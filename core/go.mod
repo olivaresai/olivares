@@ -11,7 +11,7 @@ require (
 	golang.org/x/crypto v0.54.0
 	golang.org/x/net v0.57.0
 	google.golang.org/grpc v1.82.1
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.54.0
 )
 
@@ -49,7 +49,7 @@ require (
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
+	go.opentelemetry.io/proto/otlp v1.10.0
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.40.0 // indirect
@@ -69,6 +69,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/nats-io/nats.go v1.52.0
+	github.com/olivaresai/olivares/modules v0.0.0-20260831201647-1c97d91e1cc9
 	github.com/olivaresai/olivares/sdk v0.0.0
 	github.com/olivaresai/olivares/sdk/plugin v0.0.0
 	github.com/russellhaering/goxmldsig v1.6.0

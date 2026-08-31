@@ -5,4 +5,3 @@
 module github.com/olivaresai/olivares/sdk/scaffold
 
 go 1.26.5
-
