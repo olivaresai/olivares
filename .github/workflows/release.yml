@@ -195,7 +195,7 @@ jobs:
           OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
           OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
           # Presence-only inputs for the both-or-neither check (§C.4.7); never printed.
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: bash scripts/release-preflight.sh
@@ -1448,7 +1448,7 @@ jobs:
       - name: detect Docker Hub configuration
         id: cfg
         env:
-          DH_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -1532,7 +1532,7 @@ jobs:
         if: steps.cfg.outputs.enabled == 'true'
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: cosign copy ghcr.io (build origin) -> docker.io (official) — image + signatures + attestations
         if: steps.cfg.outputs.enabled == 'true'
@@ -1558,7 +1558,7 @@ jobs:
         if: steps.cfg.outputs.enabled == 'true'
         continue-on-error: true
         env:
-          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_USER: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
