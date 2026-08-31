@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "clientId": "33333333-3333-3333-3333-333333333333",
+      "consentType": "AllPrincipals",
+      "resourceId": "00000003-0000-0000-c000-000000000000",
+      "scope": "User.Read Mail.Read"
+    },
+    {
+      "clientId": "55555555-5555-5555-5555-555555555555",
+      "consentType": "AllPrincipals",
+      "resourceId": "00000003-0000-0000-c000-000000000000",
+      "scope": "User.Read"
+    }
+  ]
+}

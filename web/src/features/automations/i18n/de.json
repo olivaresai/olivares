@@ -1,0 +1,48 @@
+{
+  "title": "Automatisierungen",
+  "description": "Die drei Automatisierungsschienen an einem Ort: governte Zeitpläne, Ereignis-Subscriptions und Alarmrouten, samt dem Trigger-Katalog, auf den sie reagieren können.",
+  "tabs": {
+    "overview": "Übersicht",
+    "workflows": "Workflows"
+  },
+  "rails": {
+    "openAction": "{{feature}} öffnen",
+    "countLabel": "{{count}} insgesamt",
+    "loadFailed": "Diese Schiene konnte nicht geladen werden.",
+    "forbidden": "Sie sind nicht berechtigt, diese Schiene zu sehen.",
+    "schedules": {
+      "title": "Zeitpläne",
+      "description": "Governte Kadenzen: Zeitplan → zweiphasiges HITL-Auslösen, mit Kadenzverfehlungs-Erkennung.",
+      "active": "{{count}} aktiv",
+      "stalled": "{{count}} ins Stocken geraten",
+      "paused": "{{count}} pausiert"
+    },
+    "subscriptions": {
+      "title": "Ereignis-Subscriptions",
+      "description": "Zustellung Ereignis → Sink/SIEM mit Wiederholungen, Replay und Zustell-Ledger.",
+      "enabled": "{{count}} aktiviert",
+      "disabled": "{{count}} deaktiviert"
+    },
+    "routes": {
+      "title": "Alarmrouten",
+      "description": "Routing Finding/Freigabe → Ziel mit Schweregrad-Schwellen und Dry-Run.",
+      "enabled": "{{count}} aktiviert",
+      "disabled": "{{count}} deaktiviert"
+    },
+    "truncated": "{{n}} Zeilen geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Zeilen als angezeigt; diese Schiene nimmt sie nach Zeilen-ID (bei der Erstellung vergeben), daher fehlen die späteren. Ein Zeitplan, ein Abonnement oder eine Route, die hier NICHT aufgeführt ist, ist kein Beweis dafür, dass es sie nicht gibt.",
+    "countLoaded": "{{count}} geladen"
+  },
+  "triggers": {
+    "title": "Trigger-Katalog",
+    "description": "Alles, worauf eine Automatisierung reagieren kann. Subscriptions können jeden katalogisierten Ereignistyp erfassen; Alarmrouten matchen die routbare Teilmenge.",
+    "typeColumn": "Typ",
+    "stabilityColumn": "Stabilität",
+    "permissionColumn": "Erforderliche Berechtigung",
+    "descriptionColumn": "Beschreibung",
+    "routable": "Routbar",
+    "routableHint": "Dieser Typ kann von Alarmrouten gematcht werden.",
+    "empty": "Kein Trigger-Katalog verfügbar.",
+    "loadFailed": "Der Trigger-Katalog konnte nicht geladen werden."
+  }
+}

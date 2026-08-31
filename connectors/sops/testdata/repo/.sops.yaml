@@ -1,0 +1,9 @@
+creation_rules:
+  - path_regex: secrets/.*\.enc\.yaml$
+    age: >-
+      age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p,age1lggyhqrw2nlhcxprm67z43rta597azn8gk38fnem3d2es66x4z3qf0p5c0
+    kms:
+      - arn: arn:aws:kms:eu-west-1:111122223333:key/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+        role: arn:aws:iam::111122223333:role/sops-encrypter
+  - path_regex: legacy/.*\.enc\.yaml$
+    pgp: 85D77543B3D624B63CEA9E6DBC17301B491B3F21

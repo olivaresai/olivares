@@ -1,0 +1,8 @@
+{
+  "_comment": "PASS floor per matrix package (pg-majors.yml evaluator, spec §2.6.3). Floors are EXACT counts measured 2026-07-31 on main against PostgreSQL 15.18 (hub instance, zero skips observed). A pass below its floor is red: comparing passes to each other cannot see an under-execution common to all four majors. Lowering a floor is a conscious, reviewed act — that is the point. The evaluator also requires this file's package set to equal ci/pg-majors-packages.txt exactly, every floor > 0.",
+  "floors": {
+    "core/internal/store/sqlstore": 438,
+    "core/api/ratelimit/pgstore": 26,
+    "core/internal/store/dialect": 16
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "truncation": {
+    "label": "{{n}} 件を読み込みました。さらに存在します",
+    "hint": "このサンドボックス一覧には上限があります。読み込み済みの行だけが表示されます。"
+  },
+  "title": "テストサンドボックス",
+  "description": "モック化されたリソースに対する分離された一時的な実行。シナリオシミュレーション、決定論的なリプレイ、デプロイ前後の比較を行います。出力は合成データであり、実際の対象テキストは一切保存されません。",
+  "tabs": {
+    "runs": "実行",
+    "comparisons": "比較",
+    "scenarios": "シナリオ"
+  },
+  "kind": {
+    "scenario": "シナリオ",
+    "replay": "リプレイ",
+    "compare": "比較"
+  },
+  "runner": {
+    "inproc-mock": "インプロセスモック",
+    "container": "コンテナ",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "エージェント",
+    "model": "モデル",
+    "prompt": "プロンプト",
+    "session": "セッション",
+    "sandbox_run": "サンドボックス実行"
+  },
+  "verdict": {
+    "improved": "改善",
+    "regressed": "退行",
+    "unchanged": "変化なし",
+    "inconclusive": "判定不能"
+  },
+  "run": {
+    "isolated": "分離済み",
+    "isolatedHint": "ランナーが分離を保証します。外部送信なし、シークレットなし、本番環境なし。推測ではなく、ランナーが報告したとおりに記録されます。",
+    "notIsolated": "未分離",
+    "notIsolatedHint": "このバックエンドは分離を保証しません。隠さず、そのまま表示します。",
+    "destroyed": "破棄済み",
+    "destroyedHint": "一時環境の状態は実行後に破棄されました。",
+    "notScored": "実行済み、未採点",
+    "pass": "合格",
+    "fail": "不合格"
+  },
+  "runs": {
+    "title": "実行",
+    "description": "すべての分離実行について、それを実行したバックエンドと採点の有無を表示します。",
+    "isolationNote": "分離は偽装ではなく実体です。ランナーと分離フラグは記録されたとおりに正確に表示されます。低下した実行は実行されましたが採点されておらず、合格ではありません。",
+    "empty": "実行はまだありません",
+    "errored": "{{count}} 件のエラー",
+    "errored_other": "{{count}} 件のエラー",
+    "columns": {
+      "kind": "種別",
+      "subject": "対象",
+      "runner": "ランナー",
+      "isolation": "分離",
+      "status": "ステータス",
+      "steps": "ステップ",
+      "score": "スコア",
+      "started": "開始"
+    }
+  },
+  "outputs": {
+    "title": "ステップ出力",
+    "empty": "記録された出力はありません",
+    "syntheticNote": "これらはモックランナーによる範囲限定の合成出力であり、本番出力ではありません。モックミスは決定論的なマーカーであり、実際のリソースには一切到達していません。",
+    "mockHit": "モックヒット",
+    "mockMiss": "モックミス"
+  },
+  "stream": {
+    "replayNote": "エンジンはこの実行の記録済みステップ出力を 1 本の接続で再生し、その後に接続を閉じます。サンドボックス実行は起動時に同期的に実行されるため、これは記録済みの証跡が順次届いているものであり、進行中の実行を映したものではありません。",
+    "waiting": "最初のステップ出力を待っています。接続状態は上に表示されます。",
+    "connecting": "接続中…",
+    "receiving": "再生を受信中",
+    "complete": "再生完了",
+    "completePartial": "再生は終了しましたが、記録のすべてではありません",
+    "unreadable": "この画面が読み取れなかったフレーム: {{n}} 件。届いたものの破棄されたため、そこに含まれていた証跡はここにありません。完全な再生ではありません。",
+    "emptyUnreadable": "ステップ出力を 1 件も読み取れませんでした",
+    "disconnected": "未接続",
+    "lost": "接続が切れました — この実行は見えなくなりました。",
+    "lostHint": "これは実行が終了したという意味ではありません。エンジンが再生の終了を通知する前に接続が終わりました。実行のステータスはエンジンが記録したもので、実行一覧に表示されます。この接続から推測することは決してありません。再接続すると続きから再開し、すでに表示された出力は繰り返されません。",
+    "reconnect": "再接続",
+    "snapshot": "ストリームが何も届けなかったため、これは JSON API で読み取った保存済みの出力です。ライブ表示ではなくスナップショットです。",
+    "summary": "エンジンのサマリー: {{total}} ステップ中 {{ok}} 件がモックで解決、{{error}} 件がモックミス。"
+  },
+  "comparisons": {
+    "title": "デプロイ前後の比較",
+    "description": "同一スイートに対して採点されたベースラインと候補の比較。デプロイを制御する判定です。",
+    "empty": "比較はまだありません",
+    "emptyHint": "比較を実行して、候補のバリアントをそのベースラインと照らして評価します。",
+    "baseline": "ベースライン",
+    "candidate": "候補",
+    "delta": "差分",
+    "decidedBy": "判定者",
+    "scoredAgainst": "採点基準",
+    "noSuite": "スイートがありません。採点されたベースラインと候補がなければ、判定は判定不能です。"
+  },
+  "scenarios": {
+    "title": "シナリオ",
+    "description": "合成ステップ入力と、モック化された MCP／リソース応答からなる再利用可能な仕様です。",
+    "empty": "シナリオはまだありません",
+    "emptyHintAuthor": "最初の合成フィクスチャを記録しましょう。対象が受け取るステップ入力と、それらが解決されるモック応答です。",
+    "emptyHintReadOnly": "シナリオは、サンドボックスシナリオの書き込み権限を持つ呼び出し元が作成します。その権限がなくても、既存のシナリオとその実行は読めます。",
+    "emptyHintConfined": "あなたのメンバーシップはワークスペースに限定されています。シナリオはテナント単位のフィクスチャなので、エンジンは限定されたメンバーシップからの登録を拒否します。テナント全体のメンバーが作成する必要があります。",
+    "columns": {
+      "name": "名称",
+      "subjectKind": "対象",
+      "steps": "ステップ",
+      "status": "ステータス",
+      "actions": "操作"
+    },
+    "create": {
+      "action": "新規シナリオ",
+      "title": "新規シナリオ",
+      "description": "シナリオは合成フィクスチャです。対象が受け取るステップ入力と、それらが解決されるモック化された MCP／リソース応答からなります。ここにあるものが実際のリソースに到達することはありません。",
+      "name": "名称",
+      "namePlaceholder": "チェックアウトエージェント — 正常系",
+      "subjectKind": "対象",
+      "subjectKindHint": "シナリオが検証する対象（エージェント、モデル、プロンプト、セッション）。自由入力で、前後の空白は除去され、200 文字まで保存されます。",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "説明",
+      "descriptionPlaceholder": "このフィクスチャが何を検証し、なぜ存在するのか。",
+      "steps": "ステップ",
+      "stepsHint": "対象が受け取る入力を順番に並べます。キーを空欄にすると、エンジンが step-1、step-2 のように割り当てます。",
+      "stepsEmpty": "ステップはまだありません。このシナリオを実行しても出力は生成されません。",
+      "addStep": "ステップを追加",
+      "removeStep": "ステップ {{index}} を削除",
+      "stepKey": "ステップ {{index}} のキー",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "ステップ {{index}} の入力",
+      "stepInputPlaceholder": "この返金リクエストを分類してください。",
+      "mocks": "モック",
+      "mocksHint": "モック化された各 MCP／リソースが返す応答です。モックが見つからないステップは決定論的なモックミスのマーカーを記録し、外部を呼び出すことはありません。",
+      "mocksEmpty": "モックはまだありません。すべてのステップがモックミスのマーカーを記録します。",
+      "addMock": "モックを追加",
+      "removeMock": "モック {{index}} を削除",
+      "mockResource": "モック {{index}} のリソース",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "モック {{index}} の応答",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "合成テキストのみを入力してください。ここでは分類も墨消しも拒否も行われないため、貼り付けた秘密情報はそのまま保存された秘密情報になります。エンジンが行うのは長さの制限だけです（名称 200 文字、説明 1024 文字、各ステップやモックの本文 8192 文字）。切り詰めるときは省略記号が付きます。",
+      "submit": "シナリオを作成",
+      "submitting": "作成中…",
+      "success": "シナリオを作成しました",
+      "failed": "シナリオは作成されませんでした。"
+    },
+    "archive": {
+      "action": "アーカイブ",
+      "alreadyArchived": "アーカイブ済み",
+      "confirmTitle": "このシナリオをアーカイブしますか？",
+      "confirmBody": "「{{name}}」はアーカイブ済みとして記録され、その決定は監査台帳に残ります。すでにこれを使った実行と比較は保持され、アーカイブが証跡を削除することはありません。これはブロックではなく状態の変更です。この状態でも、要求されればエンジンはシナリオを実行します。",
+      "success": "シナリオをアーカイブしました"
+    }
+  },
+  "seam": {
+    "synthetic": "合成データ：未配線",
+    "syntheticData": "合成データ生成は文書化された v1 以降の拡張ポイントであり、このバージョンでは実装されていません。"
+  },
+  "empty": {
+    "runs": {
+      "title": "サンドボックス実行はまだ記録されていません",
+      "description": "認可された呼び出し元がサンドボックス API を通じて保存済みのシナリオ、リプレイ、または比較を開始すると、実行が表示されます。"
+    },
+    "scenarios": {
+      "title": "サンドボックスシナリオはまだ定義されていません",
+      "description": "シナリオはオペレーターが作成する合成フィクスチャで、サンドボックスシナリオの書き込み権限を持つ呼び出し元が、この画面またはサンドボックス API から記録します。"
+    }
+  },
+  "actions": {
+    "replay": "Replay a session",
+    "compare": "Compare variants",
+    "run": "Replay",
+    "compareRun": "Compare",
+    "sessionRef": "Session ref",
+    "scenarioRef": "Scenario ref (optional)",
+    "baseline": "Baseline variant",
+    "candidate": "Candidate variant",
+    "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
+    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs."
+  }
+}

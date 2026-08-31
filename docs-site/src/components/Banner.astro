@@ -1,0 +1,58 @@
+---
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Banner override (i18n honesty). On every translated (non-English) page we
+// prepend a notice that the page is machine-translated and that the English
+// version is authoritative — native review is pending. Pages that fall back to
+// English (not yet translated) get a distinct "showing English" notice instead,
+// so the banner never claims a translation that is not there. The default
+// frontmatter banner is preserved.
+const route = Astro.locals.starlightRoute
+const { banner } = route.entry.data
+const locale = route.locale // undefined for the root (English) locale
+const isFallback = route.isFallback === true
+
+const MT = {
+  es: 'Traducción automática. La versión en inglés es la fuente autoritativa; falta la revisión por un hablante nativo.',
+  zh: '机器翻译。英文版本为权威来源，母语审校尚未完成。',
+  ru: 'Машинный перевод. Авторитетным источником является английская версия; проверка носителем языка ещё не выполнена.',
+  ja: '機械翻訳です。正式な情報源は英語版であり、ネイティブによる確認は未完了です。',
+  de: 'Maschinell übersetzt. Maßgeblich ist die englische Fassung; eine muttersprachliche Prüfung steht noch aus.',
+  fr: 'Traduction automatique. La version anglaise fait foi ; une relecture par un locuteur natif reste à faire.',
+}
+const FALLBACK = {
+  es: 'Esta página aún no está traducida — se muestra la versión en inglés.',
+  zh: '此页面尚未翻译，正在显示英文版本。',
+  ru: 'Эта страница ещё не переведена — показана английская версия.',
+  ja: 'このページはまだ翻訳されていません。英語版を表示しています。',
+  de: 'Diese Seite ist noch nicht übersetzt — es wird die englische Fassung angezeigt.',
+  fr: "Cette page n'est pas encore traduite — la version anglaise est affichée.",
+}
+const LINK = {
+  es: 'Ver en inglés',
+  zh: '查看英文版',
+  ru: 'Открыть на английском',
+  ja: '英語版を見る',
+  de: 'Auf Englisch ansehen',
+  fr: 'Voir en anglais',
+}
+
+type Locale = keyof typeof MT
+const localeKey = typeof locale === 'string' && locale in MT ? (locale as Locale) : undefined
+const notice = localeKey ? (isFallback ? FALLBACK[localeKey] : MT[localeKey]) : undefined
+const enHref = localeKey ? Astro.url.pathname.replace(new RegExp('^/' + localeKey + '/'), '/') : undefined
+const linkText = localeKey ? LINK[localeKey] : undefined
+---
+
+{banner && <div class="sl-banner" set:html={banner.content} />}
+{
+  notice && (
+    <aside class="sl-mt-banner" aria-label="translation notice">
+      <span>{notice}</span>
+      {enHref && linkText && !isFallback && (
+        <a href={enHref}>{linkText}</a>
+      )}
+    </aside>
+  )
+}

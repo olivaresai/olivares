@@ -1,0 +1,21 @@
+{
+  "name": "projects/test-proj/locations/global/floorSetting",
+  "enableFloorSettingEnforcement": true,
+  "integratedServices": ["AI_PLATFORM", "GOOGLE_MCP_SERVER"],
+  "aiPlatformFloorSetting": {
+    "enableCloudLogging": true,
+    "inspectAndBlock": true
+  },
+  "googleMcpServerFloorSetting": {
+    "enableCloudLogging": true,
+    "inspectOnly": true
+  },
+  "filterConfig": {
+    "raiSettings": {
+      "raiFilters": [
+        { "filterType": "HATE_SPEECH", "confidenceLevel": "HIGH" }
+      ]
+    },
+    "piAndJailbreakFilterSettings": { "filterEnforcement": "ENABLED" }
+  }
+}

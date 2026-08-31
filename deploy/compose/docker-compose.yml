@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# One-command single-node deployment of the Olivares AI control plane (SCP-05).
+# This base file runs the engine with the embedded, pure-Go SQLite store — zero
+# external dependencies, air-gap-ready, installable in one command (INSTALL.md).
+#
+#   docker compose -f deploy/compose/docker-compose.yml up -d
+#   docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+#
+# For the Postgres (multi-tenant) topology, layer the override:
+#   docker compose -f deploy/compose/docker-compose.yml \
+#                  -f deploy/compose/docker-compose.postgres.yml up -d
+#
+# Supply chain: PIN THE IMAGE BY DIGEST in production. Set OLIVARES_IMAGE to
+# docker.io/olivaresai/olivares@sha256:<digest> (the OFFICIAL registry) and verify
+# it with cosign before running (scripts/verify-release.sh / cosign verify). The
+# ghcr.io/olivaresai/olivares fallback carries the SAME digest, signatures and
+# attestations — swap the host if Docker Hub is unreachable or its anonymous-pull
+# rate limit bites (ghcr.io does not rate-limit anonymous pulls). See .env.example.
+services:
+  olivares:
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:latest}
+    # :8443 inside the container asks Go for dual-stack (IPv4+IPv6; IPv4 still
+    # works on IPv6-disabled kernels); the published port below controls exposure.
+    command:
+      - serve
+      - --listen=:8443
+      - --grpc-listen=:8444
+      - --data-dir=/var/lib/olivares
+      - --checkpoint-interval=1h
+    ports:
+      # Bind to localhost on the HOST by default — expose deliberately.
+      - "127.0.0.1:8443:8443"   # HTTPS: REST API + web UI
+      - "127.0.0.1:8444:8444"   # gRPC: ControlPlane/ingest API
+    volumes:
+      # Holds the audit signing key, TLS material and the SQLite store — persist it.
+      - olivares-data:/var/lib/olivares
+    # --- hardening (mirrors the distroless image + docs/SECURITY-HARDENING.md) ---
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Resource ceilings (honored by `docker compose up`); match the Helm defaults.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.1"
+          memory: 256M
+    restart: unless-stopped
+    # No in-container HEALTHCHECK: the image is distroless (no shell/curl). The
+    # engine exposes /livez and /readyz on 8443 for external probes (k8s uses
+    # httpGet; for compose, curl the port from the host).
+
+volumes:
+  olivares-data:

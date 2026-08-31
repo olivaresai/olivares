@@ -1,0 +1,35 @@
+{
+  "id": "P_detail",
+  "displayName": "Detailed Agent",
+  "longDescription": "Not decoded or mapped.",
+  "categories": ["Sales", "Productivity"],
+  "sensitivity": "confidential",
+  "allowedUsersAndGroups": [
+    {"resourceId": "group-1", "resourceType": "group"},
+    {"resourceId": "user-1", "resourceType": "user"}
+  ],
+  "acquireUsersAndGroups": [
+    {"resourceId": "group-2", "resourceType": "group"}
+  ],
+  "elementDetails": [
+    {
+      "elementType": "DeclarativeAgent",
+      "elements": [
+        {
+          "id": "element-1",
+          "definition": "SECRET-INSTRUCTIONS"
+        }
+      ]
+    },
+    {
+      "elementType": "Bots",
+      "elements": [
+        {
+          "id": "element-2",
+          "definition": "SECRET-INSTRUCTIONS"
+        }
+      ]
+    }
+  ],
+  "zipFile": "SECRET-INSTRUCTIONS"
+}

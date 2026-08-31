@@ -1,0 +1,11 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "gpt-4o", "object": "model", "created": 1715000000, "owned_by": "openai" },
+    { "id": "gpt-4o-mini", "object": "model", "created": 1716000000, "owned_by": "openai" },
+    { "id": "gpt-4.1", "object": "model", "created": 1717000000, "owned_by": "openai" },
+    { "id": "o3-pro", "object": "model", "created": 1718000000, "owned_by": "openai" },
+    { "id": "gpt-5.5-2026-04-23", "object": "model", "created": 1776902400, "owned_by": "openai" },
+    { "id": "o3-2025-04-16", "object": "model", "created": 1744761600, "owned_by": "openai" }
+  ]
+}

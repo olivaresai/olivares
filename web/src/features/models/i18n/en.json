@@ -1,0 +1,269 @@
+{
+  "title": "Models & providers",
+  "description": "The governed model estate — declared capabilities and pricing, routing policy, and provider key references. Secrets are never shown; only masked references.",
+  "tabs": {
+    "catalog": "Catalog",
+    "estate": "Estate",
+    "routing": "Routing",
+    "keys": "Provider keys",
+    "gpai": "GPAI posture",
+    "access": "Access"
+  },
+  "catalog": {
+    "title": "Capability matrix",
+    "description": "Declared API capabilities per model family.",
+    "pricingTitle": "Declared pricing",
+    "pricingDescription": "List-price defaults — reference, not immutable truth. Verify against each provider and override per model.",
+    "family": "Family",
+    "provider": "Provider",
+    "context": "Context",
+    "maxOutput": "Max output",
+    "modality": "Modality",
+    "inputPrice": "Input / MTok",
+    "outputPrice": "Output / MTok",
+    "cacheRead": "Cache read / MTok",
+    "cacheWrite1h": "Cache write 1h / MTok",
+    "residency": "Data residency",
+    "tiers": "Service tiers",
+    "residencyNotApplicable": "Not applicable",
+    "tiersNotDeclared": "Not declared",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "Caps to confirm",
+    "capsToConfirmHint": "This family's capability set is not yet verified against a model card. The model is listed, but its capabilities are flagged unconfirmed rather than invented.",
+    "tier": {
+      "standard": "Standard",
+      "batch": "Batch",
+      "priority": "Priority",
+      "priority_on_demand": "Priority on-demand",
+      "flex": "Flex",
+      "flex_discount": "Flex discount"
+    },
+    "asOf": "As of {{date}}",
+    "noPricing": "No declared price",
+    "present": "Supported",
+    "absent": "Not supported"
+  },
+  "estate": {
+    "title": "Governed models",
+    "description": "Models in this tenant's estate, enriched from the catalog.",
+    "empty": "No models in the estate",
+    "columns": {
+      "name": "Model",
+      "provider": "Provider",
+      "family": "Family",
+      "context": "Context",
+      "inputCost": "Input µ$/tok",
+      "outputCost": "Output µ$/tok",
+      "modality": "Modality",
+      "capabilities": "Capabilities",
+      "status": "Status"
+    },
+    "notEnriched": "No declared family yet — no pricing",
+    "costNote": "Per-token µUSD is a coarse convenience figure; the authoritative cost of real usage is the FinOps ledger.",
+    "truncated": "Loaded {{n}} models; there are more",
+    "truncatedHint": "There are more governed models than shown; this page takes rows by id. Table search and sorting apply only to what is loaded."
+  },
+  "routing": {
+    "title": "Routing policies",
+    "description": "Policies are defined here and executed by the gateway connector — the UI configures and shows them.",
+    "new": "New policy",
+    "empty": "No routing policies",
+    "emptyHint": "A routing policy selects the primary model and fallback chain for a strategy.",
+    "strategy": "Strategy",
+    "requiredCapabilities": "Required capabilities",
+    "preferredProviders": "Preferred providers",
+    "minContext": "Min context window",
+    "pinnedModel": "Pinned model",
+    "allowDeprecated": "Allow deprecated",
+    "gateway": "Gateway endpoint",
+    "viaGateway": "via gateway",
+    "resolve": "Resolve",
+    "resolving": "Resolving…",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "strategies": {
+      "cost": "Cost",
+      "latency": "Latency",
+      "capability": "Capability",
+      "pinned": "Pinned"
+    },
+    "decision": {
+      "title": "Resolved decision",
+      "primary": "Primary",
+      "fallbacks": "Fallback chain",
+      "unresolved": "No governed model satisfies this policy",
+      "reason": "Reason"
+    },
+    "dialog": {
+      "title": "Routing policy",
+      "name": "Name",
+      "listHint": "Comma-separated.",
+      "create": "Save policy",
+      "created": "Routing policy saved"
+    },
+    "execute": "Execute",
+    "executeConfirm": "Execute and spend",
+    "input": "Input",
+    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
+    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "noExecutor": "No executor is provisioned. This is not an outage: the control plane resolves routing decisions but never spends against a provider until an operator wires an executor.",
+    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "fallbackUsed": "fallback used",
+    "refusal": "provider refusal",
+    "tokens": "{{in}} in · {{out}} out",
+    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "truncated": "Loaded {{n}} policies; there are more",
+    "truncatedHint": "There are more routing policies than shown; this page takes rows by id. A policy not listed here does not demonstrate that no policy routes a given request."
+  },
+  "keys": {
+    "title": "Provider key references",
+    "description": "Governed references to provider API keys and workspaces. Only a masked hint is stored — never the secret value.",
+    "new": "Add key reference",
+    "empty": "No key references",
+    "maskedOnly": "Reference only — the secret value is never stored or shown.",
+    "columns": {
+      "name": "Name",
+      "provider": "Provider",
+      "kind": "Kind",
+      "extId": "External id",
+      "hint": "Masked hint",
+      "owner": "Owner",
+      "status": "Status",
+      "created": "Created"
+    },
+    "kind": {
+      "api_key": "API key",
+      "workspace": "Workspace"
+    },
+    "dialog": {
+      "title": "Add key reference",
+      "name": "Name",
+      "provider": "Provider",
+      "kind": "Reference kind",
+      "extId": "External id",
+      "extIdHint": "The key/workspace id at the provider (e.g. apikey_01). Not the secret.",
+      "owner": "Owner",
+      "noSecretNote": "This form never accepts a secret. Olivares stores a reference and a masked hint only.",
+      "create": "Add reference",
+      "created": "Key reference added"
+    },
+    "truncated": "Loaded {{n}} keys; there are more",
+    "truncatedHint": "There are more provider key references than shown; this page takes rows by id. A key not listed here does not demonstrate that no credential exists for that provider. Table sorting applies only to what is loaded."
+  },
+  "gpai": {
+    "title": "GPAI provider posture",
+    "description": "Operator-attested supplier posture, recorded once per provider.",
+    "notice": "This is supplier GPAI posture attested by the operator and feeds supplier-evidence needs for ISO/IEC 42001 A.10.3 and NIST AI RMF GOVERN-6.1 / MAP-4.1. It is not a compliance determination by Olivares.",
+    "empty": "No GPAI provider posture recorded",
+    "emptyHint": "Attest a provider posture when published supplier material has been reviewed or a claim needs to be recorded.",
+    "verifiedMeaning": "Reviewed by the operator against published provider material — this is the operator's own attestation, not verification performed by Olivares and not a compliance determination.",
+    "actions": {
+      "attest": "Attest posture",
+      "edit": "Edit posture",
+      "editProvider": "Edit posture for {{provider}}"
+    },
+    "columns": {
+      "provider": "Provider",
+      "review": "Review state",
+      "attestedAt": "Attested",
+      "actions": "Actions"
+    },
+    "claims": {
+      "cop_signatory": "Code of Practice signatory",
+      "technical_docs": "Technical documentation published",
+      "training_data_summary": "Training-data summary published",
+      "copyright_policy": "Copyright policy recorded",
+      "downstream_info": "Downstream information provided",
+      "systemic_risk": "GPAI with systemic risk",
+      "safety_report": "Safety & Security Model Report"
+    },
+    "states": {
+      "recorded": "Recorded",
+      "notRecorded": "Claim not recorded",
+      "reviewed": "Operator-reviewed attestation",
+      "unreviewed": "Operator claim — unreviewed"
+    },
+    "detail": {
+      "title": "GPAI posture: {{provider}}",
+      "description": "The operator-recorded claims and attestation metadata for this provider.",
+      "claims": "Provider claims",
+      "reviewState": "Review state",
+      "verificationMethod": "Verification method",
+      "attestedBy": "Attested by",
+      "attestedAt": "Attested at",
+      "note": "Note",
+      "notProvided": "Not provided"
+    },
+    "form": {
+      "createTitle": "Attest GPAI provider posture",
+      "editTitle": "Edit GPAI provider posture",
+      "description": "Record the provider's claims and the operator's own review attestation.",
+      "providerRef": "Provider reference",
+      "providerLocked": "The provider reference is locked while editing because changing it would create a second posture.",
+      "providerRequired": "Enter a provider reference.",
+      "claimsTitle": "Provider claims",
+      "claimsDescription": "Turn on a claim only when the operator has recorded it for this provider.",
+      "systemicRiskHint": "Classification: the model is classified as GPAI with systemic risk.",
+      "safetyReportHint": "This report applies to models classified as GPAI with systemic risk.",
+      "verified": "Reviewed against published provider material",
+      "verificationMethod": "Verification method",
+      "verificationMethodHint": "Required when the operator marks this posture as reviewed.",
+      "verificationMethodRequired": "Describe how the published provider material was reviewed.",
+      "note": "Note",
+      "requestRejected": "The posture was not saved. Review the server response below.",
+      "created": "GPAI provider posture attested",
+      "updated": "GPAI provider posture updated",
+      "save": "Save attestation",
+      "saving": "Saving…"
+    },
+    "truncated": "Loaded {{n}} postures; there are more",
+    "truncatedHint": "There are more GPAI postures than shown; this page takes rows by id. A provider not listed here does not demonstrate that nothing was declared for it. Table sorting applies only to what is loaded."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "No provider key references added yet",
+      "description": "Add an API key or workspace reference by provider identifier; the console never accepts or stores the credential value."
+    },
+    "models": {
+      "title": "No governed models observed yet",
+      "description": "Models enter the estate when a connector emits a cost sample naming the provider and model in use."
+    }
+  },
+  "residency": {
+    "title": "Workspace residency",
+    "description": "Where each workspace processes inference and where its data rests, as the provider reports it.",
+    "empty": "No workspace reports residency settings",
+    "unrestricted": "The provider reports no restriction",
+    "allowed": "Allowed: {{geos}}",
+    "unreported": "not reported",
+    "defaultGeo": "default: {{geo}}",
+    "atRest": "at rest: {{geo}}",
+    "truncated": "Loaded {{n}} workspaces; there are more",
+    "truncatedHint": "There are more workspace residency records than shown; this page takes rows by id — assigned at creation — so later rows are missing. A workspace not listed here does not demonstrate that its processing is unrestricted: it may simply be beyond this page."
+  },
+  "access": {
+    "title": "Model access rules",
+    "description": "Who may use which model, and where.",
+    "empty": "No access rules — every subject is unrestricted",
+    "groupsTitle": "Model groups",
+    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsEmpty": "No model groups",
+    "members": "{{n}} members",
+    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "effect": {
+      "allow": "allow",
+      "forbid": "forbid"
+    },
+    "tenantWide": "tenant-wide",
+    "inWorkspace": "in {{ws}}",
+    "allSurfaces": "all surfaces",
+    "onSurfaces": "on {{list}}",
+    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
+    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "readOnlyNote": "Read-only: changing who may use a model requires models:model-access:admin, which is a higher tier than editing a routing policy.",
+    "truncated": "Loaded {{n}} rules; there are more",
+    "truncatedHint": "There are more access rules than shown; this page takes rows by id. The marks on these rows reflect ONLY the loaded rules: allows that would introduce confinement or add permitted targets may be missing, and forbids that subtract access may be missing too — so this page can read wider OR narrower than reality, and a subject with no loaded rule does not appear at all. Do not infer effective access from it: the engine drains every page before deciding, and it resolves a principal across user, role and group, which a row cannot show.",
+    "groupsTruncated": "Loaded {{n}} groups; there are more",
+    "groupsTruncatedHint": "There are more model groups than shown; this page takes rows by id. A group not listed here does not demonstrate that it does not exist — a rule may still target it."
+  }
+}

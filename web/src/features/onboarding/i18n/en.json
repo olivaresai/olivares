@@ -1,0 +1,98 @@
+{
+  "title": "Get started",
+  "subtitle": "Set up your deployment step by step — every step is verified against the live control plane.",
+  "progress": "{{done}} of {{total}} verified",
+  "refresh": "Refresh",
+  "dismiss": "Dismiss",
+  "allDone": "Your deployment is set up.",
+  "allDoneHint": "Every step is verified against the control plane. You can revisit this wizard at any time.",
+  "dismissed": {
+    "title": "Setup guide dismissed",
+    "description": "The guide is hidden on this browser. Your deployment keeps working — you can resume the verified steps at any time.",
+    "resume": "Resume setup guide"
+  },
+  "status": {
+    "verified": "Verified",
+    "pending": "Pending",
+    "awaiting": "Awaiting host"
+  },
+  "steps": {
+    "infra": {
+      "title": "Infrastructure",
+      "hint": "The database must be reachable before anything else.",
+      "ready": "The control plane can reach its database. This step is verified automatically.",
+      "notReady": "The control plane cannot reach its database yet."
+    },
+    "workspace": {
+      "title": "Create your first workspace",
+      "hint": "A workspace scopes agents, sources and policies.",
+      "name": "Workspace name",
+      "namePlaceholder": "e.g. Platform team",
+      "slug": "Slug",
+      "create": "Create workspace",
+      "addAnother": "Create another",
+      "created": "Created workspace {{name}}."
+    },
+    "identity": {
+      "title": "Invite an administrator",
+      "hint": "Invite a second administrator, or connect your identity provider.",
+      "email": "Email",
+      "role": "Role",
+      "mode": "Method",
+      "modeInvite": "Send an invite",
+      "modePassword": "Set a password",
+      "invite": "Invite",
+      "inviteAnother": "Invite another",
+      "invited": "Invited {{email}}.",
+      "or": "or",
+      "ssoCta": "Connect SSO",
+      "password": "Password",
+      "passwordHint": "At least 8 characters. The new administrator can change it later.",
+      "memberCount_one": "{{count}} member in this tenant.",
+      "memberCount_other": "{{count}} members in this tenant."
+    },
+    "source": {
+      "title": "Register your first source",
+      "hint": "Connect a content or governance source. Credentials are stored by reference.",
+      "kind": "Connector",
+      "kindPlaceholder": "Choose a connector",
+      "name": "Source name",
+      "namePlaceholder": "e.g. my-wiki",
+      "tenant": "Tenant",
+      "noFields": "This connector needs no further configuration.",
+      "secretHint": "Enter a value to seal, or a store:<name> reference.",
+      "test": "Test",
+      "tested": "Connection succeeded.",
+      "testOk": "The connector opened successfully.",
+      "testFail": "The connector could not open — check the configuration.",
+      "register": "Register",
+      "addAnother": "Register another",
+      "registered": "Registered {{name}}.",
+      "notRunning": "A source is registered but not yet running — check its status above.",
+      "credByRef": "Secret fields are sealed into the store and referenced as store:<name> — a credential value is never stored inline."
+    },
+    "pep": {
+      "title": "Activate your first policy enforcement point",
+      "hint": "Publish a managed-settings policy and confirm a host applied it.",
+      "notPublished": "No managed-settings policy is published yet.",
+      "authorCta": "Author a policy",
+      "active": "A host has attested this policy — the enforcement point is active.",
+      "awaitingHint": "The policy is published and signed, but no host has checked in yet. Deploy the snippet and refresh.",
+      "revision": "Revision",
+      "fingerprint": "Key fingerprint",
+      "snippet": "Managed-settings snippet",
+      "copy": "Copy",
+      "copied": "Copied to clipboard.",
+      "copyFailed": "Could not copy to the clipboard.",
+      "checkins": "Host check-ins",
+      "noCheckins": "No host has checked in yet.",
+      "colScope": "Scope",
+      "colReporter": "Reporter",
+      "colRevision": "Revision",
+      "colVerified": "Verified",
+      "verifiedCurrent": "Verified (current)",
+      "verifiedStale": "Verified (stale)",
+      "unverified": "Unverified"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "slug": "engineering",
+    "name": "Engineering",
+    "permission": "push"
+  },
+  {
+    "slug": "security",
+    "name": "Security",
+    "permission": "admin"
+  },
+  {
+    "slug": "docs-team",
+    "name": "Documentation Team",
+    "permission": "pull"
+  }
+]

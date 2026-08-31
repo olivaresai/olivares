@@ -1,0 +1,169 @@
+---
+title: "Docker Compose で始める"
+description: >-
+  同梱の Compose スタックで control plane を動かす：デフォルトで堅牢化された
+  シングルノード SQLite、Postgres マルチテナントのオーバーライド、そして暗号化された
+  ディザスタリカバリ バックアッププロファイル — 初回起動のセットアップトークン込み。
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+リポジトリは `deploy/compose/` 配下に Compose スタックを同梱しています：堅牢化された
+シングルノードデプロイ（組み込み SQLite、外部依存ゼロ）に加え、2つのオーバーレイ —
+**Postgres マルチテナント**のオーバーライドと、**ディザスタリカバリ バックアップ**の
+プロファイルです。このチュートリアルは、`up -d` からバックアップを備えた設定済みの
+control plane までを案内します。
+
+コンテナは、他のすべてのインストールと**同じ単一バイナリ**をラップします。異なるのは
+パッケージングだけです。以下のコマンドはスタック自身のドキュメント化されたエントリ
+ポイント（`deploy/compose/*.yml`）であり、それらが駆動する初回起動フローは、
+[シングルノードチュートリアル](/tutorials/getting-started/single-node/)でバイナリに
+対してエンドツーエンドで検証されたものと同じです。
+
+<Aside type="caution" title="最初のリリースまでは、イメージをローカルでビルドする">
+リリースイメージは、**最初の公開リリースが出荷されるとき**に Docker Hub の
+`docker.io/olivaresai/olivares` に公開されます（署名済み、digest でピン留め）— そのタグが切られる
+までレジストリパスは空です（同じ内容は `ghcr.io/olivaresai/olivares` にもミラーされ、
+digest で同一です）。今は、同じ堅牢化された distroless イメージをソースからビルドし、
+スタックをそれに向けます：
+
+```bash
+task image                                   # builds olivares:dev
+echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
+```
+
+リリースが存在するようになったら：`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>`
+を設定し、まず[検証](/how-to/verify-a-release/)してください — タグではなく digest で。
+</Aside>
+
+## 1. シングルノードスタックを立ち上げる（SQLite）
+
+<Steps>
+
+1. 起動します：
+
+   ```bash
+   docker compose -f deploy/compose/docker-compose.yml up -d
+   ```
+
+   設計上、得られるもの：
+
+   | プロパティ | 値 |
+   |---|---|
+   | ポート | `127.0.0.1:8443`（HTTPS：REST + web UI）、`127.0.0.1:8444`（gRPC） — **ホスト上の localhost** にバインド。公開は意図的に |
+   | データ | 名前付きボリューム `olivares-data` → `/var/lib/olivares`（SQLite ストア、audit 署名鍵、TLS 素材） |
+   | 堅牢化 | `65532:65532` として実行、read-only root、全 capability をドロップ、`no-new-privileges`、tmpfs `/tmp` |
+   | ヘルスチェック | コンテナ内にはなし（イメージは distroless — シェルなし）。ホストから `/livez` と `/readyz` をプローブする |
+
+2. ログからワンタイムのセットアップトークンを読み取ります：
+
+   ```bash
+   docker compose -f deploy/compose/docker-compose.yml logs olivares \
+     | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. 最初の管理者を作成し、ログインし、組織を作成します —
+   [シングルノードチュートリアル](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)
+   とまったく同じです（API は同じ。TLS 証明書は初回起動時に自己署名されるため、
+   ブートストラップには `curl -k` を使います）：
+
+   ```bash
+   curl -ksf -X POST https://localhost:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="tip" title="トークンを逃した？">
+再起動してもトークンは再印字されません（保存されるのはそのハッシュだけです）。まだユーザーが
+存在しない間は、リカバリは安全です：`docker compose down` し、`olivares-data` ボリュームから
+`setup.token` を削除（または新規インストールならボリュームごと削除）し、再び `up -d` します —
+新しいトークンが鋳造されます。
+</Aside>
+
+## 2. ソースを配線する
+
+ソースは `OLIVARES_SOURCES_CONFIG` で名指しされる1つのオペレーターファイルで宣言します
+（[ソースを接続する](/how-to/connect-a-source/)）。コンテナの場合、そのファイルをマウントし、
+小さなオーバーライドで変数を設定します：
+
+```yaml
+# deploy/compose/docker-compose.sources.yml (yours — not shipped)
+services:
+  olivares:
+    environment:
+      OLIVARES_SOURCES_CONFIG: /etc/olivares/sources.json
+    volumes:
+      - ./sources.json:/etc/olivares/sources.json:ro
+```
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.sources.yml up -d
+docker compose -f deploy/compose/docker-compose.yml logs olivares | grep "ingest: wired source"
+```
+
+`sources.json` 内のパスは**コンテナ**のパスであることを忘れないでください — 例えば
+pgAudit のログ末尾には、Postgres のログディレクトリもコンテナ内に read-only でマウント
+する必要があります。
+
+## 3. 暗号化された DR バックアップ（`backup` プロファイル）
+
+スタックは、**暗号化され、ledger の連続性を損なわない**バンドル（`olivares dr backup`）を
+生成し、14日より古いバンドルをプルーニングするワンショットのバックアップサービスを同梱します：
+
+```bash
+# Write your KEK passphrase once (keep it OUT of the repo / image):
+printf 'a strong DR passphrase' > deploy/compose/dr-pass
+
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.backup.yml \
+               --profile backup run --rm backup
+```
+
+スケジュールされた RPO のために、そのコマンドをホストの cron でラップし、**`olivares-backups`
+ボリュームをオフサイトにミラー**してください — 同一ホスト上のバックアップはディザスタ
+リカバリではなく、パスフレーズはバンドルとは別に運ばれなければなりません（3-2-1）。リストア
+ドリル（`olivares dr verify`）を含む完全な手順は、
+[バックアップとリストア](/how-to/backup-and-restore/)にあります。
+
+## 4. オプション：Postgres マルチテナントのオーバーライド
+
+マルチテナントのトポロジーには、Postgres オーバーライドを重ねます。これは Postgres 16 を
+立ち上げ、**最小権限の `olivares_app` ロール**（superuser なし、`BYPASSRLS` なし —
+row-level security がテナントのバックストップであるため、エンジンは特権ロールに対しては起動を
+*拒否*します）をプロビジョニングし、エンジンをそれに向けます：
+
+```bash
+cp deploy/compose/.env.example deploy/compose/.env
+# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.postgres.yml up -d
+```
+
+<Aside type="caution" title="Compose の Postgres はデモトポロジー">
+このオーバーライドは compose ネットワーク内で `sslmode=disable` で接続します —
+評価には問題ありませんが、本番には**不適切**です。本番の Postgres デプロイは
+`sslmode=verify-full` での TLS と DSN シークレットを使います — それが
+[Kubernetes/Helm 経路](/tutorials/getting-started/kubernetes/)です。
+</Aside>
+
+## ヘルス
+
+```bash
+curl -ks https://localhost:8443/readyz
+# {"leader":true,"setup_required":false,"status":"ok","store":"up"}
+curl -ks https://localhost:8443/metrics | grep olivares_store_up
+```
+
+## 次のステップ
+
+- **実物のシグナルを配線する：** [コネクターガイド](/how-to/connectors/pgaudit/)。
+- **バックアップをスケジュールしドリルする：** [バックアップとリストア](/how-to/backup-and-restore/)。
+- **モニタリングする：** [Prometheus メトリクス、SLO、アラート](/how-to/monitor-with-prometheus/)。
+- **マルチノードへ？** [Helm での Kubernetes](/tutorials/getting-started/kubernetes/)、
+  HA とコレクター DaemonSet を含む。

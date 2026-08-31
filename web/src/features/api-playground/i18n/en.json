@@ -1,0 +1,68 @@
+{
+  "title": "API Playground",
+  "description": "Interactively explore and test the control-plane API",
+  "filterPlaceholder": "Filter endpoints…",
+  "selectEndpoint": "Select an endpoint from the left panel",
+  "send": "Send",
+  "sending": "Sending…",
+  "streaming": "Streaming…",
+  "cancel": "Cancel",
+  "requiredPermission": "Required permission",
+  "copyAsCurl": "Copy as curl",
+  "response": "Response",
+  "history": "History",
+  "clearHistory": "Clear",
+  "noRequests": "No requests yet",
+  "noMatch": "No endpoints match your filter.",
+  "pathParams": "Path Params",
+  "queryParams": "Query",
+  "headers": "Headers",
+  "body": "Body",
+  "networkError": "Network Error",
+  "beta": "beta",
+  "summary": "{{endpoints}} endpoints across {{groups}} groups",
+  "summaryWithBeta": "{{endpoints}} endpoints across {{groups}} groups · {{beta}} beta module routes",
+  "endpointTree": {
+    "ariaLabel": "API endpoints"
+  },
+  "errors": {
+    "loadSpec": "Failed to load OpenAPI spec"
+  },
+  "request": {
+    "networkError": "Network Error",
+    "failedNetworkHint": "Request failed — check your network connection.",
+    "blockedDestination": "Blocked destination",
+    "blockedDestinationHint": "API Playground can only send requests to this control plane.",
+    "enterPathParam": "Enter {{name}}",
+    "headerNamePlaceholder": "Header name",
+    "headerValuePlaceholder": "Value",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Remove {{header}} header",
+    "addHeaderAria": "Add custom header",
+    "bodyAria": "Request body"
+  },
+  "responsePanel": {
+    "empty": "Select an endpoint and send a request",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "Headers ({{count}})",
+    "bodyAria": "Response body"
+  },
+  "historyPanel": {
+    "recentCount": "Recent ({{count}})",
+    "clearAria": "Clear request history",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "just now",
+      "minutes": "{{count}}m ago",
+      "hours": "{{count}}h ago",
+      "days": "{{count}}d ago"
+    }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "title": "Visor de grabación de sesión",
+  "subtitle": "Línea de tiempo unificada de la actividad del agente y evidencia de gobernanza para una única sesión.",
+  "back": "Volver a grabaciones",
+  "header": {
+    "subject": "Sujeto",
+    "status": "Estado",
+    "opened": "Abierto",
+    "duration": "Duración",
+    "model": "Modelo",
+    "frames": "Fotogramas",
+    "live": "EN VIVO",
+    "tipHash": "Tip de la cadena",
+    "openSeq": "Seq de apertura",
+    "anchorSeq": "Seq de la última ancla",
+    "sealSeq": "Seq de sellado"
+  },
+  "lanes": {
+    "activity": "Actividad del agente",
+    "evidence": "Evidencia de gobernanza"
+  },
+  "panels": {
+    "tools": "Herramientas utilizadas",
+    "files": "Archivos accedidos",
+    "decisions": "Decisiones"
+  },
+  "timeline": {
+    "loadMore": "Cargar más",
+    "empty": "No hay eventos registrados",
+    "activityUnavailable": "La actividad del agente no está disponible porque el resolver de timeline no está cableado o no respondió. La evidencia de gobernanza sigue disponible.",
+    "tool": "Llamada a herramienta",
+    "mcp": "Invocación MCP",
+    "cost": "Muestra de coste",
+    "finding": "Hallazgo"
+  },
+  "redaction": {
+    "hidden": "[REDACTADO — haz clic para revelar]",
+    "reveal": "Revelar",
+    "hide": "Ocultar"
+  },
+  "verify": {
+    "passive": "Verificación integrada",
+    "fresh": "Verificación nueva",
+    "intact": "Cadena intacta",
+    "broken": "Cadena rota",
+    "frames": "{{count}} fotogramas verificados",
+    "anchors": "{{count}} anclas verificadas",
+    "tipMatch": "Tip coincide",
+    "tipMismatch": "Tip no coincide",
+    "anchorsOk": "{{count}} anclas verificadas",
+    "anchorsBroken": "{{count}} anclas fallidas",
+    "anchoredThrough": "Las anclas verificadas del registro cubren hasta el fotograma {{idx}}.",
+    "breakAt": "Rotura en el fotograma {{idx}} — {{reason}}",
+    "gap": "Hueco de fotogramas",
+    "failures": "Fallos de ancla",
+    "failure": "Ancla {{kind}} · seq {{seq}} · fotograma {{idx}} · {{reason}}",
+    "failed": "La verificación ha fallado"
+  },
+  "export": {
+    "json": "Exportar JSON",
+    "summary": "Exportar resumen",
+    "verify": "Verificar cadena"
+  },
+  "tools": {
+    "success": "éxito",
+    "fail": "fallo",
+    "calls": "{{count}} llamadas"
+  },
+  "files": {
+    "read": "Leer",
+    "write": "Escribir",
+    "edit": "Editar",
+    "create": "Crear"
+  },
+  "decisions": {
+    "group": "Tarea {{idx}}",
+    "tools": "{{count}} llamadas a herramienta",
+    "fileCount": "{{count}} archivos"
+  },
+  "detail": {
+    "toolRef": "Ref. herramienta",
+    "resourceRef": "Ref. recurso",
+    "mode": "Modo",
+    "source": "Fuente",
+    "titleField": "Título",
+    "at": "En",
+    "frameIdx": "#",
+    "namespace": "Espacio de nombres",
+    "method": "Método",
+    "pattern": "Patrón",
+    "outcome": "Resultado",
+    "actor": "Actor",
+    "actAs": "Actuar como",
+    "params": "Parámetros",
+    "httpStatus": "Estado HTTP",
+    "durMs": "Duración",
+    "hash": "Hash del fotograma",
+    "prevHash": "Hash anterior",
+    "anchorSeq": "Seq de ancla",
+    "close": "Cerrar detalles del evento"
+  },
+  "seal": {
+    "action": "Sellar sesión",
+    "title": "¿Sellar esta sesión de grabación?",
+    "body": "El sellado es irreversible: cierra la sesión, fija el tip de su cadena e impide añadir más fotogramas.",
+    "confirm": "Sellar sesión",
+    "done": "Sesión sellada",
+    "alreadySealed": "Esta sesión ya está sellada."
+  },
+  "summarize": {
+    "action": "Generar resumen",
+    "done": "Resumen generado.",
+    "unavailable": "No hay ningún generador de resúmenes configurado; la grabación sigue disponible como evidencia en bruto.",
+    "disabled": "Los resúmenes por IA están desactivados para este tenant porque la transcripción saldría de la frontera de confianza.",
+    "active": "Esta sesión sigue activa. Séllala antes de generar un resumen completo.",
+    "failed": "No se ha podido generar el resumen; la grabación no se ve afectada."
+  },
+  "ledger": {
+    "title": "Registro",
+    "subtitle": "Eventos semánticos correlacionados del registro de evidencia.",
+    "seq": "seq {{seq}}",
+    "empty": "No hay eventos correlacionados del registro",
+    "truncated": "La vista del registro está truncada; existen más eventos correlacionados más allá de esta ventana acotada."
+  },
+  "notFound": "Sesión de grabación no encontrada"
+}

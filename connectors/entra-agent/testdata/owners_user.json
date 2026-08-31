@@ -1,0 +1,5 @@
+{
+  "value": [
+    {"@odata.type": "#microsoft.graph.user", "id": "user-owner"}
+  ]
+}

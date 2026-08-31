@@ -1,0 +1,170 @@
+---
+title: ゼロから read/write アクセスグラフへ
+description: >-
+  単一のバイナリをビルドし、同梱のデモ estate で起動し、投入された
+  Permitted-vs-Observed アクセスグラフに到達する — 製品の中核となる発想を、
+  端から端まで、数分で。
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+このチュートリアルを終えると、Olivares AI がローカルで稼働し、その中心的な
+アーティファクトに到達します。すなわち、実際の **Permitted-vs-Observed** ドリフト
+結果を伴う **read/write アクセスグラフ** です。あなたは *製品が動くのを見ることで
+製品を学びます* — これは学習用の経路であり、本番インストールではありません
+（それについては[セルフホスティング](/ja/how-to/self-hosting/)を参照）。
+
+ここでは同梱の **デモ estate**（`--seed-demo`）を使います。これはエージェント、
+アイデンティティ、リソースの小さな合成セットで、ライブの pgAudit や
+OpenTelemetry collector とまったく同じように **実際の** イベントバスを流れます。
+すべては `localhost` 上で実行されます。
+
+<Aside type="caution" title="デモモードは学習専用">
+`--seed-demo` は、**公開された、ソースツリーのパスワード** を持つデモ管理者と
+合成データをプロビジョニングし、**非ループバックアドレスでは起動を拒否** します。
+実際のインストールには決して使わないでください。本物の初回実行経路
+（ワンタイムセットアップトークン、デフォルト認証情報なし、実際のソース）は
+[セルフホスティング](/ja/how-to/self-hosting/)で扱われます。
+</Aside>
+
+## 前提条件
+
+- **Go 1.26+**（バイナリをビルドするため）、または Docker（コンテナ経路については
+  [セルフホスティングの how-to](/ja/how-to/self-hosting/) を参照）。
+- シェルから API と対話するための `curl` と `python3`。
+- Olivares AI リポジトリのチェックアウト。
+
+## ビルドして起動する
+
+<Steps>
+
+1. **単一のバイナリをビルドします。** リポジトリのルートから:
+
+   ```bash
+   task setup    # install git hooks, commit tooling and web deps
+   task build    # compile the static binary with the web embedded (go:embed)
+   ./bin/olivares version
+   ```
+
+   `task build` は web バンドル、ファーストパーティのコネクタプラグイン、そして
+   バイナリをビルドし、`./bin/olivares` に 1 つの自己完結型アーティファクトを
+   生成します。
+
+   <Aside type="note">
+   バイナリだけが欲しく、web バンドルがすでにビルド済みである場合、素のビルドは
+   `CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares` です
+   — ストアは純粋 Go の SQLite（modernc）なので、C ツールチェーンは不要です。
+   </Aside>
+
+2. **デモ estate で起動します**（ループバック上）。クリーンな状態で始めるために、
+   新しいデータディレクトリを選びます:
+
+   ```bash
+   DATA="$(mktemp -d)"
+   ./bin/olivares serve --insecure --seed-demo \
+     --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 \
+     --data-dir "$DATA"
+   ```
+
+   `--insecure` フラグはループバック上で平文 HTTP を提供します（ローカルチュートリアル
+   には問題ありません。それ以外ではデフォルトで TLS が有効です）。起動時に、デモ
+   認証情報を伴う **DEMO MODE** バナーが表示されます:
+
+   ```
+   demo@olivares.local / olivares-demo-estate
+   ```
+
+</Steps>
+
+## アクセスグラフに到達する
+
+サーバーを実行したままにして、2 つ目のターミナルを開きます。
+
+<Steps>
+
+1. デモ認証情報で **ログイン** して bearer トークンを取得します:
+
+   ```bash
+   BASE=http://127.0.0.1:8901
+   TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+     | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+   ```
+
+2. **デモテナントを解決します**（access-map エンドポイントはテナントスコープです）:
+
+   ```bash
+   TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+     | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+   ```
+
+3. **read/write グラフを取得します。** これがモジュール III — access map です:
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   デモ estate はおおよそ **20 ノードと 13 エッジ** を返します — エージェント、
+   アイデンティティ、MCP サーバー、モデル、プロバイダー、リソースで、各エッジは
+   read または read-write に分類されています。
+
+4. **Permitted-vs-Observed ドリフトを取得します:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/drift" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   これは投入された **予期しないアクセス** を表面化させます。たとえば:
+
+   - **一度も付与されていない** `appdb.public.secrets` を読み取っているエージェント（帰属あり）。そして
+   - `appdb.public.logs` に書き込んでいる共有プールのアイデンティティ（近似的な帰属）。
+
+   <Aside type="tip" title="/diff ではなく /drift です">
+   Permitted-vs-Observed の結果は `/v1/m/accessmap/drift` で提供されます。
+   `/v1/m/accessmap/diff` エンドポイントは存在しません。
+   </Aside>
+
+5. **(オプション) 投入されたインベントリ全体を見る:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/inventory/summary" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+</Steps>
+
+## web UI で見る
+
+web UI は **同じバイナリに組み込まれて** おり、同じオリジンから提供されます。デモ
+サーバーをまだ実行したまま、次を開きます:
+
+```
+http://127.0.0.1:8901
+```
+
+デモ認証情報でログインし、access-map ビューを開きます。グラフは同じノードとエッジを
+レンダリングし、ドリフトオーバーレイが予期しないアクセスをハイライトし、
+ダッシュボードが estate を要約します。
+
+<Aside type="note" title="今見たものが背骨です">
+*discover → R/RW グラフ → Permitted-vs-Observed diff → inventory/dashboards* が
+製品の中核フローです。デモは合成された観測結果を実際のバスを通じて与えました。
+実際のインストールは代わりにコネクタを通じてそれを与えます — 
+[ソースを接続](/ja/how-to/connect-a-source/)を参照してください。
+</Aside>
+
+## ここで起きていない *こと*（そして次にすべきこと）
+
+- デモデータは合成であり、デモパスワードは公開されています — これは **セキュアな
+  デプロイではありません**。実際のものについては[セルフホスティング](/ja/how-to/self-hosting/)に
+  従ってください: デフォルト認証情報がなく、ワンタイムセットアップトークンを使います。
+- 上で使ったモジュールエンドポイント（`/v1/m/accessmap/*`、`/v1/m/inventory/*`）は
+  到達可能ですが、設計上、提供される OpenAPI ドキュメントの **一部ではありません**。
+  [API リファレンス](/reference/api/)が core REST サーフェスを記載しています。
+- グラフが *なぜ* このように構築されるのか（協調的テレメトリとネイティブなストア
+  監査の交差、バックストップとしての eBPF、信頼できないものとして扱われる MCP
+  アノテーション）を理解するには、
+  [アーキテクチャ概要](/ja/explanation/architecture/overview/)を読んでください。

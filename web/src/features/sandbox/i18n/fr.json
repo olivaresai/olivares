@@ -1,0 +1,185 @@
+{
+  "truncation": {
+    "label": "{{n}} lignes chargées ; il y en a d'autres",
+    "hint": "Cette liste sandbox est plafonnée. Seules les lignes chargées sont affichées."
+  },
+  "title": "Bac à sable de test",
+  "description": "Exécutions isolées et éphémères sur des ressources simulées — simulations de scénarios, rejeux déterministes et comparaisons avant/après déploiement. Les sorties sont synthétiques ; aucun texte cible réel n’est jamais conservé.",
+  "tabs": {
+    "runs": "Exécutions",
+    "comparisons": "Comparaisons",
+    "scenarios": "Scénarios"
+  },
+  "kind": {
+    "scenario": "Scénario",
+    "replay": "Rejeu",
+    "compare": "Comparaison"
+  },
+  "runner": {
+    "inproc-mock": "simulation in-proc",
+    "container": "Conteneur",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "Agent",
+    "model": "Modèle",
+    "prompt": "Invite",
+    "session": "Session",
+    "sandbox_run": "Exécution en bac à sable"
+  },
+  "verdict": {
+    "improved": "Amélioré",
+    "regressed": "Régressé",
+    "unchanged": "Inchangé",
+    "inconclusive": "Non concluant"
+  },
+  "run": {
+    "isolated": "Isolé",
+    "isolatedHint": "L’exécuteur garantit l’isolation : aucune sortie réseau, aucun secret, aucune production. Enregistré tel que rapporté par l’exécuteur, et non déduit.",
+    "notIsolated": "Non isolé",
+    "notIsolatedHint": "Ce backend ne garantit pas l’isolation — affiché littéralement, sans le masquer.",
+    "destroyed": "Détruit",
+    "destroyedHint": "L’état de l’environnement éphémère a été effacé après l’exécution.",
+    "notScored": "Exécuté, non évalué",
+    "pass": "Réussite",
+    "fail": "Échec"
+  },
+  "runs": {
+    "title": "Exécutions",
+    "description": "Chaque exécution isolée, avec le backend qui l’a lancée et son évaluation éventuelle.",
+    "isolationNote": "L’isolation est réelle, non simulée : l’exécuteur et l’indicateur d’isolation sont affichés exactement tels qu’enregistrés. Une exécution dégradée a été lancée mais non évaluée — il ne s’agit pas d’une réussite.",
+    "empty": "Aucune exécution pour l’instant",
+    "errored": "{{count}} erreur",
+    "errored_one": "{{count}} erreur",
+    "errored_many": "{{count}} erreurs",
+    "errored_other": "{{count}} erreurs",
+    "columns": {
+      "kind": "Type",
+      "subject": "Sujet",
+      "runner": "Exécuteur",
+      "isolation": "Isolation",
+      "status": "Statut",
+      "steps": "Étapes",
+      "score": "Score",
+      "started": "Démarrée"
+    }
+  },
+  "outputs": {
+    "title": "Sorties des étapes",
+    "empty": "Aucune sortie enregistrée",
+    "syntheticNote": "Ce sont des sorties synthétiques bornées issues de l’exécuteur simulé — et non des sorties de production. Un échec de simulation est un marqueur déterministe ; il n’a jamais atteint de ressource réelle.",
+    "mockHit": "Correspondance de simulation",
+    "mockMiss": "Échec de simulation"
+  },
+  "stream": {
+    "replayNote": "Le moteur rejoue sur cette connexion les sorties par étape déjà enregistrées de cette exécution, puis la ferme. Une exécution de bac à sable s'exécute de manière synchrone au lancement : il s'agit donc de éléments de preuve déjà enregistrés qui arrivent progressivement, et non de la vue d'une exécution encore en cours.",
+    "waiting": "En attente de la première sortie d'étape ; l'état de la connexion est indiqué ci-dessus.",
+    "connecting": "Connexion…",
+    "receiving": "Réception de la relecture",
+    "complete": "Relecture terminée",
+    "completePartial": "La relecture s'est terminée, mais ce n'est pas l'enregistrement complet",
+    "unreadable": "Trames que cette vue n'a pas pu lire : {{n}}. Elles sont arrivées et ont été écartées : les preuves qu'elles portaient manquent ici — ce n'est pas une relecture intègre.",
+    "emptyUnreadable": "Aucune sortie d'étape n'a pu être lue",
+    "disconnected": "Non connecté",
+    "lost": "Connexion perdue — vous ne voyez plus cette exécution.",
+    "lostHint": "Cela ne signifie PAS que l'exécution est terminée : la connexion s'est interrompue avant que le moteur ne signale la fin de la relecture. Le statut de l'exécution est celui enregistré par le moteur, affiché dans le tableau des exécutions ; il n'est jamais déduit de cette connexion. Reconnectez-vous pour reprendre ; les sorties déjà affichées ne sont pas répétées.",
+    "reconnect": "Se reconnecter",
+    "snapshot": "Le flux n'a rien transmis : voici les sorties stockées, lues via l'API JSON — un instantané, pas la vue en direct.",
+    "summary": "Résumé du moteur : {{ok}} étapes sur {{total}} résolues avec un mock, {{error}} mock-miss."
+  },
+  "comparisons": {
+    "title": "Comparaisons avant/après déploiement",
+    "description": "Référence comparée à la version candidate, évaluées sur la même suite — le verdict qui conditionne un déploiement.",
+    "empty": "Aucune comparaison pour l’instant",
+    "emptyHint": "Lancez une comparaison pour évaluer une variante candidate par rapport à sa référence.",
+    "baseline": "Référence",
+    "candidate": "Candidate",
+    "delta": "Écart",
+    "decidedBy": "Décidé par",
+    "scoredAgainst": "Évalué sur",
+    "noSuite": "Aucune suite — le verdict est non concluant sans référence et candidate évaluées."
+  },
+  "scenarios": {
+    "title": "Scénarios",
+    "description": "Spécifications réutilisables d’entrées d’étapes synthétiques ainsi que de réponses MCP/ressource simulées.",
+    "empty": "Aucun scénario pour l’instant",
+    "emptyHintAuthor": "Enregistrez le premier jeu de test synthétique : les entrées d’étapes que reçoit un sujet, ainsi que les réponses simulées auxquelles elles se résolvent.",
+    "emptyHintReadOnly": "Les scénarios sont rédigés par un appelant disposant du droit d’écriture sur les scénarios du bac à sable. Sans ce droit, vous pouvez lire ceux qui existent ainsi que leurs exécutions.",
+    "emptyHintConfined": "Votre appartenance est confinée à un espace de travail. Un scénario est un jeu de test au niveau du locataire : le moteur refuse donc de l’enregistrer depuis une appartenance confinée — c’est à un membre de portée locataire de le rédiger.",
+    "columns": {
+      "name": "Nom",
+      "subjectKind": "Sujet",
+      "steps": "Étapes",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "create": {
+      "action": "Nouveau scénario",
+      "title": "Nouveau scénario",
+      "description": "Un scénario est un jeu de test synthétique : les entrées d’étapes que reçoit un sujet et les réponses MCP/ressource simulées auxquelles elles se résolvent. Rien ici n’atteint une ressource réelle.",
+      "name": "Nom",
+      "namePlaceholder": "Agent de paiement — cas nominal",
+      "subjectKind": "Sujet",
+      "subjectKindHint": "Ce que le scénario met à l’épreuve — agent, modèle, prompt ou session. Texte libre, nettoyé des espaces et conservé jusqu’à 200 caractères.",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Ce que ce jeu de test met à l’épreuve, et pourquoi il existe.",
+      "steps": "Étapes",
+      "stepsHint": "Les entrées que reçoit le sujet, dans l’ordre. Laissez une clé vide et le moteur attribue step-1, step-2, et ainsi de suite.",
+      "stepsEmpty": "Aucune étape pour l’instant — une exécution de ce scénario ne produirait aucune sortie.",
+      "addStep": "Ajouter une étape",
+      "removeStep": "Supprimer l’étape {{index}}",
+      "stepKey": "Clé de l’étape {{index}}",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "Entrée de l’étape {{index}}",
+      "stepInputPlaceholder": "Classe cette demande de remboursement.",
+      "mocks": "Simulations",
+      "mocksHint": "La réponse que renvoie chaque MCP/ressource simulé. Une étape qui ne trouve aucune simulation enregistre un marqueur déterministe de simulation manquante — elle n’appelle jamais l’extérieur.",
+      "mocksEmpty": "Aucune simulation pour l’instant — chaque étape enregistrerait un marqueur de simulation manquante.",
+      "addMock": "Ajouter une simulation",
+      "removeMock": "Supprimer la simulation {{index}}",
+      "mockResource": "Ressource de la simulation {{index}}",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "Réponse de la simulation {{index}}",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "Ne saisissez que du texte synthétique : rien ici n’est classifié, expurgé ni rejeté, donc un secret collé est un secret stocké. Le moteur ne fait que borner la longueur — le nom à 200 caractères, la description à 1024, le corps de chaque étape ou simulation à 8192 — en ajoutant des points de suspension lorsqu’il tronque.",
+      "submit": "Créer le scénario",
+      "submitting": "Création…",
+      "success": "Scénario créé",
+      "failed": "Le scénario n’a pas été créé."
+    },
+    "archive": {
+      "action": "Archiver",
+      "alreadyArchived": "Déjà archivé",
+      "confirmTitle": "Archiver ce scénario ?",
+      "confirmBody": "« {{name}} » est marqué archivé et la décision est consignée au journal d’audit. Les exécutions et comparaisons qui l’ont déjà utilisé sont conservées — archiver ne supprime jamais de preuve. C’est un changement de statut, pas un blocage : le moteur exécute encore un scénario dans cet état si quelque chose le lui demande.",
+      "success": "Scénario archivé"
+    }
+  },
+  "seam": {
+    "synthetic": "Données synthétiques : non câblé",
+    "syntheticData": "La génération de données synthétiques est un point d’extension documenté pour l’après-v1 — non implémenté dans cette version."
+  },
+  "empty": {
+    "runs": {
+      "title": "Aucune exécution en bac à sable enregistrée",
+      "description": "Les exécutions apparaissent lorsqu’un appelant autorisé lance via l’API du bac à sable un scénario, un rejeu ou une comparaison préenregistrés."
+    },
+    "scenarios": {
+      "title": "Aucun scénario de bac à sable défini",
+      "description": "Un scénario est un jeu de test synthétique conçu par un opérateur, enregistré par un appelant disposant du droit d’écriture sur les scénarios du bac à sable — depuis cet écran ou via l’API du bac à sable."
+    }
+  },
+  "actions": {
+    "replay": "Replay a session",
+    "compare": "Compare variants",
+    "run": "Replay",
+    "compareRun": "Compare",
+    "sessionRef": "Session ref",
+    "scenarioRef": "Scenario ref (optional)",
+    "baseline": "Baseline variant",
+    "candidate": "Candidate variant",
+    "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
+    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs."
+  }
+}

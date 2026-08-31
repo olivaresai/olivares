@@ -1,0 +1,51 @@
+# A Flux HelmRelease that installs the Olivares AI control-plane chart from the
+# OCI HelmRepository in helmrepository.yaml. apiVersion
+# helm.toolkit.fluxcd.io/v2 is the GA Helm API. Flux pulls the chart at the pinned
+# `spec.chart.spec.version`, renders it with the values below, and continuously
+# reconciles the release — the pull-based, reconciled half of OpenGitOps 1.0
+# (see deploy/gitops/README.md).
+#
+# This manifest is a TEMPLATE: pin `version` to the chart SemVer you verified and
+# pin `values.image.digest` to the engine image digest you verified (the air-gap /
+# supply-chain posture of values.yaml — never a bare tag in production).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: olivares
+  namespace: olivares-system
+  labels:
+    app.kubernetes.io/part-of: olivares
+spec:
+  # How often Flux reconciles the release against desired state.
+  interval: 30m
+  chart:
+    spec:
+      chart: olivares
+      # CHART SemVer to deploy. 0.2.4 is the chart's current version
+      # (deploy/helm/olivares/Chart.yaml). Pin to the version you
+      # verified + signed; a fixed version (not a range) is the GitOps posture.
+      version: "0.2.4"
+      sourceRef:
+        kind: HelmRepository
+        name: olivares-charts
+        namespace: olivares-system
+      # Re-pull the chart on the HelmRepository's own cadence.
+      interval: 1h
+  # Install creates destination namespace if missing; remediate on failure.
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    image:
+      repository: docker.io/olivaresai/olivares
+      # Pin the ENGINE IMAGE BY DIGEST (SCP-06). PLACEHOLDER all-zero sha256 —
+      # replace with the digest you verified for the appVersion this chart
+      # targets. With image.digest set, the chart ignores image.tag.
+      digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      tag: "" # leave empty so the deploy is pinned by content, not by tag
+    core:
+      engine: sqlite # single-node default; set "postgres" + postgres.dsnSecret for scale

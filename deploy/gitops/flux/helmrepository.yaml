@@ -1,0 +1,35 @@
+# A Flux HelmRepository pointing at the OCI registry that holds the Olivares AI
+# control-plane chart. `type: oci` makes Flux treat the URL as
+# an OCI registry (helm pull over the OCI distribution spec) rather than a classic
+# index.yaml HTTP repo — matching how the chart is published (deploy/helm/README.md;
+# Helm is OCI-default since v3.8.0).
+#
+# apiVersion source.toolkit.fluxcd.io/v1 is the GA Source API. Pair this with the
+# HelmRelease in helmrelease.yaml (sourceRef -> this object). See
+# deploy/gitops/README.md for the OpenGitOps 1.0 alignment.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: olivares-charts
+  namespace: olivares-system
+  labels:
+    app.kubernetes.io/part-of: olivares
+spec:
+  type: oci
+  url: oci://ghcr.io/olivaresai/charts
+  # How often Flux refreshes its view of the registry (pull-based reconciliation).
+  interval: 1h
+  # GHCR is public for the released chart, so no auth is needed. For a private
+  # mirror, reference a pull secret here:
+  # secretRef:
+  #   name: ghcr-auth   # a kubernetes.io/dockerconfigjson Secret
+  #
+  # OPTIONAL but RECOMMENDED: have Flux cryptographically verify the chart's
+  # cosign signature before it is pulled (the chart is keyless-cosign-signed by
+  # release-chart.yml). This is the supply-chain gate on the consumption side.
+  # verify:
+  #   provider: cosign
+  #   # keyless: matchOIDCIdentity pins the Fulcio identity of the publisher.
+  #   matchOIDCIdentity:
+  #     - issuer: https://token.actions.githubusercontent.com
+  #       subject: ^https://github.com/olivaresai/olivares

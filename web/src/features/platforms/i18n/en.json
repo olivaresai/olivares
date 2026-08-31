@@ -1,0 +1,105 @@
+{
+  "title": "Platforms & lifecycle",
+  "description": "The multi-surface deployment matrix and per-platform model lifecycle for the Claude estate — compliance posture by surface and divergent retirement deadlines. Reference served by the engine, never recomputed.",
+  "tabs": {
+    "surfaces": "Surfaces & compliance",
+    "lifecycle": "Model lifecycle"
+  },
+  "liveReference": "Reference served by the engine — AsOf {{date}}, source {{source}}.",
+  "unavailable": "The platforms reference is unavailable on this engine",
+  "confirm": {
+    "confirmed": "Confirmed",
+    "toConfirm": "To confirm"
+  },
+  "surfaces": {
+    "title": "Deployment surfaces",
+    "description": "The six modeled Claude surfaces (ANT2-01/17). Each differs in base URL, auth, model-id form, billing, residency and compliance posture — they are not interchangeable.",
+    "matrixTitle": "Surface attribute matrix",
+    "matrixSummary": "Six deployment surfaces compared across operator, endpoint, auth, model-id form, API support, billing, HIPAA, ZDR and residency.",
+    "unmodeled": "Unmodeled surface — no attribute matrix.",
+    "unmodeledHint": "This gateway is not one of the six modeled Claude surfaces; its compliance and residency attributes are not declared and are not inferred.",
+    "deprecatedBadge": "Deprecated",
+    "noWorkspaceHeader": "none",
+    "noSigv4": "n/a",
+    "apiSupportTitle": "Anthropic API support by surface",
+    "apiSupportDescription": "Which Anthropic API families apply per surface. A surface without the Admin/Models/Compliance APIs cannot serve Anthropic-side governance ingest — it degrades honestly, never reports empty as \"no findings\".",
+    "columns": {
+      "surface": "Surface",
+      "operator": "Operator",
+      "baseUrl": "Base URL",
+      "sigv4": "SigV4 service",
+      "workspaceHeader": "Workspace header",
+      "modelIdForm": "Model-id form",
+      "billing": "Billing",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "Residency / inference geo",
+      "apiSupport": "API support",
+      "messages": "Messages",
+      "admin": "Admin",
+      "compliance": "Compliance",
+      "models": "Models",
+      "batches": "Batches",
+      "mcp": "MCP connector"
+    },
+    "api": {
+      "supported": "Supported",
+      "unsupported": "Not supported"
+    },
+    "fedramp": {
+      "eligible": "HIPAA / FedRAMP / IL4-5 eligible",
+      "na": "Not declared"
+    },
+    "notesTitle": "Surface notes",
+    "compliance": {
+      "title": "Compliance posture",
+      "description": "HIPAA / FedRAMP / IL / ZDR are a per-surface axis (where inference runs), distinct from a model's or provider's GPAI posture. Do not conflate them.",
+      "hipaaNote": "HIPAA is shown with its confirm status. A \"to-confirm\" posture is never rendered as a hard yes or no."
+    }
+  },
+  "lifecycle": {
+    "title": "Per-platform model lifecycle",
+    "description": "Model retirement is per-platform, not global (ANT2-03). Anthropic-operated surfaces retire a model on a different date than Bedrock and Vertex — a single \"retired\" flag would give a false migration deadline on half the estate.",
+    "datePending": "date not published / to-confirm",
+    "noSuccessor": "No successor declared",
+    "noSuccessorHint": "The authority named no replacement model for this family. None is inferred.",
+    "matrixTitle": "Retirement deadlines by surface",
+    "columns": {
+      "model": "Model",
+      "surface": "Surface",
+      "retiresOn": "Retires on",
+      "status": "Status",
+      "replacement": "Replacement"
+    },
+    "paramDeprecation": {
+      "title": "Parameter deprecation pre-advice",
+      "badge": "Informational",
+      "body": "{{affected}} reject a non-default {{params}} with an HTTP {{status}}. This is Anthropic's deprecation (ANT2-03), not a product bug and not a fixable error — the inference plane withholds these parameters as pre-advice.",
+      "paramsJoin": ", "
+    },
+    "notes": {
+      "title": "Bedrock id & residency notes",
+      "declaredNote": "Web-declared reference: these notes cite modules/models/bedrock.go honesty facts the platforms endpoint does not serve. Each carries its own confirm status.",
+      "crisIdFormat": "Cross-region inference-profile id format is \"<geo>.anthropic.<model>\", geo ∈ {us, eu, apac, global}. The current Bedrock Mantle surface uses the bare \"anthropic.<model>\" id.",
+      "crisOpusId": "The concrete Bedrock Global-CRIS opus inference-profile id is not verified against the AWS page — the format is confirmed, that specific id is not presented as authoritative.",
+      "globalRegionalPremium": "AWS docs indicate regional inference profiles carry a ~10% premium over global (global is the cheaper baseline) — opposite of a \"global +10%\" assumption; the exact multiplier is unverified, so no premium is modeled.",
+      "usBurndown": "US-only inference burndown is 1.1× (Opus 4.6 / Sonnet 4.6+, inference_geo=\"us\")."
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "No model retirement schedules declared",
+      "description": "The engine's compiled Claude lifecycle reference must supply these deadlines; tenant activity and console input do not populate them."
+    },
+    "surface": {
+      "title": "No deployment surfaces declared",
+      "description": "The engine's compiled Claude surface reference must supply these rows; tenant activity and console input do not populate them."
+    }
+  },
+  "effectiveState": {
+    "label": "In this estate:",
+    "models": "Model catalog",
+    "modelOps": "Model operations"
+  }
+}

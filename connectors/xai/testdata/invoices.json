@@ -1,0 +1,27 @@
+{
+  "invoices": [
+    {
+      "teamId": "team_default",
+      "invoiceId": "inv_001",
+      "invoiceNumber": "2026-05",
+      "createTime": "2026-06-01T00:00:00Z",
+      "invoiceStatus": "PAID",
+      "total": "14.75",
+      "lines": [
+        { "clusterName": "us-east-1", "description": "Grok 4.3 input tokens", "amount": "10.50" },
+        { "clusterName": "us-east-1", "description": "Grok 4.3 output tokens", "amount": "4.25" }
+      ]
+    },
+    {
+      "teamId": "team_default",
+      "invoiceId": "inv_002",
+      "invoiceNumber": "2026-06",
+      "createTime": "2026-06-20T00:00:00Z",
+      "invoiceStatus": "PENDING",
+      "total": "2.00",
+      "lines": [
+        { "clusterName": "us-east-1", "description": "Grok 4.3 input tokens", "amount": "2.00" }
+      ]
+    }
+  ]
+}

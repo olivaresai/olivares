@@ -1,0 +1,534 @@
+---
+title: Référence du bus d'événements (AsyncAPI 3.0)
+description: >-
+  La plateforme d'eventing sous forme de contrat AsyncAPI 3.0 — ses types
+  d'événements catalogués, leur enveloppe et leurs payloads, la sémantique du bus
+  live et de l'intake durable, l'encodage wire et les abonnements webhook externes.
+  La contrepartie asynchrone de la référence REST.
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components'
+
+Les connecteurs hissent des observations normalisées sur le **bus d'événements interne** du
+moteur sous forme d'**événements** ; les modules et les connecteurs de sortie **s'abonnent
+par type d'événement** et réagissent — sans qu'aucun n'importe l'autre. Cette page est ce
+contrat, exprimé en **AsyncAPI 3.0** — la contrepartie asynchrone de la [référence de l'API
+REST](/reference/api/).
+
+<Aside type="note" title="Spec lisible par machine">
+Le document AsyncAPI 3.0 complet et validé est disponible au téléchargement :
+**[`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)**. Il est **dérivé à la main du SDK
+Go et du catalogue Eventing** (il n'y a pas de codegen), donc les sources de vérité faisant
+autorité sont l'enveloppe/les payloads du SDK et `modules/eventing/catalog.go` ; cette page
+et le YAML sont tenus en phase avec eux à la main.
+</Aside>
+
+## Le modèle du bus
+
+- **Transport.** Le défaut v1 est un **bus de Go-channels in-process** à l'intérieur de
+  l'unique binaire `olivares`. L'interface `Bus` n'expose aucun channel, si bien qu'une
+  implémentation distribuée (**NATS**) peut être insérée pour des déploiements multi-hôtes
+  sans changer un seul abonné. NATS est le binding distribué prévu, **non** requis pour le
+  défaut.
+- **Abonnement.** Un abonné enregistre un handler filtré par un ensemble de types
+  d'événements ; un ensemble vide signifie *tous* les événements. Le bus possède la
+  goroutine qui exécute le handler.
+- **Livraison.** Asynchrone et **at-least-once** : chaque abonné a sa propre file
+  bufferisée drainée par une goroutine dédiée ; un abonné lent applique une backpressure ;
+  un panic de handler est isolé. Les consommateurs **dédupliquent** sur le timestamp de la
+  clé naturelle après un redémarrage de connecteur.
+- **Minimal-data.** Chaque événement porte le *fait*, **jamais** les payloads bruts, les
+  secrets ou les PII. Une arête est `(origin → resource, R/RW)` ; un finding porte un *hash*
+  du détail expurgé, jamais le détail.
+- **Intake durable.** `audit.recorded` et les types durables `work.*` ne voyagent jamais
+  sur le bus local au processus. Leur outbox source fournit un ID stable et ne règle
+  l'événement qu'après sa persistance par Eventing. Un replay exact est un no-op ; réutiliser
+  le même ID pour un type, une source, un instant ou un payload différent est refusé.
+
+## L'enveloppe
+
+Chaque événement partage l'enveloppe immuable `Event` ; l'observation voyage dans
+`Payload`.
+
+| Champ | Type | Signification |
+|---|---|---|
+| `ID` | string | Id unique de l'événement, assigné par le moteur pour le trafic du bus et exigé d'une source durable avant l'intake. |
+| `Type` | string | Le discriminateur — l'une des adresses de channel ci-dessous. |
+| `Tenant` | string | Le tenant d'origine sous forme de référence string ; le moteur le résout en interne. |
+| `Source` | string | Nom du composant (connecteur/module) qui l'a émis. |
+| `Time` | timestamp | Quand le fait sous-jacent s'est produit, dans l'horloge du connecteur. |
+| `Payload` | object | Le fait — l'un des schémas de payload ci-dessous. |
+
+## Channels
+
+Le catalogue combine des observations first-party scellées, des événements de bus live
+définis par les modules et les channels réservés à l'intake durable énumérés ci-dessous.
+Chaque type porte son propre **niveau de stabilité**, piloté depuis le catalogue in-code (voir
+[Stabilité de l'API](/fr/reference/api-stability/) : stable = fenêtre dépréciation→sunset de
+24 mois, beta = 12 mois, contraignante à partir de la GA ; un payload beta peut encore
+gagner des champs, jamais en perdre silencieusement).
+
+| Channel (`Type`) | Payload | Objet | Transport | Stabilité |
+|---|---|---|---|---|
+| `edge.observed` | `EdgeObservation` | une origine a touché une ressource (R/RW) — la colonne vertébrale de l'access map | gRPC typé `oneof` | **stable** |
+| `cost.sampled` | `CostSample` | un fait de coût d'usage modèle/provider | gRPC typé `oneof` | **stable** |
+| `finding.reported` | `FindingReport` | un finding guardrail/red-team/forensic | gRPC typé `oneof` | **stable** |
+| `guardrail.observed` | `ObservedText` | un extrait expurgé de texte d'agent observé (entrée détective) | fallback JSON | **beta** |
+| `approval.requested` | `ApprovalRequest` | une approbation en attente a été ouverte et attend une décision | fallback JSON | **beta** |
+| `policy.changed` | `PolicyChange` | une politique de gouvernance a été créée, mise à jour ou supprimée | fallback JSON | **beta** |
+| `metric.sampled` | `MetricSample` | un échantillon de métrique d'usage/productivité ; son sujet peut être une référence de développeur | gRPC typé `oneof` | **beta** |
+| `approval.resolved` | `ApprovalResolution` | une approbation en attente a atteint un résultat terminal | fallback JSON | **beta** |
+| `workflow.signal` | `WorkflowSignal` | une étape `eventing-emit` d'un workflow DAG s'est exécutée | fallback JSON | **beta** |
+| `work.item.created` | `WorkEventFact` | un fait durable de création de WorkItem | intake durable | **beta** |
+| `work.item.transitioned` | `WorkEventFact` | une mise à jour, un archivage ou une transition d'état gouvernée et durable de WorkItem | intake durable | **beta** |
+| `work.owner.changed` | `WorkEventFact` | l'owner canonique ou l'epoch d'ownership a changé | intake durable | **beta** |
+| `work.dependency.changed` | `WorkEventFact` | une dépendance a été ajoutée, réactivée ou tombstonée | intake durable | **beta** |
+| `work.acceptance.changed` | `WorkEventFact` | un critère d'acceptation a été créé, mis à jour, évalué ou waived | intake durable | **beta** |
+| `work.message.available` | `DirectNoticeAvailableV1` ou `WorkflowMessageCarrierV1` | un DirectNotice ou un porteur Message de tâche de workflow est devenu disponible | intake durable | **beta** |
+| `work.message.acknowledged` | `DirectNoticeAcknowledgedV1` | un Delivery a reçu un Ack explicite, ponctuel ou tardif | intake durable | **beta** |
+| `work.message.retracted` | `MessageLifecycleV1` | un Message a été rétracté | intake durable | **beta** |
+| `work.message.expired` | `MessageLifecycleV1` | un Message a atteint sa limite d'expiration | intake durable | **beta** |
+| `work.message.overdue` | `MessageLifecycleV1` | un Message a franchi son délai d'acquittement | intake durable | **beta** |
+| `work.message.rerouted` | `MessageDerivedV1` | un reroutage gouverné a dérivé un nouveau porteur Message | intake durable | **beta** |
+| `work.message.escalated` | `MessageDerivedV1` | un Message en retard a produit une escalade bornée | intake durable | **beta** |
+| `work.protocol.reply.available` | `WorkflowMessageCarrierV1` | une réponse de protocole authentifiée est devenue un porteur Message local borné | intake durable | **beta** |
+| `work.protocol.message.received` | `WorkflowMessageCarrierV1` | un Message de protocole entrant authentifié est devenu un porteur Message local borné | intake durable | **beta** |
+| `work.handoff.carrier.available` | `WorkflowMessageCarrierV1` | un workflow a créé le porteur Message/Delivery d'un futur Handoff | intake durable | **beta** |
+| `work.decision.recorded` | `WorkEventFact` | une décision append-only et sa projection head actuelle ont été enregistrées | intake durable | **beta** |
+| `work.decision.request.responded` | `DecisionRequestEvent` | un DecisionRequest a reçu une réponse gouvernée explicite | intake durable | **beta** |
+| `work.decision.request.expired` | `DecisionRequestEvent` | un DecisionRequest a franchi son échéance | intake durable | **beta** |
+| `work.handoff.offered` | `HandoffEventV1` | un Handoff gouverné a été offert | intake durable | **beta** |
+| `work.handoff.accepted` | `HandoffEventV1` | la cible d'un Handoff a accepté l'offre | intake durable | **beta** |
+| `work.handoff.rejected` | `HandoffEventV1` | la cible d'un Handoff a rejeté l'offre | intake durable | **beta** |
+| `work.handoff.withdrawn` | `HandoffEventV1` | l'owner d'un Handoff a retiré l'offre | intake durable | **beta** |
+| `work.handoff.expired` | `HandoffEventV1` | un Handoff a franchi son délai d'acquittement | intake durable | **beta** |
+| `work.lease.acquired` | `WorkEventFact` | un lease a été acquis, repris ou renouvelé ; renew conserve sa fence | intake durable | **beta** |
+| `work.lease.ended` | `WorkEventFact` | un lease a été libéré, a expiré ou a été révoqué (mort du holder comprise) et son ancienne génération invalidée | intake durable | **beta** |
+| `work.binding.reserved` | `ProtocolBindingEvent` | un protocol binding et l'autorité WorkItem fenced ont été réservés avant transmission | intake durable | **beta** |
+| `work.binding.observed` | `ProtocolBindingEvent` | une observation de protocole a produit un résultat CLEAN ou BROKEN | intake durable | **beta** |
+| `work.binding.ambiguous` | `ProtocolBindingEvent` | une observation de protocole est restée explicitement UNKNOWN | intake durable | **beta** |
+| `work.binding.cancel_requested` | `ProtocolBindingEvent` | une intention d'annulation a été durablement revendiquée avant l'effet distant | intake durable | **beta** |
+| `audit.recorded` | `AuditRecord` | un enregistrement scellé de l'audit ledger transmis à un SIEM — **jamais sur le bus** (voir ci-dessous) | intake durable | **stable** |
+
+<Aside type="caution" title="L'encodage wire diffère selon le type">
+Les quatre types first-party (`edge.observed`, `cost.sampled`, `finding.reported`,
+`metric.sampled`) voyagent par le **`oneof` gRPC typé** du contrat de connecteur,
+jamais en JSON. Les types définis par les modules ne sont **pas** des observations
+scellées : ils utilisent des payloads JSON appartenant au module. Les cinq types du bus
+live voyagent par un **fallback JSON non versionné** appartenant aux modules qui publient
+et consomment : `guardrail.observed` est une entrée détective de couche module/ingest
+documentée dans le contrat runtime-ingestion ; `approval.requested`,
+`approval.resolved` et `policy.changed` sont des événements de cycle de vie de gouvernance
+publiés post-commit ; `workflow.signal` est publié par le module d'orchestration lorsqu'un
+workflow DAG atteint une étape `eventing-emit`. Ils sont délibérément absents de la table
+wire first-party figée ; ils sont consignés ici par souci d'exhaustivité et marqués comme
+ne faisant pas partie du sealed sum type. Les types réservés au durable utilisent le
+contrat d'intake décrit ensuite, pas ce fallback.
+</Aside>
+
+<Aside type="note" title="Les channels durables ne voyagent pas sur le bus">
+`audit.recorded` et `work.*` sont abonnables, protégés par RBAC et rejouables comme tout
+autre type, mais **aucun composant ne les publie sur le bus in-process**. Les enregistrements
+scellés du ledger entrent par leur cursor de chaîne dédié. Les faits K1/K2 WorkItem et lease,
+les faits K3/K4 Message, DecisionRequest et Handoff et les faits K5 ProtocolBinding entrent
+par un outbox côté source et l'intake durable générique après le commit de la transaction
+source. L'abonnement est normal ; ces channels n'apparaissent simplement jamais dans le
+fan-out du bus.
+</Aside>
+
+## Payloads
+
+### `EdgeObservation` — `edge.observed`
+
+Minimal-data : identifiants et classification d'accès uniquement.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `OriginKind` | enum | `agent` \| `identity` \| `session` |
+| `OriginRef` | string | la référence naturelle du connecteur pour l'origine |
+| `ResourceKind` | string | p. ex. `postgres.table`, `s3.bucket`, `http.api` |
+| `ResourceRef` | string | p. ex. `public.customers`, `arn:aws:s3:::bucket` |
+| `Mode` | enum | `unknown` \| `read` \| `write` \| `readwrite` |
+| `Source` | enum | `otel` \| `mcp_annotation` \| `pg_audit` \| `cloudtrail` \| `ebpf` \| `policy` \| `a2a` |
+| `Confidence` | enum | `attributed` \| `approximate` |
+| `ToolRef` | string | outil/opération optionnel ayant réalisé l'accès |
+| `ObservedAt` | timestamp | le timestamp de clé naturelle sur lequel les consommateurs dédupliquent |
+
+`mcp_annotation` est traité comme **non fiable** (corroboré, jamais accordé seul) ; le mode
+`unknown` et la confiance `approximate` sont explicites, si bien que le produit ne fabrique
+jamais de certitude.
+
+### `CostSample` — `cost.sampled`
+
+L'argent est en **micro-USD** entiers (millionièmes de dollar). Les champs après les sept
+premiers sont une extension additive et neutre vis-à-vis du provider, alignée sur
+OpenTelemetry `gen_ai.*` et FOCUS ; **zéro/vide signifie « non rapporté », jamais
+« zéro »**.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `ProviderRef`, `ModelRef` | string | références naturelles de provider/modèle |
+| `SessionRef` | string | lien optionnel à une session |
+| `InputTokens` | int64 | TOTAL d'entrée (le split de cache ci-dessous est une ventilation *de* ce total) |
+| `OutputTokens` | int64 | compte de sortie |
+| `CostMicroUSD` | int64 | coût en micro-USD |
+| `OccurredAt` | timestamp | quand l'usage s'est produit |
+| `CacheReadTokens` | int64 | tokens d'entrée cache-hit |
+| `CacheCreation1hTokens`, `CacheCreation5mTokens` | int64 | tokens de cache-write par TTL |
+| `WorkspaceRef` | string | workspace/projet de facturation |
+| `APIKeyRef` | string | référence **masquée** de clé/service-account, jamais le secret |
+| `Actor` | string | le principal qui a engagé le coût (le « qui » de la refacturation) |
+| `ServiceTier`, `ContextWindow`, `InferenceGeo` | string | vocabulaire du provider (tier / bande de contexte / résidence) |
+| `Gateway` | enum | `direct` \| `bedrock-mantle` \| `bedrock-legacy` \| `vertex` \| `foundry` \| `claude-platform-aws` (string ouverte) |
+| `Provenance` | enum | `estimated` \| `billed` — vide traité comme estimated |
+| `CostType` | string | classe de charge server-tool non-token (vide = coût ordinaire de tokens) |
+
+### `FindingReport` — `finding.reported`
+
+| Champ | Type | Notes |
+|---|---|---|
+| `Kind` | string | p. ex. `guardrail`, `redteam`, `forensic` |
+| `Severity` | enum | `info` \| `low` \| `medium` \| `high` \| `critical` |
+| `SubjectKind`, `SubjectRef` | string | l'objet du finding |
+| `Title` | string | résumé court, non sensible, sûr à afficher |
+| `DetailHash` | string | SHA-256 hex du détail expurgé ; le détail brut n'est jamais transmis ni stocké |
+| `OccurredAt` | timestamp | quand le finding a été produit |
+| `OWASPLLM`, `OWASPASI`, `ATLAS` | string[] | références de frameworks (OWASP LLM Top 10, OWASP Agentic Top 10, MITRE ATLAS) ; un finding peut en mapper plusieurs à la fois |
+
+### `ObservedText` — `guardrail.observed`
+
+Un extrait borné et **déjà expurgé** de texte d'agent observé. Le producteur doit expurger
+secrets/PII avant d'émettre ; le consommateur le re-borne défensivement.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `Surface` | enum | `input` \| `output` \| `tool_args` |
+| `Text` | string | l'extrait expurgé et borné qu'inspectent les détecteurs |
+| `AgentRef`, `SessionRef`, `ResourceRef` | string | références de contexte non sensibles (chacune peut être vide) |
+
+### `ApprovalRequest` — `approval.requested`
+
+Minimal-data : identifiants et paramètres de décision de l'approbation uniquement. Elle ne
+porte délibérément **ni** la raison en texte libre du demandeur **ni** la référence du
+sujet ; un consommateur autorisé pour `governance:approval:read` récupère l'approbation
+complète par `ApprovalID`.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `ApprovalID` | string | l'id de l'approbation — la référence pour récupérer, décider ou surveiller la requête |
+| `Action` | string | l'action demandée (un identifiant court borné) |
+| `SubjectKind` | string | le kind de sujet visé par l'action (la *référence* du sujet n'est délibérément pas portée) |
+| `RiskTier` | string | la classification de risque sous laquelle la requête a été ouverte (p. ex. `critical`) ; détermine le plancher de dual-control |
+| `RequiredApprovals` | int64 | le nombre d'approbateurs distincts requis |
+| `PolicyRef` | string | la politique d'approbation qui a matché ; vide quand la requête a utilisé des paramètres fournis par l'appelant |
+| `ExpiresAt` | timestamp | quand la requête en attente expire (absent = n'expire jamais) |
+| `EscalateAt` | timestamp | quand une requête non décidée escalade (absent = jamais) |
+
+### `MetricSample` — `metric.sampled`
+
+Une mesure d'usage/productivité. Le sujet peut être une **référence de développeur**
+(l'e-mail interne à l'organisation ou le nom de clé requis par le sujet ROI), ce qui
+explique pourquoi sa réception est protégée par la permission privilégiée de drill-down,
+et non par le niveau viewer de l'agrégat.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `Name` | string | nom naturel de la métrique (p. ex. `claude_code.lines_of_code.count`) |
+| `Value` | int64 | mesure dans son unité entière naturelle ; l'entier conserve l'exactitude de l'arithmétique mesure/argent |
+| `Additive` | bool | `true` = delta à SOMMER ; `false` = niveau/snapshot à conserver comme le plus récent |
+| `Unit` | string | `lines` \| `commits` \| `sessions` \| `tokens` \| `ms` \| `1` \| … ; vide = sans dimension |
+| `SubjectKind`, `SubjectRef` | string | qui/ce que concerne la mesure — `developer` \| `team` \| `session` \| `account` \| `org` \| `agent` et sa référence |
+| `OccurredAt` | timestamp | instant du datapoint (delta) ou jour du bucket (snapshot) ; également clé d'idempotence contrôlée par le producteur |
+| `Dimensions` | map | axes de ventilation propres à la métrique ; labels structurels, jamais payload/PII — ils FONT PARTIE de la clé naturelle |
+| `Labels` | map | tags d'attribution fournis par l'opérateur (équipe/projet/centre de coût) ; ils ne font jamais partie de la clé naturelle |
+
+### `ApprovalResolution` — `approval.resolved`
+
+La contrepartie terminale d'`approval.requested`, avec la même posture minimal-data :
+identifiants et paramètres de décision uniquement, jamais la référence du sujet ni une
+raison en texte libre.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `ApprovalID` | string | id de l'approbation résolue — référence permettant de récupérer l'enregistrement complet |
+| `Action` | string | action demandée (un identifiant court borné) |
+| `SubjectKind` | string | kind de sujet visé par l'action |
+| `RiskTier` | string | classification de risque dérivée en direct au moment de la résolution |
+| `Outcome` | string | `approved` \| `rejected` \| `canceled` \| `expired` — **ouvert sur le wire** ; tolérez les valeurs inconnues |
+| `RequiredApprovals` | int64 | approbateurs distincts requis au moment de la résolution |
+| `ApproveCount`, `RejectCount` | int64 | décisions enregistrées de chaque type |
+| `PolicyRef` | string | politique d'approbation correspondante ; vide quand des paramètres fournis par l'appelant ont été utilisés |
+| `DecidedAt` | timestamp | instant où le résultat terminal a été atteint |
+
+### `WorkflowSignal` — `workflow.signal`
+
+Publié par le module d'orchestration lorsqu'un workflow DAG gouverné atteint une étape
+`eventing-emit`. Le **type est fixé par le module**, jamais tiré de la configuration de
+l'étape ; un auteur de workflow ne peut donc jamais forger un événement first-party dans
+l'ingest d'un autre module. La configuration de l'étape ne fournit que le label borné.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `WorkflowRef` | string | workflow dont le run a émis le signal |
+| `RunRef` | string | run — associez-le à `StepRef` pour situer l'instant dans sa timeline |
+| `StepRef` | string | référence de l'étape émettrice dans le graphe |
+| `Label` | string | label fourni par l'opérateur dans la configuration de l'étape, borné et non sensible |
+
+### `WorkEventFact` — K1/K2 `work.*`
+
+Les huit channels de travail K1/K2 exposent la même projection `payload_json` bornée
+d'un WorkEvent append-only. Le type d'événement porte la classe sémantique ; ce payload
+identifie la commande, le résultat et l'état agrégé résultant. Il ne contient jamais le
+texte du brief WorkItem, les déclarations d'acceptation, les déclarations de décision, la
+justification ni du texte libre rédigé par l'owner. Les champs de holder sont des
+références d'identité stables, pas des noms d'affichage. Les consommateurs doivent tolérer
+les champs additifs tant que les channels sont bêta.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `command` | string | nom fermé de la mutation de travail durable ayant produit le fait |
+| `result_kind` | string | kind d'entité renvoyé par la mutation |
+| `result_id` | UUID | référence de l'entité renvoyée |
+| `workspace_id` | UUID | référence du workspace gouverné |
+| `work_item_id` | UUID | référence du WorkItem |
+| `status` | string | état résultant du WorkItem |
+| `owner_epoch` | int64 | epoch monotone d'ownership résultant |
+| `event_seq` | int64 | séquence monotone résultante dans le WorkItem |
+| `lease_id` | UUID | événement de lease K2 uniquement : référence stable de ligne WorkLease |
+| `lease_state` | string | événement de lease K2 uniquement : état résultant du lease |
+| `holder_sid` | string | événement de lease K2 uniquement : SID canonique du holder |
+| `holder_run_ref`, `holder_agent_ref` | string | événement de lease K2 uniquement : références bornées d'exécution/agent, lorsqu'elles existent |
+| `fence` | int64 | événement de lease K2 uniquement : génération monotone de fencing résultante |
+| `expires_at` | timestamp | événement de lease K2 uniquement : expiration à l'horloge de la base de données pendant l'activité |
+| `end_reason_code` | string | événement K2 ended uniquement : classe de raison définie par le serveur, jamais texte rédigé par l'opérateur |
+| `end_reason_hash` | string | événement K2 ended uniquement : SHA-256 hex de la raison stockée pour corrélation sans divulgation |
+| `forced` | boolean | force-takeover K2 uniquement : toujours `true`, marquant le contournement de l'autorité live du lease |
+| `severity` | string | force-takeover K2 uniquement : fixé à `high` |
+| `decision_id` | UUID | force-takeover K2 uniquement : Decision de gouvernance effective ayant autorisé le contournement |
+| `takeover_reason_hash` | string | force-takeover K2 uniquement : SHA-256 hex pour corrélation ; la raison rédigée par l'opérateur n'est jamais publiée |
+
+Les quatre champs de force-takeover constituent une projection facultative sur
+`work.lease.acquired` : les événements ordinaires acquire, renew et takeover non forcé
+ne les portent pas. Un consommateur qui a besoin de la raison restreinte rédigée par
+l'opérateur doit suivre les références Decision/audit via une surface autorisée ; ce
+texte n'est pas récupérable depuis cet événement.
+
+### `DirectNoticeAvailableV1` — `work.message.available`
+
+Le fait v1 immuable écrit par la transaction source DirectNotice dans son WorkEvent et
+son WorkOutbox. Le **Message est le sujet** : `message_id` et `result_id` sont le même
+UUID, et `result_kind` est fixé à `sessions.message`. L'identité du destinataire et le
+contenu du message sont délibérément absents ; un consommateur autorisé suit la référence
+Message via la surface de lecture gouvernée.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `schema_version` | int64 | fixé à `1` ; un writer ultérieur ajoute un nouveau schéma au lieu de réétiqueter les faits v1 conservés |
+| `command` | string | fixé à `message.publish.direct` |
+| `result_kind` | string | fixé à `sessions.message` |
+| `result_id`, `message_id` | UUID | références identiques du sujet Message |
+| `channel_id` | UUID | référence du Channel gouverné |
+| `message_kind` | string | fixé à `notice` pour cette première verticale d'écriture K3 |
+| `state` | string | fixé à `published` à la disponibilité |
+| `version` | int64 | `2`, après la transition atomique draft→published |
+| `event_sequence` | int64 | `1`, premier événement append-only de l'agrégat Message |
+| `delivery_count` | int64 | `1`, car DirectNotice résout un Delivery initial |
+| `required_count`, `ack_quorum` | int64 | exigence initiale d'acquittement, chacun `0` ou `1` |
+| `fulfillment` | object | projection initiale `not_required` ou `pending` avec compteurs required/acknowledged/viable/unmet/quorum |
+| `audience_hash` | SHA-256 hex | lie le graphe d'audience sans divulguer le destinataire |
+| `payload_digest` | SHA-256 hex | lie le contenu canonique du message sans le porter |
+| `plan_hash` | SHA-256 hex | lie le plan de publication autorisé |
+
+Le WorkOutbox fournit l'`ID` de l'enveloppe ; les nouvelles tentatives après un règlement
+ambigu utilisent le même ID et un payload identique octet pour octet, si bien que l'intake
+Eventing les traite comme un seul événement. Un type, une source, un instant d'occurrence,
+un payload ou un sujet Message différent sous cet ID est refusé. Les consommateurs webhook
+dédupliquent sur `X-Olivares-Event` ; un replay opérateur crée un nouveau
+`X-Olivares-Delivery`, mais conserve l'ID d'événement.
+
+### Faits du cycle de vie des communications K3/K4
+
+Les autres WorkEvents de communication utilisent des projections fermées et minimal-data.
+Ils portent des IDs, des états, des versions/fences monotones et des digests de plan ou de
+valeur protégée ; ils ne portent jamais le contenu du Message, le contenu de
+DecisionResponse ni du texte de payload/raison de Handoff. Les contraintes complètes des
+champs sont publiées dans les schémas AsyncAPI.
+
+| Schéma | Channels | Champs du sujet |
+|---|---|---|
+| `DirectNoticeAcknowledgedV1` | `work.message.acknowledged` | IDs Ack, Delivery et Message ; version/état du Delivery ; flag late ; fulfillment ; hash du plan |
+| `WorkflowMessageCarrierV1` | forme workflow de `work.message.available` ; `work.handoff.carrier.available` ; `work.protocol.reply.available` ; `work.protocol.message.received` | IDs WorkItem, Message et Delivery ; kind/état/version ; séquence d'événement ; hash du plan ; aucun contenu distant ni octet d'artefact |
+| `MessageLifecycleV1` | `work.message.retracted`, `work.message.expired`, `work.message.overdue` | IDs Message/WorkItem facultatif et agrégats liés ; état/version ; nombre de Delivery affectés ; fulfillment facultatif ; hash du plan |
+| `MessageDerivedV1` | `work.message.rerouted`, `work.message.escalated` | IDs Message source/nouveau, référence de destinataire bornée, profondeur d'automatisation et hash du plan |
+| `DecisionRequestEvent` | `work.decision.request.responded`, `work.decision.request.expired` | IDs request/response/WorkItem, transition/état et digest de réponse |
+| `HandoffEventV1` | `work.handoff.offered`, `work.handoff.accepted`, `work.handoff.rejected`, `work.handoff.withdrawn`, `work.handoff.expired` | IDs Handoff/Message/Delivery/WorkItem, état, owner epoch, fence du lease et hash du plan |
+
+### `ProtocolBindingEvent` — K5 `work.binding.*`
+
+ProtocolBinding écrit une projection bornée dans le flux d'événements WorkItem lorsqu'il
+réserve un binding sortant ou entrant, réconcilie une observation ou revendique une
+intention d'annulation. Les quatre channels partagent exactement le même schéma ; le type
+d'événement fournit la classe de mutation. Ce sont des faits ordinaires de l'agrégat
+WorkItem et leur réception est protégée par `sessions:work:read`.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `binding_id` | UUID | référence durable ProtocolBinding |
+| `binding_spec_id` | UUID | ProtocolBindingSpec immuable épinglée par le binding |
+| `binding_spec_generation` | int64 | génération de spec épinglée, au moins `1` |
+| `binding_generation` | int64 | génération exacte de ressource externe représentée par le binding |
+| `protocol` | enum | `a2a` \| `mcp` |
+| `workspace_id`, `work_item_id` | UUID | références du workspace gouverné et de l'agrégat WorkItem |
+| `work_status` | enum | état WorkItem résultant `active` \| `review` \| `blocked` \| `canceled` |
+| `lease_fence` | int64 | génération de fencing attribuée à la session synthétique du binding |
+| `verdict` | enum | `CLEAN` \| `BROKEN` \| `UNKNOWN` ; UNKNOWN n'est jamais traité comme un succès |
+| `code` | string | code de raison système borné (128 octets maximum), jamais texte libre |
+| `terminal` | boolean | indique si l'observation prouve un résultat distant terminal |
+| `event_seq` | int64 | séquence monotone dans l'agrégat WorkItem |
+| `external_id_hash` | SHA-256 hex | corrélation unidirectionnelle facultative d'un ID distant lié ; l'ID lui-même est absent |
+
+Le payload exclut délibérément la référence et l'état de la ressource distante, les
+arguments de request/outil, les résultats de tâche ou de message, le contenu du message,
+le détail de l'observation et la raison d'annulation rédigée par l'opérateur. Ces valeurs
+restent derrière leurs stores gouvernés ; l'événement n'expose que le fait minimal de
+réconciliation.
+
+### `AuditRecord` — `audit.recorded`
+
+Un enregistrement scellé de l'audit ledger à altération détectable, transmis à une tour de contrôle
+SIEM. Il ne voyage **pas** sur le bus (voir la note ci-dessus) : le forwarder du ledger
+parcourt la chaîne depuis un cursor par tenant et remet chaque enregistrement à un intake
+durable ; les champs d'intégrité transitent donc intacts et une tour de contrôle peut
+vérifier elle-même la chaîne.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `EventID` | string | id de l'événement d'audit — clé d'idempotence stable utilisée par un consommateur pour dédupliquer |
+| `Seq` | int64 | séquence du ledger par tenant — clé naturelle ; les lacunes sont détectables |
+| `OccurredAt` | timestamp | instant de l'action auditée |
+| `Source` | string | composant émetteur |
+| `Payload` | bytes | enregistrement minimal-data déjà encodé, portant tels quels les champs de chaîne (séquence, hash précédent, hash, signature) |
+
+### `PolicyChange` — `policy.changed`
+
+Reflète ce que conserve l'enregistrement d'audit de la mutation de politique — kind et
+enabled — plus l'id et l'opération. Elle ne porte **jamais** le nom de politique fourni par
+l'opérateur ni la spec de politique ; un consommateur autorisé pour
+`governance:policy:read` récupère la politique par `PolicyID`.
+
+| Champ | Type | Notes |
+|---|---|---|
+| `PolicyID` | string | l'id de la politique modifiée |
+| `Kind` | enum | `abac` \| `approval` |
+| `Op` | enum | `created` \| `updated` \| `deleted` — ouvert sur le wire ; tolérez les valeurs que vous ne connaissez pas |
+| `Enabled` | bool | le flag enabled après le changement ; `false` pour une suppression |
+
+## Abonnements externes (plateforme d'eventing)
+
+Le module d'eventing transfère les types d'événements catalogués vers des **endpoints HTTPS
+externes** sous forme de webhooks signés. Les abonnements sont gérés à
+`/v1/m/eventing/subscriptions` — une route de module, délibérément **hors** du contrat
+OpenAPI REST — tandis que les **types d'événements** qu'il livre portent les niveaux de
+stabilité par type ci-dessus.
+
+### La livraison
+
+Chaque livraison est un `POST` HTTPS dont le corps est l'**enveloppe JSON plus `Seq`** —
+les mêmes noms de champs que l'enveloppe ci-dessus (le SDK est le contrat), avec un champ
+additif : `Seq`, le curseur per-tenant à partir duquel un replay commence. Le payload typé
+voyage sous `Payload`.
+
+```json
+{
+  "ID": "0197a2b4-6e1d-7c3a-9f4e-2d8b5c1a0e7f",
+  "Type": "cost.sampled",
+  "Tenant": "…",
+  "Source": "…",
+  "Time": "2026-06-11T12:00:00Z",
+  "Seq": 42,
+  "Payload": { "ProviderRef": "…" }
+}
+```
+
+| Header | Signification |
+|---|---|
+| `X-Olivares-Timestamp` | le timestamp en secondes Unix que couvre la signature |
+| `X-Olivares-Signature` | `t=<ts>,v1=<hexsig>` — HMAC-SHA256 sur `<ts>.<body>` avec le secret de l'abonnement ; vérifiez avec `connectors/webhook.VerifyWithin` |
+| `X-Olivares-Event` | l'**id d'événement stable** — votre clé d'idempotence, identique sur chaque retry et replay d'un même événement |
+| `X-Olivares-Event-Type` | le type d'événement (l'adresse de channel) |
+| `X-Olivares-Delivery` | l'id de livraison — un replay est une *nouvelle livraison* du *même événement* |
+
+- **At-least-once.** Le même événement peut arriver plus d'une fois ; **dédupliquez sur
+  `X-Olivares-Event`**.
+- **Retries.** Un `408`, `425`, `429`, tout `5xx` ou un échec réseau est retenté selon une
+  échelle de backoff exponentiel — 30s, 2m, 10m, 30m, 1h, 2h, 4h, 8h (±20% de jitter) —
+  puis la livraison part en **dead-letter** (la DLQ). Toute autre réponse non-2xx est
+  terminale.
+- **Replay.** Un abonnement peut être rejoué à partir d'un curseur `Seq` ; un replay
+  conserve l'id `X-Olivares-Event` de l'événement sous un nouveau `X-Olivares-Delivery`.
+- **Les redirections ne sont jamais suivies** — une redirection re-routerait le corps signé.
+- **La rotation de secret est immédiate.** La plateforme détient exactement un secret de
+  signature par abonnement : après `POST …/rotate-secret`, chaque tentative ultérieure — y
+  compris les retries de livraisons déjà mises en file — signe avec le **nouveau** secret.
+  Mettez à jour votre vérificateur d'abord, puis effectuez la rotation.
+- **Restreindre `event_types` n'est pas un rappel.** Les livraisons déjà capturées pour
+  l'abonnement restent en file et sont livrées (la permission par type s'applique toujours) ;
+  le filtre restreint régit ce qui est capturé à partir de là.
+
+### Permission de réception par type
+
+Un abonnement nomme un rôle ; avant **chaque** tentative de livraison, ce rôle est évalué
+contre la permission du type d'événement, à travers le pipeline RBAC+ABAC complet
+(deny-closed). Le mapping reflète la surface de lecture de chaque type dans l'API du
+produit :
+
+| Type d'événement | Permission | Stabilité |
+|---|---|---|
+| `edge.observed` | `accessgraph:read` (privilégié : editor+) | stable |
+| `cost.sampled` | `finops:spend:read` | stable |
+| `finding.reported` | `security:finding:read` | stable |
+| `guardrail.observed` | `security:observed:read` (privilégié : editor+) | beta |
+| `approval.requested` | `governance:approval:read` | beta |
+| `policy.changed` | `governance:policy:read` | beta |
+| `metric.sampled` | `adoption:developer:read` (privilégié : editor+) | beta |
+| `approval.resolved` | `governance:approval:read` | beta |
+| `workflow.signal` | `orchestration:workflow:read` | beta |
+| `work.item.created` | `sessions:work:read` | beta |
+| `work.item.transitioned` | `sessions:work:read` | beta |
+| `work.owner.changed` | `sessions:work:read` | beta |
+| `work.dependency.changed` | `sessions:work:read` | beta |
+| `work.acceptance.changed` | `sessions:work:read` | beta |
+| `work.message.available` | `sessions:message:read` | beta |
+| `work.message.acknowledged` | `sessions:message:read` | beta |
+| `work.message.retracted` | `sessions:message:read` | beta |
+| `work.message.expired` | `sessions:message:read` | beta |
+| `work.message.overdue` | `sessions:message:read` | beta |
+| `work.message.rerouted` | `sessions:message:read` | beta |
+| `work.message.escalated` | `sessions:message:read` | beta |
+| `work.protocol.reply.available` | `sessions:message:read` | beta |
+| `work.protocol.message.received` | `sessions:message:read` | beta |
+| `work.handoff.carrier.available` | `sessions:message:read` | beta |
+| `work.decision.recorded` | `sessions:decision:read` | beta |
+| `work.decision.request.responded` | `sessions:decision-request:read` | beta |
+| `work.decision.request.expired` | `sessions:decision-request:read` | beta |
+| `work.handoff.offered` | `sessions:handoff:read` | beta |
+| `work.handoff.accepted` | `sessions:handoff:read` | beta |
+| `work.handoff.rejected` | `sessions:handoff:read` | beta |
+| `work.handoff.withdrawn` | `sessions:handoff:read` | beta |
+| `work.handoff.expired` | `sessions:handoff:read` | beta |
+| `work.lease.acquired` | `sessions:lease:read` | beta |
+| `work.lease.ended` | `sessions:lease:read` | beta |
+| `work.binding.reserved` | `sessions:work:read` | beta |
+| `work.binding.observed` | `sessions:work:read` | beta |
+| `work.binding.ambiguous` | `sessions:work:read` | beta |
+| `work.binding.cancel_requested` | `sessions:work:read` | beta |
+| `audit.recorded` | `audit:read` | stable |
+
+## Voir aussi
+
+- [Référence de l'API REST](/reference/api/) — le contrat synchrone (OpenAPI 3.1).
+- [Stabilité de l'API](/fr/reference/api-stability/) — les fenêtres derrière les niveaux de
+  stabilité par type.
+- [Vue d'ensemble de l'architecture](/fr/explanation/architecture/overview/) — comment les
+  observations deviennent des arêtes et atteignent l'access map.
+- La spec brute : [`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml).

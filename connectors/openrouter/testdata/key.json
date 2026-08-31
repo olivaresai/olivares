@@ -1,0 +1,10 @@
+{
+  "data": {
+    "label": "sk-or-v1-redacted",
+    "usage": 12.5,
+    "limit": 100.0,
+    "limit_remaining": 87.5,
+    "is_free_tier": false,
+    "rate_limit": {"requests": 200, "interval": "10s"}
+  }
+}

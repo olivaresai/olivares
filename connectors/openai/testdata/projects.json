@@ -1,0 +1,10 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "proj_default", "object": "organization.project", "name": "Default", "status": "active", "created_at": 1700000000 },
+    { "id": "proj_old", "object": "organization.project", "name": "Legacy", "status": "archived", "created_at": 1699000000 }
+  ],
+  "has_more": false,
+  "first_id": "proj_default",
+  "last_id": "proj_old"
+}

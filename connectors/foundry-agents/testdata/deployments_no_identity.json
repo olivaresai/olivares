@@ -1,0 +1,12 @@
+{
+  "value": [
+    {
+      "name": "run",
+      "properties": {
+        "state": "Running",
+        "deploymentType": "Managed",
+        "protocols": ["A2A"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,252 @@
+{
+  "title": "Sicherheit & Forensik",
+  "description": "Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Die Ebene ist standardmäßig detektivisch — sie zeichnet auf, sie blockiert nicht von sich aus, sofern die Durchsetzung nicht aktiviert und gesteuert ist.",
+  "tabs": {
+    "safety": "Sicherheitslage",
+    "findings": "Befunde",
+    "guardrails": "Schutzleitplanken",
+    "anomalies": "Anomalien",
+    "forensics": "Forensik"
+  },
+  "findings": {
+    "title": "Befunde",
+    "description": "Befunde aus Schutzleitplanken, Anomalien und Forensik. Der Nachweis ist ein Fingerabdruck — es gibt keine Nutzdaten zum Aufklappen.",
+    "empty": "Keine Befunde",
+    "emptyHint": "Befunde erscheinen, sobald Schutzleitplanken, Anomalieerkennung und Forensik Nachweise aufzeichnen.",
+    "export": {
+      "action": "SARIF exportieren",
+      "busy": "Export läuft…",
+      "done": "SARIF-Export heruntergeladen.",
+      "truncated": "SARIF-Export heruntergeladen, aber er endete am Ergebnislimit des Servers — ein gültiger Run, nicht der vollständige Satz."
+    },
+    "search": "Befunde suchen",
+    "fingerprint": "fp",
+    "columns": {
+      "severity": "Schweregrad",
+      "kind": "Art",
+      "source": "Quelle",
+      "title": "Befund",
+      "evidence": "Nachweis",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "kind": {
+      "guardrail": "Schutzleitplanke",
+      "anomaly": "Anomalie",
+      "forensic": "Forensik"
+    },
+    "status": {
+      "open": "Offen",
+      "triaged": "Eingestuft",
+      "resolved": "Behoben",
+      "dismissed": "Verworfen"
+    },
+    "triage": {
+      "action": "Einstufen",
+      "title": "Befund einstufen",
+      "description": "Die Einstufung ändert nur den Ablaufstatus. Der Nachweis — Art, Schweregrad und der Detail-Fingerabdruck — ist unveränderlich.",
+      "statusLabel": "Status",
+      "submit": "Status aktualisieren",
+      "updated": "Befundstatus aktualisiert",
+      "immutableNote": "Schweregrad, Art und der Detail-Fingerabdruck können nicht geändert werden — nur der Ablaufstatus."
+    },
+    "subjectKinds": {
+      "local_residency": "Residentes lokales Modell"
+    },
+    "truncated": "Die ersten {{n}} erfassten werden angezeigt",
+    "truncatedHint": "Es gibt mehr Funde als angezeigt, und diese Seite ist nach Erfassungs-ID sortiert — NICHT danach, wann das Problem auftrat —, es können also aktuelle Funde fehlen. Dass der Rest nicht sichtbar ist, belegt nicht, dass nichts weiter gefunden wurde."
+  },
+  "safetyPosture": {
+    "title": "Anbieter-Sicherheitslage",
+    "description": "Read-first-KI-Sicherheitslage aus den nativen Kontrollen der Anbieter — OpenAI Moderation, AWS Bedrock Guardrails und Azure Responsible AI. Die Plattform liest und protokolliert sie; die Durchsetzung bleibt beim Anbieter.",
+    "empty": "Keine Befunde zur Sicherheitslage",
+    "emptyHint": "Verbinde die OpenAI-, AWS- oder Azure-Konnektoren mit aktivierten Sicherheitslesungen, um diese Ansicht zu füllen.",
+    "countsPartial": "Teil-Übersicht — dieser Mandant hat mehr Sicherheitslage-Befunde, als der Übersichts-Scan abdeckt.",
+    "columns": {
+      "open": "Offen"
+    }
+  },
+  "guardrails": {
+    "title": "Schutzleitplanken-Prüfung",
+    "description": "Führen Sie den Prüfdienst der Schutzleitplanken über eine Oberfläche aus. Der Text wird redigiert gehasht und niemals gespeichert — das Ergebnis ist ein Entscheid samt minimalem, bereits redigiertem Nachweis.",
+    "verdictTitle": "Entscheid",
+    "clean": "Keine Erkennungen — sauber.",
+    "detectiveNote": "Dieser Entscheid stammt von der detektivischen Ebene: Der Vorfall wurde erkannt und aufgezeichnet, nicht blockiert. Eine Blockierung ist nur erreichbar, wenn die Durchsetzung aktiviert und gesteuert ist.",
+    "wouldBlock": "Würde blockieren (durchgesetzt)",
+    "detectOnly": "Nur erkennen",
+    "findingsRecorded": "{{count}} Befund aufgezeichnet",
+    "findingsRecorded_one": "{{count}} Befund aufgezeichnet",
+    "findingsRecorded_other": "{{count}} Befunde aufgezeichnet",
+    "enforcement": {
+      "detective": "Detektivisch",
+      "enforced": "Durchgesetzt"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "Prompt-Injektion",
+      "jailbreak": "Jailbreak",
+      "content": "Inhalt",
+      "output_validation": "Ausgabevalidierung",
+      "owasp_agentic": "OWASP agentenbasiert"
+    },
+    "form": {
+      "surface": "Oberfläche",
+      "text": "Zu prüfender Text",
+      "textHint": "Wird geprüft und redigiert gehasht — niemals gespeichert oder zurückgegeben.",
+      "enforce": "Durchsetzung anfordern",
+      "enforceHint": "Blockiert nur, wenn die Durchsetzungsrichtlinie diese Klasse aktiviert und gesteuert hat; andernfalls ist der Entscheid eine Markierung.",
+      "submit": "Prüfen",
+      "running": "Wird geprüft…",
+      "surfaceLabel": "Oberfläche"
+    },
+    "surface": {
+      "input": "Eingabe",
+      "output": "Ausgabe",
+      "tool_args": "Werkzeugargumente"
+    }
+  },
+  "enforcement": {
+    "title": "Durchsetzungslage",
+    "description": "Die eine Aktion, die die Produktion berührt. Jede Klasse von Schutzleitplanken ist standardmäßig detektivisch; das Aktivieren der Inline-Durchsetzung ist eine Administrator-Aktion, gesteuert dort, wo das Tor verkabelt ist.",
+    "defaultDetectiveNote": "Die Standardebene ist detektivisch: Klassen blockieren nur, wenn sie hier ausdrücklich aktiviert und gesteuert sind.",
+    "fullyDetective": "Keine Durchsetzung ist aktiviert — die Ebene ist vollständig detektivisch, die sichere Voreinstellung. Nichts blockiert von sich aus.",
+    "detective": "Detektivisch",
+    "enforced": "Durchgesetzt",
+    "governed": "Gesteuert",
+    "ungoverned": "Aktiviert ohne menschliche Governance",
+    "wildcard": "Alle Klassen",
+    "change": "Ändern",
+    "columns": {
+      "class": "Klasse",
+      "posture": "Lage",
+      "minSeverity": "Min. Schweregrad",
+      "governance": "Governance",
+      "updated": "Aktualisiert",
+      "actions": "Aktionen"
+    },
+    "dialog": {
+      "title": "Durchsetzung ändern",
+      "description": "Das Deaktivieren (zurück zu detektivisch) ist stets gestattet. Das Aktivieren der Inline-Durchsetzung wird dort gesteuert, wo das Tor verkabelt ist — eine Governance-Verweigerung wird als Grund angezeigt.",
+      "enabledLabel": "Inline-Durchsetzung aktivieren",
+      "minSeverity": "Mindest-Schweregrad",
+      "reason": "Grund",
+      "reasonHint": "Wird mit der Änderung für das Audit-Hauptbuch aufgezeichnet.",
+      "submit": "Anwenden",
+      "applied": "Durchsetzungslage aktualisiert",
+      "ungovernedWarning": "Das Aktivieren dieser Klasse ohne verkabeltes Governance-Tor lässt sie ungesteuert — die Änderung ist gestattet, aber markiert.",
+      "deniedTitle": "Governance hat diese Änderung verweigert"
+    }
+  },
+  "anomalies": {
+    "title": "Anomalie-Warteschlange",
+    "description": "Abweichungen und korrelierte Befunde, nach Priorität geordnet. Ungefähre Einträge sind nicht abgeglichene Abweichungen — niemals eine gesicherte Verletzung.",
+    "empty": "Keine Anomalien in der Warteschlange",
+    "orderNote": "Nach Priorität geordnet, höchste zuerst.",
+    "priority": "Priorität",
+    "approximate": "Ungefähr",
+    "suspectedTitle": "Vermutet: {{title}}",
+    "unreconciledNote": "Nicht abgeglichene Abweichung — die abgeglichene Autorität ist die Zugriffskarte. Die Priorität ist abgewertet; dies ist keine bestätigte Verletzung.",
+    "kind": {
+      "access_drift": "Zugriffsabweichung",
+      "egress_exfil_suspected": "Egress-Exfiltration (vermutet)",
+      "anti_evasion_correlated": "Korrelierte Umgehung"
+    }
+  },
+  "forensics": {
+    "title": "Forensische Fälle",
+    "description": "Vorfallreaktion — jeder Fall friert seinen Integritätszustand zum Eröffnungszeitpunkt ein, sodass eine spätere Manipulation erkennbar ist. Der Zeitverlauf wird aus dem reinen Anhänge-Hauptbuch rekonstruiert.",
+    "empty": "Keine forensischen Fälle",
+    "openCase": "Fall eröffnen",
+    "back": "Zurück zu den Fällen",
+    "summary": "Zusammenfassung",
+    "openedBy": "Eröffnet von",
+    "opened": "Eröffnet",
+    "closed": "Geschlossen",
+    "integrity": "Integrität der Beweiskette",
+    "timeline": "Rekonstruierter Zeitverlauf",
+    "timelineNote": "Jedes Ereignis trägt seq · hash · prev_hash, sodass ein Leser die Verkettung unabhängig erneut prüfen kann. Hinter einem Ereignis stehen niemals Nutzdaten.",
+    "columns": {
+      "severity": "Schweregrad",
+      "title": "Fall",
+      "status": "Status",
+      "opened": "Eröffnet"
+    },
+    "status": {
+      "open": "Offen",
+      "investigating": "In Untersuchung",
+      "contained": "Eingedämmt",
+      "closed": "Geschlossen"
+    },
+    "truncated": "Die ersten {{n}} eröffneten werden angezeigt",
+    "truncatedHint": "Es gibt mehr Fälle als angezeigt, und diese Seite ist nach Eröffnungs-ID sortiert, es können also aktuelle Fälle fehlen. Eine Untersuchung, die du hier nicht siehst, ist keine, die es nicht gibt."
+  },
+  "integrity": {
+    "title": "Hauptbuch-Integrität",
+    "description": "Zwei Entscheide: dass die Hash-Kette intern konsistent ist und die signierten Prüfpunkte. Die Verifizierung selbst wird in der Kette aufgezeichnet, die sie prüft.",
+    "chain": "Hash-Kette",
+    "chainChecked": "{{count}} Ereignis geprüft",
+    "chainChecked_one": "{{count}} Ereignis geprüft",
+    "chainChecked_other": "{{count}} Ereignisse geprüft",
+    "checkpoints": "Signierte Prüfpunkte",
+    "checkpointsCount": "{{count}} Prüfpunkt verifiziert",
+    "checkpointsCount_one": "{{count}} Prüfpunkt verifiziert",
+    "checkpointsCount_other": "{{count}} Prüfpunkte verifiziert",
+    "signingUnavailable": "Kein Signierschlüssel ist verkabelt — eine signierte Attestierung wird nicht vorgetäuscht.",
+    "checkpointsPendingNote": "Noch kein Prüfpunkt geschrieben — der Ketten-Entscheid ist der Nachweis dieses Hauptbuchs.",
+    "signingSeam": "Prüfpunkt-Signierung nicht verkabelt",
+    "attestedSeq": "Attestierte seq",
+    "headSeq": "Hauptbuch-Kopf seq {{seq}}",
+    "reverifyNote": "Jedes Ereignis trägt seq · hash · prev_hash, sodass ein Leser die Verkettung offline gegen einen externen WORM-Speicher erneut prüfen kann.",
+    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "Keine Durchsetzungsklassen konfiguriert",
+      "description": "Zeilen erscheinen erst nach Festlegung der Lage einer Schutzleitplanken-Klasse; zuvor bleibt jede Klasse detektivisch und nichts blockiert inline."
+    },
+    "findings": {
+      "title": "Keine Sicherheitsbefunde",
+      "description": "Befunde erscheinen bei Signalen aus Schutzleitplankenprüfung, beobachteter Drift oder Anbieter-Sicherheitslage sowie bei schweren Signalen anderer Module."
+    }
+  },
+  "cases": {
+    "new": "Neuer Fall",
+    "newHint": "Eröffnet einen forensischen Fall. Die Engine setzt den Status auf „offen“.",
+    "title": "Titel",
+    "severity": "Schweregrad",
+    "create": "Anlegen",
+    "cancel": "Abbrechen",
+    "created": "Fall eröffnet",
+    "status": "Status",
+    "save": "Änderungen speichern",
+    "updated": "Fall aktualisiert",
+    "statusName": {
+      "open": "Offen",
+      "investigating": "In Untersuchung",
+      "contained": "Eingedämmt",
+      "closed": "Geschlossen"
+    },
+    "exportFormat": "Exportformat",
+    "export": "Exportieren",
+    "exported": "Export angefordert",
+    "links": "Beweiskette",
+    "linksHint": "Womit dieser Fall verknüpft ist: Funde, Ledger-Sequenzen, Anomalien oder Notizen.",
+    "noLinks": "Noch nichts verknüpft",
+    "link": "Verknüpfen",
+    "linked": "Verknüpft",
+    "linkKindLabel": "Art",
+    "linkRef": "Referenz",
+    "linkKind": {
+      "finding": "Fund",
+      "audit_seq": "Ledger-Sequenz",
+      "anomaly": "Anomalie",
+      "note": "Notiz"
+    }
+  },
+  "severity": {
+    "low": "Niedrig",
+    "medium": "Mittel",
+    "high": "Hoch",
+    "critical": "Kritisch"
+  }
+}

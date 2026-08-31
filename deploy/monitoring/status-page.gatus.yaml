@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Self-hostable status / uptime page for the Olivares control plane (REL-2).
+# Gatus (https://github.com/TwiN/gatus, MIT) is a single static binary that probes
+# endpoints, computes real uptime (1h/24h/7d/30d) + response-time history, serves a
+# public status page, and pushes alerts. It probes from OUTSIDE the engine, which
+# is the honest availability signal: a down engine cannot report its own downtime
+# (docs/17 §1.1), so the status page — not a self-scrape — is the authoritative
+# uptime source. Replace CONTROL_PLANE_HOST and pin the probe CA before exposing.
+#
+# Run: gatus --config status-page.gatus.yaml   (or the ghcr.io/twin/gatus image)
+
+storage:
+  type: sqlite
+  path: /data/gatus.db        # persist uptime history across restarts
+
+ui:
+  title: "Olivares Control Plane — Status"
+  header: "Olivares.AI control-plane availability"
+
+endpoints:
+  # Readiness is the authoritative availability SLI: 200 = serving, 503 = store
+  # down / draining (core/api/metrics.go handleReadyz). Uptime % here is the
+  # number the 99.5%/99.9% SLO (docs/17 §2) is measured against.
+  - name: readiness
+    group: control-plane
+    url: "https://CONTROL_PLANE_HOST:8443/readyz"
+    interval: 30s
+    client:
+      insecure: true          # self-signed probe cert by default; set false + pin the CA in prod
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].store == up"
+      - "[RESPONSE_TIME] < 300" # ms — mirrors the API p99 SLO budget
+    # 99.5% / 30d ≈ 3h39m of allowed downtime; 99.9% ≈ 43m. Gatus shows the live %.
+    alerts:
+      - type: pagerduty       # or slack/email/teams/webhook — wire to your incident channel
+        send-on-resolved: true
+        description: "Olivares control-plane readiness failing (availability SLO at risk)"
+
+  # Liveness proves the process is up even when a dependency is down — it must NEVER
+  # depend on backends (core/api/metrics.go handleLivez). If livez is green but
+  # readyz is red, the engine is up with a wedged store: failover runbook, store branch.
+  - name: liveness
+    group: control-plane
+    url: "https://CONTROL_PLANE_HOST:8443/livez"
+    interval: 30s
+    client:
+      insecure: true
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: slack
+        send-on-resolved: true
+
+  #the public aggregate status endpoint — returns per-component
+  # operational/not_configured/degraded/outage state as JSON. Complementary to
+  # the Gatus uptime view: Gatus probes from outside, /status reports the
+  # engine's own assessment.
+  #
+  # `not_configured` is healthy-but-incomplete: a correct install that was never
+  # given an OPTIONAL provider (e.g. embeddings) reports it, and paging on it
+  # would alert on every fresh deployment. The engine names what is unprovisioned
+  # in `components[]`; only a real fault (degraded/outage) is an alert.
+  - name: status-page
+    group: control-plane
+    url: "https://CONTROL_PLANE_HOST:8443/status"
+    interval: 30s
+    client:
+      insecure: true
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == any(operational, not_configured)"
+    alerts:
+      - type: slack
+        send-on-resolved: true
+        description: "Olivares control-plane /status reports non-operational state"
+
+# Public-facing component map for the status page. The control plane is a single
+# writer today (no partial/degraded availability with one replica, docs/17 §2.1):
+# readiness red == full outage. With HA this becomes a per-replica view.

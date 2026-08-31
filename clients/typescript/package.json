@@ -1,0 +1,45 @@
+{
+  "name": "@olivaresai/client",
+  "version": "0.1.0",
+  "description": "First-party TypeScript client for the Olivares AI control plane API (v1).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.3",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.8"
+  },
+  "homepage": "https://olivares.ai/docs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/olivaresai/olivares.git",
+    "directory": "clients/typescript"
+  },
+  "pnpm": {
+    "overrides": {
+      "nanoid": "^3.3.17"
+    }
+  }
+}

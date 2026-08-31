@@ -1,0 +1,119 @@
+{
+  "title": "Aufzeichnungen",
+  "subtitle": "Aufzeichnung privilegierter Sitzungen — jede administrative Aktion auf einer aufgezeichneten Oberfläche wird als Hash-verkettetes Frame erfasst und im Nachweis-Hauptbuch verankert.",
+  "search": {
+    "field": "Suchfeld",
+    "subject": "Subjekt enthält",
+    "grant": "Berechtigungs-ID",
+    "input": "Aufzeichnungen durchsuchen",
+    "subjectPlaceholder": "Subjekttext",
+    "grantPlaceholder": "Exakte Berechtigungs-ID",
+    "submit": "Suchen",
+    "clear": "Leeren"
+  },
+  "allStatuses": "Alle Status",
+  "filterByStatus": "Nach Status filtern",
+  "filterBySealReason": "Nach Versiegelungsgrund filtern",
+  "allSealReasons": "Alle Versiegelungsgründe",
+  "filterOpenedAfter": "Geöffnet nach",
+  "filterOpenedBefore": "Geöffnet vor",
+  "sealReasonOption": {
+    "idle": "Inaktiv",
+    "closed": "Geschlossen",
+    "breakglass_review": "Notfallzugriff-Überprüfung",
+    "sweep": "Bereinigung",
+    "consent_change": "Einwilligungsänderung"
+  },
+  "status": {
+    "active": "Aktiv",
+    "sealed": "Versiegelt"
+  },
+  "kind": {
+    "user": "Benutzer",
+    "token": "Token"
+  },
+  "cols": {
+    "subject": "Subjekt",
+    "kind": "Art",
+    "status": "Status",
+    "opened": "Geöffnet",
+    "frames": "Geschriebene Frames",
+    "flags": "Markierungen",
+    "sealReason": "Versiegelungsgrund"
+  },
+  "badge": {
+    "gap": "LÜCKE",
+    "gapHint": "Frames wurden reserviert, aber nie geschrieben — die Aufzeichnung weist eine dauerhafte, nachweisbare Lücke auf.",
+    "breakglass": "Notfallzugriff",
+    "breakglassHint": "Unter einer Notfallzugriff-Gewährung geöffnet — wird stets aufgezeichnet."
+  },
+  "empty": {
+    "title": "Noch keine Aufzeichnungssitzungen",
+    "description": "Sobald Operatoren auf einer aufgezeichneten privilegierten Oberfläche tätig werden, erscheinen ihre Sitzungen hier."
+  },
+  "notice": {
+    "strip": "Dies ist eine aufgezeichnete privilegierte Oberfläche — Aktionen werden im Nachweis-Hauptbuch erfasst."
+  },
+  "consent": {
+    "title": "Aufzeichnungshinweis (AC-8)",
+    "body": "Privilegierte Aktionen auf dieser Steuerungsebene werden aufgezeichnet: Jede administrative Anfrage wird als Hash-verkettetes Frame erfasst und im Nachweis-Hauptbuch verankert — ausschließlich Routenform, Bezeichner und ein Einweg-Digest des Inhalts, niemals Nutzdaten oder Geheimnisse. Notfallzugriff-Sitzungen werden stets aufgezeichnet. Zum Fortfahren ist die Bestätigung dieses Hinweises erforderlich.",
+    "ack": "Bestätigen und fortfahren",
+    "ackDone": "Aufzeichnungshinweis bestätigt",
+    "cancel": "Abbrechen"
+  },
+  "policy": {
+    "title": "Aufzeichnungsrichtlinie",
+    "subtitle": "Was auf dieser Steuerungsebene aufgezeichnet wird und wie die Nachweise klassifiziert werden. Bearbeiten erfordert die Berechtigung recording:config:admin; jede Änderung hier ist selbst eine aufgezeichnete privilegierte Aktion.",
+    "loading": "Aufzeichnungsrichtlinie wird geladen …",
+    "saved": "Aufzeichnungsrichtlinie gespeichert",
+    "save": "Richtlinie speichern",
+    "saveFailed": "Die Richtlinie wurde nicht gespeichert.",
+    "forbidden": {
+      "title": "Das Bearbeiten der Aufzeichnungsrichtlinie erfordert recording:config:admin",
+      "description": "Ihre Rolle kann Aufzeichnungssitzungen verwalten, aber das Ändern der Aufzeichnungsrichtlinie benötigt die eigene Berechtigung recording:config:admin. Bitten Sie eine Administratorin oder einen Administrator, sie zu erteilen."
+    },
+    "error": {
+      "title": "Aufzeichnungsrichtlinie konnte nicht geladen werden",
+      "description": "Die Aufzeichnungsrichtlinie konnte nicht gelesen werden. Erneut versuchen oder prüfen, ob das Modul eingebunden ist."
+    },
+    "breakglass": {
+      "label": "Break-Glass-Sitzungen",
+      "hint": "Break-Glass-Notzugriff wird immer aufgezeichnet — keine Richtlinie kann ihn abschalten. Die Aufzeichnungsuntergrenze basiert auf Berechtigungen, nicht auf Namensräumen.",
+      "badge": "Immer an"
+    },
+    "namespaces": {
+      "label": "Aufgezeichnete Namensräume",
+      "hint": "Die Modulflächen, deren privilegierte Aktionen erfasst werden. Jeder muss ein eingebundenes Modul benennen; ein unbekannter Name wird vom Server abgelehnt.",
+      "empty": "Keine Namensräume aufgezeichnet — auf keiner Modulfläche werden privilegierte Aktionen erfasst.",
+      "placeholder": "z. B. governance",
+      "addLabel": "Aufgezeichneten Namensraum hinzufügen",
+      "add": "Hinzufügen",
+      "remove": "{{name}} entfernen",
+      "shape": "Ein Namensraum besteht aus Kleinbuchstaben, Ziffern, - oder _, beginnt mit einem Buchstaben und endet nicht mit - oder _.",
+      "duplicate": "Dieser Namensraum steht bereits in der Liste.",
+      "tooLong": "Ein Namensraum hat höchstens {{max}} Zeichen.",
+      "tooMany": "Es können höchstens {{max}} Namensräume aufgezeichnet werden."
+    },
+    "consent": {
+      "label": "Bestätigung vor privilegierten Aktionen verlangen",
+      "hint": "Standardmäßig verweigernd (\"required\"): Bedienende müssen den AC-8-Aufzeichnungshinweis bestätigen, bevor sie handeln. Aus lässt den Hinweis nur als Banner (\"notice\")."
+    },
+    "idle": {
+      "label": "Leerlauf-Versiegelungszeit (Sekunden)",
+      "hint": "Eine offene Aufzeichnungssitzung wird nach dieser Inaktivität versiegelt. Zwischen 60 und 86400 Sekunden.",
+      "error": "Geben Sie eine ganze Zahl von Sekunden zwischen 60 und 86400 ein."
+    },
+    "retention": {
+      "label": "Aufbewahrungsklasse (Tage)",
+      "hint": "Ein Klassifizierungs-Tag für versiegelte Aufzeichnungen — es kennzeichnet, wie lange sie aufbewahrt werden sollten. Zwischen 1 und 3650 Tagen.",
+      "tag": "Nur Tag",
+      "enforced": "Erzwungen",
+      "notEnforced": "Aufbewahrung ist nur ein Klassifizierungs-Tag — Aufzeichnungen werden gekennzeichnet, nie bereinigt. Keine Richtlinie entfernt bislang eine Aufzeichnung (keine Bereinigung verdrahtet).",
+      "error": "Geben Sie eine ganze Zahl von Tagen zwischen 1 und 3650 ein."
+    },
+    "ai": {
+      "label": "KI-abgeleitete Zusammenfassungen",
+      "hint": "Erlaubt das Erzeugen modellabgeleiteter Sitzungszusammenfassungen. Eine Zusammenfassung ist eine abgeleitete Erzählung, nie ein Nachweis — die hash-verketteten Frames bleiben der Nachweis."
+    }
+  }
+}

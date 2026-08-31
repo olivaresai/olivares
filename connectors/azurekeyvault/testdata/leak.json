@@ -1,0 +1,11 @@
+{"records":[
+  {
+    "time":"2026-06-01T13:00:00Z",
+    "category":"AuditEvent",
+    "operationName":"SecretGet",
+    "resourceId":"/SUBSCRIPTIONS/AAAA0A0A-BB1B-CC2C-DD3D-EEEEEE4E4E4E/RESOURCEGROUPS/PROD/PROVIDERS/MICROSOFT.KEYVAULT/VAULTS/CONTOSOVAULT",
+    "id":"https://contosovault.vault.azure.net/secrets/db-password/abcdef?sv=2021-10-04&sig=SECRETSASSIGNATURE_MUST_NEVER_LEAK&se=2026-06-02",
+    "identity":{"claim":{"appid":"11111111-2222-3333-4444-555555555555","access_token":"SECRETBEARERTOKEN_MUST_NEVER_LEAK","oid":"oid-aaa"}},
+    "properties":{"id":"https://contosovault.vault.azure.net/secrets/db-password/abcdef?sig=SECRETSASSIGNATURE_MUST_NEVER_LEAK"}
+  }
+]}

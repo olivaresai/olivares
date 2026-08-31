@@ -1,0 +1,186 @@
+{
+  "title": "Carte des accès",
+  "subtitle": "Ce que chaque agent lit et écrit dans votre parc — les origines à gauche, les ressources qu’ils touchent à droite, R/RW par couleur.",
+  "auditedNote": "L’ouverture de cette carte est une action privilégiée et auditée. À des fins de revue défensive uniquement — elle montre les relations, jamais le SQL, les charges utiles ni les secrets.",
+  "refresh": "Actualiser",
+  "stats": {
+    "origins": "Origines",
+    "resources": "Ressources",
+    "read": "Lecture",
+    "write": "Écriture / RW",
+    "approximate": "Approximatif",
+    "unexpected": "Inattendu",
+    "truncated": "Affichage des {{n}} premiers",
+    "truncatedHint": "Le parc comporte plus d’arêtes que celles affichées ; affinez avec les filtres ou développez un nœud pour voir ses voisins."
+  },
+  "webgl": {
+    "badge": "Vue haute densité",
+    "hint": "Affichage de {{n}} nœuds — passage au moteur de rendu WebGL accéléré pour la mise à l’échelle.",
+    "clustered": "Les ressources sont regroupées par hôte à cette échelle ; un groupe se lit « hôte (N) ». Aucun constat n’est masqué — tout groupe présentant un accès inattendu est signalé."
+  },
+  "filters": {
+    "search": "Rechercher une origine, une ressource, un outil…",
+    "mode": "Mode d’accès",
+    "attributedOnly": "Attribués uniquement",
+    "attributedHint": "Masquer les arêtes approximatives (inférées) et n’afficher que les accès fermement attribués.",
+    "signal": "Signal",
+    "allSignals": "Tous les signaux",
+    "clear": "Effacer",
+    "drift": "Permis vs observé",
+    "driftHint": "Superposer la différence de moindre privilège : mettre en évidence les accès inattendus (observés, non permis) et les octrois inutilisés.",
+    "driftForbidden": "Nécessite la permission de dérive (accessmap:drift:read)."
+  },
+  "legend": {
+    "read": "Lecture",
+    "write": "Écriture",
+    "writeRw": "Écriture / RW",
+    "unknown": "Inconnu",
+    "approximate": "Approximatif",
+    "unexpected": "Accès inattendu",
+    "pending": "En attente (indécis)",
+    "unused": "Octroi inutilisé"
+  },
+  "drift": {
+    "title": "Dérive de moindre privilège",
+    "cleanTitle": "Aucune dérive détectée",
+    "cleanHint": "Chaque accès observé est permis, et chaque octroi est utilisé.",
+    "unexpectedTitle": "Accès inattendu",
+    "unexpectedHint": "Observé mais NON permis — le constat le plus prioritaire.",
+    "pendingTitle": "Réconciliation en attente",
+    "pendingHint": "Observé sans autorisation correspondante, et le moteur ne peut pas encore décider s'il est autorisé : lien agent↔identité non résolu, mode d'autorisation inconnu, ou mode observé indécidable. Il ne dit pas lequel : ce n'est donc pas encore une violation avérée.",
+    "unusedTitle": "Octrois inutilisés",
+    "unusedHint": "Permis mais jamais observé — surprovisionnement à resserrer.",
+    "forbiddenTitle": "Dérive non autorisée",
+    "forbiddenHint": "Votre rôle peut voir le graphe mais pas la différence permis-vs-observé (accessmap:drift:read).",
+    "partial": "Résultat partiel : le moteur a réconcilié cet écart sur une fenêtre de dérive tronquée ; ces totaux ne couvrent donc pas tout le parc et une arête absente ici peut simplement se situer au-delà de la limite.",
+    "emptyWindowTitle": "Aucun constat dans la fenêtre analysée",
+    "emptyWindowHint": "L'analyse s'est arrêtée à sa limite de page : ceci ne dit rien de l'ensemble du parc."
+  },
+  "detail": {
+    "edgeTitle": "Arête d’accès",
+    "nodeSubtitle": "Un nœud du graphe — développez-le pour voir à quoi il se connecte.",
+    "ref": "Référence",
+    "id": "ID",
+    "expand": "Développer les voisins",
+    "unexpectedFlag": "Observé sans octroi correspondant",
+    "origin": "Origine",
+    "kind": "Type",
+    "bridge": "Pont",
+    "unbridged": "Agent non résolu",
+    "resource": "Ressource",
+    "coverage": "Couverture",
+    "tool": "Outil",
+    "attribution": "Attribution par agent",
+    "signal": "Signal et confiance",
+    "confidence": "Confiance",
+    "sources": "Sources",
+    "reason": "Attribution",
+    "diff": "Permis vs observé",
+    "observed": "Observé",
+    "permitted": "Permis",
+    "activity": "Activité",
+    "occurrences": "Occurrences",
+    "firstSeen": "Première observation",
+    "lastSeen": "Dernière observation",
+    "yes": "Oui",
+    "no": "Non",
+    "minimalData": "Seules les métadonnées sont affichées. Par conception, le moteur ne transporte jamais ici le SQL, les charges utiles ni les secrets (données minimales)."
+  },
+  "authority": {
+    "title": "Autorité et étape suivante",
+    "declaredBy": "Signaux sur cette arête :",
+    "multiple": "Plus d'une autorisation indépendante est enregistrée ici. En traiter une laisse l'autre en place.",
+    "noRetraction": "La carte enregistre les signaux et ne les retire jamais : cette arête peut donc subsister après modification de la source. Revérifiez plutôt que de supposer.",
+    "explain": {
+      "sourceScope": "Une liaison source→portée a enregistré l'autorisation de cette arête. C'est sur ce plan de liaisons qu'elle se configure.",
+      "declared": "Un signal d'autorisation déclarée a été enregistré pour cette arête. La carte ne transporte pas quel système l'a émis — fournisseur d'identité, déploiement, ou ACL de dépôt ou de coffre de secrets — elle ne peut donc pas vous en désigner un.",
+      "unattributed": "Cet accès est autorisé, mais aucun signal nommant une autorisation n'est présent sur l'arête. Rien ici n'identifie le système propriétaire, et en deviner un serait pire que de le dire.",
+      "unpermitted": "Aucun signal d'autorisation n'est présent dans cette carte pour cet accès. C'est ce qui en fait un constat — mais ce n'est pas la preuve que rien ne l'autorise : un résolveur actif peut autoriser des accès que cette carte ne voit jamais.",
+      "undetermined": "Ni observé ni autorisé. Il s'agit d'une capacité déclarée, pas d'une preuve d'accès : il n'y a rien à corriger.",
+      "undecided": "Impossible de décider encore si cette arête est autorisée ; ce n'est donc pas une violation confirmée. Le moteur ne dit pas quelle condition reste non résolue — lien agent↔identité, mode d'autorisation inconnu, ou mode observé indécidable — aucun correctif précis n'est donc proposé.",
+      "unchecked": "Cette carte montre l'accès sans aucun signal d'autorisation, mais l'état de dérive de cette arête n'a pas été établi ici. Seul l'écart de moindre privilège dit si le moteur a confirmé un constat ou réconcilie encore, et cette fiche n'en a aucune réponse. D'ici là ce n'est pas un constat — ni une arête saine.",
+      "reconciled": "Le moteur a lu l'écart de moindre privilège et n'y a pas listé cet accès : ce n'est donc pas un constat confirmé et il n'y a rien à corriger ici. Ce que la carte ne dit pas, c'est POURQUOI : une autorisation qui le couvre peut être enregistrée sur une autre arête, ou une autorisation peut avoir atteint celle-ci — le graphe et l'écart sont deux lectures distinctes, cette fiche ne peut pas trancher."
+    },
+    "target": {
+      "sourceBindings": "Ouvrir les liaisons de source",
+      "nhiRoster": "Ouvrir l'inventaire NHI"
+    },
+    "needsPermission": "{{action}} requiert la permission {{permission}}, dont ce rôle ne dispose pas.",
+    "recheck": "Revérifier la dérive",
+    "verdict": {
+      "clear": "Revérifié : cette arête n'est plus dans l'ensemble de dérive. L'explication ci-dessus décrit l'état antérieur à cette vérification.",
+      "present": "Revérifié : cette arête est toujours dans l'ensemble de dérive.",
+      "unknown": "Impossible de confirmer — la lecture de dérive n'a pas répondu, ou n'a couvert qu'une partie du parc. Ni l'un ni l'autre n'équivaut à « propre »."
+    },
+    "checkDrift": "Lire la dérive de cette arête",
+    "closes": "Enregistrer une autorisation règle ce constat — pas nécessairement sur cette arête : une autorisation portant sur l'identité à laquelle l'accès se résout le règle depuis une autre. La projection source→portée est au mieux-effort, et les liaisons de groupe, de rôle et de dossier s'appliquent sans rien projeter sur la carte : une autorisation réelle peut exister sans que cet écart la voie. Arrêter l'accès ne le règle pas non plus : une observation n'est jamais retirée. Revérifiez plutôt que de supposer.",
+    "cannotClose": "Supprimer l'autorisation ne remettra pas à zéro l'indicateur « autorisé » de cette arête — la carte ne retire jamais une autorisation — donc ce constat ne disparaît pas du fait de cette suppression. (Il peut tout de même quitter l'écart pour une raison sans rapport, par exemple si l'accès finit par être observé.) Vérifiez la suppression sur la surface propriétaire, pas ici.",
+    "signalsNotFused": "Cette arête ne porte que son signal le plus récent : l'ensemble des signaux qui la corroborent n'était pas inclus dans cette réponse, donc d'autres signaux — y compris d'autres autorisations — peuvent exister sans être affichés ici."
+  },
+  "kinds": {
+    "agent": "Agent",
+    "session": "Session",
+    "identity": "Identité",
+    "resource": "Ressource"
+  },
+  "coverage": {
+    "clean": "Propre",
+    "lossy": "Avec perte",
+    "opaque": "Opaque",
+    "mixed": "Mixte"
+  },
+  "coverageHint": {
+    "clean": "Capture haute fidélité (p. ex. audit SQL/objet/entrepôt).",
+    "lossy": "Capture partielle — certains accès ne sont pas classifiables.",
+    "opaque": "Ne peut pas être capturé passivement (p. ex. Redis/SQLite).",
+    "mixed": "Fidélité mixte selon les signaux."
+  },
+  "attributionTier": {
+    "firm": "Ferme",
+    "approximate": "Approximatif",
+    "unknown": "Inconnu"
+  },
+  "attributionTierHint": {
+    "firm": "Lié à un agent/NHI concret via un SVID, WIF ou un identifiant dédié.",
+    "approximate": "Un compte partagé — l’identité est connue, mais pas un agent unique.",
+    "unknown": "Aucun audit par identité (p. ex. Redis/SQLite/D1) — attribution impossible."
+  },
+  "empty": {
+    "title": "Aucun accès observé pour l’instant",
+    "description": "Dès que les connecteurs signaleront l’activité des agents, les relations R/RW apparaîtront ici."
+  },
+  "forbidden": {
+    "title": "Carte des accès non autorisée",
+    "description": "Votre rôle n’inclut pas la permission de consulter le graphe des accès."
+  },
+  "mobile": {
+    "title": "La carte nécessite un écran plus large",
+    "hint": "Ouvrez cette vue sur un écran plus grand pour le graphe interactif R/RW."
+  },
+  "attackPaths": {
+    "chooseAgent": "Choisissez un agent dans le graphe pour voir ses chemins d'attaque.",
+    "auditedNote": "Chacune de ces lectures est scellée dans le journal d'audit, comme le graphe lui-même.",
+    "loading": "Calcul en cours…",
+    "error": "Cette analyse n'a pas pu être lue.",
+    "none": "Aucun chemin trouvé.",
+    "weakestLink": "maillon le plus faible :",
+    "sensitivity": "sensibilité maximale",
+    "sensitivityAbsent": "non précisé",
+    "sensitivityAbsentHint": "Le moteur omet ce champ lorsqu'il est vide : une valeur absente n'affirme donc PAS qu'aucun élément sensible n'est concerné.",
+    "kind": {
+      "reachability": "Ce qu'il peut atteindre",
+      "escalation": "Où il pourrait escalader",
+      "exfil": "Voies d'exfiltration"
+    },
+    "attribution": {
+      "firm": "ferme",
+      "approximate": "approximative",
+      "unknown": "non attribuée"
+    },
+    "confidence": {
+      "attributed": "attribuée",
+      "approximate": "approximative"
+    },
+    "analyse": "Analyser les chemins d'attaque (audité)"
+  }
+}

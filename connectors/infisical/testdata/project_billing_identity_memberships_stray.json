@@ -1,0 +1,21 @@
+{
+  "identityMemberships": [
+    {
+      "id": "pim-9",
+      "roles": [{ "id": "r-9", "role": "member", "isTemporary": false }],
+      "identity": {
+        "id": "id-ghost",
+        "name": "ghost"
+      }
+    },
+    {
+      "id": "pim-10",
+      "roles": [{ "id": "r-10", "role": "no-access", "isTemporary": false }],
+      "identity": {
+        "id": "id-ghost-noaccess",
+        "name": "ghost-noaccess"
+      }
+    }
+  ],
+  "totalCount": 2
+}

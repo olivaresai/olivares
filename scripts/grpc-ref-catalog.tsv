@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# grpc-ref-catalog.tsv — the ONLY hand-written part of the gRPC reference.
+#
+# The roster is not here. It is the grpc.ServiceDesc registration tables in
+# core/api/genpb/apiv1/api_grpc.pb.go and sdk/plugin/genpb/olivaresv1/v1_grpc.pb.go — what
+# the servers actually hand to gRPC. Method names, streaming shape and message types are
+# read from there; this file carries one sentence per method and nothing else.
+#
+# Both directions are enforced. A registered rpc with no row here is red, and a row here
+# for an rpc no descriptor registers is red — the second is how a reference keeps
+# advertising a call that was removed two releases ago.
+#
+# Columns, tab-separated:
+#   full method  /<package>.<Service>/<Method>, exactly as it travels on the wire
+#   summary      one sentence: what a caller gets, not a restatement of the name
+#
+/olivares.api.v1.ControlPlane/CreateAgent	Registers a new agent in the inventory and returns the stored record, including the identifier the rest of the API uses.
+/olivares.api.v1.ControlPlane/GetAgent	Returns one agent by identifier, with the same fields the REST inventory endpoint serves.
+/olivares.api.v1.ControlPlane/GetServerInfo	Reports version, edition and readiness. It is the only method on this service that does not require an authenticated principal.
+/olivares.api.v1.ControlPlane/ListAgents	Lists the agents visible to the calling principal, page by page.
+/olivares.api.v1.ControlPlane/VerifyAudit	Re-verifies the audit chain over a range and reports whether the hashes still link, including the checkpoint status.
+/olivares.sdk.v1.ContentSourceService/Close	Ends the session opened by Open and releases whatever the connector held for it.
+/olivares.sdk.v1.ContentSourceService/DeltaList	Streams the changes since a cursor. Called only when the connector advertises the content.delta capability.
+/olivares.sdk.v1.ContentSourceService/Describe	Returns the connector's descriptor: its identity, its configuration fields and the capabilities it advertises.
+/olivares.sdk.v1.ContentSourceService/Fetch	Returns one document's body and metadata for the reference the host picked off the List stream.
+/olivares.sdk.v1.ContentSourceService/FetchACL	Returns the permission references that govern one document. An empty result means the knowledge base default applies.
+/olivares.sdk.v1.ContentSourceService/List	Streams document references one page at a time, bounded by the ceilings the host passes so a corpus cannot be pulled into host memory in one call.
+/olivares.sdk.v1.ContentSourceService/Open	Starts a session with the configuration the host supplies, before any content call.
+/olivares.sdk.v1.HostService/Log	Writes one structured log record through the engine, so an out-of-process module logs where an in-process one does.
+/olivares.sdk.v1.HostService/Publish	Publishes one event onto the engine's bus on behalf of an out-of-process module.
+/olivares.sdk.v1.HostService/Subscribe	Streams bus events to the module, filtered by the event types it asks for. An empty filter means every type.
+/olivares.sdk.v1.IngestService/Push	Accepts a stream of observations pushed by a collector daemon and lifts each onto the event bus, returning a summary when the stream completes.
+/olivares.sdk.v1.ModuleService/Describe	Returns the module's descriptor: its identity and the configuration it accepts.
+/olivares.sdk.v1.ModuleService/Init	Hands the module its configuration and lets it prepare, before anything is started.
+/olivares.sdk.v1.ModuleService/Start	Starts the module's work after a successful Init.
+/olivares.sdk.v1.ModuleService/Stop	Stops the module and lets it release what it holds.
+/olivares.sdk.v1.OutputService/Close	Ends the session opened by Open and releases whatever the connector held for it.
+/olivares.sdk.v1.OutputService/Describe	Returns the connector's descriptor: its identity, its configuration fields and the capabilities it advertises.
+/olivares.sdk.v1.OutputService/Notify	Delivers one notification to the destination and reports what the destination did with it, which is what decides whether the host retries.
+/olivares.sdk.v1.OutputService/Open	Starts a session with the configuration the host supplies, before any delivery.
+/olivares.sdk.v1.SourceService/Close	Ends the session opened by Open and releases whatever the connector held for it.
+/olivares.sdk.v1.SourceService/Describe	Returns the connector's descriptor: its identity, its configuration fields and the capabilities it advertises.
+/olivares.sdk.v1.SourceService/Gather	Streams observations to the host, which lifts each onto the event bus. The stream ends when a batch run completes or the host cancels it.
+/olivares.sdk.v1.SourceService/Open	Starts a session with the configuration the host supplies, before any observation is gathered.

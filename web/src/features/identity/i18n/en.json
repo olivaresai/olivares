@@ -1,0 +1,584 @@
+{
+  "title": "Identity & NHI",
+  "subtitle": "SSO, SCIM, identity inventory, the NHI lifecycle, the WIF graph and privileged login — observed, governed and audited.",
+  "tabs": {
+    "federation": "SSO & SCIM",
+    "inventory": "Identity inventory",
+    "lifecycle": "NHI lifecycle",
+    "mcp": "MCP auth",
+    "wif": "WIF graph",
+    "posture": "Key & residency posture",
+    "login": "Privileged login"
+  },
+  "seam": {
+    "badge": "Backend pending",
+    "body": "{{what}} is a declared contract — the backend endpoint is not live yet, so there is nothing to show. This panel will populate the moment it lands; it never fabricates data."
+  },
+  "assurance": {
+    "stepUpTitle": "Step-up authentication required",
+    "stepUpBody": "{{action}} requires {{required}}. Your session is {{current}}. Authenticate with a hardware security key to continue.",
+    "authenticate": "Authenticate with security key",
+    "authenticatePiv": "Authenticate with PIV/CAC card",
+    "authenticating": "Waiting for your authenticator…",
+    "seamWhat": "The privileged-login ceremony (WebAuthn step-up)",
+    "unsupported": "This browser does not support WebAuthn. A platform that supports phishing-resistant authenticators is required for privileged actions.",
+    "failed": "Step-up did not complete. The action stays denied.",
+    "actions": {
+      "wif": "Viewing the Workload Identity Federation graph",
+      "identity": "Managing identity",
+      "nhiLifecycleRotate": "Rotating a non-human identity credential",
+      "nhiLifecycleFinalize": "Finalizing non-human identity offboarding",
+      "generic": "This action"
+    },
+    "aal": {
+      "aal1": "AAL1 (password)",
+      "aal2": "AAL2 (multi-factor)",
+      "aal3": "AAL3 (hardware, phishing-resistant)"
+    },
+    "unenrolled": "No passkey is registered for your account yet. Register a hardware security key in the Privileged login tab first, then retry the step-up."
+  },
+  "references": {
+    "note": "Standards this panel reflects. The panel observes and verifies; it does not claim certification.",
+    "labels": {
+      "scim": "SCIM 2.0 (RFC 7644)",
+      "prm": "Protected Resource Metadata (RFC 9728)",
+      "asMetadata": "Authorization Server Metadata (RFC 8414)",
+      "resourceIndicators": "Resource Indicators (RFC 8707)",
+      "pkce": "PKCE (RFC 7636)",
+      "oauthSecurityBcp": "OAuth 2.0 Security BCP (RFC 9700)",
+      "webauthn": "NIST SP 800-63B-4 (authenticator assurance)",
+      "piv": "FIPS 201-3 (PIV)",
+      "certManager": "cert-manager (CNCF)",
+      "pqc": "NIST SP 800-57 Part 1 r6 (key management)",
+      "wifReference": "Anthropic WIF reference",
+      "workloadIdentity": "Anthropic Workload Identity Federation",
+      "externalKeys": "Anthropic External Keys (CMEK)",
+      "workspaceUpdate": "Anthropic workspace residency"
+    },
+    "sso": {
+      "title": "SSO & SCIM standards"
+    },
+    "mcpAuth": {
+      "title": "MCP authorization standards"
+    },
+    "wif": {
+      "title": "Workload Identity Federation references"
+    },
+    "posture": {
+      "title": "Key & residency references"
+    },
+    "login": {
+      "title": "Privileged-login standards"
+    }
+  },
+  "sso": {
+    "title": "Single sign-on (OIDC / SAML)",
+    "description": "Federated login is implemented in the business build and configured by environment at boot. This panel documents the configuration, checks the exact redirect URI and surfaces the connection state — it does not write the configuration.",
+    "notConfigured": "Not configured",
+    "notConfiguredHint": "No identity provider is configured, so federation requests return 501. Set the environment keys below and restart the engine to enable SSO.",
+    "seamWhat": "The SSO connection-state summary",
+    "protocol": "Protocol",
+    "state": "Connection",
+    "redirectUri": "Redirect URI (exact)",
+    "pkce": "PKCE",
+    "pkceValue": "Authorization Code + S256 (always)",
+    "redirectCheckLabel": "Check your IdP redirect URI",
+    "redirectCheckHint": "Paste the redirect/ACS URI configured in your identity provider. It must match the value above exactly (RFC 9700).",
+    "redirectMatch": "Exact match — this redirect URI is valid.",
+    "redirectMismatch": "Does not match exactly. The IdP must use the redirect URI above, character-for-character.",
+    "proto": {
+      "common": "Common",
+      "oidc": "OIDC",
+      "saml": "SAML"
+    },
+    "required": "Required",
+    "secret": "Secret",
+    "envNote": "Configuration is read once at boot from the environment; there is no configuration write API. Secrets are never read back.",
+    "testLogin": "Start a test login"
+  },
+  "scim": {
+    "title": "SCIM 2.0 provisioning",
+    "description": "Inbound provisioning of users and groups. Read-only status of the service provider, the synchronized users, and the leaver evidence.",
+    "seamWhat": "The SCIM service-provider configuration",
+    "patch": "PATCH",
+    "filter": "Filter",
+    "filterMax": "Supported (max {{n}})",
+    "auth": "Authentication",
+    "bearerName": "tenant SCIM bearer",
+    "bearerNote": "Authentication is a tenant-bound bearer token. The token value is never displayed — only its reference.",
+    "usersTitle": "Synchronized users",
+    "noUsers": "No users synchronized",
+    "noUsersHint": "Once your IdP provisions users over SCIM they appear here. A disabled (mover/leaver) user shows as inactive.",
+    "groupsSupported": "Group provisioning is supported inbound (groups and memberships). Mapping a directory group to a role stays operator-only, in Identity → Groups.",
+    "leaverTitle": "Leaver evidence",
+    "leaverSeamWhat": "The leaver audit evidence",
+    "noLeaver": "No deprovision events",
+    "noLeaverHint": "When a SCIM leaver (delete / prov:delete) is processed, the backend revokes the user's sessions and tokens and records it here.",
+    "revoked": "Sessions + tokens revoked",
+    "col": {
+      "userName": "User",
+      "state": "State",
+      "externalId": "External ID",
+      "lastModified": "Last modified"
+    }
+  },
+  "console": {
+    "title": "Claude console posture",
+    "description": "What the Anthropic Admin API does — and does not — let us verify about your org's identity posture. Surfaced honestly, never as a complete roster.",
+    "seamWhat": "The claude-console posture finding",
+    "noFindings": "No posture finding",
+    "noFindingsHint": "The claude-console connector emits a structural posture finding when configured.",
+    "blindSpotTitle": "Admin-API blind spot (structural — not a misconfiguration)",
+    "blindSpots": {
+      "ssoEnforcement": "SSO enforcement state is not exposed by the Admin API (unknown-by-API).",
+      "scimProvisioning": "SCIM provisioning state is not exposed by the Admin API (unknown-by-API).",
+      "members": "Organization members ARE listable via the Admin API.",
+      "ssoJit": "SSO / JIT is a Team-plan-and-above capability.",
+      "auditExport": "SCIM / audit export is Enterprise-gated.",
+      "continuousAudit": "Continuous audit is the Compliance Activity Feed, not a pollable API (the 180-day CSV is an owner-only Console download)."
+    }
+  },
+  "roster": {
+    "label": "Non-human and human identities",
+    "search": "Search identities…",
+    "convergenceNote": "This identity converges by its external ID — the same id the observed side uses — so the access map can diff what it is PERMITTED versus what it is OBSERVED doing.",
+    "openInAccessMap": "View in access map",
+    "col": {
+      "name": "Name",
+      "externalId": "External ID",
+      "kind": "Kind",
+      "principalType": "Principal",
+      "source": "Source",
+      "state": "State"
+    },
+    "principal": {
+      "nhi": "Non-human",
+      "human": "Human",
+      "unknown": "Unknown"
+    },
+    "filter": {
+      "principalType": "Filter by principal",
+      "kind": "Filter by kind",
+      "all": "All"
+    }
+  },
+  "lifecycle": {
+    "loading": "Loading NHI lifecycle…",
+    "unknown": "Unknown",
+    "notSet": "Not set",
+    "orphaned": "Orphaned",
+    "forbidden": {
+      "title": "Not authorized",
+      "description": "Your role does not have permission to read the NHI lifecycle."
+    },
+    "posture": {
+      "title": "Lifecycle posture",
+      "description": "Tenant-wide staleness, enforcement, ownership and criticality posture.",
+      "total": "Total",
+      "stale": "Stale",
+      "blocked": "Blocked",
+      "alerting": "Alerting",
+      "orphaned": "Orphaned",
+      "critical": "Critical"
+    },
+    "filters": {
+      "criticality": "Filter by criticality",
+      "enforcement": "Filter by enforcement",
+      "allCriticality": "All criticalities",
+      "allEnforcement": "All enforcement states"
+    },
+    "criticality": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "staleness": {
+      "ok": "Current",
+      "stale": "Stale",
+      "unknown": "Unknown"
+    },
+    "enforcement": {
+      "monitor": "Monitor",
+      "alert": "Alert",
+      "blocked": "Blocked"
+    },
+    "offboard": {
+      "none": "Active",
+      "soft_deleted": "Soft-deleted",
+      "finalized": "Finalized"
+    },
+    "table": {
+      "title": "Governed non-human identities",
+      "description": "Rotation posture, enforcement, accountable humans and offboarding state. Select an identity for its event trail and actions.",
+      "identity": "Identity",
+      "criticality": "Criticality",
+      "staleness": "Staleness",
+      "enforcement": "Enforcement",
+      "ownership": "Owner and sponsor",
+      "offboarding": "Offboarding",
+      "ownerValue": "Owner: {{ref}}",
+      "sponsorValue": "Sponsor: {{ref}}",
+      "openDetail": "Open lifecycle details for {{ref}}",
+      "truncated_one": "Showing the first {{count}} identity; more match this filter than are listed. Narrow the filters to see the rest.",
+      "truncated_other": "Showing the first {{count}} identities; more match this filter than are listed. Narrow the filters to see the rest."
+    },
+    "empty": {
+      "title": "No lifecycle records",
+      "description": "Run a confirmed sweep to register roster NHIs and materialize their lifecycle posture."
+    },
+    "detail": {
+      "description": "Current lifecycle state and append-only governance trail.",
+      "posture": "Lifecycle details",
+      "enforcementReason": "Enforcement reason",
+      "owner": "Human owner",
+      "sponsor": "Human sponsor",
+      "rotatedAt": "Last rotation",
+      "maxAge": "Maximum age",
+      "seconds": "{{count}} seconds",
+      "inherited": "Inherited from criticality",
+      "rotationTarget": "Rotation target",
+      "recoveryUntil": "Recovery window ends"
+    },
+    "events": {
+      "title": "Append-only event trail",
+      "description": "Lifecycle changes and enforcement transitions recorded by the backend.",
+      "empty": "No lifecycle events recorded.",
+      "event": "Event",
+      "actor": "Actor",
+      "detail": "Detail",
+      "when": "When"
+    },
+    "actions": {
+      "title": "Lifecycle actions",
+      "reason": "Reason",
+      "critical": {
+        "twoAccountsAal3": "This CRITICAL action requires approval from two distinct user accounts, each over an AAL3 session, before it can run. The engine enforces distinct ACCOUNTS: it cannot prove that two accounts are two different people. Both conditions follow the live risk tier, which an approval policy can lower.",
+        "breakGlassPossible": "Nothing runs until two distinct user accounts approve it, each over a hardware-verified session. An active emergency break-glass grant can authorize it instead — that use is recorded and reviewed afterwards. Both conditions follow the live risk tier, which an approval policy can lower.",
+        "noBreakGlass": "Nothing runs until two distinct user accounts approve it, each over a hardware-verified session. Break-glass cannot authorize this one: there is no emergency path around the second approver. Both conditions follow the live risk tier, which an approval policy can lower."
+      },
+      "ownership": {
+        "button": "Assign ownership",
+        "title": "Assign human ownership",
+        "description": "Set the accountable owner and sponsor using roster identity references.",
+        "owner": "Owner identity reference",
+        "sponsor": "Sponsor identity reference",
+        "humanOnly": "Owner and sponsor must both resolve to human identities in the roster.",
+        "noChanges": "Change the owner or sponsor before saving.",
+        "cannotClear": "Owner and sponsor references cannot be cleared here. Assign another human identity instead.",
+        "confirm": "Save ownership",
+        "saved": "NHI ownership saved."
+      },
+      "policy": {
+        "button": "Edit policy",
+        "title": "Edit rotation policy",
+        "description": "Set credential criticality, rotation window, target and last-known rotation.",
+        "enforcementWarning": "Saving this policy can indirectly change enforcement: criticality controls whether staleness alerts or blocks, and a CRITICAL stale credential can be blocked on the next sweep.",
+        "criticality": "Credential criticality",
+        "maxAge": "Maximum age in seconds",
+        "maxAgeHint": "Use zero to inherit the default for the selected criticality.",
+        "rotationTarget": "Rotation target",
+        "rotatedAt": "Last-known rotation",
+        "confirm": "Save policy",
+        "saved": "NHI rotation policy saved.",
+        "partialUpdateNote": "Leaving a field blank or at zero keeps its current value — these settings can be changed but not cleared, so a rotation window or target already set stays until you replace it."
+      },
+      "rotate": {
+        "button": "Rotate",
+        "title": "Request credential rotation",
+        "description": "Open the governed CRITICAL rotation request.",
+        "target": "Actuator target",
+        "confirm": "Request rotation",
+        "credentialTitle": "New credential — shown once",
+        "credentialWarning": "Copy and store this credential securely now. It is shown once, is not persisted by Olivares AI, and cannot be recovered after you close this dialog.",
+        "credential": "New credential",
+        "credentialRef": "New credential reference: {{ref}}",
+        "credentialSaved": "I have stored it securely"
+      },
+      "offboard": {
+        "button": "Offboard",
+        "title": "Soft-delete this NHI",
+        "description": "Open the HIGH-risk, single-approver offboarding request.",
+        "warning": "This reversible step blocks the NHI and its bound agents, then opens a recovery window. It does not require AAL3.",
+        "confirm": "Request soft-delete"
+      },
+      "finalize": {
+        "button": "Finalize",
+        "title": "Finalize offboarding",
+        "description": "Permanently revoke a previously soft-deleted NHI.",
+        "irreversible": "Finalization is irreversible. Break-glass does not apply here; the second distinct user account and AAL3 requirements cannot be bypassed.",
+        "confirm": "Finalize permanently"
+      },
+      "restore": {
+        "button": "Restore",
+        "title": "Restore soft-deleted NHI",
+        "description": "Reverse the soft-delete within its recovery window. This admin action deliberately has no dual-control gate.",
+        "confirm": "Restore NHI"
+      },
+      "sweep": {
+        "button": "Run lifecycle sweep",
+        "title": "Run lifecycle sweep",
+        "description": "Recompute staleness, ownership and enforcement for this tenant.",
+        "warning": "This sweep is idempotent but mutating. It can move identities to blocked enforcement and deny their governed actions.",
+        "confirm": "Run mutating sweep",
+        "done": "NHI lifecycle sweep completed.",
+        "result": "Scanned {{scanned}}; newly blocked {{blocked}}."
+      },
+      "result": {
+        "title": "Governed request status",
+        "done": "The lifecycle action completed.",
+        "pending": "The request is pending approval; no actuation has occurred yet.",
+        "rejected": "The governed request was rejected; no actuation occurred.",
+        "expired": "The governed request expired; submit a new request if it is still needed.",
+        "noGate": "No approval gate is configured, so the action remains denied.",
+        "unavailable": "Approval was granted, but this source has no automated actuator. Follow the provider-specific manual procedure.",
+        "breakGlass": "The action completed through the audited emergency path.",
+        "received": "The backend returned a governed request state.",
+        "approval": "Approval reference: {{ref}}"
+      }
+    },
+    "errors": {
+      "mutation": "The lifecycle action could not be completed. Review the request and try again.",
+      "forbidden": "Not authorized: your role does not permit this lifecycle action.",
+      "humanOwnerRequired": "Owner and sponsor must be human identities from the roster; a non-human identity cannot hold either role.",
+      "softDeleteRequired": "Finalization requires a prior soft-delete. Offboard the NHI first, then finalize it after the recovery decision.",
+      "gate": {
+        "rejected": "A reviewer rejected this request. It was not a permission problem — ask the reviewer, or open a new request with the missing context.",
+        "expired": "The approval for this request lapsed before it was carried out. Open a new request; the previous decision no longer authorizes anything.",
+        "no_gate": "No approval gate is wired, so this action cannot be governed and is refused. An operator must configure governance before it can run."
+      }
+    }
+  },
+  "mcp": {
+    "title": "MCP authorization",
+    "description": "Whether each MCP server's OAuth token binding was verified. Defensive posture only — the panel never proxies or replays a token.",
+    "seamWhat": "The MCP authorization findings",
+    "noFindings": "No MCP authorization findings",
+    "noFindingsHint": "When an OAuth-protected MCP server is discovered, its token-binding posture is recorded here.",
+    "prmTitle": "Audience-bound authorization (RFC 9728)",
+    "prmDescription": "How an OAuth-protected MCP server binds a token to one concrete resource — so a token minted for one server cannot be replayed at another.",
+    "flow": {
+      "prm": {
+        "title": "Protected Resource Metadata",
+        "body": "The server advertises its authorization servers at /.well-known/oauth-protected-resource (RFC 9728)."
+      },
+      "asDiscovery": {
+        "title": "Authorization server discovery",
+        "body": "The advertised authorization server's metadata is fetched (RFC 8414)."
+      },
+      "pkce": {
+        "title": "PKCE S256",
+        "body": "The authorization code flow uses a S256 challenge (RFC 7636) — never plain."
+      },
+      "resourceBound": {
+        "title": "Resource-bound token",
+        "body": "The resource indicator (RFC 8707) is the canonical server URI, so the token's audience is one concrete server."
+      },
+      "introspect": {
+        "title": "Read-only introspection",
+        "body": "The token binding is verified by read-only introspection; the panel never calls tools or proxies the token."
+      }
+    },
+    "noPassthrough": "Token passthrough is prohibited by design: the panel observes and introspects, it never forwards or replays an MCP token."
+  },
+  "wif": {
+    "gatedNote": "The Workload Identity Federation graph is a privileged, audited view; it requires hardware step-up.",
+    "consoleOnly": "Workload identity federation objects (issuers, rules, service accounts) are managed only in the Anthropic Console. This panel visualises and lints them — it never creates or edits them.",
+    "openConsole": "Open in Anthropic Console",
+    "graphTitle": "WIF object graph",
+    "graphDescription": "Federation issuer → rule → service account → OAuth scope, with the linter flagging over-broad boundaries.",
+    "empty": "No federation declared",
+    "emptyHint": "No Workload Identity Federation issuers, rules or service accounts are configured for this organization. Declare federation in the Anthropic Console to govern non-human access without static keys.",
+    "lintClean": "Lint clean",
+    "lintErrors": "{{n}} error",
+    "lintWarnings": "{{n}} warning",
+    "lintInfo": "{{n}} info",
+    "lintNoFindings": "No lint findings — the federation graph looks well-scoped.",
+    "lintLabel": "WIF lint findings",
+    "lintRulesTitle": "The linter is ready. When the graph loads it applies these rules:",
+    "legend": {
+      "issuer": "Federation issuer (fdis_)",
+      "rule": "Federation rule (fdrl_)",
+      "svac": "Service account (svac_)",
+      "scope": "OAuth scope"
+    },
+    "lint": {
+      "cel-over-broad": {
+        "title": "Over-broad federation rule",
+        "detail": "This rule's match is too permissive. CEL conditions are security boundaries — narrow subject_prefix, audience, claims or the CEL condition.",
+        "rule": "flags rules whose subject / audience / claims / CEL match is too permissive."
+      },
+      "key-shadow": {
+        "title": "Static key shadows federation",
+        "detail": "{{var}} is present — a static Anthropic key takes precedence and silently disables Workload Identity Federation, so a \"keyless\" org keeps using the long-lived key.",
+        "recommendation": "Run `ant auth status` to confirm the active credential, then unset the static key to actually use federation.",
+        "rule": "flags a static ANTHROPIC_API_KEY / AUTH_TOKEN that shadows WIF."
+      },
+      "token-lifetime": {
+        "title": "Token lifetime concern",
+        "detail": "token_lifetime_seconds = {{lifetime}}. Keep it well under the {{max}}s maximum and within the supported band — shorter tokens shrink the blast radius.",
+        "rule": "flags token_lifetime_seconds outside 60–86400s, or close to the 24h maximum."
+      },
+      "scope-over-broad": {
+        "title": "Over-broad OAuth scope",
+        "detail": "Scope {{scope}} grants beyond a single workspace. Prefer workspace:developer unless org-wide management is genuinely required.",
+        "rule": "flags org:manage_tunnels or unrecognised scopes; prefers least privilege."
+      },
+      "jwks-insecure": {
+        "title": "Inline JWKS does not rotate",
+        "detail": "This rule pins an inline JWKS ({{mode}}). Prefer discovery so the issuer's keys can rotate.",
+        "rule": "flags inline JWKS that cannot rotate."
+      },
+      "drift": {
+        "title": "Federation drift",
+        "detail": "This object diverges from the governed federation ({{reason}}). Reconcile the declared rules with the live Anthropic configuration.",
+        "rule": "flags declared-vs-actual drift: an undeclared (ungoverned) live rule, a declared rule missing live, or an orphan rule/issuer.",
+        "reason": {
+          "undeclared-rule": "undeclared live rule",
+          "declared-not-live": "declared but not live",
+          "orphan-rule": "orphan rule",
+          "orphan-issuer": "orphan issuer"
+        }
+      }
+    },
+    "recon": {
+      "declaredOnly": "Showing the declared federation. Configure an org:admin OAuth token to reconcile against the live Anthropic configuration.",
+      "reconciled": "Reconciled with the live configuration at {{at}}.",
+      "unavailable": "Live reconciliation is unavailable — showing the declared baseline. Check the org:admin OAuth token."
+    }
+  },
+  "posture": {
+    "ek": {
+      "title": "External keys (CMEK)",
+      "description": "Customer-managed encryption keys referenced by your workspaces. Posture only — never the key material.",
+      "seamWhat": "The external-keys posture",
+      "immutable": "In use — immutable",
+      "never": "Never validated",
+      "col": {
+        "id": "Key reference",
+        "provider": "Provider",
+        "state": "State",
+        "inUse": "Referenced",
+        "validated": "Last validated"
+      }
+    },
+    "residency": {
+      "title": "Workspace residency",
+      "description": "Data-residency and CMEK binding per workspace. The home region and a referenced CMEK are immutable.",
+      "seamWhat": "The workspace residency posture",
+      "none": "No workspaces reported.",
+      "workspace": "Workspace",
+      "geo": "Home region",
+      "cmek": "CMEK",
+      "providerManaged": "Provider-managed (no CMEK)",
+      "compartment": "KMS compartment",
+      "inferenceGeos": "Allowed inference regions",
+      "unrestricted": "Unrestricted / unreported"
+    },
+    "tls": {
+      "title": "Panel TLS (cert-manager)",
+      "description": "The panel's own TLS posture: issuer, expiry, rotation and chain.",
+      "seamWhat": "The panel cert-manager TLS posture",
+      "issuer": "Issuer",
+      "notAfter": "Expires",
+      "autoRenew": "Auto-renew",
+      "chain": "Chain"
+    },
+    "crypto": {
+      "title": "Crypto agility / PQC inventory",
+      "description": "Classic versus post-quantum algorithms across the identity estate, and which slots can be rotated to PQC (NIST SP 800-57 r6).",
+      "seamWhat": "The crypto-agility / PQC inventory",
+      "ready": "PQC-ready",
+      "notReady": "Classic only",
+      "family": {
+        "classic": "Classic",
+        "pqc": "Post-quantum",
+        "hybrid": "Hybrid"
+      },
+      "col": {
+        "usage": "Usage",
+        "algorithm": "Algorithm",
+        "family": "Family",
+        "pqcReady": "PQC agility"
+      }
+    },
+    "unavailable": {
+      "badge": "Not readable",
+      "fallback": "This posture could not be read on this deployment."
+    }
+  },
+  "login": {
+    "statusTitle": "Session assurance",
+    "statusDescription": "The authenticator assurance level of your current session. Sensitive views require a hardware step-up.",
+    "currentAal": "Current level",
+    "methods": "Methods",
+    "methodsUnknown": "Not reported",
+    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) and PIV/CAC (FIPS 201-3) are the target standards for privileged login. The panel reflects what the backend enforces; it claims no certification.",
+    "passkeyTitle": "Register a passkey",
+    "passkeyDescription": "Enrol a hardware security key or platform authenticator (WebAuthn / FIDO2) for phishing-resistant privileged login.",
+    "registerPasskey": "Register a passkey",
+    "registering": "Follow your authenticator…",
+    "passkeySeamWhat": "WebAuthn passkey registration",
+    "registered": "Passkey registered.",
+    "unsupported": "This browser does not support WebAuthn.",
+    "registerFailed": "Registration did not complete.",
+    "pivTitle": "PIV / CAC (smartcard)",
+    "pivDescription": "X.509 client-certificate login with cert-to-role mapping and OCSP revocation, read from the mTLS connection.",
+    "pivSeamWhat": "The PIV/CAC client-certificate status",
+    "pivPresented": "Client certificate",
+    "pivAbsent": "Not presented",
+    "pivSubject": "Subject",
+    "pivRole": "Mapped role",
+    "pivOcsp": "OCSP",
+    "pivNote": "Chain and OCSP verification are performed by the backend; the panel reflects the result.",
+    "pivNotConfigured": "PIV/CAC is not configured on this deployment. An operator enables it by setting OLIVARES_PIV_CONFIG (agency CA, cert-to-role map) on the engine.",
+    "ocsp": {
+      "good": "Good",
+      "revoked": "Revoked",
+      "unknown": "Unknown"
+    },
+    "passkeys": {
+      "title": "Registered passkeys",
+      "description": "Manage your FIDO2/WebAuthn authenticators. Each passkey provides phishing-resistant hardware-bound login.",
+      "register": "Register passkey",
+      "registerTitle": "Register new passkey",
+      "registerHint": "Give your passkey a name so you can identify it later.",
+      "nameLabel": "Passkey name",
+      "namePlaceholder": "e.g. YubiKey 5C, MacBook Touch ID",
+      "registering": "Completing ceremony…",
+      "registered": "Passkey registered.",
+      "registerFailed": "Registration failed. Your browser may not support WebAuthn or the ceremony was cancelled.",
+      "unsupported": "This browser does not support WebAuthn/FIDO2.",
+      "none": "No passkeys registered",
+      "noneHint": "Register a passkey to enable phishing-resistant hardware-bound login (AAL3).",
+      "colName": "Name",
+      "colCreated": "Registered",
+      "colBackup": "Backup",
+      "backupEligible": "Multi-device",
+      "backupBound": "Hardware-bound",
+      "rename": "Rename",
+      "renameTitle": "Rename passkey",
+      "renamed": "Passkey renamed.",
+      "delete": "Delete",
+      "deleteTitle": "Delete passkey",
+      "deleteBody": "Delete the passkey \"{{name}}\"? This is permanent. You will need another registered passkey to maintain AAL3 access.",
+      "deleted": "Passkey deleted.",
+      "lastCredential": "Cannot delete your only passkey. Register another one first.",
+      "stepUpRequired": "Deleting a passkey requires a fresh AAL3 session. Complete a step-up authentication first."
+    }
+  },
+  "empty": {
+    "cryptoInventory": {
+      "title": "No cryptographic assets inventoried",
+      "description": "This build declares the TLS and post-quantum posture contract without serving it; a pending-contract notice replaces this panel until it answers."
+    },
+    "externalKeys": {
+      "title": "No external key references reported yet",
+      "description": "No customer-managed encryption keys were reported for this organization. The inventory was read successfully — this is a real zero, not a missing backend."
+    },
+    "nhiRoster": {
+      "title": "No human or non-human identities yet",
+      "description": "After a directory source is configured, resync the identity roster to populate human and non-human identities with their external IDs."
+    }
+  }
+}

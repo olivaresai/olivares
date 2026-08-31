@@ -1,0 +1,132 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# "Operate Claude Code" co-deployment image (FASE V) — the verified Olivares
+# engine binary + the OFFICIAL Claude Code CLI on a minimal Debian base, so the
+# control plane can CONDUCT a governed `claude` session as a child process via the
+# native procRunner. One container, one hardened image; the engine owns
+# claude's stdin/stdout (the stream-json governed transport) WITHOUT a Docker socket
+# and WITHOUT any privilege escalation. Decision (2026-06-16): combined
+# image + procRunner, no socket — the secure, minimal-surface path for self-hosted
+# co-deployment (the per-session fresh-container Runner via the Docker API is a
+# documented follow-up, not built here).
+#
+# OPT-IN. This is a SEPARATE artifact — it does NOT replace the distroless
+# ./Dockerfile / Dockerfile.release. The default engine image stays claude-free and
+# distroless; an operator who does not run governed Claude Code never builds or
+# pulls this. The added surface (a shell, claude, its deps) is the deliberate,
+# isolated cost of the Operate feature, kept out of the base.
+#
+# CLAUDE PROVISIONING — official source only, never redistributed. Anthropic's terms
+# do not permit redistributing the `claude` binary, so it is installed at BUILD time
+# from Anthropic's official, GPG-SIGNED apt repository (verified against the published
+# key fingerprint below), version-pinned, with the auto-updater disabled for a
+# reproducible image. We ship NO third-party binary in this Dockerfile; the build
+# fetches it from the vendor. BYO: build with --build-arg CLAUDE_INSTALL=byo to skip
+# the install entirely and mount your own `claude` at runtime (point
+# OLIVARES_SESSION_RUNTIME_CLAUDE_BIN at it). Official source verified 2026-06-16:
+# https://code.claude.com/docs/en/setup ("Install with Linux package managers").
+#
+# Build (pulls the released, cosign-verified engine image by default — pin it by
+# DIGEST in production and `cosign verify` it first; see INSTALL.md):
+#   docker build -f Dockerfile.agentops \
+#     --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
+#     --build-arg CLAUDE_CHANNEL=stable \
+#     -t olivares-agentops:dev .
+#
+# To build the engine from source instead of pulling a release, build ./Dockerfile
+# first (-t olivares:dev) and pass --build-arg OLIVARES_IMAGE=olivares:dev here.
+
+# ---- engine stage: the verified, distroless olivares binary, copied as-is -------
+# Pin OLIVARES_IMAGE by digest in production; the tag is an evaluation default.
+# docker.io/olivaresai/olivares is the OFFICIAL registry; ghcr.io/olivaresai/olivares
+# is the fallback and carries identical content by digest (no anonymous-pull rate limit).
+ARG OLIVARES_IMAGE=docker.io/olivaresai/olivares:latest
+FROM ${OLIVARES_IMAGE} AS engine
+
+# ---- runtime stage: minimal Debian + the official Claude Code CLI ---------------
+# Debian slim (glibc) so the signed apt package resolves claude's dependencies for
+# us — cleaner and more verifiable than curl|bash. Pin by digest in production.
+FROM debian:bookworm-slim
+
+LABEL org.opencontainers.image.title="olivares-agentops" \
+      org.opencontainers.image.description="Olivares AI control plane + Claude Code runtime (governed Operate co-deployment)" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/olivaresai/olivares" \
+      org.opencontainers.image.vendor="Olivares.AI"
+
+# CLAUDE_CHANNEL: the signed repo channel — `stable` (≈1 week behind, regressions
+# skipped; the reproducible-leaning default) or `latest`.
+ARG CLAUDE_CHANNEL=stable
+# CLAUDE_VERSION: optional exact pin (e.g. 2.1.178). Empty = the channel head.
+ARG CLAUDE_VERSION=
+# CLAUDE_INSTALL: `repo` (default; signed apt repo) or `byo` (skip — bring your own
+# claude, mounted at runtime). Anything else fails the build closed.
+ARG CLAUDE_INSTALL=repo
+# Official, fixed vendor URLs + the published key fingerprint we PIN against (we never
+# trust a downloaded key blindly). Verify against https://code.claude.com/docs/en/setup.
+ARG CLAUDE_APT_KEY_URL=https://downloads.claude.ai/keys/claude-code.asc
+ARG CLAUDE_KEY_FPR="31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"
+
+ENV DEBIAN_FRONTEND=noninteractive
+# hadolint ignore=DL3008,DL3015
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg tini; \
+    case "$CLAUDE_INSTALL" in \
+      repo) \
+        install -d -m 0755 /etc/apt/keyrings; \
+        curl -fsSL "$CLAUDE_APT_KEY_URL" -o /etc/apt/keyrings/claude-code.asc; \
+        # PIN: refuse to proceed unless the downloaded key matches the published
+        # fingerprint (supply-chain integrity, not blind trust-on-first-use).
+        got="$(gpg --show-keys --with-colons /etc/apt/keyrings/claude-code.asc \
+               | awk -F: '/^fpr:/ {print $10; exit}')"; \
+        [ "$got" = "$CLAUDE_KEY_FPR" ] || { echo "claude-code signing key fingerprint MISMATCH: got $got want $CLAUDE_KEY_FPR" >&2; exit 1; }; \
+        echo "deb [signed-by=/etc/apt/keyrings/claude-code.asc] https://downloads.claude.ai/claude-code/apt/${CLAUDE_CHANNEL} ${CLAUDE_CHANNEL} main" \
+          > /etc/apt/sources.list.d/claude-code.list; \
+        apt-get update; \
+        if [ -n "$CLAUDE_VERSION" ]; then \
+          apt-get install -y --no-install-recommends "claude-code=${CLAUDE_VERSION}"; \
+        else \
+          apt-get install -y --no-install-recommends claude-code; \
+        fi; \
+        command -v claude >/dev/null || { echo "claude not on PATH after install" >&2; exit 1; }; \
+        ;; \
+      byo) \
+        echo "CLAUDE_INSTALL=byo: skipping claude install; mount your own claude at runtime"; \
+        ;; \
+      *) echo "invalid CLAUDE_INSTALL=$CLAUDE_INSTALL (want repo|byo)" >&2; exit 1; ;; \
+    esac; \
+    # Slim the build-only tooling; keep ca-certificates (claude TLS) + tini (PID 1).
+    apt-get purge -y --auto-remove gnupg curl; \
+    rm -rf /var/lib/apt/lists/*
+
+# Disable Claude Code's background auto-updater: this image is a pinned, reproducible
+# artifact (https://code.claude.com/docs/en/setup#disable-auto-updates). Operators
+# rebuild to upgrade, they do not mutate a running container.
+ENV DISABLE_AUTOUPDATER=1
+
+# Non-root service identity — uid/gid 65532, matching the distroless engine's
+# `nonroot`. claude needs a WRITABLE HOME for ~/.claude (config + session history); a
+# runtime volume provides it (the root filesystem is mounted read-only — see the
+# compose override). The data dir holds the audit signing key + SQLite store.
+RUN groupadd -g 65532 olivares \
+ && useradd -u 65532 -g 65532 -M -s /usr/sbin/nologin -d /home/olivares olivares \
+ && install -d -o 65532 -g 65532 -m 0750 \
+      /home/olivares /home/olivares/.claude \
+      /var/lib/olivares /var/lib/olivares/workspaces \
+ && install -d -o 65532 -g 65532 -m 0700 /run/olivares
+ENV HOME=/home/olivares
+
+# The VERIFIED engine binary, copied from the (cosign-signed, distroless) engine
+# image — we do not recompile it here, so the bytes are exactly what release shipped.
+COPY --from=engine /usr/local/bin/olivares /usr/local/bin/olivares
+
+USER 65532:65532
+# Documented surface only — the engine binds 127.0.0.1 by DEFAULT (docs/SECURITY-HARDENING.md); a
+# container operator opts into 0.0.0.0 explicitly. The host controls real exposure.
+EXPOSE 8443 8444
+# tini is PID 1 so the claude grandchildren the procRunner's process group leaves on
+# stop are reaped (a distroless engine has no init; here the engine spawns children).
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/olivares"]
+CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/var/lib/olivares"]

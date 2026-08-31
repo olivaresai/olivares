@@ -1,0 +1,31 @@
+{
+  "menu": {
+    "trigger": "Vistas guardadas",
+    "myViews": "Mis vistas",
+    "shared": "Compartidas",
+    "empty": "No hay vistas guardadas",
+    "loading": "Cargando vistas guardadas…",
+    "loadFailed": "No se han podido cargar las vistas guardadas.",
+    "save": "Guardar vista actual…",
+    "delete": "Eliminar",
+    "deleteAria": "Eliminar la vista guardada {{name}}"
+  },
+  "save": {
+    "title": "Guardar vista actual",
+    "description": "Guarda los filtros y el ámbito actuales para poder aplicarlos de nuevo.",
+    "name": "Nombre",
+    "viewDescription": "Descripción",
+    "share": "Compartir con este tenant",
+    "shareHint": "Cualquiera con acceso a vistas guardadas en este tenant puede aplicarla.",
+    "cancel": "Cancelar",
+    "submit": "Guardar vista",
+    "failed": "No se ha podido crear la vista guardada."
+  },
+  "delete": {
+    "title": "¿Eliminar la vista guardada?",
+    "description": "Se eliminará «{{name}}». Esta acción no se puede deshacer.",
+    "confirm": "Eliminar vista",
+    "cancel": "Cancelar",
+    "failed": "No se ha podido eliminar la vista guardada."
+  }
+}

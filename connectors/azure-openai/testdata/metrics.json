@@ -1,0 +1,27 @@
+{
+  "cost": 0,
+  "timespan": "2026-06-20T11:00:00Z/2026-06-20T12:00:00Z",
+  "interval": "PT1H",
+  "value": [
+    {
+      "name": { "value": "ProcessedPromptTokens", "localizedValue": "Processed Prompt Tokens" },
+      "unit": "Count",
+      "timeseries": [
+        {
+          "metadatavalues": [ { "name": { "value": "modeldeploymentname" }, "value": "gpt4o-prod" } ],
+          "data": [ { "timeStamp": "2026-06-20T11:00:00Z", "total": 1000.0 } ]
+        }
+      ]
+    },
+    {
+      "name": { "value": "GeneratedTokens", "localizedValue": "Generated Completion Tokens" },
+      "unit": "Count",
+      "timeseries": [
+        {
+          "metadatavalues": [ { "name": { "value": "modeldeploymentname" }, "value": "gpt4o-prod" } ],
+          "data": [ { "timeStamp": "2026-06-20T11:00:00Z", "total": 200.0 } ]
+        }
+      ]
+    }
+  ]
+}

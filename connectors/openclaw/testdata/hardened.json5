@@ -1,0 +1,71 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  wizard: {lastRunVersion: '2026.6.11'},
+  gateway: {
+    bind: 'loopback',
+    auth: {mode: 'password', password: {source: 'env', name: 'OPENCLAW_GATEWAY_PASSWORD'}},
+    tls: {enabled: true},
+    tailscale: {mode: 'off'},
+    controlUi: {
+      allowInsecureAuth: false,
+      dangerouslyDisableDeviceAuth: false,
+    },
+  },
+  channels: {
+    defaults: {groupPolicy: 'allowlist'},
+    telegram: {
+      enabled: true,
+      dmPolicy: 'pairing',
+      allowFrom: ['ops-team'],
+      groupPolicy: 'allowlist',
+    },
+  },
+  tools: {
+    deny: ['group:runtime'],
+    exec: {
+      security: 'ask',
+      applyPatch: {workspaceOnly: true},
+    },
+    fs: {workspaceOnly: true},
+    elevated: {enabled: false},
+  },
+  agents: {
+    defaults: {
+      sandbox: {mode: 'all', workspaceAccess: 'rw'},
+      model: {
+        primary: 'anthropic/claude-sonnet-4-20250514',
+        fallbacks: ['anthropic/claude-haiku-3-5-20241022'],
+      },
+      models: {'anthropic/*': true},
+      skills: ['reviewer'],
+    },
+  },
+  skills: {
+    load: {allowSymlinkTargets: false},
+    install: {allowUploadedArchives: false},
+    workshop: {allowSymlinkTargetWrites: false},
+  },
+  plugins: {
+    entries: {
+      safePlugin: {
+        enabled: true,
+        hooks: {allowPromptInjection: false, allowConversationAccess: false},
+      },
+    },
+  },
+  security: {installPolicy: 'operator-command'},
+  discovery: {mdns: {mode: 'minimal'}, wideArea: {enabled: false}},
+  logging: {
+    file: '/var/log/openclaw/openclaw.log',
+    redactSensitive: 'tools',
+  },
+  diagnostics: {otel: {enabled: true}},
+  models: {
+    providers: {
+      anthropic: {apiKey: {source: 'env', name: 'ANTHROPIC_API_KEY'}},
+    },
+  },
+  session: {dmScope: 'per-peer'},
+  update: {channel: 'stable'},
+}

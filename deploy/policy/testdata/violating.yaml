@@ -1,0 +1,27 @@
+# A Deployment that violates all three rules of the Olivares governance posture:
+#   - identity-bound: NO olivares.ai/tenant or olivares.ai/identity labels;
+#   - least privilege: NO runAsNonRoot anywhere (may run as UID 0);
+#   - no inline secrets: API_KEY is pasted as an inline literal.
+# `conftest test violating.yaml` must FAIL (exit code 2), reporting one finding
+# per rule.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-worker
+  namespace: acme-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: billing-worker
+  template:
+    metadata:
+      labels:
+        app: billing-worker
+    spec:
+      containers:
+        - name: app
+          image: registry.example.com/billing-worker:0.9.0
+          env:
+            - name: API_KEY
+              value: AKIAIOSFODNN7EXAMPLE

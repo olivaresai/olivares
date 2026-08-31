@@ -1,0 +1,34 @@
+{
+  "title": "Paramètres",
+  "subtitle": "Gérez votre compte et l’apparence de la console.",
+  "tabs": {
+    "profile": "Profil",
+    "appearance": "Apparence",
+    "about": "À propos"
+  },
+  "profile": {
+    "title": "Profil",
+    "email": "Email",
+    "displayName": "Nom affiché",
+    "role": "Rôle dans cette organisation",
+    "memberships": "Organisations",
+    "actor": "Principal"
+  },
+  "appearance": {
+    "title": "Apparence",
+    "theme": "Thème",
+    "themeHint": "Choisissez clair, sombre, ou suivez votre système.",
+    "density": "Densité du tableau",
+    "densityHint": "Le mode compact affiche plus de lignes ; le mode confortable est plus aéré.",
+    "language": "Langue",
+    "languageHint": "La langue de l’interface de la console."
+  },
+  "about": {
+    "title": "À propos",
+    "version": "Version",
+    "engine": "Moteur de stockage",
+    "license": "État de la licence",
+    "licensee": "Sous licence pour",
+    "none": "Aucun"
+  }
+}

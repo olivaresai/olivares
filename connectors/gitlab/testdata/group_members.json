@@ -1,0 +1,14 @@
+[
+  {
+    "username": "org-admin",
+    "access_level": 50
+  },
+  {
+    "username": "team-lead",
+    "access_level": 40
+  },
+  {
+    "username": "intern",
+    "access_level": 10
+  }
+]

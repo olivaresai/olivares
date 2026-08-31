@@ -1,0 +1,167 @@
+---
+title: 从零到一张读/写访问图
+description: >-
+  构建单一二进制、用捆绑的演示资产域（estate）启动它，并到达一张
+  填充好的 Permitted-vs-Observed 访问图 —— 在几分钟内完整体验产品的核心理念，
+  端到端。
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+完成本教程后，你将在本地运行起 Olivares AI，
+并到达它的核心工件：一张带有真实 **Permitted-vs-Observed**
+偏差结果的 **读/写访问图**。你将 *通过看它运作来理解产品* ——
+这是一条学习路径，而非生产安装（关于后者，参见
+[自托管](/zh/how-to/self-hosting/)）。
+
+我们使用捆绑的 **演示资产域**（`--seed-demo`）：一小组合成的 agents、
+身份和资源，它们会像一个实际运行的 pgAudit 或 OpenTelemetry collector 那样，
+**真实** 地流经事件总线。一切都在 `localhost` 上运行。
+
+<Aside type="caution" title="演示模式仅用于学习">
+`--seed-demo` 会预置一个使用 **公开的、源码树中的
+密码** 的演示管理员以及合成数据，且它 **会拒绝在非 loopback
+地址上启动**。切勿将其用于真实安装。真正的首次运行路径（一个一次性
+setup token、无默认凭据、真实 sources）见
+[自托管](/zh/how-to/self-hosting/)。
+</Aside>
+
+## 先决条件
+
+- **Go 1.26+**（用于构建二进制），或 Docker（关于容器路径，参见
+  [自托管操作指南](/zh/how-to/self-hosting/)）。
+- `curl` 和 `python3`，用于从 shell 与 API 通信。
+- 一份 Olivares AI 仓库的 checkout。
+
+## 构建并启动
+
+<Steps>
+
+1. **构建单一二进制。** 从仓库根目录：
+
+   ```bash
+   task setup    # install git hooks, commit tooling and web deps
+   task build    # compile the static binary with the web embedded (go:embed)
+   ./bin/olivares version
+   ```
+
+   `task build` 会构建 web bundle、第一方 connector 插件以及
+   二进制，生成一个位于 `./bin/olivares` 的自包含工件。
+
+   <Aside type="note">
+   如果你只想要二进制且已构建好 web bundle，原始的
+   构建命令是 `CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares`
+   —— 存储是纯 Go 的 SQLite（modernc），因此无需 C 工具链。
+   </Aside>
+
+2. **用演示资产域在 loopback 上启动它。** 选一个全新的数据目录，以便
+   从干净状态开始：
+
+   ```bash
+   DATA="$(mktemp -d)"
+   ./bin/olivares serve --insecure --seed-demo \
+     --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 \
+     --data-dir "$DATA"
+   ```
+
+   `--insecure` 标志在 loopback 上以明文 HTTP 提供服务（对本地
+   教程而言没问题；否则 TLS 默认开启）。启动时你会看到一条 **DEMO MODE**
+   横幅，其中包含演示凭据：
+
+   ```
+   demo@olivares.local / olivares-demo-estate
+   ```
+
+</Steps>
+
+## 到达访问图
+
+让服务器保持运行，打开第二个终端。
+
+<Steps>
+
+1. **登录**，使用演示凭据来获取一个 bearer token：
+
+   ```bash
+   BASE=http://127.0.0.1:8901
+   TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+     | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+   ```
+
+2. **解析演示租户**（access-map 端点是租户范围的）：
+
+   ```bash
+   TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+     | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+   ```
+
+3. **获取读/写图。** 这是模块 III —— access map：
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   演示资产域大约返回 **20 个节点和 13 条边** —— agents、身份、
+   MCP servers、模型、provider 和资源，每条边都被分类为 read 或
+   read-write。
+
+4. **获取 Permitted-vs-Observed 偏差：**
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/drift" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   这会浮现出预置的 **意外访问**，例如：
+
+   - 一个 agent 读取它 **从未被授予** 的 `appdb.public.secrets`（已归属）；以及
+   - 一个共享池身份写入 `appdb.public.logs`（近似归属）。
+
+   <Aside type="tip" title="是 /drift，不是 /diff">
+   Permitted-vs-Observed 结果由 `/v1/m/accessmap/drift` 提供。不存在
+   `/v1/m/accessmap/diff` 端点。
+   </Aside>
+
+5. **（可选）查看整个预置清单：**
+
+   ```bash
+   curl -sf "$BASE/v1/m/inventory/summary" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+</Steps>
+
+## 在 web UI 中查看
+
+web UI **内嵌于同一个二进制中**，并从同一 origin 提供。在
+演示服务器仍在运行时，打开：
+
+```
+http://127.0.0.1:8901
+```
+
+用演示凭据登录并打开 access-map 视图：图会渲染出
+相同的节点和边，偏差叠加层会高亮意外访问，
+仪表盘会汇总该资产域。
+
+<Aside type="note" title="你刚刚看到的就是这条主线">
+*discover → R/RW graph → Permitted-vs-Observed diff → inventory/dashboards* 是
+产品的核心流程。演示通过真实总线馈入合成观测数据；一个
+真实安装则改为通过 connectors 馈入 —— 参见
+[连接一个 source](/zh/how-to/connect-a-source/)。
+</Aside>
+
+## 这里 *没有* 发生的事（以及接下来该做什么）
+
+- 演示数据是合成的，且演示密码是公开的 —— 这 **不是** 一个
+  安全的部署。要做一个真实部署，请遵循[自托管](/zh/how-to/self-hosting/)：
+  它没有默认凭据，并使用一个一次性 setup token。
+- 上面用到的模块端点（`/v1/m/accessmap/*`、`/v1/m/inventory/*`）是
+  可达的，但按设计 **不** 属于所提供的 OpenAPI 文档；
+  [API 参考](/reference/api/)记录了核心 REST 面。
+- 要理解 *为什么* 图以这种方式构建（协作式遥测与原生存储
+  审计交叉、eBPF 作为后备、MCP 注解被视为
+  不可信），请阅读[架构概览](/zh/explanation/architecture/overview/)。

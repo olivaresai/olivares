@@ -1,0 +1,49 @@
+{
+  "records": [
+    {
+      "recordId": "rec-mcp-1",
+      "recordArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:registry/reg-alpha/record/rec-mcp-1",
+      "name": "support-mcp-tool",
+      "description": "MCP tool for support ticket management",
+      "descriptorType": "MCP",
+      "recordVersion": "1.0.0",
+      "status": "APPROVED",
+      "createdAt": 1748995200,
+      "updatedAt": 1749081600
+    },
+    {
+      "recordId": "rec-a2a-1",
+      "recordArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:registry/reg-alpha/record/rec-a2a-1",
+      "name": "billing-a2a-agent",
+      "description": "A2A agent for billing queries",
+      "descriptorType": "A2A",
+      "recordVersion": "2.1.0",
+      "status": "APPROVED",
+      "createdAt": 1748995200,
+      "updatedAt": 1749081600
+    },
+    {
+      "recordId": "rec-fail-1",
+      "recordArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:registry/reg-alpha/record/rec-fail-1",
+      "name": "broken-connector",
+      "description": "Connector that failed to create",
+      "descriptorType": "CUSTOM",
+      "recordVersion": "0.1.0",
+      "status": "CREATE_FAILED",
+      "statusReason": "Schema validation error",
+      "createdAt": 1748995200,
+      "updatedAt": 1749081600
+    },
+    {
+      "recordId": "rec-dep-1",
+      "recordArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:registry/reg-alpha/record/rec-dep-1",
+      "name": "legacy-tool",
+      "description": "Deprecated legacy tool",
+      "descriptorType": "MCP",
+      "recordVersion": "0.5.0",
+      "status": "DEPRECATED",
+      "createdAt": 1748995200,
+      "updatedAt": 1749081600
+    }
+  ]
+}

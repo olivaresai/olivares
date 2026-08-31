@@ -1,0 +1,238 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Drills-nightly. The DR and PSIRT runbooks are only trustworthy if their
+# happy paths are exercised on a cadence — `task dr:drill` (DR-RUNBOOK.md §8) and
+# `task security:drill` (PSIRT-RUNBOOK.md §7) are CI-safe round trips that touch no
+# real data, yet NO workflow ran them: they were green in local dev and nowhere else.
+# A broken drill means the documented recovery/advisory path is broken, so a non-zero
+# exit here is an OPERATIONAL INCIDENT and opens a tracking issue.
+#
+# Both drills run even if the first fails (independent steps capturing their own exit
+# code), so one incident never masks the other. The tracking issue is deduplicated
+# PER DRILL by a stable title: while an issue for `dr`/`security` stays open, later
+# nightly failures append a comment instead of spawning a new issue every night;
+# distinct drills get distinct issues; close the issue once the drill is green again.
+#
+# POSIX cron, UTC. Nightly 04:00 UTC — ahead of the weekly Scorecard/patch-velocity
+# cadence so a fresh drill signal is available each morning.
+name: drills-nightly
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # nightly, 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drills:
+    # On olivaresai/olivares the scheduled cadence runs by default; on any other
+    # clone or mirror, scheduled runs are gated on the repository variable
+    # CI_NIGHTLIES=true (manual `gh workflow run <file>` always works).
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'olivaresai/olivares' || vars.CI_NIGHTLIES == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    # 20 -> 40: el paseo de consola añade un build de Go, la instalación de chromium y 55
+    # pantallas contra un motor vivo. Un límite que corta a mitad no da «hallazgos», da un
+    # nocturno rojo que nadie sabe leer.
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      issues: write # open/update the drill-failure tracking issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: install go-task (pinned)
+        run: |
+          # ⛔ TRES PARTES, NO UNA — la doctrina vive en mainline-ci.yml:642-646 desde el 08-18 y
+          # llevaba ONCE DIAS sin propagarse. La cobro `export-check` el 2026-08-29 en
+          # `ci-runner-3`: el paso «install go-task» salio **success** y el siguiente murio con
+          # `task: command not found`, exit 127; el job midio 1 de 14 pasos y el fail-closed del
+          # propio instrumento quedo SALTADO (corrida 33278242758, curada por r26 en #2149).
+          #
+          #   GOBIN explicito .... `go install` honra un GOBIN del entorno POR ENCIMA de
+          #                        $GOPATH/bin. En un runner auto-alojado PERSISTENTE ese GOBIN
+          #                        puede venir del servicio, y entonces el binario aterriza fuera
+          #                        del PATH que el job acaba de componer — **sin fallar**, porque
+          #                        instalar si instalo.
+          #   su bin al PATH ..... para el paso siguiente (GITHUB_PATH) y para ESTE (export PATH).
+          #   la GUARDA .......... «instalar no es alcanzar». Convierte «instalado e inalcanzable»
+          #                        en un rojo NOMBRADO aqui, en vez de un 127 opaco mas adelante
+          #                        que manda a investigar el PATH en vez de la instalacion.
+          #
+          # ⚠ Y la causa esta CONFIRMADA por una medida que no estaba en el diagnostico original:
+          # en esa corrida los dos jobs corrieron en maquinas DISTINTAS — el que fallo en
+          # `ci-runner-3`, el que paso en `srv17`— con los MISMOS pasos. No era el orden de los
+          # pasos: era el entorno del runner, que es exactamente lo que GOBIN explicito neutraliza.
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install dijo OK y task no esta en PATH (GOBIN=$GOBIN, PATH=$PATH)"; exit 1; }
+
+      # Each drill runs in its own step and never aborts the job on failure, so a DR
+      # incident does not hide a PSIRT incident (and vice versa). pipefail makes the
+      # task exit code — not tee's — decide `failed`.
+      - name: DR round-trip drill (task dr:drill)
+        id: dr
+        run: |
+          set -uo pipefail
+          if task dr:drill 2>&1 | tee "$RUNNER_TEMP/drill-dr.log"; then
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ⛔ THE QUICKSTART IS A DRILL TOO, AND ITS CLAIM WAS THE UNTRUE ONE.
+      # The seven READMEs we publish say "CI walks the same path: `task smoke:quickstart` boots
+      # this demo estate against the real binary and asserts its access-map and drift counts".
+      # It was wired into mainline-ci — which is `on: workflow_dispatch` and nothing else, so a
+      # human has to press a button for it to happen. That is not what "CI walks the same path"
+      # says to a reader, and this file's own header names exactly that defect for the other two
+      # drills: "green in local dev and nowhere else".
+      #
+      # A nightly is the honest cadence: the numbers are asserted every day without spending a
+      # runner on every push, which is why mainline-ci is dispatch-only in the first place.
+      - name: quickstart contract drill (task smoke:quickstart)
+        id: quickstart
+        run: |
+          set -uo pipefail
+          if task smoke:quickstart 2>&1 | tee "$RUNNER_TEMP/drill-quickstart.log"; then
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ⛔ EL PASEO DE CONSOLA NO TENÍA LLAMANTE (C15-P9), y es el ÚNICO instrumento del
+      # repositorio que abre un navegador de verdad contra un motor de verdad. `test:web` corre
+      # la consola contra mocks y `web:check` sólo prueba que el bundle commiteado casa con sus
+      # fuentes: un cliente TIPADO llamando a un endpoint que el motor NUNCA registra es
+      # invisible para los dos —la consola pregunta, el motor contesta 404, y todo el unitario
+      # sigue verde porque el mock contestó—. Sin llamante, ese hueco lo cubría que alguien se
+      # acordara.
+      #
+      # Un nocturno es la cadencia honesta, por lo mismo que el quickstart: necesita un motor
+      # arrancado y un navegador, y no cabe en un lint rápido.
+      #
+      # ⚠ LA SECUENCIA DE ABAJO ESTÁ TRANSCRITA DE UNA CORRIDA REAL, no compuesta a partir de la
+      # documentación: el 2026-08-18 se arrancó el binario en 127.0.0.1:18080, se tomó el token
+      # de un solo uso de su propia salida y se pasearon **55 pantallas con 0 hallazgos**. Un
+      # trabajo de CI que nadie ha visto correr es exactamente lo que esta jornada ha estado
+      # corrigiendo en otros sitios.
+      #
+      # ⛔ `task -x`, NO `task`: medido el 2026-08-07, `task` a secas aplasta TODO código de
+      # fallo a 201, lo que funde «encontré defectos» (1) con «no he podido mirar» (2) — la única
+      # distinción para la que este instrumento existe. Con `-x` pasan 1→1 y 2→2, y por eso el
+      # veredicto de abajo separa los dos.
+      - name: console walk against a live engine (task -x console:walk)
+        # ⚠ SIN MEDIDA: este workflow sale `skipped` en las cinco ultimas corridas, asi que no hay
+        # duracion de la que leerlo. Se guarda el paso que MAS puede colgarse —el unico que conduce un
+        # navegador contra un motor vivo— y el numero se declara como cota, no como medida. Cuando
+        # corra de verdad, releelo con `task ci:timeout-headroom --fetch` y ajustalo.
+        timeout-minutes: 20
+        id: walk
+        run: |
+          set -uo pipefail
+          go build -o "$RUNNER_TEMP/olivares" ./cmd/olivares
+          mkdir -p "$RUNNER_TEMP/walk-estate"
+          (cd "$RUNNER_TEMP/walk-estate" && OLIVARES_DATA_DIR="$RUNNER_TEMP/walk-estate" \
+            "$RUNNER_TEMP/olivares" quickstart --listen 127.0.0.1:18080 \
+            > "$RUNNER_TEMP/walk-engine.log" 2>&1 &)
+          # El motor imprime su token de un solo uso al arrancar; se espera a que aparezca en vez
+          # de dormir a ciegas — un sleep fijo convierte una caja lenta en un falso «no he podido
+          # mirar».
+          for _ in $(seq 1 60); do
+            grep -qoE 'olst_[A-Z0-9]+' "$RUNNER_TEMP/walk-engine.log" && break
+            sleep 2
+          done
+          TOK="$(grep -oE 'olst_[A-Z0-9]+' "$RUNNER_TEMP/walk-engine.log" | head -1)"
+          if [ -z "$TOK" ]; then
+            echo "::error::console-walk: el motor no imprimió token de primer arranque; sin él no se puede mirar."
+            sed -n '1,40p' "$RUNNER_TEMP/walk-engine.log"
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npx --yes playwright install --with-deps chromium
+          OLIVARES_WALK_BASE=https://127.0.0.1:18080 OLIVARES_WALK_TOKEN="$TOK" \
+            task -x console:walk 2>&1 | tee "$RUNNER_TEMP/drill-console-walk.log"
+          rc=${PIPESTATUS[0]}
+          pkill -f 'olivares quickstart --listen 127.0.0.1:18080' || true
+          # 0 limpio · 1 hallazgos · 2 no he podido mirar. Los dos últimos abren incidencia: un
+          # paseo que no pudo mirar NO es un paseo limpio, y ésa es la razón de usar `-x`.
+          if [ "$rc" -eq 0 ]; then
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "console-walk salió $rc (1 hallazgos · 2 no he podido mirar)"
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: PSIRT advisory-pipeline drill (task security:drill)
+        id: sec
+        run: |
+          set -uo pipefail
+          if task security:drill 2>&1 | tee "$RUNNER_TEMP/drill-security.log"; then
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Open (or update) one tracking issue PER failing drill, deduplicated by an
+      # exact stable title so recurring failures append rather than multiply.
+      - name: open/update tracking issue on any drill failure
+        if: steps.dr.outputs.failed == 'true' || steps.sec.outputs.failed == 'true' || steps.quickstart.outputs.failed == 'true' || steps.walk.outputs.failed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DR_FAILED: ${{ steps.dr.outputs.failed }}
+          SEC_FAILED: ${{ steps.sec.outputs.failed }}
+          QUICKSTART_FAILED: ${{ steps.quickstart.outputs.failed }}
+          WALK_FAILED: ${{ steps.walk.outputs.failed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # printf (not a heredoc) builds the body so YAML block-scalar indentation
+          # can never swallow a heredoc terminator; the backticks are literal.
+          open_or_update() {
+            local key="$1" desc="$2" log="$3"
+            local title="drills-nightly: ${key} drill failed"
+            local tail_log body existing
+            tail_log="$(tail -40 "$log" 2>/dev/null || printf '(no log captured)')"
+            # shellcheck disable=SC2016 # Backticks are literal Markdown in the issue body.
+            body="$(printf '%s\n\n- Run: %s\n- Commit: `%s`\n\nLast 40 lines of drill output:\n\n```\n%s\n```\n\n_%s_\n' \
+              "The nightly **${desc}** FAILED — a broken drill means the documented runbook path is broken (operational incident)." \
+              "${RUN_URL}" "${COMMIT_SHA}" "${tail_log}" \
+              "This issue is auto-deduplicated: while it stays open, subsequent nightly failures of this same drill append a comment instead of opening a new issue. Close it once the drill is green again.")"
+            existing="$(gh issue list --label drills-nightly --state open --json number,title \
+              | jq -r --arg t "$title" ".[] | select(.title == \$t) | .number" | head -1)"
+            if [ -n "${existing:-}" ]; then
+              gh issue comment "$existing" --body "$body"
+            else
+              gh issue create --title "$title" --label drills-nightly --body "$body" \
+                || gh issue create --title "$title" --body "$body"
+            fi
+          }
+          if [ "${DR_FAILED}" = "true" ]; then
+            open_or_update "dr" "Disaster-recovery drill (task dr:drill, DR-RUNBOOK.md §8)" "$RUNNER_TEMP/drill-dr.log"
+          fi
+          if [ "${SEC_FAILED}" = "true" ]; then
+            open_or_update "security" "PSIRT advisory-pipeline drill (task security:drill, PSIRT-RUNBOOK.md §7)" "$RUNNER_TEMP/drill-security.log"
+          fi
+          if [ "${QUICKSTART_FAILED}" = "true" ]; then
+            open_or_update "quickstart" "Quickstart contract drill (task smoke:quickstart, the numbers the seven READMEs publish)" "$RUNNER_TEMP/drill-quickstart.log"
+          fi
+          if [ "${WALK_FAILED}" = "true" ]; then
+            open_or_update "console-walk" "Console walk against a live engine (task -x console:walk, 55 screens)" "$RUNNER_TEMP/drill-console-walk.log"
+          fi
+
+      # Keep the run RED when any drill failed, after the issue is filed.
+      - name: fail the run if any drill failed
+        if: steps.dr.outputs.failed == 'true' || steps.sec.outputs.failed == 'true' || steps.quickstart.outputs.failed == 'true' || steps.walk.outputs.failed == 'true'
+        run: |
+          echo "::error::a nightly drill failed — see the tracking issue(s)"
+          exit 1

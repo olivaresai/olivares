@@ -1,0 +1,21 @@
+{
+  "permission": {
+    "edit": "ask",
+    "bash": "ask"
+  },
+  "mcp": {
+    "localfs": {
+      "type": "local",
+      "command": ["node", "server.js"],
+      "enabled": true
+    },
+    "remote": {
+      "type": "remote",
+      "url": "https://mcp.example.com/rpc",
+      "enabled": true
+    },
+    "disabled": {
+      "enabled": false
+    }
+  }
+}

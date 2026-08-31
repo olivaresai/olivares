@@ -1,0 +1,8 @@
+{
+  "workloadIdentities": [
+    {
+      "name": "triage-agent",
+      "workloadIdentityArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:workload-identity-directory/default/workload-identity/triage-agent"
+    }
+  ]
+}

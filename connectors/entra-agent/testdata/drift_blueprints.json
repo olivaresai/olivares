@@ -1,0 +1,32 @@
+{
+  "value": [
+    {
+      "id": "obj-bp-1",
+      "appId": "bp-app-1",
+      "displayName": "Finance Blueprint",
+      "passwordCredentials": [
+        {"keyId": "k1", "displayName": "ci secret", "hint": "Qx3", "secretText": null, "endDateTime": "2026-12-31T00:00:00Z"},
+        {"keyId": "k2", "displayName": "ops secret", "hint": "Zp9", "secretText": null, "endDateTime": "2027-12-31T00:00:00Z"}
+      ],
+      "keyCredentials": []
+    },
+    {
+      "id": "obj-bp-2",
+      "appId": "bp-app-2",
+      "displayName": "Forever Blueprint",
+      "passwordCredentials": [
+        {"keyId": "k3", "displayName": "legacy", "hint": "Aa1", "secretText": null, "endDateTime": null}
+      ],
+      "keyCredentials": []
+    },
+    {
+      "id": "obj-bp-3",
+      "appId": "bp-app-3",
+      "displayName": "Cert Blueprint",
+      "passwordCredentials": [],
+      "keyCredentials": [
+        {"keyId": "c1", "type": "AsymmetricX509Cert", "usage": "Verify"}
+      ]
+    }
+  ]
+}

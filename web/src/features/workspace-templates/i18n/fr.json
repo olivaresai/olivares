@@ -1,0 +1,90 @@
+{
+  "truncation": {
+    "label": "{{n}} modèles chargés ; il y en a d'autres",
+    "hint": "Seuls les modèles chargés sont disponibles dans ce catalogue. Un modèle absent peut se trouver au-delà de cette page."
+  },
+  "title": "Modèles d'espace de travail",
+  "subtitle": "Instantanés réutilisables de hooks, paramètres, connecteurs et politiques pour les sessions d'espace de travail.",
+  "catalog": {
+    "builtin": "Intégré",
+    "version": "v{{version}}",
+    "author": "Par {{author}}",
+    "archived": "Archivé",
+    "noTemplates": "Aucun modèle trouvé.",
+    "noTemplatesHint": "Créez votre premier modèle pour réutiliser des configurations d'espace de travail.",
+    "filterAll": "Tous",
+    "filterBuiltin": "Intégrés",
+    "filterCustom": "Personnalisés",
+    "showArchived": "Afficher les archivés"
+  },
+  "editor": {
+    "nameLabel": "Nom",
+    "namePlaceholder": "ex. Session de codage sécurisée",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Que configure ce modèle ?",
+    "sections": {
+      "hooks": "Hooks",
+      "hooksHint": "Commandes exécutées avant/après les outils et les sessions.",
+      "settings": "Paramètres de l'agent",
+      "settingsHint": "Mode de permission, niveau d'effort, modèle et instructions personnalisées.",
+      "connectors": "Connecteurs",
+      "connectorsHint": "Identifiants des connecteurs à associer lors de l'application de ce modèle.",
+      "policies": "Politiques de gouvernance",
+      "policiesHint": "Mode DLP, limites de durée de session, outils autorisés et enregistrement E/S."
+    },
+    "hooks": {
+      "preTool": "Avant l'outil",
+      "postTool": "Après l'outil",
+      "preSession": "Avant la session",
+      "postSession": "Après la session",
+      "command": "Commande",
+      "timeoutMs": "Délai d'attente (ms)",
+      "addHook": "Ajouter un hook",
+      "removeHook": "Supprimer"
+    },
+    "settings": {
+      "permissionMode": "Mode de permission",
+      "effort": "Niveau d'effort",
+      "model": "Modèle",
+      "customInstructions": "Instructions personnalisées"
+    },
+    "policies": {
+      "dlpMode": "Mode DLP",
+      "maxDuration": "Durée maximale de session (minutes)",
+      "allowedTools": "Outils autorisés",
+      "allowedToolsPlaceholder": "ex. Bash,Read,Edit",
+      "recordIo": "Enregistrer les E/S"
+    }
+  },
+  "actions": {
+    "create": "Nouveau modèle",
+    "edit": "Modifier",
+    "duplicate": "Dupliquer",
+    "archive": "Archiver",
+    "restore": "Restaurer",
+    "apply": "Appliquer à la session",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirmArchive": "Archiver ce modèle ?",
+    "confirmArchiveHint": "Les modèles archivés sont masqués du catalogue mais peuvent être restaurés.",
+    "confirmApply": "Appliquer le modèle ?",
+    "confirmApplyHint": "Cela remplacera les paramètres de session actuels par les valeurs du modèle.",
+    "duplicateName": "Copie de {{name}}"
+  },
+  "apply": {
+    "success": "Modèle appliqué.",
+    "conflicts": "Appliqué avec {{count}} conflit(s).",
+    "conflictField": "Champ",
+    "conflictOld": "Valeur précédente",
+    "conflictNew": "Nouvelle valeur",
+    "unenforceable": "Ce modèle ne peut pas être appliqué : {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "Échec du chargement des modèles.",
+    "saveFailed": "Échec de l'enregistrement du modèle.",
+    "applyFailed": "Échec de l'application du modèle.",
+    "archiveFailed": "Échec de l'archivage du modèle.",
+    "duplicateFailed": "Échec de la duplication du modèle."
+  },
+  "notFound": "Modèle introuvable."
+}

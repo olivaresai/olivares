@@ -1,0 +1,24 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "file-abc123",
+      "object": "file",
+      "filename": "quarterly_report.pdf",
+      "purpose": "assistants",
+      "bytes": 1048576,
+      "status": "processed",
+      "created_at": 1717200000
+    },
+    {
+      "id": "file-def456",
+      "object": "file",
+      "filename": "training_data.jsonl",
+      "purpose": "fine-tune",
+      "bytes": 5242880,
+      "status": "processed",
+      "created_at": 1717300000
+    }
+  ],
+  "has_more": false
+}

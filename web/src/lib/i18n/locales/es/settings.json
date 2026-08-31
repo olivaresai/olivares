@@ -1,0 +1,34 @@
+{
+  "title": "Ajustes",
+  "subtitle": "Gestiona tu cuenta y el aspecto de la consola.",
+  "tabs": {
+    "profile": "Perfil",
+    "appearance": "Apariencia",
+    "about": "Acerca de"
+  },
+  "profile": {
+    "title": "Perfil",
+    "email": "Correo",
+    "displayName": "Nombre visible",
+    "role": "Rol en esta organización",
+    "memberships": "Organizaciones",
+    "actor": "Principal"
+  },
+  "appearance": {
+    "title": "Apariencia",
+    "theme": "Tema",
+    "themeHint": "Elige claro, oscuro o seguir al sistema.",
+    "density": "Densidad de tablas",
+    "densityHint": "La compacta muestra más filas; la cómoda es más espaciosa.",
+    "language": "Idioma",
+    "languageHint": "El idioma de la interfaz de la consola."
+  },
+  "about": {
+    "title": "Acerca de",
+    "version": "Versión",
+    "engine": "Motor de almacenamiento",
+    "license": "Estado de licencia",
+    "licensee": "Licenciado a",
+    "none": "Ninguno"
+  }
+}

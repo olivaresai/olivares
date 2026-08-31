@@ -1,0 +1,10 @@
+{
+  "gatewayId": "gw-guard",
+  "gatewayArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:gateway/gw-guard",
+  "name": "guarded-gateway",
+  "status": "ACTIVE",
+  "policyConfiguration": {
+    "policyEngineArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-guard",
+    "enforcementMode": "ENFORCE"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1717200000,
+      "end_time": 1717286400,
+      "results": [
+        {
+          "object": "organization.usage.moderations.result",
+          "input_tokens": 1280,
+          "num_model_requests": 42
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

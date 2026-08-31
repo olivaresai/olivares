@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Keep the Docker build context minimal and reproducible: never ship local secrets,
+# build artifacts, VCS metadata or node_modules into the build (smaller context,
+# no accidental secret/material leak into an image layer).
+.git
+.github
+.githooks
+**/node_modules
+bin/
+olivares
+dist/
+*.log
+*.test
+*.out
+coverage*
+.gotmp/
+web/test-results
+web/playwright-report
+# Built web assets are regenerated in the image's web stage; do not copy a stale
+# local dist (except the committed placeholder index.html the Go embed needs).
+core/internal/webui/dist/assets
+# Local data dirs / certs / keys must never enter an image.
+olivares-data/
+*.crt
+*.key
+*.pem

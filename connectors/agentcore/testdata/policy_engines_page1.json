@@ -1,0 +1,11 @@
+{
+  "policyEngines": [
+    {
+      "policyEngineArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-alpha",
+      "policyEngineId": "pe-alpha",
+      "name": "prod-policy-engine",
+      "status": "ACTIVE"
+    }
+  ],
+  "nextToken": "PE+PAGE/2="
+}

@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+#
+# Test-only PostgreSQL for the pgcontent wire-proof E2E. NOT a production artifact.
+# CI (or a developer) runs:
+#
+#   docker compose -f connectors/pgcontent/testdata/docker-compose.e2e.yml up -d
+#   export PGCONTENT_E2E_ADMIN_DSN='postgres://postgres:postgres@localhost:55432/olivares_test?sslmode=disable'
+#   export PGCONTENT_E2E_RO_DSN='postgres://olivares_ro:ro_password@localhost:55432/olivares_test?sslmode=disable'
+#   go test -tags e2e ./connectors/pgcontent/
+#
+# init.sql (mounted into the init dir) provisions the least-privilege read-only role
+# the connector connects as; the admin DSN is used ONLY by the test to seed fixtures.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: olivares_test
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d olivares_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

@@ -1,0 +1,196 @@
+---
+title: Get started on Kubernetes (Helm)
+description: Deploy the control plane on Kubernetes with the shipped Helm chart
+  — from the safe single-node default to Postgres, active-passive HA with a
+  shared audit signing key, encrypted DR backups on a CronJob, and the
+  collectors DaemonSet.
+sidebar:
+  order: 3
+slug: 2026-06/tutorials/getting-started/kubernetes
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+The Helm chart at `deploy/helm/olivares` deploys the control
+plane with the same secure defaults as every other path: a **core
+StatefulSet** (non-root, read-only root filesystem, all capabilities dropped),
+TLS on, loopback-equivalent exposure (a `ClusterIP` Service — nothing public
+until you decide), and no default credentials. From there you opt into
+Postgres, **active-passive HA**, scheduled **encrypted DR backups**
+and the **collectors DaemonSet** for distributed ingest.
+
+Everything below was rendered and checked against the chart in this
+repository (`helm lint` + `helm template`, including the HA and backup
+configurations and the chart's own guard rails). The chart requires
+**Kubernetes ≥ 1.25**.
+
+<Aside type="caution" title="Chart publication status — honest">
+  At release the chart is published to an OCI registry and cosign-signed, so you
+  verify on install and pin images by digest. The chart pulls the container image
+  from Docker Hub (`docker.io/olivaresai/olivares`; the `ghcr.io/olivaresai/olivares`
+  fallback is identical by digest); the **chart** artifact
+  itself lives on `oci://ghcr.io/olivaresai/charts/olivares`. The first release is still a
+  **draft**: until a `chart-v*` tag is cut the registry path is **empty**. Until
+  then, install from the repository checkout (the chart itself is complete and
+  rendered below); once published, switch to
+  `oci://ghcr.io/olivaresai/charts/olivares --verify` and
+  [verify what you downloaded](/2026-06/how-to/verify-a-release/).
+</Aside>
+
+## 1. The default install (single node, SQLite)
+
+<Steps>
+  1. Install from the checkout:
+
+     ```bash
+     helm install olivares deploy/helm/olivares
+     ```
+
+     This renders exactly three workload objects — a `StatefulSet` (1 replica,
+     SQLite on a persistent 8 Gi PVC), a `ClusterIP` `Service` (8443 HTTPS,
+     8444 gRPC) and a `ServiceAccount` with **no** Kubernetes API privileges.
+     Probes hit `/readyz` (readiness — drains when the store is down or the
+     replica is not leader) and `/livez` (liveness — process only, never a
+     dependency, so a store outage can never cause a restart loop).
+
+  2. Read the one-time setup token from the pod log (it is printed to stdout
+     only — in Kubernetes, that is the container log):
+
+     ```bash
+     kubectl logs -l app.kubernetes.io/component=core | grep -A4 "FIRST-BOOT SETUP"
+     ```
+
+  3. Port-forward and complete the first-run setup
+     ([the same flow as everywhere](/2026-06/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)):
+
+     ```bash
+     # The Service is named <release>-olivares-core:
+     kubectl port-forward svc/olivares-core 8443:8443
+     curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+       -H 'Content-Type: application/json' \
+       -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+     ```
+</Steps>
+
+<Aside type="danger" title="Never run production on `persistence.enabled=false`">
+  With persistence off the data directory is an `emptyDir`: the **audit signing
+  key** and setup token are lost on every reschedule, which permanently breaks
+  ledger verifiability. The default (`persistence.enabled=true`) is the only
+  production posture; back the key up off-box besides
+  ([backup & restore](/2026-06/how-to/backup-and-restore/)).
+</Aside>
+
+Alternatively, with no Helm at all, the repository ships a flat manifest with
+the same safe single-node defaults, regenerated from the chart by CI:
+
+```bash
+kubectl apply -f deploy/manifests/install.yaml
+```
+
+For Argo CD / Flux / Kustomize (`kustomize build --enable-helm`), see
+`deploy/gitops/` — declarative wrappers over this same chart.
+
+## 2. Postgres (multi-tenant)
+
+The engine requires a **least-privilege** database role: `LOGIN`, no
+superuser, **no `BYPASSRLS`** — row-level security is the tenant backstop, and
+the engine refuses to start against a privileged role. Provision the role with
+the canonical `deploy/postgres/01-app-role.sql` (the chart can run it for you
+as a pre-install Job), put the DSN in a Secret, and point the chart at it:
+
+```bash
+kubectl create secret generic olivares-pg \
+  --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full'
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg
+```
+
+Optional: an `admin-dsn` key in the same Secret (a dedicated `NOSUPERUSER
+BYPASSRLS` role) enables complete cross-tenant system reads — the org list and
+multi-tenant backup coverage; without it those reads are RLS-limited.
+
+## 3. Active-passive HA
+
+With Postgres as the shared store, run several replicas. One is elected
+leader (a Postgres advisory lock); standbys answer `/readyz` with
+`503 {"status":"standby"}` so the Service only routes to the leader, and a
+standby takes over automatically when the leader goes away.
+
+Two things are structurally required, and the chart **enforces both** (we
+verified the guards render as hard failures, not warnings):
+
+| Requirement | Why | Chart guard if missing |
+|---|---|---|
+| `core.engine=postgres` | The SQLite file is local to one pod — it cannot be a shared store. | `core.replicaCount > 1 requires core.engine=postgres …` |
+| `core.auditSigningKeySecret` | Every replica must sign the audit ledger with the **same** Ed25519 key, or the hash chain forks on failover. | `core.replicaCount > 1 requires core.auditSigningKeySecret …` |
+
+```bash
+kubectl create secret generic olivares-audit-key \
+  --from-file=audit-signing.key=<base64-ed25519-private-key-file>
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set core.replicaCount=3 \
+  --set core.auditSigningKeySecret=olivares-audit-key
+```
+
+The canonical HA sizes are 3 or 5 replicas, active-passive. This single-writer
+design is deliberate (it matches the product's consistency model); the
+[production-readiness numbers](/2026-06/how-to/monitor-with-prometheus/) document the
+availability tiers it supports.
+
+## 4. Scheduled encrypted backups
+
+The chart ships a `CronJob` that runs `olivares dr backup` — an encrypted,
+**ledger-continuity-safe** bundle (store snapshot + signing keys sealed under
+your KEK + per-tenant chain-tip manifest):
+
+```bash
+kubectl create secret generic dr-kek --from-literal=passphrase='<strong passphrase>'
+
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set backup.enabled=true \
+  --set backup.kekSecret=dr-kek
+```
+
+Defaults: every 6 hours (`backup.schedule` sets your RPO), 14-day local
+retention, a dedicated destination PVC. **Mirror the destination offsite and
+keep the KEK separate from the bundles** — a same-cluster backup is not
+disaster recovery. Drill restores with `olivares dr verify`; the full
+procedure is in [backup & restore](/2026-06/how-to/backup-and-restore/).
+
+## 5. Collectors DaemonSet (distributed ingest)
+
+For the distributed topology, a collectors `DaemonSet` runs source connectors
+on every node and **pushes** observations to the core over gRPC — collectors
+have no inbound listener. The chart requires an ingest token and accepts
+optional mTLS material:
+
+```bash
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set collectors.enabled=true \
+  --set collectors.ingestTokenSecret=olivares-ingest-token   # ingest:write bearer token
+```
+
+Give collectors their sources via `collectors.sourcesConfig` (the same
+[sources JSON](/2026-06/how-to/connect-a-source/) as everywhere), and turn on
+verified-client-cert mTLS for the collector→core channel with
+`tls.grpcClientCaSecret` — see [hardening](/2026-06/how-to/security-hardening/).
+
+## Monitoring
+
+Set `serviceMonitor` on if you run the Prometheus operator; either way the
+engine exposes `/metrics` unauthenticated (it carries no tenant data) and the
+repository ships ready-made alert rules. See
+[monitor with Prometheus](/2026-06/how-to/monitor-with-prometheus/).
+
+## Next steps
+
+* **Wire sources:** [connect a source](/2026-06/how-to/connect-a-source/) and the
+  [connector guides](/2026-06/how-to/connectors/pgaudit/).
+* **Failure drills:** [troubleshooting](/2026-06/how-to/troubleshooting/) — failover
+  behavior, backpressure, ledger verification.
+* **Air-gapped cluster?** [Get started in an air-gapped site](/2026-06/tutorials/getting-started/air-gapped/).

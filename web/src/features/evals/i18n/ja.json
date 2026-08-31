@@ -1,0 +1,194 @@
+{
+  "truncation": {
+    "label": "{{n}} 件を読み込みました。さらに存在します",
+    "hint": "この一覧には上限があります。読み込み済みの行だけが表示されます。ここにないことは評価記録が存在しない証明にはなりません。"
+  },
+  "title": "評価",
+  "description": "品質スコアカード、実行結果、A/B比較、ドリフトを、バージョン管理されたゴールデンスイートに対して測定します。出力は一切保存されず、スコアとハッシュフィンガープリントのみを保持します。",
+  "forbidden": {
+    "title": "認可されていません",
+    "description": "品質測定を表示するには、evals読み取り権限が必要です。"
+  },
+  "tabs": {
+    "scorecards": "スコアカード",
+    "runs": "実行",
+    "ab": "A/B",
+    "drift": "ドリフト",
+    "gate": "CI ゲート",
+    "calibration": "ジャッジ較正"
+  },
+  "subjectKind": {
+    "suite": "スイート",
+    "agent": "エージェント",
+    "model": "モデル",
+    "prompt_variant": "プロンプトバリアント",
+    "prompt": "プロンプト",
+    "session": "セッション",
+    "sandbox_run": "サンドボックス実行"
+  },
+  "scorecards": {
+    "title": "品質スコアカード",
+    "description": "サブジェクトごとの平均スコア、合格率、傾向を、読み取り時に集計します。",
+    "groupBy": "グループ化",
+    "by": {
+      "agent": "エージェント別",
+      "model": "モデル別",
+      "suite": "スイート別",
+      "prompt_variant": "プロンプトバリアント別"
+    },
+    "meanScore": "平均スコア",
+    "passRate": "合格率",
+    "runs": "実行",
+    "lastScore": "直近スコア",
+    "regressed": "回帰あり",
+    "empty": "スコアカードはまだありません。ゴールデンスイートに対して評価を実行してください。"
+  },
+  "runs": {
+    "title": "評価の実行",
+    "description": "各実行は、スイートのバージョンに対してサブジェクトをスコア付けします。回帰はここでマークされ、検出結果はセキュリティビューで処理されます。",
+    "columns": {
+      "subject": "サブジェクト",
+      "status": "ステータス",
+      "score": "スコア",
+      "passRate": "合格率",
+      "regression": "回帰",
+      "startedAt": "開始日時"
+    },
+    "regressed": "回帰あり · ドリフト {{drift}}",
+    "noRegression": "なし",
+    "empty": "範囲内に実行はありません。",
+    "overN": "{{n}} 件中",
+    "notScored": "not scored — no verdict",
+    "noBaseline": "no baseline — nothing compared"
+  },
+  "cases": {
+    "title": "{{subject}} — ケース結果",
+    "titleEmpty": "ケース結果",
+    "description": "この実行におけるケースごとの成果とスコアです。",
+    "noPayload": "候補出力は一切保存されません。各ケースは一方向フィンガープリントと短く切り詰められたラベルのみを保持し、展開可能なペイロードは保持しません。",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "ケース",
+      "outcome": "成果",
+      "score": "スコア",
+      "label": "ラベル",
+      "fingerprint": "フィンガープリント"
+    },
+    "empty": "この実行にはケース結果がありません。"
+  },
+  "ab": {
+    "title": "A/B比較",
+    "description": "2つのプロンプトバリアントを同一スイートに対してスコア付けします。スコアの高い方が勝者となり、引き分けは明示されます。",
+    "winner": "勝者: {{label}} · Δ {{delta}}",
+    "winnerTag": "勝者",
+    "tie": "引き分け",
+    "passRate": "合格率 {{value}}",
+    "seamNote": "A/B比較は POST /ab を通じた特権書き込みです。エンジンは読み戻し可能な保存済み比較を公開しません。",
+    "seamLabel": "特権書き込み",
+    "pickerTitle": "A/B比較を実行",
+    "pickerDescription": "スイートを選び、各バリアントが生成した出力を入力してください。",
+    "runComparison": "比較を実行",
+    "runError": "A/B比較を実行できませんでした。もう一度お試しください。",
+    "empty": "このセッションではA/B比較がまだ実行されていません。",
+    "emptyDescription": "特権書き込み POST /ab が完了した後にのみ結果が表示されます。保存済み比較用の GET エンドポイントはありません。",
+    "suiteLabel": "スイート",
+    "selectSuite": "スイートを選択",
+    "noSuites": "スイートがまだありません。比較はスイートのケースに対して採点されるため、先に作成してください。",
+    "labelA": "バリアント A のラベル",
+    "labelB": "バリアント B のラベル",
+    "outputsA": "バリアント A の出力",
+    "outputsB": "バリアント B の出力",
+    "outputsHint": "case_key とそのバリアントが生成した出力を対応づける JSON オブジェクト。エンジンは採点後にハッシュのみを保持し、本文は保存しません。",
+    "outputsInvalid": "case_key と出力テキストを対応づける JSON オブジェクトではありません。",
+    "outputsEmpty": "少なくとも 1 件のケース出力を入力してください。空の集合は何も採点されず、結果のない実行として保存されます。",
+    "pairwiseLabel": "バリアントの直接対決も判定する",
+    "pairwiseHint": "共通する各ケースを候補の順序を入れ替えて 2 回判定し、両方の順序が一致した場合のみ勝ちとして数えます。1 ケースにつき判定 2 回（課金対象）で、スイートに評価基準が必要です。",
+    "pairwiseTitle": "直接対決の判定",
+    "pairwiseSkippedTag": "スキップ",
+    "pairwiseWinner": "判定の勝者: {{label}}",
+    "pairwiseCounts": "比較 {{compared}} 件 · A {{aWins}} · B {{bWins}} · 引き分け {{ties}} · 順序不一致 {{inconsistent}} · エラー {{errors}}",
+    "pairwiseConsistency": "位置一貫性 {{rate}}（n={{n}}、95% CI {{lo}}–{{hi}}）",
+    "outputsTooLong": "ケースキーは最大 {{maxKey}} 文字、出力は最大 {{maxOutput}} 文字です。エンジンはこれを超える値を切り詰め、切り詰めた文字列を採点します。",
+    "outputsPlaceholder": "{\"case-1\": \"そのバリアントが生成した出力\"}",
+    "pairwiseSkippedBody": "エンジンは判定による比較を実行しませんでした。その理由:"
+  },
+  "drift": {
+    "title": "ドリフト — {{subject}}",
+    "description": "スイートの合格しきい値に対する時系列のスコアです。持続的な低下は劣化を意味します。",
+    "score": "スコア",
+    "threshold": "合格しきい値",
+    "pickerTitle": "サブジェクト",
+    "note": "しきい値の線はスイートの合格しきい値です。それを下回る点は、その時点で基準を満たしませんでした。",
+    "empty": "傾向データはまだありません。"
+  },
+  "outcomeBar": {
+    "passed": "合格",
+    "failed": "不合格",
+    "errors": "エラー",
+    "skipped": "スキップ"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "この実行のケース結果はまだ記録されていません",
+      "description": "ケースごとの成果、スコア、フィンガープリントがここに表示されるには、この実行で選択したスイートのケースを採点またはスキップする必要があります。"
+    },
+    "runs": {
+      "title": "評価の実行はまだ記録されていません",
+      "description": "スコア付きの実行がここに表示されるには、呼び出し元が評価実行 API を通じて、バージョン管理されたゴールデンスイートに対する候補出力を送信する必要があります。"
+    }
+  },
+  "gate": {
+    "title": "CI ゲート",
+    "description": "リグレッションゲートの評価: ゲートが測定した結果と、CI が従うべき結果。",
+    "empty": "ゲートの評価はありません",
+    "measured": "測定 {{verdict}}",
+    "effective": "CI は {{verdict}} に従います",
+    "sampled": "{{total}} 件中 {{sampled}} 件を抽出",
+    "overriddenBy": "{{actor}} が上書きしました",
+    "override": "上書き",
+    "overrideTitle": "{{verdict}} のゲートを上書き",
+    "overrideDescription": "書面による理由が必須です。元の判定の横に、行と証跡台帳の両方に記録されます。",
+    "reason": "理由",
+    "reasonHint": "このゲートを上書きする理由。元の判定は消去されません。",
+    "confirmOverride": "ゲートを上書き",
+    "overrideDone": "ゲートを上書きしました",
+    "cancel": "キャンセル",
+    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
+    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+  },
+  "calibration": {
+    "title": "ジャッジ較正",
+    "description": "LLM ジャッジが人間のラベルとどの程度一致するか。偶然を補正した一致度を測定できない集合は、何も証明できません。",
+    "empty": "較正レポートはありません",
+    "meets": "目標を満たす",
+    "below": "目標未達",
+    "cannotCertify": "証明不可 — カッパ未定義",
+    "agreement": "一致度",
+    "kappa": "カッパ",
+    "sensitivity": "感度",
+    "specificity": "特異度",
+    "ciOverN": "95% 信頼区間 {{lo}}–{{hi}}（n={{n}}）",
+    "degradedWithErrors": "劣化 · エラー {{n}} 件",
+    "verbosityCorr": "冗長性相関"
+  },
+  "calibItems": {
+    "title": "Reference set",
+    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "run": "Run calibration",
+    "empty": "No labelled items yet",
+    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
+    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "humanPass": "human: pass",
+    "humanFail": "human: fail",
+    "unscored": "unscored",
+    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+  },
+  "baseline": {
+    "pin": "Pin as baseline",
+    "confirm": "Replace the baseline",
+    "pinned": "Baseline pinned",
+    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
+    "thisRunScores": "This run passed {{score}} over n={{n}}.",
+    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+  }
+}

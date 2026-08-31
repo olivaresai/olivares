@@ -1,0 +1,17 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct1",
+      "name": "acct1",
+      "kind": "OpenAI",
+      "location": "eastus",
+      "properties": { "endpoint": "https://acct1.openai.azure.com/" }
+    },
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/speechy",
+      "name": "speechy",
+      "kind": "SpeechServices",
+      "location": "eastus"
+    }
+  ]
+}

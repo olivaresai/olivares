@@ -1,0 +1,137 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# FIPS 140-3 image variant (gap SCP-09). A SEPARATE, opt-in artifact — it does NOT
+# replace the default ./Dockerfile / Dockerfile.release. The default pure-Go
+# reproducible binary that release packaging ships is unaffected.
+#
+# What "FIPS" means here, precisely (no over-claim — see docs/SCP-09-FIPS-STIG.md):
+#   - Built with GOFIPS140=v1.0.0, which selects Go's native FIPS 140-3 mode at
+#     BUILD time (https://go.dev/doc/security/fips140). That links the in-tree
+#     crypto/internal/fips140 module v1.0.0 — the "FIPS 140-3 Go Cryptographic
+#     Module v1.0.0", CMVP Certificate #5247 (ACTIVE: validated 2026-04-27 by
+#     Lightship Security, Level 1, sunset 2031-04-26; frozen from Go 1.24). We
+#     deliberately do NOT use GOFIPS140=v1.26.0/latest: that module matches this
+#     repo's Go 1.26 toolchain but is "Pending Review" on the CMVP
+#     Modules-In-Process List (CAVP cert A8028) — i.e. NOT yet validated.
+#     Re-verified 2026-06-10 against the CMVP cert page and the MIP list (updated
+#     2026-06-10): #5247 still the ONLY validated Go module; GOFIPS140=certified
+#     still resolves to v1.0.0 on this toolchain.
+#   - Native FIPS mode needs NO CGO and NO BoringCrypto, so the binary is STILL a
+#     fully static pure-Go binary (CGO_ENABLED=0) — same static posture as the base.
+#   - Run with GODEBUG=fips140=on so the module runs its self-tests at startup and
+#     the standard library refuses non-approved algorithms. Verify in-process with
+#     crypto/fips140.Enabled() / Version() (the olivares exposes this via its
+#     `version` output; or run the one-liner in docs/SCP-09-FIPS-STIG.md).
+#
+# This is NOT a FedRAMP/DoD authorization and we claim none. It is: a build that
+# uses a CMVP-validated crypto module so a buyer whose policy requires FIPS-validated
+# cryptography can deploy it and self-verify the toggle.
+#
+# NOTE ON SCANNING: the final image is distroless (no OS, no package DB, no shell),
+# so there is nothing for an OSCAP/STIG scan to evaluate HERE. STIG verification is
+# Dockerfile.stig, which bases on a scannable, SCAP-profiled OS. This file's job is
+# the validated-crypto BINARY in a minimal hardened runtime.
+#
+# Build (from the repo root; the go.work workspace + web/ must be in context):
+#   docker build -f Dockerfile.fips \
+#     --build-arg VERSION="$(git describe --tags --always --dirty)" \
+#     --build-arg COMMIT="$(git rev-parse --short HEAD)" \
+#     --build-arg SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
+#     -t olivares:fips .
+#
+# Verify FIPS is actually on after build:
+#   docker run --rm olivares:fips version   # prints fips140=on, module v1.0.0
+#
+# Under GoReleaser the binary is prebuilt by the `olivares-fips` build (already
+# GOFIPS140=v1.0.0) and only COPYed in; the from-source path below is for plain
+# `docker build` and is what enforces GOFIPS140 in that path.
+
+# ---- web stage: build the React/Vite UI into the Go embed dir -----------------
+FROM node:26-bookworm-slim AS web
+WORKDIR /src
+RUN corepack enable
+COPY web/package.json web/pnpm-lock.yaml ./web/
+RUN cd web && pnpm install --frozen-lockfile
+COPY web/ ./web/
+COPY core/internal/webui/dist/index.html ./core/internal/webui/dist/index.html
+RUN cd web && pnpm run build
+
+# ---- go stage: compile the static binary in FIPS 140-3 mode --------------------
+# GOFIPS140=v1.0.0 is the load-bearing line: it selects the CMVP-validated module
+# (cert #5247). It ships INSIDE the Go toolchain ($GOROOT/lib/fips140), so this
+# needs no network and does NOT touch go.work/go.work.sum.
+FROM golang:1.26.6-bookworm AS build
+WORKDIR /src
+ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly GOFIPS140=v1.0.0
+COPY go.work go.work.sum ./
+COPY core/go.mod core/go.sum ./core/
+COPY cmd/olivares/go.mod cmd/olivares/go.sum ./cmd/olivares/
+COPY connectors/go.mod connectors/go.sum ./connectors/
+COPY modules/go.mod modules/go.sum ./modules/
+COPY sdk/go.mod sdk/go.sum ./sdk/
+COPY sdk/plugin/go.mod sdk/plugin/go.sum ./sdk/plugin/
+COPY terraform-provider-olivares/go.mod terraform-provider-olivares/go.sum ./terraform-provider-olivares/
+RUN go mod download
+COPY . .
+COPY --from=web /src/core/internal/webui/dist/ ./core/internal/webui/dist/
+ARG VERSION=dev
+ARG COMMIT=none
+ARG SOURCE_DATE_EPOCH=0
+RUN BUILD_DATE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)" && \
+    go build -trimpath \
+      -ldflags "-s -w -buildid= -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
+      -o /out/olivares ./cmd/olivares && \
+    # Fail the build if the FIPS module did not get linked in (defence-in-depth: a stray
+    # GOFIPS140=off would silently produce a non-FIPS binary otherwise).
+    #
+    # THIS GUARD USED TO MAKE THE IMAGE UNBUILDABLE, and it is worth writing down because
+    # the shape recurs. It read `go tool nm /out/olivares | grep -q 'crypto/internal/
+    # fips140/v1.0.0'` — over the binary THE LINE ABOVE had just stripped with `-s -w`.
+    # Measured, no container needed: the same build without those flags gives 2934 symbol
+    # lines, and with them `go tool nm` answers `no symbol section` and prints nothing. So
+    # the grep could never match, the `||` branch fired unconditionally, and every build of
+    # this file died at this step — while docs/SEC-G3-CRYPTO-AGILITY-PQC.md rested a public
+    # FIPS claim on the resulting image. A guard that cannot pass is not defence in depth;
+    # it is an outage with a reassuring comment.
+    #
+    # The replacement RUNS the binary instead, which is strictly stronger: a symbol name
+    # proves a package was linked, whereas this proves the module actually initialises and
+    # that it is the VALIDATED one. Both halves are asserted — `"fips": "on"` (the runtime
+    # toggle really engages) and `"module": "v1.0.0"` (CMVP #5247, not the pending v1.26.0)
+    # — because either alone is satisfiable while the claim is false. Native build stage,
+    # no cross-compilation in this file or in the release config, so the binary runs here.
+    FIPS_JSON="$(GODEBUG=fips140=on /out/olivares version -o json)" && \
+    printf '%s' "$FIPS_JSON" | grep -q '"fips"[[:space:]]*:[[:space:]]*"on"' && \
+    printf '%s' "$FIPS_JSON" | grep -q '"module"[[:space:]]*:[[:space:]]*"v1.0.0"' \
+      || (echo 'FATAL: this binary does not report FIPS 140-3 v1.0.0 at runtime — GOFIPS140' >&2; \
+          echo "was not honoured, or the module is not the validated one. version said:" >&2; \
+          printf '%s\n' "${FIPS_JSON:-<the binary did not run>}" >&2; exit 1)
+
+# ---- final stage: distroless, non-root, static, FIPS toggle ON -----------------
+# Same hardened runtime base as Dockerfile.release, PINNED BY DIGEST (SCP-11), kept
+# in sync by the patch-velocity workflow. `crane digest …:nonroot` resolves it.
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+LABEL org.opencontainers.image.title="olivares-fips" \
+      org.opencontainers.image.description="Olivares AI control plane — FIPS 140-3 native mode (GOFIPS140=v1.0.0, CMVP cert #5247)" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/olivaresai/olivares" \
+      org.opencontainers.image.vendor="Olivares.AI" \
+      ai.olivares.fips140.mode="v1.0.0" \
+      ai.olivares.fips140.cmvp-certificate="5247"
+COPY --from=build /out/olivares /usr/local/bin/olivares
+# The licence travels INSIDE the image. Until 2026-08-04 it did not: the OCI images
+# carried an org.opencontainers.image.licenses LABEL and no licence TEXT, so the main
+# distribution path handed an operator an AGPL binary with neither the grant that lets
+# them run it nor the warranty disclaimer that protects everyone who wrote it. A label
+# is metadata; AGPL sections 4 and 5 ask for the document.
+COPY LICENSE NOTICE LICENSING.md DISCLAIMER.md /usr/share/doc/olivares/
+COPY LICENSES /usr/share/doc/olivares/LICENSES
+# Enforce FIPS at RUNTIME: the module runs its CASTs/self-tests at startup and the
+# stdlib rejects non-approved algorithms. Build-time GOFIPS140 selects the module;
+# GODEBUG=fips140=on is what turns enforcement on for the running process.
+ENV GODEBUG=fips140=on
+USER 65532:65532
+EXPOSE 8443 8444
+ENTRYPOINT ["/usr/local/bin/olivares"]
+CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/data"]

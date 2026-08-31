@@ -1,0 +1,38 @@
+{
+  "title": "团队成本",
+  "subtitle": "按团队进行成本归因——会话、Token 及支出，包含每日趋势和项目/模型明细。",
+  "period": {
+    "label": "周期",
+    "7d": "最近 7 天",
+    "30d": "最近 30 天",
+    "90d": "最近 90 天"
+  },
+  "cols": {
+    "team": "团队",
+    "sessions": "会话",
+    "tokensIn": "输入 Token",
+    "tokensOut": "输出 Token",
+    "cost": "成本",
+    "trend": "趋势"
+  },
+  "breakdown": {
+    "projects": "项目",
+    "models": "模型",
+    "project": "项目",
+    "model": "模型",
+    "sessions": "会话",
+    "tokensIn": "输入 Token",
+    "tokensOut": "输出 Token",
+    "cost": "成本",
+    "noProjects": "无项目明细。",
+    "noModels": "无模型明细。"
+  },
+  "export": "导出 CSV",
+  "empty": {
+    "title": "无团队成本数据",
+    "description": "该周期内未找到带团队标签的成本记录。请为会话添加团队标签以查看归因。"
+  },
+  "errors": {
+    "loadFailed": "加载团队成本数据失败。"
+  }
+}

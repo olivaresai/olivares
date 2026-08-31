@@ -1,0 +1,48 @@
+{
+  "title": "自动化",
+  "description": "三条自动化轨道集中一处：受治理的计划任务、事件订阅与告警路由，以及它们可响应的触发器目录。",
+  "tabs": {
+    "overview": "概览",
+    "workflows": "工作流"
+  },
+  "rails": {
+    "openAction": "打开{{feature}}",
+    "countLabel": "共 {{count}} 项",
+    "loadFailed": "无法加载此轨道。",
+    "forbidden": "您无权查看此轨道。",
+    "schedules": {
+      "title": "计划任务",
+      "description": "受治理的节奏：计划 → 两阶段 HITL 触发，并带节奏缺失检测。",
+      "active": "活跃 {{count}} 项",
+      "stalled": "停滞 {{count}} 项",
+      "paused": "已暂停 {{count}} 项"
+    },
+    "subscriptions": {
+      "title": "事件订阅",
+      "description": "事件 → sink/SIEM 投递，支持重试、重放与投递台账。",
+      "enabled": "已启用 {{count}} 项",
+      "disabled": "已禁用 {{count}} 项"
+    },
+    "routes": {
+      "title": "告警路由",
+      "description": "finding/审批 → 目的地路由，支持严重度阈值与试运行。",
+      "enabled": "已启用 {{count}} 项",
+      "disabled": "已禁用 {{count}} 项"
+    },
+    "truncated": "已加载 {{n}} 行；还有更多",
+    "truncatedHint": "行数多于此处所示；本轨道按行 id（创建时分配）取数，因此更靠后的会缺失。某个计划、订阅或路由未列在此处，并不能证明它不存在。",
+    "countLoaded": "已加载 {{count}} 项"
+  },
+  "triggers": {
+    "title": "触发器目录",
+    "description": "自动化可响应的一切。订阅可捕获任何已编目的事件类型；告警路由匹配可路由的子集。",
+    "typeColumn": "类型",
+    "stabilityColumn": "稳定性",
+    "permissionColumn": "所需权限",
+    "descriptionColumn": "描述",
+    "routable": "可路由",
+    "routableHint": "此类型可被告警路由匹配。",
+    "empty": "没有可用的触发器目录。",
+    "loadFailed": "无法加载触发器目录。"
+  }
+}

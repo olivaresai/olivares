@@ -1,0 +1,91 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+Optional one-shot bootstrap for the Postgres path. Applies the least-privilege
+role SQL (files/app-role.sql == deploy/postgres/01-app-role.sql) using a
+SUPERUSER/maintenance DSN, creating the NOSUPERUSER NOBYPASSRLS `olivares_app`
+role + `olivares` database. The engine then connects as that role and the
+FORCE-RLS tenant backstop is real (docs/SECURITY-HARDENING.md). Runs as a pre-install/pre-upgrade
+Helm hook; the app password it sets MUST match postgres.dsnSecret's password.
+*/ -}}
+{{- if and (eq .Values.core.engine "postgres") .Values.postgres.roleInit.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "olivares.postgres.fullname" . }}-roleinit-sql
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-roleinit
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data:
+  app-role.sql: |-
+    {{- .Files.Get "files/app-role.sql" | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "olivares.postgres.fullname" . }}-roleinit
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-roleinit
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "olivares.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres-roleinit
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: roleinit
+          image: {{ include "olivares.imageRef" .Values.postgres.roleInit.image }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              echo "Applying olivares_app role SQL (idempotent)…"
+              psql "$SUPERUSER_DSN" -v ON_ERROR_STOP=1 \
+                -v app_password="$APP_PASSWORD" \
+                -f /sql/app-role.sql
+              echo "done."
+          env:
+            - name: HOME
+              value: /tmp
+            - name: PGCONNECT_TIMEOUT
+              value: "10"
+            - name: SUPERUSER_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.roleInit.superuserDsnSecret | required "postgres.roleInit.superuserDsnSecret is required when roleInit.enabled=true" }}
+                  key: {{ .Values.postgres.roleInit.superuserDsnKey }}
+            - name: APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.roleInit.appPasswordSecret | required "postgres.roleInit.appPasswordSecret is required when roleInit.enabled=true" }}
+                  key: {{ .Values.postgres.roleInit.appPasswordKey }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: sql
+          configMap:
+            name: {{ include "olivares.postgres.fullname" . }}-roleinit-sql
+        - name: tmp
+          emptyDir: {}
+{{- end }}

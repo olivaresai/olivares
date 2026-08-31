@@ -1,0 +1,15 @@
+{
+  "value": [
+    {
+      "id": "P_3c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f",
+      "displayName": "Bare Minimum Agent",
+      "type": "custom",
+      "isBlocked": false
+    },
+    {
+      "displayName": "Row Without Id (must be skipped)",
+      "type": "external",
+      "isBlocked": false
+    }
+  ]
+}

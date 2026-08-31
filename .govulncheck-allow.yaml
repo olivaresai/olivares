@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Dated, justified allowlist for the fail-closed dependency-vulnerability gate
+# (scripts/govulncheck-gate.sh/E4).
+#
+# Each entry TEMPORARILY accepts a CALLED vulnerability that has no upstream fix
+# yet. Rules the gate enforces:
+#   - A vulnerability that IS called and is NOT listed here fails the gate.
+#   - Every entry MUST carry an `expires` date (YYYY-MM-DD, UTC); once that date
+#     passes the gate fails, forcing a re-review (no silent forever-exceptions).
+#   - A vulnerability WITH an available fix is never allowlisted — bump the
+#     dependency instead. The allowlist is only for "no fix upstream yet".
+#
+# Keep this list empty whenever possible. It is audited by the adversarial
+# campaign and surfaced in docs/security/gate-report.md.
+allow: []
+#  - id: GO-2026-XXXX          # the govulncheck / OSV identifier
+#    reason: >-
+#      No upstream fix as of listing; the vulnerable symbol is not reachable with
+#      our inputs (link the analysis). Re-evaluate before expiry.
+#    added: 2026-07-19
+#    expires: 2026-09-01
+#    by:

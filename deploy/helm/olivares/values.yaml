@@ -1,0 +1,392 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Default values for the olivares chart.
+# Secure-by-default (docs/SECURITY-HARDENING.md): TLS on, non-root, dropped caps, read-only rootfs,
+# localhost-free binds inside the pod (the Service controls exposure). Every
+# dangerous departure is an explicit, named opt-in — mirroring the engine's own
+# secure defaults (docs/SECURITY-HARDENING.md §3).
+
+# -- Container image for the engine AND the collectors (same single binary).
+# Docker Hub (docker.io/olivaresai/olivares) is the OFFICIAL, primary registry.
+# GitHub Container Registry (ghcr.io/olivaresai/olivares) is the always-published
+# FALLBACK: the release pipeline builds and signs there first, then copies the
+# SAME content to Docker Hub by digest (`cosign copy`), so both coordinates carry
+# identical layers, cosign signatures and attestations. Point `repository` at
+# ghcr.io when you want to avoid Docker Hub's anonymous-pull rate limits (ghcr.io
+# does not rate-limit anonymous pulls of public images) or when Docker Hub is
+# unreachable from the cluster.
+image:
+  repository: docker.io/olivaresai/olivares
+  # tag is the human-readable default; in production / air-gap, set `digest`
+  # instead and leave tag empty so the deploy is pinned by content (SCP-06).
+  tag: ""               # defaults to .Chart.AppVersion when empty
+  # digest PINS the image by content: docker.io/olivaresai/olivares@sha256:...
+  # The digest is identical on either registry, so the same pin verifies against
+  # ghcr.io. When set, it takes precedence over `tag` (the air-gap posture).
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# CORE — the control-plane engine.
+# A StatefulSet whose topology depends on the engine:
+#   * sqlite (default): exactly ONE writer (the data dir holds the audit signing
+#     key, TLS material and the store). replicaCount>1 is rejected.
+#   * postgres + a SHARED audit signing key Secret: ACTIVE-PASSIVE HA.
+#     Run 3/5 replicas; a Postgres advisory lock elects one active writer, the
+#     rest are hot standbys that /readyz drains and that take over automatically
+#     on failover. Set replicaCount>1 + core.auditSigningKeySecret to enable it.
+# ---------------------------------------------------------------------------
+core:
+  enabled: true
+  # replicaCount>1 requires engine=postgres AND core.auditSigningKeySecret (a
+  # SHARED key so a standby signs the audit chain with the same key — the chart
+  # rejects the unsafe combinations). 3 is the canonical active-passive size.
+  replicaCount: 1
+
+  # Store engine: "sqlite" (default, zero external deps, single-node/air-gap) or
+  # "postgres" (multi-tenant scale + active-passive HA, requires postgres.dsn). See ARCHITECTURE.md.
+  engine: sqlite
+
+  # SHARED audit signing key. The name of a Secret with key `audit-signing.key`
+  # holding the base64 Ed25519 private key, mounted read-only (0400) into EVERY replica
+  # so they all sign the audit ledger with the same key — REQUIRED for replicaCount>1
+  # so the hash-chain does not fork at failover. Empty (single-node): the engine mints a
+  # per-node key in the data dir, as before. This is the custody seam BYOK/HSM
+  # plugs into. The optional catalog (artifact) signing key shares the same Secret under
+  # key `catalog-signing.key` when present.
+  auditSigningKeySecret: ""
+  catalogSigningKeySecret: ""   # optional; defaults to auditSigningKeySecret's Secret
+
+  # Listen addresses INSIDE the pod. :8443 asks Go for dual-stack (IPv4+IPv6);
+  # 0.0.0.0:8443 would bind IPv4 only. On IPv6-disabled kernels, :8443 still
+  # serves IPv4. The Service/NetworkPolicy controls real exposure.
+  listen: ":8443"
+  grpcListen: ":8444"
+
+  dataDir: /var/lib/olivares
+
+  # Signed-audit checkpoint cadence (tamper-evidence anchor, docs/SECURITY-HARDENING.md).
+  checkpointInterval: 1h
+
+  # Extra raw flags appended to `olivares serve` (escape hatch).
+  extraArgs: []
+
+  # Path to a commercial license file mounted via `license.existingSecret`
+  # (informational only — never gates features; LICENSING.md).
+  licenseSecret: ""     # name of a Secret with key `license` mounted at /etc/olivares/license
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+  persistence:
+    enabled: true
+    # storageClass "" uses the cluster default. "-" disables dynamic provisioning.
+    storageClass: ""
+    accessModes: ["ReadWriteOnce"]
+    size: 8Gi
+    # When persistence.enabled=false an emptyDir is used (data lost on restart —
+    # eval/demo only; you lose the audit signing key + setup token on reschedule).
+
+  # Node scheduling.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+
+  # PodDisruptionBudget — keep the cluster available during voluntary disruptions
+  # (node drains, rollouts). For active-passive HA (replicaCount>1) prefer
+  # maxUnavailable:1 so a drain never evicts more than one replica at a time,
+  # leaving the leader plus a standby. minAvailable is honored when maxUnavailable
+  # is null (the single-writer default). Set only ONE of them.
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: null
+
+  # Extra environment for the engine (e.g. OLIVARES_NOTIFY_CONFIG path). Secrets
+  # should come from `envFromSecret`, never inline here.
+  # HA notes:
+  #   * OLIVARES_RATELIMIT_STORE is set to "postgres" AUTOMATICALLY when
+  #     replicaCount > 1 (global per-tenant quotas instead of per-node ones);
+  #     set core.env.OLIVARES_RATELIMIT_STORE=in-process to override.
+  #   * The distributed event bus (NATS bridge) is BYO, like Postgres: run/point
+  #     to your NATS server, mount a JSON config matching natsbus.Config and set
+  #     core.env.OLIVARES_BUS_CONFIG to its path (sealable with `keys seal`).
+  #     Without it each node's bus is node-local and standby-origin observations
+  #     do not reach the leader (docs/adr/0017, docs/contracts/S02 §14).
+  env: {}
+  envFromSecret: ""     # name of a Secret loaded via envFrom (e.g. ANTHROPIC_API_KEY)
+
+# ---------------------------------------------------------------------------
+# TLS — the engine serves HTTPS/gRPC-TLS by default and auto-generates a
+# self-signed cert into the data dir if none is provided. For production, mount
+# operator-provided material (cert-manager, your PKI) and the engine uses it.
+# ---------------------------------------------------------------------------
+tls:
+  # When an existingSecret is set, it must carry `tls.crt` and `tls.key`; they
+  # are mounted read-only and passed via --tls-cert/--tls-key. Otherwise the
+  # engine self-signs into the data dir on first boot.
+  existingSecret: ""
+  certPath: tls.crt
+  keyPath: tls.key
+  # mTLS for remote collectors: a CA bundle that signs collector client certs.
+  # When set, the engine enforces RequireAndVerifyClientCert on gRPC (docs/SECURITY-HARDENING.md).
+  grpcClientCaSecret: ""   # Secret with key `ca.crt`; enables collector mTLS
+  grpcClientCaPath: ca.crt
+
+# ---------------------------------------------------------------------------
+# POSTGRES — used only when core.engine=postgres. Default: EXTERNAL (you provide
+# a DSN secret). An optional in-chart single-instance StatefulSet is available
+# for evaluation (NOT for production). No external subchart is pulled, so the
+# chart stays air-gap-clean (no helm-repo egress).
+# ---------------------------------------------------------------------------
+postgres:
+  # DSN to the application role (NON-superuser, NOBYPASSRLS — see roleInit).
+  # Provide via a Secret to keep credentials out of values. The Secret must hold
+  # keys `dsn` and (optionally) `admin-dsn`.
+  dsnSecret: ""            # Secret name with key `dsn` (and optional `admin-dsn`)
+  dsnKey: dsn
+  # OPT-IN: name the key in dsnSecret holding a dedicated BYPASSRLS (NOSUPERUSER)
+  # admin DSN for cross-tenant System reads (org list, multi-tenant checkpoint
+  # coverage). Empty (default) keeps those reads RLS-scoped — the engine's own
+  # default. Set it ONLY when the key exists: the engine eagerly probes the admin
+  # pool at boot and fails closed, so a named-but-absent key crashloops the pod.
+  # REQUIRED when backup.enabled=true: pg_dump keeps row_security=off and ABORTS as
+  # the NOBYPASSRLS app role against FORCE-RLS tables (no backup at all), and the
+  # manifest's cross-tenant tenant inventory needs the same role to be complete.
+  adminDsnKey: ""
+
+  # One-shot Helm pre-install/pre-upgrade hook Job that applies the RLS role SQL
+  # (files/app-role.sql, kept in sync with deploy/postgres/01-app-role.sql) to
+  # provision the least-privilege olivares_app role + the olivares database.
+  # Needs a SUPERUSER/maintenance DSN; runs once. docs/SECURITY-HARDENING.md — the engine REFUSES
+  # to start against a superuser role, so this is how you bootstrap correctly.
+  # The app password it sets MUST match the password in postgres.dsnSecret.
+  roleInit:
+    enabled: false
+    superuserDsnSecret: ""  # Secret with key `dsn` (a superuser/maintenance DSN)
+    superuserDsnKey: dsn
+    appPasswordSecret: ""   # Secret with key `password` (the olivares_app password)
+    appPasswordKey: password
+    image:
+      repository: postgres
+      tag: "16-alpine"
+      digest: ""
+  # NOTE: this chart does NOT bundle a Postgres server. Bring your own (managed PG
+  # or your own StatefulSet) and point postgres.dsnSecret at the olivares_app role.
+  # Keeping Postgres external keeps the chart air-gap-clean (no helm-repo egress)
+  # and matches how enterprises actually run their database.
+
+# ---------------------------------------------------------------------------
+# BACKUP — opt-in scheduled disaster-recovery bundles (docs/DR-RUNBOOK.md).
+# A CronJob runs `olivares dr backup`, producing a LEDGER-CONTINUITY-SAFE
+# bundle: the store snapshot + the signing keys encrypted under YOUR key-encryption
+# key (KEK) + a manifest of the per-tenant chain tips. OFF by default.
+#
+# A backup sitting on the same cluster is NOT disaster recovery — mirror the
+# destination OFFSITE (3-2-1). The KEK is what makes the bundle restorable: without
+# it the restored ledger cannot be verified (the per-event signing key is sealed
+# with it). Keep the KEK separate from the bundles.
+# ---------------------------------------------------------------------------
+backup:
+  enabled: false
+
+  # RPO target == this schedule interval (default every 6h). Tighten for a smaller
+  # RPO. For Postgres near-zero RPO, use PITR/WAL archiving instead of pg_dump (see
+  # docs/DR-RUNBOOK.md) and pair it with a `dr backup --pitr-ref` companion bundle.
+  schedule: "0 */6 * * *"
+
+  # KEK source: a Secret holding either a passphrase (Argon2id-derived) OR a raw
+  # 32-byte key (the KMS-unwrapped path). REQUIRED when backup.enabled=true.
+  kekSecret: ""                  # Secret name
+  kekPassphraseKey: passphrase   # key holding the passphrase (default), OR…
+  kekRawKey: ""                  # key holding a raw/base64 32-byte KEK (set to use the raw path)
+
+  # Where bundles are written. MIRROR THIS OFFSITE — a same-cluster copy is not DR.
+  destination:
+    existingClaim: ""            # PVC to write bundles to; empty => the chart creates one
+    size: 16Gi
+    storageClass: ""
+    accessModes: ["ReadWriteOnce"]
+
+  retentionDays: 14              # local bundle retention; the offsite copy keeps longer
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+
+  # Postgres engine only: the olivares image is distroless and has no pg_dump,
+  # so an initContainer (a postgres-client image) runs pg_dump through the
+  # postgres.adminDsnKey BYPASSRLS role into a shared dir and the olivares image
+  # bundles that complete multi-tenant dump + the keys via `dr backup --snapshot-file`.
+  pgClientImage:
+    repository: postgres
+    tag: "16-alpine"
+    digest: ""
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# ---------------------------------------------------------------------------
+# COLLECTORS — the distributed ingest plane "C". A DaemonSet that runs
+# `olivares collector`, loading local source connectors and PUSHING
+# observations to the core over gRPC + mTLS. No inbound listener (push model).
+# OFF by default: single-node installs use the in-process/out-of-process plane.
+# Enable for multi-host estates. Requires tls.grpcClientCaSecret on the core
+# (mTLS) + an ingest token with the `ingest:write` permission.
+# ---------------------------------------------------------------------------
+collectors:
+  enabled: false
+
+  # gRPC address of the core ingest endpoint. Empty => derived from the in-cluster
+  # core Service (<release>-core:8444).
+  coreAddr: ""
+
+  # Bearer token (principal with ingest:write) — provide via a Secret.
+  ingestTokenSecret: ""    # Secret name with key `token`
+  ingestTokenKey: token
+
+  # Client cert/key for collector->core mTLS (required when the core enforces it).
+  clientTlsSecret: ""      # Secret with keys `tls.crt`, `tls.key`
+  # CA that signed the core's SERVER cert (pin a self-signed core). Empty => the
+  # in-cluster core TLS secret is trusted if provided, else system roots.
+  coreCaSecret: ""         # Secret with key `ca.crt`
+  # Override TLS server name when dialing the core by IP/ClusterIP.
+  serverName: ""
+
+  # Sources wiring (OLIVARES_SOURCES_CONFIG). Provide the JSON via a ConfigMap
+  # (non-secret refs) and/or a Secret (credentials). docs/contracts.
+  sourcesConfig: |
+    {
+      "sources": [],
+      "identity": []
+    }
+  sourcesConfigSecret: ""  # optional Secret with key `sources.json` (overrides the ConfigMap)
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+  nodeSelector: {}
+  tolerations:
+    # collectors run on every node by default, including control-plane nodes.
+    - operator: Exists
+  affinity: {}
+  updateStrategy:
+    type: RollingUpdate
+
+# ---------------------------------------------------------------------------
+# Service exposing the core (ClusterIP by default — front it with an Ingress or
+# port-forward for the UI; do not expose 8444/gRPC publicly without mTLS).
+# ---------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  httpPort: 8443
+  grpcPort: 8444
+  annotations: {}
+
+# Minimal ServiceAccount (no cluster privileges; the engine needs none).
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Pod- and container-level hardening (matches connectors/ebpf/deploy + docs/SECURITY-HARDENING.md).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# Liveness/readiness against the engine's own endpoints (docs: /livez, /readyz on
+# 8443 HTTPS; the kubelet does not verify the self-signed cert for probes).
+probes:
+  liveness:
+    enabled: true
+    path: /livez
+    initialDelaySeconds: 5
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 6
+  readiness:
+    enabled: true
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Optional default-deny NetworkPolicy for the core (egress to Postgres/DNS only).
+networkPolicy:
+  enabled: false
+  # Extra egress rules (e.g. to a provider API) appended to the baseline.
+  extraEgress: []
+
+# Optional Prometheus ServiceMonitor (requires the Prometheus Operator CRDs).
+metrics:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+    # /metrics is served on 8443 over HTTPS; scrape with scheme: https + insecure
+    # skip verify unless you wire the CA.
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+    # When OLIVARES_METRICS_TOKEN is set on the engine, configure the scraper to
+    # present the same token. Provide a Secret reference:
+    #   bearerTokenSecret:
+    #     name: olivares-metrics-token
+    #     key: token
+    bearerTokenSecret: {}
+
+# Optional Grafana dashboards provisioned as ConfigMaps. Requires the Grafana
+# sidecar (kiwigrid/k8s-sidecar) or manual provisioning. Three dashboards:
+# overview, policy & compliance, and performance — see deploy/monitoring/dashboards/.
+grafana:
+  dashboards:
+    enabled: false
+    # Label and value the Grafana sidecar watches for dashboard auto-discovery.
+    # Default matches the kube-prometheus-stack / Grafana Helm chart defaults.
+    label: grafana_dashboard
+    labelValue: "1"
+    # Extra annotations on the ConfigMaps (e.g. grafana_folder for folder routing).
+    annotations: {}
+
+# Common labels/annotations merged onto every rendered object.
+commonLabels: {}
+commonAnnotations: {}

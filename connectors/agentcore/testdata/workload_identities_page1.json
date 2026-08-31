@@ -1,0 +1,13 @@
+{
+  "workloadIdentities": [
+    {
+      "name": "support-agent",
+      "workloadIdentityArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:workload-identity-directory/default/workload-identity/support-agent"
+    },
+    {
+      "name": "billing-agent",
+      "workloadIdentityArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:workload-identity-directory/default/workload-identity/billing-agent"
+    }
+  ],
+  "nextToken": "WI-PAGE-2"
+}

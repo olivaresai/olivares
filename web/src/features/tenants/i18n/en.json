@@ -1,0 +1,49 @@
+{
+  "truncation": {
+    "label": "Loaded {{n}} tenants; there are more",
+    "hint": "The engine returned a page of the roster, not every tenant. The total CANNOT be inferred from the loaded rows — a tenant that is not listed here may still exist, and may still be served."
+  },
+  "title": "Tenants",
+  "description": "Withdraw or restore a tenant's service — that part is lossless. Deleting a tenant is a separate, permanent action.",
+  "roster": "Organizations",
+  "empty": "No organizations",
+  "emptyHint": "The system roster is empty, or this deployment has a single tenant.",
+  "forbidden": "Tenant lifecycle is superadmin-only.",
+  "columns": {
+    "name": "Organization",
+    "slug": "Slug",
+    "status": "Service",
+    "region": "Region",
+    "created": "Created"
+  },
+  "status": {
+    "active": "Active",
+    "suspended": "Suspended",
+    "unknown": "Unknown"
+  },
+  "unknownHint": "The engine reported a service state this console does not know. It is shown as-is rather than assumed active.",
+  "unpinned": "Unpinned",
+  "suspend": "Withdraw service",
+  "restore": "Restore service",
+  "suspendTitle": "Withdraw service from {{name}}?",
+  "suspendDescription": "Mutations and interactive service are refused with 423 tenant_suspended until service is restored.",
+  "keeps": "Three things deliberately continue:",
+  "keepsAuth": "Authentication and the operator's system routes, so the tenant can be explained and restored.",
+  "keepsExport": "Export of the tenant's own data — withdrawing service must not hold a customer's data hostage. An export taken while service is withdrawn is recorded on the tenant's own audit chain.",
+  "keepsCustody": "Custodial work: the chain keeps being checkpointed and stays verifiable and backup-certifiable.",
+  "notDelete": "This does not delete anything. Deleting a tenant is a separate, destructive operation.",
+  "confirmSuspend": "Withdraw service",
+  "suspended": "Service withdrawn from {{name}}",
+  "restoreTitle": "Restore service to {{name}}?",
+  "restoreDescription": "Service is restored losslessly: nothing was deleted while it was withdrawn.",
+  "confirmRestore": "Restore service",
+  "restored": "Service restored to {{name}}",
+  "delete": "Delete",
+  "deleteTitle": "Delete {{name}} and everything in it",
+  "deleteDescription": "This purges the tenant and its data immediately. It cannot be undone and there is no recovery window in this engine.",
+  "confirmDelete": "Delete permanently",
+  "deleteGrace": "The 30-day grace period documented for the API belongs to the cloud control plane, not to this engine. Here the purge happens the moment you confirm.",
+  "deleteInstead": "To stop serving a customer without destroying anything, suspend instead — suspending is lossless and reversible.",
+  "deleteDone": "{{name}} deleted",
+  "deleteSystem": "The system tenant cannot be deleted"
+}

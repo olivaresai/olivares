@@ -1,0 +1,155 @@
+{
+  "title": "备份与恢复",
+  "description": "管理控制平面的灾难恢复快照。",
+  "tabs": {
+    "backups": "备份",
+    "schedule": "计划"
+  },
+  "actions": {
+    "restore": "恢复",
+    "createBackup": "创建备份",
+    "cancel": "取消",
+    "close": "关闭",
+    "upload": "上传",
+    "delete": "删除"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "备份",
+    "searchPlaceholder": "搜索备份...",
+    "deleted": "备份已删除",
+    "deleteTitle": "删除备份",
+    "deleteDescription": "永久删除 \"{{filename}}\"？此操作无法撤消。",
+    "columns": {
+      "date": "日期",
+      "filename": "文件名",
+      "size": "大小",
+      "engine": "引擎",
+      "tenants": "租户",
+      "notes": "备注"
+    },
+    "actions": {
+      "download": "下载",
+      "inspect": "检查",
+      "downloadAria": "下载 {{filename}}",
+      "inspectAria": "检查 {{filename}}",
+      "deleteAria": "删除 {{filename}}",
+      "downloadFailed": "下载失败：{{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "备份计划已更新",
+    "loading": "正在加载计划...",
+    "title": "自动备份计划",
+    "description": "配置定期备份。计划由引擎执行；口令短语从实例密钥派生。",
+    "enableAria": "启用自动备份",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "cronLabel": "Cron 表达式",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "每天午夜",
+      "daily0200": "每天 02:00",
+      "daily0300": "每天 03:00",
+      "weeklySundayMidnight": "每周日午夜",
+      "weeklyMondayMidnight": "每周一午夜",
+      "monthlyFirstMidnight": "每月 1 日午夜",
+      "dailyAt": "每天 {{time}}"
+    },
+    "retentionLabel": "保留期（天）",
+    "retentionDescription": "早于此时间的备份会自动清理。",
+    "dualControlAria": "恢复需要双人控制",
+    "dualControlLabel": "恢复需要双人控制",
+    "dualControlDescription": "启用后，从本控制台发起的恢复必须由第二位不同的管理员批准后才会运行。关闭该开关会被记录，并在一小时后才生效——无法在执行恢复的同一次操作中移除这道关卡；重新启用会取消待生效的关闭。它不涵盖主机上的 `olivares dr restore`：该路径在本关卡之外替换 estate，转而记录一位申报的操作者（Postgres estate 只能通过该路径恢复）。单人运维时请保持关闭。",
+    "dualControlDisarmPending": "已请求关闭——已记录，将于 {{when}} 生效。在此之前，恢复仍需第二位管理员批准。重新启用即可取消。",
+    "dualControlDisarmRequestedBy": "请求者：{{who}}。",
+    "save": "保存计划"
+  },
+  "trigger": {
+    "started": "备份已开始",
+    "title": "创建备份",
+    "description": "创建整个控制平面的加密快照。",
+    "notes": "备注",
+    "notesPlaceholder": "此备份的可选说明",
+    "passphrase": "口令短语",
+    "passphraseDescription": "用于加密备份包。",
+    "start": "开始备份"
+  },
+  "job": {
+    "initializing": "正在初始化",
+    "status": {
+      "running": "运行中",
+      "completed": "已完成",
+      "failed": "失败"
+    },
+    "progressAria": "{{phase}} {{progress}}%",
+    "complete": "{{progress}}% 完成"
+  },
+  "pending": {
+    "title": "等待批准的恢复（双人控制）",
+    "requestedByPrefix": "请求者",
+    "approveRestore": "批准并恢复",
+    "approved": "恢复已批准",
+    "dialogTitle": "批准恢复",
+    "dialogDescription": "你正在批准 {{initiator}} 请求的恢复。你必须是不同于请求者的管理员。",
+    "passphrase": "口令短语",
+    "passphraseDescription": "输入创建该备份时使用的口令短语。",
+    "confirmTitle": "确认恢复",
+    "confirmDescription": "验证后，这将用备份内容覆盖所有当前数据。此操作无法撤消。",
+    "confirmLabel": "立即批准并恢复"
+  },
+  "restore": {
+    "notAuthorized": "未授权",
+    "uploadFailed": "上传失败",
+    "started": "恢复已开始",
+    "title": "从备份恢复",
+    "description": "上传 .drbundle 文件以恢复控制平面状态。",
+    "apply": "应用恢复",
+    "confirmTitle": "确认恢复",
+    "confirmDescription": "这将用备份内容覆盖所有当前数据。此操作无法撤消。",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "立即恢复",
+    "confirmSummaryPrefix": "正在从",
+    "confirmSummarySuffix": "恢复，包含 {{count}} 个租户。",
+    "awaitingTitle": "等待第二位批准者",
+    "awaitingDescription": "已启用双人控制。此恢复必须由另一位管理员在备份标签页中批准并提供口令短语后才会运行。",
+    "requestId": "请求 ID",
+    "selectFile": "选择 .drbundle 文件",
+    "chooseFile": "选择文件",
+    "passphrase": "口令短语",
+    "passphraseDescription": "输入创建此备份时使用的口令短语。",
+    "manifestTitle": "包清单",
+    "manifest": {
+      "file": "文件",
+      "engine": "引擎",
+      "created": "创建时间",
+      "tenants": "租户",
+      "keys": "密钥"
+    }
+  },
+  "inspect": {
+    "title": "备份详情",
+    "description": "已解码的密封包清单——恢复操作将带回的确切内容。",
+    "filename": "文件名",
+    "size": "大小",
+    "engine": "引擎",
+    "createdAt": "创建时间",
+    "tenants": "租户",
+    "keys": "密封密钥",
+    "empty": "无",
+    "loadFailed": "无法加载备份详情。"
+  },
+  "empty": {
+    "backup": {
+      "title": "尚未创建备份快照",
+      "description": "SQLite 环境请从此控制台创建加密备份；PostgreSQL 环境请使用 DR CLI 在已配置的备份目录中创建备份包。"
+    }
+  }
+}

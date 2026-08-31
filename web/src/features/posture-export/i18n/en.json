@@ -1,0 +1,51 @@
+{
+  "title": "Posture export",
+  "description": "Export the read-only ground-truth posture — inventory, least-privilege drift and findings — for a control tower to ingest.",
+  "filters": {
+    "title": "Export filters",
+    "severity": "Minimum severity",
+    "severityHint": "Only include findings at or above this severity.",
+    "severityAny": "Any severity",
+    "category": "Category",
+    "categoryHint": "Match a finding kind or subject kind.",
+    "categoryPlaceholder": "e.g. policy_drift",
+    "kind": "Inventory kind",
+    "kindHint": "Limit the inventory to a single entity kind.",
+    "kindPlaceholder": "e.g. agent",
+    "none": "no filters"
+  },
+  "severity": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "notes": {
+    "pull": "This is a read-only, minimal-data projection — references and hashes only — that a control tower pulls; nothing leaves the box until you export it."
+  },
+  "export": {
+    "action": "Export posture",
+    "done": "Posture exported.",
+    "failed": "Posture export failed."
+  },
+  "summary": {
+    "title": "Last export",
+    "inventory": "Inventory entities",
+    "findings": "Findings",
+    "unexpected": "Unexpected accesses",
+    "drift": "Drift signals",
+    "truncated": "Truncated",
+    "truncatedHint": "One or more sections hit the export cap and are partial — the counts are a floor, not a total.",
+    "severityFloor": "severity ≥ {{severity}}"
+  },
+  "history": {
+    "title": "Exports this session",
+    "note": "This list covers only exports made in this browser session. Every export is recorded in the tamper-evident audit ledger (action posture.export) —",
+    "auditLink": "open the Audit Explorer",
+    "empty": "No exports yet in this session.",
+    "colTime": "Time",
+    "colFilters": "Filters",
+    "colCounts": "Counts",
+    "counts": "{{inventory}} inventory · {{findings}} findings · {{drift}} drift"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "value": [
+    {"@odata.type": "#microsoft.graph.servicePrincipal", "id": "sp-x"},
+    {"@odata.type": "#microsoft.graph.user", "id": "user-owner-1"},
+    {"@odata.type": "#microsoft.graph.user", "id": "user-owner-2"}
+  ]
+}

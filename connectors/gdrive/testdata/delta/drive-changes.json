@@ -1,0 +1,23 @@
+{
+  "newStartPageToken": "next-sync-token-456",
+  "changes": [
+    {
+      "fileId": "file-abc",
+      "removed": false,
+      "file": {
+        "id": "file-abc",
+        "name": "Design Doc.docx",
+        "mimeType": "application/vnd.google-apps.document",
+        "modifiedTime": "2026-06-26T14:00:00Z",
+        "permissions": [
+          {"id": "perm-1", "type": "group", "emailAddress": "eng@acme.com", "role": "reader"}
+        ],
+        "labels": []
+      }
+    },
+    {
+      "fileId": "file-xyz",
+      "removed": true
+    }
+  ]
+}

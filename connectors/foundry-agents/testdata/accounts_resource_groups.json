@@ -1,0 +1,14 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-keep/providers/Microsoft.CognitiveServices/accounts/acctkeep",
+      "name": "acctkeep",
+      "kind": "AIServices"
+    },
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-skip/providers/Microsoft.CognitiveServices/accounts/acctskip",
+      "name": "acctskip",
+      "kind": "AIServices"
+    }
+  ]
+}

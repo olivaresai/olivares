@@ -1,0 +1,90 @@
+{
+  "truncation": {
+    "label": "Loaded {{n}} templates; there are more",
+    "hint": "Only the loaded templates are available in this catalog. A template not shown here may exist beyond this page."
+  },
+  "title": "Workspace Templates",
+  "subtitle": "Reusable snapshots of hooks, settings, connectors, and policies for workspace sessions.",
+  "catalog": {
+    "builtin": "Built-in",
+    "version": "v{{version}}",
+    "author": "By {{author}}",
+    "archived": "Archived",
+    "noTemplates": "No templates found.",
+    "noTemplatesHint": "Create your first template to reuse workspace configurations.",
+    "filterAll": "All",
+    "filterBuiltin": "Built-in",
+    "filterCustom": "Custom",
+    "showArchived": "Show archived"
+  },
+  "editor": {
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Secure coding session",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What does this template configure?",
+    "sections": {
+      "hooks": "Hooks",
+      "hooksHint": "Commands run before/after tools and sessions.",
+      "settings": "Agent Settings",
+      "settingsHint": "Permission mode, effort level, model, and custom instructions.",
+      "connectors": "Connectors",
+      "connectorsHint": "Connector IDs to attach when this template is applied.",
+      "policies": "Governance Policies",
+      "policiesHint": "DLP mode, session duration limits, allowed tools, and I/O recording."
+    },
+    "hooks": {
+      "preTool": "Pre-tool",
+      "postTool": "Post-tool",
+      "preSession": "Pre-session",
+      "postSession": "Post-session",
+      "command": "Command",
+      "timeoutMs": "Timeout (ms)",
+      "addHook": "Add hook",
+      "removeHook": "Remove"
+    },
+    "settings": {
+      "permissionMode": "Permission mode",
+      "effort": "Effort level",
+      "model": "Model",
+      "customInstructions": "Custom instructions"
+    },
+    "policies": {
+      "dlpMode": "DLP mode",
+      "maxDuration": "Max session duration (minutes)",
+      "allowedTools": "Allowed tools",
+      "allowedToolsPlaceholder": "e.g. Bash,Read,Edit",
+      "recordIo": "Record I/O"
+    }
+  },
+  "actions": {
+    "create": "New template",
+    "edit": "Edit",
+    "duplicate": "Duplicate",
+    "archive": "Archive",
+    "restore": "Restore",
+    "apply": "Apply to session",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirmArchive": "Archive this template?",
+    "confirmArchiveHint": "Archived templates are hidden from the catalog but can be restored.",
+    "confirmApply": "Apply template?",
+    "confirmApplyHint": "This will overwrite current session settings with the template values.",
+    "duplicateName": "Copy of {{name}}"
+  },
+  "apply": {
+    "success": "Template applied.",
+    "conflicts": "Applied with {{count}} conflict(s).",
+    "conflictField": "Field",
+    "conflictOld": "Previous value",
+    "conflictNew": "New value",
+    "unenforceable": "This template cannot be applied: {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "Failed to load templates.",
+    "saveFailed": "Failed to save template.",
+    "applyFailed": "Failed to apply template.",
+    "archiveFailed": "Failed to archive template.",
+    "duplicateFailed": "Failed to duplicate template."
+  },
+  "notFound": "Template not found."
+}

@@ -1,0 +1,20 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "alert_proj_001",
+      "object": "project.spend_alert",
+      "threshold_amount": 25000,
+      "currency": "USD",
+      "interval": "month",
+      "notification_channel": {
+        "type": "email",
+        "recipients": ["eng-leads@example.com", "finance@example.com"],
+        "subject_prefix": "[Project Budget]"
+      }
+    }
+  ],
+  "first_id": "alert_proj_001",
+  "last_id": "alert_proj_001",
+  "has_more": false
+}

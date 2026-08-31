@@ -1,0 +1,23 @@
+# Templated catalog-info skeleton for the "Register an agent with Olivares
+# governance" scaffolder Template. The ${{ values.* }} placeholders are filled by
+# the fetch:template step from the operator's answers.
+#
+# catalog apiVersion backstage.io/v1alpha1 is ALPHA; Backstage is unpinned (see
+# README "Version caveat"). A Component requires spec.type + spec.lifecycle +
+# spec.owner (verified against backstage.io).
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}
+  description: ${{ values.description }}
+  annotations:
+    olivares.ai/managed: 'true'
+    olivares.ai/agent-kind: ${{ values.kind }}
+  tags:
+    - olivares
+    - ai-agent
+spec:
+  type: service
+  lifecycle: production
+  owner: ${{ values.owner }}
+  system: olivares-estate

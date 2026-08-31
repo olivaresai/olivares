@@ -1,0 +1,286 @@
+---
+title: "Начало работы на одном узле (бинарник + systemd)"
+description: >-
+  Установите Olivares AI на один Linux-хост как укреплённый сервис systemd:
+  соберите статический бинарник, заберите одноразовый токен настройки, создайте
+  своего первого арендатора, подключите реальный источник и достигните access graph
+  — с включённым TLS и без учётных данных по умолчанию.
+sidebar:
+  order: 1
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Это первая установка в продакшен-форме: **один Linux-хост, один статический
+бинарник, systemd, встроенное хранилище SQLite** — и реальный путь первого запуска
+(одноразовый токен настройки, TLS включён по умолчанию, без учётных данных по
+умолчанию, без демонстрационных данных). К концу у вас будет Olivares AI, работающий
+как укреплённый сервис, с подключённым реальным источником и заполненным access graph.
+
+Это тот же движок, который [quickstart](/ru/start/quickstart/) демонстрирует за пять
+минут; разница в конфигурации. Если сначала хотите быстро осмотреться, выполните
+quickstart, а затем вернитесь сюда за реальной установкой.
+
+Каждая команда на этой странице была выполнена в точности так, как написано,
+относительно текущего бинарника (баннер первого запуска, путь восстановления токена,
+подключение pgAudit и приведённый ниже граф прогоняются в
+`scripts/quickstart-smoke.sh` и были перепроверены для этого руководства).
+
+## Предварительные требования
+
+- Linux-хост с systemd и `curl`.
+- **Go 1.26+** для сборки бинарника (хранилище — это SQLite на чистом Go, поэтому
+  C-toolchain не нужен). Релизы с подписанными предсобранными артефактами появятся в
+  момент первого публичного релиза — до этого вы собираете из чекаута, а
+  [проверка релиза](/ru/how-to/verify-a-release/) документирует цепочку, которую вы
+  будете использовать, когда они появятся.
+
+## 1. Сборка и установка бинарника
+
+<Steps>
+
+1. Соберите единственный статический артефакт (движок + встроенный веб-UI +
+   first-party коннекторы):
+
+   ```bash
+   task build                      # produces ./bin/olivares
+   ./bin/olivares version
+   ```
+
+2. Установите его и создайте сервисного пользователя:
+
+   ```bash
+   sudo install -m 0755 bin/olivares /usr/local/bin/olivares
+   sudo useradd --system --home /var/lib/olivares --shell /usr/sbin/nologin olivares
+   ```
+
+</Steps>
+
+## 2. Запуск как укреплённого сервиса systemd
+
+Создайте `/etc/systemd/system/olivares.service`:
+
+```ini
+[Unit]
+Description=Olivares AI — self-hosted engine for enterprise AI
+Documentation=https://olivares.ai/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olivares
+Group=olivares
+ExecStart=/usr/local/bin/olivares serve \
+  --listen 127.0.0.1:8443 \
+  --grpc-listen 127.0.0.1:8444 \
+  --data-dir /var/lib/olivares
+Restart=on-failure
+RestartSec=5
+
+# The data directory holds the SQLite store, the audit signing key and the TLS
+# material. StateDirectory creates /var/lib/olivares owned by the service user.
+StateDirectory=olivares
+StateDirectoryMode=0700
+UMask=0077
+
+# Hardening (mirrors the container posture: non-root, read-only, no escalation)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/olivares
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now olivares
+```
+
+Движок по умолчанию привязывается к **loopback** — `127.0.0.1:8443` выбран намеренно.
+Откройте к нему доступ позже, за вашим собственным ingress и TLS, как осознанное
+решение (см. [укрепление безопасности](/ru/how-to/security-hardening/)).
+
+<Aside type="note" title="TLS включён, с самоподписанным сертификатом">
+Без `--tls-cert`/`--tls-key` движок при первом запуске генерирует самоподписанный
+сертификат в каталоге данных и логирует два его хэша: `cert_fingerprint_sha256` —
+хэш сертификата, тот, что показывает браузер, и `pin_sha256` — хэш SPKI конечного
+сертификата. Команда `curl -k` ниже пропускает проверку только для bootstrap —
+прежде чем открывать доступ к сервису, выдайте ему настоящий сертификат либо
+закрепите его, передав залогированное значение `pin_sha256` дословно в
+`--pin-sha256`. Отпечаток сертификата — другой хэш: он разбирается без ошибки, а затем падает
+на handshake с `TLS SPKI pin mismatch`.
+</Aside>
+
+## 3. Заберите одноразовый токен настройки
+
+Свежая установка **не имеет учётных данных по умолчанию**. При первом запуске движок
+чеканит одноразовый токен настройки (`olst_…`) и печатает его **только в stdout** —
+под systemd это journal:
+
+```bash
+journalctl -u olivares -o cat | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+```
+
+```text
+=== FIRST-BOOT SETUP ===
+No accounts exist yet. Open the console and create the first administrator
+with this one-time token — setup also creates your first organization and
+makes that administrator its owner:
+
+  Console:  https://127.0.0.1:8443
+  Token:    olst_…
+
+The console serves HTTPS with a self-signed certificate on first boot — your
+browser will warn once; that is expected. The token is shown ONCE and is
+single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
+"password":"…"} — add "organization":"…" to name it (default: "Default
+Organization"). The reply carries the new organization's tenant_id.
+========================
+```
+
+Создайте первого администратора и войдите:
+
+```bash
+SETUP="olst_…"        # from the banner above
+
+curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+  -H 'Content-Type: application/json' \
+  -d "{\"token\":\"$SETUP\",\"email\":\"you@example.com\",\"password\":\"<strong-password>\"}"
+
+TOKEN="$(curl -ksf -X POST https://127.0.0.1:8443/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"<strong-password>"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+```
+
+<Aside type="tip" title="Пропустили токен? Путь восстановления безопасен">
+Хранится только SHA-256 токена (в `setup.token` внутри каталога данных), поэтому
+пропущенный токен **невозможно восстановить** — и перезапуск не печатает его повторно.
+На свежей установке, где ещё нет пользователей, восстановление таково: остановите
+сервис, удалите `setup.token` из каталога данных, запустите его снова — новый токен
+чеканится и печатается. Это было проверено относительно текущего бинарника; работает
+только пока нет пользователей, так что этим никогда нельзя воспользоваться, чтобы
+захватить настроенную установку.
+</Aside>
+
+## 4. Создайте свою первую организацию
+
+Всё в продукте привязано к арендатору, так что создайте организацию, в которую будут
+рапортовать ваши источники:
+
+```bash
+TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Production","slug":"prod"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+echo "tenant: $TENANT"
+```
+
+## 5. Подключите свой первый реальный источник
+
+Источники объявляются в одном JSON-файле, принадлежащем оператору, имя которого задаётся
+`OLIVARES_SOURCES_CONFIG`, читаемом до запуска движка. Вот источник PostgreSQL
+**pgAudit** (R/RW-сигнал чистого уровня — см.
+[руководство по pgAudit](/ru/how-to/connectors/pgaudit/) для настройки на стороне Postgres):
+
+```bash
+sudo tee /etc/olivares/sources.json >/dev/null <<JSON
+{"sources":[{
+  "name": "salesdb-pgaudit",
+  "kind": "pgaudit",
+  "tenant": "$TENANT",
+  "config": { "log_path": "/var/log/postgresql/postgresql.csv", "format": "csvlog" }
+}]}
+JSON
+sudo chmod 0600 /etc/olivares/sources.json && sudo chown olivares: /etc/olivares/sources.json
+```
+
+Укажите его сервису через drop-in и перезапустите:
+
+```bash
+sudo systemctl edit olivares
+```
+
+```ini
+[Service]
+Environment=OLIVARES_SOURCES_CONFIG=/etc/olivares/sources.json
+ReadOnlyPaths=/etc/olivares
+```
+
+```bash
+sudo systemctl restart olivares
+journalctl -u olivares -o cat | grep "ingest: wired source"
+```
+
+```text
+ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
+```
+
+Если ничего не подключено, движок честно говорит об этом, а не выглядит здоровым на
+пустой карте — см. [устранение неполадок](/ru/how-to/troubleshooting/) для точных
+предупреждений и того, что каждое из них означает.
+
+## 6. Достигните графа
+
+```bash
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/graph?limit=200" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/drift" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+```
+
+Тот же граф рендерится во встроенном веб-UI по адресу `https://127.0.0.1:8443`
+(с рабочей станции пробросьте туннель: `ssh -L 8443:127.0.0.1:8443 <host>`).
+
+## 7. Прежде чем считать это завершённым
+
+Два артефакта в каталоге данных решают, переживут ли ваши свидетельства инцидент —
+займитесь ими **сейчас**, а не после:
+
+| Артефакт | Почему это важно | Действие |
+|---|---|---|
+| `audit-signing.key` | Подписывает append-only audit ledger. Если он потерян, ledger больше нельзя перепроверить. Движок при первом запуске только **предупреждает** — принудительного эскроу нет. | Сделайте резервную копию вне машины, с правами `0600`, сегодня. |
+| Публичный ключ ledger | **Внешняя** копия публичного ключа — это то, что делает проверку устойчивой к атакам после компрометации хоста. | `curl -ksf https://127.0.0.1:8443/v1/audit/pubkey` и сохраните результат вне машины. |
+
+Затем запланируйте реальные резервные копии — `olivares dr backup` производит
+зашифрованный, безопасный для непрерывности ledger пакет;
+[руководство по резервному копированию и восстановлению](/ru/how-to/backup-and-restore/)
+— это полная процедура, включая тренировку восстановления.
+
+## Здоровье и мониторинг
+
+Движок предоставляет `/livez` (процесс запущен), `/readyz` (хранилище доступно — это
+SLI доступности) и `/metrics` (Prometheus) на HTTP-слушателе:
+
+```bash
+curl -ks https://127.0.0.1:8443/readyz
+# {"leader":true,"setup_required":false,"status":"ok","store":"up"}
+```
+
+См. [мониторинг с Prometheus](/ru/how-to/monitor-with-prometheus/) для набора метрик,
+целевых SLO и поставляемых правил алертов.
+
+## Следующие шаги
+
+- **Подключите больше сигналов:** [руководства по коннекторам](/ru/how-to/connectors/pgaudit/)
+  — pgAudit, CloudTrail, Claude Code, eBPF и остальной каталог.
+- **Укрепите развёртывание:** [укрепление безопасности](/ru/how-to/security-hardening/) —
+  экспозиция, mTLS для коллекторов, согласования.
+- **Управляйте:** [управление и согласование](/ru/how-to/govern-and-approve/) — RBAC,
+  политики и гарантия записанных решений.

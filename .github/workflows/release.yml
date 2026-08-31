@@ -1,0 +1,2599 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Public RELEASE pipeline (SCP-02/01/03/04). Runs on the GitHub mirror — the
+# substrate where the OIDC issuer scripts/verify-release.sh already trusts
+# (token.actions.githubusercontent.com) is real, where slsa-github-generator and
+# keyless cosign/Sigstore work natively, and where the OpenSSF Scorecard runs.
+#
+# This pipeline is WRITTEN AND READY but NOT auto-triggered: it runs
+# only on a maintainer-pushed `v*` release tag, and goreleaser's `release.draft: true`
+# means even then it builds + signs into a DRAFT — publishing the draft is a deliberate
+# human action. It NEVER auto-publishes (releases are cut manually by a maintainer).
+#
+# What a tagged run produces and signs (all keyless via OIDC -> Fulcio/Rekor):
+#   - the cross-platform static binaries + tar.gz archives + checksums.txt (goreleaser)
+#   - a cosign signature over checksums.txt (transitively covers every artifact)
+#   - SPDX + CycloneDX 1.6 SBOMs per archive, AND the same attached as signed
+#     in-toto ATTESTATIONS (cosign attest-blob, new-bundle-format)            [SCP-03]
+#   - an SBOM of the container IMAGE + a cosign attestation on it             [SCP-03]
+#   - an OpenVEX document driven by govulncheck reachability + attestation    [SCP-04]
+#   - SLSA Build L3 provenance for the binaries (generic generator) and the
+#     image (container generator), verifiable with slsa-verifier              [SCP-01]
+#   - an unsigned stable OTA manifest, digest-bound to the archives of THIS run and
+#     carrying a freshness bound (--expires-in; anti-freeze). The off-box ceremony
+#     signs it, and a protected dispatch re-verifies the cosign signature over
+#     checksums.txt and has the shipped community binary cross-check every manifest
+#     digest against it — and against the published bytes — before attachment. The
+#     manifest is never signed blind: checksums.txt is the CI-signed link the
+#     custodian and the dispatch both bind it to.
+# Consumers verify with scripts/verify-release.sh (+ cosign verify-attestation /
+# slsa-verifier). Air-gap consumers use the key-based bundle (scripts/airgap-bundle.sh).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  # Phase 2: after the tag run has attached stable-manifest.json to the DRAFT, this
+  # dispatch completes the stable ceremony — and SIGNS the manifest itself.
+  #
+  # ⛔ ESTO CAMBIÓ CON LA ORDEN 37, y lo que había aquí decía lo contrario: «the OTA private
+  # key is never a GitHub secret and never enters CI». Era cierto, y era el motivo de que
+  # existiera un input `ota_signature_b64`: una firma producida a mano fuera de la caja y
+  # pegada en el dispatch. La orden lo retira — «no voy a estar firmando manualmente cada
+  # release». Firmar a mano no es una salvaguarda: es un paso que se olvida, que se hace mal
+  # de madrugada, y que deja la release bloqueada en quien tenga la llave.
+  #
+  # LA MITIGACIÓN, que es lo que hace aceptable el cambio: la clave vive como secreto de un
+  # ENVIRONMENT PROTEGIDO (`ota-release-ceremony`, que el job de abajo ya declara), no como
+  # secreto de repositorio. Un environment con revisores exige aprobación humana ANTES de que
+  # el job arranque, así que la llave sigue sin ser alcanzable sin un «ok» explícito — sólo
+  # que ese «ok» pasa a ser una aprobación en vez de un pegado manual. Y el material nunca
+  # aparece en una línea de mandato ni en el log: se escribe con `umask 077` bajo
+  # `$RUNNER_TEMP` y se pasa por `@ruta`.
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing draft release tag (vMAJOR.MINOR.PATCH)"
+        required: true
+        type: string
+      release_commit:
+        description: "Full 40-hex commit OID the tag pointed at when phase 1 ran"
+        required: true
+        type: string
+
+# ONE RELEASE AT A TIME, and this is a correctness control rather than a courtesy to the
+# runners. Phase 1 (tag push) creates the draft and may upload a security manifest; phase 2
+# (dispatch) reads the draft and completes the stable ceremony. With no `concurrency:` key
+# Actions runs them concurrently by default, and the QA contrast executed the real block to
+# show what that buys: an upload landing after the inventory response is FORMED but before it
+# returns leaves the ceremony finishing rc=0 while the draft already carries security bytes —
+# `block_rc=0 remote_security_manifest=present`. A second GET does not make a mutable release
+# atomic. Serializing the two phases of the SAME release does close the in-workflow window.
+#
+# Grouped by the RELEASE, not by the workflow: two different tags still run in parallel.
+# `cancel-in-progress: false` because a publisher is never cancelled — the rule
+# release-rehearsal.yml already carries, for the same reason.
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+# Least privilege by default; each job widens only what it needs.
+permissions:
+  contents: read
+
+env:
+  IMAGE_REPO: ghcr.io/olivaresai/olivares
+
+jobs:
+  # --- §C.4: the AUTHORIZATION ROOT of the production tag path (R1 contrast P1-02). ------
+  # A previous revision ran this preflight as a STEP inside the goreleaser job — i.e.
+  # inside a job that already held `contents/packages/id-token: write` before the first
+  # instruction executed, and whose siblings did not depend on it at all. That violates
+  # §C.4 twice: the preflight must run before ANY job receives a write permission or an
+  # OIDC token, and every mutating job must consume its validated outputs. This job is
+  # read-only (`contents: read`), produces the validated profile as JOB outputs, and every
+  # mutating job below `needs:` it — directly or transitively — and reads ONLY its
+  # outputs for mode-governed decisions. If it fails, nothing downstream starts.
+  #
+  # DELIBERATELY NO repository `if:` here (R1 contrast P2-02): a job-level `if:` that is
+  # false SKIPS silently — green nothing. This read-only job runs in ANY repository the
+  # tag push happens in (a fork, a rename, a copied tree) and the script fails RED with
+  # the §C.4.2 message. The literal repository guards remain on the MUTATING jobs as the
+  # second fence. It is event-scoped to `push` only: the workflow_dispatch path is the
+  # phase-2 OTA ceremony, which has its own declared authorization contract (see
+  # publish-ota-manifest).
+  preflight:
+    if: github.event_name == 'push'
+    # Hosted runner, same trust rationale as every job in this workflow.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release_mode: ${{ steps.profile.outputs.release_mode }}
+      release_github_repo: ${{ steps.profile.outputs.release_github_repo }}
+      release_github_owner: ${{ steps.profile.outputs.release_github_owner }}
+      release_github_name: ${{ steps.profile.outputs.release_github_name }}
+      oci_image_repo: ${{ steps.profile.outputs.oci_image_repo }}
+      source_repository_url: ${{ steps.profile.outputs.source_repository_url }}
+      release_tag: ${{ steps.profile.outputs.release_tag }}
+      release_version: ${{ steps.profile.outputs.release_version }}
+      cosign_mode: ${{ steps.profile.outputs.cosign_mode }}
+      cosign_tlog_upload: ${{ steps.profile.outputs.cosign_tlog_upload }}
+      publish_latest: ${{ steps.profile.outputs.publish_latest }}
+      publish_dockerhub: ${{ steps.profile.outputs.publish_dockerhub }}
+      publish_homebrew: ${{ steps.profile.outputs.publish_homebrew }}
+      publish_ota_stable: ${{ steps.profile.outputs.publish_ota_stable }}
+      run_slsa: ${{ steps.profile.outputs.run_slsa }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: preflight — validate the release profile (fail-closed)
+        id: profile
+        # ⛔ EL PERFIL LO DECLARA EL REPOSITORIO QUE CORRE, Y NINGÚN NOMBRE PRIVADO VIVE AQUÍ.
+        # `vars.OLIVARES_RELEASE_PROFILE` sólo existe en el repositorio de preprod, así que en
+        # el público toda rama de abajo resuelve a producción, que es el valor por omisión y
+        # no un caso especial. Los destinos de preprod llegan por variables de ESE repositorio
+        # (`OLIVARES_PREPROD_EXPECTED_*`) y jamás por un literal en este fichero, que viaja al
+        # árbol público — el mismo motivo por el que `aws-images.yml:306-312` deriva su ancla.
+        #
+        # ⚠ LA FORMA `cond && A || B` ES EL TERNARIO DE ACTIONS Y TIENE UNA TRAMPA: devuelve B
+        # si A resulta FALSY, así que el valor de A decide tanto como la condición. Donde una
+        # rama vale la CADENA `'false'`, la condición va INVERTIDA a propósito para que esa
+        # cadena caiga siempre en el lado `||`, donde su veracidad no se evalúa.
+        #
+        # No es cautela decorativa: la documentación dice que una cadena no vacía es verdadera,
+        # pero eso NO se puede comprobar en esta caja y en este repositorio no había precedente
+        # que lo respaldara —lo busqué—. Escribirlo de forma que la respuesta dé igual cuesta
+        # una palabra y quita la dependencia. Si la lectura optimista hubiera sido falsa, el
+        # preflight lo habría cazado (exige `false` en preprod) y el acto habría muerto ROJO el
+        # día D: fallo seguro, pero caro.
+        #
+        # Y no es una llave de confianza: el preflight en modo preprod exige la tupla inyectada
+        # (deny-closed), rechaza destinos que nombren superficie de producción (§C.4.6), obliga
+        # a que el destino declarado SEA el repositorio que corre (§C.4.2) y refuse cualquier
+        # secreto de publicación en él (§C.4.7).
+        env:
+          RELEASE_MODE: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && 'preprod' || 'production' }}
+          RELEASE_GITHUB_REPO: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && vars.OLIVARES_PREPROD_EXPECTED_REPO || 'olivaresai/olivares' }}
+          OCI_IMAGE_REPO: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && vars.OLIVARES_PREPROD_EXPECTED_OCI || env.IMAGE_REPO }}
+          SOURCE_REPOSITORY_URL: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && vars.OLIVARES_PREPROD_EXPECTED_SOURCE || 'https://github.com/olivaresai/olivares' }}
+          # La tupla ESPERADA viaja aparte de la DECLARADA a propósito: el preflight compara
+          # una contra otra (§C.4.1) y luego contra el repositorio que corre (§C.4.2), que es
+          # lo que convierte una variable mutable por un admin en algo inofensivo — lo peor
+          # que consigue manipularla es que su propia corrida se niegue.
+          # ⛔ Y AQUÍ VIVE LA TRAMPA DEL TERNARIO, DICHA DONDE SE LEE. Si el repositorio
+          # declara el perfil pero OLVIDA una de las tres expectativas, esa variable llega
+          # VACÍA, la rama verdadera del ternario de arriba resulta falsy, y el valor DECLARADO
+          # cae al literal de producción: un acto con perfil `preprod` declarando el destino
+          # público. No se queda así — la tupla ESPERADA sigue vacía y el preflight muere en su
+          # comprobación deny-closed antes de tocar nada— pero eso es una afirmación sobre otro
+          # fichero, así que está PROBADA allí: `test-release-preflight.sh` lleva el caso
+          # "preprod con expectativas vacías y destino de producción declarado".
+          OLIVARES_PREPROD_EXPECTED_REPO: ${{ vars.OLIVARES_PREPROD_EXPECTED_REPO }}
+          OLIVARES_PREPROD_EXPECTED_OCI: ${{ vars.OLIVARES_PREPROD_EXPECTED_OCI }}
+          OLIVARES_PREPROD_EXPECTED_SOURCE: ${{ vars.OLIVARES_PREPROD_EXPECTED_SOURCE }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          # La firma es la MISMA en preprod que en producción —keyless, con log— y eso es
+          # deliberado: ensayar con otra ruta de firma no ensaya la ruta. El razonamiento
+          # completo, incluida la fuga que esto acepta, está en el perfil `preprod` de
+          # `scripts/release-preflight.sh`, que además lo EXIGE, así que no hay dos valores
+          # que puedan separarse en silencio.
+          COSIGN_MODE: keyless
+          COSIGN_TLOG_UPLOAD: "true"
+          PUBLISH_LATEST: "true"
+          # Docker Hub y el tap de Homebrew son superficies OFICIALES de producción sin
+          # equivalente en preprod, y §C.4.6 se negaría a nombrarlas de todos modos.
+          PUBLISH_DOCKERHUB: ${{ vars.OLIVARES_RELEASE_PROFILE != 'preprod' && 'auto' || 'false' }}
+          PUBLISH_HOMEBREW: ${{ vars.OLIVARES_RELEASE_PROFILE != 'preprod' && 'auto' || 'false' }}
+          PUBLISH_OTA_STABLE: "true"
+          RUN_SLSA: "true"
+          # Los generadores SLSA escriben registros PÚBLICOS que nombran el repositorio que
+          # corre: un acto que no es de producción tiene que decir en voz alta que los acepta.
+          ACKNOWLEDGE_PUBLIC_SLSA_LOG: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && 'true' || '' }}
+          OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
+          OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
+          # Presence-only inputs for the both-or-neither check (§C.4.7); never printed.
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: bash scripts/release-preflight.sh
+
+  goreleaser:
+    # PRODUCTION TARGET GUARD (design §E.1.1). Every mutation below targets
+    # olivaresai/olivares through the preflight's validated outputs. A `v*` tag pushed in
+    # ANY other repository — a fork, or the disposable rehearsal target — dies RED in the
+    # preflight job above; this literal guard is the second fence on the mutating job.
+    needs: [preflight]
+    # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
+    # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
+    # el nombre del repositorio de preprod lo publicaría — `lint:export` bloquea ese literal
+    # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
+    #
+    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio de preprod, así que en el
+    # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
+    # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
+    # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
+    # producción (§C.4.6) y obliga a que el destino declarado SEA el repositorio que corre
+    # (§C.4.2). Esta condición abre la puerta; las de allí deciden quién pasa.
+    if: github.event_name == 'push' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
+    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
+    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
+    # hosted runner: a persistent self-hosted runner serves many jobs, so a
+    # compromised build can leave tooling behind for the next one, and a verifier
+    # "has no guarantee that the code run is in fact the intended workflow unless
+    # they also trust the self-hosted runner" (slsa-framework). Moving a release
+    # here to save minutes would silently downgrade the provenance we publish.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the DRAFT release + upload assets
+      packages: write # push the image to ghcr.io
+      id-token: write # keyless cosign (Fulcio) + attestations
+      actions: read # read race-full's run history for the pre-release evidence gate
+    outputs:
+      hashes: ${{ steps.hashes.outputs.hashes }}
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.image.outputs.digest }}
+    env:
+      # The VALIDATED profile — §C.4 job outputs, the only permitted source (§C.4.10).
+      # Job-level so GoReleaser's templates and every step read one authority; empty
+      # outputs (preflight skipped or rewired) fail the goreleaser template render
+      # (missingkey=error) instead of defaulting anywhere.
+      RELEASE_GITHUB_OWNER: ${{ needs.preflight.outputs.release_github_owner }}
+      RELEASE_GITHUB_NAME: ${{ needs.preflight.outputs.release_github_name }}
+      OCI_IMAGE_REPO: ${{ needs.preflight.outputs.oci_image_repo }}
+      SOURCE_REPOSITORY_URL: ${{ needs.preflight.outputs.source_repository_url }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+      COSIGN_MODE: ${{ needs.preflight.outputs.cosign_mode }}
+      COSIGN_TLOG_UPLOAD: ${{ needs.preflight.outputs.cosign_tlog_upload }}
+      PUBLISH_HOMEBREW: ${{ needs.preflight.outputs.publish_homebrew }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # goreleaser needs tags/history for the changelog
+          persist-credentials: false
+      - name: phase 1 guard 1 — straight after checkout
+        run: |
+          set -euo pipefail
+          # NOTHING has touched the tree yet; this is the baseline every later window compares against.
+          # A guard belongs after EACH `uses:` window and before the next `run`: the previous
+          # single guard sat after setup-go, setup-node, pnpm/action-setup, `install go-task`
+          # and two preflight steps that already read .node-version, the lockfile and the
+          # Taskfile and executed against this checkout (the model, R2 third follow-up).
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            exit 1
+          fi
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          if [ "${head_oid}" != "${GITHUB_SHA}" ]; then
+            echo "ERROR: HEAD is ${head_oid}, not the triggering commit (${GITHUB_SHA})." >&2
+            exit 1
+          fi
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (phase 1 guard 1 — straight after checkout)." >&2
+            exit 1
+          }
+          if [ -n "${status_raw}" ]; then
+            echo "ERROR: the checkout was modified before this window consumed it." >&2
+            printf '%s\n' "${status_raw}" >&2
+            echo "No tracked script has been executed. Stopping here." >&2
+            exit 1
+          fi
+          echo "checkout verified: phase 1 guard 1 — straight after checkout"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+      # The web UI is built into the Go embed dir by goreleaser's `before` hook,
+      # so node + pnpm must be present before goreleaser runs.
+      # NODE FIRST, AND THAT ORDER IS THE FIX (2026-08-05). pnpm/action-setup installs pnpm
+      # THROUGH npm, so it needs a node on PATH — and it used to sit ABOVE setup-node because
+      # setup-node's `cache: pnpm` needs pnpm to already exist. On the Hetzner runners, which
+      # ship no node, that cycle cannot be satisfied: mainline-ci 30982224609 lost `web` on
+      # ci-runner-1 and `control-plane` on ci-runner-3, both at that step, with
+      # `npm ERR! ... paths[0] ... received undefined`. `standalone: true` did NOT help and the
+      # action's own docs say why: it installs @pnpm/exe, which is still an npm package.
+      # So node is installed FIRST and `cache: pnpm` is dropped — a store cache is worth less
+      # than a job that runs at all, and these runners keep their disk between jobs anyway.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      # PREFLIGHT: tagged-source integrity for generated artifacts. This
+      # workflow triggers on ANY `v*` tag and depends on no mainline-ci result, so
+      # nothing proves the tagged SHA ever passed the gate; goreleaser then builds
+      # the console from the COMMITTED sources (.goreleaser.yaml:42). Placed here,
+      # right after the toolchains it needs and BEFORE syft/cosign/QEMU/buildx and
+      # the registry login, so drift fails before any of that setup — and long
+      # before anything is built, signed or published.
+      # HONEST SCOPE: openapi.gen.ts is a types-only module (interfaces/type
+      # aliases, erased at compile time) that nothing imports yet, so a stale copy
+      # does NOT change the emitted bundle today. What this prevents is publishing a
+      # tag whose committed sources disagree with their own generator — and a silent
+      # miscompile the moment the console starts consuming those types.
+      # Covers the OpenAPI class only; proto:check (Taskfile.yml:539-543) is ungated
+      # by the same mechanism and DOES reach the binary (core/api/grpc.go), but
+      # needs the pinned buf/protoc toolchain budgeted in its own change.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          # standalone installs @pnpm/exe, which does not need a node at RUN time. It is kept
+          # for that reason only: it does NOT remove the node this step needs to INSTALL, which
+          # is why the setup-node above it is the actual fix and must stay above it.
+          standalone: true
+      - name: phase 1 guard 2 — after the setup actions, before the first script
+        run: |
+          set -euo pipefail
+          # setup-go, setup-node and pnpm/action-setup have run; they read .node-version and the lockfile.
+          # A guard belongs after EACH `uses:` window and before the next `run`: the previous
+          # single guard sat after setup-go, setup-node, pnpm/action-setup, `install go-task`
+          # and two preflight steps that already read .node-version, the lockfile and the
+          # Taskfile and executed against this checkout (the model, R2 third follow-up).
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            exit 1
+          fi
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          if [ "${head_oid}" != "${GITHUB_SHA}" ]; then
+            echo "ERROR: HEAD is ${head_oid}, not the triggering commit (${GITHUB_SHA})." >&2
+            exit 1
+          fi
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (phase 1 guard 2 — after the setup actions, before the first script)." >&2
+            exit 1
+          }
+          if [ -n "${status_raw}" ]; then
+            echo "ERROR: the checkout was modified before this window consumed it." >&2
+            printf '%s\n' "${status_raw}" >&2
+            echo "No tracked script has been executed. Stopping here." >&2
+            exit 1
+          fi
+          echo "checkout verified: phase 1 guard 2 — after the setup actions, before the first script"
+      - name: install go-task (pinned)
+        timeout-minutes: 10
+        run: |
+          # ⛔ TRES PARTES, NO UNA — la doctrina vive en mainline-ci.yml:642-646 desde el 08-18 y
+          # llevaba ONCE DIAS sin propagarse. La cobro `export-check` el 2026-08-29 en
+          # `ci-runner-3`: el paso «install go-task» salio **success** y el siguiente murio con
+          # `task: command not found`, exit 127; el job midio 1 de 14 pasos y el fail-closed del
+          # propio instrumento quedo SALTADO (corrida 33278242758, curada por r26 en #2149).
+          #
+          #   GOBIN explicito .... `go install` honra un GOBIN del entorno POR ENCIMA de
+          #                        $GOPATH/bin. En un runner auto-alojado PERSISTENTE ese GOBIN
+          #                        puede venir del servicio, y entonces el binario aterriza fuera
+          #                        del PATH que el job acaba de componer — **sin fallar**, porque
+          #                        instalar si instalo.
+          #   su bin al PATH ..... para el paso siguiente (GITHUB_PATH) y para ESTE (export PATH).
+          #   la GUARDA .......... «instalar no es alcanzar». Convierte «instalado e inalcanzable»
+          #                        en un rojo NOMBRADO aqui, en vez de un 127 opaco mas adelante
+          #                        que manda a investigar el PATH en vez de la instalacion.
+          #
+          # ⚠ Y la causa esta CONFIRMADA por una medida que no estaba en el diagnostico original:
+          # en esa corrida los dos jobs corrieron en maquinas DISTINTAS — el que fallo en
+          # `ci-runner-3`, el que paso en `srv17`— con los MISMOS pasos. No era el orden de los
+          # pasos: era el entorno del runner, que es exactamente lo que GOBIN explicito neutraliza.
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install dijo OK y task no esta en PATH (GOBIN=$GOBIN, PATH=$PATH)"; exit 1; }
+      - name: preflight — OpenAPI snapshot + web client codegen freshness
+        timeout-minutes: 15
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          task openapi:check
+      # PREFLIGHT: the race evidence this release claims to rest on (2026-07-29,
+      # hardened 2026-07-30).
+      #
+      # race-full.yml declares itself "the mandatory pre-release evidence". The
+      # first version of this preflight accepted a green run on any ANCESTOR of
+      # the tag. The 2026-07-30 review refuted that: `git merge-base
+      # --is-ancestor` accepts a pre-#447/#448 base whose green would then
+      # "cover" 38,226 later insertions it never saw. An old green must not
+      # habilitate a new tag.
+      #
+      # EQUALITY, therefore: some green race-full run's head SHA must BE the
+      # tagged SHA. No silent pass, no warn — the escape hatch is deliberate and
+      # loud: dispatch race-full on the release commit, wait for green, re-tag.
+      - name: preflight — a green race-full ran on the EXACT tagged SHA
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          match="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=100" \
+                  --jq "[.workflow_runs[] | select(.head_sha == \"${GITHUB_SHA}\")] | length")"
+          if [ "${match}" -eq 0 ]; then
+            newest="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=1" \
+                    --jq '.workflow_runs[0].head_sha // "none"')"
+            echo "::error::no successful race-full run exists on the tagged SHA ${GITHUB_SHA} (newest green: ${newest}). An ancestor green does not cover the diff after it — dispatch race-full on this exact commit, wait for green, and re-tag."
+            exit 1
+          fi
+          echo "race-full evidence exists for the exact tagged SHA ${GITHUB_SHA}"
+      # syft on PATH for goreleaser's `sboms`; cosign for `signs`/`docker_signs`.
+      - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # EXACT pin, not the action default. Measured 2026-07-25 with both binaries:
+          # this installer revision defaults to cosign v3.0.6, the OTA job's revision
+          # defaults to v2.5.2, and .goreleaser.yaml signs with --output-signature /
+          # --output-certificate. Under v3 those flags are deprecated and IGNORED when
+          # --new-bundle-format is on (it defaults to true), so the .sig/.pem files
+          # GoReleaser expects are never written; and `--tlog-upload=false` — the flag
+          # the rehearsal depends on to leave no public record — is rejected outright
+          # ("not supported with --signing-config"). Under v2.5.2 the same commands
+          # produce a signature file and `verify-blob --key` reports Verified OK.
+          # v2.6.4, not the v2.5.2 the OTA job used to resolve: v2.5.2 falls inside two
+          # published Sigstore advisories — GHSA-whqx-f9j3-ch6m ("verification accepts
+          # any valid Rekor entry under certain conditions", <=2.6.1, fixed 2.6.2) and
+          # GHSA-w6c6-c85g-mmv6 (verify-blob-attestation false positive, <=2.6.2, fixed
+          # 2.6.3). scripts/check-cosign-contract.sh proves v2.6.4 still honours the
+          # contract. Migrating to v3 bundles is a real migration (signer, verifier, OTA
+          # check and scripts/verify-release.sh) and needs its own unit.
+          cosign-release: 'v2.6.4'
+      # EXECUTION-TIME INVARIANT — the actual control. The static gate
+      # (task lint:cosign-pins) reads the workflow YAML and is fast, but four rounds of
+      # adversarial review proved it can never be complete: `run:` is a shell, so proving
+      # "no path here can obtain an unapproved cosign" by reading YAML is proving a
+      # negative over a Turing-complete language. At THIS point the property is decidable
+      # — resolve the binary, hash it, compare against the upstream published digest. It
+      # does not matter how cosign arrived.
+      - name: assert the checkout is untouched before phase 1 runs any script
+        run: |
+          set -euo pipefail
+          # ⛔ ONE GUARD PER WINDOW. "After the last uses:" is only true of a window, and this
+          # job has two: setup actions, then two TRACKED scripts, then the docker actions, then
+          # the build. The guard further down covers the second window; without this one the
+          # first window ran scripts/assert-cosign-binary.sh and scripts/check-cosign-contract.sh
+          # straight after setup-node, pnpm, syft and cosign-installer — any of which can
+          # rewrite them — with no dirt detection in between (the model, R2 follow-up).
+          # ABSOLUTE, WITH NO OVERRIDE. This was briefly `${OLIVARES_TRUSTED_BIN:-/usr/bin}`
+          # "so the battery can point at stubs", and that is not a test seam: an earlier action
+          # writes OLIVARES_TRUSTED_BIN through GITHUB_ENV and owns git, gh and sha256sum for
+          # every guard in this job. The harness mutates a COPY of this workflow instead; a
+          # control must not be configurable by the thing it guards against.
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            exit 1
+          fi
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          if [ "${head_oid}" != "${GITHUB_SHA}" ]; then
+            echo "ERROR: HEAD is ${head_oid}, not the triggering commit (${GITHUB_SHA})." >&2
+            exit 1
+          fi
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (phase 1 pre-script guard)." >&2
+            exit 1
+          }
+          if [ -n "${status_raw}" ]; then
+            echo "ERROR: the checkout was modified before this phase ran any of its scripts." >&2
+            printf '%s\n' "${status_raw}" >&2
+            echo "No tracked script has been executed. Stopping here." >&2
+            exit 1
+          fi
+          echo "checkout verified before phase 1 runs any tracked script"
+      - name: assert the cosign binary is the reviewed artifact
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      # Prove the installed cosign actually honours this pipeline's signing contract
+      # BEFORE anything is built, pushed or published. It runs the real commands against
+      # a temporary key with the transparency log disabled. It is NOT a "no network"
+      # step — `verify-blob` fetches TUF trusted-root material regardless — but every
+      # Sigstore endpoint it is given is unroutable, so it cannot reach Rekor or Fulcio
+      # and cannot create a public record. Without it, a cosign that accepts our flags
+      # and silently ignores them ships a release whose signatures were never written.
+      # EXPLICIT INTERPRETER, not a bare path. The script is tracked 100644 — the repo's
+      # dominant mode (53 of 58 scripts/*.sh) — so a bare path exits 126 "permission
+      # denied" on a fresh checkout. Wired this step in with a bare path, so the
+      # check it claims to perform could never have run at all.
+      - name: cosign signing-contract check (no publication)
+        run: bash scripts/check-cosign-contract.sh
+      # Multi-arch image build + push to ghcr.io.
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: assert the checkout is untouched before anything consumes it (phase 1)
+        run: |
+          set -euo pipefail
+          # ⛔ EARLY, BECAUSE A LATE REFUSAL DOES NOT UNBIND WHAT ALREADY HAPPENED. The guard
+          # further down runs immediately before the release rule is read, which is right and
+          # is not enough: by then this job has already built, signed, generated and uploaded.
+          # Refusing there leaves those effects standing and merely declines to add one more.
+          # This step runs after the LAST setup `uses:` and before the first thing that
+          # consumes the tree, so a tampered checkout stops the phase before it produces
+          # anything at all (the model, report 56aeafd4c, R2).
+          #
+          # STRICTEST FORM: at this point the job has generated nothing, so NOTHING untracked,
+          # modified or staged is acceptable. The permitted-artifact list belongs to the later
+          # guard, where those artifacts legitimately exist.
+          # ABSOLUTE, WITH NO OVERRIDE. This was briefly `${OLIVARES_TRUSTED_BIN:-/usr/bin}`
+          # "so the battery can point at stubs", and that is not a test seam: an earlier action
+          # writes OLIVARES_TRUSTED_BIN through GITHUB_ENV and owns git, gh and sha256sum for
+          # every guard in this job. The harness mutates a COPY of this workflow instead; a
+          # control must not be configurable by the thing it guards against.
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            echo "An earlier action put another git ahead of it. Nothing has been consumed yet." >&2
+            exit 1
+          fi
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          if [ "${head_oid}" != "${GITHUB_SHA}" ]; then
+            echo "ERROR: HEAD is ${head_oid}, not the commit this run was triggered for (${GITHUB_SHA})." >&2
+            exit 1
+          fi
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (phase 1 early guard)." >&2
+            exit 1
+          }
+          if [ -n "${status_raw}" ]; then
+            echo "ERROR: the checkout was modified before this phase consumed it." >&2
+            printf '%s\n' "${status_raw}" >&2
+            echo "Nothing has been built, generated or uploaded. Stopping here." >&2
+            exit 1
+          fi
+          echo "checkout verified before phase 1 consumes it"
+      # ⛔ NO STEP WRITES THE COMMIT EVIDENCE HERE, AND THAT IS THE FIX, NOT AN OMISSION.
+      # A step named "record the phase-1 commit as checksum-covered evidence" used to sit
+      # exactly here and `printf` the OID into release-commit.txt. The file is neither tracked
+      # nor ignored, so it left `?? release-commit.txt` behind, and the very next thing in this
+      # job is GoReleaser — which REFUSES to release from a dirty tree and documents this exact
+      # shape as the example (goreleaser.com/resources/errors/dirty/). The guard chain in this
+      # job was therefore blocking ITSELF: every legitimate release died at the build, having
+      # produced nothing (the model, 2026-08-15, P0-A, verdict NO-LAND).
+      #
+      # The write now happens INSIDE GoReleaser, as the first `before` hook
+      # (.goreleaser.yaml → scripts/release-commit-evidence.sh), which is the earliest point
+      # after its dirty validation: v2.17.0 runs `… → git → … → before → …`
+      # (internal/pipeline/pipeline.go:63-104) and checks dirtiness in the git pipe
+      # (internal/pipe/git/git.go:194-224). Nothing was relaxed to achieve it: the guard below
+      # still allow-lists that ONE untracked name and still pins its bytes to GITHUB_SHA, and
+      # the file is deliberately NOT ignored, so `git status` keeps seeing it.
+      # ⛔ MAKE ROOM BEFORE BUILDING. Not a precaution: the enterprise overlay's release,
+      # which uses the same shape and the same hosted runner, died on 2026-08-31 (run
+      # 33350368843) after 21 minutes 24 seconds of compiling with
+      #   compile: writing output: write $WORK/b681/_pkg_.a: no space left on device
+      # and the runner had said so itself fifteen minutes earlier — "Free space left: 95 MB" —
+      # with nobody reading it.
+      #
+      # CORRECTED DERIVATION, 2026-08-31, and the correction matters more than the number.
+      # The first version of this comment said "14 build ids = 56 binaries, against that
+      # one's 136". Both figures were wrong, by the same sloppy predicate — counting every
+      # `- id:` in the file instead of the ones under `builds:`. Counted per section: this
+      # config has builds=2 (archives=2, dockers=4, sboms=2, signs=1, nfpms=1), so 2 × 4
+      # targets = 8 binaries; the overlay's own 914-line config has builds=18, so 18 × 4 =
+      # 72, not 136. Caught it and cross-checked against the run's own build lines.
+      #
+      # And the conclusion inverts with it. 8 is not comfortably below what failed: that run
+      # built 68 of its 72 and died on the first line of each FIPS target — 94 %, needing
+      # modestly more than it had, not double. So this is not insurance for a smaller build;
+      # it is the repair of a failure this repository has not had the CHANCE to observe,
+      # because no release has ever run here. The step is written so: it costs nothing
+      # when there is room, it prints the number either way, and it refuses BEFORE compiling
+      # if there is not — instead of failing at minute 21 with a COMPILER error, which accuses
+      # the code when the fault is the machine. This workflow fires on any `v*` tag, so the
+      # public act would meet that wall with an audience.
+      #
+      # Only what this job does not use is removed. `/opt/hostedtoolcache` is NOT removed
+      # wholesale: Go and Node were installed there by the steps above and deleting it would
+      # kill them. No third-party action.
+      - name: make room on the runner (and say how much)
+        run: |
+          set -euo pipefail
+          before=$(df -BM --output=avail / | tail -1 | tr -dc '0-9')
+          echo "::group::before"; df -h /; echo "::endgroup::"
+          # The list is the enterprise overlay's, which measured 36 886 MB freed on
+          # the same hosted image, minus nothing this job uses: release.yml here
+          # names no `pwsh`, `gcloud`, `java`, `mono`, `swift`, `julia` or `graalvm`
+          # (all measured at 0), and every `uses:` is Go/Node/docker/cosign/syft/
+          # goreleaser/slsa. The floor below is the same 20 GiB, so a shorter list
+          # does not fail safe — it fails the floor, in public, on a `v*` tag.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+                      /usr/lib/jvm /usr/lib/mono /usr/lib/google-cloud-sdk \
+                      /usr/local/graalvm /usr/local/julia /usr/share/swift \
+                      /usr/local/share/powershell || true
+          after=$(df -BM --output=avail / | tail -1 | tr -dc '0-9')
+          echo "::group::after"; df -h /; echo "::endgroup::"
+          echo "==> freed $(( after - before )) MB; ${after} MB left"
+          # Fail-closed floor, and it is NOT derived from the output size — deriving it that
+          # way is what made the first version of this comment a mine: a correct number with
+          # a false derivation invites the next reader to "fix" it downwards. 8 binaries here
+          # (~1 GB of output) and 72 in the overlay (~8 GB), and yet a hosted runner ran out
+          # at 94 % of that build. The consumer is Go's cache plus the per-target plugin
+          # builds, not the output, which is why 20 GiB and not "twice the output".
+          # ⛔ UN `df` QUE TIENE EXITO Y NO TRAE DIGITOS PASABA EL SUELO. Medido el 2026-08-31
+          # (REL-56) con un `df` señuelo que imprime `Avail\n-\n`: `tr -dc '0-9'` deja `after`
+          # VACIO, el pipeline sale 0 —asi que ni `pipefail` ni `set -e` lo ven—, y
+          # `[ "" -lt 20480 ]` escribe «integer expression expected» en stderr y devuelve 2. Un
+          # estado != 0 en la CONDICION de un `if` no dispara `set -e`: se toma la rama `else`,
+          # y el suelo queda satisfecho por una medida que no existe. En un runner alojado eso
+          # es justo el fallo que este bloque existe para impedir, disfrazado de verde.
+          #
+          # Un `df` que FALLA si estaba cubierto (pipefail + set -e; medido: rc 1), y el control
+          # positivo con un numero por debajo del suelo tambien rehusa. El unico hueco era el
+          # exito sin digitos, y por eso la guarda pregunta por la FORMA del valor, no por el rc.
+          if ! printf '%s' "$after" | grep -qE '^[0-9]+$'; then
+            echo "::error title=could not read free disk::\`df\` succeeded but produced no usable number, so the 20480 MB floor could not be evaluated. Refusing: not knowing how much disk there is is not the same as having enough." >&2
+            exit 1
+          fi
+          if [ "$after" -lt 20480 ]; then
+            echo "::error title=not enough disk to build::${after} MB left, floor is 20480 MB. Refusing before compiling rather than dying at minute 21 disguised as a compiler error." >&2
+            exit 1
+          fi
+
+      - name: goreleaser release (build + SBOM + cosign-sign, into a DRAFT)
+        id: goreleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          # EXACT version, not "~> v2": a floating constraint means two nominally
+          # identical runs can install different release engines, so a rehearsal
+          # would not prove what the next production release does (design §D.3).
+          version: "v2.17.0"
+          # ⛔ THE ENGINE HAS ITS OWN CLOCK, AND IT IS NOT THE JOB'S. GoReleaser v2
+          # applies a 30-minute default deadline to the whole pipeline; this job
+          # declares no `timeout-minutes`, so the runner would allow 6 hours and the
+          # binding limit is goreleaser's, not GitHub's. The enterprise overlay's
+          # 13th release rehearsal (2026-08-31) built all 72 of its binaries and then
+          # died STARTING the SBOM catalog, ~55 minutes in, on exactly that deadline —
+          # a whole cycle spent to learn the clock. This config is smaller (2 build
+          # ids = 8 binaries) but carries 4 docker images, 2 SBOMs and cosign signing
+          # behind the build, and no release has ever run here, so its wall time is
+          # UNMEASURED. `--timeout` is a CLI flag, not a config key: putting it in
+          # .goreleaser.yaml fails the parse with `field timeout not found in type
+          # config.Project` (measured, with an invented key as the negative control).
+          args: release --clean --timeout 3h
+        env:
+          # Destinations/signing/Homebrew mode arrive from the JOB env — the validated
+          # §C.4 outputs. A missing value fails the template render (missingkey=error)
+          # instead of silently publishing anywhere.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Independent PUBLIC anchors. The validator rejects empty/malformed/equal
+          # values before compiling. The license private key exists only in the narrow
+          # online fulfilment Worker. The OTA private key stays off-box/HSM and NEVER
+          # reaches this runner; only its public half is needed to build/verify.
+          OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
+          OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
+          # Optional: a token with contents:write on olivaresai/homebrew-tap. When
+          # absent the Homebrew cask self-gates to skip_upload (the release still
+          # succeeds); when present, goreleaser pushes the cask to the tap. Without
+          # passing it here, the cask would never upload even once the secret exists.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      # --- Phase 1: digest-bound manifest, deliberately UNSIGNED in CI ------------
+      # GOVERNED by the validated profile (P1-02): PUBLISH_OTA_STABLE is not a decorative
+      # assertion — this step, the only stable-named draft mutation of phase 1, runs only
+      # when the §C.4 output says so.
+
+      # ⛔ THE NUMBER, ALSO WHEN IT DIES. `if: always()` on purpose: when the overlay's release
+      # ran out of disk the only trace was that loose runner warning, and the next person to
+      # investigate had nothing to measure. A failure that leaves no measurement behind costs
+      # the next cycle as well as its own.
+      - name: the disk AFTER building (always, pass or fail)
+        if: always()
+        run: |
+          df -h /
+          echo "==> free: $(df -BM --output=avail / | tail -1 | tr -dc '0-9') MB"
+          du -sh dist 2>/dev/null || true
+      - name: assert GoReleaser left the checkout intact before anything is uploaded
+        run: |
+          set -euo pipefail
+          # ⛔ THE BUILD IS ALSO AN ACTION. GoReleaser runs as a pinned `uses:` and executes
+          # this repository's own build, hooks and SBOM tooling in this workspace. The guard
+          # above ran BEFORE it; the next steps run `go run ./cmd/olivares release manifest`
+          # and upload the result. Between those two points nothing looked at the tree, so a
+          # build that rewrote a tracked file — or an action that did — reached the producers
+          # and the uploads unchallenged (the model, R2 second follow-up).
+          #
+          # ALLOW-LIST, exact: the only untracked path this job has legitimately created by now
+          # is the evidence file, written by GoReleaser's own first `before` hook
+          # (scripts/release-commit-evidence.sh) AFTER its dirty validation — which is why the
+          # build could start at all. `dist/` is the one directory the repository already
+          # ignores, so GoReleaser's own output never appears here; anything else does.
+          # ABSOLUTE, WITH NO OVERRIDE. This was briefly `${OLIVARES_TRUSTED_BIN:-/usr/bin}`
+          # "so the battery can point at stubs", and that is not a test seam: an earlier action
+          # writes OLIVARES_TRUSTED_BIN through GITHUB_ENV and owns git, gh and sha256sum for
+          # every guard in this job. The harness mutates a COPY of this workflow instead; a
+          # control must not be configurable by the thing it guards against.
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            exit 1
+          fi
+          # ⛔ AND RE-BIND THE HEAD. Every other guard in this job checks that the checkout is
+          # still the triggering commit; this one only asked whether the tree was CLEAN, and a
+          # clean tree at a different commit is exactly what a pivot leaves behind. Measured on
+          # the extracted block: GITHUB_SHA=A, HEAD=B, tree clean, release-commit.txt=A —
+          # rc=0, "producers and uploads may run" (the model, exact audit of 533563e48).
+          #
+          # The evidence check below compares those bytes against GITHUB_SHA, so on its own it
+          # is satisfied by a pivot that never touched the file. Identity has to be asserted
+          # about the CHECKOUT, not only about what the checkout claims.
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          if [ "${head_oid}" != "${GITHUB_SHA}" ]; then
+            echo "ERROR: HEAD is ${head_oid}, not the commit this run builds (${GITHUB_SHA})." >&2
+            echo "The build already ran: its artefacts and the draft exist. This step performs" >&2
+            echo "no rollback. What it stops is every producer and upload that follows." >&2
+            exit 1
+          fi
+          # THE TAG CONTRACT IS DENY-CLOSED, and until 2026-08-18 it was not.
+          #
+          # This read used to be `rev-parse ... 2>/dev/null || tag_oid=""`, and an empty
+          # tag_oid skipped the comparison entirely. That collapses TWO different answers
+          # into one: "the tag is not there", which is legitimate before it is cut, and
+          # "I could not read it", which is a refusal. NOT KNOWING WAS WRITTEN THE SAME
+          # WAY AS AGREEING — a corrupt object, an unreadable ref, a git that fails for
+          # any reason at all, and this guard waved the build through to every producer
+          # and upload below.
+          #
+          # Now the two are separated. `tag --list` answers the existence question and
+          # its own failure is a refusal; only when the tag EXISTS is it resolved, and a
+          # resolution that fails on a tag we just saw is a refusal too, never an empty
+          # string. The legitimate case — no tag yet — still proceeds, so the permit
+          # direction is unchanged.
+          # HOW THE THREE ANSWERS ARE TOLD APART, and this had to be MEASURED because git
+          # does not make it obvious. For refs/tags/<T>, with the ref BROKEN vs ABSENT:
+          #
+          #   state    rev-parse --verify --quiet   rev-parse --verify   tag --list stderr
+          #   sound    0                            0                    (empty)
+          #   BROKEN   1                            128                  warning: ignoring broken ref
+          #   ABSENT   1                            128                  (empty)
+          #
+          # The exit codes are IDENTICAL for broken and absent. The only signal that
+          # separates "there is no tag" from "there is a tag and I cannot read it" is a
+          # warning on STDERR — so that warning is what this guard reads, and any output
+          # there is a refusal. A first attempt at this used `tag --list` stdout alone and
+          # was wrong in the dangerous direction: git prints NOTHING to stdout for a broken
+          # ref, so a corrupt tag read as "absent" and sailed through. Its own battery case
+          # caught that, which is the only reason this comment is right.
+          #
+          # 2>&1 >/dev/null, and the order is the whole point: stderr is duplicated onto the
+          # capture FIRST and only then stdout is sent to /dev/null. The other order sends
+          # both to /dev/null and captures an empty string forever.
+          tag_err="$("${GIT_BIN}" tag --list "${RELEASE_TAG}" 2>&1 >/dev/null)" || {
+            echo "ERROR: could not enumerate tags to check ${RELEASE_TAG}." >&2
+            echo "This is NOT the same as the tag being absent: the check could not be" >&2
+            echo "performed, so nothing below it may run." >&2
+            exit 1
+          }
+          if [ -n "${tag_err}" ]; then
+            echo "ERROR: reading refs/tags/${RELEASE_TAG} produced a diagnostic:" >&2
+            printf '%s\n' "${tag_err}" >&2
+            echo "A tag that cannot be read is a refusal, not an absence. Deny-closed on any" >&2
+            echo "output here is deliberate: a warning we do not recognise is still a warning." >&2
+            exit 1
+          fi
+          tag_listed="$("${GIT_BIN}" tag --list "${RELEASE_TAG}")"
+          if [ -n "${tag_listed}" ]; then
+            tag_oid="$("${GIT_BIN}" rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")" || {
+              echo "ERROR: ${RELEASE_TAG} is listed but could not be resolved to a commit." >&2
+              echo "A tag that exists and cannot be read is a refusal, not an absence." >&2
+              exit 1
+            }
+            if [ "${tag_oid}" != "${GITHUB_SHA}" ]; then
+              echo "ERROR: ${RELEASE_TAG} resolves to ${tag_oid}, not ${GITHUB_SHA}." >&2
+              echo "The tag moved while this job was building. Stopping before any producer runs." >&2
+              exit 1
+            fi
+          fi
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (phase 1 post-build guard)." >&2
+            exit 1
+          }
+          dirty=""
+          while IFS= read -r st || [ -n "${st}" ]; do
+            [ -n "${st}" ] || continue
+            case "${st}" in
+            '?? release-commit.txt') continue ;;
+            esac
+            dirty="${dirty}${st}"$'\n'
+          done <<<"${status_raw}"
+          if [ -n "${dirty}" ]; then
+            echo "ERROR: the build left the checkout modified." >&2
+            printf '%s\n' "${dirty}" >&2
+            # HONEST ABOUT WHERE WE ARE. GoReleaser has already run by this point: it built,
+            # signed and created the draft. Saying "nothing has been generated or uploaded"
+            # here would be false, and claiming a rollback this step does not perform would be
+            # worse. What is still true is that no manifest has been produced from this tree
+            # and nothing further will be attached.
+            echo "The build already ran: its artefacts and the draft exist. This step performs" >&2
+            echo "no rollback. What it stops is every producer and upload that follows." >&2
+            exit 1
+          fi
+          # THE NAME IS NOT THE BYTES. `?? release-commit.txt` stays `?? release-commit.txt`
+          # whatever it contains, so allow-listing the path lets the build rewrite the very
+          # evidence phase 2 binds to while the status output never changes. Its content is
+          # pinned here: exactly the triggering commit and a single LF.
+          if [ ! -f release-commit.txt ]; then
+            echo "ERROR: release-commit.txt is missing after the build." >&2
+            exit 1
+          fi
+          # BYTE-EXACT, by digest. Reading the first line and counting lines is not the same
+          # claim: `GITHUB_SHA` + LF + arbitrary bytes with no trailing LF satisfies both
+          # `read` and `wc -l == 1`, so the build could append to the very evidence phase 2
+          # binds to and this check would still pass.
+          want_sum="$(printf '%s\n' "${GITHUB_SHA}" | "${TRUSTED_BIN}/sha256sum")" || want_sum=""
+          want_sum="${want_sum%% *}"
+          have_sum="$("${TRUSTED_BIN}/sha256sum" release-commit.txt)" || have_sum=""
+          have_sum="${have_sum%% *}"
+          if [ -z "${want_sum}" ] || [ "${have_sum}" != "${want_sum}" ]; then
+            echo "ERROR: release-commit.txt is not exactly this run's commit and a newline." >&2
+            echo "  expected sha256 ${want_sum:-<unreadable>}" >&2
+            echo "  found    sha256 ${have_sum:-<unreadable>}" >&2
+            echo "The build rewrote the evidence phase 2 binds to. Stopping before any producer" >&2
+            echo "or upload runs." >&2
+            exit 1
+          fi
+          echo "checkout intact after the build; producers and uploads may run"
+      - name: generate unsigned stable OTA channel manifest
+        if: needs.preflight.outputs.publish_ota_stable == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # FRESHNESS BOUND (anti-freeze). Without `expires`, Manifest.Stale() is
+          # always false and a hostile or merely stale mirror can serve this
+          # validly-signed manifest FOREVER, pinning clients to a superseded —
+          # possibly vulnerable — version. Every production manifest must carry one.
+          #
+          # Default 2160h = 90 days. The bound only bites when no NEW release has
+          # been cut in the window (each release re-issues and re-signs a manifest),
+          # so it must exceed the longest realistic quiet period, and shorter is not
+          # free: the OTA private key is off-box/HSM and every re-sign is a manual
+          # maintainer-approved ceremony. If a manifest lapses, `upgrade` fail-closes
+          # for everyone until a ceremony runs — a self-inflicted outage on the very
+          # path a security release travels. 90 days bounds a freeze to one quarter
+          # while keeping the ceremony obligation quarterly at worst. Override per repo
+          # with the OLIVARES_MANIFEST_EXPIRES_IN variable (Go duration, e.g. 720h).
+          # Re-sign cadence this implies: one signing ceremony per expiry window at
+          # worst (quarterly at the 90-day default), sooner if no release ships.
+          MANIFEST_EXPIRES_IN: ${{ vars.OLIVARES_MANIFEST_EXPIRES_IN }}
+        run: |
+          set -euo pipefail
+          # Tag/version come from the JOB env — the §C.4 validated outputs, not the raw
+          # ref context. The preflight already pinned the vMAJOR.MINOR.PATCH grammar.
+          version="${RELEASE_VERSION}"
+          [ -n "${version}" ] || { echo "ERROR: empty validated version" >&2; exit 1; }
+          expires_in="${MANIFEST_EXPIRES_IN:-2160h}"
+          echo "manifest freshness window: ${expires_in}"
+          go run ./cmd/olivares release manifest \
+            --dir dist --channel stable --version "${version}" \
+            --expires-in "${expires_in}" \
+            --out dist/stable-manifest.json
+          # Bind the manifest to the artifacts THIS run built and cosign-signed:
+          # every manifest digest must equal the checksums.txt entry for the same
+          # file, and every archive on disk must re-hash to it. A divergence here
+          # means the generator and the signed release disagree at the origin — the
+          # draft must never carry a manifest that fails this.
+          # A freshness bound, plausible policy and platform-correct artifact names are
+          # all REQUIRED by default now — there is no flag to forget.
+          go run ./cmd/olivares release verify-manifest \
+            --manifest dist/stable-manifest.json --checksums dist/checksums.txt \
+            --dir dist --expect-channel stable --expect-version "${version}"
+          # This draft asset is the exact byte sequence signed off-box in the ceremony.
+          # It is not an accepted channel manifest until phase 2 verifies and uploads
+          # stable-manifest.json.sig; the GitHub Release itself remains a draft.
+          # CREATE-ONLY (INT-22, M60/M67-M73). `--clobber` was here and it OVERWRITES an
+          # asset that is already on the release. On a draft that is merely untidy; on a
+          # second pass over a release whose bytes someone may already hold, it rewrites
+          # delivered evidence, and that is the one property of this chain that cannot be
+          # undone. Without the flag `gh` refuses when the name is taken, which is exactly
+          # the guarantee we want: a re-run stops and a human decides, instead of the
+          # ceremony quietly replacing a signed manifest.
+          #
+          # The ceremony ALREADY treats the flag as a hazard: the OTA gate below refuses
+          # "BEFORE THE DRAFT IS TOUCHED" with the written reason that "the upload below is
+          # a --clobber, so refusing afterwards would already have rewritten the stable
+          # pair". That workaround exists because of this flag; removing it removes the
+          # reason for the workaround.
+          # ⛔ Y SE FIRMA AQUÍ, DONDE SE ACABA DE GENERAR. Esto lo pide la orden 37 aunque no
+          # lo diga: automatizar la firma OTA retira al humano que leía el bloque
+          # «=== POLICY THE SIGNATURE WILL COVER — READ EVERY LINE BEFORE SIGNING ===», y ese
+          # humano era lo único que ataba SIETE campos que `--checksums` no toca — `expires`,
+          # `released_at`, `min_version`, `rollout`, `security`/`advisories`, `notes` y
+          # `channel`. El propio verificador lo dice: «OK: means plausible, not intended».
+          #
+          # `CheckPolicy` rehúsa los valores imposibles (un `min_version` que nadie puede
+          # satisfacer, un `rollout` de 0), pero no puede distinguir una política PLAUSIBLE de
+          # la política INTENCIONADA — para eso estaba la lectura. Sin sustituirla, la fase 2
+          # firmaría con la clave de producción unos bytes que descarga de un asset de BORRADOR,
+          # reemplazable por cualquiera con `contents:write`.
+          #
+          # La sustitución no es restaurar la lectura: es ATAR LOS BYTES. Firmados aquí con la
+          # identidad keyless de este workflow, la fase 2 puede probar que el manifiesto es el
+          # que ESTE pipeline generó, y entonces la política es la salida determinista de la
+          # release y no la elección de nadie. Cierra los siete campos de una vez.
+          bash scripts/cosign-verified.sh sign-blob --yes \
+            --output-signature dist/stable-manifest.json.pipeline.sig \
+            --output-certificate dist/stable-manifest.json.pipeline.pem \
+            dist/stable-manifest.json
+          gh release upload "${RELEASE_TAG}" dist/stable-manifest.json
+          gh release upload "${RELEASE_TAG}" \
+            dist/stable-manifest.json.pipeline.sig \
+            dist/stable-manifest.json.pipeline.pem
+
+      # --- Phase 1b: the SECURITY channel, deny-closed ----------------------------
+      # Until this step existed, `--channel stable` at the step above was the ONLY
+      # `release manifest` invocation in all of `.github/`, so the `security` channel —
+      # the one an internal design note (not shipped) §1 calls the central
+      # promise of a subscription — was NEVER PRODUCED. The vocabulary
+      # (core/release/manifest.go:44-50), the generator (cmd_release_manifest.go:109) and
+      # the worker that serves it all supported three channels already; only the producer
+      # was missing.
+      #
+      # WHETHER a tag is a security release is DATA IN THE TREE, not a workflow input:
+      # phase 1 runs on `push: tags`, where `inputs.*` does not exist (the dispatch path
+      # of this workflow is the phase-2 ceremony). scripts/release-ota-channel.sh reads
+      # release/advisories/<version>.txt and answers `none` or `security<TAB><ids>`,
+      # refusing a half-made declaration rather than downgrading it to `none` in silence.
+      # An ordinary release has no such file and this step is a no-op.
+      #
+      # `lts` is deliberately NOT produced here. §8.3 of the same plan leaves the LTS line
+      # policy — which version anchors it, how long it lives, whether it is an add-on —
+      # to and §7.1 states the rule: a `lts` job without that policy would publish
+      # an empty promise. The channel is activated when its policy exists, not before.
+      - name: generate unsigned security OTA channel manifest (deny-closed)
+        if: needs.preflight.outputs.publish_ota_stable == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANIFEST_EXPIRES_IN: ${{ vars.OLIVARES_MANIFEST_EXPIRES_IN }}
+        run: |
+          set -euo pipefail
+
+          # ⛔ THE COMMIT IS NOT THE BYTES. Matching HEAD, the tag and an OID proves WHICH
+          # commit was checked out; it says nothing about what is on disk NOW. Eight `uses:`
+          # steps run before this one in this job — setup-node, pnpm/action-setup, syft,
+          # cosign-installer, three docker actions, goreleaser — and any of them executes code
+          # in this workspace. A custom action can rewrite scripts/release-ota-channel.sh, or
+          # the verifier it will run, WITHOUT touching HEAD: every OID check still passes and
+          # the release rule is no longer the reviewed one.
+          #
+          # So the tree is checked against its commit HERE, immediately before it is read,
+          # instead of being trusted from the checkout onwards. `git status --porcelain`
+          # covers the three ways it can differ — staged in the index, modified in the working
+          # tree, and untracked additions — and any of them is a tree that is not the release.
+          # ⛔ THE TOOL IS PART OF THE CONTROL. The byte check below asks `git` what changed,
+          # and GitHub documents that an earlier action can prepend a directory to PATH for the
+          # rest of the job by writing to GITHUB_PATH. A shim that answers `status --porcelain`
+          # with silence and delegates everything else keeps every OID identical and every
+          # clean-direction case green, while modified, staged and untracked bytes all sail
+          # through. Measured against these exact blocks: producer 20/24, ceremony 59/61
+          # (the model repair audit, 2026-08-10, P1-02).
+          #
+          # So the tools are named by ABSOLUTE PATH instead of being resolved through PATH, and
+          # a `git` that PATH resolves elsewhere is itself evidence that something ran before
+          # this step: it refuses rather than quietly using the trusted copy.
+          # ABSOLUTE, WITH NO OVERRIDE. This was briefly `${OLIVARES_TRUSTED_BIN:-/usr/bin}`
+          # "so the battery can point at stubs", and that is not a test seam: an earlier action
+          # writes OLIVARES_TRUSTED_BIN through GITHUB_ENV and owns git, gh and sha256sum for
+          # every guard in this job. The harness mutates a COPY of this workflow instead; a
+          # control must not be configurable by the thing it guards against.
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            echo "Something earlier in this job put another git ahead of it, so the byte check" >&2
+            echo "would be asking the wrong tool. Nothing was produced or uploaded." >&2
+            exit 1
+          fi
+          # WHAT THIS JOB IS ALLOWED TO HAVE CREATED, NAMED HERE. The positive flow writes
+          # into the workspace before these guards run, and the first version of this check
+          # denied its own release for it: phase 1 writes release-commit.txt at the root and
+          # the producer answered `?? release-commit.txt`; phase 2 downloads into ota-dist/ and
+          # the ceremony answered `?? ota-dist/`. Both refused every legitimate release
+          # (the model, #638@1fc91ed8, measured on the real .gitignore).
+          #
+          # The fix is NOT a .gitignore rule. `git status --porcelain` stops reporting ignored
+          # paths at all, so anything dropped inside an ignored directory becomes invisible to
+          # this control, and a repo-wide ignore line would silently become load-bearing for a
+          # release guard — remove it and the denial comes back. The permitted set is declared
+          # HERE, beside the check it qualifies, and it admits ONLY untracked paths: a modified
+          # or staged TRACKED file never matches, which is the tampering this exists to catch.
+          #
+          # `-uall` because untracked DIRECTORIES are otherwise collapsed into one entry, and a
+          # single `?? ota-dist/` would then cover any file placed inside it.
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (producer)." >&2
+            exit 1
+          }
+          dirty=""
+          while IFS= read -r st || [ -n "${st}" ]; do
+            [ -n "${st}" ] || continue
+            case "${st}" in
+            '?? release-commit.txt') continue ;;
+            esac
+            dirty="${dirty}${st}"$'\n'
+          done <<<"${status_raw}"
+          if [ -n "${dirty}" ]; then
+            echo "ERROR: the workspace no longer matches the commit for ${RELEASE_TAG} (producer)." >&2
+            printf '%s\n' "${dirty}" >&2
+            echo "Something wrote to the checkout after it was made. The release rule and the" >&2
+            echo "verifier are read from this tree, so a modified tree is not this release." >&2
+            exit 1
+          fi
+          version="${RELEASE_VERSION}"
+          [ -n "${version}" ] || { echo "ERROR: empty validated version" >&2; exit 1; }
+          expires_in="${MANIFEST_EXPIRES_IN:-2160h}"
+
+          # Fail-closed on the CLASSIFIER too: a refusal (exit 2) or any other non-zero is
+          # "I could not decide", which must stop the release rather than quietly skip the
+          # security manifest — the whole point of this step is that a security release
+          # cannot be downgraded to an ordinary one without somebody seeing it.
+          set +e
+          verdict="$(bash scripts/release-ota-channel.sh "${version}")"
+          rc=$?
+          set -e
+          if [ "${rc}" -ne 0 ]; then
+            echo "ERROR: OTA channel gate refused for ${version}: ${verdict}" >&2
+            exit 1
+          fi
+          # The consumer must recognise the verdict vocabulary EXACTLY, not just test for
+          # "security". A predicate of the form `kind != security -> skip` treats a blank
+          # first field, a `refuse`, a missing tab and any multi-line corruption as the
+          # ordinary no-security path and exits 0 — so a classifier corrupted into
+          # "exit 0 + bad output" would silently downgrade a security release, which is
+          # the exact failure this step exists to make impossible (the model contrast,
+          # 2026-08-09, finding 3). Unknown verdict is a hard error, never a skip.
+          if [ "${verdict}" != "${verdict#*$'\n'}" ]; then
+            echo "ERROR: OTA channel gate emitted more than one line for ${version}" >&2
+            exit 1
+          fi
+          case "${verdict}" in
+          *$'\t'*) ;;
+          *)
+            echo "ERROR: OTA channel gate emitted no TAB-separated detail for ${version}: ${verdict}" >&2
+            exit 1
+            ;;
+          esac
+          kind="${verdict%%$'\t'*}"
+          detail="${verdict#*$'\t'}"
+          case "${kind}" in
+          none)
+            echo "no security channel for ${version}: ${detail}"
+            exit 0
+            ;;
+          security) ;;
+          *)
+            echo "ERROR: OTA channel gate emitted an unknown verdict ${kind} for ${version}" >&2
+            exit 1
+            ;;
+          esac
+          # The classifier already refuses an empty id list, but the consumer enforces the
+          # invariant it depends on rather than trusting it: with `security<TAB>` the array
+          # below expands to nothing and `release manifest` would be called with no
+          # --advisory at all, which only fails later at verify-manifest's CheckPolicy —
+          # a correct refusal at a much less diagnostic layer.
+          if [ -z "${detail}" ]; then
+            echo "ERROR: OTA channel gate declared security for ${version} with no advisory ids" >&2
+            exit 1
+          fi
+
+          echo "security channel declared for ${version}: ${detail}"
+          # Advisory ids are passed as REPEATED --advisory flags, never as one joined
+          # string: the generator bounds and validates each id separately
+          # (core/release/manifest.go:593-602), and a single joined argument would smuggle
+          # a whole list past the per-id length and control-character bounds.
+          adv_flags=()
+          IFS=',' read -r -a adv_ids <<<"${detail}"
+          for id in "${adv_ids[@]}"; do
+            adv_flags+=(--advisory "${id}")
+          done
+
+          go run ./cmd/olivares release manifest \
+            --dir dist --channel security --version "${version}" \
+            "${adv_flags[@]}" \
+            --expires-in "${expires_in}" \
+            --out dist/security-manifest.json
+          # Same binding as stable: every manifest digest must equal the checksums.txt
+          # entry for the same file, and every archive on disk must re-hash to it.
+          go run ./cmd/olivares release verify-manifest \
+            --manifest dist/security-manifest.json --checksums dist/checksums.txt \
+            --dir dist --expect-channel security --expect-version "${version}"
+          # ⛔ DRAFT ASSET, AND UNSIGNED — and phase 2 does NOT yet sign it.
+          #
+          # An earlier revision of this comment said phase 2 "verifies and uploads
+          # security-manifest.json.sig", and that was FALSE: every phase-2 binding is
+          # stable-only (the single dispatch signature input at :40-49, the download at
+          # :935, the .sig write at :999, both verification legs, and the upload at :1083).
+          # the model named it as the principal NO-LAND finding, and it was right: a
+          # channel is a sequence of SIGNED manifests
+          # (an internal design note (not shipped):47-52), so producing an
+          # unsigned one is not yet producing a channel.
+          #
+          # The gap is NOT closed by deleting this step — that would restore the original
+          # defect, where nothing produces the channel at all. It is closed by the ceremony
+          # gaining a second signature, which changes the human contract of phase 2 and
+          # travels in its own movement. What this step MUST NOT do meanwhile is let the
+          # half-state be silent, so the guard below makes phase 2 refuse to finish green
+          # while an unsigned security manifest sits on the draft.
+          # CREATE-ONLY: see the stable-manifest upload above for why the flag is gone.
+          gh release upload "${RELEASE_TAG}" dist/security-manifest.json
+          echo "::warning::${version} published an UNSIGNED security manifest to the draft. The phase-2 ceremony does not sign it yet; publishing this draft would expose security-channel bytes that every conforming client rejects."
+
+      # --- SLSA subjects: base64(checksums.txt), the sha256sum-format manifest ----
+      - name: compute base64 subjects for SLSA provenance
+        id: hashes
+        env:
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+        run: |
+          set -euo pipefail
+          checksum_file="$(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Checksum") | .path')"
+          echo "hashes=$(base64 -w0 < "$checksum_file")" >> "$GITHUB_OUTPUT"
+
+      # --- resolve the EXACT versioned bare-manifest digest (for image attest/provenance)
+      # No `head -1`: the previous selection took whichever Docker image artifact came
+      # FIRST — possibly a single-arch child or the FIPS variant — and attested THAT
+      # while everything downstream implied the multi-arch image users pull (design
+      # finding P1-SUSPECT / §E.1.5). The script requires exactly one manifest artifact
+      # named ${OCI_IMAGE_REPO}:${VERSION}, resolves its digest from the registry, and
+      # cross-checks it against the digest GoReleaser recorded at push.
+      - name: resolve the exact versioned bare-manifest digest
+        id: image
+        env:
+          # OCI_IMAGE_REPO / RELEASE_VERSION come from the job env (§C.4 outputs).
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+        run: bash scripts/resolve-bare-manifest-digest.sh
+
+      # --- SCP-03: SBOM in-toto attestations (binary archives, keyless) -----------
+      - name: attest SBOMs to the binary archives (cosign attest-blob)
+        env:
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for a in $(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Archive") | .path'); do
+            sbom="${a}.spdx.sbom.json"   # goreleaser wrote this sidecar
+            # FAIL, not WARN (2026-08-01). goreleaser is configured to write an
+            # SPDX sidecar per archive; if one is absent the build changed under us,
+            # and `continue` shipped that archive with no SBOM attestation while the
+            # step stayed green. A release that cannot say what is inside an artifact
+            # is not a release we sign.
+            [ -f "$sbom" ] || { echo "ERROR: no SBOM sidecar for $a — refusing to publish an unattested artifact" >&2; exit 1; }
+            bash scripts/cosign-verified.sh attest-blob --type spdxjson --predicate "$sbom" \
+              --new-bundle-format --bundle "${a}.sbom.sigstore.json" --yes "$a"
+            # CREATE-ONLY: see the stable-manifest upload for why the flag is gone.
+            gh release upload "${RELEASE_TAG}" "${a}.sbom.sigstore.json" "${a}.cdx.sbom.json"
+          done
+        # CISA-fields linter (draft-pending) over the first archive SBOM.
+      - name: CISA-2025-draft SBOM fields check
+        env:
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+        run: |
+          set -euo pipefail
+          a="$(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Archive") | .path' | head -1)"
+          bash scripts/sbom-check-cisa.sh "${a}.spdx.sbom.json" --cyclonedx "${a}.cdx.sbom.json"
+
+      # --- SCP-03: SBOM of the IMAGE + attestation --------------------------------
+      - name: image SBOM + cosign attestation
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          ref="${OCI_IMAGE_REPO}@${DIGEST}"
+          bash scripts/sbom-generate.sh "registry:${ref}" spdx-json image.spdx.sbom.json
+          bash scripts/cosign-verified.sh attest --yes --type spdxjson --predicate image.spdx.sbom.json "${ref}"
+
+      # --- SCP-04: OpenVEX driven by govulncheck reachability + attestations ------
+      - name: generate + attest OpenVEX
+        env:
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin govulncheck to the exact version the rest of the repo uses (Taskfile,
+          # patch-velocity, mainline-ci) — @latest makes release behaviour time-dependent
+          # in a supply-chain pipeline (D.2).
+          GOVULNCHECK_VERSION: "v1.3.0"
+        run: |
+          set -euo pipefail
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          bash scripts/gen-vex.sh --mode source --out olivares.vex.openvex.json
+          # attach to the image (by digest) and to each binary archive
+          bash scripts/cosign-verified.sh attest --yes --type openvex --predicate olivares.vex.openvex.json "${OCI_IMAGE_REPO}@${DIGEST}"
+          for a in $(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Archive") | .path'); do
+            cp olivares.vex.openvex.json "${a}.vex.openvex.json"
+            bash scripts/cosign-verified.sh attest-blob --type openvex --predicate olivares.vex.openvex.json \
+              --new-bundle-format --bundle "${a}.vex.sigstore.json" --yes "$a"
+            # CREATE-ONLY: see the stable-manifest upload for why the flag is gone.
+            gh release upload "${RELEASE_TAG}" "${a}.vex.sigstore.json" "${a}.vex.openvex.json"
+          done
+          # CREATE-ONLY: see the stable-manifest upload for why the flag is gone.
+          gh release upload "${RELEASE_TAG}" olivares.vex.openvex.json image.spdx.sbom.json
+        # gh is preinstalled on the runner; GH_TOKEN (above) authorises the uploads.
+
+  # --- SCP-01: SLSA Build L3 provenance for the BINARIES ------------------------
+  # The reusable workflow runs in an ISOLATED context so signing material is
+  # unreachable from the build steps above — that isolation is what makes it L3
+  # (not L2). Pinned by SEMVER TAG, not SHA: slsa-verifier validates the builder
+  # ID against this tag, so a SHA pin would break verification (documented
+  # exception to the SHA-pin rule; SCP-07).
+  provenance-binaries:
+    needs: [preflight, goreleaser]
+    # GOVERNED by the validated profile (P1-02): RUN_SLSA is load-bearing, not a
+    # decorative assertion in the preflight log.
+    if: needs.preflight.outputs.run_slsa == 'true'
+    permissions:
+      actions: read # read the build environment for provenance
+      id-token: write # keyless Sigstore signing
+      contents: write # upload the .intoto.jsonl to the (draft) release
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
+      upload-assets: true
+      draft-release: true
+
+  # --- SCP-01: SLSA Build L3 provenance for the IMAGE ---------------------------
+  provenance-image:
+    needs: [preflight, goreleaser]
+    if: needs.preflight.outputs.run_slsa == 'true'
+    permissions:
+      actions: read
+      id-token: write
+      packages: write # push the provenance attestation to ghcr.io
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.goreleaser.outputs.image }}
+      digest: ${{ needs.goreleaser.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # --- PRODUCTION-ONLY PROMOTION: the mutable `latest*` aliases (design §A.2.4/6) --------
+  # The shared GoReleaser build phase now emits VERSIONED outputs only — `latest`,
+  # `latest-amd64` and `latest-arm64` no longer exist in .goreleaser.yaml, so a rehearsal
+  # run structurally cannot publish them. This job re-creates them here, in the production
+  # caller only, BY DIGEST: each source is re-resolved to its immutable digest, its keyless
+  # signature is verified against the release identity, and only then is the alias tag
+  # written THROUGH scripts/alias-image-digest.sh, which must prove the alias resolves to
+  # the SAME digest before declaring success. Docker's `imagetools create` defaults to
+  # `--prefer-index=true`, which WRAPS a single-manifest source in a NEW index with a NEW
+  # digest — an alias carrying neither the signature nor the attestations just verified
+  # (R1 contrast P1-01); the script passes `--prefer-index=false` for manifest sources and
+  # asserts digest equality for every source kind.
+  #
+  # HONEST SCOPE vs design §D.4 (R1 contrast P3-01): this is ONLY the production-side
+  # extraction of the latest aliases out of the shared build — it is NOT the full §D.4
+  # protected promotion. That split (environment: production-release with required
+  # reviewers, Docker Hub + Homebrew + draft publication behind the approval) is called
+  # optional and deferrable by the design itself and remains an owned residual; Homebrew
+  # in particular is still embedded in the GoReleaser run.
+  promote-latest:
+    needs: [preflight, goreleaser, provenance-image]
+    # PRODUCTION TARGET GUARD (design §E.1.1) — same literal guard as the build job —
+    # AND the load-bearing PUBLISH_LATEST switch from the validated §C.4 outputs.
+    # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
+    # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
+    # el nombre del repositorio de preprod lo publicaría — `lint:export` bloquea ese literal
+    # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
+    #
+    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio de preprod, así que en el
+    # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
+    # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
+    # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
+    # producción (§C.4.6) y obliga a que el destino declarado SEA el repositorio que corre
+    # (§C.4.2). Esta condición abre la puerta; las de allí deciden quién pasa.
+    if: github.event_name == 'push' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod') && needs.preflight.outputs.publish_latest == 'true'
+    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
+    # vars.CI_RUNNER (same rationale as the build job: this touches what the
+    # published provenance covers).
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push the latest* alias tags to ghcr.io
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # EXACT pin — same reviewed binary as the build job; see the rationale there.
+          cosign-release: 'v2.6.4'
+      # EXECUTION-TIME INVARIANT — the actual control; see the build job's comment.
+      - name: assert the cosign binary is the reviewed artifact
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: verify each versioned digest, then alias latest* to it
+        env:
+          # Validated §C.4 outputs, never raw contexts (P1-02).
+          DIGEST: ${{ needs.goreleaser.outputs.digest }}
+          OCI_IMAGE_REPO: ${{ needs.preflight.outputs.oci_image_repo }}
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+          # Same anchored-identity contract (and the same repo-var validation) as the
+          # OTA job's checksum verification — see that step for the full rationale.
+          # PINNED, not a repo variable: see the binding step's note. The in-step grammar
+          # checks below stay as defence in depth, but the value they guard is now fixed here.
+          # ⛔ LA IDENTIDAD SE DERIVA EN EL PASO, NO SE ESCRIBE AQUÍ. Este fichero VIAJA al
+          # árbol público, así que un nombre de repositorio privado escrito en él se publica;
+          # `aws-images.yml:306-312` resolvió exactamente esto y `lint:export` rechazó su
+          # primera versión, la que llevaba el literal. `GITHUB_REPOSITORY` da el mismo valor
+          # en ejecución y no deja rastro en el fichero. El contrato no cambia: sigue siendo la
+          # identidad de ESTE workflow sobre una etiqueta SemVer, anclada de punta a punta, y
+          # los validadores de gramática siguen siendo defensa en profundidad, ahora sobre el
+          # valor derivado — que es lo único que puede llegar hasta ellos.
+          CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          # El destino que el preflight YA validó (§C.4.1/2/6). Es la otra fuente del cruce
+          # de abajo: sin él, comprobar el ancla contra sí misma no afirmaría nada.
+          PREFLIGHT_RELEASE_REPO: ${{ needs.preflight.outputs.release_github_repo }}
+        run: |
+          set -euo pipefail
+          # El nombre del repositorio entra en una EXPRESIÓN REGULAR, así que se escapa
+          # primero: lleva puntos, y un punto sin escapar casa con cualquier carácter — el
+          # ancla se aflojaría justo donde tiene que ser estricta. Misma clase de caracteres
+          # que `aws-images.yml:315`.
+          # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          # ⛔ LA DERIVACION NO PISA UN VALOR YA PUESTO, y esto lo exigió una bateria real, no una
+          # opinion: `test-release-security-sig-guard.sh` INYECTA un ancla sin anclar para
+          # comprobar que los validadores de abajo la rechazan. Mi primera version derivaba
+          # siempre, asi que el valor inyectado se perdia, el validador veia una cadena bien
+          # formada y NUNCA rechazaba — el caso «an unanchored identity pattern refuses» pasaba a
+          # rc=0. Es decir: al derivar habia convertido en teatro justo el control que la bateria
+          # existe para probar, y la bateria lo cazo.
+          #
+          # Que se pueda inyectar NO reabre el agujero que la derivacion cierra: el agujero era
+          # una VARIABLE DE REPOSITORIO, mutable por cualquier admin sin revision. Un valor puesto
+          # en el `env:` de este paso vive en el fichero versionado y pasa por PR, que es
+          # exactamente el nivel de revision que se pedia.
+          CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\$}"
+          case "${CERT_IDENTITY_REGEXP}" in
+            '^'*'$') ;;
+            *) echo "ERROR: OLIVARES_CERT_IDENTITY must be fully anchored (^…\$); got '${CERT_IDENTITY_REGEXP}'" >&2; exit 1;;
+          esac
+              # ⛔ EL CRUCE VA CONTRA OTRA FUENTE. Preguntar si la cadena que acabo de construir
+              # con ${repo_rx} contiene ${repo_rx} no puede fallar nunca: sería decoración, el
+              # mismo defecto que `release-preflight.sh` documenta haber matado en §C.4.8
+              # («printing a fingerprint is not comparing it»). La afirmación real es que el
+              # repositorio con el que se construye el ancla es el MISMO que el preflight validó
+              # contra §C.4.1, §C.4.2 y §C.4.6 — dos caminos distintos que deben coincidir.
+              [ -n "${PREFLIGHT_RELEASE_REPO:-}" ] || {
+                echo "ERROR: the preflight's validated destination did not reach this step" >&2; exit 1; }
+              [ "${GITHUB_REPOSITORY}" = "${PREFLIGHT_RELEASE_REPO}" ] || {
+                echo "ERROR: the identity is being built for '${GITHUB_REPOSITORY}' but the preflight validated '${PREFLIGHT_RELEASE_REPO}'" >&2; exit 1; }
+          case "${CERT_IDENTITY_REGEXP}" in
+            *"/${repo_rx}/"*'workflows/'*) ;;
+            *) echo "ERROR: OLIVARES_CERT_IDENTITY must pin the repository AND the workflow path; got '${CERT_IDENTITY_REGEXP}'" >&2; exit 1;;
+          esac
+          case "${CERT_IDENTITY_REGEXP##*workflows/}" in
+            *'.*'*|*'.+'*) echo "ERROR: OLIVARES_CERT_IDENTITY must not wildcard the workflow path (no '.*'/'.+' after workflows/); got '${CERT_IDENTITY_REGEXP}'" >&2; exit 1;;
+          esac
+          verify_and_alias() {
+            src_digest="$1"; alias_tag="$2"
+            [[ "${src_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+              echo "ERROR: refusing to alias '${alias_tag}': source digest '${src_digest}' is not a sha256 digest" >&2
+              exit 1
+            }
+            bash scripts/cosign-verified.sh verify \
+              --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+              --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+              "${OCI_IMAGE_REPO}@${src_digest}" >/dev/null
+            # Format-preserving, digest-asserting alias (P1-01): --prefer-index=false for
+            # single-manifest sources, then digest(alias) MUST equal src_digest or it fails.
+            SRC_DIGEST="${src_digest}" ALIAS_TAG="${alias_tag}" \
+              bash scripts/alias-image-digest.sh
+          }
+          # Bare `latest` <- the exact versioned bare-manifest digest the build resolved.
+          verify_and_alias "${DIGEST}" "latest"
+          # Per-arch aliases <- each versioned arch image, re-resolved by digest here.
+          for arch in amd64 arm64; do
+            d="$(docker buildx imagetools inspect "${OCI_IMAGE_REPO}:${RELEASE_VERSION}-${arch}" --format '{{.Manifest.Digest}}')"
+            verify_and_alias "${d}" "latest-${arch}"
+          done
+
+  # --- Publish the signed images to the OFFICIAL registry (docker.io) ----------
+  # ghcr.io is where the pipeline BUILDS and SIGNS (goreleaser + SLSA + SBOM); this
+  # job copies the SAME content to Docker Hub *by digest* with `cosign copy`, which
+  # carries every cosign signature and in-toto attestation (SBOM, OpenVEX, SLSA
+  # provenance) along with the image — so the Docker Hub pull path verifies
+  # identically (scripts/verify-release.sh works against either registry).
+  #
+  # REGISTRY ROLES (maintainer decision, 2026-07-25):
+  # docker.io/olivaresai/olivares is the OFFICIAL PRIMARY mirror — the coordinate the
+  # chart default, the quickstarts and every doc lead with. ghcr.io/olivaresai/olivares
+  # remains the always-published FALLBACK (build/sign origin; no anonymous-pull rate
+  # limit). The mechanics did NOT change with that decision: build on ghcr.io, copy
+  # here. What changed is which coordinate the docs put first.
+  #
+  # STILL GATED on the DOCKERHUB_* secrets (BOTH-or-NEITHER): when both are absent
+  # the job no-ops and the release still succeeds — this job is deliberately not a
+  # release gate, so a missing credential never strands a signed ghcr.io release.
+  # The trade-off is real and is why the skip path emits a WARNING, not a notice:
+  # with the docs leading with Docker Hub, a skipped mirror means the published pull
+  # commands 404 until it is re-run. Treat the secrets as a release precondition.
+  # It runs only after the image, its attestations and SLSA provenance exist on ghcr.io —
+  # and after promote-latest, because the `latest` tag it copies is now created there.
+  mirror-dockerhub:
+    needs: [preflight, goreleaser, provenance-image, promote-latest]
+    # GOVERNED by the validated profile (P1-02): PUBLISH_DOCKERHUB=false skips the job
+    # entirely; 'auto' (the production value) leaves the decision to the both-or-neither
+    # credential check below, which stays as defense in depth.
+    if: needs.preflight.outputs.publish_dockerhub != 'false'
+    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
+    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
+    # hosted runner: a persistent self-hosted runner serves many jobs, so a
+    # compromised build can leave tooling behind for the next one, and a verifier
+    # "has no guarantee that the code run is in fact the intended workflow unless
+    # they also trust the self-hosted runner" (slsa-framework). Moving a release
+    # here to save minutes would silently downgrade the provenance we publish.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: detect Docker Hub configuration
+        id: cfg
+        env:
+          DH_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # BOTH-or-NEITHER (D.1): login AND the repo-description update below both
+          # consume DOCKERHUB_USERNAME, so a username-only or token-only half-config must
+          # FAIL loudly, not silently half-run. The old check looked at the token alone.
+          if [ -n "${DH_USERNAME}" ] && [ -n "${DH_TOKEN}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "${DH_USERNAME}" ] && [ -z "${DH_TOKEN}" ]; then
+            # ⛔ ERROR, NOT A WARNING, SINCE 2026-08-23. This branch used to emit
+            # `enabled=false` and let the release finish GREEN. That is a false green of the
+            # automatic-sale chain: `docker.io/olivaresai/olivares` is the OFFICIAL coordinate
+            # by the maintainer decision of 2026-07-25 — it is what `deploy/helm/olivares/
+            # values.yaml:20` sets as the chart default and what INSTALL.md, the quickstarts
+            # and every `docker run` in the docs lead with. Publishing to ghcr.io only and
+            # calling the release a success means the documented pull command answers
+            # `manifest unknown` to the first stranger who copies it, and nothing anywhere
+            # said so.
+            #
+            # The repair is fail-closed applied to DELIVERY: the credentials stop being a
+            # silent option and become a DECLARED PRECONDITION. The workflow's own comment
+            # already asked for exactly this ("Treat the secrets as a release precondition")
+            # while the code did the opposite.
+            #
+            # ⚠ WHY THIS DOES NOT BREAK THE REHEARSAL, checked before writing it: the T3
+            # rehearsal profile sets PUBLISH_DOCKERHUB=false (scripts/release-preflight.sh:132),
+            # and the job's own `if:` skips on 'false', so this branch is unreachable there.
+            # Production sets `auto` (:118) and the preflight emits it VERBATIM (:270), so the
+            # job runs and this check is what decides. The deliberate opt-out therefore still
+            # works and only the production path is now fail-closed.
+            #
+            # This does NOT re-decide which registry is official — it makes the decision that
+            # already exists TRUE for the first time. Reversing the roles would be a different
+            # question and it belongs to.
+            echo "::error::Docker Hub credentials absent, and docker.io/olivaresai/olivares is the OFFICIAL coordinate (maintainer decision 2026-07-25) that the chart default, INSTALL.md and every quickstart point at. Publishing only to ghcr.io would leave those documented pull commands answering 'manifest unknown'. Set DOCKERHUB_USERNAME + DOCKERHUB_TOKEN, or set PUBLISH_DOCKERHUB=false to opt out DELIBERATELY."
+            exit 1
+          else
+            echo "::error::DOCKERHUB_USERNAME and DOCKERHUB_TOKEN must be both set or both absent."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.cfg.outputs.enabled == 'true'
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # EXACT pin, not the action default. Measured 2026-07-25 with both binaries:
+          # this installer revision defaults to cosign v3.0.6, the OTA job's revision
+          # defaults to v2.5.2, and .goreleaser.yaml signs with --output-signature /
+          # --output-certificate. Under v3 those flags are deprecated and IGNORED when
+          # --new-bundle-format is on (it defaults to true), so the .sig/.pem files
+          # GoReleaser expects are never written; and `--tlog-upload=false` — the flag
+          # the rehearsal depends on to leave no public record — is rejected outright
+          # ("not supported with --signing-config"). Under v2.5.2 the same commands
+          # produce a signature file and `verify-blob --key` reports Verified OK.
+          # v2.6.4, not the v2.5.2 the OTA job used to resolve: v2.5.2 falls inside two
+          # published Sigstore advisories — GHSA-whqx-f9j3-ch6m ("verification accepts
+          # any valid Rekor entry under certain conditions", <=2.6.1, fixed 2.6.2) and
+          # GHSA-w6c6-c85g-mmv6 (verify-blob-attestation false positive, <=2.6.2, fixed
+          # 2.6.3). scripts/check-cosign-contract.sh proves v2.6.4 still honours the
+          # contract. Migrating to v3 bundles is a real migration (signer, verifier, OTA
+          # check and scripts/verify-release.sh) and needs its own unit.
+          cosign-release: 'v2.6.4'
+        if: steps.cfg.outputs.enabled == 'true'
+      # EXECUTION-TIME INVARIANT — the actual control. The static gate
+      # (task lint:cosign-pins) reads the workflow YAML and is fast, but four rounds of
+      # adversarial review proved it can never be complete: `run:` is a shell, so proving
+      # "no path here can obtain an unapproved cosign" by reading YAML is proving a
+      # negative over a Turing-complete language. At THIS point the property is decidable
+      # — resolve the binary, hash it, compare against the upstream published digest. It
+      # does not matter how cosign arrived.
+      - name: assert the cosign binary is the reviewed artifact
+        # SAME predicate as the checkout and the installer above. Without it this step ran
+        # unconditionally in an un-checked-out workspace with no cosign installed, so a
+        # release with no Docker Hub credentials — the documented optional case — failed
+        # here instead of no-opping. Acquisition, assertion and use must share one
+        # predicate or they drift.
+        if: steps.cfg.outputs.enabled == 'true'
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: steps.cfg.outputs.enabled == 'true'
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: cosign copy ghcr.io (build origin) -> docker.io (official) — image + signatures + attestations
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          # Build origin from the validated §C.4 outputs (P1-02); the docker.io mirror
+          # coordinate is production-only and deliberately not part of the shared tuple.
+          SRC: ${{ needs.preflight.outputs.oci_image_repo }}
+          DST: docker.io/olivaresai/olivares
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          # goreleaser renders {{ .Version }} WITHOUT the leading "v"; the preflight
+          # output already carries exactly that form.
+          ver="${RELEASE_VERSION}"
+          # Copy each multi-arch manifest tag by digest. cosign copy transfers the
+          # image index, its child manifests AND the referring signatures/attestations
+          # (SBOM, OpenVEX, SLSA) — so the digest and every verification are preserved.
+          for tag in "${ver}" "latest" "${ver}-fips" "${ver}-stig"; do
+            echo "==> mirroring ${SRC}:${tag} -> ${DST}:${tag}"
+            bash scripts/cosign-verified.sh copy --force "${SRC}:${tag}" "${DST}:${tag}"
+          done
+      - name: sync Docker Hub repository description (best-effort)
+        if: steps.cfg.outputs.enabled == 'true'
+        continue-on-error: true
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          jwt="$(curl -fsS -H 'Content-Type: application/json' \
+            -d "{\"username\":\"${DH_USER}\",\"password\":\"${DH_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)"
+          full="$(jq -Rs . < packaging/docker/dockerhub-overview.md)"
+          short="Ground truth for enterprise AI — self-hosted, one static binary."
+          curl -fsS -X PATCH \
+            -H "Authorization: JWT ${jwt}" -H 'Content-Type: application/json' \
+            -d "{\"full_description\": ${full}, \"description\": \"${short}\"}" \
+            "https://hub.docker.com/v2/repositories/olivaresai/olivares/" >/dev/null
+          echo "Docker Hub repository description synced from packaging/docker/dockerhub-overview.md"
+
+  # --- Phase 2: verify the off-box signature, then attach it ----------------------
+  # This job receives a signature (public data), never private key material. The
+  # protected `ota-release-ceremony` environment requires maintainer approval.
+  #
+  # AUTHORIZATION CONTRACT OF THIS DISPATCH — declared separately from the §C.4 tag-push
+  # preflight, deliberately (R1 contrast P1-02 adjudication). The push-path preflight
+  # asserts ref==tag identity, which a phase-2 dispatch cannot satisfy or need: this
+  # ceremony runs AFTER the tag run, against an existing draft. Its authorization root is:
+  #   1. the protected `ota-release-ceremony` environment — a human maintainer approves
+  #      every run before any step executes;
+  #   2. the literal production guard below — the only repository this job may run in is
+  #      the one its GITHUB_TOKEN can write to;
+  #   3. content authorization is CRYPTOGRAPHIC, not positional: release_tag is validated
+  #      against the same vMAJOR.MINOR.PATCH grammar the preflight pins (below) and only
+  #      selects WHICH draft to verify. La FIRMA ya no es un input (orden 37): la produce
+  #      este job con la clave del environment protegido, y sigue teniendo que verificar
+  #      bajo el ancla pública OTA sobre un manifiesto atado digest a digest al
+  #      checksums.txt verificado por identidad cosign — el mismo cruce de antes, sólo que
+  #      ahora nadie lo pega a mano. Una firma hostil sigue fallando esas comprobaciones.
+  #      verifications; neither input can redirect a destination.
+  # The §C.4 switches do not govern this job: PUBLISH_OTA_STABLE gates the PHASE-1
+  # stable-manifest draft upload in the goreleaser job; phase 2 only attaches a signature
+  # to bytes phase 1 produced, and cannot exist without them.
+  publish-ota-manifest:
+    # PRODUCTION TARGET GUARD (design §E.1.1). Every mutation below is hard-coded to
+    # olivaresai/olivares: the GoReleaser release target, the GHCR image repository,
+    # the Homebrew tap and the stable OTA assets. A `v*` tag pushed in ANY other
+    # repository — a fork, or the disposable rehearsal target — would otherwise start
+    # this workflow and try to publish there with that repository's token. The literal
+    # guard is what makes it safe to copy this source into the rehearsal repo at all.
+    # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
+    # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
+    # el nombre del repositorio de preprod lo publicaría — `lint:export` bloquea ese literal
+    # y tiene razón. Mismo motivo y misma cura que `aws-images.yml:306-312`.
+    #
+    # `vars.OLIVARES_RELEASE_PROFILE` sólo existe EN el repositorio de preprod, así que en el
+    # público esta rama no puede activarse ni por accidente. Y no es una llave de confianza:
+    # quien la ponga sigue chocando con el preflight, que en modo preprod exige la tupla
+    # inyectada (deny-closed), rechaza cualquier destino que nombre una superficie de
+    # producción (§C.4.6) y obliga a que el destino declarado SEA el repositorio que corre
+    # (§C.4.2). Esta condición abre la puerta; las de allí deciden quién pasa.
+    if: github.event_name == 'workflow_dispatch' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
+    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
+    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
+    # hosted runner: a persistent self-hosted runner serves many jobs, so a
+    # compromised build can leave tooling behind for the next one, and a verifier
+    # "has no guarantee that the code run is in fact the intended workflow unless
+    # they also trust the self-hosted runner" (slsa-framework). Moving a release
+    # here to save minutes would silently downgrade the provenance we publish.
+    runs-on: ubuntu-latest
+    # ⛔ EL NOMBRE SE QUEDA, Y ESO SE MIDIÓ ANTES DE DECIDIRLO. La orden 5 hablaba de un
+    # environment `production`, y cambiar esta línea a ese nombre parecía cosmético. No lo era:
+    # `gh api repos/<org>/<repo>/environments` devuelve `ota-release-ceremony` con
+    # `required_reviewers` y NINGÚN `production`. Un job que declara un environment inexistente
+    # no falla — Actions lo crea al vuelo, SIN reglas —, así que el renombrado habría movido la
+    # firma automática de un environment con revisor obligatorio a uno sin ninguno, en silencio.
+    #
+    # Y eso habría vaciado la mitigación entera de la orden 37: lo que hace aceptable que CI
+    # firme sola no es el nombre del environment, son sus revisores. El nombre describe la
+    # ceremonia manual que la orden retira; la protección es lo que se queda.
+    #
+    # En preprod se usa `preprod`, donde no hay nada que perder — y conviene saber que hoy
+    # el repositorio de preprod no tiene environments hoy, así que allí Actions creará uno sin
+    # reglas — en preprod no habrá puerta, y conviene saberlo antes del acto y no después.
+    environment:
+      # ⛔ EL PERFIL VA ATADO AL REPOSITORIO, y esa conjuncion es el arreglo de un agujero que
+      # yo mismo abri. Con la forma anterior —solo `vars.OLIVARES_RELEASE_PROFILE == 'preprod'`—
+      # un admin del repositorio de PRODUCCION podia poner esa variable y conseguir dos cosas a
+      # la vez: que el guard del job pasara por su primer disyuntor (que mira el repositorio) y
+      # que este environment resolviera a `preprod`, que en produccion NO EXISTE. Actions habria
+      # creado uno al vuelo SIN reglas, y la firma automatica habria arrancado sin revisor.
+      #
+      # Es exactamente el peligro que este mismo fichero documenta doce lineas mas arriba para
+      # justificar que el nombre no se renombre — reintroducido detras de una variable que se
+      # pone sin revision de nadie. Atado al repositorio, en produccion `preprod` es inalcanzable.
+      name: ${{ (github.repository != 'olivaresai/olivares' && vars.OLIVARES_RELEASE_PROFILE == 'preprod') && 'preprod' || 'ota-release-ceremony' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # FULLY QUALIFIED, and it is load-bearing rather than tidy. An unqualified `v26.8.0`
+          # lets the action resolve `refs/remotes/origin/v26.8.0` AHEAD of `refs/tags/v26.8.0`,
+          # so a branch that merely shares the tag's name wins. Every fact this ceremony treats
+          # as immutable comes out of this checkout — above all the advisories declaration that
+          # authorizes it — and a branch is not immutable: it would be reading the release's
+          # own truth from a commit that is not the release (the model audit, 2026-08-10,
+          # P1-02). Phase 1 runs on the tag; phase 2 must stand on the same object.
+          ref: refs/tags/${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # EXACT pin, not the action default. Measured 2026-07-25 with both binaries:
+          # this installer revision defaults to cosign v3.0.6, the OTA job's revision
+          # defaults to v2.5.2, and .goreleaser.yaml signs with --output-signature /
+          # --output-certificate. Under v3 those flags are deprecated and IGNORED when
+          # --new-bundle-format is on (it defaults to true), so the .sig/.pem files
+          # GoReleaser expects are never written; and `--tlog-upload=false` — the flag
+          # the rehearsal depends on to leave no public record — is rejected outright
+          # ("not supported with --signing-config"). Under v2.5.2 the same commands
+          # produce a signature file and `verify-blob --key` reports Verified OK.
+          # v2.6.4, not the v2.5.2 the OTA job used to resolve: v2.5.2 falls inside two
+          # published Sigstore advisories — GHSA-whqx-f9j3-ch6m ("verification accepts
+          # any valid Rekor entry under certain conditions", <=2.6.1, fixed 2.6.2) and
+          # GHSA-w6c6-c85g-mmv6 (verify-blob-attestation false positive, <=2.6.2, fixed
+          # 2.6.3). scripts/check-cosign-contract.sh proves v2.6.4 still honours the
+          # contract. Migrating to v3 bundles is a real migration (signer, verifier, OTA
+          # check and scripts/verify-release.sh) and needs its own unit.
+          cosign-release: 'v2.6.4'
+      # EXECUTION-TIME INVARIANT — the actual control. The static gate
+      # (task lint:cosign-pins) reads the workflow YAML and is fast, but four rounds of
+      # adversarial review proved it can never be complete: `run:` is a shell, so proving
+      # "no path here can obtain an unapproved cosign" by reading YAML is proving a
+      # negative over a Turing-complete language. At THIS point the property is decidable
+      # — resolve the binary, hash it, compare against the upstream published digest. It
+      # does not matter how cosign arrived.
+      - name: assert the checkout is untouched before anything consumes it (phase 2)
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          # ⛔ EARLY, BECAUSE A LATE REFUSAL DOES NOT UNBIND WHAT ALREADY HAPPENED. The guard
+          # further down runs immediately before the release rule is read, which is right and
+          # is not enough: by then this job has already built, signed, generated and uploaded.
+          # Refusing there leaves those effects standing and merely declines to add one more.
+          # This step runs after the LAST setup `uses:` and before the first thing that
+          # consumes the tree, so a tampered checkout stops the phase before it produces
+          # anything at all (the model, report 56aeafd4c, R2).
+          #
+          # STRICTEST FORM: at this point the job has generated nothing, so NOTHING untracked,
+          # modified or staged is acceptable. The permitted-artifact list belongs to the later
+          # guard, where those artifacts legitimately exist.
+          # ABSOLUTE, WITH NO OVERRIDE. This was briefly `${OLIVARES_TRUSTED_BIN:-/usr/bin}`
+          # "so the battery can point at stubs", and that is not a test seam: an earlier action
+          # writes OLIVARES_TRUSTED_BIN through GITHUB_ENV and owns git, gh and sha256sum for
+          # every guard in this job. The harness mutates a COPY of this workflow instead; a
+          # control must not be configurable by the thing it guards against.
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            echo "An earlier action put another git ahead of it. Nothing has been consumed yet." >&2
+            exit 1
+          fi
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          tag_oid="$("${GIT_BIN}" rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          if [ "${head_oid}" != "${tag_oid}" ]; then
+            echo "ERROR: the checkout (${head_oid}) is not ${RELEASE_TAG} (${tag_oid})." >&2
+            exit 1
+          fi
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (phase 2 early guard)." >&2
+            exit 1
+          }
+          if [ -n "${status_raw}" ]; then
+            echo "ERROR: the checkout was modified before this phase consumed it." >&2
+            printf '%s\n' "${status_raw}" >&2
+            echo "Nothing has been built, generated or uploaded. Stopping here." >&2
+            exit 1
+          fi
+          echo "checkout verified before phase 2 consumes it"
+      - name: bind this checkout to phase 1 before any tracked code runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          # PINNED HERE, like the digest, and for the same reason: validating the GRAMMAR of a
+          # repo variable does not make it immutable. `vars.OLIVARES_CERT_IDENTITY` is settable
+          # by any repo admin without review, and an identity that passes every shape check can
+          # still name another workflow or another ref. The identity that signs checksums.txt
+          # is this workflow on a SemVer tag; nothing else may satisfy it.
+          # ⛔ LA IDENTIDAD SE DERIVA EN EL PASO, NO SE ESCRIBE AQUÍ. Este fichero VIAJA al
+          # árbol público, así que un nombre de repositorio privado escrito en él se publica;
+          # `aws-images.yml:306-312` resolvió exactamente esto y `lint:export` rechazó su
+          # primera versión, la que llevaba el literal. `GITHUB_REPOSITORY` da el mismo valor
+          # en ejecución y no deja rastro en el fichero. El contrato no cambia: sigue siendo la
+          # identidad de ESTE workflow sobre una etiqueta SemVer, anclada de punta a punta, y
+          # los validadores de gramática siguen siendo defensa en profundidad, ahora sobre el
+          # valor derivado — que es lo único que puede llegar hasta ellos.
+          CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
+          # PINNED IN THIS VERSIONED FILE, not in a repo variable. `vars.OLIVARES_COSIGN_SHA256`
+          # did not exist — `gh variable get` answers NOT FOUND — so the ceremony denied
+          # itself; and had it existed, a repo variable is admin-mutable without review, so
+          # whoever could swap the binary could swap the digest that vouches for it.
+          #
+          # This is the same approved digest the repository already pins for cosign v2.6.4
+          # linux-amd64 in scripts/assert-cosign-binary.sh, taken there from the upstream
+          # signed checksums file. Phase 2 runs on ubuntu-latest, so linux-amd64 is the
+          # artefact this step can see; a different runner arch fails the comparison rather
+          # than silently accepting an unpinned binary.
+          COSIGN_EXPECTED_SHA256: 309779b0c4e409186b0a80daba99041fe2cf65a920ce645013901df6211895a9
+          COSIGN_EXPECTED_VERSION: v2.6.4
+        run: |
+          set -euo pipefail
+          # El nombre del repositorio entra en una EXPRESIÓN REGULAR, así que se escapa
+          # primero: lleva puntos, y un punto sin escapar casa con cualquier carácter — el
+          # ancla se aflojaría justo donde tiene que ser estricta. Misma clase de caracteres
+          # que `aws-images.yml:315`.
+          # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          # ⛔ LA DERIVACION NO PISA UN VALOR YA PUESTO, y esto lo exigió una bateria real, no una
+          # opinion: `test-release-security-sig-guard.sh` INYECTA un ancla sin anclar para
+          # comprobar que los validadores de abajo la rechazan. Mi primera version derivaba
+          # siempre, asi que el valor inyectado se perdia, el validador veia una cadena bien
+          # formada y NUNCA rechazaba — el caso «an unanchored identity pattern refuses» pasaba a
+          # rc=0. Es decir: al derivar habia convertido en teatro justo el control que la bateria
+          # existe para probar, y la bateria lo cazo.
+          #
+          # Que se pueda inyectar NO reabre el agujero que la derivacion cierra: el agujero era
+          # una VARIABLE DE REPOSITORIO, mutable por cualquier admin sin revision. Un valor puesto
+          # en el `env:` de este paso vive en el fichero versionado y pasa por PR, que es
+          # exactamente el nivel de revision que se pedia.
+          CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\$}"
+          # ⛔ IDENTITY, CRYPTOGRAPHICALLY, BEFORE ANY CHECKOUT CODE RUNS.
+          #
+          # The previous version of this step compared the evidence digest against
+          # checksums.txt and said in its own comment that checksums.txt was not yet
+          # authenticated. That is not a binding: an actor with contents:write moves the tag,
+          # the checkout and the input together AND replaces both files, the digests agree,
+          # and the job goes on to execute scripts/assert-cosign-binary.sh from a checkout
+          # nothing has vouched for (the model, R2 second follow-up, finding 1).
+          #
+          # So the signature is verified HERE, first, with:
+          #   · tools resolved by ABSOLUTE PATH, never through PATH — GITHUB_PATH lets an
+          #     earlier action prepend a shim, and a shimmed `gh` or `git` would be choosing
+          #     what this step gets to see;
+          #   · cosign from the SHA-pinned installer, checked to be the reviewed version and
+          #     refused if it resolves inside the workspace;
+          #   · the anchored identity/issuer this repository already requires elsewhere,
+          #     invoked inline rather than through the checkout's wrapper script.
+          #
+          # OLIVARES_TRUSTED_BIN exists so the battery can run this exact block against stub
+          # tools. It is not set by this workflow; changing it requires editing this file,
+          # which is the same privilege as editing the step itself.
+          # ABSOLUTE, WITH NO OVERRIDE. This was briefly `${OLIVARES_TRUSTED_BIN:-/usr/bin}`
+          # "so the battery can point at stubs", and that is not a test seam: an earlier action
+          # writes OLIVARES_TRUSTED_BIN through GITHUB_ENV and owns git, gh and sha256sum for
+          # every guard in this job. The harness mutates a COPY of this workflow instead; a
+          # control must not be configurable by the thing it guards against.
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          GH_BIN="${TRUSTED_BIN}/gh"
+          for tool in "${GIT_BIN}" "${GH_BIN}"; do
+            [ -x "${tool}" ] || { echo "ERROR: no trusted tool at ${tool}" >&2; exit 1; }
+          done
+          for name in git gh; do
+            resolved="$(command -v "${name}" || true)"
+            if [ "${resolved}" != "${TRUSTED_BIN}/${name}" ]; then
+              echo "ERROR: PATH resolves ${name} to ${resolved:-<none>}, not ${TRUSTED_BIN}/${name}." >&2
+              echo "An earlier action put another one ahead of it. No tracked code has run." >&2
+              exit 1
+            fi
+          done
+          # gh IS IDENTIFIED, NOT MERELY LOCATED (INT-22, M78). Until 2026-08-18 gh was checked
+          # for existence and for PATH resolution and nothing else, while cosign — the other
+          # tool this ceremony trusts — is pinned by sha256 AND version a few steps below, under
+          # a comment that says "THE BINARY, NOT ITS SELF-DESCRIPTION". gh uploads and downloads
+          # the release's assets, so it is in the same trust position and had none of the same
+          # checks.
+          #
+          # ⚠️ WHAT THIS IS AND IS NOT, said plainly so nobody reads it as the cosign treatment.
+          # This is a VERSION FLOOR plus a recorded digest. It is NOT a digest pin. A digest pin
+          # is the stronger form and it is what this should become, but the value has to be the
+          # sha256 of /usr/bin/gh ON THE RUNNER, and a deny-closed pin with the value left empty
+          # would refuse every release until somebody filled it in. Landing that days before a
+          # cut would trade one hole for an outage. The digest is printed on every run, so the
+          # value the pin needs is one release away from being known.
+          # ⛔ SIN TUBERIA Y CON EL CODIGO DE SALIDA A LA VISTA, y las dos mitades son por lo
+          # mismo: este `||` convertia CUALQUIER fallo en una cadena vacia, y el error de abajo
+          # solo enseñaba la cadena. `X | head -1` bajo `pipefail` puede devolver 141 —SIGPIPE—
+          # cuando el escritor sigue escribiendo despues de que head cierre, y `gh --version`
+          # imprime DOS lineas; que ese sea el caso aqui NO esta demostrado (no se reprodujo con
+          # un stub de dos lineas cortas el 2026-08-19), pero un `head` que no aporta nada frente
+          # a una expansion de parametro no merece ni la duda. Lo que si esta medido es el
+          # sintoma: `release mechanics` fallo dos veces en runners distintos con
+          # `could not read a version from …/gh: ''`, sin una sola pista de por que la lectura
+          # devolvio vacio.
+          gh_ver_rc=0
+          gh_ver_raw="$("${GH_BIN}" --version 2>/dev/null)" || gh_ver_rc=$?
+          gh_ver_raw="${gh_ver_raw%%$'\n'*}"
+          case "${gh_ver_raw}" in
+          "gh version "*) ;;
+          *)
+            echo "ERROR: could not read a version from ${GH_BIN}: '${gh_ver_raw}' (exit ${gh_ver_rc})." >&2
+            echo "A tool that moves release assets must identify itself. No tracked code has run." >&2
+            echo "  126 = no ejecutable o montaje noexec · 127 = interprete del shebang ausente" >&2
+            echo "  141 = SIGPIPE · 0 con cadena vacia = arranco y no imprimio nada" >&2
+            ls -l -- "${GH_BIN}" >&2 || true
+            exit 1
+            ;;
+          esac
+          gh_ver="${gh_ver_raw#gh version }"
+          gh_ver="${gh_ver%% *}"
+          gh_major="${gh_ver%%.*}"
+          gh_rest="${gh_ver#*.}"
+          gh_minor="${gh_rest%%.*}"
+          case "${gh_major}${gh_minor}" in
+          *[!0-9]*|"")
+            echo "ERROR: ${GH_BIN} reported an unparseable version '${gh_ver}'." >&2
+            exit 1
+            ;;
+          esac
+          # Floor, not equality: the ceremony needs `release upload` to refuse a name that
+          # already exists, which is the create-only property the uploads now rely on.
+          if [ "${gh_major}" -lt 2 ] || { [ "${gh_major}" -eq 2 ] && [ "${gh_minor}" -lt 40 ]; }; then
+            echo "ERROR: ${GH_BIN} is gh ${gh_ver}; this ceremony requires >= 2.40." >&2
+            exit 1
+          fi
+          gh_sum="$("${TRUSTED_BIN}/sha256sum" "${GH_BIN}")" || gh_sum=""
+          echo "gh: version ${gh_ver}, sha256 ${gh_sum%% *}"
+          # THE BINARY, NOT ITS SELF-DESCRIPTION. Asking `command -v cosign` and believing the
+          # `GitVersion:` it prints trusts the very thing under suspicion: a shim on
+          # GITHUB_PATH answers with the reviewed version and returns 0 from verify-blob. The
+          # artefact is identified by DIGEST against a value pinned outside this job, and it
+          # must live where the SHA-pinned installer put it — never in the workspace.
+          COSIGN_BIN="$(command -v cosign || true)"
+          [ -n "${COSIGN_BIN}" ] || { echo "ERROR: cosign is not installed" >&2; exit 1; }
+          case "${COSIGN_BIN}" in
+          "${GITHUB_WORKSPACE}"/*)
+            echo "ERROR: cosign resolves inside the checkout (${COSIGN_BIN})." >&2
+            echo "No tracked code has run." >&2
+            exit 1
+            ;;
+          /opt/hostedtoolcache/* | /usr/local/bin/*) ;;
+          *)
+            echo "ERROR: cosign resolves to ${COSIGN_BIN}, outside the installer's locations." >&2
+            echo "No tracked code has run." >&2
+            exit 1
+            ;;
+          esac
+          # DENY-CLOSED ON AN UNPINNED DIGEST. Without the reviewed artefact's sha256 there is
+          # nothing to compare against, and "I could not check" is not "it is fine".
+          if [ -z "${COSIGN_EXPECTED_SHA256}" ]; then
+            echo "ERROR: the reviewed cosign digest is not pinned in this workflow." >&2
+            echo "A tool that verifies a release must itself be identified. No tracked code has run." >&2
+            exit 1
+          fi
+          # VERSION TOO, after the digest and never instead of it. The digest is what
+          # identifies the artefact; the version check is what turns "these bytes are not the
+          # ones we approved" into a diagnosis an operator can act on when the installer pin
+          # moves. A location allow-list alone was never sufficient: /usr/local/bin is
+          # writable by an earlier step on a hosted runner.
+          cosign_sum="$("${TRUSTED_BIN}/sha256sum" "${COSIGN_BIN}")" || cosign_sum=""
+          cosign_sum="${cosign_sum%% *}"
+          if [ "${cosign_sum}" != "${COSIGN_EXPECTED_SHA256}" ]; then
+            echo "ERROR: cosign at ${COSIGN_BIN} is not the reviewed artefact." >&2
+            echo "  expected ${COSIGN_EXPECTED_SHA256}" >&2
+            echo "  got      ${cosign_sum:-<unreadable>}" >&2
+            echo "No tracked code has run." >&2
+            exit 1
+          fi
+          cosign_ver=""
+          while IFS= read -r _l || [ -n "${_l}" ]; do
+            case "${_l}" in
+            *GitVersion:*)
+              cosign_ver="${_l##*: }"
+              cosign_ver="${cosign_ver// /}"
+              ;;
+            esac
+          done <<<"$("${COSIGN_BIN}" version 2>/dev/null)"
+          if [ "${cosign_ver}" != "${COSIGN_EXPECTED_VERSION}" ]; then
+            echo "ERROR: the approved bytes report ${cosign_ver:-<unknown>}, not ${COSIGN_EXPECTED_VERSION}." >&2
+            echo "The pinned digest and the installer pin disagree. No tracked code has run." >&2
+            exit 1
+          fi
+          # The identity pattern is a repo variable, settable without review; an unanchored
+          # override turns the verification into theatre.
+          # THE SAME CONTRACT AS THE LATE STEP, not a weaker echo of it. Checking only that
+          # the pattern is anchored accepts `^.*$`, which matches every identity there is.
+          case "${CERT_IDENTITY_REGEXP}" in
+          '^'*'$') ;;
+          *) echo "ERROR: OLIVARES_CERT_IDENTITY must be fully anchored (^…\$)" >&2; exit 1 ;;
+          esac
+          # ⛔ AQUÍ NO HAY CRUCE CONTRA EL PREFLIGHT, Y NO PUEDE HABERLO. Este job responde a
+          # `workflow_dispatch` y **no declara `needs:`**, asi que `needs.preflight.outputs.*`
+          # no existe para el — actionlint rechaza el intento con «property "preflight" is not
+          # defined». Lo intente, y de la peor manera: retire la DEFINICION y deje el
+          # CONSUMIDOR, con lo que este paso moria siempre bajo `set -euo pipefail` y la fase 2
+          # entera no llegaba ni a descargar la evidencia. Lo cazo un contraste adversarial
+          # contra mi propio diseño, no una revision mia.
+          #
+          # El cruce equivalente esta mas abajo y es MAS FUERTE que una comparacion en shell:
+          # `--certificate-github-workflow-repository "${GITHUB_REPOSITORY}"` exige que la
+          # reclamacion del CERTIFICADO nombre al repositorio que corre, asi que un ancla
+          # construida para otro repositorio no se satisface ni pasando esta gramatica.
+          case "${CERT_IDENTITY_REGEXP}" in
+          *"/${repo_rx}/"*'workflows/'*) ;;
+          *) echo "ERROR: the derived identity does not pin the repository AND the workflow path" >&2; exit 1 ;;
+          esac
+          case "${CERT_IDENTITY_REGEXP##*workflows/}" in
+          *'.*'* | *'.+'*)
+            echo "ERROR: OLIVARES_CERT_IDENTITY must not wildcard the workflow path" >&2
+            exit 1
+            ;;
+          esac
+
+          [ -n "${RELEASE_COMMIT}" ] || { echo "ERROR: release_commit is empty" >&2; exit 1; }
+          case "${RELEASE_COMMIT}" in
+          *[!0-9a-f]* | "") echo "ERROR: release_commit is not lowercase hex" >&2; exit 1 ;;
+          esac
+          [ "${#RELEASE_COMMIT}" -eq 40 ] || { echo "ERROR: release_commit is not a full OID" >&2; exit 1; }
+
+          mkdir -p ota-dist
+          "${GH_BIN}" release download "${RELEASE_TAG}" --dir ota-dist --clobber \
+            --pattern release-commit.txt --pattern checksums.txt \
+            --pattern checksums.txt.sig --pattern checksums.txt.pem || {
+            echo "ERROR: could not download phase 1's evidence and its signature." >&2
+            exit 1
+          }
+          for f in release-commit.txt checksums.txt checksums.txt.sig checksums.txt.pem; do
+            [ -f "ota-dist/${f}" ] || {
+              echo "ERROR: the draft is missing ${f}; phase 1 published no verifiable evidence." >&2
+              exit 1
+            }
+          done
+
+          # THE SIGNATURE FIRST. Everything below reads checksums.txt, so it is authenticated
+          # before it is read — not after.
+          "${COSIGN_BIN}" verify-blob \
+            --certificate ota-dist/checksums.txt.pem \
+            --signature ota-dist/checksums.txt.sig \
+            --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+            --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+            --certificate-github-workflow-repository "${GITHUB_REPOSITORY}" \
+            ota-dist/checksums.txt || {
+            echo "ERROR: checksums.txt is not signed by the release identity." >&2
+            echo "No tracked script has been executed. Stopping here." >&2
+            exit 1
+          }
+
+          ev_sum="$("${TRUSTED_BIN}/sha256sum" ota-dist/release-commit.txt)" || ev_sum=""
+          ev_sum="${ev_sum%% *}"
+          [ -n "${ev_sum}" ] || { echo "ERROR: could not digest the evidence" >&2; exit 1; }
+          ev_bound=0
+          while IFS= read -r _cs || [ -n "${_cs}" ]; do
+            [ "${_cs%$'\r'}" = "${ev_sum}  release-commit.txt" ] && ev_bound=1
+          done <ota-dist/checksums.txt
+          [ "${ev_bound}" -eq 1 ] || {
+            echo "ERROR: the evidence does not match its entry in the SIGNED checksums." >&2
+            echo "No tracked script has been executed. Stopping here." >&2
+            exit 1
+          }
+          IFS= read -r phase1_oid <ota-dist/release-commit.txt || true
+          phase1_oid="${phase1_oid%$'\r'}"
+          case "${phase1_oid}" in
+          *[!0-9a-f]* | "") echo "ERROR: evidence is not a bare OID: ${phase1_oid}" >&2; exit 1 ;;
+          esac
+          [ "${#phase1_oid}" -eq 40 ] || { echo "ERROR: evidence is not a full OID" >&2; exit 1; }
+          # Byte-exact here too. The signed checksum already pins these bytes, but the OID is
+          # taken with `read`, so the shape is asserted rather than inferred.
+          want_ev="$(printf '%s\n' "${phase1_oid}" | "${TRUSTED_BIN}/sha256sum")" || want_ev=""
+          want_ev="${want_ev%% *}"
+          if [ -z "${want_ev}" ] || [ "${want_ev}" != "${ev_sum}" ]; then
+            echo "ERROR: the evidence file is not exactly one OID and a newline." >&2
+            echo "No tracked code has run." >&2
+            exit 1
+          fi
+
+          tag_oid="$("${GIT_BIN}" rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          if [ "${phase1_oid}" != "${RELEASE_COMMIT}" ] ||
+            [ "${tag_oid}" != "${phase1_oid}" ] || [ "${head_oid}" != "${phase1_oid}" ]; then
+            echo "ERROR: this checkout is not the commit phase 1 built." >&2
+            echo "  phase 1 built  : ${phase1_oid}" >&2
+            echo "  dispatched for : ${RELEASE_COMMIT}" >&2
+            echo "  tag resolves to: ${tag_oid}" >&2
+            echo "  checkout is    : ${head_oid}" >&2
+            echo "No tracked script has been executed. Stopping here." >&2
+            exit 1
+          fi
+          echo "checkout bound to phase 1 commit ${phase1_oid}, on a cosign-verified checksums.txt"
+      - name: assert the cosign binary is the reviewed artifact
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: download draft manifest, signed checksums and every published archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          # Same tag grammar the §C.4 preflight pins for production (the old check
+          # accepted any v* string). Prereleases are deliberately outside the contract —
+          # see the policy note at PROD_TAG_RE in scripts/release-preflight.sh.
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: release_tag must be vMAJOR.MINOR.PATCH" >&2; exit 1; }
+          version="${RELEASE_TAG#v}"
+          mkdir -p ota-dist
+          # ALL platform archives, not just linux/amd64: the cross-check below binds
+          # EVERY manifest artifact to its published bytes, so every one must be here.
+          # ONLY WHAT IS STILL MISSING. The binding step above already fetched
+          # release-commit.txt, checksums.txt, its signature and its certificate into this same
+          # directory, and it verified the cosign signature over them before anything from the
+          # checkout ran. Asking for them again here refused the whole step: `gh release
+          # download` will not overwrite an existing destination without --clobber, so the
+          # ceremony denied itself on files it had just authenticated. Re-downloading them
+          # would also be the wrong instinct — the bytes verified above are the bytes the rest
+          # of this job must use, not a second copy fetched later.
+          gh release download "${RELEASE_TAG}" --dir ota-dist \
+            --pattern stable-manifest.json \
+            --pattern stable-manifest.json.pipeline.sig \
+            --pattern stable-manifest.json.pipeline.pem \
+            --pattern "olivares_${version}_*.tar.gz"
+          # El par del manifiesto es OBLIGATORIO, no opcional: sin el, los bytes que se van a
+          # firmar con la clave OTA no estan atados a nada mas que a los digests, y los siete
+          # campos de politica quedarian a merced de quien pueda reescribir un asset de borrador.
+          for f in stable-manifest.json.pipeline.sig stable-manifest.json.pipeline.pem; do
+            [ -s "ota-dist/${f}" ] || {
+              echo "::error::the draft is missing ${f}; phase 1 published no binding for the manifest bytes" >&2
+              exit 1; }
+          done
+
+      # --- The strong link of the chain, brought INTO the OTA flow -------------------
+      # checksums.txt is signed in CI by the keyless cosign identity (goreleaser
+      # `signs:`) and is the subject of the SLSA provenance. The OTA manifest is signed
+      # off-box by the custodian. Nothing previously forced the two to agree, so an
+      # actor with contents:write could overwrite the draft stable-manifest.json between
+      # phase 1 and the ceremony with the digests of a malicious archive: the custodian
+      # would sign valid JSON, this job would pass, and clients would OTA to it.
+      # Verifying cosign here and then cross-checking every digest closes that window.
+      - name: verify the cosign signature over checksums.txt
+        env:
+          # FULLY ANCHORED. cosign matches --certificate-identity-regexp with an
+          # UNANCHORED Go regexp, so the old '^https://github.com/olivaresai/olivares'
+          # also accepted `…/olivares-anything/…`, any workflow file in the repo and
+          # any branch — i.e. any Sigstore identity whose SAN merely started with that
+          # prefix. The identity that signs checksums.txt is exactly this workflow
+          # running on a version tag; nothing else may satisfy the check.
+          # PINNED, not a repo variable: see the binding step's note. The in-step grammar
+          # checks below stay as defence in depth, but the value they guard is now fixed here.
+          # ⛔ LA IDENTIDAD SE DERIVA EN EL PASO, NO SE ESCRIBE AQUÍ. Este fichero VIAJA al
+          # árbol público, así que un nombre de repositorio privado escrito en él se publica;
+          # `aws-images.yml:306-312` resolvió exactamente esto y `lint:export` rechazó su
+          # primera versión, la que llevaba el literal. `GITHUB_REPOSITORY` da el mismo valor
+          # en ejecución y no deja rastro en el fichero. El contrato no cambia: sigue siendo la
+          # identidad de ESTE workflow sobre una etiqueta SemVer, anclada de punta a punta, y
+          # los validadores de gramática siguen siendo defensa en profundidad, ahora sobre el
+          # valor derivado — que es lo único que puede llegar hasta ellos.
+          CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          # El nombre del repositorio entra en una EXPRESIÓN REGULAR, así que se escapa
+          # primero: lleva puntos, y un punto sin escapar casa con cualquier carácter — el
+          # ancla se aflojaría justo donde tiene que ser estricta. Misma clase de caracteres
+          # que `aws-images.yml:315`.
+          # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          # ⛔ LA DERIVACION NO PISA UN VALOR YA PUESTO, y esto lo exigió una bateria real, no una
+          # opinion: `test-release-security-sig-guard.sh` INYECTA un ancla sin anclar para
+          # comprobar que los validadores de abajo la rechazan. Mi primera version derivaba
+          # siempre, asi que el valor inyectado se perdia, el validador veia una cadena bien
+          # formada y NUNCA rechazaba — el caso «an unanchored identity pattern refuses» pasaba a
+          # rc=0. Es decir: al derivar habia convertido en teatro justo el control que la bateria
+          # existe para probar, y la bateria lo cazo.
+          #
+          # Que se pueda inyectar NO reabre el agujero que la derivacion cierra: el agujero era
+          # una VARIABLE DE REPOSITORIO, mutable por cualquier admin sin revision. Un valor puesto
+          # en el `env:` de este paso vive en el fichero versionado y pasa por PR, que es
+          # exactamente el nivel de revision que se pedia.
+          CERT_IDENTITY_REGEXP="${CERT_IDENTITY_REGEXP:-^https://github\.com/${repo_rx}/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\$}"
+          # The identity pattern is a REPO VARIABLE, i.e. settable by anyone with repo
+          # admin and never reviewed in a PR. An unanchored or over-broad override
+          # turns this whole step into theatre, so validate the var before trusting it.
+          case "${CERT_IDENTITY_REGEXP}" in
+            '^'*'$') ;;
+            *) echo "ERROR: OLIVARES_CERT_IDENTITY must be fully anchored (^…\$); got '${CERT_IDENTITY_REGEXP}'" >&2; exit 1;;
+          esac
+              # ⛔ EL CRUCE VA CONTRA OTRA FUENTE. Preguntar si la cadena que acabo de construir
+              # con ${repo_rx} contiene ${repo_rx} no puede fallar nunca: sería decoración, el
+              # mismo defecto que `release-preflight.sh` documenta haber matado en §C.4.8
+              # («printing a fingerprint is not comparing it»). La afirmación real es que el
+              # repositorio con el que se construye el ancla es el MISMO que el preflight validó
+              # contra §C.4.1, §C.4.2 y §C.4.6 — dos caminos distintos que deben coincidir.
+              # ⛔ AQUÍ NO HAY CRUCE CONTRA EL PREFLIGHT, Y NO ES UN OLVIDO: este job es la fase 2
+              # por `workflow_dispatch` y NO depende del preflight — no hay output validado que
+              # consultar. El cruce equivalente lo hace cosign más abajo, y es más fuerte que
+              # una comparación en shell: `--certificate-github-workflow-repository
+              # "${GITHUB_REPOSITORY}"` exige que la reclamación del CERTIFICADO nombre al
+              # repositorio que corre, así que un ancla construida para otro repositorio no
+              # podría satisfacerse ni aunque pasara esta gramática.
+          case "${CERT_IDENTITY_REGEXP}" in
+            *"/${repo_rx}/"*'workflows/'*) ;;
+            *) echo "ERROR: OLIVARES_CERT_IDENTITY must pin the repository AND the workflow path; got '${CERT_IDENTITY_REGEXP}'" >&2; exit 1;;
+          esac
+          # Anchored and repo-pinned is not enough on its own: '^…/workflows/.*$'
+          # satisfies both while still matching ANY workflow on ANY ref, which is
+          # the same over-broad identity the anchoring is meant to prevent. Refuse
+          # a wildcard in the workflow-path segment so the override must name it.
+          case "${CERT_IDENTITY_REGEXP##*workflows/}" in
+            *'.*'*|*'.+'*) echo "ERROR: OLIVARES_CERT_IDENTITY must not wildcard the workflow path (no '.*'/'.+' after workflows/); got '${CERT_IDENTITY_REGEXP}'" >&2; exit 1;;
+          esac
+          bash scripts/cosign-verified.sh verify-blob \
+            --certificate ota-dist/checksums.txt.pem \
+            --signature ota-dist/checksums.txt.sig \
+            --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+            --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+            --certificate-github-workflow-repository "${GITHUB_REPOSITORY}" \
+            ota-dist/checksums.txt
+          echo "checksums.txt is the one this repository's release workflow signed."
+
+          # --- Y LOS BYTES DEL MANIFIESTO, atados al mismo pipeline -------------------
+          # ⛔ AQUÍ, NO EN EL PASO DE FIRMA, y por dos razones. La mecánica: el ancla y el
+          # emisor se derivan en ESTE paso, así que consumirlos en otro los dejaría vacíos —
+          # lo intenté y creé ese consumidor huérfano, el mismo defecto que acababa de
+          # arreglar unas líneas más abajo. La de orden: este paso ES el que verifica la
+          # evidencia, y el manifiesto es evidencia; firmar viene después, cuando ya no queda
+          # nada por comprobar.
+          #
+          # QUÉ CIERRA. `--checksums` ata los ARTEFACTOS del manifiesto, pero no `expires`,
+          # `released_at`, `min_version`, `rollout`, `security`/`advisories`, `notes` ni
+          # `channel`. A esos siete los ataba la lectura humana de la ceremonia — el bloque
+          # «READ EVERY LINE BEFORE SIGNING», cuyo propio verificador advierte que «OK: means
+          # plausible, not intended» —, y la orden 37 retira a ese humano. `CheckPolicy` rehúsa
+          # lo imposible; no distingue lo plausible de lo intencionado.
+          #
+          # La sustitución no es restaurar la lectura: es ATAR LOS BYTES. Verificada la firma
+          # que la fase 1 puso sobre ESTOS bytes, la política pasa a ser la salida determinista
+          # del pipeline en vez de la elección de quien pueda reescribir un asset de borrador.
+          bash scripts/cosign-verified.sh verify-blob \
+            --certificate ota-dist/stable-manifest.json.pipeline.pem \
+            --signature ota-dist/stable-manifest.json.pipeline.sig \
+            --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+            --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+            --certificate-github-workflow-repository "${GITHUB_REPOSITORY}" \
+            ota-dist/stable-manifest.json
+          echo "stable-manifest.json are the bytes this repository's phase 1 produced."
+
+      - name: sign the OTA manifest in-job and bind it to the signed release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          # ⛔ SECRETO DE ENVIRONMENT, NO DE REPOSITORIO. Este job declara
+          # `environment: ota-release-ceremony`, así que esta clave sólo es alcanzable
+          # después de que ese environment apruebe. Un secreto de REPOSITORIO lo leería
+          # cualquier workflow del repo, sin que nadie apruebe nada.
+          OTA_PRIVATE_KEY: ${{ secrets.OLIVARES_OTA_PRIVATE_KEY }}
+          OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
+          OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}
+        run: |
+          set -euo pipefail
+          sh scripts/check-release-pubkey.sh
+          version="${RELEASE_TAG#v}"
+
+
+          # --- La firma se produce AQUÍ (orden 37) -----------------------------------
+          # ⛔ LA CLAVE NO PASA POR LA LÍNEA DE MANDATO. `--sign-key` acepta `@ruta` y es la
+          # forma que se usa: un valor en argv es visible en la tabla de procesos del runner
+          # y acaba en cualquier traza que imprima el mandato. `umask 077` antes de crearlo,
+          # y se borra en cuanto se usa — con `trap`, para que también desaparezca si algo
+          # de en medio falla.
+          [ -n "${OTA_PRIVATE_KEY:-}" ] || {
+            echo "::error::OLIVARES_OTA_PRIVATE_KEY is not set on the ota-release-ceremony environment; phase 2 cannot sign" >&2
+            exit 1; }
+          echo "::add-mask::${OTA_PRIVATE_KEY}"
+          keyfile="${RUNNER_TEMP}/ota-signing.key"
+          ( umask 077; printf '%s' "${OTA_PRIVATE_KEY}" > "$keyfile" )
+          trap 'rm -f "$keyfile"' EXIT
+
+          # `--checksums` NO es opcional aquí: ata el manifiesto a los digests del
+          # checksums.txt que este mismo job acaba de verificar con cosign unas líneas más
+          # arriba. Sin ese cruce se firmaría JSON bien formado que podría describir OTROS
+          # bytes — exactamente la ventana que el paso anterior existe para cerrar.
+          go run ./cmd/olivares release sign-manifest \
+            --manifest ota-dist/stable-manifest.json \
+            --checksums ota-dist/checksums.txt \
+            --sign-key "@${keyfile}" \
+            --out ota-dist/stable-manifest.json.sig
+          rm -f "$keyfile"
+          trap - EXIT
+
+          # --- Break the circular bootstrap ------------------------------------------
+          # Everything below extracts and RUNS the binary out of the published archive
+          # and treats what it prints as verification. That is only meaningful if the
+          # archive was bound to the cosign-verified checksums.txt FIRST, by a tool
+          # that shares no code with it: the fingerprints this job greps for are PUBLIC
+          # repo variables (docs/RELEASE-VERIFICATION.md), so a substituted archive can
+          # print every expected value, print `OK:` and exit 0. sha256sum + awk, before
+          # the tar is opened, is what makes the rest of this job non-vacuous.
+          bash scripts/verify-archive-digest.sh ota-dist/checksums.txt \
+            "ota-dist/olivares_${version}_linux_amd64.tar.gz"
+
+          # The digest/policy verdict itself comes from the CHECKOUT, not from the
+          # artifact under test — `go run` at the release tag, with the public OTA
+          # anchor supplied explicitly (a `go run` build embeds none). If this and the
+          # shipped-binary run below ever disagree, the artifact is the suspect.
+          go run ./cmd/olivares release verify-manifest \
+            --manifest ota-dist/stable-manifest.json \
+            --sig ota-dist/stable-manifest.json.sig \
+            --pubkey "${OLIVARES_OTA_PUBKEY}" \
+            --checksums ota-dist/checksums.txt \
+            --dir ota-dist \
+            --expect-channel stable --expect-version "${version}"
+
+          mkdir -p ota-dist/community ota-dist/bundle
+          # ⛔ SYMLINK CONTRACT (INT-22, M79-M81). What follows extracts an entry from a
+          # downloaded archive, chmods it and RUNS it. tar happily creates a symlink, and a
+          # crafted archive whose `olivares` member is a link — to /usr/bin/env, to a path
+          # outside the extraction dir, to anything — turns `ota-dist/community/olivares`
+          # into a name that executes something else entirely. The verification above proves
+          # the ARCHIVE's bytes; it says nothing about the SHAPE of what comes out.
+          #
+          # Refused BEFORE extraction by reading the member list, and re-checked AFTER on the
+          # file that actually landed. Listing alone is not enough — it describes what tar
+          # says it will do, not what it did — and the post-check alone is not enough either,
+          # because by then the link exists on disk.
+          members="$(tar -tzf "ota-dist/olivares_${version}_linux_amd64.tar.gz")" || {
+            echo "ERROR: could not list the archive members; nothing was extracted." >&2
+            exit 1
+          }
+          bad="$(tar -tvzf "ota-dist/olivares_${version}_linux_amd64.tar.gz" | grep -E '^[hl]' || true)"
+          if [ -n "${bad}" ]; then
+            echo "ERROR: the published archive contains link entries:" >&2
+            printf '%s\n' "${bad}" >&2
+            echo "A release archive carries regular files only. Nothing was extracted." >&2
+            exit 1
+          fi
+          case "${members}" in
+          *..*) echo "ERROR: an archive member contains '..'; refusing to extract." >&2; exit 1 ;;
+          /*) echo "ERROR: an archive member is an absolute path; refusing to extract." >&2; exit 1 ;;
+          esac
+          tar -xzf "ota-dist/olivares_${version}_linux_amd64.tar.gz" \
+            -C ota-dist/community olivares
+          # AFTER the fact, on the thing that exists: -L follows a link, -h does not, so a
+          # symlink is the one case where these two disagree. If they disagree, what landed
+          # is not a regular file and must not be chmod-ed or run.
+          if [ -L ota-dist/community/olivares ] || [ ! -f ota-dist/community/olivares ]; then
+            echo "ERROR: the extracted olivares is not a regular file." >&2
+            ls -l ota-dist/community/olivares >&2 || true
+            echo "Nothing has been chmod-ed or executed." >&2
+            exit 1
+          fi
+          chmod 0755 ota-dist/community/olivares
+          cp ota-dist/stable-manifest.json ota-dist/bundle/manifest.json
+          cp ota-dist/stable-manifest.json.sig ota-dist/bundle/manifest.json.sig
+
+          license_fp="$(printf '%s' "${OLIVARES_LICENSE_PUBKEY}" | base64 -d | sha256sum | cut -c1-8)"
+          ota_fp="$(printf '%s' "${OLIVARES_OTA_PUBKEY}" | base64 -d | sha256sum | cut -c1-8)"
+          version_out="$(ota-dist/community/olivares version)"
+          grep -F "license-key=release/${license_fp}" <<<"${version_out}"
+          grep -F "ota-key=release/${ota_fp}" <<<"${version_out}"
+          # A binary built around the anchor gate (direct -ldflags) can embed ONE key in
+          # both trust domains; it says so on stderr. Never ship such an artifact.
+          version_err="$(ota-dist/community/olivares version 2>&1 >/dev/null || true)"
+          if grep -q "SAME key" <<<"${version_err}"; then
+            echo "ERROR: the shipped binary reuses one key across the licence and OTA trust domains:" >&2
+            echo "${version_err}" >&2
+            exit 1
+          fi
+
+          # THE proof, run by the SHIPPED community binary with NO --pubkey override.
+          # The archive it came out of was bound to checksums.txt above, so this run
+          # adds what the checkout cannot: that the EMBEDDED client-side anchor — the
+          # one every user's binary carries — accepts these exact published bytes.
+          #   1. the off-box signature verifies under the binary's own embedded OTA anchor;
+          #   2. channel/version are the ones being released;
+          #   3. the manifest carries a freshness bound and is not already stale;
+          #   4. its POLICY (expires window, min_version, rollout, security/advisories,
+          #      notes) is within plausibility bounds — the fields checksums.txt does
+          #      NOT bind and which alone can block or suppress every upgrade;
+          #   5. EVERY manifest digest equals the cosign-verified checksums.txt entry,
+          #      and each filename is the archive that platform must carry (not the
+          #      FIPS variant, not another platform's);
+          #   6. EVERY published archive is re-hashed and bound to that digest.
+          # Steps 5-6 are the ones `upgrade --check` can never give us here: with a
+          # manifest at the SAME version as the binary, upgrade returns at
+          # plan.IsUpToDate() long before VerifyArtifactSHA256, so it proves nothing
+          # about digests. verify-manifest has no version-comparison shortcut.
+          ota-dist/community/olivares release verify-manifest \
+            --manifest ota-dist/stable-manifest.json \
+            --sig ota-dist/stable-manifest.json.sig \
+            --checksums ota-dist/checksums.txt \
+            --dir ota-dist \
+            --expect-channel stable --expect-version "${version}"
+
+          # Belt and braces: exercise the REAL updater entry point too. This one is
+          # about the upgrade code path (bundle discovery, VerifyManifest, planning),
+          # NOT about digests — see above.
+          ota-dist/community/olivares upgrade --bundle ota-dist/bundle --check \
+            --target ota-dist/community/olivares --data-dir ota-dist/data \
+            --os linux --arch amd64
+      - name: attach verified OTA signature to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: |
+          set -euo pipefail
+
+          # ⛔ THE AUTHORIZATION IS THE TAG'S OWN DECLARATION, NOT THE DRAFT'S ASSET LIST.
+          #
+          # This gate used to rest entirely on `gh release view`, and a GET is a SNAPSHOT of a
+          # MUTABLE draft — never a durable attestation about it. Reproduced against the real
+          # block with a hermetic state server: the response is formed WITHOUT the security
+          # manifest, a writer outside this workflow uploads it (the `concurrency:` key at the
+          # top serializes the two phases of ONE release, so the in-workflow interleaving is
+          # excluded; another actor with contents:write is not), `gh` then
+          # returns the older body, and the ceremony finishes `rc=0` while the draft already
+          # carries security bytes nothing verified. Measured: `block_rc=0
+          # remote_security_manifest=present` (the model re-audit, 2026-08-09, P1-01).
+          #
+          # No second read fixes that — a later GET is just a second snapshot, and two
+          # snapshots that disagree cannot decide anything. What CAN decide is a fact that
+          # does not move: `release/advisories/<version>.txt` in THIS checkout, which is the
+          # tagged commit itself (`ref: inputs.release_tag` above). That file is what made
+          # phase 1b produce a security manifest in the first place, so asking it is asking
+          # the same question one layer earlier, where the answer is immutable.
+          #
+
+          # ⛔ THE COMMIT IS NOT THE BYTES. Matching HEAD, the tag and an OID proves WHICH
+          # commit was checked out; it says nothing about what is on disk NOW. Eight `uses:`
+          # steps run before this one in this job — setup-node, pnpm/action-setup, syft,
+          # cosign-installer, three docker actions, goreleaser — and any of them executes code
+          # in this workspace. A custom action can rewrite scripts/release-ota-channel.sh, or
+          # the verifier it will run, WITHOUT touching HEAD: every OID check still passes and
+          # the release rule is no longer the reviewed one.
+          #
+          # So the tree is checked against its commit HERE, immediately before it is read,
+          # instead of being trusted from the checkout onwards. `git status --porcelain`
+          # covers the three ways it can differ — staged in the index, modified in the working
+          # tree, and untracked additions — and any of them is a tree that is not the release.
+          # ⛔ THE TOOL IS PART OF THE CONTROL. The byte check below asks `git` what changed,
+          # and GitHub documents that an earlier action can prepend a directory to PATH for the
+          # rest of the job by writing to GITHUB_PATH. A shim that answers `status --porcelain`
+          # with silence and delegates everything else keeps every OID identical and every
+          # clean-direction case green, while modified, staged and untracked bytes all sail
+          # through. Measured against these exact blocks: producer 20/24, ceremony 59/61
+          # (the model repair audit, 2026-08-10, P1-02).
+          #
+          # So the tools are named by ABSOLUTE PATH instead of being resolved through PATH, and
+          # a `git` that PATH resolves elsewhere is itself evidence that something ran before
+          # this step: it refuses rather than quietly using the trusted copy.
+          # ABSOLUTE, WITH NO OVERRIDE. This was briefly `${OLIVARES_TRUSTED_BIN:-/usr/bin}`
+          # "so the battery can point at stubs", and that is not a test seam: an earlier action
+          # writes OLIVARES_TRUSTED_BIN through GITHUB_ENV and owns git, gh and sha256sum for
+          # every guard in this job. The harness mutates a COPY of this workflow instead; a
+          # control must not be configurable by the thing it guards against.
+          TRUSTED_BIN="/usr/bin"
+          GIT_BIN="${TRUSTED_BIN}/git"
+          [ -x "${GIT_BIN}" ] || { echo "ERROR: no trusted git at ${GIT_BIN}" >&2; exit 1; }
+          path_git="$(command -v git || true)"
+          if [ "${path_git}" != "${GIT_BIN}" ]; then
+            echo "ERROR: PATH resolves git to ${path_git:-<none>}, not ${GIT_BIN}." >&2
+            echo "Something earlier in this job put another git ahead of it, so the byte check" >&2
+            echo "would be asking the wrong tool. Nothing was produced or uploaded." >&2
+            exit 1
+          fi
+          # WHAT THIS JOB IS ALLOWED TO HAVE CREATED, NAMED HERE. The positive flow writes
+          # into the workspace before these guards run, and the first version of this check
+          # denied its own release for it: phase 1 writes release-commit.txt at the root and
+          # the producer answered `?? release-commit.txt`; phase 2 downloads into ota-dist/ and
+          # the ceremony answered `?? ota-dist/`. Both refused every legitimate release
+          # (the model, #638@1fc91ed8, measured on the real .gitignore).
+          #
+          # The fix is NOT a .gitignore rule. `git status --porcelain` stops reporting ignored
+          # paths at all, so anything dropped inside an ignored directory becomes invisible to
+          # this control, and a repo-wide ignore line would silently become load-bearing for a
+          # release guard — remove it and the denial comes back. The permitted set is declared
+          # HERE, beside the check it qualifies, and it admits ONLY untracked paths: a modified
+          # or staged TRACKED file never matches, which is the tampering this exists to catch.
+          #
+          # `-uall` because untracked DIRECTORIES are otherwise collapsed into one entry, and a
+          # single `?? ota-dist/` would then cover any file placed inside it.
+          status_raw="$("${GIT_BIN}" status --porcelain -uall)" || {
+            echo "ERROR: could not read the workspace state (signing ceremony)." >&2
+            exit 1
+          }
+          dirty=""
+          while IFS= read -r st || [ -n "${st}" ]; do
+            [ -n "${st}" ] || continue
+            case "${st}" in
+            '?? ota-dist/'*) continue ;;
+            '?? ota-staging/'*) continue ;;
+            esac
+            dirty="${dirty}${st}"$'\n'
+          done <<<"${status_raw}"
+          if [ -n "${dirty}" ]; then
+            echo "ERROR: the workspace no longer matches the commit for ${RELEASE_TAG} (signing ceremony)." >&2
+            printf '%s\n' "${dirty}" >&2
+            echo "Something wrote to the checkout after it was made. The release rule and the" >&2
+            echo "verifier are read from this tree, so a modified tree is not this release." >&2
+            exit 1
+          fi
+
+          # Same classifier as the producer, so the two cannot drift apart.
+          version="${RELEASE_TAG#v}"
+          [ -n "${version}" ] || { echo "ERROR: empty version from ${RELEASE_TAG}" >&2; exit 1; }
+          set +e
+          declaration="$(bash scripts/release-ota-channel.sh "${version}")"
+          decl_rc=$?
+          set -e
+          if [ "${decl_rc}" -ne 0 ]; then
+            echo "ERROR: the OTA channel gate refused for ${version}: ${declaration}" >&2
+            echo "A ceremony that cannot tell whether this is a security release must not finish it." >&2
+            exit 1
+          fi
+          if [ "${declaration}" != "${declaration#*$'\n'}" ]; then
+            echo "ERROR: the OTA channel gate emitted more than one line for ${version}" >&2
+            exit 1
+          fi
+          case "${declaration}" in
+          *$'\t'*) ;;
+          *) echo "ERROR: the OTA channel gate emitted no TAB-separated detail: ${declaration}" >&2; exit 1 ;;
+          esac
+          case "${declaration%%$'\t'*}" in
+          none) ;;
+          security)
+            # REFUSED BEFORE THE DRAFT IS TOUCHED. The upload below is a --clobber, so
+            # refusing afterwards would already have rewritten the stable pair on a release
+            # this ceremony cannot complete.
+            echo "ERROR: ${RELEASE_TAG} DECLARED a security release: ${declaration#*$'\t'}" >&2
+            echo "This ceremony signs the stable channel only, so it cannot complete a security" >&2
+            echo "release: the security manifest would go out unsigned, and every conforming" >&2
+            echo "client rejects it. Cryptographic verification of that channel is #644." >&2
+            echo "Nothing was uploaded. Do not publish this draft." >&2
+            exit 1
+            ;;
+          *)
+            echo "ERROR: unknown verdict from the OTA channel gate: ${declaration}" >&2
+            exit 1
+            ;;
+          esac
+
+          # ⛔ THE SAME OBJECT AS PHASE 1, NOT MERELY THE SAME NAME. A fully qualified
+          # `refs/tags/<tag>` fixes the NAMESPACE; it does not fix the OBJECT. A tag can be
+          # moved between the run that built the draft and the ceremony that completes it, and
+          # the contrast demonstrated exactly that on the same qualified ref:
+          #
+          #   qualified_ref=refs/tags/v26.8.0
+          #   phase1=1866293202ea…  phase2=5a9295bdbe…  moved=yes
+          #
+          # So the dispatch NAMES the commit phase 1 ran on, and this step refuses unless the
+          # tag still resolves to it AND the checkout is that same commit. Everything this
+          # ceremony treats as durable — above all the advisories declaration that authorizes
+          # it — then comes from an object identified by digest, not by a movable label.
+          [ -n "${RELEASE_COMMIT}" ] || { echo "ERROR: release_commit is empty" >&2; exit 1; }
+          case "${RELEASE_COMMIT}" in
+          *[!0-9a-f]* | "") echo "ERROR: release_commit is not lowercase hex: ${RELEASE_COMMIT}" >&2; exit 1 ;;
+          esac
+          [ "${#RELEASE_COMMIT}" -eq 40 ] || { echo "ERROR: release_commit must be a full 40-hex OID" >&2; exit 1; }
+          # ⛔ AND THE INPUT IS NOT EVIDENCE. Comparing the input against the tag and the
+          # checkout compares three values that all move together: moving the tag, moving the
+          # checkout and passing the matching OID satisfied every comparison, and phase 2
+          # completed over artifacts that may belong to the earlier run (the model repair
+          # audit, 2026-08-10, P1-01 — measured rc=0).
+          #
+          # So the authority is phase 1's own record: release-commit.txt, written by
+          # GoReleaser's own `before` hook and declared in BOTH `checksum.extra_files` — which
+          # puts its digest inside the checksums.txt this job has already cosign-verified — and
+          # `release.extra_files`, which is what uploads it to the draft at all. Neither key
+          # implies the other in v2.17.0, and the comment that used to sit here named only the
+          # first while the config carried neither (the model, 2026-08-15, P0-A).
+          # The input, the tag and the checkout must all equal THAT.
+          evidence="ota-dist/release-commit.txt"
+          [ -f "${evidence}" ] || {
+            echo "ERROR: ${evidence} is missing from the draft; phase 1 published no commit evidence." >&2
+            echo "Without it the commit would only be this dispatch's own claim. Nothing was uploaded." >&2
+            exit 1
+          }
+          # sha256sum by absolute path, and its output split in the shell: `cut` would be one
+          # more PATH lookup inside a control whose whole point is not to depend on one.
+          ev_sum="$("${TRUSTED_BIN}/sha256sum" "${evidence}" 2>/dev/null)" || ev_sum=""
+          ev_sum="${ev_sum%% *}"
+          [ -n "${ev_sum}" ] || { echo "ERROR: could not digest ${evidence}" >&2; exit 1; }
+          # The digest must be the one checksums.txt records, and checksums.txt is the file
+          # cosign verified earlier in this job. That is the link that makes it evidence.
+          # Matched in the shell, for the same reason the asset names are: no binary that can
+          # be missing or shimmed, no pattern that can be interpreted. The checksums line is
+          # `<sha256>  <name>`, compared whole.
+          ev_bound=0
+          while IFS= read -r _cs_line || [ -n "${_cs_line}" ]; do
+            [ "${_cs_line%$'\r'}" = "${ev_sum}  release-commit.txt" ] && ev_bound=1
+          done <ota-dist/checksums.txt
+          if [ "${ev_bound}" -ne 1 ]; then
+            echo "ERROR: ${evidence} does not match its entry in the cosign-verified checksums." >&2
+            echo "Its digest: ${ev_sum}" >&2
+            echo "The commit evidence was replaced after phase 1 signed the checksum set." >&2
+            exit 1
+          fi
+          IFS= read -r phase1_oid <"${evidence}" || true
+          phase1_oid="${phase1_oid%$'\r'}"
+          case "${phase1_oid}" in
+          *[!0-9a-f]* | "") echo "ERROR: phase-1 evidence is not a bare OID: ${phase1_oid}" >&2; exit 1 ;;
+          esac
+          [ "${#phase1_oid}" -eq 40 ] || { echo "ERROR: phase-1 evidence is not a full OID" >&2; exit 1; }
+
+          tag_oid="$("${GIT_BIN}" rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          head_oid="$("${GIT_BIN}" rev-parse --verify "HEAD^{commit}")"
+          if [ "${phase1_oid}" != "${RELEASE_COMMIT}" ]; then
+            echo "ERROR: the dispatched commit is not the one phase 1 recorded." >&2
+            echo "  phase 1 built  : ${phase1_oid}" >&2
+            echo "  dispatched for : ${RELEASE_COMMIT}" >&2
+            echo "A tag and an input that moved together cannot impersonate phase 1." >&2
+            exit 1
+          fi
+          if [ "${tag_oid}" != "${phase1_oid}" ] || [ "${head_oid}" != "${phase1_oid}" ]; then
+            echo "ERROR: ${RELEASE_TAG} does not resolve to the commit this ceremony was dispatched for." >&2
+            echo "  phase 1 built  : ${phase1_oid}" >&2
+            echo "  tag resolves to: ${tag_oid}" >&2
+            echo "  checkout is    : ${head_oid}" >&2
+            echo "The tag moved, or the wrong commit was named. Nothing was uploaded." >&2
+            exit 1
+          fi
+
+          # ⛔ THE CUSTODY CEREMONY CONTINUES IN THE SAME WINDOW, IN A VERSIONED SCRIPT.
+          # Everything from here on — the single draft read, the draft/immutable refusals, the
+          # staging, the clobbering upload, the exact-snapshot rollback and the deny-closed
+          # verdict on a security manifest — lives in scripts/release-attach-stable-pair.sh.
+          #
+          # It moved because this `run:` measured 21,600 characters against GitHub's documented
+          # 21,000-character limit for a single `run:`, so a legitimate release could not
+          # execute this step at all (the model, 2026-08-15, P0-B, NO-LAND).
+          #
+          # WHAT DID NOT MOVE IS THE GUARANTEE. The `git status` above, the classifier call
+          # that reads the release rule and the binding to phase 1's evidence are all still in
+          # THIS one scalar, so no step — and therefore no `uses:` — can be scheduled between
+          # the check and the consumption. The script below is invoked from inside that same
+          # verified window, exactly as scripts/release-ota-channel.sh already is: it is
+          # tracked code, and the tree it is read from was checked a few lines above. Cutting
+          # the block at the check instead would have destroyed the property the check exists
+          # for. `set -e` is in force, so its refusal is this step's refusal.
+          bash scripts/release-attach-stable-pair.sh "${RELEASE_TAG}"

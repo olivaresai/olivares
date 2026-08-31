@@ -1,0 +1,82 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  gateway: {
+    bind: 'lan',
+    auth: {mode: 'token'},
+    tls: {enabled: false},
+    tailscale: {mode: 'funnel'},
+    controlUi: {
+      allowInsecureAuth: true,
+      dangerouslyDisableDeviceAuth: true,
+    },
+  },
+  channels: {
+    defaults: {groupPolicy: 'open'},
+    discord: {
+      enabled: true,
+      dmPolicy: 'open',
+      allowFrom: ['*'],
+      configWrites: true,
+      allowBots: true,
+      token: 'literal-discord-token',
+    },
+    matrix: {
+      enabled: true,
+      network: {dangerouslyAllowPrivateNetwork: true},
+    },
+    googlechat: {
+      enabled: true,
+      dangerouslyAllowNameMatching: true,
+    },
+  },
+  tools: {
+    exec: {
+      security: 'full',
+      applyPatch: {workspaceOnly: false},
+    },
+    fs: {workspaceOnly: false},
+    elevated: {enabled: true, allowFrom: ['*']},
+  },
+  agents: {
+    defaults: {
+      sandbox: {mode: 'off'},
+      model: {
+        primary: 'openai/gpt-4.1',
+        fallbacks: ['anthropic/claude-sonnet-4-20250514'],
+      },
+    },
+  },
+  skills: {
+    load: {
+      extraDirs: ['./skills-extra'],
+      allowSymlinkTargets: true,
+    },
+    install: {allowUploadedArchives: true},
+    workshop: {allowSymlinkTargetWrites: true},
+    entries: {
+      shell: {enabled: true, apiKey: 'literal-skill-key'},
+    },
+  },
+  plugins: {
+    entries: {
+      promptTap: {
+        enabled: true,
+        apiKey: 'literal-plugin-key',
+        hooks: {allowPromptInjection: true, allowConversationAccess: true},
+      },
+    },
+  },
+  security: {installPolicy: 'self-service'},
+  discovery: {mdns: {mode: 'full'}, wideArea: {enabled: true}},
+  logging: {redactSensitive: 'off'},
+  diagnostics: {otel: {enabled: false}},
+  models: {
+    providers: {
+      anthropic: {apiKey: 'literal-anthropic-key'},
+      openai: {apiKey: {source: 'env', name: 'OPENAI_API_KEY'}},
+    },
+  },
+  session: {dmScope: 'main'},
+  update: {channel: 'dev'},
+}

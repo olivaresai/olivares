@@ -1,0 +1,140 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# STIG-hardened DEPLOYMENT image variant (gap SCP-09). A SEPARATE, opt-in artifact —
+# it does NOT replace the default ./Dockerfile / Dockerfile.release. The default
+# pure-Go reproducible binary and the distroless image are unaffected.
+#
+# WHY THIS EXISTS (honest engineering — see docs/SCP-09-FIPS-STIG.md):
+#   DISA STIG verification is done with OpenSCAP (oscap), which evaluates a SCAP
+#   datastream against a real, scannable OS. The default distroless image has NO OS
+#   (no package DB, /etc, shell, auditd, PAM…), so `oscap` has nothing to evaluate.
+#   To make STIG state SELF-VERIFIABLE by a buyer, the hardened deployment variant
+#   bases on a minimal OS that SHIPS DISA STIG SCAP content. We use Red Hat UBI
+#   `micro` (freely redistributable; the matching SCAP datastream ships in the
+#   `scap-security-guide` package / upstream ComplianceAsCode for RHEL).
+#   An Ubuntu alternative (ubuntu + the `usg` Ubuntu Security Guide tooling, or the
+#   upstream ssg-ubuntu* datastream) is documented in docs/SCP-09-FIPS-STIG.md.
+#
+# WHAT IS AND ISN'T CLAIMED:
+#   - The crypto is the FIPS 140-3 native build (GOFIPS140=v1.0.0, CMVP cert #5247),
+#     same binary as Dockerfile.fips, run with GODEBUG=fips140=on.
+#   - The image is hardened toward the DISA STIG and is SELF-VERIFIABLE with the
+#     published OpenSCAP profile (oscap/scan.sh + oscap/README.md). It is NOT a
+#     certified/accredited image and carries NO ATO. A passing OSCAP scan is
+#     evidence the operator runs, not a certification we issue.
+#
+# Build (from repo root):
+#   docker build -f Dockerfile.stig \
+#     --build-arg VERSION="$(git describe --tags --always --dirty)" \
+#     --build-arg COMMIT="$(git rev-parse --short HEAD)" \
+#     --build-arg SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
+#     -t olivares:stig .
+#
+# Verify the hardened state yourself (does not fabricate a result):
+#   oscap/scan.sh --image olivares:stig     # runs oscap, writes report.html
+#
+# Under GoReleaser the FIPS binary is prebuilt by the `olivares-fips` build and
+# only COPYed in; the from-source stage below is for plain `docker build`.
+
+# ---- web stage: build the React/Vite UI into the Go embed dir -----------------
+FROM node:26-bookworm-slim AS web
+WORKDIR /src
+RUN corepack enable
+COPY web/package.json web/pnpm-lock.yaml ./web/
+RUN cd web && pnpm install --frozen-lockfile
+COPY web/ ./web/
+COPY core/internal/webui/dist/index.html ./core/internal/webui/dist/index.html
+RUN cd web && pnpm run build
+
+# ---- go stage: compile the FIPS 140-3 static binary (same as Dockerfile.fips) --
+FROM golang:1.26.6-bookworm AS build
+WORKDIR /src
+ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly GOFIPS140=v1.0.0
+COPY go.work go.work.sum ./
+COPY core/go.mod core/go.sum ./core/
+COPY cmd/olivares/go.mod cmd/olivares/go.sum ./cmd/olivares/
+COPY connectors/go.mod connectors/go.sum ./connectors/
+COPY modules/go.mod modules/go.sum ./modules/
+COPY sdk/go.mod sdk/go.sum ./sdk/
+COPY sdk/plugin/go.mod sdk/plugin/go.sum ./sdk/plugin/
+COPY terraform-provider-olivares/go.mod terraform-provider-olivares/go.sum ./terraform-provider-olivares/
+RUN go mod download
+COPY . .
+COPY --from=web /src/core/internal/webui/dist/ ./core/internal/webui/dist/
+ARG VERSION=dev
+ARG COMMIT=none
+ARG SOURCE_DATE_EPOCH=0
+RUN BUILD_DATE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)" && \
+    go build -trimpath \
+      -ldflags "-s -w -buildid= -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
+      -o /out/olivares ./cmd/olivares && \
+    # THIS GUARD COULD NOT PASS, and the image was therefore unbuildable. It read
+    # `go tool nm /out/olivares | grep -q 'crypto/internal/fips140/v1.0.0'` over the binary
+    # THE LINE ABOVE had just stripped with `-s -w`. Measured 2026-08-08 on this tree, no
+    # container needed, with both controls: the same build WITHOUT those flags yields 72220
+    # symbol lines; WITH them `go tool nm` answers `no symbol section` and prints 0 lines, so
+    # the grep can never match and the `||` branch fires unconditionally. Every build of this
+    # file died here — while the image labels below carry ai.olivares.fips140.cmvp-certificate
+    # and docs/SCP-09-FIPS-STIG.md rests a public STIG claim on the resulting artifact.
+    #
+    # Dockerfile.fips had the IDENTICAL defect and was repaired; this file was left behind, so
+    # the class outlived the case. The external contrast on gate S-5 reported both as broken —
+    # correct about this one, and reading the repaired file's EXPLANATORY COMMENT as if it were
+    # live code for the other. Measure the code, not the prose that describes it.
+    #
+    # The replacement RUNS the binary, which is strictly stronger than a symbol name: a symbol
+    # proves a package was linked, this proves the module INITIALISES and that it is the
+    # VALIDATED one. Both halves are asserted because either alone is satisfiable while the
+    # claim is false. Native build stage, no cross-compilation, so the binary runs here.
+    FIPS_JSON="$(GODEBUG=fips140=on /out/olivares version -o json)" && \
+    printf '%s' "$FIPS_JSON" | grep -q '"fips"[[:space:]]*:[[:space:]]*"on"' && \
+    printf '%s' "$FIPS_JSON" | grep -q '"module"[[:space:]]*:[[:space:]]*"v1.0.0"' \
+      || (echo 'FATAL: this binary does not report FIPS 140-3 v1.0.0 at runtime — GOFIPS140' >&2; \
+          echo "was not honoured, or the module is not the validated one. version said:" >&2; \
+          printf '%s\n' "${FIPS_JSON:-<the binary did not run>}" >&2; exit 1)
+
+# ---- hardening stage: prepare a non-root user + data dir on the UBI base -------
+# UBI micro has no package manager/shell of its own, so we stage the rootfs (the
+# nonroot account, the owned data dir) in UBI minimal and copy it across. The SCAP
+# datastream for the scan is NOT baked into the runtime image (keep it lean); the
+# scanner mounts/installs it at scan time — see oscap/.
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8 AS osprep
+# uid/gid 65532 mirrors the distroless `nonroot` convention used elsewhere.
+RUN microdnf install -y shadow-utils \
+    && groupadd -g 65532 nonroot \
+    && useradd -u 65532 -g 65532 -m -s /sbin/nologin nonroot \
+    && mkdir -p /data && chown 65532:65532 /data \
+    && microdnf clean all
+
+# ---- final stage: UBI micro, scannable, non-root, FIPS toggle ON ---------------
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.8
+LABEL org.opencontainers.image.title="olivares-stig" \
+      org.opencontainers.image.description="Olivares AI control plane — STIG-hardened deployment image, FIPS 140-3 (GOFIPS140=v1.0.0); self-verifiable via OpenSCAP. No ATO claimed." \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/olivaresai/olivares" \
+      org.opencontainers.image.vendor="Olivares.AI" \
+      ai.olivares.fips140.mode="v1.0.0" \
+      ai.olivares.fips140.cmvp-certificate="5247" \
+      ai.olivares.stig.oscap-profile="xccdf_org.ssgproject.content_profile_stig" \
+      ai.olivares.stig.certified="false"
+# Carry over the passwd/group/shadow entries and the owned data dir from osprep so
+# the runtime has a real non-root account the OS/OSCAP checks can see.
+COPY --from=osprep /etc/passwd /etc/passwd
+COPY --from=osprep /etc/group /etc/group
+COPY --from=osprep --chown=65532:65532 /data /data
+COPY --from=build /out/olivares /usr/local/bin/olivares
+# The licence travels INSIDE the image. Until 2026-08-04 it did not: the OCI images
+# carried an org.opencontainers.image.licenses LABEL and no licence TEXT, so the main
+# distribution path handed an operator an AGPL binary with neither the grant that lets
+# them run it nor the warranty disclaimer that protects everyone who wrote it. A label
+# is metadata; AGPL sections 4 and 5 ask for the document.
+COPY LICENSE NOTICE LICENSING.md DISCLAIMER.md /usr/share/doc/olivares/
+COPY LICENSES /usr/share/doc/olivares/LICENSES
+# FIPS enforcement on (module self-tests + approved-algorithms-only) for the process.
+ENV GODEBUG=fips140=on
+# Drop privileges: run as the non-root account, never root.
+USER 65532:65532
+EXPOSE 8443 8444
+ENTRYPOINT ["/usr/local/bin/olivares"]
+CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/data"]

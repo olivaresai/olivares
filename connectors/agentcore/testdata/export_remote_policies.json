@@ -1,0 +1,69 @@
+{
+  "policies": [
+    {
+      "policyId": "pol-update",
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-export/policy/pol-update",
+      "name": "olv_tenant_a_g_update000",
+      "description": "olivares-export v1 tenant=tenant-a sha256=0000000000000000000000000000000000000000000000000000000000000000",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit old update;"
+        }
+      }
+    },
+    {
+      "policyId": "pol-delete",
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-export/policy/pol-delete",
+      "name": "olv_tenant_a_g_delete000",
+      "description": "olivares-export v1 tenant=tenant-a sha256=1111111111111111111111111111111111111111111111111111111111111111",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit delete me;"
+        }
+      }
+    },
+    {
+      "policyId": "pol-unchanged",
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-export/policy/pol-unchanged",
+      "name": "olv_tenant_a_g_unchanged",
+      "description": "olivares-export v1 tenant=tenant-a sha256=2222222222222222222222222222222222222222222222222222222222222222",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit unchanged;"
+        }
+      }
+    },
+    {
+      "policyId": "pol-other-tenant",
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-export/policy/pol-other-tenant",
+      "name": "olv_tenant_b_g_keep0000",
+      "description": "olivares-export v1 tenant=tenant-b sha256=3333333333333333333333333333333333333333333333333333333333333333",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit other tenant;"
+        }
+      }
+    },
+    {
+      "policyId": "pol-manual",
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-export/policy/pol-manual",
+      "name": "manual_policy",
+      "description": "operator-owned policy",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit manual;"
+        }
+      }
+    }
+  ]
+}

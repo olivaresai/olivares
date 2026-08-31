@@ -1,0 +1,23 @@
+{
+  "value": [
+    {
+      "id": "agent-3",
+      "name": "Workflow Agent",
+      "state": "enabled",
+      "versions": {
+        "latest": {
+          "id": "ver-3",
+          "name": "v3",
+          "version": "3",
+          "created_at": "1783363200",
+          "status": "published",
+          "draft": false,
+          "definition": {
+            "kind": "workflow",
+            "model": "workflow-model"
+          }
+        }
+      }
+    }
+  ]
+}

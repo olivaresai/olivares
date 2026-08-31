@@ -1,0 +1,99 @@
+{
+  "title": "Empezar",
+  "subtitle": "Configura tu despliegue paso a paso: cada paso se verifica contra el plano de control en vivo.",
+  "progress": "{{done}} de {{total}} verificados",
+  "refresh": "Actualizar",
+  "dismiss": "Descartar",
+  "allDone": "Tu despliegue está configurado.",
+  "allDoneHint": "Cada paso se verifica contra el plano de control. Puedes volver a este asistente cuando quieras.",
+  "dismissed": {
+    "title": "Guía de configuración descartada",
+    "description": "La guía está oculta en este navegador. Tu despliegue sigue funcionando; puedes retomar los pasos verificados cuando quieras.",
+    "resume": "Retomar la guía de configuración"
+  },
+  "status": {
+    "verified": "Verificado",
+    "pending": "Pendiente",
+    "awaiting": "A la espera del host"
+  },
+  "steps": {
+    "infra": {
+      "title": "Infraestructura",
+      "hint": "La base de datos debe estar accesible antes que nada.",
+      "ready": "El plano de control puede acceder a su base de datos. Este paso se verifica automáticamente.",
+      "notReady": "El plano de control todavía no puede acceder a su base de datos."
+    },
+    "workspace": {
+      "title": "Crea tu primer espacio de trabajo",
+      "hint": "Un espacio de trabajo delimita agentes, fuentes y políticas.",
+      "name": "Nombre del espacio de trabajo",
+      "namePlaceholder": "p. ej. Equipo de plataforma",
+      "slug": "Slug",
+      "create": "Crear espacio de trabajo",
+      "addAnother": "Crear otro",
+      "created": "Se ha creado el espacio de trabajo {{name}}."
+    },
+    "identity": {
+      "title": "Invita a un administrador",
+      "hint": "Invita a un segundo administrador o conecta tu proveedor de identidad.",
+      "email": "Correo",
+      "role": "Rol",
+      "mode": "Método",
+      "modeInvite": "Enviar una invitación",
+      "modePassword": "Establecer una contraseña",
+      "invite": "Invitar",
+      "inviteAnother": "Invitar a otro",
+      "invited": "Se ha invitado a {{email}}.",
+      "or": "o",
+      "ssoCta": "Conectar SSO",
+      "password": "Contraseña",
+      "passwordHint": "Al menos 8 caracteres. El nuevo administrador podrá cambiarla después.",
+      "memberCount_one": "{{count}} miembro en este inquilino.",
+      "memberCount_many": "{{count}} miembros en este inquilino.",
+      "memberCount_other": "{{count}} miembros en este inquilino."
+    },
+    "source": {
+      "title": "Registra tu primera fuente",
+      "hint": "Conecta una fuente de contenido o de gobernanza. Las credenciales se guardan por referencia.",
+      "kind": "Conector",
+      "kindPlaceholder": "Elige un conector",
+      "name": "Nombre de la fuente",
+      "namePlaceholder": "p. ej. mi-wiki",
+      "tenant": "Inquilino",
+      "noFields": "Este conector no necesita más configuración.",
+      "secretHint": "Introduce un valor para sellarlo, o una referencia store:<name>.",
+      "test": "Probar",
+      "tested": "Conexión correcta.",
+      "testOk": "El conector se ha abierto correctamente.",
+      "testFail": "El conector no ha podido abrirse; revisa la configuración.",
+      "register": "Registrar",
+      "addAnother": "Registrar otra",
+      "registered": "Se ha registrado {{name}}.",
+      "notRunning": "Hay una fuente registrada pero aún no está en ejecución; revisa su estado arriba.",
+      "credByRef": "Los campos secretos se sellan en el almacén y se referencian como store:<name>: un valor de credencial nunca se guarda en línea."
+    },
+    "pep": {
+      "title": "Activa tu primer punto de aplicación de políticas",
+      "hint": "Publica una política managed-settings y confirma que un host la ha aplicado.",
+      "notPublished": "Aún no hay ninguna política managed-settings publicada.",
+      "authorCta": "Redactar una política",
+      "active": "Un host ha atestiguado esta política: el punto de aplicación está activo.",
+      "awaitingHint": "La política está publicada y firmada, pero ningún host ha reportado todavía. Despliega el fragmento y actualiza.",
+      "revision": "Revisión",
+      "fingerprint": "Huella de la clave",
+      "snippet": "Fragmento managed-settings",
+      "copy": "Copiar",
+      "copied": "Copiado al portapapeles.",
+      "copyFailed": "No se ha podido copiar al portapapeles.",
+      "checkins": "Reportes de hosts",
+      "noCheckins": "Ningún host ha reportado todavía.",
+      "colScope": "Ámbito",
+      "colReporter": "Informante",
+      "colRevision": "Revisión",
+      "colVerified": "Verificado",
+      "verifiedCurrent": "Verificado (actual)",
+      "verifiedStale": "Verificado (desfasado)",
+      "unverified": "Sin verificar"
+    }
+  }
+}

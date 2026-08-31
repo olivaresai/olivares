@@ -1,0 +1,18 @@
+{
+  "suite_ref": "SUITE_REF_PLACEHOLDER",
+  "a": {
+    "label": "v6-concise",
+    "outputs": {
+      "greeting": "hello",
+      "farewell": "bye"
+    }
+  },
+  "b": {
+    "label": "v5-verbose",
+    "outputs": {
+      "greeting": "hello there, friend",
+      "farewell": "bye"
+    }
+  },
+  "pairwise": true
+}

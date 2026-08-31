@@ -1,0 +1,96 @@
+{
+  "title": "推論プロキシ",
+  "description": "すべてのモデル呼び出しの前段にある、テナントごとのポリシー適用プロキシ：リクエスト/レスポンスのゲート、エグレス DLP ルール、デバイス認可の承認。",
+  "config": {
+    "title": "ゲートと上限",
+    "intro": "各ゲートはモデル呼び出しの前にリクエスト経路で適用されます。オフにするとそのチェックの適用が停止します。変更は監査台帳に記録されます。",
+    "failOpen": "フェイルオープン",
+    "failOpenHint": "プロキシがポリシー判定に到達できない場合、ブロックせずに呼び出しを許可します。オフ = フェイルクローズ。",
+    "recordMandatory": "記録を必須にする",
+    "recordMandatoryHint": "セッション台帳に記録できない呼び出しを拒否します。",
+    "gates": {
+      "gate_model_access": "モデルアクセス",
+      "gate_budget": "予算",
+      "gate_residency": "レジデンシー",
+      "gate_context_window": "コンテキストウィンドウ",
+      "gate_dlp_request": "リクエスト DLP",
+      "gate_dlp_response": "レスポンス DLP"
+    },
+    "gatesHint": {
+      "gate_model_access": "各サブジェクトが呼び出せるモデルを適用します。",
+      "gate_budget": "呼び出しがコストを発生させる前に予算上限を適用します。",
+      "gate_residency": "テナントのデータレジデンシーリージョンを適用します。",
+      "gate_context_window": "サーフェスごとのコンテキストウィンドウ上限を適用します。",
+      "gate_dlp_request": "送信リクエストに許可されない分類がないか検査します。",
+      "gate_dlp_response": "レスポンス DLP モードに従ってモデルの応答を検査します。"
+    },
+    "responseDlpMode": "レスポンス DLP モード",
+    "responseDlpModeHint": "レスポンス DLP が一致を処理する方法：off（検査なし）、flag（注釈）、buffer（返す前に検査のため保留）。",
+    "dlpModes": {
+      "off": "オフ",
+      "flag": "フラグ",
+      "buffer": "バッファ"
+    },
+    "ceilingsEnforce": "上限を適用",
+    "ceilingsEnforceHint": "呼び出しごとのトークン、ツール使用回数、タスク予算を制限します。オフ = 呼び出しごとの上限なし。",
+    "ceilingMaxTokens": "最大トークン",
+    "ceilingMaxToolUses": "最大ツール使用回数",
+    "ceilingTaskBudget": "タスク予算（トークン）",
+    "ceilingTaskBudgetHint": "0 = 未設定、それ以外は {{min}} 以上。",
+    "ceilingTaskBudgetError": "0 または {{min}} 以上である必要があります。",
+    "reset": "リセット",
+    "save": "設定を保存",
+    "saved": "プロキシ設定を保存しました"
+  },
+  "dlp": {
+    "title": "エグレス DLP ルール",
+    "intro": "コンテンツ分類をエグレス時の許可または拒否に対応付けます。分類はモデル呼び出し時にサーバー側で実行され、これらのルールが一致時の動作を決めます。",
+    "truncated": "{{n}} 件の DLP ルールを読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くの DLP ルールがあります。このページは ID 順に行を取得します。この一覧にないことは、存在しないことを示しません。ここに見えないルールが送信を統制している可能性があります。",
+    "add": "ルールを追加",
+    "noRead": "DLP ルールを表示する権限がありません。",
+    "empty": "DLP ルールがありません",
+    "emptyHint": "エグレス時に分類を許可または拒否するルールを追加します。",
+    "colClass": "分類",
+    "colAction": "アクション",
+    "colNote": "メモ",
+    "colActions": "操作",
+    "actions": {
+      "allow": "許可",
+      "deny": "拒否"
+    },
+    "editAction": "{{class}} のルールを編集",
+    "deleteAction": "{{class}} のルールを削除",
+    "created": "DLP ルールを作成しました",
+    "updated": "DLP ルールを更新しました",
+    "deleted": "DLP ルールを削除しました",
+    "deleteDialog": {
+      "title": "DLP ルールを削除しますか？",
+      "description": "「{{class}}」のエグレスルールを削除します。一致するコンテンツはデフォルトの処理に戻ります。",
+      "confirm": "ルールを削除"
+    },
+    "dialog": {
+      "title": "DLP ルールを追加",
+      "editTitle": "DLP ルールを編集",
+      "subtitle": "分類はエグレス時に許可または拒否されます。ルールは分類をキーとします。",
+      "class": "分類",
+      "classHint": "このルールが適用されるコンテンツ分類（例：pii、secret）。",
+      "action": "アクション",
+      "note": "メモ",
+      "create": "ルールを追加",
+      "save": "ルールを保存"
+    }
+  },
+  "device": {
+    "title": "デバイス認可",
+    "intro": "デバイス認可リクエストをそのユーザーコード（デバイスのペアリング画面に表示されるコード）で承認または拒否します。",
+    "userCode": "ユーザーコード",
+    "userCodePlaceholder": "例：WDJB-MJHT",
+    "approve": "承認",
+    "deny": "拒否",
+    "approved": "デバイスコード {{code}} を承認しました",
+    "denied": "デバイスコード {{code}} を拒否しました",
+    "notFound": "そのユーザーコードの保留中リクエストはありません。",
+    "expired": "そのリクエストは期限切れか、すでに使用されています。"
+  }
+}

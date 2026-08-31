@@ -1,0 +1,238 @@
+# Root .gitignore for the Olivares AI monorepo.
+#
+# Deliberately NARROW. Notable things that ARE tracked and must NOT be ignored:
+#   - core/internal/webui/dist/**        (the embedded web bundle, go:embed)
+#   - **/testdata/*.log                  (audit-connector fixtures — never add `*.log`)
+
+# Local dependency trees, installed by `task setup`. The root package.json is
+# commit-message tooling only (commitlint); the engine is Go, the web app is /web.
+#
+# NO TRAILING SLASH, on purpose (2026-08-05). A pattern ending in `/` matches only
+# a DIRECTORY, so `web/node_modules` created as a SYMLINK — which is what pointing
+# at a shared pnpm store produces, and what several of this repo's worktrees have —
+# was NOT ignored and showed up as untracked. A `git add -A` would then commit a
+# symlink to an absolute path outside the repository: broken for every other clone,
+# and a path that escapes the tree in something we export publicly. Measured here,
+# same class as the credential-shaped rules added in #537.
+/node_modules
+/web/node_modules
+/clients/typescript/node_modules
+# TypeScript client SDK build output (`pnpm --dir clients/typescript build`).
+/clients/typescript/dist/
+# Python bytecode + packaging caches (the Python client SDK; regenerated on
+# import/test/build) and the generator's `go build` binary.
+__pycache__/
+*.py[cod]
+*.egg-info/
+/clients/generator/generator
+# buf's temporary clone for `task proto:breaking` (kept off the small /tmp).
+/.buftmp/
+# examples/ smoke-test scratch (data dirs + extracted source-plugin binaries).
+# On the workspace disk because /tmp is tmpfs+noexec in the dev container and the
+# engine fork/execs the embedded connector plugin from $TMPDIR.
+/.examples-tmp/
+# The engine's LEGACY relative data directory. Until `olivares serve` with no
+# --data-dir created this in whatever directory it was run from, so running the
+# product from a clone dropped an installation into the tree. The default now
+# resolves to a per-user path (cmd/olivares/boot.go defaultDataDir) and every data
+# directory the engine creates carries its own exclusion (core/secure EnsureDataDir),
+# so this line is the third layer, not the fix.
+#
+# It is NOT redundant with the `*.key`/`*.pem` rules at the end of this file, and
+# that was measured on 2026-08-08 rather than assumed: those rules did catch the
+# seven 0600 key files, but `git add -A` still staged olivares-data/olivares.db —
+# the store, which holds the sealed secrets and the audit ledger — together with
+# olivares-data/setup.token, the one-time token that creates the first administrator.
+olivares-data/
+# schema-parity gate's repo-local build scratch (two probe binaries; /tmp is
+# noexec in the dev container so the gate builds under the worktree). Normally
+# trap-removed, but gitignored so a SIGKILL/teardown leftover can't slip into git.
+/.schema-parity.*/
+# mapper-parity gate scratch (`task lint:error-mappers`): builds its AST helper, and its
+# self-test writes throwaway module trees. /tmp is noexec in the dev container, so a gate
+# that built there would refuse on every push of every lane unless the caller happened to
+# have TMPDIR set — measured: exit 126, "permission denied" on a file whose exec bit is on.
+# Trap-removed, but gitignored so a teardown leftover cannot slip into a commit.
+/.error-mappers-tmp/
+# truncated-list gate scratch (`task lint:list-page-discarded`): builds its AST helper,
+# and /tmp is noexec in the dev container so the binary cannot live there. Trap-cleaned.
+/.list-page-discarded-tmp/
+/.cli-walk-tmp/
+
+# openapi-op-descriptions gate's repo-local scratch. That gate COMPILES a binary and RUNS it, so
+# it needs a scratch that is writable AND executable; /tmp is tmpfs+noexec in the dev container.
+# The script CHOOSES its scratch (TMPDIR, then this, then /var/tmp) rather than having the task
+# impose one — imposing it rejects on a read-only CI checkout and annuls a good TMPDIR the runner
+# may supply. This entry exists because the fallback creates the parent, and an untracked
+# directory in a SHARED clone is what a stray `git add -A` from another lane sweeps up.
+/.openapi-op-tmp/
+
+# config-env-docs gate's repo-local build scratch: it builds a Go helper and EXECUTES it,
+# and its self-test writes throwaway repository trees. /tmp is noexec in the dev container,
+# so the build lands here (same reason as .error-mappers-tmp/ above). Trap-cleaned.
+/.config-env-docs-tmp/
+
+#C09-03: the generated CLI-reference gate builds a Go helper, runs a command-tree
+# walk and executes both. /tmp is noexec in the dev container, so the build lands here
+# (same reason as .config-env-docs-tmp/ above). Trap-cleaned.
+/.cli-ref-docs-tmp/
+
+#C09-05: the guide gate (console reference, gRPC reference, upgrade-guide claims)
+# builds a Go helper and EXECUTES it, and its self-test writes throwaway repository trees.
+# /tmp is noexec in the dev container, so the build lands here (same reason as
+# .config-env-docs-tmp/ above). Trap-cleaned.
+/.guide-docs-tmp/
+
+#C09-04: the published-OpenAPI-description gate builds a Go helper and EXECUTES it,
+# and its self-test writes throwaway repository trees. /tmp is noexec in the dev container,
+# so the build lands here (same reason as .config-env-docs-tmp/ above). Trap-cleaned.
+/.openapi-op-descriptions-tmp/
+# public-export gate scratch (`task lint:export`): builds the export-scrub helper and
+# writes a throwaway curated copy; /tmp is noexec in the dev container so it runs under
+# the worktree. Trap-removed, but gitignored so a teardown leftover can't slip in.
+/.export-tmp/
+
+# Artefacts of `task console:walk`, which writes 51 files into the CURRENT DIRECTORY by default
+# (scripts/console-walk.mjs:46). Measured 2026-08-08: after a walk from the shared hub clone they
+# sat there untracked, where any other lane's `git add -A` would have committed them. In a clone
+# three containers share, an untracked artefact is not private -- it is everyone's. Point
+# OLIVARES_WALK_OUT elsewhere if you want them kept.
+/console-walk-out/
+# lint:commerce builds the canon linter here rather than `go run`-ing it (go run
+# does not propagate exit codes); /tmp is noexec in the dev container.
+/.commerce-tmp/
+# scripts/test-prepush-refclass.sh runs the real pre-push hook against STUB `task`/`git`
+# executables, and PATH lookup needs the exec bit: /tmp is noexec in the dev container, so
+# the battery falls back here. Trap-removed, but gitignored so a teardown leftover cannot
+# slip into the index.
+/.prepush-refclass-tmp/
+
+# Local build outputs (the binary + release dir). The in-package form covers a
+# `go build` run from cmd/olivares itself (a 60MB artifact once slipped into
+# the index that way).
+/olivares
+/cmd/olivares/olivares
+/dist/
+/bin/
+# First-party connector plugin binaries: BUILD ARTIFACTS, populated by
+# `task build:connectors` (release) — only the embed-pattern placeholder is
+# committed (the embed.go contract): ~249MB of blobs stay out of the index.
+/cmd/olivares/firstparty/bins/*
+!/cmd/olivares/firstparty/bins/PLACEHOLDER
+# goreleaser-build-wrapper.sh's flock file (serializes per-target connector-embed
+# builds) and release-smoke.sh's repo-local scratch (/tmp is tmpfs+noexec in the
+# dev container, same reason as .examples-tmp/). Both are trap-/exit-cleaned;
+# gitignored so a teardown leftover can't slip in.
+/.connector-embed.lock
+/.release-smoke-tmp/
+# Astro/Starlight docs build output — regenerated by `astro build`, not committed.
+/docs-site/dist/
+/docs-site/node_modules/
+# Astro's generated content cache — build artifact, regenerated on every build.
+/docs-site/.astro/
+
+# Java client SDK (clients/java) Maven build output — regenerated by `mvn` /
+# `task sdk:test:java`, never committed (the generated source IS committed).
+/clients/java/target/
+
+# Commercial license Worker (commercial/license-worker): local deps, wrangler
+# state, build output, and LOCAL SECRETS. .dev.vars holds the dev signing key + Polar/
+# Resend secrets and must NEVER be committed (the .example template IS committed).
+/commercial/license-worker/node_modules/
+/commercial/license-worker/.wrangler/
+/commercial/license-worker/dist/
+/commercial/license-worker/.dev.vars
+
+# OS / editor cruft.
+.DS_Store
+
+# Playwright run artifacts (web e2e + docs captures) — regenerated per run,
+# never committed; the curated docs captures live in docs-site/src/assets/console/.
+/web/playwright-report/
+/web/test-results/
+
+# commerce-lint build output (commercial/commerce-lint is its own Go module)
+/commercial/commerce-lint/olivares-commerce-lint
+.codex-briefs/
+
+# exec-probe fallback tempdirs for the gate batteries when ${TMPDIR:-/tmp} is a
+# noexec mount (see scripts/test-assert-cosign-binary.sh) — transient, trap-removed
+/.tmpexec.*
+.codex-input/
+
+# ── CREDENTIAL-SHAPED FILES ─────────────────────────────────────────────────────────────
+# Added 2026-08-05 after an audit for the public release found NO containment at all: the
+# only rule of this family was one exact filename, and `git check-ignore` confirmed that
+# .env, *.pem, *.key, *.p12, *.tfstate, id_rsa, id_ed25519 and .netrc would all have been
+# staged by the next `git add -A`. Nothing bad was in the tree — the point is that nothing
+# stood between the tree and the first mistake, and this repository is exported to a PUBLIC
+# repository where a published credential cannot be taken back.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
+!*.env.example
+*.tfstate
+*.tfstate.*
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+.netrc
+.npmrc
+# Tracked and legitimate: a CA CERTIFICATE (no private key) used by the mcpb connector's
+# trust-chain fixtures. Verified with `git ls-files '*.pem'` — it is the only one.
+!connectors/mcpb/testdata/root.pem
+
+# Playwright MCP scratch output (console logs + a11y snapshots from a driven browser).
+# two of these were swept into a commit by `git add -A` during a real-run check.
+# Verified secret-free before deciding not to rewrite history, but the tool writes them
+# into the repo root on every run, so the fix is to stop them being trackable at all.
+.playwright-mcp/
+
+# ⛔ Estado local de wrangler. NO es higiene: `.wrangler/cache/wrangler-account.json` guarda el ID y
+# el NOMBRE de la cuenta de Cloudflare, y este árbol se exporta a repositorios PÚBLICOS. Lo creó una
+# consulta a D1 del criterio C-10 el 2026-08-17 y **un `git add -A` mío lo dejó en el índice**; lo
+# cazó el gate de exportación al no poder clasificar la ruta —«nothing leaks by default»—, no un
+# repaso a ojo. Medido antes de sacarlo: no contiene ningún correo, pero sí el id de 32 hex y el
+# nombre. En un clon COMPARTIDO, además, lo que no está ignorado es de todos: el `git add -A` del
+# siguiente carril se lo habría llevado igual.
+.wrangler/
+
+# El binario que deja un `go build`/`go test` DENTRO de scripts/guide-docs/. El gate no lo produce
+# —compila a un scratch (`BIN="$SCRATCH/guide-docs"`, check-guide-docs.sh:73)— pero desde que ese
+# paquete tiene tests, correrlos a mano deja 4,2 MB sin trackear en el arbol. Y un artefacto de
+# compilacion sin trackear no es solo desorden: el 2026-08-21, 117 MB de residuo de `lint:export`
+# en `.export-tmp/` hicieron que `lint:guide-docs` acusara al arbol por copias de si mismo.
+/scripts/guide-docs/guide-docs
+/.overlay-fetch-seal
+
+# ⛔ RESIDUO DE `tofu init`, Y NO ES HIGIENE: ENVENENA UN GATE 485 LINTS DESPUÉS.
+#
+# Medido el 2026-08-29. Corrí `tofu init` dentro de `deploy/aws` para poder producir un plan
+# en frío, y dejó `.terraform.lock.hcl` en el árbol. `lint:spdx` lo encontró **sin trackear
+# y sin ignorar**, no supo clasificar la extensión `.hcl` y —correctamente— contestó
+# **«CANNOT LOOK», rc=2**: no es una violación de licencia y NO es un aprobado, es que el
+# gate no sabe si eso es fuente. Tumbó el push en el lint 485 de 648.
+#
+# El fallo no fue del gate: fue mío por correr una herramienta dentro del árbol de trabajo.
+# Estas reglas hacen que el descuido no vuelva a costar una corrida.
+#
+# ⚠ DECISIÓN PENDIENTE, dicha aquí para que no se pierda: un `.terraform.lock.hcl`
+# COMMITEADO es buena práctica —fija las versiones de proveedor y hace el apply
+# reproducible—, y hoy este repositorio no tiene ninguno. Ignorarlo es lo correcto para un
+# artefacto accidental como el que provocó esto, pero NO cierra esa pregunta: adoptarlo a
+# propósito exigiría además darle una regla a `.hcl` en `classify()` de `check-spdx.sh`.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+anchoridt.*

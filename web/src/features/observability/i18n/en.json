@@ -1,0 +1,150 @@
+{
+  "title": "Observability & interop",
+  "description": "Standards-based ingestion health and ledger-correlated trace drill-down. Figures are engine-wide (process-global), not per-tenant; standards are pinned to the versions and maturities the upstream bodies declare.",
+  "tabs": {
+    "ingestion": "Ingestion health",
+    "traces": "Trace drill-down"
+  },
+  "engineScope": {
+    "badge": "Engine-wide",
+    "note": "These figures are engine-wide (process-global), not per-tenant. The read-model counters accumulate since engine start and reset on restart — the same lifecycle as the engine's Prometheus /metrics, never per-tenant."
+  },
+  "ingestion": {
+    "title": "Per-standard ingestion health",
+    "description": "Each interop standard the engine ingests or emits, with its pinned version, declared maturity and pipe status.",
+    "liveNote": "Live read-model: the engine counts records per bus source since engine start. A per-standard row carries a counter only where the attribution is sound — a figure is never invented, and an absent value means \"not soundly attributable\", not zero.",
+    "columns": {
+      "standard": "Standard",
+      "direction": "Direction",
+      "version": "Version",
+      "maturity": "Maturity",
+      "status": "Status",
+      "records": "Records",
+      "lastSeen": "Last seen"
+    },
+    "direction": {
+      "in": "Ingest",
+      "out": "Emit"
+    },
+    "status": {
+      "active": "Active",
+      "available": "Available",
+      "opt_in_off": "Opt-in off",
+      "blocked": "Blocked"
+    },
+    "optInOff": "Convention in Development — off by default; enable via the connector gate.",
+    "gate": "Gate",
+    "gateOff": "off",
+    "gateOn": "on",
+    "gateNoEvidence": "no evidence yet",
+    "blockedNote": "Push transport is blocked on the off-box collector seam; the pull export remains the offline re-verification path.",
+    "recordsPending": "—"
+  },
+  "sources": {
+    "title": "Live counters by bus source",
+    "description": "One row per bus source (connector/module) with its records by observation kind and, for edges, by collector signal.",
+    "columns": {
+      "source": "Source",
+      "records": "Records",
+      "kinds": "By kind",
+      "signals": "By signal",
+      "firstSeen": "First seen",
+      "lastSeen": "Last seen"
+    },
+    "kind": {
+      "edge": "Edge",
+      "cost": "Cost",
+      "finding": "Finding"
+    },
+    "empty": "No records observed on the bus since engine start",
+    "emptyHint": "Counters start at zero on every engine start; nothing has flowed yet — this is an observation, not a failure.",
+    "sinceNote": "Counters are process-global and accumulate since engine start ({{since}}); they reset on restart, like /metrics."
+  },
+  "maturity": {
+    "title": "Maturity",
+    "development": "Development",
+    "ga": "GA",
+    "pre_1_0": "Pre-1.0",
+    "stable": "Stable",
+    "developmentHint": "convention in Development",
+    "preReleaseHint": "pre-1.0 schema"
+  },
+  "traces": {
+    "title": "W3C Trace Context drill-down",
+    "description": "Traces correlated by the W3C trace ids stamped on audit-ledger events, grouped by engine span.",
+    "listTitle": "Recent traces",
+    "listDescription": "Select a trace to open its ledger-derived span view.",
+    "empty": "No traces",
+    "emptyHint": "No audit-ledger event in the walk window (last 20,000 events) carries a W3C trace id — callers are not propagating traceparent, or the window has rolled past them.",
+    "noResults": "No traces match the search.",
+    "filterNoResults": "No traces match the active filters.",
+    "searchPlaceholder": "Search by trace ID…",
+    "filters": {
+      "service": "Filter by service",
+      "servicePlaceholder": "Service (exact)…",
+      "status": "Filter by status",
+      "allStatuses": "All statuses",
+      "from": "From",
+      "to": "To"
+    },
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "waterfallTitle": "Span waterfall",
+    "selectPrompt": "Select a trace to see its span waterfall.",
+    "exportBtn": "Export OTLP",
+    "exportTitle": "Download OTLP-compatible JSON for Jaeger / Tempo / Datadog",
+    "legend": "Actor legend",
+    "liveNote": "Ledger-correlation read-model: rows are derived from the W3C trace ids stamped on audit-ledger events (walk window: the last 20,000 events). Bars are LEDGER-EVENT windows grouped by engine span id — the engine stores no OTel spans; the full spans live in the operator's OTLP collector.",
+    "columns": {
+      "trace": "Trace",
+      "started": "Started",
+      "duration": "Duration",
+      "spans": "Spans",
+      "agents": "Agents",
+      "services": "Services",
+      "status": "Status",
+      "span": "Span",
+      "actor": "Actor",
+      "service": "Service",
+      "kind": "Kind",
+      "timing": "Timing"
+    },
+    "detail": {
+      "title": "Span detail",
+      "spanId": "Span ID",
+      "name": "Name",
+      "timing": "Timing",
+      "actor": "Actor",
+      "actorKind": "Actor kind",
+      "entityRef": "Entity",
+      "kind": "Kind",
+      "status": "Status",
+      "attributes": "Attributes"
+    },
+    "chartSummary": "Span waterfall: {{count}} spans over {{duration}}, indented by parent-child depth and sized by duration.",
+    "level1Note": "W3C Trace Context is validated only at its Stable Level 1 (v00 traceparent / tracestate). No Level-2 semantics are claimed.",
+    "status": {
+      "ok": "OK",
+      "error": "Error",
+      "unset": "Unset"
+    }
+  },
+  "empty": {
+    "ingestionHealth": {
+      "title": "No ingestion standards declared",
+      "description": "The engine's compiled standards inventory must supply these rows; operators do not add them through the console."
+    },
+    "ingestionSources": {
+      "title": "No bus sources observed since engine start",
+      "description": "A connector or module must publish an edge, cost sample or finding on the event bus before its live source counters appear here."
+    },
+    "trace": {
+      "title": "No W3C traces observed yet",
+      "description": "Callers must propagate W3C trace context so audit-ledger events among the latest 20,000 entries carry trace IDs."
+    },
+    "traceWaterfallChart": {
+      "title": "No span timings recorded for this trace",
+      "description": "Ledger events must carry engine span IDs before this view can show each span's start offset, duration, actor and status."
+    }
+  }
+}

@@ -1,0 +1,141 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Locale}}">
+<head>
+<meta charset="utf-8">
+<title>{{t .Locale "report.finops.title"}}</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>{{t .Locale "report.finops.title"}}</h1>
+    <div class="subtitle">{{if .Branding.CompanyName}}{{.Branding.CompanyName}} — {{end}}{{t .Locale "report.period"}}: {{formatDate .Report.From}} — {{formatDate .Report.To}}</div>
+  </div>
+  {{if .Branding.LogoPath}}<img class="header-logo" src="{{.Branding.LogoPath}}" alt="Logo">{{end}}
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{formatUSD .Report.TotalMicroUSD}}</div>
+    <div class="stat-label">{{t .Locale "finops.total_spend"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{formatNumber .Report.InputTokens}}</div>
+    <div class="stat-label">{{t .Locale "finops.input_tokens"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{formatNumber .Report.OutputTokens}}</div>
+    <div class="stat-label">{{t .Locale "finops.output_tokens"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{formatUSD .Report.ForecastMicroUSD}}</div>
+    <div class="stat-label">{{t .Locale "finops.forecast"}}</div>
+  </div>
+</div>
+
+<h2>{{t .Locale "finops.by_model"}}</h2>
+<table>
+<thead>
+<tr>
+  <th>{{t .Locale "finops.model"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.cost"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.input_tokens"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.output_tokens"}}</th>
+</tr>
+</thead>
+<tbody>
+{{range .Report.ByModel}}
+<tr>
+  <td>{{.Key}}</td>
+  <td style="text-align:right">{{formatUSD .CostMicroUSD}}</td>
+  <td style="text-align:right">{{formatNumber .InputTokens}}</td>
+  <td style="text-align:right">{{formatNumber .OutputTokens}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+
+<h2>{{t .Locale "finops.by_provider"}}</h2>
+<table>
+<thead>
+<tr>
+  <th>{{t .Locale "finops.provider"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.cost"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.samples"}}</th>
+</tr>
+</thead>
+<tbody>
+{{range .Report.ByProvider}}
+<tr>
+  <td>{{.Key}}</td>
+  <td style="text-align:right">{{formatUSD .CostMicroUSD}}</td>
+  <td style="text-align:right">{{.Samples}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+
+{{if .Report.ByTeam}}
+<h2>{{t .Locale "finops.by_team"}}</h2>
+<table>
+<thead>
+<tr>
+  <th>{{t .Locale "finops.team"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.cost"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.input_tokens"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.output_tokens"}}</th>
+</tr>
+</thead>
+<tbody>
+{{range .Report.ByTeam}}
+<tr>
+  <td>{{.Key}}</td>
+  <td style="text-align:right">{{formatUSD .CostMicroUSD}}</td>
+  <td style="text-align:right">{{formatNumber .InputTokens}}</td>
+  <td style="text-align:right">{{formatNumber .OutputTokens}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{end}}
+
+{{if .Report.Budgets}}
+<h2>{{t .Locale "finops.budget_status"}}</h2>
+<table>
+<thead>
+<tr>
+  <th>{{t .Locale "finops.budget_name"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.limit"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.cost"}}</th>
+  <th style="text-align:right">{{t .Locale "finops.consumed"}}</th>
+  <th>Status</th>
+</tr>
+</thead>
+<tbody>
+{{range .Report.Budgets}}
+<tr>
+  <td>{{.Name}}</td>
+  <td style="text-align:right">{{formatUSD .LimitMicroUSD}}</td>
+  <td style="text-align:right">{{formatUSD .SpendMicroUSD}}</td>
+  <td style="text-align:right">
+    {{formatPct .ConsumedPct}}
+    <div class="progress-bar"><div class="progress-fill {{budgetBar .ConsumedPct .Over}}" style="width:{{if gt .ConsumedPct 100}}100{{else}}{{.ConsumedPct}}{{end}}%"></div></div>
+  </td>
+  <td>
+    {{if .Over}}<span class="badge badge-fail">{{t $.Locale "finops.over_budget"}}</span>
+    {{else}}<span class="badge badge-ok">{{t $.Locale "finops.within_budget"}}</span>{{end}}
+  </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{end}}
+
+<div class="disclaimer">{{t .Locale "report.disclaimer"}}</div>
+<div class="footer">{{t .Locale "report.powered_by"}}{{if .Branding.FooterText}} — {{.Branding.FooterText}}{{end}}</div>
+</body>
+</html>

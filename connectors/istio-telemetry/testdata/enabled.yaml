@@ -1,0 +1,15 @@
+# Mesh-wide access logging + tracing turned ON via the default providers.
+# Expected: Info coverage findings for access logging and tracing.
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: mesh-default
+  namespace: istio-system
+spec:
+  accessLogging:
+    - providers:
+        - name: envoy
+  tracing:
+    - providers:
+        - name: otel
+      randomSamplingPercentage: 100.0

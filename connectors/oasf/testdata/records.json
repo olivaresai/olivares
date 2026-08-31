@@ -1,0 +1,25 @@
+[
+  {
+    "authors": ["Olivares AI <dev@olivares.ai>"],
+    "created_at": "2026-06-01T10:00:00Z",
+    "description": "Research agent that drafts cited reports.",
+    "domains": [{"id": 905, "name": "technology"}],
+    "locators": [{"type": "docker_image", "url": "ghcr.io/example/research-agent:1.2.0"}],
+    "name": "research-agent",
+    "schema_version": "1.0.0",
+    "skills": [
+      {"id": 10201, "name": "natural_language_processing/natural_language_generation/text_completion"},
+      {"id": 10702, "name": "natural_language_processing/information_retrieval_synthesis/search"}
+    ],
+    "version": "1.2.0"
+  },
+  {
+    "authors": ["Example Org"],
+    "created_at": "2026-05-20T08:30:00Z",
+    "description": "Triage agent for support tickets.",
+    "name": "triage-agent",
+    "schema_version": "1.0.0",
+    "skills": [{"id": 10201}],
+    "version": "0.9.1"
+  }
+]

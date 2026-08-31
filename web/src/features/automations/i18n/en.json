@@ -1,0 +1,48 @@
+{
+  "title": "Automations",
+  "description": "The three automation rails in one place: governed schedules, event subscriptions and alert routes, plus the trigger catalog they can react to.",
+  "tabs": {
+    "overview": "Overview",
+    "workflows": "Workflows"
+  },
+  "rails": {
+    "openAction": "Open {{feature}}",
+    "countLabel": "{{count}} total",
+    "loadFailed": "This rail could not be loaded.",
+    "forbidden": "You are not authorized to view this rail.",
+    "schedules": {
+      "title": "Schedules",
+      "description": "Governed cadences: schedule → two-phase HITL fire, with cadence-miss detection.",
+      "active": "{{count}} active",
+      "stalled": "{{count}} stalled",
+      "paused": "{{count}} paused"
+    },
+    "subscriptions": {
+      "title": "Event subscriptions",
+      "description": "Event → sink/SIEM delivery with retries, replay and a delivery ledger.",
+      "enabled": "{{count}} enabled",
+      "disabled": "{{count}} disabled"
+    },
+    "routes": {
+      "title": "Alert routes",
+      "description": "Finding/approval → destination routing with severity thresholds and dry-run.",
+      "enabled": "{{count}} enabled",
+      "disabled": "{{count}} disabled"
+    },
+    "truncated": "Loaded {{n}} rows; there are more",
+    "truncatedHint": "There are more rows than shown; this rail takes them by row id (assigned at creation), so the later ones are missing. A schedule, subscription or route NOT listed here is not proof that it does not exist.",
+    "countLoaded": "{{count}} loaded"
+  },
+  "triggers": {
+    "title": "Trigger catalog",
+    "description": "Everything an automation can react to. Subscriptions may capture any catalogued event type; alert routes match the routed subset.",
+    "typeColumn": "Type",
+    "stabilityColumn": "Stability",
+    "permissionColumn": "Required permission",
+    "descriptionColumn": "Description",
+    "routable": "Routable",
+    "routableHint": "This type can be matched by alert routes.",
+    "empty": "No trigger catalog is available.",
+    "loadFailed": "The trigger catalog could not be loaded."
+  }
+}

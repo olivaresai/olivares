@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# buf module config for the core ControlPlane gRPC contract. This is the AGPL
+# engine API, kept separate from the Apache sdk/plugin connector wire contract.
+# Lint with `buf lint`; check compatibility with `buf breaking`.
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # Flat apiv1/ directory keeps the generated Go import path short
+    # (.../genpb/apiv1); the proto package is still versioned (olivares.api.v1).
+    - PACKAGE_DIRECTORY_MATCH
+    # The service is "ControlPlane" (a product noun), and CRUD RPCs deliberately
+    # share the Agent message and reuse Empty — clean, not boilerplate-per-RPC.
+    # Field-level additions stay backward-compatible; breaking (FILE) still applies.
+    - SERVICE_SUFFIX
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE

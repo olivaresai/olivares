@@ -1,0 +1,40 @@
+{
+  "title": "Log Viewer",
+  "controls": {
+    "pause": "Pause",
+    "resume": "Resume",
+    "pauseAria": "Pause auto-scroll",
+    "resumeAria": "Resume auto-scroll",
+    "clear": "Clear",
+    "clearAria": "Clear log entries",
+    "entryCount": "{{value}} entries"
+  },
+  "filters": {
+    "levelAria": "Filter {{level}} logs",
+    "modulePlaceholder": "Module...",
+    "moduleAria": "Filter by module",
+    "searchPlaceholder": "Search...",
+    "searchAria": "Search in log messages",
+    "clearAria": "Clear filters"
+  },
+  "capture": {
+    "debugUnavailable": "DEBUG entries are not captured at the engine's current log level — set OLIVARES_LOG_LEVEL=debug."
+  },
+  "stream": {
+    "empty": "No log entries to display.",
+    "ariaLabel": "Log stream",
+    "attrsAriaLabel": "Structured log attributes"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  }
+}

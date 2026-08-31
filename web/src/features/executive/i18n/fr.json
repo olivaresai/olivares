@@ -1,0 +1,112 @@
+{
+  "title": "Vue d’ensemble pour la direction",
+  "description": "Coût, utilisation, risque et conformité en un coup d’œil — accédez à la vue opérationnelle pour le détail.",
+  "asOfNote": "Le risque, la conformité et la fiabilité reflètent l’état actuel ; le coût couvre la plage sélectionnée.",
+  "range": {
+    "label": "Plage",
+    "7d": "7 derniers jours",
+    "30d": "30 derniers jours",
+    "90d": "90 derniers jours",
+    "mtd": "Depuis le début du mois"
+  },
+  "export": {
+    "action": "Exporter en PDF",
+    "hint": "Imprimer ce rapport ou l’enregistrer au format PDF"
+  },
+  "report": {
+    "title": "Rapport de direction",
+    "generated": "Généré le {{date}}",
+    "generatedLabel": "Généré le",
+    "tenant": "Organisation",
+    "allOrgs": "Toutes les organisations",
+    "range": "Plage de coût",
+    "footer": "Plan de contrôle Olivares AI — KPI agrégés uniquement ; aucune charge utile ni aucun secret."
+  },
+  "empty": {
+    "title": "Aucun KPI de direction disponible",
+    "description": "Vous n’avez accès en lecture à aucune des sources de coût, de risque, de conformité ou de fiabilité de cette organisation."
+  },
+  "restricted": {
+    "label": "Restreint",
+    "hint": "Votre rôle ne permet pas de lire cette source."
+  },
+  "pillars": {
+    "cost": "Dépense",
+    "costCaption": "sur la plage sélectionnée",
+    "usage": "Agents actifs",
+    "usageCaption": "{{live}} en activité · {{entities}} suivis",
+    "risk": "Risque ouvert",
+    "riskCaption": "{{count}} critique/élevé",
+    "silentEvasion": "{{count}} évasion silencieuse",
+    "compliance": "Couverture des contrôles",
+    "complianceCaption": "{{gap}} lacunes · {{unmapped}} non mappés"
+  },
+  "cost": {
+    "title": "Coût",
+    "trendTitle": "Tendance des dépenses",
+    "trendDescription": "Dépense quotidienne en tokens sur la plage sélectionnée.",
+    "seriesCost": "Dépense",
+    "forecast": "Prévision",
+    "atRunRate": "projeté (tendance sur fenêtre glissante)",
+    "runRateNote": "Projection à partir de la tendance quotidienne sur fenêtre glissante, étendue au reste de la période — pas un modèle de prévision.",
+    "deltaUp": "{{pct}} par rapport à la période précédente",
+    "deltaDown": "{{pct}} par rapport à la période précédente",
+    "deltaFlat": "stable par rapport à la période précédente",
+    "tokens": "Tokens",
+    "samples": "Enregistrements de coût",
+    "models": "Modèles actifs",
+    "breakdownTitle": "Répartition des dépenses",
+    "breakdownDescription": "Où va la dépense — synthèse par équipe, projet, agent, modèle ou fournisseur.",
+    "noAttribution": "Aucune attribution pour cette dimension sur la plage sélectionnée."
+  },
+  "dimensions": {
+    "team": "Par équipe",
+    "project": "Par projet",
+    "agent": "Par agent",
+    "model": "Par modèle",
+    "provider": "Par fournisseur"
+  },
+  "risk": {
+    "title": "Posture de risque",
+    "description": "Constats de sécurité ouverts, robustesse face aux attaques et dérive des accès.",
+    "openFindings": "Constats ouverts",
+    "bySeverity": "Constats par gravité",
+    "robustness": "Robustesse face à l’équipe rouge",
+    "robustnessCaption": "dernière exécution terminée",
+    "robustnessPending": "Exécution en attente",
+    "robustnessPendingHint": "La dernière exécution de l’équipe rouge n’a pas pu mener ses sondes à terme — ce n’est pas une réussite.",
+    "drift": "Dérive des accès",
+    "driftFirm": "Accès inattendus",
+    "driftPending": "En attente de liaison d’identité",
+    "driftUnused": "Octrois inutilisés",
+    "coverageNote": "Certains accès sont observés avec une couverture partielle (capture approximative ou opaque) ; les chiffres de dérive constituent une borne inférieure.",
+    "noFindings": "Aucun constat ouvert.",
+    "noRuns": "Aucune exécution de l’équipe rouge pour l’instant."
+  },
+  "compliance": {
+    "title": "Conformité",
+    "description": "État des contrôles pour les référentiels que vous suivez — couverture des contrôles, jamais une affirmation de conformité.",
+    "coverage": "Couverture des contrôles",
+    "ofControls": "sur {{total}} contrôles répartis sur {{frameworks}} référentiels",
+    "satisfied": "Satisfait",
+    "byDesign": "Par conception",
+    "partial": "Partiel",
+    "gap": "Lacune",
+    "unmapped": "Non mappé",
+    "frameworks": "Référentiels",
+    "riskTiers": "Niveaux de risque des agents",
+    "noFrameworks": "Aucun référentiel mappé pour l’instant."
+  },
+  "reliability": {
+    "title": "Fiabilité",
+    "description": "État de santé des agents et de MCP en ce moment, ainsi que les incidents ouverts.",
+    "healthy": "Sain",
+    "degraded": "Dégradé",
+    "down": "Hors service",
+    "unknown": "Inconnu",
+    "slaBreaches": "Manquements aux SLA ouverts",
+    "incidents": "Incidents ouverts",
+    "nowNote": "L’état de santé est un instantané ponctuel ; « inconnu » signifie qu’aucune vérification ne suit le sujet — pas qu’il est sain.",
+    "noData": "Aucune vérification d’état de santé ne remonte pour l’instant."
+  }
+}

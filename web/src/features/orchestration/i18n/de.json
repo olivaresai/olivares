@@ -1,0 +1,263 @@
+{
+  "title": "Orchestrierung & A2A",
+  "description": "Agent-zu-Agent-Topologie — wer an wen delegiert, die laufenden Delegationsflüsse und die deklarierten Kadenzen. Lesezugriffe auf den Kommunikationsgraphen sind privilegiert und werden selbst auditiert.",
+  "tabs": {
+    "graph": "Kommunikationsgraph",
+    "flows": "Flüsse",
+    "schedules": "Zeitpläne"
+  },
+  "graph": {
+    "title": "Kommunikationsgraph",
+    "description": "Delegations- und MCP-Topologie, abgeleitet aus beobachteten Signalen. Supervisoren verankern die oberste Ebene; Worker und MCP-Peers liegen darunter.",
+    "truncated": "Es werden die ersten {{n}} Kanten angezeigt — erhöhen Sie das Limit für mehr.",
+    "empty": {
+      "title": "Keine Kommunikation beobachtet",
+      "description": "Im beobachteten Zeitfenster liegen keine Delegations- oder MCP-Kanten vor. Dies ist das, was beobachtet wird, nicht alles, was existiert — lesen Sie den Hinweis zur Abdeckung oben."
+    },
+    "kind": {
+      "session": "Sitzung",
+      "agent": "Agent",
+      "mcp_server": "MCP-Server",
+      "mcp_tool": "MCP-Werkzeug"
+    },
+    "role": {
+      "supervisor": "Supervisor",
+      "worker": "Worker",
+      "peer": "Peer"
+    },
+    "legend": {
+      "attributed": "Zugeordnet",
+      "approximate": "Näherungsweise (abgeleitet)",
+      "missed": "Kadenz verpasst"
+    }
+  },
+  "flows": {
+    "title": "Delegationsflüsse",
+    "description": "Cluster aus Supervisor → Workern. Der Zustand wird zum Lesezeitpunkt aus der Aktualität abgeleitet; „ins Stocken geraten“ bedeutet, dass der Supervisor einen aktiven Zeitplan hat, der überfällig ist.",
+    "filter": "Nach Zustand filtern",
+    "allStates": "Alle Zustände",
+    "empty": "Keine Flüsse in diesem Zustand",
+    "columns": {
+      "supervisor": "Supervisor",
+      "workers": "Worker",
+      "delegations": "Delegationen",
+      "state": "Zustand",
+      "lastSeen": "Zuletzt gesehen"
+    },
+    "state": {
+      "active": "Aktiv",
+      "idle": "Inaktiv",
+      "stalled": "Ins Stocken geraten",
+      "completed": "Abgeschlossen"
+    }
+  },
+  "schedules": {
+    "title": "Zeitpläne",
+    "description": "Deklarierte Kadenzen für Agenten und Schwärme. Der Zustand spiegelt die beobachtete Kadenz gegenüber dem erwarteten Intervall wider — ein verpasster Auslöser erscheint als „ins Stocken geraten“, nie verborgen.",
+    "empty": "Keine Zeitpläne deklariert",
+    "emptyHint": "Deklarieren Sie eine Cron-, Ereignis- oder manuelle Kadenz, um zu verfolgen, ob ein Subjekt tatsächlich pünktlich auslöst.",
+    "new": "Neuer Zeitplan",
+    "columns": {
+      "name": "Name",
+      "trigger": "Auslöser",
+      "cadence": "Kadenz",
+      "desired": "Gewünscht",
+      "health": "Zustand",
+      "lastFired": "Zuletzt ausgelöst",
+      "actions": "Aktionen"
+    },
+    "subjectKind": {
+      "agent": "Agent",
+      "swarm": "Schwarm"
+    },
+    "trigger": {
+      "cron": "Cron",
+      "event": "Ereignis",
+      "manual": "Manuell"
+    },
+    "desired": {
+      "active": "Aktiv",
+      "paused": "Pausiert",
+      "retired": "Außer Betrieb"
+    },
+    "actions": {
+      "menu": "Aktionen für {{name}}",
+      "edit": "Bearbeiten",
+      "history": "Verlauf",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "retire": "Außer Betrieb nehmen",
+      "fire": "Auslösen"
+    },
+    "form": {
+      "createTitle": "Neuer Zeitplan",
+      "editTitle": "Zeitplan bearbeiten",
+      "createDescription": "Deklarieren Sie eine kontrollierte Kadenz für einen Agenten oder Schwarm. Neue Zeitpläne starten aktiv.",
+      "editDescription": "Ändern Sie Subjekt oder Kadenz. Identität und Auslöser sind unveränderlich.",
+      "name": "Name",
+      "subjectKind": "Subjekttyp",
+      "subjectRef": "Subjektreferenz",
+      "triggerKind": "Auslösertyp",
+      "cadenceSpec": "Kadenzspezifikation",
+      "cadenceHint": {
+        "cron": "Undurchsichtiger Cron-Kadenztext. Die Syntax wird nur vom konfigurierten Dispatcher interpretiert.",
+        "event": "Undurchsichtige Ereignisreferenz oder Kadenztext.",
+        "manual": "Optionale undurchsichtige Notiz für diesen manuellen Zeitplan."
+      },
+      "expectedInterval": "Erwartetes Intervall (Sekunden)",
+      "expectedIntervalHint": "Wird zur Erkennung einer verpassten Cron-Kadenz verwendet.",
+      "graceFactor": "Toleranzfaktor",
+      "graceFactorHint": "Multiplikator, bevor die Kadenz als verpasst markiert wird.",
+      "immutableHint": "Nach der Erstellung unveränderlich.",
+      "create": "Zeitplan erstellen",
+      "update": "Änderungen speichern",
+      "created": "Zeitplan erstellt",
+      "updated": "Zeitplan aktualisiert",
+      "createFailed": "Zeitplan konnte nicht erstellt werden",
+      "updateFailed": "Zeitplan konnte nicht aktualisiert werden",
+      "errors": {
+        "required": "Dieses Feld ist erforderlich.",
+        "intervalRange": "Geben Sie eine ganze Zahl zwischen {{min}} und {{max}} ein.",
+        "intervalCronOnly": "Das erwartete Intervall ist nur für Cron-Auslöser verfügbar.",
+        "graceRange": "Geben Sie eine ganze Zahl zwischen {{min}} und {{max}} ein."
+      }
+    },
+    "status": {
+      "pauseTitle": "{{name}} pausieren?",
+      "pauseDescription": "{{name}} bleibt deklariert, wird aber nicht mehr zur Ausführung erwartet.",
+      "pauseConfirm": "Zeitplan pausieren",
+      "resumeTitle": "{{name}} fortsetzen?",
+      "resumeDescription": "{{name}} wird aktiv und die Kadenzüberwachung wird fortgesetzt.",
+      "resumeConfirm": "Zeitplan fortsetzen",
+      "retireTitle": "{{name}} außer Betrieb nehmen?",
+      "retireDescription": "{{name}} wird dauerhaft außer Betrieb genommen und kann nicht mehr ausgelöst werden.",
+      "retireConfirm": "Zeitplan außer Betrieb nehmen",
+      "changed": {
+        "active": "Zeitplan fortgesetzt",
+        "paused": "Zeitplan pausiert",
+        "retired": "Zeitplan außer Betrieb genommen"
+      }
+    },
+    "fire": {
+      "title": "{{name}} auslösen",
+      "description": "Eine kontrollierte Auslösung benötigt vor dem Versand eine an den aktuellen Plan gebundene Genehmigung.",
+      "step1Title": "1. Genehmigung anfordern",
+      "step1Description": "Öffnen Sie eine Governance-Genehmigung für dieses genaue Subjekt und diese Kadenz.",
+      "request": "Genehmigung anfordern",
+      "requested": "Genehmigung angefordert",
+      "requestFailed": "Genehmigung konnte nicht angefordert werden",
+      "requiresApproval": "Genehmigung erforderlich",
+      "copy": "Kopieren",
+      "copied": "Genehmigungsreferenz kopiert",
+      "copyFailed": "Genehmigungsreferenz konnte nicht kopiert werden",
+      "governanceLink": "Governance-Genehmigungswarteschlange öffnen",
+      "step2Title": "2. Genehmigte Auslösung ausführen",
+      "step2Description": "Senden Sie nach der Genehmigung deren Referenz, um den Plan zu versenden.",
+      "approvalRef": "Genehmigungsreferenz",
+      "execute": "Ausführen",
+      "dispatched": "Zeitplan versendet",
+      "notDispatched": "Zeitplan wurde nicht versendet",
+      "executeFailed": "Genehmigte Auslösung konnte nicht ausgeführt werden",
+      "receipt": "Auslösebeleg",
+      "planHash": "Plan-Hash",
+      "gateStatus": "Schrankenstatus",
+      "dispatchRef": "Versandreferenz",
+      "detail": "Detail",
+      "opStatus": {
+        "requested": "Angefordert",
+        "blocked": "Abgelehnt",
+        "dispatched": "Versendet",
+        "declared_not_fired": "Genehmigt, nicht betätigt",
+        "failed": "Fehlgeschlagen",
+        "budget_blocked": "Durch Budget blockiert",
+        "budget_throttled": "Durch Budget gedrosselt"
+      }
+    }
+  },
+  "decisions": {
+    "title": "Entscheidungs-Hauptbuch",
+    "description": "Nur-anhängender Datensatz der Auslöseentscheidungen für den ausgewählten Zeitplan. Eine Entscheidung wird genau so angezeigt, wie sie aufgelöst wurde — eine Genehmigung ist keine Betätigung.",
+    "pick": "Zeitplan auswählen",
+    "pickHint": "Wählen Sie einen Zeitplan aus, um sein Entscheidungs-Hauptbuch zu sehen.",
+    "empty": "Keine Entscheidungen aufgezeichnet",
+    "gate": "Schranke",
+    "plan": "Plan",
+    "op": {
+      "fire": "Auslösen",
+      "run_request": "Lauf-Anfrage",
+      "run": "Lauf",
+      "run_step": "Schritt",
+      "run_end": "Lauf-Ende",
+      "cadence_miss": "Verpasste Kadenz"
+    },
+    "opStatus": {
+      "requested": "Angefordert",
+      "blocked": "Blockiert",
+      "dispatched": "Versendet",
+      "declared_not_fired": "Genehmigt, nicht betätigt (kein Dispatcher)",
+      "failed": "Fehlgeschlagen",
+      "budget_blocked": "Durch Budget blockiert",
+      "budget_throttled": "Durch Budget gedrosselt",
+      "missed": "Verpasst",
+      "skipped": "Übersprungen (ein früherer Schritt schlug fehl oder wurde verweigert)",
+      "gate_passed": "Freigabe erteilt",
+      "completed": "Abgeschlossen",
+      "reconciled": "Abgeglichen (spätes Ergebnis erfasst)"
+    },
+    "estate": "Alle Entscheidungen (gesamter Bestand)",
+    "estateCaveat": "Das Bestandsprotokoll, neueste zuerst. Es ist die einzige Ansicht der Konsole, die die VOLLSTÄNDIGE Protokollzeile eines Workflow-Laufs zeigt — Audit, Findings und das Lauf-Detail können verwandte Fakten zeigen, aber nicht diesen Eintrag.",
+    "truncated": "Angezeigt werden die {{count}} neuesten Entscheidungen, und die Engine meldet mehr: diese Liste ist GEKÜRZT. Lies sie als Stichprobe, nicht als das vollständige Protokoll.",
+    "noSchedule": "ohne Zeitplan-Referenz",
+    "subjectKind": {
+      "agent": "Agent",
+      "swarm": "Schwarm",
+      "workflow": "Workflow"
+    },
+    "estateDescription": "Reines Anhänge-Protokoll aller Entscheidungen im Bestand, neueste zuerst. Enthält Entscheidungen, die zu keinem Zeitplan gehören.",
+    "forbidden": "Deine Rolle darf Zeitplan-Entscheidungen nicht lesen."
+  },
+  "timeline": {
+    "title": "Aktivitätsverlauf",
+    "description": "Aktuelle Kommunikationsereignisse für das Subjekt.",
+    "kind": {
+      "delegation": "Delegation",
+      "mcp_server": "MCP-Server",
+      "mcp_tool": "MCP-Werkzeug",
+      "fire": "Auslösen",
+      "cadence_miss": "Kadenzverfehlung"
+    }
+  },
+  "history": {
+    "title": "Revisionsverlauf — {{name}}",
+    "description": "Chronologische, ausschließlich ergänzte Snapshots dieses Zeitplans.",
+    "scopeCaption": "Eine Wiederherstellung wendet nur veränderliche Felder erneut an — niemals Name, Subjektart oder Auslöserart.",
+    "empty": "Keine Revisionen aufgezeichnet",
+    "loadMore": "Mehr laden",
+    "compareTitle": "Snapshot-Unterschiede",
+    "selectTwo": "Wählen Sie zwei Revisionen aus, um ihre Snapshots zu vergleichen.",
+    "selectRevision": "Revision „{{op}}“ von {{actor}} auswählen",
+    "originalLabel": "Frühere Revision",
+    "modifiedLabel": "Spätere Revision",
+    "restore": "Diese Revision wiederherstellen",
+    "restoreTitle": "Revision wiederherstellen?",
+    "restoreDescription": "Die ausgewählten veränderlichen Zeitplanfelder für {{name}} wiederherstellen?",
+    "restoreConfirm": "Revision wiederherstellen",
+    "restored": "Zeitplanrevision wiederhergestellt",
+    "operations": {
+      "create": "Erstellt",
+      "update": "Aktualisiert",
+      "delete": "Gelöscht",
+      "restore": "Wiederhergestellt"
+    }
+  },
+  "empty": {
+    "flows": {
+      "title": "Noch keine Delegationsflüsse beobachtet",
+      "description": "Ein Fluss erscheint, sobald beobachtete Laufzeitsignale eine Delegationskante von einer Supervisor-Sitzung zu einem Worker melden."
+    },
+    "schedules": {
+      "title": "Noch keine Zeitpläne deklariert",
+      "description": "Deklarieren Sie für einen Agenten oder Schwarm eine Cron-, Ereignis- oder manuelle Kadenz, um Soll-Zustand und beobachteten Zustand zu verfolgen."
+    }
+  }
+}

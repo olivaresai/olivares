@@ -1,0 +1,63 @@
+{
+  "cursor": "cursor-page-2",
+  "has_more": true,
+  "items": [
+    {
+      "uuid": "EVT00000000000000000000001",
+      "timestamp": "2026-06-11T08:15:00Z",
+      "used_version": 3,
+      "vault_uuid": "VAULTUUID0000000000000001",
+      "item_uuid": "ITEMUUID00000000000000001",
+      "action": "reveal",
+      "user": {
+        "uuid": "USERUUID00000000000000001",
+        "name": "Alice Smith",
+        "email": "alice@corp.example"
+      },
+      "client": {
+        "app_name": "1Password Browser Extension",
+        "app_version": "8.10.0",
+        "platform_name": "Chrome",
+        "os_name": "linux"
+      }
+    },
+    {
+      "uuid": "EVT00000000000000000000002",
+      "timestamp": "2026-06-11T08:20:30Z",
+      "used_version": 1,
+      "vault_uuid": "VAULTUUID0000000000000001",
+      "item_uuid": "ITEMUUID00000000000000002",
+      "action": "fill",
+      "user": {
+        "uuid": "USERUUID00000000000000002",
+        "name": "Bob Jones",
+        "email": "bob@corp.example"
+      },
+      "client": {
+        "app_name": "1Password for Mac",
+        "app_version": "8.10.0",
+        "platform_name": "Mac",
+        "os_name": "macos"
+      }
+    },
+    {
+      "uuid": "EVT00000000000000000000003",
+      "timestamp": "2026-06-11T08:25:00Z",
+      "used_version": 1,
+      "vault_uuid": "VAULTUUID0000000000000002",
+      "item_uuid": "ITEMUUID00000000000000003",
+      "action": "secure-copy",
+      "user": {
+        "uuid": "",
+        "name": "Service Robot",
+        "email": "robot@corp.example"
+      },
+      "client": {
+        "app_name": "1Password CLI",
+        "app_version": "2.30.0",
+        "platform_name": "CLI",
+        "os_name": "linux"
+      }
+    }
+  ]
+}

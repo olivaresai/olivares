@@ -1,0 +1,6 @@
+{
+  "value": [
+    {"id": "obj-bp-1", "appId": "bp-app-1", "displayName": "Finance Blueprint"},
+    {"id": "obj-bp-2", "appId": "bp-app-2", "displayName": "Unused Blueprint"}
+  ]
+}

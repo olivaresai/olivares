@@ -1,0 +1,584 @@
+{
+  "title": "Identität & NHI",
+  "subtitle": "SSO, SCIM, Identitätsinventar, NHI-Lebenszyklus, WIF-Graph und privilegierte Anmeldung — beobachtet, gesteuert und auditiert.",
+  "tabs": {
+    "federation": "SSO & SCIM",
+    "inventory": "Identitätsinventar",
+    "lifecycle": "NHI-Lebenszyklus",
+    "mcp": "MCP-Auth",
+    "wif": "WIF-Graph",
+    "posture": "Schlüssel- & Residenz-Sicherheitslage",
+    "login": "Privilegierte Anmeldung"
+  },
+  "seam": {
+    "badge": "Backend ausstehend",
+    "body": "{{what}} ist ein deklarierter Vertrag — der Backend-Endpunkt ist noch nicht aktiv, daher gibt es nichts anzuzeigen. Dieses Panel befüllt sich, sobald er bereitsteht; es erfindet niemals Daten."
+  },
+  "assurance": {
+    "stepUpTitle": "Step-up-Authentifizierung erforderlich",
+    "stepUpBody": "{{action}} erfordert {{required}}. Ihre Sitzung ist {{current}}. Authentifizieren Sie sich mit einem Hardware-Sicherheitsschlüssel, um fortzufahren.",
+    "authenticate": "Mit Sicherheitsschlüssel authentifizieren",
+    "authenticatePiv": "Mit PIV/CAC-Karte authentifizieren",
+    "authenticating": "Warten auf Ihren Authentifikator…",
+    "seamWhat": "Die Zeremonie der privilegierten Anmeldung (WebAuthn-Step-up)",
+    "unsupported": "Dieser Browser unterstützt WebAuthn nicht. Für privilegierte Aktionen ist eine Plattform erforderlich, die phishing-resistente Authentifikatoren unterstützt.",
+    "failed": "Das Step-up wurde nicht abgeschlossen. Die Aktion bleibt verweigert.",
+    "actions": {
+      "wif": "Anzeige des Workload Identity Federation-Graphen",
+      "identity": "Verwaltung von Identität",
+      "nhiLifecycleRotate": "Rotation eines NHI-Zugangsdatenwerts",
+      "nhiLifecycleFinalize": "Endgültiger Abschluss der NHI-Außerbetriebnahme",
+      "generic": "Diese Aktion"
+    },
+    "aal": {
+      "aal1": "AAL1 (Passwort)",
+      "aal2": "AAL2 (Mehrfaktor)",
+      "aal3": "AAL3 (Hardware, phishing-resistent)"
+    },
+    "unenrolled": "Für Ihr Konto ist noch kein Passkey registriert. Registrieren Sie zunächst einen Hardware-Sicherheitsschlüssel im Tab „Privilegierte Anmeldung“ und wiederholen Sie dann das Step-up."
+  },
+  "references": {
+    "note": "Standards, die dieses Panel widerspiegelt. Das Panel beobachtet und verifiziert; es beansprucht keine Zertifizierung.",
+    "labels": {
+      "scim": "SCIM 2.0 (RFC 7644)",
+      "prm": "Protected Resource Metadata (RFC 9728)",
+      "asMetadata": "Authorization Server Metadata (RFC 8414)",
+      "resourceIndicators": "Resource Indicators (RFC 8707)",
+      "pkce": "PKCE (RFC 7636)",
+      "oauthSecurityBcp": "OAuth 2.0 Security BCP (RFC 9700)",
+      "webauthn": "NIST SP 800-63B-4 (Authenticator Assurance)",
+      "piv": "FIPS 201-3 (PIV)",
+      "certManager": "cert-manager (CNCF)",
+      "pqc": "NIST SP 800-57 Part 1 r6 (Schlüsselverwaltung)",
+      "wifReference": "Anthropic WIF-Referenz",
+      "workloadIdentity": "Anthropic Workload Identity Federation",
+      "externalKeys": "Anthropic External Keys (CMEK)",
+      "workspaceUpdate": "Anthropic Arbeitsbereich-Residenz"
+    },
+    "sso": {
+      "title": "SSO- & SCIM-Standards"
+    },
+    "mcpAuth": {
+      "title": "MCP-Autorisierungsstandards"
+    },
+    "wif": {
+      "title": "Workload Identity Federation-Referenzen"
+    },
+    "posture": {
+      "title": "Schlüssel- & Residenz-Referenzen"
+    },
+    "login": {
+      "title": "Standards der privilegierten Anmeldung"
+    }
+  },
+  "sso": {
+    "title": "Single Sign-on (OIDC / SAML)",
+    "description": "Föderierte Anmeldung ist im Business-Build implementiert und wird beim Start über die Umgebung konfiguriert. Dieses Panel dokumentiert die Konfiguration, prüft die exakte Redirect-URI und stellt den Verbindungsstatus dar — es schreibt die Konfiguration nicht.",
+    "notConfigured": "Nicht konfiguriert",
+    "notConfiguredHint": "Es ist kein Identitätsanbieter konfiguriert, daher liefern Föderationsanfragen 501 zurück. Setzen Sie die unten stehenden Umgebungsschlüssel und starten Sie die Engine neu, um SSO zu aktivieren.",
+    "seamWhat": "Die Zusammenfassung des SSO-Verbindungsstatus",
+    "protocol": "Protokoll",
+    "state": "Verbindung",
+    "redirectUri": "Redirect-URI (exakt)",
+    "pkce": "PKCE",
+    "pkceValue": "Authorization Code + S256 (immer)",
+    "redirectCheckLabel": "Prüfen Sie Ihre IdP-Redirect-URI",
+    "redirectCheckHint": "Fügen Sie die in Ihrem Identitätsanbieter konfigurierte Redirect-/ACS-URI ein. Sie muss exakt mit dem obigen Wert übereinstimmen (RFC 9700).",
+    "redirectMatch": "Exakte Übereinstimmung — diese Redirect-URI ist gültig.",
+    "redirectMismatch": "Stimmt nicht exakt überein. Der IdP muss die obige Redirect-URI zeichengenau verwenden.",
+    "proto": {
+      "common": "Allgemein",
+      "oidc": "OIDC",
+      "saml": "SAML"
+    },
+    "required": "Erforderlich",
+    "secret": "Geheimnis",
+    "envNote": "Die Konfiguration wird beim Start einmalig aus der Umgebung gelesen; es gibt keine Schreib-API für die Konfiguration. Geheimnisse werden niemals zurückgelesen.",
+    "testLogin": "Test-Anmeldung starten"
+  },
+  "scim": {
+    "title": "SCIM 2.0-Provisionierung",
+    "description": "Eingehende Provisionierung von Benutzern und Gruppen. Schreibgeschützter Status des Dienstanbieters, der synchronisierten Benutzer und der Austritts-Nachweise.",
+    "seamWhat": "Die SCIM-Dienstanbieter-Konfiguration",
+    "patch": "PATCH",
+    "filter": "Filter",
+    "filterMax": "Unterstützt (max. {{n}})",
+    "auth": "Authentifizierung",
+    "bearerName": "Mandanten-SCIM-Bearer",
+    "bearerNote": "Die Authentifizierung erfolgt über ein mandantengebundenes Bearer-Token. Der Token-Wert wird niemals angezeigt — nur seine Referenz.",
+    "usersTitle": "Synchronisierte Benutzer",
+    "noUsers": "Keine Benutzer synchronisiert",
+    "noUsersHint": "Sobald Ihr IdP Benutzer über SCIM bereitstellt, erscheinen sie hier. Ein deaktivierter Benutzer (Versetzung/Austritt) wird als inaktiv angezeigt.",
+    "groupsSupported": "Gruppen-Provisionierung wird eingehend unterstützt (Gruppen und Mitgliedschaften). Die Zuordnung einer Verzeichnisgruppe zu einer Rolle bleibt betreiberseitig, unter Identität → Gruppen.",
+    "leaverTitle": "Austritts-Nachweise",
+    "leaverSeamWhat": "Der Audit-Nachweis zum Austritt",
+    "noLeaver": "Keine Deprovisionierungs-Ereignisse",
+    "noLeaverHint": "Wenn ein SCIM-Austritt (delete / prov:delete) verarbeitet wird, widerruft das Backend die Sitzungen und Token des Benutzers und protokolliert dies hier.",
+    "revoked": "Sitzungen + Token widerrufen",
+    "col": {
+      "userName": "Benutzer",
+      "state": "Zustand",
+      "externalId": "External ID",
+      "lastModified": "Zuletzt geändert"
+    }
+  },
+  "console": {
+    "title": "Claude-Konsolen-Sicherheitslage",
+    "description": "Was die Anthropic Admin API über die Identitäts-Sicherheitslage Ihrer Organisation verifizieren lässt — und was nicht. Ehrlich dargestellt, niemals als vollständiges Verzeichnis.",
+    "seamWhat": "Der Sicherheitslage-Befund der Claude-Konsole",
+    "noFindings": "Kein Sicherheitslage-Befund",
+    "noFindingsHint": "Der claude-console-Konnektor gibt einen strukturellen Sicherheitslage-Befund aus, sobald er konfiguriert ist.",
+    "blindSpotTitle": "Blinder Fleck der Admin-API (strukturell — keine Fehlkonfiguration)",
+    "blindSpots": {
+      "ssoEnforcement": "Der SSO-Durchsetzungsstatus wird von der Admin-API nicht offengelegt (per API unbekannt).",
+      "scimProvisioning": "Der SCIM-Provisionierungsstatus wird von der Admin-API nicht offengelegt (per API unbekannt).",
+      "members": "Organisationsmitglieder SIND über die Admin-API auflistbar.",
+      "ssoJit": "SSO / JIT ist eine Fähigkeit ab dem Team-Plan und höher.",
+      "auditExport": "SCIM- / Audit-Export ist Enterprise-beschränkt.",
+      "continuousAudit": "Kontinuierliches Audit ist der Compliance Activity Feed, keine abfragbare API (die 180-Tage-CSV ist ein nur dem Eigentümer zugänglicher Konsolen-Download)."
+    }
+  },
+  "roster": {
+    "label": "Nicht-menschliche und menschliche Identitäten",
+    "search": "Identitäten suchen…",
+    "convergenceNote": "Diese Identität konvergiert über ihre External ID — dieselbe ID, die die beobachtete Seite verwendet — sodass die Zugriffskarte abgleichen kann, was sie tun DARF, gegenüber dem, was BEOBACHTET wird.",
+    "openInAccessMap": "In Zugriffskarte anzeigen",
+    "col": {
+      "name": "Name",
+      "externalId": "External ID",
+      "kind": "Art",
+      "principalType": "Prinzipal",
+      "source": "Quelle",
+      "state": "Zustand"
+    },
+    "principal": {
+      "nhi": "Nicht-menschlich",
+      "human": "Menschlich",
+      "unknown": "Unbekannt"
+    },
+    "filter": {
+      "principalType": "Nach Prinzipal filtern",
+      "kind": "Nach Art filtern",
+      "all": "Alle"
+    }
+  },
+  "lifecycle": {
+    "loading": "NHI-Lebenszyklus wird geladen…",
+    "unknown": "Unbekannt",
+    "notSet": "Nicht festgelegt",
+    "orphaned": "Verwaist",
+    "forbidden": {
+      "title": "Nicht autorisiert",
+      "description": "Ihre Rolle darf den NHI-Lebenszyklus nicht lesen."
+    },
+    "posture": {
+      "title": "Lebenszyklus-Sicherheitslage",
+      "description": "Mandantenweite Lage zu Überalterung, Durchsetzung, Verantwortung und Kritikalität.",
+      "total": "Gesamt",
+      "stale": "Überaltert",
+      "blocked": "Blockiert",
+      "alerting": "Mit Warnung",
+      "orphaned": "Verwaist",
+      "critical": "Kritisch"
+    },
+    "filters": {
+      "criticality": "Nach Kritikalität filtern",
+      "enforcement": "Nach Durchsetzung filtern",
+      "allCriticality": "Alle Kritikalitäten",
+      "allEnforcement": "Alle Durchsetzungszustände"
+    },
+    "criticality": {
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch",
+      "critical": "Kritisch"
+    },
+    "staleness": {
+      "ok": "Aktuell",
+      "stale": "Überaltert",
+      "unknown": "Unbekannt"
+    },
+    "enforcement": {
+      "monitor": "Überwachen",
+      "alert": "Warnen",
+      "blocked": "Blockiert"
+    },
+    "offboard": {
+      "none": "Aktiv",
+      "soft_deleted": "Reversibel gelöscht",
+      "finalized": "Abgeschlossen"
+    },
+    "table": {
+      "title": "Gesteuerte nicht-menschliche Identitäten",
+      "description": "Rotationslage, Durchsetzung, verantwortliche Personen und Außerbetriebnahme. Wählen Sie eine Identität für Ereignisse und Aktionen.",
+      "identity": "Identität",
+      "criticality": "Kritikalität",
+      "staleness": "Überalterung",
+      "enforcement": "Durchsetzung",
+      "ownership": "Eigentümer und Sponsor",
+      "offboarding": "Außerbetriebnahme",
+      "ownerValue": "Eigentümer: {{ref}}",
+      "sponsorValue": "Sponsor: {{ref}}",
+      "openDetail": "Lebenszyklusdetails für {{ref}} öffnen",
+      "truncated_one": "Es wird die erste {{count}} Identität angezeigt; mehr entsprechen diesem Filter, als gelistet sind. Grenze die Filter ein, um den Rest zu sehen.",
+      "truncated_other": "Es werden die ersten {{count}} Identitäten angezeigt; mehr entsprechen diesem Filter, als gelistet sind. Grenze die Filter ein, um den Rest zu sehen."
+    },
+    "empty": {
+      "title": "Keine Lebenszyklusdatensätze",
+      "description": "Führen Sie einen bestätigten Abgleich aus, um NHI aus dem Inventar zu registrieren und ihre Lage zu materialisieren."
+    },
+    "detail": {
+      "description": "Aktueller Lebenszykluszustand und nur erweiterbare Governance-Spur.",
+      "posture": "Lebenszyklusdetails",
+      "enforcementReason": "Durchsetzungsgrund",
+      "owner": "Menschlicher Eigentümer",
+      "sponsor": "Menschlicher Sponsor",
+      "rotatedAt": "Letzte Rotation",
+      "maxAge": "Maximales Alter",
+      "seconds": "{{count}} Sekunden",
+      "inherited": "Von der Kritikalität geerbt",
+      "rotationTarget": "Rotationsziel",
+      "recoveryUntil": "Ende des Wiederherstellungsfensters"
+    },
+    "events": {
+      "title": "Nur erweiterbare Ereignisspur",
+      "description": "Vom Backend erfasste Lebenszyklusänderungen und Durchsetzungsübergänge.",
+      "empty": "Keine Lebenszyklusereignisse erfasst.",
+      "event": "Ereignis",
+      "actor": "Akteur",
+      "detail": "Detail",
+      "when": "Zeitpunkt"
+    },
+    "actions": {
+      "title": "Lebenszyklusaktionen",
+      "reason": "Begründung",
+      "critical": {
+        "twoAccountsAal3": "Diese KRITISCHE Aktion erfordert die Freigabe durch zwei verschiedene Benutzerkonten, jeweils über eine AAL3-Sitzung, bevor sie ausgeführt werden kann. Die Engine erzwingt verschiedene KONTEN: Sie kann nicht nachweisen, dass zwei Konten zwei verschiedene Personen sind. Beide Bedingungen richten sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann.",
+        "breakGlassPossible": "Es läuft nichts, bis zwei verschiedene Benutzerkonten zustimmen, jeweils über eine hardwareverifizierte Sitzung. Eine aktive Break-Glass-Notfallfreigabe kann es stattdessen autorisieren — diese Nutzung wird protokolliert und nachträglich geprüft. Beide Bedingungen richten sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann.",
+        "noBreakGlass": "Es läuft nichts, bis zwei verschiedene Benutzerkonten zustimmen, jeweils über eine hardwareverifizierte Sitzung. Break-Glass kann dies nicht autorisieren: Es gibt keinen Notfallweg am zweiten Freigebenden vorbei. Beide Bedingungen richten sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann."
+      },
+      "ownership": {
+        "button": "Verantwortung zuweisen",
+        "title": "Menschliche Verantwortung zuweisen",
+        "description": "Legen Sie Eigentümer und Sponsor anhand von Identitätsreferenzen im Inventar fest.",
+        "owner": "Identitätsreferenz des Eigentümers",
+        "sponsor": "Identitätsreferenz des Sponsors",
+        "humanOnly": "Eigentümer und Sponsor müssen beide menschliche Identitäten im Inventar sein.",
+        "noChanges": "Ändern Sie den Eigentümer oder Sponsor, bevor Sie speichern.",
+        "cannotClear": "Eigentümer- und Sponsorreferenzen können hier nicht gelöscht werden. Weisen Sie stattdessen eine andere menschliche Identität zu.",
+        "confirm": "Verantwortung speichern",
+        "saved": "NHI-Verantwortung gespeichert."
+      },
+      "policy": {
+        "button": "Richtlinie bearbeiten",
+        "title": "Rotationsrichtlinie bearbeiten",
+        "description": "Kritikalität, Rotationsfenster, Ziel und letzte bekannte Rotation festlegen.",
+        "enforcementWarning": "Das Speichern kann die Durchsetzung indirekt ändern: Die Kritikalität bestimmt Warnung oder Blockierung bei Überalterung; überalterte KRITISCHE Zugangsdaten können beim nächsten Abgleich blockiert werden.",
+        "criticality": "Kritikalität der Zugangsdaten",
+        "maxAge": "Maximales Alter in Sekunden",
+        "maxAgeHint": "Null übernimmt den Standard der gewählten Kritikalität.",
+        "rotationTarget": "Rotationsziel",
+        "rotatedAt": "Letzte bekannte Rotation",
+        "confirm": "Richtlinie speichern",
+        "saved": "NHI-Rotationsrichtlinie gespeichert.",
+        "partialUpdateNote": "Ein leeres Feld oder eine Null behält den aktuellen Wert — diese Einstellungen lassen sich ändern, aber nicht löschen: Ein bereits gesetztes Rotationsfenster oder Ziel bleibt, bis du es ersetzt."
+      },
+      "rotate": {
+        "button": "Rotieren",
+        "title": "Rotation der Zugangsdaten anfordern",
+        "description": "Öffnet den gesteuerten KRITISCHEN Rotationsantrag.",
+        "target": "Aktuatorziel",
+        "confirm": "Rotation anfordern",
+        "credentialTitle": "Neue Zugangsdaten — einmalige Anzeige",
+        "credentialWarning": "Kopieren und speichern Sie diese Zugangsdaten jetzt sicher. Sie werden nur einmal angezeigt, von Olivares AI nicht gespeichert und können nach dem Schließen nicht wiederhergestellt werden.",
+        "credential": "Neue Zugangsdaten",
+        "credentialRef": "Referenz der neuen Zugangsdaten: {{ref}}",
+        "credentialSaved": "Ich habe sie sicher gespeichert"
+      },
+      "offboard": {
+        "button": "Außer Betrieb nehmen",
+        "title": "NHI reversibel löschen",
+        "description": "Öffnet den HOCH-Risiko-Antrag zur Außerbetriebnahme mit einer Genehmigung.",
+        "warning": "Dieser reversible Schritt blockiert die NHI und gebundene Agenten und öffnet ein Wiederherstellungsfenster. AAL3 ist nicht erforderlich.",
+        "confirm": "Reversible Löschung anfordern"
+      },
+      "finalize": {
+        "button": "Endgültig abschließen",
+        "title": "Außerbetriebnahme abschließen",
+        "description": "Eine zuvor reversibel gelöschte NHI dauerhaft widerrufen.",
+        "irreversible": "Der Abschluss ist unumkehrbar. Break-glass gilt hier nicht; das zweite, andere Benutzerkonto und AAL3 können nicht umgangen werden.",
+        "confirm": "Dauerhaft abschließen"
+      },
+      "restore": {
+        "button": "Wiederherstellen",
+        "title": "Reversibel gelöschte NHI wiederherstellen",
+        "description": "Macht die Löschung im Wiederherstellungsfenster rückgängig. Diese Admin-Aktion hat bewusst keine Doppelkontrolle.",
+        "confirm": "NHI wiederherstellen"
+      },
+      "sweep": {
+        "button": "Lebenszyklusabgleich starten",
+        "title": "Lebenszyklusabgleich starten",
+        "description": "Überalterung, Verantwortung und Durchsetzung für diesen Mandanten neu berechnen.",
+        "warning": "Dieser Abgleich ist idempotent, verändert aber Zustand. Er kann Identitäten blockieren und ihre gesteuerten Aktionen verweigern.",
+        "confirm": "Verändernden Abgleich starten",
+        "done": "NHI-Lebenszyklusabgleich abgeschlossen.",
+        "result": "Geprüft: {{scanned}}; neu blockiert: {{blocked}}."
+      },
+      "result": {
+        "title": "Status des gesteuerten Antrags",
+        "done": "Die Lebenszyklusaktion wurde abgeschlossen.",
+        "pending": "Der Antrag wartet auf Genehmigung; es wurde noch nichts ausgeführt.",
+        "rejected": "Der Antrag wurde abgelehnt; es erfolgte keine Aktion.",
+        "expired": "Der Antrag ist abgelaufen; stellen Sie bei Bedarf einen neuen.",
+        "noGate": "Es ist kein Genehmigungsgate konfiguriert; die Aktion bleibt verweigert.",
+        "unavailable": "Die Genehmigung liegt vor, aber für diese Quelle gibt es keinen automatischen Aktuator. Folgen Sie dem manuellen Verfahren des Anbieters.",
+        "breakGlass": "Die Aktion wurde über den auditierten Notfallpfad abgeschlossen.",
+        "received": "Das Backend hat einen Status des gesteuerten Antrags geliefert.",
+        "approval": "Genehmigungsreferenz: {{ref}}"
+      }
+    },
+    "errors": {
+      "mutation": "Die Lebenszyklusaktion konnte nicht abgeschlossen werden. Prüfen Sie den Antrag und versuchen Sie es erneut.",
+      "forbidden": "Nicht autorisiert: Ihre Rolle erlaubt diese Lebenszyklusaktion nicht.",
+      "humanOwnerRequired": "Eigentümer und Sponsor müssen menschliche Identitäten aus dem Inventar sein; eine nicht-menschliche Identität darf keine dieser Rollen übernehmen.",
+      "softDeleteRequired": "Der Abschluss setzt eine reversible Löschung voraus. Nehmen Sie die NHI zuerst außer Betrieb und schließen Sie sie nach der Wiederherstellungsentscheidung ab.",
+      "gate": {
+        "rejected": "Ein Prüfer hat diese Anfrage abgelehnt. Es liegt kein Berechtigungsproblem vor — sprich mit dem Prüfer oder stelle eine neue Anfrage mit dem fehlenden Kontext.",
+        "expired": "Die Genehmigung für diese Anfrage ist vor der Ausführung verfallen. Stelle eine neue Anfrage; die frühere Entscheidung autorisiert nichts mehr.",
+        "no_gate": "Es ist kein Genehmigungs-Gate verdrahtet, daher kann diese Aktion nicht regiert werden und wird abgelehnt. Ein Betreiber muss zuvor die Governance konfigurieren."
+      }
+    }
+  },
+  "mcp": {
+    "title": "MCP-Autorisierung",
+    "description": "Ob die OAuth-Token-Bindung jedes MCP-Servers verifiziert wurde. Ausschließlich defensive Sicherheitslage — das Panel leitet ein Token niemals weiter (Proxy) und spielt es niemals erneut ab.",
+    "seamWhat": "Die MCP-Autorisierungsbefunde",
+    "noFindings": "Keine MCP-Autorisierungsbefunde",
+    "noFindingsHint": "Wenn ein OAuth-geschützter MCP-Server entdeckt wird, wird seine Token-Bindungs-Sicherheitslage hier aufgezeichnet.",
+    "prmTitle": "Audience-gebundene Autorisierung (RFC 9728)",
+    "prmDescription": "Wie ein OAuth-geschützter MCP-Server ein Token an eine konkrete Ressource bindet — sodass ein für einen Server ausgestelltes Token nicht an einem anderen erneut abgespielt werden kann.",
+    "flow": {
+      "prm": {
+        "title": "Protected Resource Metadata",
+        "body": "Der Server gibt seine Autorisierungsserver unter /.well-known/oauth-protected-resource bekannt (RFC 9728)."
+      },
+      "asDiscovery": {
+        "title": "Autorisierungsserver-Discovery",
+        "body": "Die Metadaten des bekannt gegebenen Autorisierungsservers werden abgerufen (RFC 8414)."
+      },
+      "pkce": {
+        "title": "PKCE S256",
+        "body": "Der Authorization-Code-Flow verwendet eine S256-Challenge (RFC 7636) — niemals plain."
+      },
+      "resourceBound": {
+        "title": "Ressourcengebundenes Token",
+        "body": "Der Resource Indicator (RFC 8707) ist die kanonische Server-URI, sodass die Audience des Tokens genau ein konkreter Server ist."
+      },
+      "introspect": {
+        "title": "Schreibgeschützte Introspektion",
+        "body": "Die Token-Bindung wird durch schreibgeschützte Introspektion verifiziert; das Panel ruft niemals Werkzeuge auf und leitet das Token nicht weiter (Proxy)."
+      }
+    },
+    "noPassthrough": "Token-Passthrough ist konstruktionsbedingt untersagt: Das Panel beobachtet und introspiziert, es leitet ein MCP-Token niemals weiter und spielt es niemals erneut ab."
+  },
+  "wif": {
+    "gatedNote": "Der Workload Identity Federation-Graph ist eine privilegierte, auditierte Ansicht; sie erfordert ein Hardware-Step-up.",
+    "consoleOnly": "Workload Identity Federation-Objekte (Issuer, Regeln, Dienstkonten) werden ausschließlich in der Anthropic Console verwaltet. Dieses Panel visualisiert und prüft sie — es erstellt oder bearbeitet sie niemals.",
+    "openConsole": "In Anthropic Console öffnen",
+    "graphTitle": "WIF-Objektgraph",
+    "graphDescription": "Föderations-Issuer → Regel → Dienstkonto → OAuth-Scope, wobei der Linter zu weit gefasste Grenzen kennzeichnet.",
+    "empty": "Keine Föderation deklariert",
+    "emptyHint": "Für diese Organisation sind keine Workload Identity Federation-Issuer, -Regeln oder -Dienstkonten konfiguriert. Deklarieren Sie die Föderation in der Anthropic Console, um nicht-menschlichen Zugriff ohne statische Schlüssel zu steuern.",
+    "lintClean": "Lint sauber",
+    "lintErrors": "{{n}} Fehler",
+    "lintWarnings": "{{n}} Warnung",
+    "lintInfo": "{{n}} Hinweis",
+    "lintNoFindings": "Keine Lint-Befunde — der Föderationsgraph erscheint gut eingegrenzt.",
+    "lintLabel": "WIF-Lint-Befunde",
+    "lintRulesTitle": "Der Linter ist bereit. Sobald der Graph geladen ist, wendet er diese Regeln an:",
+    "legend": {
+      "issuer": "Föderations-Issuer (fdis_)",
+      "rule": "Föderationsregel (fdrl_)",
+      "svac": "Dienstkonto (svac_)",
+      "scope": "OAuth-Scope"
+    },
+    "lint": {
+      "cel-over-broad": {
+        "title": "Zu weit gefasste Föderationsregel",
+        "detail": "Der Abgleich dieser Regel ist zu freizügig. CEL-Bedingungen sind Sicherheitsgrenzen — grenzen Sie subject_prefix, audience, claims oder die CEL-Bedingung enger ein.",
+        "rule": "kennzeichnet Regeln, deren subject- / audience- / claims- / CEL-Abgleich zu freizügig ist."
+      },
+      "key-shadow": {
+        "title": "Statischer Schlüssel überdeckt Föderation",
+        "detail": "{{var}} ist vorhanden — ein statischer Anthropic-Schlüssel hat Vorrang und deaktiviert stillschweigend die Workload Identity Federation, sodass eine „schlüssellose“ Organisation weiterhin den langlebigen Schlüssel verwendet.",
+        "recommendation": "Führen Sie `ant auth status` aus, um die aktive Anmeldedaten zu bestätigen, und entfernen Sie dann den statischen Schlüssel, um die Föderation tatsächlich zu nutzen.",
+        "rule": "kennzeichnet einen statischen ANTHROPIC_API_KEY / AUTH_TOKEN, der WIF überdeckt."
+      },
+      "token-lifetime": {
+        "title": "Bedenken zur Token-Lebensdauer",
+        "detail": "token_lifetime_seconds = {{lifetime}}. Halten Sie diesen Wert deutlich unter dem Maximum von {{max}}s und innerhalb des unterstützten Bereichs — kürzere Token verringern den Schadensradius.",
+        "rule": "kennzeichnet token_lifetime_seconds außerhalb von 60–86400s oder nahe dem 24-Stunden-Maximum."
+      },
+      "scope-over-broad": {
+        "title": "Zu weit gefasster OAuth-Scope",
+        "detail": "Scope {{scope}} gewährt über einen einzelnen Arbeitsbereich hinaus Rechte. Bevorzugen Sie workspace:developer, sofern eine organisationsweite Verwaltung nicht wirklich erforderlich ist.",
+        "rule": "kennzeichnet org:manage_tunnels oder unbekannte Scopes; bevorzugt geringste Rechte."
+      },
+      "jwks-insecure": {
+        "title": "Inline-JWKS rotiert nicht",
+        "detail": "Diese Regel fixiert ein Inline-JWKS ({{mode}}). Bevorzugen Sie Discovery, damit die Schlüssel des Issuers rotieren können.",
+        "rule": "kennzeichnet Inline-JWKS, die nicht rotieren können."
+      },
+      "drift": {
+        "title": "Föderations-Drift",
+        "detail": "Dieses Objekt weicht von der verwalteten Föderation ab ({{reason}}). Gleichen Sie die deklarierten Regeln mit der Live-Konfiguration von Anthropic ab.",
+        "rule": "meldet Soll-Ist-Drift: eine nicht deklarierte (ungovernte) Live-Regel, eine deklarierte Regel, die live fehlt, oder eine verwaiste Regel/einen verwaisten Aussteller.",
+        "reason": {
+          "undeclared-rule": "nicht deklarierte Live-Regel",
+          "declared-not-live": "deklariert, aber nicht live",
+          "orphan-rule": "verwaiste Regel",
+          "orphan-issuer": "verwaister Aussteller"
+        }
+      }
+    },
+    "recon": {
+      "declaredOnly": "Es wird die deklarierte Föderation angezeigt. Konfigurieren Sie ein org:admin-OAuth-Token, um mit der Live-Konfiguration von Anthropic abzugleichen.",
+      "reconciled": "Mit der Live-Konfiguration abgeglichen am {{at}}.",
+      "unavailable": "Der Live-Abgleich ist nicht verfügbar — es wird die deklarierte Basis angezeigt. Prüfen Sie das org:admin-OAuth-Token."
+    }
+  },
+  "posture": {
+    "ek": {
+      "title": "External Keys (CMEK)",
+      "description": "Kundenseitig verwaltete Verschlüsselungsschlüssel, die von Ihren Arbeitsbereichen referenziert werden. Nur Sicherheitslage — niemals das Schlüsselmaterial.",
+      "seamWhat": "Die Sicherheitslage der External Keys",
+      "immutable": "In Verwendung — unveränderlich",
+      "never": "Nie validiert",
+      "col": {
+        "id": "Schlüssel-Referenz",
+        "provider": "Anbieter",
+        "state": "Zustand",
+        "inUse": "Referenziert",
+        "validated": "Zuletzt validiert"
+      }
+    },
+    "residency": {
+      "title": "Arbeitsbereich-Residenz",
+      "description": "Datenresidenz und CMEK-Bindung je Arbeitsbereich. Die Heimatregion und ein referenziertes CMEK sind unveränderlich.",
+      "seamWhat": "Die Sicherheitslage der Arbeitsbereich-Residenz",
+      "none": "Keine Arbeitsbereiche gemeldet.",
+      "workspace": "Arbeitsbereich",
+      "geo": "Heimatregion",
+      "cmek": "CMEK",
+      "providerManaged": "Anbieterverwaltet (kein CMEK)",
+      "compartment": "KMS-Compartment",
+      "inferenceGeos": "Gestattete Inferenzregionen",
+      "unrestricted": "Unbeschränkt / nicht gemeldet"
+    },
+    "tls": {
+      "title": "Panel-TLS (cert-manager)",
+      "description": "Die TLS-Sicherheitslage des Panels selbst: Issuer, Ablauf, Rotation und Kette.",
+      "seamWhat": "Die cert-manager-TLS-Sicherheitslage des Panels",
+      "issuer": "Issuer",
+      "notAfter": "Läuft ab",
+      "autoRenew": "Automatische Erneuerung",
+      "chain": "Kette"
+    },
+    "crypto": {
+      "title": "Krypto-Agilität / PQC-Inventar",
+      "description": "Klassische gegenüber Post-Quantum-Algorithmen über den gesamten Identitätsbestand und welche Slots auf PQC rotiert werden können (NIST SP 800-57 r6).",
+      "seamWhat": "Das Krypto-Agilität- / PQC-Inventar",
+      "ready": "PQC-bereit",
+      "notReady": "Nur klassisch",
+      "family": {
+        "classic": "Klassisch",
+        "pqc": "Post-Quantum",
+        "hybrid": "Hybrid"
+      },
+      "col": {
+        "usage": "Verwendung",
+        "algorithm": "Algorithmus",
+        "family": "Familie",
+        "pqcReady": "PQC-Agilität"
+      }
+    },
+    "unavailable": {
+      "badge": "Nicht lesbar",
+      "fallback": "Diese Sicherheitslage konnte in dieser Installation nicht gelesen werden."
+    }
+  },
+  "login": {
+    "statusTitle": "Sitzungs-Assurance",
+    "statusDescription": "Das Authenticator-Assurance-Level Ihrer aktuellen Sitzung. Sensible Ansichten erfordern ein Hardware-Step-up.",
+    "currentAal": "Aktuelles Level",
+    "methods": "Methoden",
+    "methodsUnknown": "Nicht gemeldet",
+    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) und PIV/CAC (FIPS 201-3) sind die Zielstandards für die privilegierte Anmeldung. Das Panel spiegelt wider, was das Backend durchsetzt; es beansprucht keine Zertifizierung.",
+    "passkeyTitle": "Passkey registrieren",
+    "passkeyDescription": "Registrieren Sie einen Hardware-Sicherheitsschlüssel oder Plattform-Authentifikator (WebAuthn / FIDO2) für eine phishing-resistente privilegierte Anmeldung.",
+    "registerPasskey": "Passkey registrieren",
+    "registering": "Folgen Sie Ihrem Authentifikator…",
+    "passkeySeamWhat": "WebAuthn-Passkey-Registrierung",
+    "registered": "Passkey registriert.",
+    "unsupported": "Dieser Browser unterstützt WebAuthn nicht.",
+    "registerFailed": "Die Registrierung wurde nicht abgeschlossen.",
+    "pivTitle": "PIV / CAC (Smartcard)",
+    "pivDescription": "X.509-Client-Zertifikatsanmeldung mit Zertifikat-zu-Rolle-Zuordnung und OCSP-Widerruf, gelesen aus der mTLS-Verbindung.",
+    "pivSeamWhat": "Der Status des PIV/CAC-Client-Zertifikats",
+    "pivPresented": "Client-Zertifikat",
+    "pivAbsent": "Nicht vorgelegt",
+    "pivSubject": "Subject",
+    "pivRole": "Zugeordnete Rolle",
+    "pivOcsp": "OCSP",
+    "pivNote": "Ketten- und OCSP-Verifizierung werden vom Backend durchgeführt; das Panel spiegelt das Ergebnis wider.",
+    "pivNotConfigured": "PIV/CAC ist für diese Bereitstellung nicht konfiguriert. Ein Operator aktiviert es, indem er OLIVARES_PIV_CONFIG (Behörden-CA, Zertifikat-zu-Rolle-Zuordnung) an der Engine setzt.",
+    "ocsp": {
+      "good": "Fehlerfrei",
+      "revoked": "Widerrufen",
+      "unknown": "Unbekannt"
+    },
+    "passkeys": {
+      "title": "Registrierte Passkeys",
+      "description": "Verwalten Sie Ihre FIDO2/WebAuthn-Authentifikatoren. Jeder Passkey bietet phishing-resistente, hardware-gebundene Anmeldung.",
+      "register": "Passkey registrieren",
+      "registerTitle": "Neuen Passkey registrieren",
+      "registerHint": "Geben Sie Ihrem Passkey einen Namen zur Identifikation.",
+      "nameLabel": "Passkey-Name",
+      "namePlaceholder": "z.B. YubiKey 5C, MacBook Touch ID",
+      "registering": "Zeremonie wird durchgeführt…",
+      "registered": "Passkey registriert.",
+      "registerFailed": "Registrierung fehlgeschlagen. Ihr Browser unterstützt möglicherweise kein WebAuthn oder die Zeremonie wurde abgebrochen.",
+      "unsupported": "Dieser Browser unterstützt kein WebAuthn/FIDO2.",
+      "none": "Keine Passkeys registriert",
+      "noneHint": "Registrieren Sie einen Passkey für phishing-resistente, hardware-gebundene Anmeldung (AAL3).",
+      "colName": "Name",
+      "colCreated": "Registriert",
+      "colBackup": "Backup",
+      "backupEligible": "Multi-Gerät",
+      "backupBound": "Hardware-gebunden",
+      "rename": "Umbenennen",
+      "renameTitle": "Passkey umbenennen",
+      "renamed": "Passkey umbenannt.",
+      "delete": "Löschen",
+      "deleteTitle": "Passkey löschen",
+      "deleteBody": "Passkey \"{{name}}\" löschen? Dies ist permanent. Sie benötigen einen weiteren registrierten Passkey für AAL3-Zugang.",
+      "deleted": "Passkey gelöscht.",
+      "lastCredential": "Der einzige Passkey kann nicht gelöscht werden. Registrieren Sie zuerst einen weiteren.",
+      "stepUpRequired": "Das Löschen eines Passkeys erfordert eine aktive AAL3-Sitzung. Führen Sie zuerst eine Step-up-Authentifizierung durch."
+    }
+  },
+  "empty": {
+    "cryptoInventory": {
+      "title": "Keine kryptografischen Assets inventarisiert",
+      "description": "Dieser Build deklariert den Vertrag zur TLS-/Post-Quanten-Sicherheitslage, stellt ihn aber nicht bereit; bis seine Implementierung antwortet, ersetzt ein Hinweis auf den ausstehenden Vertrag dieses Panel."
+    },
+    "externalKeys": {
+      "title": "Noch keine externen Schlüsselreferenzen gemeldet",
+      "description": "Für diese Organisation wurden keine kundenverwalteten Verschlüsselungsschlüssel gemeldet. Das Inventar wurde erfolgreich gelesen — eine echte Null, kein fehlendes Backend."
+    },
+    "nhiRoster": {
+      "title": "Keine menschlichen oder nicht-menschlichen Identitäten",
+      "description": "Gleichen Sie nach dem Konfigurieren einer Verzeichnisquelle das Identitätsinventar erneut ab, um menschliche und nicht-menschliche Identitäten samt External IDs zu erfassen."
+    }
+  }
+}

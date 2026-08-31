@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": "stream-message-1",
+  "result": {
+    "message": {
+      "messageId": "message-stream-v101-1",
+      "contextId": "context-v101-1",
+      "taskId": "task-v101-1",
+      "role": "ROLE_AGENT",
+      "parts": [
+        {"text": "stream completed"}
+      ]
+    }
+  }
+}

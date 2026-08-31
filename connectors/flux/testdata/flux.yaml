@@ -1,0 +1,75 @@
+# Exported with `kubectl get gitrepositories,kustomizations,helmreleases -A -o yaml`
+# (item list flattened to docs). Revision strings and URLs below are recognizable
+# tokens the no-leak test asserts never appear in any emitted finding.
+#
+# A reconciled GitRepository: Ready=True => Info, no drift finding.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: apps-repo
+  namespace: flux-system
+  generation: 4
+status:
+  observedGeneration: 4
+  artifact:
+    revision: main@sha1:a1b2c3d4e5f6
+    url: http://source-controller.flux-system.svc/gitrepository/apps-repo/a1b2c3d.tar.gz
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Succeeded
+      message: stored artifact for revision 'main@sha1:a1b2c3d4e5f6'
+---
+# A failing Kustomization: Ready=False => High. The Title carries only the reason
+# token (ArtifactFailed), never the message (which embeds a path/URL).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: billing-stack
+  namespace: flux-system
+  generation: 7
+status:
+  observedGeneration: 7
+  lastAppliedRevision: main@sha1:deadbeef0001
+  lastAttemptedRevision: main@sha1:deadbeef0001
+  conditions:
+    - type: Stalled
+      status: "True"
+      reason: ArtifactFailed
+    - type: Ready
+      status: "False"
+      reason: ArtifactFailed
+      message: "failed to fetch https://git.example.com/billing.git: 404 not found"
+---
+# A drifted, but reconciled, HelmRelease: Ready=True => Info, plus a Medium drift
+# finding because the applied chart version (history[0].chartVersion) differs from
+# lastAttemptedRevision. The applied revision on a HelmRelease v2 lives in
+# status.history[0].chartVersion, NOT in a lastAppliedRevision field.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: redis-cache
+  namespace: flux-system
+  generation: 3
+status:
+  observedGeneration: 3
+  lastAttemptedRevision: 19.6.4
+  history:
+    - chartVersion: 19.5.0
+      digest: sha256:cafef00dba5e
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: InstallSucceeded
+      message: "Helm install succeeded for release flux-system/redis-cache.v1 with chart redis@19.5.0"
+---
+# A non-Flux object sharing the directory: must be ignored. (A HelmRepository is a
+# Flux source-controller object but NOT one of the three kinds this connector
+# handles, so it too would be skipped — here a plain ConfigMap stands in.)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flux-cm
+  namespace: flux-system
+data:
+  url: https://flux.example.com

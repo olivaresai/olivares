@@ -1,0 +1,12 @@
+{
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/users?$skiptoken=PAGE2",
+  "value": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "displayName": "Dana White",
+      "userPrincipalName": "dana@contoso.onmicrosoft.com",
+      "accountEnabled": true,
+      "mail": "dana@contoso.com"
+    }
+  ]
+}

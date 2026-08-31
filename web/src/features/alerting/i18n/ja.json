@@ -1,0 +1,180 @@
+{
+  "title": "アラート",
+  "description": "検出結果を宛先にルーティングし、配信ログを確認します。ルートは宛先を名前で参照します。認証情報は配線されたトランスポートに存在します。",
+  "tabs": {
+    "routes": "ルート",
+    "deliveries": "配信",
+    "outbox": "配信不能"
+  },
+  "severities": {
+    "any": "すべての重大度",
+    "info": "情報",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "重大"
+  },
+  "routes": {
+    "intro": "各ルートは一致した検出結果を優先度順に1つの宛先へ送信します。",
+    "add": "新しいルート",
+    "empty": "ルートがまだありません",
+    "emptyHint": "一致した検出結果を宛先へ送るルートを追加します。",
+    "colName": "名前",
+    "colDest": "宛先",
+    "colSeverity": "最小重大度",
+    "colStatus": "状態",
+    "colActions": "操作",
+    "enabled": "有効",
+    "disabled": "無効",
+    "bulk": {
+      "enable": "選択したルートを有効化",
+      "disable": "選択したルートを無効化"
+    },
+    "testAction": "ルート {{name}} をテスト",
+    "editAction": "ルート {{name}} を編集",
+    "deleteAction": "ルート {{name}} を削除",
+    "created": "ルートを作成しました",
+    "updated": "ルートを更新しました",
+    "deleted": "ルートを削除しました",
+    "tested": "{{destination}} にテストを送信しました",
+    "deleteDialog": {
+      "title": "ルートを削除しますか？",
+      "description": "ルート「{{name}}」を削除します。一致していた検出結果はこのルートでは配信されなくなります。",
+      "confirm": "ルートを削除"
+    },
+    "dialog": {
+      "title": "新しいルート",
+      "editTitle": "ルートを編集",
+      "subtitle": "検出結果を照合して宛先に送ります。空の照合リストはすべてに一致します。",
+      "name": "名前",
+      "destination": "宛先",
+      "destinationHint": "プロビジョニング済みの宛先（名前のみ。認証情報はトランスポートに存在）。",
+      "destinationPlaceholder": "宛先を選択",
+      "minSeverity": "最小重大度",
+      "matchTypes": "一致タイプ",
+      "matchKinds": "一致カインド",
+      "matchSources": "一致ソース",
+      "matchSubjectKinds": "一致サブジェクトカインド",
+      "listHint": "カンマ区切り。空はすべてに一致。",
+      "dedup": "重複排除ウィンドウ（秒）",
+      "throttle": "スロットルウィンドウ（秒）",
+      "priority": "優先度",
+      "enabled": "有効",
+      "enabledHint": "無効なルートは再有効化するまで何にも一致しません。",
+      "create": "ルートを作成",
+      "save": "ルートを保存",
+      "matchTypesHint": "イベントタイプを1つ以上選択します。説明はサーバーカタログから取得されます。"
+    }
+  },
+  "deliveries": {
+    "noRead": "配信を表示する権限がありません。",
+    "intro": "記録された配信試行（読み取り専用）。宛先を確認するにはルートのテストを使用します。",
+    "filterStatus": "状態で絞り込み",
+    "allStatuses": "すべての状態",
+    "empty": "配信がありません",
+    "colTime": "時刻",
+    "colDest": "宛先",
+    "colKind": "種類",
+    "colStatus": "状態",
+    "colDetail": "詳細",
+    "statuses": {
+      "claimed": "取得済み",
+      "delivered": "配信済み",
+      "rejected": "拒否",
+      "failed": "失敗",
+      "no_dispatcher": "ディスパッチャーなし",
+      "unknown_destination": "不明な宛先"
+    },
+    "loadMore": "さらに読み込む"
+  },
+  "outbox": {
+    "noRead": "アウトボックスを表示する権限がありません。",
+    "intro": "永続アウトボックス：エンジンがまだ未送の通知、すでに配信済みの通知、そして送信を断念した通知です。再キューは新しい配信試行を要求するだけで、配信そのものではありません。",
+    "filterStatus": "アウトボックスの状態で絞り込み",
+    "colTime": "時刻",
+    "colDest": "宛先",
+    "colKind": "種類",
+    "colAttempts": "試行回数",
+    "colStatus": "状態",
+    "colDetail": "最新の詳細",
+    "colActions": "操作",
+    "statuses": {
+      "dead": "配信不能",
+      "queued": "キュー待ち",
+      "delivering": "配信中",
+      "delivered": "配信済み"
+    },
+    "emptyDead": "配信不能の通知はありません",
+    "emptyDeadHint": "再試行を使い切ったか、宛先が恒久的に拒否した通知がここに入ります。断念されたものはありません。",
+    "empty": "状態が「{{status}}」の通知はありません",
+    "emptyHint": "別の状態を選ぶか、ルートタブで期待する検出結果に一致するルートがあるか確認してください。",
+    "redeliverAction": "この通知を {{destination}} 宛に再キューする",
+    "redeliver": {
+      "queued": "{{destination}} 宛に再キューしました",
+      "queuedHint": "通知は再びキューに入りました。次の配信処理が試行します。まだ配信は完了していません。",
+      "accepted": "{{destination}} 宛の再キューを状態「{{status}}」で受け付けました",
+      "inFlight": "再キューしていません：この通知はすでに {{destination}} へ送信中です。",
+      "gone": "再キューしていません：この通知はこのテナントのアウトボックスにありません。削除されたか、別のテナントのものである可能性があります。",
+      "forbidden": "再キューしていません：コントロールプレーンが {{destination}} 宛の要求を拒否しました。再キューには notify ルートの管理者権限が必要です。ポリシーやスコープ制限によって拒否されることもあります。",
+      "consent": "再キューしていません：この画面の記録通知がまだ承認されていません。承認してからやり直してください。権限不足ではありません。",
+      "stepUp": "まだ再キューイングされていません: {{destination}} への再配信には検証済みセッションが必要です。検証を完了してから再試行してください。",
+      "failed": "{{destination}} 宛の再キューに失敗しました。通知はキューに戻っていません。"
+    },
+    "confirm": {
+      "title": "この通知を再キューしますか？",
+      "description": "{{destination}} 宛に新しい配信試行を要求します。以前の試行が実際には届いていた場合、受信側が複数回受け取る可能性があります。",
+      "body": "これまでの試行回数：{{attempts}}。最新の結果：{{detail}}。",
+      "noDetail": "記録なし",
+      "confirm": "通知を再キュー"
+    }
+  },
+  "evaluate": {
+    "title": "シグナルをテスト",
+    "caption": "述語評価のみ。重複排除とスロットリングはシミュレートされません。",
+    "eventType": "イベントタイプ",
+    "selectType": "イベントタイプを選択",
+    "kind": "種類",
+    "severity": "重大度",
+    "source": "ソース",
+    "subjectKind": "サブジェクト種類",
+    "submit": "評価",
+    "matchedCount": "一致したルート: {{count}}",
+    "name": "ルート",
+    "enabled": "有効",
+    "matched": "一致",
+    "mismatches": "不一致",
+    "yes": "はい",
+    "no": "いいえ",
+    "dimensions": {
+      "type": "タイプ",
+      "severity": "重大度",
+      "kind": "種類",
+      "source": "ソース",
+      "subject_kind": "サブジェクト種類",
+      "disabled": "無効"
+    }
+  },
+  "history": {
+    "action": "{{name}} のリビジョン履歴を表示",
+    "title": "リビジョン履歴 — {{name}}",
+    "description": "この通知ルートの時系列の追記専用スナップショットです。",
+    "empty": "記録されたリビジョンはありません",
+    "loadMore": "さらに読み込む",
+    "compareTitle": "スナップショットの差分",
+    "selectTwo": "比較するリビジョンを2つ選択してください。",
+    "selectRevision": "{{actor}} による「{{op}}」リビジョンを選択",
+    "originalLabel": "以前のリビジョン",
+    "modifiedLabel": "後のリビジョン",
+    "restore": "このリビジョンを復元",
+    "restoreTitle": "リビジョンを復元しますか？",
+    "restoreDescription": "{{name}} の選択したルート構成を復元しますか？",
+    "restoreConfirm": "リビジョンを復元",
+    "restored": "ルートのリビジョンを復元しました",
+    "operations": {
+      "create": "作成",
+      "update": "更新",
+      "delete": "削除",
+      "restore": "復元"
+    }
+  }
+}

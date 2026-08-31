@@ -1,0 +1,40 @@
+# Línea base de `scripts/check-phone-home-claims.sh` (a repository gate). Formato: cuenta<TAB>ruta.
+# ⚠ ESTE FICHERO SE PUBLICA, y el escrubador del export sólo entiende comentarios de
+# código/config: en un .txt NO scrubea nada, ni las líneas que empiezan por #. Nada de
+# referencias internas aquí. Medido el 2026-08-28: una ruta con el número de sesión en el
+# nombre cortó un push a los 26 minutos con LEAK[raw] en dos líneas.
+# Una fila a 0 NO es ruido: es una ruta que LLEVÓ una promesa absoluta y hoy no la lleva, y sin
+# ella una reaparición se leería como entrada nueva… o como nada. Las 19 filas a 0 son las que
+# el lote del 2026-08-28 retiró.
+# Las TRES filas a 1 son menciones ACOTADAS y ciertas que el patrón casa porque no lee sujetos:
+#   docs/07-LICENSE-AND-OPEN-CORE.md      §custody explica qué significa «no phone-home» aquí
+#   docs/POLAR-COMMERCIAL-SETUP.md        «sin phone-home» acotado a la VALIDACIÓN de licencia
+#   docs/ai-context/PROJECT-CONTEXT.md    «no phone-home kill-switch», acotado al kill switch
+# Si una de ellas sube, es que se le añadió una promesa nueva al lado de la explicación.
+0	INSTALL.md
+0	commercial/license-worker/src/portal/pages/licenses.ts
+0	commercial/license-worker/src/portal/pages/trust.ts
+0	docs-site/src/content/docs/de/explanation/security/security-model.md
+0	docs-site/src/content/docs/de/how-to/air-gap-install.md
+0	docs-site/src/content/docs/es/explanation/security/security-model.md
+0	docs-site/src/content/docs/es/how-to/air-gap-install.md
+0	docs-site/src/content/docs/explanation/security/security-model.md
+0	docs-site/src/content/docs/explanation/security/threat-model.mdx
+0	docs-site/src/content/docs/fr/explanation/security/security-model.md
+0	docs-site/src/content/docs/fr/how-to/air-gap-install.md
+0	docs-site/src/content/docs/how-to/air-gap-install.md
+0	docs-site/src/content/docs/ja/explanation/security/security-model.md
+0	docs-site/src/content/docs/ja/how-to/air-gap-install.md
+0	docs-site/src/content/docs/ru/explanation/security/security-model.md
+0	docs-site/src/content/docs/ru/how-to/air-gap-install.md
+0	docs-site/src/content/docs/start/what-is-olivares-ai.md
+0	docs-site/src/content/docs/zh/explanation/security/security-model.md
+0	docs-site/src/content/docs/zh/how-to/air-gap-install.md
+1	docs/07-LICENSE-AND-OPEN-CORE.md
+1	docs/POLAR-COMMERCIAL-SETUP.md
+1	docs/ai-context/PROJECT-CONTEXT.md
+2	docs/launch/POSTS-2026-08-30.md
+0	docs/trust/one-pager.md
+0	docs/trust/questionnaire-answer-bank.md
+0	docs/trust/vendor-viability.md
+0	email/copy/en.json

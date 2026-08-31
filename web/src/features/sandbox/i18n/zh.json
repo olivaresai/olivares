@@ -1,0 +1,183 @@
+{
+  "truncation": {
+    "label": "已加载 {{n}} 行；还有更多",
+    "hint": "此沙箱列表有上限，仅显示已加载的行。"
+  },
+  "title": "测试沙箱",
+  "description": "针对模拟资源进行隔离的临时运行——场景模拟、确定性重放以及部署前后对比。输出均为合成数据；绝不存储任何真实目标文本。",
+  "tabs": {
+    "runs": "运行",
+    "comparisons": "对比",
+    "scenarios": "场景"
+  },
+  "kind": {
+    "scenario": "场景",
+    "replay": "重放",
+    "compare": "对比"
+  },
+  "runner": {
+    "inproc-mock": "进程内模拟",
+    "container": "容器",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "智能体",
+    "model": "模型",
+    "prompt": "提示词",
+    "session": "会话",
+    "sandbox_run": "沙箱运行"
+  },
+  "verdict": {
+    "improved": "改善",
+    "regressed": "退化",
+    "unchanged": "无变化",
+    "inconclusive": "无定论"
+  },
+  "run": {
+    "isolated": "已隔离",
+    "isolatedHint": "运行器保证隔离：无出口流量、无密钥、无生产环境。按运行器的上报内容记录，而非推断得出。",
+    "notIsolated": "未隔离",
+    "notIsolatedHint": "此后端不保证隔离——如实显示，不予隐藏。",
+    "destroyed": "已销毁",
+    "destroyedHint": "运行结束后，临时环境的状态已被丢弃。",
+    "notScored": "已执行，未评分",
+    "pass": "通过",
+    "fail": "失败"
+  },
+  "runs": {
+    "title": "运行",
+    "description": "每一次隔离执行，包含执行它的后端以及是否已评分。",
+    "isolationNote": "隔离是真实的，并非伪装：运行器与隔离标志严格按记录显示。降级运行虽已执行但未评分——它不算通过。",
+    "empty": "尚无运行",
+    "errored": "{{count}} 个错误",
+    "errored_other": "{{count}} 个错误",
+    "columns": {
+      "kind": "类型",
+      "subject": "主体",
+      "runner": "运行器",
+      "isolation": "隔离",
+      "status": "状态",
+      "steps": "步骤",
+      "score": "评分",
+      "started": "开始时间"
+    }
+  },
+  "outputs": {
+    "title": "步骤输出",
+    "empty": "未记录任何输出",
+    "syntheticNote": "这些是模拟运行器产生的有界合成输出——并非生产输出。模拟未命中是一个确定性标记；它从未触及任何真实资源。",
+    "mockHit": "模拟命中",
+    "mockMiss": "模拟未命中"
+  },
+  "stream": {
+    "replayNote": "引擎会通过一条连接重放本次运行已记录的分步输出，然后关闭连接。沙箱运行在启动时同步执行，因此这是已记录的证据在逐步到达，而不是正在进行中的执行画面。",
+    "waiting": "正在等待第一条分步输出；连接状态显示在上方。",
+    "connecting": "正在连接…",
+    "receiving": "正在接收重放",
+    "complete": "重放完成",
+    "completePartial": "重放已结束，但这不是完整的记录",
+    "unreadable": "本视图无法读取的帧：{{n}} 个。它们已送达但被丢弃，因此其中承载的证据在此处缺失——这不是一次完整的重放。",
+    "emptyUnreadable": "未能读取到任何分步输出",
+    "disconnected": "未连接",
+    "lost": "连接已中断 — 你已经看不到这次运行了。",
+    "lostHint": "这并不表示运行已结束：连接在引擎发出重放结束信号之前就断开了。运行的状态以引擎记录的为准，显示在运行列表中，绝不会从这条连接推断。重新连接即可继续；已显示的输出不会重复。",
+    "reconnect": "重新连接",
+    "snapshot": "流式连接没有送达任何内容，因此这些是通过 JSON API 读取的已存储输出 — 属于快照，而非实时视图。",
+    "summary": "引擎汇总：{{total}} 个步骤中有 {{ok}} 个匹配到 mock，{{error}} 个 mock-miss。"
+  },
+  "comparisons": {
+    "title": "部署前后对比",
+    "description": "基线与候选项针对同一套件进行评分——这是决定是否放行部署的裁定。",
+    "empty": "尚无对比",
+    "emptyHint": "运行一次对比，以评估候选变体相对于其基线的表现。",
+    "baseline": "基线",
+    "candidate": "候选项",
+    "delta": "差值",
+    "decidedBy": "裁定依据",
+    "scoredAgainst": "评分基准",
+    "noSuite": "无套件——缺少已评分的基线与候选项时，裁定无定论。"
+  },
+  "scenarios": {
+    "title": "场景",
+    "description": "可复用的合成步骤输入规格，以及模拟的 MCP/资源响应。",
+    "empty": "尚无场景",
+    "emptyHintAuthor": "记录第一份合成测试样例：主体收到的步骤输入，以及它们所解析到的模拟响应。",
+    "emptyHintReadOnly": "场景由持有沙箱场景写入权限的调用方编写。没有该权限，你仍可以读取现有场景及其运行记录。",
+    "emptyHintConfined": "你的成员身份被限定在某个工作区。场景是租户级的测试样例，因此引擎拒绝从受限成员身份记录场景——需要由租户级成员来编写。",
+    "columns": {
+      "name": "名称",
+      "subjectKind": "主体",
+      "steps": "步骤",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "create": {
+      "action": "新建场景",
+      "title": "新建场景",
+      "description": "场景是一份合成测试样例：主体收到的步骤输入，以及它们所解析到的模拟 MCP/资源响应。其中没有任何内容会触及真实资源。",
+      "name": "名称",
+      "namePlaceholder": "结账代理——正常路径",
+      "subjectKind": "主体",
+      "subjectKindHint": "场景所检验的对象——代理、模型、提示词或会话。自由文本：首尾空白会被去除，最多保存 200 个字符。",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "这份样例检验什么，以及它为何存在。",
+      "steps": "步骤",
+      "stepsHint": "主体按顺序收到的输入。将键留空，引擎会依次指定 step-1、step-2 等。",
+      "stepsEmpty": "尚无步骤——运行此场景不会产生任何输出。",
+      "addStep": "添加步骤",
+      "removeStep": "移除步骤 {{index}}",
+      "stepKey": "步骤 {{index}} 的键",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "步骤 {{index}} 的输入",
+      "stepInputPlaceholder": "对这条退款请求进行分类。",
+      "mocks": "模拟",
+      "mocksHint": "每个被模拟的 MCP/资源所返回的响应。找不到模拟的步骤会记录一个确定性的模拟未命中标记——它绝不会向外调用。",
+      "mocksEmpty": "尚无模拟——每个步骤都会记录模拟未命中标记。",
+      "addMock": "添加模拟",
+      "removeMock": "移除模拟 {{index}}",
+      "mockResource": "模拟 {{index}} 的资源",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "模拟 {{index}} 的响应",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "请只输入合成文本：此处不做任何分类、脱敏或拒绝，粘贴进来的密钥就是被存下来的密钥。引擎只限制长度——名称 200 个字符、描述 1024、每个步骤或模拟的正文 8192——截断时会追加省略号。",
+      "submit": "创建场景",
+      "submitting": "正在创建…",
+      "success": "场景已创建",
+      "failed": "场景未创建。"
+    },
+    "archive": {
+      "action": "归档",
+      "alreadyArchived": "已归档",
+      "confirmTitle": "要归档此场景吗？",
+      "confirmBody": "“{{name}}”会被标记为已归档，该决定记入审计账本。已经用过它的运行与对比会被保留——归档绝不删除证据。这是状态变更而非阻断：若有请求，引擎仍会运行处于该状态的场景。",
+      "success": "场景已归档"
+    }
+  },
+  "seam": {
+    "synthetic": "合成数据：未接线",
+    "syntheticData": "合成数据生成是一个有文档记录的 v1 后扩展点——本版本尚未实现。"
+  },
+  "empty": {
+    "runs": {
+      "title": "尚无沙箱运行记录",
+      "description": "获授权的调用方通过沙箱 API 启动已存储的场景、重放或对比后，运行才会显示。"
+    },
+    "scenarios": {
+      "title": "尚未定义沙箱场景",
+      "description": "场景是由运维人员编写的合成测试样例，由持有沙箱场景写入权限的调用方记录——可以在本页面完成，也可以通过沙箱 API 提交。"
+    }
+  },
+  "actions": {
+    "replay": "Replay a session",
+    "compare": "Compare variants",
+    "run": "Replay",
+    "compareRun": "Compare",
+    "sessionRef": "Session ref",
+    "scenarioRef": "Scenario ref (optional)",
+    "baseline": "Baseline variant",
+    "candidate": "Candidate variant",
+    "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
+    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs."
+  }
+}

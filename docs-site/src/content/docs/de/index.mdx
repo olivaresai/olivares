@@ -1,0 +1,187 @@
+---
+title: Olivares AI Dokumentation
+description: >-
+  Produktdokumentation für Olivares AI — die von Ihnen betriebene KI integrieren,
+  verwalten und absichern, von einem einzelnen Rechner bis zu einer gesamten
+  IT-Landschaft. Eine Ground Truth: Claude Code auf der tiefsten Stufe, Codex und Grok
+  Build daneben. Self-hosted: Sehen Sie, was Ihre KI tut, entscheiden Sie, was sie darf,
+  und weisen Sie es nach.
+template: splash
+hero:
+  tagline: "Die von Ihnen betriebene KI integrieren, verwalten und absichern — auf einem Rechner oder in einer gesamten IT-Landschaft. Self-hosted, eine Ground Truth: Claude Code auf der tiefsten Stufe, Codex und Grok Build daneben. Ehrlich über die eigenen Grenzen."
+  actions:
+    - text: Hier beginnen
+      link: /start/what-is-olivares-ai/
+      icon: right-arrow
+      variant: primary
+    - text: Den passenden Pfad finden
+      link: /de/start/paths-by-role/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+Diese Dokumentation ist nach dem [Diátaxis](https://diataxis.fr/start-here/)-Framework
+gegliedert — vier Modi, von denen jeder eine andere Anforderung beantwortet. Wählen Sie
+den, der zu Ihrem aktuellen Vorhaben passt.
+
+<CardGrid>
+  <LinkCard
+    title="Tutorials"
+    href="/de/tutorials/zero-to-graph/"
+    description="Lernorientiert. Führen Sie das einzelne Binary aus und erreichen Sie Schritt für Schritt eine befüllte Read/Write-Zugriffsgraph (Access Graph)."
+  />
+  <LinkCard
+    title="How-to-Anleitungen"
+    href="/de/how-to/self-hosting/"
+    description="Aufgabenorientiert. Eine Quelle anbinden, self-hosten, air-gapped installieren, ein Release verifizieren, Audit an Splunk weiterleiten."
+  />
+  <LinkCard
+    title="Referenz"
+    href="/de/reference/"
+    description="Informationsorientiert. Die REST API, der Event Bus (AsyncAPI), die Module, das CLI und die Konfiguration."
+  />
+  <LinkCard
+    title="Erläuterung"
+    href="/de/explanation/"
+    description="Verständnisorientiert. Architektur, der Zugriffsgraph (Access Graph), das Security- und Bedrohungsmodell, Lizenzierung."
+  />
+</CardGrid>
+
+## Was ist das?
+
+Olivares AI **integriert, verwaltet und sichert die von Ihnen betriebene KI** — auf einem
+Rechner oder über eine gesamte IT-Landschaft hinweg, eine Ground Truth: Claude Code auf
+der tiefsten Stufe, Codex und Grok Build daneben, als Ergänzung statt als Konkurrenz. Ein einzelnes,
+self-hosted Binary gibt Ihrer KI den Kontext, den Ressourcenzugriff und die verwalteten
+Sessions, die sie braucht, um echte Arbeit zu leisten, und gibt Ihnen die
+granularen Berechtigungen, Richtlinien, Budgets und Audit-Nachweise, um das Ganze zu betreiben —
+Modelle, Agenten, MCP-Server, die Identitäten dahinter und die Daten, die sie berühren — über
+Ihre Infrastruktur hinweg. Sie sehen weiterhin eine Read/Write-Zugriffskarte (Access Map) dessen,
+was jeder von ihnen erreichen kann, und die Abweichung zwischen *Permitted* und *Observed*; alles
+**self-hosted**, ohne verpflichtende Telemetrie und standardmäßig ohne Egress der Control Plane.
+Ihren Perimeter überschreitet nur, was **Sie** dafür konfigurieren: Aufrufe an Ihre Modell-APIs,
+die von Ihnen eingerichteten SIEM-/Webhook-Ausgaben und ein externer Embedding-Anbieter, falls
+Sie einen bereitstellen. Zugleich sagen wir ehrlich, was heute läuft und was pre-v1 ist.
+
+<CardGrid>
+  <Card title="Ehrlich von Grund auf" icon="approve-check">
+    Wir dokumentieren, was heute läuft und was pre-v1 ist. Tutorial-Befehle sind getestet;
+    wo der Vertrag etwas noch nicht abdeckt, sagt die Dokumentation das. Siehe
+    [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/).
+  </Card>
+  <Card title="Open Core" icon="open-book">
+    Das Produkt (Engine, Module, Web) steht unter AGPL-3.0-only; das SDK und die Connectors
+    stehen unter Apache-2.0; Enterprise-Module sind kommerziell. Siehe
+    [Open Core & Lizenzierung](/de/explanation/open-core-and-licensing/).
+  </Card>
+</CardGrid>
+
+{/* GALERIA-CONSOLA:INICIO — generada; el orden es el del README. */}
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-dark.png" />
+  <img src="/console/access-map-light.png" width="960" alt="Zugriffskarte: Was jeder Agent über Ihren Bestand hinweg liest und schreibt — Ursprünge links, die berührten Ressourcen rechts, R/RW nach Farbe." />
+</picture>
+<figcaption><strong>Zugriffskarte</strong> — Was jeder Agent über Ihren Bestand hinweg liest und schreibt — Ursprünge links, die berührten Ressourcen rechts, R/RW nach Farbe.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-drift-dark.png" />
+  <img src="/console/access-map-drift-light.png" alt="Abweichung der geringsten Rechte: Den Abgleich der geringsten Rechte überlagern: unerwarteten Zugriff (beobachtet, nicht gestattet) und ungenutzte Gewährungen hervorheben." />
+</picture>
+<figcaption><strong>Abweichung der geringsten Rechte</strong> — Den Abgleich der geringsten Rechte überlagern: unerwarteten Zugriff (beobachtet, nicht gestattet) und ungenutzte Gewährungen hervorheben.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/orchestration-dark.png" />
+  <img src="/console/orchestration-light.png" alt="Orchestrierung &amp; A2A: Agent-zu-Agent-Topologie — wer an wen delegiert, die laufenden Delegationsflüsse und die deklarierten Kadenzen. Lesezugriffe auf den Kommunikationsgraphen sind privilegiert und werden selbst auditiert." />
+</picture>
+<figcaption><strong>Orchestrierung &amp; A2A</strong> — Agent-zu-Agent-Topologie — wer an wen delegiert, die laufenden Delegationsflüsse und die deklarierten Kadenzen. Lesezugriffe auf den Kommunikationsgraphen sind privilegiert und werden selbst auditiert.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/inventory-dark.png" />
+  <img src="/console/inventory-light.png" alt="Inventar: Jeder Agent, jede Sitzung, jeder MCP, jedes Modell und jede Identität, die in Ihrem Bestand erkannt wurden." />
+</picture>
+<figcaption><strong>Inventar</strong> — Jeder Agent, jede Sitzung, jeder MCP, jedes Modell und jede Identität, die in Ihrem Bestand erkannt wurden.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/observability-dark.png" />
+  <img src="/console/observability-light.png" alt="Beobachtbarkeit &amp; Interoperabilität: Standardbasierte Erfassungszustände und Hauptbuch-korrelierte Trace-Detailanalyse. Die Kennzahlen gelten engine-weit (prozessglobal), nicht pro Mandant; Standards sind auf die Versionen und Reifegrade festgelegt, die die zuständigen Gremien deklarieren." />
+</picture>
+<figcaption><strong>Beobachtbarkeit &amp; Interoperabilität</strong> — Standardbasierte Erfassungszustände und Hauptbuch-korrelierte Trace-Detailanalyse. Die Kennzahlen gelten engine-weit (prozessglobal), nicht pro Mandant; Standards sind auf die Versionen und Reifegrade festgelegt, die die zuständigen Gremien deklarieren.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/dashboards-dark.png" />
+  <img src="/console/dashboards-light.png" alt="Führungsübersicht: Kosten, Nutzung, Risiko und Compliance auf einen Blick — für die Details zur operativen Ansicht wechseln." />
+</picture>
+<figcaption><strong>Führungsübersicht</strong> — Kosten, Nutzung, Risiko und Compliance auf einen Blick — für die Details zur operativen Ansicht wechseln.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/home-dark.png" />
+  <img src="/console/home-light.png" alt="Übersicht: Ihr KI-Bestand auf einen Blick — Inventar, Aktivität, Risiko, Compliance, Ausgaben und Zustand." />
+</picture>
+<figcaption><strong>Übersicht</strong> — Ihr KI-Bestand auf einen Blick — Inventar, Aktivität, Risiko, Compliance, Ausgaben und Zustand.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/security-dark.png" />
+  <img src="/console/security-light.png" alt="Sicherheit &amp; Forensik: Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Die Ebene ist standardmäßig detektivisch — sie zeichnet auf, sie blockiert nicht von sich aus, sofern die Durchsetzung nicht aktiviert und gesteuert ist." />
+</picture>
+<figcaption><strong>Sicherheit &amp; Forensik</strong> — Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Die Ebene ist standardmäßig detektivisch — sie zeichnet auf, sie blockiert nicht von sich aus, sofern die Durchsetzung nicht aktiviert und gesteuert ist.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/session-viewer-dark.png" />
+  <img src="/console/session-viewer-light.png" alt="Viewer für Sitzungsaufzeichnungen: Einheitliche Zeitachse der Agentenaktivität und Governance-Nachweise für eine einzelne Sitzung." />
+</picture>
+<figcaption><strong>Viewer für Sitzungsaufzeichnungen</strong> — Einheitliche Zeitachse der Agentenaktivität und Governance-Nachweise für eine einzelne Sitzung.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/identity-dark.png" />
+  <img src="/console/identity-light.png" alt="Identität &amp; NHI: SSO, SCIM, Identitätsinventar, NHI-Lebenszyklus, WIF-Graph und privilegierte Anmeldung — beobachtet, gesteuert und auditiert." />
+</picture>
+<figcaption><strong>Identität &amp; NHI</strong> — SSO, SCIM, Identitätsinventar, NHI-Lebenszyklus, WIF-Graph und privilegierte Anmeldung — beobachtet, gesteuert und auditiert.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/knowledge-dark.png" />
+  <img src="/console/knowledge-light.png" alt="Daten, Wissen &amp; Kontext: Governance-konforme Wissensdatenbanken, Abruf-Herkunft, das Prompt-Register, Agent-Speicher und Kontextrichtlinien." />
+</picture>
+<figcaption><strong>Daten, Wissen &amp; Kontext</strong> — Governance-konforme Wissensdatenbanken, Abruf-Herkunft, das Prompt-Register, Agent-Speicher und Kontextrichtlinien.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/work-apply-refused-dark.png" />
+  <img src="/console/work-apply-refused-light.png" alt="Plan: Die Änderung wird geplant. In diesem Schritt wird nichts geschrieben." />
+</picture>
+<figcaption><strong>Plan</strong> — Die Änderung wird geplant. In diesem Schritt wird nichts geschrieben.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/killswitch-dark.png" />
+  <img src="/console/killswitch-light.png" alt="Not-Aus: Die Notabschaltung des Bestands: Ein Klick stoppt jede gesteuerte Aktuierungsoberfläche. Das Auslösen ist bewusst niederschwellig; die Wiederherstellung erfordert zwei unterschiedliche Benutzerkonten und eine erzwungene Nachprüfung." />
+</picture>
+<figcaption><strong>Not-Aus</strong> — Die Notabschaltung des Bestands: Ein Klick stoppt jede gesteuerte Aktuierungsoberfläche. Das Auslösen ist bewusst niederschwellig; die Wiederherstellung erfordert zwei unterschiedliche Benutzerkonten und eine erzwungene Nachprüfung.</figcaption>
+</figure>
+
+{/* GALERIA-CONSOLA:FIN */}

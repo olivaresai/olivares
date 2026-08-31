@@ -1,0 +1,93 @@
+{
+  "value": [
+    {
+      "id": "si-1",
+      "createdDateTime": "2026-06-11T11:30:00Z",
+      "servicePrincipalId": "aid-1111",
+      "servicePrincipalName": "Invoice Copilot",
+      "appId": "sp-app-1111",
+      "resourceId": "res-app-1",
+      "resourceDisplayName": "Finance API",
+      "status": {
+        "errorCode": 0
+      },
+      "agent": {
+        "agentType": "agenticAppInstance",
+        "agentSubjectType": "servicePrincipal",
+        "agentSubjectParentId": "aid-1111",
+        "parentAppId": "bp-app-1"
+      }
+    },
+    {
+      "id": "si-2",
+      "createdDateTime": "2026-06-11T11:31:00Z",
+      "servicePrincipalId": "bpp-1",
+      "servicePrincipalName": "Finance Blueprint Principal",
+      "appId": "sp-app-bpp",
+      "resourceId": "res-app-2",
+      "resourceDisplayName": "Shared Finance API",
+      "status": {
+        "errorCode": 0
+      },
+      "agent": {
+        "agentType": "agentIdentityBlueprintPrincipal",
+        "agentSubjectType": "servicePrincipal",
+        "agentSubjectParentId": "bp-app-1",
+        "parentAppId": "bp-app-1"
+      }
+    },
+    {
+      "id": "si-failed",
+      "createdDateTime": "2026-06-11T11:32:00Z",
+      "servicePrincipalId": "aid-failed",
+      "servicePrincipalName": "Failed Agent",
+      "appId": "sp-app-failed",
+      "resourceId": "res-failed",
+      "resourceDisplayName": "Denied API",
+      "status": {
+        "errorCode": 50126
+      },
+      "agent": {
+        "agentType": "agentIDuser",
+        "agentSubjectType": "user",
+        "agentSubjectParentId": "aid-failed",
+        "parentAppId": "bp-app-1"
+      }
+    },
+    {
+      "id": "si-bad-time",
+      "createdDateTime": "not-a-time",
+      "servicePrincipalId": "aid-bad-time",
+      "servicePrincipalName": "Bad Timestamp Agent",
+      "appId": "sp-app-bad",
+      "resourceId": "res-bad-time",
+      "resourceDisplayName": "Bad Timestamp API",
+      "status": {
+        "errorCode": 0
+      },
+      "agent": {
+        "agentType": "AgentIdentity",
+        "agentSubjectType": "servicePrincipal",
+        "agentSubjectParentId": "aid-bad-time",
+        "parentAppId": "bp-app-1"
+      }
+    },
+    {
+      "id": "si-missing-resource",
+      "createdDateTime": "2026-06-11T11:33:00Z",
+      "servicePrincipalId": "aid-no-resource",
+      "servicePrincipalName": "No Resource Agent",
+      "appId": "sp-app-no-resource",
+      "resourceDisplayName": "Missing Resource API",
+      "status": {
+        "errorCode": 0
+      },
+      "agent": {
+        "agentType": "agenticAppInstance",
+        "agentSubjectType": "servicePrincipal",
+        "agentSubjectParentId": "aid-no-resource",
+        "parentAppId": "bp-app-1"
+      }
+    }
+  ]
+}

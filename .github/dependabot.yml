@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Keeps SHA-pinned GitHub Actions current (SCP-07). The github-actions ecosystem
+# updates BOTH the pinned 40-char SHA AND the trailing `# vX.Y.Z` comment in one
+# PR, so Scorecard's Pinned-Dependencies stays green without manual SHA bumps.
+# Keep one clean `# vX.Y.Z` comment on the same line as each `uses: …@<sha>` so
+# Dependabot can find and rewrite it. Also tracks Go modules and the web npm tree.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
+    # The SLSA reusable workflows are pinned by SEMVER TAG (slsa-verifier validates
+    # the builder ID against the tag); let Dependabot bump the tag, not a SHA.
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # The Terraform/OpenTofu provider is a SEPARATE Go module (its own go.mod), so it
+  # needs its own gomod entry. Same weekly/grouped policy as the root.
+  - package-ecosystem: "gomod"
+    directory: "/terraform-provider-olivares"
+    schedule:
+      interval: "weekly"
+    groups:
+      provider-go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    groups:
+      web-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Bumps the pinned distroless base digest (FROM …@sha256:…) when upstream rebuilds
+  # the nonroot image with CVE fixes — the automated half of SCP-11's base pin.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

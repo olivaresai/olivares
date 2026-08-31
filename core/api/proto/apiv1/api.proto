@@ -1,0 +1,104 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Olivares AI control-plane API, v1 (gRPC).
+//
+// This is a focused, frozen MIRROR of the REST surface — not full parity. New
+// endpoints land in REST first; this proto carries a representative tenant-scoped
+// slice (server info, agent CRUD, audit verification) that exercises the same
+// authenticate -> resolve-tenant -> authorize path as REST. buf guards it from
+// incompatible change; a breaking change requires olivares.api.v2.
+//
+// Authentication is the "authorization: Bearer <token>" metadata, identical to
+// the REST header. The tenant is the request's `tenant` field; a bound token's
+// tenant must match it (the same confused-deputy guard as the REST header).
+syntax = "proto3";
+
+package olivares.api.v1;
+
+option go_package = "github.com/olivaresai/olivares/core/api/genpb/apiv1;apiv1";
+
+message Empty {}
+
+message ServerInfo {
+  string version = 1;
+  string engine = 2;
+  bool setup_required = 3;
+  string license_status = 4;
+  string license_licensee = 5;
+  // Attested display-only commercial labels (empty for community/none). They gate
+  // nothing — informational mirror of the REST server-info license badge (LICENSING.md).
+  string license_plan = 6;
+  string license_support_tier = 7;
+}
+
+message Agent {
+  string id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  string kind = 4;
+  string external_id = 5;
+  string status = 6;
+  int64 version = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+
+message ListAgentsRequest {
+  string tenant = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  string cursor = 2;
+  bool has_more = 3;
+}
+
+message GetAgentRequest {
+  string tenant = 1;
+  string id = 2;
+}
+
+message CreateAgentRequest {
+  string tenant = 1;
+  string name = 2;
+  string kind = 3;
+  string external_id = 4;
+  string status = 5;
+}
+
+message VerifyAuditRequest {
+  string tenant = 1;
+  int64 from = 2;
+}
+
+message VerifyAuditResponse {
+  bool ok = 1;
+  bool chain_ok = 2;
+  int64 checked = 3;
+  // checkpoints_ok is a BOOLEAN and a young chain has no checkpoints yet, so `false` has
+  // meant two opposite things since this message was written: "a checkpoint exists and did
+  // NOT verify" (tamper, act now) and "nothing has been attested yet" (normal, wait). REST
+  // has carried the distinction as `checkpoints.status` — ok | failed | pending — from the
+  // start; this surface could not express it, so a gRPC client saw ok=true beside
+  // checkpoints_ok=false and had no way to tell an untouched new ledger from a broken one.
+  bool checkpoints_ok = 4;
+  int32 checkpoint_count = 5;
+  int64 latest_attested_seq = 6;
+  // checkpoint_status is that third answer, added 2026-08-06. Field 7 is additive, so an
+  // older client keeps reading 1-6 unchanged; `checkpoints_ok` stays exactly what it always
+  // was rather than being redefined under existing readers.
+  string checkpoint_status = 7;
+}
+
+// ControlPlane is the engine's gRPC API surface. Every RPC except GetServerInfo
+// requires an authenticated, authorized principal.
+service ControlPlane {
+  rpc GetServerInfo(Empty) returns (ServerInfo);
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc GetAgent(GetAgentRequest) returns (Agent);
+  rpc CreateAgent(CreateAgentRequest) returns (Agent);
+  rpc VerifyAudit(VerifyAuditRequest) returns (VerifyAuditResponse);
+}

@@ -1,0 +1,28 @@
+{
+  "object_kind": "push",
+  "ref": "refs/heads/main",
+  "user_name": "Fran Olivares",
+  "user_username": "fran",
+  "project": {
+    "path_with_namespace": "mygroup/myproject",
+    "web_url": "https://gitlab.com/mygroup/myproject"
+  },
+  "commits": [
+    {
+      "id": "abc123def456",
+      "message": "feat: add new endpoint\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+      "author": {
+        "name": "Fran Olivares",
+        "email": "fran@example.com"
+      }
+    },
+    {
+      "id": "def789abc012",
+      "message": "fix: resolve edge case",
+      "author": {
+        "name": "Fran Olivares",
+        "email": "fran@example.com"
+      }
+    }
+  ]
+}

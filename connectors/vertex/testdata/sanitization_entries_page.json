@@ -1,0 +1,158 @@
+{
+  "entries": [
+    {
+      "timestamp": "2026-06-20T11:59:00Z",
+      "insertId": "ins-block-pi",
+      "logName": "projects/test-proj/logs/modelarmor.googleapis.com%2Fsanitize",
+      "resource": {
+        "labels": {
+          "resource_container": "projects/test-proj",
+          "location": "us-central1",
+          "template_id": "tmpl-block"
+        }
+      },
+      "labels": {
+        "modelarmor.googleapis.com/client_name": "gemini",
+        "modelarmor.googleapis.com/client_correlation_id": "corr-block"
+      },
+      "jsonPayload": {
+        "@type": "type.googleapis.com/google.cloud.modelarmor.logging.v1.SanitizeOperationLogEntry",
+        "operationType": "SANITIZE_USER_PROMPT",
+        "sanitizationVerdict": "MODEL_ARMOR_SANITIZATION_VERDICT_BLOCK",
+        "sanitizationVerdictReason": "PI_AND_JAILBREAK",
+        "sanitizationResult": {
+          "filterMatchState": "MATCH_FOUND",
+          "invocationResult": "SUCCESS",
+          "filterResults": {
+            "piAndJailbreakFilterResult": {
+              "piAndJailbreakFilterResult": {
+                "matchState": "MATCH_FOUND"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2026-06-20T11:58:00Z",
+      "insertId": "ins-match-sdp",
+      "logName": "projects/test-proj/logs/modelarmor.googleapis.com%2Fsanitize",
+      "resource": {
+        "labels": {
+          "resource_container": "projects/test-proj",
+          "location": "us-central1",
+          "template_id": "tmpl-sdp"
+        }
+      },
+      "labels": {
+        "modelarmor.googleapis.com/client_name": "template",
+        "modelarmor.googleapis.com/client_correlation_id": "corr-sdp"
+      },
+      "jsonPayload": {
+        "@type": "type.googleapis.com/google.cloud.modelarmor.logging.v1.SanitizeOperationLogEntry",
+        "operationType": "SANITIZE_MODEL_RESPONSE",
+        "sanitizationVerdict": "MODEL_ARMOR_SANITIZATION_VERDICT_ALLOW",
+        "sanitizationVerdictReason": "SDP",
+        "sanitizationResult": {
+          "filterMatchState": "MATCH_FOUND",
+          "invocationResult": "SUCCESS",
+          "filterResults": {
+            "sdpFilterResult": {
+              "sdpFilterResult": {
+                "matchState": "MATCH_FOUND"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2026-06-20T11:57:00Z",
+      "insertId": "ins-clean",
+      "logName": "projects/test-proj/logs/modelarmor.googleapis.com%2Fsanitize",
+      "resource": {
+        "labels": {
+          "resource_container": "projects/test-proj",
+          "location": "us-central1",
+          "template_id": "tmpl-clean"
+        }
+      },
+      "labels": {
+        "modelarmor.googleapis.com/client_name": "gemini",
+        "modelarmor.googleapis.com/client_correlation_id": "corr-clean"
+      },
+      "jsonPayload": {
+        "@type": "type.googleapis.com/google.cloud.modelarmor.logging.v1.SanitizeOperationLogEntry",
+        "operationType": "SANITIZE_MODEL_RESPONSE",
+        "sanitizationVerdict": "MODEL_ARMOR_SANITIZATION_VERDICT_ALLOW",
+        "sanitizationVerdictReason": "NO_MATCH",
+        "sanitizationResult": {
+          "filterMatchState": "NO_MATCH",
+          "invocationResult": "SUCCESS",
+          "filterResults": {
+            "maliciousUriFilterResult": {
+              "maliciousUriFilterResult": {
+                "matchState": "NO_MATCH"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2026-06-20T11:56:00Z",
+      "insertId": "ins-sentinel",
+      "logName": "projects/test-proj/logs/modelarmor.googleapis.com%2Fsanitize",
+      "resource": {
+        "labels": {
+          "resource_container": "projects/test-proj",
+          "location": "us-central1",
+          "template_id": "tmpl-sentinel"
+        }
+      },
+      "labels": {
+        "modelarmor.googleapis.com/client_name": "gemini",
+        "modelarmor.googleapis.com/client_correlation_id": "corr-sentinel"
+      },
+      "jsonPayload": {
+        "@type": "type.googleapis.com/google.cloud.modelarmor.logging.v1.SanitizeOperationLogEntry",
+        "operationType": "SANITIZE_USER_PROMPT",
+        "sanitizationVerdict": "MODEL_ARMOR_SANITIZATION_VERDICT_ALLOW",
+        "sanitizationVerdictReason": "RAI",
+        "sanitizationInput": {
+          "text": "SENTINEL-PROMPT-TEXT"
+        },
+        "sanitizationResult": {
+          "filterMatchState": "MATCH_FOUND",
+          "invocationResult": "SUCCESS",
+          "filterResults": {
+            "raiFilterResult": {
+              "raiFilterResult": {
+                "raiFilterTypeResults": {
+                  "HATE_SPEECH": {
+                    "matchState": "MATCH_FOUND"
+                  }
+                }
+              }
+            },
+            "sdpFilterResult": {
+              "sdpFilterResult": {
+                "matchState": "NO_MATCH",
+                "inspectResult": {
+                  "findings": [
+                    {
+                      "quote": "SENTINEL-SDP-QUOTE"
+                    }
+                  ]
+                },
+                "deidentifyResult": {
+                  "quote": "SENTINEL-SDP-QUOTE"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

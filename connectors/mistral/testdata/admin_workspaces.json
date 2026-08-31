@@ -1,0 +1,6 @@
+{
+  "data": [
+    { "id": "ws_prod", "name": "Production" },
+    { "id": "ws_staging", "name": "Staging" }
+  ]
+}

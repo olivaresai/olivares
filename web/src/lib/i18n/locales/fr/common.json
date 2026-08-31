@@ -1,0 +1,204 @@
+{
+  "errors": {
+    "generic": "Une erreur s'est produite"
+  },
+  "app": {
+    "name": "Olivares AI",
+    "tagline": "Plan de contrôle"
+  },
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "retry": "Réessayer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "refresh": "Actualiser",
+    "copy": "Copier",
+    "copied": "Copié",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "viewAll": "Tout afficher",
+    "learnMore": "En savoir plus",
+    "openMenu": "Ouvrir le menu",
+    "expandSidebar": "Développer la barre latérale",
+    "collapseSidebar": "Réduire la barre latérale",
+    "help": "Ouvrir la documentation de cette vue"
+  },
+  "states": {
+    "loading": "Chargement…",
+    "empty": "Rien ici pour l’instant",
+    "noResults": "Aucun résultat",
+    "comingSoon": "Bientôt disponible",
+    "loaded": "Chargé",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "theme": {
+    "label": "Thème",
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système",
+    "toggle": "Changer de thème"
+  },
+  "density": {
+    "label": "Densité",
+    "comfortable": "Confortable",
+    "compact": "Compacte"
+  },
+  "language": {
+    "label": "Langue"
+  },
+  "table": {
+    "label": "Table de données",
+    "rowsPerPage": "Lignes par page",
+    "page": "Page",
+    "of": "sur",
+    "noRows": "Aucune ligne à afficher",
+    "loadMore": "Charger plus",
+    "sortAscending": "Trier par ordre croissant",
+    "sortDescending": "Trier par ordre décroissant",
+    "search": "Rechercher des lignes…",
+    "selectAllVisible": "Sélectionner toutes les lignes visibles",
+    "selectRow": "Sélectionner la ligne {{id}}"
+  },
+  "bulk": {
+    "selected": "{{count}} sélectionnés",
+    "clear": "Effacer la sélection",
+    "progress": "Traitement de {{current}} sur {{total}}",
+    "summary": "{{success}} réussis, {{failed}} échoués",
+    "confirmTitle": "Confirmer l’action groupée",
+    "confirmDescription": "« {{action}} » sera exécutée séparément pour {{count}} éléments sélectionnés."
+  },
+  "chart": {
+    "showTable": "Afficher en table",
+    "showChart": "Afficher le graphique"
+  },
+  "commandPalette": {
+    "placeholder": "Rechercher ou accéder à…",
+    "empty": "Aucune correspondance.",
+    "navigation": "Navigation",
+    "actions": "Actions",
+    "results": "Résultats",
+    "searchResults": "Résultats dans vos données",
+    "searchTruncated": "Il existe d’autres correspondances — affinez la recherche.",
+    "searchDegraded": "Certaines sources n’ont pas pu être interrogées — cette liste est incomplète."
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif",
+    "healthy": "Sain",
+    "degraded": "Dégradé",
+    "pending": "En attente",
+    "error": "Erreur",
+    "revoked": "Révoqué",
+    "unknown": "Inconnu",
+    "running": "En cours",
+    "ok": "OK",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "approved": "Approuvé",
+    "rejected": "Rejeté",
+    "requested": "Demandé",
+    "queued": "En file d’attente",
+    "provisioning": "Provisionnement",
+    "draft": "Brouillon",
+    "warning": "Avertissement",
+    "deprecated": "Obsolète",
+    "unused": "Inutilisé",
+    "failed": "Échoué",
+    "down": "Hors service",
+    "unexpected": "Inattendu",
+    "idle": "Inactif",
+    "completed": "Terminé",
+    "archived": "Archivé",
+    "retired": "Retiré",
+    "drifted": "En dérive",
+    "declared": "Déclaré",
+    "applied": "Appliqué"
+  },
+  "accessMode": {
+    "read": "Lecture",
+    "readwrite": "Lecture/Écriture",
+    "write": "Écriture",
+    "unknown": "Inconnu"
+  },
+  "confidence": {
+    "attributed": "Attribué",
+    "attributedHint": "Fermement attribué à cet agent.",
+    "approximate": "Approximatif",
+    "approximateHint": "Attribué par inférence — pas encore réconcilié avec l’agent."
+  },
+  "validation": {
+    "required": "Ce champ est obligatoire.",
+    "email": "Saisissez une adresse e-mail valide."
+  },
+  "a11y": {
+    "breadcrumb": "Fil d’Ariane",
+    "skipToContent": "Aller au contenu",
+    "primarySidebar": "Principale",
+    "mainNavigation": "Navigation principale",
+    "graphControls": "Contrôles du graphe",
+    "graphMinimap": "Mini-carte du graphe"
+  },
+  "privileged": {
+    "auditedNotice": "Cette action est consignée dans le registre d’audit inviolable.",
+    "confirm": "Confirmer",
+    "typeToConfirm": "Saisissez {{phrase}} pour confirmer",
+    "typeToConfirmAria": "Phrase de confirmation",
+    "notAuthorized": "Votre rôle permet de consulter ceci, mais pas d’effectuer cette action.",
+    "notAuthorizedToast": "Non autorisé — votre rôle ne permet pas d’effectuer cette action.",
+    "tenantChangedToast": "L’organisation a changé pendant la vérification — l’action n’a pas été reprise. Revenez-y et réessayez.",
+    "stepUp": {
+      "title": "Cette action requiert une session élevée",
+      "description": "Votre rôle l’autorise ; le niveau d’assurance de cette session a expiré. Effectuez l’élévation ci-dessous et l’action reprend. Si vous fermez, elle reste refusée.",
+      "busyToast": "Une autre élévation est déjà ouverte. Terminez-la, puis réessayez cette action.",
+      "abandonedToast": "Cette action a été fermée avant la fin de l'élévation ; elle n'a donc pas été reprise. Relancez-la.",
+      "descriptionNoResume": "Votre rôle l'autorise ; le niveau de sécurité de cette session a expiré. Terminez l'élévation, puis relancez l'action. Fermer la laisse refusée."
+    },
+    "working": "En cours…"
+  },
+  "secretRef": {
+    "label": "Référence de secret",
+    "hint": "Une référence à un secret stocké hors de la console — sa valeur n’est jamais affichée ici.",
+    "none": "Aucun secret",
+    "prefix": "ref"
+  },
+  "untrusted": {
+    "label": "Non vérifié",
+    "hint": "Auto-déclaré par la capacité — un signal seulement. Le plan de contrôle ne le vérifie pas et ne l’applique jamais."
+  },
+  "risk": {
+    "low": "Risque faible",
+    "medium": "Risque moyen",
+    "high": "Risque élevé"
+  },
+  "notifications": {
+    "title": "Activité récente",
+    "empty": "Aucune activité récente.",
+    "viewAll": "Tout voir dans le registre d’audit"
+  },
+  "passphrase": {
+    "tooShort": "La phrase secrète doit comporter au moins {{min}} caractères",
+    "strengthLabel": "Robustesse de la phrase secrète",
+    "strength": {
+      "weak": "Faible",
+      "fair": "Passable",
+      "good": "Bonne",
+      "strong": "Forte"
+    }
+  },
+  "shortcuts": {
+    "title": "Raccourcis clavier",
+    "description": "Naviguez dans la console sans quitter le clavier.",
+    "general": "Général",
+    "navigation": "Aller à",
+    "openPalette": "Ouvrir la palette de commandes",
+    "showHelp": "Afficher cette aide"
+  }
+}

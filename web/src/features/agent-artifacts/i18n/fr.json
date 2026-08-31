@@ -1,0 +1,147 @@
+{
+  "title": "Agent Artifacts",
+  "subtitle": "Gouvernez le registre à l'échelle du tenant, la posture enregistrée et le BOM de chaîne d'approvisionnement des artefacts exécutés par les agents.",
+  "intro": "Ce registre ne stocke que l'identité, la provenance et la posture enregistrée — jamais le corps des skills, les manifestes ni le texte d'instructions.",
+  "tabs": {
+    "registry": "Registre des artefacts",
+    "aibom": "AIBOM de la chaîne d'approvisionnement des agents"
+  },
+  "classes": {
+    "skill": "Skill",
+    "mcpb_extension": "Extension MCPB",
+    "mcp_app_template": "Modèle MCP App",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "registry": {
+    "title": "Artefacts enregistrés",
+    "description": "Identités du parc du tenant, déclarations de provenance et résultats de scanners enregistrés.",
+    "new": "Enregistrer un artefact",
+    "created": "Artefact enregistré.",
+    "deleted": "Artefact supprimé.",
+    "search": "Rechercher parmi les artefacts enregistrés…",
+    "empty": "Aucun artefact enregistré",
+    "emptyHint": "Un artefact jamais enregistré n'est pas représenté dans le BOM de chaîne d'approvisionnement des agents.",
+    "filter": {
+      "label": "Classe d'artefact",
+      "all": "Toutes les classes d'artefacts"
+    },
+    "columns": {
+      "class": "Classe",
+      "name": "Nom",
+      "version": "Version",
+      "provenance": "Provenance",
+      "posture": "Résultat d'analyse enregistré",
+      "issues": "Problèmes",
+      "attestedAt": "Enregistré"
+    },
+    "provenance": {
+      "claim": "Déclaration de l'opérateur",
+      "verified": "Provenance examinée",
+      "claimHint": "La provenance est une déclaration de l'opérateur et n'a pas été marquée comme examinée.",
+      "verifiedHint": "L'opérateur a examiné la déclaration de provenance ; il ne s'agit pas d'une certification Olivares."
+    },
+    "posture": {
+      "notScanned": "Non analysé",
+      "grade": "Note {{grade}}",
+      "recorded": "Résultat d'analyse enregistré",
+      "hint": "Une note consigne ce qu'un scanner de connecteur a évalué ou ce qu'un opérateur a enregistré. La console n'a exécuté aucune analyse."
+    },
+    "drawer": {
+      "description": "Métadonnées stockées dans le registre et leur état déclaration-versus-examiné.",
+      "identityNotice": "Seules des métadonnées sont stockées. Aucun contenu d'artefact ne se trouve derrière cet enregistrement.",
+      "postureNotice": "Une note de posture est un résultat d'analyse enregistré, pas une analyse effectuée par cette console. Non analysé est neutre, pas un échec.",
+      "id": "ID de registre",
+      "class": "Classe d'artefact",
+      "name": "Nom",
+      "version": "Version",
+      "provenance": "Provenance",
+      "sourceRef": "Référence source",
+      "contentHash": "Empreinte du contenu",
+      "posture": "Résultat d'analyse enregistré",
+      "issues": "Problèmes enregistrés",
+      "verified": "État de la provenance",
+      "attestedBy": "Enregistré par",
+      "attestedAt": "Enregistré le",
+      "note": "Note"
+    },
+    "create": {
+      "title": "Enregistrer un artefact d'agent",
+      "description": "Consignez les métadonnées d'identité, de provenance et de posture. Le contenu de l'artefact n'est jamais téléversé.",
+      "uniqueHint": "La classe et le nom forment une identité de registre unique et immuable. Il n'existe pas de voie de mise à jour.",
+      "class": "Classe d'artefact",
+      "name": "Nom",
+      "version": "Version",
+      "provenance": "Déclaration de provenance",
+      "sourceRef": "Référence source",
+      "contentHash": "Hachage du contenu",
+      "contentAlg": "Algorithme de hachage",
+      "posture": "Résultat d'analyse enregistré",
+      "issues": "Problèmes enregistrés",
+      "issuesHint": "Nombre de problèmes issu du résultat enregistré. Désactivé et à zéro en l'absence d'analyse.",
+      "verified": "Provenance examinée par l'opérateur",
+      "verifiedHint": "Ceci atteste que l'opérateur a examiné la déclaration de provenance ; il ne s'agit pas d'une certification Olivares.",
+      "note": "Note",
+      "errorTitle": "L'artefact n'a pas été enregistré",
+      "duplicateTitle": "Artefact déjà enregistré",
+      "duplicate": "Un artefact avec cette classe et ce nom existe déjà. Il n'existe pas de voie de mise à jour ; choisissez une identité différente ou supprimez d'abord l'enregistrement existant."
+    },
+    "delete": {
+      "title": "Supprimer l'artefact enregistré",
+      "description": "Supprimer « {{name}} » du registre ? Les futurs BOM en direct ne l'incluront plus."
+    },
+    "truncated": "{{n}} artefacts chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus d'artefacts enregistrés que ceux affichés ; cette page prend des lignes par id — attribué à la création —, les suivantes manquent, normalement les plus récemment enregistrés. Le filtre de classe est appliqué par le MOTEUR et relance donc la requête ; la recherche et le tri du tableau ne portent que sur ce qui est chargé. Un artefact absent ici n'est pas pour autant non enregistré."
+  },
+  "aibom": {
+    "difference": "Ce BOM à l'échelle du parc couvre les artefacts d'agent enregistrés ; l'AIBOM par modèle couvre le lignage d'un modèle détenu.",
+    "coverage": "La couverture reflète ce qui a été enregistré : un artefact jamais enregistré n'est pas représenté.",
+    "live": {
+      "title": "BOM en direct de la chaîne d'approvisionnement des agents",
+      "description": "Généré à l'instant — en direct, non scellé et non audité.",
+      "notice": "L'aperçu génère un document CycloneDX 1.6 frais à partir du registre actuel. Il est en lecture seule et ne crée aucune preuve.",
+      "preview": "Prévisualiser le BOM en direct",
+      "loading": "Génération du BOM en direct…",
+      "dialogTitle": "BOM en direct de la chaîne d'approvisionnement des agents",
+      "dialogDescription": "Généré à l'instant à partir du registre. Ce document n'est ni scellé ni audité.",
+      "jsonLabel": "JSON CycloneDX en direct",
+      "download": "Télécharger le BOM en direct"
+    },
+    "seal": {
+      "action": "Sceller le BOM actuel",
+      "confirmTitle": "Sceller le BOM de la chaîne d'approvisionnement des agents",
+      "confirmDescription": "Cette action régénère le BOM et inscrit le hachage canonique de son contenu dans le registre d'audit. Le registre d'audit n'archive pas le document.",
+      "confirmBody": "Conservez le reçu retourné : son AIBOM est la seule copie du document scellé.",
+      "confirm": "Sceller et recevoir le BOM",
+      "success": "BOM de la chaîne d'approvisionnement des agents scellé. Téléchargez dès maintenant le BOM du reçu.",
+      "receiptTitle": "Reçu du BOM scellé",
+      "receiptDescription": "L'engagement de hachage est durable ; ce reçu contient la seule copie du document scellé.",
+      "download": "Télécharger le BOM scellé"
+    },
+    "history": {
+      "title": "Historique des scellements",
+      "description": "Engagements models.agent_aibom en append-only pour le parc d'artefacts d'agent enregistrés.",
+      "empty": "Aucun BOM de chaîne d'approvisionnement des agents scellé",
+      "emptyHint": "Le scellement crée un engagement de hachage et retourne la seule copie du document dans son reçu.",
+      "loadError": "Impossible de charger l'historique des scellements.",
+      "id": "ID de scellement",
+      "subject": "Sujet",
+      "serial": "Numéro de série",
+      "contentHash": "Hachage du contenu",
+      "specVersion": "Version CycloneDX",
+      "components": "Composants enregistrés",
+      "ledgerSeq": "Séquence d'audit antérieure",
+      "ledgerHash": "Tête d'audit antérieure",
+      "scope": "Note de couverture",
+      "generatedBy": "Généré par",
+      "generatedAt": "Généré le",
+      "noPriorHead": "{{seq}} (aucune tête d'audit antérieure)",
+      "truncated": "{{n}} scellés chargés ; il y en a d'autres",
+      "truncatedHint": "Il y a plus d'AI-BOM scellés que ceux affichés ; cette page prend des lignes par id. Sceller ajoute une ligne : ce qui manque est normalement la preuve la plus récente."
+    }
+  }
+}

@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# console-guide-catalog.tsv — the ONLY hand-written part of the console reference.
+#
+# The roster is not here. It is web/src/features/route-census.json, and the guide covers
+# every path in it. This file exists for the gaps in the console's own translation
+# catalog: a screen with no `nav.items.<id>` label or no `nav.descriptions.<id>` sentence
+# in web/src/lib/i18n/locales/en/nav.json has nothing to publish, and a table cell that
+# says nothing is a route the reader still cannot use.
+#
+# THE CONSOLE'S OWN WORDS WIN. Where nav.json speaks, the column here must be a single
+# hyphen. That is not tidiness: it is how a description added to nav.json later turns this
+# file RED instead of being silently shadowed, so the guide can never print one sentence
+# while the sidebar shows a different one. Both directions are enforced — a path with no
+# row and no nav string is red, a row for a path the census does not record is red.
+#
+# When you add a screen: put its description in nav.json (it is user-facing text and the
+# console shows it in the sidebar, in seven languages). Come here only for the screens
+# that have no place in that catalog — the pre-session legs, and the deep-link pages.
+#
+# Columns, tab-separated:
+#   path         the route, exactly as route-census.json records it
+#   title        display name, or "-" when nav.items.<id> already names it
+#   summary      one sentence, or "-" when nav.descriptions.<id> already says it
+#
+/accept-invite	Accept an invitation	Where an emailed invitation link lands: the invitee sets a password and joins the workspace, with no prior session.
+/agentcore-export	-	Plan and apply the Cedar policy export to AWS AgentCore, and review what would change before it does.
+/backups	-	Trigger, schedule, download and restore backups, with a second confirmation on the destructive path.
+/eventing	-	Outbound webhook subscriptions, their delivery log and the dead-letter queue.
+/login	Sign in	The credential and token sign-in page for an already provisioned account.
+/logs	-	The live engine log stream, filtered by level and module, with search and pause.
+/routine-policies	-	Cadence floors, concurrency caps, approval requirements and cron allowlists for Claude Code routines.
+/session-viewer/$id	-	The full timeline of one recorded session, reached from a row in Recordings rather than from the sidebar.
+/setup	First-run setup	The one-time page that turns a fresh deployment into a usable one: it consumes the setup token and creates the first owner account.
+/status-page	Public status	Component health for people who are not signed in, refreshed on its own while the page is open.
+/team-costs	-	Spend attributed by team, expandable into the per-project and per-model breakdown.
+/workspace-templates	-	Reusable session configuration snapshots: hooks, settings, connectors and policies.

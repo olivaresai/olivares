@@ -1,0 +1,5 @@
+{
+  "object": "project.model_permissions",
+  "mode": "allow_list",
+  "model_ids": ["gpt-4.1", "o3"]
+}

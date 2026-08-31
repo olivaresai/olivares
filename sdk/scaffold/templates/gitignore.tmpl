@@ -1,0 +1,11 @@
+# Build outputs — the plugin binary ships via signed releases, never via git.
+/bin/
+/dist/
+[[- if .WithPlugin]]
+/[[.BinName]]
+[[- end]]
+
+# Signing material: the cosign PRIVATE key must never be committed. The public
+# key and the attestation bundles ship with the release artifacts instead.
+cosign.key
+*.sigstore.json

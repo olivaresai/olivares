@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "id": "1aBcStrategy",
+      "name": "Q3 Strategy",
+      "mimeType": "application/vnd.google-apps.document",
+      "modifiedTime": "2026-05-01T10:00:00Z",
+      "parents": ["folderXYZ"],
+      "permissions": [
+        {"id": "perm-eng", "type": "group", "emailAddress": "engineering@acme.com", "role": "reader"},
+        {"id": "perm-alice", "type": "user", "emailAddress": "alice@acme.com", "role": "reader"},
+        {"id": "perm-dom", "type": "domain", "domain": "acme.com", "role": "reader"}
+      ],
+      "appProperties": {"sensitivity": "confidential"},
+      "exportedContent": "Our Q3 strategy focuses on edge governance. Deploy token AKIAIOSFODNN7EXAMPLE must be rotated."
+    },
+    {
+      "id": "2deHandbook",
+      "name": "Public Handbook",
+      "mimeType": "application/vnd.google-apps.document",
+      "modifiedTime": "2026-04-10T08:00:00Z",
+      "parents": ["folderPub"],
+      "permissions": [
+        {"type": "anyone", "role": "reader"}
+      ],
+      "exportedContent": "Welcome to Acme. This handbook is public."
+    }
+  ]
+}

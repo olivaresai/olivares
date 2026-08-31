@@ -1,0 +1,23 @@
+{
+  "//": "SPDX-License-Identifier: Apache-2.0 — compiles the framework-free logic and its node:test unit tests to CommonJS so `node --test` can run them with zero runtime dependencies. The full plugin (router/wiring) is built by backstage-cli, not this config.",
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "ignoreDeprecations": "5.0",
+    "rootDir": "src",
+    "outDir": ".test-out",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/config.ts",
+    "src/upstream.ts",
+    "src/allowlist.ts",
+    "src/config.test.ts",
+    "src/upstream.test.ts",
+    "src/allowlist.test.ts"
+  ]
+}

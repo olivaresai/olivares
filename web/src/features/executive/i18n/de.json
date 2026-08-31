@@ -1,0 +1,112 @@
+{
+  "title": "Führungsübersicht",
+  "description": "Kosten, Nutzung, Risiko und Compliance auf einen Blick — für die Details zur operativen Ansicht wechseln.",
+  "asOfNote": "Risiko, Compliance und Zuverlässigkeit spiegeln den aktuellen Zustand wider; die Kosten umfassen den ausgewählten Zeitraum.",
+  "range": {
+    "label": "Zeitraum",
+    "7d": "Letzte 7 Tage",
+    "30d": "Letzte 30 Tage",
+    "90d": "Letzte 90 Tage",
+    "mtd": "Seit Monatsbeginn"
+  },
+  "export": {
+    "action": "Als PDF exportieren",
+    "hint": "Diesen Bericht als PDF drucken oder speichern"
+  },
+  "report": {
+    "title": "Führungsbericht",
+    "generated": "Erstellt am {{date}}",
+    "generatedLabel": "Erstellt",
+    "tenant": "Organisation",
+    "allOrgs": "Alle Organisationen",
+    "range": "Kostenzeitraum",
+    "footer": "Olivares AI Control Plane — ausschließlich aggregierte KPIs; keine Nutzdaten oder Geheimnisse."
+  },
+  "empty": {
+    "title": "Keine Führungs-KPIs verfügbar",
+    "description": "Sie haben keinen Lesezugriff auf die Quellen für Kosten, Risiko, Compliance oder Zuverlässigkeit dieser Organisation."
+  },
+  "restricted": {
+    "label": "Eingeschränkt",
+    "hint": "Ihre Rolle kann diese Quelle nicht lesen."
+  },
+  "pillars": {
+    "cost": "Ausgaben",
+    "costCaption": "im ausgewählten Zeitraum",
+    "usage": "Aktive Agenten",
+    "usageCaption": "{{live}} live · {{entities}} erfasst",
+    "risk": "Offenes Risiko",
+    "riskCaption": "{{count}} kritisch/hoch",
+    "silentEvasion": "{{count}} stille Umgehung",
+    "compliance": "Kontrollabdeckung",
+    "complianceCaption": "{{gap}} Lücken · {{unmapped}} nicht zugeordnet"
+  },
+  "cost": {
+    "title": "Kosten",
+    "trendTitle": "Ausgabentrend",
+    "trendDescription": "Tägliche Token-Ausgaben über den ausgewählten Zeitraum.",
+    "seriesCost": "Ausgaben",
+    "forecast": "Prognose",
+    "atRunRate": "hochgerechnet (Trend im gleitenden Fenster)",
+    "runRateNote": "Hochrechnung aus dem täglichen Trend im gleitenden Fenster, skaliert auf den Rest der Periode — kein Prognosemodell.",
+    "deltaUp": "{{pct}} gegenüber der Vorperiode",
+    "deltaDown": "{{pct}} gegenüber der Vorperiode",
+    "deltaFlat": "unverändert gegenüber der Vorperiode",
+    "tokens": "Tokens",
+    "samples": "Kostendatensätze",
+    "models": "Aktive Modelle",
+    "breakdownTitle": "Ausgabenaufschlüsselung",
+    "breakdownDescription": "Wohin die Ausgaben fließen — Zusammenfassung nach Team, Projekt, Agent, Modell oder Anbieter.",
+    "noAttribution": "Keine Zuordnung für diese Dimension im ausgewählten Zeitraum."
+  },
+  "dimensions": {
+    "team": "Nach Team",
+    "project": "Nach Projekt",
+    "agent": "Nach Agent",
+    "model": "Nach Modell",
+    "provider": "Nach Anbieter"
+  },
+  "risk": {
+    "title": "Sicherheitslage",
+    "description": "Offene Sicherheitsbefunde, adversariale Robustheit und Zugriffsabweichung.",
+    "openFindings": "Offene Befunde",
+    "bySeverity": "Befunde nach Schweregrad",
+    "robustness": "Red-Team-Robustheit",
+    "robustnessCaption": "letzter abgeschlossener Lauf",
+    "robustnessPending": "Lauf ausstehend",
+    "robustnessPendingHint": "Der jüngste Red-Team-Lauf konnte seine Prüfungen nicht abschließen — kein Bestehen.",
+    "drift": "Zugriffsabweichung",
+    "driftFirm": "Unerwartete Zugriffe",
+    "driftPending": "Wartet auf Identitätsverknüpfung",
+    "driftUnused": "Ungenutzte Gewährungen",
+    "coverageNote": "Einige Zugriffe werden mit teilweiser Abdeckung beobachtet (annähernde oder undurchsichtige Erfassung); die Abweichungswerte sind eine Untergrenze.",
+    "noFindings": "Keine offenen Befunde.",
+    "noRuns": "Noch keine Red-Team-Läufe."
+  },
+  "compliance": {
+    "title": "Compliance",
+    "description": "Kontrollstatus über die von Ihnen verfolgten Rahmenwerke — Kontrollabdeckung, niemals eine Compliance-Behauptung.",
+    "coverage": "Kontrollabdeckung",
+    "ofControls": "von {{total}} Kontrollen über {{frameworks}} Rahmenwerke",
+    "satisfied": "Erfüllt",
+    "byDesign": "Durch Design",
+    "partial": "Teilweise",
+    "gap": "Lücke",
+    "unmapped": "Nicht zugeordnet",
+    "frameworks": "Rahmenwerke",
+    "riskTiers": "Risikostufen der Agenten",
+    "noFrameworks": "Noch keine Rahmenwerke zugeordnet."
+  },
+  "reliability": {
+    "title": "Zuverlässigkeit",
+    "description": "Aktueller Zustand von Agenten und MCP sowie offene Vorfälle.",
+    "healthy": "Fehlerfrei",
+    "degraded": "Beeinträchtigt",
+    "down": "Ausgefallen",
+    "unknown": "Unbekannt",
+    "slaBreaches": "Offene SLA-Verletzungen",
+    "incidents": "Offene Vorfälle",
+    "nowNote": "Der Zustand ist eine Momentaufnahme; \"unbekannt\" bedeutet, dass keine Prüfung das Subjekt überwacht — nicht fehlerfrei.",
+    "noData": "Noch keine Zustandsprüfungen melden Daten."
+  }
+}

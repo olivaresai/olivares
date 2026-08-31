@@ -1,0 +1,6 @@
+{"start_time":"2026-06-01T10:00:00Z","gen_ai.provider.name":"anthropic","gen_ai.response.model":"claude-opus-4-20250514","gen_ai.usage.input_tokens":1200,"gen_ai.usage.output_tokens":350,"gen_ai.usage.total_tokens":1550,"gen_ai.operation.name":"chat","prompt":"AKIAIOSFODNN7EXAMPLE my password is hunter2 — summarize this PII: SSN 123-45-6789","completion":"Here is the summary the user asked for, verbatim secret leak test."}
+{"timestamp":"2026-06-01T10:05:00Z","backend_name":"anthropic","response_model":"claude-3-5-sonnet-20241022","llm_input_token":800,"llm_output_token":210,"llm_total_token":1010,"llm_cost_micro_usd":18450,"response_body":"sk-ant-api03-SECRETLEAKCANARY1234567890 do not leak me"}
+{"start_time":"2026-06-01T10:10:00Z","gen_ai.provider.name":"anthropic","gen_ai.response.model":"claude-opus-4-20250514","gen_ai.usage.input_tokens":5000,"gen_ai.usage.output_tokens":400,"gen_ai.usage.cached_input_tokens":4200,"gen_ai.usage.cache_creation_input_tokens":600}
+{"start_time":"2026-06-01T10:12:00Z","gen_ai.provider.name":"openai","gen_ai.response.model":"gpt-4o-mini","gen_ai.usage.input_tokens":300,"gen_ai.usage.output_tokens":90}
+{"start_time":"2026-06-01T10:15:00Z","gen_ai.provider.name":"anthropic","gen_ai.usage.input_tokens":0,"gen_ai.usage.output_tokens":0}
+{"start_time":"2026-06-01T10:20:00Z","method":"GET","path":"/healthz","response_code":200}

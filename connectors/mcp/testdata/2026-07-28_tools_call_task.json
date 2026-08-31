@@ -1,0 +1,39 @@
+{
+  "revision": "2026-07-28",
+  "source_url": "https://modelcontextprotocol.io/specification/2026-07-28/server/tools",
+  "request_headers": {
+    "MCP-Protocol-Version": "2026-07-28",
+    "Mcp-Method": "tools/call",
+    "Mcp-Name": "search"
+  },
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "method": "tools/call",
+    "params": {
+      "name": "search",
+      "arguments": {
+        "query": "slow"
+      },
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {
+          "name": "olivares-mcp-connector",
+          "version": "0.1.0"
+        },
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "result": {
+      "resultType": "task",
+      "taskId": "task-fixture-1",
+      "status": "working",
+      "ttlMs": 60000,
+      "pollIntervalMs": 1000
+    }
+  }
+}

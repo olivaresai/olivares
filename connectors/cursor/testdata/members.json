@@ -1,0 +1,7 @@
+{
+  "teamMembers": [
+    { "id": "user_alice", "email": "alice@example.com", "name": "Alice", "role": "admin", "isRemoved": false },
+    { "id": "user_bob", "email": "bob@example.com", "name": "Bob", "role": "member", "isRemoved": false },
+    { "id": "user_carol", "email": "carol@example.com", "name": "Carol", "role": "member", "isRemoved": true }
+  ]
+}

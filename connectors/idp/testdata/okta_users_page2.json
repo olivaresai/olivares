@@ -1,0 +1,10 @@
+[
+  {
+    "id": "00u3carol",
+    "status": "STAGED",
+    "profile": {
+      "login": "carol@corp.example",
+      "displayName": "Carol Lee"
+    }
+  }
+]

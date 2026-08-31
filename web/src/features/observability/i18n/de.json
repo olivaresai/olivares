@@ -1,0 +1,150 @@
+{
+  "title": "Beobachtbarkeit & Interoperabilität",
+  "description": "Standardbasierte Erfassungszustände und Hauptbuch-korrelierte Trace-Detailanalyse. Die Kennzahlen gelten engine-weit (prozessglobal), nicht pro Mandant; Standards sind auf die Versionen und Reifegrade festgelegt, die die zuständigen Gremien deklarieren.",
+  "tabs": {
+    "ingestion": "Erfassungszustand",
+    "traces": "Trace-Detailanalyse"
+  },
+  "engineScope": {
+    "badge": "Engine-weit",
+    "note": "Diese Kennzahlen gelten engine-weit (prozessglobal), nicht pro Mandant. Die Zähler des Read-Models akkumulieren seit dem Engine-Start und werden bei einem Neustart zurückgesetzt — derselbe Lebenszyklus wie der Prometheus-Endpunkt /metrics der Engine, niemals pro Mandant."
+  },
+  "ingestion": {
+    "title": "Erfassungszustand je Standard",
+    "description": "Jeder Interoperabilitätsstandard, den die Engine erfasst oder ausgibt, mit seiner festgelegten Version, dem deklarierten Reifegrad und dem Pipe-Status.",
+    "liveNote": "Live-Read-Model: Die Engine zählt Datensätze je Bus-Quelle seit dem Engine-Start. Eine Zeile je Standard führt nur dort einen Zähler, wo die Zuordnung belastbar ist — eine Kennzahl wird niemals erfunden, und ein fehlender Wert bedeutet „nicht belastbar zuordenbar“, nicht null.",
+    "columns": {
+      "standard": "Standard",
+      "direction": "Richtung",
+      "version": "Version",
+      "maturity": "Reifegrad",
+      "status": "Status",
+      "records": "Datensätze",
+      "lastSeen": "Zuletzt gesehen"
+    },
+    "direction": {
+      "in": "Erfassen",
+      "out": "Ausgeben"
+    },
+    "status": {
+      "active": "Aktiv",
+      "available": "Verfügbar",
+      "opt_in_off": "Opt-in aus",
+      "blocked": "Blockiert"
+    },
+    "optInOff": "Konvention in Entwicklung — standardmäßig aus; über das Konnektor-Gate aktivieren.",
+    "gate": "Gate",
+    "gateOff": "aus",
+    "gateOn": "an",
+    "gateNoEvidence": "noch kein Nachweis",
+    "blockedNote": "Der Push-Transport ist an der Off-Box-Collector-Schnittstelle blockiert; der Pull-Export bleibt der Pfad zur Offline-Neuverifizierung.",
+    "recordsPending": "—"
+  },
+  "sources": {
+    "title": "Live-Zähler je Bus-Quelle",
+    "description": "Eine Zeile je Bus-Quelle (Konnektor/Modul) mit ihren Datensätzen nach Beobachtungsart und, bei Edges, nach Collector-Signal.",
+    "columns": {
+      "source": "Quelle",
+      "records": "Datensätze",
+      "kinds": "Nach Art",
+      "signals": "Nach Signal",
+      "firstSeen": "Zuerst gesehen",
+      "lastSeen": "Zuletzt gesehen"
+    },
+    "kind": {
+      "edge": "Edge",
+      "cost": "Kosten",
+      "finding": "Befund"
+    },
+    "empty": "Seit dem Engine-Start keine Datensätze auf dem Bus beobachtet",
+    "emptyHint": "Die Zähler beginnen bei jedem Engine-Start bei null; bisher ist nichts geflossen — dies ist eine Beobachtung, kein Fehler.",
+    "sinceNote": "Die Zähler sind prozessglobal und akkumulieren seit dem Engine-Start ({{since}}); sie werden bei einem Neustart zurückgesetzt, wie /metrics."
+  },
+  "maturity": {
+    "title": "Reifegrad",
+    "development": "Entwicklung",
+    "ga": "GA",
+    "pre_1_0": "Pre-1.0",
+    "stable": "Stabil",
+    "developmentHint": "Konvention in Entwicklung",
+    "preReleaseHint": "Pre-1.0-Schema"
+  },
+  "traces": {
+    "title": "W3C-Trace-Context-Detailanalyse",
+    "description": "Traces, korreliert über die W3C-Trace-IDs, die auf Audit-Hauptbuch-Ereignissen geprägt sind, gruppiert nach Engine-Span.",
+    "listTitle": "Aktuelle Traces",
+    "listDescription": "Wählen Sie einen Trace aus, um seine aus dem Hauptbuch abgeleitete Span-Ansicht zu öffnen.",
+    "empty": "Keine Traces",
+    "emptyHint": "Kein Audit-Hauptbuch-Ereignis im Auswertungsfenster (letzte 20.000 Ereignisse) trägt eine W3C-Trace-ID — die Aufrufer propagieren keinen traceparent, oder das Fenster ist über sie hinweggerollt.",
+    "noResults": "Keine Traces entsprechen der Suche.",
+    "filterNoResults": "Keine Traces entsprechen den aktiven Filtern.",
+    "searchPlaceholder": "Nach Trace-ID suchen…",
+    "filters": {
+      "service": "Nach Dienst filtern",
+      "servicePlaceholder": "Dienst (exakt)…",
+      "status": "Nach Status filtern",
+      "allStatuses": "Alle Status",
+      "from": "Von",
+      "to": "Bis"
+    },
+    "loadMore": "Mehr laden",
+    "loadingMore": "Wird geladen…",
+    "waterfallTitle": "Span-Wasserfall",
+    "selectPrompt": "Wählen Sie einen Trace aus, um seinen Span-Wasserfall anzuzeigen.",
+    "exportBtn": "OTLP exportieren",
+    "exportTitle": "OTLP-kompatibles JSON für Jaeger / Tempo / Datadog herunterladen",
+    "legend": "Akteurlegende",
+    "liveNote": "Read-Model der Hauptbuch-Korrelation: Die Zeilen werden aus den W3C-Trace-IDs abgeleitet, die auf Audit-Hauptbuch-Ereignissen geprägt sind (Auswertungsfenster: die letzten 20.000 Ereignisse). Die Balken sind HAUPTBUCH-EREIGNIS-Fenster, gruppiert nach Engine-Span-ID — die Engine speichert keine OTel-Spans; die vollständigen Spans liegen im OTLP-Collector des Betreibers.",
+    "columns": {
+      "trace": "Trace",
+      "started": "Gestartet",
+      "duration": "Dauer",
+      "spans": "Spans",
+      "agents": "Agenten",
+      "services": "Dienste",
+      "status": "Status",
+      "span": "Span",
+      "actor": "Akteur",
+      "service": "Dienst",
+      "kind": "Art",
+      "timing": "Zeitverlauf"
+    },
+    "detail": {
+      "title": "Span-Detail",
+      "spanId": "Span-ID",
+      "name": "Name",
+      "timing": "Zeitverlauf",
+      "actor": "Akteur",
+      "actorKind": "Akteurtyp",
+      "entityRef": "Entität",
+      "kind": "Art",
+      "status": "Status",
+      "attributes": "Attribute"
+    },
+    "chartSummary": "Span-Wasserfall: {{count}} Spans über {{duration}}, eingerückt nach Eltern-Kind-Tiefe und nach Dauer dimensioniert.",
+    "level1Note": "W3C Trace Context wird nur auf seinem stabilen Level 1 (v00 traceparent / tracestate) validiert. Es werden keine Level-2-Semantiken beansprucht.",
+    "status": {
+      "ok": "OK",
+      "error": "Fehler",
+      "unset": "Nicht gesetzt"
+    }
+  },
+  "empty": {
+    "ingestionHealth": {
+      "title": "Keine Erfassungsstandards deklariert",
+      "description": "Diese Zeilen müssen aus dem einkompilierten Standardinventar der Engine stammen; Betreiber können sie nicht über die Konsole hinzufügen."
+    },
+    "ingestionSources": {
+      "title": "Keine Bus-Quellen seit Engine-Start",
+      "description": "Ein Konnektor oder Modul muss eine Kante, einen Kostendatensatz oder einen Befund auf dem Event-Bus veröffentlichen, bevor seine Live-Zähler hier erscheinen."
+    },
+    "trace": {
+      "title": "Noch keine W3C-Traces beobachtet",
+      "description": "Aufrufer müssen W3C-Trace-Context propagieren, damit Audit-Hauptbuch-Ereignisse unter den letzten 20.000 Einträgen Trace-IDs tragen."
+    },
+    "traceWaterfallChart": {
+      "title": "Keine Span-Zeiten für diesen Trace erfasst",
+      "description": "Hauptbuchereignisse müssen Engine-Span-IDs tragen, bevor diese Ansicht Startversatz, Dauer, Akteur und Status jedes Spans anzeigen kann."
+    }
+  }
+}

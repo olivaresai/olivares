@@ -1,0 +1,329 @@
+{
+  "title": "Katalog",
+  "subtitle": "Der kuratierte Katalog genehmigter Fähigkeiten — Agents, MCPs, Skills, Vorlagen, Modelle und Konnektoren — sowie gesteuerte Self-Service-Instanziierungen.",
+  "tabs": {
+    "entries": "Einträge",
+    "instances": "Instanzen",
+    "policy": "Zulassungsrichtlinie"
+  },
+  "kind": {
+    "agent": "Agent",
+    "mcp": "MCP",
+    "skill": "Skill",
+    "template": "Vorlage",
+    "model": "Modell",
+    "connector": "Konnektor"
+  },
+  "entries": {
+    "search": "Einträge suchen…",
+    "name": "Name",
+    "kind": "Art",
+    "slug": "Slug",
+    "version": "Version",
+    "status": "Status",
+    "owner": "Inhaber",
+    "signing": "Signierung",
+    "verification": "Verifizierung",
+    "newEntry": "Neuer Eintrag",
+    "empty": "Keine Katalogeinträge",
+    "emptyHint": "Erstellen Sie einen Entwurfseintrag, reichen Sie ihn zur Prüfung ein und genehmigen Sie ihn, um eine eingefrorene, hash-fixierte Version zu veröffentlichen.",
+    "filters": {
+      "kind": "Art",
+      "status": "Status",
+      "all": "Alle"
+    },
+    "truncated": "{{n}} Katalogeinträge geladen; es gibt weitere",
+    "truncatedHint": "Es gibt mehr Katalogeinträge als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier ein Eintrag, beweist das nicht, dass es sie nicht gibt."
+  },
+  "signing": {
+    "signed": "Signiert",
+    "unsigned": "Nicht signiert",
+    "signedHint": "Ed25519-signiert; Signierer-Fingerabdruck {{fingerprint}}.",
+    "unsignedHint": "Hash-fixiert und im Hauptbuch attestiert, jedoch nicht signiert (bei der Genehmigung war kein Katalog-Signierschlüssel konfiguriert).",
+    "notPinned": "—"
+  },
+  "verify": {
+    "title": "Integrität",
+    "caption": "Beim Öffnen neu berechnet. Der Signierschlüssel verlässt niemals die Engine — nur sein Fingerabdruck wird angezeigt.",
+    "verified": "Signatur verifiziert",
+    "verifiedHashOnly": "Hash-fixiert",
+    "notVerified": "Nicht verifiziert",
+    "pending": "Noch nicht fixiert",
+    "verifiedHint": "Der Inhalts-Hash stimmt mit dem fixierten Hash überein und die Signatur ist gültig.",
+    "verifiedHashOnlyHint": "Der Inhalts-Hash stimmt mit dem fixierten Hash überein. Diese Version ist hash-fixiert und im Hauptbuch attestiert, jedoch nicht signiert.",
+    "notVerifiedHint": "Der neu berechnete Hash oder die Signatur stimmt nicht mit dem überein, was bei der Genehmigung fixiert wurde. Behandeln Sie diese Version nicht als genehmigt.",
+    "pendingHint": "Bis zur Genehmigung des Eintrags wird nichts fixiert. Die Verifizierung gilt für genehmigte und veraltete Versionen.",
+    "contentHash": "Fixierter Hash",
+    "recomputedHash": "Neu berechneter Hash",
+    "signedBy": "Signierer-Fingerabdruck",
+    "reason": "Grund",
+    "reverify": "Erneut verifizieren"
+  },
+  "posture": {
+    "title": "Sicherheitslage der Katalog-Signierung",
+    "enabled": "Signierung aktiviert",
+    "disabled": "Signierung nicht konfiguriert",
+    "algorithm": "Algorithmus",
+    "fingerprint": "Schlüssel-Fingerabdruck",
+    "publicKey": "Öffentlicher Schlüssel",
+    "publicKeyHint": "Der öffentliche Ed25519-Schlüssel zur externen Verifizierung — absichtlich öffentlich, kein Geheimnis.",
+    "disabledNote": "Es ist kein Katalog-Signierschlüssel konfiguriert. Genehmigte Einträge sind hash-fixiert und im Hauptbuch attestiert, jedoch nicht signiert."
+  },
+  "detail": {
+    "title": "Eintragsdetails",
+    "identity": "Identität",
+    "kind": "Art",
+    "slug": "Slug",
+    "version": "Version",
+    "status": "Status",
+    "summary": "Zusammenfassung",
+    "owner": "Inhaber",
+    "spec": "Spezifikation",
+    "specCaption": "Schreibgeschützte Definition. Geheimnisse werden innerhalb der Spezifikation per Name oder Locator referenziert — niemals als Werte. Inline-Anmeldedaten werden beim Schreiben abgelehnt.",
+    "specEmpty": "Keine Spezifikation",
+    "integrity": "Integrität & Genehmigung",
+    "contentHash": "Inhalts-Hash",
+    "signed": "Signiert",
+    "sigAlg": "Signaturalgorithmus",
+    "signedBy": "Signierer-Fingerabdruck",
+    "approvedBy": "Genehmigt von",
+    "approvedAt": "Genehmigt am",
+    "notApprovedYet": "Noch nicht genehmigt — es ist nichts fixiert oder signiert.",
+    "actions": {
+      "edit": "Entwurf bearbeiten",
+      "delete": "Entwurf löschen",
+      "submit": "Zur Prüfung einreichen",
+      "approve": "Genehmigen",
+      "deprecate": "Als veraltet markieren",
+      "instantiate": "Instanziieren"
+    }
+  },
+  "editor": {
+    "createTitle": "Neuer Katalogeintrag",
+    "editTitle": "Entwurfseintrag bearbeiten",
+    "kind": "Art",
+    "name": "Anzeigename",
+    "slug": "Slug",
+    "slugHint": "Kleinbuchstaben, Ziffern, „-“ und „_“, bis zu 64 Zeichen.",
+    "version": "Version",
+    "versionHint": "Semantische Version, z. B. 1.2.3 oder 1.0.0-beta.1.",
+    "summary": "Zusammenfassung",
+    "ownerRef": "Inhaber-Referenz",
+    "ownerRefHint": "Optionale Inhaber-Kennzeichnung, z. B. platform-team.",
+    "spec": "Spezifikation (JSON)",
+    "specHint": "Optionales JSON-Objekt. Referenzieren Sie Geheimnisse per Name oder Locator — betten Sie niemals Anmeldedaten ein. Inline-Anmeldedaten werden abgelehnt.",
+    "specPlaceholder": "{\n  \"command\": \"npx\",\n  \"token_ref\": \"$GITHUB_TOKEN\"\n}",
+    "specInvalid": "Die Spezifikation muss ein gültiges JSON-Objekt sein.",
+    "credentialWarning": "Das sieht wie ein Anmeldedaten-Wert aus. Referenzieren Sie Geheimnisse per Name oder Locator (z. B. $GITHUB_TOKEN oder einen Vault-Pfad), niemals das Geheimnis selbst.",
+    "draftNotice": "Neue Einträge werden als Entwurf erstellt. Lebenszyklus- und Integritätsfelder (Status, Hash, Signatur, Genehmigender) werden von der Engine verwaltet — hier niemals setzen.",
+    "create": "Entwurf erstellen",
+    "save": "Änderungen speichern",
+    "created": "Entwurfseintrag erstellt",
+    "updated": "Entwurfseintrag aktualisiert",
+    "admissionStaleWarning": "Dieser {{kind}}-Eintrag hat ein aufgezeichnetes Zulassungsurteil. Das Speichern einer geänderten Spezifikation macht es ungültig — Sie müssen eine neue Attestierung zulassen, bevor er genehmigt werden kann."
+  },
+  "admission": {
+    "title": "Attestierungszulassung",
+    "caption": "Das aufgezeichnete Herkunfts-/SBOM-Urteil, das die Genehmigung in den ausgelieferten Katalog kontrolliert — der dauerhafte Nachweis, warum dieser Eintrag zugelassen oder abgelehnt wurde.",
+    "verified": "Attestierung verifiziert",
+    "signedUnbound": "Signatur verifiziert, Digest nicht gebunden",
+    "notVerified": "Nicht verifiziert",
+    "none": "Kein Zulassungsurteil aufgezeichnet",
+    "noneHint": "Unter einer erzwingenden Zulassungsrichtlinie kann dieser Eintrag erst genehmigt werden, wenn eine verifizierte Attestierung zugelassen wurde.",
+    "reason": "Grund",
+    "noReason": "Kein Grund aufgezeichnet.",
+    "subjectDigest": "Subjekt-Digest",
+    "subjectName": "Subjekt",
+    "method": "Methode",
+    "signer": "Signierer",
+    "transparencyLog": "Transparenzprotokoll",
+    "tlogVerified": "Aufnahme verifiziert",
+    "tlogPresent": "Vorhanden, nicht verifiziert",
+    "tlogAbsent": "Nicht vorhanden",
+    "coverage": "Abdeckung",
+    "attestedBy": "Attestiert von",
+    "attestedAt": "Attestiert am",
+    "admit": "Attestierung zulassen",
+    "admitTitle": "Eine Attestierung zulassen",
+    "admitBodyMcp": "Verifizieren Sie ein Sigstore-Attestierungs-Bundle (cosign download attestation / gh attestation download) für diesen MCP-Server gegen den Vertrauensanker des Mandanten. Nur ein verifiziertes Urteil erlaubt es einer erzwingenden Richtlinie, ihn in die ausgelieferte Registry aufzunehmen.",
+    "admitBodyConnector": "Verifizieren Sie ein Sigstore-Attestierungs-Bundle für dieses Konnektor-Artefakt gegen den Vertrauensanker des Mandanten. Der erwartete Digest wird standardmäßig aus spec.artifact_digest übernommen; nur ein verifiziertes Urteil erlaubt es einer erzwingenden Richtlinie, ihn als verifizierten Konnektor zu genehmigen.",
+    "bundle": "Attestierungs-Bundle (JSON)",
+    "bundleHint": "Fügen Sie das JSON des Sigstore-Bundles ein. Es wird serverseitig verifiziert; nichts wird aufgezeichnet, bis es geparst ist.",
+    "bundleInvalid": "Das Bundle muss gültiges JSON sein.",
+    "bundlePlaceholder": "{ \"mediaType\": \"application/vnd.dev.sigstore.bundle.v0.3+json\", … }",
+    "expectedDigest": "Erwarteter Artefakt-Digest",
+    "expectedDigestHint": "Optionaler sha256, mit dem das attestierte Subjekt übereinstimmen muss (z. B. sha256:…). Für Konnektoren wird er standardmäßig aus spec.artifact_digest übernommen.",
+    "note": "Notiz",
+    "admitSubmit": "Verifizieren und zulassen",
+    "admitted": "Attestierung zugelassen",
+    "recordedNotAdmitted": "Aufgezeichnet, aber die Attestierung erfüllte die Richtlinie nicht — siehe das Urteil."
+  },
+  "confirm": {
+    "deleteTitle": "Diesen Entwurfseintrag löschen?",
+    "deleteBody": "Diesen Entwurfseintrag dauerhaft löschen? Dies kann nicht rückgängig gemacht werden. Nur Entwürfe können gelöscht werden; genehmigte Einträge müssen stattdessen als veraltet markiert werden.",
+    "deleteConfirm": "Dauerhaft löschen",
+    "deletePhrase": "DELETE",
+    "deleted": "Entwurfseintrag gelöscht",
+    "submitTitle": "Diesen Entwurf zur Prüfung einreichen?",
+    "submitBody": "Er wechselt in den Status „ausstehend“ und ist bis zur Entscheidung nicht mehr als Entwurf bearbeitbar.",
+    "submitConfirm": "Zur Prüfung einreichen",
+    "submitted": "Eintrag zur Prüfung eingereicht",
+    "approveTitle": "Diesen Eintrag genehmigen?",
+    "approveBody": "Die Genehmigung ist ENDGÜLTIG: Die Version wird eingefroren und unveränderlich gemacht, ihr Inhalts-Hash wird fixiert (und signiert, falls die Signierung aktiviert ist), und sie wird für die Self-Service-Instanziierung verfügbar. Um sie später auszumustern, müssen Sie sie als veraltet markieren, nicht löschen.",
+    "approveConfirm": "Genehmigen und einfrieren",
+    "approvePhrase": "APPROVE",
+    "approved": "Eintrag genehmigt und eingefroren",
+    "deprecateTitle": "Diesen genehmigten Eintrag als veraltet markieren?",
+    "deprecateBody": "Er wird ausgemustert und für neue Instanziierungen ausgeblendet, aber seine Historie und Signatur bleiben erhalten, damit er verifizierbar bleibt. Dies kann nicht rückgängig gemacht werden — veröffentlichen Sie stattdessen eine neue Version.",
+    "deprecateConfirm": "Als veraltet markieren",
+    "deprecated": "Eintrag als veraltet markiert"
+  },
+  "instantiate": {
+    "title": "Instanziierung anfordern",
+    "body": "Dies erstellt eine Governance-Anforderung (Status „angefordert“), die Ihnen zugeschrieben wird — es wird noch NICHTS bereitgestellt. Die Genehmigungsentscheidung liegt bei der Governance und die Bereitstellung beim Deployment; ein Administrator muss sie genehmigen und aktivieren.",
+    "name": "Instanzname",
+    "nameHint": "Ein eindeutiger Name für diese Instanziierung des Eintrags.",
+    "targetRef": "Ziel-Referenz",
+    "targetRefHint": "Optionales Bereitstellungsziel, z. B. env:prod.",
+    "note": "Notiz",
+    "submit": "Instanziierung anfordern",
+    "requested": "Instanziierung angefordert",
+    "notApproved": "Nur ein genehmigter Eintrag kann instanziiert werden."
+  },
+  "instances": {
+    "search": "Instanzen suchen…",
+    "name": "Name",
+    "entry": "Quelleintrag",
+    "kind": "Art",
+    "version": "Version",
+    "status": "Status",
+    "target": "Ziel",
+    "requestedBy": "Angefordert von",
+    "decidedBy": "Entschieden von",
+    "note": "Notiz",
+    "empty": "Keine Instanziierungsanforderungen",
+    "emptyHint": "Self-Service-Instanziierungen genehmigter Einträge erscheinen hier mit ihrem Governance-Status.",
+    "filters": {
+      "status": "Status",
+      "all": "Alle"
+    },
+    "liveNote": "Live — wird aktualisiert, während Anforderungen auf eine Governance-Entscheidung warten.",
+    "truncated": "{{n}} Instanzen geladen; es gibt weitere",
+    "truncatedHint": "Es gibt mehr Instanzen als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier eine Instanz, beweist das nicht, dass es sie nicht gibt."
+  },
+  "instanceDetail": {
+    "title": "Instanzdetails",
+    "provenance": "Herkunft",
+    "entryId": "Eintrags-ID",
+    "entryKind": "Eintragsart",
+    "entrySlug": "Eintrags-Slug",
+    "entryVersion": "Eintragsversion",
+    "governance": "Governance",
+    "note": "Notiz",
+    "governanceCaption": "Übergänge folgen dem zulässigen Ablauf und werden gegen Ihre Identität aufgezeichnet. Die Richtlinie/HITL ist Governance; die tatsächliche Bereitstellung liegt beim Deployment.",
+    "actions": {
+      "approve": "Genehmigen",
+      "reject": "Ablehnen",
+      "activate": "Aktivieren"
+    }
+  },
+  "transition": {
+    "approveTitle": "Diese Instanzanforderung genehmigen?",
+    "rejectTitle": "Diese Instanzanforderung ablehnen?",
+    "activateTitle": "Diese Instanz aktivieren?",
+    "body": "Das Genehmigen, Ablehnen oder Aktivieren wird gegen Ihre Identität im Audit-Hauptbuch aufgezeichnet und folgt dem zulässigen Ablauf (angefordert → genehmigt/abgelehnt, genehmigt → aktiv/abgelehnt).",
+    "noteLabel": "Entscheidungsnotiz (optional)",
+    "notePlaceholder": "Grund für diese Entscheidung…",
+    "approveConfirm": "Genehmigen",
+    "rejectConfirm": "Ablehnen",
+    "activateConfirm": "Aktivieren",
+    "done": "Governance-Entscheidung angewendet"
+  },
+  "status": {
+    "draft": "Entwurf",
+    "pending": "Ausstehend",
+    "approved": "Genehmigt",
+    "deprecated": "Veraltet",
+    "requested": "Angefordert",
+    "rejected": "Abgelehnt",
+    "active": "Aktiv"
+  },
+  "empty": {
+    "entry": {
+      "title": "Noch keine Katalogeinträge",
+      "description": "Erstellen Sie einen Entwurf, reichen Sie ihn zur Prüfung ein und genehmigen Sie ihn, um eine eingefrorene, hash-fixierte Katalogversion zu veröffentlichen."
+    },
+    "instance": {
+      "title": "Noch keine Instanziierungsanfragen",
+      "description": "Genehmigen Sie einen Katalogeintrag und fordern Sie dessen Instanziierung an; der gesteuerte Instanzdatensatz erscheint dann hier."
+    }
+  },
+  "policy": {
+    "kind": {
+      "mcp": {
+        "title": "MCP-Einträge",
+        "body": "Vertrauensanker, die föderierte MCP-Einträge in die bereitgestellte Unterregistrierung lassen.",
+        "editTitle": "MCP-Zulassungsrichtlinie bearbeiten"
+      },
+      "connector": {
+        "title": "Konnektor-Einträge",
+        "body": "Vertrauensanker, die Konnektoren Dritter vor der Freigabe prüfen.",
+        "editTitle": "Konnektor-Zulassungsrichtlinie bearbeiten"
+      }
+    },
+    "state": {
+      "unconfigured": {
+        "title": "Keine Richtlinie — alles wird zugelassen",
+        "body": "Ohne konfigurierte Richtlinie werden Einträge OHNE jede Signaturprüfung zugelassen. Konfigurieren Sie einen Vertrauensanker, um die Zulassung zu steuern."
+      },
+      "observe": {
+        "title": "Konfiguriert — nur beobachtend",
+        "body": "Signaturen werden geprüft und protokolliert, ein Fehlschlag verhindert die Zulassung aber nicht. Aktivieren Sie „Signatur verlangen“, um durchzusetzen."
+      },
+      "enforce": {
+        "title": "Durchgesetzt",
+        "body": "Einträge, die sich gegen diese Vertrauensanker nicht verifizieren lassen, werden abgelehnt."
+      }
+    },
+    "modeName": {
+      "keyless": "Schlüssellos (identitätsgebunden)",
+      "certificate-pki": "Zertifikats-PKI",
+      "bare-key": "Bloßer Schlüssel",
+      "empty": "Kein Anker"
+    },
+    "mode": "Vertrauensmethode",
+    "derivedMode": "Abgeleitete Vertrauensmethode",
+    "on": "Ein",
+    "off": "Aus",
+    "requireSigned": "Signierte Einträge verlangen",
+    "requireSignedHint": "Wenn aktiv, wird ein Eintrag ohne gültige Verifikation abgelehnt.",
+    "requireSubjectDigest": "Subjekt-Digest verlangen",
+    "requireSubjectDigestHint": "Bindet die Attestierung an den Digest des Eintrags, nicht nur an seinen Namen.",
+    "identities": "Erlaubte Identitäten",
+    "identitiesHint": "Eine pro Zeile. Nur gemeinsam mit Ausstellern setzbar.",
+    "issuers": "Erlaubte Aussteller",
+    "issuersHint": "Einer pro Zeile. Nur gemeinsam mit Identitäten setzbar.",
+    "predicates": "Erlaubte Prädikate",
+    "predicatesHint": "Eines pro Zeile, z. B. der Provenance-Prädikattyp. Leerzeilen werden abgelehnt.",
+    "trustedRoots": "Vertrauenswürdige Wurzeln",
+    "trustedRootsHint": "CA-Zertifikate im PEM-Format. Nur vollständige BEGIN…END-Blöcke werden gespeichert.",
+    "trustedKeys": "Vertrauenswürdige Schlüssel",
+    "trustedKeysHint": "ÖFFENTLICHE Schlüssel im PEM-Format. Nur vollständige BEGIN…END-Blöcke werden gespeichert.",
+    "note": "Notiz",
+    "attestedBy": "Zuletzt geändert von",
+    "attestedAt": "Zuletzt geändert",
+    "edit": "Richtlinie bearbeiten",
+    "editBody": "Änderungen greifen bei der nächsten Zulassung.",
+    "saved": "Zulassungsrichtlinie gespeichert",
+    "loadFailed": "Die Zulassungsrichtlinie konnte nicht geladen werden.",
+    "confirmTitle": "Vertrauensänderung bestätigen",
+    "confirmBody": "Dies verschärft die Zulassung oder entfernt einen Vertrauensanker. Bereits Zugelassenes wird nicht erneut geprüft, neue Zulassungen können aber scheitern, bis neu signiert wurde.",
+    "err": {
+      "privateKey": "Vertrauensmaterial muss öffentlich sein — entfernen Sie jeden PRIVATE-KEY-Block.",
+      "pemResidual": "Nur vollständige BEGIN…END-Blöcke werden gespeichert; entfernen Sie den Resttext.",
+      "emptyPredicate": "Prädikate dürfen keine leeren Einträge enthalten.",
+      "anchorMissing": "Durchsetzung braucht mindestens eine vertrauenswürdige Wurzel oder einen Schlüssel, sonst würde nichts zugelassen.",
+      "identityIssuer": "Identitäten und Aussteller müssen zusammen gesetzt werden, oder keines von beiden."
+    }
+  }
+}

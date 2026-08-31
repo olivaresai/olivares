@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Improve Go module license coverage from local build inputs only. The release
+# hook runs go mod download before GoReleaser builds, so the module cache is a
+# reproducible local source; remote license lookup stays disabled for air-gapped
+# and reproducible release builds.
+golang:
+  search-local-mod-cache-licenses: true
+  search-local-vendor-licenses: true
+  search-remote-licenses: false

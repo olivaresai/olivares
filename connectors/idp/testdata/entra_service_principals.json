@@ -1,0 +1,21 @@
+{
+  "value": [
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "displayName": "ci-pipeline-sp",
+      "accountEnabled": true,
+      "servicePrincipalType": "Application"
+    },
+    {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "displayName": "retired-sp",
+      "accountEnabled": false
+    },
+    {
+      "id": "55555555-5555-5555-5555-555555555555",
+      "displayName": "support-triage-agent",
+      "accountEnabled": true,
+      "servicePrincipalType": "ServiceIdentity"
+    }
+  ]
+}

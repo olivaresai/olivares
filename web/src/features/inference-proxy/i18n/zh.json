@@ -1,0 +1,96 @@
+{
+  "title": "推理代理",
+  "description": "位于每次模型调用前、按租户实施策略的代理：请求/响应闸门、出站 DLP 规则以及设备授权审批。",
+  "config": {
+    "title": "闸门与上限",
+    "intro": "每个闸门都在模型调用之前于请求路径上实施。关闭某个闸门将停止实施该检查；更改会记录在审计账本中。",
+    "failOpen": "失败放行",
+    "failOpenHint": "当代理无法得出策略判定时，放行调用而非阻断。关闭 = 失败阻断。",
+    "recordMandatory": "要求录制",
+    "recordMandatoryHint": "拒绝无法记录到会话账本的调用。",
+    "gates": {
+      "gate_model_access": "模型访问",
+      "gate_budget": "预算",
+      "gate_residency": "驻留",
+      "gate_context_window": "上下文窗口",
+      "gate_dlp_request": "请求 DLP",
+      "gate_dlp_response": "响应 DLP"
+    },
+    "gatesHint": {
+      "gate_model_access": "实施每个主体可调用哪些模型。",
+      "gate_budget": "在调用产生费用之前实施预算上限。",
+      "gate_residency": "实施租户的数据驻留区域。",
+      "gate_context_window": "实施各界面的上下文窗口上限。",
+      "gate_dlp_request": "扫描出站请求中不允许的分类。",
+      "gate_dlp_response": "按响应 DLP 模式扫描模型响应。"
+    },
+    "responseDlpMode": "响应 DLP 模式",
+    "responseDlpModeHint": "响应 DLP 如何处理命中：off（不扫描）、flag（标注）或 buffer（返回前保留以扫描）。",
+    "dlpModes": {
+      "off": "关闭",
+      "flag": "标记",
+      "buffer": "缓冲"
+    },
+    "ceilingsEnforce": "实施上限",
+    "ceilingsEnforceHint": "限制每次调用的令牌、工具使用次数和任务预算。关闭 = 每次调用无上限。",
+    "ceilingMaxTokens": "最大令牌",
+    "ceilingMaxToolUses": "最大工具使用次数",
+    "ceilingTaskBudget": "任务预算（令牌）",
+    "ceilingTaskBudgetHint": "0 = 未设置，否则至少 {{min}}。",
+    "ceilingTaskBudgetError": "必须为 0 或至少 {{min}}。",
+    "reset": "重置",
+    "save": "保存配置",
+    "saved": "代理配置已保存"
+  },
+  "dlp": {
+    "title": "出站 DLP 规则",
+    "intro": "将内容分类映射为出站时允许或拒绝。分类在模型调用时于服务器端执行；这些规则决定命中时的处理。",
+    "truncated": "已加载 {{n}} 条 DLP 规则；还有更多",
+    "truncatedHint": "DLP 规则多于所显示的；本页按 id 取行。列表中没有某条规则并不能证明它不存在——出站流量可能受此处看不到的规则约束。",
+    "add": "添加规则",
+    "noRead": "你没有查看 DLP 规则的权限。",
+    "empty": "暂无 DLP 规则",
+    "emptyHint": "添加规则以在出站时允许或拒绝某个分类。",
+    "colClass": "分类",
+    "colAction": "动作",
+    "colNote": "备注",
+    "colActions": "操作",
+    "actions": {
+      "allow": "允许",
+      "deny": "拒绝"
+    },
+    "editAction": "编辑 {{class}} 的规则",
+    "deleteAction": "删除 {{class}} 的规则",
+    "created": "已创建 DLP 规则",
+    "updated": "已更新 DLP 规则",
+    "deleted": "已删除 DLP 规则",
+    "deleteDialog": {
+      "title": "删除 DLP 规则？",
+      "description": "这将删除“{{class}}”的出站规则。匹配的内容将回退到默认处理。",
+      "confirm": "删除规则"
+    },
+    "dialog": {
+      "title": "添加 DLP 规则",
+      "editTitle": "编辑 DLP 规则",
+      "subtitle": "分类在出站时被允许或拒绝。规则以其分类为键。",
+      "class": "分类",
+      "classHint": "此规则适用的内容分类（例如 pii、secret）。",
+      "action": "动作",
+      "note": "备注",
+      "create": "添加规则",
+      "save": "保存规则"
+    }
+  },
+  "device": {
+    "title": "设备授权",
+    "intro": "通过用户代码（设备配对屏幕上显示的代码）批准或拒绝设备授权请求。",
+    "userCode": "用户代码",
+    "userCodePlaceholder": "例如 WDJB-MJHT",
+    "approve": "批准",
+    "deny": "拒绝",
+    "approved": "已批准设备代码 {{code}}",
+    "denied": "已拒绝设备代码 {{code}}",
+    "notFound": "该用户代码没有待处理的请求。",
+    "expired": "该请求已过期或已被使用。"
+  }
+}

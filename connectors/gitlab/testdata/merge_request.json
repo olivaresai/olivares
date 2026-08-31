@@ -1,0 +1,17 @@
+{
+  "object_kind": "merge_request",
+  "object_attributes": {
+    "action": "merge",
+    "state": "merged",
+    "target_branch": "main",
+    "source_branch": "feature/new-api"
+  },
+  "project": {
+    "path_with_namespace": "mygroup/myproject",
+    "web_url": "https://gitlab.com/mygroup/myproject"
+  },
+  "user": {
+    "username": "fran",
+    "name": "Fran Olivares"
+  }
+}

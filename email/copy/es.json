@@ -1,0 +1,55 @@
+{
+  "$locale": "es",
+  "common": {
+    "wordmark": "Olivares AI",
+    "footerNote": "Este es un mensaje transaccional de Olivares AI.",
+    "fallbackIntro": "Si el botón no funciona, copie esta dirección en el navegador:",
+    "signoff": "Olivares AI"
+  },
+  "signin": {
+    "subject": "Acceda a su portal de Olivares AI",
+    "preheader": "Use este enlace de un solo uso para acceder a su portal de cliente de Olivares AI.",
+    "heading": "Acceda a su portal de cliente",
+    "intro": "Use el botón siguiente para acceder a su portal de cliente de Olivares AI.",
+    "cta": "Acceder al portal",
+    "expiry": "Este enlace solo funciona una vez y caduca en {{MINUTES}} minutos.",
+    "sameBrowser": "Ábralo donde lo solicitó: en el mismo navegador, con el mismo perfil y en el mismo modo de navegación. El enlace está vinculado a una cookie almacenada allí, por lo que no funcionará si cambia cualquiera de ellos o borra las cookies.",
+    "ignore": "Este enlace da acceso a su portal. Si no lo ha solicitado, ignore este mensaje; no ocurrirá nada a menos que se use el enlace.",
+    "textIntro": "Use este enlace para acceder a su portal de cliente de Olivares AI:"
+  },
+  "license": {
+    "subject": "Su licencia comercial de Olivares AI",
+    "preheader": "Su clave de licencia firmada y los datos de descarga empresarial están listos.",
+    "preheaderNoDownload": "Su clave de licencia firmada está lista. El enlace de descarga no está en este mensaje.",
+    "noDownloadNote": "Su licencia va adjunta y está activa: no queda nada pendiente sobre ella. El enlace de descarga empresarial no está en este mensaje.",
+    "noDownloadPortalNote": "Su licencia va adjunta y está activa: no queda nada pendiente sobre ella. El enlace de descarga empresarial no está en este mensaje; las descargas se gestionan en su portal de cliente.",
+    "heading": "Su licencia comercial",
+    "greeting": "Hola, {{LICENSEE}}:",
+    "intro": "Su clave de licencia firmada se adjunta como olivares-license.key y se reproduce a continuación.",
+    "installHeading": "Instálela",
+    "installNote": "No es necesario reiniciar un motor en ejecución.",
+    "installStdinNote": "Para pegar la clave en lugar de usar el archivo adjunto, ejecute el comando siguiente y pulse Ctrl-D cuando termine de pegarla.",
+    "verifyNote": "Tras instalarla, verifique la licencia con el comando siguiente.",
+    "statusPerpetual": "Esta licencia es perpetua.",
+    "statusUntil": "Esta licencia es válida hasta el {{DATE}}.",
+    "downloadHeading": "Descargue el binario empresarial",
+    "downloadNote": "Este enlace de descarga está asociado a su compra.",
+    "downloadCta": "Descargar binario",
+    "portalHeading": "Su portal de cliente",
+    "portalNote": "Inicie sesión cuando quiera con esta dirección de correo: le enviamos un enlace de un solo uso, así que no hay ninguna contraseña que recordar. Sus licencias, sus descargas y los datos de su cuenta están todos ahí.",
+    "portalCta": "Abrir el portal",
+    "keyHeading": "Su clave de licencia",
+    "attestation": "Esta licencia, basada únicamente en atestación, registra su excepción comercial y le da derecho a los complementos empresariales. Nunca limita el número de usuarios (las cuentas de usuario autoalojadas son ilimitadas en todas las ediciones) y su verificación no se comunica con nosotros: se valida por completo sin conexión y no existe un interruptor de apagado remoto. Descargar lo que ha pagado sí se comunica con nosotros: esta suscripción es la credencial para obtener los complementos empresariales, sus actualizaciones y sus parches. No hay telemetría obligatoria ni salida hacia el plano de control de forma predeterminada."
+  },
+  "invite": {
+    "subject": "Configure su cuenta de Olivares AI",
+    "preheader": "Acepte la invitación y elija una contraseña para su cuenta de Olivares AI.",
+    "heading": "Configure su cuenta de Olivares AI",
+    "intro": "Un administrador le ha invitado a configurar su cuenta de Olivares AI para su organización.",
+    "cta": "Configurar la cuenta",
+    "expiry": "Esta invitación solo puede usarse una vez y caduca el {{EXPIRES_AT}}.",
+    "setPassword": "Elegirá su propia contraseña; el administrador que le ha invitado nunca la verá.",
+    "ignore": "Si no esperaba recibir este mensaje, no use el enlace y póngase en contacto con el administrador que le invitó. La cuenta ya existe; ignorar este mensaje solo deja sin establecer la contraseña de la cuenta.",
+    "textIntro": "Use este enlace de invitación para configurar su cuenta de Olivares AI:"
+  }
+}

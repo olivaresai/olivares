@@ -1,0 +1,6 @@
+{
+  "data": {
+    "name": "orphan-policy",
+    "policy": "path \"secret/data/orphan\" { capabilities = [\"read\"] }\n"
+  }
+}

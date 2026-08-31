@@ -1,0 +1,336 @@
+# scripts/openapi-op-catalog.tsv — the ONE hand-written input of the published
+# OpenAPI operation descriptions.
+#
+# Format: <METHOD>\t<spec path>\t<description>.
+#
+# A row belongs here ONLY for an operation whose description cannot come from the
+# code: an operation of the stable document (core/api/openapi.go builds those by hand,
+# there is no handler seam to read), or a module route whose handler does not document
+# itself in a form that can be published. scripts/openapi-op-descriptions names both
+# cases, one line per operation, when it fails.
+#
+# This file does NOT decide which operations exist. A row for an operation that is not
+# published is red; an operation with no row and no publishable doc comment is red; and
+# a row for a module route whose handler HAS since been documented is red too, so one
+# description never has two sources.
+#
+# The right fix for a module route is usually not a row here: it is a doc comment on
+# the handler, which then reaches this document for free and cannot drift from the code
+# it sits next to.
+
+DELETE	/v1/m/compliance/depth/fedramp/{id}	Deletes one stored FedRAMP key security indicator by id.
+DELETE	/v1/m/compliance/depth/sector/{id}	Deletes one stored sector compliance pack by id.
+DELETE	/v1/m/compliance/depth/us-law/{id}	Deletes one stored US state law pack by id.
+DELETE	/v1/m/compliance/nis2/incidents/{id}	Deletes one classified NIS2 incident by id.
+DELETE	/v1/m/deploy/definitions/{id}	Deletes one deployment definition by id, and refuses while a live deployment still uses it.
+DELETE	/v1/m/finops/budgets/{id}	Deletes one budget by id; a policy of any other kind is refused.
+DELETE	/v1/m/finops/cost-centers/{id}	Deletes one cost center by id together with the mappings attached to it.
+DELETE	/v1/m/finops/cost-centers/{id}/mappings/{mid}	Deletes one cost-center mapping by its own id.
+DELETE	/v1/m/governance/rbac/grants/{id}	Revokes one scoped RBAC grant by id.
+DELETE	/v1/m/governance/rbac/permission-groups/{name}	Deletes one permission group by name; the caller must be a tenant admin.
+DELETE	/v1/m/governance/rbac/roles/{name}	Deletes one custom role by name; the caller must be a tenant admin.
+DELETE	/v1/m/knowledge/data-products/{id}	Deletes one data product by id.
+DELETE	/v1/m/models/agent-artifacts/{id}	Deletes one registered agent artifact by id.
+DELETE	/v1/m/models/datasets/{id}	Deletes one registered dataset by id.
+DELETE	/v1/m/models/inference-deployments/{id}	Deletes one inference deployment by id.
+DELETE	/v1/m/models/model-access/{id}	Deletes one model-access rule by id.
+DELETE	/v1/m/models/model-versions/{id}	Deletes one model version by id, and refuses while a deployment still references it.
+DELETE	/v1/m/models/owned-models/{id}	Deletes one owned model by id, and refuses while a deployment still references it.
+DELETE	/v1/m/reporting/schedules/{id}	Deletes one report schedule by id.
+DELETE	/v1/m/reporting/templates/{type}	Deletes the tenant custom template for one report type.
+DELETE	/v1/m/sessions/runs/{ref}	Deletes one session run by reference.
+DELETE	/v1/m/sessions/templates/{id}	Deletes one session template by id; a built-in template is refused.
+DELETE	/v1/m/sessions/work-items/{id}/dependencies/{dep_id}	Removes one dependency edge from a work item as a validate, plan or apply command.
+DELETE	/v1/m/sessions/workspaces/{ref}	Deletes one session workspace by reference.
+DELETE	/v1/m/sessions/workspaces/{ref}/files	Deletes one file of a workspace, or a whole subtree when recursive=true.
+GET	/v1/m/capabilities/toolpins	Lists the tenant approved tool pins, and answers 501 when no pin verifier is wired.
+GET	/v1/m/catalog/connector-admission/policy	Returns the connector admission policy in force, or the unset defaults when none has been authored.
+GET	/v1/m/catalog/mcp-admission/policy	Returns the MCP server admission policy in force, or the unset defaults when none has been authored.
+GET	/v1/m/compliance/aims/pack	Lists the stored AI management system packs.
+GET	/v1/m/compliance/aims/pack/{id}	Returns one AI management system pack with its full detail.
+GET	/v1/m/compliance/aims/pack/{id}/export	Exports one AI management system pack together with a ledger integrity proof taken at export time.
+GET	/v1/m/compliance/data-subjects/{id}/erasure-status	Returns the erasure status of one data subject, optionally narrowed by subject_kind.
+GET	/v1/m/compliance/depth/ccm/drift	Lists the recorded Cloud Controls Matrix drift findings.
+GET	/v1/m/compliance/depth/ccm/snapshots	Lists the stored Cloud Controls Matrix snapshots.
+GET	/v1/m/compliance/depth/ccm/snapshots/{id}	Returns one Cloud Controls Matrix snapshot with its full detail.
+GET	/v1/m/compliance/depth/fedramp	Lists the stored FedRAMP key security indicators.
+GET	/v1/m/compliance/depth/fedramp/{id}	Returns one FedRAMP key security indicator with its full detail.
+GET	/v1/m/compliance/depth/sector	Lists the stored sector compliance packs.
+GET	/v1/m/compliance/depth/sector/{id}	Returns one sector compliance pack with its full detail.
+GET	/v1/m/compliance/depth/us-law	Lists the stored US state law packs.
+GET	/v1/m/compliance/depth/us-law/{id}	Returns one US state law pack with its full detail.
+GET	/v1/m/compliance/dora/incidents	Lists the classified DORA incidents, optionally narrowed to the major ones.
+GET	/v1/m/compliance/dora/incidents/{id}	Returns one classified DORA incident with its full detail.
+GET	/v1/m/compliance/dora/register	Lists the maintained DORA registers of information.
+GET	/v1/m/compliance/dora/register/{id}	Returns one DORA register of information with its full detail.
+GET	/v1/m/compliance/dora/register/{id}/export	Exports one DORA register of information together with a ledger integrity proof taken at export time.
+GET	/v1/m/compliance/erasure	Lists the erasure requests, optionally filtered by status.
+GET	/v1/m/compliance/erasure/{id}	Returns one erasure request with its full detail.
+GET	/v1/m/compliance/erasure/{id}/events	Lists the recorded lifecycle events of one erasure request.
+GET	/v1/m/compliance/erasure/{id}/receipt	Returns the completion receipt of one erasure request, or 404 while none has been issued.
+GET	/v1/m/compliance/evidence	Lists the stored evidence packages, optionally filtered by framework.
+GET	/v1/m/compliance/frameworks	Lists the compliance frameworks the engine ships, each with its authority, version pin and control count.
+GET	/v1/m/compliance/frameworks/{id}	Returns one compliance framework with its controls.
+GET	/v1/m/compliance/frameworks/{id}/gaps	Returns the controls of one framework that the tenant evidence does not satisfy, as JSON or CSV.
+GET	/v1/m/compliance/frameworks/{id}/status	Assesses one framework against the tenant live evidence and returns the per-control result, as JSON or CSV.
+GET	/v1/m/compliance/hipaa/gap-report	Assesses the HIPAA technical safeguards against the tenant live evidence and returns the gaps.
+GET	/v1/m/compliance/holds	Lists the legal holds, optionally filtered by status.
+GET	/v1/m/compliance/holds/check	Answers whether a subject is under a legal hold, for a caller outside this process; subject_kind and subject_ref travel together.
+GET	/v1/m/compliance/holds/{id}	Returns one legal hold with its full detail.
+GET	/v1/m/compliance/holds/{id}/events	Lists the recorded lifecycle events of one legal hold.
+GET	/v1/m/compliance/nis2/incidents	Lists the recorded NIS2 incidents.
+GET	/v1/m/compliance/nis2/incidents/{id}	Returns one NIS2 incident with its full detail.
+GET	/v1/m/compliance/nis2/incidents/{id}/export	Exports one NIS2 incident together with a ledger integrity proof taken at export time.
+GET	/v1/m/compliance/oscal/profiles	Lists the registered OSCAL profiles, optionally filtered by framework.
+GET	/v1/m/compliance/oscal/profiles/{id}	Returns one registered OSCAL profile with its full detail.
+GET	/v1/m/compliance/residency	Lists the recorded data residency attestations.
+GET	/v1/m/compliance/retention/policies	Lists the retention policies with the state of each.
+GET	/v1/m/compliance/retention/runs	Lists the recorded retention runs, optionally filtered by data class.
+GET	/v1/m/compliance/risk	Lists the recorded risk entries, optionally filtered by tier.
+GET	/v1/m/eventing/dead-letters	Lists the deliveries that ended in the dead-letter queue, narrowed to the event types the caller is authorized for.
+GET	/v1/m/eventing/egress-policy/compat	Reports the destinations that only a legacy exception still permits under the tenant egress policy.
+GET	/v1/m/finops/alerts	Lists the budget alerts, optionally filtered by budget_id.
+GET	/v1/m/finops/budgets	Lists the budgets defined for the tenant.
+GET	/v1/m/finops/budgets/{id}	Returns one budget by id; a policy of any other kind reads as absent.
+GET	/v1/m/finops/budgets/{id}/status	Returns the live consumption of one budget against its limit.
+GET	/v1/m/finops/cost-centers	Lists the cost centers, optionally filtered by status.
+GET	/v1/m/finops/cost-centers/{id}	Returns one cost center with its full detail.
+GET	/v1/m/finops/cost-centers/{id}/mappings	Lists the mappings that attribute spend to one cost center.
+GET	/v1/m/finops/forecast	Forecasts spend for a period (monthly by default), optionally over a window of days and broken down by a dimension.
+GET	/v1/m/finops/recommendations	Returns the cost optimization recommendations derived from the tenant recorded spend.
+GET	/v1/m/finops/spend	Returns spend aggregated by a dimension (model by default) over an optional RFC3339 since/until window.
+GET	/v1/m/finops/spend/allocation	Returns spend allocated to its attribution dimensions over an optional RFC3339 since/until window.
+GET	/v1/m/finops/spend/reconciliation	Reconciles metered spend against the ingested provider cost over an optional RFC3339 since/until window.
+GET	/v1/m/finops/spend/summary	Summarizes spend over an optional RFC3339 since/until window.
+GET	/v1/m/finops/spend/trend	Returns the per-day spend series over an optional RFC3339 since/until window.
+GET	/v1/m/finops/spend/unified	Returns spend across every metered surface in one view, over an optional RFC3339 since/until window.
+GET	/v1/m/finops/statements	Lists the chargeback statements, newest period first, optionally filtered by cost center, period and status.
+GET	/v1/m/finops/statements/{id}	Returns one chargeback statement with its full detail.
+GET	/v1/m/finops/statements/{id}/export	Exports one chargeback statement together with its line items.
+GET	/v1/m/governance/guardian/rules	Lists the guardian rules defined for the tenant.
+GET	/v1/m/governance/pdp/tests	Returns the authored decision tests for one policy engine (cedar or opa), at the current or a requested revision.
+GET	/v1/m/governance/pdp/versions/{revision}	Returns one authored policy revision of the engine named by the engine query parameter.
+GET	/v1/m/governance/rbac/catalog	Returns the vocabulary an authoring console needs: the scopeable kinds, the kinds that carry a scope tree, the grantable module permissions, the verbs, the built-in roles and the subject kinds.
+GET	/v1/m/governance/rbac/delegation-authority	Returns the domains within which the calling principal may delegate authority; a superadmin is answered with no domain restriction.
+GET	/v1/m/governance/rbac/grants	Lists the scoped RBAC grants of the tenant.
+GET	/v1/m/governance/rbac/grants/{id}	Returns one scoped RBAC grant by id.
+GET	/v1/m/governance/rbac/permission-groups	Lists the permission groups defined for the tenant.
+GET	/v1/m/governance/rbac/permission-groups/{name}	Returns one permission group by name.
+GET	/v1/m/governance/rbac/roles	Lists the custom roles defined for the tenant.
+GET	/v1/m/governance/rbac/roles/{name}	Returns one custom role by name.
+GET	/v1/m/knowledge/data-products	Lists the data products, optionally filtered by status, owner_ref and kb_ref.
+GET	/v1/m/knowledge/data-products/{id}	Returns one data product with its full detail.
+GET	/v1/m/knowledge/data-products/{id}/contracts	Lists the data contracts authored for one data product.
+GET	/v1/m/knowledge/data-products/{id}/contracts/active	Returns the data contract currently active for one data product.
+GET	/v1/m/knowledge/data-products/{id}/contracts/{ver}	Returns one numbered version of a data product contract.
+GET	/v1/m/knowledge/data-products/{id}/events	Lists the recorded lifecycle events of one data product.
+GET	/v1/m/knowledge/data-products/{id}/health	Evaluates and returns the current health of one data product.
+GET	/v1/m/knowledge/kbs/{id}	Returns one knowledge base with its full detail.
+GET	/v1/m/knowledge/memory/all	Lists every agent memory entry in the tenant scope, optionally narrowed by agent_ref, and flags any entry whose integrity check failed.
+GET	/v1/m/knowledge/prompts	Lists the stored prompts.
+GET	/v1/m/models/admission-policy	Returns the model admission policy in force, or the observe-mode defaults when none has been authored.
+GET	/v1/m/models/agent-artifacts	Lists the registered agent artifacts, optionally filtered by artifact_class.
+GET	/v1/m/models/aiboms	Lists the sealed AI bills of materials, optionally filtered by owned_ref.
+GET	/v1/m/models/datasets	Lists the registered datasets, optionally filtered by owned_ref.
+GET	/v1/m/models/finetune-jobs	Lists the fine-tune jobs, optionally filtered by status.
+GET	/v1/m/models/finetune-jobs/{id}	Returns one fine-tune job with its full detail.
+GET	/v1/m/models/inference-deployments	Lists the inference deployments, optionally filtered by runtime and status.
+GET	/v1/m/models/model-access	Lists the model-access rules, optionally filtered by subject and target kind and reference.
+GET	/v1/m/models/model-admissions	Lists the recorded model admission verdicts, optionally filtered by version_ref and by whether the signature verified.
+GET	/v1/m/models/model-groups	Lists the model groups defined for the tenant.
+GET	/v1/m/models/model-groups/{id}	Returns one model group with its full detail.
+GET	/v1/m/models/model-versions	Lists the model versions, optionally filtered by owned_ref and status.
+GET	/v1/m/models/owned-models	Lists the owned models, optionally filtered by kind and status.
+GET	/v1/m/models/owned-models/{id}	Returns one owned model with its full detail.
+GET	/v1/m/reporting/branding	Returns the tenant report branding, and answers 501 when no branding store is wired.
+GET	/v1/m/reporting/enterprise/bundle	Builds the evidence bundle, and answers 501 when the report engine is not configured.
+GET	/v1/m/reporting/enterprise/posture	Builds the posture report, and answers 501 when the report engine is not configured.
+GET	/v1/m/reporting/enterprise/risk	Builds the risk summary, and answers 501 when the report engine is not configured.
+GET	/v1/m/reporting/reports	Lists the report types this engine can generate, each with its available formats.
+GET	/v1/m/reporting/reports/{type}	Generates one report type in the requested format and locale over the requested window; an unavailable renderer answers 501.
+GET	/v1/m/reporting/schedules	Lists the report schedules of the tenant, and answers 501 when report scheduling is not wired.
+GET	/v1/m/reporting/schedules/{id}/runs	Lists the recorded runs of one report schedule, metadata only; the artifact downloads through the run route.
+GET	/v1/m/reporting/schedules/{id}/runs/{rid}	Returns one recorded run of a report schedule, with its artifact when the run produced one.
+GET	/v1/m/reporting/templates/{type}	Returns the tenant custom template for one report type, or 404 when none has been authored.
+GET	/v1/m/sandbox/runs/{id}/stream	Streams one sandbox run as server-sent events; a missing run answers 404 before any stream opens, and the open is recorded in the audit ledger.
+GET	/v1/m/security/integrity/verify	Verifies the audit ledger integrity and returns the result; the verification is itself recorded in the ledger.
+GET	/v1/m/sessions/decisions	Lists the recorded work decisions with keyset paging, narrowed by the allowlisted filters, which combine with AND.
+GET	/v1/m/sessions/decisions/{id}	Returns one recorded work decision by id.
+GET	/v1/m/sessions/leases	Lists the work leases with keyset paging, narrowed by the allowlisted filters, which combine with AND.
+GET	/v1/m/sessions/runs	Lists the session runs newest first, optionally narrowed by state or by the provider session a run drives.
+GET	/v1/m/sessions/runs/{ref}	Returns one session run by reference.
+GET	/v1/m/sessions/runs/{ref}/events	Lists the events of one session run in sequence order.
+GET	/v1/m/sessions/templates	Lists the session templates, optionally narrowed to built-in ones and optionally including archived ones.
+GET	/v1/m/sessions/templates/{id}	Returns one session template with its full detail.
+GET	/v1/m/sessions/work-items	Lists the work items with keyset paging, narrowed by the allowlisted filters, which combine with AND; any other query parameter is refused.
+GET	/v1/m/sessions/work-items/{id}	Returns one work item with its data, and its version as a strong ETag for a later conditional write.
+GET	/v1/m/sessions/work-items/{id}/acceptance	Lists the acceptance criteria of one work item with keyset paging.
+GET	/v1/m/sessions/work-items/{id}/dependencies	Lists the dependency edges of one work item with keyset paging.
+GET	/v1/m/sessions/work-items/{id}/events	Lists the recorded events of one work item with keyset paging.
+GET	/v1/m/sessions/work-items/{id}/lease	Returns the lease of one work item, with the PARENT work item version as the ETag a lease mutation must send back.
+GET	/v1/m/sessions/work-stream	Streams work events as server-sent events, resuming strictly after the cursor query parameter or the Last-Event-ID header; the two must agree when both are sent.
+GET	/v1/m/sessions/workspaces	Lists the session workspaces of the tenant.
+GET	/v1/m/sessions/workspaces/{ref}	Returns one session workspace by reference.
+GET	/v1/m/sessions/workspaces/{ref}/files	Lists the files of a workspace under an optional path prefix, with paging.
+GET	/v1/m/sessions/workspaces/{ref}/files/raw	Reads the content of one workspace file named by the path query parameter.
+GET	/v1/m/sessions/workspaces/{ref}/files/stat	Returns the metadata of one workspace entry named by the path query parameter, without its content.
+GET	/v1/m/sourcescope/resources	Lists the discovered resources, optionally filtered by kind, workspace, parent or subtree; a malformed id is refused before any store read.
+PATCH	/v1/m/sessions/work-items/{id}	Updates one work item as a validate, plan or apply command.
+PATCH	/v1/m/sessions/work-items/{id}/acceptance/{criterion_id}	Updates or evaluates one acceptance criterion of a work item as a validate, plan or apply command.
+POST	/v1/m/capabilities/toolpins/approve	Approves one tool pin; the call requires an Idempotency-Key header and the version the caller expects, and answers 501 when no pin verifier is wired.
+POST	/v1/m/capabilities/toolpins/unpin	Removes one tool pin; the call requires an Idempotency-Key header and the version the caller expects, and answers 501 when no pin verifier is wired.
+POST	/v1/m/catalog/entries/{id}/admit	Runs the admission decision for one catalog entry, dispatching on the entry kind; an entry of any other kind is refused.
+POST	/v1/m/compliance/data-subjects/{id}/erase	Opens an erasure request for one data subject, optionally narrowed by subject kind and tied to a case reference.
+POST	/v1/m/compliance/holds/{id}/release	Releases one legal hold under dual control; the approval gate runs before any store write.
+POST	/v1/m/compliance/nis2/incidents/classify	Classifies an operator incident against the NIS 2 significance thresholds; the operator reference is required and is refused rather than truncated when it is too long.
+POST	/v1/m/compliance/risk/{id}/review	Records a review of one risk entry, setting its tier to one of unacceptable, high, limited or minimal.
+POST	/v1/m/deploy/definitions/{id}/plan	Plans one deployment definition through its executor and records the resulting plan, without applying it.
+POST	/v1/m/evals/gate/{id}/override	Overrides one eval gate verdict; a written reason is required.
+POST	/v1/m/finops/budgets	Creates a budget from the posted document.
+POST	/v1/m/finops/cost-centers	Creates a cost center from the posted document, defaulting its status to active.
+POST	/v1/m/finops/cost-centers/{id}/mappings	Creates one mapping that attributes spend to a cost center.
+POST	/v1/m/finops/statements/generate	Generates the chargeback statements for one monthly or weekly period starting at the posted RFC3339 instant.
+POST	/v1/m/governance/agentcore-export/apply	Applies a previously planned AgentCore export; the plan hash is required and must still reproduce.
+POST	/v1/m/governance/agentcore-export/plan	Plans an AgentCore export for the requested enforcement mode, without applying it.
+POST	/v1/m/governance/approvals/{id}/consume	Consumes one single-use approval on behalf of a named consumer; the consumer id is required and rides the immutable audit trail.
+POST	/v1/m/governance/breakglass/consume	Consumes one break-glass grant for a named action and subject; both ride the immutable use trail.
+POST	/v1/m/governance/killswitch	Engages a stop across the estate or over one named agent scope.
+POST	/v1/m/governance/nhi/{ref}/offboard/finalize	Finalizes the offboarding of one non-human identity.
+POST	/v1/m/governance/pdp/dry-run	Evaluates an authorization request against an unpublished candidate policy; the route is separate from explain so a console can label the intent.
+POST	/v1/m/governance/rbac/grants	Creates one scoped RBAC grant from the posted document.
+POST	/v1/m/governance/rbac/permission-groups	Creates one permission group; the caller must be a tenant admin and every permission is validated.
+POST	/v1/m/governance/rbac/roles	Creates one custom role; the caller must be a tenant admin, and a built-in role name is refused.
+POST	/v1/m/health/incidents/{id}/resolve	Resolves one open incident manually.
+POST	/v1/m/inferenceproxy/device/approve	Approves or denies one device authorization by its user code; an expired or consumed code answers 410.
+POST	/v1/m/knowledge/data-products	Creates one data product from the posted document; the name must be free.
+POST	/v1/m/knowledge/data-products/{id}/archive	Moves one data product to the archived state.
+POST	/v1/m/knowledge/data-products/{id}/contracts	Creates one data contract version for a data product.
+POST	/v1/m/knowledge/data-products/{id}/deprecate	Moves one data product to the deprecated state.
+POST	/v1/m/knowledge/data-products/{id}/publish	Moves one data product to the published state.
+POST	/v1/m/knowledge/data-products/{id}/validate	Validates a posted payload or metadata document against the active contract of one data product.
+POST	/v1/m/knowledge/kbs/{id}/query	Runs one retrieval query against a knowledge base and returns the ranked passages.
+POST	/v1/m/knowledge/memory/verify	Verifies the integrity of the stored agent memory, optionally narrowed by agent_ref; the verification is recorded in the audit ledger.
+POST	/v1/m/models/agent-artifacts	Registers one agent artifact from the posted document.
+POST	/v1/m/models/datasets	Registers one dataset; an owned_ref, when set, must resolve.
+POST	/v1/m/models/finetune-jobs	Creates one fine-tune job; a result version, when set, must already exist.
+POST	/v1/m/models/inference-deployments	Creates one inference deployment; its model and version references must resolve, and the admission policy can refuse it.
+POST	/v1/m/models/model-access	Creates one model-access rule; its subject and target references are validated.
+POST	/v1/m/models/model-groups	Creates one model group from the posted document.
+POST	/v1/m/models/model-versions	Creates one model version; the owned model it belongs to must exist in the same tenant.
+POST	/v1/m/models/owned-models	Creates one owned model from the posted document.
+POST	/v1/m/orchestration/schedules/{id}/fire	Fires one schedule out of band; an empty body requests approval first, and a body carries the approved run.
+POST	/v1/m/orchestration/workflows/{id}/run	Starts one run of a workflow, optionally with the posted inputs.
+POST	/v1/m/reporting/schedules	Creates one report schedule, and answers 501 when report scheduling is not wired.
+POST	/v1/m/sessions/decisions	Records a work decision as a validate, plan or apply command.
+POST	/v1/m/sessions/decisions/{id}/revoke	Revokes one recorded work decision as a validate, plan or apply command.
+POST	/v1/m/sessions/runs	Creates one session run from the posted parameters, and answers 503 when the runtime is not available.
+POST	/v1/m/sessions/runs/{ref}/cleanup	Cleans up the resources of one finished session run.
+POST	/v1/m/sessions/runs/{ref}/input	Sends one input line or message to a live session run.
+POST	/v1/m/sessions/runs/{ref}/resume	Resumes one suspended session run.
+POST	/v1/m/sessions/runs/{ref}/stop	Stops one session run; a fenced stop carries the lease fence, and a reason without a fence is refused.
+POST	/v1/m/sessions/templates	Creates one session template; an unknown key in the body is refused rather than dropped, so a misspelled policy key cannot silently govern nothing.
+POST	/v1/m/sessions/templates/{id}/apply	Resolves one session template into the run parameters it would produce, without starting a run.
+POST	/v1/m/sessions/templates/{id}/duplicate	Duplicates one session template under a new name, which is required.
+POST	/v1/m/sessions/work-events/{event_id}/replay	Replays one dead-lettered work event as a validate, plan or apply command; a workspace-confined principal is refused because the receipt is anchored tenant-wide.
+POST	/v1/m/sessions/work-items	Creates one work item as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/acceptance	Adds one acceptance criterion to a work item as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/assignments	Assigns one work item as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/dependencies	Adds one dependency edge to a work item as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/lease/acquire	Acquires the lease of one work item as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/lease/clock-rebase	Rebases the clock of one work item lease as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/lease/release	Releases the lease of one work item as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/lease/renew	Renews the lease of one work item as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/lease/revoke	Revokes the lease another holder has on one work item, as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/lease/takeover	Takes over the lease of one work item from its current holder, as a validate, plan or apply command.
+POST	/v1/m/sessions/work-items/{id}/transitions	Transitions one work item to another status as a validate, plan or apply command.
+POST	/v1/m/sessions/workspaces	Creates one session workspace from the posted parameters, and answers 503 when the workspace registry is not available.
+POST	/v1/m/sessions/workspaces/{ref}/files/dir	Creates one directory in a workspace at the path query parameter.
+POST	/v1/m/sessions/workspaces/{ref}/files/move	Moves one workspace entry from the posted source path to the posted destination path.
+POST	/v1/m/sourcescope/posture-requests/{id}/approve	Approves one pending posture relaxation and applies it.
+POST	/v1/m/voice/sessions/open	Opens one voice session; session, agent, model and provider references are all required, and an engaged stop freezes the call.
+PUT	/v1/m/compliance/nis2/incidents/{id}	Updates one NIS2 incident, moving it to one of the early_warning, notification, intermediate or final phases.
+PUT	/v1/m/finops/budgets/{id}	Replaces one budget with the posted document; the name is required.
+PUT	/v1/m/finops/cost-centers/{id}	Replaces one cost center with the posted document.
+PUT	/v1/m/governance/rbac/permission-groups/{name}	Replaces one permission group; the caller must be a tenant admin and every permission is validated.
+PUT	/v1/m/governance/rbac/roles/{name}	Replaces one custom role; the caller must be a tenant admin, and the base role and its exclusions are validated together.
+PUT	/v1/m/knowledge/data-products/{id}	Replaces one data product with the posted document.
+PUT	/v1/m/models/inference-deployments/{id}	Replaces one inference deployment; its references must resolve, and the admission policy can refuse it.
+PUT	/v1/m/models/model-access/{id}	Replaces one model-access rule; its subject and target references are validated.
+PUT	/v1/m/models/model-groups/{id}	Replaces one model group with the posted document.
+PUT	/v1/m/models/owned-models/{id}	Replaces one owned model with the posted document.
+PUT	/v1/m/reporting/branding	Replaces the tenant report branding, and answers 501 when no branding store is wired.
+PUT	/v1/m/reporting/templates/{type}	Replaces the tenant custom template for one report type; a body over the size ceiling is refused with 413.
+PUT	/v1/m/sessions/templates/{id}	Replaces one session template; an unknown key in the body is refused rather than dropped, and a built-in template is refused.
+PUT	/v1/m/sessions/workspaces/{ref}/files/raw	Writes the request body as the content of one workspace file named by the path query parameter; a body over the size ceiling is refused with 413.
+PUT	/v1/m/sourcescope/guard-postures	Sets the retrieval guard posture of one source; a downgrade to public_only is queued as a posture request for approval instead of being applied.
+GET	/healthz	Answers 200 while the process is alive. It is unauthenticated, exempt from the first-run setup gate, and exposes nothing beyond liveness.
+GET	/livez	Answers 200 while the process can serve. It runs no dependency check on purpose: a failing dependency must not trigger a liveness restart loop, which is what readiness is for.
+GET	/metrics	Serves the Prometheus text exposition of structural engine counters and gauges: request rates, in-flight requests, ingest throughput, Go runtime and store reachability. It is unauthenticated and setup-exempt, and carries no tenant data, no credentials and no per-record detail.
+GET	/openapi.json	Returns this document, the stable REST contract of the engine. It is served without authentication and before first-run setup so client code generation can fetch it from a fresh install.
+GET	/pod-readyz	Answers 200 when the process serves and the store is reachable, WITHOUT consulting leadership, so a hot standby is Ready to its orchestrator and a rolling update can progress. It answers 503 only when the store is down.
+GET	/readyz	Answers 200 when the store is reachable AND this node is the active writer, so a load balancer drains a standby or a wedged instance. The store ping carries a short timeout, and a pending first-run setup is reported without failing readiness.
+GET	/status	Returns the unauthenticated status summary: the same store and leader signals readiness probes use, enriched with the connector fleet aggregate when one is available. No tenant data is exposed.
+GET	/v1/access-edges	Lists the recorded access edges of the resolved tenant, the read and read-write map between principals and resources. The read is recorded in the audit ledger.
+GET	/v1/agents	Lists the agents of the resolved tenant, with cursor paging.
+POST	/v1/agents	Creates one agent in the resolved tenant from the posted document.
+DELETE	/v1/agents/{id}	Deletes one agent of the resolved tenant by id.
+GET	/v1/agents/{id}	Returns one agent of the resolved tenant by id.
+PATCH	/v1/agents/{id}	Updates the mutable fields of one agent from the posted document.
+GET	/v1/audit	Reads a page of the tenant evidence ledger. Paging is keyset by SEQUENCE, not a cursor, and the page runs FORWARDS from ?from in ascending sequence order — oldest first. The response carries head_seq, the chain tip, which is what a caller pairs with ?from to address the newest events.
+GET	/v1/audit/export	Streams the tenant ledger in the requested format, carrying the chain-integrity fields so an external archive or SIEM holds an independently verifiable copy. The export is itself recorded in the ledger.
+GET	/v1/audit/pubkey	Returns the Ed25519 checkpoint verification key in PEM form, so an external party can verify exported checkpoints offline.
+GET	/v1/audit/system	Reads the system-tenant evidence ledger, which records the cross-tenant operations. Superadmin only.
+GET	/v1/audit/verify	Verifies the ledger chain structurally and verifies every signed checkpoint against the engine key. The verification is not itself recorded, so it does not grow the chain it inspects.
+POST	/v1/auth/login	Exchanges an email and password for a session token.
+POST	/v1/auth/logout	Revokes the calling session. It applies to session principals only, never to an API token.
+POST	/v1/auth/refresh	Rotates the calling session credential and extends its expiry, returning a fresh token; the old one stops working. It applies to session principals only, and an API token is reissued rather than refreshed.
+GET	/v1/auth/whoami	Returns the calling principal, its tenant grants, and the effective permission set it holds in each of them.
+GET	/v1/connectors/health	Returns per-connector health metrics and the fleet summary, compositing the live source roster status with the connector catalog metadata.
+GET	/v1/console/bus	Returns the privileged event-bus snapshot: subscribers, saturation, loss counters and the bridge state when one is configured.
+GET	/v1/console/config/effective	Returns the live effective configuration of the deployment with every secret-bearing value redacted.
+DELETE	/v1/console/connectors	Removes one configured connector instance.
+GET	/v1/console/connectors	Lists the connector types this build offers, each with the configuration fields it accepts.
+PUT	/v1/console/connectors	Onboards a connector instance, or replaces the configuration of an existing one.
+POST	/v1/console/connectors/test	Tests connectivity for a candidate connector configuration without persisting it.
+GET	/v1/console/health-summary	Returns the deployment health snapshot the console dashboard renders: readiness, the connector catalog size, the configured, running and failed connector counts, the user count and the SSO state.
+GET	/v1/console/keys	Returns the non-secret custody inventory of the signing keys and sealers resolved at boot. No key material is returned.
+DELETE	/v1/console/license	Removes the installed license and reverts the deployment to the community build.
+GET	/v1/console/license	Returns the current license status and the entitlements it grants.
+POST	/v1/console/license	Installs a commercial license from the posted document.
+DELETE	/v1/console/secrets	Deletes one sealed secret by the name carried in the body.
+GET	/v1/console/secrets	Lists the sealed secrets by name with a non-secret hint for each. A stored value is never returned.
+PUT	/v1/console/secrets	Creates or replaces one sealed secret; the name travels in the body, so it may contain a slash.
+GET	/v1/console/setup-status	Returns which first-run setup steps the deployment has completed, so the console wizard can resume onboarding at the right step.
+DELETE	/v1/console/sources	Removes one configured source connector.
+GET	/v1/console/sources	Lists the configured source connectors with the live status of each.
+PUT	/v1/console/sources	Creates or replaces one source connector and reconfigures it live.
+DELETE	/v1/console/sso	Removes the managed SSO or IdP configuration of the addressed scope.
+GET	/v1/console/sso	Returns the managed SSO or IdP configuration of the addressed scope. Sealed secrets are never returned.
+PUT	/v1/console/sso	Creates or replaces the managed SSO or IdP configuration of the addressed scope; its secrets are sealed at rest.
+POST	/v1/console/sso/test	Validates a candidate SSO configuration by running discovery or fetching metadata, without persisting it. It answers 501 when the provider builder is not configured.
+POST	/v1/console/support-bundle	Builds and returns a redacted support archive from in-process data only; it invokes no host tooling and makes no loopback request.
+POST	/v1/console/update-check	Runs a check now against the configured signed update channel. An air-gapped or unconfigured deployment answers 501 rather than reporting no update.
+GET	/v1/members	Lists the members of the resolved tenant with the effective role, workspace scoping and directory groups of each.
+POST	/v1/memberships	Grants one user a role in a tenant.
+GET	/v1/search	Fans one query out across every searchable kind and returns the matches. Each kind is gated on its own read permission, so the result only narrows what the caller could already list.
+GET	/v1/server-info	Returns the non-sensitive server facts: version, engine, whether first-run setup is still required, and the informational license status.
+POST	/v1/setup	Creates the first organization and the superadmin that owns it, using the one-time setup token. It is atomic against a concurrent setup and consumes the token on success.
+GET	/v1/system/orgs	Lists the tenant orgs of the deployment. Superadmin only.
+POST	/v1/system/orgs	Provisions one tenant org. Superadmin only.
+DELETE	/v1/system/orgs/{tenant_id}	Hard-deletes one tenant org and its data, the unrecoverable step after the grace period has expired. The org is verified to exist first, so a missing tenant is not reported as a successful purge.
+PUT	/v1/system/orgs/{tenant_id}/region	Sets or clears the data residency pin of one tenant. The region is validated against the residency registry, and an empty region clears the pin.
+PUT	/v1/system/orgs/{tenant_id}/status	Withdraws or restores the SERVICE of one tenant without touching its data, the step between served and deleted.
+GET	/v1/system/residency	Returns the residency registry this instance is configured with. An unconfigured instance answers with an empty region list, not a null one.
+GET	/v1/tokens	Lists the API tokens visible to the caller: every active token for a superadmin, the tokens bound to their tenant for a tenant admin. Revoked tokens are excluded unless include_revoked is set.
+POST	/v1/tokens	Issues one API token. The secret is returned once, at issue time, and is never readable again.
+DELETE	/v1/tokens/{id}	Revokes one API token by id.
+POST	/v1/tokens/{id}/rotate	Issues a new token with the same specification and revokes the old one in the same step. The new secret is returned once.
+GET	/v1/users	Lists the user accounts of the deployment. Superadmin only.
+POST	/v1/users	Creates one user account. Superadmin only.
+GET	/v1/users/superadmins	Lists the superadmin accounts with the active or inactive status of each.
+POST	/v1/users/{id}/disable	Disables one superadmin account. The action is non-destructive and reversible.
+POST	/v1/users/{id}/enable	Enables one previously disabled superadmin account.
+GET	/v1/workspaces	Lists the workspaces of the resolved tenant.
+POST	/v1/workspaces	Creates one workspace. Beyond the tenant admin permission the caller must be the tenant owner or a superadmin, because a workspace admin administers within a workspace and does not mint them.
+GET	/v1/workspaces/{id}	Returns one workspace of the resolved tenant by id.
+PATCH	/v1/workspaces/{id}	Renames a workspace, edits its settings or archives it. The slug is immutable, and the default workspace cannot be archived because it is the resolution target for an unset workspace.

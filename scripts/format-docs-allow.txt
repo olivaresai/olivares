@@ -1,0 +1,21 @@
+# Adjudicated-correct lines the format-docs guard would otherwise flag
+# (fixed-string fragments, one per line; matched with grep -F against the
+# guard's hits). Every entry is HISTORICAL NARRATIVE in past tense — prose
+# that truthfully describes a pre-remap state as history, which no spelling
+# pattern can distinguish from a stale present-tense claim. Adding an entry
+# requires the same adjudication the 2026-07-27 sweep applied: verify the
+# sentence reads as history, not as the current contract.
+#
+# CHANGELOG.md — the fixed-CLI-completion bug entry quotes the old three-token
+# list as the bug being described:
+completed and error-messaged `cef|syslog|otlp` while the engine accepted five
+# CHANGELOG.md — the pre-remap entry's past-tense bridge to the remap entry:
+the existing `otlp` format stayed a bare `LogRecord` projection for
+#
+# The observability-interop contract doc — two mega-paragraph lines that use
+# "the bare projection" as a NOUN PHRASE for a thing the same paragraph already
+# named correctly (`otlp_log_record`), not as a gloss attributing the bare shape
+# to `otlp`. The same-clause ownership test cannot reach the token across several
+# thousand characters of intervening prose, and both sentences are true:
+and the bare projection pins its own exact bytes
+guarantee of the bare projection in the one direction

@@ -1,0 +1,106 @@
+---
+title: 威胁模型（STRIDE / DFD）
+description: >-
+  公开的威胁模型：资产、信任边界、一张数据流图，以及每个组件的主要 STRIDE 威胁与缓解措施。
+  Defensive by design——只讲姿态与缓解，绝非攻击地图。
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Olivares AI 是一款运行在你自有主机上的安全产品，它构建一张图，刻画每个智能体能够触及的范围。这使得一个厂商缺陷
+等同于一次客户破防——因此产品被设计为从第一天起就能通过企业级渗透测试，而威胁模型是公开的，而非隐藏的。
+
+<Aside type="caution" title="这是一份防御性文档">
+本页描述 **信任边界与缓解措施**。它刻意 **不** 暴露任何资产范围（estate）访问图的内容、内部授权标识符、
+磁盘上的密钥名称，或任何可被重新包装成攻击指南之物。产品 **不附带任何攻击性功能**——它不是一个 command-and-control
+框架，也不扫描任何他人的凭据。这条界线是刻意的，并被保持得明确无误。
+</Aside>
+
+## 方法
+
+该模型在一张带信任边界的 **数据流图（DFD）** 之上运用 **STRIDE**（Spoofing 仿冒、Tampering 篡改、Repudiation 抵赖、
+Information disclosure 信息泄露、Denial of service 拒绝服务、Elevation of privilege 提权）。此处列出的缓解措施已对照
+产品内部的加固矩阵加以核验；本页公开的是 *姿态*，而非代码级证据。
+
+## 支配性原则
+
+- **Read-first = 低非对称风险。** 引擎通过日志、OpenTelemetry 与 eBPF 进行观察。它 **不** 坐落在智能体的数据路径中，
+  因此采集器的失败不会破坏生产流量。
+- **Minimal data。** 该图存储的是 **关系**——发起方 → 资源、读/写、信号源、置信度、时间戳——**绝不** 存储负载、SQL 主体、
+  密钥或 PII。*未存储者不可泄露。*
+- **自托管 = 数据路径中没有供应商。** 产品没有强制遥测，控制平面默认不产生出站流量，Olivares AI
+  也从不位于数据路径之上。只有在你主动向我们索取时才会联系我们——`olivares upgrade`，或按订阅
+  下载商业附加组件及其更新——而绝不会作为运行的副作用发生。 而且 `olivares upgrade --endpoint` 可以把这唯一的外呼也指向你自己的镜像。只有客户明确配置为跨越边界的内容才会跨越其边界——对客户模型 API 的调用、客户接入的
+  SIEM/webhook 输出，以及客户配置时使用的外部嵌入提供商。这些是客户选择的第三方；上述供应商范围仅指
+  **Olivares AI**，不延伸至这些第三方。
+
+## 资产
+
+| 资产 | 为何敏感 |
+|---|---|
+| **访问图** | 一张刻画每个智能体能触及范围的图。**最敏感的单一资产**——因而被相应地治理（见缓解措施）。 |
+| **采集器的主机访问** | 它在生产主机上读取日志/OTEL/eBPF；一次破防将成为一个跳板。 |
+| **证据 / 审计账本** | 若被静默篡改，产品就会说谎。完整性即一切。 |
+| **许可证密钥** | 伪造将绕过商业闸门。 |
+| **面板凭据** | 访问意味着能看到客户的整个智能体资产范围。 |
+
+由于访问图是最敏感的资产，**查看它是一项特权动作**——从 *编辑者（editor）* 角色向上授予，**永不** 对最低的
+*查看者（viewer）* 角色开放——**限定到租户**，并且 **每一次读取都被审计**。分层防御：特权、租户隔离与自我审计。
+
+## 信任边界与数据流
+
+共有 **四条信任边界**：
+
+1. `host sources → collector`
+2. `collector → core`（网络边界）
+3. `user → panel`
+4. `core → store`
+
+```text
+  CUSTOMER INFRASTRUCTURE                         CONTROL PLANE (self-hosted or managed)
+  ┌─ Collectors (edge) ───────────────┐           ┌─ Engine (Go) ───────────────────────────┐
+  │ • OTLP receiver (agents)          │           │ Ingest + event bus                       │
+  │ • MCP / skills introspection      │ ──mTLS──▶  │ Connector SDK · Module runtime           │
+  │ • Tail audit (pgAudit/CloudTrail) │  gRPC     │ Multi-tenant data model                  │
+  │ • eBPF backstop (Tetragon)        │  +bearer  │ REST/gRPC API · AuthN/Z                   │
+  └───────────────────────────────────┘           │ Append-only, hash-chained audit          │
+        (1) host sources → collector               └──────────────┬───────────────────────────┘
+        (2) collector → core (network)                            │ go:embed         (4) core → store
+                                                     ┌────────────▼─────────┐   ┌──────────────────┐
+                                       (3) user ───▶ │ Web panel (React)    │   │ Access-graph     │
+                                           → panel   └──────────────────────┘   │ store + ledger   │
+                                                                                 └──────────────────┘
+```
+
+数据平面（采集器）**始终** 运行在客户基础设施上。采集器向核心 **推送**；它们 **不暴露任何入站监听器**。
+
+## STRIDE——每个组件的主要威胁与缓解
+
+该模型记录每个组件的 **主要** 威胁及对应的缓解措施（并非穷尽的网格）。
+
+| 组件 | 主要威胁 | 缓解 |
+|---|---|---|
+| **Collector** | *提权*（eBPF 需要内核能力）、二进制的 *篡改* | 最小能力（`CAP_BPF`/`CAP_PERFMON`，**而非** 完整 root）；签名二进制；**无入站监听器**（推送模型） |
+| **Collector → core** | *信息泄露*、*仿冒* | 默认 TLS ≥ 1.2，**无明文回退**（失败即关闭）+ bearer 令牌；本地插件信道上的 AutoMTLS；远程采集器的 **可选启用、受验证客户端证书的 mTLS** |
+| **Access-graph store** | 静态时的 *信息泄露* | 由部署提供的静态加密（LUKS/FS/TDE）；敏感值的脱敏/哈希在写入路径上由引擎侧强制 |
+| **Evidence ledger** | *篡改*、*抵赖* | 仅追加 + hash-chain（+ Ed25519 签名检查点）；导出到一份外部 WORM/SIEM 副本 |
+| **Panel** | *仿冒*、*提权* | 无默认凭据；一次性首启设置令牌；RBAC；安全会话；自我审计（谁查看/更改了什么） |
+| **License key** | *仿冒* | Ed25519 签名、离线验证；通过订阅到期撤销 |
+
+## 本模型 *不* 防护什么
+
+对模型的边界保持诚实，本身就是模型的一部分：
+
+- **一个主机 root / 数据库超级用户** 可以更改磁盘上的本地账本。hash-chain 使检查点之前的重写在密码学上 *可被检测*，
+  但真正的反篡改控制是 **将账本导出到一份本地运维方无法触及的外部 WORM/SIEM** 副本。请启用它。
+- **存储的静态加密是运维方的责任**——产品对敏感值进行脱敏/哈希，但磁盘/FS/TDE 加密由部署提供。
+- **访问图的覆盖是分级的**（在受审计的存储上干净，在某些存储上有损耗，在另一些上无法被动重建）。一条缺失的边
+  并不能证明某次访问没有发生——请阅读 [诚实与边界](/zh/start/honesty-and-limits/)。
+- **一台被攻陷的采集器主机** 是一个严重事件；采集器以只读、最小权限且无入站监听器的方式运行，以收缩那个爆炸半径，
+  但主机沦陷超出了单凭 control plane 所能阻止的范围。
+
+## 相关
+
+- [安全模型](/zh/explanation/security/security-model/) —— 姿态以及这些缓解背后的 *为何*。
+- [验证你下载的内容](/zh/how-to/verify-a-release/) —— 供应链完整性。
+- [架构概览](/zh/explanation/architecture/overview/) —— DFD 中各组件的深入说明。

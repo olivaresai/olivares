@@ -1,0 +1,25 @@
+{
+  "resourceSpans": [
+    {
+      "scopeSpans": [
+        {
+          "spans": [
+            {
+              "name": "chat gpt-4o",
+              "spanId": "Z2VuYWkwMDE=",
+              "attributes": [
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "chat" } },
+                { "key": "gen_ai.system", "value": { "stringValue": "openai" } },
+                { "key": "gen_ai.request.model", "value": { "stringValue": "gpt-4o" } },
+                { "key": "gen_ai.response.model", "value": { "stringValue": "gpt-4o-2024-08-06" } },
+                { "key": "gen_ai.usage.input_tokens", "value": { "intValue": "1200" } },
+                { "key": "gen_ai.usage.output_tokens", "value": { "intValue": "350" } },
+                { "key": "gen_ai.conversation.id", "value": { "stringValue": "demo-thread-1" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

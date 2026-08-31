@@ -1,0 +1,20 @@
+[
+  {
+    "id": 101,
+    "path_with_namespace": "mygroup/backend",
+    "default_branch": "main",
+    "visibility": "private"
+  },
+  {
+    "id": 102,
+    "path_with_namespace": "mygroup/frontend",
+    "default_branch": "develop",
+    "visibility": "internal"
+  },
+  {
+    "id": 103,
+    "path_with_namespace": "mygroup/infra/deploy",
+    "default_branch": "main",
+    "visibility": "private"
+  }
+]

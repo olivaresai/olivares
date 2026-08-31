@@ -1,0 +1,263 @@
+{
+  "title": "Orchestration et A2A",
+  "description": "Topologie agent-à-agent — qui délègue à qui, les flux de délégation en direct et les cadences déclarées. Les lectures du graphe de communication sont privilégiées et auto-auditées.",
+  "tabs": {
+    "graph": "Graphe de communication",
+    "flows": "Flux",
+    "schedules": "Planifications"
+  },
+  "graph": {
+    "title": "Graphe de communication",
+    "description": "Topologie de délégation et MCP, dérivée des signaux observés. Les superviseurs ancrent le niveau supérieur ; les travailleurs et pairs MCP se situent en dessous.",
+    "truncated": "Affichage des {{n}} premières arêtes — augmentez la limite pour en voir davantage.",
+    "empty": {
+      "title": "Aucune communication observée",
+      "description": "Aucune arête de délégation ou MCP dans la fenêtre observée. Ceci correspond à ce qui est vu, non à tout ce qui existe — consultez la note de couverture ci-dessus."
+    },
+    "kind": {
+      "session": "Session",
+      "agent": "Agent",
+      "mcp_server": "Serveur MCP",
+      "mcp_tool": "Outil MCP"
+    },
+    "role": {
+      "supervisor": "Superviseur",
+      "worker": "Travailleur",
+      "peer": "Pair"
+    },
+    "legend": {
+      "attributed": "Attribué",
+      "approximate": "Approximatif (inféré)",
+      "missed": "Cadence manquée"
+    }
+  },
+  "flows": {
+    "title": "Flux de délégation",
+    "description": "Grappes superviseur → travailleurs. L’état est dérivé à la lecture à partir de la récence ; « bloqué » signifie que le superviseur a une planification active en retard.",
+    "filter": "Filtrer par état",
+    "allStates": "Tous les états",
+    "empty": "Aucun flux dans cet état",
+    "columns": {
+      "supervisor": "Superviseur",
+      "workers": "Travailleurs",
+      "delegations": "Délégations",
+      "state": "État",
+      "lastSeen": "Dernière observation"
+    },
+    "state": {
+      "active": "Actif",
+      "idle": "Inactif",
+      "stalled": "Bloqué",
+      "completed": "Terminé"
+    }
+  },
+  "schedules": {
+    "title": "Planifications",
+    "description": "Cadences déclarées pour les agents et les essaims. La santé reflète la cadence observée par rapport à l’intervalle attendu — un déclenchement manqué apparaît comme bloqué, jamais masqué.",
+    "empty": "Aucune planification déclarée",
+    "emptyHint": "Déclarez une cadence cron, événementielle ou manuelle pour suivre si un sujet se déclenche réellement à temps.",
+    "new": "Nouvelle planification",
+    "columns": {
+      "name": "Nom",
+      "trigger": "Déclencheur",
+      "cadence": "Cadence",
+      "desired": "Souhaité",
+      "health": "Santé",
+      "lastFired": "Dernier déclenchement",
+      "actions": "Actions"
+    },
+    "subjectKind": {
+      "agent": "Agent",
+      "swarm": "Essaim"
+    },
+    "trigger": {
+      "cron": "Cron",
+      "event": "Événement",
+      "manual": "Manuel"
+    },
+    "desired": {
+      "active": "Actif",
+      "paused": "En pause",
+      "retired": "Retiré"
+    },
+    "actions": {
+      "menu": "Actions pour {{name}}",
+      "edit": "Modifier",
+      "history": "Historique",
+      "pause": "Mettre en pause",
+      "resume": "Reprendre",
+      "retire": "Retirer",
+      "fire": "Déclencher"
+    },
+    "form": {
+      "createTitle": "Nouvelle planification",
+      "editTitle": "Modifier la planification",
+      "createDescription": "Déclarez une cadence gouvernée pour un agent ou un essaim. Les nouvelles planifications démarrent actives.",
+      "editDescription": "Modifiez le sujet ou la cadence. L’identité et le déclencheur sont immuables.",
+      "name": "Nom",
+      "subjectKind": "Type de sujet",
+      "subjectRef": "Référence du sujet",
+      "triggerKind": "Type de déclencheur",
+      "cadenceSpec": "Spécification de cadence",
+      "cadenceHint": {
+        "cron": "Texte de cadence cron opaque. Seul le distributeur configuré interprète la syntaxe.",
+        "event": "Référence d’événement ou texte de cadence opaque.",
+        "manual": "Note opaque facultative pour cette planification manuelle."
+      },
+      "expectedInterval": "Intervalle attendu (secondes)",
+      "expectedIntervalHint": "Utilisé pour détecter une cadence cron manquée.",
+      "graceFactor": "Facteur de grâce",
+      "graceFactorHint": "Multiplicateur appliqué avant de marquer la cadence comme manquée.",
+      "immutableHint": "Immuable après la création.",
+      "create": "Créer la planification",
+      "update": "Enregistrer les modifications",
+      "created": "Planification créée",
+      "updated": "Planification mise à jour",
+      "createFailed": "Impossible de créer la planification",
+      "updateFailed": "Impossible de mettre à jour la planification",
+      "errors": {
+        "required": "Ce champ est obligatoire.",
+        "intervalRange": "Saisissez un nombre entier compris entre {{min}} et {{max}}.",
+        "intervalCronOnly": "L’intervalle attendu est disponible uniquement pour les déclencheurs cron.",
+        "graceRange": "Saisissez un nombre entier compris entre {{min}} et {{max}}."
+      }
+    },
+    "status": {
+      "pauseTitle": "Mettre {{name}} en pause ?",
+      "pauseDescription": "{{name}} restera déclarée, mais son déclenchement ne sera plus attendu.",
+      "pauseConfirm": "Mettre la planification en pause",
+      "resumeTitle": "Reprendre {{name}} ?",
+      "resumeDescription": "{{name}} deviendra active et la surveillance de la cadence reprendra.",
+      "resumeConfirm": "Reprendre la planification",
+      "retireTitle": "Retirer {{name}} ?",
+      "retireDescription": "{{name}} sera définitivement retirée et ne pourra plus être déclenchée.",
+      "retireConfirm": "Retirer la planification",
+      "changed": {
+        "active": "Planification reprise",
+        "paused": "Planification mise en pause",
+        "retired": "Planification retirée"
+      }
+    },
+    "fire": {
+      "title": "Déclencher {{name}}",
+      "description": "Un déclenchement gouverné nécessite une approbation liée au plan actuel avant la distribution.",
+      "step1Title": "1. Demander une approbation",
+      "step1Description": "Ouvrez une approbation governance pour ce sujet et cette cadence précis.",
+      "request": "Demander une approbation",
+      "requested": "Approbation demandée",
+      "requestFailed": "Impossible de demander l’approbation",
+      "requiresApproval": "Approbation requise",
+      "copy": "Copier",
+      "copied": "Référence d’approbation copiée",
+      "copyFailed": "Impossible de copier la référence d’approbation",
+      "governanceLink": "Ouvrir la file d’approbations governance",
+      "step2Title": "2. Exécuter le déclenchement approuvé",
+      "step2Description": "Une fois l’approbation autorisée, envoyez sa référence pour distribuer le plan.",
+      "approvalRef": "Référence d’approbation",
+      "execute": "Exécuter",
+      "dispatched": "Planification distribuée",
+      "notDispatched": "La planification n’a pas été distribuée",
+      "executeFailed": "Impossible d’exécuter le déclenchement approuvé",
+      "receipt": "Reçu de déclenchement",
+      "planHash": "Empreinte du plan",
+      "gateStatus": "État de la garde",
+      "dispatchRef": "Référence de distribution",
+      "detail": "Détail",
+      "opStatus": {
+        "requested": "Demandé",
+        "blocked": "Refusé",
+        "dispatched": "Distribué",
+        "declared_not_fired": "Approuvé, non actionné",
+        "failed": "Échoué",
+        "budget_blocked": "Bloqué par le budget",
+        "budget_throttled": "Limité par le budget"
+      }
+    }
+  },
+  "decisions": {
+    "title": "Registre des décisions",
+    "description": "Enregistrement en ajout seul des décisions de déclenchement pour la planification sélectionnée. Une décision est affichée exactement telle qu’elle a été résolue — une approbation n’est pas un actionnement.",
+    "pick": "Sélectionner une planification",
+    "pickHint": "Sélectionnez une planification pour voir son registre des décisions.",
+    "empty": "Aucune décision enregistrée",
+    "gate": "Garde",
+    "plan": "plan",
+    "op": {
+      "fire": "Déclenchement",
+      "run_request": "Demande d’exécution",
+      "run": "Exécution",
+      "run_step": "Étape",
+      "run_end": "Fin d’exécution",
+      "cadence_miss": "Cadence manquée"
+    },
+    "opStatus": {
+      "requested": "Demandé",
+      "blocked": "Bloqué",
+      "dispatched": "Distribué",
+      "declared_not_fired": "Approuvé, non actionné (aucun distributeur)",
+      "failed": "Échoué",
+      "budget_blocked": "Bloqué par le budget",
+      "budget_throttled": "Limité par le budget",
+      "missed": "Manqué",
+      "skipped": "Ignorée (une étape précédente a échoué ou a été refusée)",
+      "gate_passed": "Approbation accordée",
+      "completed": "Terminée",
+      "reconciled": "Réconciliée (résultat tardif enregistré)"
+    },
+    "estate": "Toutes les décisions (parc entier)",
+    "estateCaveat": "Le journal du parc, de la plus récente à la plus ancienne. C’est la seule vue de la console qui montre la LIGNE COMPLÈTE du journal d’une exécution de workflow — l’audit, les findings et le détail de l’exécution peuvent montrer des faits liés, mais pas cet enregistrement.",
+    "truncated": "Les {{count}} décisions les plus récentes sont affichées et le moteur en signale davantage : cette liste est TRONQUÉE. Lisez-la comme un échantillon, pas comme le journal complet.",
+    "noSchedule": "sans référence de planification",
+    "subjectKind": {
+      "agent": "Agent",
+      "swarm": "Essaim",
+      "workflow": "Workflow"
+    },
+    "estateDescription": "Journal en ajout seul de toutes les décisions du parc, de la plus récente à la plus ancienne. Inclut des décisions qui n’appartiennent à aucune planification.",
+    "forbidden": "Votre rôle ne peut pas lire les décisions de planification."
+  },
+  "timeline": {
+    "title": "Chronologie d’activité",
+    "description": "Événements de communication récents pour le sujet.",
+    "kind": {
+      "delegation": "Délégation",
+      "mcp_server": "Serveur MCP",
+      "mcp_tool": "Outil MCP",
+      "fire": "Déclenchement",
+      "cadence_miss": "Cadence manquée"
+    }
+  },
+  "history": {
+    "title": "Historique des révisions — {{name}}",
+    "description": "Instantanés chronologiques de cette planification dans un journal en ajout seul.",
+    "scopeCaption": "La restauration réapplique uniquement les champs modifiables — jamais le nom, la nature du sujet ni la nature du déclencheur.",
+    "empty": "Aucune révision enregistrée",
+    "loadMore": "Charger plus",
+    "compareTitle": "Différence entre les instantanés",
+    "selectTwo": "Sélectionnez deux révisions pour comparer leurs instantanés.",
+    "selectRevision": "Sélectionner la révision « {{op}} » de {{actor}}",
+    "originalLabel": "Révision antérieure",
+    "modifiedLabel": "Révision ultérieure",
+    "restore": "Restaurer cette révision",
+    "restoreTitle": "Restaurer la révision ?",
+    "restoreDescription": "Restaurer les champs modifiables sélectionnés de {{name}} ?",
+    "restoreConfirm": "Restaurer la révision",
+    "restored": "Révision de la planification restaurée",
+    "operations": {
+      "create": "Créée",
+      "update": "Mise à jour",
+      "delete": "Supprimée",
+      "restore": "Restaurée"
+    }
+  },
+  "empty": {
+    "flows": {
+      "title": "Aucun flux de délégation observé",
+      "description": "Un flux apparaît dès que les signaux observés à l’exécution consignent une arête de délégation d’une session de superviseur vers un travailleur."
+    },
+    "schedules": {
+      "title": "Aucune planification déclarée",
+      "description": "Déclarez pour un agent ou un essaim une cadence cron, événementielle ou manuelle afin de suivre son état désiré et sa santé observée."
+    }
+  }
+}

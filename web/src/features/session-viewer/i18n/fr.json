@@ -1,0 +1,126 @@
+{
+  "title": "Visionneuse d'enregistrement de session",
+  "subtitle": "Chronologie unifiée de l'activité de l'agent et des preuves de gouvernance pour une session unique.",
+  "back": "Retour aux enregistrements",
+  "header": {
+    "subject": "Sujet",
+    "status": "Statut",
+    "opened": "Ouvert",
+    "duration": "Durée",
+    "model": "Modèle",
+    "frames": "Images",
+    "live": "EN DIRECT",
+    "tipHash": "Tip de la chaîne",
+    "openSeq": "Seq d'ouverture du registre",
+    "anchorSeq": "Seq de la dernière ancre",
+    "sealSeq": "Seq de scellement du registre"
+  },
+  "lanes": {
+    "activity": "Activité de l'agent",
+    "evidence": "Preuves de gouvernance"
+  },
+  "panels": {
+    "tools": "Outils utilisés",
+    "files": "Fichiers concernés",
+    "decisions": "Décisions"
+  },
+  "timeline": {
+    "loadMore": "Charger plus",
+    "empty": "Aucun événement enregistré",
+    "activityUnavailable": "L’activité de l’agent est indisponible car le résolveur de timeline n’est pas câblé ou n’a pas répondu. Les preuves de gouvernance restent disponibles.",
+    "tool": "Appel d'outil",
+    "mcp": "Invocation MCP",
+    "cost": "Échantillon de coût",
+    "finding": "Constat"
+  },
+  "redaction": {
+    "hidden": "[EXPURGÉ — cliquez pour révéler]",
+    "reveal": "Révéler",
+    "hide": "Masquer"
+  },
+  "verify": {
+    "passive": "Vérification intégrée",
+    "fresh": "Vérification à la demande",
+    "intact": "Chaîne intacte",
+    "broken": "Chaîne rompue",
+    "frames": "{{count}} images vérifiées",
+    "anchors": "{{count}} ancres vérifiées",
+    "tipMatch": "Tip concordant",
+    "tipMismatch": "Tip discordant",
+    "anchorsOk": "{{count}} ancres vérifiées",
+    "anchorsBroken": "{{count}} ancres en échec",
+    "anchoredThrough": "Les ancres vérifiées du registre couvrent jusqu'à l'image {{idx}}.",
+    "breakAt": "Rupture à l'image {{idx}} — {{reason}}",
+    "gap": "Images manquantes",
+    "failures": "Échecs d'ancrage",
+    "failure": "Ancre {{kind}} · seq {{seq}} · image {{idx}} · {{reason}}",
+    "failed": "Échec de la vérification"
+  },
+  "export": {
+    "json": "Exporter JSON",
+    "summary": "Exporter le résumé",
+    "verify": "Vérifier la chaîne"
+  },
+  "tools": {
+    "success": "succès",
+    "fail": "échec",
+    "calls": "{{count}} appels"
+  },
+  "files": {
+    "read": "Lecture",
+    "write": "Écriture",
+    "edit": "Modification",
+    "create": "Création"
+  },
+  "decisions": {
+    "group": "Tâche {{idx}}",
+    "tools": "{{count}} appels d'outils",
+    "fileCount": "{{count}} fichiers"
+  },
+  "detail": {
+    "toolRef": "Réf. outil",
+    "resourceRef": "Réf. ressource",
+    "mode": "Mode",
+    "source": "Source",
+    "titleField": "Titre",
+    "at": "À",
+    "frameIdx": "#",
+    "namespace": "Espace de noms",
+    "method": "Méthode",
+    "pattern": "Modèle",
+    "outcome": "Résultat",
+    "actor": "Acteur",
+    "actAs": "Agir en tant que",
+    "params": "Paramètres",
+    "httpStatus": "Statut HTTP",
+    "durMs": "Durée",
+    "hash": "Hachage de l'image",
+    "prevHash": "Hachage précédent",
+    "anchorSeq": "Seq d'ancrage",
+    "close": "Fermer les détails de l'événement"
+  },
+  "seal": {
+    "action": "Sceller la session",
+    "title": "Sceller cette session d'enregistrement ?",
+    "body": "Le scellement est irréversible : il clôt la session, fige le tip de sa chaîne et empêche l'ajout de toute nouvelle image.",
+    "confirm": "Sceller la session",
+    "done": "Session scellée",
+    "alreadySealed": "Cette session est déjà scellée."
+  },
+  "summarize": {
+    "action": "Générer un résumé",
+    "done": "Résumé généré.",
+    "unavailable": "Aucun générateur de résumé n'est configuré ; l'enregistrement reste disponible comme preuve brute.",
+    "disabled": "Les résumés IA sont désactivés pour ce locataire, car la transcription sortirait du périmètre de confiance.",
+    "active": "Cette session est encore active. Scellez-la avant de générer un résumé complet.",
+    "failed": "Le résumé n'a pas pu être généré ; l'enregistrement lui-même n'est pas affecté."
+  },
+  "ledger": {
+    "title": "Registre",
+    "subtitle": "Événements sémantiques corrélés issus du registre de preuves.",
+    "seq": "seq {{seq}}",
+    "empty": "Aucun événement corrélé du registre",
+    "truncated": "La vue du registre est tronquée ; d'autres événements corrélés existent au-delà de cette fenêtre bornée."
+  },
+  "notFound": "Session d'enregistrement introuvable"
+}

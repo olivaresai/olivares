@@ -1,0 +1,49 @@
+{
+  "truncation": {
+    "label": "Cargados {{n}} tenants; hay más",
+    "hint": "El motor devolvió una página del roster, no todos los tenants. El total NO se puede inferir de las filas cargadas — un tenant que no aparezca aquí puede existir igual, y puede seguir con servicio."
+  },
+  "title": "Tenants",
+  "description": "Retira o restaura el servicio de un tenant: eso no pierde nada. Borrar un tenant es una acción aparte y permanente.",
+  "roster": "Organizaciones",
+  "empty": "Sin organizaciones",
+  "emptyHint": "El roster de sistema está vacío, o este despliegue tiene un único tenant.",
+  "forbidden": "El ciclo de vida de tenant es sólo para superadmin.",
+  "columns": {
+    "name": "Organización",
+    "slug": "Slug",
+    "status": "Servicio",
+    "region": "Región",
+    "created": "Creado"
+  },
+  "status": {
+    "active": "Activo",
+    "suspended": "Suspendido",
+    "unknown": "Desconocido"
+  },
+  "unknownHint": "El motor ha devuelto un estado de servicio que esta consola no conoce. Se muestra tal cual en vez de darlo por activo.",
+  "unpinned": "Sin fijar",
+  "suspend": "Retirar servicio",
+  "restore": "Restaurar servicio",
+  "suspendTitle": "¿Retirar el servicio a {{name}}?",
+  "suspendDescription": "Las mutaciones y el servicio interactivo se rechazan con 423 tenant_suspended hasta que se restaure.",
+  "keeps": "Tres cosas siguen funcionando a propósito:",
+  "keepsAuth": "La autenticación y las rutas de sistema del operador, para poder explicar y restaurar el tenant.",
+  "keepsExport": "La exportación de los datos del propio tenant: retirar el servicio no puede secuestrar los datos de un cliente. Una exportación hecha con el servicio retirado queda registrada en la cadena de auditoría del propio tenant.",
+  "keepsCustody": "El trabajo custodial: la cadena se sigue checkpointeando y sigue siendo verificable y certificable en copia.",
+  "notDelete": "Esto no borra nada. Borrar un tenant es una operación aparte y destructiva.",
+  "confirmSuspend": "Retirar servicio",
+  "suspended": "Servicio retirado a {{name}}",
+  "restoreTitle": "¿Restaurar el servicio a {{name}}?",
+  "restoreDescription": "El servicio se restaura sin pérdida: no se borró nada mientras estuvo retirado.",
+  "confirmRestore": "Restaurar servicio",
+  "restored": "Servicio restaurado a {{name}}",
+  "delete": "Borrar",
+  "deleteTitle": "Borrar {{name}} y todo lo que contiene",
+  "deleteDescription": "Purga el tenant y sus datos de inmediato. No se puede deshacer y en este motor no hay ventana de recuperación.",
+  "confirmDelete": "Borrar definitivamente",
+  "deleteGrace": "El periodo de gracia de 30 días que documenta la API es del plano de control cloud, no de este motor. Aquí la purga ocurre en el momento en que confirmas.",
+  "deleteInstead": "Para dejar de servir a un cliente sin destruir nada, retira el servicio: retirar no pierde datos y es reversible.",
+  "deleteDone": "{{name}} borrado",
+  "deleteSystem": "El tenant de sistema no se puede borrar"
+}

@@ -1,0 +1,43 @@
+# Kyverno ClusterPolicy — the identity-bound gate, mirroring
+# conftest/policy/require_governed_labels.rego. Enforce => a Deployment without
+# the governance labels is denied at admission.
+#
+# A Deployment must carry both:
+#   olivares.ai/tenant     — the tenant the workload belongs to
+#   olivares.ai/identity   — the workload identity it runs as
+# Without them an observed flow cannot be bound to a subject, so the control
+# plane's ABAC stance (deny unless the actor is known) cannot evaluate. The
+# "?*" anchor requires a non-empty value for each label. This binds the manifest
+# to the identity the runtime PDP keys on; it is not the PDP.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: olivares-require-governance-labels
+  annotations:
+    policies.kyverno.io/title: Require governance labels
+    policies.kyverno.io/category: Olivares Governance
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Deployment
+    policies.kyverno.io/description: >-
+      Deployments must be identity-bound: they must carry the olivares.ai/tenant
+      and olivares.ai/identity labels with non-empty values. Mirrors the Olivares
+      identity-bound posture so every action is attributable to a tenant+identity.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: governance-labels
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+      validate:
+        message: >-
+          Deployments must carry non-empty olivares.ai/tenant and
+          olivares.ai/identity labels (identity-bound posture).
+        pattern:
+          metadata:
+            labels:
+              olivares.ai/tenant: "?*"
+              olivares.ai/identity: "?*"

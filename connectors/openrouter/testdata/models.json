@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "id": "anthropic/claude-sonnet-4",
+      "canonical_slug": "anthropic/claude-sonnet-4",
+      "name": "Anthropic: Claude Sonnet 4",
+      "created": 1717200000,
+      "context_length": 200000,
+      "architecture": {"modality": "text+image->text", "input_modalities": ["text", "image"], "tokenizer": "Claude"},
+      "pricing": {"prompt": "0.000003", "completion": "0.000015", "request": "0", "image": "0"},
+      "top_provider": {"context_length": 200000, "max_completion_tokens": 64000, "is_moderated": true},
+      "supported_parameters": ["tools", "structured_outputs", "reasoning"]
+    },
+    {
+      "id": "openai/gpt-4o",
+      "name": "OpenAI: GPT-4o",
+      "created": 1715300000,
+      "context_length": 128000,
+      "pricing": {"prompt": "0.0000025", "completion": "0.00001", "request": "0", "image": "0.003613"},
+      "top_provider": {"context_length": 128000, "max_completion_tokens": 16384, "is_moderated": true},
+      "supported_parameters": ["tools", "response_format"]
+    },
+    {
+      "id": "somevendor/free-model",
+      "name": "Free Model",
+      "created": 0,
+      "context_length": 8192,
+      "pricing": {"prompt": "0", "completion": "0", "request": "0", "image": "0"},
+      "supported_parameters": []
+    }
+  ]
+}

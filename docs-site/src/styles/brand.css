@@ -1,0 +1,199 @@
+/* SPDX-FileCopyrightText: 2026 Olivares.AI */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/*
+ * GENERATED FILE — DO NOT EDIT. Run `node docs-site/scripts/gen-brand-css.mjs`.
+ * Source of truth: web/tokens/*.tokens.json (DTCG), the same files the console
+ * (web/src/styles/tokens.css), the release diagrams (scripts/gen-release-diagrams.mjs)
+ * and the transactional emails derive from. Move the token; this moves with it.
+ *
+ * Olivares AI docs — the brand layer over Starlight. brandv4 (2026-06-10): near-neutral
+ * charcoal/off-white surfaces and the SINGLE brand orange — the Ledger O's flagged WRITE
+ * row — with the product's own semantic axis for callouts. Every text pair below was
+ * measured against the surface it sits on at generation time; see the script header.
+ */
+
+/* Dark theme (default — the primary operator surface). */
+:root,
+:root[data-theme='dark'] {
+  /* Neutral ramp — the brand's near-neutral graphite, not Starlight's hsl(224°) blue-tinted
+     grey. primitives.tokens.json:2 re-derived these on purpose; this is where that lands. */
+  --sl-color-white: #fafaf9;
+  --sl-color-gray-1: #f3f3f4;
+  --sl-color-gray-2: #c9c9cd;
+  --sl-color-gray-3: #9c9ca3;
+  --sl-color-gray-4: #71717a;
+  --sl-color-gray-5: #52525a;
+  --sl-color-gray-6: #2e2e32;
+  --sl-color-gray-7: #232327;
+  --sl-color-black: #28282b;
+
+  /* Surfaces */
+  --sl-color-bg: #28282b;
+  --sl-color-bg-nav: #2f2f33;
+  --sl-color-bg-sidebar: #2f2f33;
+  --sl-color-bg-inline-code: #323237;
+  --sl-color-backdrop-overlay: rgba(16, 16, 18, 0.88);
+
+  /* Text. --sl-color-text-accent is EVERY in-content link (markdown.css:101), the active
+     table-of-contents item, the sidebar marker, the site title and the search UI. It is the
+     TEXT role, so it takes --accent-text, not the fill. */
+  --sl-color-text: #c9c9cd;
+  --sl-color-text-accent: #f08000;
+  /* The ink on the two surfaces that invert: the sidebar's active item and the skip link. BOTH
+     pair it with --sl-color-text-accent as the fill (SidebarSublist.astro:133-134,
+     SkipLink.astro:21-22) — NOT with --sl-color-accent, and that distinction is the whole story
+     below. */
+  --sl-color-text-invert: #28282b;
+
+  /* Lines */
+  --sl-color-hairline-light: #4c4c54;
+  --sl-color-hairline: #3a3a40;
+  --sl-color-hairline-shade: #3a3a40;
+
+  /* The single brand orange, split by role exactly as the tokens split it: --sl-color-accent is
+     the LINE (search outline, mobile-TOC border, expressive-code active tab), --sl-color-bg-accent
+     is the FILL and stays the brand orange #f08000 in both themes, and the TEXT role is above. */
+  --sl-color-accent-low: #34250f;
+  --sl-color-accent: #d17421;
+  --sl-color-accent-high: #f0974a;
+  --sl-color-bg-accent: #f08000;
+
+  /* Callouts and badges — the product's OWN semantic axis (success / warning / danger / info
+     + the confidence teal), so a warning in the documentation is the same colour as a warning
+     in the console. Starlight's stock hues are what these replace: its --sl-color-orange
+     (#eebd53) was a second orange on 490 :::caution blocks. */
+  --sl-color-orange-low: #3c3732;
+  --sl-color-orange: #e7b65a;
+  --sl-color-orange-high: #e7b65a;
+  --sl-color-red-low: #3e3436;
+  --sl-color-red: #f7928b;
+  --sl-color-red-high: #f7928b;
+  --sl-color-blue-low: #31373f;
+  --sl-color-blue: #6fb6e6;
+  --sl-color-blue-high: #6fb6e6;
+  --sl-color-purple-low: #333936;
+  --sl-color-purple: #86c58a;
+  --sl-color-purple-high: #86c58a;
+  --sl-color-green-low: #333936;
+  --sl-color-green: #86c58a;
+  --sl-color-green-high: #86c58a;
+}
+
+/* Light theme. */
+:root[data-theme='light'] {
+  /* Neutral ramp — the brand's near-neutral graphite, not Starlight's hsl(224°) blue-tinted
+     grey. primitives.tokens.json:2 re-derived these on purpose; this is where that lands. */
+  --sl-color-white: #28282b;
+  --sl-color-gray-1: #232327;
+  --sl-color-gray-2: #3f3f45;
+  --sl-color-gray-3: #52525a;
+  --sl-color-gray-4: #71717a;
+  --sl-color-gray-5: #c9c9cd;
+  --sl-color-gray-6: #e4e4e6;
+  --sl-color-gray-7: #f3f3f4;
+  --sl-color-black: #fafaf9;
+
+  /* Surfaces */
+  --sl-color-bg: #fafaf9;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #f1f1f0;
+  --sl-color-bg-inline-code: #f1f1f0;
+  --sl-color-backdrop-overlay: rgba(24, 24, 27, 0.45);
+
+  /* Text. --sl-color-text-accent is EVERY in-content link (markdown.css:101), the active
+     table-of-contents item, the sidebar marker, the site title and the search UI. It is the
+     TEXT role, so it takes --accent-text, not the fill. */
+  --sl-color-text: #5c564e;
+  --sl-color-text-accent: #a84f00;
+  /* The ink on the two surfaces that invert: the sidebar's active item and the skip link. BOTH
+     pair it with --sl-color-text-accent as the fill (SidebarSublist.astro:133-134,
+     SkipLink.astro:21-22) — NOT with --sl-color-accent, and that distinction is the whole story
+     below. */
+  --sl-color-text-invert: #fafaf9;
+
+  /* Lines */
+  --sl-color-hairline-light: #d6d6d3;
+  --sl-color-hairline: #e6e6e4;
+  --sl-color-hairline-shade: #e6e6e4;
+
+  /* The single brand orange, split by role exactly as the tokens split it: --sl-color-accent is
+     the LINE (search outline, mobile-TOC border, expressive-code active tab), --sl-color-bg-accent
+     is the FILL and stays the brand orange #f08000 in both themes, and the TEXT role is above. */
+  --sl-color-accent-low: #fdeedf;
+  --sl-color-accent: #c26000;
+  --sl-color-accent-high: #8a3f00;
+  --sl-color-bg-accent: #f08000;
+
+  /* Callouts and badges — the product's OWN semantic axis (success / warning / danger / info
+     + the confidence teal), so a warning in the documentation is the same colour as a warning
+     in the console. Starlight's stock hues are what these replace: its --sl-color-orange
+     (#eebd53) was a second orange on 490 :::caution blocks. */
+  --sl-color-orange-low: #ede5dd;
+  --sl-color-orange: #8a5300;
+  --sl-color-orange-high: #8a5300;
+  --sl-color-red-low: #f5e1de;
+  --sl-color-red: #b0201b;
+  --sl-color-red-high: #b0201b;
+  --sl-color-blue-low: #dfe6eb;
+  --sl-color-blue: #1e5a86;
+  --sl-color-blue-high: #1e5a86;
+  --sl-color-purple-low: #e1e8df;
+  --sl-color-purple: #2f6b2c;
+  --sl-color-purple-high: #2f6b2c;
+  --sl-color-green-low: #e1e8df;
+  --sl-color-green: #2f6b2c;
+  --sl-color-green-high: #2f6b2c;
+}
+
+/* Typefaces. --olv-font-sans / --olv-font-mono / --olv-font-display are EMITTED BY ASTRO's font
+ * pipeline (astro.config.mjs `fonts:`), which resolves the same @fontsource-variable packages
+ * the console pins, self-hosts them with no CDN, and derives a metric-matched fallback so the
+ * swap costs no layout shift. This file only points Starlight's two variables at them.
+ *
+ * Before: --sl-font was never declared and --sl-font-mono named a family nothing loaded, so the
+ * documentation rendered in the visitor's operating-system font while the product rendered in
+ * Inter. The family names below are NOT authored here either — they are the stacks Astro built.
+ *
+ * The primitives carry the same three families for the console
+ * (primitives.tokens.json font-sans / font-mono / font-display); they are the same typefaces,
+ * reached through each surface's own loader. */
+:root {
+  --sl-font: var(--olv-font-sans);
+  --sl-font-mono: var(--olv-font-mono);
+
+  /* Motion, from primitives.tokens.json — the curve the console animates on. */
+  --olv-ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/*
+ * Machine-translation honesty banner. Rendered by src/components/Banner.astro on every
+ * translated/fallback page: English is authoritative, native review pending. Uses the low-accent
+ * surface so it reads as informational, not error.
+ */
+.sl-mt-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 1.25rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--sl-color-hairline-shade);
+  border-inline-start: 3px solid var(--sl-color-accent);
+  border-radius: 0.375rem;
+  background: var(--sl-color-accent-low);
+  color: var(--sl-color-text);
+  font-size: var(--sl-text-xs);
+  line-height: 1.4;
+}
+.sl-mt-banner a {
+  white-space: nowrap;
+  font-weight: 600;
+  /* ⛔ There was no colour here at all. This banner is an <aside> OUTSIDE .sl-markdown-content, so
+     Starlight's link rule (style/markdown.css:100-104) never reaches it and the link fell back to
+     the user agent's blue — and to its visited purple — on a brand-tinted surface, in every
+     translated page of six locales. The contrast routine was measuring the accent on this fill
+     while the CSS set no such colour: it was validating a pair the stylesheet did not create. */
+  color: var(--sl-color-text-accent);
+}

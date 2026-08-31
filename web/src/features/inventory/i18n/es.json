@@ -1,0 +1,71 @@
+{
+  "title": "Inventario",
+  "subtitle": "Todos los agentes, sesiones, MCP, modelos e identidades descubiertos en tu infraestructura.",
+  "refresh": "Actualizar",
+  "summary": {
+    "total": "Entidades",
+    "active": "Activas",
+    "stale": "Desfasadas",
+    "kinds": "Tipos"
+  },
+  "tabs": {
+    "catalog": "Catálogo",
+    "topology": "Topología"
+  },
+  "facets": {
+    "allKinds": "Todos los tipos",
+    "allStatus": "Todos los estados"
+  },
+  "status": {
+    "active": "Activa",
+    "stale": "Desfasada"
+  },
+  "cols": {
+    "name": "Nombre",
+    "kind": "Tipo",
+    "status": "Estado",
+    "signals": "Señales",
+    "hosts": "Hosts",
+    "lastSeen": "Última vez",
+    "occurrences": "Vista"
+  },
+  "searchPlaceholder": "Buscar nombre, ref, señal…",
+  "hostCount": "{{count}} hosts",
+  "kinds": {
+    "agent": "Agente",
+    "session": "Sesión",
+    "identity": "Identidad",
+    "mcp_server": "Servidor MCP",
+    "tool": "Herramienta",
+    "resource": "Recurso",
+    "skill": "Skill",
+    "model": "Modelo",
+    "provider": "Proveedor"
+  },
+  "detail": {
+    "ref": "Referencia",
+    "id": "ID",
+    "firstSeen": "Primera vez",
+    "lastSeen": "Última vez",
+    "relations": "Relaciones",
+    "viewAccess": "Mapa de acceso",
+    "viewSessions": "Sesiones"
+  },
+  "topology": {
+    "note": "Composición del estate por tipo. El uso en runtime (qué agente usa qué modelo/MCP) está en Sesiones; el acceso a recursos (R/RW) en el Mapa de acceso.",
+    "bands": {
+      "origins": "Quién actúa",
+      "capabilities": "Qué pueden usar",
+      "resources": "Qué tocan"
+    },
+    "emptyTitle": "Nada descubierto todavía",
+    "emptyHint": "A medida que los conectores reporten actividad, tu estate se cataloga aquí.",
+    "truncated": "Mostrando las primeras {{n}} entidades"
+  },
+  "empty": {
+    "catalog": {
+      "title": "Aún no se han descubierto entidades del estate",
+      "description": "Las entidades aparecen conforme las observaciones de los conectores informan de agentes, sesiones, identidades, capacidades MCP, modelos, proveedores o recursos."
+    }
+  }
+}

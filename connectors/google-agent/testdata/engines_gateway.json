@@ -1,0 +1,52 @@
+{
+  "reasoningEngines": [
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/gw-agent",
+      "displayName": "Gateway Agent",
+      "spec": {
+        "agentFramework": "google-adk",
+        "identityType": "AGENT_IDENTITY",
+        "effectiveIdentity": "agents.global.org-123456789012.system.id.goog/resources/aiplatform/projects/9876543210/locations/us-central1/reasoningEngines/gw-agent",
+        "deploymentSpec": {
+          "agentGatewayConfig": {
+            "clientToAgentConfig": {
+              "agentGateway": "projects/test-project-id/locations/us-central1/agentGateways/client-gw"
+            },
+            "agentToAnywhereConfig": {
+              "agentGateway": "projects/test-project-id/locations/us-central1/agentGateways/egress-gw"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/gw-sa",
+      "displayName": "Gateway SA",
+      "spec": {
+        "agentFramework": "langchain",
+        "identityType": "SERVICE_ACCOUNT",
+        "serviceAccount": "gw-sa@test-project-id.iam.gserviceaccount.com",
+        "effectiveIdentity": "gw-sa@test-project-id.iam.gserviceaccount.com",
+        "deploymentSpec": {
+          "agentGatewayConfig": {
+            "clientToAgentConfig": {
+              "agentGateway": "projects/test-project-id/locations/us-central1/agentGateways/client-gw"
+            },
+            "agentToAnywhereConfig": {
+              "agentGateway": "projects/test-project-id/locations/us-central1/agentGateways/egress-gw"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/no-gateway",
+      "displayName": "No Gateway",
+      "spec": {
+        "agentFramework": "custom",
+        "identityType": "AGENT_IDENTITY",
+        "effectiveIdentity": "agents.global.org-123456789012.system.id.goog/resources/aiplatform/projects/9876543210/locations/us-central1/reasoningEngines/no-gateway"
+      }
+    }
+  ]
+}

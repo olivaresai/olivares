@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+#
+# The eBPF/Tetragon backstop connector (connectors/ebpf/cmd/ebpf-source).
+#
+# This is the ZERO-capability half of the privilege split (docs/SECURITY-HARDENING.md, §6): it
+# holds NO kernel capabilities, reads only Tetragon's export file over a shared
+# volume, and pushes normalized access edges through the SDK. The image is
+# distroless + non-root + read-only-friendly to match that posture.
+#
+# Build (from the repo root, so the go.work workspace is in context):
+#   docker build -f Dockerfile.ebpf-source -t ghcr.io/olivaresai/ebpf-source:dev .
+# Pin to a sha256 DIGEST (not a tag) in production deploy manifests.
+
+FROM golang:1.26.6-bookworm AS build
+WORKDIR /src
+ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
+COPY go.work go.work.sum ./
+COPY core/go.mod core/go.sum ./core/
+COPY cmd/olivares/go.mod cmd/olivares/go.sum ./cmd/olivares/
+COPY connectors/go.mod connectors/go.sum ./connectors/
+COPY modules/go.mod modules/go.sum ./modules/
+COPY sdk/go.mod sdk/go.sum ./sdk/
+COPY sdk/plugin/go.mod sdk/plugin/go.sum ./sdk/plugin/
+COPY terraform-provider-olivares/go.mod terraform-provider-olivares/go.sum ./terraform-provider-olivares/
+RUN go mod download
+COPY . .
+ARG SOURCE_DATE_EPOCH=0
+RUN go build -trimpath -ldflags "-s -w -buildid=" \
+      -o /out/ebpf-source ./connectors/ebpf/cmd/ebpf-source
+
+FROM gcr.io/distroless/static-debian12:nonroot
+LABEL org.opencontainers.image.title="olivares-ebpf-source" \
+      org.opencontainers.image.description="Olivares AI eBPF/Tetragon backstop connector (zero kernel capabilities)" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.vendor="Olivares.AI"
+COPY --from=build /out/ebpf-source /usr/local/bin/ebpf-source
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/ebpf-source"]

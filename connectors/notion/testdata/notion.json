@@ -1,0 +1,16 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "properties": {"title": {"title": [{"plain_text": "Product Meeting Notes"}]}},
+      "parent": {"type": "database_id", "database_id": "db-9"},
+      "last_edited_time": "2026-05-10T12:00:00Z",
+      "permissions": [{"type": "group", "group_name": "product"}],
+      "classification": "internal",
+      "blocks": [
+        {"type": "heading_2", "text": "Decisions"},
+        {"type": "paragraph", "text": "We will ship the governed retrieval API in Q3."}
+      ]
+    }
+  ]
+}

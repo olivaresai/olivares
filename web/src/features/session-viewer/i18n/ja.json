@@ -1,0 +1,126 @@
+{
+  "title": "セッション録画ビューア",
+  "subtitle": "単一セッションのエージェント活動とガバナンス証拠の統合タイムライン。",
+  "back": "録画一覧に戻る",
+  "header": {
+    "subject": "サブジェクト",
+    "status": "ステータス",
+    "opened": "開始",
+    "duration": "期間",
+    "model": "モデル",
+    "frames": "フレーム数",
+    "live": "ライブ",
+    "tipHash": "チェーン Tip",
+    "openSeq": "開始時の台帳 seq",
+    "anchorSeq": "最新アンカー seq",
+    "sealSeq": "封印時の台帳 seq"
+  },
+  "lanes": {
+    "activity": "エージェント活動",
+    "evidence": "ガバナンス証拠"
+  },
+  "panels": {
+    "tools": "使用ツール",
+    "files": "アクセスファイル",
+    "decisions": "決定事項"
+  },
+  "timeline": {
+    "loadMore": "さらに読み込む",
+    "empty": "記録されたイベントはありません",
+    "activityUnavailable": "タイムラインリゾルバーが接続されていないか応答しなかったため、エージェント活動は利用できません。ガバナンス証拠は引き続き利用できます。",
+    "tool": "ツール呼び出し",
+    "mcp": "MCP呼び出し",
+    "cost": "コストサンプル",
+    "finding": "所見"
+  },
+  "redaction": {
+    "hidden": "[削除済み — クリックして表示]",
+    "reveal": "表示",
+    "hide": "非表示"
+  },
+  "verify": {
+    "passive": "インライン検証",
+    "fresh": "新規検証",
+    "intact": "チェーンは無傷",
+    "broken": "チェーンが破損",
+    "frames": "{{count}} フレーム検証済み",
+    "anchors": "{{count}} アンカー検証済み",
+    "tipMatch": "Tip 一致",
+    "tipMismatch": "Tip 不一致",
+    "anchorsOk": "{{count}} アンカー検証済み",
+    "anchorsBroken": "{{count}} アンカー検証失敗",
+    "anchoredThrough": "検証済みの台帳アンカーはフレーム {{idx}} までをカバーしています。",
+    "breakAt": "フレーム {{idx}} で破損 — {{reason}}",
+    "gap": "フレーム欠落",
+    "failures": "アンカーの失敗",
+    "failure": "{{kind}} アンカー · seq {{seq}} · フレーム {{idx}} · {{reason}}",
+    "failed": "検証失敗"
+  },
+  "export": {
+    "json": "JSONをエクスポート",
+    "summary": "サマリーをエクスポート",
+    "verify": "チェーンを検証"
+  },
+  "tools": {
+    "success": "成功",
+    "fail": "失敗",
+    "calls": "{{count}} 回の呼び出し"
+  },
+  "files": {
+    "read": "読み取り",
+    "write": "書き込み",
+    "edit": "編集",
+    "create": "作成"
+  },
+  "decisions": {
+    "group": "タスク {{idx}}",
+    "tools": "{{count}} 回のツール呼び出し",
+    "fileCount": "{{count}} ファイル"
+  },
+  "detail": {
+    "toolRef": "ツール参照",
+    "resourceRef": "リソース参照",
+    "mode": "モード",
+    "source": "ソース",
+    "titleField": "タイトル",
+    "at": "時刻",
+    "frameIdx": "#",
+    "namespace": "名前空間",
+    "method": "メソッド",
+    "pattern": "パターン",
+    "outcome": "結果",
+    "actor": "アクター",
+    "actAs": "代理実行",
+    "params": "パラメータ",
+    "httpStatus": "HTTP ステータス",
+    "durMs": "所要時間",
+    "hash": "フレームハッシュ",
+    "prevHash": "前のハッシュ",
+    "anchorSeq": "アンカー seq",
+    "close": "イベント詳細を閉じる"
+  },
+  "seal": {
+    "action": "セッションを封印",
+    "title": "この録画セッションを封印しますか？",
+    "body": "封印は不可逆です。セッションを閉じ、チェーン Tip を確定し、以降のフレームの追記をできなくします。",
+    "confirm": "セッションを封印",
+    "done": "セッションを封印しました",
+    "alreadySealed": "このセッションはすでに封印されています。"
+  },
+  "summarize": {
+    "action": "サマリーを生成",
+    "done": "サマリーを生成しました。",
+    "unavailable": "サマライザーが設定されていません。録画は生の証拠としてそのまま利用できます。",
+    "disabled": "トランスクリプトが信頼境界の外に出るため、このテナントでは AI サマリーは無効になっています。",
+    "active": "このセッションはまだアクティブです。完全なサマリーを生成する前に封印してください。",
+    "failed": "サマリーを生成できませんでした。録画自体には影響ありません。"
+  },
+  "ledger": {
+    "title": "台帳",
+    "subtitle": "証拠台帳から相関付けられたセマンティックイベント。",
+    "seq": "seq {{seq}}",
+    "empty": "相関する台帳イベントはありません",
+    "truncated": "台帳ビューは切り詰められています。この限定ウィンドウの先にも相関イベントが存在します。"
+  },
+  "notFound": "録画セッションが見つかりません"
+}

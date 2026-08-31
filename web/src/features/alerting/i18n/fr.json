@@ -1,0 +1,180 @@
+{
+  "title": "Alertes",
+  "description": "Acheminez les constats vers des destinations et inspectez le journal des livraisons. Une route référence une destination par son nom ; le credential vit dans le transport câblé.",
+  "tabs": {
+    "routes": "Routes",
+    "deliveries": "Livraisons",
+    "outbox": "Lettres mortes"
+  },
+  "severities": {
+    "any": "Toute sévérité",
+    "info": "Info",
+    "low": "Basse",
+    "medium": "Moyenne",
+    "high": "Haute",
+    "critical": "Critique"
+  },
+  "routes": {
+    "intro": "Chaque route envoie les constats correspondants à une destination, par ordre de priorité.",
+    "add": "Nouvelle route",
+    "empty": "Aucune route pour l'instant",
+    "emptyHint": "Ajoutez une route pour envoyer les constats correspondants à une destination.",
+    "colName": "Nom",
+    "colDest": "Destination",
+    "colSeverity": "Sévérité min.",
+    "colStatus": "Statut",
+    "colActions": "Actions",
+    "enabled": "Activée",
+    "disabled": "Désactivée",
+    "bulk": {
+      "enable": "Activer la sélection",
+      "disable": "Désactiver la sélection"
+    },
+    "testAction": "Tester la route {{name}}",
+    "editAction": "Modifier la route {{name}}",
+    "deleteAction": "Supprimer la route {{name}}",
+    "created": "Route créée",
+    "updated": "Route mise à jour",
+    "deleted": "Route supprimée",
+    "tested": "Test envoyé à {{destination}}",
+    "deleteDialog": {
+      "title": "Supprimer la route ?",
+      "description": "Cela supprime la route « {{name}} ». Les constats qu'elle appariait ne seront plus livrés par elle.",
+      "confirm": "Supprimer la route"
+    },
+    "dialog": {
+      "title": "Nouvelle route",
+      "editTitle": "Modifier la route",
+      "subtitle": "Appariez des constats et envoyez-les à une destination. Les listes d'appariement vides correspondent à tout.",
+      "name": "Nom",
+      "destination": "Destination",
+      "destinationHint": "Une destination approvisionnée (nom seulement — son credential vit dans le transport).",
+      "destinationPlaceholder": "Sélectionner une destination",
+      "minSeverity": "Sévérité min.",
+      "matchTypes": "Types appariés",
+      "matchKinds": "Genres appariés",
+      "matchSources": "Sources appariées",
+      "matchSubjectKinds": "Genres de sujet appariés",
+      "listHint": "Séparé par des virgules ; vide correspond à tout.",
+      "dedup": "Fenêtre dédup (s)",
+      "throttle": "Fenêtre throttle (s)",
+      "priority": "Priorité",
+      "enabled": "Activée",
+      "enabledHint": "Une route désactivée ne correspond à rien jusqu'à sa réactivation.",
+      "create": "Créer la route",
+      "save": "Enregistrer la route",
+      "matchTypesHint": "Sélectionnez un ou plusieurs types d’événement. Les descriptions viennent du catalogue serveur."
+    }
+  },
+  "deliveries": {
+    "noRead": "Vous n'avez pas la permission de voir les livraisons.",
+    "intro": "Les tentatives de livraison enregistrées (lecture seule). Utilisez le test d'une route pour sonder une destination.",
+    "filterStatus": "Filtrer par statut",
+    "allStatuses": "Tous les statuts",
+    "empty": "Aucune livraison",
+    "colTime": "Heure",
+    "colDest": "Destination",
+    "colKind": "Genre",
+    "colStatus": "Statut",
+    "colDetail": "Détail",
+    "statuses": {
+      "claimed": "Réclamée",
+      "delivered": "Livrée",
+      "rejected": "Refusée",
+      "failed": "Échouée",
+      "no_dispatcher": "Aucun dispatcher",
+      "unknown_destination": "Destination inconnue"
+    },
+    "loadMore": "Charger plus"
+  },
+  "outbox": {
+    "noRead": "Vous n'avez pas la permission de voir la file d'attente sortante.",
+    "intro": "La file d'attente durable : les notifications que le moteur doit encore, celles qu'il a déjà livrées, et celles qu'il a abandonnées. Remettre en file demande une nouvelle tentative de livraison ; cela ne livre pas.",
+    "filterStatus": "Filtrer par statut de la file",
+    "colTime": "Heure",
+    "colDest": "Destination",
+    "colKind": "Genre",
+    "colAttempts": "Tentatives",
+    "colStatus": "Statut",
+    "colDetail": "Dernier détail",
+    "colActions": "Actions",
+    "statuses": {
+      "dead": "Lettre morte",
+      "queued": "En file",
+      "delivering": "Livraison en cours",
+      "delivered": "Livrée"
+    },
+    "emptyDead": "Aucune lettre morte",
+    "emptyDeadHint": "Une notification arrive ici lorsque ses tentatives sont épuisées ou que la destination l'a refusée définitivement. Rien n'a été abandonné.",
+    "empty": "Aucune notification au statut « {{status}} »",
+    "emptyHint": "Choisissez un autre statut, ou vérifiez l'onglet des routes pour confirmer qu'une route correspond aux constats attendus.",
+    "redeliverAction": "Remettre cette notification en file vers {{destination}}",
+    "redeliver": {
+      "queued": "Remise en file pour {{destination}}",
+      "queuedHint": "La notification est de nouveau en file. La prochaine passe de livraison fera la tentative — elle n'est pas encore livrée.",
+      "accepted": "Remise en file pour {{destination}} acceptée avec le statut « {{status}} »",
+      "inFlight": "Pas de remise en file : cette notification est déjà en vol vers {{destination}}.",
+      "gone": "Pas de remise en file : cette notification n'est pas dans la file de ce tenant. Elle a pu être retirée, ou appartenir à un autre tenant.",
+      "forbidden": "Pas de remise en file : le plan de contrôle a refusé la demande vers {{destination}}. Cela exige la permission d'administration des routes notify ; une politique ou une restriction de portée peut aussi la refuser.",
+      "consent": "Pas de remise en file : l'avis d'enregistrement de cette surface n'a pas encore été accepté. Acceptez-le et réessayez — il ne s'agit pas d'une permission manquante.",
+      "stepUp": "Pas encore remis en file: la remise à {{destination}} nécessite une session vérifiée. Terminez la vérification puis réessayez.",
+      "failed": "La remise en file pour {{destination}} a échoué. La notification n'a pas été remise en file."
+    },
+    "confirm": {
+      "title": "Remettre cette notification en file ?",
+      "description": "Ceci demande une nouvelle tentative de livraison vers {{destination}}. Le destinataire peut la recevoir plusieurs fois si une tentative antérieure est finalement arrivée.",
+      "body": "Tentatives à ce jour : {{attempts}}. Dernier résultat : {{detail}}.",
+      "noDetail": "non enregistré",
+      "confirm": "Remettre en file"
+    }
+  },
+  "evaluate": {
+    "title": "Tester un signal",
+    "caption": "Évaluation des prédicats uniquement ; la déduplication et la limitation ne sont pas simulées.",
+    "eventType": "Type d’événement",
+    "selectType": "Sélectionner un type d’événement",
+    "kind": "Nature",
+    "severity": "Sévérité",
+    "source": "Source",
+    "subjectKind": "Nature du sujet",
+    "submit": "Évaluer",
+    "matchedCount": "Routes correspondantes : {{count}}",
+    "name": "Route",
+    "enabled": "Activée",
+    "matched": "Correspond",
+    "mismatches": "Écarts",
+    "yes": "Oui",
+    "no": "Non",
+    "dimensions": {
+      "type": "Type",
+      "severity": "Sévérité",
+      "kind": "Nature",
+      "source": "Source",
+      "subject_kind": "Nature du sujet",
+      "disabled": "Désactivée"
+    }
+  },
+  "history": {
+    "action": "Afficher l’historique des révisions de {{name}}",
+    "title": "Historique des révisions — {{name}}",
+    "description": "Instantanés chronologiques de cette route de notification dans un journal en ajout seul.",
+    "empty": "Aucune révision enregistrée",
+    "loadMore": "Charger plus",
+    "compareTitle": "Différence entre les instantanés",
+    "selectTwo": "Sélectionnez deux révisions pour comparer leurs instantanés.",
+    "selectRevision": "Sélectionner la révision « {{op}} » de {{actor}}",
+    "originalLabel": "Révision antérieure",
+    "modifiedLabel": "Révision ultérieure",
+    "restore": "Restaurer cette révision",
+    "restoreTitle": "Restaurer la révision ?",
+    "restoreDescription": "Restaurer la configuration de route sélectionnée pour {{name}} ?",
+    "restoreConfirm": "Restaurer la révision",
+    "restored": "Révision de la route restaurée",
+    "operations": {
+      "create": "Créée",
+      "update": "Mise à jour",
+      "delete": "Supprimée",
+      "restore": "Restaurée"
+    }
+  }
+}

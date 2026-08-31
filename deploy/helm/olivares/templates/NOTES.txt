@@ -1,0 +1,65 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+*/ -}}
+Olivares AI control plane — release "{{ .Release.Name }}" installed in namespace "{{ .Release.Namespace }}".
+
+Engine image: {{ include "olivares.image" . }}
+Store engine: {{ .Values.core.engine }}{{ if eq .Values.core.engine "sqlite" }} (single-node; data on a PersistentVolume){{ end }}
+Topology:     {{ if and (eq .Values.core.engine "postgres") (gt (int .Values.core.replicaCount) 1) }}ACTIVE-PASSIVE HA — {{ .Values.core.replicaCount }} replicas, one active writer elected via a Postgres advisory lock; standbys are drained by /readyz and take over automatically{{ else }}single writer (1 replica){{ end }}
+Collectors:   {{ if .Values.collectors.enabled }}ENABLED (DaemonSet, push to {{ include "olivares.coreAddr" . }} over gRPC+mTLS){{ else }}disabled (single-node in-process plane){{ end }}
+
+1) FIRST-BOOT SETUP TOKEN
+   The engine has NO default credentials. On first boot it prints a one-time
+   setup token to stdout (and writes {{ .Values.core.dataDir }}/setup.token).
+   Retrieve it:
+
+     kubectl -n {{ .Release.Namespace }} logs sts/{{ include "olivares.core.fullname" . }} | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+
+   Then create the first administrator (POST /v1/setup with that token).
+
+2) REACH THE UI / API (TLS is on; the cert is self-signed unless you set tls.existingSecret)
+
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "olivares.core.fullname" . }} 8443:{{ .Values.service.httpPort }}
+     # then open https://localhost:8443  (accept the self-signed cert, or wire your own via tls.existingSecret)
+
+3) HEALTH
+
+     kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/component=core
+     # readiness: GET /readyz (store reachable) · liveness: GET /livez   (both on 8443/HTTPS)
+{{- if and (eq .Values.core.engine "postgres") (gt (int .Values.core.replicaCount) 1) }}
+   HA: exactly ONE pod is Ready at a time — the elected leader (active writer). The
+   others are healthy hot STANDBYS that /readyz reports 503 for, so the Service routes
+   only to the leader. On leader loss a standby acquires the advisory lock and becomes
+   Ready automatically. The first-boot setup token is printed by whichever pod is the
+   leader; the grep in step 1 across the StatefulSet's pods finds it.
+{{- end }}
+
+{{- if eq .Values.core.engine "postgres" }}
+
+4) POSTGRES (engine=postgres)
+   The engine REFUSES to start against a superuser/BYPASSRLS role (docs/SECURITY-HARDENING.md).
+   Provision the least-privilege role + database first:
+   {{- if .Values.postgres.roleInit.enabled }}
+   - postgres.roleInit is ENABLED: a pre-install hook Job applied files/app-role.sql.
+   {{- else }}
+   - postgres.roleInit is disabled. Run it manually ONCE before install:
+       psql "$SUPERUSER_DSN" -v ON_ERROR_STOP=1 -v app_password="$APP_PW" \
+         -f deploy/postgres/01-app-role.sql
+   {{- end }}
+   - DSN is read from Secret "{{ .Values.postgres.dsnSecret }}" (key "{{ .Values.postgres.dsnKey }}"){{ if .Values.postgres.adminDsnKey }}; cross-tenant admin DSN from key "{{ .Values.postgres.adminDsnKey }}"{{ else }}; cross-tenant System reads are RLS-scoped (set postgres.adminDsnKey to enable the BYPASSRLS admin pool){{ end }}.
+{{- end }}
+
+VERIFY WHAT YOU INSTALLED (supply-chain): this chart and the engine image are
+signed. Verify the chart's signature before trusting it:
+
+   # cosign signature over the OCI chart manifest (keyless / Sigstore):
+   cosign verify ghcr.io/olivaresai/charts/olivares:{{ .Chart.Version }} \
+     --certificate-identity-regexp '^https://github.com/olivaresai/olivares' \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+   # OR the Helm-native GPG provenance (.prov), air-gap friendly:
+   helm verify olivares-{{ .Chart.Version }}.tgz   # needs the public key in your keyring
+
+For the air-gapped / offline install (pinned digests + offline cosign verify),
+see deploy/helm/README.md and scripts/airgap-bundle.sh.

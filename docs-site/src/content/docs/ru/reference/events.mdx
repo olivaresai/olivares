@@ -1,0 +1,524 @@
+---
+title: Справочник по шине событий (AsyncAPI 3.0)
+description: >-
+  Платформа событий как контракт AsyncAPI 3.0 — каталогизированные типы событий,
+  их конверт и полезные нагрузки, семантика живой шины и долговечного приёма,
+  протокольная кодировка и внешние webhook-подписки. Асинхронный аналог справочника REST.
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components'
+
+Коннекторы поднимают нормализованные наблюдения на **внутреннюю шину событий** движка как
+**события**; модули и коннекторы вывода **подписываются по типу события** и реагируют — без
+того, чтобы кто-либо из них импортировал другого. Эта страница и есть тот контракт,
+выраженный как **AsyncAPI 3.0** — асинхронный аналог [справочника REST API](/reference/api/).
+
+<Aside type="note" title="Машиночитаемая спецификация">
+Полный валидированный документ AsyncAPI 3.0 доступен для загрузки:
+**[`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)**. Он **выведен вручную из Go SDK и
+каталога Eventing** (кодогенерации нет), поэтому авторитетные источники — конверт и полезные
+нагрузки SDK и `modules/eventing/catalog.go`; эта страница и YAML поддерживаются в синхроне
+с ними вручную.
+</Aside>
+
+## Модель шины
+
+- **Транспорт.** По умолчанию в v1 — это **внутрипроцессная шина на Go-каналах** внутри
+  единого бинарного файла `olivares`. Интерфейс `Bus` не раскрывает канал, поэтому
+  распределённую реализацию (**NATS**) можно вставить для многохостовых развёртываний без
+  изменения хоть одного подписчика. NATS — это планируемая распределённая привязка, **не**
+  требуемая для варианта по умолчанию.
+- **Подписка.** Подписчик регистрирует обработчик, отфильтрованный по набору типов событий;
+  пустой набор означает *каждое* событие. Шина владеет горутиной, которая запускает
+  обработчик.
+- **Доставка.** Асинхронная и **at-least-once**: каждый подписчик имеет собственную
+  буферизованную очередь, опустошаемую выделенной горутиной; медленный подписчик создаёт
+  backpressure; паника обработчика изолируется. Потребители **дедуплицируют** по метке
+  времени естественного ключа после перезапуска коннектора.
+- **Минимум данных.** Каждое событие несёт *факт*, **никогда** — сырые полезные нагрузки,
+  секреты или PII. Ребро — это `(инициатор → ресурс, R/RW)`; находка несёт *хеш*
+  замаскированной детали, никогда — саму деталь.
+- **Долговечный приём.** `audit.recorded` и долговечные типы `work.*` никогда не проходят
+  через локальную шину процесса. Их исходящий ящик источника предоставляет стабильный ID и
+  подтверждает завершение лишь после сохранения события модулем Eventing. Точный повтор —
+  no-op; повторное использование того же ID с другим типом, источником, временем или
+  полезной нагрузкой отклоняется.
+
+## Конверт
+
+Каждое событие разделяет неизменяемый конверт `Event`; наблюдение едет в `Payload`.
+
+| Поле | Тип | Значение |
+|---|---|---|
+| `ID` | string | Уникальный id события: для трафика шины его назначает движок, а долговечный источник обязан предоставить его до приёма. |
+| `Type` | string | Дискриминатор — один из адресов каналов ниже. |
+| `Tenant` | string | Исходный тенант как строковая ссылка; движок разрешает его внутренне. |
+| `Source` | string | Имя компонента (коннектор/модуль), который его эмитировал. |
+| `Time` | timestamp | Когда произошёл базовый факт, по часам коннектора. |
+| `Payload` | object | Факт — одна из схем полезной нагрузки ниже. |
+
+## Каналы
+
+Каталог объединяет первичные запечатанные наблюдения, события модулей на живой шине и
+перечисленные ниже каналы только для долговечного приёма. Каждый тип несёт свой собственный
+**уровень стабильности**, управляемый из внутрикодового каталога
+(см. [Стабильность API](/ru/reference/api-stability/): stable = окно
+устаревания→sunset 24 месяца, beta = 12 месяцев, связывающее с GA; beta-полезная нагрузка
+может ещё получать поля, но никогда не теряет их молча).
+
+| Канал (`Type`) | Полезная нагрузка | Назначение | Транспорт | Стабильность |
+|---|---|---|---|---|
+| `edge.observed` | `EdgeObservation` | инициатор коснулся ресурса (R/RW) — хребет access map | типизированный gRPC `oneof` | **stable** |
+| `cost.sampled` | `CostSample` | факт стоимости использования модели/поставщика | типизированный gRPC `oneof` | **stable** |
+| `finding.reported` | `FindingReport` | находка guardrail/red-team/forensic | типизированный gRPC `oneof` | **stable** |
+| `guardrail.observed` | `ObservedText` | маскированный фрагмент наблюдаемого текста агента (детективный вход) | запасной JSON | **beta** |
+| `approval.requested` | `ApprovalRequest` | открыто ожидающее одобрение и ждёт решения | запасной JSON | **beta** |
+| `policy.changed` | `PolicyChange` | политика управления была создана, обновлена или удалена | запасной JSON | **beta** |
+| `metric.sampled` | `MetricSample` | образец метрики использования/продуктивности; субъектом может быть ссылка на разработчика | типизированный gRPC `oneof` | **beta** |
+| `approval.resolved` | `ApprovalResolution` | ожидающее одобрение достигло терминального исхода | запасной JSON | **beta** |
+| `workflow.signal` | `WorkflowSignal` | выполнен шаг `eventing-emit` DAG-workflow | запасной JSON | **beta** |
+| `work.item.created` | `WorkEventFact` | долговечный факт создания WorkItem | долговечный приём | **beta** |
+| `work.item.transitioned` | `WorkEventFact` | долговечный факт обновления, архивации или управляемого перехода состояния WorkItem | долговечный приём | **beta** |
+| `work.owner.changed` | `WorkEventFact` | изменился канонический владелец или эпоха владения | долговечный приём | **beta** |
+| `work.dependency.changed` | `WorkEventFact` | зависимость добавлена, реактивирована или помечена tombstone | долговечный приём | **beta** |
+| `work.acceptance.changed` | `WorkEventFact` | критерий приёмки создан, обновлён, оценён или отменён | долговечный приём | **beta** |
+| `work.message.available` | `DirectNoticeAvailableV1` или `WorkflowMessageCarrierV1` | стал доступен носитель Message для DirectNotice или workflow work-task | долговечный приём | **beta** |
+| `work.message.acknowledged` | `DirectNoticeAcknowledgedV1` | Delivery получила явный Ack, вовремя или с опозданием | долговечный приём | **beta** |
+| `work.message.retracted` | `MessageLifecycleV1` | Message отозвано | долговечный приём | **beta** |
+| `work.message.expired` | `MessageLifecycleV1` | Message достигло границы срока действия | долговечный приём | **beta** |
+| `work.message.overdue` | `MessageLifecycleV1` | Message пересекло срок подтверждения | долговечный приём | **beta** |
+| `work.message.rerouted` | `MessageDerivedV1` | управляемая перемаршрутизация породила новый носитель Message | долговечный приём | **beta** |
+| `work.message.escalated` | `MessageDerivedV1` | просроченное Message породило ограниченную эскалацию | долговечный приём | **beta** |
+| `work.protocol.reply.available` | `WorkflowMessageCarrierV1` | аутентифицированный ответ протокола стал одним ограниченным локальным носителем Message | долговечный приём | **beta** |
+| `work.protocol.message.received` | `WorkflowMessageCarrierV1` | аутентифицированное входящее Message протокола стало одним ограниченным локальным носителем Message | долговечный приём | **beta** |
+| `work.handoff.carrier.available` | `WorkflowMessageCarrierV1` | workflow создал носитель Message/Delivery для будущего Handoff | долговечный приём | **beta** |
+| `work.decision.recorded` | `WorkEventFact` | записаны append-only решение и проекция его текущей вершины | долговечный приём | **beta** |
+| `work.decision.request.responded` | `DecisionRequestEvent` | DecisionRequest получил явный управляемый ответ | долговечный приём | **beta** |
+| `work.decision.request.expired` | `DecisionRequestEvent` | DecisionRequest пересёк свой крайний срок | долговечный приём | **beta** |
+| `work.handoff.offered` | `HandoffEventV1` | предложен управляемый Handoff | долговечный приём | **beta** |
+| `work.handoff.accepted` | `HandoffEventV1` | целевой участник Handoff принял предложение | долговечный приём | **beta** |
+| `work.handoff.rejected` | `HandoffEventV1` | целевой участник Handoff отклонил предложение | долговечный приём | **beta** |
+| `work.handoff.withdrawn` | `HandoffEventV1` | владелец Handoff отозвал предложение | долговечный приём | **beta** |
+| `work.handoff.expired` | `HandoffEventV1` | Handoff пересёк срок подтверждения | долговечный приём | **beta** |
+| `work.lease.acquired` | `WorkEventFact` | аренда получена, перехвачена или продлена; продление сохраняет fence | долговечный приём | **beta** |
+| `work.lease.ended` | `WorkEventFact` | аренда освобождена, истекла или отозвана (включая смерть держателя), а её прежнее поколение аннулировано | долговечный приём | **beta** |
+| `work.binding.reserved` | `ProtocolBindingEvent` | привязка протокола и ограждённые полномочия WorkItem зарезервированы до передачи | долговечный приём | **beta** |
+| `work.binding.observed` | `ProtocolBindingEvent` | наблюдение протокола дало исход CLEAN или BROKEN | долговечный приём | **beta** |
+| `work.binding.ambiguous` | `ProtocolBindingEvent` | наблюдение протокола осталось явно UNKNOWN | долговечный приём | **beta** |
+| `work.binding.cancel_requested` | `ProtocolBindingEvent` | намерение отмены долговечно заявлено до удалённого побочного эффекта | долговечный приём | **beta** |
+| `audit.recorded` | `AuditRecord` | запечатанная запись журнала аудита, пересылаемая в SIEM — **никогда не по шине** (см. ниже) | долговечный приём | **stable** |
+
+<Aside type="caution" title="Протокольная кодировка различается по типу">
+Четыре первичных типа (`edge.observed`, `cost.sampled`, `finding.reported`,
+`metric.sampled`) передаются через **типизированный gRPC `oneof`** контракта коннектора,
+никогда — через JSON. Типы, определяемые модулями, **не** являются запечатанными
+наблюдениями: они используют полезные нагрузки JSON, которыми владеют модули. Пять типов
+живой шины передаются через **неверсионированный запасной JSON**, которым владеют
+публикующий и потребляющий модули: `guardrail.observed` — детективный вход уровня
+модуля/приёма, документированный в контракте приёма среды выполнения;
+`approval.requested`, `approval.resolved` и `policy.changed` — события жизненного цикла
+управления, публикуемые после коммита; `workflow.signal` публикуется модулем оркестрации,
+когда DAG-workflow достигает шага `eventing-emit`. Они намеренно отсутствуют в
+замороженной первичной таблице протокола; здесь они записаны для полноты и отмечены как не
+входящие в запечатанный sum-тип. Долговечные типы используют описанный далее контракт
+приёма, а не этот запасной транспорт.
+</Aside>
+
+<Aside type="note" title="Долговечные каналы не проходят по шине">
+На `audit.recorded` и `work.*` можно подписываться; они ограничены RBAC и допускают повтор,
+как любой другой тип, но **ни один компонент не публикует их во внутрипроцессную шину**.
+Запечатанные записи журнала поступают через собственный курсор цепочки. Факты WorkItem и
+аренды K1/K2, факты Message, DecisionRequest и Handoff K3/K4 и факты ProtocolBinding K5
+поступают из исходящего ящика на стороне источника и через общий долговечный приём после
+коммита транзакции источника. Подписка обычна; эти каналы просто никогда не появляются в
+fan-out шины.
+</Aside>
+
+## Полезные нагрузки
+
+### `EdgeObservation` — `edge.observed`
+
+Минимум данных: только идентификаторы и классификация доступа.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `OriginKind` | enum | `agent` \| `identity` \| `session` |
+| `OriginRef` | string | естественная ссылка коннектора на инициатора |
+| `ResourceKind` | string | напр. `postgres.table`, `s3.bucket`, `http.api` |
+| `ResourceRef` | string | напр. `public.customers`, `arn:aws:s3:::bucket` |
+| `Mode` | enum | `unknown` \| `read` \| `write` \| `readwrite` |
+| `Source` | enum | `otel` \| `mcp_annotation` \| `pg_audit` \| `cloudtrail` \| `ebpf` \| `policy` \| `a2a` |
+| `Confidence` | enum | `attributed` \| `approximate` |
+| `ToolRef` | string | опциональный инструмент/операция, выполнившая доступ |
+| `ObservedAt` | timestamp | метка времени естественного ключа, по которой дедуплицируют потребители |
+
+`mcp_annotation` трактуется как **недоверенный** (подтверждается перекрёстно, никогда не
+принимается на веру в одиночку); режим `unknown` и уверенность `approximate` явны, поэтому
+продукт никогда не фабрикует определённость.
+
+### `CostSample` — `cost.sampled`
+
+Деньги — это целые **микро-USD** (миллионные доли доллара). Поля ниже первых семи — это
+аддитивное, нейтральное к поставщику расширение, согласованное с OpenTelemetry `gen_ai.*` и
+FOCUS; **ноль/пусто означает «не сообщено», никогда — «ноль»**.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `ProviderRef`, `ModelRef` | string | естественные ссылки на поставщика/модель |
+| `SessionRef` | string | опциональная привязка к сессии |
+| `InputTokens` | int64 | ВСЕГО входных (разделение кэша ниже — это разбивка *этого*) |
+| `OutputTokens` | int64 | счёт выходных |
+| `CostMicroUSD` | int64 | стоимость в микро-USD |
+| `OccurredAt` | timestamp | когда произошло использование |
+| `CacheReadTokens` | int64 | входные токены попадания в кэш |
+| `CacheCreation1hTokens`, `CacheCreation5mTokens` | int64 | токены записи в кэш по TTL |
+| `WorkspaceRef` | string | биллинговое рабочее пространство/проект |
+| `APIKeyRef` | string | **замаскированная** ссылка на ключ/служебную учётную запись, никогда — секрет |
+| `Actor` | string | принципал, понёсший стоимость (chargeback «кто») |
+| `ServiceTier`, `ContextWindow`, `InferenceGeo` | string | словарь поставщика (уровень / полоса контекста / резидентность) |
+| `Gateway` | enum | `direct` \| `bedrock-mantle` \| `bedrock-legacy` \| `vertex` \| `foundry` \| `claude-platform-aws` (открытая строка) |
+| `Provenance` | enum | `estimated` \| `billed` — пусто трактуется как estimated |
+| `CostType` | string | класс не-токеновой платы за серверный инструмент (пусто = обычная токеновая стоимость) |
+
+### `FindingReport` — `finding.reported`
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `Kind` | string | напр. `guardrail`, `redteam`, `forensic` |
+| `Severity` | enum | `info` \| `low` \| `medium` \| `high` \| `critical` |
+| `SubjectKind`, `SubjectRef` | string | о чём находка |
+| `Title` | string | короткая, нечувствительная сводка, безопасная для отображения |
+| `DetailHash` | string | hex SHA-256 замаскированной детали; сырая деталь никогда не передаётся и не хранится |
+| `OccurredAt` | timestamp | когда находка была произведена |
+| `OWASPLLM`, `OWASPASI`, `ATLAS` | string[] | ссылки на фреймворки (OWASP LLM Top 10, OWASP Agentic Top 10, MITRE ATLAS); находка может отображаться сразу на несколько |
+
+### `ObservedText` — `guardrail.observed`
+
+Ограниченный, **уже маскированный** фрагмент наблюдаемого текста агента. Производитель
+обязан маскировать секреты/PII перед эмиссией; потребитель защитно обрезает его снова.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `Surface` | enum | `input` \| `output` \| `tool_args` |
+| `Text` | string | маскированный, ограниченный фрагмент, который инспектируют детекторы |
+| `AgentRef`, `SessionRef`, `ResourceRef` | string | нечувствительные контекстные ссылки (любая может быть пустой) |
+
+### `ApprovalRequest` — `approval.requested`
+
+Минимум данных: только идентификаторы и параметры решения одобрения. Оно намеренно несёт
+**ни** свободнотекстовую причину запрашивающего, **ни** ссылку на субъект; потребитель,
+авторизованный для `governance:approval:read`, получает полное одобрение по `ApprovalID`.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `ApprovalID` | string | id одобрения — ссылка для получения, решения или отслеживания запроса |
+| `Action` | string | запрошенное действие (ограниченный короткий идентификатор) |
+| `SubjectKind` | string | вид субъекта, на который нацелено действие (*ссылка* на субъект намеренно не несётся) |
+| `RiskTier` | string | классификация риска, под которой открыт запрос (напр. `critical`); определяет порог dual-control |
+| `RequiredApprovals` | int64 | число различных одобряющих, которое необходимо |
+| `PolicyRef` | string | политика одобрения, которая совпала; пусто, когда запрос использовал параметры от вызывающего |
+| `ExpiresAt` | timestamp | когда истекает ожидающий запрос (отсутствует = никогда не истекает) |
+| `EscalateAt` | timestamp | когда нерешённый запрос эскалируется (отсутствует = никогда) |
+
+### `MetricSample` — `metric.sampled`
+
+Мера использования/продуктивности. Субъектом может быть **ссылка на разработчика**
+(внутренняя для организации электронная почта или имя ключа, необходимые субъекту ROI),
+поэтому её получение ограничено привилегированным разрешением детализации, а не
+агрегированным разрешением уровня viewer.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `Name` | string | естественное имя метрики (например, `claude_code.lines_of_code.count`) |
+| `Value` | int64 | мера в естественной целочисленной единице; целое число сохраняет точность арифметики мер и денег |
+| `Additive` | bool | `true` = дельта для SUM; `false` = уровень/снимок, сохраняемый как последний |
+| `Unit` | string | `lines` \| `commits` \| `sessions` \| `tokens` \| `ms` \| `1` \| …; пусто = безразмерная величина |
+| `SubjectKind`, `SubjectRef` | string | о ком/чём мера — `developer` \| `team` \| `session` \| `account` \| `org` \| `agent` и соответствующая ссылка |
+| `OccurredAt` | timestamp | момент точки данных (дельта) или день корзины (снимок); также управляемый производителем ключ идемпотентности |
+| `Dimensions` | map | собственные оси разбивки метрики; структурные метки, никогда не payload/PII — они ВХОДЯТ в естественный ключ |
+| `Labels` | map | заданные оператором метки атрибуции (команда/проект/центр затрат); они никогда не входят в естественный ключ |
+
+### `ApprovalResolution` — `approval.resolved`
+
+Терминальный аналог `approval.requested` с той же позицией минимальных данных: только
+идентификаторы и параметры решения, никогда — ссылка на субъект или свободнотекстовая
+причина.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `ApprovalID` | string | id разрешённого одобрения — ссылка для получения полной записи |
+| `Action` | string | запрошенное действие (ограниченный короткий идентификатор) |
+| `SubjectKind` | string | вид субъекта, на который было нацелено действие |
+| `RiskTier` | string | классификация риска, вычисленная из актуального состояния в момент решения |
+| `Outcome` | string | `approved` \| `rejected` \| `canceled` \| `expired` — **открытое поле в протоколе**; допускайте неизвестные значения |
+| `RequiredApprovals` | int64 | число различных одобряющих, необходимое в момент решения |
+| `ApproveCount`, `RejectCount` | int64 | число записанных решений каждого вида |
+| `PolicyRef` | string | совпавшая политика одобрения; пусто, если использовались параметры вызывающего |
+| `DecidedAt` | timestamp | когда был достигнут терминальный исход |
+
+### `WorkflowSignal` — `workflow.signal`
+
+Публикуется модулем оркестрации, когда управляемый DAG-workflow достигает шага
+`eventing-emit`. **Тип задаётся модулем**, он никогда не берётся из конфигурации шага,
+поэтому автор workflow никогда не может подделать первичное событие для приёма другим
+модулем; конфигурация шага добавляет лишь ограниченную метку.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `WorkflowRef` | string | workflow, чей запуск эмитировал сигнал |
+| `RunRef` | string | запуск — сопоставьте со `StepRef`, чтобы найти момент на временной шкале запуска |
+| `StepRef` | string | ссылка на эмитирующий шаг внутри графа |
+| `Label` | string | заданная оператором метка из конфигурации шага, ограниченная и нечувствительная |
+
+### `WorkEventFact` — K1/K2 `work.*`
+
+Восемь рабочих каналов K1/K2 предоставляют одну и ту же ограниченную проекцию
+`payload_json` append-only WorkEvent. Тип события несёт семантический класс; эта полезная
+нагрузка идентифицирует команду, результат и итоговое агрегированное состояние. Она никогда
+не содержит текст brief WorkItem, формулировки критериев приёмки или решений, обоснование
+либо свободный текст владельца. Поля держателя — стабильные ссылки идентичности, а не
+отображаемые имена. Пока каналы в beta, потребители обязаны допускать добавочные поля.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `command` | string | закрытое имя мутации долговечной работы, породившей факт |
+| `result_kind` | string | вид сущности, возвращённой мутацией |
+| `result_id` | UUID | ссылка на возвращённую сущность |
+| `workspace_id` | UUID | ссылка на управляемое рабочее пространство |
+| `work_item_id` | UUID | ссылка на WorkItem |
+| `status` | string | итоговое состояние WorkItem |
+| `owner_epoch` | int64 | итоговая монотонная эпоха владения |
+| `event_seq` | int64 | итоговая монотонная последовательность внутри WorkItem |
+| `lease_id` | UUID | только событие аренды K2: стабильная ссылка на строку WorkLease |
+| `lease_state` | string | только событие аренды K2: итоговое состояние аренды |
+| `holder_sid` | string | только событие аренды K2: канонический SID держателя |
+| `holder_run_ref`, `holder_agent_ref` | string | только событие аренды K2: ограниченные ссылки выполнения/агента, если имеются |
+| `fence` | int64 | только событие аренды K2: итоговое монотонное поколение fencing |
+| `expires_at` | timestamp | только событие аренды K2: срок действия по часам базы данных, пока аренда активна |
+| `end_reason_code` | string | только событие завершения K2: заданный сервером класс причины, никогда не авторский текст оператора |
+| `end_reason_hash` | string | только событие завершения K2: hex SHA-256 сохранённой причины для корреляции без раскрытия |
+| `forced` | boolean | только принудительный перехват K2: всегда `true`, отмечает переопределение действующих полномочий аренды |
+| `severity` | string | только принудительный перехват K2: фиксировано `high` |
+| `decision_id` | UUID | только принудительный перехват K2: фактическое governance Decision, разрешившее переопределение |
+| `takeover_reason_hash` | string | только принудительный перехват K2: hex SHA-256 для корреляции; авторская причина оператора никогда не публикуется |
+
+Четыре поля принудительного перехвата — необязательная проекция в
+`work.lease.acquired`: обычные события получения, продления и непринудительного перехвата их
+не несут. Потребитель, которому нужна ограниченная авторская причина оператора, обязан
+проследовать по ссылкам Decision/audit через авторизованную поверхность; восстановить этот
+текст из события невозможно.
+
+### `DirectNoticeAvailableV1` — `work.message.available`
+
+Неизменяемый факт v1, записываемый исходной транзакцией DirectNotice в WorkEvent и
+WorkOutbox. **Субъект — Message**: `message_id` и `result_id` — один UUID, а `result_kind`
+фиксирован как `sessions.message`. Идентичность получателя и содержимое сообщения намеренно
+отсутствуют; авторизованный потребитель следует по ссылке Message через управляемую
+поверхность чтения.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `schema_version` | int64 | фиксировано `1`; последующий writer добавляет новую схему, а не меняет метку сохранённых фактов v1 |
+| `command` | string | фиксировано `message.publish.direct` |
+| `result_kind` | string | фиксировано `sessions.message` |
+| `result_id`, `message_id` | UUID | идентичные ссылки на субъект Message |
+| `channel_id` | UUID | ссылка на управляемый Channel |
+| `message_kind` | string | фиксировано `notice` для этой первой вертикали записи K3 |
+| `state` | string | фиксировано `published` при доступности |
+| `version` | int64 | `2`, после атомарного перехода draft→published |
+| `event_sequence` | int64 | `1`, первое append-only событие агрегата Message |
+| `delivery_count` | int64 | `1`, поскольку DirectNotice разрешает одну исходную Delivery |
+| `required_count`, `ack_quorum` | int64 | исходное требование подтверждения; каждое равно `0` или `1` |
+| `fulfillment` | object | исходная проекция `not_required` или `pending` со счётчиками required/acknowledged/viable/unmet/quorum |
+| `audience_hash` | SHA-256 hex | связывает граф аудитории, не раскрывая получателя |
+| `payload_digest` | SHA-256 hex | связывает каноническое содержимое сообщения, не передавая его |
+| `plan_hash` | SHA-256 hex | связывает авторизованный план публикации |
+
+WorkOutbox предоставляет `ID` конверта; повторы после неоднозначного завершения используют
+тот же ID и побайтно идентичную полезную нагрузку, поэтому приём Eventing считает их одним
+событием. Другой тип, источник, время возникновения, payload или субъект Message под тем же
+ID отклоняется. Потребители webhook дедуплицируют по `X-Olivares-Event`; операторский replay
+создаёт новый `X-Olivares-Delivery`, но сохраняет ID события.
+
+### Факты жизненного цикла коммуникации K3/K4
+
+Остальные WorkEvent коммуникации используют закрытые проекции минимальных данных. Они
+несут ID, состояния, монотонные версии/fence и дайджесты планов или защищённых значений;
+они никогда не несут содержимое Message, DecisionResponse, payload Handoff или текст
+причины. Полные ограничения полей опубликованы в схемах AsyncAPI.
+
+| Схема | Каналы | Поля субъекта |
+|---|---|---|
+| `DirectNoticeAcknowledgedV1` | `work.message.acknowledged` | ID Ack, Delivery и Message; версия/состояние Delivery; флаг опоздания; fulfillment; хеш плана |
+| `WorkflowMessageCarrierV1` | workflow-форма `work.message.available`; `work.handoff.carrier.available`; `work.protocol.reply.available`; `work.protocol.message.received` | ID WorkItem, Message и Delivery; вид/состояние/версия; последовательность события; хеш плана; без удалённого содержимого или байтов артефакта |
+| `MessageLifecycleV1` | `work.message.retracted`, `work.message.expired`, `work.message.overdue` | ID Message/необязательного WorkItem и связанного агрегата; состояние/версия; число затронутых Delivery; необязательный fulfillment; хеш плана |
+| `MessageDerivedV1` | `work.message.rerouted`, `work.message.escalated` | ID исходного/нового Message, ограниченная ссылка на получателя, глубина автоматизации и хеш плана |
+| `DecisionRequestEvent` | `work.decision.request.responded`, `work.decision.request.expired` | ID запроса/ответа/WorkItem, переход/состояние и дайджест ответа |
+| `HandoffEventV1` | `work.handoff.offered`, `work.handoff.accepted`, `work.handoff.rejected`, `work.handoff.withdrawn`, `work.handoff.expired` | ID Handoff/Message/Delivery/WorkItem, состояние, эпоха владельца, fence аренды и хеш плана |
+
+### `ProtocolBindingEvent` — K5 `work.binding.*`
+
+ProtocolBinding записывает одну ограниченную проекцию в поток событий WorkItem, когда
+резервирует исходящую или входящую привязку, сверяет наблюдение или заявляет намерение
+отмены. Четыре канала используют одну и ту же точную схему; тип события задаёт класс
+мутации. Это обычные факты агрегата WorkItem, и их получение ограничено
+`sessions:work:read`.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `binding_id` | UUID | ссылка на долговечный ProtocolBinding |
+| `binding_spec_id` | UUID | неизменяемый ProtocolBindingSpec, закреплённый привязкой |
+| `binding_spec_generation` | int64 | закреплённое поколение spec, не менее `1` |
+| `binding_generation` | int64 | точное поколение внешнего ресурса, представленное привязкой |
+| `protocol` | enum | `a2a` \| `mcp` |
+| `workspace_id`, `work_item_id` | UUID | ссылки на управляемое рабочее пространство и агрегат WorkItem |
+| `work_status` | enum | итоговое состояние WorkItem: `active` \| `review` \| `blocked` \| `canceled` |
+| `lease_fence` | int64 | поколение fencing, назначенное синтетической сессии привязки |
+| `verdict` | enum | `CLEAN` \| `BROKEN` \| `UNKNOWN`; UNKNOWN никогда не считается успехом |
+| `code` | string | ограниченный системный код причины (максимум 128 байт), никогда не свободный текст |
+| `terminal` | boolean | доказывает ли наблюдение терминальный удалённый исход |
+| `event_seq` | int64 | монотонная последовательность внутри агрегата WorkItem |
+| `external_id_hash` | SHA-256 hex | необязательная односторонняя корреляция связанного удалённого ID; сам ID отсутствует |
+
+Полезная нагрузка намеренно исключает ссылку и состояние удалённого ресурса, аргументы
+запроса/инструмента, результаты задачи или сообщения, содержимое сообщения, детали
+наблюдения и авторскую причину отмены оператора. Эти значения остаются за управляемыми
+хранилищами; событие раскрывает лишь минимальный факт сверки.
+
+### `AuditRecord` — `audit.recorded`
+
+Запечатанная запись журнала аудита с обнаружением вмешательства, пересылаемая в центр
+управления SIEM. Она **не** проходит по шине (см. примечание выше): форвардер журнала
+обходит цепочку от курсора каждого тенанта и передаёт каждую запись долговечному приёму,
+поэтому поля целостности проходят без изменений, и центр управления может сам проверить
+цепочку.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `EventID` | string | id события аудита — стабильный ключ идемпотентности, по которому потребитель дедуплицирует |
+| `Seq` | int64 | последовательность журнала для тенанта — естественный ключ; пропуски обнаружимы |
+| `OccurredAt` | timestamp | когда произошло аудируемое действие |
+| `Source` | string | эмитирующий компонент |
+| `Payload` | bytes | уже закодированная запись минимальных данных, дословно несущая поля цепочки (последовательность, предыдущий хеш, хеш, подпись) |
+
+### `PolicyChange` — `policy.changed`
+
+Отражает то, что хранит аудиторская запись мутации политики — вид и enabled — плюс id и
+операцию. Оно **никогда** не несёт заданное оператором имя политики или спецификацию
+политики; потребитель, авторизованный для `governance:policy:read`, получает политику по
+`PolicyID`.
+
+| Поле | Тип | Примечания |
+|---|---|---|
+| `PolicyID` | string | id изменённой политики |
+| `Kind` | enum | `abac` \| `approval` |
+| `Op` | enum | `created` \| `updated` \| `deleted` — открыт в протоколе; терпимо относитесь к неизвестным значениям |
+| `Enabled` | bool | флаг enabled после изменения; `false` для удаления |
+
+## Внешние подписки (платформа событий)
+
+Модуль событий пересылает каталогизированные типы событий на **внешние конечные точки
+HTTPS** как подписанные webhooks. Подписки управляются по адресу
+`/v1/m/eventing/subscriptions` — маршрут модуля, намеренно **вне** контракта REST OpenAPI —
+тогда как **типы событий**, которые он доставляет, несут уровни стабильности по типу,
+указанные выше.
+
+### Доставка
+
+Каждая доставка — это HTTPS `POST`, тело которого — JSON-**конверт плюс `Seq`** — те же имена
+полей, что у конверта выше (SDK — это контракт), с одним аддитивным полем: `Seq`, курсор на
+уровне тенанта, с которого начинается повтор. Типизированная полезная нагрузка едет под
+`Payload`.
+
+```json
+{
+  "ID": "0197a2b4-6e1d-7c3a-9f4e-2d8b5c1a0e7f",
+  "Type": "cost.sampled",
+  "Tenant": "…",
+  "Source": "…",
+  "Time": "2026-06-11T12:00:00Z",
+  "Seq": 42,
+  "Payload": { "ProviderRef": "…" }
+}
+```
+
+| Заголовок | Значение |
+|---|---|
+| `X-Olivares-Timestamp` | метка времени в Unix-секундах, которую покрывает подпись |
+| `X-Olivares-Signature` | `t=<ts>,v1=<hexsig>` — HMAC-SHA256 над `<ts>.<body>` с секретом подписки; проверяйте через `connectors/webhook.VerifyWithin` |
+| `X-Olivares-Event` | **стабильный id события** — ваш ключ идемпотентности, идентичный при каждой повторной попытке и повторе одного события |
+| `X-Olivares-Event-Type` | тип события (адрес канала) |
+| `X-Olivares-Delivery` | id доставки — повтор является *новой доставкой* *того же события* |
+
+- **At-least-once.** Одно и то же событие может прийти более одного раза;
+  **дедуплицируйте по `X-Olivares-Event`**.
+- **Повторы.** `408`, `425`, `429`, любой `5xx` или сетевой сбой повторяются по
+  экспоненциальной лестнице backoff — 30s, 2m, 10m, 30m, 1h, 2h, 4h, 8h (±20% джиттера) —
+  затем доставка **уходит в dead-letter** (DLQ). Любой другой не-2xx ответ является
+  терминальным.
+- **Повтор (replay).** Подписку можно повторить с курсора `Seq`; повтор сохраняет id
+  `X-Olivares-Event` события под свежим `X-Olivares-Delivery`.
+- **Редиректы никогда не следуются** — редирект перенаправил бы подписанное тело.
+- **Ротация секрета немедленна.** Платформа держит ровно один секрет подписи на подписку:
+  после `POST …/rotate-secret` каждая последующая попытка — включая повторы уже
+  поставленных в очередь доставок — подписывается **новым** секретом. Сначала обновите свой
+  верификатор, затем ротируйте.
+- **Сужение `event_types` не является отзывом.** Доставки, уже захваченные для подписки,
+  остаются в очереди и доставляются (разрешение по типу всё ещё применяется); суженный
+  фильтр управляет тем, что захватывается с этого момента.
+
+### Разрешение на приём по типу
+
+Подписка называет роль; перед **каждой** попыткой доставки эта роль оценивается против
+разрешения типа события через полный конвейер RBAC+ABAC (deny-closed). Отображение зеркалит
+поверхность чтения каждого типа в API продукта:
+
+| Тип события | Разрешение | Стабильность |
+|---|---|---|
+| `edge.observed` | `accessgraph:read` (привилегированное: editor+) | stable |
+| `cost.sampled` | `finops:spend:read` | stable |
+| `finding.reported` | `security:finding:read` | stable |
+| `guardrail.observed` | `security:observed:read` (привилегированное: editor+) | beta |
+| `approval.requested` | `governance:approval:read` | beta |
+| `policy.changed` | `governance:policy:read` | beta |
+| `metric.sampled` | `adoption:developer:read` (привилегированное: editor+) | beta |
+| `approval.resolved` | `governance:approval:read` | beta |
+| `workflow.signal` | `orchestration:workflow:read` | beta |
+| `work.item.created` | `sessions:work:read` | beta |
+| `work.item.transitioned` | `sessions:work:read` | beta |
+| `work.owner.changed` | `sessions:work:read` | beta |
+| `work.dependency.changed` | `sessions:work:read` | beta |
+| `work.acceptance.changed` | `sessions:work:read` | beta |
+| `work.message.available` | `sessions:message:read` | beta |
+| `work.message.acknowledged` | `sessions:message:read` | beta |
+| `work.message.retracted` | `sessions:message:read` | beta |
+| `work.message.expired` | `sessions:message:read` | beta |
+| `work.message.overdue` | `sessions:message:read` | beta |
+| `work.message.rerouted` | `sessions:message:read` | beta |
+| `work.message.escalated` | `sessions:message:read` | beta |
+| `work.protocol.reply.available` | `sessions:message:read` | beta |
+| `work.protocol.message.received` | `sessions:message:read` | beta |
+| `work.handoff.carrier.available` | `sessions:message:read` | beta |
+| `work.decision.recorded` | `sessions:decision:read` | beta |
+| `work.decision.request.responded` | `sessions:decision-request:read` | beta |
+| `work.decision.request.expired` | `sessions:decision-request:read` | beta |
+| `work.handoff.offered` | `sessions:handoff:read` | beta |
+| `work.handoff.accepted` | `sessions:handoff:read` | beta |
+| `work.handoff.rejected` | `sessions:handoff:read` | beta |
+| `work.handoff.withdrawn` | `sessions:handoff:read` | beta |
+| `work.handoff.expired` | `sessions:handoff:read` | beta |
+| `work.lease.acquired` | `sessions:lease:read` | beta |
+| `work.lease.ended` | `sessions:lease:read` | beta |
+| `work.binding.reserved` | `sessions:work:read` | beta |
+| `work.binding.observed` | `sessions:work:read` | beta |
+| `work.binding.ambiguous` | `sessions:work:read` | beta |
+| `work.binding.cancel_requested` | `sessions:work:read` | beta |
+| `audit.recorded` | `audit:read` | stable |
+
+## См. также
+
+- [Справочник REST API](/reference/api/) — синхронный контракт (OpenAPI 3.1).
+- [Стабильность API](/ru/reference/api-stability/) — окна за уровнями стабильности по типу.
+- [Обзор архитектуры](/ru/explanation/architecture/overview/) — как наблюдения становятся
+  рёбрами и достигают access map.
+- Сырая спецификация: [`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml).

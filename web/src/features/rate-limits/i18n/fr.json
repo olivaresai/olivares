@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "{{n}} constats chargés ; il y en a d'autres",
+    "hint": "Le résumé des limites n'a été recherché que dans les constats chargés. Un résumé absent peut se trouver au-delà de cette page."
+  },
+  "title": "Limites de débit",
+  "description": "Inventaire en lecture seule des limites de débit délimitées à l’organisation et à l’espace de travail qu’une passerelle ou un proxy doit maintenir synchronisées. Issu de l’API Rate Limits d’Anthropic (lecture seule) ; cette vue ne modifie jamais une limite.",
+  "caveats": {
+    "keepInSync": "Les passerelles/proxys doivent rester synchronisés : ces limites constituent l’inventaire qu’une passerelle ou un proxy en amont doit refléter. Elles ne sont pas appliquées ici, et leur modification s’effectue chez le fournisseur, non dans cette console.",
+    "managedAgents": "Les Managed Agents ne sont PAS couverts par l’API Rate Limits. Leurs limites constituent une lacune documentée, et non une valeur nulle — aucune ligne Managed-Agents n’est affichée car l’API n’en signale aucune."
+  },
+  "summary": {
+    "title": "État de synchronisation",
+    "description": "Nombre de limites de débit qu’une passerelle ou un proxy doit maintenir synchronisées, tel que rapporté par l’ingestion de gouvernance en lecture seule."
+  },
+  "count": {
+    "label": "Limites à maintenir synchronisées",
+    "observedAt": "Observé le {{at}}",
+    "unknown": "Nombre indisponible"
+  },
+  "degraded": {
+    "title": "Ingestion de gouvernance via l’Admin API indisponible",
+    "hint": "Cette surface de déploiement (par exemple une passerelle Bedrock, Vertex ou Foundry) n’expose pas l’Anthropic Admin API ; l’inventaire des limites de débit ne peut donc pas être lu ici. Il s’agit d’une indisponibilité honnête, et non d’un inventaire vide."
+  },
+  "inventory": {
+    "title": "Inventaire par limiteur",
+    "description": "Chaque limiteur rapporté par le fournisseur, regroupé par périmètre : d’abord les groupes à l’échelle de l’organisation, puis les groupes de remplacement par espace de travail.",
+    "unavailable": "Inventaire indisponible",
+    "unavailableHint": "Le connecteur Admin en lecture seule n’est pas câblé ; l’inventaire par limiteur ne peut donc pas être lu ici. Il s’agit d’une indisponibilité honnête, et non d’un inventaire vide.",
+    "tableLabel": "Inventaire des limites de débit",
+    "empty": "Aucune limite de débit rapportée",
+    "emptyHint": "Le fournisseur n’a renvoyé aucune entrée par limiteur pour cette organisation.",
+    "scope": {
+      "org": "Organisation"
+    },
+    "columns": {
+      "scope": "Périmètre",
+      "groupType": "Groupe",
+      "models": "Modèles",
+      "limiterType": "Limiteur",
+      "value": "Valeur",
+      "orgLimit": "Limite org."
+    }
+  },
+  "groupType": {
+    "model_group": "Groupe de modèles",
+    "batch": "Lot",
+    "token_count": "Comptage de tokens",
+    "files": "Fichiers",
+    "skills": "Compétences",
+    "web_search": "Recherche web"
+  },
+  "limitType": {
+    "requests_per_minute": "Requêtes par minute",
+    "input_tokens_per_minute": "Tokens d’entrée par minute",
+    "output_tokens_per_minute": "Tokens de sortie par minute",
+    "enqueued_batch_requests": "Requêtes batch en file d’attente"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "Aucune limite de débit signalée",
+      "description": "Les entrées apparaissent dès que l’API Anthropic Rate Limits en lecture seule renvoie les limites par limiteur de cette organisation."
+    }
+  },
+  "effectiveState": {
+    "label": "Ce que vous pouvez changer ici :",
+    "proxy": "Proxy d'inférence",
+    "finops": "Dépenses"
+  }
+}

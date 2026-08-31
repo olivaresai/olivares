@@ -1,0 +1,48 @@
+{
+  "title": "Automatizaciones",
+  "description": "Los tres raíles de automatización en un solo sitio: schedules gobernados, suscripciones de eventos y rutas de alerta, junto al catálogo de triggers al que pueden reaccionar.",
+  "tabs": {
+    "overview": "Resumen",
+    "workflows": "Flujos de trabajo"
+  },
+  "rails": {
+    "openAction": "Abrir {{feature}}",
+    "countLabel": "{{count}} en total",
+    "loadFailed": "No se pudo cargar este raíl.",
+    "forbidden": "No tienes autorización para ver este raíl.",
+    "schedules": {
+      "title": "Schedules",
+      "description": "Cadencias gobernadas: schedule → fire HITL en dos fases, con detección de cadence-miss.",
+      "active": "{{count}} activos",
+      "stalled": "{{count}} estancados",
+      "paused": "{{count}} pausados"
+    },
+    "subscriptions": {
+      "title": "Suscripciones de eventos",
+      "description": "Entrega evento → sink/SIEM con reintentos, replay y ledger de entregas.",
+      "enabled": "{{count}} habilitadas",
+      "disabled": "{{count}} deshabilitadas"
+    },
+    "routes": {
+      "title": "Rutas de alerta",
+      "description": "Enrutado finding/aprobación → destino con umbrales de severidad y dry-run.",
+      "enabled": "{{count}} habilitadas",
+      "disabled": "{{count}} deshabilitadas"
+    },
+    "truncated": "Cargadas {{n}} filas; hay más",
+    "truncatedHint": "Hay más filas de las que se ven; este raíl las coge por id de fila (asignado al crear), así que faltan las posteriores. Que un horario, una suscripción o una ruta NO salga aquí no prueba que no exista.",
+    "countLoaded": "{{count}} cargados"
+  },
+  "triggers": {
+    "title": "Catálogo de triggers",
+    "description": "Todo aquello a lo que una automatización puede reaccionar. Las suscripciones pueden capturar cualquier tipo catalogado; las rutas de alerta casan el subconjunto ruteable.",
+    "typeColumn": "Tipo",
+    "stabilityColumn": "Estabilidad",
+    "permissionColumn": "Permiso requerido",
+    "descriptionColumn": "Descripción",
+    "routable": "Ruteable",
+    "routableHint": "Este tipo puede casarse en rutas de alerta.",
+    "empty": "No hay catálogo de triggers disponible.",
+    "loadFailed": "No se pudo cargar el catálogo de triggers."
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "reasoningEngines": [
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/sa-agent",
+      "displayName": "Legacy SA Agent",
+      "createTime": "2026-04-01T09:00:00Z",
+      "spec": {
+        "agentFramework": "langchain",
+        "identityType": "SERVICE_ACCOUNT",
+        "serviceAccount": "shared-sa@test-project.iam.gserviceaccount.com",
+        "effectiveIdentity": "shared-sa@test-project.iam.gserviceaccount.com"
+      }
+    },
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/unspecified-agent",
+      "createTime": "2026-04-02T09:00:00Z",
+      "spec": {
+        "agentFramework": "custom",
+        "identityType": "IDENTITY_TYPE_UNSPECIFIED",
+        "effectiveIdentity": "default-compute@test-project.iam.gserviceaccount.com"
+      }
+    },
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/pending-agent",
+      "displayName": "Pending Agent",
+      "createTime": "2026-06-01T09:00:00Z",
+      "spec": {
+        "agentFramework": "llama-index",
+        "identityType": "AGENT_IDENTITY"
+      }
+    }
+  ]
+}

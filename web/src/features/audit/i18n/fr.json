@@ -1,0 +1,107 @@
+{
+  "title": "Registre d’audit",
+  "subtitle": "La chaîne de preuves inviolable. Vérifiez-la et exportez-la vers votre WORM/SIEM.",
+  "subtitleSystem": "La chaîne du locataire système contenant les opérations administratives inter-locataires (lecture seule).",
+  "searchLoaded": "Filtrer uniquement les lignes chargées (côté client)…",
+  "filters": {
+    "title": "Filtres du registre côté serveur",
+    "q": "Rechercher dans le registre",
+    "qPlaceholder": "Action, acteur, type de cible ou ID",
+    "actor": "Acteur",
+    "actorPlaceholder": "Acteur exact",
+    "action": "Préfixe d’action",
+    "actionPlaceholder": "ex. agent.",
+    "targetKind": "Type de cible",
+    "targetKindPlaceholder": "Type de cible exact",
+    "targetId": "ID de cible",
+    "targetIdPlaceholder": "ID de cible exact",
+    "since": "Depuis",
+    "until": "Jusqu’à",
+    "clearOne": "Effacer le filtre {{filter}}",
+    "clearAll": "Effacer tous les filtres"
+  },
+  "scan": {
+    "incomplete": "Analysé jusqu’à la seq {{seq}} — pas l’intégralité du registre ; « Charger plus » poursuit l’analyse."
+  },
+  "scope": {
+    "label": "Portée du registre",
+    "tenant": "Registre du locataire",
+    "system": "Registre système",
+    "systemHint": "La chaîne du locataire système enregistre les opérations administratives inter-locataires et est en lecture seule ici. La vérification et l’export portent sur les registres de locataire."
+  },
+  "cols": {
+    "seq": "Séq.",
+    "occurred": "Quand",
+    "action": "Action",
+    "actor": "Acteur",
+    "target": "Cible",
+    "hash": "Hachage"
+  },
+  "actorKind": {
+    "user": "Utilisateur",
+    "agent": "Agent",
+    "connector": "Connecteur",
+    "system": "Système"
+  },
+  "verify": {
+    "action": "Vérifier la chaîne",
+    "failed": "La vérification n’a pas pu être effectuée.",
+    "chain": "Chaîne · {{checked}} maillons",
+    "checkpoints": "Points de contrôle · {{count}} signés",
+    "noCheckpoints": "Aucun point de contrôle signé pour l’instant",
+    "attested": "Attesté jusqu’à la séq. {{seq}}",
+    "chainBreak": "Chaîne rompue à la séq. {{seq}}",
+    "checkpointBreak": "Échec de la signature du point de contrôle à la séq. {{seq}}"
+  },
+  "pubkey": {
+    "action": "Clé de vérification",
+    "label": "Clé de signature du registre",
+    "key": "clé",
+    "hint": "Partagez cette clé publique Ed25519 pour qu'un tiers puisse vérifier hors ligne les événements exportés ET les points de contrôle : la même clé signe les deux.",
+    "failed": "La clé de vérification est indisponible."
+  },
+  "export": {
+    "action": "Exporter",
+    "formatLabel": "Format d’export",
+    "fromSeq": "Seq de début",
+    "toSeq": "Seq de fin",
+    "optional": "Facultatif",
+    "useCurrent": "Utiliser les filtres et la plage actuels",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "Requête OTLP",
+      "otlp_envelope": "Requête OTLP (alias)",
+      "otlp_log_record": "Lignes LogRecord OTLP",
+      "ocsf": "OCSF"
+    },
+    "done": "Export téléchargé.",
+    "failed": "Échec de l’export.",
+    "forbidden": "Vous n’êtes pas autorisé à exporter le registre."
+  },
+  "detail": {
+    "title": "Événement de preuve",
+    "seqTitle": "Événement n° {{seq}}",
+    "signed": "Événement signé — cette ligne porte sa propre signature sur son hachage de chaîne",
+    "seq": "Séquence",
+    "occurred": "Survenu",
+    "action": "Action",
+    "actor": "Acteur",
+    "actorSystem": "système",
+    "target": "Cible",
+    "id": "ID de l’événement",
+    "chainTitle": "Intégrité de la chaîne",
+    "prevHash": "Hachage précédent",
+    "prev": "préc.",
+    "hash": "Hachage de l’événement",
+    "this": "actuel",
+    "sig": "Signature de l'événement",
+    "checkpoint": "sig.",
+    "chainHint": "Le hachage de chaque événement est chaîné au précédent. Il n’y a aucune charge utile derrière une empreinte — le hachage est la preuve (données minimales par conception)."
+  },
+  "empty": {
+    "title": "Aucune preuve pour l’instant",
+    "description": "Le registre est vide pour cette portée. Les opérations gouvernées ajoutent des événements inviolables au fur et à mesure."
+  }
+}

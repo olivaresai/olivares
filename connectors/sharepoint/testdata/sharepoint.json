@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "id": "item-1",
+      "name": "Leave Policy.docx",
+      "parentReference": {"siteId": "site-HR", "path": "/sites/HR/Shared Documents"},
+      "lastModifiedDateTime": "2026-03-15T09:00:00Z",
+      "permissions": [
+        {"grantedToV2": {"siteGroup": {"displayName": "HR Team"}}, "roles": ["read"]},
+        {"grantedToV2": {"group": {"displayName": "All Employees"}}, "roles": ["read"]}
+      ],
+      "content": "Employees accrue 25 days of leave per year.",
+      "sensitivityLabel": {"displayName": "Confidential"}
+    }
+  ]
+}

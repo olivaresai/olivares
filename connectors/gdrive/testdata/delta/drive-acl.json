@@ -1,0 +1,10 @@
+{
+  "id": "file-pqr",
+  "permissions": [
+    {"id": "perm-a", "type": "group", "emailAddress": "legal@acme.com", "role": "reader"},
+    {"id": "perm-b", "type": "user", "emailAddress": "bob@acme.com", "role": "writer"}
+  ],
+  "labels": [
+    {"id": "sensitivity-lbl"}
+  ]
+}

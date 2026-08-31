@@ -1,0 +1,477 @@
+{
+  "title": "Fehlerfreiheit & SLA",
+  "subtitle": "Lebendigkeit, Zuverlässigkeit und Abhängigkeiten in Ihrem gesamten Bestand — abgeleitet aus beobachteter Aktivität und dem Veralterungs-Sweep, niemals durch Abfragen der Infrastruktur.",
+  "auditedNote": "Der Live-Stream sowie jede Auflösungs- oder Bearbeitungsaktion sind privilegierte, auditierte Vorgänge. Die Fehlerfreiheit wird abgeleitet; die Engine führt hier niemals Fehlertexte oder Nutzdaten mit.",
+  "refresh": "Aktualisieren",
+  "statusPageLink": "Öffentliche Statusseite",
+  "tabs": {
+    "status": "Status",
+    "sla": "SLA",
+    "incidents": "Vorfälle",
+    "timeline": "Zeitverlauf",
+    "connectors": "Konnektoren",
+    "dependencies": "Abhängigkeiten",
+    "system": "System",
+    "checks": "Checks"
+  },
+  "state": {
+    "healthy": "Fehlerfrei",
+    "degraded": "Beeinträchtigt",
+    "down": "Ausgefallen",
+    "observed": "Beobachtet",
+    "unknown": "Unbekannt"
+  },
+  "stateHint": {
+    "unknown": "Keine Prüfung erfasst dieses Subjekt — nicht dasselbe wie fehlerfrei.",
+    "observed": "Von einer Kante als lebendig erkannt, aber keine Prüfung deklariert — die Fehlerfreiheit wird nicht gemessen (weder fehlerfrei noch unbekannt)."
+  },
+  "desired": {
+    "active": "Aktiv",
+    "paused": "Pausiert",
+    "retired": "Stillgelegt"
+  },
+  "desiredHint": {
+    "paused": "Keine Alarmierung — von einem Betreiber pausiert.",
+    "retired": "Keine Alarmierung — stillgelegt."
+  },
+  "subjectKind": {
+    "agent": "Agent",
+    "mcp": "MCP",
+    "session": "Sitzung",
+    "mcp_tool": "Werkzeug"
+  },
+  "tiles": {
+    "healthy": "Fehlerfrei",
+    "degraded": "Beeinträchtigt",
+    "down": "Ausgefallen",
+    "unknown": "Unbekannt"
+  },
+  "facets": {
+    "allStates": "Alle Zustände",
+    "allKinds": "Alle Arten"
+  },
+  "status": {
+    "title": "Überwachte Subjekte",
+    "slaBreach": "SLA-Verletzung",
+    "slaBreachHint": "Für dieses Subjekt liegt eine offene SLA-Verletzung vor.",
+    "notAlerting": "Keine Alarmierung",
+    "cols": {
+      "subject": "Subjekt",
+      "kind": "Art",
+      "state": "Zustand",
+      "desired": "Absicht",
+      "sla": "SLA",
+      "latency": "Latenz",
+      "lastSeen": "Zuletzt gesehen"
+    },
+    "searchPlaceholder": "Subjekt suchen…",
+    "empty": {
+      "title": "Noch keine Subjekte überwacht",
+      "description": "Sobald für einen Agent oder MCP-Server eine Fehlerfreiheitsprüfung deklariert ist, erscheint dessen Lebendigkeit hier."
+    }
+  },
+  "sla": {
+    "title": "Zuverlässigkeit (SLA)",
+    "pick": "Subjekt",
+    "pickPlaceholder": "Subjekt auswählen…",
+    "pickEmpty": "Noch keine überwachten Subjekte zum Berichten vorhanden.",
+    "pickPrompt": {
+      "title": "Subjekt auswählen",
+      "description": "Wählen Sie ein überwachtes Subjekt, um dessen Verfügbarkeit im Vergleich zum Ziel zu sehen, rekonstruiert aus dem Zuverlässigkeits-Hauptbuch."
+    },
+    "window": "Zeitfenster",
+    "uptime": "Verfügbarkeit",
+    "target": "Ziel",
+    "noTarget": "Kein Ziel",
+    "breaching": "Verletzend",
+    "withinTarget": "Innerhalb des Ziels",
+    "downtime": "Ausfallzeit",
+    "degraded": "Beeinträchtigt",
+    "degradedNote": "Beeinträchtigt zählt für die SLA als verfügbar — separat ausgewiesen, nicht als Ausfallzeit.",
+    "currentState": "Aktueller Zustand",
+    "noCheck": {
+      "title": "Keine Prüfung deklariert",
+      "description": "Für dieses Subjekt gibt es keine Fehlerfreiheitsprüfung, daher kann keine Zuverlässigkeit berichtet werden. Dies ist ein ehrlicher Zustand, kein Fehler."
+    },
+    "noData": {
+      "title": "Noch kein Verlauf",
+      "description": "Dieses Subjekt verfügt über eine Prüfung, aber keinen Zuverlässigkeitsverlauf im Zeitfenster — die Verfügbarkeit ist undefiniert, nicht 0 %. Sie erscheint, sobald Übergänge aufgezeichnet werden."
+    }
+  },
+  "incidents": {
+    "title": "Vorfälle",
+    "filterState": "Zustand",
+    "allStates": "Alle",
+    "open": "Offen",
+    "resolved": "Aufgelöst",
+    "resolve": "Auflösen",
+    "resolving": "Wird aufgelöst…",
+    "resolveTitle": "Diesen Vorfalldatensatz schließen",
+    "resolveHint": "Das Auflösen bestätigt, dass der Zeitraum abgeschlossen wird — es behauptet NICHT, dass sich das Subjekt erholt hat. Die Erholung ergibt sich aus tatsächlicher Lebendigkeit. Diese Aktion ist privilegiert und auditiert.",
+    "cols": {
+      "subject": "Subjekt",
+      "subjectKind": "Typ",
+      "incidentKind": "Vorfall",
+      "severity": "Schweregrad",
+      "opened": "Eröffnet",
+      "state": "Zustand",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "Beeinträchtigt",
+      "down": "Ausgefallen",
+      "sla_breach": "SLA-Verletzung"
+    },
+    "possibleEvasion": "Mögliche Umgehung",
+    "possibleEvasionHint": "Ein Subjekt verstummte innerhalb seiner erwarteten Taktung (ein per Sweep erkannter Ausfall). Ein Subjekt, das aufhört zu senden, ist selbst ein Signal, kein UI-Fehler.",
+    "searchPlaceholder": "Vorfall suchen…",
+    "empty": {
+      "title": "Keine Vorfälle",
+      "description": "Keine Zuverlässigkeitsvorfälle entsprechen diesem Filter. Offene Vorfälle erscheinen hier, sobald Subjekte beeinträchtigt werden oder ausfallen."
+    },
+    "truncated": "Die ersten {{n}} werden angezeigt",
+    "truncatedHint": "Es gibt mehr Vorfälle als angezeigt; diese Seite ist begrenzt, ein leerer Rest ist also KEIN Beweis, dass es keine gibt."
+  },
+  "timeline": {
+    "title": "Zuverlässigkeits-Zeitverlauf",
+    "pick": "Subjekt",
+    "pickPlaceholder": "Subjekt auswählen…",
+    "pickPrompt": {
+      "title": "Subjekt auswählen",
+      "description": "Wählen Sie ein überwachtes Subjekt, um dessen Zuverlässigkeitsübergänge aus dem nur anfügbaren Hauptbuch nachzuverfolgen."
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "Latenz",
+    "latencyUnknown": "Unbekannt",
+    "cause": {
+      "edge": "Beobachtete Lebendigkeit",
+      "report": "Aktive Abfrage",
+      "sweep": "Veralterungs-Sweep"
+    },
+    "causeHint": {
+      "edge": "Aus beobachteter Aktivität abgeleitet (eine Lebendigkeitskante).",
+      "report": "Eine aktive Fehlerfreiheitsabfrage hat diesen Zustand gemeldet.",
+      "sweep": "Vom Veralterungs-Sweep erkannt — Stille innerhalb der erwarteten Taktung."
+    },
+    "possibleEvasion": "Mögliche Umgehung",
+    "possibleEvasionHint": "Ein vom Veralterungs-Sweep erkannter Ausfall bedeutet Stille innerhalb der erwarteten Taktung — als mögliche Umgehung dargestellt, nicht als Ladefehler.",
+    "empty": {
+      "title": "Keine Übergänge aufgezeichnet",
+      "description": "Für dieses Subjekt sind noch keine Zuverlässigkeitsübergänge im Hauptbuch vorhanden."
+    },
+    "truncated": "Die ersten {{n}} werden angezeigt",
+    "truncatedHint": "Es gibt mehr Ereignisse als angezeigt. Die Seite ist nach id sortiert (älteste zuerst), abgeschnitten wird also der NEUESTE Abschnitt — ein Ereignis, das du hier nicht siehst, ist kein Ereignis, das nicht stattfand."
+  },
+  "deps": {
+    "title": "Abhängigkeitskarte",
+    "subtitle": "Automatisch aus beobachteter Aktivität entdeckt. Jeder Knoten ist nach seiner aktuellen Fehlerfreiheit eingefärbt — ein als lebendig erkannter Knoten ohne Prüfung gilt als \"beobachtet\" (blau, Fehlerfreiheit nicht gemessen), ein Knoten ganz ohne Signal bleibt grau (unbekannt); keiner ist jemals grün.",
+    "legendTitle": "Fehlerfreiheit",
+    "relation": {
+      "uses_mcp": "Nutzt MCP",
+      "uses_tool": "Nutzt Werkzeug",
+      "delegates_to": "Delegiert an"
+    },
+    "observed": "Beobachtet",
+    "truncated": "Zeige die ersten {{n}}",
+    "truncatedHint": "Der Abhängigkeitsgraph hat mehr Knoten als angezeigt; dies ist die erste Keyset-Seite.",
+    "empty": {
+      "title": "Noch keine Abhängigkeiten entdeckt",
+      "description": "Sobald Agenten MCP-Server und Werkzeuge aufrufen, erscheint hier der beobachtete Abhängigkeitsgraph."
+    },
+    "mobile": {
+      "title": "Die Karte benötigt einen breiteren Bildschirm",
+      "summary": "{{nodes}} Knoten · {{edges}} Abhängigkeiten",
+      "hint": "Öffnen Sie diese Ansicht auf einem größeren Bildschirm für den interaktiven Abhängigkeitsgraphen."
+    }
+  },
+  "detail": {
+    "statusTitle": "Subjekt-Fehlerfreiheit",
+    "incidentTitle": "Vorfall",
+    "ref": "Referenz",
+    "id": "ID",
+    "name": "Name",
+    "kind": "Art",
+    "state": "Zustand",
+    "desired": "Absicht",
+    "cadence": "Erwartete Taktung",
+    "grace": "Toleranzfaktor",
+    "slaTarget": "SLA-Ziel",
+    "slaBreach": "SLA-Verletzung offen",
+    "latency": "Letzte Latenz",
+    "lastSeen": "Zuletzt gesehen",
+    "lastChecked": "Zuletzt geprüft",
+    "owner": "Eigentümer",
+    "lastDetail": "Letztes Detail",
+    "severity": "Schweregrad",
+    "opened": "Eröffnet",
+    "resolved": "Aufgelöst",
+    "summary": "Zusammenfassung",
+    "viewSla": "SLA anzeigen",
+    "viewTimeline": "Zeitverlauf anzeigen",
+    "yes": "Ja",
+    "no": "Nein",
+    "minimalData": "Es werden nur Metadaten angezeigt. Per Design führt die Engine hier niemals Fehlertexte, Nutzdaten oder Geheimnisse mit (Datenminimierung)."
+  },
+  "live": {
+    "note": "Zeilen aktualisieren sich live, wenn sich die Fehlerfreiheit ändert; abgeglichen anhand der ID, nicht durch Annahme von Kontinuität."
+  },
+  "empty": {
+    "title": "Nichts anzuzeigen",
+    "description": "Für diesen Mandanten liegen noch keine Fehlerfreiheitsdaten vor."
+  },
+  "forbidden": {
+    "title": "Fehlerfreiheit nicht autorisiert",
+    "description": "Ihre Rolle umfasst nicht die Berechtigung, Fehlerfreiheit und SLA anzuzeigen."
+  },
+  "forbiddenResolve": {
+    "title": "Auflösen nicht autorisiert",
+    "description": "Das Auflösen eines Vorfalls erfordert die Berechtigung „Prüfungsadministrator“ (health:check:admin)."
+  },
+  "connectors": {
+    "autoRefresh": "Automatische Aktualisierung alle 15 Sekunden.",
+    "searchPlaceholder": "Konnektor suchen…",
+    "summary": {
+      "running": "Aktiv",
+      "failed": "Fehlgeschlagen",
+      "stopped": "Gestoppt",
+      "disabled": "Deaktiviert"
+    },
+    "cols": {
+      "name": "Konnektor",
+      "kind": "Typ",
+      "health": "Zustand",
+      "status": "Status",
+      "trend": "Trend",
+      "lastPoll": "Letzte Abfrage",
+      "mode": "Modus"
+    },
+    "status": {
+      "running": "Aktiv",
+      "failed": "Fehlgeschlagen",
+      "stopped": "Gestoppt",
+      "disabled": "Deaktiviert",
+      "not_wired": "Nicht verbunden"
+    },
+    "trend": {
+      "up": "Verbessernd",
+      "down": "Verschlechternd",
+      "stable": "Stabil"
+    },
+    "empty": {
+      "title": "Keine Konnektoren konfiguriert",
+      "description": "Sobald Konnektoren eingerichtet sind, wird deren Betriebszustand hier angezeigt."
+    },
+    "modeAll": "Alle Modi",
+    "modeFilter": "Modusfilter",
+    "emptyMode": {
+      "title": "Keine Konnektoren entsprechen diesem Modus",
+      "description": "Ändern Sie den Modusfilter, um andere Konnektoren zu sehen."
+    }
+  },
+  "statusPage": {
+    "title": "Olivares Control Plane — Status",
+    "subtitle": "Aktueller Betriebsstatus aller Komponenten.",
+    "unavailable": "Statusinformationen sind derzeit nicht verfügbar.",
+    "lastUpdated": "Zuletzt aktualisiert: {{time}}",
+    "overall": {
+      "operational": "Alle Systeme betriebsbereit",
+      "not_configured": "Betriebsbereit — optionale Funktionen nicht konfiguriert",
+      "degraded": "Teilweiser Systemausfall",
+      "outage": "Größerer Systemausfall"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "Wissensabruf",
+      "store": "Datenbank",
+      "connectors": "Konnektoren",
+      "ingest": "Datenaufnahme",
+      "audit_spool": "Audit-Spool"
+    },
+    "status": {
+      "operational": "Betriebsbereit",
+      "not_configured": "Nicht konfiguriert",
+      "degraded": "Beeinträchtigt",
+      "outage": "Ausfall"
+    }
+  },
+  "update": {
+    "available": "Update verfügbar",
+    "security": "Sicherheitsupdate",
+    "channel": "Kanal",
+    "upToDate": "Aktuell",
+    "title": "Updates",
+    "notChecked": "Keine aktuelle Prüfung",
+    "failed": "Update-Prüfung fehlgeschlagen",
+    "checked": "Update-Prüfung abgeschlossen",
+    "advisories": "Behobene Sicherheitshinweise",
+    "checkNow": "Jetzt prüfen",
+    "unconfigured": "Die Update-Prüfung ist nicht konfiguriert. Für Air-Gap-Bereitstellungen ist dies zu erwarten."
+  },
+  "system": {
+    "title": "Systemzustand",
+    "systemStatus": "Systemstatus",
+    "healthy": "Fehlerfrei",
+    "unhealthy": "Fehlerhaft",
+    "ready": "Bereit",
+    "notReady": "Nicht bereit",
+    "storeEngine": "Speicher-Engine",
+    "version": "Version",
+    "connectors": "Konnektoren",
+    "connectorsRunning": "{{count}} in Betrieb",
+    "connectorsConfigured": "{{count}} konfiguriert",
+    "connectorsAvailable": "{{count}} zur Einrichtung verfügbar",
+    "connectorsError": "{{count}} fehlerhaft",
+    "noConnectors": "Keine Konnektoren konfiguriert",
+    "users": "Benutzer",
+    "usersCount": "{{count}} registriert",
+    "identity": "Identität",
+    "ssoConfigured": "SSO konfiguriert",
+    "ssoNotConfigured": "SSO nicht konfiguriert",
+    "unavailable": "Betriebsdaten sind nicht verfügbar oder nicht autorisiert."
+  },
+  "auditSpool": {
+    "title": "Audit-Spool",
+    "withinBudget": "Im Budget",
+    "nearFull": "Nahe am Limit",
+    "engaged": "Budget erschöpft",
+    "modes": {
+      "block": "Bei voll blockieren",
+      "degrade": "Bei voll degradieren"
+    },
+    "usage": "{{used}} von {{max}} belegt ({{pct}})",
+    "pendingDrops": "{{drops}} unversiegelte Evidenzverluste über {{tenants}} Tenants"
+  },
+  "checks": {
+    "title": "Fehlerfreiheitsprüfungen",
+    "description": "Deklarieren und steuern Sie Taktung, Toleranzfenster, SLA-Ziel und Lebenszyklus-Absicht überwachter Agenten und MCP-Server.",
+    "create": "Prüfung erstellen",
+    "created": "Fehlerfreiheitsprüfung erstellt",
+    "updated": "Fehlerfreiheitsprüfung aktualisiert",
+    "deleted": "Fehlerfreiheitsprüfung gelöscht",
+    "failed": "Der Vorgang der Fehlerfreiheitsprüfung ist fehlgeschlagen.",
+    "duplicate": "Für dieses Subjekt existiert bereits eine Fehlerfreiheitsprüfung.",
+    "searchPlaceholder": "Prüfungen suchen…",
+    "reportTooltipLabel": "Über Abfrageberichte",
+    "reportTooltip": "Die Aufnahme von Abfrageberichten richtet sich an Maschinen und ist bewusst nicht Teil der Konsole.",
+    "seconds": "{{count}}s",
+    "cols": {
+      "subject": "Subjekt",
+      "kind": "Art",
+      "state": "Zustand",
+      "intent": "Absicht",
+      "cadence": "Taktung",
+      "sla": "SLA",
+      "lastChecked": "Zuletzt geprüft",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "editAria": "Fehlerfreiheitsprüfung für {{subject}} bearbeiten",
+      "pause": "Pausieren",
+      "pauseAria": "Fehlerfreiheitsprüfung für {{subject}} pausieren",
+      "resume": "Fortsetzen",
+      "resumeAria": "Fehlerfreiheitsprüfung für {{subject}} fortsetzen",
+      "retire": "Stilllegen",
+      "retireAria": "Fehlerfreiheitsprüfung für {{subject}} stilllegen",
+      "delete": "Löschen",
+      "deleteAria": "Fehlerfreiheitsprüfung für {{subject}} löschen"
+    },
+    "form": {
+      "name": "Name",
+      "subjectKind": "Subjektart",
+      "subjectRef": "Subjektreferenz",
+      "expectedInterval": "Erwartetes Intervall (Sekunden)",
+      "graceFactor": "Toleranzfaktor",
+      "slaTarget": "SLA-Ziel (PPM)",
+      "slaTargetHint": "0 entfernt das SLA-Ziel; 999000 bedeutet 99,9 %.",
+      "desiredStatus": "Gewünschter Status",
+      "validation": "Geben Sie eine Subjektreferenz, positive ganzzahlige Werte für Taktung und Toleranz sowie ein SLA-Ziel zwischen 0 und 1000000 an."
+    },
+    "createDialog": {
+      "title": "Fehlerfreiheitsprüfung erstellen",
+      "description": "Deklarieren Sie einen überwachten Agenten oder MCP-Server. Ein Subjekt kann nur eine Fehlerfreiheitsprüfung haben."
+    },
+    "edit": {
+      "title": "Fehlerfreiheitsprüfung bearbeiten",
+      "description": "Das Subjekt ist unveränderlich. Aktualisieren Sie die angezeigte Konfiguration und die Lebenszyklus-Absicht."
+    },
+    "delete": {
+      "title": "Fehlerfreiheitsprüfung löschen",
+      "description": "Löscht die Fehlerfreiheitsprüfung für {{subject}} endgültig. Diese Admin-Aktion wird im Audit-Ledger erfasst."
+    },
+    "empty": {
+      "title": "Keine Fehlerfreiheitsprüfungen deklariert",
+      "description": "Erstellen Sie eine Prüfung, um die erwartete Lebendigkeitstaktung eines Agenten oder MCP-Servers zu steuern."
+    }
+  },
+  "tls": {
+    "title": "TLS-Zertifikat",
+    "notAfter": "Gültig bis",
+    "daysLeft": "Noch {{count}} Tage",
+    "expired": "Vor {{count}} Tagen abgelaufen"
+  },
+  "keys": {
+    "title": "Schlüsselverwahrung",
+    "empty": "Keine Metadaten zur Schlüsselverwahrung verfügbar.",
+    "sealers": "Symmetrische Versiegelungsschlüssel",
+    "sourceUnknown": "Quelle nicht verfügbar",
+    "copyFingerprint": "Vollständigen Fingerabdruck für {{purpose}} kopieren",
+    "copied": "Fingerabdruck kopiert",
+    "cols": {
+      "purpose": "Zweck",
+      "algorithm": "Algorithmus",
+      "mode": "Verwahrmodus",
+      "kek": "KEK",
+      "created": "Erstellt",
+      "fingerprint": "Fingerabdruck",
+      "prior": "Vorherige Schlüssel"
+    }
+  },
+  "config": {
+    "title": "Effektive Konfiguration",
+    "empty": "Keine Einträge zur effektiven Konfiguration verfügbar.",
+    "strictViolations": "Verstöße gegen die strikte Konfiguration",
+    "redacted": "Geschwärzt",
+    "cols": {
+      "key": "Schlüssel",
+      "value": "Effektiver Wert",
+      "source": "Quelle"
+    }
+  },
+  "bus": {
+    "title": "Event-Bus",
+    "noSubscribers": "Keine Event-Bus-Abonnenten registriert.",
+    "depthAria": "Warteschlangentiefe für {{subscriber}}",
+    "counters": {
+      "publishBlocked": "Veröffentlichen blockiert",
+      "dropped": "Verworfen",
+      "droppedTelemetry": "Telemetrie verworfen",
+      "droppedNotify": "Benachrichtigungen verworfen",
+      "handlerErrors": "Handler-Fehler",
+      "enqueued": "Eingereiht",
+      "handled": "Verarbeitet"
+    },
+    "bridge": {
+      "title": "Bridge",
+      "pendingMessages": "Ausstehende Nachrichten",
+      "pendingBytes": "Ausstehende Bytes",
+      "dropped": "Verworfen",
+      "publishErrors": "Veröffentlichungsfehler",
+      "decodeErrors": "Dekodierfehler",
+      "gateSkipped": "Gate übersprungen",
+      "invalidSubject": "Ungültiges Subject"
+    }
+  },
+  "support": {
+    "title": "Support-Paket",
+    "description": "Erzeugen Sie ein Diagnosearchiv für den Support, ohne gespeicherte Geheimniswerte offenzulegen.",
+    "download": "Support-Paket herunterladen",
+    "generate": "Erzeugen und herunterladen",
+    "confirmTitle": "Support-Paket erzeugen?",
+    "confirmDescription": "Diese privilegierte AAL3-Aktion wird im Audit-Ledger erfasst.",
+    "contents": "Das Paket enthält die geschwärzte effektive Konfiguration, den Betriebsstatus und Logs. Prüfen Sie es vor der Weitergabe.",
+    "downloaded": "Support-Paket heruntergeladen",
+    "needsAal3": "Für die Erzeugung eines Support-Pakets ist ein hardwaregestützter AAL3-Step-up erforderlich.",
+    "failed": "Die Erzeugung des Support-Pakets ist fehlgeschlagen."
+  }
+}

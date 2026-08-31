@@ -1,0 +1,34 @@
+{
+  "title": "Settings",
+  "subtitle": "Manage your account and how the console looks.",
+  "tabs": {
+    "profile": "Profile",
+    "appearance": "Appearance",
+    "about": "About"
+  },
+  "profile": {
+    "title": "Profile",
+    "email": "Email",
+    "displayName": "Display name",
+    "role": "Role in this organization",
+    "memberships": "Organizations",
+    "actor": "Principal"
+  },
+  "appearance": {
+    "title": "Appearance",
+    "theme": "Theme",
+    "themeHint": "Choose light, dark, or follow your system.",
+    "density": "Table density",
+    "densityHint": "Compact fits more rows; comfortable is roomier.",
+    "language": "Language",
+    "languageHint": "The console interface language."
+  },
+  "about": {
+    "title": "About",
+    "version": "Version",
+    "engine": "Store engine",
+    "license": "License status",
+    "licensee": "Licensed to",
+    "none": "None"
+  }
+}

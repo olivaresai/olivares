@@ -1,0 +1,194 @@
+{
+  "truncation": {
+    "label": "{{n}} lignes chargées ; il y en a d'autres",
+    "hint": "Cette liste est plafonnée. Seules les lignes chargées sont affichées ; l'absence d'un enregistrement d'évaluation ici ne prouve pas qu'il n'existe pas."
+  },
+  "title": "Évaluations",
+  "description": "Fiches de score qualité, résultats d’exécution, comparaisons A/B et dérive — mesurés par rapport à des suites de référence versionnées. Les sorties ne sont jamais stockées ; seuls les scores et les empreintes de hachage le sont.",
+  "forbidden": {
+    "title": "Non autorisé",
+    "description": "La permission de lecture des évaluations est requise pour consulter les mesures de qualité."
+  },
+  "tabs": {
+    "scorecards": "Fiches de score",
+    "runs": "Exécutions",
+    "ab": "A/B",
+    "drift": "Dérive",
+    "gate": "Gate CI",
+    "calibration": "Calibration du juge"
+  },
+  "subjectKind": {
+    "suite": "Suite",
+    "agent": "Agent",
+    "model": "Modèle",
+    "prompt_variant": "Variante d’invite",
+    "prompt": "Invite",
+    "session": "Session",
+    "sandbox_run": "Exécution en bac à sable"
+  },
+  "scorecards": {
+    "title": "Fiches de score qualité",
+    "description": "Score moyen, taux de réussite et tendance par sujet, agrégés à la lecture.",
+    "groupBy": "Regrouper par",
+    "by": {
+      "agent": "Par agent",
+      "model": "Par modèle",
+      "suite": "Par suite",
+      "prompt_variant": "Par variante d’invite"
+    },
+    "meanScore": "Score moyen",
+    "passRate": "Taux de réussite",
+    "runs": "Exécutions",
+    "lastScore": "Dernier score",
+    "regressed": "En régression",
+    "empty": "Aucune fiche de score pour l’instant — lancez une évaluation contre une suite de référence."
+  },
+  "runs": {
+    "title": "Exécutions d’évaluation",
+    "description": "Chaque exécution évalue un sujet par rapport à une version de suite. Une régression est signalée ici ; le constat est traité par la vue de sécurité.",
+    "columns": {
+      "subject": "Sujet",
+      "status": "Statut",
+      "score": "Score",
+      "passRate": "Taux de réussite",
+      "regression": "Régression",
+      "startedAt": "Démarrée"
+    },
+    "regressed": "En régression · dérive {{drift}}",
+    "noRegression": "Aucune",
+    "empty": "Aucune exécution sur la période.",
+    "overN": "sur {{n}}",
+    "notScored": "not scored — no verdict",
+    "noBaseline": "no baseline — nothing compared"
+  },
+  "cases": {
+    "title": "{{subject}} — résultats par cas",
+    "titleEmpty": "Résultats par cas",
+    "description": "Résultat et score par cas pour cette exécution.",
+    "noPayload": "La sortie candidate n’est jamais stockée — chaque cas ne porte qu’une empreinte à sens unique et une étiquette courte tronquée, jamais une charge utile dépliable.",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "Cas",
+      "outcome": "Résultat",
+      "score": "Score",
+      "label": "Étiquette",
+      "fingerprint": "Empreinte"
+    },
+    "empty": "Aucun résultat par cas pour cette exécution."
+  },
+  "ab": {
+    "title": "Comparaison A/B",
+    "description": "Deux variantes d’invite évaluées sur la même suite ; le score le plus élevé l’emporte, les égalités sont explicites.",
+    "winner": "Gagnant : {{label}} · Δ {{delta}}",
+    "winnerTag": "Gagnant",
+    "tie": "Égalité",
+    "passRate": "Taux de réussite {{value}}",
+    "seamNote": "Une comparaison A/B est une écriture privilégiée via POST /ab ; le moteur n’expose aucune comparaison stockée à relire.",
+    "seamLabel": "Écriture privilégiée",
+    "pickerTitle": "Exécuter une comparaison A/B",
+    "pickerDescription": "Choisissez la suite, puis fournissez les sorties produites par chaque variante.",
+    "runComparison": "Exécuter la comparaison",
+    "runError": "La comparaison A/B n’a pas pu être exécutée. Réessayez.",
+    "empty": "Aucune comparaison A/B n’a été exécutée dans cette session.",
+    "emptyDescription": "Un résultat apparaît uniquement lorsque l’écriture privilégiée POST /ab est terminée. Il n’existe aucun endpoint GET pour une comparaison stockée.",
+    "suiteLabel": "Suite",
+    "selectSuite": "Sélectionner une suite",
+    "noSuites": "Aucune suite pour l’instant. Une comparaison est notée sur les cas d’une suite : créez-en une d’abord.",
+    "labelA": "Libellé de la variante A",
+    "labelB": "Libellé de la variante B",
+    "outputsA": "Sorties de la variante A",
+    "outputsB": "Sorties de la variante B",
+    "outputsHint": "Objet JSON associant case_key à la sortie produite par cette variante. Le moteur les note et ne conserve qu’une empreinte : le texte n’est jamais stocké.",
+    "outputsInvalid": "Ce n’est pas un objet JSON associant case_key à un texte de sortie.",
+    "outputsEmpty": "Fournissez au moins la sortie d’un cas. Un ensemble vide ne note rien et serait enregistré comme une exécution sans résultat.",
+    "pairwiseLabel": "Juger aussi les variantes en face-à-face",
+    "pairwiseHint": "Juge chaque cas commun deux fois en inversant l’ordre des candidats, et ne compte une victoire que si les deux ordres concordent. Deux appels au juge par cas (facturable) et la suite doit porter un critère.",
+    "pairwiseTitle": "Face-à-face jugé",
+    "pairwiseSkippedTag": "Ignoré",
+    "pairwiseWinner": "Vainqueur jugé : {{label}}",
+    "pairwiseCounts": "{{compared}} comparés · {{aWins}} A · {{bWins}} B · {{ties}} égalités · {{inconsistent}} incohérents selon l’ordre · {{errors}} erreurs",
+    "pairwiseConsistency": "Cohérence de position {{rate}} (n={{n}}, IC 95 % {{lo}}–{{hi}})",
+    "outputsTooLong": "Une clé de cas ne peut dépasser {{maxKey}} caractères et une sortie {{maxOutput}}. Le moteur tronque les valeurs plus longues et note le texte tronqué.",
+    "outputsPlaceholder": "{\"cas-1\": \"la sortie produite par cette variante\"}",
+    "pairwiseSkippedBody": "Le moteur n’a pas exécuté la comparaison jugée. Sa raison :"
+  },
+  "drift": {
+    "title": "Dérive — {{subject}}",
+    "description": "Score au fil du temps par rapport au seuil de réussite de la suite ; un déclin soutenu constitue une dégradation.",
+    "score": "Score",
+    "threshold": "Seuil de réussite",
+    "pickerTitle": "Sujet",
+    "note": "La ligne de seuil est le seuil de réussite de la suite ; les points en dessous ont échoué à atteindre la barre à ce moment-là.",
+    "empty": "Aucune donnée de tendance pour l’instant."
+  },
+  "outcomeBar": {
+    "passed": "Réussis",
+    "failed": "Échoués",
+    "errors": "Erreurs",
+    "skipped": "Ignorés"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "Aucun résultat par cas pour cette exécution",
+      "description": "L’exécution doit évaluer ou ignorer des cas de la suite sélectionnée avant que leurs résultats, scores et empreintes n’apparaissent ici."
+    },
+    "runs": {
+      "title": "Aucune exécution d’évaluation enregistrée",
+      "description": "Un appelant doit soumettre des sorties candidates à une suite de référence versionnée via l’API d’exécution des évaluations avant qu’une exécution avec score n’apparaisse ici."
+    }
+  },
+  "gate": {
+    "title": "Gate CI",
+    "description": "Évaluations du gate de régression : ce que le gate a mesuré, et ce que la CI doit appliquer.",
+    "empty": "Aucune évaluation du gate",
+    "measured": "mesuré {{verdict}}",
+    "effective": "la CI applique {{verdict}}",
+    "sampled": "{{sampled}} cas sur {{total}} échantillonnés",
+    "overriddenBy": "contourné par {{actor}}",
+    "override": "Contourner",
+    "overrideTitle": "Contourner un gate en {{verdict}}",
+    "overrideDescription": "Un motif écrit est obligatoire. Il est consigné à côté du verdict initial, dans la ligne et dans le registre de preuves.",
+    "reason": "Motif",
+    "reasonHint": "Pourquoi ce gate est contourné. Le verdict initial n'est pas effacé.",
+    "confirmOverride": "Contourner le gate",
+    "overrideDone": "Gate contourné",
+    "cancel": "Annuler",
+    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
+    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+  },
+  "calibration": {
+    "title": "Calibration du juge",
+    "description": "Dans quelle mesure le juge LLM concorde avec les étiquettes humaines. Un ensemble incapable de mesurer l'accord corrigé du hasard ne peut rien certifier.",
+    "empty": "Aucun rapport de calibration",
+    "meets": "objectif atteint",
+    "below": "en dessous de l'objectif",
+    "cannotCertify": "non certifiable — kappa indéfini",
+    "agreement": "Accord",
+    "kappa": "Kappa",
+    "sensitivity": "Sensibilité",
+    "specificity": "Spécificité",
+    "ciOverN": "IC 95 % {{lo}}–{{hi}} sur n={{n}}",
+    "degradedWithErrors": "dégradé · {{n}} en erreur",
+    "verbosityCorr": "Corr. verbosité"
+  },
+  "calibItems": {
+    "title": "Reference set",
+    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "run": "Run calibration",
+    "empty": "No labelled items yet",
+    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
+    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "humanPass": "human: pass",
+    "humanFail": "human: fail",
+    "unscored": "unscored",
+    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+  },
+  "baseline": {
+    "pin": "Pin as baseline",
+    "confirm": "Replace the baseline",
+    "pinned": "Baseline pinned",
+    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
+    "thisRunScores": "This run passed {{score}} over n={{n}}.",
+    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+  }
+}

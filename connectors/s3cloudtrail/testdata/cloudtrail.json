@@ -1,0 +1,112 @@
+{
+  "Records": [
+    {
+      "eventVersion": "1.09",
+      "eventTime": "2026-06-03T10:23:45Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "GetObject",
+      "readOnly": true,
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "AIDAEXAMPLE",
+        "arn": "arn:aws:iam::123456789012:user/analyst",
+        "accountId": "123456789012",
+        "userName": "analyst"
+      },
+      "requestParameters": { "bucketName": "sales-data", "key": "reports/q2.csv" },
+      "resources": [
+        { "type": "AWS::S3::Object", "ARN": "arn:aws:s3:::sales-data/reports/q2.csv" },
+        { "accountId": "123456789012", "type": "AWS::S3::Bucket", "ARN": "arn:aws:s3:::sales-data" }
+      ]
+    },
+    {
+      "eventVersion": "1.09",
+      "eventTime": "2026-06-03T10:23:46Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "PutObject",
+      "readOnly": false,
+      "userIdentity": {
+        "type": "AssumedRole",
+        "principalId": "AROAEXAMPLE:claude-agent-7",
+        "arn": "arn:aws:sts::123456789012:assumed-role/AppRole/claude-agent-7",
+        "accountId": "123456789012",
+        "sessionContext": {
+          "sessionIssuer": {
+            "type": "Role",
+            "principalId": "AROAEXAMPLE",
+            "arn": "arn:aws:iam::123456789012:role/AppRole",
+            "accountId": "123456789012",
+            "userName": "AppRole"
+          }
+        }
+      },
+      "requestParameters": { "bucketName": "sales-data", "key": "uploads/new.csv" },
+      "resources": [
+        { "type": "AWS::S3::Object", "ARN": "arn:aws:s3:::sales-data/uploads/new.csv" },
+        { "type": "AWS::S3::Bucket", "ARN": "arn:aws:s3:::sales-data" }
+      ]
+    },
+    {
+      "eventVersion": "1.09",
+      "eventTime": "2026-06-03T10:23:47Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "DeleteObject",
+      "readOnly": false,
+      "userIdentity": {
+        "type": "AssumedRole",
+        "arn": "arn:aws:sts::123456789012:assumed-role/CleanupRole/batch-9",
+        "accountId": "123456789012",
+        "sessionContext": {
+          "sessionIssuer": {
+            "arn": "arn:aws:iam::123456789012:role/CleanupRole",
+            "userName": "CleanupRole"
+          }
+        }
+      },
+      "requestParameters": { "bucketName": "sales-data", "key": "tmp/old.csv" },
+      "resources": [
+        { "type": "AWS::S3::Object", "ARN": "arn:aws:s3:::sales-data/tmp/old.csv" }
+      ]
+    },
+    {
+      "eventVersion": "1.09",
+      "eventTime": "2026-06-03T10:23:48Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "ListBucket",
+      "readOnly": true,
+      "userIdentity": {
+        "type": "IAMUser",
+        "arn": "arn:aws:iam::123456789012:user/analyst",
+        "accountId": "123456789012",
+        "userName": "analyst"
+      },
+      "requestParameters": { "bucketName": "sales-data" },
+      "resources": [
+        { "type": "AWS::S3::Bucket", "ARN": "arn:aws:s3:::sales-data" }
+      ]
+    },
+    {
+      "eventVersion": "1.09",
+      "eventTime": "2026-06-03T10:23:49Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "PutObject",
+      "readOnly": false,
+      "userIdentity": { "type": "AWSService", "invokedBy": "replication.s3.amazonaws.com" },
+      "requestParameters": { "bucketName": "sales-data-replica", "key": "reports/q2.csv" },
+      "resources": [
+        { "type": "AWS::S3::Object", "ARN": "arn:aws:s3:::sales-data-replica/reports/q2.csv" }
+      ]
+    },
+    {
+      "eventVersion": "1.09",
+      "eventTime": "2026-06-03T10:23:50Z",
+      "eventSource": "dynamodb.amazonaws.com",
+      "eventName": "GetItem",
+      "readOnly": true,
+      "userIdentity": { "type": "IAMUser", "arn": "arn:aws:iam::123456789012:user/analyst" },
+      "resources": [
+        { "type": "AWS::DynamoDB::Table", "ARN": "arn:aws:dynamodb:eu-west-1:123456789012:table/sessions" }
+      ]
+    }
+  ]
+}

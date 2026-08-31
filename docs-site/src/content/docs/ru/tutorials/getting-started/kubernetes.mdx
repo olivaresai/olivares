@@ -1,0 +1,214 @@
+---
+title: "Начало работы в Kubernetes (Helm)"
+description: >-
+  Разверните control plane в Kubernetes с помощью поставляемого Helm-чарта — от
+  безопасной одноузловой конфигурации по умолчанию до Postgres, active-passive HA
+  с общим ключом подписи аудита, зашифрованных DR-резервных копий по CronJob и
+  DaemonSet коллекторов.
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Helm-чарт по пути `deploy/helm/olivares` разворачивает control
+plane с теми же безопасными настройками по умолчанию, что и любой другой способ:
+**core StatefulSet** (не от root, корневая файловая система только для чтения, все
+capabilities сброшены), включённый TLS, экспозиция, эквивалентная loopback
+(Service типа `ClusterIP` — ничего публичного, пока вы сами не решите), и никаких
+учётных данных по умолчанию. Отсюда вы по своему выбору подключаете
+Postgres, **active-passive HA**, плановые **зашифрованные DR-резервные копии**
+и **DaemonSet коллекторов** для распределённого приёма данных.
+
+Всё, что приведено ниже, было отрендерено и проверено относительно чарта в этом
+репозитории (`helm lint` + `helm template`, включая конфигурации HA и резервного
+копирования, а также собственные предохранители чарта). Чарт требует
+**Kubernetes ≥ 1.25**.
+
+<Aside type="caution" title="Статус публикации чарта — честно">
+На момент релиза чарт публикуется в OCI-реестр и подписывается через cosign, так
+что вы проверяете его при установке и привязываете образы по digest. Чарт скачивает
+образ контейнера из Docker Hub (`docker.io/olivaresai/olivares`; также доступен на
+`ghcr.io/olivaresai/olivares`, идентичен по digest); сам артефакт **чарта** живёт на
+`oci://ghcr.io/olivaresai/charts/olivares`. Первый релиз пока остаётся
+**черновиком**: пока не выпущен тег `chart-v*`, путь в реестре **пуст**. До этого
+момента устанавливайте из чекаута репозитория (сам чарт завершён и отрендерён
+ниже); после публикации переключитесь на
+`oci://ghcr.io/olivaresai/charts/olivares` и
+[проверьте, что вы скачали](/how-to/verify-a-release/).
+</Aside>
+
+## 1. Установка по умолчанию (один узел, SQLite)
+
+<Steps>
+
+1. Установка из чекаута:
+
+   ```bash
+   helm install olivares deploy/helm/olivares
+   ```
+
+   Это рендерит ровно три объекта рабочих нагрузок — `StatefulSet` (1 реплика,
+   SQLite на постоянном PVC объёмом 8 Gi), `ClusterIP` `Service` (8443 HTTPS,
+   8444 gRPC) и `ServiceAccount` **без** привилегий Kubernetes API.
+   Пробы обращаются к `/readyz` (readiness — выводится из ротации, когда хранилище
+   недоступно или реплика не лидер) и `/livez` (liveness — только процесс, никогда
+   не зависимость, так что отказ хранилища никогда не вызовет цикл перезапусков).
+
+2. Прочитайте одноразовый токен настройки из лога пода (он выводится только в stdout
+   — в Kubernetes это лог контейнера):
+
+   ```bash
+   kubectl logs -l app.kubernetes.io/component=core | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. Сделайте port-forward и завершите первичную настройку
+   ([тот же процесс, что и везде](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)):
+
+   ```bash
+   # Service называется <release>-olivares-core:
+   kubectl port-forward svc/olivares-core 8443:8443
+   curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="danger" title="Никогда не запускайте продакшен с `persistence.enabled=false`">
+При выключенном хранении данных каталог данных — это `emptyDir`: **ключ подписи
+аудита** и токен настройки теряются при каждом перепланировании, что навсегда ломает
+проверяемость ledger. Значение по умолчанию (`persistence.enabled=true`) — это
+единственная продакшен-конфигурация; помимо этого сделайте резервную копию ключа вне
+машины ([резервное копирование и восстановление](/how-to/backup-and-restore/)).
+</Aside>
+
+Как вариант, вообще без Helm: репозиторий поставляет плоский манифест с теми же
+безопасными одноузловыми настройками по умолчанию, регенерируемый из чарта в CI:
+
+```bash
+kubectl apply -f deploy/manifests/install.yaml
+```
+
+Для Argo CD / Flux / Kustomize (`kustomize build --enable-helm`) см.
+`deploy/gitops/` — декларативные обёртки над тем же чартом.
+
+## 2. Postgres (многоарендный)
+
+Движку требуется роль базы данных с **минимальными привилегиями**: `LOGIN`, не
+superuser, **без `BYPASSRLS`** — row-level security служит подстраховкой арендатора,
+и движок отказывается запускаться с привилегированной ролью. Подготовьте роль с
+помощью канонического `deploy/postgres/01-app-role.sql` (чарт может выполнить его за
+вас как pre-install Job), поместите DSN в Secret и укажите его чарту:
+
+```bash
+kubectl create secret generic olivares-pg \
+  --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full' \
+  --from-literal=admin-dsn='postgres://olivares_admin:***@db:5432/olivares?sslmode=verify-full'
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set postgres.adminDsnKey=admin-dsn
+```
+
+Ключ `admin-dsn` в том же Secret содержит выделенную роль `NOSUPERUSER
+BYPASSRLS`. Он опционален **только** если вы никогда не будете включать
+резервное копирование: именно он делает **полными** межарендные системные
+чтения — список организаций и охват многоарендности, — а включение резервного
+копирования его **требует** ([плановые зашифрованные резервные
+копии](#4-плановые-зашифрованные-резервные-копии)). Если создать его сейчас, тот
+последующий шаг сведётся к правке в одну строку.
+
+## 3. Active-passive HA
+
+С Postgres в роли общего хранилища запустите несколько реплик. Одна избирается
+лидером (advisory lock Postgres); резервные реплики отвечают на `/readyz`
+`503 {"status":"standby"}`, так что Service маршрутизирует только к лидеру, а
+резервная реплика автоматически берёт управление, когда лидер исчезает.
+
+Две вещи структурно обязательны, и чарт **обеспечивает обе** (мы убедились, что
+предохранители рендерятся как жёсткие отказы, а не предупреждения):
+
+| Требование | Зачем | Предохранитель чарта при отсутствии |
+|---|---|---|
+| `core.engine=postgres` | Файл SQLite локален для одного пода — он не может быть общим хранилищем. | `core.replicaCount > 1 requires core.engine=postgres …` |
+| `core.auditSigningKeySecret` | Каждая реплика должна подписывать audit ledger **одним и тем же** ключом Ed25519, иначе hash chain раздваивается при failover. | `core.replicaCount > 1 requires core.auditSigningKeySecret …` |
+
+```bash
+kubectl create secret generic olivares-audit-key \
+  --from-file=audit-signing.key=<base64-ed25519-private-key-file>
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set core.replicaCount=3 \
+  --set core.auditSigningKeySecret=olivares-audit-key
+```
+
+Канонические размеры HA — 3 или 5 реплик, active-passive. Эта одно-писательская
+архитектура намеренна (она соответствует модели консистентности продукта);
+[показатели готовности к продакшену](/how-to/monitor-with-prometheus/) документируют
+уровни доступности, которые она поддерживает.
+
+## 4. Плановые зашифрованные резервные копии
+
+Чарт поставляет `CronJob`, который запускает `olivares dr backup` — зашифрованный,
+**безопасный для непрерывности ledger** пакет (снимок хранилища + ключи подписи,
+запечатанные под вашим KEK + манифест chain-tip по каждому арендатору):
+
+```bash
+kubectl create secret generic dr-kek --from-literal=passphrase='<strong passphrase>'
+
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set backup.enabled=true \
+  --set backup.kekSecret=dr-kek \
+  --set postgres.adminDsnKey=admin-dsn   # на Postgres ОБЯЗАТЕЛЕН вместе с backup
+```
+
+С `core.engine=postgres` чарт **отказывается рендериться** без
+`postgres.adminDsnKey`, и это жёсткий отказ по существу: `pg_dump` резервной копии
+удерживает `row_security=off` и **аварийно завершается** под ролью приложения на
+таблицах с `FORCE ROW LEVEL SECURITY`. CronJob, подключённый к DSN приложения,
+падал бы при **каждом** запуске — резервной копии не было бы вообще (речь не о
+«тихом захвате части строк»).
+
+Значения по умолчанию: каждые 6 часов (`backup.schedule` задаёт ваш RPO), 14-дневное
+локальное хранение, выделенный PVC назначения. **Зеркалируйте назначение вне площадки
+и храните KEK отдельно от пакетов** — резервная копия в том же кластере не является
+аварийным восстановлением. Тренируйте восстановление через `olivares dr verify`;
+полная процедура описана в
+[резервном копировании и восстановлении](/how-to/backup-and-restore/).
+
+## 5. DaemonSet коллекторов (распределённый приём данных)
+
+Для распределённой топологии `DaemonSet` коллекторов запускает коннекторы источников
+на каждом узле и **отправляет** наблюдения в core по gRPC — у коллекторов нет
+входящего слушателя. Чарт требует токен приёма данных и принимает опциональный
+материал mTLS:
+
+```bash
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set collectors.enabled=true \
+  --set collectors.ingestTokenSecret=olivares-ingest-token   # ingest:write bearer token
+```
+
+Передайте коллекторам их источники через `collectors.sourcesConfig` (тот же
+[JSON источников](/how-to/connect-a-source/), что и везде), и включите mTLS с
+проверкой клиентского сертификата для канала коллектор→core через
+`tls.grpcClientCaSecret` — см. [укрепление безопасности](/how-to/security-hardening/).
+
+## Мониторинг
+
+Включите `serviceMonitor`, если у вас запущен Prometheus operator; в любом случае
+движок предоставляет `/metrics` без аутентификации (он не несёт данных арендатора), а
+репозиторий поставляет готовые правила алертов. См.
+[мониторинг с Prometheus](/how-to/monitor-with-prometheus/).
+
+## Следующие шаги
+
+- **Подключите источники:** [подключение источника](/how-to/connect-a-source/) и
+  [руководства по коннекторам](/how-to/connectors/pgaudit/).
+- **Тренировки на отказах:** [устранение неполадок](/how-to/troubleshooting/) —
+  поведение при failover, обратное давление, проверка ledger.
+- **Изолированный кластер?** [Начало работы на изолированной площадке](/tutorials/getting-started/air-gapped/).

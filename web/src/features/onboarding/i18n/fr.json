@@ -1,0 +1,99 @@
+{
+  "title": "Commencer",
+  "subtitle": "Configurez votre déploiement étape par étape : chaque étape est vérifiée sur le plan de contrôle en direct.",
+  "progress": "{{done}} sur {{total}} vérifiées",
+  "refresh": "Actualiser",
+  "dismiss": "Masquer",
+  "allDone": "Votre déploiement est configuré.",
+  "allDoneHint": "Chaque étape est vérifiée sur le plan de contrôle. Vous pouvez revenir à cet assistant à tout moment.",
+  "dismissed": {
+    "title": "Guide de configuration masqué",
+    "description": "Le guide est masqué dans ce navigateur. Votre déploiement continue de fonctionner — vous pouvez reprendre les étapes vérifiées à tout moment.",
+    "resume": "Reprendre le guide de configuration"
+  },
+  "status": {
+    "verified": "Vérifié",
+    "pending": "En attente",
+    "awaiting": "En attente d'un hôte"
+  },
+  "steps": {
+    "infra": {
+      "title": "Infrastructure",
+      "hint": "La base de données doit être joignable avant toute chose.",
+      "ready": "Le plan de contrôle peut joindre sa base de données. Cette étape est vérifiée automatiquement.",
+      "notReady": "Le plan de contrôle ne peut pas encore joindre sa base de données."
+    },
+    "workspace": {
+      "title": "Créez votre premier espace de travail",
+      "hint": "Un espace de travail délimite agents, sources et politiques.",
+      "name": "Nom de l'espace de travail",
+      "namePlaceholder": "p. ex. Équipe plateforme",
+      "slug": "Slug",
+      "create": "Créer l'espace de travail",
+      "addAnother": "En créer un autre",
+      "created": "Espace de travail {{name}} créé."
+    },
+    "identity": {
+      "title": "Invitez un administrateur",
+      "hint": "Invitez un second administrateur, ou connectez votre fournisseur d'identité.",
+      "email": "E-mail",
+      "role": "Rôle",
+      "mode": "Méthode",
+      "modeInvite": "Envoyer une invitation",
+      "modePassword": "Définir un mot de passe",
+      "invite": "Inviter",
+      "inviteAnother": "En inviter un autre",
+      "invited": "{{email}} invité.",
+      "or": "ou",
+      "ssoCta": "Connecter le SSO",
+      "password": "Mot de passe",
+      "passwordHint": "Au moins 8 caractères. Le nouvel administrateur pourra le changer plus tard.",
+      "memberCount_one": "{{count}} membre dans ce locataire.",
+      "memberCount_many": "{{count}} membres dans ce locataire.",
+      "memberCount_other": "{{count}} membres dans ce locataire."
+    },
+    "source": {
+      "title": "Enregistrez votre première source",
+      "hint": "Connectez une source de contenu ou de gouvernance. Les identifiants sont stockés par référence.",
+      "kind": "Connecteur",
+      "kindPlaceholder": "Choisissez un connecteur",
+      "name": "Nom de la source",
+      "namePlaceholder": "p. ex. my-wiki",
+      "tenant": "Locataire",
+      "noFields": "Ce connecteur ne nécessite aucune configuration supplémentaire.",
+      "secretHint": "Saisissez une valeur à sceller, ou une référence store:<name>.",
+      "test": "Tester",
+      "tested": "Connexion réussie.",
+      "testOk": "Le connecteur s'est ouvert correctement.",
+      "testFail": "Le connecteur n'a pas pu s'ouvrir — vérifiez la configuration.",
+      "register": "Enregistrer",
+      "addAnother": "En enregistrer une autre",
+      "registered": "{{name}} enregistré.",
+      "notRunning": "Une source est enregistrée mais pas encore en cours d'exécution — vérifiez son état ci-dessus.",
+      "credByRef": "Les champs secrets sont scellés dans le coffre et référencés en tant que store:<name> — une valeur d'identifiant n'est jamais stockée en clair."
+    },
+    "pep": {
+      "title": "Activez votre premier point d'application des politiques",
+      "hint": "Publiez une politique managed-settings et confirmez qu'un hôte l'a appliquée.",
+      "notPublished": "Aucune politique managed-settings n'est encore publiée.",
+      "authorCta": "Rédiger une politique",
+      "active": "Un hôte a attesté cette politique — le point d'application est actif.",
+      "awaitingHint": "La politique est publiée et signée, mais aucun hôte ne s'est encore manifesté. Déployez l'extrait et actualisez.",
+      "revision": "Révision",
+      "fingerprint": "Empreinte de la clé",
+      "snippet": "Extrait managed-settings",
+      "copy": "Copier",
+      "copied": "Copié dans le presse-papiers.",
+      "copyFailed": "Impossible de copier dans le presse-papiers.",
+      "checkins": "Rapports des hôtes",
+      "noCheckins": "Aucun hôte ne s'est encore manifesté.",
+      "colScope": "Portée",
+      "colReporter": "Rapporteur",
+      "colRevision": "Révision",
+      "colVerified": "Vérifié",
+      "verifiedCurrent": "Vérifié (à jour)",
+      "verifiedStale": "Vérifié (obsolète)",
+      "unverified": "Non vérifié"
+    }
+  }
+}

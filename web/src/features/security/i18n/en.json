@@ -1,0 +1,252 @@
+{
+  "title": "Security & forensics",
+  "description": "Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. The plane is detective by default — it records, it does not block on its own unless enforcement is enabled and governed.",
+  "tabs": {
+    "safety": "Safety posture",
+    "findings": "Findings",
+    "guardrails": "Guardrails",
+    "anomalies": "Anomalies",
+    "forensics": "Forensics"
+  },
+  "findings": {
+    "title": "Findings",
+    "description": "Guardrail, anomaly and forensic findings. Evidence is a fingerprint — there is no payload to expand.",
+    "empty": "No findings",
+    "emptyHint": "Findings appear as guardrails, anomaly detection and forensics record evidence.",
+    "export": {
+      "action": "Export SARIF",
+      "busy": "Exporting…",
+      "done": "SARIF export downloaded.",
+      "truncated": "SARIF export downloaded, but it stopped at the server's result cap — it is a valid run, not the complete set."
+    },
+    "search": "Search findings",
+    "fingerprint": "fp",
+    "columns": {
+      "severity": "Severity",
+      "kind": "Kind",
+      "source": "Source",
+      "title": "Finding",
+      "evidence": "Evidence",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "kind": {
+      "guardrail": "Guardrail",
+      "anomaly": "Anomaly",
+      "forensic": "Forensic"
+    },
+    "status": {
+      "open": "Open",
+      "triaged": "Triaged",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
+    },
+    "triage": {
+      "action": "Triage",
+      "title": "Triage finding",
+      "description": "Triage only changes the flow status. The evidence — kind, severity and the detail fingerprint — is immutable.",
+      "statusLabel": "Status",
+      "submit": "Update status",
+      "updated": "Finding status updated",
+      "immutableNote": "Severity, kind and the detail fingerprint cannot be changed — only the flow status."
+    },
+    "subjectKinds": {
+      "local_residency": "Resident local model"
+    },
+    "truncated": "Showing the first {{n}} ingested",
+    "truncatedHint": "There are more findings than shown, and this page is ordered by ingestion id — NOT by when the problem occurred — so recent findings can be missing from it. The rest being out of view is not evidence that nothing else was found."
+  },
+  "safetyPosture": {
+    "title": "Provider safety posture",
+    "description": "Read-first AI-safety posture ingested from the providers' own controls — OpenAI Moderation, AWS Bedrock Guardrails and Azure Responsible AI. The plane reads and records it; enforcement stays with the provider.",
+    "empty": "No safety posture findings",
+    "emptyHint": "Connect the OpenAI, AWS or Azure connectors with their safety reads enabled to populate this view.",
+    "countsPartial": "Showing a partial roll-up — this tenant has more safety posture findings than the summary scan covers.",
+    "columns": {
+      "open": "Open"
+    }
+  },
+  "guardrails": {
+    "title": "Guardrail inspect",
+    "description": "Run the guardrail inspection service over a surface. The text is hashed redacted and never stored — the result is a verdict plus minimal, already-redacted evidence.",
+    "verdictTitle": "Verdict",
+    "clean": "No detections — clean.",
+    "detectiveNote": "This verdict came from the detective plane: the trip was detected and recorded, not blocked. A block is only reachable when enforcement is enabled and governed.",
+    "wouldBlock": "Would block (enforced)",
+    "detectOnly": "Detect only",
+    "findingsRecorded": "{{count}} finding recorded",
+    "findingsRecorded_one": "{{count}} finding recorded",
+    "findingsRecorded_other": "{{count}} findings recorded",
+    "enforcement": {
+      "detective": "Detective",
+      "enforced": "Enforced"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "Prompt injection",
+      "jailbreak": "Jailbreak",
+      "content": "Content",
+      "output_validation": "Output validation",
+      "owasp_agentic": "OWASP agentic"
+    },
+    "form": {
+      "surface": "Surface",
+      "text": "Text to inspect",
+      "textHint": "Inspected and hashed redacted — never stored or returned.",
+      "enforce": "Request enforcement",
+      "enforceHint": "Only blocks if the enforcement policy has this class enabled and governed; otherwise the verdict is a flag.",
+      "submit": "Inspect",
+      "running": "Inspecting…",
+      "surfaceLabel": "Surface"
+    },
+    "surface": {
+      "input": "Input",
+      "output": "Output",
+      "tool_args": "Tool arguments"
+    }
+  },
+  "enforcement": {
+    "title": "Enforcement posture",
+    "description": "The one action that touches production. Each guardrail class is detective by default; enabling inline enforcement is an admin action, governed where the gate is wired.",
+    "defaultDetectiveNote": "The default plane is detective: classes only block when explicitly enabled here and governed.",
+    "fullyDetective": "No enforcement is enabled — the plane is fully detective, the safe default. Nothing blocks on its own.",
+    "detective": "Detective",
+    "enforced": "Enforced",
+    "governed": "Governed",
+    "ungoverned": "Enabled without human governance",
+    "wildcard": "All classes",
+    "change": "Change",
+    "columns": {
+      "class": "Class",
+      "posture": "Posture",
+      "minSeverity": "Min severity",
+      "governance": "Governance",
+      "updated": "Updated",
+      "actions": "Actions"
+    },
+    "dialog": {
+      "title": "Change enforcement",
+      "description": "Disabling (back to detective) is always allowed. Enabling inline enforcement is governed where the gate is wired — a governance denial is shown as the reason.",
+      "enabledLabel": "Enable inline enforcement",
+      "minSeverity": "Minimum severity",
+      "reason": "Reason",
+      "reasonHint": "Recorded with the change for the audit ledger.",
+      "submit": "Apply",
+      "applied": "Enforcement posture updated",
+      "ungovernedWarning": "Enabling this class without a wired governance gate leaves it ungoverned — the change is allowed but flagged.",
+      "deniedTitle": "Governance denied this change"
+    }
+  },
+  "anomalies": {
+    "title": "Anomaly queue",
+    "description": "Drift and correlated findings, ranked by priority. Approximate entries are unreconciled drift — never a firm violation.",
+    "empty": "No anomalies in the queue",
+    "orderNote": "Ordered by priority, highest first.",
+    "priority": "Priority",
+    "approximate": "Approximate",
+    "suspectedTitle": "Suspected: {{title}}",
+    "unreconciledNote": "Unreconciled drift — the reconciled authority is the access map. Priority is discounted; this is not a confirmed violation.",
+    "kind": {
+      "access_drift": "Access drift",
+      "egress_exfil_suspected": "Egress exfiltration (suspected)",
+      "anti_evasion_correlated": "Correlated evasion"
+    }
+  },
+  "forensics": {
+    "title": "Forensic cases",
+    "description": "Incident response — each case freezes its integrity state at open time, so a later tamper is detectable. The timeline is reconstructed from the append-only ledger.",
+    "empty": "No forensic cases",
+    "openCase": "Open case",
+    "back": "Back to cases",
+    "summary": "Summary",
+    "openedBy": "Opened by",
+    "opened": "Opened",
+    "closed": "Closed",
+    "integrity": "Chain of custody integrity",
+    "timeline": "Reconstructed timeline",
+    "timelineNote": "Each event carries seq · hash · prev_hash so a reader can re-verify the link independently. There is never a payload behind an event.",
+    "columns": {
+      "severity": "Severity",
+      "title": "Case",
+      "status": "Status",
+      "opened": "Opened"
+    },
+    "status": {
+      "open": "Open",
+      "investigating": "Investigating",
+      "contained": "Contained",
+      "closed": "Closed"
+    },
+    "truncated": "Showing the first {{n}} opened",
+    "truncatedHint": "There are more cases than shown, and this page is ordered by opening id, so recent cases can be missing. An investigation you cannot see here is not an investigation that does not exist."
+  },
+  "integrity": {
+    "title": "Ledger integrity",
+    "description": "Two verdicts: the hash chain is internally consistent, and the signed checkpoints. Verifying is itself recorded in the chain it checks.",
+    "chain": "Hash chain",
+    "chainChecked": "{{count}} event checked",
+    "chainChecked_one": "{{count}} event checked",
+    "chainChecked_other": "{{count}} events checked",
+    "checkpoints": "Signed checkpoints",
+    "checkpointsCount": "{{count}} checkpoint verified",
+    "checkpointsCount_one": "{{count}} checkpoint verified",
+    "checkpointsCount_other": "{{count}} checkpoints verified",
+    "signingUnavailable": "No signing key is wired — signed attestation is not faked.",
+    "checkpointsPendingNote": "No checkpoint written yet — the chain verdict is what proves this ledger.",
+    "signingSeam": "Checkpoint signing not wired",
+    "attestedSeq": "Attested seq",
+    "headSeq": "ledger head seq {{seq}}",
+    "reverifyNote": "Each event carries seq · hash · prev_hash so a reader can re-verify the link offline against an external WORM store.",
+    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "No enforcement classes configured",
+      "description": "Rows appear only after a guardrail class posture is set; until then every class remains detective and nothing blocks inline."
+    },
+    "findings": {
+      "title": "No security findings recorded yet",
+      "description": "Findings appear when guardrail inspection, observed-drift checks or provider safety posture record a signal, or another module raises a high-severity one."
+    }
+  },
+  "cases": {
+    "new": "New case",
+    "newHint": "Opens a forensic case. The engine sets its status to “open”.",
+    "title": "Title",
+    "severity": "Severity",
+    "create": "Create",
+    "cancel": "Cancel",
+    "created": "Case opened",
+    "status": "Status",
+    "save": "Save changes",
+    "updated": "Case updated",
+    "statusName": {
+      "open": "Open",
+      "investigating": "Investigating",
+      "contained": "Contained",
+      "closed": "Closed"
+    },
+    "exportFormat": "Export format",
+    "export": "Export",
+    "exported": "Export requested",
+    "links": "Chain of custody",
+    "linksHint": "What this case is linked to: findings, ledger sequences, anomalies or notes.",
+    "noLinks": "Nothing linked yet",
+    "link": "Link",
+    "linked": "Linked",
+    "linkKindLabel": "Kind",
+    "linkRef": "Reference",
+    "linkKind": {
+      "finding": "Finding",
+      "audit_seq": "Ledger sequence",
+      "anomaly": "Anomaly",
+      "note": "Note"
+    }
+  },
+  "severity": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  }
+}

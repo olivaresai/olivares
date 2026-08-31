@@ -1,0 +1,49 @@
+# Conformant resources for `kyverno test`:
+#   - good-deploy: a Deployment carrying both governance labels (passes
+#     require-governance-labels);
+#   - good-pod: a Pod that sets pod-level runAsNonRoot=true and references its
+#     credential via secretKeyRef (passes require-run-as-non-root and
+#     disallow-inline-secrets).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: good-deploy
+  namespace: acme-prod
+  labels:
+    olivares.ai/tenant: acme
+    olivares.ai/identity: payments-api
+spec:
+  selector:
+    matchLabels:
+      app: payments-api
+  template:
+    metadata:
+      labels:
+        app: payments-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: app
+          image: registry.example.com/payments-api:1.4.2
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-pod
+  namespace: acme-prod
+  labels:
+    olivares.ai/tenant: acme
+    olivares.ai/identity: payments-api
+spec:
+  securityContext:
+    runAsNonRoot: true
+  containers:
+    - name: app
+      image: registry.example.com/payments-api:1.4.2
+      env:
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: payments-api-creds
+              key: api-key

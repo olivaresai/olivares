@@ -1,0 +1,107 @@
+{
+  "title": "Audit ledger",
+  "subtitle": "The tamper-evident evidence chain. Verify it, and export it to your WORM/SIEM.",
+  "subtitleSystem": "The system-tenant chain of cross-tenant administrative operations (read-only).",
+  "searchLoaded": "Filter loaded rows only (client-side)…",
+  "filters": {
+    "title": "Server-side ledger filters",
+    "q": "Search ledger",
+    "qPlaceholder": "Action, actor, target kind or ID",
+    "actor": "Actor",
+    "actorPlaceholder": "Exact actor",
+    "action": "Action prefix",
+    "actionPlaceholder": "e.g. agent.",
+    "targetKind": "Target kind",
+    "targetKindPlaceholder": "Exact target kind",
+    "targetId": "Target ID",
+    "targetIdPlaceholder": "Exact target ID",
+    "since": "Since",
+    "until": "Until",
+    "clearOne": "Clear {{filter}} filter",
+    "clearAll": "Clear all filters"
+  },
+  "scan": {
+    "incomplete": "Scanned up to seq {{seq}} — not the full ledger; Load more continues the scan."
+  },
+  "scope": {
+    "label": "Ledger scope",
+    "tenant": "Tenant ledger",
+    "system": "System ledger",
+    "systemHint": "The system-tenant chain records cross-tenant administrative operations and is read-only here. Verification and export operate on tenant ledgers."
+  },
+  "cols": {
+    "seq": "Seq",
+    "occurred": "When",
+    "action": "Action",
+    "actor": "Actor",
+    "target": "Target",
+    "hash": "Hash"
+  },
+  "actorKind": {
+    "user": "User",
+    "agent": "Agent",
+    "connector": "Connector",
+    "system": "System"
+  },
+  "verify": {
+    "action": "Verify chain",
+    "failed": "Verification could not be completed.",
+    "chain": "Chain · {{checked}} links",
+    "checkpoints": "Checkpoints · {{count}} signed",
+    "noCheckpoints": "No signed checkpoints yet",
+    "attested": "Attested through seq {{seq}}",
+    "chainBreak": "Chain broken at seq {{seq}}",
+    "checkpointBreak": "Checkpoint signature failed at seq {{seq}}"
+  },
+  "pubkey": {
+    "action": "Verification key",
+    "label": "Ledger signing key",
+    "key": "key",
+    "hint": "Share this Ed25519 public key so an external party can verify exported events AND checkpoints offline — the same key signs both.",
+    "failed": "The verification key is unavailable."
+  },
+  "export": {
+    "action": "Export",
+    "formatLabel": "Export format",
+    "fromSeq": "From seq",
+    "toSeq": "To seq",
+    "optional": "Optional",
+    "useCurrent": "Use current filters & range",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "OTLP request",
+      "otlp_envelope": "OTLP request (alias)",
+      "otlp_log_record": "OTLP LogRecord lines",
+      "ocsf": "OCSF"
+    },
+    "done": "Export downloaded.",
+    "failed": "Export failed.",
+    "forbidden": "You are not authorized to export the ledger."
+  },
+  "detail": {
+    "title": "Evidence event",
+    "seqTitle": "Event #{{seq}}",
+    "signed": "Signed event — this row carries its own signature over its chain hash",
+    "seq": "Sequence",
+    "occurred": "Occurred",
+    "action": "Action",
+    "actor": "Actor",
+    "actorSystem": "system",
+    "target": "Target",
+    "id": "Event ID",
+    "chainTitle": "Chain integrity",
+    "prevHash": "Previous hash",
+    "prev": "prev",
+    "hash": "Event hash",
+    "this": "this",
+    "sig": "Event signature",
+    "checkpoint": "sig",
+    "chainHint": "Each event's hash chains to the previous one. There is no payload behind a fingerprint — the hash is the evidence (minimal-data by design)."
+  },
+  "empty": {
+    "title": "No evidence yet",
+    "description": "The ledger is empty for this scope. Governed operations append tamper-evident events as they happen."
+  }
+}

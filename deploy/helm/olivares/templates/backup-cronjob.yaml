@@ -1,0 +1,234 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+Opt-in scheduled disaster-recovery backup (docs/DR-RUNBOOK.md). A CronJob
+runs `olivares dr backup`, writing a LEDGER-CONTINUITY-SAFE bundle (store
+snapshot + signing keys sealed under the operator KEK + a manifest of the
+per-tenant chain tips) to a destination PVC. In single-node mode it mounts the
+data PVC that holds the signing keys + (sqlite) the store. In HA, the store is
+Postgres and the signing keys are mounted from Secrets, so data is an emptyDir.
+
+A same-cluster bundle is NOT disaster recovery: MIRROR the destination OFFSITE
+(3-2-1). The KEK lives in backup.kekSecret and must be kept SEPARATE from the
+bundles — it is what makes the restore verifiable.
+*/ -}}
+{{- if .Values.backup.enabled }}
+{{- if not .Values.backup.kekSecret }}{{ fail "backup.kekSecret is required when backup.enabled=true (the bundle seals the signing keys with it; without it a restore cannot verify the ledger)" }}{{- end }}
+{{- $ha := and (eq .Values.core.engine "postgres") (gt (int .Values.core.replicaCount) 1) -}}
+{{- if and (not $ha) (not .Values.core.persistence.enabled) }}{{ fail "backup.enabled requires core.persistence.enabled outside HA (the signing keys must live on a PersistentVolume to be backed up)" }}{{- end }}
+{{- $coreName := include "olivares.core.fullname" . -}}
+{{- $destClaim := .Values.backup.destination.existingClaim | default (printf "%s-backups" (include "olivares.fullname" .)) -}}
+{{- /* The DR backup boots a full engine to build the manifest, which resolves the
+catalog signing key too; mirror the core pod's catalog-key wiring so it uses the
+SHARED key (defaulting to the audit Secret) instead of minting a throwaway one into
+the operand PVC. */ -}}
+{{- $catalogKeySecret := .Values.core.catalogSigningKeySecret | default .Values.core.auditSigningKeySecret -}}
+{{- if not .Values.backup.destination.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $destClaim }}
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    {{- toYaml .Values.backup.destination.accessModes | nindent 4 }}
+  {{- if .Values.backup.destination.storageClass }}
+  {{- if (eq "-" .Values.backup.destination.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.backup.destination.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.destination.size | quote }}
+---
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $coreName }}-backup
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: {{ .Values.backup.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ .Values.backup.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            {{- include "olivares.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "olivares.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          {{- if eq .Values.core.engine "postgres" }}
+          initContainers:
+            # The distroless engine image has no pg_dump; a postgres-client image
+            # produces the consistent custom-format dump the engine then bundles.
+            - name: pg-dump
+              image: {{ include "olivares.imageRef" .Values.backup.pgClientImage }}
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  echo "pg_dump (custom format, consistent snapshot)…"
+                  pg_dump --format=custom --no-owner --no-privileges \
+                    --file=/work/dump.pgcustom --dbname="$OLIVARES_ADMIN_DSN"
+                  echo "dump complete."
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: PGCONNECT_TIMEOUT
+                  value: "10"
+                # pg_dump sets row_security=off and therefore cannot dump FORCE-RLS
+                # tables through the NOBYPASSRLS app role. This dedicated,
+                # NOSUPERUSER BYPASSRLS + SELECT role captures every tenant.
+                - name: OLIVARES_ADMIN_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgres.dsnSecret | required "postgres.dsnSecret is required for engine=postgres" }}
+                      key: {{ .Values.postgres.adminDsnKey | required "postgres.adminDsnKey is required for Postgres backups" }}
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              volumeMounts:
+                - name: work
+                  mountPath: /work
+                - name: tmp
+                  mountPath: /tmp
+          {{- end }}
+          containers:
+            - name: dr-backup
+              image: {{ include "olivares.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              # SHELL-FREE: the engine image is distroless/static — NO /bin/sh, date
+              # or find — so invoke the olivares entrypoint directly. POD_NAME
+              # (downward API) yields a unique, traceable bundle name per run, and
+              # `dr backup --retain-days` does the local pruning a shell `find` used
+              # to (the OFFSITE mirror keeps longer; 3-2-1).
+              args:
+                - dr
+                - backup
+                - --data-dir={{ .Values.core.dataDir }}
+                - --engine={{ .Values.core.engine }}
+                {{- if eq .Values.core.engine "postgres" }}
+                - --dsn=$(OLIVARES_DSN)
+                - --admin-dsn=$(OLIVARES_ADMIN_DSN)
+                - --snapshot-file=/work/dump.pgcustom
+                {{- end }}
+                - --out=/backups/olivares-dr-$(POD_NAME).drbundle
+                {{- if .Values.backup.kekRawKey }}
+                - --kek-key-file=/etc/olivares/dr-kek/{{ .Values.backup.kekRawKey }}
+                {{- else }}
+                - --passphrase-file=/etc/olivares/dr-kek/{{ .Values.backup.kekPassphraseKey }}
+                {{- end }}
+                - --retain-days={{ .Values.backup.retentionDays }}
+              env:
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: HOME
+                  value: /tmp
+                - name: OLIVARES_DATA_DIR
+                  value: {{ .Values.core.dataDir | quote }}
+                {{- if .Values.core.auditSigningKeySecret }}
+                # HA: the per-node data dir holds NO signing key (it lives in the
+                # shared Secret), so the bundle's manifest signer must resolve the
+                # SAME key from the mounted Secret (externalKeyCustodyConfigured).
+                - name: OLIVARES_AUDIT_SIGNING_KEY_FILE
+                  value: /etc/olivares/audit-key/audit-signing.key
+                {{- end }}
+                {{- if $catalogKeySecret }}
+                - name: OLIVARES_CATALOG_SIGNING_KEY_FILE
+                  value: /etc/olivares/catalog-key/catalog-signing.key
+                {{- end }}
+                {{- if eq .Values.core.engine "postgres" }}
+                - name: OLIVARES_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgres.dsnSecret | required "postgres.dsnSecret is required for engine=postgres" }}
+                      key: {{ .Values.postgres.dsnKey }}
+                - name: OLIVARES_ADMIN_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgres.dsnSecret }}
+                      key: {{ .Values.postgres.adminDsnKey }}
+                {{- end }}
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              volumeMounts:
+                # The core data dir: signing keys (+ the sqlite store) to back up.
+                - name: data
+                  mountPath: {{ .Values.core.dataDir }}
+                {{- if .Values.core.auditSigningKeySecret }}
+                - name: audit-key
+                  mountPath: /etc/olivares/audit-key
+                  readOnly: true
+                {{- end }}
+                {{- if $catalogKeySecret }}
+                - name: catalog-key
+                  mountPath: /etc/olivares/catalog-key
+                  readOnly: true
+                {{- end }}
+                - name: kek
+                  mountPath: /etc/olivares/dr-kek
+                  readOnly: true
+                - name: backups
+                  mountPath: /backups
+                - name: work
+                  mountPath: /work
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              {{- if $ha }}
+              # HA has no per-node durable state: Postgres is the shared store and
+              # both signing keys are mounted above from shared Secrets.
+              emptyDir: {}
+              {{- else }}
+              # The single-node StatefulSet's data PVC (template "data", ordinal 0).
+              persistentVolumeClaim:
+                claimName: data-{{ $coreName }}-0
+              {{- end }}
+            {{- if .Values.core.auditSigningKeySecret }}
+            - name: audit-key
+              secret:
+                secretName: {{ .Values.core.auditSigningKeySecret }}
+                defaultMode: 0440
+            {{- end }}
+            {{- if $catalogKeySecret }}
+            - name: catalog-key
+              secret:
+                secretName: {{ $catalogKeySecret }}
+                defaultMode: 0440
+                optional: true
+                items:
+                  - key: catalog-signing.key
+                    path: catalog-signing.key
+            {{- end }}
+            - name: kek
+              secret:
+                secretName: {{ .Values.backup.kekSecret }}
+                defaultMode: 0400
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ $destClaim }}
+            - name: work
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+{{- end }}

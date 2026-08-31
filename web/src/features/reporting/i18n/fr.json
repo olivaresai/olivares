@@ -1,0 +1,80 @@
+{
+  "title": "Rapports",
+  "description": "Générez et téléchargez des rapports de gouvernance à la demande, et gérez les envois planifiés.",
+  "catalog": {
+    "title": "Rapports à la demande",
+    "empty": "Aucun type de rapport n'est disponible.",
+    "colReport": "Rapport",
+    "colFormats": "Formats",
+    "colActions": "Actions",
+    "generate": "Générer"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "Générer {{title}}",
+    "subtitle": "Choisissez le format et la période ; le rapport se télécharge une fois prêt.",
+    "format": "Format",
+    "from": "Du",
+    "to": "Au",
+    "framework": "Référentiel",
+    "frameworkHint": "Facultatif — limitez les preuves à un seul référentiel de conformité.",
+    "frameworkPlaceholder": "p. ex. soc2",
+    "team": "Équipe",
+    "teamHint": "Facultatif — limitez la répartition des coûts à une seule équipe.",
+    "teamPlaceholder": "p. ex. platform",
+    "download": "Télécharger",
+    "done": "{{title}} généré.",
+    "failed": "Échec de la génération du rapport.",
+    "pdfUnavailable": "La génération de PDF n'est pas disponible dans cette édition. Choisissez HTML."
+  },
+  "schedules": {
+    "title": "Rapports planifiés",
+    "new": "Nouvelle planification",
+    "enterprise": "Les rapports planifiés sont une capacité Enterprise et ne sont pas activés dans cette édition.",
+    "empty": "Aucun rapport planifié pour l'instant.",
+    "colReport": "Rapport",
+    "colCron": "Cron",
+    "colStatus": "État",
+    "colActions": "Actions",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "delete": "Supprimer la planification",
+    "deleted": "Planification supprimée.",
+    "newTitle": "Nouveau rapport planifié",
+    "newSubtitle": "Le rapport est généré selon la cadence cron et conservé pour téléchargement.",
+    "report": "Rapport",
+    "cron": "Expression cron",
+    "cronHint": "Un cron standard à 5 champs, p. ex. 0 8 * * 1 (lundis à 08:00).",
+    "create": "Créer",
+    "created": "Planification créée."
+  },
+  "enterprise": {
+    "title": "Rapports enterprise",
+    "description": "Posture de conformité en direct, la synthèse des risques pour la direction et le pack de preuves d'audit signé.",
+    "request": "Demander",
+    "done": "Rapport téléchargé",
+    "seam": "Ce rapport réside dans un module non relié à ce déploiement. Rien n'est cassé.",
+    "posture": {
+      "title": "Posture de conformité",
+      "description": "État par référentiel et par contrôle, calculé en direct."
+    },
+    "risk": {
+      "title": "Synthèse des risques",
+      "description": "La vue des risques pour la direction, en une page."
+    },
+    "bundle": {
+      "title": "Pack de preuves",
+      "description": "Le pack de preuves d'audit SIGNÉ — ce que vous remettez à un auditeur externe."
+    }
+  },
+  "runs": {
+    "open": "Historique",
+    "title": "Historique des exécutions",
+    "description": "Chaque exécution enregistrée de cette planification : quand elle a eu lieu et, en cas d'échec, pourquoi.",
+    "notAnArchive": "Les fournisseurs limitent cette liste et purgent les anciennes exécutions — c'est une commodité opérationnelle, pas une archive. Une liste courte ne signifie pas que la planification n'a tourné que quelques fois.",
+    "empty": "Aucune exécution enregistrée"
+  }
+}

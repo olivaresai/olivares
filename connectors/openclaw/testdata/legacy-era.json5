@@ -1,0 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  wizard: {lastRunVersion: '2026.6.11'},
+  channels: {
+    telegram: {enabled: false},
+  },
+  logging: {file: '/var/log/openclaw/openclaw.log', redactSensitive: 'tools'},
+  diagnostics: {otel: {enabled: true}},
+}

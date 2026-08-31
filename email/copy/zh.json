@@ -1,0 +1,55 @@
+{
+  "$locale": "zh",
+  "common": {
+    "wordmark": "Olivares AI",
+    "footerNote": "这是 Olivares AI 发送的事务性消息。",
+    "fallbackIntro": "如果按钮无法使用，可将此地址复制到浏览器中：",
+    "signoff": "Olivares AI"
+  },
+  "signin": {
+    "subject": "登录您的 Olivares AI 门户",
+    "preheader": "使用此一次性链接登录您的 Olivares AI 客户门户。此链接只能用于完成一次登录，并会将您带到 Olivares AI 客户门户。",
+    "heading": "登录您的客户门户",
+    "intro": "使用下方按钮登录您的 Olivares AI 客户门户。",
+    "cta": "登录门户",
+    "expiry": "此链接只能使用一次，并将在 {{MINUTES}} 分钟后过期。",
+    "sameBrowser": "请在请求该链接的地方打开它：使用同一浏览器、同一浏览器配置文件和同一浏览模式。该链接与存储在那里的一个 Cookie 绑定，因此更改其中任何一项或清除 Cookie 都会使其无法使用。",
+    "ignore": "此链接可用于访问您的门户。如果您没有请求此链接，可忽略此消息；只要未使用该链接，就不会发生任何操作。",
+    "textIntro": "使用此链接登录您的 Olivares AI 客户门户："
+  },
+  "license": {
+    "subject": "您的 Olivares AI 商业许可证",
+    "preheader": "您的许可证密钥已经过签名，企业版二进制文件下载详情也已准备完毕。您可以在这封邮件中获取许可证密钥，并查看企业版二进制文件的下载信息。",
+    "preheaderNoDownload": "您的许可证密钥已经过签名并准备就绪。下载链接不在此消息中。",
+    "noDownloadNote": "您的许可证已随邮件附上并已生效，没有任何事项待处理。此消息不包含企业版下载链接。",
+    "noDownloadPortalNote": "您的许可证已随邮件附上并已生效，没有任何事项待处理。此消息不包含企业版下载链接；下载在您的客户门户中处理。",
+    "heading": "您的商业许可证",
+    "greeting": "{{LICENSEE}}，您好：",
+    "intro": "您的许可证密钥已经过签名，并作为 olivares-license.key 附件发送，也在下方列出。",
+    "installHeading": "安装许可证",
+    "installNote": "运行中的引擎无需重启。",
+    "installStdinNote": "选择粘贴密钥而不使用附件时，运行以下命令，并在粘贴完成后按 Ctrl-D。",
+    "verifyNote": "安装后，使用下方命令验证许可证。",
+    "statusPerpetual": "此许可证永久有效。",
+    "statusUntil": "此许可证有效期至 {{DATE}}。",
+    "downloadHeading": "下载企业版二进制文件",
+    "downloadNote": "此下载链接与您的购买记录绑定。",
+    "downloadCta": "下载企业版二进制文件",
+    "portalHeading": "您的客户门户",
+    "portalNote": "随时可以使用此电子邮件地址登录：我们会发送一次性链接，因此无需记住任何密码。您的许可证、下载和账户信息都在其中。",
+    "portalCta": "打开客户门户",
+    "keyHeading": "您的许可证密钥",
+    "attestation": "此许可证仅作权利证明，记录您的商业许可例外，并赋予您使用企业附加组件的权利。它绝不限制用户数量（所有版本的自托管用户账户数量均不受限制），且校验时不会联系我们：校验完全离线完成，也不存在远程停用开关。但下载您已付费的内容确实会联系我们：本订阅就是获取企业附加组件及其更新和补丁的凭据。不存在强制遥测，默认也不会向控制平面发送出站流量。"
+  },
+  "invite": {
+    "subject": "设置您的 Olivares AI 账户",
+    "preheader": "接受此邀请并为您的 Olivares AI 账户选择一个密码。完成这些步骤后，您的 Olivares AI 账户即设置完毕。",
+    "heading": "设置您的 Olivares AI 账户",
+    "intro": "一位管理员已邀请您为其组织设置 Olivares AI 账户。",
+    "cta": "设置账户",
+    "expiry": "此邀请只能使用一次，并将于 {{EXPIRES_AT}} 过期。",
+    "setPassword": "您将自行选择密码；邀请您的管理员绝不会看到该密码。",
+    "ignore": "如果您并未预期收到此消息，请勿使用该链接，并联系邀请您的管理员。该账户已经存在；忽略此消息只会使该账户的密码保持未设置状态。",
+    "textIntro": "使用此邀请链接设置您的 Olivares AI 账户："
+  }
+}

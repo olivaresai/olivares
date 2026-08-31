@@ -1,0 +1,44 @@
+{
+  "cursor": "cursor-page-3",
+  "has_more": false,
+  "items": [
+    {
+      "uuid": "EVT00000000000000000000004",
+      "timestamp": "2026-06-11T09:00:00Z",
+      "used_version": 2,
+      "vault_uuid": "VAULTUUID0000000000000002",
+      "item_uuid": "ITEMUUID00000000000000004",
+      "action": "export",
+      "user": {
+        "uuid": "USERUUID00000000000000001",
+        "name": "Alice Smith",
+        "email": "alice@corp.example"
+      },
+      "client": {
+        "app_name": "1Password for Mac",
+        "app_version": "8.10.0",
+        "platform_name": "Mac",
+        "os_name": "macos"
+      }
+    },
+    {
+      "uuid": "EVT00000000000000000000005",
+      "timestamp": "2026-06-11T09:05:00Z",
+      "used_version": 1,
+      "vault_uuid": "VAULTUUID0000000000000002",
+      "item_uuid": "",
+      "action": "reveal",
+      "user": {
+        "uuid": "USERUUID00000000000000002",
+        "name": "Bob Jones",
+        "email": "bob@corp.example"
+      },
+      "client": {
+        "app_name": "1Password for Mac",
+        "app_version": "8.10.0",
+        "platform_name": "Mac",
+        "os_name": "macos"
+      }
+    }
+  ]
+}

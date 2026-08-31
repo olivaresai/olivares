@@ -1,0 +1,167 @@
+---
+title: De zéro à un graphe d'accès en lecture/écriture
+description: >-
+  Compilez le binaire unique, démarrez-le avec l'estate de démonstration intégré, et atteignez un
+  graphe d'accès Permitted-vs-Observed peuplé — l'idée centrale du produit, de bout en
+  bout, en quelques minutes.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+À la fin de ce tutoriel, vous aurez Olivares AI fonctionnant
+localement et aurez atteint son artefact central : un **graphe d'accès en lecture/écriture**
+avec un vrai résultat de dérive **Permitted-vs-Observed**. Vous allez *apprendre le produit en
+le voyant fonctionner* — c'est un parcours d'apprentissage, pas une installation de production (pour cela, voir
+[self-hosting](/fr/how-to/self-hosting/)).
+
+Nous utilisons l'**estate de démonstration** intégré (`--seed-demo`) : un petit ensemble synthétique d'agents,
+d'identités et de ressources qui circule à travers le **vrai** bus d'événements exactement comme un
+collecteur pgAudit ou OpenTelemetry en direct le ferait. Tout s'exécute sur `localhost`.
+
+<Aside type="caution" title="Le mode démonstration est uniquement pour l'apprentissage">
+`--seed-demo` provisionne un administrateur de démonstration avec un **mot de passe public, présent
+dans l'arbre source** et des données synthétiques, et il **refuse de démarrer sur une adresse
+non-loopback**. Ne l'utilisez jamais pour une vraie installation. Le véritable chemin de premier lancement (un jeton de
+configuration à usage unique, aucun identifiant par défaut, des sources réelles) est couvert dans
+[self-hosting](/fr/how-to/self-hosting/).
+</Aside>
+
+## Prérequis
+
+- **Go 1.26+** (pour compiler le binaire), ou Docker (voir le
+  [how-to self-hosting](/fr/how-to/self-hosting/) pour le chemin du conteneur).
+- `curl` et `python3` pour parler à l'API depuis le shell.
+- Un checkout du dépôt Olivares AI.
+
+## Compiler et démarrer
+
+<Steps>
+
+1. **Compilez le binaire unique.** Depuis la racine du dépôt :
+
+   ```bash
+   task setup    # install git hooks, commit tooling and web deps
+   task build    # compile the static binary with the web embedded (go:embed)
+   ./bin/olivares version
+   ```
+
+   `task build` compile le bundle web, les plugins de connecteurs first-party et le
+   binaire, produisant un artefact autonome unique à `./bin/olivares`.
+
+   <Aside type="note">
+   Si vous voulez seulement le binaire et que le bundle web est déjà compilé, la
+   compilation brute est `CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares`
+   — le store est du SQLite pur-Go (modernc), donc aucune chaîne d'outils C n'est requise.
+   </Aside>
+
+2. **Démarrez-le avec l'estate de démonstration** sur loopback. Choisissez un répertoire de données neuf afin de
+   partir propre :
+
+   ```bash
+   DATA="$(mktemp -d)"
+   ./bin/olivares serve --insecure --seed-demo \
+     --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 \
+     --data-dir "$DATA"
+   ```
+
+   Le drapeau `--insecure` sert du HTTP en clair sur loopback (acceptable pour un tutoriel
+   local ; TLS est activé par défaut sinon). Au démarrage, vous verrez une bannière **DEMO MODE**
+   avec les identifiants de démonstration :
+
+   ```
+   demo@olivares.local / olivares-demo-estate
+   ```
+
+</Steps>
+
+## Atteindre le graphe d'accès
+
+Laissez le serveur tourner et ouvrez un second terminal.
+
+<Steps>
+
+1. **Connectez-vous** avec les identifiants de démonstration pour obtenir un jeton bearer :
+
+   ```bash
+   BASE=http://127.0.0.1:8901
+   TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+     | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+   ```
+
+2. **Résolvez le tenant de démonstration** (les endpoints de l'access-map sont à portée tenant) :
+
+   ```bash
+   TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+     | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+   ```
+
+3. **Récupérez le graphe en lecture/écriture.** C'est le module III — l'access map :
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   L'estate de démonstration retourne environ **20 nœuds et 13 arêtes** — agents, identités,
+   serveurs MCP, modèles, fournisseurs et ressources, chaque arête classée en lecture ou
+   lecture-écriture.
+
+4. **Récupérez la dérive Permitted-vs-Observed :**
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/drift" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   Cela fait remonter les **accès inattendus** semés, par exemple :
+
+   - un agent lisant `appdb.public.secrets` qui ne lui a **jamais été accordé** (attribué) ; et
+   - une identité de pool partagé écrivant `appdb.public.logs` (attribution approximative).
+
+   <Aside type="tip" title="C'est /drift, pas /diff">
+   Le résultat Permitted-vs-Observed est servi à `/v1/m/accessmap/drift`. Il n'y a pas
+   d'endpoint `/v1/m/accessmap/diff`.
+   </Aside>
+
+5. **(Optionnel) Voyez tout l'inventaire semé :**
+
+   ```bash
+   curl -sf "$BASE/v1/m/inventory/summary" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+</Steps>
+
+## Le voir dans l'UI web
+
+L'UI web est **embarquée dans le même binaire** et servie depuis la même origine. Avec
+le serveur de démonstration encore en cours d'exécution, ouvrez :
+
+```
+http://127.0.0.1:8901
+```
+
+Connectez-vous avec les identifiants de démonstration et ouvrez la vue access-map : le graphe rend les
+mêmes nœuds et arêtes, avec la superposition de dérive mettant en évidence les accès inattendus et
+les tableaux de bord résumant l'estate.
+
+<Aside type="note" title="Ce que vous venez de voir est la colonne vertébrale">
+*découvrir → graphe R/RW → diff Permitted-vs-Observed → inventaire/tableaux de bord* est le
+flux central du produit. La démonstration a alimenté des observations synthétiques à travers le vrai bus ; une
+vraie installation l'alimente à travers des connecteurs à la place — voir
+[connecter une source](/fr/how-to/connect-a-source/).
+</Aside>
+
+## Ce qui ne se passe *pas* ici (et que faire ensuite)
+
+- Les données de démonstration sont synthétiques et le mot de passe de démonstration est public — ce n'est **pas** un
+  déploiement sécurisé. Pour un vrai, suivez [self-hosting](/fr/how-to/self-hosting/) :
+  il n'a aucun identifiant par défaut et utilise un jeton de configuration à usage unique.
+- Les endpoints de module utilisés ci-dessus (`/v1/m/accessmap/*`, `/v1/m/inventory/*`) sont
+  joignables mais ne font **pas** partie du document OpenAPI servi, par conception ; la
+  [référence de l'API](/reference/api/) documente la surface REST core.
+- Pour comprendre *pourquoi* le graphe est construit de cette manière (télémétrie coopérative croisée
+  avec l'audit du store natif, eBPF comme filet de sécurité, annotations MCP traitées comme
+  non fiables), lisez l'[aperçu de l'architecture](/fr/explanation/architecture/overview/).

@@ -1,0 +1,17 @@
+{
+  "value": [
+    {
+      "id": "ca-4",
+      "displayName": "Disabled agent policy",
+      "state": "disabled",
+      "conditions": {
+        "clientApplications": {
+          "includeAgentIdServicePrincipals": ["aid-1111"],
+          "excludeAgentIdServicePrincipals": [],
+          "agentIdServicePrincipalFilter": null
+        },
+        "agentIdRiskLevels": ["high"]
+      }
+    }
+  ]
+}

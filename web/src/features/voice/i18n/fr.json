@@ -1,0 +1,152 @@
+{
+  "title": "Voix et temps réel",
+  "description": "Sessions vocales et en temps réel gouvernées sur l’ensemble du parc. La console n’affiche que des références et des agrégats — jamais d’audio, de texte de transcription, d’invites ni de PII.",
+  "tabs": {
+    "sessions": "Sessions",
+    "policies": "Politiques",
+    "ledger": "Décisions"
+  },
+  "refresh": "Actualiser",
+  "stats": {
+    "live": "Sessions en direct",
+    "liveCaption": "sur {{total}} affichées",
+    "avgLatency": "Latence moyenne",
+    "avgLatencyCaption": "moyenne des moyennes par session",
+    "governed": "Part gouvernée",
+    "governedCaption": "{{governed}} sur {{total}} étaient soumises à une politique"
+  },
+  "sessions": {
+    "title": "Sessions",
+    "description": "Chaque session telle que le moteur la rapporte — l’état est dérivé à la lecture. La transcription n’est affichée que sous forme d’empreinte ; aucun audio ni texte ne se trouve derrière.",
+    "empty": "Aucune session vocale",
+    "emptyHint": "Les sessions apparaissent dès qu’une ouverture gouvernée est déclenchée selon une politique vocale.",
+    "governed": "Gouvernée",
+    "ungoverned": "Non gouvernée",
+    "transcriptLabel": "transcription",
+    "turnsBreakdown": "{{user}}u / {{agent}}a",
+    "latencyAvg": "moy. {{value}}",
+    "latencyMax": "max {{value}}",
+    "columns": {
+      "state": "État",
+      "agent": "Agent",
+      "model": "Modèle / fournisseur",
+      "turns": "Tours",
+      "duration": "Durée",
+      "latency": "Latence",
+      "governed": "Gouvernée",
+      "transcript": "Transcription",
+      "lastEvent": "Dernier événement"
+    }
+  },
+  "latency": {
+    "title": "Latence par session",
+    "description": "Latence de réponse moyenne par session, classée. Le tableau présente le maximum à côté — aucun p50/p95 n’est affiché sans échantillons par tour.",
+    "summary": "Latence de réponse moyenne pour {{count}} sessions, classée. La plus lente est {{session}} à {{latency}}.",
+    "summaryEmpty": "Aucune session à classer par latence.",
+    "colSession": "Session",
+    "colLatency": "Latence moyenne"
+  },
+  "honesty": {
+    "noContent": "Références et agrégats uniquement — aucun audio, texte de transcription, invite ni PII n’est exposé ici.",
+    "findingsNote": "Les violations de politique, la dégradation de latence et les ouvertures non gouvernées remontent via le plan des constats de sécurité, et non par ces routes."
+  },
+  "policies": {
+    "title": "Politiques vocales",
+    "description": "Refus par défaut : une politique est ce qui PERMET l’ouverture d’une session. En l’absence de politique correspondante, une ouverture est refusée.",
+    "empty": "Aucune politique vocale",
+    "emptyHint": "Définissez une politique pour permettre l’ouverture de sessions vocales pour un agent — le refus par défaut signifie que rien ne s’ouvre tant qu’aucune ne correspond.",
+    "all": "Toutes",
+    "minutes": "{{value}} min",
+    "new": "Nouvelle politique",
+    "edit": "Modifier",
+    "columns": {
+      "agent": "Agent",
+      "model": "Modèle autorisé",
+      "provider": "Fournisseur autorisé",
+      "maxMinutes": "Session max",
+      "maxLatency": "Latence max",
+      "setBy": "Définie par",
+      "updated": "Mise à jour"
+    },
+    "dialog": {
+      "title": "Politique vocale",
+      "description": "Cette politique PERMET l’ouverture de sessions pour l’agent correspondant (refus par défaut). Utilisez « * » pour correspondre à tous les agents, modèles ou fournisseurs.",
+      "agent": "Agent",
+      "agentHint": "Une référence d’agent, ou « * » pour chaque agent.",
+      "model": "Modèle autorisé",
+      "modelHint": "Une référence de modèle, ou « * » pour n’importe quel modèle.",
+      "provider": "Fournisseur autorisé",
+      "providerHint": "Une référence de fournisseur, ou « * » pour n’importe quel fournisseur.",
+      "maxMinutes": "Minutes max par session",
+      "maxLatency": "Latence max (ms)",
+      "save": "Enregistrer la politique",
+      "saved": "Politique vocale enregistrée"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "Aucune latence de session à classer",
+      "description": "La latence de réponse moyenne peut être classée dès qu’une ouverture gouvernée ou la télémétrie en temps réel crée un enregistrement de session vocale."
+    },
+    "policies": {
+      "title": "Aucune politique vocale",
+      "description": "Une politique permet d’ouvrir si agent, modèle et fournisseur concordent ; sans elle, l’ouverture est refusée, seul un admin la définit."
+    },
+    "sessions": {
+      "title": "Aucune session vocale observée",
+      "description": "Les sessions apparaissent après l’enregistrement d’une ouverture gouvernée ou la publication d’une télémétrie de session par l’observateur en temps réel configuré."
+    }
+  },
+  "surface": {
+    "chooseSession": "Choisissez une session pour voir sa vue en direct.",
+    "loading": "Chargement…",
+    "decisionsError": "Les décisions n'ont pas pu être lues.",
+    "noDecisions": "Aucune décision enregistrée pour cette session.",
+    "noReason": "aucun motif enregistré",
+    "frames": "{{count}} mise(s) à jour en direct",
+    "open": "Ouvrir la session (encadré)",
+    "stream": {
+      "connecting": "connexion",
+      "open": "en direct",
+      "closed": "non connecté",
+      "error": "échec du flux"
+    },
+    "outcome": {
+      "opened": "Ouverte.",
+      "approval": "Approbation demandée — renvoyez avec cette référence :",
+      "denied": "Refusée par la politique : aucune n'autorise cette combinaison (agent, modèle, fournisseur). C'est une décision de refus par défaut, pas un échec.",
+      "noGate": "Aucune porte d'approbation n'est câblée dans ce déploiement, l'ouverture reste donc refusée. C'est une lacune du parc, pas un refus de politique.",
+      "unavailable": "La porte d'approbation n'a pas répondu : rien n'a été décidé."
+    }
+  },
+  "ledger": {
+    "title": "Journal des décisions d’ouverture",
+    "description": "Toute décision d’ouvrir une session vocale du parc, en ajout seul et de la plus récente à la plus ancienne — y compris celles qui ont été REFUSÉES et ne sont donc jamais devenues une session.",
+    "caveat": "Une ouverture refusée ne crée pas d’elle-même de ligne de session : c’est donc la première vue dédiée qui la montre entièrement avec le seul `voice:session:read`. Les autres chemins ne la montrent qu’en partie ou exigent une autre permission : le playground d’API (admin de tenant), l’explorateur d’audit (l’action, sans son motif) et les findings Security (certains chemins seulement).",
+    "empty": "Aucune décision d’ouverture pour l’instant",
+    "emptyHint": "On trouve ici les décisions que le moteur a pu persister. L’écriture de la preuve est best-effort à dessein — un refus reste valide même si sa ligne est perdue — : un journal vide ne prouve donc pas qu’aucun refus n’a eu lieu.",
+    "truncated": "Les {{count}} décisions les plus récentes sont affichées et le moteur en signale davantage : cette liste est TRONQUÉE. Lisez-la comme un échantillon, pas comme le journal complet.",
+    "columns": {
+      "when": "Quand",
+      "outcome": "Issue",
+      "session": "Réf. de session",
+      "agent": "Agent",
+      "actor": "Acteur",
+      "reason": "Motif du moteur"
+    },
+    "opStatus": {
+      "requested": "Approbation demandée",
+      "blocked": "Bloquée",
+      "dispatched": "Dispatchée",
+      "declared_not_opened": "Déclarée, non ouverte",
+      "failed": "Échouée",
+      "budget_blocked": "Bloquée — budget",
+      "budget_throttled": "Ouverture refusée — plafond de budget"
+    },
+    "op": {
+      "open_request": "Demande d’ouverture",
+      "open": "Ouverture",
+      "close": "Fermeture"
+    }
+  }
+}

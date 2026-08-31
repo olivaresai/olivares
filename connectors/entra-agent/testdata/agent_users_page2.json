@@ -1,0 +1,12 @@
+{
+  "value": [
+    {
+      "id": "au-2222",
+      "displayName": "Disabled Agent User",
+      "accountEnabled": false,
+      "identityParentId": "aid-2222",
+      "userPrincipalName": "disabled-agent@contoso.example",
+      "createdDateTime": "2026-06-02T10:00:00Z"
+    }
+  ]
+}

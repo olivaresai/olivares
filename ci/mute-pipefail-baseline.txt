@@ -1,0 +1,15 @@
+# Linea base del trinquete check-mute-pipefail.sh — 2026-08-31.
+# Clave: fichero<TAB>variable (NO la linea: se mueve con cualquier edicion de arriba).
+# Cada entrada se retira en el MISMO commit que la cura. El detalle y la cura, en
+# design/CENSO-GUIONES-MUDOS-2026-08-31.md.
+#
+# ⛔ SALIR DE ESTA LISTA NO ES SIEMPRE CURARSE. El 2026-08-31 salieron dos: `check-aws-estate.sh`
+#    porque SE CURO (lleva su `|| true`), y `test-exec-tmpdir.sh` porque otro carril reordeno el
+#    bloque y alejo el mensaje fuera de la ventana de 4 lineas del discriminante — sigue siendo
+#    vulnerable (:395). Al retirar una fila, comprueba CUAL de las dos cosas paso.
+scripts/assert-cosign-binary.sh	missing
+scripts/check-c04-nlb-idle-nat.sh	idle
+scripts/quickstart-smoke.sh	SETUP_TOKEN
+scripts/smoke-agentops.sh	SETUP_TOKEN
+scripts/test-release-security-sig-guard.sh	EXPECT_JQ
+scripts/test-release-security-sig-guard.sh	custody_line

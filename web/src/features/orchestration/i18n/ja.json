@@ -1,0 +1,263 @@
+{
+  "title": "オーケストレーションとA2A",
+  "description": "エージェント間トポロジー — どのエージェントがどのエージェントに委譲するか、ライブの委譲フロー、宣言された実行間隔を示します。通信グラフの読み取りは特権操作であり、自己監査されます。",
+  "tabs": {
+    "graph": "通信グラフ",
+    "flows": "フロー",
+    "schedules": "スケジュール"
+  },
+  "graph": {
+    "title": "通信グラフ",
+    "description": "観測されたシグナルから導出された委譲とMCPのトポロジーです。スーパーバイザーが最上位層を構成し、その下にワーカーとMCPピアが配置されます。",
+    "truncated": "最初の{{n}}本のエッジを表示しています — さらに表示するには上限を引き上げてください。",
+    "empty": {
+      "title": "通信は観測されていません",
+      "description": "観測ウィンドウ内に委譲またはMCPのエッジはありません。これは観測されたものであり、存在するすべてではありません — 上記のカバレッジに関する注記をお読みください。"
+    },
+    "kind": {
+      "session": "セッション",
+      "agent": "エージェント",
+      "mcp_server": "MCPサーバー",
+      "mcp_tool": "MCPツール"
+    },
+    "role": {
+      "supervisor": "スーパーバイザー",
+      "worker": "ワーカー",
+      "peer": "ピア"
+    },
+    "legend": {
+      "attributed": "帰属済み",
+      "approximate": "概算（推定）",
+      "missed": "実行間隔の超過"
+    }
+  },
+  "flows": {
+    "title": "委譲フロー",
+    "description": "スーパーバイザー → ワーカーのクラスターです。状態は読み取り時に直近の活動から導出されます。停滞とは、スーパーバイザーがアクティブなスケジュールを持ちながら期限を超過している状態を指します。",
+    "filter": "状態でフィルター",
+    "allStates": "すべての状態",
+    "empty": "この状態のフローはありません",
+    "columns": {
+      "supervisor": "スーパーバイザー",
+      "workers": "ワーカー",
+      "delegations": "委譲",
+      "state": "状態",
+      "lastSeen": "最終観測"
+    },
+    "state": {
+      "active": "アクティブ",
+      "idle": "アイドル",
+      "stalled": "停滞",
+      "completed": "完了"
+    }
+  },
+  "schedules": {
+    "title": "スケジュール",
+    "description": "エージェントおよびスウォームに宣言された実行間隔です。ヘルスは、期待される間隔に対する観測された実行間隔を反映します — 実行の取りこぼしは停滞として表示され、隠されることはありません。",
+    "empty": "宣言されたスケジュールはありません",
+    "emptyHint": "対象が実際に時間どおりに実行されるかを追跡するため、cron、イベント、または手動の実行間隔を宣言してください。",
+    "new": "新しいスケジュール",
+    "columns": {
+      "name": "名前",
+      "trigger": "トリガー",
+      "cadence": "実行間隔",
+      "desired": "希望状態",
+      "health": "ヘルス",
+      "lastFired": "最終実行",
+      "actions": "操作"
+    },
+    "subjectKind": {
+      "agent": "エージェント",
+      "swarm": "スウォーム"
+    },
+    "trigger": {
+      "cron": "Cron",
+      "event": "イベント",
+      "manual": "手動"
+    },
+    "desired": {
+      "active": "アクティブ",
+      "paused": "一時停止",
+      "retired": "廃止"
+    },
+    "actions": {
+      "menu": "{{name}} の操作",
+      "edit": "編集",
+      "history": "履歴",
+      "pause": "一時停止",
+      "resume": "再開",
+      "retire": "廃止",
+      "fire": "実行"
+    },
+    "form": {
+      "createTitle": "新しいスケジュール",
+      "editTitle": "スケジュールを編集",
+      "createDescription": "エージェントまたはスウォームに管理対象の実行間隔を宣言します。新しいスケジュールはアクティブで作成されます。",
+      "editDescription": "対象または実行間隔を変更します。識別情報とトリガーフィールドは変更できません。",
+      "name": "名前",
+      "subjectKind": "対象の種類",
+      "subjectRef": "対象参照",
+      "triggerKind": "トリガーの種類",
+      "cadenceSpec": "実行間隔の仕様",
+      "cadenceHint": {
+        "cron": "不透明な cron 実行間隔テキストです。構文は設定済みのディスパッチャーだけが解釈します。",
+        "event": "不透明なイベント参照または実行間隔テキストです。",
+        "manual": "この手動スケジュールに対する任意の不透明なメモです。"
+      },
+      "expectedInterval": "予想間隔（秒）",
+      "expectedIntervalHint": "cron の実行間隔超過の検出に使用します。",
+      "graceFactor": "猶予係数",
+      "graceFactorHint": "実行間隔を超過と判定する前に適用する倍率です。",
+      "immutableHint": "作成後は変更できません。",
+      "create": "スケジュールを作成",
+      "update": "変更を保存",
+      "created": "スケジュールを作成しました",
+      "updated": "スケジュールを更新しました",
+      "createFailed": "スケジュールを作成できませんでした",
+      "updateFailed": "スケジュールを更新できませんでした",
+      "errors": {
+        "required": "このフィールドは必須です。",
+        "intervalRange": "{{min}} から {{max}} までの整数を入力してください。",
+        "intervalCronOnly": "予想間隔は cron トリガーでのみ使用できます。",
+        "graceRange": "{{min}} から {{max}} までの整数を入力してください。"
+      }
+    },
+    "status": {
+      "pauseTitle": "{{name}} を一時停止しますか？",
+      "pauseDescription": "{{name}} の宣言は維持されますが、実行は期待されなくなります。",
+      "pauseConfirm": "スケジュールを一時停止",
+      "resumeTitle": "{{name}} を再開しますか？",
+      "resumeDescription": "{{name}} がアクティブになり、実行間隔の監視が再開されます。",
+      "resumeConfirm": "スケジュールを再開",
+      "retireTitle": "{{name}} を廃止しますか？",
+      "retireDescription": "{{name}} は永続的に廃止され、実行できなくなります。",
+      "retireConfirm": "スケジュールを廃止",
+      "changed": {
+        "active": "スケジュールを再開しました",
+        "paused": "スケジュールを一時停止しました",
+        "retired": "スケジュールを廃止しました"
+      }
+    },
+    "fire": {
+      "title": "{{name}} を実行",
+      "description": "管理対象の実行には、ディスパッチ前に現在のプランへ紐付けられた承認が必要です。",
+      "step1Title": "1. 承認を要求",
+      "step1Description": "この対象と実行間隔に対する governance 承認を開始します。",
+      "request": "承認を要求",
+      "requested": "承認を要求しました",
+      "requestFailed": "承認を要求できませんでした",
+      "requiresApproval": "承認が必要",
+      "copy": "コピー",
+      "copied": "承認参照をコピーしました",
+      "copyFailed": "承認参照をコピーできませんでした",
+      "governanceLink": "governance 承認キューを開く",
+      "step2Title": "2. 承認済みの実行を開始",
+      "step2Description": "承認が許可された後、その参照を送信してプランをディスパッチします。",
+      "approvalRef": "承認参照",
+      "execute": "実行",
+      "dispatched": "スケジュールをディスパッチしました",
+      "notDispatched": "スケジュールはディスパッチされませんでした",
+      "executeFailed": "承認済みの実行を開始できませんでした",
+      "receipt": "実行レシート",
+      "planHash": "プランハッシュ",
+      "gateStatus": "ゲート状態",
+      "dispatchRef": "ディスパッチ参照",
+      "detail": "詳細",
+      "opStatus": {
+        "requested": "要求済み",
+        "blocked": "拒否済み",
+        "dispatched": "ディスパッチ済み",
+        "declared_not_fired": "承認済み・未実行",
+        "failed": "失敗",
+        "budget_blocked": "予算によりブロック",
+        "budget_throttled": "予算により制限"
+      }
+    }
+  },
+  "decisions": {
+    "title": "意思決定台帳",
+    "description": "選択したスケジュールに対する実行判断の追記専用の記録です。判断は解決されたとおりに正確に表示されます — 承認は実行（アクチュエーション）ではありません。",
+    "pick": "スケジュールを選択",
+    "pickHint": "意思決定台帳を表示するには、スケジュールを選択してください。",
+    "empty": "記録された判断はありません",
+    "gate": "ゲート",
+    "plan": "プラン",
+    "op": {
+      "fire": "発火",
+      "run_request": "実行要求",
+      "run": "実行",
+      "run_step": "ステップ",
+      "run_end": "実行終了",
+      "cadence_miss": "ケイデンス欠落"
+    },
+    "opStatus": {
+      "requested": "要求済み",
+      "blocked": "ブロック済み",
+      "dispatched": "ディスパッチ済み",
+      "declared_not_fired": "承認済み・未実行（ディスパッチャーなし）",
+      "failed": "失敗",
+      "budget_blocked": "予算によりブロック",
+      "budget_throttled": "予算により制限",
+      "missed": "取りこぼし",
+      "skipped": "スキップ（前のステップが失敗または拒否）",
+      "gate_passed": "ゲート承認",
+      "completed": "完了",
+      "reconciled": "調整済み（遅延結果を記録）"
+    },
+    "estate": "すべての決定（環境全体）",
+    "estateCaveat": "環境全体の台帳を新しい順に表示します。ワークフロー実行の台帳エントリ全体を示すのはコンソールでこのビューだけです。監査・検知・実行詳細では関連する事実は見えますが、この記録そのものは見えません。",
+    "truncated": "最新の{{count}}件を表示していますが、エンジンはそれ以上あると報告しています。この一覧は切り詰められています。台帳全体ではなく標本として読んでください。",
+    "noSchedule": "スケジュール参照なし",
+    "subjectKind": {
+      "agent": "エージェント",
+      "swarm": "スウォーム",
+      "workflow": "ワークフロー"
+    },
+    "estateDescription": "環境全体のすべての決定を新しい順に記録する追記専用の台帳です。どのスケジュールにも属さない決定を含みます。",
+    "forbidden": "このロールではスケジュールの決定を参照できません。"
+  },
+  "timeline": {
+    "title": "アクティビティタイムライン",
+    "description": "対象に関する直近の通信イベントです。",
+    "kind": {
+      "delegation": "委譲",
+      "mcp_server": "MCPサーバー",
+      "mcp_tool": "MCPツール",
+      "fire": "実行",
+      "cadence_miss": "実行間隔の取りこぼし"
+    }
+  },
+  "history": {
+    "title": "リビジョン履歴 — {{name}}",
+    "description": "このスケジュールの時系列の追記専用スナップショットです。",
+    "scopeCaption": "復元で再適用されるのは変更可能なフィールドのみです。名前、サブジェクト種類、トリガー種類は変更されません。",
+    "empty": "記録されたリビジョンはありません",
+    "loadMore": "さらに読み込む",
+    "compareTitle": "スナップショットの差分",
+    "selectTwo": "比較するリビジョンを2つ選択してください。",
+    "selectRevision": "{{actor}} による「{{op}}」リビジョンを選択",
+    "originalLabel": "以前のリビジョン",
+    "modifiedLabel": "後のリビジョン",
+    "restore": "このリビジョンを復元",
+    "restoreTitle": "リビジョンを復元しますか？",
+    "restoreDescription": "{{name}} の選択した変更可能フィールドを復元しますか？",
+    "restoreConfirm": "リビジョンを復元",
+    "restored": "スケジュールのリビジョンを復元しました",
+    "operations": {
+      "create": "作成",
+      "update": "更新",
+      "delete": "削除",
+      "restore": "復元"
+    }
+  },
+  "empty": {
+    "flows": {
+      "title": "委譲フローはまだ観測されていません",
+      "description": "観測されたランタイムシグナルによってスーパーバイザーセッションからワーカーへの委譲エッジが記録されると、フローが表示されます。"
+    },
+    "schedules": {
+      "title": "スケジュールはまだ宣言されていません",
+      "description": "希望状態と観測されたヘルスを追跡するため、エージェントまたはスウォームに cron、イベント、または手動の実行間隔を宣言してください。"
+    }
+  }
+}

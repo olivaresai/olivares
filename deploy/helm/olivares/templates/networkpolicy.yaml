@@ -1,0 +1,44 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+Optional default-deny-ish NetworkPolicy for the core: allow ingress to the HTTPS
+and gRPC ports, and egress to DNS + (in postgres mode) the database. Self-hosted
+security posture is "no calls home" (docs/SECURITY-HARDENING.md) — the engine makes no
+mandatory outbound calls, so the baseline egress is DNS only. Add provider/SMTP
+egress via networkPolicy.extraEgress when you wire those connectors.
+*/ -}}
+{{- if and .Values.core.enabled .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "olivares.core.fullname" . }}
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "olivares.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: 8443
+          protocol: TCP
+        - port: 8444
+          protocol: TCP
+  egress:
+    # DNS
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- with .Values.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

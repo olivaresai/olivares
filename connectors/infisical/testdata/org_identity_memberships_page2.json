@@ -1,0 +1,27 @@
+{
+  "identityMemberships": [
+    {
+      "id": "im-bulk-100",
+      "role": "member",
+      "identity": {
+        "id": "id-bulk-100",
+        "name": "bulk-100",
+        "authMethods": [
+          "universal-auth"
+        ]
+      }
+    },
+    {
+      "id": "im-bulk-101",
+      "role": "member",
+      "identity": {
+        "id": "id-bulk-101",
+        "name": "bulk-101",
+        "authMethods": [
+          "universal-auth"
+        ]
+      }
+    }
+  ],
+  "totalCount": 102
+}

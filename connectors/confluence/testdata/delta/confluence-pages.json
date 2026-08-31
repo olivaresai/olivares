@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "id": "page-1",
+      "title": "Architecture Overview",
+      "spaceId": "space-abc",
+      "version": {
+        "createdAt": "2026-06-20T09:00:00.000Z"
+      }
+    },
+    {
+      "id": "page-2",
+      "title": "Deployment Guide",
+      "spaceId": "space-abc",
+      "version": {
+        "createdAt": "2026-06-25T14:30:00.000Z"
+      }
+    }
+  ],
+  "_links": {
+    "next": ""
+  }
+}

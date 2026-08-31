@@ -1,0 +1,15 @@
+{
+  "policies": [
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-guard/policy/pol-no-guardrail",
+      "policyId": "pol-no-guardrail",
+      "name": "allow-orders",
+      "status": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit(principal, action, resource);"
+        }
+      }
+    }
+  ]
+}

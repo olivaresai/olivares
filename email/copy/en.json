@@ -1,0 +1,55 @@
+{
+  "$locale": "en",
+  "common": {
+    "wordmark": "Olivares AI",
+    "footerNote": "This is a transactional message from Olivares AI.",
+    "fallbackIntro": "If the button does not work, copy this address into your browser:",
+    "signoff": "Olivares AI"
+  },
+  "signin": {
+    "subject": "Sign in to your Olivares AI portal",
+    "preheader": "Use this single-use link to sign in to your Olivares AI customer portal.",
+    "heading": "Sign in to your customer portal",
+    "intro": "Use the button below to sign in to your Olivares AI customer portal.",
+    "cta": "Sign in to portal",
+    "expiry": "This link works once and expires in {{MINUTES}} minutes.",
+    "sameBrowser": "Open it where you requested it: the same browser, the same profile and the same browsing mode. The link is tied to a cookie stored there, so switching any of them, or clearing cookies, will not work.",
+    "ignore": "This link grants access to your portal. If you did not request it, ignore this message; nothing happens unless the link is used.",
+    "textIntro": "Use this link to sign in to your Olivares AI customer portal:"
+  },
+  "license": {
+    "subject": "Your Olivares AI commercial licence",
+    "preheader": "Your signed licence key and enterprise download details are ready.",
+    "preheaderNoDownload": "Your signed licence key is ready. The download link is not in this message.",
+    "noDownloadNote": "Your licence is attached and active — nothing about it is pending. The enterprise download link is not in this message.",
+    "noDownloadPortalNote": "Your licence is attached and active — nothing about it is pending. The enterprise download link is not in this message; downloads are handled in your customer portal.",
+    "heading": "Your commercial licence",
+    "greeting": "Hello {{LICENSEE}},",
+    "intro": "Your signed licence key is attached as olivares-license.key and printed below.",
+    "installHeading": "Install it",
+    "installNote": "No restart is needed on a running engine.",
+    "installStdinNote": "To paste the key instead of using the attached file, run the command below and press Ctrl-D when you have finished.",
+    "verifyNote": "After installation, verify the licence with the command below.",
+    "statusPerpetual": "This licence is perpetual.",
+    "statusUntil": "This licence is valid until {{DATE}}.",
+    "downloadHeading": "Download the enterprise binary",
+    "downloadNote": "This download link is tied to your purchase.",
+    "downloadCta": "Download enterprise binary",
+    "portalHeading": "Your customer portal",
+    "portalNote": "Sign in at any time with this email address — we send a single-use link, so there is no password to keep. Your licences, your downloads and your account details are all there.",
+    "portalCta": "Open your portal",
+    "keyHeading": "Your licence key",
+    "attestation": "This attestation-only licence records your commercial exception and entitles you to the enterprise add-ons. It never caps users (self-hosted user accounts are unlimited in every edition), and verifying it never calls us: validation is fully offline, with no remote kill switch. Downloading what you paid for does call us — this subscription is the credential for the enterprise add-ons, their updates and their patches. There is no mandatory telemetry and no control-plane egress by default."
+  },
+  "invite": {
+    "subject": "Set up your Olivares AI account",
+    "preheader": "Accept your invitation and choose a password for your Olivares AI account.",
+    "heading": "Set up your Olivares AI account",
+    "intro": "An administrator has invited you to set up your Olivares AI account for their organisation.",
+    "cta": "Set up your account",
+    "expiry": "This invitation can be used once and expires on {{EXPIRES_AT}}.",
+    "setPassword": "You will choose your own password; the administrator who invited you will never see it.",
+    "ignore": "If you were not expecting this, do not use the link and speak to the administrator who invited you. The account already exists; ignoring this message only leaves its password unset.",
+    "textIntro": "Use this invitation link to set up your Olivares AI account:"
+  }
+}

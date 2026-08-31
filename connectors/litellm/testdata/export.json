@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {"key_alias": "alice-key", "token": "sk-SECRETVALUE-litellm", "user_id": "alice", "max_budget": 100.0, "models": ["gpt-4o", "claude-sonnet-4"], "spend": 42.0},
+    {"key_alias": "nobudget-key", "user_id": "bob", "models": ["gpt-4o"]},
+    {"token": "sk-orphan-SECRETVALUE2", "models": ["gpt-4o"]},
+    {"key_alias": "blocked-key", "user_id": "carol", "max_budget": 50.0, "blocked": true, "models": []}
+  ],
+  "teams": [
+    {"team_alias": "research", "team_id": "t1", "max_budget": 500.0, "models": ["gpt-4o"]}
+  ],
+  "users": [
+    {"user_id": "alice", "max_budget": 100.0}
+  ]
+}

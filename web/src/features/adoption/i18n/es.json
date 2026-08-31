@@ -1,0 +1,130 @@
+{
+  "title": "Adopción de Claude Code",
+  "description": "Cuánto se usa Claude Code y qué parte de lo que propone conservan los desarrolladores.",
+  "range": {
+    "label": "Intervalo de tiempo",
+    "7d": "Últimos 7 días",
+    "30d": "Últimos 30 días",
+    "90d": "Últimos 90 días",
+    "mtd": "Mes en curso"
+  },
+  "tabs": {
+    "overview": "Resumen",
+    "teams": "Equipos",
+    "developers": "Desarrolladores",
+    "trend": "Tendencia"
+  },
+  "boundary": {
+    "note": "Cubre solo el tráfico de Claude API: el feed de administración de Analytics y el plano de telemetría OTLP. El uso servido por {{providers}} no se incluye, así que la ausencia de adopción aquí no es prueba de su ausencia.",
+    "providers": {
+      "claude-platform-aws": "Claude Platform on AWS",
+      "microsoft-foundry": "Microsoft Foundry",
+      "amazon-bedrock": "Amazon Bedrock",
+      "vertex-ai": "Vertex AI"
+    }
+  },
+  "lenses": {
+    "analytics": {
+      "title": "Por desarrollador (administración de Analytics)",
+      "description": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{developers}} desarrollador(es)."
+    },
+    "telemetry": {
+      "title": "Por sesión (telemetría en vivo)",
+      "description": "Actividad por sesión en tiempo real del plano OTLP en {{teams}} equipo(s); incluye el tiempo activo."
+    }
+  },
+  "comparison": {
+    "title": "Oficial frente a observado",
+    "description": "Métricas compartidas de actividad de Claude Code comparadas entre la API de Analytics de administración y la telemetría OTLP local.",
+    "official": "oficial (API de Analytics)",
+    "observed": "observado (OTLP)",
+    "withinThreshold": "Dentro del umbral",
+    "empty": "No hay actividad de métricas compartidas en este intervalo.",
+    "boundaryNote": "La API oficial de Analytics no cubre superficies de terceros como {{providers}}; el uso solo en telemetría es una señal para revisar, no una conclusión de uso indebido.",
+    "metrics": {
+      "sessions": "Sesiones",
+      "tokens": "Tokens",
+      "linesAdded": "Líneas añadidas",
+      "commits": "Commits",
+      "pullRequests": "Pull requests"
+    },
+    "directions": {
+      "aligned": "Dentro del umbral",
+      "telemetry_exceeds_official": "Lo observado supera a lo oficial en {{ratio}}",
+      "official_exceeds_telemetry": "Lo oficial supera a lo observado en {{ratio}}",
+      "official_plane_absent": "Plano oficial ausente",
+      "telemetry_plane_absent": "Plano observado ausente"
+    }
+  },
+  "stats": {
+    "sessions": "Sesiones",
+    "linesNet": "Líneas de código netas",
+    "addedRemoved": "+{{added}} / -{{removed}}",
+    "commits": "Commits",
+    "pullRequests": "Pull requests",
+    "acceptance": "Aceptación de herramientas",
+    "acceptedOfTotal": "{{accepted}} de {{total}} aceptadas",
+    "tokens": "Tokens",
+    "activeTime": "Tiempo activo"
+  },
+  "models": {
+    "total": "Tokens totales",
+    "empty": "No hay uso de modelos en este intervalo."
+  },
+  "acceptance": {
+    "empty": "No hay decisiones de herramientas en este intervalo.",
+    "columns": {
+      "tool": "Herramienta",
+      "accepted": "Aceptadas",
+      "rejected": "Rechazadas",
+      "rate": "Aceptación"
+    }
+  },
+  "trend": {
+    "title": "Tendencia diaria",
+    "description": "Productividad a lo largo del tiempo para la lente seleccionada.",
+    "lensLabel": "Lente",
+    "empty": "No hay actividad en este intervalo."
+  },
+  "teams": {
+    "title": "Por equipo",
+    "description": "Actividad por equipo del plano de telemetría en vivo (etiquetas de equipo del operador).",
+    "empty": "No hay telemetría atribuida a equipos en este intervalo.",
+    "emptyHint": "Define OTEL_RESOURCE_ATTRIBUTES (p. ej. team=…) en la flota de Claude Code para atribuir por equipo.",
+    "unassigned": "(sin asignar)",
+    "columns": {
+      "team": "Equipo"
+    }
+  },
+  "developers": {
+    "title": "Por desarrollador",
+    "description": "ROI por desarrollador del feed de administración de Analytics.",
+    "empty": "No hay actividad por desarrollador en este intervalo.",
+    "locked": "Vista por desarrollador restringida",
+    "lockedHint": "Ver la productividad de cada desarrollador requiere el permiso adoption:developer:read (denegado por defecto).",
+    "columns": {
+      "developer": "Desarrollador"
+    }
+  },
+  "columns": {
+    "sessions": "Sesiones",
+    "commits": "Commits",
+    "pullRequests": "PRs",
+    "linesNet": "LoC netas",
+    "acceptance": "Aceptación"
+  },
+  "empty": {
+    "acceptance": {
+      "title": "Aún no se han observado decisiones de herramientas",
+      "description": "Las decisiones de herramientas aceptadas y rechazadas aparecen cuando el feed de administración de Analytics o la telemetría OTLP informan de ellas."
+    },
+    "developer": {
+      "title": "Aún no se ha informado de actividad por desarrollador",
+      "description": "Las filas por desarrollador aparecen cuando el feed de administración de Analytics de Claude informa de actividad de desarrolladores."
+    },
+    "team": {
+      "title": "Aún no hay telemetría atribuida a equipos",
+      "description": "La atribución exige ambas partes: la lista resource_labels del conector debe incluir la clave de equipo — está vacía por defecto — y la flota debe enviarla."
+    }
+  }
+}

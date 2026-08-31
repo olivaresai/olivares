@@ -1,0 +1,17 @@
+{
+  "_comment": "DECLARED console seams — routes a hand-written typed client under web/src/features/*/api.ts calls and the engine deliberately does NOT mount. Enforced by TestEveryConsoleClientCallHitsARegisteredRoute (cmd/olivares/consoleroutes_test.go). Every entry needs a REASON and an OWNER: a bare allow-list is how the next silent 404 gets in. An entry whose route becomes mounted, or that no client calls any more, FAILS the test until it is deleted.",
+  "seams": [
+    {
+      "method": "GET",
+      "path": "/v1/m/identity/tls",
+      "reason": "The console labels this section cert-manager TLS posture (issuer / ClusterIssuer reference, chain, auto-renew). The engine knows its OWN serving certificate, but serving that under a cert-manager label would fabricate MEANING even though the bytes are real: an operator would read a Kubernetes issuer where there is a self-signed local certificate. No posture contract for it has been built (verified absent; see web/src/features/identity/posture.tsx). Kept as an honest 404 so the panel renders its pending-seam notice until the contract is designed.",
+      "owner": "cert-manager TLS posture — contract unbuilt; re-measured against a live engine on 2026-08-07"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/m/identity/crypto-inventory",
+      "reason": "The console labels this a crypto-agility / post-quantum key inventory. The engine knows its own signing algorithms (the ed25519 audit, catalog and policy keys) but that is not the same inventory: post-quantum readiness spans the whole estate's key material, and reporting three local signing keys as the answer would understate the gap while looking complete. No contract for it has been built (verified absent). Kept as an honest 404 rather than a confident wrong number.",
+      "owner": "crypto-agility / PQC inventory — contract unbuilt; re-measured against a live engine on 2026-08-07"
+    }
+  ]
+}

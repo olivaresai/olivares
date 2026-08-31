@@ -1,0 +1,180 @@
+{
+  "title": "Alertas",
+  "description": "Enruta hallazgos a destinos e inspecciona el registro de entregas. Una ruta referencia un destino por nombre; la credencial vive en el transporte cableado.",
+  "tabs": {
+    "routes": "Rutas",
+    "deliveries": "Entregas",
+    "outbox": "Mensajes muertos"
+  },
+  "severities": {
+    "any": "Cualquier severidad",
+    "info": "Info",
+    "low": "Baja",
+    "medium": "Media",
+    "high": "Alta",
+    "critical": "Crítica"
+  },
+  "routes": {
+    "intro": "Cada ruta envía los hallazgos coincidentes a un destino, por orden de prioridad.",
+    "add": "Nueva ruta",
+    "empty": "Aún no hay rutas",
+    "emptyHint": "Añade una ruta para enviar hallazgos coincidentes a un destino.",
+    "colName": "Nombre",
+    "colDest": "Destino",
+    "colSeverity": "Severidad mín.",
+    "colStatus": "Estado",
+    "colActions": "Acciones",
+    "enabled": "Activada",
+    "disabled": "Desactivada",
+    "bulk": {
+      "enable": "Activar las seleccionadas",
+      "disable": "Desactivar las seleccionadas"
+    },
+    "testAction": "Probar ruta {{name}}",
+    "editAction": "Editar ruta {{name}}",
+    "deleteAction": "Eliminar ruta {{name}}",
+    "created": "Ruta creada",
+    "updated": "Ruta actualizada",
+    "deleted": "Ruta eliminada",
+    "tested": "Prueba enviada a {{destination}}",
+    "deleteDialog": {
+      "title": "¿Eliminar ruta?",
+      "description": "Esto elimina la ruta «{{name}}». Los hallazgos que coincidían ya no se entregarán por ella.",
+      "confirm": "Eliminar ruta"
+    },
+    "dialog": {
+      "title": "Nueva ruta",
+      "editTitle": "Editar ruta",
+      "subtitle": "Haz coincidir hallazgos y envíalos a un destino. Las listas de coincidencia vacías coinciden con todo.",
+      "name": "Nombre",
+      "destination": "Destino",
+      "destinationHint": "Un destino aprovisionado (solo el nombre: su credencial vive en el transporte).",
+      "destinationPlaceholder": "Selecciona un destino",
+      "minSeverity": "Severidad mín.",
+      "matchTypes": "Tipos coincidentes",
+      "matchKinds": "Clases coincidentes",
+      "matchSources": "Orígenes coincidentes",
+      "matchSubjectKinds": "Clases de sujeto coincidentes",
+      "listHint": "Separado por comas; vacío coincide con todo.",
+      "dedup": "Ventana dedup (s)",
+      "throttle": "Ventana throttle (s)",
+      "priority": "Prioridad",
+      "enabled": "Activada",
+      "enabledHint": "Una ruta desactivada no coincide con nada hasta reactivarla.",
+      "create": "Crear ruta",
+      "save": "Guardar ruta",
+      "matchTypesHint": "Selecciona uno o varios tipos de evento. Las descripciones proceden del catálogo del servidor."
+    }
+  },
+  "deliveries": {
+    "noRead": "No tienes permiso para ver las entregas.",
+    "intro": "Los intentos de entrega registrados (solo lectura). Usa la prueba de una ruta para sondear un destino.",
+    "filterStatus": "Filtrar por estado",
+    "allStatuses": "Todos los estados",
+    "empty": "Sin entregas",
+    "colTime": "Hora",
+    "colDest": "Destino",
+    "colKind": "Tipo",
+    "colStatus": "Estado",
+    "colDetail": "Detalle",
+    "statuses": {
+      "claimed": "Reclamada",
+      "delivered": "Entregada",
+      "rejected": "Rechazada",
+      "failed": "Fallida",
+      "no_dispatcher": "Sin despachador",
+      "unknown_destination": "Destino desconocido"
+    },
+    "loadMore": "Cargar más"
+  },
+  "outbox": {
+    "noRead": "No tienes permiso para ver la bandeja de salida.",
+    "intro": "La bandeja de salida duradera: los avisos que el motor todavía debe, los que ya entregó y los que ha dado por muertos. Reencolar uno pide un nuevo intento de entrega; no lo entrega.",
+    "filterStatus": "Filtrar por estado de la bandeja",
+    "colTime": "Hora",
+    "colDest": "Destino",
+    "colKind": "Tipo",
+    "colAttempts": "Intentos",
+    "colStatus": "Estado",
+    "colDetail": "Último detalle",
+    "colActions": "Acciones",
+    "statuses": {
+      "dead": "Muerto",
+      "queued": "En cola",
+      "delivering": "Entregando",
+      "delivered": "Entregado"
+    },
+    "emptyDead": "Sin mensajes muertos",
+    "emptyDeadHint": "Un aviso llega aquí cuando agota sus reintentos o el destino lo rechaza de forma permanente. No se ha dado nada por perdido.",
+    "empty": "Sin avisos con estado «{{status}}»",
+    "emptyHint": "Elige otro estado, o revisa la pestaña de rutas para confirmar que alguna ruta casa con los hallazgos que esperas.",
+    "redeliverAction": "Reencolar este aviso hacia {{destination}}",
+    "redeliver": {
+      "queued": "Reencolado para {{destination}}",
+      "queuedHint": "El aviso vuelve a estar en cola. El siguiente ciclo de entrega hace el intento: todavía no se ha entregado.",
+      "accepted": "Reencolado para {{destination}} aceptado con estado «{{status}}»",
+      "inFlight": "No se ha reencolado: este aviso ya está en vuelo hacia {{destination}}.",
+      "gone": "No se ha reencolado: este aviso no está en la bandeja de salida de este tenant. Puede haberse retirado, o pertenecer a otro tenant.",
+      "forbidden": "No se ha reencolado: el plano de control ha rechazado la petición hacia {{destination}}. Reencolar exige el permiso de administración de rutas de notify; también puede rechazarlo una política o una restricción de ámbito.",
+      "consent": "No se ha reencolado: todavía no se ha aceptado el aviso de grabación de esta superficie. Acéptalo y vuelve a intentarlo — no es un permiso que falte.",
+      "stepUp": "Aún no reencolado: el reenvío a {{destination}} necesita una sesión verificada. Completa la verificación y vuelve a intentarlo.",
+      "failed": "El reencolado para {{destination}} ha fallado. El aviso no ha vuelto a la cola."
+    },
+    "confirm": {
+      "title": "¿Reencolar este aviso?",
+      "description": "Esto pide un nuevo intento de entrega hacia {{destination}}. El destinatario puede recibirlo más de una vez si un intento anterior sí llegó.",
+      "body": "Intentos hasta ahora: {{attempts}}. Último resultado: {{detail}}.",
+      "noDetail": "sin registrar",
+      "confirm": "Reencolar aviso"
+    }
+  },
+  "evaluate": {
+    "title": "Probar señal",
+    "caption": "Solo evalúa predicados; no simula la deduplicación ni la limitación.",
+    "eventType": "Tipo de evento",
+    "selectType": "Selecciona un tipo de evento",
+    "kind": "Clase",
+    "severity": "Severidad",
+    "source": "Origen",
+    "subjectKind": "Clase de sujeto",
+    "submit": "Evaluar",
+    "matchedCount": "Rutas coincidentes: {{count}}",
+    "name": "Ruta",
+    "enabled": "Habilitada",
+    "matched": "Coincide",
+    "mismatches": "Diferencias",
+    "yes": "Sí",
+    "no": "No",
+    "dimensions": {
+      "type": "Tipo",
+      "severity": "Severidad",
+      "kind": "Clase",
+      "source": "Origen",
+      "subject_kind": "Clase de sujeto",
+      "disabled": "Deshabilitada"
+    }
+  },
+  "history": {
+    "action": "Ver el historial de revisiones de {{name}}",
+    "title": "Historial de revisiones — {{name}}",
+    "description": "Instantáneas cronológicas de esta ruta de notificación en un registro de solo anexión.",
+    "empty": "No hay revisiones registradas",
+    "loadMore": "Cargar más",
+    "compareTitle": "Diferencias entre instantáneas",
+    "selectTwo": "Selecciona dos revisiones para comparar sus instantáneas.",
+    "selectRevision": "Seleccionar la revisión {{op}} de {{actor}}",
+    "originalLabel": "Revisión anterior",
+    "modifiedLabel": "Revisión posterior",
+    "restore": "Restaurar esta revisión",
+    "restoreTitle": "¿Restaurar la revisión?",
+    "restoreDescription": "¿Restaurar la configuración de ruta seleccionada de {{name}}?",
+    "restoreConfirm": "Restaurar revisión",
+    "restored": "Revisión de la ruta restaurada",
+    "operations": {
+      "create": "Creada",
+      "update": "Actualizada",
+      "delete": "Eliminada",
+      "restore": "Restaurada"
+    }
+  }
+}

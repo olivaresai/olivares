@@ -1,0 +1,134 @@
+---
+title: Modelo de amenazas (STRIDE / DFD)
+description: >-
+  El modelo de amenazas publicado: activos, fronteras de confianza, un diagrama de
+  flujo de datos y la amenaza STRIDE principal y su mitigación por componente.
+  Defensivo por diseño — postura y mitigaciones, nunca un mapa de ataque.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Olivares AI es un producto de seguridad que corre en tus propios hosts y construye un
+mapa de lo que cada agente puede tocar. Eso hace que un fallo del proveedor equivalga a
+una brecha del cliente — por eso el producto está diseñado para superar un pentest
+empresarial desde el primer día, y el modelo de amenazas se publica, no se oculta.
+
+<Aside type="caution" title="Este es un documento defensivo">
+Esta página describe **fronteras de confianza y mitigaciones**. Deliberadamente **no**
+expone el contenido del grafo de acceso de ningún estate, los identificadores de
+autorización internos, los nombres de secretos en disco, ni nada que pudiera
+reformularse como una guía de ataque. El producto no incluye **ninguna función
+ofensiva** — no es un framework de mando y control y no escanea credenciales de
+terceros. Esa línea es intencionada y se mantiene explícita.
+</Aside>
+
+## Método
+
+El modelo usa **STRIDE** (Spoofing, Tampering, Repudiation, Information disclosure,
+Denial of service, Elevation of privilege) sobre un **diagrama de flujo de datos** con
+sus fronteras de confianza. Las mitigaciones listadas aquí se verifican contra la
+matriz de endurecimiento interna del producto; esta página publica la *postura*, no la
+evidencia a nivel de código.
+
+## Principios rectores
+
+- **Read-first = riesgo asimétrico bajo.** El motor observa a través de logs,
+  OpenTelemetry y eBPF. **No** se sitúa en la ruta de datos del agente, de modo que un
+  fallo del colector no puede romper el tráfico de producción.
+- **Datos mínimos.** El grafo almacena **relaciones** — origen → recurso,
+  lectura/escritura, fuente, confianza, timestamp — **nunca** payloads, cuerpos SQL,
+  secretos o PII. *Lo que no se almacena no puede filtrarse.*
+- **Autoalojado = sin proveedor en la ruta de datos.** No hay telemetría obligatoria ni
+  egreso del plano de control de forma predeterminada, y Olivares AI nunca está en la ruta de
+  datos. Al proveedor solo se le llega cuando le pides algo — `olivares upgrade`, o una descarga
+  por suscripción de add-ons comerciales y sus actualizaciones — nunca como efecto de ejecutar. Y `olivares upgrade --endpoint` apunta incluso eso a tu propio mirror.
+  Solo cruza el perímetro del cliente lo que este configura para que lo cruce: llamadas a
+  sus API de modelos, las salidas SIEM/webhook que conecta y un proveedor externo de
+  embeddings si aprovisiona uno. Esos son terceros elegidos por el cliente; la afirmación
+  anterior se refiere a **Olivares AI** y no se extiende a ellos.
+
+## Activos
+
+| Activo | Por qué es sensible |
+|---|---|
+| **El grafo de acceso** | Un mapa de lo que cada agente puede tocar. **El activo más sensible de todos** — se gobierna en consecuencia (ver mitigaciones). |
+| **El acceso al host del colector** | Lee logs/OTEL/eBPF en hosts de producción; un compromiso sería un pivote. |
+| **El audit ledger / la evidencia** | Si se altera silenciosamente, el producto mentiría. La integridad lo es todo. |
+| **Las claves de licencia** | La falsificación eludiría el gate comercial. |
+| **Las credenciales del panel** | El acceso significa ver todo el estate de agentes del cliente. |
+
+Como el grafo de acceso es el activo más sensible, **verlo es una acción privilegiada**
+— concedida desde el rol *editor* hacia arriba, **nunca** al rol *visor* más bajo — con
+**alcance de tenant**, y **cada lectura se audita**. Defensa por capas: privilegio,
+aislamiento de tenant y autoauditoría.
+
+## Fronteras de confianza y flujo de datos
+
+Hay **cuatro fronteras de confianza**:
+
+1. `host sources → collector`
+2. `collector → core` (la frontera de red)
+3. `user → panel`
+4. `core → store`
+
+```text
+  CUSTOMER INFRASTRUCTURE                         CONTROL PLANE (self-hosted or managed)
+  ┌─ Collectors (edge) ───────────────┐           ┌─ Engine (Go) ───────────────────────────┐
+  │ • OTLP receiver (agents)          │           │ Ingest + event bus                       │
+  │ • MCP / skills introspection      │ ──mTLS──▶  │ Connector SDK · Module runtime           │
+  │ • Tail audit (pgAudit/CloudTrail) │  gRPC     │ Multi-tenant data model                  │
+  │ • eBPF backstop (Tetragon)        │  +bearer  │ REST/gRPC API · AuthN/Z                   │
+  └───────────────────────────────────┘           │ Append-only, hash-chained audit          │
+        (1) host sources → collector               └──────────────┬───────────────────────────┘
+        (2) collector → core (network)                            │ go:embed         (4) core → store
+                                                     ┌────────────▼─────────┐   ┌──────────────────┐
+                                       (3) user ───▶ │ Web panel (React)    │   │ Access-graph     │
+                                           → panel   └──────────────────────┘   │ store + ledger   │
+                                                                                 └──────────────────┘
+```
+
+El plano de datos (los colectores) **siempre** corre en infraestructura del cliente.
+Los colectores **empujan** al núcleo; **no exponen ningún listener entrante**.
+
+## STRIDE — amenaza principal y mitigación por componente
+
+El modelo registra la(s) amenaza(s) **principal(es)** de cada componente y la mitigación
+que la aborda (no una cuadrícula exhaustiva).
+
+| Componente | Amenaza principal | Mitigación |
+|---|---|---|
+| **Colector** | *Elevation* (eBPF necesita capacidades de kernel), *Tampering* del binario | capacidades mínimas (`CAP_BPF`/`CAP_PERFMON`, **no** root completo); binario firmado; **sin listener entrante** (modelo push) |
+| **Colector → núcleo** | *Information disclosure*, *Spoofing* | TLS ≥ 1.2 por defecto, **sin fallback en claro** (fail-closed) + bearer token; AutoMTLS en el canal de plugin local; **mTLS con certificado de cliente verificado opt-in** para colectores remotos |
+| **Almacén del grafo de acceso** | *Information disclosure* en reposo | cifrado en reposo provisto por el despliegue (LUKS/FS/TDE); expurgo/hash de valores sensibles impuesto del lado del motor en la ruta de escritura |
+| **Audit ledger** | *Tampering*, *Repudiation* | append-only + hash-chain (+ checkpoints firmados con Ed25519); exportación a una copia WORM/SIEM externa |
+| **Panel** | *Spoofing*, *Elevation* | sin credenciales por defecto; token de configuración de un solo uso en el primer arranque; RBAC; sesiones seguras; autoauditoría (quién vio/cambió qué) |
+| **Clave de licencia** | *Spoofing* | firma Ed25519, validación offline; revocación vía expiración de la suscripción |
+
+## Contra qué *no* protege este modelo
+
+Ser honesto sobre los bordes del modelo es parte del modelo:
+
+- **Un root del host / superusuario de base de datos** puede alterar el ledger local en
+  disco. El hash-chain hace las reescrituras previas al checkpoint criptográficamente
+  *detectables*, pero el control anti-manipulación real es **exportar el ledger a una
+  copia WORM/SIEM externa** que el operador local no pueda alcanzar. Actívalo.
+- **El cifrado en reposo del almacén es responsabilidad del operador** — el producto
+  expurga/hashea los valores sensibles, pero el despliegue proporciona el cifrado de
+  disco/FS/TDE.
+- **La cobertura del access map es escalonada** (limpia en almacenes auditados, con
+  pérdidas en algunos, imposible de reconstruir pasivamente en otros). Una arista
+  ausente no es prueba de que un acceso no ocurriera — lee
+  [Honestidad y límites](/es/start/honesty-and-limits/).
+- **Un host de colector comprometido** es un evento serio; el colector corre en solo
+  lectura con privilegios mínimos y sin listener entrante para reducir ese radio de
+  impacto, pero el compromiso del host queda fuera de lo que el control plane por sí
+  solo puede prevenir.
+
+## Relacionado
+
+- [Modelo de seguridad](/es/explanation/security/security-model/) — la postura y el *porqué*
+  detrás de estas mitigaciones.
+- [Verifica lo que descargaste](/es/how-to/verify-a-release/) — integridad de la cadena de
+  suministro.
+- [Visión general de la arquitectura](/es/explanation/architecture/overview/) — los
+  componentes del DFD, en profundidad.

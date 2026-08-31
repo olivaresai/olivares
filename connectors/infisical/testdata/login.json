@@ -1,0 +1,6 @@
+{
+  "accessToken": "ist.minted.abc123",
+  "expiresIn": 7200,
+  "accessTokenMaxTTL": 43200,
+  "tokenType": "Bearer"
+}

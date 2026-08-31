@@ -1,0 +1,284 @@
+---
+title: "シングルノードで始める (バイナリ + systemd)"
+description: >-
+  Olivares AI を 1 台の Linux ホストにハードニングされた systemd サービスとして
+  インストールする: 静的バイナリをビルドし、ワンタイムセットアップトークンを取得し、
+  最初のテナントを作成し、実際のソースを接続してアクセスグラフに到達する — TLS を
+  有効にし、デフォルト認証情報なしで。
+sidebar:
+  order: 1
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+これは本番に近い形での最初のインストールです。**1 台の Linux ホスト、1 つの静的
+バイナリ、systemd、組み込みの SQLite ストア** — そして実際の初回実行経路
+（ワンタイムセットアップトークン、デフォルトで TLS 有効、デフォルト認証情報なし、
+デモデータなし）です。これを終えると、実際のソースを接続し、アクセスグラフが
+投入された状態で、Olivares AI がハードニングされたサービスとして稼働します。
+
+これは[クイックスタート](/ja/start/quickstart/)が 5 分でデモするのと同じエンジンです。
+違いは姿勢です。まず即座に見て回りたい場合は、クイックスタートを実行してから、
+実際のインストールのためにここに戻ってきてください。
+
+このページ上のすべてのコマンドは、記載どおりに現在のバイナリに対して実行されました
+（初回起動バナー、トークン回復経路、pgAudit の接続、以下のグラフは
+`scripts/quickstart-smoke.sh` によって実行され、このガイドのために再検証されています）。
+
+## 前提条件
+
+- systemd と `curl` を備えた Linux ホスト。
+- バイナリをビルドするための **Go 1.26+**（ストアは純粋 Go の SQLite なので、
+  C ツールチェーンは不要）。署名済みのビルド済みアーティファクトを伴うリリースは
+  最初の一般公開リリースで提供されます — それまではチェックアウトからビルドし、
+  [リリースの検証](/ja/how-to/verify-a-release/)が、それらが存在するようになったら
+  使うチェーンを記載しています。
+
+## 1. バイナリをビルドしてインストールする
+
+<Steps>
+
+1. 1 つの静的アーティファクト（エンジン + 組み込み web UI + ファーストパーティ
+   コネクタ）をビルドします:
+
+   ```bash
+   task build                      # produces ./bin/olivares
+   ./bin/olivares version
+   ```
+
+2. それをインストールし、サービスユーザーを作成します:
+
+   ```bash
+   sudo install -m 0755 bin/olivares /usr/local/bin/olivares
+   sudo useradd --system --home /var/lib/olivares --shell /usr/sbin/nologin olivares
+   ```
+
+</Steps>
+
+## 2. ハードニングされた systemd サービスとして実行する
+
+`/etc/systemd/system/olivares.service` を作成します:
+
+```ini
+[Unit]
+Description=Olivares AI — self-hosted engine for enterprise AI
+Documentation=https://olivares.ai/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olivares
+Group=olivares
+ExecStart=/usr/local/bin/olivares serve \
+  --listen 127.0.0.1:8443 \
+  --grpc-listen 127.0.0.1:8444 \
+  --data-dir /var/lib/olivares
+Restart=on-failure
+RestartSec=5
+
+# The data directory holds the SQLite store, the audit signing key and the TLS
+# material. StateDirectory creates /var/lib/olivares owned by the service user.
+StateDirectory=olivares
+StateDirectoryMode=0700
+UMask=0077
+
+# Hardening (mirrors the container posture: non-root, read-only, no escalation)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/olivares
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now olivares
+```
+
+エンジンはデフォルトで **ループバック** にバインドします — `127.0.0.1:8443` は
+意図的なものです。後で、独自のイングレスと TLS の背後に、明示的な決定として公開して
+ください（[ハードニング](/ja/how-to/security-hardening/)を参照）。
+
+<Aside type="note" title="TLS は有効で、自己署名証明書を使用">
+`--tls-cert`/`--tls-key` がない場合、エンジンは初回起動時にデータディレクトリ内に
+自己署名証明書を生成し、その 2 つのダイジェストをログに記録します。ブラウザーが
+表示する証明書ダイジェスト `cert_fingerprint_sha256` と、リーフ証明書の SPKI
+ダイジェスト `pin_sha256` です。以下の `curl -k` はブートストラップに限り検証を
+スキップします — 公開する前に、サービスに正規の証明書を与えるか、ログに記録された
+`pin_sha256` の値をそのまま `--pin-sha256` に渡してピン留めしてください。証明書
+フィンガープリントは別のダイジェストです。解析自体は通り、その後ハンドシェイクで
+`TLS SPKI pin mismatch` として失敗します。
+</Aside>
+
+## 3. ワンタイムセットアップトークンを取得する
+
+新規インストールには **デフォルト認証情報がありません**。初回起動時、エンジンは
+使い捨てのセットアップトークン（`olst_…`）を生成し、それを **stdout のみ** に
+出力します — systemd の下では、それは journal です:
+
+```bash
+journalctl -u olivares -o cat | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+```
+
+```text
+=== FIRST-BOOT SETUP ===
+No accounts exist yet. Open the console and create the first administrator
+with this one-time token — setup also creates your first organization and
+makes that administrator its owner:
+
+  Console:  https://127.0.0.1:8443
+  Token:    olst_…
+
+The console serves HTTPS with a self-signed certificate on first boot — your
+browser will warn once; that is expected. The token is shown ONCE and is
+single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
+"password":"…"} — add "organization":"…" to name it (default: "Default
+Organization"). The reply carries the new organization's tenant_id.
+========================
+```
+
+最初の管理者を作成してログインします:
+
+```bash
+SETUP="olst_…"        # from the banner above
+
+curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+  -H 'Content-Type: application/json' \
+  -d "{\"token\":\"$SETUP\",\"email\":\"you@example.com\",\"password\":\"<strong-password>\"}"
+
+TOKEN="$(curl -ksf -X POST https://127.0.0.1:8443/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"<strong-password>"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+```
+
+<Aside type="tip" title="トークンを見逃した? 回復経路は安全です">
+保存されるのはトークンの SHA-256 のみ（データディレクトリ内の `setup.token` に）
+なので、見逃したトークンは **回復できません** — そして再起動しても再出力されません。
+ユーザーがまだ存在しない新規インストールでは、回復方法は次のとおりです: サービスを
+停止し、データディレクトリから `setup.token` を削除し、再び起動します — 新しい
+トークンが生成され出力されます。これは現在のバイナリに対して検証済みです。これは
+ユーザーが存在しない間にのみ機能するため、構成済みのインストールを乗っ取るために
+使われることは決してあり得ません。
+</Aside>
+
+## 4. 最初の組織を作成する
+
+製品内のすべてはテナントスコープなので、ソースが報告先とする組織を作成します:
+
+```bash
+TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Production","slug":"prod"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+echo "tenant: $TENANT"
+```
+
+## 5. 最初の実際のソースを接続する
+
+ソースは `OLIVARES_SOURCES_CONFIG` で名前を指定された、オペレーター所有の 1 つの
+JSON ファイルで宣言され、エンジンが起動する前に読み込まれます。以下は PostgreSQL の
+**pgAudit** ソース（クリーンティアの R/RW シグナル — Postgres 側のセットアップは
+[pgAudit ガイド](/ja/how-to/connectors/pgaudit/)を参照）です:
+
+```bash
+sudo tee /etc/olivares/sources.json >/dev/null <<JSON
+{"sources":[{
+  "name": "salesdb-pgaudit",
+  "kind": "pgaudit",
+  "tenant": "$TENANT",
+  "config": { "log_path": "/var/log/postgresql/postgresql.csv", "format": "csvlog" }
+}]}
+JSON
+sudo chmod 0600 /etc/olivares/sources.json && sudo chown olivares: /etc/olivares/sources.json
+```
+
+drop-in でサービスをそこに向け、再起動します:
+
+```bash
+sudo systemctl edit olivares
+```
+
+```ini
+[Service]
+Environment=OLIVARES_SOURCES_CONFIG=/etc/olivares/sources.json
+ReadOnlyPaths=/etc/olivares
+```
+
+```bash
+sudo systemctl restart olivares
+journalctl -u olivares -o cat | grep "ingest: wired source"
+```
+
+```text
+ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
+```
+
+何も接続されていない場合、エンジンは空のマップ上で健全に見せかけるのではなく、
+正直にそう述べます — 正確な警告とそれぞれの意味については
+[トラブルシューティング](/ja/how-to/troubleshooting/)を参照してください。
+
+## 6. グラフに到達する
+
+```bash
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/graph?limit=200" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/drift" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+```
+
+同じグラフは `https://127.0.0.1:8443` の組み込み web UI でレンダリングされます
+（ワークステーションからはトンネルします: `ssh -L 8443:127.0.0.1:8443 <host>`）。
+
+## 7. 完了とみなす前に
+
+データディレクトリ内の 2 つのアーティファクトが、インシデントを越えて証拠が
+生き残るかどうかを決定します — それらに **今すぐ** 対処してください、後でではなく:
+
+| アーティファクト | なぜ重要か | アクション |
+|---|---|---|
+| `audit-signing.key` | 追記専用の監査台帳に署名する。失われると、台帳は再検証できなくなる。エンジンは初回起動時に **警告** するのみ — 強制されたエスクローはない。 | 今日、`0600` 権限でボックス外にバックアップする。 |
+| 台帳の公開鍵 | 公開鍵の **ボックス外** のコピーこそが、ホスト侵害後に検証を攻撃者耐性のあるものにする。 | `curl -ksf https://127.0.0.1:8443/v1/audit/pubkey` を実行し、結果をボックス外に保管する。 |
+
+その後、実際のバックアップをスケジュールします — `olivares dr backup` は暗号化され、
+台帳の連続性が保たれるバンドルを生成します。
+[バックアップとリストアガイド](/ja/how-to/backup-and-restore/)が、リストア訓練を含む
+完全な手順です。
+
+## ヘルスとモニタリング
+
+エンジンは HTTP リスナー上に `/livez`（プロセス稼働）、`/readyz`（ストア到達可能 —
+これが可用性 SLI）、`/metrics`（Prometheus）を公開します:
+
+```bash
+curl -ks https://127.0.0.1:8443/readyz
+# {"leader":true,"setup_required":false,"status":"ok","store":"up"}
+```
+
+メトリックセット、SLO ターゲット、同梱のアラートルールについては
+[Prometheus でモニタリング](/ja/how-to/monitor-with-prometheus/)を参照してください。
+
+## 次のステップ
+
+- **さらにシグナルを接続する:** [コネクタガイド](/ja/how-to/connectors/pgaudit/)
+  — pgAudit、CloudTrail、Claude Code、eBPF、そしてカタログの残り。
+- **デプロイをハードニングする:** [セキュリティハードニング](/ja/how-to/security-hardening/) —
+  公開、collectors の mTLS、承認。
+- **ガバナンス:** [ガバナンスと承認](/ja/how-to/govern-and-approve/) — RBAC、
+  ポリシー、そして記録された意思決定の保証。

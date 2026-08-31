@@ -1,0 +1,11 @@
+{
+  "value": [
+    {
+      "id": "bpp-1",
+      "appId": "bp-app-1",
+      "displayName": "Finance Blueprint",
+      "accountEnabled": false,
+      "servicePrincipalType": "Application"
+    }
+  ]
+}

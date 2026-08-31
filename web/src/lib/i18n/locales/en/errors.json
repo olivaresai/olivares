@@ -1,0 +1,40 @@
+{
+  "notFound": {
+    "title": "Page not found",
+    "description": "This page does not exist or has moved.",
+    "back": "Back to overview"
+  },
+  "forbidden": {
+    "title": "Not authorized",
+    "description": "You do not have permission to view this. Ask an administrator for access."
+  },
+  "serverError": {
+    "title": "Something went wrong",
+    "description": "The control plane hit an unexpected error. Please try again.",
+    "back": "Back to overview"
+  },
+  "network": {
+    "title": "Control plane unreachable",
+    "description": "We could not reach the control plane. Check your connection and that the engine is running."
+  },
+  "boundary": {
+    "title": "This view crashed",
+    "description": "An unexpected error occurred while rendering. Reloading usually fixes it.",
+    "reload": "Reload"
+  },
+  "generic": "Something went wrong.",
+  "requestId": "Request ID",
+  "codes": {
+    "unauthenticated": "Your session is no longer valid.",
+    "forbidden": "You are not authorized to do that.",
+    "not_found": "Not found.",
+    "conflict": "That conflicts with the current state.",
+    "bad_request": "The request was invalid.",
+    "weak_password": "Choose a stronger password.",
+    "locked_out": "Too many attempts. Try again in a moment.",
+    "setup_required": "The control plane needs first-boot setup.",
+    "setup_complete": "Setup is already complete.",
+    "cross_tenant_admin_pool_not_configured": "This deployment has no cross-tenant admin database pool. Provision a NOSUPERUSER BYPASSRLS role with `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (see deploy/postgres/README.md) and restart the server with --admin-dsn pointing at that role.",
+    "internal": "An internal error occurred."
+  }
+}

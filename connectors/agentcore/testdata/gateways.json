@@ -1,0 +1,20 @@
+{
+  "gateways": [
+    {
+      "gatewayId": "gw-prod",
+      "gatewayArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:gateway/gw-prod",
+      "name": "production-gateway",
+      "status": "ACTIVE",
+      "authorizerType": "AWS_IAM",
+      "description": "Production inference gateway"
+    },
+    {
+      "gatewayId": "gw-unattached",
+      "gatewayArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:gateway/gw-unattached",
+      "name": "staging-gateway",
+      "status": "ACTIVE",
+      "authorizerType": "CUSTOM_JWT",
+      "description": "Staging gateway with no policy"
+    }
+  ]
+}

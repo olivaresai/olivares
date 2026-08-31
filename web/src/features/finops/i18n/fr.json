@@ -1,0 +1,461 @@
+{
+  "alerts": {
+    "title": "Alertes de seuil",
+    "description": "Historique des franchissements de seuil de budget. L’acheminement vers Slack/SIEM est assuré par les connecteurs de sortie — ceci en est le relevé.",
+    "empty": "Aucune alerte franchie",
+    "columns": {
+      "triggeredAt": "Déclenchée",
+      "budget": "Budget",
+      "threshold": "Seuil",
+      "spend": "Dépense / limite",
+      "severity": "Gravité"
+    },
+    "truncated": "{{n}} alertes chargées ; il y en a d’autres",
+    "truncatedHint": "Il existe plus d’alertes budgétaires que celles affichées ; cette page prend les lignes par identifiant. L’absence d’une alerte ici ne démontre pas qu’aucun seuil n’a été franchi."
+  },
+  "allocation": {
+    "title": "Répartition multi-agents",
+    "description": "Le coût d’un agent réparti sur les ressources qu’il a touchées, à travers le graphe d’accès.",
+    "method": "Méthode",
+    "resolved": "Résolu",
+    "unresolved": "Non résolu",
+    "resourceCount_one": "{{count}} ressource",
+    "resourceCount_many": "{{count}} ressources",
+    "resourceCount_other": "{{count}} ressources",
+    "sharedCount_one": "{{count}} partagée",
+    "sharedCount_many": "{{count}} partagées",
+    "sharedCount_other": "{{count}} partagées",
+    "empty": "Aucun coût attribué à un agent sur cette période.",
+    "confidence": {
+      "attributed": "Attribué",
+      "approximate": "Approximatif"
+    },
+    "columns": {
+      "agent": "Agent",
+      "cost": "Coût",
+      "resolved": "Graphe",
+      "confidence": "Confiance",
+      "resources": "Ressources"
+    }
+  },
+  "breakdown": {
+    "title": "Ventilation de la dépense",
+    "description": "Où va le coût, classé par importance.",
+    "byModel": "Par modèle",
+    "byProvider": "Par fournisseur",
+    "byAgent": "Par agent",
+    "share": "Part de la dépense",
+    "noAgentAttribution": "L’attribution par agent apparaît dès qu’un connecteur attribue un coût à une session — le modèle et le fournisseur sont toujours présents.",
+    "columns": {
+      "key": "Nom",
+      "cost": "Coût",
+      "inputTokens": "Entrée",
+      "outputTokens": "Sortie",
+      "samples": "Enregistrements"
+    }
+  },
+  "budgets": {
+    "title": "Budgets",
+    "description": "Consommation par rapport à chaque limite, avec la projection au rythme actuel. La capacité réservée compte dans la limite.",
+    "new": "Nouveau budget",
+    "empty": "Aucun budget pour l’instant",
+    "emptyHint": "Définissez une limite de dépense par dimension pour suivre la consommation et recevoir des alertes de seuil.",
+    "limit": "Limite",
+    "spent": "Dépensé",
+    "remaining": "Restant",
+    "period": "Période",
+    "over": "Limite dépassée",
+    "onTrackToExceed": "En passe de dépasser",
+    "disabled": "Désactivé",
+    "global": "Global",
+    "reservedHint": "Inclut {{amount}} de capacité réservée comptée dans la limite.",
+    "actions": {
+      "alert": "Alerter",
+      "throttle": "Limiter le débit",
+      "block": "Bloquer"
+    },
+    "dialog": {
+      "title": "Nouveau budget",
+      "name": "Nom",
+      "dimension": "Dimension",
+      "key": "Clé de dimension",
+      "keyHint": "Requise sauf si la dimension est globale (par ex. un nom de modèle ou d’équipe).",
+      "limitUsd": "Limite (USD)",
+      "reservedUsd": "Réservé (USD)",
+      "reservedHint": "Capacité engagée facultative comptée dans la limite (une écriture comptable, pas une facturation).",
+      "action": "Action",
+      "actionHint": "L’alerte est en showback uniquement ; limiter le débit ou bloquer émet un signal de plafond strict qu’une couche d’actuation peut appliquer.",
+      "period": "Période",
+      "create": "Créer le budget",
+      "created": "Budget créé",
+      "editTitle": "Modifier le budget",
+      "save": "Enregistrer le budget",
+      "saved": "Budget mis à jour"
+    },
+    "editAction": "Modifier {{name}}",
+    "deleteAction": "Supprimer {{name}}",
+    "deleteDialog": {
+      "title": "Supprimer le budget ?",
+      "description": "Cela supprime définitivement le budget « {{name}} » et ses alertes de seuil. Cette action est irréversible.",
+      "confirm": "Supprimer le budget",
+      "deleted": "Budget supprimé"
+    },
+    "truncated": "{{n}} budgets chargés ; il y en a d’autres",
+    "truncatedHint": "Il existe plus de budgets que ceux affichés ; cette page prend les lignes par identifiant. L’absence d’un plafond ici ne démontre pas que la dépense est sans limite : il peut simplement se trouver au-delà de cette page."
+  },
+  "cache": {
+    "title": "Efficacité du cache d’invite",
+    "description": "Tokens de lecture de cache contre tokens de création, et l’économie réalisée — le principal levier de coût sur Claude.",
+    "hitRate": "Taux de réussite du cache",
+    "hitRateCaption": "lectures de cache en part de tous les tokens d’entrée",
+    "savings": "Économie réalisée",
+    "savingsCaption": "issue des lectures de cache, tarifées par modèle",
+    "uncached": "Entrée hors cache",
+    "read": "Lectures de cache",
+    "create1h": "Création de cache (1 h)",
+    "create5m": "Création de cache (5 min)",
+    "chartTitle": "Paliers de tokens d’entrée",
+    "chartSummary": "{{read}} tokens de lecture de cache contre {{uncached}} d’entrée hors cache — un taux de réussite de {{rate}}.",
+    "empty": "Aucune entrée mise en cache observée",
+    "columns": {
+      "tier": "Palier",
+      "tokens": "Tokens"
+    },
+    "note": "L’économie valorise les tokens de lecture de cache à la part économisée du tarif d’entrée de base de chaque modèle ; les modèles sans tarif ne contribuent en rien. Une économie nulle est honnête, pas une erreur."
+  },
+  "chargeback": {
+    "title": "Refacturation par dimension",
+    "description": "Ventilez la dépense selon n’importe quelle dimension d’attribution portée par le modèle de lecture.",
+    "dimensionLabel": "Dimension",
+    "chartTitle": "Dépense par {{dimension}}",
+    "chartSummary": "Dépense par {{dimension}}, menée par {{top}} ; {{total}} sur la période.",
+    "empty": "Aucune dépense enregistrée pour {{dimension}} sur cette période.",
+    "costTypeBilledOnly": "Le type de coût est une ventilation issue uniquement du facturé (la répartition du server-tool cost_report). Le flux de dépense par défaut est estimé, cette dimension est donc généralement vide ici — son détail réel provient du rapprochement et de l’export FOCUS.",
+    "costTypeEmpty": "Aucun détail de type de coût sur le flux estimé. Le type de coût n’est renseigné que sur les lignes facturées ; voir Rapprochement et l’export FOCUS.",
+    "serviceTierFreeform": "Les clés de niveau de service sont restituées exactement telles que l’API les retourne ; les niveaux documentés (standard, batch, priority, priority_on_demand, flex, flex_discount) sont des indications d’affichage, pas une liste fermée."
+  },
+  "costCentres": {
+    "ambiguous": "ambiguous — engine picks one arbitrarily",
+    "archive": "Archive cost centre {{code}}",
+    "archived": "Cost centre updated",
+    "code": "Code",
+    "create": "Create",
+    "created": "Cost centre created",
+    "delete": "Delete cost centre {{code}}",
+    "deleteRule": "Delete rule for {{key}}",
+    "description": "Accounting codes and the rules that bind spend to them.",
+    "descriptionField": "Description",
+    "dimension": "Dimension: {{dim}}",
+    "dimensionLabel": "Dimension",
+    "edit": "Edit cost centre {{code}}",
+    "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
+    "editTitle": "Edit cost centre",
+    "empty": "No cost centres yet",
+    "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
+    "key": "Key",
+    "name": "Name",
+    "new": "New cost centre",
+    "newDescription": "A code is required. It is the accounting identity chargeback statements filter on.",
+    "newRule": "New rule",
+    "newRuleDescription": "Bind one dimension value to this cost centre.",
+    "noRules": "No rules — traffic stays unattributed",
+    "owner": "Owner",
+    "priority": "priority {{n}}",
+    "priorityLabel": "Priority",
+    "priorityNote": "The highest priority wins BETWEEN different dimensions. Within one dimension and key the engine reads a single rule and does not order by priority, so duplicates are resolved arbitrarily.",
+    "restore": "Restore cost centre {{code}}",
+    "ruleCreated": "Rule created",
+    "rulesDescription": "Which traffic binds to this cost centre.",
+    "rulesTitle": "Mapping rules",
+    "save": "Save",
+    "saved": "Cost centre saved",
+    "status": {
+      "archived": "Archived",
+      "unknown": "No status — attributes nothing"
+    },
+    "title": "Cost centres",
+    "truncated": "{{n}} centres de coûts chargés ; il y en a d’autres",
+    "truncatedHint": "Il existe plus de centres de coûts que ceux affichés ; cette page prend les lignes par identifiant. L’absence d’un centre de coûts ne démontre pas qu’il n’existe pas.",
+    "rulesTruncated": "{{n}} règles chargées ; il y en a d’autres",
+    "rulesTruncatedHint": "Il existe plus de règles d’affectation pour ce centre de coûts que celles affichées ; cette page prend les lignes par identifiant. Pour les coûts nouvellement ingérés, le moteur résout les règles correspondantes indépendamment de cette page : une ressource qui paraît non affectée ici peut l’être par une règle au-delà — et les coûts déjà enregistrés ne sont pas réaffectés lorsqu’une règle est ajoutée."
+  },
+  "description": "Coût en tokens sur l’ensemble du parc — tendances, refacturation, rapprochement, budgets et prévision. Les chiffres sont exactement ceux que rapporte le registre FinOps.",
+  "dimensions": {
+    "global": "Global",
+    "model": "Modèle",
+    "provider": "Fournisseur",
+    "agent": "Agent",
+    "session": "Session",
+    "team": "Équipe",
+    "project": "Projet",
+    "workspace": "Espace de travail",
+    "api_key": "Clé API",
+    "actor": "Acteur",
+    "service_tier": "Niveau de service",
+    "context_window": "Fenêtre de contexte",
+    "inference_geo": "Géographie d’inférence",
+    "gateway": "Passerelle",
+    "cost_type": "Type de coût"
+  },
+  "empty": {
+    "alerts": {
+      "title": "Aucun seuil de budget franchi",
+      "description": "Créez un budget avec des seuils d’alerte ; une alerte est enregistrée lorsqu’un nouvel enregistrement de coût porte la consommation au-delà de l’un d’eux."
+    },
+    "allocation": {
+      "title": "Aucun coût attribué à un agent à répartir",
+      "description": "Dès que le flux de coûts porte une référence d’agent, la dépense apparaît ici ; sa répartition par ressource s’ajoute là où les arêtes d’accès sont résolues."
+    },
+    "anomalies": {
+      "title": "Aucune anomalie de dépense détectée",
+      "description": "Une journée apparaît lorsque la dépense enregistrée dépasse d’au moins deux écarts-types la référence de la fenêtre glissante."
+    },
+    "cacheEfficiencyChart": {
+      "title": "Aucune utilisation de tokens d’entrée enregistrée",
+      "description": "Les volumes d’entrée hors cache, de lectures et de créations de cache apparaissent dès que les enregistrements de coût indiquent l’usage des tokens d’entrée."
+    },
+    "dimensionChart": {
+      "title": "Aucune dépense pour cette dimension",
+      "description": "Les postes de dépense apparaissent si la dimension est dans le flux de coûts estimés ; si aucun échantillon ne la porte, rien ne s’affiche."
+    },
+    "futureBreakdowns": {
+      "title": "Aucune ventilation de coût à venir dans le catalogue",
+      "description": "Les entrées n’apparaissent que lorsque des ventilations de coût à l’exécution sont ajoutées à la référence compilée ; aucune donnée fournisseur en direct n’alimente ce tableau."
+    },
+    "futureDimensions": {
+      "title": "Aucune dimension à venir dans le catalogue",
+      "description": "Les entrées n’apparaissent que lorsque des dimensions de regroupement à venir sont ajoutées à la référence compilée ; aucune donnée fournisseur en direct n’alimente ce tableau."
+    },
+    "reconciliationChart": {
+      "title": "Aucune dépense facturée à rapprocher",
+      "description": "Le comparatif quotidien entre dépense facturée et estimée apparaît lorsque l’interrogation cost_report de l’API Claude fournit des lignes facturées faisant autorité."
+    },
+    "spend": {
+      "title": "Aucune dépense pour cette ventilation",
+      "description": "Le classement des dépenses et les totaux de tokens apparaissent dès qu’un enregistrement de coût porte la référence de modèle, de fournisseur ou d’agent sélectionnée."
+    }
+  },
+  "export": {
+    "title": "Export FOCUS",
+    "description": "Exportez le modèle de lecture des coûts au format CSV FOCUS v1.3 (le schéma ouvert de coût et d’usage de la FinOps Foundation).",
+    "provenanceLabel": "Provenance",
+    "provenance": {
+      "estimated": "Estimé (granulaire)",
+      "billed": "Facturé (cost_report)",
+      "all": "Les deux (étiquetés)"
+    },
+    "download": "Exporter le CSV",
+    "done": "Export FOCUS téléchargé",
+    "note": "EffectiveCost est la colonne sûre pour la somme ; dans l’export combiné, les lignes estimées l’omettent afin qu’une SUM naïve ne compte jamais deux fois le flux facturé. Ne recalculez pas les totaux à partir du CSV."
+  },
+  "forecast": {
+    "title": "Prévision de période",
+    "subtitle": "Une projection au rythme actuel, pas un modèle.",
+    "spentSoFar": "Dépensé à ce jour",
+    "trendProjected": "Projeté à la clôture",
+    "dailyRunRate": "Rythme quotidien",
+    "projected": "Projeté à la clôture",
+    "period": "Période",
+    "confidenceBand": "Intervalle de confiance sur une fenêtre de {{window}} jours : {{low}} … {{high}} (±1,96σ).",
+    "runRateNote": "La projection est un rythme quotidien sur fenêtre glissante, étendu au reste de la période — au rythme actuel, et non un modèle de prévision.",
+    "anomaliesTitle": "Anomalies de dépense",
+    "sigma": "{{value}}σ",
+    "anomalyColumns": {
+      "day": "Jour",
+      "spend": "Dépense",
+      "baseline": "Référence",
+      "deviation": "Écart"
+    }
+  },
+  "future": {
+    "title": "Dimensions à venir",
+    "description": "Dimensions et ventilations de coût Anthropic que la plateforme expose mais que le moteur ne modélise pas encore comme tranches interrogeables.",
+    "seam": "Backend en attente",
+    "caveat": "Référence déclarée — AsOf {{date}}. Ce ne sont pas encore des tranches interrogeables ; c’est un catalogue vérifié par rapport à la documentation Anthropic, affiché pour rendre l’écart visible, jamais comme des données en direct.",
+    "dimensionsTitle": "Dimensions de regroupement",
+    "breakdownsTitle": "Ventilations de coût à l’exécution",
+    "columns": {
+      "dimension": "Dimension",
+      "breakdown": "Ventilation",
+      "field": "Champ",
+      "maturity": "Maturité",
+      "ref": "Réf"
+    },
+    "maturity": {
+      "beta": "Bêta",
+      "ga": "GA",
+      "development": "Développement"
+    },
+    "dims": {
+      "speed": {
+        "label": "Vitesse",
+        "detail": "Mode rapide en bêta (fast-mode-2026-02-01) ; un group_by distinct exposé par le cost report."
+      },
+      "service_account_id": {
+        "label": "Compte de service",
+        "detail": "Un principal de compte de service (svac_) — distinct de la clé API confondue que sert aujourd’hui la vue de dépense."
+      },
+      "account_id": {
+        "label": "Compte",
+        "detail": "Le compte propriétaire ; un group_by distinct pas encore modélisé par le modèle de lecture."
+      }
+    },
+    "breakdowns": {
+      "advisor": {
+        "label": "Inférence de conseil",
+        "detail": "Une seconde inférence côté serveur, masquée, facturée séparément dans usage.iterations[].advisor_message."
+      },
+      "thinking_tokens": {
+        "label": "Tokens de réflexion",
+        "detail": "Tokens de réflexion étendue (usage.output_tokens_details.thinking_tokens), facturés même lorsque la réflexion est omise de l’affichage."
+      },
+      "programmatic_tool_calling": {
+        "label": "Appel d’outils programmatique",
+        "detail": "Les résultats intermédiaires arrivent hors du contexte et hors de usage, si bien que le coût et l’analyse forensique les sous-estiment."
+      }
+    }
+  },
+  "optimization": {
+    "title": "Recommandations d’optimisation",
+    "description": "Économies potentielles issues du parc gouverné. Les estimations ne sont pas une promesse — vérifiez l’adéquation en capacité et en qualité.",
+    "empty": "Aucune recommandation",
+    "estimatedSavings": "Économie est.",
+    "subject": "Sujet",
+    "kind": {
+      "cheaper_model": "Modèle moins cher",
+      "budget_burn": "Consommation de budget",
+      "cache_savings": "Économies de cache",
+      "cache_opportunity": "Opportunité de cache",
+      "info": "Note"
+    }
+  },
+  "outcomes": {
+    "title": "Graded outcomes",
+    "description": "The numerator of cost-per-outcome: what the spend actually achieved.",
+    "grade": "Grade an outcome",
+    "gradeHint": "The instant is captured now and re-sent unchanged on a retry, so a repeated submit cannot count the value twice.",
+    "subject": "Agent ref",
+    "verdict": "Verdict",
+    "send": "Send",
+    "empty": "No graded outcomes",
+    "emptyHint": "Without these, spend has no measurable value and every agent looks like pure cost.",
+    "noValue": "no value recorded",
+    "accepted": "Accepted — the engine may have deduplicated it; the list below is the record",
+    "truncated": "{{n}} résultats chargés ; il y en a d’autres",
+    "truncatedHint": "Il existe plus de résultats enregistrés que ceux affichés ; cette page prend les lignes par identifiant. N’en déduisez pas de totaux agrégés de résultat ou de valeur à partir des lignes chargées."
+  },
+  "periods": {
+    "daily": "Quotidien",
+    "weekly": "Hebdomadaire",
+    "monthly": "Mensuel",
+    "total": "Total"
+  },
+  "range": {
+    "label": "Période",
+    "7d": "7 derniers jours",
+    "30d": "30 derniers jours",
+    "90d": "90 derniers jours",
+    "mtd": "Ce mois-ci"
+  },
+  "rates": {
+    "title": "Model rate catalogue",
+    "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
+    "unit": "micro-USD per 1M tokens (integer)",
+    "empty": "No rates in the catalogue",
+    "inOut": "in {{in}} · out {{out}}",
+    "until": "until {{at}}",
+    "current": "current",
+    "truncated": "{{n}} tarifs chargés ; il y en a d’autres",
+    "truncatedHint": "Il existe plus de tarifs de modèles que ceux affichés ; cette page est triée par date d’entrée en vigueur, la plus récente d’abord. Une absence ici n’établit pas une absence du catalogue : le calcul des coûts et la comparaison résolvent le tarif en vigueur dans le catalogue, indépendamment de cette page."
+  },
+  "reconciliation": {
+    "title": "Facturé contre estimé",
+    "description": "À quel point l’estimation dérivée suit la facture faisant autorité. Les deux flux ne sont jamais additionnés.",
+    "billedTotal": "Total facturé",
+    "billedCaption": "issu du cost_report du fournisseur",
+    "noBilled": "Aucune donnée facturée",
+    "estimatedTotal": "Total estimé",
+    "estimatedCaption": "dérivé de la tarification publique",
+    "drift": "Dérive",
+    "driftUnder": "facturé supérieur à l’estimation (sous-estimé)",
+    "driftOver": "facturé inférieur à l’estimation (surestimé)",
+    "driftNoBaseline": "pas encore de référence facturée",
+    "estimatedOnlyTiers": "Paliers uniquement estimés",
+    "chartTitle": "Facturé contre estimé, par jour",
+    "chartSummary": "Facturé {{billed}} contre estimé {{estimated}} sur la période.",
+    "columns": {
+      "day": "Jour",
+      "billed": "Facturé",
+      "estimated": "Estimé",
+      "drift": "Dérive"
+    }
+  },
+  "seats": {
+    "title": "Utilisation des sièges",
+    "description": "Sièges attribués face aux acteurs réellement actifs, par jour. Un jour sans instantané de sièges ne rapporte rien — ce n'est pas un jour à usage nul.",
+    "provider": "Fournisseur",
+    "empty": "Aucun jour rapporté",
+    "assigned": "{{assigned}} attribués · {{active}} actifs",
+    "noSnapshot": "aucun instantané de sièges publié pour ce jour"
+  },
+  "statements": {
+    "agent": "Agent",
+    "cost": "Cost",
+    "description": "Per-cost-centre, per-period snapshots with line items grouped by model, provider and agent — the artefact finance consumes for internal billing.",
+    "empty": "No chargeback statements generated",
+    "exportCsv": "Export statement CSV",
+    "generate": "Generate",
+    "generated": "Statements generated",
+    "inputTokens": "Input tokens",
+    "model": "Model",
+    "monthly": "Monthly",
+    "outputTokens": "Output tokens",
+    "period": "Period",
+    "provider": "Provider",
+    "samples": "Samples",
+    "snapshotNotice": "A statement is a frozen snapshot: it is computed when generated and records the cost centre name and code as they were. Regenerating the same period does NOT recalculate it, so spend ingested afterwards will not appear.",
+    "title": "Chargeback statements",
+    "total": "Total",
+    "weekly": "Weekly",
+    "truncated": "{{n}} relevés chargés ; il y en a d’autres",
+    "truncatedHint": "Il existe plus de relevés de refacturation que ceux affichés ; cette page est triée par début de période, la plus récente d’abord. L’absence d’une période ne démontre pas que rien n’y a été facturé."
+  },
+  "stats": {
+    "totalSpend": "Dépense totale",
+    "inThisRange": "sur cette période",
+    "tokens": "Tokens",
+    "inOut": "{{in}} en entrée · {{out}} en sortie",
+    "samples": "Enregistrements de coût",
+    "forecast": "Prévision",
+    "atRunRate": "projeté (tendance sur fenêtre glissante)"
+  },
+  "tabs": {
+    "spend": "Dépense",
+    "chargeback": "Refacturation",
+    "reconciliation": "Rapprochement",
+    "budgets": "Budgets",
+    "optimization": "Optimisation",
+    "value": "Coût par résultat",
+    "seats": "Utilisation des sièges",
+    "costCentres": "Cost centres"
+  },
+  "title": "Coût et FinOps",
+  "trend": {
+    "title": "Tendance des coûts",
+    "description": "Coût quotidien en tokens sur la période sélectionnée.",
+    "cost": "Coût",
+    "tokens": "Tokens"
+  },
+  "value": {
+    "title": "Coût par résultat",
+    "description": "Dépense mesurée face aux résultats évalués. La dépense non attribuée est affichée à part, pas fondue dans le total.",
+    "totalCost": "Dépense totale",
+    "unattributed": "Non attribuée",
+    "outcomes": "Résultats satisfaits",
+    "costPerOutcome": "Coût par résultat",
+    "riskTitle": "Risque de résiliation",
+    "riskDescription": "Sujets qui consomment de la dépense sans résultats satisfaits.",
+    "riskEmpty": "Aucun sujet ne consomme de dépense sans résultats",
+    "satisfiedOf": "{{satisfied}} sur {{outcomes}} satisfaits"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "value": [
+    {
+      "id": "ca-all-users",
+      "displayName": "All human users",
+      "state": "enabled",
+      "conditions": {
+        "users": {
+          "includeUsers": ["All"]
+        },
+        "clientApplications": {
+          "includeAgentIdServicePrincipals": [],
+          "excludeAgentIdServicePrincipals": [],
+          "agentIdServicePrincipalFilter": null
+        },
+        "agentIdRiskLevels": []
+      }
+    }
+  ]
+}

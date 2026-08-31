@@ -1,0 +1,218 @@
+---
+title: "Primeros pasos en Kubernetes (Helm)"
+description: >-
+  Despliega el control plane en Kubernetes con el chart de Helm incluido — desde
+  el valor por defecto seguro de un solo nodo hasta Postgres, HA activo-pasivo con
+  una clave de firma de auditoría compartida, copias de seguridad de DR cifradas en
+  un CronJob y el DaemonSet de colectores.
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+El chart de Helm en `deploy/helm/olivares` despliega el control
+plane con los mismos valores por defecto seguros que cualquier otra vía: un
+**StatefulSet del núcleo** (sin root, sistema de ficheros raíz de solo lectura,
+todas las capabilities eliminadas), TLS activado, exposición equivalente a
+loopback (un Service `ClusterIP` — nada público hasta que tú lo decidas) y sin
+credenciales por defecto. A partir de ahí optas por Postgres, **HA
+activo-pasivo**, **copias de seguridad de DR cifradas** programadas y el
+**DaemonSet de colectores** para la ingesta distribuida.
+
+Todo lo de abajo se renderizó y comprobó contra el chart de este
+repositorio (`helm lint` + `helm template`, incluidas las configuraciones de HA y
+de copias de seguridad y las propias guard rails del chart). El chart requiere
+**Kubernetes ≥ 1.25**.
+
+<Aside type="caution" title="Estado de publicación del chart — con honestidad">
+En el lanzamiento, el chart se publica en un registro OCI y se firma con cosign,
+de modo que verificas en la instalación y fijas las imágenes por digest. El chart
+descarga la imagen del contenedor desde Docker Hub (`docker.io/olivaresai/olivares`; también
+en `ghcr.io/olivaresai/olivares`, idéntica por digest); el propio artefacto del
+**chart** vive en `oci://ghcr.io/olivaresai/charts/olivares`. La primera versión
+sigue siendo un **borrador**: hasta que se corte una etiqueta `chart-v*`, la ruta
+del registro está **vacía**. Hasta entonces, instala desde el checkout del
+repositorio (el chart en sí está completo y renderizado abajo); una vez publicado,
+cambia a `oci://ghcr.io/olivaresai/charts/olivares` y
+[verifica lo que descargaste](/how-to/verify-a-release/).
+</Aside>
+
+## 1. La instalación por defecto (un solo nodo, SQLite)
+
+<Steps>
+
+1. Instala desde el checkout:
+
+   ```bash
+   helm install olivares deploy/helm/olivares
+   ```
+
+   Esto renderiza exactamente tres objetos de carga de trabajo — un `StatefulSet`
+   (1 réplica, SQLite en un PVC persistente de 8 Gi), un `Service` `ClusterIP`
+   (8443 HTTPS, 8444 gRPC) y un `ServiceAccount` **sin** privilegios sobre la API
+   de Kubernetes. Las probes apuntan a `/readyz` (readiness — drena cuando el
+   almacén está caído o la réplica no es líder) y `/livez` (liveness — solo el
+   proceso, nunca una dependencia, así que una caída del almacén nunca puede
+   provocar un bucle de reinicios).
+
+2. Lee el token de configuración de un solo uso desde el log del pod (se imprime
+   solo en stdout — en Kubernetes, eso es el log del contenedor):
+
+   ```bash
+   kubectl logs -l app.kubernetes.io/component=core | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. Haz port-forward y completa la configuración de primer arranque
+   ([el mismo flujo que en todas partes](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)):
+
+   ```bash
+   # The Service is named <release>-olivares-core:
+   kubectl port-forward svc/olivares-core 8443:8443
+   curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="danger" title="Nunca ejecutes producción con `persistence.enabled=false`">
+Con la persistencia desactivada, el directorio de datos es un `emptyDir`: la
+**clave de firma de auditoría** y el token de configuración se pierden en cada
+reprogramación, lo que rompe permanentemente la verificabilidad del ledger. El
+valor por defecto (`persistence.enabled=true`) es la única postura de producción;
+además, haz una copia de seguridad de la clave fuera de la máquina
+([copia de seguridad y restauración](/how-to/backup-and-restore/)).
+</Aside>
+
+Como alternativa, sin Helm en absoluto, el repositorio incluye un manifiesto
+plano con los mismos valores por defecto seguros de un solo nodo, regenerado
+desde el chart por CI:
+
+```bash
+kubectl apply -f deploy/manifests/install.yaml
+```
+
+Para Argo CD / Flux / Kustomize (`kustomize build --enable-helm`), consulta
+`deploy/gitops/` — envoltorios declarativos sobre este mismo chart.
+
+## 2. Postgres (multi-tenant)
+
+El motor requiere un rol de base de datos de **mínimo privilegio**: `LOGIN`, sin
+superusuario, **sin `BYPASSRLS`** — la seguridad a nivel de fila es la red de
+seguridad del tenant, y el motor se niega a arrancar contra un rol privilegiado.
+Aprovisiona el rol con el canónico `deploy/postgres/01-app-role.sql` (el chart
+puede ejecutarlo por ti como un Job de pre-instalación), pon el DSN en un Secret y
+apunta el chart a él:
+
+```bash
+kubectl create secret generic olivares-pg \
+  --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full' \
+  --from-literal=admin-dsn='postgres://olivares_admin:***@db:5432/olivares?sslmode=verify-full'
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set postgres.adminDsnKey=admin-dsn
+```
+
+La clave `admin-dsn` del mismo Secret contiene un rol dedicado `NOSUPERUSER
+BYPASSRLS`. Es opcional **solo** si nunca vas a activar las copias de seguridad:
+es lo que hace **completas** las lecturas del sistema entre tenants — la lista de
+organizaciones y la cobertura multi-tenant —, y activar la copia de seguridad la
+**exige** ([copias de seguridad cifradas
+programadas](#4-copias-de-seguridad-cifradas-programadas)). Crearla ahora
+convierte ese paso posterior en un cambio de una sola línea.
+
+## 3. HA activo-pasivo
+
+Con Postgres como almacén compartido, ejecuta varias réplicas. Una se elige como
+líder (un advisory lock de Postgres); las réplicas en espera responden a `/readyz`
+con `503 {"status":"standby"}` para que el Service solo enrute al líder, y una
+réplica en espera toma el relevo automáticamente cuando el líder desaparece.
+
+Hay dos cosas estructuralmente obligatorias, y el chart **fuerza ambas**
+(verificamos que las guardas se renderizan como fallos duros, no como avisos):
+
+| Requisito | Por qué | Guarda del chart si falta |
+|---|---|---|
+| `core.engine=postgres` | El fichero SQLite es local a un solo pod — no puede ser un almacén compartido. | `core.replicaCount > 1 requires core.engine=postgres …` |
+| `core.auditSigningKeySecret` | Cada réplica debe firmar el ledger de auditoría con la **misma** clave Ed25519, o la cadena de hashes se bifurca en el failover. | `core.replicaCount > 1 requires core.auditSigningKeySecret …` |
+
+```bash
+kubectl create secret generic olivares-audit-key \
+  --from-file=audit-signing.key=<base64-ed25519-private-key-file>
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set core.replicaCount=3 \
+  --set core.auditSigningKeySecret=olivares-audit-key
+```
+
+Los tamaños canónicos de HA son 3 o 5 réplicas, activo-pasivo. Este diseño de
+único escritor es deliberado (encaja con el modelo de consistencia del producto);
+los [números de preparación para producción](/how-to/monitor-with-prometheus/)
+documentan los niveles de disponibilidad que soporta.
+
+## 4. Copias de seguridad cifradas programadas
+
+El chart incluye un `CronJob` que ejecuta `olivares dr backup` — un paquete
+cifrado y **seguro para la continuidad del ledger** (instantánea del almacén +
+claves de firma selladas bajo tu KEK + manifiesto de la punta de cadena por
+tenant):
+
+```bash
+kubectl create secret generic dr-kek --from-literal=passphrase='<strong passphrase>'
+
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set backup.enabled=true \
+  --set backup.kekSecret=dr-kek \
+  --set postgres.adminDsnKey=admin-dsn   # solo Postgres, y OBLIGATORIO con backups
+```
+
+En Postgres el chart **se niega a renderizar** sin `postgres.adminDsnKey`: el
+`pg_dump` de la copia de seguridad mantiene `row_security=off` y **aborta** como
+rol de aplicación bajo `FORCE ROW LEVEL SECURITY`, así que un `CronJob` cableado
+al DSN de la aplicación fallaría en cada ejecución y te dejaría **sin copia de
+seguridad alguna**.
+
+Valores por defecto: cada 6 horas (`backup.schedule` fija tu RPO), retención local
+de 14 días, un PVC de destino dedicado. **Replica el destino fuera del sitio y
+mantén la KEK separada de los paquetes** — una copia de seguridad en el mismo
+clúster no es recuperación ante desastres. Ensaya restauraciones con
+`olivares dr verify`; el procedimiento completo está en
+[copia de seguridad y restauración](/how-to/backup-and-restore/).
+
+## 5. DaemonSet de colectores (ingesta distribuida)
+
+Para la topología distribuida, un `DaemonSet` de colectores ejecuta conectores de
+fuentes en cada nodo y **empuja** observaciones al núcleo por gRPC — los colectores
+no tienen listener entrante. El chart requiere un token de ingesta y acepta
+material mTLS opcional:
+
+```bash
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set collectors.enabled=true \
+  --set collectors.ingestTokenSecret=olivares-ingest-token   # ingest:write bearer token
+```
+
+Da a los colectores sus fuentes mediante `collectors.sourcesConfig` (el mismo
+[JSON de fuentes](/how-to/connect-a-source/) que en todas partes), y activa el mTLS
+con verificación de certificado de cliente para el canal colector→núcleo con
+`tls.grpcClientCaSecret` — consulta [endurecimiento](/how-to/security-hardening/).
+
+## Monitorización
+
+Activa `serviceMonitor` si ejecutas el operador de Prometheus; en cualquier caso,
+el motor expone `/metrics` sin autenticación (no transporta datos de tenant) y el
+repositorio incluye reglas de alerta listas para usar. Consulta
+[monitorizar con Prometheus](/how-to/monitor-with-prometheus/).
+
+## Siguientes pasos
+
+- **Cablea fuentes:** [conectar una fuente](/how-to/connect-a-source/) y las
+  [guías de conectores](/how-to/connectors/pgaudit/).
+- **Ensayos de fallo:** [resolución de problemas](/how-to/troubleshooting/) —
+  comportamiento de failover, backpressure, verificación del ledger.
+- **¿Clúster air-gapped?** [Primeros pasos en un sitio air-gapped](/tutorials/getting-started/air-gapped/).

@@ -1,0 +1,17 @@
+{
+  "jsonrpc": "2.0",
+  "id": "request-message-1",
+  "result": {
+    "message": {
+      "messageId": "message-v101-1",
+      "contextId": "context-v101-1",
+      "role": "ROLE_AGENT",
+      "parts": [
+        {"text": "completed"},
+        {"data": {"resultRef": "urn:result:42", "score": 1}},
+        {"url": "artifact:report-v101-1"},
+        {"raw": "cmF3LXJlc3VsdA==", "filename": "result.txt", "mediaType": "text/plain"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Bench anti-bit-rot — a scheduled smoke that BUILDS AND RUNS every capacity/scale
+# benchmark once (write plane, storage-growth, per-tenant cost, hook/proxy decision
+# planes, and the RAG retrieval + ranker curve). Its job is to catch a harness or
+# seeding regression that compiles but panics — compile-rot is already caught by
+# `task test` in mainline-ci; this adds RUNTIME coverage for the benches that
+# mainline-ci builds but never executes.
+#
+# It is deliberately NOT a threshold/benchstat gate: bench numbers are
+# hardware-dependent and this runs on ubuntu-latest, not the reference hardware the
+# published numbers derive from, so a delta here would be noise, not a regression.
+# The published, provenance-stamped figures live in docs/SIZING-AND-CAPACITY.md and
+# are (re)measured with `task bench` on reference hardware. The raw numbers this run
+# prints are for human trend-eyeballing only.
+#
+# Schedule: weekly (Sunday 05:00 UTC), after e2e-claude, to bound runner time.
+name: bench-nightly
+
+on:
+  schedule:
+    - cron: "0 5 * * 0"  # weekly, Sunday 05:00 UTC
+  workflow_dispatch:       # manual trigger for ad-hoc runs
+
+permissions:
+  contents: read
+
+jobs:
+  bench-smoke:
+    # On olivaresai/olivares the scheduled cadence runs by default; on any other
+    # clone or mirror, scheduled runs are gated on the repository variable
+    # CI_NIGHTLIES=true (manual `gh workflow run <file>` always works).
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'olivaresai/olivares' || vars.CI_NIGHTLIES == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          go-version-file: go.work
+
+      # The anti-bit-rot gate: every scale benchmark builds and runs once. Non-zero
+      # exit (a build break or a panic in a bench/seeding path) fails the run.
+      - name: bench smoke (full — includes RAG end-to-end corpus + 1M ranker curve)
+        # ⚠ SIN MEDIDA y POR DEBAJO del umbral de `lint:ci-step-guard` (techo de job 20 < 30), asi que el
+        # gate no la exige. Se pone igual porque the orchestrator lo nombro el 2026-08-23: un cuelgue aqui
+        # moriria MUDO a los 20 min en vez de a las 2 h 50 — mas barato, no gratis. Las cinco ultimas
+        # corridas salen `skipped`, asi que no hay duracion de la que leerlo: 15 es COTA, no medida.
+        timeout-minutes: 15
+        run: bash scripts/bench-check.sh --full

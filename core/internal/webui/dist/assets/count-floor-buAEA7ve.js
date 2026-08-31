@@ -1,0 +1,1 @@
+function e(e,t,n){return t===!0?`≥ ${n(e)}`:n(e)}export{e as t};

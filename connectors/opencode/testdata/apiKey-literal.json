@@ -1,0 +1,18 @@
+{
+  "permission": {
+    "edit": "ask",
+    "bash": "ask"
+  },
+  "provider": {
+    "anthropic": {
+      "options": {
+        "apiKey": "sk-ant-literal-secret"
+      }
+    },
+    "envsafe": {
+      "options": {
+        "apiKey": "{env:ANTHROPIC_API_KEY}"
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "notFound": {
+    "title": "Page introuvable",
+    "description": "Cette page n’existe pas ou a été déplacée.",
+    "back": "Retour à la vue d’ensemble"
+  },
+  "forbidden": {
+    "title": "Non autorisé",
+    "description": "Vous n’avez pas la permission de consulter ceci. Demandez l’accès à un administrateur."
+  },
+  "serverError": {
+    "title": "Une erreur est survenue",
+    "description": "Le plan de contrôle a rencontré une erreur inattendue. Veuillez réessayer.",
+    "back": "Retour à la vue d’ensemble"
+  },
+  "network": {
+    "title": "Plan de contrôle injoignable",
+    "description": "Nous n’avons pas pu joindre le plan de contrôle. Vérifiez votre connexion et que le moteur est en cours d’exécution."
+  },
+  "boundary": {
+    "title": "Cette vue a planté",
+    "description": "Une erreur inattendue s’est produite lors du rendu. Recharger la page résout généralement le problème.",
+    "reload": "Recharger"
+  },
+  "generic": "Une erreur est survenue.",
+  "requestId": "ID de requête",
+  "codes": {
+    "unauthenticated": "Votre session n’est plus valide.",
+    "forbidden": "Vous n’êtes pas autorisé à effectuer cette action.",
+    "not_found": "Introuvable.",
+    "conflict": "Cela entre en conflit avec l’état actuel.",
+    "bad_request": "La requête était invalide.",
+    "weak_password": "Choisissez un mot de passe plus robuste.",
+    "locked_out": "Trop de tentatives. Réessayez dans un instant.",
+    "setup_required": "Le plan de contrôle nécessite une configuration au premier démarrage.",
+    "setup_complete": "La configuration est déjà terminée.",
+    "cross_tenant_admin_pool_not_configured": "Ce déploiement n’a pas de pool de base de données d’administration inter-tenants. Provisionnez un rôle NOSUPERUSER BYPASSRLS avec `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (voir deploy/postgres/README.md) puis redémarrez le serveur avec --admin-dsn pointant vers ce rôle.",
+    "internal": "Une erreur interne est survenue."
+  }
+}

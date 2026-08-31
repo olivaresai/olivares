@@ -1,0 +1,263 @@
+{
+  "title": "Webhook 与事件订阅",
+  "description": "出站事件订阅 — 配置 Webhook 端点、检查已送达的事件并管理死信队列。",
+  "tabs": {
+    "subscriptions": "订阅",
+    "events": "事件",
+    "deliveries": "投递",
+    "deadLetters": "死信"
+  },
+  "subscriptions": {
+    "title": "Webhook 订阅",
+    "description": "接收事件通知的端点。每个订阅按事件类型过滤，并使用配置的方法进行认证。",
+    "new": "新建订阅",
+    "empty": "暂无订阅",
+    "emptyHint": "创建订阅以开始接收 Webhook 事件。",
+    "columns": {
+      "name": "名称",
+      "endpoint": "端点",
+      "enabled": "状态",
+      "eventTypes": "事件类型",
+      "authType": "认证",
+      "role": "角色",
+      "secret": "密钥",
+      "created": "创建时间"
+    },
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "bulk": {
+      "enable": "启用所选订阅",
+      "disable": "禁用所选订阅"
+    },
+    "test": "测试",
+    "testing": "测试中…",
+    "delete": "删除",
+    "edit": "编辑",
+    "rotateSecret": "轮换密钥",
+    "rotateAuth": "轮换认证",
+    "testSuccess": "测试投递成功",
+    "testFailed": "测试投递失败",
+    "deleted": "订阅已删除",
+    "rotated": "密钥已轮换",
+    "authRotated": "认证凭据已轮换",
+    "confirmDelete": "删除此订阅？此操作无法撤销。",
+    "authTypes": {
+      "none": "无",
+      "bearer": "Bearer",
+      "basic": "Basic",
+      "header": "Header"
+    },
+    "actions": "{{name}} 的操作",
+    "replay": "重放"
+  },
+  "dialog": {
+    "createTitle": "新建订阅",
+    "editTitle": "编辑订阅",
+    "description": "描述",
+    "name": "名称",
+    "endpoint": "端点 URL",
+    "eventTypes": "事件类型",
+    "eventTypesHint": "选择此订阅接收的事件类型。",
+    "matchSources": "来源过滤",
+    "matchSourcesHint": "以逗号分隔的来源过滤（空 = 全部来源）。",
+    "role": "角色",
+    "authType": "认证类型",
+    "authValue": "认证值",
+    "authValueHint": "Bearer 令牌、Basic 凭据或 Header 值。",
+    "authHeaderName": "认证 Header 名称",
+    "authHeaderNameHint": "自定义 Header 名称（仅限 'header' 类型）。",
+    "maxAttempts": "最大尝试次数",
+    "maxAttemptsHint": "0 = 使用服务器默认值。",
+    "initialInterval": "初始间隔（秒）",
+    "initialIntervalHint": "重试退避种子（秒）。0 = 默认。",
+    "enabled": "启用",
+    "create": "创建订阅",
+    "update": "保存更改",
+    "created": "订阅已创建",
+    "updated": "订阅已更新",
+    "sinkKind": "SIEM 接收器",
+    "sinkKindHint": "可选的供应商接收器配置。无 = 通用 HMAC Webhook。",
+    "sinkNone": "无（通用 Webhook）",
+    "sinkKinds": {
+      "https": "HTTPS (OCSF)",
+      "splunk_hec": "Splunk HEC",
+      "sentinel_dcr": "Microsoft Sentinel",
+      "datadog": "Datadog",
+      "newrelic": "New Relic"
+    },
+    "sinkFormat": "接收器格式",
+    "sinkFormatHint": "接收器的传输方言。默认 = OCSF。",
+    "sinkFormatDefault": "默认（OCSF）",
+    "sinkCred": "接收器凭据",
+    "sinkCredHint": "此接收器的采集端令牌/密钥 — 加密封存，不会再次显示。",
+    "sinkCredKeepHint": "留空以保留当前凭据（{{hint}}）。",
+    "sinkCredRequired": "此接收器需要凭据。",
+    "errors": {
+      "maxAttempts": "最大尝试次数必须为 0 或介于 1 到 20 之间。",
+      "initialInterval": "初始间隔必须为 0 或介于 5 到 3600 秒之间。"
+    }
+  },
+  "secret": {
+    "title": "订阅密钥",
+    "description": "此 HMAC 签名密钥仅显示一次。请立即复制 — 之后无法再次获取。",
+    "copied": "密钥已复制到剪贴板",
+    "done": "完成"
+  },
+  "events": {
+    "title": "已捕获事件",
+    "description": "带序列游标的事件日志。按事件类型过滤以缩小结果范围。",
+    "empty": "暂无已捕获事件",
+    "typeFilter": "按类型过滤",
+    "allTypes": "所有类型",
+    "columns": {
+      "seq": "序号",
+      "type": "类型",
+      "source": "来源",
+      "occurredAt": "发生时间",
+      "payload": "负载"
+    },
+    "loadMore": "加载更多",
+    "noMore": "没有更多事件"
+  },
+  "deliveries": {
+    "title": "投递记录",
+    "description": "Webhook 事件派发的投递状态。按订阅、状态或事件类型过滤。",
+    "empty": "暂无投递",
+    "subscriptionFilter": "订阅",
+    "statusFilter": "状态",
+    "typeFilter": "事件类型",
+    "allSubscriptions": "全部",
+    "allStatuses": "全部",
+    "allTypes": "全部",
+    "columns": {
+      "eventType": "事件类型",
+      "eventSeq": "序号",
+      "subscription": "订阅",
+      "status": "状态",
+      "origin": "来源",
+      "attempts": "尝试次数",
+      "lastAttempt": "上次尝试",
+      "nextAttempt": "下次尝试"
+    },
+    "statuses": {
+      "queued": "排队中",
+      "delivering": "投递中",
+      "delivered": "已送达",
+      "dead": "已死信",
+      "denied": "已拒绝"
+    },
+    "origins": {
+      "live": "实时",
+      "replay": "重放"
+    },
+    "loadMore": "加载更多",
+    "originFilter": "来源",
+    "allOrigins": "所有来源",
+    "nextRetry": "下次重试 {{time}}"
+  },
+  "deadLetters": {
+    "title": "死信队列",
+    "description": "已用尽所有重试次数的失败投递。可重新投递单个项目或调查原因。",
+    "empty": "暂无死信",
+    "emptyHint": "当投递用尽所有重试次数时，死信将出现在此处。",
+    "redeliver": "重新投递",
+    "redelivered": "投递已重新入队",
+    "loadMore": "加载更多"
+  },
+  "rotateAuthDialog": {
+    "title": "轮换认证凭据 — {{name}}",
+    "description": "请输入此端点的新凭据。凭据将加密封存，不会再次显示；卡片仅显示指纹。",
+    "value": "新凭据",
+    "valueHint": "Bearer 令牌、Basic 凭据或标头值 — 仅发送一次，绝不回显。",
+    "submit": "轮换凭据"
+  },
+  "replay": {
+    "title": "重放事件 — {{name}}",
+    "description": "选择要重新排队的事件序列范围。",
+    "fromSeq": "起始序列",
+    "toSeq": "结束序列（可选）",
+    "submit": "重放",
+    "continue": "继续重放",
+    "total": "已重放总数：{{count}}",
+    "viewDeliveries": "查看重放投递",
+    "completed": "已重放 {{count}} 个事件"
+  },
+  "history": {
+    "action": "查看 {{name}} 的修订历史",
+    "title": "修订历史 — {{name}}",
+    "description": "此订阅按时间顺序记录的仅追加快照。",
+    "scopeCaption": "恢复只会重新应用投递配置结构，绝不会恢复凭据或接收端配置。",
+    "empty": "没有已记录的修订",
+    "loadMore": "加载更多",
+    "compareTitle": "快照差异",
+    "selectTwo": "选择两个修订以比较其快照。",
+    "selectRevision": "选择由 {{actor}} {{op}}的修订",
+    "originalLabel": "较早的修订",
+    "modifiedLabel": "较晚的修订",
+    "restore": "恢复此修订",
+    "restoreTitle": "恢复修订？",
+    "restoreDescription": "要恢复 {{name}} 所选的投递配置结构吗？",
+    "restoreConfirm": "恢复修订",
+    "restored": "订阅修订已恢复",
+    "operations": {
+      "create": "创建",
+      "update": "更新",
+      "delete": "删除",
+      "restore": "恢复"
+    }
+  },
+  "egress": {
+    "title": "目标策略",
+    "description": "此部署是否限制事件流的发送目标，以及强制执行会破坏什么。开关是主机上的运维仪式；这里显示的是它作用的状态。",
+    "unknown": "未知",
+    "unreadable": "无法读取策略状态。",
+    "unreadablePolicy": "无法读取",
+    "inForce": "策略生效中",
+    "inForceYes": "是",
+    "inForceNo": "未编写",
+    "source": "来源",
+    "mode": "部署模式",
+    "classifiedMode": "归类为",
+    "committed": "强制执行已确定",
+    "committedYes": "已确定",
+    "committedNo": "未确定",
+    "fence": {
+      "title": "写入围栏",
+      "armed": "已启用",
+      "armedYes": "已启用",
+      "armedNo": "休眠",
+      "mode": "模式",
+      "required": "所需能力",
+      "binary": "此二进制文件",
+      "generation": "代次"
+    },
+    "compat": {
+      "title": "兼容性",
+      "seeded": "记录",
+      "drawn": "已划定",
+      "notDrawn": "未划定",
+      "recorded": "已记录的目标",
+      "stillNeeded": "将停止工作",
+      "unparsable": "无法解析",
+      "notIntact": "兼容性记录已不完整：它看起来完整，却描述了一个已丢失成员的集合。请勿据此规划实施。",
+      "notServed": "您的权限级别不提供此项。",
+      "notProvided": "此响应中未提供。"
+    },
+    "report": {
+      "title": "强制执行会破坏什么",
+      "description": "此租户仅因部署早于该控制而保留的目标。",
+      "unreadable": "无法读取兼容性报告。",
+      "notSeeded": "兼容性记录从未划定，因此本报告未描述任何内容。",
+      "subscriptions": "划定时的订阅数",
+      "unparsed": "未解析的目标",
+      "seededAt": "划定于",
+      "noAuthorities": "没有遗留目标。",
+      "authority": "目标",
+      "kind": "类型",
+      "uses": "订阅数",
+      "effect": "强制执行时",
+      "survives": "保留",
+      "breaks": "停止工作"
+    }
+  }
+}

@@ -1,0 +1,122 @@
+// SPDX-FileCopyrightText: [[.Year]] <your name>
+// SPDX-License-Identifier: Apache-2.0
+
+package [[.Package]]
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/olivaresai/olivares/sdk"
+)
+
+type fakeBackend struct {
+	refs []sdk.DocRef
+	docs map[string]sdk.Document
+}
+
+func (f *fakeBackend) List(ctx context.Context, cursor string) ([]sdk.DocRef, string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	if cursor != "" {
+		return nil, "", nil
+	}
+	return f.refs, "", nil
+}
+
+func (f *fakeBackend) Fetch(ctx context.Context, docID string) (sdk.Document, error) {
+	if err := ctx.Err(); err != nil {
+		return sdk.Document{}, err
+	}
+	return f.docs[docID], nil
+}
+
+// TestLifecycle drives the full Open → List → Fetch → Close lifecycle exactly
+// as the engine does, using an in-memory fake backend.
+func TestLifecycle(t *testing.T) {
+	ctx := context.Background()
+	modified := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	fake := &fakeBackend{
+		refs: []sdk.DocRef{{
+			DocID:       "doc-1",
+			Title:       "Doc one",
+			ContentType: "text/markdown",
+			ModifiedAt:  modified,
+		}},
+		docs: map[string]sdk.Document{
+			"doc-1": {
+				Source:         sdk.SourceKind(Name),
+				DocID:          "doc-1",
+				Title:          "Doc one",
+				Body:           []byte("# Doc one\n"),
+				ContentType:    "text/markdown",
+				ACL:            nil,
+				Classification: "internal",
+				SpaceRef:       "space/example",
+				ModifiedAt:     modified,
+				Attributes:     map[string]string{"repository": "example"},
+			},
+		},
+	}
+	c := newWithBackend(fake)
+
+	d := c.Descriptor()
+	if d.Name != Name {
+		t.Fatalf("Descriptor().Name = %q, want %q", d.Name, Name)
+	}
+	if d.Type != sdk.TypeContentSource {
+		t.Fatalf("Descriptor().Type = %q, want %q", d.Type, sdk.TypeContentSource)
+	}
+	if len(d.Surfaces) != 1 || d.Surfaces[0] != "knowledge.document" {
+		t.Fatalf("Descriptor().Surfaces = %v, want [knowledge.document]", d.Surfaces)
+	}
+
+	if err := c.Open(ctx, sdk.Config{Settings: map[string]string{
+		"base_url": "https://content.example.invalid",
+		"token":    "resolved-test-secret",
+	}}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	refs, next, err := c.List(ctx, "")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if next != "" {
+		t.Fatalf("List next cursor = %q, want empty", next)
+	}
+	if len(refs) != 1 || refs[0].DocID != "doc-1" {
+		t.Fatalf("List refs = %#v, want doc-1", refs)
+	}
+	doc, err := c.Fetch(ctx, refs[0].DocID)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if string(doc.Body) != "# Doc one\n" {
+		t.Fatalf("Fetch body = %q, want test document", doc.Body)
+	}
+	if len(doc.ACL) != 0 {
+		t.Fatalf("Fetch ACL = %v, want empty ACL to inherit the KB default", doc.ACL)
+	}
+	if doc.Attributes["repository"] != "example" {
+		t.Fatalf("Fetch attributes = %#v, want repository provenance", doc.Attributes)
+	}
+	if err := c.Close(ctx); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestListHonorsContext(t *testing.T) {
+	c := newWithBackend(&fakeBackend{})
+	if err := c.Open(context.Background(), sdk.Config{Settings: map[string]string{
+		"base_url": "https://content.example.invalid",
+	}}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := c.List(ctx, ""); err == nil {
+		t.Fatal("List with a canceled context should return the context error")
+	}
+}

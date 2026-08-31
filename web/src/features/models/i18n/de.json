@@ -1,0 +1,269 @@
+{
+  "title": "Modelle & Anbieter",
+  "description": "Der gesteuerte Modellbestand — deklarierte Fähigkeiten und Preise, Routing-Richtlinie und Anbieter-Schlüsselreferenzen. Geheimnisse werden niemals angezeigt; nur maskierte Referenzen.",
+  "tabs": {
+    "catalog": "Katalog",
+    "estate": "Bestand",
+    "routing": "Routing",
+    "keys": "Anbieterschlüssel",
+    "gpai": "GPAI-Status",
+    "access": "Access"
+  },
+  "catalog": {
+    "title": "Fähigkeitsmatrix",
+    "description": "Deklarierte API-Fähigkeiten je Modellfamilie.",
+    "pricingTitle": "Deklarierte Preise",
+    "pricingDescription": "Listenpreis-Vorgaben — Referenz, keine unveränderliche Wahrheit. Gleichen Sie sie mit jedem Anbieter ab und setzen Sie sie je Modell außer Kraft.",
+    "family": "Familie",
+    "provider": "Anbieter",
+    "context": "Kontext",
+    "maxOutput": "Max. Ausgabe",
+    "modality": "Modalität",
+    "inputPrice": "Eingabe / MTok",
+    "outputPrice": "Ausgabe / MTok",
+    "cacheRead": "Cache-Lesen / MTok",
+    "cacheWrite1h": "Cache-Schreiben 1h / MTok",
+    "residency": "Datenresidenz",
+    "tiers": "Service-Stufen",
+    "residencyNotApplicable": "Nicht zutreffend",
+    "tiersNotDeclared": "Nicht deklariert",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "Zu bestätigende Fähigkeiten",
+    "capsToConfirmHint": "Der Fähigkeitssatz dieser Familie ist noch nicht gegen eine Modellkarte verifiziert. Das Modell ist gelistet, aber seine Fähigkeiten werden als unbestätigt gekennzeichnet, statt erfunden zu werden.",
+    "tier": {
+      "standard": "Standard",
+      "batch": "Batch",
+      "priority": "Priorität",
+      "priority_on_demand": "Priorität auf Abruf",
+      "flex": "Flex",
+      "flex_discount": "Flex-Rabatt"
+    },
+    "asOf": "Stand {{date}}",
+    "noPricing": "Kein deklarierter Preis",
+    "present": "Unterstützt",
+    "absent": "Nicht unterstützt"
+  },
+  "estate": {
+    "title": "Gesteuerte Modelle",
+    "description": "Modelle im Bestand dieses Mandanten, angereichert aus dem Katalog.",
+    "empty": "Keine Modelle im Bestand",
+    "columns": {
+      "name": "Modell",
+      "provider": "Anbieter",
+      "family": "Familie",
+      "context": "Kontext",
+      "inputCost": "Eingabe µ$/tok",
+      "outputCost": "Ausgabe µ$/tok",
+      "modality": "Modalität",
+      "capabilities": "Fähigkeiten",
+      "status": "Status"
+    },
+    "notEnriched": "Noch keine deklarierte Familie — keine Preise",
+    "costNote": "Der µUSD-Wert pro Token ist eine grobe Komfortgröße; die maßgeblichen Kosten der tatsächlichen Nutzung ist das FinOps-Hauptbuch.",
+    "truncated": "{{n}} Modelle geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr regierte Modelle als angezeigt; diese Seite nimmt Zeilen nach ID. Tabellensuche und -sortierung wirken nur auf das Geladene."
+  },
+  "routing": {
+    "title": "Routing-Richtlinien",
+    "description": "Richtlinien werden hier definiert und vom Gateway-Konnektor ausgeführt — die UI konfiguriert und zeigt sie an.",
+    "new": "Neue Richtlinie",
+    "empty": "Keine Routing-Richtlinien",
+    "emptyHint": "Eine Routing-Richtlinie wählt das primäre Modell und die Fallback-Kette für eine Strategie aus.",
+    "strategy": "Strategie",
+    "requiredCapabilities": "Erforderliche Fähigkeiten",
+    "preferredProviders": "Bevorzugte Anbieter",
+    "minContext": "Min. Kontextfenster",
+    "pinnedModel": "Angeheftetes Modell",
+    "allowDeprecated": "Veraltete zulassen",
+    "gateway": "Gateway-Endpunkt",
+    "viaGateway": "über Gateway",
+    "resolve": "Auflösen",
+    "resolving": "Wird aufgelöst…",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "strategies": {
+      "cost": "Kosten",
+      "latency": "Latenz",
+      "capability": "Fähigkeit",
+      "pinned": "Angeheftet"
+    },
+    "decision": {
+      "title": "Aufgelöster Entscheid",
+      "primary": "Primär",
+      "fallbacks": "Fallback-Kette",
+      "unresolved": "Kein gesteuertes Modell erfüllt diese Richtlinie",
+      "reason": "Grund"
+    },
+    "dialog": {
+      "title": "Routing-Richtlinie",
+      "name": "Name",
+      "listHint": "Durch Kommas getrennt.",
+      "create": "Richtlinie speichern",
+      "created": "Routing-Richtlinie gespeichert"
+    },
+    "execute": "Execute",
+    "executeConfirm": "Execute and spend",
+    "input": "Input",
+    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
+    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "noExecutor": "No executor is provisioned. This is not an outage: the control plane resolves routing decisions but never spends against a provider until an operator wires an executor.",
+    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "fallbackUsed": "fallback used",
+    "refusal": "provider refusal",
+    "tokens": "{{in}} in · {{out}} out",
+    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "truncated": "{{n}} Richtlinien geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Routing-Richtlinien als angezeigt; diese Seite nimmt Zeilen nach ID. Eine hier fehlende Richtlinie belegt nicht, dass keine eine Anfrage routet."
+  },
+  "keys": {
+    "title": "Anbieter-Schlüsselreferenzen",
+    "description": "Gesteuerte Referenzen auf Anbieter-API-Schlüssel und Arbeitsbereiche. Es wird nur ein maskierter Hinweis gespeichert — niemals der Geheimniswert.",
+    "new": "Schlüsselreferenz hinzufügen",
+    "empty": "Keine Schlüsselreferenzen",
+    "maskedOnly": "Nur Referenz — der Geheimniswert wird niemals gespeichert oder angezeigt.",
+    "columns": {
+      "name": "Name",
+      "provider": "Anbieter",
+      "kind": "Art",
+      "extId": "Externe ID",
+      "hint": "Maskierter Hinweis",
+      "owner": "Eigentümer",
+      "status": "Status",
+      "created": "Erstellt"
+    },
+    "kind": {
+      "api_key": "API-Schlüssel",
+      "workspace": "Arbeitsbereich"
+    },
+    "dialog": {
+      "title": "Schlüsselreferenz hinzufügen",
+      "name": "Name",
+      "provider": "Anbieter",
+      "kind": "Referenzart",
+      "extId": "Externe ID",
+      "extIdHint": "Die Schlüssel-/Arbeitsbereichs-ID beim Anbieter (z. B. apikey_01). Nicht das Geheimnis.",
+      "owner": "Eigentümer",
+      "noSecretNote": "Dieses Formular akzeptiert niemals ein Geheimnis. Olivares speichert nur eine Referenz und einen maskierten Hinweis.",
+      "create": "Referenz hinzufügen",
+      "created": "Schlüsselreferenz hinzugefügt"
+    },
+    "truncated": "{{n}} Schlüssel geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Provider-Schlüsselreferenzen als angezeigt; diese Seite nimmt Zeilen nach ID. Ein hier fehlender Schlüssel belegt nicht, dass es für diesen Provider keine Zugangsdaten gibt. Die Tabellensortierung wirkt nur auf das Geladene."
+  },
+  "gpai": {
+    "title": "GPAI-Anbieterstatus",
+    "description": "Vom Betreiber attestierter Lieferantenstatus, einmal pro Anbieter erfasst.",
+    "notice": "Dies ist der vom Betreiber attestierte GPAI-Status des Lieferanten und dient dem Bedarf an Lieferantennachweisen nach ISO/IEC 42001 A.10.3 und NIST AI RMF GOVERN-6.1 / MAP-4.1. Es ist keine Compliance-Feststellung durch Olivares.",
+    "empty": "Kein GPAI-Anbieterstatus erfasst",
+    "emptyHint": "Attestieren Sie einen Anbieterstatus, wenn veröffentlichtes Lieferantenmaterial geprüft wurde oder eine Angabe erfasst werden soll.",
+    "verifiedMeaning": "Vom Betreiber anhand des veröffentlichten Anbietermaterials geprüft — dies ist die eigene Attestierung des Betreibers, keine von Olivares durchgeführte Verifizierung und keine Compliance-Feststellung.",
+    "actions": {
+      "attest": "Status attestieren",
+      "edit": "Status bearbeiten",
+      "editProvider": "Status für {{provider}} bearbeiten"
+    },
+    "columns": {
+      "provider": "Anbieter",
+      "review": "Prüfstatus",
+      "attestedAt": "Attestiert",
+      "actions": "Aktionen"
+    },
+    "claims": {
+      "cop_signatory": "Unterzeichner des Praxisleitfadens",
+      "technical_docs": "Technische Dokumentation veröffentlicht",
+      "training_data_summary": "Zusammenfassung der Trainingsdaten veröffentlicht",
+      "copyright_policy": "Urheberrechtsrichtlinie erfasst",
+      "downstream_info": "Informationen für nachgelagerte Akteure bereitgestellt",
+      "systemic_risk": "GPAI mit systemischem Risiko",
+      "safety_report": "Safety & Security Model Report"
+    },
+    "states": {
+      "recorded": "Erfasst",
+      "notRecorded": "Angabe nicht erfasst",
+      "reviewed": "Vom Betreiber geprüfte Attestierung",
+      "unreviewed": "Angabe des Betreibers — ungeprüft"
+    },
+    "detail": {
+      "title": "GPAI-Status: {{provider}}",
+      "description": "Die vom Betreiber erfassten Angaben und Attestierungsmetadaten für diesen Anbieter.",
+      "claims": "Anbieterangaben",
+      "reviewState": "Prüfstatus",
+      "verificationMethod": "Verifizierungsmethode",
+      "attestedBy": "Attestiert von",
+      "attestedAt": "Attestiert am",
+      "note": "Anmerkung",
+      "notProvided": "Nicht angegeben"
+    },
+    "form": {
+      "createTitle": "GPAI-Anbieterstatus attestieren",
+      "editTitle": "GPAI-Anbieterstatus bearbeiten",
+      "description": "Erfassen Sie die Angaben des Anbieters und die eigene Prüfattestierung des Betreibers.",
+      "providerRef": "Anbieterreferenz",
+      "providerLocked": "Die Anbieterreferenz ist während der Bearbeitung gesperrt, da eine Änderung einen zweiten Statuseintrag anlegen würde.",
+      "providerRequired": "Geben Sie eine Anbieterreferenz ein.",
+      "claimsTitle": "Anbieterangaben",
+      "claimsDescription": "Aktivieren Sie eine Angabe nur, wenn der Betreiber sie für diesen Anbieter erfasst hat.",
+      "systemicRiskHint": "Einstufung: Das Modell ist als GPAI mit systemischem Risiko eingestuft.",
+      "safetyReportHint": "Dieser Bericht gilt für Modelle, die als GPAI mit systemischem Risiko eingestuft sind.",
+      "verified": "Anhand des veröffentlichten Anbietermaterials geprüft",
+      "verificationMethod": "Verifizierungsmethode",
+      "verificationMethodHint": "Erforderlich, wenn der Betreiber diesen Status als geprüft kennzeichnet.",
+      "verificationMethodRequired": "Beschreiben Sie, wie das veröffentlichte Anbietermaterial geprüft wurde.",
+      "note": "Anmerkung",
+      "requestRejected": "Der Status wurde nicht gespeichert. Prüfen Sie die untenstehende Serverantwort.",
+      "created": "GPAI-Anbieterstatus attestiert",
+      "updated": "GPAI-Anbieterstatus aktualisiert",
+      "save": "Attestierung speichern",
+      "saving": "Wird gespeichert…"
+    },
+    "truncated": "{{n}} Posturen geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr GPAI-Posturen als angezeigt; diese Seite nimmt Zeilen nach ID. Ein hier fehlender Provider belegt nicht, dass für ihn nichts erklärt wurde. Die Tabellensortierung wirkt nur auf das Geladene."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "Noch keine Anbieterschlüsselreferenzen",
+      "description": "Fügen Sie mit der Anbieterkennung eine API-Schlüssel- oder Arbeitsbereichsreferenz hinzu; die Konsole nimmt den Zugangsdatenwert niemals an und speichert ihn nicht."
+    },
+    "models": {
+      "title": "Noch keine gesteuerten Modelle",
+      "description": "Modelle gelangen in den Bestand, wenn ein Konnektor einen Kostendatensatz mit Anbieter und verwendetem Modell ausgibt."
+    }
+  },
+  "residency": {
+    "title": "Workspace-Residenz",
+    "description": "Wo jeder Workspace Inferenz verarbeitet und wo seine Daten ruhen, wie der Anbieter es meldet.",
+    "empty": "Kein Workspace meldet Residenz-Einstellungen",
+    "unrestricted": "Der Anbieter meldet keine Einschränkung",
+    "allowed": "Erlaubt: {{geos}}",
+    "unreported": "nicht gemeldet",
+    "defaultGeo": "Standard: {{geo}}",
+    "atRest": "ruhend: {{geo}}",
+    "truncated": "{{n}} Workspaces geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Residency-Einträge als angezeigt; diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere fehlen. Ein hier nicht gelisteter Workspace belegt nicht, dass seine Verarbeitung unbeschränkt ist: er kann jenseits dieser Seite liegen."
+  },
+  "access": {
+    "title": "Model access rules",
+    "description": "Who may use which model, and where.",
+    "empty": "No access rules — every subject is unrestricted",
+    "groupsTitle": "Model groups",
+    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsEmpty": "No model groups",
+    "members": "{{n}} members",
+    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "effect": {
+      "allow": "allow",
+      "forbid": "forbid"
+    },
+    "tenantWide": "tenant-wide",
+    "inWorkspace": "in {{ws}}",
+    "allSurfaces": "all surfaces",
+    "onSurfaces": "on {{list}}",
+    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
+    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "readOnlyNote": "Read-only: changing who may use a model requires models:model-access:admin, which is a higher tier than editing a routing policy.",
+    "truncated": "{{n}} Regeln geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Zugriffsregeln als angezeigt; diese Seite nimmt Zeilen nach ID. Die Markierungen dieser Zeilen spiegeln NUR die geladenen Regeln: Allows, die eine Einschränkung einführen oder erlaubte Ziele ergänzen, können fehlen, und Forbids, die Zugriff abziehen, ebenfalls — die Seite kann also weiter ODER enger wirken als die Wirklichkeit, und ein Subjekt ohne geladene Regel erscheint gar nicht. Leite hieraus keinen effektiven Zugriff ab: die Engine liest alle Seiten, bevor sie entscheidet, und löst ein Principal über Nutzer, Rolle und Gruppe zugleich auf, was eine Zeile nicht zeigen kann.",
+    "groupsTruncated": "{{n}} Gruppen geladen; es gibt mehr",
+    "groupsTruncatedHint": "Es gibt mehr Modellgruppen als angezeigt; diese Seite nimmt Zeilen nach ID. Eine hier fehlende Gruppe belegt nicht, dass sie nicht existiert — eine Regel kann sie weiterhin adressieren."
+  }
+}

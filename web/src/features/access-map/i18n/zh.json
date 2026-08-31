@@ -1,0 +1,186 @@
+{
+  "title": "访问映射",
+  "subtitle": "展示每个智能体在你的资产域中读取和写入了哪些内容——左侧为来源，右侧为其触及的资源，读/写（R/RW）以颜色区分。",
+  "auditedNote": "打开此映射是一项受审计的特权操作，仅用于防御性审查——它只展示关系，绝不展示 SQL、负载或密钥。",
+  "refresh": "刷新",
+  "stats": {
+    "origins": "来源",
+    "resources": "资源",
+    "read": "读取",
+    "write": "写入 / RW",
+    "approximate": "近似",
+    "unexpected": "异常",
+    "truncated": "显示前 {{n}} 条",
+    "truncatedHint": "资产域中的连接数超出当前显示范围；请用筛选缩小范围，或展开某个节点以查看其相邻节点。"
+  },
+  "webgl": {
+    "badge": "高密度视图",
+    "hint": "正在显示 {{n}} 个节点——已切换至加速的 WebGL 渲染器以支持大规模展示。",
+    "clustered": "在此缩放级别下，资源按主机分组；每个分组显示为「host (N)」。不会隐藏任何发现项——任何存在异常访问的分组都会被标记。"
+  },
+  "filters": {
+    "search": "搜索来源、资源、工具……",
+    "mode": "访问模式",
+    "attributedOnly": "仅显示已归属",
+    "attributedHint": "隐藏近似（推断）连接，仅显示已确切归属的访问。",
+    "signal": "信号",
+    "allSignals": "全部信号",
+    "clear": "清除",
+    "drift": "已许可 vs 已观测",
+    "driftHint": "叠加最小权限差异：高亮显示异常访问（已观测但未许可）以及未使用的授权。",
+    "driftForbidden": "需要漂移权限（accessmap:drift:read）。"
+  },
+  "legend": {
+    "read": "读取",
+    "write": "写入",
+    "writeRw": "写入 / RW",
+    "unknown": "未知",
+    "approximate": "近似",
+    "unexpected": "异常访问",
+    "pending": "待定（尚未判定）",
+    "unused": "未使用的授权"
+  },
+  "drift": {
+    "title": "最小权限漂移",
+    "cleanTitle": "未发现漂移",
+    "cleanHint": "每一次已观测的访问都已被许可，且每一项授权都在使用中。",
+    "unexpectedTitle": "异常访问",
+    "unexpectedHint": "已观测但未被许可——优先级最高的发现项。",
+    "pendingTitle": "待协调",
+    "pendingHint": "在没有匹配授予的情况下被观测到，且引擎尚无法判定它是否被允许——可能是未解决的智能体↔身份关联、未知的授予模式，或无法判定的观测模式。引擎并未说明是哪一种，因此这还不是已确认的违规。",
+    "unusedTitle": "未使用的授权",
+    "unusedHint": "已许可但从未观测到——应收紧的过度授权。",
+    "forbiddenTitle": "无漂移查看权限",
+    "forbiddenHint": "你的角色可以查看图谱，但无法查看已许可 vs 已观测的差异（accessmap:drift:read）。",
+    "partial": "部分结果：引擎是在被截断的偏移窗口上完成本次比对的，因此这些计数并非整个环境；此处缺失的边可能只是超出了上限。",
+    "emptyWindowTitle": "在已扫描的窗口内未发现问题",
+    "emptyWindowHint": "扫描在其分页上限处停止，因此这并不是对整个环境的判断。"
+  },
+  "detail": {
+    "edgeTitle": "访问连接",
+    "nodeSubtitle": "图谱节点——展开以查看其连接的对象。",
+    "ref": "引用",
+    "id": "ID",
+    "expand": "展开相邻节点",
+    "unexpectedFlag": "已观测但没有匹配的授权",
+    "origin": "来源",
+    "kind": "类型",
+    "bridge": "桥接",
+    "unbridged": "智能体未解析",
+    "resource": "资源",
+    "coverage": "覆盖范围",
+    "tool": "工具",
+    "attribution": "按智能体归属",
+    "signal": "信号与置信度",
+    "confidence": "置信度",
+    "sources": "来源",
+    "reason": "归属",
+    "diff": "已许可 vs 已观测",
+    "observed": "已观测",
+    "permitted": "已许可",
+    "activity": "活动",
+    "occurrences": "出现次数",
+    "firstSeen": "首次出现",
+    "lastSeen": "最近出现",
+    "yes": "是",
+    "no": "否",
+    "minimalData": "此处仅显示元数据。按设计，引擎绝不在此携带 SQL、负载或密钥（最小化数据）。"
+  },
+  "authority": {
+    "title": "授权来源与下一步",
+    "declaredBy": "此边上的信号：",
+    "multiple": "这里记录了不止一条独立许可。处理其中一条，另一条依然成立。",
+    "noRetraction": "地图只记录信号，从不撤回，因此在你更改来源之后这条边仍可能存在。请重新检查，不要假设。",
+    "explain": {
+      "sourceScope": "一条「来源→范围」绑定记录了这条边的许可。该绑定层就是它的配置之处。",
+      "declared": "这条边记录了一个已声明的许可信号。地图并不携带是哪个系统发出的——身份提供方、某次部署，或是代码仓库、密钥库的 ACL——因此无法为你指向具体某处。",
+      "unattributed": "此访问是被允许的，但边上没有任何指明许可的信号。这里没有可用来确定归属系统的依据，臆测一个会比如实说明更糟。",
+      "unpermitted": "本地图中没有针对此访问的许可信号。这正是它成为发现的原因——但这并不能证明没有任何东西允许它：运行中的解析器可能允许本地图从未看到的访问。",
+      "undetermined": "既未被观测，也未被允许。这是一项已声明的能力，而非访问证据，因此没有需要整改的内容。",
+      "undecided": "尚无法判定这条边是否被允许，因此这还不是已确认的违规。引擎并未说明哪一项条件未解决——智能体↔身份关联、未知的授予模式，或无法判定的观测模式——因此不提供具体修复。",
+      "unchecked": "本地图显示这条访问没有许可信号，但这条边的偏移状态在此尚未确定。只有最小权限比对才能说明引擎是已确认为发现，还是仍在核对，而本页没有来自它的答案。在此之前，它既不是发现，也不是一条干净的边。",
+      "reconciled": "引擎读取了最小权限比对，并未将这条访问列入其中，因此它不是已确认的发现，这里也没有需要整改的内容。地图没有说明的是「为什么」：覆盖它的授予可能记录在另一条边上，也可能有许可已经到达了这条边——图谱与比对是两次独立的读取，本页无法分辨是哪一种。"
+    },
+    "target": {
+      "sourceBindings": "打开来源绑定",
+      "nhiRoster": "打开 NHI 清单"
+    },
+    "needsPermission": "{{action}} 需要 {{permission}} 权限，而此角色不具备。",
+    "recheck": "重新检查偏移",
+    "verdict": {
+      "clear": "已重新检查：这条边已不在偏移集合中。上面的说明描述的是该次检查之前的状态。",
+      "present": "已重新检查：这条边仍在偏移集合中。",
+      "unknown": "无法确认——偏移读取未返回，或仅覆盖了环境的一部分。两者都不等于「已清除」。"
+    },
+    "checkDrift": "读取这条边的偏移",
+    "closes": "消除这项发现的是记录一条许可——但不一定在这条边上：授予给该访问所解析到身份的许可，会从另一条边消除它。来源→范围的投影是尽力而为，而组、角色与文件夹绑定会生效却不向地图投影任何内容，因此可能存在这次比对看不到的真实许可。停止访问同样不会消除它：观测从不被撤回。请重新检查，不要假设。",
+    "cannotClose": "删除授予不会清除这条边上的「已许可」标志——地图从不撤回许可——因此这项发现不会因为那次删除而消失。（它仍可能因无关原因离开比对，例如该访问终于被观测到。）请到拥有它的界面去确认删除，而不是在这里。",
+    "signalsNotFused": "这条边只带有它最近的一个信号——本次响应未包含用于佐证的信号集合，因此可能还存在其他信号（包括其他许可），但这里看不到。"
+  },
+  "kinds": {
+    "agent": "智能体",
+    "session": "会话",
+    "identity": "身份",
+    "resource": "资源"
+  },
+  "coverage": {
+    "clean": "完整",
+    "lossy": "有损",
+    "opaque": "不透明",
+    "mixed": "混合"
+  },
+  "coverageHint": {
+    "clean": "高保真采集（例如 SQL／对象存储／数仓审计）。",
+    "lossy": "部分采集——部分访问无法分类。",
+    "opaque": "无法被动采集（例如 Redis／SQLite）。",
+    "mixed": "各信号之间保真度不一。"
+  },
+  "attributionTier": {
+    "firm": "确切",
+    "approximate": "近似",
+    "unknown": "未知"
+  },
+  "attributionTierHint": {
+    "firm": "通过 SVID、WIF 或专用凭据绑定到具体的智能体／NHI。",
+    "approximate": "共享账户——身份已知，但并非单个智能体。",
+    "unknown": "无按身份的审计（例如 Redis／SQLite／D1）——无法进行归属。"
+  },
+  "empty": {
+    "title": "尚未观测到访问",
+    "description": "一旦连接器上报智能体活动，读/写（R/RW）关系将显示于此。"
+  },
+  "forbidden": {
+    "title": "无访问映射权限",
+    "description": "你的角色不包含查看访问图谱的权限。"
+  },
+  "mobile": {
+    "title": "此映射需要更宽的屏幕",
+    "hint": "请在更大的显示屏上打开此视图，以使用交互式读/写（R/RW）图谱。"
+  },
+  "attackPaths": {
+    "chooseAgent": "在图中选择一个代理，以查看其攻击路径。",
+    "auditedNote": "这些读取都会像图本身一样被封存进审计账本。",
+    "loading": "计算中…",
+    "error": "无法读取该分析。",
+    "none": "未找到路径。",
+    "weakestLink": "最薄弱环节：",
+    "sensitivity": "最高敏感度",
+    "sensitivityAbsent": "未注明",
+    "sensitivityAbsentHint": "该字段为空时引擎会省略，因此缺少数值并不表示不涉及敏感对象。",
+    "kind": {
+      "reachability": "可达范围",
+      "escalation": "可能提权之处",
+      "exfil": "外泄路径"
+    },
+    "attribution": {
+      "firm": "确凿",
+      "approximate": "近似",
+      "unknown": "未归因"
+    },
+    "confidence": {
+      "attributed": "已归因",
+      "approximate": "近似"
+    },
+    "analyse": "分析攻击路径（留痕）"
+  }
+}

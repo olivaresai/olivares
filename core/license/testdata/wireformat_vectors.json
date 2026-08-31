@@ -1,0 +1,161 @@
+{
+  "_comment": "Wire-format golden vectors locking core/license.Sign byte-for-byte. Cross-language conformance oracle: an independent re-implementation of the signer signing the same input with private_key_b64 MUST reproduce expected_blob exactly. Regenerate with: go test ./core/license -run TestWireFormatGolden -update-golden",
+  "private_key_b64": "b2xpdmFyZXMgd2lyZS1mbXQgZ29sZGVuIHNlZWQgdjGb/YN9yxakUPMwg9MkggrAwh7i0rbu+ZRl6dqoG4RGBw==",
+  "public_key_b64": "m/2DfcsWpFDzMIPTJIIKwMIe4tK27vmUZenaqBuERgc=",
+  "vectors": [
+    {
+      "name": "minimal_perpetual",
+      "note": "licensee + issued_at only; omitempty drops everything else; perpetual (no expires_at)",
+      "input": {
+        "licensee": "Acme GmbH",
+        "issued_at": "2026-01-02T03:04:05Z"
+      },
+      "expected_payload": "{\"licensee\":\"Acme GmbH\",\"issued_at\":\"2026-01-02T03:04:05Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6IkFjbWUgR21iSCIsImlzc3VlZF9hdCI6IjIwMjYtMDEtMDJUMDM6MDQ6MDVaIn0.AUup2zW2kwE23YfBglG6NV7h_Cz7RK38htAhZ205oMMeVT2Pfi7QRzQ6Iub7VapPOvKeT1HO2NDZubC9uPACCQ"
+    },
+    {
+      "name": "max_users_only",
+      "note": "the common enterprise case: a seat entitlement, perpetual",
+      "input": {
+        "licensee": "Beta Corp",
+        "plan": "commercial",
+        "holder_id": "polar_sub_123",
+        "max_users": 25,
+        "issued_at": "2026-06-23T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Beta Corp\",\"plan\":\"commercial\",\"holder_id\":\"polar_sub_123\",\"max_users\":25,\"issued_at\":\"2026-06-23T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6IkJldGEgQ29ycCIsInBsYW4iOiJjb21tZXJjaWFsIiwiaG9sZGVyX2lkIjoicG9sYXJfc3ViXzEyMyIsIm1heF91c2VycyI6MjUsImlzc3VlZF9hdCI6IjIwMjYtMDYtMjNUMTA6MDA6MDBaIn0.nLvDfYZQX1TSE4Hm9IvYOSknFNXGIr2WUpkqgfdPhyVqJJtG8Dbz7p5Jhrfimyoz26U2iwE4Bx0wFRWozgd7Dw"
+    },
+    {
+      "name": "full_with_expiry",
+      "note": "every field set incl. expiry + support_tier — locks field ORDER and presence",
+      "input": {
+        "licensee": "Gamma S.L.",
+        "plan": "commercial",
+        "support_tier": "enterprise",
+        "holder_id": "polar_cus_abc",
+        "features": [
+          "sso",
+          "worm",
+          "ha"
+        ],
+        "max_tenants": 50,
+        "max_users": 200,
+        "issued_at": "2026-06-23T10:00:00Z",
+        "expires_at": "2027-06-23T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Gamma S.L.\",\"plan\":\"commercial\",\"support_tier\":\"enterprise\",\"holder_id\":\"polar_cus_abc\",\"features\":[\"sso\",\"worm\",\"ha\"],\"max_tenants\":50,\"max_users\":200,\"issued_at\":\"2026-06-23T10:00:00Z\",\"expires_at\":\"2027-06-23T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6IkdhbW1hIFMuTC4iLCJwbGFuIjoiY29tbWVyY2lhbCIsInN1cHBvcnRfdGllciI6ImVudGVycHJpc2UiLCJob2xkZXJfaWQiOiJwb2xhcl9jdXNfYWJjIiwiZmVhdHVyZXMiOlsic3NvIiwid29ybSIsImhhIl0sIm1heF90ZW5hbnRzIjo1MCwibWF4X3VzZXJzIjoyMDAsImlzc3VlZF9hdCI6IjIwMjYtMDYtMjNUMTA6MDA6MDBaIiwiZXhwaXJlc19hdCI6IjIwMjctMDYtMjNUMTA6MDA6MDBaIn0.HANZmPwjI9DBOAp9R9cSUOLvt67uXOWEjObOxJArgp317u1nTeQCmH8hqWuOGXinO5rh_GSLtBp0y4zw3QpDBQ"
+    },
+    {
+      "name": "html_escape",
+      "note": "Go json.Marshal escapes \u0026 \u003c \u003e by default (SetEscapeHTML) -\u003e a naive JSON.stringify DIVERGES here",
+      "input": {
+        "licensee": "Acme \u0026 Sons \u003cHoldings\u003e \"Inc.\"",
+        "plan": "commercial",
+        "holder_id": "id\u003ewith\u003egt",
+        "features": [
+          "a\u0026b",
+          "c\u003cd"
+        ],
+        "issued_at": "2026-06-23T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Acme \\u0026 Sons \\u003cHoldings\\u003e \\\"Inc.\\\"\",\"plan\":\"commercial\",\"holder_id\":\"id\\u003ewith\\u003egt\",\"features\":[\"a\\u0026b\",\"c\\u003cd\"],\"issued_at\":\"2026-06-23T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6IkFjbWUgXHUwMDI2IFNvbnMgXHUwMDNjSG9sZGluZ3NcdTAwM2UgXCJJbmMuXCIiLCJwbGFuIjoiY29tbWVyY2lhbCIsImhvbGRlcl9pZCI6ImlkXHUwMDNld2l0aFx1MDAzZWd0IiwiZmVhdHVyZXMiOlsiYVx1MDAyNmIiLCJjXHUwMDNjZCJdLCJpc3N1ZWRfYXQiOiIyMDI2LTA2LTIzVDEwOjAwOjAwWiJ9.jH-C0ssUpSPpRD_MOpJLrFdbNZAI1qbsYBAqYDbvGgEyMW6etZIWGxT1AJuitwodMT43HvtqPoc5vxvxOo4QBw"
+    },
+    {
+      "name": "unicode_passthrough",
+      "note": "non-ASCII runes are emitted as raw UTF-8 (NOT \\u escaped), but \u0026 still escapes",
+      "input": {
+        "licensee": "Müller \u0026 Associés — Genève ☃ 株式会社",
+        "plan": "commercial",
+        "issued_at": "2026-06-23T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Müller \\u0026 Associés — Genève ☃ 株式会社\",\"plan\":\"commercial\",\"issued_at\":\"2026-06-23T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6Ik3DvGxsZXIgXHUwMDI2IEFzc29jacOpcyDigJQgR2Vuw6h2ZSDimIMg5qCq5byP5Lya56S-IiwicGxhbiI6ImNvbW1lcmNpYWwiLCJpc3N1ZWRfYXQiOiIyMDI2LTA2LTIzVDEwOjAwOjAwWiJ9.TMh1KRsFwmkedCPmsWeJ63etQVhnFO0q6MM6TF4tRG0HILmKLHoexBkAX3-zDfvDJkzNVo-QAM7VuTIM5aZ2Cg"
+    },
+    {
+      "name": "line_and_paragraph_separators",
+      "note": "U+2028 and U+2029 are escaped by Go's encoder (\\u2028/\\u2029) even though they are valid UTF-8",
+      "input": {
+        "licensee": "before\u2028mid\u2029after",
+        "issued_at": "2026-06-23T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"before\\u2028mid\\u2029after\",\"issued_at\":\"2026-06-23T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6ImJlZm9yZVx1MjAyOG1pZFx1MjAyOWFmdGVyIiwiaXNzdWVkX2F0IjoiMjAyNi0wNi0yM1QxMDowMDowMFoifQ.mnfhwjsZNtgAc8YdSaoYt3AwJ0xvJCfjNe401DHcRYiGW7BwhEF0tE3-cvvO7Xbg0Lw0Rk7Xhv5kTwAyidwoAg"
+    },
+    {
+      "name": "control_chars_quote_backslash",
+      "note": "tab/newline short-forms, \\u0001 long-form, escaped quote and backslash",
+      "input": {
+        "licensee": "tab\tnl\nctrl\u0001q\"bs\\xend",
+        "issued_at": "2026-06-23T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"tab\\tnl\\nctrl\\u0001q\\\"bs\\\\xend\",\"issued_at\":\"2026-06-23T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6InRhYlx0bmxcbmN0cmxcdTAwMDFxXCJic1xceGVuZCIsImlzc3VlZF9hdCI6IjIwMjYtMDYtMjNUMTA6MDA6MDBaIn0.2mOAYbf3fozUSK-NfsGa12fME6qRGlafLaT97GXXNaNH_gCMqRNrApVnUDybEly7KX0SvCJAM246mvgOsXGdBg"
+    },
+    {
+      "name": "expired",
+      "note": "valid signature over a past expiry — status is a local-clock decision, not a signing one",
+      "input": {
+        "licensee": "Old Co",
+        "plan": "commercial",
+        "max_users": 5,
+        "issued_at": "2024-01-01T00:00:00Z",
+        "expires_at": "2025-01-01T00:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Old Co\",\"plan\":\"commercial\",\"max_users\":5,\"issued_at\":\"2024-01-01T00:00:00Z\",\"expires_at\":\"2025-01-01T00:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6Ik9sZCBDbyIsInBsYW4iOiJjb21tZXJjaWFsIiwibWF4X3VzZXJzIjo1LCJpc3N1ZWRfYXQiOiIyMDI0LTAxLTAxVDAwOjAwOjAwWiIsImV4cGlyZXNfYXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwWiJ9.Kd4BwGEVuC84DLrs8XACxa-bjkKwt4hOvOOCXagSjhMI7gqVpJ3IRGp52U8HijV2CLDUPdsd6NMdsZ8RTDvECg"
+    },
+    {
+      "name": "serial_and_profile",
+      "note": "serial + profile ride the wire AFTER holder_id and BEFORE features — the short-lived online license the worker re-issues each cycle",
+      "input": {
+        "licensee": "Delta Ltd",
+        "plan": "commercial",
+        "holder_id": "polar_cus_del",
+        "serial": "d2f1a0be-9c34-4e57-8a21-0f6b3c9d4e5f",
+        "profile": "online",
+        "max_users": 50,
+        "issued_at": "2026-07-19T10:00:00Z",
+        "expires_at": "2026-10-17T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Delta Ltd\",\"plan\":\"commercial\",\"holder_id\":\"polar_cus_del\",\"serial\":\"d2f1a0be-9c34-4e57-8a21-0f6b3c9d4e5f\",\"profile\":\"online\",\"max_users\":50,\"issued_at\":\"2026-07-19T10:00:00Z\",\"expires_at\":\"2026-10-17T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6IkRlbHRhIEx0ZCIsInBsYW4iOiJjb21tZXJjaWFsIiwiaG9sZGVyX2lkIjoicG9sYXJfY3VzX2RlbCIsInNlcmlhbCI6ImQyZjFhMGJlLTljMzQtNGU1Ny04YTIxLTBmNmIzYzlkNGU1ZiIsInByb2ZpbGUiOiJvbmxpbmUiLCJtYXhfdXNlcnMiOjUwLCJpc3N1ZWRfYXQiOiIyMDI2LTA3LTE5VDEwOjAwOjAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEwLTE3VDEwOjAwOjAwWiJ9.7Pp-6qrphBGsBRTJJLN9dk2b-ADYsMF3PSfj5_MrIw7zZgrC0CJuAHrSKDdD3tzbn0NDT3hd-HlCddMWPrCfAg"
+    },
+    {
+      "name": "attested_grace_window",
+      "note": "term-only: the issuer attests the 168h grace window; absent everywhere else, so omitempty drops it",
+      "input": {
+        "licensee": "Zeta Systems",
+        "plan": "commercial",
+        "holder_id": "dodo_sub_zeta",
+        "serial": "9f1c4d22-7a63-4b81-9e05-2c8d7f6a1b34",
+        "profile": "online",
+        "features": [
+          "regulated"
+        ],
+        "issued_at": "2026-08-02T09:00:00Z",
+        "expires_at": "2026-09-02T09:00:00Z",
+        "grace_until": "2026-09-09T09:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Zeta Systems\",\"plan\":\"commercial\",\"holder_id\":\"dodo_sub_zeta\",\"serial\":\"9f1c4d22-7a63-4b81-9e05-2c8d7f6a1b34\",\"profile\":\"online\",\"features\":[\"regulated\"],\"issued_at\":\"2026-08-02T09:00:00Z\",\"expires_at\":\"2026-09-02T09:00:00Z\",\"grace_until\":\"2026-09-09T09:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6IlpldGEgU3lzdGVtcyIsInBsYW4iOiJjb21tZXJjaWFsIiwiaG9sZGVyX2lkIjoiZG9kb19zdWJfemV0YSIsInNlcmlhbCI6IjlmMWM0ZDIyLTdhNjMtNGI4MS05ZTA1LTJjOGQ3ZjZhMWIzNCIsInByb2ZpbGUiOiJvbmxpbmUiLCJmZWF0dXJlcyI6WyJyZWd1bGF0ZWQiXSwiaXNzdWVkX2F0IjoiMjAyNi0wOC0wMlQwOTowMDowMFoiLCJleHBpcmVzX2F0IjoiMjAyNi0wOS0wMlQwOTowMDowMFoiLCJncmFjZV91bnRpbCI6IjIwMjYtMDktMDlUMDk6MDA6MDBaIn0.jLSZc6Ycq7Tt2UDcJbhgIIeeviGsOqKSyOuTWks9czZGtMWiyPm-Jp_tyiUaiTGf2O8VZYExTivhugIRUDG1CQ"
+    },
+    {
+      "name": "airgapped_serial_no_holder",
+      "note": "an air-gapped SKU blob — serial present without holder_id, profile airgapped, 12-month term",
+      "input": {
+        "licensee": "Epsilon Gov",
+        "plan": "commercial",
+        "serial": "0b7e2c11-5d6f-4a89-9c30-e4d5f6a7b8c9",
+        "profile": "airgapped",
+        "max_users": 500,
+        "issued_at": "2026-07-19T10:00:00Z",
+        "expires_at": "2027-07-19T10:00:00Z"
+      },
+      "expected_payload": "{\"licensee\":\"Epsilon Gov\",\"plan\":\"commercial\",\"serial\":\"0b7e2c11-5d6f-4a89-9c30-e4d5f6a7b8c9\",\"profile\":\"airgapped\",\"max_users\":500,\"issued_at\":\"2026-07-19T10:00:00Z\",\"expires_at\":\"2027-07-19T10:00:00Z\"}",
+      "expected_blob": "eyJsaWNlbnNlZSI6IkVwc2lsb24gR292IiwicGxhbiI6ImNvbW1lcmNpYWwiLCJzZXJpYWwiOiIwYjdlMmMxMS01ZDZmLTRhODktOWMzMC1lNGQ1ZjZhN2I4YzkiLCJwcm9maWxlIjoiYWlyZ2FwcGVkIiwibWF4X3VzZXJzIjo1MDAsImlzc3VlZF9hdCI6IjIwMjYtMDctMTlUMTA6MDA6MDBaIiwiZXhwaXJlc19hdCI6IjIwMjctMDctMTlUMTA6MDA6MDBaIn0.jpd5W21vupJUKJWxtikfpGtM-i1g8iJkmryoaAax6o0h0oWUlugeW7jdfWKLC7rw07Jd9E5zRDsP81XMB8xNCg"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "title": "概要",
+  "description": "AIエステートを一目で把握 — インベントリ、アクティビティ、リスク、コンプライアンス、支出、ヘルスを集約します。",
+  "asOfNote": "過去30日間のライブ集計を、ロールで開けるモジュール全体にわたって表示します。各タイルは対応するモジュールにリンクします。完全なロールアップとPDFはエグゼクティブレポートを開いてください。",
+  "openReport": "エグゼクティブレポート",
+  "range": "過去30日間",
+  "tiles": {
+    "inventory": {
+      "label": "インベントリ",
+      "caption": "{{agents}}エージェント · {{active}}有効"
+    },
+    "sessions": {
+      "label": "ライブセッション",
+      "caption": "現在{{idle}}アイドル",
+      "silent": "{{count}}が無応答（回避の可能性）"
+    },
+    "security": {
+      "label": "セキュリティ",
+      "caption": "{{count}}が重大または高",
+      "clear": "未対応の検出事項なし"
+    },
+    "compliance": {
+      "label": "コンプライアンス",
+      "caption": "{{gap}}ギャップ · {{unmapped}}未マッピング",
+      "noControls": "マッピング済みの統制がまだありません"
+    },
+    "spend": {
+      "label": "支出",
+      "caption": "{{range}}",
+      "projected": "ランレートで{{amount}}を予測"
+    },
+    "health": {
+      "label": "ヘルス & SLA",
+      "value": "{{healthy}}/{{total}}が正常",
+      "caption": "{{breaches}}件のSLA違反 · {{incidents}}件の未対応インシデント",
+      "noChecks": "ヘルスチェックがまだありません"
+    }
+  },
+  "state": {
+    "unavailable": "読み込めませんでした — 開いて再試行してください"
+  },
+  "empty": {
+    "title": "まだ表示できるものがありません",
+    "description": "お使いのロールには、いずれのエステートモジュールに対する読み取りアクセスも付与されていません。概要を表示するには、管理者に読み取りの付与を依頼してください。"
+  }
+}

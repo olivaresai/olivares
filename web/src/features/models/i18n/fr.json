@@ -1,0 +1,269 @@
+{
+  "title": "Modèles et fournisseurs",
+  "description": "Le parc de modèles gouverné — capacités et tarification déclarées, politique de routage et références de clés de fournisseur. Les secrets ne sont jamais affichés ; uniquement des références masquées.",
+  "tabs": {
+    "catalog": "Catalogue",
+    "estate": "Parc",
+    "routing": "Routage",
+    "keys": "Clés de fournisseur",
+    "gpai": "Posture GPAI",
+    "access": "Access"
+  },
+  "catalog": {
+    "title": "Matrice des capacités",
+    "description": "Capacités d'API déclarées par famille de modèles.",
+    "pricingTitle": "Tarification déclarée",
+    "pricingDescription": "Valeurs par défaut du prix catalogue — à titre de référence, et non une vérité immuable. Vérifiez auprès de chaque fournisseur et appliquez une dérogation par modèle.",
+    "family": "Famille",
+    "provider": "Fournisseur",
+    "context": "Contexte",
+    "maxOutput": "Sortie max.",
+    "modality": "Modalité",
+    "inputPrice": "Entrée / MTok",
+    "outputPrice": "Sortie / MTok",
+    "cacheRead": "Lecture de cache / MTok",
+    "cacheWrite1h": "Écriture de cache 1 h / MTok",
+    "residency": "Résidence des données",
+    "tiers": "Niveaux de service",
+    "residencyNotApplicable": "Non applicable",
+    "tiersNotDeclared": "Non déclaré",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "Capacités à confirmer",
+    "capsToConfirmHint": "L'ensemble des capacités de cette famille n'est pas encore vérifié par rapport à une fiche de modèle. Le modèle est répertorié, mais ses capacités sont signalées comme non confirmées plutôt qu'inventées.",
+    "tier": {
+      "standard": "Standard",
+      "batch": "Par lot",
+      "priority": "Prioritaire",
+      "priority_on_demand": "Prioritaire à la demande",
+      "flex": "Flexible",
+      "flex_discount": "Remise flexible"
+    },
+    "asOf": "Au {{date}}",
+    "noPricing": "Aucun prix déclaré",
+    "present": "Pris en charge",
+    "absent": "Non pris en charge"
+  },
+  "estate": {
+    "title": "Modèles gouvernés",
+    "description": "Modèles du parc de ce locataire, enrichis à partir du catalogue.",
+    "empty": "Aucun modèle dans le parc",
+    "columns": {
+      "name": "Modèle",
+      "provider": "Fournisseur",
+      "family": "Famille",
+      "context": "Contexte",
+      "inputCost": "Entrée µ$/tok",
+      "outputCost": "Sortie µ$/tok",
+      "modality": "Modalité",
+      "capabilities": "Capacités",
+      "status": "Statut"
+    },
+    "notEnriched": "Aucune famille déclarée pour l'instant — aucune tarification",
+    "costNote": "Le µUSD par token est une valeur indicative approximative ; le coût de référence de l'usage réel est le registre FinOps.",
+    "truncated": "{{n}} modèles chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de modèles gouvernés que ceux affichés ; cette page prend des lignes par id. La recherche et le tri du tableau ne portent que sur ce qui est chargé."
+  },
+  "routing": {
+    "title": "Politiques de routage",
+    "description": "Les politiques sont définies ici et exécutées par le connecteur de passerelle — l'UI les configure et les affiche.",
+    "new": "Nouvelle politique",
+    "empty": "Aucune politique de routage",
+    "emptyHint": "Une politique de routage sélectionne le modèle principal et la chaîne de repli pour une stratégie.",
+    "strategy": "Stratégie",
+    "requiredCapabilities": "Capacités requises",
+    "preferredProviders": "Fournisseurs privilégiés",
+    "minContext": "Fenêtre de contexte minimale",
+    "pinnedModel": "Modèle épinglé",
+    "allowDeprecated": "Autoriser les obsolètes",
+    "gateway": "Point d'accès de la passerelle",
+    "viaGateway": "via la passerelle",
+    "resolve": "Résoudre",
+    "resolving": "Résolution…",
+    "enabled": "Activée",
+    "disabled": "Désactivée",
+    "strategies": {
+      "cost": "Coût",
+      "latency": "Latence",
+      "capability": "Capacité",
+      "pinned": "Épinglé"
+    },
+    "decision": {
+      "title": "Décision résolue",
+      "primary": "Principal",
+      "fallbacks": "Chaîne de repli",
+      "unresolved": "Aucun modèle gouverné ne satisfait cette politique",
+      "reason": "Motif"
+    },
+    "dialog": {
+      "title": "Politique de routage",
+      "name": "Nom",
+      "listHint": "Séparés par des virgules.",
+      "create": "Enregistrer la politique",
+      "created": "Politique de routage enregistrée"
+    },
+    "execute": "Execute",
+    "executeConfirm": "Execute and spend",
+    "input": "Input",
+    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
+    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "noExecutor": "No executor is provisioned. This is not an outage: the control plane resolves routing decisions but never spends against a provider until an operator wires an executor.",
+    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "fallbackUsed": "fallback used",
+    "refusal": "provider refusal",
+    "tokens": "{{in}} in · {{out}} out",
+    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "truncated": "{{n}} politiques chargées ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de politiques de routage que celles affichées ; cette page prend des lignes par id. Une politique absente ici ne démontre pas qu'aucune ne route une requête donnée."
+  },
+  "keys": {
+    "title": "Références de clés de fournisseur",
+    "description": "Références gouvernées vers les clés d'API et les espaces de travail des fournisseurs. Seul un indice masqué est stocké — jamais la valeur du secret.",
+    "new": "Ajouter une référence de clé",
+    "empty": "Aucune référence de clé",
+    "maskedOnly": "Référence uniquement — la valeur du secret n'est jamais stockée ni affichée.",
+    "columns": {
+      "name": "Nom",
+      "provider": "Fournisseur",
+      "kind": "Type",
+      "extId": "Identifiant externe",
+      "hint": "Indice masqué",
+      "owner": "Propriétaire",
+      "status": "Statut",
+      "created": "Création"
+    },
+    "kind": {
+      "api_key": "Clé d'API",
+      "workspace": "Espace de travail"
+    },
+    "dialog": {
+      "title": "Ajouter une référence de clé",
+      "name": "Nom",
+      "provider": "Fournisseur",
+      "kind": "Type de référence",
+      "extId": "Identifiant externe",
+      "extIdHint": "L'identifiant de la clé/de l'espace de travail chez le fournisseur (par ex. apikey_01). Pas le secret.",
+      "owner": "Propriétaire",
+      "noSecretNote": "Ce formulaire n'accepte jamais de secret. Olivares ne stocke qu'une référence et un indice masqué.",
+      "create": "Ajouter la référence",
+      "created": "Référence de clé ajoutée"
+    },
+    "truncated": "{{n}} clés chargées ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de références de clés fournisseur que celles affichées ; cette page prend des lignes par id. Une clé absente ici ne démontre pas qu'aucun identifiant n'existe pour ce fournisseur. Le tri du tableau ne porte que sur ce qui est chargé."
+  },
+  "gpai": {
+    "title": "Posture des fournisseurs GPAI",
+    "description": "Posture fournisseur attestée par l'opérateur, enregistrée une fois par fournisseur.",
+    "notice": "Il s'agit de la posture GPAI du fournisseur attestée par l'opérateur ; elle alimente les besoins en preuves fournisseur pour ISO/IEC 42001 A.10.3 et NIST AI RMF GOVERN-6.1 / MAP-4.1. Ce n'est pas une détermination de conformité par Olivares.",
+    "empty": "Aucune posture de fournisseur GPAI enregistrée",
+    "emptyHint": "Attestez une posture fournisseur lorsque la documentation publiée du fournisseur a été revue ou qu'une déclaration doit être enregistrée.",
+    "verifiedMeaning": "Revue par l'opérateur au regard de la documentation publiée du fournisseur — il s'agit de l'attestation propre de l'opérateur, et non d'une vérification effectuée par Olivares ni d'une détermination de conformité.",
+    "actions": {
+      "attest": "Attester la posture",
+      "edit": "Modifier la posture",
+      "editProvider": "Modifier la posture de {{provider}}"
+    },
+    "columns": {
+      "provider": "Fournisseur",
+      "review": "État de revue",
+      "attestedAt": "Attesté le",
+      "actions": "Actions"
+    },
+    "claims": {
+      "cop_signatory": "Signataire du code de bonne conduite",
+      "technical_docs": "Documentation technique publiée",
+      "training_data_summary": "Résumé des données d'entraînement publié",
+      "copyright_policy": "Politique de droit d'auteur enregistrée",
+      "downstream_info": "Informations en aval fournies",
+      "systemic_risk": "GPAI présentant un risque systémique",
+      "safety_report": "Safety & Security Model Report"
+    },
+    "states": {
+      "recorded": "Enregistrée",
+      "notRecorded": "Déclaration non enregistrée",
+      "reviewed": "Attestation revue par l'opérateur",
+      "unreviewed": "Déclaration de l'opérateur — non revue"
+    },
+    "detail": {
+      "title": "Posture GPAI : {{provider}}",
+      "description": "Les déclarations enregistrées par l'opérateur et les métadonnées d'attestation pour ce fournisseur.",
+      "claims": "Déclarations du fournisseur",
+      "reviewState": "État de revue",
+      "verificationMethod": "Méthode de vérification",
+      "attestedBy": "Attesté par",
+      "attestedAt": "Attesté le",
+      "note": "Note",
+      "notProvided": "Non renseigné"
+    },
+    "form": {
+      "createTitle": "Attester la posture d'un fournisseur GPAI",
+      "editTitle": "Modifier la posture du fournisseur GPAI",
+      "description": "Enregistrez les déclarations du fournisseur et l'attestation de revue propre à l'opérateur.",
+      "providerRef": "Référence du fournisseur",
+      "providerLocked": "La référence du fournisseur est verrouillée pendant la modification, car la changer créerait une seconde posture.",
+      "providerRequired": "Saisissez une référence de fournisseur.",
+      "claimsTitle": "Déclarations du fournisseur",
+      "claimsDescription": "N'activez une déclaration que lorsque l'opérateur l'a enregistrée pour ce fournisseur.",
+      "systemicRiskHint": "Classification : le modèle est classé comme GPAI présentant un risque systémique.",
+      "safetyReportHint": "Ce rapport s'applique aux modèles classés comme GPAI présentant un risque systémique.",
+      "verified": "Revue au regard de la documentation publiée du fournisseur",
+      "verificationMethod": "Méthode de vérification",
+      "verificationMethodHint": "Obligatoire lorsque l'opérateur marque cette posture comme revue.",
+      "verificationMethodRequired": "Décrivez comment la documentation publiée du fournisseur a été revue.",
+      "note": "Note",
+      "requestRejected": "La posture n'a pas été enregistrée. Consultez la réponse du serveur ci-dessous.",
+      "created": "Posture du fournisseur GPAI attestée",
+      "updated": "Posture du fournisseur GPAI mise à jour",
+      "save": "Enregistrer l'attestation",
+      "saving": "Enregistrement…"
+    },
+    "truncated": "{{n}} postures chargées ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de postures GPAI que celles affichées ; cette page prend des lignes par id. Un fournisseur absent ici ne démontre pas que rien n'a été déclaré pour lui. Le tri du tableau ne porte que sur ce qui est chargé."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "Aucune référence de clé de fournisseur ajoutée",
+      "description": "Ajoutez une référence de clé API ou d’espace de travail à partir de son identifiant chez le fournisseur ; la console n’accepte ni ne stocke la valeur du secret."
+    },
+    "models": {
+      "title": "Aucun modèle gouverné observé",
+      "description": "Les modèles rejoignent le parc lorsqu’un connecteur émet un enregistrement de coût indiquant le fournisseur et le modèle utilisés."
+    }
+  },
+  "residency": {
+    "title": "Résidence par workspace",
+    "description": "Où chaque workspace traite l'inférence et où ses données reposent, tel que le fournisseur le rapporte.",
+    "empty": "Aucun workspace ne rapporte de paramètres de résidence",
+    "unrestricted": "Le fournisseur ne rapporte aucune restriction",
+    "allowed": "Autorisées : {{geos}}",
+    "unreported": "non rapporté",
+    "defaultGeo": "par défaut : {{geo}}",
+    "atRest": "au repos : {{geo}}",
+    "truncated": "{{n}} workspaces chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus d'enregistrements de résidence que ceux affichés ; cette page prend des lignes par id — attribué à la création —, les suivantes manquent. Un workspace absent ici ne démontre pas que son traitement est sans restriction : il peut simplement se trouver au-delà de cette page."
+  },
+  "access": {
+    "title": "Model access rules",
+    "description": "Who may use which model, and where.",
+    "empty": "No access rules — every subject is unrestricted",
+    "groupsTitle": "Model groups",
+    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsEmpty": "No model groups",
+    "members": "{{n}} members",
+    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "effect": {
+      "allow": "allow",
+      "forbid": "forbid"
+    },
+    "tenantWide": "tenant-wide",
+    "inWorkspace": "in {{ws}}",
+    "allSurfaces": "all surfaces",
+    "onSurfaces": "on {{list}}",
+    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
+    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "readOnlyNote": "Read-only: changing who may use a model requires models:model-access:admin, which is a higher tier than editing a routing policy.",
+    "truncated": "{{n}} règles chargées ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de règles d'accès que celles affichées ; cette page prend des lignes par id. Les marques de ces lignes ne reflètent QUE les règles chargées : des allow qui introduiraient un confinement ou ajouteraient des cibles autorisées peuvent manquer, et des forbid qui retirent de l'accès aussi — cette page peut donc paraître plus large OU plus étroite que la réalité, et un sujet sans aucune règle chargée n'apparaît même pas. N'en déduis pas l'accès effectif : le moteur parcourt toutes les pages avant de décider, et résout un principal par utilisateur, rôle et groupe à la fois, ce qu'une ligne ne peut pas montrer.",
+    "groupsTruncated": "{{n}} groupes chargés ; il y en a d'autres",
+    "groupsTruncatedHint": "Il y a plus de groupes de modèles que ceux affichés ; cette page prend des lignes par id. Un groupe absent ici ne démontre pas qu'il n'existe pas — une règle peut toujours le viser."
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "changes": [
+    { "teamId": "team_default", "changeOrigin": "PURCHASE", "amount": { "val": "50.00" }, "createTime": "2026-06-01T00:00:00Z" },
+    { "teamId": "team_default", "changeOrigin": "SPEND", "amount": { "val": "-37.66" }, "createTime": "2026-06-15T00:00:00Z" }
+  ],
+  "total": { "val": "12.34" }
+}

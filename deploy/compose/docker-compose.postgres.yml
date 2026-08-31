@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Postgres (multi-tenant) override for the engine compose. Layer it ON TOP of the
+# base file:
+#   docker compose -f deploy/compose/docker-compose.yml \
+#                  -f deploy/compose/docker-compose.postgres.yml up -d
+#
+# It brings up a Postgres, provisions the least-privilege olivares_app role +
+# olivares database on first init (the canonical deploy/postgres/01-app-role.sql,
+# run with the app password by initdb/10-app-role.sh), and points the engine at
+# that NON-superuser role so the FORCE-RLS tenant backstop is real (docs/SECURITY-HARDENING.md —
+# the engine REFUSES to start against a superuser/BYPASSRLS role).
+#
+# Provide POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env (see
+# .env.example). The DSN is passed to the engine as an argument — for a hardened
+# production deployment prefer the Helm chart with a DSN Secret + sslmode=verify-full.
+services:
+  olivares:
+    command:
+      - serve
+      - --listen=:8443
+      - --grpc-listen=:8444
+      - --data-dir=/var/lib/olivares
+      - --checkpoint-interval=1h
+      - --engine=postgres
+      - --dsn=postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD in .env}@postgres:5432/olivares?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: ${OLIVARES_POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      # Consumed by the initdb hook to set the olivares_app role's password.
+      OLIVARES_DB_PASSWORD: ${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD in .env}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      # The canonical role SQL (read-only) + the initdb hook that runs it with -v app_password.
+      - ../postgres/01-app-role.sql:/sql/01-app-role.sql:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Direct exec (no shell dependency); pg_isready ships in the image.
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # sslmode=disable above is for the in-network compose demo only; production
+    # uses TLS + sslmode=verify-full (see deploy/helm).
+    security_opt:
+      - no-new-privileges:true
+    # Evaluation-grade Postgres bundled for convenience. A production multi-tenant
+    # deployment uses an external/managed Postgres with TLS (sslmode=verify-full)
+    # via the Helm chart — not this in-network demo container.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    restart: unless-stopped
+
+volumes:
+  pg-data:

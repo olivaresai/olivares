@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="5 3 25 27" fill="none" role="img" aria-label="Olivares AI">
+<!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- "Ledger O" mark — dark-ink variant (for light backgrounds). -->
+<defs>
+<linearGradient id="mli" gradientUnits="userSpaceOnUse" x1="16" y1="4" x2="16" y2="28"><stop offset="0" stop-color="#28282B"></stop><stop offset="1" stop-color="#3A3A3D"></stop></linearGradient>
+<linearGradient id="mlo" gradientUnits="userSpaceOnUse" x1="8" y1="13.4" x2="16.4" y2="15.8"><stop offset="0" stop-color="#FFA257"></stop><stop offset="0.5" stop-color="#F08000"></stop><stop offset="1" stop-color="#B45500"></stop></linearGradient>
+</defs>
+<path d="M16 5.5A10.5 10.5 0 0 1 16 26.5" stroke="url(#mli)" stroke-width="3" stroke-linecap="round"></path>
+<path d="M8.4 10.5H13.2" stroke="url(#mli)" stroke-width="2.6" stroke-linecap="round"></path>
+<path d="M8.4 14.5H15.4" stroke="url(#mlo)" stroke-width="3.1" stroke-linecap="round"></path>
+<path d="M8.4 18.5H15" stroke="url(#mli)" stroke-width="2.6" stroke-linecap="round"></path>
+<path d="M8.4 22.5H13.4" stroke="url(#mli)" stroke-width="2.6" stroke-linecap="round"></path>
+</svg>

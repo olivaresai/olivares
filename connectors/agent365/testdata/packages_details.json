@@ -1,0 +1,20 @@
+{
+  "value": [
+    {
+      "id": "P_detail",
+      "displayName": "Detailed Agent",
+      "type": "custom",
+      "isBlocked": false,
+      "shortDescription": "Needs detail expansion",
+      "assetId": "asset-detail",
+      "availableTo": "some",
+      "deployedTo": "none"
+    },
+    {
+      "id": "P_missing",
+      "displayName": "Missing Detail Agent",
+      "type": "microsoft",
+      "isBlocked": false
+    }
+  ]
+}

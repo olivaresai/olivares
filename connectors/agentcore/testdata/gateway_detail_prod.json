@@ -1,0 +1,10 @@
+{
+  "gatewayId": "gw-prod",
+  "gatewayArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:gateway/gw-prod",
+  "name": "production-gateway",
+  "status": "ACTIVE",
+  "policyConfiguration": {
+    "policyEngineArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-alpha",
+    "enforcementMode": "ENFORCE"
+  }
+}

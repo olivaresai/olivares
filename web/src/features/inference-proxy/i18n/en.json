@@ -1,0 +1,96 @@
+{
+  "title": "Inference proxy",
+  "description": "The per-tenant policy-enforcing proxy in front of every model call: request/response gates, egress DLP rules, and device-authorization approvals.",
+  "config": {
+    "title": "Gates & ceilings",
+    "intro": "Each gate is enforced on the request path before the model call. Turning one off stops enforcing that check; the change is recorded in the audit ledger.",
+    "failOpen": "Fail open",
+    "failOpenHint": "When the proxy cannot reach a policy decision, allow the call instead of blocking it. Off = fail closed.",
+    "recordMandatory": "Require recording",
+    "recordMandatoryHint": "Refuse a call that cannot be recorded to the session ledger.",
+    "gates": {
+      "gate_model_access": "Model access",
+      "gate_budget": "Budget",
+      "gate_residency": "Residency",
+      "gate_context_window": "Context window",
+      "gate_dlp_request": "Request DLP",
+      "gate_dlp_response": "Response DLP"
+    },
+    "gatesHint": {
+      "gate_model_access": "Enforce which models each subject may call.",
+      "gate_budget": "Enforce budget ceilings before the call accrues cost.",
+      "gate_residency": "Enforce the tenant's data-residency region.",
+      "gate_context_window": "Enforce the per-surface context-window ceiling.",
+      "gate_dlp_request": "Scan the outbound request for disallowed classifications.",
+      "gate_dlp_response": "Scan the model response per the response-DLP mode."
+    },
+    "responseDlpMode": "Response DLP mode",
+    "responseDlpModeHint": "How the response DLP handles a match: off (no scan), flag (annotate), or buffer (hold for scan before returning).",
+    "dlpModes": {
+      "off": "Off",
+      "flag": "Flag",
+      "buffer": "Buffer"
+    },
+    "ceilingsEnforce": "Enforce ceilings",
+    "ceilingsEnforceHint": "Cap per-call tokens, tool uses and task budget. Off = no per-call cap.",
+    "ceilingMaxTokens": "Max tokens",
+    "ceilingMaxToolUses": "Max tool uses",
+    "ceilingTaskBudget": "Task budget (tokens)",
+    "ceilingTaskBudgetHint": "0 = unset, otherwise at least {{min}}.",
+    "ceilingTaskBudgetError": "Must be 0 or at least {{min}}.",
+    "reset": "Reset",
+    "save": "Save configuration",
+    "saved": "Proxy configuration saved"
+  },
+  "dlp": {
+    "title": "Egress DLP rules",
+    "intro": "Map a content classification to allow or deny on egress. Classification runs server-side at the model call; these rules decide what a match does.",
+    "truncated": "Loaded {{n}} DLP rules; there are more",
+    "truncatedHint": "There are more DLP rules than shown; this page takes rows by id. A rule missing from this list does not prove it does not exist — egress may be governed by rules you cannot see here.",
+    "add": "Add rule",
+    "noRead": "You do not have permission to view DLP rules.",
+    "empty": "No DLP rules",
+    "emptyHint": "Add a rule to allow or deny a classification on egress.",
+    "colClass": "Classification",
+    "colAction": "Action",
+    "colNote": "Note",
+    "colActions": "Actions",
+    "actions": {
+      "allow": "Allow",
+      "deny": "Deny"
+    },
+    "editAction": "Edit rule for {{class}}",
+    "deleteAction": "Delete rule for {{class}}",
+    "created": "DLP rule created",
+    "updated": "DLP rule updated",
+    "deleted": "DLP rule deleted",
+    "deleteDialog": {
+      "title": "Delete DLP rule?",
+      "description": "This removes the egress rule for “{{class}}”. Matching content will fall back to the default handling.",
+      "confirm": "Delete rule"
+    },
+    "dialog": {
+      "title": "Add DLP rule",
+      "editTitle": "Edit DLP rule",
+      "subtitle": "A classification is allowed or denied on egress. The rule is keyed by its classification.",
+      "class": "Classification",
+      "classHint": "The content classification this rule applies to (e.g. pii, secret).",
+      "action": "Action",
+      "note": "Note",
+      "create": "Add rule",
+      "save": "Save rule"
+    }
+  },
+  "device": {
+    "title": "Device authorization",
+    "intro": "Approve or deny a device-authorization request by its user code (the code shown on the device pairing screen).",
+    "userCode": "User code",
+    "userCodePlaceholder": "e.g. WDJB-MJHT",
+    "approve": "Approve",
+    "deny": "Deny",
+    "approved": "Approved device code {{code}}",
+    "denied": "Denied device code {{code}}",
+    "notFound": "No pending request for that user code.",
+    "expired": "That request has expired or was already used."
+  }
+}

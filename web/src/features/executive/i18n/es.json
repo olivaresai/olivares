@@ -1,0 +1,112 @@
+{
+  "title": "Visión ejecutiva",
+  "description": "Coste, uso, riesgo y cumplimiento de un vistazo; baja a la vista operativa para el detalle.",
+  "asOfNote": "Riesgo, cumplimiento y fiabilidad reflejan el estado actual; el coste abarca el rango seleccionado.",
+  "range": {
+    "label": "Rango",
+    "7d": "Últimos 7 días",
+    "30d": "Últimos 30 días",
+    "90d": "Últimos 90 días",
+    "mtd": "Mes en curso"
+  },
+  "export": {
+    "action": "Exportar PDF",
+    "hint": "Imprime o guarda este informe en PDF"
+  },
+  "report": {
+    "title": "Informe ejecutivo",
+    "generated": "Generado el {{date}}",
+    "generatedLabel": "Generado",
+    "tenant": "Organización",
+    "allOrgs": "Todas las organizaciones",
+    "range": "Rango de coste",
+    "footer": "Plano de control de Olivares AI — solo KPIs agregados; sin cargas útiles ni secretos."
+  },
+  "empty": {
+    "title": "No hay KPIs ejecutivos disponibles",
+    "description": "No tienes acceso de lectura a ninguna de las fuentes de coste, riesgo, cumplimiento o fiabilidad de esta organización."
+  },
+  "restricted": {
+    "label": "Restringido",
+    "hint": "Tu rol no puede leer esta fuente."
+  },
+  "pillars": {
+    "cost": "Gasto",
+    "costCaption": "en el rango seleccionado",
+    "usage": "Agentes activos",
+    "usageCaption": "{{live}} en vivo · {{entities}} rastreados",
+    "risk": "Riesgo abierto",
+    "riskCaption": "{{count}} críticos/altos",
+    "silentEvasion": "{{count}} en evasión silenciosa",
+    "compliance": "Cobertura de controles",
+    "complianceCaption": "{{gap}} brechas · {{unmapped}} sin mapear"
+  },
+  "cost": {
+    "title": "Coste",
+    "trendTitle": "Tendencia de gasto",
+    "trendDescription": "Gasto diario en tokens durante el rango seleccionado.",
+    "seriesCost": "Gasto",
+    "forecast": "Previsión",
+    "atRunRate": "proyectado (tendencia de ventana móvil)",
+    "runRateNote": "Proyección a partir de la tendencia diaria de la ventana móvil, escalada al resto del periodo; no es un modelo de previsión.",
+    "deltaUp": "{{pct}} respecto al periodo anterior",
+    "deltaDown": "{{pct}} respecto al periodo anterior",
+    "deltaFlat": "estable respecto al periodo anterior",
+    "tokens": "Tokens",
+    "samples": "Registros de coste",
+    "models": "Modelos activos",
+    "breakdownTitle": "Desglose de gasto",
+    "breakdownDescription": "A dónde va el gasto; resume por equipo, proyecto, agente, modelo o proveedor.",
+    "noAttribution": "Sin atribución para esta dimensión en el rango seleccionado."
+  },
+  "dimensions": {
+    "team": "Por equipo",
+    "project": "Por proyecto",
+    "agent": "Por agente",
+    "model": "Por modelo",
+    "provider": "Por proveedor"
+  },
+  "risk": {
+    "title": "Postura de riesgo",
+    "description": "Hallazgos de seguridad abiertos, robustez adversarial y deriva de accesos.",
+    "openFindings": "Hallazgos abiertos",
+    "bySeverity": "Hallazgos por severidad",
+    "robustness": "Robustez red-team",
+    "robustnessCaption": "última ejecución completada",
+    "robustnessPending": "Ejecución pendiente",
+    "robustnessPendingHint": "La ejecución red-team más reciente no pudo completar sus pruebas; no es un aprobado.",
+    "drift": "Deriva de accesos",
+    "driftFirm": "Accesos inesperados",
+    "driftPending": "A la espera de vínculo de identidad",
+    "driftUnused": "Permisos sin usar",
+    "coverageNote": "Parte del acceso se observa con cobertura parcial (captura aproximada u opaca); las cifras de deriva son un mínimo.",
+    "noFindings": "Sin hallazgos abiertos.",
+    "noRuns": "Aún no hay ejecuciones red-team."
+  },
+  "compliance": {
+    "title": "Cumplimiento",
+    "description": "Estado de los controles en los marcos que sigues — cobertura de controles, nunca una afirmación de cumplimiento.",
+    "coverage": "Cobertura de controles",
+    "ofControls": "de {{total}} controles en {{frameworks}} marcos",
+    "satisfied": "Satisfecho",
+    "byDesign": "Por diseño",
+    "partial": "Parcial",
+    "gap": "Brecha",
+    "unmapped": "Sin mapear",
+    "frameworks": "Marcos",
+    "riskTiers": "Niveles de riesgo de agentes",
+    "noFrameworks": "Aún no hay marcos mapeados."
+  },
+  "reliability": {
+    "title": "Fiabilidad",
+    "description": "Salud de agentes y MCP ahora mismo, e incidencias abiertas.",
+    "healthy": "Sano",
+    "degraded": "Degradado",
+    "down": "Caído",
+    "unknown": "Desconocido",
+    "slaBreaches": "Incumplimientos de SLA abiertos",
+    "incidents": "Incidencias abiertas",
+    "nowNote": "La salud es una instantánea puntual; \"desconocido\" significa que ningún chequeo lo vigila, no que esté sano.",
+    "noData": "Aún no hay chequeos de salud reportando."
+  }
+}

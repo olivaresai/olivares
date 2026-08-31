@@ -1,0 +1,16 @@
+{
+  "@odata.deltaLink": "https://graph.microsoft.com/v1.0/sites/site1/drive/root/delta?token=new-token",
+  "value": [
+    {
+      "id": "item-1",
+      "name": "doc.docx",
+      "lastModifiedDateTime": "2026-06-26T12:00:00Z",
+      "permissions": [{"grantedToV2": {"group": {"displayName": "Engineering"}}}],
+      "sensitivityLabel": {"displayName": "Internal"}
+    },
+    {
+      "id": "item-2",
+      "deleted": {"state": "deleted"}
+    }
+  ]
+}

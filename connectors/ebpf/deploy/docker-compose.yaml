@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+#
+# Reference Docker Compose wiring for a single Linux host (no Kubernetes). Same
+# privilege split as the DaemonSet: tetragon holds CAP_BPF + CAP_PERFMON and writes
+# its JSON export to a shared volume; the connector holds NO capabilities and only
+# reads that export. Pin image digests and scope the TracingPolicies before
+# production. The shared volume is the trust boundary — keep it off any other mount.
+services:
+  tetragon:
+    image: quay.io/cilium/tetragon:v1.0.0 # pin a digest in production
+    pid: "host"
+    cap_drop:
+      - ALL
+    cap_add:
+      - BPF # use SYS_ADMIN instead on pre-5.8 kernels
+      - PERFMON
+    security_opt:
+      - seccomp=unconfined # the sensor loads BPF; tighten with a custom profile
+    read_only: true
+    volumes:
+      - /sys/fs/bpf:/sys/fs/bpf
+      - export:/var/run/olivares
+      - ./tracingpolicy-file-access.yaml:/etc/tetragon/tetragon.tp.d/file.yaml:ro
+      - ./tracingpolicy-network.yaml:/etc/tetragon/tetragon.tp.d/network.yaml:ro
+    command:
+      - "--export-filename=/var/run/olivares/tetragon.log"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  ebpf-connector:
+    # Built from ../../../Dockerfile.ebpf-source. Use an immutable sha256 DIGEST in
+    # production: a :latest/floating tag on this host-privileged path is a
+    # rollback/substitution supply-chain vector (docs/SECURITY-HARDENING.md).
+    image: ghcr.io/olivaresai/ebpf-source:v0 # pin a @sha256:… digest in production
+    depends_on:
+      - tetragon
+    user: "65532:65532"
+    cap_drop:
+      - ALL
+    read_only: true
+    # The connector's settings are delivered by the engine as sdk.Config over the
+    # go-plugin channel, not via the environment. The settings that matter:
+    #   events_path = /var/run/olivares/tetragon.log   follow = true
+    #   detect_evasion = false (off until reviewed)
+    # This service illustrates the connector's zero-capability, read-only posture.
+    volumes:
+      - export:/var/run/olivares:ro # read-only: the connector never writes
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+volumes:
+  export: {}

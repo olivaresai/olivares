@@ -1,0 +1,94 @@
+# Olivares policy gate — reusable GitHub composite action.
+#
+# This is the CLIENT-SIDE gate: a customer drops it into their OWN workflow to run
+# the Olivares policy pack (OPA/Conftest + Kyverno, plus a best-effort
+# terraform lint) against their manifests / IaC before they merge or apply. It is
+# DISTINCT from the release pipeline (.github/workflows/release.yml), which
+# signs and publishes Olivares' own artifacts; this one runs in the consumer's CI.
+#
+# CONTRACT (verified against docs.github.com "Creating a composite action"):
+#   - top-level name/description, typed inputs, runs.using: "composite";
+#   - every run step declares shell:; the bundled helper is referenced through
+#     ${{ github.action_path }} and added to $GITHUB_PATH.
+# The gate EXITS NON-ZERO on any policy violation (run-gate.sh: set -e), which
+# fails the consumer's job — same guarantee as the GitLab component.
+#
+# CLI versions are PINNED via inputs (never `latest`) so a customer reproduces an
+# exact, reviewable gate.
+#
+# Usage in a consumer workflow:
+#   - uses: olivaresai/olivares/.github/actions/olivares-policy-gate@<tag>
+#     with:
+#       target: deploy/                 # required: the dir/file to scan
+#       policy_dir: deploy/policy        # default; the policy pack
+#       conftest_version: "0.56.0"
+#       kyverno_version: "1.13.2"
+#       fail_on_warn: "true"
+name: "Olivares policy gate"
+description: >-
+  Run the Olivares policy pack (OPA/Conftest + Kyverno, plus a
+  best-effort terraform fmt/validate) against a manifests/IaC directory. Exits
+  non-zero on any policy violation.
+
+inputs:
+  policy_dir:
+    description: >-
+      Directory holding the policy pack: a conftest/policy/ subdir
+      (OPA/Rego) and a kyverno/ subdir (Kyverno policies).
+    required: false
+    default: "deploy/policy"
+  target:
+    description: >-
+      The manifests / IaC directory or file to scan (e.g. deploy/ or a rendered
+      manifest). Both conftest and kyverno run against this path.
+    required: true
+  conftest_version:
+    description: >-
+      conftest release to install, WITHOUT the leading v (e.g. 0.56.0). Pinned;
+      never 'latest'. Confirm the latest stable on the conftest releases page and
+      set it explicitly.
+    required: false
+    default: "0.56.0"
+  kyverno_version:
+    description: >-
+      Kyverno CLI release to install, WITHOUT the leading v (e.g. 1.13.2). Pinned;
+      never 'latest'. Confirm the latest stable on the Kyverno releases page and
+      set it explicitly.
+    required: false
+    default: "1.13.2"
+  fail_on_warn:
+    description: >-
+      When 'true', pass --fail-on-warn to conftest so a warn-level rule also fails
+      the gate (default treats warns as non-fatal).
+    required: false
+    default: "false"
+
+outputs:
+  result:
+    description: "'pass' when the gate succeeded (the action only reaches here on success; a violation exits the job non-zero first)."
+    value: ${{ steps.gate.outputs.result }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Put the bundled gate helper on PATH
+      shell: bash
+      run: |
+        chmod +x "${{ github.action_path }}/scripts/run-gate.sh"
+        echo "${{ github.action_path }}/scripts" >> "$GITHUB_PATH"
+
+    - name: Run the Olivares policy gate
+      id: gate
+      shell: bash
+      env:
+        POLICY_DIR: ${{ inputs.policy_dir }}
+        TARGET: ${{ inputs.target }}
+        CONFTEST_VERSION: ${{ inputs.conftest_version }}
+        KYVERNO_VERSION: ${{ inputs.kyverno_version }}
+        FAIL_ON_WARN: ${{ inputs.fail_on_warn }}
+      run: |
+        # run-gate.sh installs the pinned conftest + kyverno CLIs, runs both
+        # policy engines (and the best-effort terraform leg) against TARGET, and
+        # exits non-zero on any violation — which fails this step and the job.
+        bash "${{ github.action_path }}/scripts/run-gate.sh"
+        echo "result=pass" >> "$GITHUB_OUTPUT"

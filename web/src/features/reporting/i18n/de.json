@@ -1,0 +1,80 @@
+{
+  "title": "Berichte",
+  "description": "Governance-Berichte bei Bedarf erstellen und herunterladen sowie geplante Zustellungen verwalten.",
+  "catalog": {
+    "title": "Berichte auf Abruf",
+    "empty": "Keine Berichtstypen verfügbar.",
+    "colReport": "Bericht",
+    "colFormats": "Formate",
+    "colActions": "Aktionen",
+    "generate": "Erstellen"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "{{title}} erstellen",
+    "subtitle": "Format und Zeitraum wählen; der Bericht wird heruntergeladen, sobald er fertig ist.",
+    "format": "Format",
+    "from": "Von",
+    "to": "Bis",
+    "framework": "Framework",
+    "frameworkHint": "Optional – die Nachweise auf ein einzelnes Compliance-Framework beschränken.",
+    "frameworkPlaceholder": "z. B. soc2",
+    "team": "Team",
+    "teamHint": "Optional – die Kostenaufschlüsselung auf ein einzelnes Team beschränken.",
+    "teamPlaceholder": "z. B. platform",
+    "download": "Herunterladen",
+    "done": "{{title}} erstellt.",
+    "failed": "Berichtserstellung fehlgeschlagen.",
+    "pdfUnavailable": "Die PDF-Ausgabe ist in dieser Edition nicht verfügbar. Wählen Sie HTML."
+  },
+  "schedules": {
+    "title": "Geplante Berichte",
+    "new": "Neue Planung",
+    "enterprise": "Geplante Berichte sind eine Enterprise-Funktion und in dieser Edition nicht aktiviert.",
+    "empty": "Noch keine geplanten Berichte.",
+    "colReport": "Bericht",
+    "colCron": "Cron",
+    "colStatus": "Status",
+    "colActions": "Aktionen",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "delete": "Planung löschen",
+    "deleted": "Planung gelöscht.",
+    "newTitle": "Neuer geplanter Bericht",
+    "newSubtitle": "Der Bericht wird gemäß dem Cron-Rhythmus erstellt und zum Download bereitgehalten.",
+    "report": "Bericht",
+    "cron": "Cron-Ausdruck",
+    "cronHint": "Ein Standard-Cron mit 5 Feldern, z. B. 0 8 * * 1 (montags um 08:00).",
+    "create": "Erstellen",
+    "created": "Planung erstellt."
+  },
+  "enterprise": {
+    "title": "Enterprise-Berichte",
+    "description": "Live-Compliance-Status, die Risikozusammenfassung für die Leitung und das signierte Audit-Nachweispaket.",
+    "request": "Anfordern",
+    "done": "Bericht heruntergeladen",
+    "seam": "Dieser Bericht liegt in einem Add-on, das mit dieser Installation nicht verknüpft ist. Es ist nichts defekt.",
+    "posture": {
+      "title": "Compliance-Status",
+      "description": "Status je Rahmenwerk und Kontrolle, live berechnet."
+    },
+    "risk": {
+      "title": "Risikozusammenfassung",
+      "description": "Die einseitige Risikoübersicht für die Leitung."
+    },
+    "bundle": {
+      "title": "Nachweispaket",
+      "description": "Das SIGNIERTE Audit-Nachweispaket — was Sie einem externen Prüfer übergeben."
+    }
+  },
+  "runs": {
+    "open": "Verlauf",
+    "title": "Ausführungsverlauf",
+    "description": "Jede aufgezeichnete Ausführung dieses Zeitplans: wann sie lief und, falls sie fehlschlug, warum.",
+    "notAnArchive": "Anbieter begrenzen diese Liste und entfernen alte Läufe — sie ist eine betriebliche Hilfe, kein Archiv. Eine kurze Liste bedeutet nicht, dass der Zeitplan nur wenige Male lief.",
+    "empty": "Keine Läufe aufgezeichnet"
+  }
+}

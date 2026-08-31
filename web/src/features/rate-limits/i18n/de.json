@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "{{n}} Befunde geladen; es gibt weitere",
+    "hint": "Die Rate-Limit-Zusammenfassung wurde nur in den geladenen Befunden gesucht. Eine fehlende Zusammenfassung kann auf einer späteren Seite liegen."
+  },
+  "title": "Ratenbegrenzungen",
+  "description": "Schreibgeschütztes Inventar der auf Organisations- und Arbeitsbereichsebene geltenden Ratenbegrenzungen, die ein Gateway oder Proxy synchron halten muss. Bezogen aus der Anthropic Rate Limits API (schreibgeschützt); diese Ansicht ändert niemals eine Begrenzung.",
+  "caveats": {
+    "keepInSync": "Gateways/Proxys müssen synchron gehalten werden: Diese Begrenzungen bilden das Inventar, das ein vorgelagertes Gateway oder ein Proxy spiegeln muss. Sie werden hier nicht durchgesetzt, und ihre Änderung erfolgt beim Anbieter, nicht in dieser Konsole.",
+    "managedAgents": "Managed Agents werden NICHT von der Rate Limits API abgedeckt. Ihre Begrenzungen sind eine dokumentierte Lücke, kein Wert von null — es wird keine Zeile für Managed Agents angezeigt, weil die API keine meldet."
+  },
+  "summary": {
+    "title": "Synchronisierungsstatus",
+    "description": "Wie viele Ratenbegrenzungen ein Gateway oder Proxy synchron halten muss, gemäß der schreibgeschützten Governance-Erfassung."
+  },
+  "count": {
+    "label": "Synchron zu haltende Begrenzungen",
+    "observedAt": "Beobachtet {{at}}",
+    "unknown": "Anzahl nicht verfügbar"
+  },
+  "degraded": {
+    "title": "Governance-Erfassung der Admin-API nicht verfügbar",
+    "hint": "Diese Bereitstellungsoberfläche (zum Beispiel ein Bedrock-, Vertex- oder Foundry-Gateway) stellt die Anthropic Admin API nicht bereit, sodass das Inventar der Ratenbegrenzungen hier nicht gelesen werden kann. Dies ist eine ehrliche Nichtverfügbarkeit, kein leeres Inventar."
+  },
+  "inventory": {
+    "title": "Inventar pro Limitwert",
+    "description": "Jeder vom Anbieter gemeldete Limitwert, gruppiert nach Geltungsbereich: zuerst organisationsweite Gruppen, dann Override-Gruppen pro Arbeitsbereich.",
+    "unavailable": "Inventar nicht verfügbar",
+    "unavailableHint": "Der schreibgeschützte Admin-Konnektor ist nicht verkabelt, sodass das Inventar pro Limitwert hier nicht gelesen werden kann. Dies ist eine ehrliche Nichtverfügbarkeit, kein leeres Inventar.",
+    "tableLabel": "Inventar der Ratenbegrenzungen",
+    "empty": "Keine Ratenbegrenzungen gemeldet",
+    "emptyHint": "Der Anbieter hat für diese Organisation keine Limitwert-Einträge zurückgegeben.",
+    "scope": {
+      "org": "Organisation"
+    },
+    "columns": {
+      "scope": "Geltungsbereich",
+      "groupType": "Gruppe",
+      "models": "Modelle",
+      "limiterType": "Limittyp",
+      "value": "Wert",
+      "orgLimit": "Org.-Limit"
+    }
+  },
+  "groupType": {
+    "model_group": "Modellgruppe",
+    "batch": "Stapel",
+    "token_count": "Token-Anzahl",
+    "files": "Dateien",
+    "skills": "Skills",
+    "web_search": "Websuche"
+  },
+  "limitType": {
+    "requests_per_minute": "Anfragen pro Minute",
+    "input_tokens_per_minute": "Eingabe-Tokens pro Minute",
+    "output_tokens_per_minute": "Ausgabe-Tokens pro Minute",
+    "enqueued_batch_requests": "Eingereihte Batch-Anfragen"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "Noch keine Ratenbegrenzungen gemeldet",
+      "description": "Einträge erscheinen, sobald die schreibgeschützte Anthropic Rate Limits API dieser Organisation Begrenzungen je Limiter meldet."
+    }
+  },
+  "effectiveState": {
+    "label": "Was Sie hier ändern können:",
+    "proxy": "Inferenz-Proxy",
+    "finops": "Ausgaben"
+  }
+}

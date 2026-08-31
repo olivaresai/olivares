@@ -1,0 +1,10 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "audit_log-1", "type": "api_key.created", "effective_at": 1717200000, "actor": { "type": "session", "session": { "ip_address": "203.0.113.9", "user": { "id": "user_admin", "email": "admin@example.com" } }, "api_key": {} }, "project": { "id": "proj_codex", "name": "Codex" } },
+    { "id": "audit_log-2", "type": "login.succeeded", "effective_at": 1717203600, "actor": { "type": "session", "session": { "ip_address": "203.0.113.10", "user": { "id": "user_alice", "email": "alice@example.com" } }, "api_key": {} }, "project": { "id": "proj_codex", "name": "Codex" } }
+  ],
+  "has_more": false,
+  "first_id": "audit_log-1",
+  "last_id": "audit_log-2"
+}

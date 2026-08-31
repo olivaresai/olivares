@@ -1,0 +1,16 @@
+apiVersion: ops.olivares.ai/v1alpha1
+kind: ControlPlane
+metadata:
+  name: prod
+status:
+  phase: Progressing
+  conditions:
+    - type: Available
+      status: "True"
+      message: previous replica still serving
+    - type: Progressing
+      status: "True"
+      message: rolling out new image
+    - type: Degraded
+      status: "False"
+      message: no degradation detected

@@ -1,0 +1,5 @@
+{"timestamp":"2026-06-03 10:23:45.123 UTC","user":"claude_rw","dbname":"salesdb","application_name":"claude-agent-7","message":"AUDIT: SESSION,1,1,READ,SELECT,TABLE,public.customers,SELECT c.id FROM customers c WHERE c.id = $1,1"}
+{"timestamp":"2026-06-03 10:23:46.200 UTC","user":"claude_rw","dbname":"salesdb","application_name":"claude-agent-7","message":"AUDIT: SESSION,2,1,WRITE,INSERT,TABLE,public.orders,\"INSERT INTO orders (id, total, note) VALUES ($1, $2, 'x,y')\",3 args"}
+{"timestamp":"2026-06-03 10:23:47.050 UTC","user":"etl_pool","dbname":"salesdb","application_name":"","message":"AUDIT: SESSION,1,1,DDL,CREATE TABLE,TABLE,public.staging_2026,CREATE TABLE staging_2026 (LIKE orders),<not logged>"}
+{"timestamp":"2026-06-03 10:23:48.000 UTC","user":"etl_pool","dbname":"salesdb","application_name":"","message":"AUDIT: SESSION,2,1,MISC,SET,,,SET search_path = public,<none>"}
+{"timestamp":"2026-06-03 10:23:49.000 UTC","user":"postgres","dbname":"salesdb","application_name":"psql","message":"connection authorized: user=postgres database=salesdb"}

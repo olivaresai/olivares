@@ -1,0 +1,147 @@
+{
+  "title": "Artefactos de agente",
+  "subtitle": "Gobierna el registro global del tenant, la postura consignada y el BOM de cadena de suministro de los artefactos que ejecutan los agentes.",
+  "intro": "Este registro almacena únicamente identidad, procedencia y postura consignada — nunca cuerpos de skills, manifiestos ni texto de instrucciones.",
+  "tabs": {
+    "registry": "Registro de artefactos",
+    "aibom": "AIBOM de cadena de suministro de agentes"
+  },
+  "classes": {
+    "skill": "Skill",
+    "mcpb_extension": "Extensión MCPB",
+    "mcp_app_template": "Plantilla MCP App",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "Sí",
+    "no": "No"
+  },
+  "registry": {
+    "title": "Artefactos registrados",
+    "description": "Identidades del parque del tenant, declaraciones de procedencia y resultados de escáner consignados.",
+    "new": "Registrar artefacto",
+    "created": "Artefacto registrado.",
+    "deleted": "Artefacto eliminado.",
+    "search": "Buscar artefactos registrados…",
+    "empty": "No hay artefactos registrados",
+    "emptyHint": "Un artefacto nunca registrado no está representado en el BOM de cadena de suministro de agentes.",
+    "filter": {
+      "label": "Clase de artefacto",
+      "all": "Todas las clases de artefacto"
+    },
+    "columns": {
+      "class": "Clase",
+      "name": "Nombre",
+      "version": "Versión",
+      "provenance": "Procedencia",
+      "posture": "Resultado de escaneo consignado",
+      "issues": "Incidencias",
+      "attestedAt": "Consignado"
+    },
+    "provenance": {
+      "claim": "Declaración del operador",
+      "verified": "Procedencia revisada",
+      "claimHint": "La procedencia es una declaración del operador y no se ha marcado como revisada.",
+      "verifiedHint": "El operador revisó la declaración de procedencia; esto no es una certificación de Olivares."
+    },
+    "posture": {
+      "notScanned": "Sin escanear",
+      "grade": "Calificación {{grade}}",
+      "recorded": "Resultado de escaneo consignado",
+      "hint": "Una calificación consigna lo que calificó un escáner de conector o lo que consignó un operador. La consola no ejecutó ningún escaneo."
+    },
+    "drawer": {
+      "description": "Metadatos almacenados en el registro y su estado de declaración frente a revisión.",
+      "identityNotice": "Solo se almacenan metadatos. No hay contenido del artefacto detrás de esta entrada.",
+      "postureNotice": "Una calificación de postura es un resultado de escaneo consignado, no un escaneo realizado por esta consola. Sin escanear es neutral, no un fallo.",
+      "id": "ID de registro",
+      "class": "Clase de artefacto",
+      "name": "Nombre",
+      "version": "Versión",
+      "provenance": "Procedencia",
+      "sourceRef": "Referencia de origen",
+      "contentHash": "Huella del contenido",
+      "posture": "Resultado de escaneo consignado",
+      "issues": "Incidencias consignadas",
+      "verified": "Estado de la procedencia",
+      "attestedBy": "Consignado por",
+      "attestedAt": "Fecha de consignación",
+      "note": "Nota"
+    },
+    "create": {
+      "title": "Registrar artefacto de agente",
+      "description": "Consigna los metadatos de identidad, procedencia y postura. El contenido del artefacto nunca se sube.",
+      "uniqueHint": "La clase y el nombre forman una identidad de registro única e inmutable. No existe ruta de actualización.",
+      "class": "Clase de artefacto",
+      "name": "Nombre",
+      "version": "Versión",
+      "provenance": "Declaración de procedencia",
+      "sourceRef": "Referencia de origen",
+      "contentHash": "Hash del contenido",
+      "contentAlg": "Algoritmo de hash",
+      "posture": "Resultado de escaneo consignado",
+      "issues": "Incidencias consignadas",
+      "issuesHint": "Número de incidencias del resultado consignado. Deshabilitado y a cero cuando no se ha escaneado.",
+      "verified": "Procedencia revisada por el operador",
+      "verifiedHint": "Esto atestigua que el operador revisó la declaración de procedencia; no es una certificación de Olivares.",
+      "note": "Nota",
+      "errorTitle": "El artefacto no se ha registrado",
+      "duplicateTitle": "Artefacto ya registrado",
+      "duplicate": "Ya existe un artefacto con esta clase y este nombre. No existe ruta de actualización; elige una identidad distinta o elimina antes la entrada existente."
+    },
+    "delete": {
+      "title": "Eliminar artefacto registrado",
+      "description": "¿Eliminar «{{name}}» del registro? Los futuros BOM en vivo ya no lo incluirán."
+    },
+    "truncated": "Cargados {{n}} artefactos; hay más",
+    "truncatedHint": "Hay más artefactos registrados de los que se ven; esta página coge filas por id —asignado al crear—, así que faltan las posteriores, normalmente lo registrado más recientemente. El filtro por clase lo aplica el MOTOR, o sea que vuelve a consultar; el buscador y la ordenación de la tabla actúan sólo sobre lo cargado. Que un artefacto no salga aquí no demuestra que esté sin registrar."
+  },
+  "aibom": {
+    "difference": "Este BOM de todo el parque cubre los artefactos de agente registrados; el AIBOM por modelo cubre el linaje de un modelo propio.",
+    "coverage": "La cobertura refleja lo que se registró: un artefacto nunca registrado no está representado.",
+    "live": {
+      "title": "BOM en vivo de la cadena de suministro de agentes",
+      "description": "Generado ahora — en vivo, sin sellar y sin auditar.",
+      "notice": "La previsualización genera un documento CycloneDX 1.6 nuevo a partir del registro actual. Es de solo lectura y no crea evidencia.",
+      "preview": "Previsualizar BOM en vivo",
+      "loading": "Generando BOM en vivo…",
+      "dialogTitle": "BOM en vivo de la cadena de suministro de agentes",
+      "dialogDescription": "Generado ahora a partir del registro. Este documento no está sellado ni auditado.",
+      "jsonLabel": "JSON CycloneDX en vivo",
+      "download": "Descargar BOM en vivo"
+    },
+    "seal": {
+      "action": "Sellar BOM actual",
+      "confirmTitle": "Sellar BOM de la cadena de suministro de agentes",
+      "confirmDescription": "Esto regenera el BOM y compromete su hash de contenido canónico en el libro mayor de auditoría. El libro mayor no archiva el documento.",
+      "confirmBody": "Conserva el recibo devuelto: su AIBOM es la única copia del documento sellado.",
+      "confirm": "Sellar y recibir el BOM",
+      "success": "BOM de la cadena de suministro de agentes sellado. Descarga ahora el BOM del recibo.",
+      "receiptTitle": "Recibo del BOM sellado",
+      "receiptDescription": "El compromiso de hash es duradero; este recibo contiene la única copia del documento sellado.",
+      "download": "Descargar BOM sellado"
+    },
+    "history": {
+      "title": "Historial de sellados",
+      "description": "Compromisos models.agent_aibom de solo anexado para el parque registrado de artefactos de agente.",
+      "empty": "No hay BOM de cadena de suministro de agentes sellados",
+      "emptyHint": "Sellar crea un compromiso de hash y devuelve la única copia del documento en su recibo.",
+      "loadError": "No se ha podido cargar el historial de sellados.",
+      "id": "ID de sellado",
+      "subject": "Sujeto",
+      "serial": "Número de serie",
+      "contentHash": "Hash del contenido",
+      "specVersion": "Versión de CycloneDX",
+      "components": "Componentes registrados",
+      "ledgerSeq": "Secuencia de auditoría previa",
+      "ledgerHash": "Cabecera de auditoría previa",
+      "scope": "Nota de cobertura",
+      "generatedBy": "Generado por",
+      "generatedAt": "Fecha de generación",
+      "noPriorHead": "{{seq}} (sin cabecera de auditoría previa)",
+      "truncated": "Cargados {{n}} precintos; hay más",
+      "truncatedHint": "Hay más AI-BOM precintados de los que se ven; esta página coge filas por id. Precintar AÑADE fila, así que lo que falta es normalmente la evidencia más reciente."
+    }
+  }
+}

@@ -1,0 +1,95 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# docs-site-artifact — builds docs-site and publishes its `dist/` as a run artifact.
+#
+# ============ WHY THIS EXISTS =================================================================
+# `docs-site` is built on every code push already: mainline-ci runs `npm --prefix docs-site test`,
+# and docs-site/package.json:20 chains `build` inside that script. So the bytes are produced today
+# and then THROWN AWAY — mainline-ci uploads no artifact at all (measured 2026-08-23: zero
+# `upload-artifact` steps in the whole workflow).
+#
+# That matters now because `docs.olivares.ai` resolves again and PLAN adjudicated (2026-08-23,
+# under order of the same day) that docs-site is to be served there. The two ways to do
+# that are wired in DIFFERENT repositories:
+#
+#   1 · the web Worker serves docs-site  -> the deploy lives in the web repo, and what it needs
+#       from here is exactly this: a versioned, inspectable `dist/`.
+#   2 · a Cloudflare Pages project owns docs.olivares.ai -> the deploy lives here, and it needs
+#       CLOUDFLARE_API_TOKEN, which this repository does NOT have
+#       (publish-enterprise-artifacts.yml:23 says so, and it is the only workflow that asks).
+#
+# This job is the half that is IDENTICAL in both, so it does not wait on that decision. What it
+# deliberately does NOT do is deploy: it has no credential, touches no remote and no DNS, and
+# cannot publish anything by accident.
+#
+# ⛔ DISPATCH ONLY, and for the reason publish-enterprise-artifacts.yml:18-21 already states for
+# its own job: producing something a deploy will later consume is deployment-class work, so
+# somebody asks for it by name. No push trigger, no tag, no schedule — a push trigger here would
+# also mean every prose commit under .github/ starts building a docs site nobody asked for.
+# ⛔ Y UNA PROPIEDAD DE ESTA FORMA QUE HAY QUE SABER ANTES DE FIARSE DE ELLA: un workflow
+# `workflow_dispatch` NO SE PUEDE DESPACHAR desde una rama. Medido al intentarlo, 2026-08-23:
+#
+#   gh workflow run docs-site-artifact.yml --ref hub/r25-docs-artifact
+#   HTTP 404: workflow docs-site-artifact.yml not found on the default branch
+#
+# ⇒ un workflow dispatch-only ATERRIZA SIN HABERSE EJERCITADO NUNCA, y su primera ejecución real
+# es en producción. No es descuido de nadie: es la forma. Y explica, en parte, por qué
+# release.yml y release-rehearsal.yml — dispatch-only y además gateados a OTROS repositorios —
+# llevan cero corridas en toda su vida.
+#
+# Lo que se hizo en su lugar, porque «no se puede probar» no autoriza «no se probó»:
+#   · los pasos de build NO son nuevos: mainline-ci ya corre `npm --prefix docs-site ci` y el
+#     `test` que encadena `build`, en verde, en cada push de código;
+#   · lo único nuevo es la guarda de abajo, y se probó fuera con sus tres controles —
+#     sin dist -> 1 · dist con 12 ficheros -> 1 · dist con 150 -> 0;
+#   · `task lint:actions` (actionlint), `lint:ci-timeout-arithmetic` y `lint:ci-ports`: verdes.
+name: docs-site-artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      # `npm ci`, never `npm install`: the lockfile is the input. The same call mainline-ci makes.
+      - name: install docs-site deps (locked)
+        run: npm --prefix docs-site ci
+
+      - name: build docs-site
+        run: npm --prefix docs-site run build
+
+      # A build that produced nothing must not upload an empty artifact and look like a success:
+      # "no he podido" is not "publicado", the rule this repository applies to its Cloudflare job.
+      - name: refuse an empty dist, and SAY so
+        run: |
+          set -u
+          if [ ! -d docs-site/dist ]; then
+            echo "::error::docs-site/dist does not exist after a build that exited 0. Nothing to upload."
+            exit 1
+          fi
+          n="$(find docs-site/dist -type f | wc -l)"
+          if [ "$n" -lt 100 ]; then
+            echo "::error::docs-site/dist has only ${n} file(s). The site is ~1000 pages; that is a"
+            echo "::error::broken build reported as a pass, not a small site."
+            exit 1
+          fi
+          echo "docs-site/dist: ${n} files"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5.0.0
+        with:
+          name: docs-site-dist-${{ github.sha }}
+          path: docs-site/dist
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,119 @@
+{
+  "severity": {
+    "label": "Severidad",
+    "info": "Info",
+    "low": "Baja",
+    "medium": "Media",
+    "high": "Alta",
+    "critical": "Crítica"
+  },
+  "outcome": {
+    "pass": "Pasa",
+    "fail": "Fallo",
+    "error": "Error",
+    "skipped": "Omitido",
+    "blocked": "Bloqueado",
+    "refused": "Rechazado",
+    "complied": "Cumplido",
+    "leaked": "Filtrado"
+  },
+  "verdict": {
+    "allow": "Permitir",
+    "flag": "Marcar",
+    "block": "Bloquear",
+    "detective": "Detective",
+    "enforced": "Aplicado"
+  },
+  "integrity": {
+    "verified": "Integridad verificada",
+    "failed": "Integridad fallida",
+    "unavailable": "Firma no disponible",
+    "pending": "Aún no atestado",
+    "tamperEvident": "A prueba de manipulación",
+    "chainOk": "Cadena hash consistente",
+    "chainBroken": "Cadena rota en seq {{seq}}",
+    "reverifyHint": "Cada evento lleva seq · hash · prev_hash para re-verificar el enlace sin conexión.",
+    "attestedSeq": "Atestado hasta seq {{seq}}",
+    "headSeq": "Cabeza del ledger seq {{seq}}"
+  },
+  "consent": {
+    "registered": "Registrado",
+    "authorized": "Autorizado",
+    "revoked": "Revocado",
+    "notAuthorizedHint": "Registrar no es consentimiento — el run se bloquea hasta autorizar el target."
+  },
+  "risk": {
+    "unacceptable": "Inaceptable",
+    "high": "Alto",
+    "limited": "Limitado",
+    "minimal": "Mínimo",
+    "suggested": "Sugerido",
+    "approved": "Aprobado",
+    "overridden": "Anulado"
+  },
+  "control": {
+    "satisfied": "Satisfecho",
+    "by_design": "Listo por diseño",
+    "partial": "Parcial",
+    "gap": "Brecha",
+    "unmapped": "Sin mapear",
+    "operational": "Operacional",
+    "architectural": "Arquitectónico"
+  },
+  "hash": {
+    "fingerprint": "Huella",
+    "hint": "Una huella unidireccional — nunca un payload (dato mínimo).",
+    "copy": "Copiar valor completo",
+    "copied": "Copiado"
+  },
+  "notices": {
+    "truncated": "Datos parciales",
+    "truncatedHint": "Este agregado alcanzó el tope de escaneo — es parcial, no un total exacto.",
+    "selfAudited": "Lectura privilegiada — registrada en el ledger de auditoría.",
+    "seam": "Aún sin cablear",
+    "seamBody": "Contrato declarado — {{what}} aún no está conectado al backend, así que esto muestra la forma declarada, no datos en vivo.",
+    "minimalData": "Solo agregados y metadatos — sin prompts, salidas ni secretos.",
+    "declared": "Referencia declarada",
+    "noConnector": "Sin conector — ausente, no cero.",
+    "listTruncated": "Cargadas {{n}} filas; hay más",
+    "listTruncatedHint": "El motor devolvió una página, no el conjunto entero. El total NO se puede inferir de las filas cargadas, y pueden existir filas que no se muestran."
+  },
+  "badges": {
+    "signed": "Firmado",
+    "linked": "Cadena de custodia",
+    "governed": "Gobernado",
+    "ungoverned": "Sin gobernanza",
+    "approximate": "Aproximada",
+    "attributed": "Atribuida",
+    "isolated": "Aislado",
+    "destroyed": "Destruido"
+  },
+  "timeline": {
+    "title": "Cronología reconstruida",
+    "empty": "Sin eventos en el rango.",
+    "seq": "seq"
+  },
+  "consumption": {
+    "projected": "proyectado {{pct}}",
+    "label": "Consumo del presupuesto",
+    "valueText": "{{consumed}} consumido, {{projected}} previsto"
+  },
+  "disclaimers": {
+    "report": "Correspondencia técnica del estado de los controles, derivada de la evidencia observada en la plataforma. NO es una certificación NI asesoramiento jurídico."
+  },
+  "gate": {
+    "approved": "Aprobado",
+    "pending": "Pendiente",
+    "rejected": "Rechazado",
+    "expired": "Caducado",
+    "no_gate": "Sin gate",
+    "not_required": "No requerido",
+    "approvedHint": "El gobierno aprobó este plan — ejecuta para continuar.",
+    "pendingHint": "A la espera de una decisión de gobierno (denegado por defecto).",
+    "rejectedHint": "El gobierno rechazó este plan — vuelve a solicitarlo con un plan nuevo.",
+    "expiredHint": "La aprobación caducó — vuelve a planificar y a solicitar.",
+    "no_gateHint": "No hay ningún gate de aprobación configurado — la acción no puede continuar.",
+    "not_requiredHint": "Esta acción no requiere aprobación.",
+    "displayNotice": "El estado del gate es una decisión informada que solo se muestra aquí. La autorización se aplica en el servidor; la consola nunca concede acceso a partir de este valor."
+  }
+}

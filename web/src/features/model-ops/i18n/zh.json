@@ -1,0 +1,423 @@
+{
+  "title": "模型运维",
+  "subtitle": "治理自有模型及其签名模型准入与本地推理部署。",
+  "tabs": {
+    "owned": "自有模型",
+    "admission": "准入",
+    "deployments": "部署",
+    "datasets": "数据集",
+    "finetune": "微调作业",
+    "evidence": "AIBOM 封存"
+  },
+  "owned": {
+    "title": "自有模型",
+    "description": "你所拥有模型的受治理注册表——托管、微调或导入的模型。",
+    "new": "新建模型",
+    "search": "搜索模型…",
+    "created": "模型已创建。",
+    "updated": "模型已更新。",
+    "deleted": "模型已删除。",
+    "newTitle": "新建自有模型",
+    "editTitle": "编辑自有模型",
+    "formBody": "登记一个你拥有的模型。仅治理元数据——绝不包含机密。",
+    "deleteTitle": "删除自有模型",
+    "deleteBody": "删除“{{name}}”？其版本及血缘引用将被移除。此操作记录在审计账本中。",
+    "columns": {
+      "name": "名称",
+      "kind": "类型",
+      "provider": "提供方",
+      "visibility": "可见性",
+      "status": "状态"
+    },
+    "drawer": {
+      "subtitle": "概览、版本及各版本准入证据。"
+    },
+    "form": {
+      "name": "名称",
+      "kind": "类型",
+      "status": "状态",
+      "baseRef": "基础引用",
+      "providerRef": "提供方引用",
+      "visibility": "可见性",
+      "ownerRef": "所有者引用",
+      "note": "备注"
+    },
+    "truncated": "已加载 {{n}} 个模型；还有更多",
+    "truncatedHint": "已登记的模型多于此处所示；本页按行 id（创建时分配）取数，因此更靠后的会缺失，通常是最近登记的。表格的搜索与排序仅作用于已加载的内容。模型未列在此处，并不能证明它未登记。"
+  },
+  "versions": {
+    "title": "版本",
+    "new": "新建版本",
+    "admit": "准入",
+    "empty": "尚无版本",
+    "emptyHint": "创建一个版本以登记制品并准入其签名。",
+    "created": "版本已创建。",
+    "deleted": "版本已删除。",
+    "newTitle": "新建模型版本",
+    "formBody": "版本一经创建即不可变——先登记，再准入其签名制品。",
+    "deleteTitle": "删除版本",
+    "deleteBody": "删除版本“{{version}}”？其准入裁定将被移除。此操作记录在审计账本中。",
+    "form": {
+      "version": "版本",
+      "status": "状态",
+      "artifactRef": "制品引用",
+      "parentRef": "父级引用",
+      "sourceRef": "来源引用",
+      "note": "备注"
+    },
+    "truncated": "已加载 {{n}} 个版本；还有更多",
+    "truncatedHint": "该模型的版本多于此处所示；本页按行 id 取数，更靠后的可能缺失。在此看不到的版本，也是无法从本界面到达其准入证据的版本。",
+    "loadError": "无法读取版本列表——这不等于“没有版本”"
+  },
+  "deployments": {
+    "title": "部署",
+    "description": "跨所有模型的本地推理部署。受准入门控治理。",
+    "new": "新建部署",
+    "search": "搜索部署…",
+    "created": "部署已创建。",
+    "updated": "部署已更新。",
+    "deleted": "部署已删除。",
+    "governed": "受治理",
+    "newTitle": "新建部署",
+    "editTitle": "编辑部署",
+    "formBody": "将运行时指向一个受治理的模型版本。保存时强制执行准入。",
+    "deleteTitle": "删除部署",
+    "deleteBody": "删除“{{name}}”？此操作记录在审计账本中。",
+    "deniedTitle": "被准入拦截",
+    "deniedHint": "在当前信任锚下准入所引用的版本，然后重试——你的输入会被保留。",
+    "columns": {
+      "name": "名称",
+      "runtime": "运行时",
+      "version": "版本",
+      "governed": "受治理",
+      "status": "状态"
+    },
+    "filters": {
+      "allRuntimes": "所有运行时",
+      "allStatuses": "所有状态"
+    },
+    "form": {
+      "name": "名称",
+      "runtime": "运行时",
+      "status": "状态",
+      "ownedRef": "模型引用",
+      "versionRef": "版本引用",
+      "endpointRef": "端点引用",
+      "governed": "受治理",
+      "governedHint": "一个声明性的姿态标志——并非准入绕过。",
+      "note": "备注",
+      "deploymentType": "部署类型",
+      "deploymentTypeHint": "Local 提供自托管的模型版本并受准入控制；brokered 调用托管的提供方，不受准入控制。",
+      "providerRef": "提供方端点",
+      "providerHint": "此部署所代理的托管提供方（例如 API 端点）。"
+    },
+    "types": {
+      "local": "Local（自托管）",
+      "brokered": "Brokered（托管提供方）"
+    },
+    "truncated": "已加载 {{n}} 个部署；还有更多",
+    "truncatedHint": "部署多于此处所示；本页按行 id 取数。运行时与状态筛选由引擎执行并重新查询——截断作用于已筛选的集合。部署未列在此处，并不能证明没有任何东西在运行。 表格的搜索与排序仅作用于已加载的内容。"
+  },
+  "policy": {
+    "title": "准入策略",
+    "description": "用于签名模型准入的租户信任策略。签名方法由你的配置推导得出。",
+    "edit": "编辑策略",
+    "editTitle": "编辑准入策略",
+    "editBody": "编写信任锚。原子性保存；引擎始终是最终权威。",
+    "loadError": "无法加载准入策略。",
+    "saved": "准入策略已保存。",
+    "mode": "推导模式",
+    "derivedMode": "推导签名模式",
+    "requireSigned": "要求签名模型",
+    "requireSignedHint": "强制执行：拒绝部署任何没有经验证准入裁定的版本。",
+    "requireDigests": "要求制品摘要",
+    "requireDigestsHint": "此外要求对签名制品进行磁盘上的重新哈希以匹配。",
+    "identities": "允许的身份",
+    "identitiesHint": "每行一个签名者身份正则表达式（Sigstore keyless）。",
+    "issuers": "允许的颁发者",
+    "issuersHint": "每行一个 OIDC 颁发者 URL。必须与身份一同设置，否则两者都不设置。",
+    "trustedRoots": "受信根",
+    "trustedRootsHint": "PEM CA 证书（Fulcio 或私有 PKI）。仅限公开材料。",
+    "trustedKeys": "受信密钥",
+    "trustedKeysHint": "用于 bare-key 签名的 PEM 公钥。仅限公开材料。",
+    "note": "备注",
+    "on": "开",
+    "off": "关",
+    "attestedBy": "证明者",
+    "attestedAt": "证明时间",
+    "confirmTitle": "确认信任变更",
+    "confirmBody": "启用强制执行或移除某个信任锚，可能导致后续部署的创建与更新失败，直到受影响的版本被重新准入。是否继续？",
+    "state": {
+      "unconfigured": {
+        "title": "观察模式——未配置",
+        "body": "尚未设置策略。准入裁定会被记录，但不会拒绝任何操作。"
+      },
+      "observe": {
+        "title": "观察模式",
+        "body": "已配置策略但强制执行处于关闭状态。裁定会被记录；部署不会被拒绝。"
+      },
+      "enforce": {
+        "title": "强制模式",
+        "body": "部署没有经验证且仍受锚定的准入裁定的版本将被拒绝。"
+      }
+    },
+    "err": {
+      "privateKey": "信任材料必须是公开的——请移除任何 PRIVATE KEY 块。",
+      "pemResidual": "请删除不完整的 PEM 块——只会保存完整的 BEGIN…END 块。",
+      "anchorMissing": "强制执行至少需要一个受信根或密钥。",
+      "identityIssuer": "身份与颁发者必须一同设置，否则两者都不设置。"
+    }
+  },
+  "verdicts": {
+    "title": "准入裁定",
+    "description": "已记录的当前裁定，每个版本一条——重新准入是替换而非新增行。没有尝试记录的版本不会出现在此处。",
+    "search": "搜索裁定…",
+    "reAdmit": "重新准入",
+    "drawerSubtitle": "已记录的裁定——每一项真值独立呈现。",
+    "columns": {
+      "version": "版本",
+      "posture": "姿态",
+      "method": "方法",
+      "roots": "签名者根",
+      "tlog": "透明日志",
+      "attestedAt": "记录时间"
+    },
+    "filters": {
+      "all": "全部",
+      "verified": "仅已验证",
+      "unverified": "仅未验证"
+    },
+    "truncated": "已加载 {{n}} 条裁定；还有更多",
+    "truncatedHint": "准入裁定多于此处所示；本页按行 id 取数。每个版本只有一条裁定——重新准入是替换而非新增行，且 id 保留首次尝试的位置——因此此处缺失的版本未必未获准入。"
+  },
+  "admit": {
+    "title": "准入一个签名模型",
+    "reAdmitTitle": "在当前信任下重新准入",
+    "body": "验证并记录版本 {{version}} 的签名。无论是否准入，已记录的裁定即为证据。",
+    "bundle": "签名捆绑包",
+    "bundleHint": "原始的 OMS / Sigstore 捆绑包 JSON。",
+    "bundlePlaceholder": "{ \"mediaType\": \"…\", … }",
+    "bundleInvalid": "应为一个 JSON 对象。",
+    "digests": "已解析摘要",
+    "digestsHint": "可选的 文件 → 十六进制摘要 映射，用于对磁盘上的制品重新哈希。",
+    "digestsInvalid": "应为一个由字符串值组成的 JSON 对象。",
+    "modelRef": "模型引用",
+    "aibomRef": "AIBOM 引用",
+    "note": "备注",
+    "submit": "准入",
+    "admitted": "版本已准入。",
+    "recordedNotAdmitted": "裁定已记录，但签名未满足该策略。"
+  },
+  "admission": {
+    "mode": {
+      "keyless": "sigstore-keyless",
+      "certificate-pki": "certificate-pki",
+      "bare-key": "bare-key",
+      "empty": "不准入任何内容"
+    },
+    "posture": {
+      "verified": "已验证",
+      "signedUnbound": "已签名，制品未绑定",
+      "denied": "未验证"
+    }
+  },
+  "evidence": {
+    "reason": "原因",
+    "noReason": "未记录原因。",
+    "subjectName": "主体",
+    "subjectDigest": "主体摘要",
+    "signer": "签名者",
+    "signerRoots": "签名者根",
+    "artifact": "制品重新哈希",
+    "artifactVerified": "已匹配",
+    "artifactUnverified": "未检查",
+    "tlog": "透明日志",
+    "tlogVerified": "已验证",
+    "tlogPresent": "存在（未检查包含性）",
+    "tlogAbsent": "缺失",
+    "resourceCount": "已签名资源",
+    "coverage": "覆盖范围",
+    "attestedBy": "证明者",
+    "attestedAt": "记录时间",
+    "none": "未记录准入尝试",
+    "noneHint": "准入此版本以记录一次签名裁定。"
+  },
+  "datasets": {
+    "title": "数据集",
+    "description": "AIBOM 血缘组件——一个名称、一个内容引用和一个哈希。绝不包含数据本身。",
+    "new": "新建数据集",
+    "search": "搜索数据集…",
+    "created": "数据集已记录。",
+    "deleted": "数据集已删除。",
+    "claimed": "操作者声明",
+    "newTitle": "记录数据集",
+    "formBody": "一条最小化数据的血缘记录：标识、分类和内容引用——绝不包含数据集内容。",
+    "deleteTitle": "删除数据集",
+    "deleteBody": "删除“{{name}}”？其血缘引用将被移除，这会改变未来的 BOM（绝不改变已封存的历史）。此操作会记入审计账本。",
+    "drawerSubtitle": "血缘记录——分类、内容引用和来源声明。",
+    "provenanceLabel": "来源",
+    "provenanceClaimed": "已记录操作者声明——操作者声明已审查所记录的来源。Olivares 并未对该数据集进行加密验证或检查其内容。",
+    "provenanceNotClaimed": "操作者未记录任何来源声明。",
+    "attestedBy": "记录者",
+    "columns": {
+      "name": "名称",
+      "classification": "分类",
+      "ownedRef": "模型引用",
+      "provenance": "来源",
+      "recorded": "已记录"
+    },
+    "form": {
+      "name": "名称",
+      "classification": "分类",
+      "ownedRef": "模型引用",
+      "ownedRefHint": "可选——将此数据集关联到一个自有模型。必须能够解析，否则拒绝保存。",
+      "sourceRef": "来源引用",
+      "contentHash": "内容哈希",
+      "contentAlg": "哈希算法",
+      "contentAlgHint": "设置哈希时默认使用 sha256。",
+      "governance": "治理标签",
+      "verified": "已审查来源（操作者声明）",
+      "verifiedHint": "声明你已审查此数据集的来源。这将记录一条操作者声明——而非 Olivares 执行的验证。此项无法更新：更正意味着删除后重新创建。",
+      "note": "备注"
+    },
+    "truncated": "已加载 {{n}} 个数据集；还有更多",
+    "truncatedHint": "已登记的数据集多于此处所示；本页按行 id 取数。这些行是 AI-BOM 的血缘组件：此处缺少某个数据集，并不能证明血缘中没有它。 表格的搜索与排序仅作用于已加载的内容。"
+  },
+  "finetune": {
+    "title": "微调作业",
+    "description": "微调作业及其产出版本的记录。该平面绝不训练模型，也不持有权重。",
+    "new": "新建作业记录",
+    "search": "搜索作业…",
+    "created": "作业已记录。",
+    "updated": "作业已更新。",
+    "newTitle": "记录微调作业",
+    "editTitle": "更新微调作业",
+    "formBody": "记录作业的状态及其产出的版本。这是一条清单记录——控制平面不运行训练。",
+    "columns": {
+      "name": "名称",
+      "runtime": "运行时",
+      "status": "状态",
+      "resultVersion": "产出版本",
+      "started": "开始时间"
+    },
+    "filters": {
+      "allStatuses": "所有状态"
+    },
+    "form": {
+      "name": "名称",
+      "status": "状态",
+      "runtime": "运行时",
+      "runtimeNone": "未指定",
+      "baseRef": "基础引用",
+      "datasetRef": "数据集引用",
+      "resultVersionRef": "产出版本引用",
+      "resultVersionRefHint": "此作业产出的模型版本。必须能够解析到一个已存在的版本，否则拒绝保存。",
+      "startedAt": "开始于",
+      "endedAt": "结束于",
+      "note": "备注",
+      "clearHint": "清空已记录的时间戳不会生效——引擎会保留之前的值。"
+    },
+    "trackBanner": "此项记录在外部运行的微调工作。Olivares 不启动、取消或执行训练，也不存储任何权重或数据集内容。",
+    "truncated": "已加载 {{n}} 个任务；还有更多",
+    "truncatedHint": "微调记录多于此处所示；本页按行 id 取数。状态筛选由引擎执行并重新查询。任务未列在此处，并不能证明它从未运行。 表格的搜索与排序仅作用于已加载的内容。"
+  },
+  "evidenceLedger": {
+    "title": "AIBOM 封存",
+    "description": "覆盖所有模型的已封存 AIBOM 账本——持久、仅追加、以账本锚定的防篡改证据。每一行都是一条内容哈希承诺，而非 BOM 文档本身。",
+    "search": "搜索封存…",
+    "drawerSubtitle": "一份已封存的 AIBOM——锚定到审计账本的防篡改证据。",
+    "serialNumber": "序列号",
+    "ledgerHash": "账本哈希",
+    "generatedBy": "封存者",
+    "scopeNote": "范围",
+    "columns": {
+      "ownedRef": "模型引用",
+      "contentHash": "内容哈希",
+      "components": "组件",
+      "spec": "规范",
+      "ledgerSeq": "账本序号",
+      "sealed": "已封存"
+    },
+    "sealMeaning": "封存是一条锚定到审计账本的仅追加内容哈希承诺——而非 BOM 的存档。完整文档不会被存储，也无法从封存中取回。",
+    "noPriorHead": "0（无先前的审计头）",
+    "truncated": "已加载 {{n}} 条封存记录；还有更多",
+    "truncatedHint": "已封存的 AI-BOM 多于此处所示。本页按行 id（创建时分配）取数，因此更靠后的行会缺失，在正常运行下即为较新的证据。表格的搜索与排序仅作用于已加载的内容。某个模型未出现在此处，并不能证明它从未被封存。"
+  },
+  "documents": {
+    "live": "实时",
+    "preview": "预览",
+    "export": "导出",
+    "loadError": "无法生成该文档。",
+    "aibom": {
+      "title": "AIBOM",
+      "cyclonedx": "CycloneDX (JSON)",
+      "spdx": "SPDX 3.0.1 (JSON)",
+      "seal": "封存 AIBOM",
+      "sealHint": "封存会创建一条锚定到审计账本的仅追加 CycloneDX 内容哈希承诺。它不会存档 BOM 文档。始终为 CycloneDX——SPDX 导出永远无法被封存。",
+      "previewTitle": "AIBOM（实时）",
+      "previewBody": "一份实时、只读的 CycloneDX（或 SPDX）清单——在你封存之前均未封存。"
+    },
+    "card": {
+      "title": "模型卡",
+      "markdown": "Markdown (.md)",
+      "json": "JSON",
+      "previewTitle": "模型卡（实时）",
+      "previewBody": "根据受治理的清单生成。没有已记录证据的章节标记为未记录——绝不虚构。",
+      "name": "名称",
+      "kind": "类型",
+      "status": "状态",
+      "intendedUse": "预期用途",
+      "versions": "版本",
+      "noVersions": "未记录任何版本。",
+      "admitted": "已准入",
+      "notVerified": "已记录，未验证",
+      "noVerdict": "无裁定",
+      "trainingData": "训练数据",
+      "notRecorded": "未记录。",
+      "admissionsRecorded": "已记录签名准入",
+      "admissionsVerified": "已验证签名准入",
+      "gpaiRecorded": "已记录供应商 GPAI 状态",
+      "yes": "是",
+      "no": "否"
+    },
+    "liveTitle": "生成的文档——实时",
+    "liveSubtitle": "根据当前注册表状态即时生成。未封存且未审计。",
+    "sealsTitle": "已封存的 AIBOM 承诺",
+    "sealRecorded": "AIBOM 封存已记录",
+    "receiptBody": "账本仅存储内容哈希——已封存的 CycloneDX 文档仅存在于此处。请立即下载以保留副本。",
+    "downloadSealed": "下载已封存的 BOM",
+    "noSeals": "尚无封存",
+    "noSealsHint": "封存该 AIBOM，以将一条内容哈希承诺锚定到审计账本。",
+    "sealConfirmTitle": "封存此 AIBOM？",
+    "sealConfirmBody": "根据当前注册表状态创建一条仅追加的 CycloneDX 内容哈希承诺？此操作不会存档 BOM 文档。",
+    "sealsTruncated": "已加载 {{n}} 条封存记录；还有更多",
+    "sealsTruncatedHint": "该模型的封存记录多于此处所示；本页按行 id 取数，因此更靠后的记录——通常是最近一次封存——可能缺失。此处没有某个哈希，并不能证明该文档从未被封存。",
+    "sealsLoadError": "无法读取封存历史——这不等于“没有封存记录”"
+  },
+  "empty": {
+    "datasets": {
+      "title": "尚无数据集记录",
+      "description": "记录数据集的标识和分类，并可附加内容引用与哈希，以在不存储内容的情况下将其加入 AIBOM 血缘。"
+    },
+    "deployments": {
+      "title": "尚无推理部署记录",
+      "description": "记录本地或经代理的推理部署；本地条目需要现有模型版本，并且仅在准入策略要求签名时才受门控。"
+    },
+    "finetune": {
+      "title": "尚无微调作业记录",
+      "description": "记录在 Olivares 外部运行的微调作业，以跟踪其状态、血缘和产出的模型版本；控制平面不运行训练。"
+    },
+    "modelEvidence": {
+      "title": "尚无 AIBOM 封存记录",
+      "description": "打开一个自有模型并封存其 AIBOM，以将仅追加的内容哈希承诺锚定到审计账本。"
+    },
+    "ownedModels": {
+      "title": "尚未注册自有模型",
+      "description": "注册托管、微调或导入的模型，以管理其版本、准入证据和 AIBOM 文档。"
+    },
+    "verdict": {
+      "title": "尚无准入裁定记录",
+      "description": "在自有模型下创建版本，再准入其签名制品；每个版本只保留一项裁定，再次准入时会将其替换。"
+    }
+  }
+}

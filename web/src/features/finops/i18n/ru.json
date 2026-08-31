@@ -1,0 +1,463 @@
+{
+  "alerts": {
+    "title": "Оповещения о порогах",
+    "description": "История пересечений порогов бюджета. Доставка в Slack/SIEM выполняется выходными коннекторами — это запись.",
+    "empty": "Порогов не пересечено",
+    "columns": {
+      "triggeredAt": "Сработало",
+      "budget": "Бюджет",
+      "threshold": "Порог",
+      "spend": "Расходы / лимит",
+      "severity": "Серьёзность"
+    },
+    "truncated": "Загружено оповещений: {{n}}; есть ещё",
+    "truncatedHint": "Бюджетных оповещений больше, чем показано; страница берёт строки по идентификатору. Отсутствие оповещения здесь не доказывает, что порог не был превышен."
+  },
+  "allocation": {
+    "title": "Распределение по нескольким агентам",
+    "description": "Стоимость агента, разделённая по ресурсам, которых он касался, по графу доступа.",
+    "method": "Метод",
+    "resolved": "Сопоставлено",
+    "unresolved": "Не сопоставлено",
+    "resourceCount_one": "{{count}} ресурс",
+    "resourceCount_few": "{{count}} ресурса",
+    "resourceCount_many": "{{count}} ресурсов",
+    "resourceCount_other": "{{count}} ресурсов",
+    "sharedCount_one": "{{count}} общий",
+    "sharedCount_few": "{{count}} общих",
+    "sharedCount_many": "{{count}} общих",
+    "sharedCount_other": "{{count}} общих",
+    "empty": "Нет стоимости, привязанной к агентам, за этот период.",
+    "confidence": {
+      "attributed": "Привязано",
+      "approximate": "Приблизительно"
+    },
+    "columns": {
+      "agent": "Агент",
+      "cost": "Стоимость",
+      "resolved": "Граф",
+      "confidence": "Достоверность",
+      "resources": "Ресурсы"
+    }
+  },
+  "breakdown": {
+    "title": "Разбивка расходов",
+    "description": "Куда уходят затраты, по убыванию.",
+    "byModel": "По модели",
+    "byProvider": "По провайдеру",
+    "byAgent": "По агенту",
+    "share": "Доля расходов",
+    "noAgentAttribution": "Разбивка по агентам появляется, как только коннектор привязывает стоимость к сессии — модель и провайдер присутствуют всегда.",
+    "columns": {
+      "key": "Название",
+      "cost": "Стоимость",
+      "inputTokens": "Вход",
+      "outputTokens": "Выход",
+      "samples": "Записи"
+    }
+  },
+  "budgets": {
+    "title": "Бюджеты",
+    "description": "Потребление относительно каждого лимита, с проекцией по темпу расходов. Зарезервированная ёмкость засчитывается в лимит.",
+    "new": "Новый бюджет",
+    "empty": "Бюджетов пока нет",
+    "emptyHint": "Задайте лимит расходов по измерению, чтобы отслеживать потребление и получать оповещения о порогах.",
+    "limit": "Лимит",
+    "spent": "Израсходовано",
+    "remaining": "Остаток",
+    "period": "Период",
+    "over": "Превышен лимит",
+    "onTrackToExceed": "Идёт к превышению",
+    "disabled": "Отключено",
+    "global": "Глобальный",
+    "reservedHint": "Включает {{amount}} зарезервированной ёмкости, засчитанной в лимит.",
+    "actions": {
+      "alert": "Оповестить",
+      "throttle": "Ограничить",
+      "block": "Блокировать"
+    },
+    "dialog": {
+      "title": "Новый бюджет",
+      "name": "Название",
+      "dimension": "Измерение",
+      "key": "Ключ измерения",
+      "keyHint": "Обязателен, если измерение не глобальное (например, название модели или команды).",
+      "limitUsd": "Лимит (USD)",
+      "reservedUsd": "Зарезервировано (USD)",
+      "reservedHint": "Необязательная зафиксированная ёмкость, засчитанная в лимит (учётная строка, а не списание).",
+      "action": "Действие",
+      "actionHint": "Оповещение — только информирование; ограничение/блокировка испускают сигнал жёсткого предела, который может применить точка актуации.",
+      "period": "Период",
+      "create": "Создать бюджет",
+      "created": "Бюджет создан",
+      "editTitle": "Изменить бюджет",
+      "save": "Сохранить бюджет",
+      "saved": "Бюджет обновлён"
+    },
+    "editAction": "Изменить {{name}}",
+    "deleteAction": "Удалить {{name}}",
+    "deleteDialog": {
+      "title": "Удалить бюджет?",
+      "description": "Бюджет «{{name}}» и его пороговые оповещения будут удалены навсегда. Отменить это действие нельзя.",
+      "confirm": "Удалить бюджет",
+      "deleted": "Бюджет удалён"
+    },
+    "truncated": "Загружено бюджетов: {{n}}; есть ещё",
+    "truncatedHint": "Бюджетов больше, чем показано; страница берёт строки по идентификатору. Отсутствие лимита в этом списке не доказывает, что расходы не ограничены: он может быть просто за пределами страницы."
+  },
+  "cache": {
+    "title": "Эффективность кэша промптов",
+    "description": "Токены чтения из кэша против токенов его создания и реальная экономия — главный рычаг стоимости Claude.",
+    "hitRate": "Частота попаданий в кэш",
+    "hitRateCaption": "чтения из кэша как доля всех входных токенов",
+    "savings": "Реальная экономия",
+    "savingsCaption": "от чтений из кэша, по тарифу каждой модели",
+    "uncached": "Вход без кэша",
+    "read": "Чтения из кэша",
+    "create1h": "Создание кэша (1 ч)",
+    "create5m": "Создание кэша (5 мин)",
+    "chartTitle": "Уровни входных токенов",
+    "chartSummary": "{{read}} токенов чтения из кэша против {{uncached}} входных токенов без кэша — частота попаданий {{rate}}.",
+    "empty": "Кэшированный вход не зафиксирован",
+    "columns": {
+      "tier": "Уровень",
+      "tokens": "Токены"
+    },
+    "note": "Экономия оценивает токены чтения из кэша по сэкономленной доле базового входного тарифа каждой модели; модели без тарифа не дают вклада. Нулевая экономия — честный результат, а не ошибка."
+  },
+  "chargeback": {
+    "title": "Перераспределение затрат по измерению",
+    "description": "Разрежьте расходы по любому измерению привязки, которое несёт read-model.",
+    "dimensionLabel": "Измерение",
+    "chartTitle": "Расходы по: {{dimension}}",
+    "chartSummary": "Расходы по: {{dimension}}, лидирует {{top}}; {{total}} за период.",
+    "empty": "Нет расходов по измерению {{dimension}} за этот период.",
+    "costTypeBilledOnly": "Тип затрат — это разбивка только по списанным суммам (split серверного инструмента cost_report). Поток расходов по умолчанию является оценочным, поэтому здесь это измерение обычно пустое — реальные детали поступают из сверки и экспорта FOCUS.",
+    "costTypeEmpty": "В оценочном потоке нет детализации по типу затрат. Тип затрат заполняется только в списанных строках; см. «Сверка» и экспорт FOCUS.",
+    "serviceTierFreeform": "Ключи уровня обслуживания отображаются ровно так, как их возвращает API; задокументированные уровни (standard, batch, priority, priority_on_demand, flex, flex_discount) — это подсказки для отображения, а не закрытый список."
+  },
+  "costCentres": {
+    "ambiguous": "ambiguous — engine picks one arbitrarily",
+    "archive": "Archive cost centre {{code}}",
+    "archived": "Cost centre updated",
+    "code": "Code",
+    "create": "Create",
+    "created": "Cost centre created",
+    "delete": "Delete cost centre {{code}}",
+    "deleteRule": "Delete rule for {{key}}",
+    "description": "Accounting codes and the rules that bind spend to them.",
+    "descriptionField": "Description",
+    "dimension": "Dimension: {{dim}}",
+    "dimensionLabel": "Dimension",
+    "edit": "Edit cost centre {{code}}",
+    "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
+    "editTitle": "Edit cost centre",
+    "empty": "No cost centres yet",
+    "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
+    "key": "Key",
+    "name": "Name",
+    "new": "New cost centre",
+    "newDescription": "A code is required. It is the accounting identity chargeback statements filter on.",
+    "newRule": "New rule",
+    "newRuleDescription": "Bind one dimension value to this cost centre.",
+    "noRules": "No rules — traffic stays unattributed",
+    "owner": "Owner",
+    "priority": "priority {{n}}",
+    "priorityLabel": "Priority",
+    "priorityNote": "The highest priority wins BETWEEN different dimensions. Within one dimension and key the engine reads a single rule and does not order by priority, so duplicates are resolved arbitrarily.",
+    "restore": "Restore cost centre {{code}}",
+    "ruleCreated": "Rule created",
+    "rulesDescription": "Which traffic binds to this cost centre.",
+    "rulesTitle": "Mapping rules",
+    "save": "Save",
+    "saved": "Cost centre saved",
+    "status": {
+      "archived": "Archived",
+      "unknown": "No status — attributes nothing"
+    },
+    "title": "Cost centres",
+    "truncated": "Загружено центров затрат: {{n}}; есть ещё",
+    "truncatedHint": "Центров затрат больше, чем показано; страница берёт строки по идентификатору. Отсутствие центра затрат в списке не доказывает, что его нет.",
+    "rulesTruncated": "Загружено правил: {{n}}; есть ещё",
+    "rulesTruncatedHint": "Правил сопоставления для этого центра затрат больше, чем показано; страница берёт строки по идентификатору. Для вновь поступающих затрат движок разрешает подходящие правила независимо от этой страницы, поэтому ресурс, выглядящий здесь несопоставленным, может быть сопоставлен правилом за её пределами; уже учтённые затраты при добавлении правила не перераспределяются."
+  },
+  "description": "Стоимость токенов по всему ИТ-ландшафту — тренды, перераспределение затрат, сверка, бюджеты и прогноз. Цифры приведены ровно так, как их сообщает реестр FinOps.",
+  "dimensions": {
+    "global": "Глобальный",
+    "model": "Модель",
+    "provider": "Провайдер",
+    "agent": "Агент",
+    "session": "Сессия",
+    "team": "Команда",
+    "project": "Проект",
+    "workspace": "Рабочая область",
+    "api_key": "API-ключ",
+    "actor": "Субъект",
+    "service_tier": "Уровень обслуживания",
+    "context_window": "Контекстное окно",
+    "inference_geo": "География вывода",
+    "gateway": "Шлюз",
+    "cost_type": "Тип затрат"
+  },
+  "empty": {
+    "alerts": {
+      "title": "Пороги бюджета пока не пересечены",
+      "description": "Создайте бюджет с порогами оповещения; оповещение фиксируется, когда новая запись о стоимости приводит к пересечению одного из них."
+    },
+    "allocation": {
+      "title": "Нет стоимости по агентам для распределения",
+      "description": "Когда поток стоимости будет содержать ссылку на агента, расходы появятся здесь; доли по ресурсам добавятся там, где удаётся разрешить рёбра доступа."
+    },
+    "anomalies": {
+      "title": "Аномалий расходов пока не обнаружено",
+      "description": "День появится, когда зафиксированные расходы превысят базовый уровень скользящего окна минимум на два стандартных отклонения."
+    },
+    "cacheEfficiencyChart": {
+      "title": "Использование входных токенов пока не зафиксировано",
+      "description": "Когда записи о стоимости будут содержать использование входных токенов, здесь появятся объёмы входа без кэша, чтения и создания кэша."
+    },
+    "dimensionChart": {
+      "title": "Нет расходов по этому измерению",
+      "description": "Разбивки расходов появляются, если выбранное измерение есть в потоке оценочной стоимости; если его нет ни в одном образце, график пуст."
+    },
+    "futureBreakdowns": {
+      "title": "Будущие разбивки стоимости не каталогизированы",
+      "description": "Записи появятся, только когда разбивки стоимости во время выполнения добавят в скомпилированный справочник; живые данные провайдера эту таблицу не заполняют."
+    },
+    "futureDimensions": {
+      "title": "Будущие измерения не каталогизированы",
+      "description": "Записи появятся, только когда будущие измерения группировки добавят в скомпилированный справочник; живые данные провайдера эту таблицу не заполняют."
+    },
+    "reconciliationChart": {
+      "title": "Списанных расходов для сверки пока нет",
+      "description": "Посуточное сравнение списанных и оценочных расходов появится, когда опрос cost_report API Claude вернёт авторитетные строки списаний."
+    },
+    "spend": {
+      "title": "Расходов для этой разбивки пока нет",
+      "description": "Ранжированные расходы и итоги по токенам появятся, когда записи о стоимости будут содержать выбранную модель, провайдера или ссылку на агента."
+    }
+  },
+  "export": {
+    "title": "Экспорт FOCUS",
+    "description": "Экспортируйте read-model стоимости в формате FOCUS v1.3 CSV (открытая схема затрат и потребления от FinOps Foundation).",
+    "provenanceLabel": "Происхождение",
+    "provenance": {
+      "estimated": "Оценочные (детальные)",
+      "billed": "Списанные (cost_report)",
+      "all": "Оба (с тегами)"
+    },
+    "download": "Экспортировать CSV",
+    "done": "Экспорт FOCUS загружен",
+    "note": "EffectiveCost — это столбец, безопасный для суммирования; в комбинированном экспорте оценочные строки опускают его, чтобы наивный SUM никогда не учитывал поток списаний дважды. Не пересчитывайте итоги из CSV."
+  },
+  "forecast": {
+    "title": "Прогноз на период",
+    "subtitle": "Проекция при текущем темпе расходов, а не модель.",
+    "spentSoFar": "Израсходовано на данный момент",
+    "trendProjected": "Прогноз на конец периода",
+    "dailyRunRate": "Дневной темп расходов",
+    "projected": "Прогноз на конец периода",
+    "period": "Период",
+    "confidenceBand": "Доверительный интервал по окну в {{window}} дн.: {{low}} … {{high}} (±1,96σ).",
+    "runRateNote": "Проекция — это дневной темп расходов по скользящему окну, масштабированный на оставшийся период, при текущем темпе, а не модель прогнозирования.",
+    "anomaliesTitle": "Аномалии расходов",
+    "sigma": "{{value}}σ",
+    "anomalyColumns": {
+      "day": "День",
+      "spend": "Расходы",
+      "baseline": "Базовый уровень",
+      "deviation": "Отклонение"
+    }
+  },
+  "future": {
+    "title": "Будущие измерения",
+    "description": "Измерения Anthropic и разбивки стоимости, которые платформа предоставляет, но которые движок пока не моделирует как доступные для запроса срезы.",
+    "seam": "Бэкенд в ожидании",
+    "caveat": "Декларированная ссылка — по состоянию на {{date}}. Это пока не доступные для запроса срезы; это каталог, сверенный с документацией Anthropic, показанный, чтобы пробел был виден, и никогда не как живые данные.",
+    "dimensionsTitle": "Измерения группировки",
+    "breakdownsTitle": "Разбивки стоимости во время выполнения",
+    "columns": {
+      "dimension": "Измерение",
+      "breakdown": "Разбивка",
+      "field": "Поле",
+      "maturity": "Зрелость",
+      "ref": "Ссылка"
+    },
+    "maturity": {
+      "beta": "Бета",
+      "ga": "GA",
+      "development": "В разработке"
+    },
+    "dims": {
+      "speed": {
+        "label": "Скорость",
+        "detail": "Бета быстрого режима (fast-mode-2026-02-01); отдельный group_by, который предоставляет отчёт о стоимости."
+      },
+      "service_account_id": {
+        "label": "Сервисный аккаунт",
+        "detail": "Принципал сервисного аккаунта (svac_) — отличается от смешанного API-ключа, который сегодня обслуживает представление расходов."
+      },
+      "account_id": {
+        "label": "Аккаунт",
+        "detail": "Аккаунт-владелец; отдельный group_by, пока не смоделированный read-model."
+      }
+    },
+    "breakdowns": {
+      "advisor": {
+        "label": "Вывод советника",
+        "detail": "Второй, скрытый серверный вывод, тарифицируемый отдельно в usage.iterations[].advisor_message."
+      },
+      "thinking_tokens": {
+        "label": "Токены размышления",
+        "detail": "Токены расширенного размышления (usage.output_tokens_details.thinking_tokens), тарифицируемые даже когда размышление скрыто из отображения."
+      },
+      "programmatic_tool_calling": {
+        "label": "Программный вызов инструментов",
+        "detail": "Промежуточные результаты оказываются вне контекста и вне usage, поэтому стоимость и форензика их недоучитывают."
+      }
+    }
+  },
+  "optimization": {
+    "title": "Рекомендации по оптимизации",
+    "description": "Возможная экономия по управляемому ИТ-ландшафту. Оценки не являются обещанием — проверьте соответствие по возможностям и качеству.",
+    "empty": "Нет рекомендаций",
+    "estimatedSavings": "Оцен. экономия",
+    "subject": "Предмет",
+    "kind": {
+      "cheaper_model": "Более дешёвая модель",
+      "budget_burn": "Расход бюджета",
+      "cache_savings": "Экономия на кэше",
+      "cache_opportunity": "Возможность кэширования",
+      "info": "Примечание"
+    }
+  },
+  "outcomes": {
+    "title": "Graded outcomes",
+    "description": "The numerator of cost-per-outcome: what the spend actually achieved.",
+    "grade": "Grade an outcome",
+    "gradeHint": "The instant is captured now and re-sent unchanged on a retry, so a repeated submit cannot count the value twice.",
+    "subject": "Agent ref",
+    "verdict": "Verdict",
+    "send": "Send",
+    "empty": "No graded outcomes",
+    "emptyHint": "Without these, spend has no measurable value and every agent looks like pure cost.",
+    "noValue": "no value recorded",
+    "accepted": "Accepted — the engine may have deduplicated it; the list below is the record",
+    "truncated": "Загружено результатов: {{n}}; есть ещё",
+    "truncatedHint": "Записанных результатов больше, чем показано; страница берёт строки по идентификатору. Не выводите совокупные итоги по результатам или стоимости из загруженных строк."
+  },
+  "periods": {
+    "daily": "Ежедневно",
+    "weekly": "Еженедельно",
+    "monthly": "Ежемесячно",
+    "total": "Итого"
+  },
+  "range": {
+    "label": "Период",
+    "7d": "Последние 7 дней",
+    "30d": "Последние 30 дней",
+    "90d": "Последние 90 дней",
+    "mtd": "Текущий месяц"
+  },
+  "rates": {
+    "title": "Model rate catalogue",
+    "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
+    "unit": "micro-USD per 1M tokens (integer)",
+    "empty": "No rates in the catalogue",
+    "inOut": "in {{in}} · out {{out}}",
+    "until": "until {{at}}",
+    "current": "current",
+    "truncated": "Загружено тарифов: {{n}}; есть ещё",
+    "truncatedHint": "Тарифов моделей больше, чем показано; страница отсортирована по дате вступления в силу, от новых к старым. Отсутствие здесь не доказывает отсутствия в каталоге: расчёт стоимости и сравнение определяют действующий тариф по каталогу, независимо от этой страницы."
+  },
+  "reconciliation": {
+    "title": "Списано против оценки",
+    "description": "Насколько точно производная оценка отслеживает авторитетный счёт. Два потока никогда не суммируются.",
+    "billedTotal": "Итого списано",
+    "billedCaption": "из cost_report провайдера",
+    "noBilled": "Нет данных о списаниях",
+    "estimatedTotal": "Итого по оценке",
+    "estimatedCaption": "выведено из прайс-листа",
+    "drift": "Отклонение",
+    "driftUnder": "списано выше оценки (недооценка)",
+    "driftOver": "списано ниже оценки (переоценка)",
+    "driftNoBaseline": "пока нет базового уровня по списаниям",
+    "estimatedOnlyTiers": "Уровни только с оценкой",
+    "chartTitle": "Списано против оценки, по дням",
+    "chartSummary": "Списано {{billed}} против оценки {{estimated}} за период.",
+    "columns": {
+      "day": "День",
+      "billed": "Списано",
+      "estimated": "Оценка",
+      "drift": "Отклонение"
+    }
+  },
+  "seats": {
+    "title": "Использование мест",
+    "description": "Назначенные места против фактически активных субъектов по дням. День без снимка мест ничего не сообщает — это не день с нулевым использованием.",
+    "provider": "Поставщик",
+    "empty": "Дней не зафиксировано",
+    "assigned": "назначено {{assigned}} · активно {{active}}",
+    "noSnapshot": "снимок мест за этот день не опубликован"
+  },
+  "statements": {
+    "agent": "Agent",
+    "cost": "Cost",
+    "description": "Per-cost-centre, per-period snapshots with line items grouped by model, provider and agent — the artefact finance consumes for internal billing.",
+    "empty": "No chargeback statements generated",
+    "exportCsv": "Export statement CSV",
+    "generate": "Generate",
+    "generated": "Statements generated",
+    "inputTokens": "Input tokens",
+    "model": "Model",
+    "monthly": "Monthly",
+    "outputTokens": "Output tokens",
+    "period": "Period",
+    "provider": "Provider",
+    "samples": "Samples",
+    "snapshotNotice": "A statement is a frozen snapshot: it is computed when generated and records the cost centre name and code as they were. Regenerating the same period does NOT recalculate it, so spend ingested afterwards will not appear.",
+    "title": "Chargeback statements",
+    "total": "Total",
+    "weekly": "Weekly",
+    "truncated": "Загружено выписок: {{n}}; есть ещё",
+    "truncatedHint": "Выписок по перевыставлению больше, чем показано; страница отсортирована по началу периода, от новых к старым. Отсутствие периода в списке не доказывает, что за него ничего не выставлялось."
+  },
+  "stats": {
+    "totalSpend": "Суммарные расходы",
+    "inThisRange": "за этот период",
+    "tokens": "Токены",
+    "inOut": "{{in}} вход · {{out}} выход",
+    "samples": "Записи о стоимости",
+    "forecast": "Прогноз",
+    "atRunRate": "прогноз (тренд по скользящему окну)"
+  },
+  "tabs": {
+    "spend": "Расходы",
+    "chargeback": "Перераспределение затрат",
+    "reconciliation": "Сверка",
+    "budgets": "Бюджеты",
+    "optimization": "Оптимизация",
+    "value": "Стоимость результата",
+    "seats": "Использование мест",
+    "costCentres": "Cost centres"
+  },
+  "title": "Стоимость и FinOps",
+  "trend": {
+    "title": "Динамика стоимости",
+    "description": "Ежедневная стоимость токенов за выбранный период.",
+    "cost": "Стоимость",
+    "tokens": "Токены"
+  },
+  "value": {
+    "title": "Стоимость результата",
+    "description": "Расходы, сопоставленные с оценёнными результатами. Нераспределённые расходы показаны отдельно, а не свёрнуты в итог.",
+    "totalCost": "Всего расходов",
+    "unattributed": "Нераспределено",
+    "outcomes": "Достигнутые результаты",
+    "costPerOutcome": "Стоимость результата",
+    "riskTitle": "Риск расторжения",
+    "riskDescription": "Субъекты, расходующие бюджет без достигнутых результатов.",
+    "riskEmpty": "Ни один субъект не расходует бюджет без результатов",
+    "satisfiedOf": "достигнуто {{satisfied}} из {{outcomes}}"
+  }
+}

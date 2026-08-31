@@ -1,0 +1,17 @@
+{
+  "value": [
+    {
+      "id": "ca-2",
+      "displayName": "Human users only",
+      "state": "enabled",
+      "conditions": {
+        "clientApplications": {
+          "includeAgentIdServicePrincipals": [],
+          "excludeAgentIdServicePrincipals": [],
+          "agentIdServicePrincipalFilter": null
+        },
+        "agentIdRiskLevels": []
+      }
+    }
+  ]
+}

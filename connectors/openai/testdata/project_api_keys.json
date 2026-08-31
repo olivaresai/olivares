@@ -1,0 +1,27 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "key_proj1",
+      "name": "Production Key",
+      "redacted_value": "sk-proj-...xY9z",
+      "created_at": 1717200000,
+      "owner": {
+        "type": "user",
+        "user": {"id": "user_proj1", "name": "Alice", "email": "alice@example.com"}
+      }
+    },
+    {
+      "id": "key_proj2",
+      "name": "Legacy Key",
+      "redacted_value": "sk-proj-...aB1c",
+      "created_at": 1704067200,
+      "owner": {
+        "type": "service_account",
+        "service_account": {"id": "svc_abc123", "name": "ci-pipeline"}
+      }
+    }
+  ],
+  "has_more": false,
+  "last_id": "key_proj2"
+}

@@ -1,0 +1,40 @@
+{
+  "title": "ログビューア",
+  "controls": {
+    "pause": "一時停止",
+    "resume": "再開",
+    "pauseAria": "自動スクロールを一時停止",
+    "resumeAria": "自動スクロールを再開",
+    "clear": "クリア",
+    "clearAria": "ログエントリをクリア",
+    "entryCount": "{{value}} 件"
+  },
+  "filters": {
+    "levelAria": "{{level}} ログをフィルター",
+    "modulePlaceholder": "モジュール...",
+    "moduleAria": "モジュールでフィルター",
+    "searchPlaceholder": "検索...",
+    "searchAria": "ログメッセージを検索",
+    "clearAria": "フィルターをクリア"
+  },
+  "capture": {
+    "debugUnavailable": "エンジンの現在のログレベルでは DEBUG エントリは記録されません — OLIVARES_LOG_LEVEL=debug を設定してください。"
+  },
+  "stream": {
+    "empty": "表示するログエントリはありません。",
+    "ariaLabel": "ログストリーム",
+    "attrsAriaLabel": "構造化ログ属性"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  }
+}

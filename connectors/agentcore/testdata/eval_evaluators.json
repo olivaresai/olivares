@@ -1,0 +1,20 @@
+{
+  "evaluators": [
+    {
+      "evaluatorId": "eval-custom",
+      "evaluatorArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:evaluator/eval-custom",
+      "evaluatorName": "custom-quality",
+      "evaluatorType": "CUSTOM",
+      "level": "ACCOUNT",
+      "status": "CREATING"
+    },
+    {
+      "evaluatorId": "eval-builtin",
+      "evaluatorArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:evaluator/eval-builtin",
+      "evaluatorName": "builtin-safety",
+      "evaluatorType": "BUILTIN",
+      "level": "ACCOUNT",
+      "status": "FAILED"
+    }
+  ]
+}

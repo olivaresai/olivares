@@ -1,0 +1,194 @@
+{
+  "truncation": {
+    "label": "Загружено строк: {{n}}; есть ещё",
+    "hint": "Список ограничен. Показаны только загруженные строки; отсутствие записи оценки здесь не доказывает, что её нет."
+  },
+  "title": "Оценки",
+  "description": "Карточки качества, результаты запусков, A/B-сравнения и отклонения — измеряются относительно версионированных эталонных наборов. Выводы никогда не сохраняются; только оценки и хеш-отпечатки.",
+  "forbidden": {
+    "title": "Нет доступа",
+    "description": "Для просмотра измерений качества требуется разрешение на чтение оценок."
+  },
+  "tabs": {
+    "scorecards": "Карточки качества",
+    "runs": "Запуски",
+    "ab": "A/B",
+    "drift": "Отклонение",
+    "gate": "Шлюз CI",
+    "calibration": "Калибровка судьи"
+  },
+  "subjectKind": {
+    "suite": "Набор",
+    "agent": "Агент",
+    "model": "Модель",
+    "prompt_variant": "Вариант промпта",
+    "prompt": "Промпт",
+    "session": "Сессия",
+    "sandbox_run": "Запуск в песочнице"
+  },
+  "scorecards": {
+    "title": "Карточки качества",
+    "description": "Средняя оценка, доля прохождения и тренд по каждому субъекту, агрегируются при чтении.",
+    "groupBy": "Группировать по",
+    "by": {
+      "agent": "По агенту",
+      "model": "По модели",
+      "suite": "По набору",
+      "prompt_variant": "По варианту промпта"
+    },
+    "meanScore": "Средняя оценка",
+    "passRate": "Доля прохождения",
+    "runs": "Запуски",
+    "lastScore": "Последняя оценка",
+    "regressed": "Регрессия",
+    "empty": "Карточек качества пока нет — запустите оценку относительно эталонного набора."
+  },
+  "runs": {
+    "title": "Запуски оценок",
+    "description": "Каждый запуск оценивает субъект относительно версии набора. Регрессия отмечается здесь; находка обрабатывается в разделе безопасности.",
+    "columns": {
+      "subject": "Субъект",
+      "status": "Статус",
+      "score": "Оценка",
+      "passRate": "Доля прохождения",
+      "regression": "Регрессия",
+      "startedAt": "Начат"
+    },
+    "regressed": "Регрессия · отклонение {{drift}}",
+    "noRegression": "Нет",
+    "empty": "Нет запусков в диапазоне.",
+    "overN": "из {{n}}",
+    "notScored": "not scored — no verdict",
+    "noBaseline": "no baseline — nothing compared"
+  },
+  "cases": {
+    "title": "{{subject}} — результаты по случаям",
+    "titleEmpty": "Результаты по случаям",
+    "description": "Результат и оценка по каждому случаю для этого запуска.",
+    "noPayload": "Выходные данные кандидата никогда не сохраняются — каждый случай содержит лишь односторонний отпечаток и короткую усечённую метку, но не разворачиваемую полезную нагрузку.",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "Случай",
+      "outcome": "Результат",
+      "score": "Оценка",
+      "label": "Метка",
+      "fingerprint": "Отпечаток"
+    },
+    "empty": "Нет результатов по случаям для этого запуска."
+  },
+  "ab": {
+    "title": "A/B-сравнение",
+    "description": "Два варианта промпта оцениваются относительно одного набора; побеждает более высокая оценка, ничьи указываются явно.",
+    "winner": "Победитель: {{label}} · Δ {{delta}}",
+    "winnerTag": "Победитель",
+    "tie": "Ничья",
+    "passRate": "Доля прохождения {{value}}",
+    "seamNote": "A/B-сравнение — это привилегированная запись через POST /ab; движок не предоставляет сохранённого сравнения для обратного чтения.",
+    "seamLabel": "Привилегированная запись",
+    "pickerTitle": "Запустить A/B-сравнение",
+    "pickerDescription": "Выберите набор, затем укажите выводы, которые выдал каждый вариант.",
+    "runComparison": "Запустить сравнение",
+    "runError": "Не удалось выполнить A/B-сравнение. Повторите попытку.",
+    "empty": "В этом сеансе A/B-сравнение ещё не запускалось.",
+    "emptyDescription": "Результат появляется только после завершения привилегированной записи POST /ab. GET-эндпоинта для сохранённого сравнения нет.",
+    "suiteLabel": "Набор",
+    "selectSuite": "Выберите набор",
+    "noSuites": "Наборов пока нет. Сравнение оценивается по случаям набора — сначала создайте его.",
+    "labelA": "Метка варианта A",
+    "labelB": "Метка варианта B",
+    "outputsA": "Выводы варианта A",
+    "outputsB": "Выводы варианта B",
+    "outputsHint": "JSON-объект, сопоставляющий case_key с выводом этого варианта. Движок оценивает их и хранит только хеш — сам текст не сохраняется.",
+    "outputsInvalid": "Это не JSON-объект, сопоставляющий case_key с текстом вывода.",
+    "outputsEmpty": "Укажите вывод хотя бы для одного случая. Пустой набор ничего не оценивает и будет сохранён как запуск без результата.",
+    "pairwiseLabel": "Также сравнить варианты напрямую",
+    "pairwiseHint": "Оценивает каждый общий случай дважды, меняя порядок кандидатов местами, и засчитывает победу только при совпадении обоих порядков. Два вызова судьи на случай (тарифицируется), и у набора должен быть критерий.",
+    "pairwiseTitle": "Прямое сравнение",
+    "pairwiseSkippedTag": "Пропущено",
+    "pairwiseWinner": "Победитель по оценке: {{label}}",
+    "pairwiseCounts": "сравнено {{compared}} · A {{aWins}} · B {{bWins}} · ничьих {{ties}} · зависящих от порядка {{inconsistent}} · ошибок {{errors}}",
+    "pairwiseConsistency": "Согласованность позиции {{rate}} (n={{n}}, 95 % ДИ {{lo}}–{{hi}})",
+    "outputsTooLong": "Ключ случая — не более {{maxKey}} символов, вывод — не более {{maxOutput}}. Движок обрезает более длинные значения и оценивает обрезанный текст.",
+    "outputsPlaceholder": "{\"case-1\": \"вывод, который выдал этот вариант\"}",
+    "pairwiseSkippedBody": "Движок не выполнил сравнение с судьёй. Причина:"
+  },
+  "drift": {
+    "title": "Отклонение — {{subject}}",
+    "description": "Оценка во времени относительно порога прохождения набора; устойчивое снижение означает деградацию.",
+    "score": "Оценка",
+    "threshold": "Порог прохождения",
+    "pickerTitle": "Субъект",
+    "note": "Линия порога — это порог прохождения набора; точки ниже неё не достигли планки в тот момент.",
+    "empty": "Данных о тренде пока нет."
+  },
+  "outcomeBar": {
+    "passed": "Пройдено",
+    "failed": "Не пройдено",
+    "errors": "Ошибки",
+    "skipped": "Пропущено"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "Для этого запуска не зафиксированы результаты по случаям",
+      "description": "Запуск должен оценить или пропустить случаи выбранного набора, прежде чем здесь появятся результаты, оценки и отпечатки по каждому случаю."
+    },
+    "runs": {
+      "title": "Запуски оценок пока не зафиксированы",
+      "description": "Чтобы здесь появился оценённый запуск, вызывающая сторона должна через API запусков оценок отправить выходные данные кандидата для оценки по версионированному эталонному набору."
+    }
+  },
+  "gate": {
+    "title": "Шлюз CI",
+    "description": "Оценки регрессионного шлюза: что измерил шлюз и чему должен следовать CI.",
+    "empty": "Оценок шлюза нет",
+    "measured": "измерено {{verdict}}",
+    "effective": "CI следует {{verdict}}",
+    "sampled": "отобрано {{sampled}} из {{total}} случаев",
+    "overriddenBy": "переопределено пользователем {{actor}}",
+    "override": "Переопределить",
+    "overrideTitle": "Переопределить шлюз со статусом {{verdict}}",
+    "overrideDescription": "Письменное обоснование обязательно. Оно сохраняется рядом с исходным вердиктом — в строке и в реестре доказательств.",
+    "reason": "Обоснование",
+    "reasonHint": "Почему этот шлюз переопределяется. Исходный вердикт не стирается.",
+    "confirmOverride": "Переопределить шлюз",
+    "overrideDone": "Шлюз переопределён",
+    "cancel": "Отмена",
+    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
+    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+  },
+  "calibration": {
+    "title": "Калибровка судьи",
+    "description": "Насколько LLM-судья согласуется с человеческими метками. Набор, не позволяющий измерить согласие с поправкой на случайность, ничего не подтверждает.",
+    "empty": "Отчётов о калибровке нет",
+    "meets": "цель достигнута",
+    "below": "ниже цели",
+    "cannotCertify": "подтвердить нельзя — каппа не определена",
+    "agreement": "Согласие",
+    "kappa": "Каппа",
+    "sensitivity": "Чувствительность",
+    "specificity": "Специфичность",
+    "ciOverN": "95 % ДИ {{lo}}–{{hi}} при n={{n}}",
+    "degradedWithErrors": "деградация · ошибок: {{n}}",
+    "verbosityCorr": "Корр. многословия"
+  },
+  "calibItems": {
+    "title": "Reference set",
+    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "run": "Run calibration",
+    "empty": "No labelled items yet",
+    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
+    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "humanPass": "human: pass",
+    "humanFail": "human: fail",
+    "unscored": "unscored",
+    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+  },
+  "baseline": {
+    "pin": "Pin as baseline",
+    "confirm": "Replace the baseline",
+    "pinned": "Baseline pinned",
+    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
+    "thisRunScores": "This run passed {{score}} over n={{n}}.",
+    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+  }
+}

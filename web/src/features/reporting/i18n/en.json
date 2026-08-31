@@ -1,0 +1,80 @@
+{
+  "title": "Reports",
+  "description": "Generate and download governance reports on demand, and manage scheduled deliveries.",
+  "catalog": {
+    "title": "On-demand reports",
+    "empty": "No report types are available.",
+    "colReport": "Report",
+    "colFormats": "Formats",
+    "colActions": "Actions",
+    "generate": "Generate"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "Generate {{title}}",
+    "subtitle": "Choose the format and time window; the report downloads when it is ready.",
+    "format": "Format",
+    "from": "From",
+    "to": "To",
+    "framework": "Framework",
+    "frameworkHint": "Optional — limit the evidence to a single compliance framework.",
+    "frameworkPlaceholder": "e.g. soc2",
+    "team": "Team",
+    "teamHint": "Optional — limit the spend breakdown to a single team.",
+    "teamPlaceholder": "e.g. platform",
+    "download": "Download",
+    "done": "Generated {{title}}.",
+    "failed": "Report generation failed.",
+    "pdfUnavailable": "PDF rendering is not available in this build. Choose HTML instead."
+  },
+  "schedules": {
+    "title": "Scheduled reports",
+    "new": "New schedule",
+    "enterprise": "Scheduled reports are an enterprise capability and are not enabled in this build.",
+    "empty": "No scheduled reports yet.",
+    "colReport": "Report",
+    "colCron": "Cron",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "delete": "Delete schedule",
+    "deleted": "Schedule deleted.",
+    "newTitle": "New scheduled report",
+    "newSubtitle": "The report is generated on the cron cadence and kept for download.",
+    "report": "Report",
+    "cron": "Cron expression",
+    "cronHint": "A standard 5-field cron, e.g. 0 8 * * 1 (Mondays at 08:00).",
+    "create": "Create",
+    "created": "Schedule created."
+  },
+  "enterprise": {
+    "title": "Enterprise reports",
+    "description": "Live compliance posture, the executive risk summary, and the signed audit evidence bundle.",
+    "request": "Request",
+    "done": "Report downloaded",
+    "seam": "This report lives in an add-on that is not linked to this deployment. Nothing is broken.",
+    "posture": {
+      "title": "Compliance posture",
+      "description": "Status by framework and control, computed live."
+    },
+    "risk": {
+      "title": "Risk summary",
+      "description": "The one-page executive view of risk."
+    },
+    "bundle": {
+      "title": "Evidence bundle",
+      "description": "The SIGNED audit evidence bundle — what you hand an external auditor."
+    }
+  },
+  "runs": {
+    "open": "History",
+    "title": "Run history",
+    "description": "Every recorded execution of this schedule: when it ran, and if it failed, why.",
+    "notAnArchive": "Providers cap this list and prune old runs — it is an operational convenience, not an archive. A short list does not mean the schedule only ran a few times.",
+    "empty": "No runs recorded"
+  }
+}

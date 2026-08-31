@@ -1,0 +1,49 @@
+{
+  "truncation": {
+    "label": "{{n}} locataires chargés ; il y en a d'autres",
+    "hint": "Le moteur a renvoyé une page du répertoire, pas tous les locataires. Le total NE PEUT PAS être déduit des lignes chargées — un locataire absent d'ici peut malgré tout exister et rester servi."
+  },
+  "title": "Locataires",
+  "description": "Retirer ou rétablir le service d'un locataire — sans aucune perte. Supprimer un locataire est une action distincte et définitive.",
+  "roster": "Organisations",
+  "empty": "Aucune organisation",
+  "emptyHint": "Le registre système est vide, ou ce déploiement n'a qu'un seul locataire.",
+  "forbidden": "Le cycle de vie des locataires est réservé aux superadministrateurs.",
+  "columns": {
+    "name": "Organisation",
+    "slug": "Slug",
+    "status": "Service",
+    "region": "Région",
+    "created": "Créé"
+  },
+  "status": {
+    "active": "Actif",
+    "suspended": "Retiré",
+    "unknown": "Inconnu"
+  },
+  "unknownHint": "Le moteur signale un état de service que cette console ne connaît pas. Il est affiché tel quel plutôt que supposé actif.",
+  "unpinned": "Non épinglé",
+  "suspend": "Retirer le service",
+  "restore": "Rétablir le service",
+  "suspendTitle": "Retirer le service de {{name}} ?",
+  "suspendDescription": "Les modifications et le service interactif sont refusés avec 423 tenant_suspended jusqu'au rétablissement.",
+  "keeps": "Trois choses continuent délibérément :",
+  "keepsAuth": "L'authentification et les routes système de l'opérateur, pour que le locataire puisse être expliqué et rétabli.",
+  "keepsExport": "L'export des données propres du locataire — retirer le service ne doit pas prendre en otage les données d'un client. Un export effectué pendant le retrait est consigné dans la chaîne d'audit du locataire.",
+  "keepsCustody": "Le travail de conservation : la chaîne continue d'être horodatée et reste vérifiable et certifiable en sauvegarde.",
+  "notDelete": "Ceci ne supprime rien. Supprimer un locataire est une opération distincte et destructrice.",
+  "confirmSuspend": "Retirer le service",
+  "suspended": "Service retiré de {{name}}",
+  "restoreTitle": "Rétablir le service de {{name}} ?",
+  "restoreDescription": "Le service est rétabli sans perte : rien n'a été supprimé pendant le retrait.",
+  "confirmRestore": "Rétablir le service",
+  "restored": "Service rétabli pour {{name}}",
+  "delete": "Supprimer",
+  "deleteTitle": "Supprimer {{name}} et tout son contenu",
+  "deleteDescription": "Purge le locataire et ses données immédiatement. L'opération est irréversible et ce moteur n'offre aucune fenêtre de récupération.",
+  "confirmDelete": "Supprimer définitivement",
+  "deleteGrace": "Le délai de grâce de 30 jours documenté pour l'API relève du plan de contrôle cloud, pas de ce moteur. Ici, la purge a lieu dès la confirmation.",
+  "deleteInstead": "Pour cesser de servir un client sans rien détruire, suspendez plutôt : la suspension est sans perte et réversible.",
+  "deleteDone": "{{name}} supprimé",
+  "deleteSystem": "Le locataire système ne peut pas être supprimé"
+}

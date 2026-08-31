@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+
+model:
+  provider: anthropic
+  default: claude-sonnet-4-20250514

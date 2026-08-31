@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": "request-task-1",
+  "result": {
+    "task": {
+      "id": "task-v101-1",
+      "contextId": "context-v101-1",
+      "status": {
+        "state": "TASK_STATE_WORKING"
+      }
+    }
+  }
+}

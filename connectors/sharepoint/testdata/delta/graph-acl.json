@@ -1,0 +1,5 @@
+{
+  "id": "item-3",
+  "permissions": [{"grantedToV2": {"siteGroup": {"displayName": "Members"}}}],
+  "sensitivityLabel": {"displayName": "Confidential"}
+}

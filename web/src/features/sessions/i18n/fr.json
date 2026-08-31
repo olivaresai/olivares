@@ -1,0 +1,190 @@
+{
+  "title": "Sessions",
+  "subtitle": "Opération des agents en direct — ce que chaque session fait à l’instant même, ses tokens, son coût et sa cadence, mis à jour via un flux en direct.",
+  "refresh": "Actualiser",
+  "search": "Rechercher une session, un agent, une action…",
+  "allStates": "Tous les états",
+  "summary": {
+    "active": "Actif",
+    "idle": "Inactif",
+    "silentEvasion": "Évasion possible",
+    "total": "Sessions",
+    "launched": "Lancées",
+    "discovered": "Découvertes",
+    "attention": "À examiner"
+  },
+  "cols": {
+    "session": "Session",
+    "agent": "Agent",
+    "state": "État",
+    "action": "Action en cours",
+    "model": "Modèle",
+    "tokens": "Tokens (entrée / sortie)",
+    "cost": "Coût",
+    "duration": "Durée",
+    "lastSeen": "Vu pour la dernière fois",
+    "provenance": "Origine",
+    "control": "Contrôle"
+  },
+  "state": {
+    "active": "Actif",
+    "idle": "Inactif",
+    "ended": "Terminé",
+    "silent_evasion": "Évasion possible"
+  },
+  "stateHint": {
+    "active": "Au travail — événements conformes à la cadence attendue.",
+    "idle": "Calme, mais dans la tolérance.",
+    "ended": "Terminée ou clôturée.",
+    "silent_evasion": "Devenue silencieuse au sein de sa cadence attendue — un signal à surveiller, pas une erreur."
+  },
+  "evasionBanner": "Cette session est devenue silencieuse au sein de sa cadence attendue. Le moteur la signale comme une évasion possible — examinez la chronologie.",
+  "detail": {
+    "title": "Session",
+    "goal": "Objectif",
+    "summary": "Résumé",
+    "noGoal": "Aucun objectif signalé",
+    "noSummary": "Aucun résumé signalé",
+    "agent": "Agent",
+    "model": "Modèle",
+    "state": "État",
+    "action": "Action en cours",
+    "resource": "Ressource",
+    "mode": "Mode",
+    "inputTokens": "Tokens d’entrée",
+    "outputTokens": "Tokens de sortie",
+    "cost": "Coût",
+    "events": "Événements",
+    "toolCalls": "Appels d’outils",
+    "duration": "Durée",
+    "firstSeen": "Premier événement",
+    "lastSeen": "Dernier événement",
+    "minimalData": "Seules les métadonnées sont affichées. Par conception, le moteur ne transporte jamais ici de SQL, de charges utiles ni de secrets (données minimales).",
+    "viewAccess": "Carte des accès",
+    "viewInventory": "Inventaire"
+  },
+  "timeline": {
+    "title": "Chronologie",
+    "subtitle": "Ordre d’ingestion reconstitué — les événements les plus récents apparaissent à mesure qu’ils arrivent.",
+    "loadMore": "Charger plus",
+    "empty": "Aucun événement dans la chronologie pour l’instant",
+    "emptyHint": "À mesure que la session émet des événements d’outil, MCP, de coût et de constat, ils apparaissent ici.",
+    "all": "Tous les types",
+    "source": "Source"
+  },
+  "kind": {
+    "tool": "Outil",
+    "mcp": "MCP",
+    "cost": "Coût",
+    "finding": "Constat"
+  },
+  "empty": {
+    "title": "Aucune session pour l’instant",
+    "description": "Les sessions apparaissent ici dès que les agents commencent à travailler : celles qu’Olivares découvre via ses connecteurs et celles que vous lancez depuis cet écran."
+  },
+  "forbidden": {
+    "title": "Sessions non autorisées",
+    "description": "Votre rôle n’inclut pas la permission de consulter les sessions en direct."
+  },
+  "operateTitle": "Claude Code",
+  "operateSubtitle": "Créez, rejoignez et gouvernez des sessions Claude Code, sans SSH. Les sessions qu’Olivares se contente d’observer figurent dans cette même liste et ouvrent la même fiche.",
+  "unifiedSubtitle": "Toutes les sessions d’agents de ce plan — celles qu’Olivares a découvertes et celles qu’il a lancées — dans une seule liste, avec ce que chacune fait et ce que l’on peut en faire.",
+  "launch": "Nouvelle session",
+  "allSources": "Toutes les origines",
+  "tabs": {
+    "sessions": "Sessions",
+    "workspaces": "Espaces de travail"
+  },
+  "partial": {
+    "noLiveRead": "Les sessions observées ne sont pas affichées : votre rôle n’inclut pas sessions:live:read. Les sessions lancées ci-dessous sont la part qui a pu être lue, pas le tableau complet.",
+    "noRunRead": "Les sessions lancées ne sont pas affichées : votre rôle n’inclut pas sessions:run:read. Une session indiquée ci-dessous comme découverte peut avoir été lancée par Olivares — cette liste n’a pas pu le vérifier.",
+    "truncated": "Ceci est la page la plus récente, pas l’ensemble du parc. L’origine y est recoupée sur ce qui est chargé : une session dont l’exécution est sortie de la page peut apparaître comme découverte ; ouvrez la session pour que le moteur réponde.",
+    "runLookupFailed": "La moitié « lancées » n’a pas pu être lue : la requête sur les exécutions a échoué. Les lignes ci-dessous sont ce qu’a renvoyé la moitié observée ; l’origine est indiquée comme non lue plutôt que devinée.",
+    "liveLookupFailed": "La moitié observée n’a pas pu être lue : la requête en direct a échoué. Les lignes ci-dessous sont les sessions lancées ; les colonnes de télémétrie sont vides parce que rien n’a pu être lu, pas parce qu’il n’y a rien."
+  },
+  "card": {
+    "tabs": {
+      "overview": "Aperçu",
+      "live": "En direct",
+      "governance": "Gouvernance",
+      "lifecycle": "Cycle de vie",
+      "details": "Détails"
+    },
+    "provenance": {
+      "launched": "Lancée",
+      "discovered": "Découverte",
+      "launchedExplain": "Un enregistrement de lancement rattache cette session à Olivares : c’est lui qui l’a démarrée. Ce que l’on peut en faire maintenant figure ci-dessous — l’avoir lancée n’équivaut pas à détenir un processus vivant.",
+      "discoveredExplain": "Aucun enregistrement de lancement ne s’y rattache : autant que ce plan puisse l’établir, Olivares ne l’a pas démarrée. Elle peut être lue et auditée, pas pilotée.",
+      "unknownExplain": "Impossible de vérifier si Olivares a lancé cette session : permission sessions:run:read absente, ou la requête a échoué. C’est « non lu », pas « non lancée ».",
+      "multipleRuns": "{{n}} exécutions pilotent cette session",
+      "unknown": "Origine non lue"
+    },
+    "control": {
+      "title": "Ce que l’on peut en faire",
+      "full": "Contrôle complet",
+      "lifecycle": "Cycle de vie seulement",
+      "observe": "Observation seulement",
+      "fullExplain": "Olivares détient le processus et relaie ses E/S : il peut être observé, piloté et arrêté.",
+      "lifecycleExplain": "Démarrer et arrêter, rien entre les deux : soit Olivares détient le processus mais pas ses E/S, soit le processus est arrêté et peut être repris.",
+      "observeExplain": "Olivares ne détient aucun processus pour cette session. Elle peut être lue et auditée ; l’arrêter n’est pas à la portée de ce plan.",
+      "unknownExplain": "La moitié « opération » n’a pas été lue (sessions:run:read) : voici ce qui se voit depuis la seule moitié observée."
+    },
+    "cap": {
+      "watch": "Voir sa télémétrie en direct et sa chronologie",
+      "attach": "Voir ses E/S au fil de l’eau",
+      "drive": "Lui envoyer une entrée",
+      "stop": "L’arrêter",
+      "resume": "La reprendre",
+      "cleanup": "Nettoyer son espace de travail",
+      "delete": "Supprimer son enregistrement",
+      "reason": {
+        "no-run": "aucun processus : Olivares n’a pas lancé cette session",
+        "no-observation": "rien n’a encore été observé pour cette session",
+        "transport": "ses E/S sont relayées vers le cloud d’Anthropic : Olivares ne peut ni les montrer ni les piloter",
+        "state": "son état ne le permet pas",
+        "permission": "votre rôle ne l’inclut pas"
+      },
+      "sharedReason": "Indisponible : {{reason}}."
+    },
+    "actions": {
+      "stop": "Arrêter",
+      "resume": "Reprendre",
+      "cleanup": "Nettoyer",
+      "delete": "Supprimer",
+      "cleanupHint": "Clôt l’exécution et libère sa poignée de reprise : elle ne pourra plus être reprise. Le journal de cycle de vie est conservé.",
+      "deleteHint": "Supprime l’enregistrement de l’exécution. Les événements de cycle de vie ancrés restent dans le journal d’audit."
+    },
+    "transport": {
+      "stream-json": "Gouverné (stream-json)",
+      "remote-control": "Contrôle à distance"
+    },
+    "postureValue": {
+      "enforced": "Appliquée — ses appels d’outils sont contrôlés au moment où ils se produisent",
+      "observed": "Observée — ses appels d’outils sont enregistrés, pas contrôlés"
+    },
+    "sessionRef": "Référence de session",
+    "engine": "Moteur",
+    "posture": "Posture",
+    "none": "Aucune",
+    "notDeclared": "Non déclarée",
+    "unclaimed": "Une activité a été vue depuis une session ne détenant aucune revendication active. Le moteur le signale ; ce n’est pas le même signal qu’une possible évasion.",
+    "relayedIO": "Ses E/S sont relayées vers le cloud d’Anthropic : Olivares ne peut pas les afficher ici. Le contrôle du cycle de vie reste applicable.",
+    "observedNotRead": "La moitié observée n’a pas été lue : votre rôle n’inclut pas sessions:live:read.",
+    "noObservationYet": "Rien n’a encore été observé pour cette session : aucune télémétrie n’est parvenue au plan sous cette référence.",
+    "actionFailed": "L’action n’a pas pu être menée à bien.",
+    "activeRun": "en cours d’usage",
+    "pickRun": "Plusieurs exécutions pilotent cette session. Choisissez-en une pour la rejoindre, la gouverner ou l’arrêter."
+  },
+  "facet": {
+    "observed": "Observée : {{state}}",
+    "run": "Exécution : {{state}}"
+  },
+  "runState": {
+    "pending": "En attente",
+    "running": "En cours",
+    "idle": "Inactive",
+    "stopped": "Arrêtée",
+    "failed": "Échouée",
+    "cleaned": "Nettoyée"
+  }
+}

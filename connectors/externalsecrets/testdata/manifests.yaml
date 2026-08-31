@@ -1,0 +1,90 @@
+# Multi-document ESO manifest fixture. Contains an ExternalSecret, a
+# SecretStore and a ClusterSecretStore, plus a non-ESO document and a no-data
+# ExternalSecret to exercise skipping. NOTE: there is no secret VALUE anywhere in a
+# CRD manifest — only backend key NAMES (remoteRef.key). The data fields here use
+# the literal MUST_NOT_LEAK only as a key name, to prove names are never confused
+# for values and that no value is ever emitted.
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: default
+spec:
+  provider:
+    vault:
+      server: https://vault.example:8200
+      path: secret
+      version: v2
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-sm
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: eu-west-1
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: app-credentials
+  namespace: default
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: app-credentials-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: username
+      remoteRef:
+        key: apps/app/db
+        property: username
+    - secretKey: password
+      remoteRef:
+        key: apps/app/db
+        property: password
+  dataFrom:
+    - extract:
+        key: apps/app/shared
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: cluster-wide
+  namespace: team-a
+spec:
+  secretStoreRef:
+    name: aws-sm
+    kind: ClusterSecretStore
+  # No target.name => the materialized Secret is named after metadata.name.
+  data:
+    - secretKey: api_key
+      remoteRef:
+        key: prod/MUST_NOT_LEAK/api
+---
+# An ExternalSecret with neither data nor dataFrom must emit nothing.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: empty-es
+  namespace: default
+spec:
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: empty-secret
+---
+# A non-ESO document in the same directory must be ignored.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unrelated
+  namespace: default
+data:
+  note: ignored

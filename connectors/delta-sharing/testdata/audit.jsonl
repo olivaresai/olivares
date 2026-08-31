@@ -1,0 +1,6 @@
+{"timestamp":"2026-06-04T09:15:01Z","recipient":"acme-corp","share":"sales_share","schema":"public","table":"q3","action":"queryTable","predicate":"WHERE region = 'EMEA' AND revenue > 1000000","token":"recipient-bearer-SECRET-xyz","rows_returned":42000}
+{"timestamp":"2026-06-04T09:15:02.500Z","recipient":"acme-corp","share":"sales_share","schema":"public","table":"q3","action":"getTableData","fileUrl":"https://presigned.example.com/abc?sig=DEADBEEF","predicate":"SELECT customer_email FROM q3"}
+{"timestamp":"2026-06-04T09:15:03Z","recipient":"acme-corp","share":"sales_share","schema":"public","table":"q4","action":"getTableVersion"}
+{"timestamp":"2026-06-04T09:15:04Z","recipient":"partner-pool","share":"sales_share","schema":"public","table":"forecast","action":"queryTable","predicate":"WHERE forecast_year = 2027","token":"pool-bearer-SECRET-987"}
+{"timestamp":"2026-06-04T09:15:05Z","recipient":"acme-corp","share":"sales_share","schema":"","table":"","action":"listShares"}
+{"timestamp":"2026-06-04T09:15:06Z","recipient":"acme-corp","share":"sales_share","schema":"public","table":"audit_internal","action":"adminRotateToken"}

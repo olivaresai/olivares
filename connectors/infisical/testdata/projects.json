@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "id": "proj-platform",
+      "name": "Platform",
+      "orgId": "org-acme",
+      "slug": "platform",
+      "type": "secret-manager",
+      "environments": [
+        { "id": "env-dev", "name": "Development", "slug": "dev" },
+        { "id": "env-prod", "name": "Production", "slug": "prod" }
+      ]
+    },
+    {
+      "id": "proj-billing",
+      "name": "Billing",
+      "orgId": "org-acme",
+      "slug": "billing",
+      "type": "secret-manager"
+    }
+  ]
+}

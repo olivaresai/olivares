@@ -1,0 +1,480 @@
+name: aws-terraform
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# C04-02 — validate on every push; apply only from workflow_dispatch
+# with the exact confirmation token AND the AWS role + backend secrets.
+# Push/PR never apply. A missing secret with confirm set is a refusal,
+# not a skip that looks clean.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "deploy/aws/**"
+      - "scripts/check-aws-estate.sh"
+      - "scripts/test-aws-estate.sh"
+      - ".github/workflows/aws-terraform.yml"
+      # ⛔ ESTAS TRES SON ENTRADAS DIRECTAS DEL GATE Y FALTABAN. `check-aws-estate.sh`
+      # construye un parser HCL desde `scripts/hcl-module-guard/`, y la toolchain la fija
+      # `go.work`. Un cambio SOLO en cualquiera de ellas no disparaba este workflow: eso es
+      # AUSENCIA DE VEREDICTO, no un verde. (Contraste sol max 2026-08-26, hallazgo 4.)
+      - "scripts/hcl-module-guard/**"
+      # Mismo argumento que las tres de arriba, aplicado a lo que se añadió el
+      # 2026-08-27: `check-aws-estate.sh` construye TAMBIÉN `scripts/aws-apply-guard`
+      # y su sujeto incluye `aws-images.yml`. Un cambio sólo en cualquiera de los dos
+      # sin este filtro es AUSENCIA DE VEREDICTO, no un verde.
+      - "scripts/aws-apply-guard/**"
+      - ".github/workflows/aws-images.yml"
+      - "go.work"
+      - "go.work.sum"
+  pull_request:
+    paths:
+      - "deploy/aws/**"
+      - "scripts/check-aws-estate.sh"
+      - "scripts/test-aws-estate.sh"
+      - ".github/workflows/aws-terraform.yml"
+      # ⛔ ESTAS TRES SON ENTRADAS DIRECTAS DEL GATE Y FALTABAN. `check-aws-estate.sh`
+      # construye un parser HCL desde `scripts/hcl-module-guard/`, y la toolchain la fija
+      # `go.work`. Un cambio SOLO en cualquiera de ellas no disparaba este workflow: eso es
+      # AUSENCIA DE VEREDICTO, no un verde. (Contraste sol max 2026-08-26, hallazgo 4.)
+      - "scripts/hcl-module-guard/**"
+      # Mismo argumento que las tres de arriba, aplicado a lo que se añadió el
+      # 2026-08-27: `check-aws-estate.sh` construye TAMBIÉN `scripts/aws-apply-guard`
+      # y su sujeto incluye `aws-images.yml`. Un cambio sólo en cualquiera de los dos
+      # sin este filtro es AUSENCIA DE VEREDICTO, no un verde.
+      - "scripts/aws-apply-guard/**"
+      - ".github/workflows/aws-images.yml"
+      - "go.work"
+      - "go.work.sum"
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type apply-sandbox-estate to apply. Anything else is refused."
+        required: true
+        default: "plan-only"
+      # ── LAS CUATRO VARIABLES DE RAÍZ QUE HOY VAN VACÍAS, Y POR QUÉ ESTÁN AQUÍ.
+      # `deploy/aws/variables.tf` las declara con default "" y `main.tf` las pasa a sus
+      # módulos, así que dejarlas en blanco reproduce EXACTAMENTE el comportamiento
+      # anterior: sin hostname no hay ACM ni listener HTTPS (count 0), y sin digest no
+      # hay task definition ni service (count 0). Van como entradas de dispatch y no
+      # como secretos porque NINGUNA es secreta: un hostname es público en cuanto se
+      # resuelve, y un digest de imagen es público en cuanto se firma.
+      #
+      # ⛔ Y EL ORDEN QUE ESTO IMPLICA, que es lo que faltaba escrito en alguna parte:
+      # el repositorio ECR lo CREA este mismo apply, así que en la primera corrida no
+      # existe todavía y no puede haber digest. La secuencia real es de TRES pasos:
+      #   1 · apply con las cuatro vacías  -> VPC, RDS, ECR, secretos, ingress. Sin ECS.
+      #   2 · aws-images.yml               -> construye, firma y empuja; imprime digests.
+      #   3 · apply con image/engine_image -> task definitions y services.
+      # Y `hostname` entra cuando su registro DNS exista, porque ACM valida por DNS.
+      hostname:
+        description: "Root var.hostname (e.g. cloud-api.olivares.ai). Empty keeps ACM and the HTTPS listener at count 0."
+        required: false
+        default: ""
+      ingest_hostname:
+        description: "Root var.ingest_hostname (collector NLB name). Empty uses the sandbox default."
+        required: false
+        default: ""
+      await_certificate_validation:
+        description: "FASE 2. Leave false for the first apply. Set true ONLY after the ACM validation CNAME exists, or the apply waits until its timeout."
+        required: false
+        default: "false"
+      certificate_arn:
+        description: "Root var.certificate_arn, ALREADY VALIDATED. Empty makes the module issue its own ACM cert from hostname, in two phases."
+        required: false
+        default: ""
+      image:
+        description: "Control-plane image BY DIGEST (repo@sha256:...). Empty keeps the ECS service at count 0."
+        required: false
+        default: ""
+      engine_image:
+        description: "Engine image BY DIGEST (repo@sha256:...). Empty keeps the engine service at count 0."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  TOFU_VERSION: "1.12.1"
+  TOFU_SHA256: "1fc9af962e3632b7cd0ba27076cd9f1ced177567defe9e331ac37f5a40468575"
+
+jobs:
+  validate:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ── Go, PROVISIONADO, no heredado del host ────────────────────────────────
+      # ⛔ ESTE JOB COMPILABA Go SIN INSTALAR Go, Y ES EL UNICO DEL ARBOL QUE LO HACIA.
+      # `check-aws-estate.sh` paso de balancear llaves con awk a construir un parser HCL
+      # de verdad (`GOWORK=off go build`), asi que el job necesita una toolchain — y no
+      # la tenia: usaba la que hubiera en el PATH del runner, que aqui es un snap.
+      #
+      # Medido el 2026-08-26 (run 33006146084, job 98300279577, runner ci-runner-5):
+      #   internal error, please report: running "go" failed: cannot find installed snap
+      #   "go" at revision 11227: missing file /var/lib/snapd/snaps/go_11227.snap
+      #   check-aws-estate: COULD NOT LOOK — cannot build the pinned HCL parser
+      # El guion respondio BIEN (rc=2, la tercera respuesta). Lo que estaba mal era pedirle
+      # a un gate que dependiera de lo que el host tuviera puesto.
+      #
+      # ⛔ Y LA RAZON POR LA QUE NO SE HIZO ANTES ERA FALSA, con la fuente delante: el
+      # comentario de «install OpenTofu» de mas abajo dice que en un runner auto-hospedado
+      # «no se puede dar por supuesto el HOME», y de ahi que `setup-go` fuera inviable.
+      # `mainline-ci.yml` corre `setup-go` EN ESTOS MISMOS RUNNERS y en verde desde el
+      # 2026-08-18: lo resolvio poniendo las cachés bajo $RUNNER_TEMP ANTES de setup-go
+      # (`.github/workflows/mainline-ci.yml:477-506`, con su medida: el job no moria en
+      # `go install`, moria DENTRO de setup-go con «GOCACHE is not defined and neither
+      # $XDG_CACHE_HOME nor $HOME are defined»). La solucion ya estaba escrita en el arbol.
+      #
+      # EL ORDEN ES EL ARREGLO: este paso va ANTES de setup-go. Colocado despues sale
+      # verde en los runners que ya funcionaban y sigue rojo en los que no.
+      # ⛔ `TMPDIR` VA AQUÍ, Y SU AUSENCIA TUMBÓ `validate` HOY (actions-runner-3, medido por
+      # the planner). `check-aws-estate.sh:72` hace `_tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"`
+      # y acto seguido `mkdir -p` con `|| cannot`: ese respaldo es la ruta de ESTAS CAJAS, no la de
+      # un runner de GitHub, donde `/workspace` no existe. ⇒ el gate contestaba `2 · no he podido
+      # mirar` — el veredicto correcto, por un motivo que no era el estate.
+      #
+      # Es la clase «un requisito que vive en un comentario es una suposición sobre el llamador»:
+      # el guion documentaba que el llamador apunta TMPDIR, y ningún llamador lo apuntaba. Se fija
+      # donde ya se fijan las cachés de Go, y por la misma razón — `$RUNNER_TEMP` lo purga el
+      # runner entre jobs y es escribible, que `/tmp` en estos runners no lo es.
+      - name: Go caches and TMPDIR under RUNNER_TEMP (this runner may have no $HOME)
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+            echo "GOTMPDIR=$RUNNER_TEMP/tmp"
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+
+      # ⛔ ESTO ES UN *SMOKE* DE COMPILADOR/ENLAZADOR, NO UN CONTROL DEL PARSER HCL, y el
+      # nombre importa porque la primera versión de este paso SÍ se presentó como lo segundo.
+      # Lo corrigió el contraste `sol max` del 2026-08-26 con una contraprueba: con la red
+      # cortada, este probe da 0 y `GOWORK=off go build` del parser real da 1
+      # (`module lookup disabled by GOPROXY=off`). ⇒ **puede quedar verde mientras la
+      # construcción que importa falla.** El que responde por el parser es el paso siguiente.
+      #
+      # QUÉ MIDE, exactamente y nada más: que el `go` que el PATH resuelve tras `setup-go`
+      # (a) arranca y contesta, y (b) compila y **EJECUTA** un binario en `$RUNNER_TEMP`.
+      # La segunda mitad no es adorno: `/tmp` es NOEXEC en esta casa y ya ha costado un gate
+      # con rc=126 leído como rojo del código, así que «se escribió» no es «se puede correr».
+      #
+      # POR QUÉ SIGUE VALIENDO LA PENA aunque el paso siguiente construya de verdad: separa
+      # «la toolchain no sirve» de «el estate está mal», que es la confusión que originó todo
+      # esto — un snap roto salía como defecto del estate.
+      #
+      # ⚠ Y SU PUNTO CIEGO, DICHO AQUÍ PORQUE UN CONTROL QUE NO DECLARA LO QUE NO VE MIENTE:
+      # si Go falla DENTRO de `setup-go`, ese paso falla y GitHub **omite éste**, así que su
+      # rc=2 no llega a emitirse. Cubre el fallo de la toolchain YA PROVISIONADA, no el de la
+      # provisión. Tampoco compara la versión con `go.work`: de eso responde `setup-go`.
+      #
+      # `shell: bash` EXPLÍCITO y sin `-e`: el `run:` por defecto corre con `bash -e`, y así
+      # un fallo de `mkdir` o de escritura salía con el rc del shell ANTES del bloque que lo
+      # traduce — es decir, el mensaje habría nombrado a Go por un fallo de almacenamiento.
+      - name: compiler/linker smoke — the provisioned Go runs and its output executes
+        shell: bash
+        run: |
+          set -u
+          _d="$RUNNER_TEMP/go-liveness"
+          if ! mkdir -p "$_d" 2>/dev/null || ! printf 'package main\nfunc main(){}\n' > "$_d/main.go" 2>/dev/null; then
+            echo "aws-terraform: COULD NOT LOOK — no puedo preparar $_d (espacio, permisos o inodos)." >&2
+            echo "                Esto es almacenamiento temporal, NO la toolchain de Go." >&2
+            exit 2
+          fi
+          if ! _v="$(go env GOVERSION 2>&1)"; then
+            echo "aws-terraform: COULD NOT LOOK — la toolchain de Go no arranca: $_v" >&2
+            exit 2
+          fi
+          printf 'aws-terraform: go vivo: %s (%s)\n' "$_v" "$(command -v go)"
+          if ! ( cd "$_d" && GOWORK=off GO111MODULE=off go build -o "$_d/probe" ./main.go ) 2>&1; then
+            echo "aws-terraform: COULD NOT LOOK — Go informa versión pero no compila." >&2
+            exit 2
+          fi
+          if ! "$_d/probe"; then
+            echo "aws-terraform: COULD NOT LOOK — el binario compila pero NO se puede ejecutar en" >&2
+            echo "                $RUNNER_TEMP (¿montado noexec?). El parser HCL se construye y se" >&2
+            echo "                EJECUTA ahí mismo, así que esto lo tumbaría después." >&2
+            exit 2
+          fi
+          echo "aws-terraform: smoke OK — compila y ejecuta en RUNNER_TEMP"
+
+      - name: estate shape (no apply)
+        run: bash scripts/check-aws-estate.sh
+
+      - name: estate shape selftest
+        run: bash scripts/test-aws-estate.sh
+
+      - name: install OpenTofu (pinned)
+        run: |
+          set -euo pipefail
+          # ⛔ $RUNNER_TEMP Y NO /tmp: en este runner /tmp NO ES ESCRIBIBLE. Medido el
+          # 2026-08-24 (job 97367227397): `curl: (23) Failure writing output to
+          # destination`, y 0 verdes en 40 corridas. El 23 de curl es un fallo de
+          # ESCRITURA, no de red ni de checksum -- la descarga nunca llego al disco, asi
+          # que el `sha256sum -c` de abajo no llego a comparar nada. Misma clase que el
+          # $HOME ausente que rompe setup-go: en un runner auto-hospedado no se puede dar
+          # por supuesto ni el HOME ni el /tmp. RUNNER_TEMP lo purga el runner entre jobs.
+          curl -fsSL -o "$RUNNER_TEMP/tofu.zip" \
+            "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip"
+          echo "${TOFU_SHA256}  $RUNNER_TEMP/tofu.zip" | sha256sum -c -
+          # ⛔ SIN `sudo`, Y NO ES ESTILO: ES QUE EL POOL DE RUNNERS NO ES HOMOGÉNEO.
+          # Medido el 2026-08-28 en el run 33212068653: este MISMO paso, con este MISMO
+          # código, pasó en `validate` y murió en `apply` con «sudo: a terminal is
+          # required to read the password». El job cayó en un runner auto-hospedado cuyo
+          # `sudo` pide contraseña, y no en uno de los `ci-runner-*` que corren como root.
+          # El zip se descargó y verificó bien (`tofu.zip: OK`) — lo único que falló fue
+          # pedir root para escribir en /usr/local/bin.
+          #
+          # Reintentar es una LOTERÍA DE RUNNER, no un arreglo. Y este paso no necesita
+          # root para nada: se descomprime en el temporal del propio job y se añade al
+          # PATH. Funciona en TODOS los runners, y de paso quita una escalada a root de un
+          # job privilegiado, que es mejor postura además de más portable.
+          #
+          # `$GITHUB_PATH` surte efecto en los pasos SIGUIENTES, no en éste, así que la
+          # comprobación de aquí invoca el binario por su ruta.
+          unzip -o "$RUNNER_TEMP/tofu.zip" -d "$RUNNER_TEMP/bin" tofu
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/tofu" version
+
+      - name: tofu init (no backend) and validate
+        working-directory: deploy/aws
+        run: |
+          set -euo pipefail
+          tofu init -backend=false -input=false
+          tofu validate
+          echo "aws-terraform: validate job does not apply"
+
+  apply:
+    # ⛔ `needs: validate` NO ES ORDEN, ES LA PUERTA. Sin él, el `if` de confirmación de abajo
+    # deja correr `apply` EN PARALELO con `validate`, así que un dispatch confirmado podía
+    # APLICAR SOBRE AWS con el gate del estate en rojo — por Go, por el parser HCL o por un
+    # invariante ratificado (`scripts/check-aws-estate.sh`). La corrida acababa en rojo, pero
+    # DEMASIADO TARDE: el efecto externo ya se había producido. Un `if` decide si un job se
+    # ejecuta; sólo `needs` decide CUÁNDO y con qué condición previa.
+    # Defecto ALTO preexistente, encontrado por el contraste `sol max` del 2026-08-26 sobre un
+    # cambio que no lo tocaba. `apply` NO necesita Go: no lo invoca por ningún camino
+    # (ni `local-exec`, ni `remote-exec`, ni provider `external`) — así que la corrección es
+    # esta dependencia, no una segunda copia de `setup-go`.
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'apply-sandbox-estate'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      TF_BACKEND_BUCKET: ${{ secrets.TF_BACKEND_BUCKET }}
+      # ⛔ LA FASE DE IAM QUE ESTE REPOSITORIO DECLARA ESPERAR, y vive aquí y no en un
+      # input del dispatch a propósito: una expectativa que se teclea al lanzar no la
+      # revisa nadie, y la que de verdad importa —«este rol ya NO lleva
+      # AdministratorAccess»— se pierde el día que alguien relanza con los valores por
+      # defecto. Aquí es un commit, con su diff y su revisión. Se pone a "2" en el mismo
+      # commit en que se corre `scripts/aws-iam-phase2.sh apply`.
+      IAM_PHASE: "1"
+      AWSCLI_VERSION: "2.31.9"
+      # sha256 del zip oficial, calculado sobre la descarga del 2026-08-29. AWS no publica
+      # un fichero de checksums junto al zip (sólo una firma GPG), así que este valor se
+      # re-calcula al bumpear: `sha256sum awscli-exe-linux-x86_64-<v>.zip`.
+      AWSCLI_SHA256: "bf1150ac34672ebec370f724578c85f6a49f72390670022a06b9cf0f68b6d36e"
+      # `TF_VAR_<name>` es la vía documentada de OpenTofu para una variable de raíz, y
+      # se prefiere a `-var` porque no imprime el valor en la línea de comando del paso.
+      # Las cuatro vacías por defecto ⇒ el apply se comporta como antes de este cambio.
+      TF_VAR_hostname: ${{ github.event.inputs.hostname }}
+      TF_VAR_certificate_arn: ${{ github.event.inputs.certificate_arn }}
+      # ⛔ VACÍO NO ES "" AQUÍ, y por eso no se pasa a secas: `hostname` e `ingest_hostname`
+      # tienen DEFAULT en el estate (los nombres de sandbox), así que mandar una cadena
+      # vacía los BORRARÍA en vez de dejarlos por defecto. Se pasan sólo cuando traen algo.
+      TF_VAR_ingest_hostname: ${{ github.event.inputs.ingest_hostname }}
+      TF_VAR_await_certificate_validation: ${{ github.event.inputs.await_certificate_validation }}
+      TF_VAR_image: ${{ github.event.inputs.image }}
+      TF_VAR_engine_image: ${{ github.event.inputs.engine_image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: refuse apply without the role and backend
+        run: |
+          set -euo pipefail
+          if [ -z "${AWS_ROLE_ARN}" ] || [ -z "${TF_BACKEND_BUCKET}" ]; then
+            echo "C04-02: confirm was apply-sandbox-estate but AWS_ROLE_ARN or TF_BACKEND_BUCKET is empty"
+            echo "CLOUD-ACC does not exist in this lote — apply is refused, not skipped."
+            exit 1
+          fi
+
+      - name: install OpenTofu (pinned)
+        run: |
+          set -euo pipefail
+          # ⛔ $RUNNER_TEMP Y NO /tmp: en este runner /tmp NO ES ESCRIBIBLE. Medido el
+          # 2026-08-24 (job 97367227397): `curl: (23) Failure writing output to
+          # destination`, y 0 verdes en 40 corridas. El 23 de curl es un fallo de
+          # ESCRITURA, no de red ni de checksum -- la descarga nunca llego al disco, asi
+          # que el `sha256sum -c` de abajo no llego a comparar nada. Misma clase que el
+          # $HOME ausente que rompe setup-go: en un runner auto-hospedado no se puede dar
+          # por supuesto ni el HOME ni el /tmp. RUNNER_TEMP lo purga el runner entre jobs.
+          curl -fsSL -o "$RUNNER_TEMP/tofu.zip" \
+            "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip"
+          echo "${TOFU_SHA256}  $RUNNER_TEMP/tofu.zip" | sha256sum -c -
+          # ⛔ SIN `sudo`, Y NO ES ESTILO: ES QUE EL POOL DE RUNNERS NO ES HOMOGÉNEO.
+          # Medido el 2026-08-28 en el run 33212068653: este MISMO paso, con este MISMO
+          # código, pasó en `validate` y murió en `apply` con «sudo: a terminal is
+          # required to read the password». El job cayó en un runner auto-hospedado cuyo
+          # `sudo` pide contraseña, y no en uno de los `ci-runner-*` que corren como root.
+          # El zip se descargó y verificó bien (`tofu.zip: OK`) — lo único que falló fue
+          # pedir root para escribir en /usr/local/bin.
+          #
+          # Reintentar es una LOTERÍA DE RUNNER, no un arreglo. Y este paso no necesita
+          # root para nada: se descomprime en el temporal del propio job y se añade al
+          # PATH. Funciona en TODOS los runners, y de paso quita una escalada a root de un
+          # job privilegiado, que es mejor postura además de más portable.
+          #
+          # `$GITHUB_PATH` surte efecto en los pasos SIGUIENTES, no en éste, así que la
+          # comprobación de aquí invoca el binario por su ruta.
+          unzip -o "$RUNNER_TEMP/tofu.zip" -d "$RUNNER_TEMP/bin" tofu
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/tofu" version
+
+      # ⛔ EL CLI DE AWS, PINCHADO Y SIN ROOT, y está aquí por un fallo medido, no por
+      # completitud: el run 33240917638 murió en la comprobación de fase de IAM con
+      # «NO HE PODIDO MIRAR — no hay AWS CLI en esta caja» (rc=2). El runner `srv17` no lo
+      # trae. Falló CERRADO —antes de que OpenTofu tocara nada, cero recursos creados—, que
+      # es lo que ese control promete; pero un control que no puede correr no protege nada,
+      # así que la respuesta es darle la herramienta, no aflojarlo.
+      #
+      # Es la MISMA lección que el `sudo`: en un pool de runners heterogéneo, **una
+      # herramienta que no instalas tú es una moneda al aire**. Se instala pinchada por
+      # versión Y por sha256 —el instalador oficial de AWS no publica un fichero de
+      # checksums junto al zip, sólo una firma GPG, así que este valor lo calculé yo sobre
+      # la descarga— y sin root, con el `-i`/`-b` que el propio instalador documenta.
+      #
+      # ⛔ VA ANTES DEL CANJE OIDC A PROPÓSITO: no necesita credenciales, y colocarlo
+      # DESPUÉS metería un paso entre el canje y la comprobación de fase, que
+      # `scripts/aws-apply-guard` exige contiguos — el orden es parte de la invariante.
+      - name: install the AWS CLI (pinned, no root)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/awscli.zip" \
+            "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"
+          echo "${AWSCLI_SHA256}  $RUNNER_TEMP/awscli.zip" | sha256sum -c -
+          unzip -q -o "$RUNNER_TEMP/awscli.zip" -d "$RUNNER_TEMP/awscli-src"
+          "$RUNNER_TEMP/awscli-src/aws/install" --update \
+            -i "$RUNNER_TEMP/awscli" -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/aws" --version
+
+      # ── EL CANJE OIDC. Sin este paso, `id-token: write` (:237) es un permiso que
+      # nadie ejerce. Medido en el árbol el 2026-08-27, antes de este cambio: CERO
+      # apariciones de `aws-actions/configure-aws-credentials` en `.github/workflows/`
+      # — así que con los dos secretos puestos y el token de confirmación correcto, el
+      # `tofu init` de abajo habría leído el backend S3 con la cadena de credenciales
+      # POR DEFECTO del runner Hetzner: sin instance profile, sin perfil y sin
+      # variables, o sea con nada. El fallo llega en `init`, no en `apply`, porque el
+      # backend es S3 y se lee antes que cualquier recurso.
+      #
+      # ⛔ EL PIN ES UN OID DE COMMIT, NO UNA ETIQUETA. `@v6` es un puntero móvil: quien
+      # controle ese repositorio decide qué código corre en un job que asume un rol con
+      # AdministratorAccess sobre nuestra cuenta. `e6de0542…` es el commit que la
+      # etiqueta v6.2.3 apuntaba el 2026-08-27 (`chore(main): release 6.2.3 (#1878)`,
+      # 2026-07-22T18:31:37Z, resuelto contra la API de GitHub). El comentario `# v6.2.3`
+      # existe para que esa correspondencia se pueda re-verificar a mano al bumpear:
+      # `scripts/aws-apply-guard` comprueba la FORMA del digest y **no puede** comprobar
+      # que sea el commit que la etiqueta nombra — eso exige red y el gate no la tiene.
+      #
+      # `node24`, como `actions/checkout@v7.0.1` y `actions/setup-go@v7.0.0` que este
+      # mismo workflow ya corre en estos runners: no estrena runtime.
+      - name: assume the sandbox apply role (OIDC → STS)
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          # El nombre de sesión viaja a CloudTrail: sin él, cada apply es
+          # `GitHubActions` y no se puede atribuir a una corrida. `run_id` es único.
+          role-session-name: olivares-apply-${{ github.run_id }}
+          # Runner PERSISTENTE: credenciales de una corrida anterior siguen en el entorno y
+          # la propia acción documenta que pueden interferir (contraste `sol max`, B-01).
+          unset-current-credentials: true
+          # El identificador de cuenta no es un secreto, pero sí es identidad de
+          # infraestructura y estos repositorios se exportan a repositorios PÚBLICOS.
+          # Enmascararlo cuesta cero y el canon pide CERO fugas, no «pocas».
+          mask-aws-account-id: true
+
+      # ⛔ FALLA CERRADO, INCLUIDO EL «no he podido mirar». Un control que no puede leer
+      # el estado del rol y deja seguir un apply privilegiado no es un control: es una
+      # línea de log. Las tres respuestas del guion se conservan enteras — 0 está en la
+      # fase declarada, 1 no lo está, 2 no pude comprobarlo — y las tres que no son 0
+      # paran el job antes de que OpenTofu toque nada.
+      - name: the apply role is in the IAM phase this repository declares
+        run: bash scripts/aws-iam-phase2.sh check "$GITHUB_REPOSITORY" design
+
+      - name: tofu apply (sandbox estate only)
+        working-directory: deploy/aws
+        run: |
+          set -euo pipefail
+          # ⛔ UN `TF_VAR` VACÍO NO ES "SIN VALOR": ES EL VALOR "". Y desde la orden 24
+          # `hostname` e `ingest_hostname` tienen DEFAULT en el estate (los nombres de
+          # sandbox), así que un dispatch que no los rellena mandaría `TF_VAR_hostname=""`
+          # y **borraría el default** — sin hostname no hay certificado, y la fase 1 no
+          # pediría nada. El síntoma sería un apply verde que no hace lo que dice.
+          #
+          # Se desexportan los que llegan vacíos, así que OpenTofu ve «no lo pasaron» y usa
+          # su default. Se hace aquí y no duplicando los nombres en las entradas del
+          # dispatch, porque un hecho escrito en dos sitios deriva.
+          for _v in TF_VAR_hostname TF_VAR_ingest_hostname TF_VAR_certificate_arn \
+                    TF_VAR_image TF_VAR_engine_image TF_VAR_await_certificate_validation; do
+            eval "_val=\${$_v-}"
+            [ -n "${_val}" ] || unset "$_v"
+          done
+          # ⛔ BLOQUEO DE ESTADO. Sin él, dos applies concurrentes sobre el mismo
+          # `terraform.tfstate` no dan error: intercalan escrituras y dejan un estado que
+          # describe una infraestructura que no existe — y el remedio de eso es un
+          # `import` a mano de todo el estate. Se elige el lockfile NATIVO de S3 y NO
+          # DynamoDB: `use_lockfile` está declarado en el backend S3 de OpenTofu
+          # (v1.12.1, `internal/backend/remote-state/s3/backend.go:469-473`, «Manage
+          # locking in the same configured S3 bucket») y se implementa con una escritura
+          # condicional `PutObject … IfNoneMatch: *` sobre `<key>.tflock`
+          # (`client.go:319-335`, borrado en `:542-547`). ⇒ CERO recursos nuevos, cero
+          # tabla que aprovisionar y cero IAM más allá del bucket que ya existe;
+          # DynamoDB habría exigido crear la tabla ANTES de poder aplicar el estate que
+          # la crearía. El bucket de estado tiene versioning, así
+          # que una escritura perdida se puede recuperar; una entrelazada, no.
+          tofu init -input=false \
+            -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+            -backend-config="key=cloud/sandbox/terraform.tfstate" \
+            -backend-config="region=us-east-1"
+          tofu apply -input=false -auto-approve
+
+      # ⛔ UN OUTPUT QUE NADIE IMPRIME NO EXISTE, y sin este paso la partición en dos fases
+      # ERA INEJECUTABLE. `deploy/aws/outputs.tf` publica los tres CNAME —el de validación
+      # de ACM y los dos de servicio— precisamente para que nadie los deduzca; pero el
+      # apply corre en un runner, los outputs se quedan en el estado de S3, y el único
+      # camino para leerlos era tener credenciales y correr `tofu output` a mano. Es decir:
+      # el diseño exigía valores literales y el pipeline no los enseñaba. Encontrado al
+      # escribir el runbook del despacho, no leyendo el fichero.
+      #
+      # Se usa `tofu output` en su forma humana y NO `-json` a propósito: OpenTofu **redacta
+      # los valores marcados `sensitive`** en esa forma, así que un output sensible que
+      # alguien añada mañana no se publica en el resumen del job por descuido. La versión
+      # JSON los trae en claro.
+      - name: publish the estate outputs into the job summary
+        working-directory: deploy/aws
+        run: |
+          set -euo pipefail
+          {
+            echo "## estate outputs"
+            echo '```'
+            tofu output
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

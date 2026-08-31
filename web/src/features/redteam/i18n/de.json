@@ -1,0 +1,172 @@
+{
+  "title": "Red Team",
+  "description": "Test der adversarialen Robustheit — ausschließlich gegen Ihre eigenen registrierten und autorisierten Agenten. Die API führt eine defensive Taxonomie und Scorecards, niemals eine Angriffsnutzlast.",
+  "tabs": {
+    "targets": "Ziele",
+    "runs": "Läufe",
+    "catalog": "Katalog"
+  },
+  "suites": {
+    "all": "Alle Suiten",
+    "injection": "Prompt-Injection",
+    "jailbreak": "Jailbreak",
+    "exfil": "Datenexfiltration",
+    "tool_poisoning": "Werkzeug-Vergiftung"
+  },
+  "targets": {
+    "title": "Ziele",
+    "description": "Die Einwilligungsfläche. Ein Lauf berührt stets nur einen Agenten, den Sie registriert und autorisiert haben.",
+    "consentNote": "Die Registrierung eines Agenten ist keine Einwilligung. Ein Ziel entsteht nicht-autorisiert — autorisieren Sie es, um die Einwilligung zu erteilen, und widerrufen Sie sie jederzeit.",
+    "register": "Agent registrieren",
+    "authorize": "Autorisieren",
+    "revoke": "Widerrufen",
+    "authorizedBy": "von {{who}}",
+    "empty": "Keine Ziele registriert",
+    "emptyHint": "Registrieren Sie einen Ihrer eigenen Agenten als Kandidaten und autorisieren Sie ihn anschließend, um Prüfsonden auszuführen.",
+    "columns": {
+      "name": "Ziel",
+      "endpoint": "Endpunkt",
+      "scope": "Geltungsbereich",
+      "consent": "Einwilligung",
+      "actions": "Aktionen"
+    },
+    "dialog": {
+      "registerTitle": "Einen Kandidaten-Agenten registrieren",
+      "registerHint": "Registrieren Sie einen Ihrer eigenen Agenten als Red-Team-Kandidaten.",
+      "registerCta": "Registrieren",
+      "notConsentNote": "Die Registrierung ist keine Einwilligung — der Kandidat wird nicht-autorisiert erstellt, und kein Lauf kann ihn berühren, bis Sie ihn autorisieren.",
+      "registered": "Agent als Kandidat registriert",
+      "agentRef": "Agent-Referenz",
+      "name": "Anzeigename",
+      "endpoint": "Endpunkt",
+      "scope": "Geltungsbereich",
+      "scopeHint": "Durch Kommas getrennte Flächen (z. B. input, output, tool_args).",
+      "authorizeTitle": "Dieses Ziel autorisieren",
+      "authorizeHint": "Die Erteilung der Einwilligung erlaubt Red-Team-Läufen, {{name}} zu prüfen. Diese Aktion wird im Audit-Hauptbuch festgehalten.",
+      "revokeTitle": "Einwilligung widerrufen",
+      "revokeHint": "Der Widerruf der Einwilligung stoppt jegliche weiteren Läufe gegen {{name}}. Diese Aktion wird im Audit-Hauptbuch festgehalten.",
+      "granted": "Einwilligung erteilt",
+      "revoked": "Einwilligung widerrufen"
+    },
+    "truncated": "{{n}} Ziele geladen; es gibt weitere",
+    "truncatedHint": "Es gibt mehr registrierte Ziele als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier ein Ziel, belegt das nicht, dass es nicht registriert oder nicht autorisiert ist — es kann schlicht jenseits dieser Seite liegen."
+  },
+  "runs": {
+    "title": "Läufe",
+    "description": "Jeder Lauf prüft ein autorisiertes Ziel und erstellt eine Robustheits-Scorecard. Fehlgeschlagene Prüfsonden werden zu Befunden.",
+    "detailTitle": "Lauf-Detail",
+    "closeDetail": "Schließen",
+    "launch": "Lauf starten",
+    "launchGatedHint": "Der Start ist deaktiviert, bis dieses Ziel autorisiert ist — die Registrierung eines Agenten ist keine Einwilligung.",
+    "robustness": "Robustheit",
+    "noScore": "keine Bewertung",
+    "degradedHint": "Alle Prüfsonden wurden übersprungen — es war keine Sandbox verfügbar. Dies ist ausstehende Sandbox, kein Bestehen.",
+    "errorHint": "Alle Prüfsonden sind durch einen Ausführungsfehler fehlgeschlagen. Dies ist kein Robustheits-Entscheid; führen Sie den Lauf erneut aus, sobald das Problem behoben ist.",
+    "empty": "Noch keine Läufe",
+    "emptyHint": "Starten Sie einen Lauf gegen ein autorisiertes Ziel, um eine Scorecard zu erstellen.",
+    "status": {
+      "completed": "Abgeschlossen",
+      "degraded": "Sandbox ausstehend",
+      "error": "Ausführungsfehler"
+    },
+    "columns": {
+      "started": "Gestartet",
+      "target": "Ziel",
+      "suite": "Suite",
+      "status": "Status",
+      "score": "Bewertung",
+      "passFail": "Bestanden / fehlgeschlagen"
+    },
+    "stats": {
+      "passed": "Bestanden",
+      "passedCaption": "blockiert + verweigert — Verteidigung hielt stand",
+      "failed": "Fehlgeschlagen",
+      "failedCaption": "befolgt + geleakt — echte Schwachstelle",
+      "errors": "Fehler",
+      "skipped": "Übersprungen",
+      "excludedCaption": "von der Bewertung ausgeschlossen"
+    },
+    "scorecard": {
+      "title": "Scorecard",
+      "description": "Robustheit = bestanden / (bestanden + fehlgeschlagen) × 100. Fehler und übersprungene Prüfsonden werden ausgeschlossen; höher ist besser."
+    },
+    "byFamily": {
+      "title": "Fehlschläge nach Familie",
+      "description": "Prüfsonden-Familien mit mindestens einer fehlgeschlagenen Prüfsonde.",
+      "empty": "Keine Fehlschläge über die Familien hinweg.",
+      "summary": "Fehlschläge nach Familie, {{count}} Familien mit Fehlschlägen; am schlimmsten ist {{family}} mit {{failed}} fehlgeschlagenen Prüfsonden.",
+      "summaryEmpty": "Keine Prüfsonden-Familie wies Fehlschläge auf.",
+      "colFamily": "Familie",
+      "colFailed": "Fehlgeschlagen"
+    },
+    "owasp": {
+      "title": "OWASP-Fehlschläge",
+      "description": "OWASP-Zeilen mit einer fehlgeschlagenen Prüfsonde (Zählung nach Referenz).",
+      "empty": "Keine OWASP-Zeilen fehlgeschlagen."
+    },
+    "dialog": {
+      "title": "Lauf starten",
+      "hint": "Prüfen Sie {{name}} mit der ausgewählten Suite. Diese adversariale Aktion wird im Audit-Hauptbuch festgehalten.",
+      "suite": "Suite",
+      "launched": "Lauf gestartet"
+    },
+    "truncated": "{{n}} Läufe geladen; es gibt weitere",
+    "truncatedHint": "Es gibt mehr Läufe als angezeigt; diese Seite lädt Zeilen nach ID, nicht nach Datum — die neuesten sind also nicht zwingend dabei. Ein fehlender Lauf belegt nicht, dass ein Ziel nie geprüft wurde."
+  },
+  "results": {
+    "title": "Ergebnisse je Prüfsonde",
+    "description": "Das Ergebnis jeder Prüfsonde. Der Fingerabdruck ist ein Einweg-Hash — niemals eine Angriffsnutzlast.",
+    "empty": "Keine Ergebnisse für diesen Lauf.",
+    "columns": {
+      "probe": "Prüfsonde",
+      "family": "Familie",
+      "frameworks": "Rahmenwerke",
+      "outcome": "Ergebnis",
+      "severity": "Schweregrad",
+      "fingerprint": "Fingerabdruck",
+      "occurredAt": "Aufgetreten"
+    }
+  },
+  "catalog": {
+    "title": "Prüfsonden-Katalog",
+    "description": "Die Taxonomie der Batterie und ihre Rahmenwerk-Abdeckung — nur defensive Metadaten.",
+    "suiteLabel": "Nach Suite filtern",
+    "metadataNote": "Dies sind defensive Metadaten, kein Exploit-Schrank. Die API führt keine Angriffsnutzlast.",
+    "stats": {
+      "probes": "Prüfsonden",
+      "families": "Familien",
+      "owasp": "OWASP-Refs",
+      "atlas": "ATLAS-Refs"
+    },
+    "columns": {
+      "id": "Prüfsonden-ID",
+      "family": "Familie",
+      "title": "Titel",
+      "frameworks": "Rahmenwerke",
+      "surface": "Fläche",
+      "severity": "Schweregrad"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "Keine defensiven Prüfsonden katalogisiert",
+      "description": "Diese schreibgeschützte Taxonomie enthält nur Prüfsonden-Definitionen, die in die Control Plane einkompiliert sind."
+    },
+    "familyFailureChart": {
+      "title": "Keine Fehlschläge nach Prüfsondenfamilie",
+      "description": "Eine Familie erscheint, wenn eine bewertete Prüfsonde im ausgewählten Lauf fehlschlägt, weil sie eine adversariale Anfrage befolgt oder einen verbotenen Marker preisgibt."
+    },
+    "results": {
+      "title": "Noch keine Prüfsonden-Ergebnisse erfasst",
+      "description": "Starten Sie eine Suite gegen ein autorisiertes Ziel; jedes Prüfsondenergebnis wird hier mit Einweg-Fingerabdruck, niemals mit Angriffsnutzlast erfasst."
+    },
+    "runs": {
+      "title": "Noch keine Red-Team-Läufe",
+      "description": "Registrieren und autorisieren Sie einen eigenen Agenten; starten Sie dann eine Prüfsonden-Suite, um seine Robustheits-Scorecard zu erfassen."
+    },
+    "targets": {
+      "title": "Noch keine Red-Team-Ziele registriert",
+      "description": "Registrieren Sie einen Agenten aus dem Inventar dieses Mandanten als Kandidaten; die Autorisierung bleibt ein separater Einwilligungsschritt."
+    }
+  }
+}

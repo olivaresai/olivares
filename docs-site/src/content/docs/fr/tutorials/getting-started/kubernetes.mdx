@@ -1,0 +1,213 @@
+---
+title: "Démarrer sur Kubernetes (Helm)"
+description: >-
+  Déployez le control plane sur Kubernetes avec le chart Helm fourni — depuis le
+  défaut sûr en nœud unique jusqu'à Postgres, la HA active-passive avec une clé de
+  signature d'audit partagée, des sauvegardes DR chiffrées sur un CronJob, et le
+  DaemonSet de collecteurs.
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Le chart Helm dans `deploy/helm/olivares` déploie le control
+plane avec les mêmes valeurs par défaut sécurisées que tous les autres chemins : un
+**StatefulSet core** (non-root, système de fichiers racine en lecture seule, toutes
+les capacités supprimées), TLS activé, exposition équivalente à la loopback (un
+Service `ClusterIP` — rien de public tant que vous ne le décidez pas), et aucune
+identifiant par défaut. À partir de là, vous activez à votre choix
+Postgres, la **HA active-passive**, des **sauvegardes DR chiffrées** planifiées
+et le **DaemonSet de collecteurs** pour l'ingestion distribuée.
+
+Tout ce qui suit a été rendu et vérifié contre le chart de ce
+dépôt (`helm lint` + `helm template`, y compris les configurations de HA et de
+sauvegarde et les garde-fous propres au chart). Le chart requiert
+**Kubernetes ≥ 1.25**.
+
+<Aside type="caution" title="Statut de publication du chart — en toute honnêteté">
+À la publication, le chart est publié sur un registre OCI et signé avec cosign, afin
+que vous le vérifiiez à l'installation et épingliez les images par digest. Le chart tire
+l'image du conteneur depuis Docker Hub (`docker.io/olivaresai/olivares` ; aussi sur
+`ghcr.io/olivaresai/olivares`, identique par digest) ; l'artefact **chart**
+lui-même réside sur
+`oci://ghcr.io/olivaresai/charts/olivares`. La première version est encore un
+**brouillon** : tant qu'un tag `chart-v*` n'est pas créé, le chemin du registre est
+**vide**. D'ici là, installez depuis le checkout du dépôt (le chart lui-même est complet et
+rendu ci-dessous) ; une fois publié, basculez vers
+`oci://ghcr.io/olivaresai/charts/olivares` et
+[vérifiez ce que vous avez téléchargé](/how-to/verify-a-release/).
+</Aside>
+
+## 1. L'installation par défaut (nœud unique, SQLite)
+
+<Steps>
+
+1. Installez depuis le checkout :
+
+   ```bash
+   helm install olivares deploy/helm/olivares
+   ```
+
+   Cela rend exactement trois objets de charge de travail — un `StatefulSet` (1 réplique,
+   SQLite sur un PVC persistant de 8 Gi), un `Service` `ClusterIP` (8443 HTTPS,
+   8444 gRPC) et un `ServiceAccount` **sans aucun** privilège sur l'API Kubernetes.
+   Les sondes interrogent `/readyz` (readiness — se draine quand le store est indisponible ou que la
+   réplique n'est pas leader) et `/livez` (liveness — processus uniquement, jamais une
+   dépendance, de sorte qu'une panne du store ne peut jamais provoquer une boucle de redémarrage).
+
+2. Lisez le jeton de configuration à usage unique dans le log du pod (il n'est imprimé que sur stdout
+   — sous Kubernetes, c'est le log du conteneur) :
+
+   ```bash
+   kubectl logs -l app.kubernetes.io/component=core | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. Faites un port-forward et terminez la configuration au premier lancement
+   ([le même flux que partout](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)) :
+
+   ```bash
+   # The Service is named <release>-olivares-core:
+   kubectl port-forward svc/olivares-core 8443:8443
+   curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="danger" title="N'exécutez jamais en production avec `persistence.enabled=false`">
+Avec la persistance désactivée, le répertoire de données est un `emptyDir` : la **clé de signature
+d'audit** et le jeton de configuration sont perdus à chaque replanification, ce qui casse définitivement
+la vérifiabilité du ledger. Le défaut (`persistence.enabled=true`) est la seule posture
+de production ; sauvegardez aussi la clé hors de la machine
+([sauvegarde et restauration](/how-to/backup-and-restore/)).
+</Aside>
+
+Alternativement, sans aucun Helm, le dépôt fournit un manifeste plat avec
+les mêmes valeurs par défaut sûres en nœud unique, régénéré depuis le chart par la CI :
+
+```bash
+kubectl apply -f deploy/manifests/install.yaml
+```
+
+Pour Argo CD / Flux / Kustomize (`kustomize build --enable-helm`), voir
+`deploy/gitops/` — des wrappers déclaratifs sur ce même chart.
+
+## 2. Postgres (multi-tenant)
+
+Le moteur requiert un rôle de base de données à **moindre privilège** : `LOGIN`, pas de
+superuser, **pas de `BYPASSRLS`** — la sécurité au niveau ligne est le filet de sécurité tenant, et
+le moteur refuse de démarrer contre un rôle privilégié. Provisionnez le rôle avec
+le canonique `deploy/postgres/01-app-role.sql` (le chart peut l'exécuter pour vous
+en tant que Job de pré-installation), placez le DSN dans un Secret, et pointez le chart dessus :
+
+```bash
+kubectl create secret generic olivares-pg \
+  --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full' \
+  --from-literal=admin-dsn='postgres://olivares_admin:***@db:5432/olivares?sslmode=verify-full'
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set postgres.adminDsnKey=admin-dsn
+```
+
+La clé `admin-dsn` porte un rôle `NOSUPERUSER BYPASSRLS` dédié. Elle n'est
+optionnelle **que si vous n'activez jamais les sauvegardes** : c'est elle qui rend
+**complètes** les lectures système inter-tenant (la liste des organisations, la couverture
+multi-tenant), et activer `backup` l'**EXIGE** — voir
+[§4](#4-sauvegardes-chiffrées-planifiées). La créer maintenant fait de l'étape de
+sauvegarde ultérieure un changement d'une seule ligne.
+
+## 3. HA active-passive
+
+Avec Postgres comme store partagé, exécutez plusieurs répliques. L'une est élue
+leader (un verrou consultatif Postgres) ; les standbys répondent à `/readyz` par
+`503 {"status":"standby"}` afin que le Service ne route que vers le leader, et un
+standby prend le relais automatiquement quand le leader disparaît.
+
+Deux choses sont structurellement requises, et le chart **impose les deux** (nous
+avons vérifié que les garde-fous se rendent comme des échecs durs, pas des avertissements) :
+
+| Exigence | Pourquoi | Garde-fou du chart si absent |
+|---|---|---|
+| `core.engine=postgres` | Le fichier SQLite est local à un seul pod — il ne peut pas être un store partagé. | `core.replicaCount > 1 requires core.engine=postgres …` |
+| `core.auditSigningKeySecret` | Chaque réplique doit signer le ledger d'audit avec la **même** clé Ed25519, sinon la chaîne de hachage bifurque au basculement. | `core.replicaCount > 1 requires core.auditSigningKeySecret …` |
+
+```bash
+kubectl create secret generic olivares-audit-key \
+  --from-file=audit-signing.key=<base64-ed25519-private-key-file>
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set core.replicaCount=3 \
+  --set core.auditSigningKeySecret=olivares-audit-key
+```
+
+Les tailles HA canoniques sont 3 ou 5 répliques, active-passive. Cette conception
+à écriture unique est délibérée (elle correspond au modèle de cohérence du produit) ; les
+[chiffres de production-readiness](/how-to/monitor-with-prometheus/) documentent les
+paliers de disponibilité qu'elle prend en charge.
+
+## 4. Sauvegardes chiffrées planifiées
+
+Le chart fournit un `CronJob` qui exécute `olivares dr backup` — un bundle chiffré,
+**sûr pour la continuité du ledger** (snapshot du store + clés de signature scellées sous
+votre KEK + manifeste de pointe de chaîne par tenant) :
+
+```bash
+kubectl create secret generic dr-kek --from-literal=passphrase='<strong passphrase>'
+
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set backup.enabled=true \
+  --set backup.kekSecret=dr-kek \
+  --set postgres.adminDsnKey=admin-dsn   # obligatoire sous Postgres avec les sauvegardes
+```
+
+Sous Postgres, le chart **refuse de se rendre** sans `postgres.adminDsnKey` : le
+`pg_dump` de la sauvegarde **avorte** s'il tourne sous le rôle applicatif contre
+des tables en `FORCE ROW LEVEL SECURITY`, donc un CronJob câblé au seul DSN
+applicatif **échouerait à chaque exécution** et vous laisserait **sans aucune
+sauvegarde**. Le garde-fou transforme cette panne silencieuse en échec dur à
+l'installation.
+
+Valeurs par défaut : toutes les 6 heures (`backup.schedule` définit votre RPO), rétention
+locale de 14 jours, un PVC de destination dédié. **Mirroitez la destination hors site et
+gardez la KEK séparée des bundles** — une sauvegarde sur le même cluster n'est pas de la
+reprise après sinistre. Faites des exercices de restauration avec `olivares dr verify` ; la
+procédure complète est dans [sauvegarde et restauration](/how-to/backup-and-restore/).
+
+## 5. DaemonSet de collecteurs (ingestion distribuée)
+
+Pour la topologie distribuée, un `DaemonSet` de collecteurs exécute les connecteurs de source
+sur chaque nœud et **pousse** les observations vers le core via gRPC — les collecteurs
+n'ont aucun listener entrant. Le chart requiert un jeton d'ingestion et accepte
+un matériel mTLS optionnel :
+
+```bash
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set collectors.enabled=true \
+  --set collectors.ingestTokenSecret=olivares-ingest-token   # ingest:write bearer token
+```
+
+Donnez leurs sources aux collecteurs via `collectors.sourcesConfig` (le même
+[JSON de sources](/how-to/connect-a-source/) que partout), et activez le mTLS
+à certificat client vérifié pour le canal collecteur→core avec
+`tls.grpcClientCaSecret` — voir [durcissement](/how-to/security-hardening/).
+
+## Surveillance
+
+Activez `serviceMonitor` si vous exécutez l'opérateur Prometheus ; dans tous les cas le
+moteur expose `/metrics` sans authentification (il ne porte aucune donnée tenant) et le
+dépôt fournit des règles d'alerte prêtes à l'emploi. Voir
+[surveiller avec Prometheus](/how-to/monitor-with-prometheus/).
+
+## Étapes suivantes
+
+- **Câblez des sources :** [connecter une source](/how-to/connect-a-source/) et les
+  [guides de connecteurs](/how-to/connectors/pgaudit/).
+- **Exercices de panne :** [dépannage](/how-to/troubleshooting/) — comportement de
+  basculement, contre-pression, vérification du ledger.
+- **Cluster air-gapped ?** [Démarrer sur un site air-gapped](/tutorials/getting-started/air-gapped/).

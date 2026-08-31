@@ -1,0 +1,51 @@
+{
+  "title": "Exportación de postura",
+  "description": "Exporta la postura real de solo lectura —inventario, deriva de mínimo privilegio y hallazgos— para que una torre de control la ingiera.",
+  "filters": {
+    "title": "Filtros de exportación",
+    "severity": "Severidad mínima",
+    "severityHint": "Incluye solo los hallazgos con esta severidad o superior.",
+    "severityAny": "Cualquier severidad",
+    "category": "Categoría",
+    "categoryHint": "Coincide con un tipo de hallazgo o de sujeto.",
+    "categoryPlaceholder": "p. ej. policy_drift",
+    "kind": "Tipo de inventario",
+    "kindHint": "Limita el inventario a un único tipo de entidad.",
+    "kindPlaceholder": "p. ej. agent",
+    "none": "sin filtros"
+  },
+  "severity": {
+    "low": "Baja",
+    "medium": "Media",
+    "high": "Alta",
+    "critical": "Crítica"
+  },
+  "notes": {
+    "pull": "Es una proyección de solo lectura y datos mínimos —solo referencias y hashes— que una torre de control recupera; nada sale de la máquina hasta que exportas."
+  },
+  "export": {
+    "action": "Exportar postura",
+    "done": "Postura exportada.",
+    "failed": "No se ha podido exportar la postura."
+  },
+  "summary": {
+    "title": "Última exportación",
+    "inventory": "Entidades de inventario",
+    "findings": "Hallazgos",
+    "unexpected": "Accesos inesperados",
+    "drift": "Señales de deriva",
+    "truncated": "Truncado",
+    "truncatedHint": "Una o más secciones alcanzaron el tope de exportación y son parciales: los recuentos son un mínimo, no un total.",
+    "severityFloor": "severidad ≥ {{severity}}"
+  },
+  "history": {
+    "title": "Exportaciones de esta sesión",
+    "note": "Esta lista solo cubre las exportaciones hechas en esta sesión del navegador. Cada exportación queda registrada en el libro de auditoría a prueba de manipulaciones (acción posture.export) —",
+    "auditLink": "abre el Explorador de auditoría",
+    "empty": "Aún no hay exportaciones en esta sesión.",
+    "colTime": "Hora",
+    "colFilters": "Filtros",
+    "colCounts": "Recuentos",
+    "counts": "{{inventory}} inventario · {{findings}} hallazgos · {{drift}} deriva"
+  }
+}

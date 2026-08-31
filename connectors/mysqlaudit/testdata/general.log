@@ -1,0 +1,12 @@
+/usr/sbin/mariadbd, Version: 11.4.2-MariaDB-log, started with:
+Tcp port: 3306  Unix socket: /run/mysqld/mysqld.sock
+Time                 Id Command    Argument
+2026-06-03T10:23:40.000000Z	   42 Connect	app_rw@10.0.0.5 on salesdb
+2026-06-03T10:23:45.100000Z	   42 Query	SELECT id, name FROM customers WHERE id = 7
+2026-06-03T10:23:46.200000Z	   42 Query	UPDATE orders SET total = 5 WHERE id = 1
+2026-06-03T10:23:47.000000Z	   43 Connect	reporting@10.0.0.9 on  using SSL/TLS
+2026-06-03T10:23:47.500000Z	   43 Init DB	analytics
+2026-06-03T10:23:48.000000Z	   43 Query	SELECT count(*) FROM events
+2026-06-03T10:23:49.000000Z	   42 Query	USE warehouse
+2026-06-03T10:23:49.500000Z	   42 Query	DELETE FROM staging WHERE id = 2
+2026-06-03T10:23:50.000000Z	   42 Quit	

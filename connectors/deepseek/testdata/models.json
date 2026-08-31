@@ -1,0 +1,29 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "deepseek-v4-flash",
+      "object": "model",
+      "created": 1771315200,
+      "owned_by": "deepseek"
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "object": "model",
+      "created": 1771315200,
+      "owned_by": "deepseek"
+    },
+    {
+      "id": "deepseek-chat",
+      "object": "model",
+      "created": 1756746619,
+      "owned_by": "deepseek"
+    },
+    {
+      "id": "deepseek-reasoner",
+      "object": "model",
+      "created": 1756746000,
+      "owned_by": "deepseek"
+    }
+  ]
+}

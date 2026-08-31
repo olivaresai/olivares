@@ -1,0 +1,37 @@
+# A Deployment that satisfies the full Olivares governance posture:
+#   - identity-bound: carries olivares.ai/tenant + olivares.ai/identity labels;
+#   - least privilege: pod securityContext sets runAsNonRoot=true;
+#   - no inline secrets: the credential is referenced via secretKeyRef, never
+#     pasted as a literal.
+# `conftest test conformant.yaml` must report 0 failures.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-api
+  namespace: acme-prod
+  labels:
+    olivares.ai/tenant: acme
+    olivares.ai/identity: payments-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payments-api
+  template:
+    metadata:
+      labels:
+        app: payments-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: app
+          image: registry.example.com/payments-api:1.4.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: payments-api-creds
+                  key: api-key

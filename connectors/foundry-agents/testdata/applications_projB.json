@@ -1,0 +1,18 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/acct1/projects/projB/applications/appDisabled",
+      "name": "appDisabled",
+      "properties": {
+        "displayName": "Disabled App",
+        "isEnabled": false,
+        "provisioningState": "Succeeded",
+        "defaultInstanceIdentity": {
+          "clientId": "disabled-instance-client",
+          "principalId": "disabled-instance-principal",
+          "tenantId": "tenant-1"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "已加载 {{n}} 条发现；还有更多",
+    "hint": "速率限制摘要仅在已加载的发现中查找；未显示的摘要可能位于后续页面。"
+  },
+  "title": "速率限制",
+  "description": "网关或代理必须保持同步的、按组织和工作区范围限定的速率限制的只读清单。数据来源于 Anthropic Rate Limits API（只读）；此视图永不更改任何限制。",
+  "caveats": {
+    "keepInSync": "网关／代理必须保持同步：这些限制构成上游网关或代理必须镜像的清单。它们不在此处强制执行，更改限制需在提供方进行，而非在本控制台。",
+    "managedAgents": "Managed Agents 不在 Rate Limits API 的覆盖范围内。其限制属于已记录的缺口，而非数值为零——之所以不显示 Managed Agents 行，是因为 API 并未报告该项。"
+  },
+  "summary": {
+    "title": "同步状态",
+    "description": "根据只读治理摄取的报告，网关或代理必须保持同步的速率限制数量。"
+  },
+  "count": {
+    "label": "需保持同步的限制数",
+    "observedAt": "观测于 {{at}}",
+    "unknown": "数量不可用"
+  },
+  "degraded": {
+    "title": "Admin-API 治理摄取不可用",
+    "hint": "此部署面（例如 Bedrock、Vertex 或 Foundry 网关）不暴露 Anthropic Admin API，因此无法在此读取速率限制清单。这是如实呈现的不可用，而非空清单。"
+  },
+  "inventory": {
+    "title": "逐限制器清单",
+    "description": "提供方报告的每一个限制器，按范围分组：先是组织级分组，再是工作区覆盖分组。",
+    "unavailable": "清单不可用",
+    "unavailableHint": "只读 Admin 连接器未接线，因此无法在此读取逐限制器清单。这是如实呈现的不可用，而非空清单。",
+    "tableLabel": "速率限制清单",
+    "empty": "未报告任何速率限制",
+    "emptyHint": "提供方未为此组织返回任何逐限制器条目。",
+    "scope": {
+      "org": "组织"
+    },
+    "columns": {
+      "scope": "范围",
+      "groupType": "分组",
+      "models": "模型",
+      "limiterType": "限制器",
+      "value": "值",
+      "orgLimit": "组织限制"
+    }
+  },
+  "groupType": {
+    "model_group": "模型组",
+    "batch": "批处理",
+    "token_count": "Token 计数",
+    "files": "文件",
+    "skills": "技能",
+    "web_search": "网络搜索"
+  },
+  "limitType": {
+    "requests_per_minute": "每分钟请求数",
+    "input_tokens_per_minute": "每分钟输入 token 数",
+    "output_tokens_per_minute": "每分钟输出 token 数",
+    "enqueued_batch_requests": "已排队批处理请求数"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "尚未报告速率限制",
+      "description": "只读 Anthropic Rate Limits API 返回此组织各限制器的限额后，条目才会显示。"
+    }
+  },
+  "effectiveState": {
+    "label": "你可以在此更改的：",
+    "proxy": "推理代理",
+    "finops": "支出"
+  }
+}

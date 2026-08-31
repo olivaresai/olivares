@@ -1,0 +1,14 @@
+{
+  "reasoningEngines": [
+    {
+      "name": "projects/9876543210/locations/europe-west4/reasoningEngines/eu-agent",
+      "displayName": "EU Agent",
+      "createTime": "2026-05-25T08:00:00Z",
+      "spec": {
+        "agentFramework": "langgraph",
+        "identityType": "AGENT_IDENTITY",
+        "effectiveIdentity": "agents.global.project-9876543210.system.id.goog/resources/aiplatform/projects/9876543210/locations/europe-west4/reasoningEngines/eu-agent"
+      }
+    }
+  ]
+}

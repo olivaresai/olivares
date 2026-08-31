@@ -1,0 +1,84 @@
+# Olivares policy gate — reusable GitLab CI/CD component.
+#
+# CLIENT-SIDE gate: a customer adds this to their .gitlab-ci.yml to run the
+# Olivares policy pack (OPA/Conftest + Kyverno) against their
+# manifests/IaC. Distinct from the release pipeline. The gate EXITS NON-ZERO
+# on any policy violation, which fails the job — the same guarantee as the GitHub
+# composite action.
+#
+# CONTRACT (verified against docs.gitlab.com "CI/CD components"):
+#   - a component lives at templates/<name>/template.yml (only template.yml is
+#     consumed); this file is templates/olivares-policy-gate/template.yml;
+#   - spec.inputs declares the typed inputs, then `---`, then the job(s) using
+#     $[[ inputs.<name> ]] interpolation;
+#   - consumed with:  include: { component: $CI_SERVER_FQDN/<path>/olivares-policy-gate@<version> }
+#   - Catalog publishing needs a semver git tag + a release-keyword job (out of
+#     scope for this template — see deploy/ci/README.md).
+#
+# CLI versions are PINNED via inputs (never 'latest'). The conftest/policy and
+# kyverno policy dirs are resolved under the consumer's checkout at $policy_dir.
+spec:
+  inputs:
+    policy_dir:
+      description: "Directory holding the policy pack (conftest/policy/ and kyverno/)."
+      default: "deploy/policy"
+      type: string
+    target:
+      description: "The manifests / IaC directory or file to scan."
+      type: string
+    conftest_version:
+      description: "conftest release to install, without the leading v (pinned; never 'latest')."
+      default: "0.56.0"
+      type: string
+    kyverno_version:
+      description: "Kyverno CLI release to install, without the leading v (pinned; never 'latest')."
+      default: "1.13.2"
+      type: string
+    fail_on_warn:
+      description: "When 'true', pass --fail-on-warn to conftest so warn-level rules also fail the gate."
+      default: "false"
+      options: ["true", "false"]
+      type: string
+    stage:
+      description: "Pipeline stage the gate job runs in."
+      default: "test"
+      type: string
+    image:
+      description: "Base image with curl/tar/bash to install the pinned CLIs into."
+      default: "debian:stable-slim"
+      type: string
+---
+olivares-policy-gate:
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.image ]]
+  variables:
+    # Surface the typed inputs as env vars so the script reads exactly the same
+    # contract as the GitHub action's run-gate.sh (one shared gate semantics).
+    POLICY_DIR: "$[[ inputs.policy_dir ]]"
+    TARGET: "$[[ inputs.target ]]"
+    CONFTEST_VERSION: "$[[ inputs.conftest_version ]]"
+    KYVERNO_VERSION: "$[[ inputs.kyverno_version ]]"
+    FAIL_ON_WARN: "$[[ inputs.fail_on_warn ]]"
+  script:
+    # set -e makes ANY non-zero step (download or a policy violation) fail the
+    # job; this is the gate guarantee.
+    - set -euo pipefail
+    - 'command -v curl >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates tar)'
+    - 'test -e "$TARGET" || { echo "TARGET $TARGET does not exist" >&2; exit 1; }'
+    - 'test -d "$POLICY_DIR/conftest/policy" || { echo "no conftest policy at $POLICY_DIR/conftest/policy" >&2; exit 1; }'
+    - 'test -d "$POLICY_DIR/kyverno" || { echo "no kyverno policy at $POLICY_DIR/kyverno" >&2; exit 1; }'
+    - 'BIN_DIR="$(mktemp -d)"; export PATH="$BIN_DIR:$PATH"'
+    - 'OS="$(uname -s)"; ARCH="$(uname -m)"; case "$ARCH" in x86_64|amd64) ARCH="x86_64";; aarch64|arm64) ARCH="arm64";; *) echo "unsupported arch $ARCH" >&2; exit 1;; esac'
+    # --- install pinned conftest (asset: conftest_<ver>_<Os>_<arch>.tar.gz) ---
+    - 'curl -fsSL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_${OS}_${ARCH}.tar.gz" -o "$BIN_DIR/conftest.tar.gz"'
+    - 'tar -xzf "$BIN_DIR/conftest.tar.gz" -C "$BIN_DIR" conftest && chmod +x "$BIN_DIR/conftest"'
+    # --- install pinned kyverno CLI (asset: kyverno-cli_v<ver>_<os>_<arch>.tar.gz) ---
+    - 'OS_LC="$(echo "$OS" | tr "[:upper:]" "[:lower:]")"'
+    - 'curl -fsSL "https://github.com/kyverno/kyverno/releases/download/v${KYVERNO_VERSION}/kyverno-cli_v${KYVERNO_VERSION}_${OS_LC}_${ARCH}.tar.gz" -o "$BIN_DIR/kyverno.tar.gz"'
+    - 'tar -xzf "$BIN_DIR/kyverno.tar.gz" -C "$BIN_DIR" kyverno && chmod +x "$BIN_DIR/kyverno"'
+    - 'conftest --version | head -1; kyverno version | head -1'
+    # --- the gate: a violation in either engine exits non-zero -> job fails ---
+    - 'CONFTEST_ARGS="test $TARGET -p $POLICY_DIR/conftest/policy"; if [ "$FAIL_ON_WARN" = "true" ]; then CONFTEST_ARGS="$CONFTEST_ARGS --fail-on-warn"; fi'
+    - 'echo "+ conftest $CONFTEST_ARGS"; conftest $CONFTEST_ARGS'
+    - 'echo "+ kyverno apply $POLICY_DIR/kyverno --resource $TARGET"; kyverno apply "$POLICY_DIR/kyverno" --resource "$TARGET"'
+    - 'echo "policy gate PASSED"'

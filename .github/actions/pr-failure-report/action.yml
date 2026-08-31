@@ -1,0 +1,104 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# On a job failure, post WHICH steps failed — plus the tail of any
+# $RUNNER_TEMP/ci-fail-*.log a teed heavy step left behind — where reviewers
+# already look: a PR comment on pull_request runs, a new ISSUE on push-to-main
+# runs (a push run has no PR to comment on). This puts the failing step table
+# and the teed log tails in the PR thread itself, so diagnosing a red run
+# never requires access to the Actions logs. Callers need
+# `permissions: pull-requests: write` + `issues: write` and must pass
+# toJSON(steps) (only steps with an `id:` appear there). Same-repo PRs only —
+# a fork PR's token is read-only, so the report attempt degrades to a warning.
+#
+# THE REPORT ALWAYS LANDS IN THE JOB SUMMARY FIRST. That channel needs no binary, no token and no
+# network, so it cannot fail; the PR comment and the issue are additions on top of it, tried with
+# `gh` when present and with the REST API when it is not. Until 2026-08-17 this action depended on
+# `gh` alone, which is not installed on the self-hosted Hetzner runners, so it had been posting
+# NOTHING — see the block by the posting code for the measured run.
+name: pr-failure-report
+description: Post a job-failure diagnosis as a PR comment (pull_request) or issue (push).
+inputs:
+  steps-json:
+    description: The calling job's toJSON(steps) payload.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        STEPS_JSON: ${{ inputs.steps-json }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        JOB_NAME: ${{ github.job }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: |
+        report="$RUNNER_TEMP/ci-report.md"
+        {
+          echo "### mainline-ci · job \`$JOB_NAME\` FAILED — run $RUN_ID attempt $RUN_ATTEMPT ($(date -u +%FT%TZ))"
+          echo
+          echo '| step | conclusion |'
+          echo '| --- | --- |'
+          printf '%s' "$STEPS_JSON" | jq -r 'to_entries[] | "| \(.key) | \(.value.conclusion // "-") |"'
+          for f in "$RUNNER_TEMP"/ci-fail-*.log; do
+            [ -e "$f" ] || continue
+            echo
+            echo "<details><summary>tail of $(basename "$f")</summary>"
+            echo
+            echo '```text'
+            tail -c 4000 "$f"
+            echo
+            echo '```'
+            echo '</details>'
+          done
+        } >"$report"
+        # ⛔ THE JOB SUMMARY GOES FIRST, AND UNCONDITIONALLY. It needs no binary, no token and no
+        #    network, so it is the only channel that cannot fail. Everything below is an ADDITION.
+        #
+        #    WHY, measured 2026-08-17 on run 32064664411: this action ended in
+        #    `gh: command not found` on ci-runner-2. `gh` is NOT installed on the self-hosted Hetzner
+        #    runners — and the `|| echo "::warning::"` swallowed it, so the report was silently never
+        #    posted. An action whose stated purpose is that "diagnosing a red run never requires
+        #    access to the Actions logs" had been requiring exactly that, on every failure, on our
+        #    only runners.
+        #
+        #    And the warning named the WRONG CULPRIT: "could not post the PR comment (fork PR token?)"
+        #    on a same-repo push, where no fork token exists. A fallback message that guesses a cause
+        #    is worse than none — it sends the reader to look at permissions instead of at PATH.
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat "$report" >>"$GITHUB_STEP_SUMMARY"; fi
+
+        # Then the thread, best-effort, by whichever tool this runner actually has.
+        post_via_api() {  # $1=url  $2=json payload file
+          command -v curl >/dev/null 2>&1 || return 1
+          curl -fsS --max-time 30 -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "$1" --data-binary "@$2" >/dev/null
+        }
+        payload="$RUNNER_TEMP/ci-report.json"
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
+          if command -v gh >/dev/null 2>&1; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$report" \
+              || echo "::warning::pr-failure-report: gh could not comment on PR $PR_NUMBER (fork PRs get a read-only token). Report is in the job summary."
+          elif command -v jq >/dev/null 2>&1 \
+            && jq -Rs '{body: .}' <"$report" >"$payload" \
+            && post_via_api "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" "$payload"; then
+            echo "pr-failure-report: posted via REST (no gh on this runner)."
+          else
+            echo "::warning::pr-failure-report: no gh, and the REST fallback failed. Report is in the job summary."
+          fi
+        else
+          # push (main) — no PR to comment on; an issue is the readable channel.
+          title="mainline-ci: job $JOB_NAME failed on $GITHUB_REF_NAME @ ${GITHUB_SHA:0:10}"
+          if command -v gh >/dev/null 2>&1; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$report" \
+              || echo "::warning::pr-failure-report: gh could not open the failure issue. Report is in the job summary."
+          elif command -v jq >/dev/null 2>&1 \
+            && jq -Rs --arg t "$title" '{title: $t, body: .}' <"$report" >"$payload" \
+            && post_via_api "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues" "$payload"; then
+            echo "pr-failure-report: opened the failure issue via REST (no gh on this runner)."
+          else
+            echo "::warning::pr-failure-report: no gh, and the REST fallback failed. Report is in the job summary."
+          fi
+        fi

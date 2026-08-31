@@ -1,0 +1,190 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Helm chart OCI publish. Lints, packages, pushes and cosign-
+# signs the control-plane chart (deploy/helm/olivares) as an OCI
+# artifact on ghcr.io/olivaresai/charts — the artifact the GitOps manifests in
+# deploy/gitops/ consume. The chart is versioned INDEPENDENTLY of the engine
+# (Chart.yaml `version` vs `appVersion`), so it gets its OWN tag namespace
+# (`chart-v*`), distinct from the engine's `v*` tag that drives release.yml.
+#
+# This pipeline is WRITTEN AND READY but NOT auto-triggered: it runs
+# ONLY on a maintainer-pushed `chart-v*` tag — there is NO workflow_dispatch publish path,
+# mirroring release.yml's gating. Cutting the tag is a deliberate human action
+# (releases are cut manually by a maintainer; never automated). It NEVER auto-publishes.
+#
+# What a tagged run produces and signs (cosign keyless via OIDC -> Fulcio/Rekor):
+#   - `helm lint` of the chart (fail closed on a broken chart)
+#   - the packaged chart (.tgz) at the Chart.yaml SemVer
+#   - the chart pushed to oci://ghcr.io/olivaresai/charts
+#   - a cosign signature over the pushed OCI manifest, BY DIGEST (keyless OIDC)
+# SIGNING POLICY = cosign-only. CI does NOT emit a Helm-native GPG `.prov`:
+# `helm package` runs WITHOUT `--sign`, so the published OCI chart carries no
+# provenance layer and `helm install/pull --verify` CANNOT work against it. The
+# supported verification is cosign over the OCI manifest, keyless, with the cert
+# identity `release-chart.yml@refs/tags/chart-v*` (NOT release.yml — that is the
+# engine's workflow). A maintainer who wants a local GPG `.prov` re-packages by hand
+# (deploy/helm/README.md "Publishing"): a separate, optional artifact, not what this
+# workflow ships. An in-cluster Kyverno/sigstore policy-controller and Flux `verify:`
+# check the cosign signature.
+#
+# Consumers verify with the commands in deploy/helm/README.md ("Verify the chart
+# before installing"). Air-gap consumers use the key-based bundle
+# (scripts/airgap-bundle.sh).
+name: release-chart
+
+on:
+  push:
+    tags: ["chart-v*"]
+
+# Least privilege by default; the single job widens only what it needs.
+permissions:
+  contents: read
+
+env:
+  CHART_DIR: deploy/helm/olivares
+  # ⛔ EL DESTINO SE RESUELVE POR PERFIL, y el nombre de preprod NO se escribe aquí: este
+  # fichero viaja al árbol público y `lint:export` bloquea ese literal de propietario. La
+  # coordenada de preprod se compone de la expectativa INYECTADA por variables del propio
+  # repositorio de destino, igual que en `release.yml`.
+  #
+  # Si esa expectativa faltara, `format()` compondría una coordenada malformada en vez de
+  # vaciarse — el ternario de Actions devuelve la rama `||` sólo cuando la primera es FALSY, y
+  # una cadena malformada no lo es. No se queda así: el paso `preflight` de abajo exige la
+  # expectativa y muere deny-closed antes de que nadie empaquete nada.
+  PRODUCTION_OCI_REPO: oci://ghcr.io/olivaresai/charts
+  PRODUCTION_CHART_OCI_NAME: ghcr.io/olivaresai/charts/olivares
+  OCI_REPO: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && format('oci://ghcr.io/{0}/charts', vars.OLIVARES_PREPROD_EXPECTED_REPO) || 'oci://ghcr.io/olivaresai/charts' }}
+  CHART_OCI_NAME: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && format('ghcr.io/{0}/charts/olivares', vars.OLIVARES_PREPROD_EXPECTED_REPO) || 'ghcr.io/olivaresai/charts/olivares' }}
+
+jobs:
+  publish-chart:
+    # PRODUCTION-REPOSITORY GUARD, same literal as release.yml's two entry jobs.
+    # added that guard to release.yml only, because the rehearsal design asked for it
+    # there; but this workflow is also tag-triggered (`chart-v*`) and also requests
+    # `packages: write` and `id-token: write`. Today a `chart-v*` tag in a fork or in
+    # the disposable rehearsal repository still FAILS, because the push destination is
+    # hard-wired to ghcr.io/olivaresai/charts and no other token can reach it — but it
+    # fails LATE and by accident, after minting a Sigstore identity for a repository
+    # that has no business minting one. The rehearsal plan's mitigation is a manual
+    # "disable every other workflow" step in the GitHub UI, which fails open if
+    # forgotten. A literal guard fails closed and costs one line.
+    # La valla se abre a preprod porque AHORA sí hay segunda valla detrás: el paso
+    # `preflight` de abajo llama a `scripts/check-publish-target.sh`, que exige la
+    # expectativa inyectada, obliga a que la corrida publique en SU propio repositorio y
+    # rechaza cualquier destino que nombre una superficie de producción.
+    #
+    # Hasta las órdenes 36/37 este workflow no tenía preflight alguno (`grep -c` daba 0) y sus
+    # destinos estaban cableados a producción. Abrir la condición sin lo de abajo habría
+    # dejado a un repositorio de preprod empujando gráficos al registro público con una sola
+    # variable de por medio — se intentó, se midió y se revirtió el mismo día.
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
+    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
+    # hosted runner: a persistent self-hosted runner serves many jobs, so a
+    # compromised build can leave tooling behind for the next one, and a verifier
+    # "has no guarantee that the code run is in fact the intended workflow unless
+    # they also trust the self-hosted runner" (slsa-framework). Moving a release
+    # here to save minutes would silently downgrade the provenance we publish.
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write # push the chart OCI artifact to ghcr.io
+      id-token: write # keyless cosign (Fulcio) signature over the manifest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Guard: the `chart-v<X.Y.Z>` tag MUST equal Chart.yaml `version`, else the OCI
+      # artifact would publish at a SemVer nobody tagged and cosign's `chart-v*` cert
+      # identity would attest a mismatched version. Fail closed before any registry
+      # login/push. `github.ref_name` is routed via env (injection-safe) and only
+      # string-stripped/compared — never eval'd.
+      - name: preflight — the destination is the reviewed one for this profile (fail-closed)
+        env:
+          RELEASE_PROFILE: ${{ vars.OLIVARES_RELEASE_PROFILE || 'production' }}
+          PUBLISH_TARGET: ${{ env.CHART_OCI_NAME }}
+          PRODUCTION_TARGET: ${{ env.PRODUCTION_CHART_OCI_NAME }}
+          PREPROD_TARGET: ${{ vars.OLIVARES_RELEASE_PROFILE == 'preprod' && format('ghcr.io/{0}/charts/olivares', vars.OLIVARES_PREPROD_EXPECTED_REPO) || '' }}
+          PREPROD_EXPECTED_REPO: ${{ vars.OLIVARES_PREPROD_EXPECTED_REPO }}
+          # Presencia sólo, para la comprobación de «ningún secreto de publicación»; nunca se imprimen.
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: sh scripts/check-publish-target.sh
+
+      - name: validate chart-v tag matches Chart.yaml version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag_ver="${REF_NAME#chart-v}"
+          chart_ver="$(grep -E '^version:[[:space:]]' "${CHART_DIR}/Chart.yaml" | head -1 | awk '{print $2}' | tr -d '"')"
+          if [ "${tag_ver}" != "${chart_ver}" ]; then
+            echo "ERROR: tag ${REF_NAME} (=> ${tag_ver}) does not match Chart.yaml version ${chart_ver}" >&2
+            exit 1
+          fi
+          echo "tag ${REF_NAME} matches Chart.yaml version ${chart_ver}"
+
+      # helm CLI (OCI push is built in since v3.8.0) and cosign for keyless signing.
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.16.4
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # EXACT pin, matching all three installer sites in release.yml. Unified
+          # those three and missed this one: without a pin this step takes the action
+          # revision's DEFAULT (cosign v3.0.6), so the chart was being signed by a
+          # different cosign generation than every other artifact in the release —
+          # precisely the split set out to eliminate. Keep in step with
+          # APPROVED in scripts/check-cosign-pins.sh, which now scans every workflow.
+          cosign-release: 'v2.6.4'
+
+      # EXECUTION-TIME INVARIANT — the actual control. The static gate
+      # (task lint:cosign-pins) reads the workflow YAML and is fast, but four rounds of
+      # adversarial review proved it can never be complete: `run:` is a shell, so proving
+      # "no path here can obtain an unapproved cosign" by reading YAML is proving a
+      # negative over a Turing-complete language. At THIS point the property is decidable
+      # — resolve the binary, hash it, compare against the upstream published digest. It
+      # does not matter how cosign arrived.
+      - name: assert the cosign binary is the reviewed artifact
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: lint the chart (fail closed on a broken chart)
+        run: helm lint "${CHART_DIR}"
+
+      - name: helm registry login (ghcr.io)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${GHCR_TOKEN}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: package the chart
+        id: package
+        run: |
+          set -euo pipefail
+          out="$(helm package "${CHART_DIR}" --destination . | sed -n 's/^Successfully packaged chart and saved it to: //p')"
+          [ -n "$out" ] || { echo "ERROR: helm package produced no artifact path" >&2; exit 1; }
+          echo "pkg=${out}" >> "$GITHUB_OUTPUT"
+          echo "packaged ${out}"
+
+      - name: push the chart to the OCI registry
+        id: push
+        env:
+          PKG: ${{ steps.package.outputs.pkg }}
+        run: |
+          set -euo pipefail
+          # `helm push` prints the pushed reference AND its Digest to stderr; tee
+          # both so we can resolve the immutable digest for cosign sign-by-digest.
+          helm push "${PKG}" "${OCI_REPO}" 2>&1 | tee push.log
+          digest="$(sed -n 's/^Digest:[[:space:]]*//p' push.log | head -1)"
+          # Fail loudly if the digest didn't resolve — cosign must NOT sign an empty ref.
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "ERROR: failed to resolve pushed chart digest (got '$digest')" >&2; exit 1; }
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "pushed ${CHART_OCI_NAME}@${digest}"
+
+      - name: cosign sign the OCI manifest (keyless OIDC, by digest)
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        # Through the launcher, not bare `cosign`: registry login and the OCI push run
+        # between the assertion above and this line, so the signer re-authenticates the
+        # verified bytes immediately before signing.
+        run: bash scripts/cosign-verified.sh sign --yes "${CHART_OCI_NAME}@${DIGEST}"

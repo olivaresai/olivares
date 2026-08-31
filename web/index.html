@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/favicon-48.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta
+      name="description"
+      content="Olivares AI — integrate, manage and secure the AI in your enterprise. Self-hosted, multi-provider: Claude Code and Codex today, Grok Build in development."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Olivares AI — Ground truth for enterprise AI" />
+    <meta
+      property="og:description"
+      content="Know what your AI touches, decide what it can do, and prove it. Self-hosted governance for Claude and enterprise AI."
+    />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://olivares.ai" />
+    <meta property="og:site_name" content="Olivares AI" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Olivares AI — Ground truth for enterprise AI" />
+    <meta
+      name="twitter:description"
+      content="Know what your AI touches, decide what it can do, and prove it. Self-hosted governance for Claude and enterprise AI."
+    />
+    <meta name="twitter:image" content="/og-image.png" />
+    <title>Olivares AI — Ground truth for enterprise AI</title>
+    <!--
+      No-FOUC theme bootstrap. Applies the persisted theme (or the OS preference)
+      to <html> BEFORE first paint, so the operator never sees a light flash on a
+      dark setup. Under the CSP Level 3 policy (script-src 'nonce-…' 'strict-dynamic',
+      see cmd/olivares/webui.go), this inline script is authorized by the same
+      per-response nonce the server injects into the __CSP_NONCE__ placeholder.
+    -->
+    <script nonce="__CSP_NONCE__">
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('olivares.theme')
+          var prefersDark = window.matchMedia(
+            '(prefers-color-scheme: dark)',
+          ).matches
+          var dark =
+            stored === 'dark' ||
+            ((stored === 'system' || !stored) && prefersDark)
+          var root = document.documentElement
+          root.classList.toggle('dark', dark)
+          root.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {
+          /* localStorage may be unavailable (private mode); default theme applies. */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

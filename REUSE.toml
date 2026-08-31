@@ -1,0 +1,142 @@
+# REUSE.toml — central licensing annotations for files that do NOT carry an
+# inline SPDX header (markdown, configs, manifests, lockfiles, data/placeholder
+# assets, and the license/notice files themselves).
+#
+# Source code (*.go, *.ts, *.tsx, *.js, *.css, *.html, shell, etc.) carries an
+# inline SPDX header from commit 1 and is NOT listed here.
+#
+# Spec: https://reuse.software/spec-3.3/  (schema version 1)
+# Run:  reuse lint
+
+version = 1
+
+# --- Repository-wide default copyright for non-code project files ------------
+# AGPL is the repository's predominant license; non-code config/docs that are
+# part of the AGPL product inherit it. precedence = "aggregate" so a more
+# specific annotation below can ADD info without being overridden by this one.
+[[annotations]]
+path = [
+  "**/*.md",
+  "**/*.txt",
+  "**/*.yaml",
+  "**/*.yml",
+  "**/*.toml",
+  "**/*.json",
+  "**/*.mod",
+  "**/*.sum",
+  "**/go.work",
+  "**/go.work.sum",
+  "**/.gitignore",
+  "**/.gitattributes",
+  "**/.dockerignore",
+  "**/.editorconfig",
+  "**/.prettierignore",
+  "**/Dockerfile",
+  "**/Taskfile.yml",
+  "**/*.env.example",
+  "**/CODEOWNERS",
+  # Build stamps written by a build task and compared byte for byte by a gate
+  # (core/internal/webui/bundle-source.stamp). They cannot carry an inline header:
+  # prepending one would change the bytes the comparison is about.
+  "**/*.stamp",
+  # Captured wire payloads replayed byte for byte by a test. Same reason as the
+  # stamps above: a protobuf with an SPDX comment in front does not unmarshal, so
+  # the header would change the very bytes the test is about. check-spdx.sh
+  # classifies `*.bin` as `data` for that reason — and that exemption is REPO-WIDE,
+  # so this line is its other half.
+  #
+  # MEASURED 2026-08-19 with `reuse lint-file`, because the first version of this
+  # comment got it wrong and the tool corrected it: the payloads that motivated the
+  # exemption (connectors/grok/testdata/otlp-traces-grok-1.0.5-*.bin, the OTLP
+  # export of `grok 1.0.5 (5115b46bc9)`) were ALREADY covered — the `connectors/**`
+  # override below gives them Apache-2.0, which is what `reuse spdx` reports. There
+  # they are redundant. The hole is OUTSIDE connectors/: a .bin under core/ answers
+  # «no license identifier / no copyright notice» (rc=1) without this line and rc=0
+  # with it. That is the case this closes, and it exists because the header gate's
+  # exemption does not stop at the directory that needed it.
+  "**/*.bin",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+# --- Product documentation site (docs-site/) ---------------------------------
+# The docs site and its content are part of the AGPL product (like /web). Its
+# non-code files use extensions the repo-wide default does not cover (.mdx,
+# .astro, .mjs, plus brand assets); this annotation gives them the AGPL header.
+# Source files it introduces (.ts/.css) ALSO carry an inline SPDX header per the
+# repo convention (and scripts/check-spdx.sh treats docs-site/* as AGPL).
+[[annotations]]
+path = ["docs-site/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+# --- Repo presence assets (.github/assets/) ----------------------------
+# Brand visuals (hero R/RW graph, architecture diagram, social previews) and
+# real console captures embedded by the root README. Binary/SVG images cannot
+# carry inline headers; they are product brand assets under the repo license.
+[[annotations]]
+path = [".github/assets/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+# --- Apache-2.0 subtrees: SDK, connectors and client SDKs -------------
+# These OVERRIDE the AGPL default for their non-code files (the permissive
+# ecosystem boundary). precedence = "override".
+[[annotations]]
+path = [
+  "sdk/**",
+  "connectors/**",
+  "clients/**",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "Apache-2.0"
+
+# --- Vendored third-party test fixtures --------------------------------------
+# Official OCSF v1.8.0 class schemas (JSON Schema export of schema.ocsf.io,
+# profiles=ai_operation), vendored verbatim so the SIEM encoder validates its
+# output offline against the real schema. Upstream is Apache-2.0.
+# Terraform provider example snippets. Each is a one-line `terraform import …`
+# that tfplugindocs renders VERBATIM into the published provider documentation,
+# so they deliberately carry no inline SPDX header — a header would show up
+# inside the rendered example. They are part of the AGPL provider and they DO
+# ship (measured 2026-08-01: all 7 are in the public export manifest), so they
+# are licensed here rather than left with no licence at all, which is what they
+# had until this annotation existed. scripts/check-spdx.sh excludes exactly this
+# path, and its comment points back here.
+[[annotations]]
+path = ["terraform-provider-olivares/examples/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = ["sdk/siemwire/testdata/ocsf/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "OCSF contributors (https://github.com/ocsf/ocsf-schema)"
+SPDX-License-Identifier = "Apache-2.0"
+
+# NOTE: the commercial enterprise subtree is no longer in this repository:
+# the additive Enterprise Edition is distributed separately under
+# LicenseRef-Olivares-Commercial, so there is no enterprise/** override here.
+
+# --- The license / notice / legal text files themselves ----------------------
+# License texts are not the project's copyrightable content; mark them CC0-1.0
+# (public-domain-equivalent) so REUSE does not demand a license-for-the-license.
+# (LICENSES/*.txt are recognized automatically by REUSE and need no annotation;
+# we cover the in-tree LICENSE/NOTICE copies and CLA/DCO here.)
+[[annotations]]
+path = [
+  "LICENSE",
+  "**/LICENSE",
+  "NOTICE",
+  "CLA.md",
+  "DCO",
+  "LICENSING.md",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "CC0-1.0"

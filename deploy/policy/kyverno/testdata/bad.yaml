@@ -1,0 +1,35 @@
+# Violating resources for `kyverno test`:
+#   - bad-deploy: a Deployment with NO governance labels (fails
+#     require-governance-labels);
+#   - bad-pod: a Pod that sets no runAsNonRoot (fails require-run-as-non-root)
+#     and pastes its credential inline (fails disallow-inline-secrets).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy
+  namespace: acme-prod
+spec:
+  selector:
+    matchLabels:
+      app: billing-worker
+  template:
+    metadata:
+      labels:
+        app: billing-worker
+    spec:
+      containers:
+        - name: app
+          image: registry.example.com/billing-worker:0.9.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-pod
+  namespace: acme-prod
+spec:
+  containers:
+    - name: app
+      image: registry.example.com/billing-worker:0.9.0
+      env:
+        - name: API_KEY
+          value: AKIAIOSFODNN7EXAMPLE

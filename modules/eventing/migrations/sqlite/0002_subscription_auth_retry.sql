@@ -1,0 +1,12 @@
+-- SPDX-FileCopyrightText: 2026 Olivares.AI
+-- SPDX-License-Identifier: AGPL-3.0-only
+-- Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+--
+-- per-subscription auth headers and retry policy. These columns are
+-- declared as Nullable in the entity descriptor, so the engine's
+-- reconcileColumns adds them on upgraded estates automatically. This file
+-- is intentionally a no-op: SQLite's ADD COLUMN has no IF NOT EXISTS, and
+-- fresh installs already create the columns from the descriptor. The
+-- Postgres counterpart retains explicit IF NOT EXISTS ALTER TABLE for
+-- clarity; both paths converge to the same schema.
+SELECT 1;

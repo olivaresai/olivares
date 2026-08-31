@@ -1,0 +1,423 @@
+{
+  "title": "Modellbetrieb",
+  "subtitle": "Verwalten Sie eigene Modelle, ihre signierte Modell-Zulassung und lokale Inferenz-Deployments.",
+  "tabs": {
+    "owned": "Eigene Modelle",
+    "admission": "Zulassung",
+    "deployments": "Deployments",
+    "datasets": "Datensätze",
+    "finetune": "Fine-Tuning-Jobs",
+    "evidence": "AIBOM-Siegel"
+  },
+  "owned": {
+    "title": "Eigene Modelle",
+    "description": "Die verwaltete Registry der Modelle in Ihrem Besitz — gehostet, feinabgestimmt oder importiert.",
+    "new": "Neues Modell",
+    "search": "Modelle suchen…",
+    "created": "Modell erstellt.",
+    "updated": "Modell aktualisiert.",
+    "deleted": "Modell gelöscht.",
+    "newTitle": "Neues eigenes Modell",
+    "editTitle": "Eigenes Modell bearbeiten",
+    "formBody": "Registrieren Sie ein Modell in Ihrem Besitz. Nur Governance-Metadaten — niemals ein Geheimnis.",
+    "deleteTitle": "Eigenes Modell löschen",
+    "deleteBody": "„{{name}}“ löschen? Seine Versionen und Lineage-Referenzen werden entfernt. Dies wird im Audit-Ledger protokolliert.",
+    "columns": {
+      "name": "Name",
+      "kind": "Art",
+      "provider": "Anbieter",
+      "visibility": "Sichtbarkeit",
+      "status": "Status"
+    },
+    "drawer": {
+      "subtitle": "Übersicht, Versionen und Zulassungsnachweise je Version."
+    },
+    "form": {
+      "name": "Name",
+      "kind": "Art",
+      "status": "Status",
+      "baseRef": "Basis-Referenz",
+      "providerRef": "Anbieter-Referenz",
+      "visibility": "Sichtbarkeit",
+      "ownerRef": "Eigentümer-Referenz",
+      "note": "Notiz"
+    },
+    "truncated": "{{n}} Modelle geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr registrierte Modelle als angezeigt; diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere fehlen, normalerweise das zuletzt Registrierte. Tabellensuche und -sortierung wirken nur auf das Geladene. Ein hier nicht gelistetes Modell ist damit nicht als unregistriert belegt."
+  },
+  "versions": {
+    "title": "Versionen",
+    "new": "Neue Version",
+    "admit": "Zulassen",
+    "empty": "Noch keine Versionen",
+    "emptyHint": "Erstellen Sie eine Version, um ein Artefakt zu erfassen und seine Signatur zuzulassen.",
+    "created": "Version erstellt.",
+    "deleted": "Version gelöscht.",
+    "newTitle": "Neue Modellversion",
+    "formBody": "Eine Version ist nach dem Erstellen unveränderlich — erfassen Sie sie und lassen Sie dann ihr signiertes Artefakt zu.",
+    "deleteTitle": "Version löschen",
+    "deleteBody": "Version „{{version}}“ löschen? Ihr Zulassungsverdikt wird entfernt. Dies wird im Audit-Ledger protokolliert.",
+    "form": {
+      "version": "Version",
+      "status": "Status",
+      "artifactRef": "Artefakt-Referenz",
+      "parentRef": "Übergeordnete Referenz",
+      "sourceRef": "Quell-Referenz",
+      "note": "Notiz"
+    },
+    "truncated": "{{n}} Versionen geladen; es gibt mehr",
+    "truncatedHint": "Dieses Modell hat mehr Versionen als angezeigt; die Seite nimmt Zeilen nach ID, spätere können fehlen. Eine hier nicht sichtbare Version ist auch eine Version, deren Zulassungsnachweis von diesem Bildschirm aus nicht erreichbar ist.",
+    "loadError": "Die Versionsliste konnte nicht gelesen werden — das heißt NICHT „keine Versionen“"
+  },
+  "deployments": {
+    "title": "Deployments",
+    "description": "Lokale Inferenz-Deployments über alle Modelle hinweg. Durch das Zulassungs-Gate geregelt.",
+    "new": "Neues Deployment",
+    "search": "Deployments suchen…",
+    "created": "Deployment erstellt.",
+    "updated": "Deployment aktualisiert.",
+    "deleted": "Deployment gelöscht.",
+    "governed": "Geregelt",
+    "newTitle": "Neues Deployment",
+    "editTitle": "Deployment bearbeiten",
+    "formBody": "Verweisen Sie eine Runtime auf eine geregelte Modellversion. Die Zulassung wird beim Speichern durchgesetzt.",
+    "deleteTitle": "Deployment löschen",
+    "deleteBody": "„{{name}}“ löschen? Dies wird im Audit-Ledger protokolliert.",
+    "deniedTitle": "Durch Zulassung blockiert",
+    "deniedHint": "Lassen Sie die referenzierte Version unter den aktuellen Vertrauensankern zu und versuchen Sie es erneut — Ihre Eingabe bleibt erhalten.",
+    "columns": {
+      "name": "Name",
+      "runtime": "Runtime",
+      "version": "Version",
+      "governed": "Geregelt",
+      "status": "Status"
+    },
+    "filters": {
+      "allRuntimes": "Alle Runtimes",
+      "allStatuses": "Alle Status"
+    },
+    "form": {
+      "name": "Name",
+      "runtime": "Runtime",
+      "status": "Status",
+      "ownedRef": "Modell-Referenz",
+      "versionRef": "Versions-Referenz",
+      "endpointRef": "Endpunkt-Referenz",
+      "governed": "Geregelt",
+      "governedHint": "Ein deklariertes Posture-Flag — keine Umgehung der Zulassung.",
+      "note": "Notiz",
+      "deploymentType": "Bereitstellungstyp",
+      "deploymentTypeHint": "Local stellt eine selbst gehostete Modellversion bereit und unterliegt der Zulassungsprüfung; Brokered ruft einen gehosteten Anbieter auf und nicht.",
+      "providerRef": "Anbieter-Endpunkt",
+      "providerHint": "Der gehostete Anbieter, an den diese Bereitstellung vermittelt (z. B. ein API-Endpunkt)."
+    },
+    "types": {
+      "local": "Local (selbst gehostet)",
+      "brokered": "Brokered (gehosteter Anbieter)"
+    },
+    "truncated": "{{n}} Deployments geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Deployments als angezeigt; diese Seite nimmt Zeilen nach ID. Die Runtime- und Status-Filter wendet die ENGINE an und fragt neu ab — der Schnitt betrifft die bereits gefilterte Menge. Ein hier nicht gelistetes Deployment belegt nicht, dass nichts läuft. Tabellensuche und -sortierung wirken nur auf das Geladene."
+  },
+  "policy": {
+    "title": "Zulassungsrichtlinie",
+    "description": "Die Mandanten-Vertrauensrichtlinie für die Zulassung signierter Modelle. Die Signaturmethode wird aus Ihrer Konfiguration abgeleitet.",
+    "edit": "Richtlinie bearbeiten",
+    "editTitle": "Zulassungsrichtlinie bearbeiten",
+    "editBody": "Legen Sie die Vertrauensanker fest. Atomar gespeichert; die Engine bleibt maßgeblich.",
+    "loadError": "Die Zulassungsrichtlinie konnte nicht geladen werden.",
+    "saved": "Zulassungsrichtlinie gespeichert.",
+    "mode": "Abgeleiteter Modus",
+    "derivedMode": "Abgeleiteter Signaturmodus",
+    "requireSigned": "Signierte Modelle erforderlich",
+    "requireSignedHint": "Durchsetzen: Deployment jeder Version ohne verifiziertes Zulassungsverdikt verweigern.",
+    "requireDigests": "Artefakt-Digests erforderlich",
+    "requireDigestsHint": "Zusätzlich verlangen, dass ein erneuter Hash der signierten Artefakte auf der Festplatte übereinstimmt.",
+    "identities": "Zulässige Identitäten",
+    "identitiesHint": "Ein Regex je Zeile für die Signierer-Identität (Sigstore keyless).",
+    "issuers": "Zulässige Aussteller",
+    "issuersHint": "Eine OIDC-Aussteller-URL je Zeile. Muss zusammen mit Identitäten gesetzt werden, oder keines von beiden.",
+    "trustedRoots": "Vertrauenswürdige Roots",
+    "trustedRootsHint": "PEM-CA-Zertifikate (Fulcio oder private PKI). Nur öffentliches Material.",
+    "trustedKeys": "Vertrauenswürdige Schlüssel",
+    "trustedKeysHint": "PEM-Public-Keys für bare-key-Signaturen. Nur öffentliches Material.",
+    "note": "Notiz",
+    "on": "Ein",
+    "off": "Aus",
+    "attestedBy": "Attestiert von",
+    "attestedAt": "Attestiert am",
+    "confirmTitle": "Vertrauensänderung bestätigen",
+    "confirmBody": "Das Aktivieren der Durchsetzung oder das Entfernen eines Vertrauensankers kann dazu führen, dass künftige Deployment-Erstellungen und -Aktualisierungen fehlschlagen, bis betroffene Versionen erneut zugelassen werden. Fortfahren?",
+    "state": {
+      "unconfigured": {
+        "title": "Beobachtungsmodus — nicht konfiguriert",
+        "body": "Es ist keine Richtlinie festgelegt. Zulassungsverdikte werden erfasst, aber nichts wird verweigert."
+      },
+      "observe": {
+        "title": "Beobachtungsmodus",
+        "body": "Eine Richtlinie ist konfiguriert, aber die Durchsetzung ist aus. Verdikte werden erfasst; Deployments werden nicht verweigert."
+      },
+      "enforce": {
+        "title": "Durchsetzungsmodus",
+        "body": "Das Deployment einer Version ohne verifiziertes, noch verankertes Zulassungsverdikt wird verweigert."
+      }
+    },
+    "err": {
+      "privateKey": "Vertrauensmaterial muss öffentlich sein — entfernen Sie jeden PRIVATE KEY-Block.",
+      "pemResidual": "Entfernen Sie den unvollständigen PEM-Block — nur vollständige BEGIN…END-Blöcke werden gespeichert.",
+      "anchorMissing": "Die Durchsetzung benötigt mindestens eine vertrauenswürdige Root oder einen vertrauenswürdigen Schlüssel.",
+      "identityIssuer": "Identitäten und Aussteller müssen zusammen gesetzt werden, oder keines von beiden."
+    }
+  },
+  "verdicts": {
+    "title": "Zulassungsverdikte",
+    "description": "Das erfasste AKTUELLE Urteil, eines je Version — eine erneute Zulassung ERSETZT es, sie fügt keine Zeile hinzu. Eine Version ohne Versuch erscheint hier nicht.",
+    "search": "Verdikte suchen…",
+    "reAdmit": "Erneut zulassen",
+    "drawerSubtitle": "Das erfasste Verdikt — jede Tatsache einzeln dargestellt.",
+    "columns": {
+      "version": "Version",
+      "posture": "Posture",
+      "method": "Methode",
+      "roots": "Signer-Roots",
+      "tlog": "Transparenzprotokoll",
+      "attestedAt": "Erfasst"
+    },
+    "filters": {
+      "all": "Alle",
+      "verified": "Nur verifiziert",
+      "unverified": "Nur nicht verifiziert"
+    },
+    "truncated": "{{n}} Urteile geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Zulassungsurteile als angezeigt; diese Seite nimmt Zeilen nach ID. Es gibt EIN Urteil je Version — eine erneute Zulassung ERSETZT es, fügt keine Zeile hinzu, und die ID behält die Position des ERSTEN Versuchs —, eine hier fehlende Version ist also nicht zwangsläufig ohne Zulassung."
+  },
+  "admit": {
+    "title": "Ein signiertes Modell zulassen",
+    "reAdmitTitle": "Erneut unter aktuellem Vertrauen zulassen",
+    "body": "Verifizieren und erfassen Sie eine Signatur für Version {{version}}. Ein erfasstes Verdikt ist ein Nachweis, ob zugelassen oder nicht.",
+    "bundle": "Signatur-Bundle",
+    "bundleHint": "Das rohe OMS / Sigstore-Bundle-JSON.",
+    "bundlePlaceholder": "{ \"mediaType\": \"…\", … }",
+    "bundleInvalid": "Ein JSON-Objekt wird erwartet.",
+    "digests": "Aufgelöste Digests",
+    "digestsHint": "Optionale Zuordnung von Datei → Hex-Digest, um das Artefakt auf der Festplatte erneut zu hashen.",
+    "digestsInvalid": "Ein JSON-Objekt mit String-Werten wird erwartet.",
+    "modelRef": "Modell-Referenz",
+    "aibomRef": "AIBOM-Referenz",
+    "note": "Notiz",
+    "submit": "Zulassen",
+    "admitted": "Version zugelassen.",
+    "recordedNotAdmitted": "Verdikt erfasst, aber die Signatur erfüllte die Richtlinie nicht."
+  },
+  "admission": {
+    "mode": {
+      "keyless": "sigstore-keyless",
+      "certificate-pki": "certificate-pki",
+      "bare-key": "bare-key",
+      "empty": "lässt nichts zu"
+    },
+    "posture": {
+      "verified": "Verifiziert",
+      "signedUnbound": "Signiert, Artefakt nicht gebunden",
+      "denied": "Nicht verifiziert"
+    }
+  },
+  "evidence": {
+    "reason": "Grund",
+    "noReason": "Es wurde kein Grund erfasst.",
+    "subjectName": "Subjekt",
+    "subjectDigest": "Subjekt-Digest",
+    "signer": "Signierer",
+    "signerRoots": "Signer-Roots",
+    "artifact": "Erneuter Artefakt-Hash",
+    "artifactVerified": "Übereinstimmung",
+    "artifactUnverified": "Nicht geprüft",
+    "tlog": "Transparenzprotokoll",
+    "tlogVerified": "Verifiziert",
+    "tlogPresent": "Vorhanden (Einschluss nicht geprüft)",
+    "tlogAbsent": "Nicht vorhanden",
+    "resourceCount": "Signierte Ressourcen",
+    "coverage": "Abdeckung",
+    "attestedBy": "Attestiert von",
+    "attestedAt": "Erfasst",
+    "none": "Kein Zulassungsversuch erfasst",
+    "noneHint": "Lassen Sie diese Version zu, um ein Signaturverdikt zu erfassen."
+  },
+  "datasets": {
+    "title": "Datensätze",
+    "description": "AIBOM-Lineage-Komponenten – ein Name, eine Inhaltsreferenz und ein Hash. Niemals die Daten selbst.",
+    "new": "Neuer Datensatz",
+    "search": "Datensätze suchen…",
+    "created": "Datensatz erfasst.",
+    "deleted": "Datensatz gelöscht.",
+    "claimed": "Betreiberangabe",
+    "newTitle": "Datensatz erfassen",
+    "formBody": "Ein datenminimaler Lineage-Eintrag: Identität, Klassifizierung und eine Inhaltsreferenz – niemals der Inhalt des Datensatzes.",
+    "deleteTitle": "Datensatz löschen",
+    "deleteBody": "„{{name}}“ löschen? Seine Lineage-Referenz wird entfernt, was künftige BOMs verändert (niemals ein bereits erstelltes Siegel). Dies wird im Audit-Ledger festgehalten.",
+    "drawerSubtitle": "Lineage-Eintrag – Klassifizierung, Inhaltsreferenz und Herkunftsangabe.",
+    "provenanceLabel": "Herkunft",
+    "provenanceClaimed": "Betreiberzusicherung erfasst – der Betreiber gibt an, die erfasste Herkunft geprüft zu haben. Olivares hat den Datensatz nicht kryptografisch verifiziert und seinen Inhalt nicht eingesehen.",
+    "provenanceNotClaimed": "Keine Herkunftszusicherung durch den Betreiber erfasst.",
+    "attestedBy": "Erfasst von",
+    "columns": {
+      "name": "Name",
+      "classification": "Klassifizierung",
+      "ownedRef": "Modellreferenz",
+      "provenance": "Herkunft",
+      "recorded": "Erfasst"
+    },
+    "form": {
+      "name": "Name",
+      "classification": "Klassifizierung",
+      "ownedRef": "Modellreferenz",
+      "ownedRefHint": "Optional – diesen Datensatz mit einem eigenen Modell verknüpfen. Muss auflösbar sein, sonst wird das Speichern abgelehnt.",
+      "sourceRef": "Quellreferenz",
+      "contentHash": "Inhalts-Hash",
+      "contentAlg": "Hash-Algorithmus",
+      "contentAlgHint": "Standardmäßig sha256, wenn ein Hash gesetzt ist.",
+      "governance": "Governance-Kennzeichnung",
+      "verified": "Herkunft geprüft (Betreiberangabe)",
+      "verifiedHint": "Bestätigen Sie, dass Sie die Herkunft dieses Datensatzes geprüft haben. Dies erfasst eine Betreiberangabe – keine von Olivares durchgeführte Verifizierung. Es gibt keine Aktualisierung: Eine Korrektur bedeutet Löschen und neu Anlegen.",
+      "note": "Notiz"
+    },
+    "truncated": "{{n}} Datensätze geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr registrierte Datensätze als angezeigt; diese Seite nimmt Zeilen nach ID. Diese Zeilen sind AI-BOM-Lineage-Komponenten: ein hier fehlender Datensatz belegt nicht, dass die Lineage ihn nicht enthält. Tabellensuche und -sortierung wirken nur auf das Geladene."
+  },
+  "finetune": {
+    "title": "Fine-Tuning-Jobs",
+    "description": "Aufzeichnungen von Fine-Tuning-Jobs und den daraus entstandenen Versionen. Die Ebene trainiert niemals ein Modell und hält keine Gewichte.",
+    "new": "Neuer Job-Eintrag",
+    "search": "Jobs suchen…",
+    "created": "Job erfasst.",
+    "updated": "Job aktualisiert.",
+    "newTitle": "Fine-Tuning-Job erfassen",
+    "editTitle": "Fine-Tuning-Job aktualisieren",
+    "formBody": "Erfassen Sie den Zustand eines Jobs und die daraus entstandene Version. Dies ist ein Inventareintrag – die Control Plane führt kein Training aus.",
+    "columns": {
+      "name": "Name",
+      "runtime": "Laufzeit",
+      "status": "Status",
+      "resultVersion": "Ergebnisversion",
+      "started": "Gestartet"
+    },
+    "filters": {
+      "allStatuses": "Alle Status"
+    },
+    "form": {
+      "name": "Name",
+      "status": "Status",
+      "runtime": "Laufzeit",
+      "runtimeNone": "Nicht angegeben",
+      "baseRef": "Basisreferenz",
+      "datasetRef": "Datensatzreferenz",
+      "resultVersionRef": "Referenz der Ergebnisversion",
+      "resultVersionRefHint": "Die Modellversion, die dieser Job erzeugt hat. Muss auf eine bestehende Version auflösbar sein, sonst wird das Speichern abgelehnt.",
+      "startedAt": "Gestartet am",
+      "endedAt": "Beendet am",
+      "note": "Notiz",
+      "clearHint": "Das Leeren eines erfassten Zeitstempels hat keine Wirkung – die Engine behält den vorherigen Wert."
+    },
+    "trackBanner": "Dies erfasst extern ausgeführte Fine-Tuning-Arbeit. Olivares startet, bricht oder führt kein Training aus und speichert keine Gewichte oder Inhalte von Datensätzen.",
+    "truncated": "{{n}} Jobs geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Fine-Tune-Einträge als angezeigt; diese Seite nimmt Zeilen nach ID. Den Status-Filter wendet die ENGINE an und fragt neu ab. Ein hier nicht gelisteter Job belegt nicht, dass er nie lief. Tabellensuche und -sortierung wirken nur auf das Geladene."
+  },
+  "evidenceLedger": {
+    "title": "AIBOM-Siegel",
+    "description": "Das versiegelte AIBOM-Ledger über alle Modelle hinweg – dauerhaft, ausschließlich anfügend, ledger-verankerte Manipulationssicherheit. Jede Zeile ist eine Inhalts-Hash-Zusicherung, nicht das BOM-Dokument.",
+    "search": "Siegel suchen…",
+    "drawerSubtitle": "Ein versiegeltes AIBOM – die im Audit-Ledger verankerte Manipulationssicherheit.",
+    "serialNumber": "Seriennummer",
+    "ledgerHash": "Ledger-Hash",
+    "generatedBy": "Versiegelt von",
+    "scopeNote": "Geltungsbereich",
+    "columns": {
+      "ownedRef": "Modellreferenz",
+      "contentHash": "Inhalts-Hash",
+      "components": "Komponenten",
+      "spec": "Spezifikation",
+      "ledgerSeq": "Ledger-Seq",
+      "sealed": "Versiegelt"
+    },
+    "sealMeaning": "Ein Siegel ist eine ausschließlich anfügende Inhalts-Hash-Zusicherung, die im Audit-Ledger verankert ist – kein Archiv der BOM. Das vollständige Dokument wird nicht gespeichert und kann nicht aus einem Siegel abgerufen werden.",
+    "noPriorHead": "0 (kein vorheriger Audit-Head)",
+    "truncated": "{{n}} Siegel geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr versiegelte AI-BOMs als angezeigt. Diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere Zeilen fehlen also, im Normalbetrieb die jüngsten Nachweise. Tabellensuche und -sortierung wirken nur auf das Geladene. Fehlt ein Modell hier, ist damit nicht belegt, dass es nie versiegelt wurde."
+  },
+  "documents": {
+    "live": "Live",
+    "preview": "Vorschau",
+    "export": "Exportieren",
+    "loadError": "Das Dokument konnte nicht generiert werden.",
+    "aibom": {
+      "title": "AIBOM",
+      "cyclonedx": "CycloneDX (JSON)",
+      "spdx": "SPDX 3.0.1 (JSON)",
+      "seal": "AIBOM versiegeln",
+      "sealHint": "Das Versiegeln erzeugt eine ausschließlich anfügende CycloneDX-Inhalts-Hash-Zusicherung, die im Audit-Ledger verankert ist. Es archiviert nicht das BOM-Dokument. Immer CycloneDX – der SPDX-Export kann niemals versiegelt werden.",
+      "previewTitle": "AIBOM (live)",
+      "previewBody": "Ein Live-, schreibgeschütztes CycloneDX- (oder SPDX-)Inventar – nicht versiegelt, bis Sie es versiegeln."
+    },
+    "card": {
+      "title": "Modellkarte",
+      "markdown": "Markdown (.md)",
+      "json": "JSON",
+      "previewTitle": "Modellkarte (live)",
+      "previewBody": "Aus dem verwalteten Inventar generiert. Abschnitte ohne erfasste Nachweise werden als nicht erfasst gekennzeichnet – niemals erfunden.",
+      "name": "Name",
+      "kind": "Art",
+      "status": "Status",
+      "intendedUse": "Vorgesehene Verwendung",
+      "versions": "Versionen",
+      "noVersions": "Keine Versionen erfasst.",
+      "admitted": "Zugelassen",
+      "notVerified": "Erfasst, nicht verifiziert",
+      "noVerdict": "Kein Urteil",
+      "trainingData": "Trainingsdaten",
+      "notRecorded": "Nicht erfasst.",
+      "admissionsRecorded": "Signierte Zulassungen erfasst",
+      "admissionsVerified": "Signierte Zulassungen verifiziert",
+      "gpaiRecorded": "GPAI-Haltung des Anbieters erfasst",
+      "yes": "Ja",
+      "no": "Nein"
+    },
+    "liveTitle": "Generierte Dokumente – live",
+    "liveSubtitle": "Jetzt aus dem aktuellen Registry-Zustand generiert. Nicht versiegelt und nicht auditiert.",
+    "sealsTitle": "Versiegelte AIBOM-Zusicherungen",
+    "sealRecorded": "AIBOM-Siegel erfasst",
+    "receiptBody": "Das Ledger speichert nur den Inhalts-Hash – das versiegelte CycloneDX-Dokument existiert nur hier. Laden Sie es jetzt herunter, um eine Kopie zu behalten.",
+    "downloadSealed": "Versiegelte BOM herunterladen",
+    "noSeals": "Noch keine Siegel",
+    "noSealsHint": "Versiegeln Sie die AIBOM, um eine Inhalts-Hash-Zusicherung im Audit-Ledger zu verankern.",
+    "sealConfirmTitle": "Diese AIBOM versiegeln?",
+    "sealConfirmBody": "Eine ausschließlich anfügende CycloneDX-Inhalts-Hash-Zusicherung aus dem aktuellen Registry-Zustand erstellen? Dies archiviert nicht das BOM-Dokument.",
+    "sealsTruncated": "{{n}} Siegel geladen; es gibt mehr",
+    "sealsTruncatedHint": "Dieses Modell hat mehr Siegel als angezeigt; die Seite nimmt Zeilen nach ID, spätere — normalerweise das jüngste Siegel — können fehlen. Fehlt hier ein Hash, ist damit nicht belegt, dass das Dokument nie versiegelt wurde.",
+    "sealsLoadError": "Die Siegelhistorie konnte nicht gelesen werden — das heißt NICHT „keine Siegel“"
+  },
+  "empty": {
+    "datasets": {
+      "title": "Noch keine Datensätze erfasst",
+      "description": "Erfassen Sie Identität und Klassifizierung eines Datensatzes, optional mit Inhaltsreferenz und Hash, um ihn ohne Inhaltspeicherung der AIBOM-Lineage hinzuzufügen."
+    },
+    "deployments": {
+      "title": "Noch keine Inferenz-Deployments erfasst",
+      "description": "Erfassen Sie ein lokales oder Brokered-Inferenz-Deployment; ein lokaler Eintrag braucht eine vorhandene Modellversion und unterliegt nur dann dem Gate, wenn eine Zulassungsrichtlinie eine Signatur verlangt."
+    },
+    "finetune": {
+      "title": "Noch keine Fine-Tuning-Job-Einträge",
+      "description": "Erfassen Sie einen außerhalb von Olivares ausgeführten Fine-Tuning-Job samt Zustand, Lineage und erzeugter Modellversion; die Control Plane führt kein Training aus."
+    },
+    "modelEvidence": {
+      "title": "Noch keine AIBOM-Siegel erfasst",
+      "description": "Öffnen Sie ein eigenes Modell und versiegeln Sie dessen AIBOM, um eine ausschließlich anfügende Inhalts-Hash-Zusicherung im Audit-Hauptbuch zu verankern."
+    },
+    "ownedModels": {
+      "title": "Noch keine eigenen Modelle registriert",
+      "description": "Registrieren Sie ein gehostetes, feinabgestimmtes oder importiertes Modell und verwalten Sie Versionen, Zulassungsnachweise und AIBOM-Dokumente."
+    },
+    "verdict": {
+      "title": "Noch keine Zulassungsverdikte erfasst",
+      "description": "Erstellen Sie unter einem eigenen Modell eine Version und lassen Sie dann ihr signiertes Artefakt zu; jede Version behält ein Verdikt, das bei erneuter Zulassung ersetzt wird."
+    }
+  }
+}

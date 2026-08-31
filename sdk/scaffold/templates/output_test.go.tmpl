@@ -1,0 +1,87 @@
+// SPDX-FileCopyrightText: [[.Year]] <your name>
+// SPDX-License-Identifier: Apache-2.0
+
+package [[.Package]]
+
+import (
+	"bytes"
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/olivaresai/olivares/sdk"
+)
+
+// TestLifecycle drives the full Open → Notify → Close lifecycle exactly as the
+// engine does, capturing the delivery in memory and proving the connector
+// really delivers. Grow this test with every real delivery path you add.
+func TestLifecycle(t *testing.T) {
+	ctx := context.Background()
+	c := New()
+	var buf bytes.Buffer
+	c.w = &buf // capture deliveries in memory instead of stderr
+
+	d := c.Descriptor()
+	if d.Name != Name {
+		t.Fatalf("Descriptor().Name = %q, want %q", d.Name, Name)
+	}
+	if d.Type != sdk.TypeOutput {
+		t.Fatalf("Descriptor().Type = %q, want %q", d.Type, sdk.TypeOutput)
+	}
+	wantSurfaces := []string{
+[[- range .Surfaces]]
+		"[[.]]",
+[[- end]]
+	}
+	if len(d.Surfaces) != len(wantSurfaces) {
+		t.Fatalf("Descriptor().Surfaces = %v, want %v", d.Surfaces, wantSurfaces)
+	}
+	for i, want := range wantSurfaces {
+		if d.Surfaces[i] != want {
+			t.Fatalf("Descriptor().Surfaces = %v, want %v", d.Surfaces, wantSurfaces)
+		}
+	}
+
+	if err := c.Open(ctx, sdk.Config{Settings: map[string]string{
+		"endpoint": "https://example.invalid",
+	}}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	n := sdk.Notification{
+		Type:   "finding.reported",
+		Title:  "example finding",
+		Body:   "a non-sensitive detail line",
+		Tenant: "default",
+		Time:   time.Now().UTC(),
+	}
+	if err := c.Notify(ctx, n); err != nil {
+		t.Fatalf("Notify: %v", err)
+	}
+	if got := buf.String(); !strings.Contains(got, "example finding") {
+		t.Fatalf("delivery did not carry the notification title; delivered %q", got)
+	}
+	if err := c.Close(ctx); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// TestNotifyHonorsContext proves a canceled engine context stops Notify: the
+// engine owns cancellation, and a connector that ignores ctx cannot be
+// supervised.
+func TestNotifyHonorsContext(t *testing.T) {
+	c := New()
+	var buf bytes.Buffer
+	c.w = &buf
+	if err := c.Open(context.Background(), sdk.Config{}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := c.Notify(ctx, sdk.Notification{Type: "finding.reported"}); err == nil {
+		t.Fatal("Notify with a canceled context should return the context error")
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("Notify delivered despite a canceled context: %q", buf.String())
+	}
+}

@@ -1,0 +1,41 @@
+{
+  "apiKeys": [
+    {
+      "apiKeyId": "key_old",
+      "redactedApiKey": "xai-a**12",
+      "name": "ci-pipeline",
+      "userId": "user_alice",
+      "teamId": "team_default",
+      "createTime": "2026-01-01T00:00:00Z",
+      "modifyTime": "2026-01-01T00:00:00Z",
+      "disabled": "false",
+      "tpm": "100000",
+      "qps": 12,
+      "qpm": "720",
+      "acl_strings": ["api-key:endpoint:*", "api-key:model:*"]
+    },
+    {
+      "apiKeyId": "key_new",
+      "redactedApiKey": "xai-z**99",
+      "name": "dev-laptop",
+      "userId": "user_bob",
+      "teamId": "team_default",
+      "createTime": "2026-06-10T00:00:00Z",
+      "modifyTime": "2026-06-10T00:00:00Z",
+      "disabled": false,
+      "aclStrings": ["api-key:endpoint:chat", "api-key:model:grok-4.3"]
+    },
+    {
+      "apiKeyId": "key_disabled",
+      "redactedApiKey": "xai-d**00",
+      "name": "old-revoked",
+      "userId": "user_alice",
+      "teamId": "team_default",
+      "createTime": "2025-01-01T00:00:00Z",
+      "modifyTime": "2025-06-01T00:00:00Z",
+      "disabled": "true",
+      "acls": ["api-key:endpoint:*"]
+    }
+  ],
+  "paginationToken": ""
+}

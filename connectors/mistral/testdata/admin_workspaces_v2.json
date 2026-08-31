@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "uuid": "ws_live_prod",
+      "name": "Production",
+      "description": "Production workspace",
+      "icon": "briefcase",
+      "is_default": true,
+      "members_count": 7,
+      "raw_roles": ["workspace_admin", "member"],
+      "spend_limit": {
+        "amount": 250.0,
+        "currency": "USD"
+      }
+    },
+    {
+      "uuid": "ws_live_research",
+      "name": "Research",
+      "members_count": 3,
+      "raw_roles": []
+    }
+  ]
+}

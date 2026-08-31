@@ -1,0 +1,167 @@
+---
+title: From zero to a read/write access graph
+description: >-
+  Build the single binary, boot it with the bundled demo estate, and reach a
+  populated Permitted-vs-Observed access graph — the product's core idea, end to
+  end, in a few minutes.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+By the end of this tutorial you will have Olivares AI running
+locally and will have reached its central artifact: a **read/write access graph**
+with a real **Permitted-vs-Observed** drift result. You will *learn the product by
+seeing it work* — this is a learning path, not a production install (for that, see
+[self-hosting](/how-to/self-hosting/)).
+
+We use the bundled **demo estate** (`--seed-demo`): a small synthetic set of agents,
+identities and resources that flows through the **real** event bus exactly as a live
+pgAudit or OpenTelemetry collector would. Everything runs on `localhost`.
+
+<Aside type="caution" title="Demo mode is for learning only">
+`--seed-demo` provisions a demo administrator with a **public, source-tree
+password** and synthetic data, and it **refuses to start on a non-loopback
+address**. Never use it for a real install. The genuine first-run path (a one-time
+setup token, no default credentials, real sources) is covered in
+[self-hosting](/how-to/self-hosting/).
+</Aside>
+
+## Prerequisites
+
+- **Go 1.26+** (to build the binary), or Docker (see the
+  [self-hosting how-to](/how-to/self-hosting/) for the container path).
+- `curl` and `python3` to talk to the API from the shell.
+- A checkout of the Olivares AI repository.
+
+## Build and boot
+
+<Steps>
+
+1. **Build the single binary.** From the repository root:
+
+   ```bash
+   task setup    # install git hooks, commit tooling and web deps
+   task build    # compile the static binary with the web embedded (go:embed)
+   ./bin/olivares version
+   ```
+
+   `task build` builds the web bundle, the first-party connector plugins and the
+   binary, producing one self-contained artifact at `./bin/olivares`.
+
+   <Aside type="note">
+   If you only want the binary and have the web bundle already built, the raw
+   build is `CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares`
+   — the store is pure-Go SQLite (modernc), so no C toolchain is required.
+   </Aside>
+
+2. **Boot it with the demo estate** on loopback. Pick a fresh data directory so you
+   start clean:
+
+   ```bash
+   DATA="$(mktemp -d)"
+   ./bin/olivares serve --insecure --seed-demo \
+     --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 \
+     --data-dir "$DATA"
+   ```
+
+   The `--insecure` flag serves plaintext HTTP on loopback (fine for a local
+   tutorial; TLS is on by default otherwise). On boot you will see a **DEMO MODE**
+   banner with the demo credentials:
+
+   ```
+   demo@olivares.local / olivares-demo-estate
+   ```
+
+</Steps>
+
+## Reach the access graph
+
+Leave the server running and open a second terminal.
+
+<Steps>
+
+1. **Log in** with the demo credentials to get a bearer token:
+
+   ```bash
+   BASE=http://127.0.0.1:8901
+   TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+     | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+   ```
+
+2. **Resolve the demo tenant** (the access-map endpoints are tenant-scoped):
+
+   ```bash
+   TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+     | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+   ```
+
+3. **Fetch the read/write graph.** This is module III — the access map:
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   The demo estate returns roughly **20 nodes and 13 edges** — agents, identities,
+   MCP servers, models, providers and resources, with each edge classified read or
+   read-write.
+
+4. **Fetch the Permitted-vs-Observed drift:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/drift" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   This surfaces the seeded **unexpected accesses**, for example:
+
+   - an agent reading `appdb.public.secrets` it was **never granted** (attributed); and
+   - a shared pool identity writing `appdb.public.logs` (approximate attribution).
+
+   <Aside type="tip" title="It is /drift, not /diff">
+   The Permitted-vs-Observed result is served at `/v1/m/accessmap/drift`. There is no
+   `/v1/m/accessmap/diff` endpoint.
+   </Aside>
+
+5. **(Optional) See the whole seeded inventory:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/inventory/summary" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+</Steps>
+
+## See it in the web UI
+
+The web UI is **embedded in the same binary** and served from the same origin. With
+the demo server still running, open:
+
+```
+http://127.0.0.1:8901
+```
+
+Log in with the demo credentials and open the access-map view: the graph renders the
+same nodes and edges, with the drift overlay highlighting the unexpected accesses and
+the dashboards summarizing the estate.
+
+<Aside type="note" title="What you just saw is the spine">
+*discover → R/RW graph → Permitted-vs-Observed diff → inventory/dashboards* is the
+product's core flow. The demo fed synthetic observations through the real bus; a
+real install feeds it through connectors instead — see
+[connect a source](/how-to/connect-a-source/).
+</Aside>
+
+## What is *not* happening here (and what to do next)
+
+- The demo data is synthetic and the demo password is public — this is **not** a
+  secure deployment. For a real one, follow [self-hosting](/how-to/self-hosting/):
+  it has no default credentials and uses a one-time setup token.
+- The module endpoints used above (`/v1/m/accessmap/*`, `/v1/m/inventory/*`) are
+  reachable but are **not** part of the served OpenAPI document by design; the
+  [API reference](/reference/api/) documents the core REST surface.
+- To understand *why* the graph is built this way (cooperative telemetry crossed
+  with native store audit, eBPF as a backstop, MCP annotations treated as
+  untrusted), read the [architecture overview](/explanation/architecture/overview/).

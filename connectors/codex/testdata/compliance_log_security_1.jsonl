@@ -1,0 +1,1 @@
+{"id":"sec_1","log_type":"CODEX_SECURITY_LOG","event_type":"CODEX_SECURITY_LOG","type":"codex.security.policy_triggered","timestamp":"2026-06-01T11:30:00Z","workspace_id":"ws_eng","actor":{"type":"user","id":"user_carol","email":"carol@example.com","ip_address":"203.0.113.7"}}

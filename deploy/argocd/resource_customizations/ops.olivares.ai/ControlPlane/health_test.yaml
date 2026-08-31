@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Argo CD health-check tests for health.lua (run with `go test ./util/lua/` in an
+# Argo CD checkout, or via the Argo CD health-check test harness). Each case feeds
+# a resource manifest (inputPath) and asserts the expected hs.status/message.
+tests:
+  - healthStatus:
+      status: Healthy
+      message: control plane reconciled
+    inputPath: testdata/healthy.yaml
+  - healthStatus:
+      status: Degraded
+      message: engine=sqlite forces 1 effective replica (requested 2)
+    inputPath: testdata/degraded.yaml
+  - healthStatus:
+      status: Progressing
+      message: rolling out new image
+    inputPath: testdata/progressing.yaml
+  - healthStatus:
+      status: Progressing
+      message: "ControlPlane phase: Pending"
+    inputPath: testdata/pending.yaml
+  - healthStatus:
+      status: Degraded
+      message: ControlPlane spec is invalid
+    inputPath: testdata/invalid.yaml
+  - healthStatus:
+      status: Progressing
+      message: Waiting for the Operator to report status
+    inputPath: testdata/waiting.yaml

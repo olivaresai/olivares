@@ -1,0 +1,16 @@
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1717200000,
+      "end_time": 1717286400,
+      "results": [
+        { "amount": 12.50, "line_item": "GPT-4o", "project_id": "proj_default", "api_key_id": "key_default", "quantity": 1500000 },
+        { "amount": 3.75, "line_item": "Embeddings", "project_id": "proj_default", "api_key_id": null, "quantity": null }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

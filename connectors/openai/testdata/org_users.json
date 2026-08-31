@@ -1,0 +1,10 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "user_admin1", "email": "admin@example.com", "role": "owner", "name": "Admin User", "added_at": 1700000000 },
+    { "id": "user_dev1", "email": "dev1@example.com", "role": "member", "name": "Dev One", "added_at": 1710000000 },
+    { "id": "user_dev2", "email": "dev2@example.com", "role": "member", "name": "Dev Two", "added_at": 1715000000 }
+  ],
+  "has_more": false,
+  "last_id": "user_dev2"
+}

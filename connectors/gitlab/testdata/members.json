@@ -1,0 +1,14 @@
+[
+  {
+    "username": "fran",
+    "access_level": 40
+  },
+  {
+    "username": "dev-alice",
+    "access_level": 30
+  },
+  {
+    "username": "viewer-bob",
+    "access_level": 20
+  }
+]

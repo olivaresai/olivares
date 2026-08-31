@@ -1,0 +1,184 @@
+{
+  "truncation": {
+    "label": "{{n}} Zeilen geladen; es gibt weitere",
+    "hint": "Diese Sandbox-Liste ist begrenzt. Nur die geladenen Zeilen werden angezeigt."
+  },
+  "title": "Test-Sandbox",
+  "description": "Isolierte, kurzlebige Läufe gegen nachgebildete Ressourcen — Szenario-Simulationen, deterministische Wiedergaben und Vergleiche vor/nach der Bereitstellung. Ausgaben sind synthetisch; echter Zieltext wird niemals gespeichert.",
+  "tabs": {
+    "runs": "Läufe",
+    "comparisons": "Vergleiche",
+    "scenarios": "Szenarien"
+  },
+  "kind": {
+    "scenario": "Szenario",
+    "replay": "Wiedergabe",
+    "compare": "Vergleichen"
+  },
+  "runner": {
+    "inproc-mock": "In-Prozess-Mock",
+    "container": "Container",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "Agent",
+    "model": "Modell",
+    "prompt": "Prompt",
+    "session": "Sitzung",
+    "sandbox_run": "Sandbox-Lauf"
+  },
+  "verdict": {
+    "improved": "Verbessert",
+    "regressed": "Verschlechtert",
+    "unchanged": "Unverändert",
+    "inconclusive": "Nicht eindeutig"
+  },
+  "run": {
+    "isolated": "Isoliert",
+    "isolatedHint": "Der Runner garantiert Isolation: kein Egress, keine Geheimnisse, keine Produktion. Erfasst wie vom Runner gemeldet, nicht abgeleitet.",
+    "notIsolated": "Nicht isoliert",
+    "notIsolatedHint": "Dieses Backend garantiert keine Isolation — wörtlich angezeigt, nicht verborgen.",
+    "destroyed": "Vernichtet",
+    "destroyedHint": "Der Zustand der kurzlebigen Umgebung wurde nach dem Lauf verworfen.",
+    "notScored": "Ausgeführt, nicht bewertet",
+    "pass": "Bestanden",
+    "fail": "Fehlgeschlagen"
+  },
+  "runs": {
+    "title": "Läufe",
+    "description": "Jede isolierte Ausführung, mit dem Backend, das sie ausgeführt hat, und der Angabe, ob sie bewertet wurde.",
+    "isolationNote": "Die Isolation ist echt, nicht vorgetäuscht: Runner und Isolations-Flag werden genau so angezeigt, wie sie erfasst wurden. Ein beeinträchtigter Lauf wurde ausgeführt, aber nicht bewertet — er gilt nicht als bestanden.",
+    "empty": "Noch keine Läufe",
+    "errored": "{{count}} Fehler",
+    "errored_one": "{{count}} Fehler",
+    "errored_other": "{{count}} Fehler",
+    "columns": {
+      "kind": "Art",
+      "subject": "Subjekt",
+      "runner": "Runner",
+      "isolation": "Isolation",
+      "status": "Status",
+      "steps": "Schritte",
+      "score": "Bewertung",
+      "started": "Gestartet"
+    }
+  },
+  "outputs": {
+    "title": "Schritt-Ausgaben",
+    "empty": "Keine Ausgaben erfasst",
+    "syntheticNote": "Dies sind begrenzte synthetische Ausgaben des Mock-Runners — keine Produktionsausgabe. Ein Mock-Miss ist ein deterministischer Marker; er hat niemals eine echte Ressource erreicht.",
+    "mockHit": "Mock-Treffer",
+    "mockMiss": "Mock-Miss"
+  },
+  "stream": {
+    "replayNote": "Die Engine spielt die bereits aufgezeichneten Schrittausgaben dieses Laufs über eine Verbindung ab und schließt sie danach. Ein Sandbox-Lauf wird beim Start synchron ausgeführt; dies sind also bereits aufgezeichnete Nachweise, die nach und nach eintreffen — nicht die Sicht auf einen noch laufenden Vorgang.",
+    "waiting": "Warte auf die erste Schrittausgabe; der Verbindungsstatus steht oben.",
+    "connecting": "Verbindung wird aufgebaut…",
+    "receiving": "Wiedergabe wird empfangen",
+    "complete": "Wiedergabe abgeschlossen",
+    "completePartial": "Die Wiedergabe endete, ist aber nicht der vollständige Datensatz",
+    "unreadable": "Frames, die diese Ansicht nicht lesen konnte: {{n}}. Sie kamen an und wurden verworfen, sodass die darin enthaltenen Nachweise hier fehlen — dies ist keine saubere Wiedergabe.",
+    "emptyUnreadable": "Es konnte keine Schrittausgabe gelesen werden",
+    "disconnected": "Nicht verbunden",
+    "lost": "Verbindung verloren — Sie sehen diesen Lauf nicht mehr.",
+    "lostHint": "Das bedeutet NICHT, dass der Lauf beendet ist: Die Verbindung endete, bevor die Engine das Ende der Wiedergabe signalisiert hat. Der Status des Laufs ist der von der Engine aufgezeichnete, wie ihn die Lauftabelle zeigt; er wird nie aus dieser Verbindung abgeleitet. Verbinden Sie sich neu, um fortzusetzen; bereits angezeigte Ausgaben werden nicht wiederholt.",
+    "reconnect": "Neu verbinden",
+    "snapshot": "Der Stream hat nichts geliefert; dies sind die gespeicherten Ausgaben, gelesen über die JSON-API — eine Momentaufnahme, nicht die Live-Ansicht.",
+    "summary": "Zusammenfassung der Engine: {{ok}} von {{total}} Schritten gegen einen Mock aufgelöst, {{error}} Mock-Misses."
+  },
+  "comparisons": {
+    "title": "Vergleiche vor/nach der Bereitstellung",
+    "description": "Baseline gegenüber Kandidat, bewertet anhand derselben Suite — der Entscheid, der eine Bereitstellung freigibt.",
+    "empty": "Noch keine Vergleiche",
+    "emptyHint": "Führen Sie einen Vergleich aus, um eine Kandidatenvariante gegen ihre Baseline zu bewerten.",
+    "baseline": "Baseline",
+    "candidate": "Kandidat",
+    "delta": "Delta",
+    "decidedBy": "Entschieden durch",
+    "scoredAgainst": "Bewertet anhand",
+    "noSuite": "Keine Suite — der Entscheid ist ohne bewertete Baseline und bewerteten Kandidaten nicht eindeutig."
+  },
+  "scenarios": {
+    "title": "Szenarien",
+    "description": "Wiederverwendbare Spezifikationen synthetischer Schritt-Eingaben sowie nachgebildeter MCP-/Ressourcen-Antworten.",
+    "empty": "Noch keine Szenarien",
+    "emptyHintAuthor": "Erfassen Sie die erste synthetische Testvorgabe: die Schritt-Eingaben, die ein Subjekt erhält, sowie die nachgebildeten Antworten, gegen die sie aufgelöst werden.",
+    "emptyHintReadOnly": "Szenarien werden von einem Aufrufer mit der Schreibberechtigung für Sandbox-Szenarien erstellt. Ohne sie können Sie die vorhandenen und deren Läufe lesen.",
+    "emptyHintConfined": "Ihre Mitgliedschaft ist auf einen Workspace beschränkt. Ein Szenario ist eine Testvorgabe auf Mandantenebene, daher weigert sich die Engine, eines aus einer beschränkten Mitgliedschaft heraus zu erfassen — das muss ein mandantenweites Mitglied tun.",
+    "columns": {
+      "name": "Name",
+      "subjectKind": "Subjekt",
+      "steps": "Schritte",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "create": {
+      "action": "Neues Szenario",
+      "title": "Neues Szenario",
+      "description": "Ein Szenario ist eine synthetische Testvorgabe: die Schritt-Eingaben, die ein Subjekt erhält, und die nachgebildeten MCP-/Ressourcen-Antworten, gegen die sie aufgelöst werden. Nichts davon erreicht eine echte Ressource.",
+      "name": "Name",
+      "namePlaceholder": "Checkout-Agent — Gutfall",
+      "subjectKind": "Subjekt",
+      "subjectKindHint": "Was das Szenario prüft — Agent, Modell, Prompt oder Sitzung. Freitext, um Leerzeichen bereinigt und bis 200 Zeichen gespeichert.",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Was diese Testvorgabe prüft und warum es sie gibt.",
+      "steps": "Schritte",
+      "stepsHint": "Die Eingaben, die das Subjekt erhält, in dieser Reihenfolge. Lassen Sie einen Schlüssel leer, dann vergibt die Engine step-1, step-2 und so weiter.",
+      "stepsEmpty": "Noch keine Schritte — ein Lauf dieses Szenarios würde keine Ausgabe erzeugen.",
+      "addStep": "Schritt hinzufügen",
+      "removeStep": "Schritt {{index}} entfernen",
+      "stepKey": "Schlüssel von Schritt {{index}}",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "Eingabe von Schritt {{index}}",
+      "stepInputPlaceholder": "Klassifiziere diese Rückerstattungsanfrage.",
+      "mocks": "Mocks",
+      "mocksHint": "Die Antwort, die jede nachgebildete MCP/Ressource zurückgibt. Ein Schritt ohne passenden Mock erfasst einen deterministischen Mock-Miss-Marker — er ruft nie nach außen.",
+      "mocksEmpty": "Noch keine Mocks — jeder Schritt würde einen Mock-Miss-Marker erfassen.",
+      "addMock": "Mock hinzufügen",
+      "removeMock": "Mock {{index}} entfernen",
+      "mockResource": "Ressource von Mock {{index}}",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "Antwort von Mock {{index}}",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "Geben Sie ausschließlich synthetischen Text ein: hier wird nichts klassifiziert, geschwärzt oder abgewiesen — ein eingefügtes Geheimnis ist ein gespeichertes Geheimnis. Die Engine begrenzt nur die Länge — den Namen auf 200 Zeichen, die Beschreibung auf 1024, den Rumpf jedes Schritts oder Mocks auf 8192 — und hängt beim Kürzen Auslassungspunkte an.",
+      "submit": "Szenario anlegen",
+      "submitting": "Wird angelegt…",
+      "success": "Szenario angelegt",
+      "failed": "Das Szenario wurde nicht angelegt."
+    },
+    "archive": {
+      "action": "Archivieren",
+      "alreadyArchived": "Bereits archiviert",
+      "confirmTitle": "Dieses Szenario archivieren?",
+      "confirmBody": "„{{name}}“ wird als archiviert markiert und die Entscheidung im Audit-Ledger festgehalten. Läufe und Vergleiche, die es bereits verwendet haben, bleiben erhalten — Archivieren löscht niemals Nachweise. Es ist eine Statusänderung, keine Sperre: die Engine führt ein Szenario in diesem Zustand weiterhin aus, wenn etwas darum bittet.",
+      "success": "Szenario archiviert"
+    }
+  },
+  "seam": {
+    "synthetic": "Synthetische Daten: nicht verkabelt",
+    "syntheticData": "Die Generierung synthetischer Daten ist ein dokumentierter Erweiterungspunkt nach v1 — in dieser Version nicht implementiert."
+  },
+  "empty": {
+    "runs": {
+      "title": "Noch keine Sandbox-Läufe erfasst",
+      "description": "Läufe erscheinen, wenn ein autorisierter Aufrufer über die Sandbox-API ein gespeichertes Szenario, eine Wiedergabe oder einen Vergleich startet."
+    },
+    "scenarios": {
+      "title": "Noch keine Sandbox-Szenarien definiert",
+      "description": "Ein Szenario ist eine vom Betreiber verfasste synthetische Testvorgabe, erfasst von einem Aufrufer mit der Schreibberechtigung für Sandbox-Szenarien — von diesem Bildschirm aus oder über die Sandbox-API."
+    }
+  },
+  "actions": {
+    "replay": "Replay a session",
+    "compare": "Compare variants",
+    "run": "Replay",
+    "compareRun": "Compare",
+    "sessionRef": "Session ref",
+    "scenarioRef": "Scenario ref (optional)",
+    "baseline": "Baseline variant",
+    "candidate": "Candidate variant",
+    "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
+    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs."
+  }
+}

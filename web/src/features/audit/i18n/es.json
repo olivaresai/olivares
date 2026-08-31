@@ -1,0 +1,107 @@
+{
+  "title": "Registro de auditoría",
+  "subtitle": "La cadena de evidencia a prueba de manipulación. Verifícala y expórtala a tu WORM/SIEM.",
+  "subtitleSystem": "La cadena del tenant de sistema con las operaciones administrativas entre tenants (solo lectura).",
+  "searchLoaded": "Filtrar solo las filas cargadas (en el cliente)…",
+  "filters": {
+    "title": "Filtros del registro en el servidor",
+    "q": "Buscar en el registro",
+    "qPlaceholder": "Acción, actor, tipo de destino o ID",
+    "actor": "Actor",
+    "actorPlaceholder": "Actor exacto",
+    "action": "Prefijo de acción",
+    "actionPlaceholder": "p. ej. agent.",
+    "targetKind": "Tipo de destino",
+    "targetKindPlaceholder": "Tipo de destino exacto",
+    "targetId": "ID de destino",
+    "targetIdPlaceholder": "ID de destino exacto",
+    "since": "Desde",
+    "until": "Hasta",
+    "clearOne": "Limpiar el filtro {{filter}}",
+    "clearAll": "Limpiar todos los filtros"
+  },
+  "scan": {
+    "incomplete": "Recorrido hasta la seq {{seq}} — no es el registro completo; «Cargar más» continúa el recorrido."
+  },
+  "scope": {
+    "label": "Ámbito del registro",
+    "tenant": "Registro del tenant",
+    "system": "Registro del sistema",
+    "systemHint": "La cadena del tenant de sistema registra las operaciones administrativas entre tenants y aquí es de solo lectura. La verificación y la exportación operan sobre los registros de tenant."
+  },
+  "cols": {
+    "seq": "Sec.",
+    "occurred": "Cuándo",
+    "action": "Acción",
+    "actor": "Actor",
+    "target": "Destino",
+    "hash": "Hash"
+  },
+  "actorKind": {
+    "user": "Usuario",
+    "agent": "Agente",
+    "connector": "Conector",
+    "system": "Sistema"
+  },
+  "verify": {
+    "action": "Verificar cadena",
+    "failed": "No se ha podido completar la verificación.",
+    "chain": "Cadena · {{checked}} enlaces",
+    "checkpoints": "Puntos de control · {{count}} firmados",
+    "noCheckpoints": "Aún no hay puntos de control firmados",
+    "attested": "Certificado hasta la sec. {{seq}}",
+    "chainBreak": "Cadena rota en la sec. {{seq}}",
+    "checkpointBreak": "Firma de punto de control fallida en la sec. {{seq}}"
+  },
+  "pubkey": {
+    "action": "Clave de verificación",
+    "label": "Clave de firma del registro",
+    "key": "clave",
+    "hint": "Comparte esta clave pública Ed25519 para que un tercero pueda verificar sin conexión los eventos exportados Y los puntos de control: la misma clave firma ambos.",
+    "failed": "La clave de verificación no está disponible."
+  },
+  "export": {
+    "action": "Exportar",
+    "formatLabel": "Formato de exportación",
+    "fromSeq": "Desde seq",
+    "toSeq": "Hasta seq",
+    "optional": "Opcional",
+    "useCurrent": "Usar filtros y rango actuales",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "Petición OTLP",
+      "otlp_envelope": "Petición OTLP (alias)",
+      "otlp_log_record": "Líneas LogRecord OTLP",
+      "ocsf": "OCSF"
+    },
+    "done": "Exportación descargada.",
+    "failed": "La exportación ha fallado.",
+    "forbidden": "No tienes autorización para exportar el registro."
+  },
+  "detail": {
+    "title": "Evento de evidencia",
+    "seqTitle": "Evento n.º {{seq}}",
+    "signed": "Evento firmado: esta fila lleva su propia firma sobre su hash de cadena",
+    "seq": "Secuencia",
+    "occurred": "Ocurrido",
+    "action": "Acción",
+    "actor": "Actor",
+    "actorSystem": "sistema",
+    "target": "Destino",
+    "id": "ID del evento",
+    "chainTitle": "Integridad de la cadena",
+    "prevHash": "Hash anterior",
+    "prev": "ant.",
+    "hash": "Hash del evento",
+    "this": "este",
+    "sig": "Firma del evento",
+    "checkpoint": "firma",
+    "chainHint": "El hash de cada evento se encadena con el anterior. No hay carga útil tras una huella: el hash es la evidencia (datos mínimos por diseño)."
+  },
+  "empty": {
+    "title": "Aún no hay evidencia",
+    "description": "El registro está vacío para este ámbito. Las operaciones gobernadas añaden eventos a prueba de manipulación a medida que ocurren."
+  }
+}

@@ -1,0 +1,34 @@
+{"records":[
+  {
+    "time":"2026-06-01T12:00:00Z",
+    "category":"AuditEvent",
+    "operationName":"SecretGet",
+    "resourceId":"/SUBSCRIPTIONS/AAAA0A0A-BB1B-CC2C-DD3D-EEEEEE4E4E4E/RESOURCEGROUPS/PROD/PROVIDERS/MICROSOFT.KEYVAULT/VAULTS/CONTOSOVAULT",
+    "id":"https://contosovault.vault.azure.net/secrets/db-password/abcdef",
+    "identity":{"claim":{"appid":"11111111-2222-3333-4444-555555555555","http://schemas.microsoft.com/identity/claims/objectidentifier":"oid-aaa"}},
+    "properties":{"clientInfo":"azsdk"}
+  },
+  {
+    "time":"2026-06-01T12:01:00Z",
+    "category":"AuditEvent",
+    "operationName":"KeySign",
+    "resourceId":"/SUBSCRIPTIONS/AAAA0A0A-BB1B-CC2C-DD3D-EEEEEE4E4E4E/RESOURCEGROUPS/PROD/PROVIDERS/MICROSOFT.KEYVAULT/VAULTS/CONTOSOVAULT",
+    "id":"https://contosovault.vault.azure.net/keys/signing-key/0",
+    "identity":{"claim":{"appid":"11111111-2222-3333-4444-555555555555"}}
+  },
+  {
+    "time":"2026-06-01T12:02:00Z",
+    "category":"AuditEvent",
+    "operationName":"KeyCreate",
+    "resourceId":"/SUBSCRIPTIONS/AAAA0A0A-BB1B-CC2C-DD3D-EEEEEE4E4E4E/RESOURCEGROUPS/PROD/PROVIDERS/MICROSOFT.KEYVAULT/MANAGEDHSMS/CONTOSOHSM",
+    "id":"https://contosohsm.managedhsm.azure.net/keys/wrap-key",
+    "identity":"{\"claim\":{\"appid\":\"99999999-8888-7777-6666-555555555555\",\"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn\":\"admin@contoso.example\"}}"
+  },
+  {
+    "time":"2026-06-01T12:03:00Z",
+    "category":"AuditEvent",
+    "operationName":"Authentication",
+    "resourceId":"/SUBSCRIPTIONS/AAAA0A0A-BB1B-CC2C-DD3D-EEEEEE4E4E4E/RESOURCEGROUPS/PROD/PROVIDERS/MICROSOFT.KEYVAULT/VAULTS/CONTOSOVAULT",
+    "identity":{"claim":{"appid":"11111111-2222-3333-4444-555555555555"}}
+  }
+]}

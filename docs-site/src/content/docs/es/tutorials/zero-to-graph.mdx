@@ -1,0 +1,174 @@
+---
+title: De cero a un grafo de acceso de lectura/escritura
+description: >-
+  Compila el binario único, arráncalo con el estate de demo incluido y alcanza un
+  grafo de acceso Permitido-vs-Observado poblado — la idea central del producto,
+  de principio a fin, en unos minutos.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+Al terminar este tutorial tendrás Olivares AI ejecutándose
+localmente y habrás alcanzado su artefacto central: un **grafo de acceso de
+lectura/escritura** con un resultado real de drift **Permitido-vs-Observado**.
+*Aprenderás sobre el producto viéndolo funcionar* — esta es una vía de aprendizaje, no
+una instalación de producción (para eso, consulta
+[self-hosting](/es/how-to/self-hosting/)).
+
+Usamos el **estate de demo** incluido (`--seed-demo`): un pequeño conjunto
+sintético de agentes, identidades y recursos que fluye por el bus de eventos
+**real** exactamente como lo haría un colector pgAudit u OpenTelemetry en vivo.
+Todo se ejecuta en `localhost`.
+
+<Aside type="caution" title="El modo demo es solo para aprender">
+`--seed-demo` aprovisiona un administrador de demo con una **contraseña pública,
+del árbol de fuentes** y datos sintéticos, y **se niega a arrancar en una dirección
+que no sea loopback**. Nunca lo uses para una instalación real. La vía genuina de
+primer arranque (un token de configuración de un solo uso, sin credenciales por
+defecto, fuentes reales) se cubre en [self-hosting](/es/how-to/self-hosting/).
+</Aside>
+
+## Requisitos previos
+
+- **Go 1.26+** (para compilar el binario), o Docker (consulta la
+  [guía de self-hosting](/es/how-to/self-hosting/) para la vía del contenedor).
+- `curl` y `python3` para hablar con la API desde la shell.
+- Un checkout del repositorio de Olivares AI.
+
+## Compila y arranca
+
+<Steps>
+
+1. **Compila el binario único.** Desde la raíz del repositorio:
+
+   ```bash
+   task setup    # install git hooks, commit tooling and web deps
+   task build    # compile the static binary with the web embedded (go:embed)
+   ./bin/olivares version
+   ```
+
+   `task build` compila el bundle web, los plugins de conectores de primera parte y
+   el binario, produciendo un único artefacto autocontenido en `./bin/olivares`.
+
+   <Aside type="note">
+   Si solo quieres el binario y ya tienes el bundle web compilado, la compilación
+   en crudo es `CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares`
+   — el almacén es SQLite puro en Go (modernc), así que no se requiere toolchain de
+   C.
+   </Aside>
+
+2. **Arráncalo con el estate de demo** en loopback. Elige un directorio de datos
+   nuevo para empezar limpio:
+
+   ```bash
+   DATA="$(mktemp -d)"
+   ./bin/olivares serve --insecure --seed-demo \
+     --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 \
+     --data-dir "$DATA"
+   ```
+
+   El flag `--insecure` sirve HTTP en texto plano sobre loopback (válido para un
+   tutorial local; en otros casos TLS está activado por defecto). Al arrancar verás
+   un banner de **DEMO MODE** con las credenciales de demo:
+
+   ```
+   demo@olivares.local / olivares-demo-estate
+   ```
+
+</Steps>
+
+## Alcanza el grafo de acceso
+
+Deja el servidor en marcha y abre una segunda terminal.
+
+<Steps>
+
+1. **Inicia sesión** con las credenciales de demo para obtener un bearer token:
+
+   ```bash
+   BASE=http://127.0.0.1:8901
+   TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+     | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+   ```
+
+2. **Resuelve el tenant de demo** (los endpoints del access map están acotados por
+   tenant):
+
+   ```bash
+   TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+     | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+   ```
+
+3. **Obtén el grafo de lectura/escritura.** Este es el módulo III — el access map:
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   El estate de demo devuelve aproximadamente **20 nodos y 13 aristas** — agentes,
+   identidades, servidores MCP, modelos, proveedores y recursos, con cada arista
+   clasificada como lectura o lectura-escritura.
+
+4. **Obtén el drift Permitido-vs-Observado:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/drift" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   Esto saca a la luz los **accesos inesperados** sembrados, por ejemplo:
+
+   - un agente leyendo `appdb.public.secrets` al que **nunca se le concedió** acceso
+     (atribuido); y
+   - una identidad de pool compartido escribiendo `appdb.public.logs` (atribución
+     aproximada).
+
+   <Aside type="tip" title="Es /drift, no /diff">
+   El resultado Permitido-vs-Observado se sirve en `/v1/m/accessmap/drift`. No
+   existe el endpoint `/v1/m/accessmap/diff`.
+   </Aside>
+
+5. **(Opcional) Ve el inventario sembrado completo:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/inventory/summary" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+</Steps>
+
+## Velo en la UI web
+
+La UI web está **embebida en el mismo binario** y se sirve desde el mismo origen.
+Con el servidor de demo aún en marcha, abre:
+
+```
+http://127.0.0.1:8901
+```
+
+Inicia sesión con las credenciales de demo y abre la vista de access map: el grafo
+renderiza los mismos nodos y aristas, con la superposición de drift resaltando los
+accesos inesperados y los dashboards resumiendo el estate.
+
+<Aside type="note" title="Lo que acabas de ver es la columna vertebral">
+*descubrir → grafo R/RW → drift Permitido-vs-Observado → inventario/dashboards* es
+el flujo central del producto. La demo alimentó observaciones sintéticas a través
+del bus real; una instalación real lo alimenta a través de conectores en su lugar
+— consulta [conectar una fuente](/es/how-to/connect-a-source/).
+</Aside>
+
+## Qué *no* está ocurriendo aquí (y qué hacer a continuación)
+
+- Los datos de demo son sintéticos y la contraseña de demo es pública — esto **no**
+  es un despliegue seguro. Para uno real, sigue [self-hosting](/es/how-to/self-hosting/):
+  no tiene credenciales por defecto y usa un token de configuración de un solo uso.
+- Los endpoints de módulo usados arriba (`/v1/m/accessmap/*`, `/v1/m/inventory/*`)
+  son alcanzables pero **no** forman parte del documento OpenAPI servido por diseño;
+  la [referencia de la API](/reference/api/) documenta la superficie REST del núcleo.
+- Para entender *por qué* el grafo se construye así (telemetría cooperativa cruzada
+  con la auditoría nativa del almacén, eBPF como red de seguridad, anotaciones MCP
+  tratadas como no confiables), lee la
+  [visión general de la arquitectura](/es/explanation/architecture/overview/).

@@ -1,0 +1,45 @@
+# The app-of-apps parent: a single Argo CD Application that
+# points at this directory (deploy/gitops/argocd/) so Argo CD renders every
+# Application manifest in it (here: application.yaml) and adopts them as children.
+# Bootstrapping the platform then collapses to applying THIS one manifest:
+#
+#   kubectl apply -n argocd -f deploy/gitops/argocd/app-of-apps.yaml
+#
+# The pattern keeps the set of deployed Applications itself declarative and
+# versioned in Git — the OpenGitOps "declarative + versioned" principles applied
+# one level up (see deploy/gitops/README.md). The CHILD (application.yaml) is the
+# one that pulls the chart from OCI; this parent only tracks the child manifests.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: olivares-app-of-apps
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: olivares
+spec:
+  project: default
+  source:
+    # Git repo that holds this directory of Application manifests. Replace
+    # repoURL/targetRevision with YOUR fork/branch — the app-of-apps tracks
+    # Git (the child Applications), while each child tracks the OCI chart.
+    repoURL: https://github.com/olivaresai/olivares.git
+    targetRevision: main
+    path: deploy/gitops/argocd
+    directory:
+      recurse: false
+      # Do not let the parent treat ITSELF as a child it should reconcile.
+      exclude: app-of-apps.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd # the children (Application objects) live in the argocd ns
+  syncPolicy:
+    # Auto-sync the SET of Applications (cheap, safe — it only creates/prunes
+    # Application objects, not the workloads). Each child Application still
+    # governs its own (manual-by-default) workload sync policy.
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

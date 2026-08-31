@@ -1,0 +1,105 @@
+{
+  "title": "Plateformes et cycle de vie",
+  "description": "La matrice de déploiement multi-surface et le cycle de vie des modèles par plateforme pour le parc Claude — posture de conformité par surface et échéances de retrait divergentes. Référence servie par le moteur, jamais recalculée.",
+  "tabs": {
+    "surfaces": "Surfaces et conformité",
+    "lifecycle": "Cycle de vie des modèles"
+  },
+  "liveReference": "Référence servie par le moteur — AsOf {{date}}, source {{source}}.",
+  "unavailable": "La référence des plateformes est indisponible sur ce moteur",
+  "confirm": {
+    "confirmed": "Confirmé",
+    "toConfirm": "À confirmer"
+  },
+  "surfaces": {
+    "title": "Surfaces de déploiement",
+    "description": "Les six surfaces Claude modélisées (ANT2-01/17). Chacune diffère par son URL de base, son authentification, sa forme d’identifiant de modèle, sa facturation, sa résidence et sa posture de conformité — elles ne sont pas interchangeables.",
+    "matrixTitle": "Matrice des attributs de surface",
+    "matrixSummary": "Six surfaces de déploiement comparées selon l’opérateur, le point de terminaison, l’authentification, la forme d’identifiant de modèle, la prise en charge de l’API, la facturation, HIPAA, ZDR et la résidence.",
+    "unmodeled": "Surface non modélisée — aucune matrice d’attributs.",
+    "unmodeledHint": "Cette passerelle ne fait pas partie des six surfaces Claude modélisées ; ses attributs de conformité et de résidence ne sont pas déclarés et ne sont pas déduits.",
+    "deprecatedBadge": "Obsolète",
+    "noWorkspaceHeader": "aucun",
+    "noSigv4": "s. o.",
+    "apiSupportTitle": "Prise en charge de l’API Anthropic par surface",
+    "apiSupportDescription": "Quelles familles de l’API Anthropic s’appliquent par surface. Une surface dépourvue des API Admin/Models/Compliance ne peut pas servir l’ingestion de gouvernance côté Anthropic — elle se dégrade honnêtement, ne signale jamais un résultat vide comme « aucun constat ».",
+    "columns": {
+      "surface": "Surface",
+      "operator": "Opérateur",
+      "baseUrl": "URL de base",
+      "sigv4": "Service SigV4",
+      "workspaceHeader": "En-tête d’espace de travail",
+      "modelIdForm": "Forme d’identifiant de modèle",
+      "billing": "Facturation",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "Résidence / géo d’inférence",
+      "apiSupport": "Prise en charge de l’API",
+      "messages": "Messages",
+      "admin": "Admin",
+      "compliance": "Compliance",
+      "models": "Models",
+      "batches": "Batches",
+      "mcp": "Connecteur MCP"
+    },
+    "api": {
+      "supported": "Pris en charge",
+      "unsupported": "Non pris en charge"
+    },
+    "fedramp": {
+      "eligible": "Éligible HIPAA / FedRAMP / IL4-5",
+      "na": "Non déclaré"
+    },
+    "notesTitle": "Notes sur les surfaces",
+    "compliance": {
+      "title": "Posture de conformité",
+      "description": "HIPAA / FedRAMP / IL / ZDR constituent un axe par surface (où s’exécute l’inférence), distinct de la posture GPAI d’un modèle ou d’un fournisseur. Ne les confondez pas.",
+      "hipaaNote": "HIPAA est affiché avec son statut de confirmation. Une posture « à confirmer » n’est jamais rendue comme un oui ou un non ferme."
+    }
+  },
+  "lifecycle": {
+    "title": "Cycle de vie des modèles par plateforme",
+    "description": "Le retrait des modèles se fait par plateforme, et non globalement (ANT2-03). Les surfaces opérées par Anthropic retirent un modèle à une date différente de Bedrock et Vertex — un unique indicateur « retiré » donnerait une fausse échéance de migration sur la moitié du parc.",
+    "datePending": "date non publiée / à confirmer",
+    "noSuccessor": "Aucun successeur déclaré",
+    "noSuccessorHint": "L’autorité n’a désigné aucun modèle de remplacement pour cette famille. Aucun n’est déduit.",
+    "matrixTitle": "Échéances de retrait par surface",
+    "columns": {
+      "model": "Modèle",
+      "surface": "Surface",
+      "retiresOn": "Retiré le",
+      "status": "Statut",
+      "replacement": "Remplacement"
+    },
+    "paramDeprecation": {
+      "title": "Avis préalable d’obsolescence de paramètre",
+      "badge": "Informatif",
+      "body": "{{affected}} rejettent un {{params}} non par défaut avec un HTTP {{status}}. Il s’agit d’une obsolescence d’Anthropic (ANT2-03), ni d’un défaut produit ni d’une erreur corrigible — le plan d’inférence retient ces paramètres à titre d’avis préalable.",
+      "paramsJoin": ", "
+    },
+    "notes": {
+      "title": "Notes sur l’identifiant et la résidence Bedrock",
+      "declaredNote": "Référence déclarée côté web : ces notes citent des faits de fiabilité de modules/models/bedrock.go que le point de terminaison des plateformes ne sert pas. Chacune porte son propre statut de confirmation.",
+      "crisIdFormat": "Le format d’identifiant de profil d’inférence inter-région est « <geo>.anthropic.<model> », geo ∈ {us, eu, apac, global}. La surface Bedrock Mantle actuelle utilise l’identifiant brut « anthropic.<model> ».",
+      "crisOpusId": "L’identifiant concret du profil d’inférence opus Bedrock Global-CRIS n’est pas vérifié par rapport à la page AWS — le format est confirmé, cet identifiant précis n’est pas présenté comme faisant autorité.",
+      "globalRegionalPremium": "La documentation AWS indique que les profils d’inférence régionaux portent une prime d’environ 10 % par rapport au global (le global est la base la moins chère) — à l’opposé d’une hypothèse « global +10 % » ; le multiplicateur exact n’est pas vérifié, aucune prime n’est donc modélisée.",
+      "usBurndown": "La consommation d’inférence US uniquement est de 1,1× (Opus 4.6 / Sonnet 4.6+, inference_geo=\"us\")."
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "Aucune échéance de retrait de modèle déclarée",
+      "description": "La référence compilée du cycle de vie Claude du moteur doit fournir ces échéances ; ni l’activité du locataire ni les saisies dans la console ne les alimentent."
+    },
+    "surface": {
+      "title": "Aucune surface de déploiement déclarée",
+      "description": "La référence compilée des surfaces Claude du moteur doit fournir ces lignes ; ni l’activité du locataire ni les saisies dans la console ne les alimentent."
+    }
+  },
+  "effectiveState": {
+    "label": "Dans ce parc :",
+    "models": "Catalogue de modèles",
+    "modelOps": "Opérations sur les modèles"
+  }
+}

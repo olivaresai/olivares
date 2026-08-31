@@ -1,0 +1,285 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# pg-majors — the PostgreSQL 15/16/17/18 support matrix.
+#
+# ONE job, FOUR service containers, one build-cache warmup, four independent
+# passes of the same packages with only the DSN triple changing. Not a
+# strategy.matrix: the db-capable runner pool has size 1, so four legs would
+# serialize anyway and pay the fixed overhead (checkout, setup-go, image pulls)
+# four times.
+#
+# NOT a required check (a required context that never triggers blocks a PR as
+# "expected, never reported") and NOT on pull_request (it would queue behind
+# control-plane/race on the single db-capable runner and add its whole runtime
+# to PR wall-clock). The hard guarantee is the release gate by SHA
+# EQUALITY, same wording as race-full.yml: a release must point at a green
+# pg-majors run on the EXACT tagged SHA; a green ancestor does not cover the
+# posterior diff. Corollary, stated not implied: until this runs on PRs, F-10
+# is NOT closed by PR CI — that release rule is the only thing between a shape
+# change and a release.
+#
+# WHAT A GREEN RUN CLAIMS — and what it does not: it claims the
+# listed packages pass, skip-free, against real servers of the four majors,
+# each pass floor-checked against ci/pg-majors-expectations.json. It does NOT
+# claim the F-09/F-10 guard conditions hold: those need the guard-side code
+# (verifiedPostgresMajors as a SET, the 16+ reachability predicate, the skip
+# removal) that lives in the-c4 lane. Landing this workflow first is the
+# permanent net; the guard lane closes the findings.
+
+name: pg-majors
+
+on:
+  schedule:
+    # Wednesday 04:23 UTC. Sunday is saturated (e2e-claude 04:00, race-full
+    # 04:17, bench-nightly 05:00); Wednesday is empty. Non-round minute because
+    # GitHub delays or drops on-the-hour schedules under load.
+    - cron: '23 4 * * 3'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write   # scheduled-run failure telemetry only (issue; no PR exists)
+
+concurrency:
+  group: pg-majors
+  cancel-in-progress: false
+
+jobs:
+  pg-majors:
+    runs-on: ${{ vars.CI_RUNNER_DB || vars.CI_RUNNER || 'ubuntu-latest' }}
+    # Absolute backstop only. The design estimate is 21-38 min with the fixed
+    # overhead UNMEASURED, and the first run pulls three new images; the
+    # hang guard is the step timeout on the passes, so the failure reporter
+    # still posts when a pass wedges.
+    timeout-minutes: 150
+    services:
+      # Digests re-verified against the registry on 2026-07-31 (manifest-list
+      # digests, Docker Hub API) — pg16 matches the
+      # digest already pinned in mainline-ci.yml and race-full.yml. Same
+      # bookworm family in all four; tag pgNN == 0.8.6-pgNN (same digest).
+      # Bare container port in all four: zero fixed host ports in this repo
+      # (lint:ci-ports). Docker picks four DISTINCT ephemeral host ports; the
+      # resolver below refuses anything else.
+      pg15:
+        image: pgvector/pgvector:pg15@sha256:a20a57d7aa5217a6af0a391ccf69f4a8512406d6c14be08132f801468cc3cc62
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      pg16:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      pg17:
+        image: pgvector/pgvector:pg17@sha256:7ae6051efd0e60444282c27c7e141af07f322ce033300e727a49c3dd11075e38
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+      pg18:
+        image: pgvector/pgvector:pg18@sha256:691673308c99d2161ba298736f3147f1f22d79de2fb7ec93ae9b4afcab870b62
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      # Unreachable server = fail, never a partial pass: this job provisions
+      # real Postgres ×4, so PG-less could only mean a service died. Covers
+      # only "unreachable" — the real anti-empty-green net is the receipt +
+      # floor + no-skip evaluation at the end.
+      OLIVARES_GATE_STRICT_PG: "1"
+    steps:
+      - name: resolve the four ephemeral Postgres ports
+        id: pg-ports
+        env:
+          # `job` context exists only in steps.* — not in jobs.<id>.env
+          # (actionlint availability.go), same regime as mainline-ci.
+          P15: ${{ job.services.pg15.ports['5432'] }}
+          P16: ${{ job.services.pg16.ports['5432'] }}
+          P17: ${{ job.services.pg17.ports['5432'] }}
+          P18: ${{ job.services.pg18.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          read -r LOPORT HIPORT < /proc/sys/net/ipv4/ip_local_port_range
+          for m in 15 16 17 18; do
+            v=$(eval "echo \${P$m:-}")
+            case "$v" in
+              '' | *[!0-9]*)
+                echo "::error::mapped host port for services.pg$m:5432 is empty or non-numeric (got '$v')" >&2
+                exit 1 ;;
+            esac
+            if [ "$v" -lt "$LOPORT" ] || [ "$v" -gt "$HIPORT" ]; then
+              echo "::error::docker published pg$m on $v, outside this host's ephemeral range ${LOPORT}-${HIPORT}" >&2
+              exit 1
+            fi
+          done
+          # Four DISTINCT ports or refuse: two equal ports means two passes
+          # measuring the SAME server — the defining false green of this
+          # topology.
+          if [ "$(printf '%s\n' "$P15" "$P16" "$P17" "$P18" | sort -u | wc -l)" -ne 4 ]; then
+            echo "::error::the four mapped host ports are not distinct ($P15 $P16 $P17 $P18)" >&2
+            exit 1
+          fi
+          {
+            echo "PGPORT_15=$P15"
+            echo "PGPORT_16=$P16"
+            echo "PGPORT_17=$P17"
+            echo "PGPORT_18=$P18"
+          } >> "$GITHUB_ENV"
+          echo "resolved ports: 15=$P15 16=$P16 17=$P17 18=$P18 (ephemeral range ${LOPORT}-${HIPORT})"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: verify each server IS its declared major, then provision roles ×4
+        id: pg-verify-provision
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client; }
+          : > pg-majors-receipts.txt
+          for m in 15 16 17 18; do
+            port=$(eval "echo \${PGPORT_$m}")
+            svn=$(psql "postgres://postgres@127.0.0.1:${port}/postgres" -tAc "SHOW server_version_num")
+            if [ "${svn:0:2}" != "$m" ]; then
+              echo "::error::service pg$m (port $port) reports server_version_num=$svn — wrong major behind the port" >&2
+              exit 1
+            fi
+            # RECEIPT, honestly labelled: this proves the EXPORTED DSN points at
+            # major $m. The harness-side assertion (pgtest reading
+            # OLIVARES_TEST_PG_EXPECT_MAJOR and comparing on its OWN connection)
+            # is guard-lane code and pending; until it lands, a
+            # harness that ignored the DSN would not be caught by this line.
+            echo "PG_MAJOR_DSN_VERIFIED|major=$m|port=$port|server_version_num=$svn" | tee -a pg-majors-receipts.txt
+            base="postgres://postgres@127.0.0.1:${port}"
+            psql "$base/postgres" -v ON_ERROR_STOP=1 -v app_password=apppw -f deploy/postgres/01-app-role.sql
+            psql "$base/postgres" -v ON_ERROR_STOP=1 -c \
+              "DROP ROLE IF EXISTS olivares_admin; CREATE ROLE olivares_admin LOGIN PASSWORD 'adminpw' NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION;"
+            psql "$base/postgres" -v ON_ERROR_STOP=1 -c \
+              "GRANT CONNECT ON DATABASE olivares TO olivares_admin;"
+            psql "$base/olivares" -v ON_ERROR_STOP=1 -c \
+              "GRANT USAGE ON SCHEMA public TO olivares_admin; ALTER DEFAULT PRIVILEGES FOR ROLE olivares_app IN SCHEMA public GRANT SELECT ON TABLES TO olivares_admin;"
+            psql "$base/olivares" -v ON_ERROR_STOP=1 -c \
+              "CREATE EXTENSION IF NOT EXISTS vector;"
+          done
+      - name: warm the build cache once (compile only, run nothing)
+        # ONE compilation, four executions. `-run '^$(none)$'` here
+        # is a build warmup, deliberately not a gate: matching zero tests exits
+        # 0 with "no tests to run", which is exactly why -run is FORBIDDEN as a
+        # selection mechanism (§2.3) and exactly right for compiling without
+        # executing. Passes 2-4 then re-link from cache instead of recompiling.
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016,SC2046 # The regex and newline-separated package list are passed to go unchanged.
+          go test -count=1 -run '^$(none)$' $(grep -v '^#' ci/pg-majors-packages.txt | sed 's|^|github.com/olivaresai/olivares/|') >/dev/null
+      - name: run the packages against each of the four majors
+        id: passes
+        timeout-minutes: 100
+        run: |
+          # NO set -e and NO || true: every pass runs to completion,
+          # its exit status is recorded, and the evaluation step decides. An
+          # abort-on-first-red would report "pg-majors failed" having measured
+          # 1 of 4; a swallow-all would go green reading only the last exit.
+          set -uo pipefail
+          pkgs=$(grep -v '^#' ci/pg-majors-packages.txt | sed 's|^|github.com/olivaresai/olivares/|')
+          : > pg-majors-exits.txt
+          # The matrix tests (guardmajormatrix_pg_test.go) walk ALL FOUR majors
+          # inside a single test, so they need every DSN at once rather than the
+          # per-pass one below. Built here and exported on EVERY pass on purpose: the
+          # evaluator's zero-skip rule is absolute, and a var set on only one pass
+          # would self-skip on the other three — nine skips reported as a red gate for
+          # the wrong reason. Superuser DSNs, which is what that test connects with.
+          MAJOR_DSNS=""
+          for mm in 15 16 17 18; do
+            pp=$(eval "echo \${PGPORT_$mm}")
+            MAJOR_DSNS="${MAJOR_DSNS:+${MAJOR_DSNS},}${mm}=postgres://postgres:postgres@127.0.0.1:${pp}/postgres?sslmode=disable"
+          done
+          echo "PG_MAJOR_DSNS_BUILT|majors=15,16,17,18" | tee -a pg-majors-receipts.txt
+          for m in 15 16 17 18; do
+            port=$(eval "echo \${PGPORT_$m}")
+            echo "== pass pg$m (host port $port) =="
+            env \
+              OLIVARES_TEST_POSTGRES_DSN="postgres://olivares_app:apppw@127.0.0.1:${port}/olivares?sslmode=disable" \
+              OLIVARES_TEST_POSTGRES_ADMIN_DSN="postgres://olivares_admin:adminpw@127.0.0.1:${port}/olivares?sslmode=disable" \
+              OLIVARES_TEST_POSTGRES_SUPERUSER_DSN="postgres://postgres:postgres@127.0.0.1:${port}/postgres?sslmode=disable" \
+              OLIVARES_TEST_VECTOR_DSN="postgres://olivares_app:apppw@127.0.0.1:${port}/olivares?sslmode=disable" \
+              # Este job PROVISIONA el servidor, así que aquí un Postgres inalcanzable es un job
+              # roto, no una ausencia que saltar. `pgtest.Available` sólo lo sabe si el RUN lo
+              # declara (core/internal/pgtest/pgtest.go:88-96); sin esto la sonda contesta `false`
+              # y la pata entera desaparece EN SILENCIO — justo el fallo que la sonda vino a cerrar.
+              # shellcheck disable=SC2086 # $pkgs is the newline-separated package list for go test.
+              OLIVARES_TEST_POSTGRES_REQUIRED=1 \
+              OLIVARES_TEST_PG_EXPECT_MAJOR="$m" \
+              OLIVARES_TEST_POSTGRES_MAJOR_DSNS="$MAJOR_DSNS" \
+              go test -json -count=1 -timeout 45m $pkgs > "gotest-$m.json" 2>&1
+            echo "$m $?" >> pg-majors-exits.txt
+          done
+          cat pg-majors-exits.txt
+      - name: self-test the evaluator, then evaluate — receipts, floors, zero skips
+        run: |
+          set -euo pipefail
+          # The evaluator is the job's whole anti-empty-green net, so its own
+          # mutation battery runs first, in this same job: a gate that has only
+          # ever been seen passing has never been seen working.
+          bash scripts/test-pg-majors-evaluate.sh
+          python3 scripts/pg-majors-evaluate.py
+      - name: failure telemetry (scheduled runs have no PR to report to)
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Guard the CLI: self-hosted runners do not all ship gh (measured:
+          # "gh: command not found" once killed a notify step silently).
+          # Context values reach the shell via env, never inline in run:.
+          if command -v gh >/dev/null 2>&1; then
+            gh issue create --title "pg-majors scheduled run failed ($(date -u +%F))" \
+              --body "Run: ${RUN_URL}. See the step summary for which major/package broke." \
+              --label ci 2>/dev/null || echo "::warning::could not open the failure issue"
+          else
+            echo "::warning::gh not on this runner; failure recorded in the step summary only"
+          fi

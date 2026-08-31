@@ -1,0 +1,69 @@
+{
+  "value": [
+    {
+      "id": "risk-high",
+      "agentDisplayName": "High Risk Agent",
+      "blueprintId": "bp-app-1",
+      "identityType": "agentIdentity",
+      "isDeleted": false,
+      "isEnabled": true,
+      "isProcessing": false,
+      "riskLevel": "high",
+      "riskState": "atRisk",
+      "riskDetail": "fixture detail excluded from findings",
+      "riskLastModifiedDateTime": "2026-07-01T10:00:00Z"
+    },
+    {
+      "id": "risk-low",
+      "agentDisplayName": "Low Risk Agent",
+      "blueprintId": null,
+      "identityType": "agentUser",
+      "isDeleted": true,
+      "isEnabled": false,
+      "isProcessing": false,
+      "riskLevel": "low",
+      "riskState": "atRisk",
+      "riskDetail": "fixture detail excluded from findings",
+      "riskLastModifiedDateTime": "2026-07-01T11:00:00Z"
+    },
+    {
+      "id": "risk-compromised",
+      "agentDisplayName": "Compromised Agent",
+      "blueprintId": "bp-app-2",
+      "identityType": "agentIdentityBlueprintPrincipal",
+      "isDeleted": false,
+      "isEnabled": true,
+      "isProcessing": false,
+      "riskLevel": "none",
+      "riskState": "confirmedCompromised",
+      "riskDetail": "fixture detail excluded from findings",
+      "riskLastModifiedDateTime": "2026-07-01T12:00:00Z"
+    },
+    {
+      "id": "risk-dismissed",
+      "agentDisplayName": "Dismissed Agent",
+      "blueprintId": "bp-app-3",
+      "identityType": "agentIdentity",
+      "isDeleted": false,
+      "isEnabled": true,
+      "isProcessing": false,
+      "riskLevel": "high",
+      "riskState": "dismissed",
+      "riskDetail": "fixture detail excluded from findings",
+      "riskLastModifiedDateTime": "2026-07-01T13:00:00Z"
+    },
+    {
+      "id": "risk-safe",
+      "agentDisplayName": "Safe Agent",
+      "blueprintId": "bp-app-4",
+      "identityType": "agentIdentity",
+      "isDeleted": false,
+      "isEnabled": true,
+      "isProcessing": false,
+      "riskLevel": "medium",
+      "riskState": "confirmedSafe",
+      "riskDetail": "fixture detail excluded from findings",
+      "riskLastModifiedDateTime": "2026-07-01T14:00:00Z"
+    }
+  ]
+}

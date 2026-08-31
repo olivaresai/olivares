@@ -1,0 +1,23 @@
+{
+  "identityMemberships": [
+    {
+      "id": "im-1",
+      "role": "admin",
+      "identity": {
+        "id": "id-ci-deployer",
+        "name": "ci-deployer",
+        "authMethods": ["universal-auth"]
+      }
+    },
+    {
+      "id": "im-2",
+      "role": "member",
+      "identity": {
+        "id": "id-backup-agent",
+        "name": "backup-agent",
+        "authMethods": ["universal-auth"]
+      }
+    }
+  ],
+  "totalCount": 2
+}

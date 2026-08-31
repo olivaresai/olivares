@@ -1,0 +1,70 @@
+{
+  "note": "Connector COUNT is not a compatibility claim. This matrix declares the small, EXPLICITLY qualified interop subset and each connector's REAL verification level. A connector not listed here — or listed as fixture-only — must never carry an equivalent 'verified compatibility' badge.",
+  "policy": {
+    "deprecation_sla_days": 90,
+    "breakage": "A Tier-1 surface whose conformance job detects breakage against its reference/vendor endpoint is downgraded to fixture-only and its last_verified cleared within one release, announced in the release notes. Deprecating a supported surface gives at least deprecation_sla_days notice with the removal release named.",
+    "badges": {
+      "fixture-only": "Unit-test wire fixtures only; no live qualification job. No compatibility guarantee beyond the pinned wire shape.",
+      "conformance-defined": "An integration-tagged conformance job exists and is designed to run against a reference/vendor endpoint per release (Actions OFF -> run via `task test:integration`). last_verified reflects the last ACTUAL run and is null until the first release run.",
+      "continuously-verified": "A conformance job exists AND was verified green against a live reference/vendor endpoint on last_verified, within the deprecation SLA."
+    }
+  },
+  "entries": [
+    {
+      "connector": "a2a",
+      "surface": "Agent2Agent agent-card discovery",
+      "vendor": "open protocol (A2A)",
+      "api_version": "A2A 1.0 (well-known agent-card)",
+      "auth_modes": ["jwks-signed card", "jku"],
+      "cloud_limits": "none (self-hosted agents)",
+      "tier": "tier1",
+      "verification": "conformance-defined",
+      "conformance": {
+        "type": "reference-server",
+        "env": ["OLIVARES_A2A_CONFORMANCE_URL", "OLIVARES_A2A_CONFORMANCE_JWKS"],
+        "job": "go test -tags integration -run TestConformanceA2ADiscovery ./connectors/a2a"
+      },
+      "last_verified": null
+    },
+    {
+      "connector": "mcp",
+      "surface": "Model Context Protocol server introspection",
+      "vendor": "open protocol (MCP)",
+      "api_version": "MCP (2026-07-28 RC-tracked, streamable HTTP)",
+      "auth_modes": ["none", "oauth (IDN-03)"],
+      "cloud_limits": "none (self-hosted / registry)",
+      "tier": "tier1",
+      "verification": "conformance-defined",
+      "conformance": {
+        "type": "reference-server",
+        "env": ["OLIVARES_MCP_CONFORMANCE_URL"],
+        "job": "go test -tags integration -run TestConformanceMCPIntrospection ./connectors/mcp"
+      },
+      "last_verified": null
+    },
+    {
+      "connector": "slack",
+      "surface": "Slack chat.postMessage notification output",
+      "vendor": "Slack",
+      "api_version": "web-api (chat.postMessage)",
+      "auth_modes": ["bot token", "incoming webhook"],
+      "cloud_limits": "slack.com",
+      "tier": "tier2",
+      "verification": "fixture-only",
+      "conformance": null,
+      "last_verified": null
+    },
+    {
+      "connector": "pagerduty",
+      "surface": "PagerDuty Events v2 alerting output",
+      "vendor": "PagerDuty",
+      "api_version": "Events API v2",
+      "auth_modes": ["routing key"],
+      "cloud_limits": "pagerduty.com",
+      "tier": "tier2",
+      "verification": "fixture-only",
+      "conformance": null,
+      "last_verified": null
+    }
+  ]
+}

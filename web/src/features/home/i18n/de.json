@@ -1,0 +1,46 @@
+{
+  "title": "Übersicht",
+  "description": "Ihr KI-Bestand auf einen Blick — Inventar, Aktivität, Risiko, Compliance, Ausgaben und Zustand.",
+  "asOfNote": "Live-Aggregate über die letzten 30 Tage, über alle Module, die Ihre Rolle öffnen kann. Jede Kachel verlinkt auf ihr Modul; öffnen Sie den Management-Bericht für die vollständige Zusammenfassung und das PDF.",
+  "openReport": "Management-Bericht",
+  "range": "letzte 30 Tage",
+  "tiles": {
+    "inventory": {
+      "label": "Inventar",
+      "caption": "{{agents}} Agenten · {{active}} aktiv"
+    },
+    "sessions": {
+      "label": "Live-Sitzungen",
+      "caption": "{{idle}} jetzt inaktiv",
+      "silent": "{{count}} verstummt (mögliche Umgehung)"
+    },
+    "security": {
+      "label": "Sicherheit",
+      "caption": "{{count}} kritisch oder hoch",
+      "clear": "Keine offenen Befunde"
+    },
+    "compliance": {
+      "label": "Compliance",
+      "caption": "{{gap}} Lücken · {{unmapped}} nicht zugeordnet",
+      "noControls": "Noch keine Kontrollen zugeordnet"
+    },
+    "spend": {
+      "label": "Ausgaben",
+      "caption": "{{range}}",
+      "projected": "{{amount}} prognostiziert bei aktueller Laufrate"
+    },
+    "health": {
+      "label": "Zustand & SLA",
+      "value": "{{healthy}}/{{total}} fehlerfrei",
+      "caption": "{{breaches}} SLA-Verletzungen · {{incidents}} offene Vorfälle",
+      "noChecks": "Noch keine Zustandsprüfungen"
+    }
+  },
+  "state": {
+    "unavailable": "Konnte nicht geladen werden — öffnen, um es erneut zu versuchen"
+  },
+  "empty": {
+    "title": "Noch nichts anzuzeigen",
+    "description": "Ihre Rolle gewährt keinen Lesezugriff auf ein Bestandsmodul. Bitten Sie einen Administrator um eine Lese-Gewährung, um die Übersicht zu sehen."
+  }
+}

@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The tofu-controller (a.k.a. weaveworks/tf-controller, now the Flux community
+# "tofu-controller") reconciles the HCL estate in ../terraform against the running
+# Olivares control plane on an interval — the continuously-reconciled half of
+# OpenGitOps (#4). It runs OpenTofu in-cluster, PULLS the source from the
+# GitRepository (never a CI runner pushing in), and self-heals drift the provider
+# detects on Read.
+#
+# VERSION CAVEAT (verify, do not fabricate): the tofu-controller CRD
+# group/version below (infra.contrib.fluxcd.io/v1alpha2) is the one the project
+# documented at time of writing; this is a community add-on, not Flux core, and
+# its apiVersion moves. Re-verify against the tofu-controller release you install
+# before applying. Nothing here pins a fabricated controller version.
+apiVersion: infra.contrib.fluxcd.io/v1alpha2
+kind: Terraform
+metadata:
+  name: olivares-estate
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./deploy/gitops/olivares-as-code/terraform
+  sourceRef:
+    kind: GitRepository
+    name: olivares-estate
+    namespace: flux-system
+
+  # approvePlan: "auto" = continuous auto-apply of the declared governance estate
+  # (policies/budgets/routes/connectors are declarative config; the engine still
+  # enforces authz + HITL on any actuation). For a stricter posture, REMOVE this
+  # line: the controller then plans every interval and waits for a human to set
+  # `approvePlan` to the pending plan id — a reviewed-apply gate, the same posture
+  # the chart GitOps (../../README.md) takes for deploying the engine itself.
+  approvePlan: "auto"
+
+  # OpenTofu (the OSS default —). Omit/empty to use Terraform instead.
+  # The exact attribute that selects the binary is controller-version-sensitive;
+  # verify against your tofu-controller release.
+  # cliConfigSecretRef / runner image selection per the controller's docs.
+
+  # The provider reads OLIVARES_ENDPOINT / OLIVARES_API_TOKEN from the runner's
+  # environment. Supply them from a Secret (a least-privilege manage-as-code
+  # token), never inline:
+  runnerPodTemplate:
+    spec:
+      containers:
+        - name: tf-runner
+          envFrom:
+            - secretRef:
+                name: olivares-api-credentials # keys: OLIVARES_ENDPOINT, OLIVARES_API_TOKEN
+
+  # Surface the estate's drift output as a Secret a dashboard/alert can consume.
+  writeOutputsToSecret:
+    name: olivares-estate-outputs
+    outputs:
+      - unexpected_accesses
+      - control_plane_version

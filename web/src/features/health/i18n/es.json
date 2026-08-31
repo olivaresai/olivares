@@ -1,0 +1,477 @@
+{
+  "title": "Salud y SLA",
+  "subtitle": "Liveness, fiabilidad y dependencias de tu infraestructura — derivado de la actividad observada y del barrido de inactividad, nunca sondeando la infraestructura.",
+  "auditedNote": "El stream en vivo y cualquier acción de resolver/editar son operaciones privilegiadas y auditadas. La salud se deriva; el motor nunca transporta aquí texto de error ni payloads.",
+  "refresh": "Actualizar",
+  "statusPageLink": "Página pública de estado",
+  "tabs": {
+    "status": "Estado",
+    "sla": "SLA",
+    "incidents": "Incidentes",
+    "timeline": "Cronología",
+    "connectors": "Conectores",
+    "dependencies": "Dependencias",
+    "system": "Sistema",
+    "checks": "Checks"
+  },
+  "state": {
+    "healthy": "Sano",
+    "degraded": "Degradado",
+    "down": "Caído",
+    "observed": "Observado",
+    "unknown": "Desconocido"
+  },
+  "stateHint": {
+    "unknown": "Ningún check sigue a este sujeto — no es lo mismo que sano.",
+    "observed": "Visto vivo por una arista, pero sin check declarado — la salud no se mide (ni sano ni desconocido)."
+  },
+  "desired": {
+    "active": "Activo",
+    "paused": "Pausado",
+    "retired": "Retirado"
+  },
+  "desiredHint": {
+    "paused": "Sin alertas — pausado por un operador.",
+    "retired": "Sin alertas — retirado."
+  },
+  "subjectKind": {
+    "agent": "Agente",
+    "mcp": "MCP",
+    "session": "Sesión",
+    "mcp_tool": "Herramienta"
+  },
+  "tiles": {
+    "healthy": "Sanos",
+    "degraded": "Degradados",
+    "down": "Caídos",
+    "unknown": "Desconocidos"
+  },
+  "facets": {
+    "allStates": "Todos los estados",
+    "allKinds": "Todos los tipos"
+  },
+  "status": {
+    "title": "Sujetos monitorizados",
+    "slaBreach": "Incumplimiento SLA",
+    "slaBreachHint": "Hay un incumplimiento de SLA abierto para este sujeto.",
+    "notAlerting": "Sin alertas",
+    "cols": {
+      "subject": "Sujeto",
+      "kind": "Tipo",
+      "state": "Estado",
+      "desired": "Intención",
+      "sla": "SLA",
+      "latency": "Latencia",
+      "lastSeen": "Última vez"
+    },
+    "searchPlaceholder": "Buscar sujeto…",
+    "empty": {
+      "title": "Aún no hay sujetos monitorizados",
+      "description": "Cuando se declare un check de salud para un agente o servidor MCP, su liveness aparecerá aquí."
+    }
+  },
+  "sla": {
+    "title": "Fiabilidad (SLA)",
+    "pick": "Sujeto",
+    "pickPlaceholder": "Elige un sujeto…",
+    "pickEmpty": "Aún no hay sujetos monitorizados sobre los que informar.",
+    "pickPrompt": {
+      "title": "Elige un sujeto",
+      "description": "Elige un sujeto monitorizado para ver su uptime frente al objetivo, reconstruido del ledger de fiabilidad."
+    },
+    "window": "Ventana",
+    "uptime": "Uptime",
+    "target": "Objetivo",
+    "noTarget": "Sin objetivo",
+    "breaching": "Incumpliendo",
+    "withinTarget": "Dentro del objetivo",
+    "downtime": "Tiempo caído",
+    "degraded": "Degradado",
+    "degradedNote": "El degradado cuenta como activo para el SLA — se muestra aparte, no como tiempo caído.",
+    "currentState": "Estado actual",
+    "noCheck": {
+      "title": "Sin check declarado",
+      "description": "No hay un check de salud para este sujeto, así que no se puede informar fiabilidad. Es estado honesto, no un fallo."
+    },
+    "noData": {
+      "title": "Aún sin histórico",
+      "description": "Este sujeto tiene check pero no hay histórico de fiabilidad en la ventana — el uptime es indefinido, no 0%. Aparecerá cuando se registren transiciones."
+    }
+  },
+  "incidents": {
+    "title": "Incidentes",
+    "filterState": "Estado",
+    "allStates": "Todos",
+    "open": "Abierto",
+    "resolved": "Resuelto",
+    "resolve": "Resolver",
+    "resolving": "Resolviendo…",
+    "resolveTitle": "Cerrar el registro de este incidente",
+    "resolveHint": "Resolver reconoce que el periodo se cierra — NO afirma que el sujeto se recuperó. La recuperación viene de un liveness real. Esta acción es privilegiada y auditada.",
+    "cols": {
+      "subject": "Sujeto",
+      "subjectKind": "Tipo",
+      "incidentKind": "Incidente",
+      "severity": "Severidad",
+      "opened": "Abierto",
+      "state": "Estado",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "Degradado",
+      "down": "Caído",
+      "sla_breach": "Incumplimiento SLA"
+    },
+    "possibleEvasion": "Posible evasión",
+    "possibleEvasionHint": "Un sujeto quedó en silencio dentro de su cadencia esperada (un caído detectado por barrido). Un sujeto que deja de emitir es en sí una señal, no un fallo de la UI.",
+    "searchPlaceholder": "Buscar incidente…",
+    "empty": {
+      "title": "Sin incidentes",
+      "description": "Ningún incidente de fiabilidad coincide con este filtro. Los incidentes abiertos aparecen aquí cuando los sujetos se degradan o caen."
+    },
+    "truncated": "Se muestran los {{n}} primeros",
+    "truncatedHint": "Hay más incidentes de los que se ven; esta página está recortada, así que un resto vacío NO prueba que no haya más."
+  },
+  "timeline": {
+    "title": "Cronología de fiabilidad",
+    "pick": "Sujeto",
+    "pickPlaceholder": "Elige un sujeto…",
+    "pickPrompt": {
+      "title": "Elige un sujeto",
+      "description": "Elige un sujeto monitorizado para trazar sus transiciones de fiabilidad desde el ledger append-only."
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "Latencia",
+    "latencyUnknown": "Desconocida",
+    "cause": {
+      "edge": "Liveness observado",
+      "report": "Probe activo",
+      "sweep": "Barrido de inactividad"
+    },
+    "causeHint": {
+      "edge": "Inferido de actividad observada (una arista de liveness).",
+      "report": "Un probe activo de salud reportó este estado.",
+      "sweep": "Detectado por el barrido de inactividad — silencio dentro de la cadencia esperada."
+    },
+    "possibleEvasion": "Posible evasión",
+    "possibleEvasionHint": "Un caído detectado por el barrido de inactividad significa silencio dentro de la cadencia esperada — se presenta como posible evasión, no como un error de carga.",
+    "empty": {
+      "title": "Sin transiciones registradas",
+      "description": "Este sujeto aún no tiene transiciones de fiabilidad en el ledger."
+    },
+    "truncated": "Se muestran los {{n}} primeros",
+    "truncatedHint": "Hay más eventos de los que se ven. La página va ordenada por id (de más antiguo a más nuevo), así que lo que queda fuera es el tramo MÁS RECIENTE — un evento que no ves aquí no es un evento que no ocurriera."
+  },
+  "deps": {
+    "title": "Mapa de dependencias",
+    "subtitle": "Auto-descubierto de la actividad observada. Cada nodo se colorea por su salud actual — un nodo visto vivo pero sin check es «observado» (azul, salud no medida), un nodo sin señal alguna queda en gris (desconocido); ninguno es verde.",
+    "legendTitle": "Salud",
+    "relation": {
+      "uses_mcp": "Usa MCP",
+      "uses_tool": "Usa herramienta",
+      "delegates_to": "Delega en"
+    },
+    "observed": "Observado",
+    "truncated": "Primeros {{n}}",
+    "truncatedHint": "El grafo de dependencias tiene más nodos de los mostrados; esta es la primera página keyset.",
+    "empty": {
+      "title": "Aún no se han descubierto dependencias",
+      "description": "Cuando los agentes llamen a servidores MCP y herramientas, el grafo de dependencias observado aparecerá aquí."
+    },
+    "mobile": {
+      "title": "El mapa necesita más ancho",
+      "summary": "{{nodes}} nodos · {{edges}} dependencias",
+      "hint": "Abre esta vista en una pantalla mayor para el grafo de dependencias interactivo."
+    }
+  },
+  "detail": {
+    "statusTitle": "Salud del sujeto",
+    "incidentTitle": "Incidente",
+    "ref": "Referencia",
+    "id": "ID",
+    "name": "Nombre",
+    "kind": "Tipo",
+    "state": "Estado",
+    "desired": "Intención",
+    "cadence": "Cadencia esperada",
+    "grace": "Factor de gracia",
+    "slaTarget": "Objetivo SLA",
+    "slaBreach": "Incumplimiento SLA abierto",
+    "latency": "Última latencia",
+    "lastSeen": "Última vez",
+    "lastChecked": "Último chequeo",
+    "owner": "Propietario",
+    "lastDetail": "Último detalle",
+    "severity": "Severidad",
+    "opened": "Abierto",
+    "resolved": "Resuelto",
+    "summary": "Resumen",
+    "viewSla": "Ver SLA",
+    "viewTimeline": "Ver cronología",
+    "yes": "Sí",
+    "no": "No",
+    "minimalData": "Solo se muestran metadatos. Por diseño el motor nunca transporta aquí texto de error, payloads ni secretos (mínimo dato)."
+  },
+  "live": {
+    "note": "Las filas se actualizan en vivo según cambia la salud; se reconcilian por id, sin asumir continuidad."
+  },
+  "empty": {
+    "title": "Nada que mostrar",
+    "description": "Aún no hay datos de salud para este tenant."
+  },
+  "forbidden": {
+    "title": "Salud no autorizada",
+    "description": "Tu rol no incluye permiso para ver salud y SLA."
+  },
+  "forbiddenResolve": {
+    "title": "Resolver no autorizado",
+    "description": "Resolver un incidente requiere el permiso de administración de checks (health:check:admin)."
+  },
+  "connectors": {
+    "autoRefresh": "Se actualiza automáticamente cada 15 segundos.",
+    "searchPlaceholder": "Buscar conector…",
+    "modeFilter": "Filtro de modo",
+    "modeAll": "Todos los modos",
+    "summary": {
+      "running": "En ejecución",
+      "failed": "Fallidos",
+      "stopped": "Detenidos",
+      "disabled": "Deshabilitados"
+    },
+    "cols": {
+      "name": "Conector",
+      "kind": "Tipo",
+      "mode": "Modo",
+      "health": "Salud",
+      "status": "Estado",
+      "trend": "Tendencia",
+      "lastPoll": "Último sondeo"
+    },
+    "status": {
+      "running": "En ejecución",
+      "failed": "Fallido",
+      "stopped": "Detenido",
+      "disabled": "Deshabilitado",
+      "not_wired": "No conectado"
+    },
+    "trend": {
+      "up": "Mejorando",
+      "down": "Empeorando",
+      "stable": "Estable"
+    },
+    "empty": {
+      "title": "No hay conectores configurados",
+      "description": "Cuando se integren conectores, su salud operativa aparecerá aquí."
+    },
+    "emptyMode": {
+      "title": "Ningún conector coincide con este modo",
+      "description": "Cambia el filtro de modo para ver otros conectores."
+    }
+  },
+  "statusPage": {
+    "title": "Olivares Control Plane — Estado",
+    "subtitle": "Estado operativo actual de todos los componentes.",
+    "unavailable": "La información de estado no está disponible actualmente.",
+    "lastUpdated": "Última actualización: {{time}}",
+    "overall": {
+      "operational": "Todos los sistemas operativos",
+      "not_configured": "Operativo — capacidades opcionales sin configurar",
+      "degraded": "Interrupción parcial del sistema",
+      "outage": "Interrupción mayor del sistema"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "Recuperación de conocimiento",
+      "store": "Base de datos",
+      "connectors": "Conectores",
+      "ingest": "Ingestión de datos",
+      "audit_spool": "Spool de auditoría"
+    },
+    "status": {
+      "operational": "Operativo",
+      "not_configured": "Sin configurar",
+      "degraded": "Degradado",
+      "outage": "Interrupción"
+    }
+  },
+  "update": {
+    "available": "Actualización disponible",
+    "security": "Actualización de seguridad",
+    "channel": "Canal",
+    "upToDate": "Actualizado",
+    "title": "Actualizaciones",
+    "notChecked": "Sin comprobación reciente",
+    "failed": "La comprobación de actualizaciones ha fallado",
+    "checked": "Comprobación de actualizaciones completada",
+    "advisories": "Avisos de seguridad corregidos",
+    "checkNow": "Comprobar ahora",
+    "unconfigured": "La comprobación de actualizaciones no está configurada. Es lo esperado en despliegues air-gapped."
+  },
+  "system": {
+    "title": "Salud del sistema",
+    "systemStatus": "Estado del sistema",
+    "healthy": "Sano",
+    "unhealthy": "No sano",
+    "ready": "Preparado",
+    "notReady": "No preparado",
+    "storeEngine": "Motor de almacenamiento",
+    "version": "Versión",
+    "connectors": "Conectores",
+    "connectorsRunning": "{{count}} en ejecución",
+    "connectorsConfigured": "{{count}} configurados",
+    "connectorsAvailable": "{{count}} disponibles para configurar",
+    "connectorsError": "{{count}} con error",
+    "noConnectors": "No hay conectores configurados",
+    "users": "Usuarios",
+    "usersCount": "{{count}} registrados",
+    "identity": "Identidad",
+    "ssoConfigured": "SSO configurado",
+    "ssoNotConfigured": "SSO no configurado",
+    "unavailable": "Los datos operativos no están disponibles o no estás autorizado a verlos."
+  },
+  "auditSpool": {
+    "title": "Spool de auditoría",
+    "withinBudget": "Dentro del presupuesto",
+    "nearFull": "Cerca del límite",
+    "engaged": "Presupuesto agotado",
+    "modes": {
+      "block": "Bloquear al llenarse",
+      "degrade": "Degradar al llenarse"
+    },
+    "usage": "{{used}} de {{max}} usados ({{pct}})",
+    "pendingDrops": "{{drops}} pérdidas de evidencia sin sellar en {{tenants}} tenants"
+  },
+  "checks": {
+    "title": "Checks de salud",
+    "description": "Declara y gobierna la cadencia, la ventana de gracia, el objetivo SLA y la intención de ciclo de vida de los agentes y servidores MCP monitorizados.",
+    "create": "Crear check",
+    "created": "Check de salud creado",
+    "updated": "Check de salud actualizado",
+    "deleted": "Check de salud eliminado",
+    "failed": "La operación sobre el check de salud ha fallado.",
+    "duplicate": "Ya existe un check de salud para este sujeto.",
+    "searchPlaceholder": "Buscar checks de salud…",
+    "reportTooltipLabel": "Acerca de los informes de probe",
+    "reportTooltip": "La ingestión de informes de probe está orientada a máquinas y se omite deliberadamente de la consola.",
+    "seconds": "{{count}}s",
+    "cols": {
+      "subject": "Sujeto",
+      "kind": "Tipo",
+      "state": "Estado",
+      "intent": "Intención",
+      "cadence": "Cadencia",
+      "sla": "SLA",
+      "lastChecked": "Último chequeo",
+      "actions": "Acciones"
+    },
+    "actions": {
+      "edit": "Editar",
+      "editAria": "Editar el check de salud de {{subject}}",
+      "pause": "Pausar",
+      "pauseAria": "Pausar el check de salud de {{subject}}",
+      "resume": "Reanudar",
+      "resumeAria": "Reanudar el check de salud de {{subject}}",
+      "retire": "Retirar",
+      "retireAria": "Retirar el check de salud de {{subject}}",
+      "delete": "Eliminar",
+      "deleteAria": "Eliminar el check de salud de {{subject}}"
+    },
+    "form": {
+      "name": "Nombre",
+      "subjectKind": "Tipo de sujeto",
+      "subjectRef": "Referencia del sujeto",
+      "expectedInterval": "Intervalo esperado (segundos)",
+      "graceFactor": "Factor de gracia",
+      "slaTarget": "Objetivo SLA (PPM)",
+      "slaTargetHint": "0 elimina el objetivo SLA; 999000 equivale al 99,9 %.",
+      "desiredStatus": "Estado deseado",
+      "validation": "Introduce una referencia de sujeto, cadencia y gracia como enteros positivos, y un objetivo SLA de 0 a 1000000."
+    },
+    "createDialog": {
+      "title": "Crear check de salud",
+      "description": "Declara un agente o servidor MCP monitorizado. Un sujeto solo puede tener un check de salud."
+    },
+    "edit": {
+      "title": "Editar check de salud",
+      "description": "El sujeto es inmutable. Actualiza la configuración mostrada y la intención de ciclo de vida."
+    },
+    "delete": {
+      "title": "Eliminar check de salud",
+      "description": "Elimina de forma permanente el check de salud de {{subject}}. Esta acción de administración queda registrada en el ledger de auditoría."
+    },
+    "empty": {
+      "title": "No hay checks de salud declarados",
+      "description": "Crea un check para gobernar la cadencia de liveness esperada de un agente o servidor MCP."
+    }
+  },
+  "tls": {
+    "title": "Certificado TLS",
+    "notAfter": "Válido hasta",
+    "daysLeft": "{{count}} días restantes",
+    "expired": "Caducó hace {{count}} días"
+  },
+  "keys": {
+    "title": "Custodia de claves",
+    "empty": "No hay metadatos de custodia de claves disponibles.",
+    "sealers": "Selladores simétricos",
+    "sourceUnknown": "origen no disponible",
+    "copyFingerprint": "Copiar la huella completa de {{purpose}}",
+    "copied": "Huella copiada",
+    "cols": {
+      "purpose": "Propósito",
+      "algorithm": "Algoritmo",
+      "mode": "Modo de custodia",
+      "kek": "KEK",
+      "created": "Creada",
+      "fingerprint": "Huella",
+      "prior": "Claves anteriores"
+    }
+  },
+  "config": {
+    "title": "Configuración efectiva",
+    "empty": "No hay entradas de configuración efectiva disponibles.",
+    "strictViolations": "Violaciones de configuración estricta",
+    "redacted": "Redactado",
+    "cols": {
+      "key": "Clave",
+      "value": "Valor efectivo",
+      "source": "Origen"
+    }
+  },
+  "bus": {
+    "title": "Bus de eventos",
+    "noSubscribers": "No hay suscriptores registrados en el bus de eventos.",
+    "depthAria": "Profundidad de cola de {{subscriber}}",
+    "counters": {
+      "publishBlocked": "Publicación bloqueada",
+      "dropped": "Descartados",
+      "droppedTelemetry": "Telemetría descartada",
+      "droppedNotify": "Notificaciones descartadas",
+      "handlerErrors": "Errores de handler",
+      "enqueued": "Encolados",
+      "handled": "Gestionados"
+    },
+    "bridge": {
+      "title": "Bridge",
+      "pendingMessages": "Mensajes pendientes",
+      "pendingBytes": "Bytes pendientes",
+      "dropped": "Descartados",
+      "publishErrors": "Errores de publicación",
+      "decodeErrors": "Errores de decodificación",
+      "gateSkipped": "Gate omitido",
+      "invalidSubject": "Subject no válido"
+    }
+  },
+  "support": {
+    "title": "Paquete de soporte",
+    "description": "Genera un archivo de diagnóstico para soporte sin exponer los valores de secretos almacenados.",
+    "download": "Descargar paquete de soporte",
+    "generate": "Generar y descargar",
+    "confirmTitle": "¿Generar un paquete de soporte?",
+    "confirmDescription": "Esta acción privilegiada AAL3 queda registrada en el ledger de auditoría.",
+    "contents": "El paquete contiene la configuración efectiva redactada, el estado operativo y los logs. Revísalo antes de compartirlo.",
+    "downloaded": "Paquete de soporte descargado",
+    "needsAal3": "Se requiere un step-up AAL3 con respaldo hardware para generar un paquete de soporte.",
+    "failed": "La generación del paquete de soporte ha fallado."
+  }
+}

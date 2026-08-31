@@ -1,0 +1,329 @@
+{
+  "title": "Catalogue",
+  "subtitle": "Le catalogue curé des capacités approuvées — agents, MCP, compétences, modèles, modèles d’IA et connecteurs — ainsi que les instanciations en libre-service gouvernées.",
+  "tabs": {
+    "entries": "Entrées",
+    "instances": "Instances",
+    "policy": "Politique d’admission"
+  },
+  "kind": {
+    "agent": "Agent",
+    "mcp": "MCP",
+    "skill": "Compétence",
+    "template": "Modèle",
+    "model": "Modèle d’IA",
+    "connector": "Connecteur"
+  },
+  "entries": {
+    "search": "Rechercher des entrées…",
+    "name": "Nom",
+    "kind": "Type",
+    "slug": "Slug",
+    "version": "Version",
+    "status": "Statut",
+    "owner": "Propriétaire",
+    "signing": "Signature",
+    "verification": "Vérification",
+    "newEntry": "Nouvelle entrée",
+    "empty": "Aucune entrée de catalogue",
+    "emptyHint": "Créez un brouillon d’entrée, soumettez-le à révision, puis approuvez-le pour publier une version figée et ancrée par hachage.",
+    "filters": {
+      "kind": "Type",
+      "status": "Statut",
+      "all": "Tous"
+    },
+    "truncated": "{{n}} entrées du catalogue chargées ; il y en a d’autres",
+    "truncatedHint": "Il existe plus d’entrées du catalogue que celles affichées ; cette page prend les lignes par id. L’absence d’une entrée ici ne prouve pas qu’elle n’existe pas."
+  },
+  "signing": {
+    "signed": "Signé",
+    "unsigned": "Non signé",
+    "signedHint": "Signé en Ed25519 ; empreinte du signataire {{fingerprint}}.",
+    "unsignedHint": "Ancré par hachage et attesté au registre, mais non signé (aucune clé de signature de catalogue configurée à l’approbation).",
+    "notPinned": "—"
+  },
+  "verify": {
+    "title": "Intégrité",
+    "caption": "Recalculé à l’ouverture. La clé de signature ne quitte jamais le moteur — seule son empreinte est affichée.",
+    "verified": "Signature vérifiée",
+    "verifiedHashOnly": "Ancré par hachage",
+    "notVerified": "Non vérifié",
+    "pending": "Pas encore ancré",
+    "verifiedHint": "Le hachage du contenu correspond au hachage ancré et la signature est valide.",
+    "verifiedHashOnlyHint": "Le hachage du contenu correspond au hachage ancré. Cette version est ancrée par hachage et attestée au registre, mais non signée.",
+    "notVerifiedHint": "Le hachage recalculé ou la signature ne correspond pas à ce qui a été ancré à l’approbation. Ne considérez pas cette version comme approuvée.",
+    "pendingHint": "Rien n’est ancré tant que l’entrée n’est pas approuvée. La vérification s’applique aux versions approuvées et dépréciées.",
+    "contentHash": "Hachage ancré",
+    "recomputedHash": "Hachage recalculé",
+    "signedBy": "Empreinte du signataire",
+    "reason": "Motif",
+    "reverify": "Vérifier à nouveau"
+  },
+  "posture": {
+    "title": "Posture de signature du catalogue",
+    "enabled": "Signature activée",
+    "disabled": "Signature non configurée",
+    "algorithm": "Algorithme",
+    "fingerprint": "Empreinte de la clé",
+    "publicKey": "Clé publique",
+    "publicKeyHint": "La clé publique Ed25519 pour la vérification externe — publique à dessein, et non un secret.",
+    "disabledNote": "Aucune clé de signature de catalogue n’est configurée. Les entrées approuvées sont ancrées par hachage et attestées au registre, mais non signées."
+  },
+  "detail": {
+    "title": "Détail de l’entrée",
+    "identity": "Identité",
+    "kind": "Type",
+    "slug": "Slug",
+    "version": "Version",
+    "status": "Statut",
+    "summary": "Résumé",
+    "owner": "Propriétaire",
+    "spec": "Spécification",
+    "specCaption": "Définition en lecture seule. Les secrets sont référencés dans la spécification par nom ou localisateur — jamais sous forme de valeurs. Les identifiants en clair sont rejetés à l’écriture.",
+    "specEmpty": "Aucune spécification",
+    "integrity": "Intégrité et approbation",
+    "contentHash": "Hachage du contenu",
+    "signed": "Signé",
+    "sigAlg": "Algorithme de signature",
+    "signedBy": "Empreinte du signataire",
+    "approvedBy": "Approuvé par",
+    "approvedAt": "Approuvé le",
+    "notApprovedYet": "Pas encore approuvé — rien n’est ancré ni signé.",
+    "actions": {
+      "edit": "Modifier le brouillon",
+      "delete": "Supprimer le brouillon",
+      "submit": "Soumettre à révision",
+      "approve": "Approuver",
+      "deprecate": "Déprécier",
+      "instantiate": "Instancier"
+    }
+  },
+  "editor": {
+    "createTitle": "Nouvelle entrée de catalogue",
+    "editTitle": "Modifier le brouillon d’entrée",
+    "kind": "Type",
+    "name": "Nom affiché",
+    "slug": "Slug",
+    "slugHint": "Lettres minuscules, chiffres, « - » et « _ », jusqu’à 64 caractères.",
+    "version": "Version",
+    "versionHint": "Version sémantique, p. ex. 1.2.3 ou 1.0.0-beta.1.",
+    "summary": "Résumé",
+    "ownerRef": "Référence du propriétaire",
+    "ownerRefHint": "Libellé de propriétaire facultatif, p. ex. platform-team.",
+    "spec": "Spécification (JSON)",
+    "specHint": "Objet JSON facultatif. Référencez les secrets par nom ou localisateur — n’intégrez jamais d’identifiants. Les identifiants en clair sont rejetés.",
+    "specPlaceholder": "{\n  \"command\": \"npx\",\n  \"token_ref\": \"$GITHUB_TOKEN\"\n}",
+    "specInvalid": "La spécification doit être un objet JSON valide.",
+    "credentialWarning": "Cela ressemble à une valeur d’identifiants. Référencez les secrets par nom ou localisateur (p. ex. $GITHUB_TOKEN ou un chemin de Vault), jamais le secret lui-même.",
+    "draftNotice": "Les nouvelles entrées sont créées sous forme de brouillon. Les champs de cycle de vie et d’intégrité (statut, hachage, signature, approbateur) sont gérés par le moteur — ne les définissez jamais ici.",
+    "create": "Créer le brouillon",
+    "save": "Enregistrer les modifications",
+    "created": "Brouillon d’entrée créé",
+    "updated": "Brouillon d’entrée mis à jour",
+    "admissionStaleWarning": "Cette entrée de type {{kind}} possède un verdict d’admission enregistré. Enregistrer une spécification modifiée l’invalide — vous devez admettre une nouvelle attestation avant qu’elle puisse être approuvée."
+  },
+  "admission": {
+    "title": "Admission d’attestation",
+    "caption": "Le verdict de provenance/SBOM enregistré qui conditionne l’approbation vers le catalogue en service — la trace durable de la raison pour laquelle cette entrée a été admise ou refusée.",
+    "verified": "Attestation vérifiée",
+    "signedUnbound": "Signature vérifiée, digest non lié",
+    "notVerified": "Non vérifiée",
+    "none": "Aucun verdict d’admission enregistré",
+    "noneHint": "Sous une politique d’admission stricte, cette entrée ne peut pas être approuvée tant qu’une attestation vérifiée n’a pas été admise.",
+    "reason": "Motif",
+    "noReason": "Aucun motif enregistré.",
+    "subjectDigest": "Digest du sujet",
+    "subjectName": "Sujet",
+    "method": "Méthode",
+    "signer": "Signataire",
+    "transparencyLog": "Journal de transparence",
+    "tlogVerified": "Inclusion vérifiée",
+    "tlogPresent": "Présent, non vérifié",
+    "tlogAbsent": "Absent",
+    "coverage": "Couverture",
+    "attestedBy": "Attesté par",
+    "attestedAt": "Attesté le",
+    "admit": "Admettre l’attestation",
+    "admitTitle": "Admettre une attestation",
+    "admitBodyMcp": "Vérifiez un bundle d’attestation Sigstore (cosign download attestation / gh attestation download) pour ce serveur MCP par rapport à la racine de confiance du locataire. Seul un verdict vérifié permet à une politique stricte de l’approuver dans le registre en service.",
+    "admitBodyConnector": "Vérifiez un bundle d’attestation Sigstore pour cet artefact de connecteur par rapport à la racine de confiance du locataire. Le digest attendu provient par défaut de spec.artifact_digest ; seul un verdict vérifié permet à une politique stricte de l’approuver en tant que connecteur vérifié.",
+    "bundle": "Bundle d’attestation (JSON)",
+    "bundleHint": "Collez le JSON du bundle Sigstore. Il est vérifié côté serveur ; rien n’est enregistré tant qu’il n’est pas analysé.",
+    "bundleInvalid": "Le bundle doit être un JSON valide.",
+    "bundlePlaceholder": "{ \"mediaType\": \"application/vnd.dev.sigstore.bundle.v0.3+json\", … }",
+    "expectedDigest": "Digest d’artefact attendu",
+    "expectedDigestHint": "sha256 facultatif auquel le sujet attesté doit correspondre (p. ex. sha256:…). Pour les connecteurs, il provient par défaut de spec.artifact_digest.",
+    "note": "Note",
+    "admitSubmit": "Vérifier et admettre",
+    "admitted": "Attestation admise",
+    "recordedNotAdmitted": "Enregistrée, mais l’attestation n’a pas satisfait la politique — voir le verdict."
+  },
+  "confirm": {
+    "deleteTitle": "Supprimer ce brouillon d’entrée ?",
+    "deleteBody": "Supprimer définitivement ce brouillon d’entrée ? Cette action est irréversible. Seuls les brouillons peuvent être supprimés ; les entrées approuvées doivent être dépréciées à la place.",
+    "deleteConfirm": "Supprimer définitivement",
+    "deletePhrase": "DELETE",
+    "deleted": "Brouillon d’entrée supprimé",
+    "submitTitle": "Soumettre ce brouillon à révision ?",
+    "submitBody": "Il passe en « en attente » et n’est plus modifiable en tant que brouillon jusqu’à décision.",
+    "submitConfirm": "Soumettre à révision",
+    "submitted": "Entrée soumise à révision",
+    "approveTitle": "Approuver cette entrée ?",
+    "approveBody": "L’approbation est DÉFINITIVE : la version est figée et rendue immuable, son hachage de contenu est ancré (et signé si la signature est activée), et elle devient disponible pour l’instanciation en libre-service. Pour la retirer ultérieurement, vous devez la déprécier, et non la supprimer.",
+    "approveConfirm": "Approuver et figer",
+    "approvePhrase": "APPROVE",
+    "approved": "Entrée approuvée et figée",
+    "deprecateTitle": "Déprécier cette entrée approuvée ?",
+    "deprecateBody": "Elle sera retirée et masquée des nouvelles instanciations, mais son historique et sa signature sont conservés afin qu’elle reste vérifiable. Cette action est irréversible — publiez plutôt une nouvelle version.",
+    "deprecateConfirm": "Déprécier",
+    "deprecated": "Entrée dépréciée"
+  },
+  "instantiate": {
+    "title": "Demander une instanciation",
+    "body": "Cela crée une demande de gouvernance (statut « demandé ») qui vous est attribuée — cela ne provisionne encore RIEN. La décision d’approbation relève de la gouvernance et le provisionnement du déploiement ; un administrateur doit l’approuver et l’activer.",
+    "name": "Nom de l’instance",
+    "nameHint": "Un nom unique pour cette instanciation de l’entrée.",
+    "targetRef": "Référence de cible",
+    "targetRefHint": "Cible de déploiement facultative, p. ex. env:prod.",
+    "note": "Note",
+    "submit": "Demander l’instanciation",
+    "requested": "Instanciation demandée",
+    "notApproved": "Seule une entrée approuvée peut être instanciée."
+  },
+  "instances": {
+    "search": "Rechercher des instances…",
+    "name": "Nom",
+    "entry": "Entrée source",
+    "kind": "Type",
+    "version": "Version",
+    "status": "Statut",
+    "target": "Cible",
+    "requestedBy": "Demandé par",
+    "decidedBy": "Décidé par",
+    "note": "Note",
+    "empty": "Aucune demande d’instanciation",
+    "emptyHint": "Les instanciations en libre-service des entrées approuvées apparaissent ici avec leur statut de gouvernance.",
+    "filters": {
+      "status": "Statut",
+      "all": "Tous"
+    },
+    "liveNote": "En direct — actualisation tant que les demandes attendent une décision de gouvernance.",
+    "truncated": "{{n}} instances chargées ; il y en a d’autres",
+    "truncatedHint": "Il existe plus d’instances que celles affichées ; cette page prend les lignes par id. L’absence d’une instance ici ne prouve pas qu’elle n’existe pas."
+  },
+  "instanceDetail": {
+    "title": "Détail de l’instance",
+    "provenance": "Provenance",
+    "entryId": "Identifiant d’entrée",
+    "entryKind": "Type d’entrée",
+    "entrySlug": "Slug d’entrée",
+    "entryVersion": "Version d’entrée",
+    "governance": "Gouvernance",
+    "note": "Note",
+    "governanceCaption": "Les transitions suivent le flux autorisé et sont enregistrées au regard de votre identité. La politique/HITL relève de la gouvernance ; le provisionnement réel relève du déploiement.",
+    "actions": {
+      "approve": "Approuver",
+      "reject": "Rejeter",
+      "activate": "Activer"
+    }
+  },
+  "transition": {
+    "approveTitle": "Approuver cette demande d’instance ?",
+    "rejectTitle": "Rejeter cette demande d’instance ?",
+    "activateTitle": "Activer cette instance ?",
+    "body": "L’approbation, le rejet ou l’activation est enregistré au regard de votre identité dans le registre d’audit et suit le flux autorisé (demandé → approuvé/rejeté, approuvé → actif/rejeté).",
+    "noteLabel": "Note de décision (facultative)",
+    "notePlaceholder": "Motif de cette décision…",
+    "approveConfirm": "Approuver",
+    "rejectConfirm": "Rejeter",
+    "activateConfirm": "Activer",
+    "done": "Décision de gouvernance appliquée"
+  },
+  "status": {
+    "draft": "Brouillon",
+    "pending": "En attente",
+    "approved": "Approuvé",
+    "deprecated": "Déprécié",
+    "requested": "Demandé",
+    "rejected": "Rejeté",
+    "active": "Actif"
+  },
+  "empty": {
+    "entry": {
+      "title": "Aucune entrée de catalogue créée",
+      "description": "Créez un brouillon d’entrée, soumettez-le à révision, puis approuvez-le pour publier une version figée et ancrée par hachage."
+    },
+    "instance": {
+      "title": "Aucune demande d’instanciation",
+      "description": "Approuvez une entrée de catalogue, puis demandez une instanciation pour créer ici l’enregistrement de son instance gouvernée."
+    }
+  },
+  "policy": {
+    "kind": {
+      "mcp": {
+        "title": "Entrées MCP",
+        "body": "Ancres de confiance qui contrôlent l’entrée des MCP fédérés dans le sous-registre servi.",
+        "editTitle": "Modifier la politique d’admission MCP"
+      },
+      "connector": {
+        "title": "Entrées connecteur",
+        "body": "Ancres de confiance qui contrôlent les connecteurs tiers avant approbation.",
+        "editTitle": "Modifier la politique d’admission des connecteurs"
+      }
+    },
+    "state": {
+      "unconfigured": {
+        "title": "Aucune politique — tout est admis",
+        "body": "Sans politique configurée, les entrées sont admises SANS aucune vérification de signature. Configurez une ancre de confiance pour contrôler l’admission."
+      },
+      "observe": {
+        "title": "Configurée — observation seule",
+        "body": "Les signatures sont vérifiées et enregistrées, mais un échec ne bloque pas l’admission. Activez « exiger la signature » pour appliquer."
+      },
+      "enforce": {
+        "title": "Appliquée",
+        "body": "Les entrées qui ne se vérifient pas contre ces ancres de confiance sont refusées."
+      }
+    },
+    "modeName": {
+      "keyless": "Sans clé (liée à l’identité)",
+      "certificate-pki": "ICP par certificats",
+      "bare-key": "Clé nue",
+      "empty": "Aucune ancre"
+    },
+    "mode": "Méthode de confiance",
+    "derivedMode": "Méthode de confiance dérivée",
+    "on": "Activé",
+    "off": "Désactivé",
+    "requireSigned": "Exiger des entrées signées",
+    "requireSignedHint": "Si activé, une entrée qui ne se vérifie pas est refusée.",
+    "requireSubjectDigest": "Exiger l’empreinte du sujet",
+    "requireSubjectDigestHint": "Lie l’attestation à l’empreinte de l’entrée, pas seulement à son nom.",
+    "identities": "Identités autorisées",
+    "identitiesHint": "Une par ligne. À définir conjointement avec les émetteurs.",
+    "issuers": "Émetteurs autorisés",
+    "issuersHint": "Un par ligne. À définir conjointement avec les identités.",
+    "predicates": "Prédicats autorisés",
+    "predicatesHint": "Un par ligne, p. ex. le type de prédicat de provenance. Les lignes vides sont refusées.",
+    "trustedRoots": "Racines de confiance",
+    "trustedRootsHint": "Certificats d’AC au format PEM. Seuls les blocs BEGIN…END complets sont enregistrés.",
+    "trustedKeys": "Clés de confiance",
+    "trustedKeysHint": "Clés PUBLIQUES au format PEM. Seuls les blocs BEGIN…END complets sont enregistrés.",
+    "note": "Note",
+    "attestedBy": "Dernière modification par",
+    "attestedAt": "Dernière modification",
+    "edit": "Modifier la politique",
+    "editBody": "Les changements prennent effet à la prochaine admission.",
+    "saved": "Politique d’admission enregistrée",
+    "loadFailed": "Impossible de charger la politique d’admission.",
+    "confirmTitle": "Confirmer le changement de confiance",
+    "confirmBody": "Ceci durcit l’admission ou retire une ancre de confiance. Ce qui est déjà admis n’est pas revérifié, mais les nouvelles admissions peuvent échouer jusqu’à une nouvelle signature.",
+    "err": {
+      "privateKey": "Le matériel de confiance doit être public — retirez tout bloc PRIVATE KEY.",
+      "pemResidual": "Seuls les blocs BEGIN…END complets sont enregistrés ; retirez le texte résiduel.",
+      "emptyPredicate": "Les prédicats ne doivent pas contenir d’entrées vides.",
+      "anchorMissing": "L’application exige au moins une racine ou une clé de confiance, sinon rien ne serait admis.",
+      "identityIssuer": "Identités et émetteurs doivent être définis ensemble, ou aucun des deux."
+    }
+  }
+}

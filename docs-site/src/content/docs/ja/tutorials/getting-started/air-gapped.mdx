@@ -1,0 +1,148 @@
+---
+title: "エアギャップサイトで始める"
+description: >-
+  切り離されたネットワーク上に control plane を立ち上げる：検証済みのアーティファクト
+  （静的バイナリ、またはクラスター用の署名済みバンドル）をギャップ越しに運び、オフラインで
+  検証し、インストールし、egress ゼロで最初の価値に到達します。
+sidebar:
+  order: 4
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Olivares AI は **設計上エアギャップ対応**です：1つの静的バイナリ、組み込みの
+SQLite ストア、オフライン（Ed25519）のライセンス検証、そして **起動時の必須の
+アウトバウンド呼び出しなし** — 無効化すべき telemetry-home は存在しません。この
+チュートリアルは、**まったくインターネットのない**ネットワーク上で、次の2つの正直な
+経路のいずれかによって最初の価値に到達します：
+
+- **経路 A — 静的バイナリ。** これ以上ないほど単純なエアギャップです：検証済みの1つの
+  ファイルをギャップ越しに運び、実行します（systemd を使い、
+  [シングルノードチュートリアル](/ja/tutorials/getting-started/single-node/)のように）。
+- **経路 B — クラスター用の署名済みバンドル。** リリースバンドルを運び、すべての
+  イメージとチャートを**完全にオフラインで**検証し、**digest で**プライベート
+  レジストリにミラーし、Helm でインストールします。
+
+バンドルスクリプトの仕組み（`airgap-bundle.sh`、`airgap-mirror.sh`、オフラインの
+cosign 検証）は
+[エアギャップ環境でのインストール](/ja/how-to/air-gap-install/)に記述されています —
+このページは、それらを使うエンドツーエンドのウォークスルーです。
+
+## 経路 A — 静的バイナリ
+
+<Steps>
+
+1. **接続された側で**、バイナリをビルド（または、リリースが出荷されたらダウンロードして
+   [検証](/ja/how-to/verify-a-release/)）し、その digest を記録します：
+
+   ```bash
+   task build
+   sha256sum bin/olivares > olivares.sha256
+   ```
+
+2. **両方のファイルを、承認された媒体でギャップ越しに運び**、切り離された側で digest を
+   検証します：
+
+   ```bash
+   sha256sum --check olivares.sha256
+   ```
+
+3. [シングルノードチュートリアル](/ja/tutorials/getting-started/single-node/)と
+   まったく同じように**インストールして実行**します — systemd ユニット、ワンタイムの
+   セットアップトークン、最初の組織。そのフローの中でネットワークに触れるものは何も
+   ありません：TLS 素材はローカルで生成され、ライセンス（もしあれば）はオフラインで
+   検証され、ストアは組み込みの SQLite です。
+
+4. **ローカルシステムを観測するソースを配線します** — pgAudit のログ末尾、境界内に
+   配送される CloudTrail ファイル、eBPF/Tetragon ストリーム。
+   [ソース設定](/ja/how-to/connect-a-source/)はローカルファイルです。何かに到達するよう
+   設定しない限り、どのコネクターも外部に電話をかけません。
+
+</Steps>
+
+これは、切り離されたサイトに推奨される出発点の形です：シングルノード、SQLite、
+ローカルソース。これは同じエンジンです — 学んだことを変えることなく、後でクラスター
+経路へと成長できます。
+
+## 経路 B — クラスター用の署名済みバンドル
+
+<Steps>
+
+1. **オンラインで、一度だけ：** メンテナーが自己完結型のバンドルをビルドします — すべての
+   イメージは digest でピン留めされ、Helm チャートはパッケージ化され署名され、
+   SBOM/OpenVEX/provenance が集められ、加えて公開鍵と、正確なオフラインウォークスルーを
+   記した `VERIFY.md` が含まれます：
+
+   ```bash
+   scripts/airgap-bundle.sh --version <v> \
+     --image <olivares-image-ref> \
+     --chart deploy/helm/olivares \
+     --cosign-key cosign.key
+   ```
+
+2. **ギャップ内で、すべてをオフラインで検証します。** 必要なのは `cosign`、`crane`、
+   `helm`、`tar` だけです — 信頼は、オンラインの透明性ログからではなく、バンドルされた
+   `cosign.pub` から来ます：
+
+   ```bash
+   for d in images/*/; do
+     cosign verify --local-image "$d" --insecure-ignore-tlog --key cosign.pub
+   done
+   cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
+     --signature chart/*.tgz.sig chart/*.tgz
+   ```
+
+3. **digest でプライベートレジストリにミラーします**（スクリプトは再ピン留めし、digest が
+   ミラーを生き延びたことを確認します）：
+
+   ```bash
+   scripts/airgap-mirror.sh --bundle olivares-airgap-<v>.tar.gz \
+     --registry registry.internal:5000
+   ```
+
+4. **タグではなく digest でインストールし**、続いて
+   [Kubernetes チュートリアル](/ja/tutorials/getting-started/kubernetes/)を初回起動トークン
+   以降からたどります — 同じチャートで同じフローです：
+
+   ```bash
+   helm install olivares \
+     oci://registry.internal:5000/charts/olivares \
+     --version <chart-version> \
+     --set image.repository=registry.internal:5000/olivares \
+     --set image.digest=<digest-from-digests.txt>
+   ```
+
+</Steps>
+
+<Aside type="note" title="「エアギャップ」が正直にカバーする範囲">
+**control plane** はあなたの境界内で完全に動きます — ガバナンス、観測、アクセスマップ、
+audit ledger。それができないのは、ブローカー経由のフロンティアモデルをオフラインで
+動かすことです：**Claude の推論は常に Anthropic の API に到達します**
+（直接、または Bedrock/Vertex/Foundry 経由で）。Anthropic が重みを公開していないからです。
+エアギャップとは、*あなたのエステートのデータとそのガバナンスプレーンが家に留まる*という
+意味です。本当にセルフホストするモデルは完全にオフラインにできます。
+[正直さと限界](/ja/start/honesty-and-limits/)を参照してください。
+</Aside>
+
+## 切り離された状態での運用
+
+- **バックアップ**は同一に動作します（`olivares dr backup` — 暗号化されたバンドル、
+  ローカルの KEK）：[バックアップとリストア](/ja/how-to/backup-and-restore/)。バンドルは
+  別々の媒体に保存してください。オフサイトのネットワークがない場合、3-2-1 ルールは
+  二重に当てはまります。
+- **Ledger 検証**は設計上、完全にオフラインです：ピン留めした公開鍵での
+  `olivares audit verify --strict` —
+  [トラブルシューティング § ledger](/ja/how-to/troubleshooting/#ledger-が検証に失敗する)。
+- **モニタリング**は `/metrics` をスクレイプするローカルの Prometheus です。同梱の
+  アラートルールは外部のものを何も必要としません —
+  [モニタリング](/ja/how-to/monitor-with-prometheus/)。
+- **更新**は、新しいバンドルで carry-verify-mirror のループを繰り返します。digest
+  マニフェスト（`digests.txt`）が、何が実際に動いているかの正確な記録です。
+
+## 次のステップ
+
+- [エアギャップ環境でのインストール](/ja/how-to/air-gap-install/) — バンドル/ミラーの
+  リファレンス、FIPS/STIG バリアントのステータスを含む。
+- [リリースを検証する](/ja/how-to/verify-a-release/) — このフローがオフラインで適用する
+  完全な検証チェーン。
+- [セキュリティ堅牢化](/ja/how-to/security-hardening/) — 防御態勢の残りの部分。

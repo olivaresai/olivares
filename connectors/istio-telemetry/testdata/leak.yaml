@@ -1,0 +1,15 @@
+# No-leak canary fixture. A misguided operator stuffed an AWS access key into a
+# selector label VALUE (the one piece of free-form manifest text this connector ever
+# renders into a Title). The connector must scrub it AND reduce the detail to a hash,
+# so the literal secret AKIAIOSFODNN7EXAMPLE must NEVER appear in any emitted finding.
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: leaky
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      token: AKIAIOSFODNN7EXAMPLE
+  accessLogging:
+    - disabled: true

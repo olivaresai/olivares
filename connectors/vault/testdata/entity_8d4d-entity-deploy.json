@@ -1,0 +1,9 @@
+{
+  "data": {
+    "id": "8d4d-entity-deploy",
+    "name": "deploy-bot",
+    "disabled": false,
+    "policies": ["app-secrets", "shared-read"],
+    "group_ids": ["g100-platform"]
+  }
+}

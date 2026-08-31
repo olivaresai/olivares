@@ -1,0 +1,90 @@
+{
+  "truncation": {
+    "label": "{{n}} Vorlagen geladen; es gibt weitere",
+    "hint": "In diesem Katalog sind nur geladene Vorlagen verfügbar. Eine fehlende Vorlage kann auf einer späteren Seite liegen."
+  },
+  "title": "Arbeitsbereich-Vorlagen",
+  "subtitle": "Wiederverwendbare Snapshots von Hooks, Einstellungen, Konnektoren und Richtlinien für Arbeitsbereichssitzungen.",
+  "catalog": {
+    "builtin": "Integriert",
+    "version": "v{{version}}",
+    "author": "Von {{author}}",
+    "archived": "Archiviert",
+    "noTemplates": "Keine Vorlagen gefunden.",
+    "noTemplatesHint": "Erstellen Sie Ihre erste Vorlage, um Arbeitsbereichskonfigurationen wiederzuverwenden.",
+    "filterAll": "Alle",
+    "filterBuiltin": "Integriert",
+    "filterCustom": "Benutzerdefiniert",
+    "showArchived": "Archivierte anzeigen"
+  },
+  "editor": {
+    "nameLabel": "Name",
+    "namePlaceholder": "z. B. Sichere Programmiersitzung",
+    "descriptionLabel": "Beschreibung",
+    "descriptionPlaceholder": "Was konfiguriert diese Vorlage?",
+    "sections": {
+      "hooks": "Hooks",
+      "hooksHint": "Befehle, die vor/nach Werkzeugen und Sitzungen ausgeführt werden.",
+      "settings": "Agenteneinstellungen",
+      "settingsHint": "Berechtigungsmodus, Aufwandsstufe, Modell und benutzerdefinierte Anweisungen.",
+      "connectors": "Konnektoren",
+      "connectorsHint": "Konnektor-IDs, die beim Anwenden dieser Vorlage angehängt werden.",
+      "policies": "Governance-Richtlinien",
+      "policiesHint": "DLP-Modus, Sitzungsdauerlimits, erlaubte Werkzeuge und Ein-/Ausgabeaufzeichnung."
+    },
+    "hooks": {
+      "preTool": "Vor Werkzeug",
+      "postTool": "Nach Werkzeug",
+      "preSession": "Vor Sitzung",
+      "postSession": "Nach Sitzung",
+      "command": "Befehl",
+      "timeoutMs": "Timeout (ms)",
+      "addHook": "Hook hinzufügen",
+      "removeHook": "Entfernen"
+    },
+    "settings": {
+      "permissionMode": "Berechtigungsmodus",
+      "effort": "Aufwandsstufe",
+      "model": "Modell",
+      "customInstructions": "Benutzerdefinierte Anweisungen"
+    },
+    "policies": {
+      "dlpMode": "DLP-Modus",
+      "maxDuration": "Maximale Sitzungsdauer (Minuten)",
+      "allowedTools": "Erlaubte Werkzeuge",
+      "allowedToolsPlaceholder": "z. B. Bash,Read,Edit",
+      "recordIo": "Ein-/Ausgabe aufzeichnen"
+    }
+  },
+  "actions": {
+    "create": "Neue Vorlage",
+    "edit": "Bearbeiten",
+    "duplicate": "Duplizieren",
+    "archive": "Archivieren",
+    "restore": "Wiederherstellen",
+    "apply": "Auf Sitzung anwenden",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "confirmArchive": "Diese Vorlage archivieren?",
+    "confirmArchiveHint": "Archivierte Vorlagen werden im Katalog ausgeblendet, können aber wiederhergestellt werden.",
+    "confirmApply": "Vorlage anwenden?",
+    "confirmApplyHint": "Die aktuellen Sitzungseinstellungen werden durch die Vorlagenwerte überschrieben.",
+    "duplicateName": "Kopie von {{name}}"
+  },
+  "apply": {
+    "success": "Vorlage angewendet.",
+    "conflicts": "Mit {{count}} Konflikt(en) angewendet.",
+    "conflictField": "Feld",
+    "conflictOld": "Vorheriger Wert",
+    "conflictNew": "Neuer Wert",
+    "unenforceable": "Diese Vorlage kann nicht angewendet werden: {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "Vorlagen konnten nicht geladen werden.",
+    "saveFailed": "Vorlage konnte nicht gespeichert werden.",
+    "applyFailed": "Vorlage konnte nicht angewendet werden.",
+    "archiveFailed": "Vorlage konnte nicht archiviert werden.",
+    "duplicateFailed": "Vorlage konnte nicht dupliziert werden."
+  },
+  "notFound": "Vorlage nicht gefunden."
+}

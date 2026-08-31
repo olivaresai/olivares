@@ -1,0 +1,1 @@
+{"id":"adm_1","log_type":"admin_audit","type":"admin.policy.updated","timestamp":"2026-06-01T08:00:00Z","workspace_id":"ws_eng","actor":{"type":"admin","id":"user_admin","email":"admin@example.com","ip_address":"203.0.113.1"}}

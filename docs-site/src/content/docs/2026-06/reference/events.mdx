@@ -1,0 +1,262 @@
+---
+title: Event bus reference (AsyncAPI 3.0)
+description: The internal event bus as an AsyncAPI 3.0 contract — six event
+  types, their envelope and payloads, the delivery semantics, the wire encoding,
+  and the eventing platform's external webhook subscriptions. The async
+  counterpart of the REST reference.
+slug: 2026-06/reference/events
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components'
+
+Connectors lift normalized observations onto the engine's **internal event bus** as
+**events**; modules and output connectors **subscribe by event type** and react —
+without any of them importing one another. This page is that contract, expressed as
+**AsyncAPI 3.0** — the async counterpart of the [REST API reference](/reference/api/).
+
+<Aside type="note" title="Machine-readable spec">
+  The full validated AsyncAPI 3.0 document is available to download:
+  **[`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)**. It is **hand-derived from
+  the Go SDK** (there is no codegen), so the authoritative source of truth is the SDK
+  itself; this page and the YAML are kept in step with it by hand.
+</Aside>
+
+## The bus model
+
+* **Transport.** The v1 default is an **in-process Go-channel bus** inside the single
+  `olivares` binary. The `Bus` interface exposes no channel, so a distributed
+  implementation (**NATS**) can be slotted in for multi-host deployments without
+  changing a single subscriber. NATS is the planned distributed binding, **not**
+  required for the default.
+* **Subscription.** A subscriber registers a handler filtered by a set of event
+  types; an empty set means *every* event. The bus owns the goroutine that runs the
+  handler.
+* **Delivery.** Asynchronous and **at-least-once**: each subscriber has its own
+  buffered queue drained by a dedicated goroutine; a slow subscriber applies
+  backpressure; a handler panic is isolated. Consumers **de-duplicate** on the
+  natural-key timestamp after a connector restart.
+* **Minimal-data.** Every event carries the *fact*, **never** raw payloads, secrets
+  or PII. An edge is `(origin → resource, R/RW)`; a finding carries a *hash* of the
+  redacted detail, never the detail.
+
+## The envelope
+
+Every event shares the immutable `Event` envelope; the observation rides in
+`Payload`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ID` | string | Unique event id, assigned by the engine at publish (may be empty in-proc before publication). |
+| `Type` | string | The discriminator — one of the six channel addresses below. |
+| `Tenant` | string | The originating tenant as a string reference; the engine resolves it internally. |
+| `Source` | string | Name of the component (connector/module) that emitted it. |
+| `Time` | timestamp | When the underlying fact occurred, in the connector's clock. |
+| `Payload` | object | The fact — one of the payload schemas below. |
+
+## Channels
+
+There are **six** event types. Three are first-party (sealed observations); the
+other three are module-defined events on a different transport. Each type carries
+its own **stability tier**, driven from the in-code catalog
+(see [API stability](/2026-06/reference/api-stability/): stable = 24-month
+deprecation→sunset window, beta = 12-month, binding from GA; a beta payload may
+still gain fields, never lose them silently).
+
+| Channel (`Type`) | Payload | Purpose | Transport | Stability |
+|---|---|---|---|---|
+| `edge.observed` | `EdgeObservation` | an origin touched a resource (R/RW) — the spine of the access map | typed gRPC `oneof` | **stable** |
+| `cost.sampled` | `CostSample` | a model/provider usage-cost fact | typed gRPC `oneof` | **stable** |
+| `finding.reported` | `FindingReport` | a guardrail/red-team/forensic finding | typed gRPC `oneof` | **stable** |
+| `guardrail.observed` | `ObservedText` | a redacted excerpt of observed agent text (detective input) | JSON fallback | **beta** |
+| `approval.requested` | `ApprovalRequest` | a pending approval was opened and awaits decision | JSON fallback | **beta** |
+| `policy.changed` | `PolicyChange` | a governance policy was created, updated or deleted | JSON fallback | **beta** |
+
+<Aside type="caution" title="Wire encoding differs by type">
+  The three first-party types travel the **typed gRPC `oneof`** of the connector
+  contract, never JSON. The other three are **not** sealed observations — they are
+  module-defined events that travel an **unversioned JSON fallback** owned by the
+  publishing and consuming modules: `guardrail.observed` is a module/ingest-layer
+  detective input documented in the runtime-ingestion contract;
+  `approval.requested` and `policy.changed` are governance lifecycle events
+  published by the governance module post-commit. All three are deliberately
+  absent from the frozen first-party wire table; they are recorded here for
+  completeness and marked as not part of the sealed sum type.
+</Aside>
+
+## Payloads
+
+### `EdgeObservation` — `edge.observed`
+
+Minimal-data: identifiers and the access classification only.
+
+| Field | Type | Notes |
+|---|---|---|
+| `OriginKind` | enum | `agent` | `identity` | `session` |
+| `OriginRef` | string | the connector's natural reference for the origin |
+| `ResourceKind` | string | e.g. `postgres.table`, `s3.bucket`, `http.api` |
+| `ResourceRef` | string | e.g. `public.customers`, `arn:aws:s3:::bucket` |
+| `Mode` | enum | `unknown` | `read` | `write` | `readwrite` |
+| `Source` | enum | `otel` | `mcp_annotation` | `pg_audit` | `cloudtrail` | `ebpf` | `policy` | `a2a` |
+| `Confidence` | enum | `attributed` | `approximate` |
+| `ToolRef` | string | optional tool/operation that performed the access |
+| `ObservedAt` | timestamp | the natural-key timestamp consumers de-duplicate on |
+
+`mcp_annotation` is treated as **untrusted** (corroborated, never trusted alone);
+`unknown` mode and `approximate` confidence are explicit, so the product never
+fabricates certainty.
+
+### `CostSample` — `cost.sampled`
+
+Money is integer **micro-USD** (millionths of a dollar). The fields below the first
+seven are an additive, provider-neutral extension aligned to OpenTelemetry `gen_ai.*`
+and FOCUS; **zero/empty means "not reported", never "zero"**.
+
+| Field | Type | Notes |
+|---|---|---|
+| `ProviderRef`, `ModelRef` | string | natural provider/model references |
+| `SessionRef` | string | optional session tie |
+| `InputTokens` | int64 | TOTAL input (the cache split below is a breakdown *of* this) |
+| `OutputTokens` | int64 | output count |
+| `CostMicroUSD` | int64 | cost in micro-USD |
+| `OccurredAt` | timestamp | when the usage happened |
+| `CacheReadTokens` | int64 | cache-hit input tokens |
+| `CacheCreation1hTokens`, `CacheCreation5mTokens` | int64 | cache-write tokens by TTL |
+| `WorkspaceRef` | string | billing workspace/project |
+| `APIKeyRef` | string | **masked** key/service-account reference, never the secret |
+| `Actor` | string | the principal that incurred the cost (chargeback "who") |
+| `ServiceTier`, `ContextWindow`, `InferenceGeo` | string | provider vocabulary (tier / context band / residency) |
+| `Gateway` | enum | `direct` | `bedrock-mantle` | `bedrock-legacy` | `vertex` | `foundry` | `claude-platform-aws` (open string) |
+| `Provenance` | enum | `estimated` | `billed` — empty treated as estimated |
+| `CostType` | string | non-token server-tool charge class (empty = ordinary token cost) |
+
+### `FindingReport` — `finding.reported`
+
+| Field | Type | Notes |
+|---|---|---|
+| `Kind` | string | e.g. `guardrail`, `redteam`, `forensic` |
+| `Severity` | enum | `info` | `low` | `medium` | `high` | `critical` |
+| `SubjectKind`, `SubjectRef` | string | what the finding is about |
+| `Title` | string | short, non-sensitive summary safe to display |
+| `DetailHash` | string | hex SHA-256 of the redacted detail; the raw detail is never transmitted or stored |
+| `OccurredAt` | timestamp | when the finding was produced |
+| `OWASPLLM`, `OWASPASI`, `ATLAS` | string\[] | framework references (OWASP LLM Top 10, OWASP Agentic Top 10, MITRE ATLAS); a finding may map to several at once |
+
+### `ObservedText` — `guardrail.observed`
+
+A bounded, **already-redacted** excerpt of observed agent text. The producer must
+redact secrets/PII before emitting; the consumer clamps it again defensively.
+
+| Field | Type | Notes |
+|---|---|---|
+| `Surface` | enum | `input` | `output` | `tool_args` |
+| `Text` | string | the redacted, bounded excerpt the detectors inspect |
+| `AgentRef`, `SessionRef`, `ResourceRef` | string | non-sensitive context references (any may be empty) |
+
+### `ApprovalRequest` — `approval.requested`
+
+Minimal-data: identifiers and the approval's decision parameters only. It
+deliberately carries **neither** the requester's free-text reason **nor** the
+subject reference; a consumer authorized for `governance:approval:read` fetches
+the full approval by `ApprovalID`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `ApprovalID` | string | the approval's id — the reference to fetch, decide or watch the request |
+| `Action` | string | the requested action (a bounded short identifier) |
+| `SubjectKind` | string | the kind of subject the action targets (the subject's *reference* is deliberately not carried) |
+| `RiskTier` | string | the risk classification the request was opened under (e.g. `critical`); determines the dual-control floor |
+| `RequiredApprovals` | int64 | the number of distinct approvers needed |
+| `PolicyRef` | string | the approval policy that matched; empty when the request used caller-supplied parameters |
+| `ExpiresAt` | timestamp | when the pending request lapses (absent = never expires) |
+| `EscalateAt` | timestamp | when an undecided request escalates (absent = never) |
+
+### `PolicyChange` — `policy.changed`
+
+Mirrors what the policy mutation's audit record keeps — kind and enabled — plus
+the id and the operation. It **never** carries the operator-supplied policy name
+or the policy spec; a consumer authorized for `governance:policy:read` fetches
+the policy by `PolicyID`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `PolicyID` | string | the changed policy's id |
+| `Kind` | enum | `abac` | `approval` |
+| `Op` | enum | `created` | `updated` | `deleted` — open on the wire; tolerate values you do not know |
+| `Enabled` | bool | the enabled flag after the change; `false` for a deletion |
+
+## External subscriptions (eventing platform)
+
+The eventing module forwards the catalogued event types to **external HTTPS
+endpoints** as signed webhooks. Subscriptions are managed at
+`/v1/m/eventing/subscriptions` — a module route, deliberately **outside** the
+REST OpenAPI contract — while the **event types** it delivers carry the
+per-type stability tiers above.
+
+### The delivery
+
+Each delivery is an HTTPS `POST` whose body is the JSON **envelope plus
+`Seq`** — the same field names as the envelope above (the SDK is the contract),
+with one additive field: `Seq`, the per-tenant cursor a replay starts from. The
+typed payload rides under `Payload`.
+
+```json
+{
+  "ID": "0197a2b4-6e1d-7c3a-9f4e-2d8b5c1a0e7f",
+  "Type": "cost.sampled",
+  "Tenant": "…",
+  "Source": "…",
+  "Time": "2026-06-11T12:00:00Z",
+  "Seq": 42,
+  "Payload": { "ProviderRef": "…" }
+}
+```
+
+| Header | Meaning |
+|---|---|
+| `X-Olivares-Timestamp` | the Unix-seconds timestamp the signature covers |
+| `X-Olivares-Signature` | `t=<ts>,v1=<hexsig>` — HMAC-SHA256 over `<ts>.<body>` with the subscription secret; verify with `connectors/webhook.VerifyWithin` |
+| `X-Olivares-Event` | the **stable event id** — your idempotency key, identical across every retry and replay of one event |
+| `X-Olivares-Event-Type` | the event type (the channel address) |
+| `X-Olivares-Delivery` | the delivery id — a replay is a *new delivery* of the *same event* |
+
+* **At-least-once.** The same event may arrive more than once; **de-duplicate on
+  `X-Olivares-Event`**.
+* **Retries.** A `408`, `425`, `429`, any `5xx` or a network failure is retried
+  on an exponential backoff ladder — 30s, 2m, 10m, 30m, 1h, 2h, 4h, 8h (±20%
+  jitter) — then the delivery **dead-letters** (the DLQ). Any other non-2xx
+  response is terminal.
+* **Replay.** A subscription can be replayed from a `Seq` cursor; a replay keeps
+  the event's `X-Olivares-Event` id under a fresh `X-Olivares-Delivery`.
+* **Redirects are never followed** — a redirect would re-route the signed body.
+* **Secret rotation is immediate.** The platform holds exactly one signing
+  secret per subscription: after `POST …/rotate-secret`, every later attempt —
+  including retries of already-queued deliveries — signs with the **new**
+  secret. Update your verifier first, then rotate.
+* **Narrowing `event_types` is not a recall.** Deliveries already captured for
+  the subscription stay queued and are delivered (the per-type permission still
+  applies); the narrowed filter governs what is captured from then on.
+
+### Per-type receive permission
+
+A subscription names a role; before **every** delivery attempt that role is
+evaluated against the event type's permission, through the full RBAC+ABAC
+pipeline (deny-closed). The mapping mirrors each type's read surface in the
+product API:
+
+| Event type | Permission | Stability |
+|---|---|---|
+| `edge.observed` | `accessgraph:read` (privileged: editor+) | stable |
+| `cost.sampled` | `finops:spend:read` | stable |
+| `finding.reported` | `security:finding:read` | stable |
+| `guardrail.observed` | `security:observed:read` (privileged: editor+) | beta |
+| `approval.requested` | `governance:approval:read` | beta |
+| `policy.changed` | `governance:policy:read` | beta |
+
+## See also
+
+* [REST API reference](/reference/api/) — the synchronous contract (OpenAPI 3.1).
+* [API stability](/2026-06/reference/api-stability/) — the windows behind the per-type
+  stability tiers.
+* [Architecture overview](/2026-06/explanation/architecture/overview/) — how observations
+  become edges and reach the access map.
+* The raw spec: [`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml).

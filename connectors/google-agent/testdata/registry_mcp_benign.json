@@ -1,0 +1,20 @@
+{
+  "mcpServers": [
+    {
+      "name": "projects/test-project-id/locations/global/mcpServers/benign-tools",
+      "mcpServerId": "benign-tools",
+      "displayName": "Benign Tools",
+      "tools": [
+        {
+          "name": "lookup",
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+          }
+        }
+      ]
+    }
+  ]
+}

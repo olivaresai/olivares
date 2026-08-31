@@ -1,0 +1,14 @@
+{
+  "rows": [
+    {
+      "id": "PRODUCTS_ROW_42",
+      "table_name": "ANALYTICS.PUBLIC.PRODUCTS",
+      "content": "Industrial-grade titanium alloy bolt, M12x1.75, tensile strength 900 MPa, certified ISO 898-1 Class 10.9.",
+      "title": "Titanium Bolt M12",
+      "modified_at": "2026-06-10T16:45:00Z",
+      "granted_roles": ["ANALYST_ROLE", "DATA_ENGINEER"],
+      "share_name": "partner_catalog_share",
+      "attributes": {"warehouse": "COMPUTE_WH", "database": "ANALYTICS"}
+    }
+  ]
+}

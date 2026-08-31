@@ -1,0 +1,17 @@
+[
+  {
+    "full_name": "acme-corp/web-app",
+    "private": true,
+    "default_branch": "main"
+  },
+  {
+    "full_name": "acme-corp/api-server",
+    "private": true,
+    "default_branch": "main"
+  },
+  {
+    "full_name": "acme-corp/docs",
+    "private": false,
+    "default_branch": "main"
+  }
+]

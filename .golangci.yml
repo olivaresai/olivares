@@ -1,0 +1,143 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# golangci-lint v2 configuration (schema version 2). Pinned tool: v2.12.2.
+# Docs: https://golangci-lint.run/docs/configuration/file/
+#
+# go.work note: `golangci-lint run ./...` from the repo root does NOT lint all
+# workspace modules (it exits non-zero, linting nothing). This single config is
+# reused by each per-module invocation (the tool walks up to the git root to
+# find it). See scripts/lint.sh.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  # Allow concurrent per-module runs to share the cache safely.
+  allow-parallel-runners: true
+
+linters:
+  # `standard` = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    # NO es "low noise", y decirlo invitaba a no mirarlo. Las cifras de esta nota estuvieron
+    # MAL desde que se escribio y se propagaron a otros tres ficheros: colgaban "217 de 473"
+    # (recuento CON los topes que este mismo bloque quita) y luego un desglose de 817
+    # apariciones cuyas filas sumaban 1022. Un desglose que no suma su propio total no es un
+    # desglose. Re-derivado el 2026-08-18 con `bash scripts/misspell-census.sh` sobre los doce
+    # modulos de go.work y los topes a 0: 978 hallazgos = 484 comentarios + 270 cadenas de
+    # test + 134 cadenas de produccion + 90 identificadores, y la herramienta SALE 1 si esas
+    # filas dejan de sumar. 120 formas distintas; las cinco mayores son ortografia britanica
+    # contra el `locale: US` que este fichero fija mas abajo (cancelled 146, licence 121,
+    # behaviour 102, organisation 73, catalogue 50). "Ni una errata" se sostiene; "todas son
+    # britanicas" NO: la cola trae falsos positivos como `adn` (13), el prefijo de los add-on
+    # de Dodo. Solo los identificadores necesitan criterio. NO copies estas cifras a mano a
+    # ningun otro sitio: corre el censo.
+    - misspell # ortografia en comentarios/cadenas; barato, y NO de bajo volumen
+    - revive # golint successor; style + exported-symbol docs
+  disable: []
+
+  settings:
+    staticcheck:
+      checks:
+        - all
+    revive:
+      # Minimal-but-disciplined rule set; grow deliberately.
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+    misspell:
+      locale: US
+      # MITRE is a proper noun (the org behind ATLAS/ATT&CK); the US dictionary
+      # otherwise false-flags it as a misspelling of "miter". Mosquitto is the
+      # Eclipse MQTT broker, false-flagged as a misspelling of "mosquito".
+      # Y la prosa en ESPANOL, que en este repositorio es deliberada (el canon, los hooks y
+      # buena parte de los comentarios van en espanol) y que un diccionario US lee como
+      # erratas inglesas. misspell no sabe saltarse un idioma, asi que la lista crece por
+      # MEDICION y no por prevision: estas cuatro apariciones son las que hay hoy, todas en
+      # cloud/control-plane, medidas el 2026-08-18. Los otros cuatro modulos grandes dieron
+      # CERO, asi que no se anaden palabras "por si acaso".
+      ignore-rules:
+        - mitre
+        - mosquitto
+        - dependencias
+        - versiones
+        # `statuser` es la convencion `-er` de Go, no una errata de "statuses": nombra la
+        # variable que sostiene un `store.AuditSpoolStatuser` (core/residency/store.go:185,
+        # core/api/handlers_connector_health.go:332). Renombrarla romperia la correspondencia
+        # con el nombre del interfaz, que es justo lo que la convencion existe para dar.
+        # Medido el 2026-08-20: OCHO apariciones, TODAS como identificador y ninguna exportada.
+        - statuser
+
+  exclusions:
+    generated: lax
+    warn-unused: true
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Relax exported-docs / error-checking inside tests.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - revive
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+# In v2, gofmt/goimports are FORMATTERS, not linters; applied via
+# `golangci-lint fmt`.
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/olivaresai/olivares
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+# ── SIN TOPES, y no es preferencia: con los de por defecto este fichero MENTIA ────────
+# golangci-lint corta por defecto en `max-issues-per-linter: 50` y `max-same-issues: 3`,
+# y este repositorio no los fijaba, asi que heredaba los dos. Medido el 2026-08-18 sobre
+# cloud/control-plane con un solo linter: 50 hallazgos con los topes, **178 sin ellos**.
+# 3,6x en un modulo.
+#
+# El coste no es el numero: es que `CLAUDE.md` cita "473 hallazgos en nueve modulos" como
+# el tamano de la campana de lint, y esa cifra se tomo con los topes puestos. Es un SUELO
+# presentado como recuento, y una campana planificada contra el se queda corta sin que
+# nada lo diga. El sintoma estaba a la vista y no lo lei: un histograma con "3x behaviour,
+# 3x organisations, 3x cancelled, 3x catalogue" no es una distribucion, es `max-same-issues`.
+#
+# Un gate que esconde hallazgos para que la salida sea comoda no es un gate. 0 = todos.
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

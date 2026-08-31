@@ -1,0 +1,120 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Terraform/OpenTofu PROVIDER release pipeline. The provider is a
+# SEPARATE Go module (terraform-provider-olivares/) with its OWN release contract:
+# the Terraform Registry parses a GPG-signed SHA256SUMS, not cosign/SLSA, so this
+# workflow is deliberately distinct from the control-plane release (release.yml).
+#
+# This pipeline is WRITTEN AND READY but NOT auto-triggered: it runs only
+# on a maintainer-pushed `terraform-provider-v*` tag (its OWN tag namespace, so a
+# control-plane `v*` tag never starts a provider release and vice-versa), and goreleaser's
+# `release.draft: true` means even then it builds + GPG-signs into a DRAFT.
+# Promoting the draft is a deliberate human action. It NEVER auto-publishes (releases
+# are cut manually by a maintainer), and the Registry only ingests once the
+# draft is published and the public GPG key is registered in the Registry account.
+#
+# What a tagged run produces (developer.hashicorp.com/terraform/registry/providers/publishing):
+#   - terraform-provider-olivares_{VERSION}_{OS}_{ARCH}.zip per platform
+#   - terraform-provider-olivares_{VERSION}_SHA256SUMS over every zip + the manifest
+#   - terraform-provider-olivares_{VERSION}_SHA256SUMS.sig — a GPG BINARY detached
+#     signature (goreleaser `gpg --detach-sign`; no cosign — the Registry rejects it)
+#   - terraform-provider-olivares_{VERSION}_manifest.json (protocol 6)
+name: release-provider
+
+on:
+  push:
+    tags: ["terraform-provider-v*"]
+
+# Least privilege by default; the single job widens only what it needs. No
+# id-token is required — the provider is GPG-signed, not keyless/Sigstore-signed.
+permissions:
+  contents: read
+
+env:
+  # Run goreleaser from the provider module dir; this points every step at it.
+  PROVIDER_DIR: terraform-provider-olivares
+
+jobs:
+  goreleaser:
+    # PRODUCTION-REPOSITORY GUARD, same literal as release.yml's two entry jobs. This
+    # workflow is tag-triggered (`terraform-provider-v*`) and holds `contents: write`,
+    # so in any repository that carries a copy of this tree a matching tag creates a
+    # release with THAT repository's token. Today it would fail on the absent
+    # GPG_PRIVATE_KEY secret rather than publish, but that is an accident of secret
+    # provisioning, not a control. Guarded release.yml alone; the same one-line
+    # guard belongs on every tag-triggered publisher.
+    # La valla se abre a preprod porque AHORA sí hay segunda valla detrás: el paso
+    # `preflight` llama a `scripts/check-publish-target.sh`, que obliga a que la corrida
+    # publique en SU propio repositorio y rechaza destinos de superficie de producción.
+    #
+    # El destino de este workflow es el repositorio que corre —goreleaser crea la release
+    # BORRADOR ahí mismo—, así que la comprobación que carga el peso es esa: una corrida sólo
+    # puede publicar en sí misma.
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    # PINNED to a GitHub-hosted runner ON PURPOSE — do NOT route this through
+    # vars.CI_RUNNER. SLSA provenance derives its trust from the isolation of a
+    # hosted runner: a persistent self-hosted runner serves many jobs, so a
+    # compromised build can leave tooling behind for the next one, and a verifier
+    # "has no guarantee that the code run is in fact the intended workflow unless
+    # they also trust the self-hosted runner" (slsa-framework). Moving a release
+    # here to save minutes would silently downgrade the provenance we publish.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the DRAFT release + upload the signed assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # goreleaser needs tags/history for the changelog
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          # Provider module go.mod pins go 1.26.x; read it rather than hardcoding.
+          go-version-file: ${{ env.PROVIDER_DIR }}/go.mod
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: ${{ env.PROVIDER_DIR }}/go.sum
+
+      # Import the registered GPG key and export its fingerprint. The .goreleaser
+      # `signs` block reads GPG_FINGERPRINT to select the signing key. The key's
+      # PUBLIC half must be registered in the Terraform Registry account or the
+      # uploaded provider version will be rejected at ingest.
+      - name: preflight — the destination is the reviewed one for this profile (fail-closed)
+        env:
+          RELEASE_PROFILE: ${{ vars.OLIVARES_RELEASE_PROFILE || 'production' }}
+          # El destino ES el repositorio que corre: goreleaser crea aquí la release borrador.
+          PUBLISH_TARGET: ${{ github.repository }}
+          PRODUCTION_TARGET: olivaresai/olivares
+          PREPROD_TARGET: ${{ vars.OLIVARES_PREPROD_EXPECTED_REPO }}
+          PREPROD_EXPECTED_REPO: ${{ vars.OLIVARES_PREPROD_EXPECTED_REPO }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: sh scripts/check-publish-target.sh
+
+      # ⛔ LO QUE ESTE WORKFLOW NECESITA Y NO TIENE EN PREPROD, dicho donde se va a buscar: el
+      # paso de abajo importa `secrets.GPG_PRIVATE_KEY` y goreleaser firma SHA256SUMS con esa
+      # clave. Un repositorio de preprod no la tiene, así que el acto de preprod llegará hasta
+      # aquí y morirá en la importación. Hace falta una clave GPG SANDBOX propia del repositorio
+      # de preprod — misma clase de material que falta para la ancla OTA sandbox
+      # (`an internal design note (not shipped)` tampoco existe). No la genero por mi cuenta: es
+      # material de firma y su custodia es decisión de.
+      - name: import GPG signing key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+
+      - name: goreleaser release (build + GPG-sign SHA256SUMS, into a DRAFT)
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          # EXACT version, matching release.yml. A floating "~> v2" means two nominally
+          # identical runs can install different release engines, so nothing rehearsed
+          # proves what the next tagged provider release will actually do. Pinned
+          # the main release and left both provider paths floating.
+          version: "v2.17.0"
+          args: release --clean -f ${{ env.PROVIDER_DIR }}/.goreleaser.yaml
+        env:
+          # The fingerprint the `signs` block selects with `--local-user`.
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

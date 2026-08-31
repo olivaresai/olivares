@@ -1,0 +1,22 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  channels: {
+    slack: {enabled: true, dmPolicy: 'pairing', groupPolicy: 'allowlist'},
+  },
+  tools: {
+    deny: ['group:runtime'],
+    exec: {security: 'ask', applyPatch: {workspaceOnly: true}},
+    fs: {workspaceOnly: true},
+  },
+  agents: {
+    defaults: {
+      sandbox: {mode: 'all'},
+      model: {primary: '${OPENCLAW_INCLUDED_MODEL}'},
+      models: {'anthropic/*': true},
+    },
+  },
+  logging: {file: '/var/log/openclaw/openclaw.log', redactSensitive: 'tools'},
+  diagnostics: {otel: {enabled: true}},
+  session: {dmScope: 'per-peer'},
+}

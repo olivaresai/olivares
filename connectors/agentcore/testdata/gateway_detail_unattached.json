@@ -1,0 +1,6 @@
+{
+  "gatewayId": "gw-unattached",
+  "gatewayArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:gateway/gw-unattached",
+  "name": "staging-gateway",
+  "status": "ACTIVE"
+}

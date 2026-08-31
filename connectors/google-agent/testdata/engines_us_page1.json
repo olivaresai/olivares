@@ -1,0 +1,15 @@
+{
+  "reasoningEngines": [
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/support-agent",
+      "displayName": "Support Agent",
+      "createTime": "2026-05-20T10:00:00Z",
+      "spec": {
+        "agentFramework": "google-adk",
+        "identityType": "AGENT_IDENTITY",
+        "effectiveIdentity": "agents.global.org-123456789012.system.id.goog/resources/aiplatform/projects/9876543210/locations/us-central1/reasoningEngines/support-agent"
+      }
+    }
+  ],
+  "nextPageToken": "PAGE2"
+}

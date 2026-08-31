@@ -1,0 +1,43 @@
+{
+  "live": {
+    "open": "En vivo",
+    "connecting": "Conectando…",
+    "error": "Reconectando…",
+    "closed": "Sin conexión"
+  },
+  "sourceModes": {
+    "export": "Export",
+    "live": "Live",
+    "direct": "Directo",
+    "hints": {
+      "export": "El contenido viene de una fuente export/offline, o el modo no estaba declarado.",
+      "live": "El contenido viene de una fuente upstream en vivo.",
+      "direct": "El contenido se envió directamente a la base de conocimiento."
+    }
+  },
+  "graph": {
+    "empty": "No hay relaciones que mostrar",
+    "emptyHint": "Nada coincide con los filtros actuales todavía.",
+    "mobileTitle": "El grafo necesita más ancho",
+    "mobileHint": "Abre esta vista en una pantalla mayor para el mapa interactivo.",
+    "fit": "Ajustar a la vista",
+    "minimap": "Minimapa",
+    "controls": {
+      "zoomIn": "Acercar",
+      "zoomOut": "Alejar",
+      "reset": "Restablecer vista"
+    }
+  },
+  "urlState": {
+    "urlRejected": "{{count}} valor de este enlace no se pudo usar ({{keys}}); la vista ha vuelto a su valor por defecto.",
+    "urlRejected_one": "{{count}} valor de este enlace no se pudo usar ({{keys}}); la vista ha vuelto a su valor por defecto.",
+    "urlRejected_many": "{{count}} valores de este enlace no se pudieron usar ({{keys}}); la vista ha vuelto a sus valores por defecto.",
+    "urlRejected_other": "{{count}} valores de este enlace no se pudieron usar ({{keys}}); la vista ha vuelto a sus valores por defecto.",
+    "savedViewRejected": "{{count}} valor guardado en «{{name}}» no se pudo usar ({{keys}}); la vista ha vuelto a su valor por defecto.",
+    "savedViewRejected_one": "{{count}} valor guardado en «{{name}}» no se pudo usar ({{keys}}); la vista ha vuelto a su valor por defecto.",
+    "savedViewRejected_many": "{{count}} valores guardados en «{{name}}» no se pudieron usar ({{keys}}); la vista ha vuelto a sus valores por defecto.",
+    "savedViewRejected_other": "{{count}} valores guardados en «{{name}}» no se pudieron usar ({{keys}}); la vista ha vuelto a sus valores por defecto.",
+    "thisSavedView": "esta vista guardada",
+    "dismiss": "Descartar"
+  }
+}

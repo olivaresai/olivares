@@ -1,0 +1,33 @@
+// Go multi-module workspace for the Olivares AI control plane.
+//
+// web/ is intentionally absent: it is a React/TS/Vite project, not a Go module.
+// Its built assets are embedded into ./core via go:embed (see
+// core/internal/webui/embed.go). The single static `olivares` binary is
+// built from ./core.
+//
+// terraform-provider-olivares is a separate module (the manage-as-code provider):
+// it keeps the large hashicorp/terraform-plugin-framework dependency tree out of
+// core's go.sum/SBOM and is a pure REST client (imports neither /core nor /sdk).
+go 1.26.6
+
+toolchain go1.26.6
+
+// cloud/control-plane ENTRA aquí el 2026-08-16. Estaba fuera y nadie lo había declarado:
+// 23.403 líneas de Go con 276 tests que NUNCA habían pasado por golangci-lint ni por el gate,
+// porque un módulo ausente del workspace es invisible para `./...` — no falla, no existe.
+// Es lo contrario del caso de terraform-provider-olivares de arriba: aquél está fuera POR
+// DECISIÓN escrita (mantener su árbol de dependencias fuera del go.sum y el SBOM de core);
+// éste estaba fuera sin que nadie lo decidiera.
+use (
+	./clients/generator
+	./clients/go
+	./cmd/olivares
+	./connectors
+	./core
+	./modules
+	./operator
+	./sdk
+	./sdk/plugin
+	./sdk/scaffold
+	./terraform-provider-olivares
+)

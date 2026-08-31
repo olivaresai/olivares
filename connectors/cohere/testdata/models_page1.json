@@ -1,0 +1,21 @@
+{
+  "models": [
+    {
+      "name": "command-r-plus",
+      "endpoints": ["chat"],
+      "context_length": 128000,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": ""
+    },
+    {
+      "name": "command-r",
+      "endpoints": ["chat"],
+      "context_length": 128000,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": ""
+    }
+  ],
+  "next_page_token": "page2cursor"
+}

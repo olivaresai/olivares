@@ -1,0 +1,80 @@
+{
+  "title": "报告",
+  "description": "按需生成和下载治理报告，并管理计划投递。",
+  "catalog": {
+    "title": "按需报告",
+    "empty": "没有可用的报告类型。",
+    "colReport": "报告",
+    "colFormats": "格式",
+    "colActions": "操作",
+    "generate": "生成"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "生成 {{title}}",
+    "subtitle": "选择格式和时间范围；报告就绪后将自动下载。",
+    "format": "格式",
+    "from": "从",
+    "to": "至",
+    "framework": "框架",
+    "frameworkHint": "可选 — 将证据限定为单个合规框架。",
+    "frameworkPlaceholder": "例如 soc2",
+    "team": "团队",
+    "teamHint": "可选 — 将支出明细限定为单个团队。",
+    "teamPlaceholder": "例如 platform",
+    "download": "下载",
+    "done": "已生成 {{title}}。",
+    "failed": "报告生成失败。",
+    "pdfUnavailable": "此版本不支持 PDF 生成。请选择 HTML。"
+  },
+  "schedules": {
+    "title": "计划报告",
+    "new": "新建计划",
+    "enterprise": "计划报告是企业版功能，在此版本中未启用。",
+    "empty": "尚无计划报告。",
+    "colReport": "报告",
+    "colCron": "Cron",
+    "colStatus": "状态",
+    "colActions": "操作",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "delete": "删除计划",
+    "deleted": "已删除计划。",
+    "newTitle": "新建计划报告",
+    "newSubtitle": "报告按 cron 周期生成并保留以供下载。",
+    "report": "报告",
+    "cron": "Cron 表达式",
+    "cronHint": "标准的 5 字段 cron，例如 0 8 * * 1（每周一 08:00）。",
+    "create": "创建",
+    "created": "已创建计划。"
+  },
+  "enterprise": {
+    "title": "企业版报告",
+    "description": "实时合规状态、面向管理层的风险摘要，以及经签名的审计证据包。",
+    "request": "请求",
+    "done": "报告已下载",
+    "seam": "该报告位于未与本部署关联的附加组件中，并非出现故障。",
+    "posture": {
+      "title": "合规状态",
+      "description": "按框架和控制项实时计算的状态。"
+    },
+    "risk": {
+      "title": "风险摘要",
+      "description": "面向管理层的一页式风险视图。"
+    },
+    "bundle": {
+      "title": "证据包",
+      "description": "经签名的审计证据包 — 交给外部审计师的材料。"
+    }
+  },
+  "runs": {
+    "open": "历史",
+    "title": "运行历史",
+    "description": "该计划的每一次记录在案的执行：何时运行，若失败则原因为何。",
+    "notAnArchive": "提供方会限制该列表并清理较早的运行记录 — 这是运维便利，而非归档。列表较短并不表示该计划只运行过几次。",
+    "empty": "没有运行记录"
+  }
+}

@@ -1,0 +1,7 @@
+# An ordinary, non-SOPS config file. It has no top-level `sops:` block, so the
+# connector must ignore it entirely (no edge, no recipient).
+service:
+  name: billing
+  replicas: 3
+  env:
+    LOG_LEVEL: info

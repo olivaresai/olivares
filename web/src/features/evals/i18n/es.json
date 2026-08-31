@@ -1,0 +1,194 @@
+{
+  "truncation": {
+    "label": "Cargadas {{n}} filas; hay más",
+    "hint": "Esta lista tiene un techo. Sólo se muestran las filas cargadas; que un registro de evaluación no aparezca aquí no demuestra que no exista."
+  },
+  "title": "Evaluaciones",
+  "description": "Cuadros de calidad, resultados de ejecuciones, comparativas A/B y deriva, medidos contra suites golden versionadas. Las salidas nunca se almacenan; solo puntuaciones y huellas hash.",
+  "forbidden": {
+    "title": "Sin autorización",
+    "description": "Necesitas el permiso de lectura de evaluaciones para ver las mediciones de calidad."
+  },
+  "tabs": {
+    "scorecards": "Cuadros",
+    "runs": "Ejecuciones",
+    "ab": "A/B",
+    "drift": "Deriva",
+    "gate": "Gate de CI",
+    "calibration": "Calibración del juez"
+  },
+  "subjectKind": {
+    "suite": "Suite",
+    "agent": "Agente",
+    "model": "Modelo",
+    "prompt_variant": "Variante de prompt",
+    "prompt": "Prompt",
+    "session": "Sesión",
+    "sandbox_run": "Ejecución de sandbox"
+  },
+  "scorecards": {
+    "title": "Cuadros de calidad",
+    "description": "Puntuación media, tasa de aprobación y tendencia por sujeto, agregadas en lectura.",
+    "groupBy": "Agrupar por",
+    "by": {
+      "agent": "Por agente",
+      "model": "Por modelo",
+      "suite": "Por suite",
+      "prompt_variant": "Por variante de prompt"
+    },
+    "meanScore": "Puntuación media",
+    "passRate": "Tasa de aprobación",
+    "runs": "Ejecuciones",
+    "lastScore": "Última puntuación",
+    "regressed": "Regresión",
+    "empty": "Aún no hay cuadros: lanza una evaluación contra una suite golden."
+  },
+  "runs": {
+    "title": "Ejecuciones de evaluación",
+    "description": "Cada ejecución puntúa un sujeto contra una versión de suite. Una regresión se marca aquí; el hallazgo lo gestiona la vista de seguridad.",
+    "columns": {
+      "subject": "Sujeto",
+      "status": "Estado",
+      "score": "Puntuación",
+      "passRate": "Tasa",
+      "regression": "Regresión",
+      "startedAt": "Inicio"
+    },
+    "regressed": "Regresión · deriva {{drift}}",
+    "noRegression": "Ninguna",
+    "empty": "No hay ejecuciones en el rango.",
+    "overN": "sobre {{n}}",
+    "notScored": "sin puntuar: no hay veredicto",
+    "noBaseline": "sin línea base: no se comparó nada"
+  },
+  "cases": {
+    "title": "{{subject}} — resultados por caso",
+    "titleEmpty": "Resultados por caso",
+    "description": "Resultado y puntuación por caso de esta ejecución.",
+    "noPayload": "La salida candidata nunca se almacena: cada caso lleva solo una huella unidireccional y una etiqueta corta acotada, nunca un contenido expandible.",
+    "fingerprint": "huella",
+    "columns": {
+      "case": "Caso",
+      "outcome": "Resultado",
+      "score": "Puntuación",
+      "label": "Etiqueta",
+      "fingerprint": "Huella"
+    },
+    "empty": "No hay resultados por caso para esta ejecución."
+  },
+  "ab": {
+    "title": "Comparativa A/B",
+    "description": "Dos variantes de prompt puntuadas contra la misma suite; gana la puntuación mayor, los empates son explícitos.",
+    "winner": "Ganadora: {{label}} · Δ {{delta}}",
+    "winnerTag": "Ganadora",
+    "tie": "Empate",
+    "passRate": "Tasa {{value}}",
+    "seamNote": "Una comparativa A/B es una escritura privilegiada mediante POST /ab; el motor no expone una comparativa almacenada para releer.",
+    "seamLabel": "Escritura privilegiada",
+    "pickerTitle": "Ejecutar una comparativa A/B",
+    "pickerDescription": "Elige la suite y luego aporta las salidas que produjo cada variante.",
+    "runComparison": "Ejecutar comparativa",
+    "runError": "No se pudo ejecutar la comparativa A/B. Inténtalo de nuevo.",
+    "empty": "No se ha ejecutado ninguna comparativa A/B en esta sesión.",
+    "emptyDescription": "Solo aparece un resultado cuando termina la escritura privilegiada POST /ab. No existe un endpoint GET para una comparativa almacenada.",
+    "suiteLabel": "Suite",
+    "selectSuite": "Selecciona una suite",
+    "noSuites": "Todavía no hay suites. Una comparación se puntúa contra los casos de una suite, así que crea una primero.",
+    "labelA": "Etiqueta de la variante A",
+    "labelB": "Etiqueta de la variante B",
+    "outputsA": "Salidas de la variante A",
+    "outputsB": "Salidas de la variante B",
+    "outputsHint": "Objeto JSON que asocia case_key con la salida que produjo esa variante. El motor las puntúa y solo conserva un hash: el texto nunca se almacena.",
+    "outputsInvalid": "No es un objeto JSON que asocie case_key con texto de salida.",
+    "outputsEmpty": "Indica al menos la salida de un caso. Un conjunto vacío no puntúa nada y se guardaría como un run sin resultado.",
+    "pairwiseLabel": "Juzgar además las variantes cara a cara",
+    "pairwiseHint": "Juzga cada caso compartido dos veces invirtiendo el orden de los dos candidatos, y solo cuenta una victoria cuando ambos órdenes coinciden. Dos llamadas al juez por caso (facturable) y la suite debe tener criterio.",
+    "pairwiseTitle": "Juicio cara a cara",
+    "pairwiseSkippedTag": "Omitido",
+    "pairwiseWinner": "Ganador juzgado: {{label}}",
+    "pairwiseCounts": "{{compared}} comparados · {{aWins}} A · {{bWins}} B · {{ties}} empates · {{inconsistent}} inconsistentes por orden · {{errors}} errores",
+    "pairwiseConsistency": "Consistencia de posición {{rate}} (n={{n}}, IC 95 % {{lo}}–{{hi}})",
+    "outputsTooLong": "Una clave de caso admite como máximo {{maxKey}} caracteres y una salida {{maxOutput}}. El motor trunca los valores más largos y puntúa el texto truncado.",
+    "outputsPlaceholder": "{\"caso-1\": \"la salida que produjo esa variante\"}",
+    "pairwiseSkippedBody": "El motor no ejecutó la comparación juzgada. Su motivo:"
+  },
+  "drift": {
+    "title": "Deriva — {{subject}}",
+    "description": "Puntuación en el tiempo frente al umbral de aprobación de la suite; un descenso sostenido es degradación.",
+    "score": "Puntuación",
+    "threshold": "Umbral de aprobación",
+    "pickerTitle": "Sujeto",
+    "note": "La línea de umbral es el umbral de aprobación de la suite; los puntos por debajo no superaron el listón en ese momento.",
+    "empty": "Aún no hay datos de tendencia."
+  },
+  "outcomeBar": {
+    "passed": "Aprobados",
+    "failed": "Fallidos",
+    "errors": "Errores",
+    "skipped": "Omitidos"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "No se han registrado resultados de casos para esta ejecución",
+      "description": "La ejecución debe puntuar u omitir casos de la suite seleccionada antes de que aparezcan aquí los resultados, las puntuaciones y las huellas de cada caso."
+    },
+    "runs": {
+      "title": "Aún no se han registrado ejecuciones de evaluación",
+      "description": "Un llamante debe enviar salidas candidatas contra una suite golden versionada mediante la API de ejecuciones de evaluación antes de que aparezca aquí una ejecución puntuada."
+    }
+  },
+  "gate": {
+    "title": "Gate de CI",
+    "description": "Evaluaciones del gate de regresión: lo que el gate midió, y lo que CI debe obedecer.",
+    "empty": "Sin evaluaciones del gate",
+    "measured": "medido {{verdict}}",
+    "effective": "CI obedece {{verdict}}",
+    "sampled": "{{sampled}} de {{total}} casos muestreados",
+    "overriddenBy": "anulado por {{actor}}",
+    "override": "Anular",
+    "overrideTitle": "Anular un gate en {{verdict}}",
+    "overrideDescription": "El motivo escrito es obligatorio. Queda junto al veredicto original, en la fila y en el registro de evidencias.",
+    "reason": "Motivo",
+    "reasonHint": "Por qué se anula este gate. El veredicto original no se borra.",
+    "confirmOverride": "Anular gate",
+    "overrideDone": "Gate anulado",
+    "cancel": "Cancelar",
+    "correctedRate": "Tasa corregida de sesgo {{rate}} (sensibilidad del juez {{sens}}, especificidad {{spec}}): se muestra junto a la cruda, nunca en su lugar.",
+    "noCorrection": "Sin estimador corregido: no hay calibración de confianza con la que corregir, así que la tasa cruda va sin ajustar — que no es lo mismo que decir que ambas coinciden."
+  },
+  "calibration": {
+    "title": "Calibración del juez",
+    "description": "Cuánto coincide el juez LLM con las etiquetas humanas. Un conjunto que no puede medir el acuerdo corregido por azar no puede certificar nada.",
+    "empty": "Sin informes de calibración",
+    "meets": "cumple el objetivo",
+    "below": "por debajo del objetivo",
+    "cannotCertify": "no se puede certificar — kappa indefinida",
+    "agreement": "Acuerdo",
+    "kappa": "Kappa",
+    "sensitivity": "Sensibilidad",
+    "specificity": "Especificidad",
+    "ciOverN": "IC 95 % {{lo}}–{{hi}} sobre n={{n}}",
+    "degradedWithErrors": "degradado · {{n}} con error",
+    "verbosityCorr": "Corr. verbosidad"
+  },
+  "calibItems": {
+    "title": "Conjunto de referencia",
+    "description": "Las etiquetas humanas contra las que se mide al juez, y la razón de que un informe pueda certificar o no.",
+    "run": "Ejecutar calibración",
+    "empty": "Todavía no hay casos etiquetados",
+    "distribution": "{{pass}} etiquetados como pasa · {{fail}} como falla",
+    "degenerate": "⛔ Todas las etiquetas son iguales, así que kappa NO se puede calcular y ningún informe de este conjunto podrá certificar. Etiqueta casos del otro signo.",
+    "humanPass": "humano: pasa",
+    "humanFail": "humano: falla",
+    "unscored": "sin puntuar",
+    "noJudge": "No hay juez cableado, así que no hay a quién medir. No es una avería ni un límite de edición: una calibración no se puede simular."
+  },
+  "baseline": {
+    "pin": "Fijar como línea base",
+    "confirm": "Sustituir la línea base",
+    "pinned": "Línea base fijada",
+    "replaceWarning": "⛔ Hay UNA línea base por suite y sujeto, y es mutable. Fijar no añade: SUSTITUYE la que ahora sea la línea base de {{suite}} / {{subject}}. Toda regresión futura se mide contra ella.",
+    "thisRunScores": "Esta ejecución aprobó {{score}} sobre n={{n}}.",
+    "cannotShowCurrent": "La consola no puede enseñar qué sustituye: `POST /baselines` es la única ruta que el motor expone, y la referencia anterior queda en la autoauditoría, no en un endpoint legible. Fijar una ejecución PEOR baja el listón, que es cómo una puerta de calidad deja de disparar sin que nadie la desactive."
+  }
+}

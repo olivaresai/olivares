@@ -1,0 +1,12 @@
+{
+  "value": [
+    {
+      "format": "OpenAI",
+      "name": "gpt-4o",
+      "version": "2024-08-06",
+      "isDefaultVersion": true,
+      "lifecycleStatus": "Deprecating",
+      "deprecation": { "inference": "2026-12-01" }
+    }
+  ]
+}

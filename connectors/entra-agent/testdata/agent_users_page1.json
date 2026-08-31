@@ -1,0 +1,13 @@
+{
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/users/microsoft.graph.agentUser?$skiptoken=AGENTUSER2",
+  "value": [
+    {
+      "id": "au-1111",
+      "displayName": "Invoice Agent User",
+      "accountEnabled": true,
+      "identityParentId": "aid-1111",
+      "userPrincipalName": "invoice-agent@contoso.example",
+      "createdDateTime": "2026-06-01T10:00:00Z"
+    }
+  ]
+}

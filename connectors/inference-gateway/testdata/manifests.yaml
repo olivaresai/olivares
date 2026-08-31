@@ -1,0 +1,50 @@
+# Gateway API Inference Extension fixture. Multi-document manifest with
+# an InferencePool (v1alpha2, with an EPP extensionRef) and an InferenceModel
+# (v1alpha2, modelName -> poolRef + criticality), plus a NON-Inference kind and a
+# malformed pool to exercise skipping. There is no request body, prompt, completion
+# or token anywhere in a routing CRD; the AKIAIOSFODNN7EXAMPLE string below is planted
+# ONLY as a pod-selector label VALUE to prove the connector never leaks it into an
+# emitted edge (the no-leak negative test) — a selector value is never emitted.
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferencePool
+metadata:
+  name: vllm-llama3-pool
+  namespace: llm
+spec:
+  targetPortNumber: 8000
+  selector:
+    app: vllm-llama3
+    planted-credential-do-not-leak: AKIAIOSFODNN7EXAMPLE
+  extensionRef:
+    group: ""
+    kind: Service
+    name: vllm-llama3-epp
+---
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferenceModel
+metadata:
+  name: llama3-binding
+  namespace: llm
+spec:
+  modelName: meta-llama/Llama-3-8b
+  criticality: Critical
+  poolRef:
+    name: vllm-llama3-pool
+---
+# Unrelated object in the same export directory: must be ignored.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-llama3
+  namespace: llm
+spec:
+  replicas: 3
+---
+# Malformed InferenceModel: no poolRef and no modelName -> skipped, never guessed.
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferenceModel
+metadata:
+  name: orphan-model
+  namespace: llm
+spec:
+  criticality: Sheddable

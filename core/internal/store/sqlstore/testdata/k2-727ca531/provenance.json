@@ -1,0 +1,77 @@
+{
+  "artifact": "core-only.sqlite.gz",
+  "artifact_sha256": "0f981175b566a5e00eac7da38ac998a592c225a64a8052921ce777eea8f01644",
+  "artifact_size": 26856,
+  "raw_sha256": "5847ce1f65d49b382ac9f89a36b66f9c4dc301ff2f405737512f1d03f1b48d90",
+  "raw_size": 999424,
+  "source_commit": "727ca531a6a1cb13ccbf3ee041edf64393ea9fd3",
+  "source_tree": "1c74200878a8c4531434acb602cf615af570d22b",
+  "go_version": "go1.26.5 linux/amd64",
+  "producer": "core/internal/store/sqlstore.TestSQLiteBootIsIdempotent",
+  "producer_command": "go test ./core/internal/store/sqlstore -run ^TestSQLiteBootIsIdempotent$ -count=1 -v",
+  "capture": "The K2 production Open/Close/Open database inode was hard-linked before test cleanup and compressed with gzip -n -9 without opening it through K3.",
+  "integrity_check": "ok",
+  "page_count": 244,
+  "page_size": 4096,
+  "guard": {
+    "format": 1,
+    "code_epoch": 1,
+    "code_sha256": "aadc7e40c8dcf29b681a3c34c98eec2299ed4e2fcd6e71b07fc587f8f70b26f5",
+    "retained_revision": 0,
+    "retained_sha256": "abb9dfe58751c145c97b811019c41a6bdd2ec10f1628607cb8a5fed1c4413f34",
+    "rollout_id": "7d2fddc5ed461d3bfc55e10c1c2fdcb128b4100945c12d3535fb55a71be5a408",
+    "inventory_count": 2,
+    "bootstrap_receipt_count": 3,
+    "gate_event_count": 0,
+    "ordered_census": [
+      {
+        "relation": "audit_events",
+        "definition_sha256": "7724590b8770de13f97c90589bd72c5af134de1eb256d9b93cc634dd65034d3f",
+        "spec_sha256": "a12707e3b61ab152a8617bd5ed22aa92640d027fac536615d9b8c4e50340ae1d",
+        "event_ordinal": 1,
+        "event_sha256": "7d4512d053dd8dc786fd5526b2dab158bca57891096ccb1e2a6c6fd836e6bcde"
+      },
+      {
+        "relation": "set_seen_jtis",
+        "definition_sha256": "82522b6108e2241d361ffbfd78ea8c1ddd28c077e1b90530c0290c2f26c24c18",
+        "spec_sha256": "ede4bad24f54e5f972e2bcc827b04bccfdde6ea383eed8a7800af7bf6687486d",
+        "event_ordinal": 2,
+        "event_sha256": "04e403e3fbf0fd4a59a864aede0578c0ce7cffec6bff76f5467b01575e421c20"
+      }
+    ],
+    "inventory_recorded_at": "2026-08-14T04:21:39.494004757Z",
+    "bootstrap_receipts": [
+      {
+        "relation": "olivares_guard_gate_events",
+        "definition_sha256": "9079127718870a3af4bdc79d7563486ac03793d3806f8cea1d9438007e9dd942",
+        "spec_sha256": "278f3ed25fac2148015a4cfe0a5a64737fe343045e790ae1fb8af7a071988f56",
+        "unit_id": "a119c54eac2424024dbd727ab0bc10a46ca7b00916f1e4b3d17e50a999b2be85",
+        "prestate_sha256": "4a9056db81570a4dc74fb5a31a8df374f35fc3befcc8441d9ff4154f3a24a9dc",
+        "receipt_id": "658df452758afa76442ed84dad069310827f0eaf8cfb5e94cb843600f1910a23",
+        "event_ordinal": 1,
+        "event_sha256": "283f0a2079da373b1722a8c982c7899a5965f3365672c70a65fc7dbd483f7537"
+      },
+      {
+        "relation": "olivares_guard_inventory_events",
+        "definition_sha256": "0f460510b3c7ad19b9acb19f9a58e9c5cb8e661d7178e003679ea5d49aed7cc0",
+        "spec_sha256": "b15abb9a9a00ab7f996d7943d77f9ef702a0e3d8795550976df83b375f874b1a",
+        "unit_id": "99a00d057abab42910d8ce2497b84951c7c3bff51659271922070a5843928d6a",
+        "prestate_sha256": "1609771ab6579d3672af7e1b945eeef728b70456cbfd8e6fb9904e34ab3190f0",
+        "receipt_id": "0b488903e6c73c8df6d7e498f97076016d9b8e85da2f445cbac7fafdb2e8fb38",
+        "event_ordinal": 2,
+        "event_sha256": "95d95dc9ea98b0aa5374c62fe880a49f41d89d27a55d70985cb492feec07614d"
+      },
+      {
+        "relation": "olivares_guard_receipts",
+        "definition_sha256": "ef2407f49b20f28392f502a52973c36b6083ecf1377a0394b8bb3bf20318417f",
+        "spec_sha256": "9b559c1f9df82995caf12ef88ee4303863a4f16582facaedf8be74da9fd4e67e",
+        "unit_id": "278651fe2f2ac0203abc1020b3186ec9167d3e4ec0664cf52ccca9fc0ff49aa5",
+        "prestate_sha256": "56273232be979e032045e953c43e3a0e19a47e024cee981034d0f34241d9a50d",
+        "receipt_id": "e233720105fa0603b26cb70709ecc57cded15b80148e7a0efdb1081a344ec3a5",
+        "event_ordinal": 3,
+        "event_sha256": "4874e96cfb76c0d532fbc46a49c07efcd13b15458eeea4ab49415a7474599e49"
+      }
+    ]
+  },
+  "safety_review": "All tables and printable payloads were scanned; the fixture contains no users, tokens, credentials, email addresses, PEM material, DSNs, repository paths or temporary paths."
+}

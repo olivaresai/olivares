@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# GENERADO por scripts/render-download-contract.sh — NO editar a mano.
+# Autoridad: commercial/license-worker/src/download/{artifacts,sets}.ts (no viajan: son
+# LicenseRef-Olivares-Commercial). Lo que viaja son estos hechos, para que el arbol
+# PUBLICADO pueda comprobar a su productor sin la fuente comercial.
+# `lint:download-contract` regenera y compara: si divergen, es ROJO.
+artifact_basename_prefix=olivares
+artifact_key_shape=enterprise/${version}/${set}/${artifactFilename(version, os, arch)}
+artifact_filename_shape=${ARTIFACT_BASENAME_PREFIX}_${version}_${os}_${arch}.tar.gz
+allowed_set_slugs=biz biz+airs biz+cp biz+ids biz+reg biz+airs+cp biz+airs+ids biz+airs+reg biz+cp+ids biz+cp+reg biz+ids+reg biz+airs+cp+ids biz+airs+cp+reg biz+airs+ids+reg biz+cp+ids+reg biz+airs+cp+ids+reg ent
+addon_codes=airs cp ids reg
+base_code=biz
+enterprise_code=ent

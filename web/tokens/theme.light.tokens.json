@@ -1,0 +1,103 @@
+{
+  "$description": "Olivares console — LIGHT theme color + elevation tokens (DTCG 2025.10 scalar shape). Emitted to the :root{} block of src/styles/tokens.css by tokens/build.mjs. Re-derived from the final brand identity (brandv4, 2026-06-10): the canonical brand light #fafaf9 is the app canvas, and the neutrals are a WARM ramp so the light theme carries the same warmth the dark one always had. THE ORANGE IS SPLIT BY ROLE, and the split is the point: `accent` is the FILL and is the brand orange #f08000 itself, IDENTICAL to dark, because the ink sits ON it (#1a1206 = 6.88:1, better than the 4.70:1 of the pale ink on the deepened orange it replaces); `accent-text` is the orange as TEXT on the canvas and STAYS deepened at #b45500, because #f08000 as text on #fafaf9 is 2.58:1 and fails AA for real. The fill's hover/active DARKEN (#d87000/#cc6a00) rather than lighten as in dark: on a near-white canvas a lighter hover dissolves the button's edge (#f89020 measures 2.23:1 against the canvas, worse than the resting 2.58:1), while darkening carries both the ink (5.50/4.97) and the edge (3.22/3.57). The semantic axes are preserved. Every TEXT pair is AA or better; the resting accent FILL against the canvas is deliberately NOT, at 2.58:1 on the background and 2.69:1 on the surface, below the 3:1 non-text threshold — the brand orange cannot reach 3:1 on a near-white canvas, so that is a measured and declared trade-off rather than an oversight, and it is pinned by a test so it cannot be lost quietly. Flat token names map 1:1 to CSS custom-property names (background -> --background).",
+  "color": {
+    "$type": "color",
+    "background": {
+      "$value": "#fafaf9"
+    },
+    "surface": {
+      "$value": "#ffffff"
+    },
+    "elevated": {
+      "$value": "#ffffff"
+    },
+    "overlay": {
+      "$value": "rgba(24, 24, 27, 0.45)"
+    },
+    "muted": {
+      "$value": "#f1f1f0"
+    },
+    "muted-foreground": {
+      "$value": "#5c564e"
+    },
+    "foreground": {
+      "$value": "#28282b"
+    },
+    "border": {
+      "$value": "#e6e6e4"
+    },
+    "border-strong": {
+      "$value": "#d6d6d3"
+    },
+    "ring": {
+      "$value": "#b45500"
+    },
+    "accent": {
+      "$value": "#f08000"
+    },
+    "accent-foreground": {
+      "$value": "#1a1206"
+    },
+    "accent-hover": {
+      "$value": "#d87000"
+    },
+    "accent-active": {
+      "$value": "#cc6a00"
+    },
+    "accent-text": {
+      "$value": "#a84f00",
+      "$description": "Accent text on LIGHT surfaces. #b45500 -> #a84f00 el 2026-08-18: era AA sobre --background (4.74) y --surface (4.95), los dos que el contrato emparejaba, pero NO sobre --muted (4.38) ni --accent-soft (4.36) — que la consola SÍ pinta en seis sitios. #a84f00 mide 4.88/4.91/5.31 y sube tambien donde ya pasaba, asi que no puede romper el otro lado."
+    },
+    "accent-soft": {
+      "$value": "#fdeedf"
+    },
+    "accent-soft-foreground": {
+      "$value": "#8a3f00"
+    },
+    "accent-line": {
+      "$value": "#f2c49e"
+    },
+    "success": {
+      "$value": "#2f6b2c"
+    },
+    "warning": {
+      "$value": "#8a5300"
+    },
+    "danger": {
+      "$value": "#b0201b"
+    },
+    "info": {
+      "$value": "#1e5a86"
+    },
+    "danger-solid": {
+      "$value": "#b0201b"
+    },
+    "danger-solid-foreground": {
+      "$value": "#fff8f0"
+    },
+    "confidence-attributed": {
+      "$value": "#0a7c77"
+    },
+    "confidence-approximate": {
+      "$value": "#5b6470"
+    }
+  },
+  "elevation": {
+    "$type": "shadow",
+    "elev-xs": {
+      "$value": "0 1px 1px rgba(28, 28, 31, 0.04)"
+    },
+    "elev-sm": {
+      "$value": "0 1px 2px rgba(28, 28, 31, 0.06), 0 1px 1px rgba(28, 28, 31, 0.04)"
+    },
+    "elev-md": {
+      "$value": "0 2px 6px -1px rgba(28, 28, 31, 0.08), 0 1px 2px rgba(28, 28, 31, 0.06)"
+    },
+    "elev-lg": {
+      "$value": "0 8px 24px -6px rgba(28, 28, 31, 0.12), 0 2px 6px -2px rgba(28, 28, 31, 0.08)"
+    },
+    "elev-xl": {
+      "$value": "0 20px 48px -12px rgba(28, 28, 31, 0.18), 0 4px 12px -4px rgba(28, 28, 31, 0.1)"
+    }
+  }
+}

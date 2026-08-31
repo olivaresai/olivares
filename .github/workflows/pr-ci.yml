@@ -1,0 +1,218 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# pr-ci — THE PULL-REQUEST REGIME OF THE PUBLIC REPOSITORY, and of nothing else.
+#
+# ⛔ WHY IT EXISTS. Measured 2026-08-27: no workflow in this tree had a `pull_request`
+# trigger that a change to core/, modules/, cmd/ or web/ would fire — the only three that
+# carry one are path-filtered to deploy/aws, the operator and the terraform provider. At the
+# same time scripts/apply-branch-protection.sh's `public` profile requires TEN contexts
+# (classify, control-plane, race-hot, web, examples, fips, secrets, sast, fuzz, helm-render)
+# plus one approval. Those are `mainline-ci` job ids, and `mainline-ci` runs on
+# `workflow_dispatch` and on `push` to main — never on a pull request, and `workflow_dispatch`
+# cannot run against a fork ref at all. So on the day the repository opens, the FIRST external
+# contribution would be born with no checks and permanently unmergeable, with the merge button
+# saying "Expected — waiting for status to be reported" about jobs that can never report.
+#
+# ⛔ WHY IT IS A SEPARATE WORKFLOW AND NOT `pull_request` ADDED TO mainline-ci. Because that
+# would WEAKEN the private hub instead of equipping the public repository. The hub's own branch
+# protection requires four mainline-ci contexts (classify, control-plane, race-hot, web). Today
+# they never report on a PR, so they cannot be satisfied by accident. Give mainline-ci a
+# `pull_request` trigger and those four jobs would report on hub PRs as SKIPPED — and a job
+# skipped by a job-level `if:` does NOT block a required check (measured on the hub 2026-08-01
+# and written into apply-branch-protection.sh). The whole required set would evaporate into
+# green. A regime for the public repository must not touch the hub's gate.
+#
+# ⛔ AND WHY EVERY JOB CARRIES A REPOSITORY GUARD. Closed the automatic-CI question on
+# 2026-08-02 for THIS repository — "no tiene sentido que sean automáticos con la cantidad de
+# desarrollo y PR y commits que tenemos" — and that decision is not reopened here. With the
+# guard, a pull request in the hub creates a run in which every job is skipped: no runner is
+# occupied, no minute is billed, nothing is superseded. In the public repository the guard is
+# true and the jobs run. The guard is not free of hazard — a rename would silently disable the
+# whole regime — so it is not left to vigilance: scripts/check-pr-ci-regime.sh pins that every
+# job carries it, that it names the same repository the export targets, and that the public
+# branch-protection profile requires exactly these job ids and no others.
+#
+# ⛔ HOSTED RUNNERS, DELIBERATELY. A `pull_request` from a fork runs UNTRUSTED code. It must
+# never reach the self-hosted runners, which share a host with this project's own builds — so
+# no job here reads `vars.CI_RUNNER`. The event is `pull_request` and not
+# `pull_request_target`, so the workflow runs from the PR's own tree with a read-only token and
+# no access to secrets; that is the correct trade and the reason the heavy legs are not here.
+#
+# WHAT THIS DOES NOT COVER, said plainly rather than implied: the race detector, fuzzing, FIPS,
+# the SAST and secret sweeps, the examples matrix and the Helm render stay in `mainline-ci`,
+# which a maintainer dispatches on the merge candidate. The public profile's required contexts
+# were lowered to what CAN report on a pull request — the alternative was leaving a list that
+# is impossible to satisfy, and an impossible gate is answered with an admin override, which is
+# not a gate. docs/RELEASE-GO-LIVE-RUNBOOK.md §4 carries the maintainer step.
+
+name: pr-ci
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One live run per pull request. Cancelling a superseded run is right here and wrong in a
+# publisher: nothing in this workflow writes anything anywhere.
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The one place the public repository is named in this file — y esto NO lo lee el guard.
+  # Un `if:` de job no puede leer el contexto `env`, asi que los cuatro guards llevan el literal
+  # y quien lo compara contra este valor es `scripts/check-pr-ci-regime.sh`. El comentario
+  # anterior decia que el guard lo leia; era falso desde que existe, y se corrige aqui.
+  #
+  # ⛔ Y LA SEGUNDA RAMA DEL GUARD NO NOMBRA NINGUN REPOSITORIO, a proposito: este fichero viaja
+  # al arbol publico. `vars.OLIVARES_RELEASE_PROFILE` solo existe EN el repositorio de preprod,
+  # asi que en el publico esa rama no puede alcanzarse.
+  PUBLIC_REPO: olivaresai/olivares
+
+jobs:
+  pr-lint:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        run: |
+          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
+          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
+          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
+          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
+          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
+          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          # Installing is not reaching: a step that installs a tool without checking it is on
+          # PATH moves its own failure to whatever runs next.
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: licence headers and the AGPL boundary
+        run: task lint:spdx lint:boundary
+
+  pr-build:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        run: |
+          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
+          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
+          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
+          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
+          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
+          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: every workspace module compiles
+        run: task build:go
+
+  pr-test:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: ubuntu-latest
+    # The functional leg without -race. Its own task carries a 45-minute internal timeout, so
+    # the job ceiling sits above the sum of its steps rather than cancelling them mute.
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        run: |
+          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
+          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
+          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
+          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
+          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
+          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: TMPDIR where an extracted binary can actually run
+        # Several suites build and EXECUTE a helper. A hardened /tmp is noexec, and the failure
+        # reads as a test defect rather than as a mount option.
+        run: |
+          mkdir -p "$RUNNER_TEMP/exec"
+          echo "TMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+          echo "GOTMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+      - name: the Go suite, without the race detector
+        timeout-minutes: 60
+        run: task test:functional
+
+  pr-web:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # NODE FIRST: pnpm/action-setup installs pnpm THROUGH npm, so it needs a node on PATH.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        run: |
+          # ⛔ LA GUARDA DE ABAJO YA ESTABA; FALTABAN LAS DOS QUE EVITAN EL FALLO EN VEZ DE
+          # NOMBRARLO. La guarda dice que `task` no se alcanza; `GOBIN` explicito y su `bin` en el
+          # PATH hacen que se alcance. En un runner auto-alojado PERSISTENTE, `go install` honra un
+          # GOBIN que venga del entorno del servicio POR ENCIMA de $GOPATH/bin y deja el binario
+          # fuera del PATH del job — sin fallar, porque instalar si instalo (medido en
+          # `ci-runner-3` el 2026-08-29, corrida 33278242758).
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+      - name: the console checks, and the embedded bundle matches its sources
+        run: task check:web web:check

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+.DS_Store
+.git/
+.gitignore
+*.tmp
+*.bak
+*.orig
+*.swp
+ci/
+README.md

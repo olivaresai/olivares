@@ -1,0 +1,30 @@
+{
+  "models": [
+    {
+      "id": "grok-4.3",
+      "created": 1714435200,
+      "owned_by": "xai",
+      "version": "1.0.0",
+      "aliases": ["grok-4.3-latest", "grok-latest"],
+      "input_modalities": ["text", "image"],
+      "output_modalities": ["text"],
+      "prompt_text_token_price": 12500,
+      "cached_prompt_text_token_price": 2000,
+      "completion_text_token_price": 25000,
+      "long_context_threshold": 200000
+    },
+    {
+      "id": "grok-4.20-0309-reasoning",
+      "created": 1709942400,
+      "owned_by": "xai",
+      "version": "1.0.0",
+      "aliases": [],
+      "input_modalities": ["text"],
+      "output_modalities": ["text"],
+      "prompt_text_token_price": 12500,
+      "cached_prompt_text_token_price": 2000,
+      "completion_text_token_price": 25000,
+      "long_context_threshold": 200000
+    }
+  ]
+}

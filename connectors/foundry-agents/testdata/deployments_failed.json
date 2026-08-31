@@ -1,0 +1,12 @@
+{
+  "value": [
+    {
+      "name": "failed",
+      "properties": {
+        "state": "Failed",
+        "deploymentType": "Hosted",
+        "protocols": ["REST"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "uuid": "INTEGRATIONUUID0000000000A",
+  "account_uuid": "ACCOUNTUUID00000000000001",
+  "features": ["auditevents", "itemusages", "signinattempts"]
+}

@@ -1,0 +1,249 @@
+{
+  "title": "安全与取证",
+  "description": "护栏发现项、强制执行态势、异常队列以及防篡改的事件取证。该平面默认仅作探测——它进行记录，除非已启用并受治理的强制执行，否则不会自行阻断。",
+  "tabs": {
+    "safety": "安全态势",
+    "findings": "发现项",
+    "guardrails": "护栏",
+    "anomalies": "异常",
+    "forensics": "取证"
+  },
+  "findings": {
+    "title": "发现项",
+    "description": "护栏、异常与取证发现项。证据是一枚指纹——没有可展开的载荷。",
+    "empty": "暂无发现项",
+    "emptyHint": "当护栏、异常检测与取证记录证据时，发现项便会出现。",
+    "export": {
+      "action": "导出 SARIF",
+      "busy": "正在导出…",
+      "done": "SARIF 导出已下载。",
+      "truncated": "SARIF 导出已下载，但在服务端结果上限处停止——这是一个有效的 run，但不是完整集合。"
+    },
+    "search": "搜索发现项",
+    "fingerprint": "fp",
+    "columns": {
+      "severity": "严重程度",
+      "kind": "类型",
+      "source": "来源",
+      "title": "发现项",
+      "evidence": "证据",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "kind": {
+      "guardrail": "护栏",
+      "anomaly": "异常",
+      "forensic": "取证"
+    },
+    "status": {
+      "open": "待处理",
+      "triaged": "已分流",
+      "resolved": "已解决",
+      "dismissed": "已忽略"
+    },
+    "triage": {
+      "action": "分流",
+      "title": "分流发现项",
+      "description": "分流仅改变流程状态。证据——类型、严重程度与明细指纹——是不可变的。",
+      "statusLabel": "状态",
+      "submit": "更新状态",
+      "updated": "发现项状态已更新",
+      "immutableNote": "严重程度、类型与明细指纹无法更改——仅可更改流程状态。"
+    },
+    "subjectKinds": {
+      "local_residency": "常驻的本地模型"
+    },
+    "truncated": "按接入顺序显示前 {{n}} 条",
+    "truncatedHint": "检出项多于所显示，且本页按接入 id 排序——不是按问题发生时间——因此可能遗漏较新的检出项。其余内容不可见并不能证明没有发现别的问题。"
+  },
+  "safetyPosture": {
+    "title": "提供商安全态势",
+    "description": "以只读方式从各提供商自带的控制（OpenAI Moderation、AWS Bedrock Guardrails、Azure Responsible AI）采集的 AI 安全态势。该平面只读取并记录，拦截仍由提供商执行。",
+    "empty": "暂无安全态势发现",
+    "emptyHint": "启用并连接 OpenAI、AWS 或 Azure 连接器的安全读取，即可填充此视图。",
+    "countsPartial": "这是部分汇总——该租户的安全态势发现数量超过了汇总扫描的覆盖范围。",
+    "columns": {
+      "open": "未处理"
+    }
+  },
+  "guardrails": {
+    "title": "护栏检查",
+    "description": "在某个面上运行护栏检查服务。文本经哈希脱敏处理且从不存储——结果是一份裁定，外加最小化、已脱敏的证据。",
+    "verdictTitle": "裁定",
+    "clean": "未检测到问题——干净。",
+    "detectiveNote": "该裁定来自探测平面：触发已被检测并记录，而非被阻断。只有在已启用并受治理的强制执行下，才可能发生阻断。",
+    "wouldBlock": "将会阻断（强制执行）",
+    "detectOnly": "仅检测",
+    "findingsRecorded": "已记录 {{count}} 项发现项",
+    "findingsRecorded_other": "已记录 {{count}} 项发现项",
+    "enforcement": {
+      "detective": "探测",
+      "enforced": "强制执行"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "提示词注入",
+      "jailbreak": "越狱",
+      "content": "内容",
+      "output_validation": "输出校验",
+      "owasp_agentic": "OWASP 智能体化"
+    },
+    "form": {
+      "surface": "面",
+      "text": "待检查文本",
+      "textHint": "经检查并哈希脱敏处理——从不存储或返回。",
+      "enforce": "请求强制执行",
+      "enforceHint": "仅当强制执行策略已对该类别启用并受治理时才会阻断；否则裁定为一个标记。",
+      "submit": "检查",
+      "running": "正在检查…",
+      "surfaceLabel": "面"
+    },
+    "surface": {
+      "input": "输入",
+      "output": "输出",
+      "tool_args": "工具参数"
+    }
+  },
+  "enforcement": {
+    "title": "强制执行态势",
+    "description": "唯一触及生产环境的操作。每个护栏类别默认仅作探测；启用内联强制执行属于管理员操作，并在已接线网关处受治理。",
+    "defaultDetectiveNote": "默认平面为探测：类别仅在此处显式启用并受治理时才会阻断。",
+    "fullyDetective": "未启用任何强制执行——该平面完全处于探测状态，即安全默认值。任何项都不会自行阻断。",
+    "detective": "探测",
+    "enforced": "强制执行",
+    "governed": "受治理",
+    "ungoverned": "已启用但无人工治理",
+    "wildcard": "所有类别",
+    "change": "更改",
+    "columns": {
+      "class": "类别",
+      "posture": "态势",
+      "minSeverity": "最低严重程度",
+      "governance": "治理",
+      "updated": "更新时间",
+      "actions": "操作"
+    },
+    "dialog": {
+      "title": "更改强制执行",
+      "description": "禁用（恢复为探测）始终被允许。启用内联强制执行在已接线网关处受治理——治理拒绝会作为原因显示。",
+      "enabledLabel": "启用内联强制执行",
+      "minSeverity": "最低严重程度",
+      "reason": "原因",
+      "reasonHint": "随此更改一并记录至审计账本。",
+      "submit": "应用",
+      "applied": "强制执行态势已更新",
+      "ungovernedWarning": "在未接线治理网关的情况下启用该类别会使其不受治理——此更改被允许但会被标记。",
+      "deniedTitle": "治理已拒绝此更改"
+    }
+  },
+  "anomalies": {
+    "title": "异常队列",
+    "description": "按优先级排序的漂移与关联发现项。近似条目为未对账的漂移——绝非确凿的违规。",
+    "empty": "队列中暂无异常",
+    "orderNote": "按优先级排序，最高者优先。",
+    "priority": "优先级",
+    "approximate": "近似",
+    "suspectedTitle": "疑似：{{title}}",
+    "unreconciledNote": "未对账的漂移——已对账的权威来源是访问映射。优先级被折减；这并非已确认的违规。",
+    "kind": {
+      "access_drift": "访问漂移",
+      "egress_exfil_suspected": "出站数据外泄（疑似）",
+      "anti_evasion_correlated": "关联规避"
+    }
+  },
+  "forensics": {
+    "title": "取证案件",
+    "description": "事件响应——每个案件在开启时冻结其完整性状态，以便后续的篡改可被检测。时间线由仅追加的账本重建而来。",
+    "empty": "暂无取证案件",
+    "openCase": "开启案件",
+    "back": "返回案件列表",
+    "summary": "摘要",
+    "openedBy": "开启者",
+    "opened": "已开启",
+    "closed": "已关闭",
+    "integrity": "监管链完整性",
+    "timeline": "重建的时间线",
+    "timelineNote": "每个事件都携带 seq · hash · prev_hash，使读者可独立地重新验证链接。事件背后从不存在载荷。",
+    "columns": {
+      "severity": "严重程度",
+      "title": "案件",
+      "status": "状态",
+      "opened": "已开启"
+    },
+    "status": {
+      "open": "待处理",
+      "investigating": "调查中",
+      "contained": "已遏制",
+      "closed": "已关闭"
+    },
+    "truncated": "按开启顺序显示前 {{n}} 条",
+    "truncatedHint": "案件多于所显示，且本页按开启 id 排序，因此可能遗漏较新的案件。你在这里看不到的调查，并不是不存在的调查。"
+  },
+  "integrity": {
+    "title": "账本完整性",
+    "description": "两项裁定：哈希链内部一致，以及已签名的检查点。验证本身也会被记录到它所校验的链中。",
+    "chain": "哈希链",
+    "chainChecked": "已校验 {{count}} 个事件",
+    "chainChecked_other": "已校验 {{count}} 个事件",
+    "checkpoints": "已签名的检查点",
+    "checkpointsCount": "已验证 {{count}} 个检查点",
+    "checkpointsCount_other": "已验证 {{count}} 个检查点",
+    "signingUnavailable": "未接线签名密钥——已签名的证明不会被伪造。",
+    "checkpointsPendingNote": "尚未写入检查点——证明此账本的是哈希链的裁定。",
+    "signingSeam": "检查点签名未接线",
+    "attestedSeq": "已证明的 seq",
+    "headSeq": "账本头部 seq {{seq}}",
+    "reverifyNote": "每个事件都携带 seq · hash · prev_hash，使读者可离线对照外部 WORM 存储重新验证链接。",
+    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "尚未配置强制执行类别",
+      "description": "仅在设置护栏类别态势后才会显示相应行；在此之前，每个类别均保持探测状态，内联路径不会阻断任何内容。"
+    },
+    "findings": {
+      "title": "尚无安全发现项记录",
+      "description": "护栏检查、观测漂移检查或提供商安全态势记录信号时，或其他模块产生高严重性信号时，发现项才会显示。"
+    }
+  },
+  "cases": {
+    "new": "新建案件",
+    "newHint": "开启一个取证案件。引擎会将其状态设为「开启」。",
+    "title": "标题",
+    "severity": "严重程度",
+    "create": "创建",
+    "cancel": "取消",
+    "created": "案件已开启",
+    "status": "状态",
+    "save": "保存更改",
+    "updated": "案件已更新",
+    "statusName": {
+      "open": "开启",
+      "investigating": "调查中",
+      "contained": "已控制",
+      "closed": "已关闭"
+    },
+    "exportFormat": "导出格式",
+    "export": "导出",
+    "exported": "已请求导出",
+    "links": "证据链",
+    "linksHint": "此案件关联的内容：发现项、账本序列、异常或备注。",
+    "noLinks": "尚未关联任何内容",
+    "link": "关联",
+    "linked": "已关联",
+    "linkKindLabel": "类型",
+    "linkRef": "引用",
+    "linkKind": {
+      "finding": "发现项",
+      "audit_seq": "账本序列",
+      "anomaly": "异常",
+      "note": "备注"
+    }
+  },
+  "severity": {
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "严重"
+  }
+}

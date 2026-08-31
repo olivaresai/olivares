@@ -1,0 +1,116 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+#
+# Reference DaemonSet wiring the Tetragon sensor to the Olivares eBPF connector
+# (ARCHITECTURE.md, docs/SECURITY-HARDENING.md, §6). It encodes the PRIVILEGE SPLIT that is the whole
+# point of this design:
+#
+#   - tetragon (sensor): holds the kernel capabilities and runs OUTSIDE the agent's
+#     control. Capabilities dropped to the minimum CAP_BPF + CAP_PERFMON, root
+#     permitted for BPF attachment, seccomp RuntimeDefault, no inbound listener.
+#     (Older kernels that lack the
+#     capability split need CAP_SYS_ADMIN instead — verify on your kernel; newer
+#     kernels, 5.8+, support CAP_BPF/CAP_PERFMON.)
+#   - ebpf-connector: holds NO kernel capabilities. It only reads Tetragon's export
+#     file over a shared volume. read-only root fs, all caps dropped, non-root.
+#
+# This is a reference, not a turnkey manifest: pin image digests, set your registry,
+# and scope the TracingPolicies (see the sibling YAMLs) before production. The
+# official Tetragon Helm chart is the supported install path; this shows the
+# hardening and the export→connector handoff to replicate there.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: olivares-ebpf-backstop
+  namespace: olivares-system
+  labels:
+    app.kubernetes.io/name: olivares-ebpf-backstop
+    app.kubernetes.io/part-of: olivares
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: olivares-ebpf-backstop
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: olivares-ebpf-backstop
+    spec:
+      hostPID: true # the sensor needs the host PID namespace to resolve processes
+      serviceAccountName: olivares-ebpf-backstop
+      # No inbound ports are exposed by either container (push model, docs/SECURITY-HARDENING.md).
+      containers:
+        # --- The kernel sensor: privileged-but-capped, hardened ----------------
+        - name: tetragon
+          image: quay.io/cilium/tetragon:v1.0.0 # pin a digest in production
+          args:
+            - "--export-filename=/var/run/olivares/tetragon.log"
+            - "--export-allowlist={\"event_set\":[\"PROCESS_EXEC\",\"PROCESS_EXIT\",\"PROCESS_KPROBE\"]}"
+          securityContext:
+            runAsNonRoot: false # the sensor attaches BPF programs; see caps below
+            privileged: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ["ALL"]
+              add: ["BPF", "PERFMON"] # CAP_SYS_ADMIN instead on pre-5.8 kernels
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+          volumeMounts:
+            - name: bpf-maps
+              mountPath: /sys/fs/bpf
+            - name: export
+              mountPath: /var/run/olivares
+            - name: tracing-policies
+              mountPath: /etc/tetragon/tetragon.tp.d
+              readOnly: true
+        # --- The Olivares connector: zero kernel capability, read-only ----------
+        # The connector receives its settings (events_path, follow, detect_evasion)
+        # from the engine as sdk.Config over the go-plugin gRPC channel, NOT from
+        # the environment. The crucial settings here are:
+        #   events_path = /var/run/olivares/tetragon.log   (the sensor's export)
+        #   follow      = true                              (tail the export)
+        #   detect_evasion = false                          (off until reviewed)
+        # How the per-host collector that hosts this connector is packaged (engine
+        # sidecar vs go-plugin subprocess) is wired by the deploy module; this
+        # container shows only the connector's zero-capability, read-only posture.
+        - name: ebpf-connector
+          # Built from Dockerfile.ebpf-source. Pin a sha256 DIGEST in production: a
+          # floating tag on this host-privileged path is a substitution vector (docs/SECURITY-HARDENING.md).
+          image: ghcr.io/olivaresai/ebpf-source:v0 # pin a @sha256:… digest in production
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            privileged: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+          volumeMounts:
+            - name: export
+              mountPath: /var/run/olivares
+              readOnly: true # the connector only reads the sensor's export
+      volumes:
+        - name: bpf-maps
+          hostPath:
+            path: /sys/fs/bpf
+            type: DirectoryOrCreate
+        - name: export
+          emptyDir: {} # pod-scoped; this manifest does not enforce ownership or modes
+        - name: tracing-policies
+          configMap:
+            name: olivares-tracing-policies # the file-access + network policies

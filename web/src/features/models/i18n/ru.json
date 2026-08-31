@@ -1,0 +1,269 @@
+{
+  "title": "Модели и провайдеры",
+  "description": "Управляемый ландшафт моделей — заявленные возможности и цены, политика маршрутизации и ссылки на ключи провайдеров. Секреты никогда не отображаются; только маскированные ссылки.",
+  "tabs": {
+    "catalog": "Каталог",
+    "estate": "Ландшафт",
+    "routing": "Маршрутизация",
+    "keys": "Ключи провайдеров",
+    "gpai": "Позиция GPAI",
+    "access": "Access"
+  },
+  "catalog": {
+    "title": "Матрица возможностей",
+    "description": "Заявленные возможности API по семействам моделей.",
+    "pricingTitle": "Заявленные цены",
+    "pricingDescription": "Значения по прейскуранту по умолчанию — справочные, а не неизменная истина. Сверяйте с каждым провайдером и переопределяйте для каждой модели.",
+    "family": "Семейство",
+    "provider": "Провайдер",
+    "context": "Контекст",
+    "maxOutput": "Макс. вывод",
+    "modality": "Модальность",
+    "inputPrice": "Ввод / MTok",
+    "outputPrice": "Вывод / MTok",
+    "cacheRead": "Чтение из кеша / MTok",
+    "cacheWrite1h": "Запись в кеш 1ч / MTok",
+    "residency": "Резидентность данных",
+    "tiers": "Уровни обслуживания",
+    "residencyNotApplicable": "Неприменимо",
+    "tiersNotDeclared": "Не заявлено",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "Возможности к подтверждению",
+    "capsToConfirmHint": "Набор возможностей этого семейства ещё не сверен с карточкой модели. Модель указана, но её возможности помечены как неподтверждённые, а не выдуманы.",
+    "tier": {
+      "standard": "Стандартный",
+      "batch": "Пакетный",
+      "priority": "Приоритетный",
+      "priority_on_demand": "Приоритетный по запросу",
+      "flex": "Гибкий",
+      "flex_discount": "Гибкий со скидкой"
+    },
+    "asOf": "По состоянию на {{date}}",
+    "noPricing": "Цена не заявлена",
+    "present": "Поддерживается",
+    "absent": "Не поддерживается"
+  },
+  "estate": {
+    "title": "Управляемые модели",
+    "description": "Модели в ландшафте этого тенанта, обогащённые данными из каталога.",
+    "empty": "В ландшафте нет моделей",
+    "columns": {
+      "name": "Модель",
+      "provider": "Провайдер",
+      "family": "Семейство",
+      "context": "Контекст",
+      "inputCost": "Ввод µ$/tok",
+      "outputCost": "Вывод µ$/tok",
+      "modality": "Модальность",
+      "capabilities": "Возможности",
+      "status": "Статус"
+    },
+    "notEnriched": "Семейство ещё не заявлено — цены отсутствуют",
+    "costNote": "Значение µUSD за токен — приблизительная справочная величина; достоверная стоимость реального использования содержится в реестре FinOps.",
+    "truncated": "Загружено моделей: {{n}}; есть ещё",
+    "truncatedHint": "Управляемых моделей больше, чем показано; страница берёт строки по id. Поиск и сортировка таблицы действуют только на загруженное."
+  },
+  "routing": {
+    "title": "Политики маршрутизации",
+    "description": "Политики задаются здесь и исполняются коннектором шлюза — UI настраивает и отображает их.",
+    "new": "Новая политика",
+    "empty": "Нет политик маршрутизации",
+    "emptyHint": "Политика маршрутизации выбирает основную модель и цепочку резервных вариантов для стратегии.",
+    "strategy": "Стратегия",
+    "requiredCapabilities": "Требуемые возможности",
+    "preferredProviders": "Предпочитаемые провайдеры",
+    "minContext": "Мин. размер контекста",
+    "pinnedModel": "Закреплённая модель",
+    "allowDeprecated": "Разрешить устаревшие",
+    "gateway": "Конечная точка шлюза",
+    "viaGateway": "через шлюз",
+    "resolve": "Разрешить",
+    "resolving": "Разрешение…",
+    "enabled": "Включено",
+    "disabled": "Отключено",
+    "strategies": {
+      "cost": "Стоимость",
+      "latency": "Задержка",
+      "capability": "Возможность",
+      "pinned": "Закреплённая"
+    },
+    "decision": {
+      "title": "Разрешённое решение",
+      "primary": "Основная",
+      "fallbacks": "Цепочка резервных вариантов",
+      "unresolved": "Ни одна управляемая модель не удовлетворяет этой политике",
+      "reason": "Причина"
+    },
+    "dialog": {
+      "title": "Политика маршрутизации",
+      "name": "Название",
+      "listHint": "Через запятую.",
+      "create": "Сохранить политику",
+      "created": "Политика маршрутизации сохранена"
+    },
+    "execute": "Execute",
+    "executeConfirm": "Execute and spend",
+    "input": "Input",
+    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
+    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "noExecutor": "No executor is provisioned. This is not an outage: the control plane resolves routing decisions but never spends against a provider until an operator wires an executor.",
+    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "fallbackUsed": "fallback used",
+    "refusal": "provider refusal",
+    "tokens": "{{in}} in · {{out}} out",
+    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "truncated": "Загружено политик: {{n}}; есть ещё",
+    "truncatedHint": "Политик маршрутизации больше, чем показано; страница берёт строки по id. Отсутствие политики здесь не доказывает, что ни одна не маршрутизирует данный запрос."
+  },
+  "keys": {
+    "title": "Ссылки на ключи провайдеров",
+    "description": "Управляемые ссылки на ключи API и рабочие области провайдеров. Хранится только маскированная подсказка — никогда значение секрета.",
+    "new": "Добавить ссылку на ключ",
+    "empty": "Нет ссылок на ключи",
+    "maskedOnly": "Только ссылка — значение секрета никогда не хранится и не отображается.",
+    "columns": {
+      "name": "Название",
+      "provider": "Провайдер",
+      "kind": "Тип",
+      "extId": "Внешний id",
+      "hint": "Маскированная подсказка",
+      "owner": "Владелец",
+      "status": "Статус",
+      "created": "Создано"
+    },
+    "kind": {
+      "api_key": "Ключ API",
+      "workspace": "Рабочая область"
+    },
+    "dialog": {
+      "title": "Добавить ссылку на ключ",
+      "name": "Название",
+      "provider": "Провайдер",
+      "kind": "Тип ссылки",
+      "extId": "Внешний id",
+      "extIdHint": "Id ключа/рабочей области у провайдера (например, apikey_01). Не секрет.",
+      "owner": "Владелец",
+      "noSecretNote": "Эта форма никогда не принимает секрет. Olivares хранит только ссылку и маскированную подсказку.",
+      "create": "Добавить ссылку",
+      "created": "Ссылка на ключ добавлена"
+    },
+    "truncated": "Загружено ключей: {{n}}; есть ещё",
+    "truncatedHint": "Ссылок на ключи провайдеров больше, чем показано; страница берёт строки по id. Отсутствие ключа здесь не доказывает, что для этого провайдера нет учётных данных. Сортировка таблицы действует только на загруженное."
+  },
+  "gpai": {
+    "title": "Позиция поставщиков GPAI",
+    "description": "Позиция поставщика, аттестованная оператором и фиксируемая один раз для каждого поставщика.",
+    "notice": "Это позиция поставщика GPAI, аттестованная оператором; она служит источником свидетельств о поставщиках для ISO/IEC 42001 A.10.3 и NIST AI RMF GOVERN-6.1 / MAP-4.1. Это не заключение Olivares о соответствии требованиям.",
+    "empty": "Позиции поставщиков GPAI не зафиксированы",
+    "emptyHint": "Аттестуйте позицию поставщика, когда опубликованные материалы поставщика рассмотрены или требуется зафиксировать заявление.",
+    "verifiedMeaning": "Рассмотрено оператором на основе опубликованных материалов поставщика — это собственная аттестация оператора, а не проверка, выполненная Olivares, и не заключение о соответствии требованиям.",
+    "actions": {
+      "attest": "Аттестовать позицию",
+      "edit": "Изменить позицию",
+      "editProvider": "Изменить позицию для {{provider}}"
+    },
+    "columns": {
+      "provider": "Поставщик",
+      "review": "Статус рассмотрения",
+      "attestedAt": "Аттестовано",
+      "actions": "Действия"
+    },
+    "claims": {
+      "cop_signatory": "Подписант Code of Practice",
+      "technical_docs": "Техническая документация опубликована",
+      "training_data_summary": "Сводка обучающих данных опубликована",
+      "copyright_policy": "Политика в отношении авторских прав зафиксирована",
+      "downstream_info": "Информация для последующих пользователей предоставлена",
+      "systemic_risk": "GPAI с системным риском",
+      "safety_report": "Safety & Security Model Report"
+    },
+    "states": {
+      "recorded": "Зафиксировано",
+      "notRecorded": "Заявление не зафиксировано",
+      "reviewed": "Аттестация с рассмотрением оператором",
+      "unreviewed": "Заявление оператора — без рассмотрения"
+    },
+    "detail": {
+      "title": "Позиция GPAI: {{provider}}",
+      "description": "Заявления, зафиксированные оператором, и метаданные аттестации для этого поставщика.",
+      "claims": "Заявления поставщика",
+      "reviewState": "Статус рассмотрения",
+      "verificationMethod": "Метод проверки",
+      "attestedBy": "Кем аттестовано",
+      "attestedAt": "Дата аттестации",
+      "note": "Примечание",
+      "notProvided": "Не указано"
+    },
+    "form": {
+      "createTitle": "Аттестовать позицию поставщика GPAI",
+      "editTitle": "Изменить позицию поставщика GPAI",
+      "description": "Зафиксируйте заявления поставщика и собственную аттестацию рассмотрения оператором.",
+      "providerRef": "Идентификатор поставщика",
+      "providerLocked": "Идентификатор поставщика заблокирован при редактировании, поскольку его изменение создало бы вторую позицию.",
+      "providerRequired": "Укажите идентификатор поставщика.",
+      "claimsTitle": "Заявления поставщика",
+      "claimsDescription": "Включайте заявление только в том случае, если оператор зафиксировал его для этого поставщика.",
+      "systemicRiskHint": "Классификация: модель классифицирована как GPAI с системным риском.",
+      "safetyReportHint": "Этот отчёт применяется к моделям, классифицированным как GPAI с системным риском.",
+      "verified": "Рассмотрено на основе опубликованных материалов поставщика",
+      "verificationMethod": "Метод проверки",
+      "verificationMethodHint": "Обязательно, когда оператор отмечает эту позицию как рассмотренную.",
+      "verificationMethodRequired": "Опишите, как были рассмотрены опубликованные материалы поставщика.",
+      "note": "Примечание",
+      "requestRejected": "Позиция не была сохранена. Проверьте ответ сервера ниже.",
+      "created": "Позиция поставщика GPAI аттестована",
+      "updated": "Позиция поставщика GPAI обновлена",
+      "save": "Сохранить аттестацию",
+      "saving": "Сохранение…"
+    },
+    "truncated": "Загружено позиций: {{n}}; есть ещё",
+    "truncatedHint": "Позиций GPAI больше, чем показано; страница берёт строки по id. Отсутствие провайдера здесь не доказывает, что по нему ничего не заявлено. Сортировка таблицы действует только на загруженное."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "Ссылки на ключи провайдеров пока не добавлены",
+      "description": "Добавьте ссылку на API-ключ или рабочую область, указав идентификатор провайдера; консоль никогда не принимает и не хранит значение секрета."
+    },
+    "models": {
+      "title": "Управляемые модели пока не зафиксированы",
+      "description": "Модели появляются в ИТ-ландшафте, когда коннектор передаёт запись о стоимости с указанием используемых провайдера и модели."
+    }
+  },
+  "residency": {
+    "title": "Резидентность рабочих пространств",
+    "description": "Где каждое рабочее пространство выполняет вывод и где хранятся его данные, по сообщению поставщика.",
+    "empty": "Ни одно рабочее пространство не сообщает настройки резидентности",
+    "unrestricted": "Поставщик не сообщает об ограничениях",
+    "allowed": "Разрешено: {{geos}}",
+    "unreported": "не сообщено",
+    "defaultGeo": "по умолчанию: {{geo}}",
+    "atRest": "хранение: {{geo}}",
+    "truncated": "Загружено рабочих пространств: {{n}}; есть ещё",
+    "truncatedHint": "Записей о резидентности больше, чем показано; страница берёт строки по id — присваивается при создании, — поэтому более поздние отсутствуют. Отсутствие рабочего пространства здесь не доказывает, что его обработка не ограничена."
+  },
+  "access": {
+    "title": "Model access rules",
+    "description": "Who may use which model, and where.",
+    "empty": "No access rules — every subject is unrestricted",
+    "groupsTitle": "Model groups",
+    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsEmpty": "No model groups",
+    "members": "{{n}} members",
+    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "effect": {
+      "allow": "allow",
+      "forbid": "forbid"
+    },
+    "tenantWide": "tenant-wide",
+    "inWorkspace": "in {{ws}}",
+    "allSurfaces": "all surfaces",
+    "onSurfaces": "on {{list}}",
+    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
+    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "readOnlyNote": "Read-only: changing who may use a model requires models:model-access:admin, which is a higher tier than editing a routing policy.",
+    "truncated": "Загружено правил: {{n}}; есть ещё",
+    "truncatedHint": "Правил доступа больше, чем показано; страница берёт строки по id. Пометки этих строк отражают ТОЛЬКО загруженные правила: могут отсутствовать allow, вводящие ограничение или добавляющие разрешённые цели, и могут отсутствовать forbid, вычитающие доступ, — поэтому страница может выглядеть и шире, и уже реальности, а субъект без единого загруженного правила не появится вовсе. Не выводите отсюда эффективный доступ: движок читает все страницы перед решением и разрешает принципала сразу по пользователю, роли и группе, чего строка показать не может.",
+    "groupsTruncated": "Загружено групп: {{n}}; есть ещё",
+    "groupsTruncatedHint": "Групп моделей больше, чем показано; страница берёт строки по id. Отсутствие группы здесь не доказывает, что её нет — правило может по-прежнему на неё ссылаться."
+  }
+}

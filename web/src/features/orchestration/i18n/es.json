@@ -1,0 +1,263 @@
+{
+  "title": "Orquestación y A2A",
+  "description": "Topología agente-a-agente: quién delega en quién, los flujos de delegación en vivo y las cadencias declaradas. Las lecturas del grafo de comunicación son privilegiadas y autoauditadas.",
+  "tabs": {
+    "graph": "Grafo de comunicación",
+    "flows": "Flujos",
+    "schedules": "Cadencias"
+  },
+  "graph": {
+    "title": "Grafo de comunicación",
+    "description": "Topología de delegación y MCP, derivada de señales observadas. Los supervisores anclan el nivel superior; los workers y los peers MCP quedan debajo.",
+    "truncated": "Mostrando las primeras {{n}} aristas — sube el límite para ver más.",
+    "empty": {
+      "title": "Sin comunicación observada",
+      "description": "No hay aristas de delegación ni MCP en la ventana observada. Esto es lo que se ve, no todo lo que existe — lee la nota de cobertura de arriba."
+    },
+    "kind": {
+      "session": "Sesión",
+      "agent": "Agente",
+      "mcp_server": "Servidor MCP",
+      "mcp_tool": "Herramienta MCP"
+    },
+    "role": {
+      "supervisor": "Supervisor",
+      "worker": "Worker",
+      "peer": "Peer"
+    },
+    "legend": {
+      "attributed": "Atribuido",
+      "approximate": "Aproximado (inferido)",
+      "missed": "Cadencia incumplida"
+    }
+  },
+  "flows": {
+    "title": "Flujos de delegación",
+    "description": "Clústeres supervisor → workers. El estado se deriva en lectura por recencia; «estancado» significa que el supervisor tiene una cadencia activa vencida.",
+    "filter": "Filtrar por estado",
+    "allStates": "Todos los estados",
+    "empty": "No hay flujos en este estado",
+    "columns": {
+      "supervisor": "Supervisor",
+      "workers": "Workers",
+      "delegations": "Delegaciones",
+      "state": "Estado",
+      "lastSeen": "Visto por última vez"
+    },
+    "state": {
+      "active": "Activo",
+      "idle": "Inactivo",
+      "stalled": "Estancado",
+      "completed": "Completado"
+    }
+  },
+  "schedules": {
+    "title": "Cadencias",
+    "description": "Cadencias declaradas para agentes y enjambres. La salud refleja la cadencia observada frente al intervalo esperado — un disparo incumplido se muestra como estancado, nunca se oculta.",
+    "empty": "Sin cadencias declaradas",
+    "emptyHint": "Declara una cadencia cron, por evento o manual para comprobar si un sujeto dispara realmente a tiempo.",
+    "new": "Nueva cadencia",
+    "columns": {
+      "name": "Nombre",
+      "trigger": "Disparador",
+      "cadence": "Cadencia",
+      "desired": "Deseado",
+      "health": "Salud",
+      "lastFired": "Último disparo",
+      "actions": "Acciones"
+    },
+    "subjectKind": {
+      "agent": "Agente",
+      "swarm": "Enjambre"
+    },
+    "trigger": {
+      "cron": "Cron",
+      "event": "Evento",
+      "manual": "Manual"
+    },
+    "desired": {
+      "active": "Activo",
+      "paused": "Pausado",
+      "retired": "Retirado"
+    },
+    "actions": {
+      "menu": "Acciones de {{name}}",
+      "edit": "Editar",
+      "history": "Historial",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "retire": "Retirar",
+      "fire": "Disparar"
+    },
+    "form": {
+      "createTitle": "Nueva cadencia",
+      "editTitle": "Editar cadencia",
+      "createDescription": "Declara una cadencia gobernada para un agente o enjambre. Las cadencias nuevas nacen activas.",
+      "editDescription": "Cambia el sujeto o la cadencia. La identidad y el disparador son inmutables.",
+      "name": "Nombre",
+      "subjectKind": "Tipo de sujeto",
+      "subjectRef": "Referencia del sujeto",
+      "triggerKind": "Tipo de disparador",
+      "cadenceSpec": "Especificación de cadencia",
+      "cadenceHint": {
+        "cron": "Texto de cadencia cron opaco. Solo el dispatcher configurado interpreta la sintaxis.",
+        "event": "Referencia de evento o texto de cadencia opaco.",
+        "manual": "Nota opaca opcional para esta cadencia manual."
+      },
+      "expectedInterval": "Intervalo esperado (segundos)",
+      "expectedIntervalHint": "Se usa para detectar una cadencia cron incumplida.",
+      "graceFactor": "Factor de gracia",
+      "graceFactorHint": "Multiplicador aplicado antes de marcar la cadencia como incumplida.",
+      "immutableHint": "Inmutable después de la creación.",
+      "create": "Crear cadencia",
+      "update": "Guardar cambios",
+      "created": "Cadencia creada",
+      "updated": "Cadencia actualizada",
+      "createFailed": "No se pudo crear la cadencia",
+      "updateFailed": "No se pudo actualizar la cadencia",
+      "errors": {
+        "required": "Este campo es obligatorio.",
+        "intervalRange": "Introduce un número entero entre {{min}} y {{max}}.",
+        "intervalCronOnly": "El intervalo esperado solo está disponible para disparadores cron.",
+        "graceRange": "Introduce un número entero entre {{min}} y {{max}}."
+      }
+    },
+    "status": {
+      "pauseTitle": "¿Pausar {{name}}?",
+      "pauseDescription": "{{name}} seguirá declarada, pero ya no se esperará que dispare.",
+      "pauseConfirm": "Pausar cadencia",
+      "resumeTitle": "¿Reanudar {{name}}?",
+      "resumeDescription": "{{name}} pasará a estar activa y se reanudará la supervisión de cadencia.",
+      "resumeConfirm": "Reanudar cadencia",
+      "retireTitle": "¿Retirar {{name}}?",
+      "retireDescription": "{{name}} se retirará permanentemente y ya no podrá dispararse.",
+      "retireConfirm": "Retirar cadencia",
+      "changed": {
+        "active": "Cadencia reanudada",
+        "paused": "Cadencia pausada",
+        "retired": "Cadencia retirada"
+      }
+    },
+    "fire": {
+      "title": "Disparar {{name}}",
+      "description": "Un disparo gobernado necesita una aprobación vinculada al plan actual antes del despacho.",
+      "step1Title": "1. Solicitar aprobación",
+      "step1Description": "Abre una aprobación de governance para este sujeto y esta cadencia exactos.",
+      "request": "Solicitar aprobación",
+      "requested": "Aprobación solicitada",
+      "requestFailed": "No se pudo solicitar la aprobación",
+      "requiresApproval": "Aprobación obligatoria",
+      "copy": "Copiar",
+      "copied": "Referencia de aprobación copiada",
+      "copyFailed": "No se pudo copiar la referencia de aprobación",
+      "governanceLink": "Abrir la cola de aprobaciones de governance",
+      "step2Title": "2. Ejecutar el disparo aprobado",
+      "step2Description": "Cuando se permita la aprobación, envía su referencia para despachar el plan.",
+      "approvalRef": "Referencia de aprobación",
+      "execute": "Ejecutar",
+      "dispatched": "Cadencia despachada",
+      "notDispatched": "La cadencia no se despachó",
+      "executeFailed": "No se pudo ejecutar el disparo aprobado",
+      "receipt": "Recibo del disparo",
+      "planHash": "Hash del plan",
+      "gateStatus": "Estado del gate",
+      "dispatchRef": "Referencia de despacho",
+      "detail": "Detalle",
+      "opStatus": {
+        "requested": "Solicitado",
+        "blocked": "Rechazado",
+        "dispatched": "Despachado",
+        "declared_not_fired": "Aprobado, no actuado",
+        "failed": "Fallido",
+        "budget_blocked": "Bloqueado por presupuesto",
+        "budget_throttled": "Limitado por presupuesto"
+      }
+    }
+  },
+  "decisions": {
+    "title": "Registro de decisiones",
+    "description": "Registro de solo anexado de las decisiones de disparo de la cadencia seleccionada. Una decisión se muestra tal como se resolvió — una aprobación no es una actuación.",
+    "pick": "Selecciona una cadencia",
+    "pickHint": "Selecciona una cadencia para ver su registro de decisiones.",
+    "empty": "Sin decisiones registradas",
+    "gate": "Gate",
+    "plan": "plan",
+    "op": {
+      "fire": "Disparo",
+      "run_request": "Solicitud de ejecución",
+      "run": "Ejecución",
+      "run_step": "Paso",
+      "run_end": "Fin de ejecución",
+      "cadence_miss": "Cadencia perdida"
+    },
+    "opStatus": {
+      "requested": "Solicitado",
+      "blocked": "Bloqueado",
+      "dispatched": "Despachado",
+      "declared_not_fired": "Aprobado, no actuado (sin dispatcher)",
+      "failed": "Fallido",
+      "budget_blocked": "Bloqueado por presupuesto",
+      "budget_throttled": "Limitado por presupuesto",
+      "missed": "Incumplido",
+      "skipped": "Omitido (un paso anterior falló o fue denegado)",
+      "gate_passed": "Puerta aprobada",
+      "completed": "Completado",
+      "reconciled": "Reconciliado (resultado tardío registrado)"
+    },
+    "estate": "Todas las decisiones (estate completo)",
+    "estateCaveat": "El registro del estate, de más reciente a más antigua. Es la única vista de la consola que enseña la FILA COMPLETA del ledger de una ejecución de workflow —auditoría, hallazgos y el detalle del run pueden mostrar hechos relacionados, pero no este registro—.",
+    "truncated": "Se muestran las {{count}} decisiones más recientes y el motor informa de más: esta lista está RECORTADA. Léela como una muestra, no como el registro completo.",
+    "noSchedule": "sin referencia de schedule",
+    "subjectKind": {
+      "agent": "Agente",
+      "swarm": "Enjambre",
+      "workflow": "Workflow"
+    },
+    "estateDescription": "Registro de solo anexión de todas las decisiones del estate, de más reciente a más antigua. Incluye decisiones que no pertenecen a ningún schedule.",
+    "forbidden": "Tu rol no puede leer las decisiones de schedules."
+  },
+  "timeline": {
+    "title": "Cronología de actividad",
+    "description": "Eventos de comunicación recientes del sujeto.",
+    "kind": {
+      "delegation": "Delegación",
+      "mcp_server": "Servidor MCP",
+      "mcp_tool": "Herramienta MCP",
+      "fire": "Disparo",
+      "cadence_miss": "Cadencia incumplida"
+    }
+  },
+  "history": {
+    "title": "Historial de revisiones — {{name}}",
+    "description": "Instantáneas cronológicas de esta programación en un registro de solo anexión.",
+    "scopeCaption": "La restauración vuelve a aplicar solo los campos modificables; nunca el nombre, la clase de sujeto ni la clase de disparador.",
+    "empty": "No hay revisiones registradas",
+    "loadMore": "Cargar más",
+    "compareTitle": "Diferencias entre instantáneas",
+    "selectTwo": "Selecciona dos revisiones para comparar sus instantáneas.",
+    "selectRevision": "Seleccionar la revisión {{op}} de {{actor}}",
+    "originalLabel": "Revisión anterior",
+    "modifiedLabel": "Revisión posterior",
+    "restore": "Restaurar esta revisión",
+    "restoreTitle": "¿Restaurar la revisión?",
+    "restoreDescription": "¿Restaurar los campos modificables seleccionados de {{name}}?",
+    "restoreConfirm": "Restaurar revisión",
+    "restored": "Revisión de la programación restaurada",
+    "operations": {
+      "create": "Creada",
+      "update": "Actualizada",
+      "delete": "Eliminada",
+      "restore": "Restaurada"
+    }
+  },
+  "empty": {
+    "flows": {
+      "title": "Aún no se han observado flujos de delegación",
+      "description": "Un flujo aparece cuando las señales de runtime observadas registran una arista de delegación desde la sesión de un supervisor hasta un worker."
+    },
+    "schedules": {
+      "title": "Aún no se han declarado cadencias",
+      "description": "Declara para un agente o enjambre una cadencia cron, por evento o manual para seguir su estado deseado y su salud observada."
+    }
+  }
+}

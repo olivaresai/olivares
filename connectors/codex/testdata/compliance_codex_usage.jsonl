@@ -1,0 +1,3 @@
+{"id":"cmpl_1","log_type":"codex_usage","type":"codex.task.completed","timestamp":"2026-06-01T10:00:00Z","workspace_id":"ws_eng","actor":{"type":"user","id":"user_alice","email":"alice@example.com","ip_address":"203.0.113.5"}}
+
+{"id":"cmpl_2","log_type":"codex_usage","type":"codex.task.failed","timestamp":"2026-06-01T11:00:00Z","workspace_id":"ws_eng","actor":{"type":"user","id":"user_bob","email":"bob@example.com","ip_address":"203.0.113.6"}}

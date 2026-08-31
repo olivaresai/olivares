@@ -1,0 +1,185 @@
+---
+title: Olivares AI ドキュメント
+description: >-
+  Olivares AI の製品ドキュメント — あなたが運用する AI を、1 台のマシンから環境全体まで
+  統合・管理・セキュア化する。ひとつのグラウンドトゥルース: Claude Code が最も深いレベル、
+  Codex と Grok Build がその隣。セルフホスト型：AI が何をしているかを把握し、何ができるかを
+  決定し、それを証明する。
+template: splash
+hero:
+  tagline: "あなたが運用する AI を統合・管理・セキュア化する — 1 台のマシンでも環境全体でも。セルフホスト型、ひとつのグラウンドトゥルース: Claude Code が最も深いレベル、Codex と Grok Build がその隣。その限界について正直であること。"
+  actions:
+    - text: ここから始める
+      link: /start/what-is-olivares-ai/
+      icon: right-arrow
+      variant: primary
+    - text: 自分に合うパスを探す
+      link: /ja/start/paths-by-role/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+このドキュメントは [Diátaxis](https://diataxis.fr/start-here/)
+フレームワークに沿って構成されています — それぞれ異なるニーズに応える 4 つのモードです。
+やろうとしていることに合ったものを選んでください。
+
+<CardGrid>
+  <LinkCard
+    title="チュートリアル"
+    href="/ja/tutorials/zero-to-graph/"
+    description="学習指向。単一バイナリを実行し、データの入った read/write アクセスグラフへ段階的に到達します。"
+  />
+  <LinkCard
+    title="ハウツーガイド"
+    href="/ja/how-to/self-hosting/"
+    description="タスク指向。ソースを接続し、セルフホストし、エアギャップ環境にインストールし、リリースを検証し、監査を Splunk に転送します。"
+  />
+  <LinkCard
+    title="リファレンス"
+    href="/ja/reference/"
+    description="情報指向。REST API、イベントバス（AsyncAPI）、モジュール、CLI、設定。"
+  />
+  <LinkCard
+    title="解説"
+    href="/ja/explanation/"
+    description="理解指向。アーキテクチャ、アクセスグラフ、セキュリティと脅威モデル、ライセンス。"
+  />
+</CardGrid>
+
+## これは何か？
+
+Olivares AI は **あなたが運用する AI を統合・管理・セキュア化** します — 1 台の
+マシンでも環境全体でも、ひとつのグラウンドトゥルース: Claude Code が最も深いレベル、
+Codex と Grok Build がその隣、それらと競合するのではなく補完します。単一の
+セルフホスト型バイナリが、AI が実際の仕事をするために必要なコンテキスト・リソースアクセス・
+管理されたセッションを AI に与え、そしてそのすべて — モデル、エージェント、MCP サーバー、それらの
+背後にある ID、そして触れるデータ — を、自社インフラ全体にわたって運用するための、きめ細かな
+権限・ポリシー・予算・監査証跡をあなたに与えます。さらに、それぞれが到達できる範囲を示す
+read/write アクセスマップと、*許可済み（Permitted）* と *観測済み（Observed）* の間のドリフトも
+引き続き示します。すべて **セルフホスト型** で、必須のテレメトリはなく、デフォルトではコントロール
+プレーンからのエグレスもありません。あなたの境界を越えるのは、**あなた**がそのように設定したもの
+だけです。具体的には、あなたのモデル API への呼び出し、接続した SIEM／Webhook 出力、用意した場合の
+外部埋め込みプロバイダーです。また、今日稼働しているものと v1 以前のものについて正直に説明します。
+
+<CardGrid>
+  <Card title="設計上、正直であること" icon="approve-check">
+    今日稼働しているものと v1 以前のものを文書化しています。チュートリアルのコマンドはテスト済みです。
+    契約がまだカバーしていない箇所については、ドキュメントにその旨を記載します。
+    [正直さと限界](/ja/start/honesty-and-limits/) を参照してください。
+  </Card>
+  <Card title="オープンコア" icon="open-book">
+    製品（エンジン、モジュール、Web）は AGPL-3.0-only です。SDK とコネクタは
+    Apache-2.0 です。エンタープライズモジュールは商用です。
+    [オープンコアとライセンス](/ja/explanation/open-core-and-licensing/) を参照してください。
+  </Card>
+</CardGrid>
+
+{/* GALERIA-CONSOLA:INICIO — generada; el orden es el del README. */}
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-dark.png" />
+  <img src="/console/access-map-light.png" width="960" alt="アクセスマップ: 各エージェントがエステート全体で何を読み書きしているか。左に起点、右にアクセス先のリソースを示し、R/RW を色で表します。" />
+</picture>
+<figcaption><strong>アクセスマップ</strong> — 各エージェントがエステート全体で何を読み書きしているか。左に起点、右にアクセス先のリソースを示し、R/RW を色で表します。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-drift-dark.png" />
+  <img src="/console/access-map-drift-light.png" alt="最小権限ドリフト: 最小権限の差分をオーバーレイ表示します。想定外のアクセス（観測されたが許諾されていない）と未使用の付与をハイライトします。" />
+</picture>
+<figcaption><strong>最小権限ドリフト</strong> — 最小権限の差分をオーバーレイ表示します。想定外のアクセス（観測されたが許諾されていない）と未使用の付与をハイライトします。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/orchestration-dark.png" />
+  <img src="/console/orchestration-light.png" alt="オーケストレーションとA2A: エージェント間トポロジー — どのエージェントがどのエージェントに委譲するか、ライブの委譲フロー、宣言された実行間隔を示します。通信グラフの読み取りは特権操作であり、自己監査されます。" />
+</picture>
+<figcaption><strong>オーケストレーションとA2A</strong> — エージェント間トポロジー — どのエージェントがどのエージェントに委譲するか、ライブの委譲フロー、宣言された実行間隔を示します。通信グラフの読み取りは特権操作であり、自己監査されます。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/inventory-dark.png" />
+  <img src="/console/inventory-light.png" alt="インベントリ: エステート全体で検出された、すべてのエージェント・セッション・MCP・モデル・アイデンティティ。" />
+</picture>
+<figcaption><strong>インベントリ</strong> — エステート全体で検出された、すべてのエージェント・セッション・MCP・モデル・アイデンティティ。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/observability-dark.png" />
+  <img src="/console/observability-light.png" alt="可観測性とインターオペラビリティ: 標準準拠の取り込み健全性と、台帳と相関させたトレースのドリルダウンです。数値はエンジン全体（プロセスグローバル）のものであり、テナント単位ではありません。標準は上流団体が宣言したバージョンと成熟度に固定されています。" />
+</picture>
+<figcaption><strong>可観測性とインターオペラビリティ</strong> — 標準準拠の取り込み健全性と、台帳と相関させたトレースのドリルダウンです。数値はエンジン全体（プロセスグローバル）のものであり、テナント単位ではありません。標準は上流団体が宣言したバージョンと成熟度に固定されています。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/dashboards-dark.png" />
+  <img src="/console/dashboards-light.png" alt="エグゼクティブ概要: コスト、利用状況、リスク、コンプライアンスを一目で把握できます。詳細は運用ビューでドリルダウンしてください。" />
+</picture>
+<figcaption><strong>エグゼクティブ概要</strong> — コスト、利用状況、リスク、コンプライアンスを一目で把握できます。詳細は運用ビューでドリルダウンしてください。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/home-dark.png" />
+  <img src="/console/home-light.png" alt="概要: AIエステートを一目で把握 — インベントリ、アクティビティ、リスク、コンプライアンス、支出、ヘルスを集約します。" />
+</picture>
+<figcaption><strong>概要</strong> — AIエステートを一目で把握 — インベントリ、アクティビティ、リスク、コンプライアンス、支出、ヘルスを集約します。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/security-dark.png" />
+  <img src="/console/security-light.png" alt="セキュリティとフォレンジック: ガードレールの検出結果、エンフォースメント態勢、異常キュー、改ざん検知可能なインシデントフォレンジック。このプレーンはデフォルトで検出型です。記録は行いますが、エンフォースメントが有効化されガバナンス下にない限り、それ自体がブロックすることはありません。" />
+</picture>
+<figcaption><strong>セキュリティとフォレンジック</strong> — ガードレールの検出結果、エンフォースメント態勢、異常キュー、改ざん検知可能なインシデントフォレンジック。このプレーンはデフォルトで検出型です。記録は行いますが、エンフォースメントが有効化されガバナンス下にない限り、それ自体がブロックすることはありません。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/session-viewer-dark.png" />
+  <img src="/console/session-viewer-light.png" alt="セッション録画ビューア: 単一セッションのエージェント活動とガバナンス証拠の統合タイムライン。" />
+</picture>
+<figcaption><strong>セッション録画ビューア</strong> — 単一セッションのエージェント活動とガバナンス証拠の統合タイムライン。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/identity-dark.png" />
+  <img src="/console/identity-light.png" alt="アイデンティティと NHI: SSO、SCIM、アイデンティティインベントリ、NHI ライフサイクル、WIF グラフ、特権ログインを観測・統制・監査します。" />
+</picture>
+<figcaption><strong>アイデンティティと NHI</strong> — SSO、SCIM、アイデンティティインベントリ、NHI ライフサイクル、WIF グラフ、特権ログインを観測・統制・監査します。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/knowledge-dark.png" />
+  <img src="/console/knowledge-light.png" alt="データ・ナレッジ・コンテキスト: ガバナンス下のナレッジベース、検索来歴、プロンプトレジストリ、エージェントメモリ、コンテキストポリシー。" />
+</picture>
+<figcaption><strong>データ・ナレッジ・コンテキスト</strong> — ガバナンス下のナレッジベース、検索来歴、プロンプトレジストリ、エージェントメモリ、コンテキストポリシー。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/work-apply-refused-dark.png" />
+  <img src="/console/work-apply-refused-light.png" alt="計画: 変更を計画しています。この段階では何も書き込まれません。" />
+</picture>
+<figcaption><strong>計画</strong> — 変更を計画しています。この段階では何も書き込まれません。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/killswitch-dark.png" />
+  <img src="/console/killswitch-light.png" alt="キルスイッチ: エステートの緊急停止。ワンクリックで、統制下のあらゆる作動面を停止します。発動は意図的に低コストですが、復旧には別個の2つのユーザーアカウントと強制的な事後レビューが必要です。" />
+</picture>
+<figcaption><strong>キルスイッチ</strong> — エステートの緊急停止。ワンクリックで、統制下のあらゆる作動面を停止します。発動は意図的に低コストですが、復旧には別個の2つのユーザーアカウントと強制的な事後レビューが必要です。</figcaption>
+</figure>
+
+{/* GALERIA-CONSOLA:FIN */}

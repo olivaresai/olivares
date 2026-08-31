@@ -1,0 +1,12 @@
+listen:
+  public_url: https://gateway-nodomain.example.com
+oidc:
+  issuer: https://idp.example.com/oauth
+  client_secret: ${OIDC_CLIENT_SECRET}
+session:
+  jwt_secret: ${JWT_SECRET}
+store:
+  postgres_url: ${POSTGRES_URL}
+upstreams:
+  - provider: anthropic
+    region: us-east-1

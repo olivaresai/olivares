@@ -1,0 +1,6 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "meta-llama/Llama-3.1-8B-Instruct", "object": "model", "created": 1715000000, "owned_by": "vllm" }
+  ]
+}

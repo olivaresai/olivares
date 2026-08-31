@@ -1,0 +1,11 @@
+'2026-06-03T10:23:45Z UTC [ db=salesdb user=analyst pid=123 userid=100 xid=456 ]' LOG: SELECT c.id, c.email FROM customers c WHERE c.region = 'EMEA'
+'2026-06-03T10:23:46Z UTC [ db=salesdb user=analyst pid=123 userid=100 xid=457 ]' LOG: INSERT INTO orders (id, total) VALUES (42, 1999)
+'2026-06-03T10:23:47Z UTC [ db=salesdb user=analyst pid=123 userid=100 xid=458 ]' LOG: UPDATE orders SET total = 2099 WHERE id = 42
+'2026-06-03T10:23:48Z UTC [ db=salesdb user=analyst pid=123 userid=100 xid=459 ]' LOG: DELETE FROM orders WHERE id = 7
+'2026-06-03T10:23:49Z UTC [ db=warehouse user=etl_pool pid=200 userid=101 xid=460 ]' LOG: COPY staging_2026 FROM 's3://bucket/data.csv' IAM_ROLE 'arn:aws:iam::1:role/r'
+'2026-06-03T10:23:50Z UTC [ db=warehouse user=etl_pool pid=200 userid=101 xid=461 ]' LOG: UNLOAD ('select * from facts') TO 's3://bucket/out/' IAM_ROLE 'arn:aws:iam::1:role/r'
+'2026-06-03T10:23:51Z UTC [ db=salesdb user=analyst pid=123 userid=100 xid=462 ]' LOG: TRUNCATE TABLE scratch
+'2026-06-03T10:23:52Z UTC [ db=salesdb user=dbadmin pid=300 userid=1 xid=463 ]' LOG: CREATE TABLE audit_archive (id BIGINT, ts TIMESTAMP)
+'2026-06-03T10:23:53Z UTC [ db=salesdb user=dbadmin pid=300 userid=1 xid=464 ]' LOG: GRANT SELECT ON customers TO analyst
+'2026-06-03T10:23:54Z UTC [ db=salesdb user=dbadmin pid=300 userid=1 xid=465 ]' LOG: VACUUM FULL orders
+'2026-06-03T10:23:55Z UTC [ db=salesdb user=analyst pid=123 userid=100 xid=466 ]' LOG: SHOW search_path

@@ -1,0 +1,38 @@
+# Scale-envelope reference baseline — snapshot of the capacity/scale benchmarks on the
+# reference hardware the docs/SIZING-AND-CAPACITY.md numbers derive from. It is a
+# DOCUMENTED REFERENCE + repro anchor, NOT a CI gate: bench numbers are hardware-
+# dependent, so a benchstat delta is only meaningful when re-run on matching hardware
+# (nightly CI runs on ubuntu-latest and uses the SMOKE, not a threshold, as its gate).
+# provenance: AMD Ryzen 7 5800U · 32 GiB · go1.26.4 · GOMAXPROCS 12 · SQLite (:memory:/tmpfs)
+# regenerate: see scripts/bench-check.sh --full (edit this header afterwards)
+#
+goos: linux
+goarch: amd64
+pkg: github.com/olivaresai/olivares/core/bench
+cpu: AMD Ryzen 7 5800U with Radeon Graphics         
+BenchmarkStorageGrowthAuditAppend/sqlite-12         	     805	   1673123 ns/op	       427.4 bytes/event	         0.3981 gib_per_million	    5748 B/op	     132 allocs/op
+BenchmarkTenantProvision/sqlite-12                  	     484	   2635097 ns/op	       379.4 events/sec	        35.14 max_ms	         1.803 p50_ms	         3.802 p95_ms	        32.59 p99_ms	       379.4 provisions/sec	   10016 B/op	     188 allocs/op
+BenchmarkRLSOverhead/sqlite/distinct-12             	    5290	    197330 ns/op	      5067 events/sec	         4.317 max_ms	         0.1790 p50_ms	         0.2730 p95_ms	         0.3450 p99_ms	       100.0 tenants	    3754 B/op	      84 allocs/op
+BenchmarkRLSOverhead/sqlite/hot-12                  	    5704	    189245 ns/op	      5283 events/sec	         1.931 max_ms	         0.1790 p50_ms	         0.2520 p95_ms	         0.3060 p99_ms	       100.0 tenants	    3736 B/op	      84 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/olivaresai/olivares/modules/inferenceproxy
+cpu: AMD Ryzen 7 5800U with Radeon Graphics         
+BenchmarkProxyDLPDecideLatency-12    	  203770	      6459 ns/op	    154820 decisions/sec	         2.156 max_ms	         0.002000 p50_ms	         0.002000 p95_ms	         0.003000 p99_ms	      48 B/op	       2 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/olivaresai/olivares/cmd/olivares
+cpu: AMD Ryzen 7 5800U with Radeon Graphics         
+BenchmarkHookDecideAlgebra-12         	  135177	      8616 ns/op	    116045 decisions/sec	         0.3880 max_ms	         0.005000 p50_ms	         0.006000 p95_ms	         0.008000 p99_ms	     112 B/op	       2 allocs/op
+BenchmarkHookDecideEndToEnd-12        	    2883	    387046 ns/op	      2583 decisions/sec	         3.439 max_ms	         0.3820 p50_ms	         0.4680 p95_ms	         0.7910 p99_ms	   14889 B/op	     294 allocs/op
+BenchmarkProxyAuthorizeEndToEnd-12    	    1317	   1115320 ns/op	       896.5 decisions/sec	         2.994 max_ms	         1.124 p50_ms	         1.306 p95_ms	         1.757 p99_ms	   30921 B/op	     639 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/olivaresai/olivares/modules/knowledge
+cpu: AMD Ryzen 7 5800U with Radeon Graphics         
+BenchmarkRetrievalEndToEnd/chunks=10000-12         	      12	 189737812 ns/op	     10000 chunks/tenant	       244.3 max_ms	       190.7 p50_ms	       215.5 p95_ms	       244.3 p99_ms	         5.270 queries/sec	65681139 B/op	  711876 allocs/op
+BenchmarkRetrievalEndToEnd/chunks=100000-12        	       2	1441155787 ns/op	    100000 chunks/tenant	      1484 max_ms	      1484 p50_ms	      1484 p95_ms	      1484 p99_ms	         0.6939 queries/sec	657031392 B/op	 7115299 allocs/op
+BenchmarkCosineIndexRankCurve/candidates=10000-12  	     408	   5729266 ns/op	     10000 candidates/op	         1.000 recall@10	  245856 B/op	       4 allocs/op
+BenchmarkCosineIndexRankCurve/candidates=100000-12 	      33	  67501622 ns/op	    100000 candidates/op	         1.000 recall@10	 2400352 B/op	       4 allocs/op
+BenchmarkCosineIndexRankCurve/candidates=1000000-12         	       3	 850537552 ns/op	   1000000 candidates/op	         1.000 recall@10	24002656 B/op	       4 allocs/op
+BenchmarkCosineIndexRank100K-12                             	      31	  69559740 ns/op	    100000 candidates/op	 2400352 B/op	       4 allocs/op

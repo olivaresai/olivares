@@ -1,0 +1,263 @@
+{
+  "title": "Webhook とイベントサブスクリプション",
+  "description": "アウトバウンドイベントサブスクリプション — Webhook エンドポイントの設定、配信済みイベントの検査、デッドレターキューの管理。",
+  "tabs": {
+    "subscriptions": "サブスクリプション",
+    "events": "イベント",
+    "deliveries": "配信",
+    "deadLetters": "デッドレター"
+  },
+  "subscriptions": {
+    "title": "Webhook サブスクリプション",
+    "description": "イベント通知を受信するエンドポイント。各サブスクリプションはイベントタイプでフィルタリングし、設定された方法で認証します。",
+    "new": "新規サブスクリプション",
+    "empty": "サブスクリプションなし",
+    "emptyHint": "サブスクリプションを作成して Webhook イベントの受信を開始します。",
+    "columns": {
+      "name": "名前",
+      "endpoint": "エンドポイント",
+      "enabled": "ステータス",
+      "eventTypes": "イベントタイプ",
+      "authType": "認証",
+      "role": "ロール",
+      "secret": "シークレット",
+      "created": "作成日"
+    },
+    "enabled": "有効",
+    "disabled": "無効",
+    "bulk": {
+      "enable": "選択したサブスクリプションを有効化",
+      "disable": "選択したサブスクリプションを無効化"
+    },
+    "test": "テスト",
+    "testing": "テスト中…",
+    "delete": "削除",
+    "edit": "編集",
+    "rotateSecret": "シークレットのローテーション",
+    "rotateAuth": "認証のローテーション",
+    "testSuccess": "テスト配信成功",
+    "testFailed": "テスト配信失敗",
+    "deleted": "サブスクリプションを削除しました",
+    "rotated": "シークレットをローテーションしました",
+    "authRotated": "認証情報をローテーションしました",
+    "confirmDelete": "このサブスクリプションを削除しますか？元に戻せません。",
+    "authTypes": {
+      "none": "なし",
+      "bearer": "Bearer",
+      "basic": "Basic",
+      "header": "Header"
+    },
+    "actions": "{{name}} の操作",
+    "replay": "リプレイ"
+  },
+  "dialog": {
+    "createTitle": "新規サブスクリプション",
+    "editTitle": "サブスクリプションの編集",
+    "description": "説明",
+    "name": "名前",
+    "endpoint": "エンドポイント URL",
+    "eventTypes": "イベントタイプ",
+    "eventTypesHint": "このサブスクリプションが受信するイベントタイプを選択します。",
+    "matchSources": "ソースフィルター",
+    "matchSourcesHint": "カンマ区切りのソースフィルター（空 = 全ソース）。",
+    "role": "ロール",
+    "authType": "認証タイプ",
+    "authValue": "認証値",
+    "authValueHint": "Bearer トークン、Basic 認証情報、またはヘッダー値。",
+    "authHeaderName": "認証ヘッダー名",
+    "authHeaderNameHint": "カスタムヘッダー名（'header' タイプのみ）。",
+    "maxAttempts": "最大試行回数",
+    "maxAttemptsHint": "0 = サーバーデフォルトを使用。",
+    "initialInterval": "初期間隔（秒）",
+    "initialIntervalHint": "リトライバックオフの初期値（秒）。0 = デフォルト。",
+    "enabled": "有効",
+    "create": "サブスクリプションを作成",
+    "update": "変更を保存",
+    "created": "サブスクリプションを作成しました",
+    "updated": "サブスクリプションを更新しました",
+    "sinkKind": "SIEM シンク",
+    "sinkKindHint": "任意のベンダーシンクプロファイル。なし = 汎用 HMAC Webhook。",
+    "sinkNone": "なし（汎用 Webhook）",
+    "sinkKinds": {
+      "https": "HTTPS (OCSF)",
+      "splunk_hec": "Splunk HEC",
+      "sentinel_dcr": "Microsoft Sentinel",
+      "datadog": "Datadog",
+      "newrelic": "New Relic"
+    },
+    "sinkFormat": "シンク形式",
+    "sinkFormatHint": "シンクの転送方言。デフォルト = OCSF。",
+    "sinkFormatDefault": "デフォルト（OCSF）",
+    "sinkCred": "シンククレデンシャル",
+    "sinkCredHint": "このシンク用のコレクタートークン/キー — 保存時に封印され、二度と表示されません。",
+    "sinkCredKeepHint": "空のままにすると現在のクレデンシャルを保持します（{{hint}}）。",
+    "sinkCredRequired": "このシンクにはクレデンシャルが必要です。",
+    "errors": {
+      "maxAttempts": "最大試行回数は 0 または 1〜20 にしてください。",
+      "initialInterval": "初期間隔は 0 または 5〜3600 秒にしてください。"
+    }
+  },
+  "secret": {
+    "title": "サブスクリプションシークレット",
+    "description": "この HMAC 署名シークレットは一度だけ表示されます。今すぐコピーしてください — 後で取得することはできません。",
+    "copied": "シークレットをクリップボードにコピーしました",
+    "done": "完了"
+  },
+  "events": {
+    "title": "キャプチャされたイベント",
+    "description": "シーケンスカーソル付きイベントログ。イベントタイプでフィルタリングして結果を絞り込みます。",
+    "empty": "キャプチャされたイベントなし",
+    "typeFilter": "タイプでフィルター",
+    "allTypes": "すべてのタイプ",
+    "columns": {
+      "seq": "Seq",
+      "type": "タイプ",
+      "source": "ソース",
+      "occurredAt": "発生日時",
+      "payload": "ペイロード"
+    },
+    "loadMore": "さらに読み込む",
+    "noMore": "これ以上のイベントはありません"
+  },
+  "deliveries": {
+    "title": "配信記録",
+    "description": "Webhook イベントディスパッチの配信状態。サブスクリプション、ステータス、イベントタイプでフィルタリングします。",
+    "empty": "配信なし",
+    "subscriptionFilter": "サブスクリプション",
+    "statusFilter": "ステータス",
+    "typeFilter": "イベントタイプ",
+    "allSubscriptions": "すべて",
+    "allStatuses": "すべて",
+    "allTypes": "すべて",
+    "columns": {
+      "eventType": "イベントタイプ",
+      "eventSeq": "Seq",
+      "subscription": "サブスクリプション",
+      "status": "ステータス",
+      "origin": "オリジン",
+      "attempts": "試行回数",
+      "lastAttempt": "最終試行",
+      "nextAttempt": "次回試行"
+    },
+    "statuses": {
+      "queued": "キュー待ち",
+      "delivering": "配信中",
+      "delivered": "配信済み",
+      "dead": "デッド",
+      "denied": "拒否"
+    },
+    "origins": {
+      "live": "ライブ",
+      "replay": "リプレイ"
+    },
+    "loadMore": "さらに読み込む",
+    "originFilter": "オリジン",
+    "allOrigins": "すべてのオリジン",
+    "nextRetry": "次の再試行 {{time}}"
+  },
+  "deadLetters": {
+    "title": "デッドレターキュー",
+    "description": "すべてのリトライ試行を使い果たした失敗配信。個別アイテムの再配信や原因の調査ができます。",
+    "empty": "デッドレターなし",
+    "emptyHint": "配信がすべてのリトライを使い果たすと、ここにデッドレターが表示されます。",
+    "redeliver": "再配信",
+    "redelivered": "配信をキューに再登録しました",
+    "loadMore": "さらに読み込む"
+  },
+  "rotateAuthDialog": {
+    "title": "認証クレデンシャルのローテーション — {{name}}",
+    "description": "このエンドポイントの新しいクレデンシャルを入力してください。保存時に封印され、二度と表示されません。カードにはフィンガープリントのみ表示されます。",
+    "value": "新しいクレデンシャル",
+    "valueHint": "Bearer トークン、Basic 認証情報、またはヘッダー値 — 一度だけ送信され、返されることはありません。",
+    "submit": "クレデンシャルをローテーション"
+  },
+  "replay": {
+    "title": "イベントをリプレイ — {{name}}",
+    "description": "再度キューに入れるイベントシーケンス範囲を選択します。",
+    "fromSeq": "開始シーケンス",
+    "toSeq": "終了シーケンス（任意）",
+    "submit": "リプレイ",
+    "continue": "リプレイを続行",
+    "total": "リプレイ合計: {{count}}",
+    "viewDeliveries": "リプレイ配信を表示",
+    "completed": "{{count}} 件のイベントをリプレイしました"
+  },
+  "history": {
+    "action": "{{name}} のリビジョン履歴を表示",
+    "title": "リビジョン履歴 — {{name}}",
+    "description": "このサブスクリプションの時系列の追記専用スナップショットです。",
+    "scopeCaption": "復元で再適用されるのは配信構成のみです。認証情報やシンクプロファイルは復元されません。",
+    "empty": "記録されたリビジョンはありません",
+    "loadMore": "さらに読み込む",
+    "compareTitle": "スナップショットの差分",
+    "selectTwo": "比較するリビジョンを2つ選択してください。",
+    "selectRevision": "{{actor}} による「{{op}}」リビジョンを選択",
+    "originalLabel": "以前のリビジョン",
+    "modifiedLabel": "後のリビジョン",
+    "restore": "このリビジョンを復元",
+    "restoreTitle": "リビジョンを復元しますか？",
+    "restoreDescription": "{{name}} の選択した配信構成を復元しますか？",
+    "restoreConfirm": "リビジョンを復元",
+    "restored": "サブスクリプションのリビジョンを復元しました",
+    "operations": {
+      "create": "作成",
+      "update": "更新",
+      "delete": "削除",
+      "restore": "復元"
+    }
+  },
+  "egress": {
+    "title": "送信先ポリシー",
+    "description": "このデプロイがイベントストリームの送信先を制限しているか、また適用すると何が壊れるか。レバーはホスト上の運用者の手順であり、ここに表示されるのはそれが作用する状態です。",
+    "unknown": "不明",
+    "unreadable": "ポリシーの状態を読み取れませんでした。",
+    "unreadablePolicy": "読み取り不可",
+    "inForce": "ポリシー適用中",
+    "inForceYes": "はい",
+    "inForceNo": "未作成",
+    "source": "出所",
+    "mode": "デプロイのモード",
+    "classifiedMode": "分類",
+    "committed": "適用の確定",
+    "committedYes": "確定済み",
+    "committedNo": "未確定",
+    "fence": {
+      "title": "書き込みフェンス",
+      "armed": "作動",
+      "armedYes": "作動中",
+      "armedNo": "休止",
+      "mode": "モード",
+      "required": "要求される能力",
+      "binary": "このバイナリ",
+      "generation": "世代"
+    },
+    "compat": {
+      "title": "互換性",
+      "seeded": "記録",
+      "drawn": "作成済み",
+      "notDrawn": "未作成",
+      "recorded": "記録された送信先",
+      "stillNeeded": "停止する送信先",
+      "unparsable": "解析不能",
+      "notIntact": "互換性の記録はもはや完全ではありません。完全に見えて、要素が失われた集合を記述しています。これを根拠に適用を計画しないでください。",
+      "notServed": "お使いの権限では提供されません。",
+      "notProvided": "この応答には含まれていません。"
+    },
+    "report": {
+      "title": "適用すると壊れるもの",
+      "description": "このテナントがこの制御より前のデプロイであるという理由だけで保持している送信先です。",
+      "unreadable": "互換性レポートを読み取れませんでした。",
+      "notSeeded": "互換性の記録が作成されていないため、このレポートは何も記述していません。",
+      "subscriptions": "作成時のサブスクリプション",
+      "unparsed": "解析できない送信先",
+      "seededAt": "作成日",
+      "noAuthorities": "レガシーの送信先はありません。",
+      "authority": "送信先",
+      "kind": "種別",
+      "uses": "サブスクリプション",
+      "effect": "適用時",
+      "survives": "存続",
+      "breaks": "停止"
+    }
+  }
+}

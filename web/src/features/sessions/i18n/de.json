@@ -1,0 +1,190 @@
+{
+  "title": "Sitzungen",
+  "subtitle": "Live-Betrieb von Agenten — was jede Sitzung gerade tut, ihre Tokens, Kosten und Taktung, aktualisiert über einen Live-Stream.",
+  "refresh": "Aktualisieren",
+  "search": "Sitzung, Agent, Aktion suchen…",
+  "allStates": "Alle Zustände",
+  "summary": {
+    "active": "Aktiv",
+    "idle": "Inaktiv",
+    "silentEvasion": "Mögliche Umgehung",
+    "total": "Sitzungen",
+    "launched": "Gestartet",
+    "discovered": "Entdeckt",
+    "attention": "Prüfen"
+  },
+  "cols": {
+    "session": "Sitzung",
+    "agent": "Agent",
+    "state": "Zustand",
+    "action": "Aktuelle Aktion",
+    "model": "Modell",
+    "tokens": "Tokens (ein / aus)",
+    "cost": "Kosten",
+    "duration": "Dauer",
+    "lastSeen": "Zuletzt gesehen",
+    "provenance": "Herkunft",
+    "control": "Steuerung"
+  },
+  "state": {
+    "active": "Aktiv",
+    "idle": "Inaktiv",
+    "ended": "Beendet",
+    "silent_evasion": "Mögliche Umgehung"
+  },
+  "stateHint": {
+    "active": "Arbeitet jetzt — Ereignisse innerhalb der erwarteten Taktung.",
+    "idle": "Ruhig, aber innerhalb der Toleranz.",
+    "ended": "Abgeschlossen oder geschlossen.",
+    "silent_evasion": "Innerhalb der erwarteten Taktung verstummt — ein Signal, das Ihre Aufmerksamkeit verdient, kein Fehler."
+  },
+  "evasionBanner": "Diese Sitzung ist innerhalb ihrer erwarteten Taktung verstummt. Die Engine kennzeichnet dies als mögliche Umgehung — prüfen Sie die Zeitleiste.",
+  "detail": {
+    "title": "Sitzung",
+    "goal": "Ziel",
+    "summary": "Zusammenfassung",
+    "noGoal": "Kein Ziel gemeldet",
+    "noSummary": "Keine Zusammenfassung gemeldet",
+    "agent": "Agent",
+    "model": "Modell",
+    "state": "Zustand",
+    "action": "Aktuelle Aktion",
+    "resource": "Ressource",
+    "mode": "Modus",
+    "inputTokens": "Eingabe-Tokens",
+    "outputTokens": "Ausgabe-Tokens",
+    "cost": "Kosten",
+    "events": "Ereignisse",
+    "toolCalls": "Werkzeugaufrufe",
+    "duration": "Dauer",
+    "firstSeen": "Erstes Ereignis",
+    "lastSeen": "Letztes Ereignis",
+    "minimalData": "Es werden nur Metadaten angezeigt. Die Engine führt hier prinzipbedingt niemals SQL, Nutzdaten oder Geheimnisse mit (Datenminimierung).",
+    "viewAccess": "Zugriffskarte",
+    "viewInventory": "Inventar"
+  },
+  "timeline": {
+    "title": "Zeitleiste",
+    "subtitle": "Rekonstruierte Eingangsreihenfolge — neueste Ereignisse erscheinen, sobald sie eintreffen.",
+    "loadMore": "Mehr laden",
+    "empty": "Noch keine Zeitleisten-Ereignisse",
+    "emptyHint": "Sobald die Sitzung Werkzeug-, MCP-, Kosten- und Befund-Ereignisse ausgibt, erscheinen sie hier.",
+    "all": "Alle Arten",
+    "source": "Quelle"
+  },
+  "kind": {
+    "tool": "Werkzeug",
+    "mcp": "MCP",
+    "cost": "Kosten",
+    "finding": "Befund"
+  },
+  "empty": {
+    "title": "Noch keine Sitzungen",
+    "description": "Sitzungen erscheinen hier, sobald Agenten zu arbeiten beginnen: die, die Olivares über seine Konnektoren entdeckt, und die, die Sie hier starten."
+  },
+  "forbidden": {
+    "title": "Sitzungen nicht autorisiert",
+    "description": "Ihre Rolle umfasst keine Berechtigung zum Anzeigen von Live-Sitzungen."
+  },
+  "operateTitle": "Claude Code",
+  "operateSubtitle": "Claude-Code-Sitzungen anlegen, sich aufschalten und regeln – ohne SSH. Sitzungen, die Olivares nur beobachtet, stehen in derselben Liste und öffnen dieselbe Karte.",
+  "unifiedSubtitle": "Alle Agentensitzungen dieser Ebene – die von Olivares entdeckten und die von ihm gestarteten – in einer Liste, mit dem, was jede gerade tut und was sich mit ihr tun lässt.",
+  "launch": "Neue Sitzung",
+  "allSources": "Alle Herkünfte",
+  "tabs": {
+    "sessions": "Sitzungen",
+    "workspaces": "Arbeitsbereiche"
+  },
+  "partial": {
+    "noLiveRead": "Beobachtete Sitzungen werden nicht angezeigt: Ihre Rolle enthält sessions:live:read nicht. Die gestarteten unten sind der lesbare Teil, nicht das ganze Bild.",
+    "noRunRead": "Gestartete Sitzungen werden nicht angezeigt: Ihre Rolle enthält sessions:run:read nicht. Eine unten als entdeckt geführte Sitzung kann dennoch von Olivares gestartet worden sein – diese Liste konnte es nicht prüfen.",
+    "truncated": "Dies ist die neueste Seite, nicht der gesamte Bestand. Die Herkunft wird hier über das Geladene verknüpft: Eine Sitzung, deren Lauf aus der Seite gefallen ist, kann als entdeckt erscheinen; öffnen Sie die Sitzung, damit die Engine antwortet.",
+    "runLookupFailed": "Die gestartete Hälfte konnte nicht gelesen werden: die Lauf-Abfrage schlug fehl. Die Zeilen unten sind, was die beobachtete Hälfte lieferte; die Herkunft wird als nicht gelesen ausgewiesen statt geraten.",
+    "liveLookupFailed": "Die beobachtete Hälfte konnte nicht gelesen werden: die Live-Abfrage schlug fehl. Die Zeilen unten sind die gestarteten; die Telemetriespalten sind leer, weil nichts gelesen werden konnte, nicht weil es nichts gibt."
+  },
+  "card": {
+    "tabs": {
+      "overview": "Überblick",
+      "live": "Live",
+      "governance": "Governance",
+      "lifecycle": "Lebenszyklus",
+      "details": "Details"
+    },
+    "provenance": {
+      "launched": "Gestartet",
+      "discovered": "Entdeckt",
+      "launchedExplain": "Ein Startvorgang verknüpft diese Sitzung mit Olivares: Olivares hat sie gestartet. Was jetzt mit ihr möglich ist, steht unten — gestartet zu haben heißt nicht, einen lebenden Prozess zu halten.",
+      "discoveredExplain": "Kein Startvorgang ist mit ihr verknüpft: soweit diese Ebene es belegen kann, hat Olivares sie nicht gestartet. Sie lässt sich lesen und prüfen, nicht steuern.",
+      "unknownExplain": "Ob Olivares diese Sitzung gestartet hat, konnte nicht geprüft werden: Berechtigung sessions:run:read fehlt, oder die Abfrage schlug fehl. Das heißt „nicht gelesen“, nicht „nicht gestartet“.",
+      "multipleRuns": "{{n}} Läufe steuern diese Sitzung",
+      "unknown": "Herkunft nicht gelesen"
+    },
+    "control": {
+      "title": "Was sich damit tun lässt",
+      "full": "Volle Steuerung",
+      "lifecycle": "Nur Lebenszyklus",
+      "observe": "Nur Beobachtung",
+      "fullExplain": "Olivares hält den Prozess und überbrückt seine E/A: Er lässt sich beobachten, steuern und stoppen.",
+      "lifecycleExplain": "Starten und stoppen, nichts dazwischen: entweder hält Olivares den Prozess, aber nicht seine E/A, oder der Prozess ist gestoppt und kann fortgesetzt werden.",
+      "observeExplain": "Olivares hält keinen Prozess dieser Sitzung. Sie lässt sich lesen und prüfen; sie zu stoppen kann diese Ebene nicht.",
+      "unknownExplain": "Die Betriebshälfte wurde nicht gelesen (sessions:run:read) – dies ist, was allein aus der beobachteten Hälfte sichtbar ist."
+    },
+    "cap": {
+      "watch": "Live-Telemetrie und Zeitleiste ansehen",
+      "attach": "Ihre E/A live mitlesen",
+      "drive": "Eingaben an sie senden",
+      "stop": "Stoppen",
+      "resume": "Fortsetzen",
+      "cleanup": "Ihren Arbeitsbereich aufräumen",
+      "delete": "Ihren Datensatz löschen",
+      "reason": {
+        "no-run": "kein Prozess: Olivares hat diese Sitzung nicht gestartet",
+        "no-observation": "für diese Sitzung wurde noch nichts beobachtet",
+        "transport": "ihre E/A wird an Anthropics Cloud weitergereicht – Olivares kann sie weder zeigen noch steuern",
+        "state": "der Zustand lässt es nicht zu",
+        "permission": "Ihre Rolle enthält es nicht"
+      },
+      "sharedReason": "Nicht verfügbar: {{reason}}."
+    },
+    "actions": {
+      "stop": "Stoppen",
+      "resume": "Fortsetzen",
+      "cleanup": "Aufräumen",
+      "delete": "Löschen",
+      "cleanupHint": "Schließt den Lauf und gibt seinen Fortsetzungs-Handle frei; danach ist kein Fortsetzen mehr möglich. Das Lebenszyklus-Protokoll bleibt erhalten.",
+      "deleteHint": "Entfernt den Datensatz des Laufs. Die verankerten Lebenszyklus-Ereignisse bleiben im Audit-Protokoll."
+    },
+    "transport": {
+      "stream-json": "Geregelt (stream-json)",
+      "remote-control": "Fernsteuerung"
+    },
+    "postureValue": {
+      "enforced": "Durchgesetzt – ihre Werkzeugaufrufe werden inline geprüft",
+      "observed": "Beobachtet – ihre Werkzeugaufrufe werden aufgezeichnet, nicht geprüft"
+    },
+    "sessionRef": "Sitzungsreferenz",
+    "engine": "Engine",
+    "posture": "Kontrollmodus",
+    "none": "Keine",
+    "notDeclared": "Nicht angegeben",
+    "unclaimed": "Aktivität einer Sitzung ohne aktiven Anspruch. Die Engine meldet das; es ist nicht dasselbe Signal wie eine mögliche Umgehung.",
+    "relayedIO": "Ihre E/A wird an Anthropics Cloud weitergereicht, daher kann Olivares sie hier nicht zeigen. Die Lebenszyklus-Steuerung gilt weiterhin.",
+    "observedNotRead": "Die beobachtete Hälfte wurde nicht gelesen: Ihre Rolle enthält sessions:live:read nicht.",
+    "noObservationYet": "Für diese Sitzung wurde noch nichts beobachtet – unter dieser Referenz ist keine Telemetrie auf der Ebene eingetroffen.",
+    "actionFailed": "Die Aktion konnte nicht abgeschlossen werden.",
+    "activeRun": "in Verwendung",
+    "pickRun": "Mehrere Läufe steuern diese Sitzung. Wählen Sie einen aus, um sich aufzuschalten, ihn zu regeln oder zu stoppen."
+  },
+  "facet": {
+    "observed": "Beobachtet: {{state}}",
+    "run": "Lauf: {{state}}"
+  },
+  "runState": {
+    "pending": "Ausstehend",
+    "running": "Läuft",
+    "idle": "Inaktiv",
+    "stopped": "Gestoppt",
+    "failed": "Fehlgeschlagen",
+    "cleaned": "Aufgeräumt"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "value": [
+    {
+      "id": "aid-3333",
+      "displayName": "Banned Agent",
+      "accountEnabled": true,
+      "agentIdentityBlueprintId": "bp-app-1",
+      "createdByAppId": "creator-app-9",
+      "createdDateTime": "2026-05-22T10:00:00Z",
+      "disabledByMicrosoftStatus": "DisabledDueToViolationOfServicesAgreement",
+      "servicePrincipalType": "ServiceIdentity"
+    }
+  ]
+}

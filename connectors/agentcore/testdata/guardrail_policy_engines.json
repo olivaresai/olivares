@@ -1,0 +1,10 @@
+{
+  "policyEngines": [
+    {
+      "policyEngineArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-guard",
+      "policyEngineId": "pe-guard",
+      "name": "guardrail-policy-engine",
+      "status": "ACTIVE"
+    }
+  ]
+}

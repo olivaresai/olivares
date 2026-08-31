@@ -1,0 +1,47 @@
+# Kyverno ClusterPolicy — the least-privilege gate, mirroring
+# conftest/policy/deny_runs_as_root.rego. Enforce => admission is denied for a
+# Pod that does not prove it drops root.
+#
+# A Pod passes when runAsNonRoot=true is set EITHER on the pod securityContext
+# (covers all containers) OR on every container's securityContext. The anchor
+# pattern below requires one of those two shapes; anything else (absent, or an
+# explicit false) is rejected — never assumed safe. This is the same control the
+# upstream Pod Security "restricted" profile applies, bound client-side to the
+# Olivares deny-by-default posture (it is not the control-plane PDP).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: olivares-require-run-as-non-root
+  annotations:
+    policies.kyverno.io/title: Require runAsNonRoot
+    policies.kyverno.io/category: Olivares Governance
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Workloads must declare runAsNonRoot=true, on the pod securityContext or on
+      every container's securityContext. A workload that may run as UID 0 is a
+      privilege-escalation surface. Mirrors the Olivares least-privilege posture.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          runAsNonRoot=true must be set on the pod securityContext or on every
+          container's securityContext. Workloads must drop root (least privilege).
+        anyPattern:
+          # Form 1: pod-level runAsNonRoot=true covers every container.
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+          # Form 2: every container sets its own runAsNonRoot=true.
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: true

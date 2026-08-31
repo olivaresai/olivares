@@ -1,0 +1,21 @@
+{
+  "value": [
+    {
+      "id": "aid-9999",
+      "displayName": "Deleted Agent",
+      "accountEnabled": true,
+      "agentIdentityBlueprintId": "bp-gone",
+      "createdByAppId": "creator-app-9",
+      "createdDateTime": "2026-04-01T10:00:00Z",
+      "servicePrincipalType": "ServiceIdentity",
+      "deletedDateTime": "2026-06-01T08:00:00Z"
+    },
+    {
+      "id": "sp-other",
+      "displayName": "Ordinary Deleted SP",
+      "accountEnabled": true,
+      "servicePrincipalType": "Application",
+      "deletedDateTime": "2026-06-02T08:00:00Z"
+    }
+  ]
+}

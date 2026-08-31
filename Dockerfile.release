@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Release image for GoReleaser (.goreleaser.yaml `dockers`). GoReleaser has ALREADY
+# built the static, reproducible binary (the web UI embedded via the `before` hook,
+# the first-party connector plugins embedded per-target via
+# scripts/goreleaser-build-wrapper.sh) and places it in the build context; here we
+# only assemble the hardened, distroless, non-root runtime image around it — the
+# plugins ride inside the binary, so this assemble-only stage needs no build step.
+# Plain `docker build` users want the top-level ./Dockerfile (which builds from
+# source) instead.
+#
+# The base is PINNED BY DIGEST (SCP-11): a tag is mutable, a digest is the exact
+# bytes we tested. The scheduled patch-velocity workflow (.github/workflows/
+# patch-velocity.yml) bumps this digest when the upstream nonroot image is
+# rebuilt with CVE fixes, then re-scans + republishes. Resolve a new digest with:
+#   crane digest gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+LABEL org.opencontainers.image.title="olivares" \
+      org.opencontainers.image.description="Olivares AI — self-hosted control plane for AI agents" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.vendor="Olivares.AI"
+COPY olivares /usr/local/bin/olivares
+# The licence travels INSIDE the image. Until 2026-08-04 it did not: the OCI images
+# carried an org.opencontainers.image.licenses LABEL and no licence TEXT, so the main
+# distribution path handed an operator an AGPL binary with neither the grant that lets
+# them run it nor the warranty disclaimer that protects everyone who wrote it. A label
+# is metadata; AGPL sections 4 and 5 ask for the document.
+COPY LICENSE NOTICE LICENSING.md DISCLAIMER.md /usr/share/doc/olivares/
+COPY LICENSES /usr/share/doc/olivares/LICENSES
+USER 65532:65532
+EXPOSE 8443 8444
+ENTRYPOINT ["/usr/local/bin/olivares"]
+CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/data"]

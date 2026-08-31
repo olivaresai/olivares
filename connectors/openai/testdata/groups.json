@@ -1,0 +1,23 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "group",
+      "id": "group_support",
+      "name": "Support Team",
+      "created_at": 1711471533,
+      "is_scim_managed": false,
+      "group_type": "group"
+    },
+    {
+      "object": "group",
+      "id": "group_platform",
+      "name": "Platform Team",
+      "created_at": 1711471633,
+      "is_scim_managed": true,
+      "group_type": "tenant_group"
+    }
+  ],
+  "has_more": false,
+  "next": null
+}

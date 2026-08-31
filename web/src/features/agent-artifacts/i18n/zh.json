@@ -1,0 +1,147 @@
+{
+  "title": "Agent 工件",
+  "subtitle": "治理智能体所执行工件的全租户注册表、已记录态势与供应链 BOM。",
+  "intro": "此注册表仅存储身份、来源与已记录态势——绝不存储 Skill 正文、清单或指令文本。",
+  "tabs": {
+    "registry": "工件注册表",
+    "aibom": "Agent 供应链 AIBOM"
+  },
+  "classes": {
+    "skill": "Skill",
+    "mcpb_extension": "MCPB 扩展",
+    "mcp_app_template": "MCP App 模板",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "是",
+    "no": "否"
+  },
+  "registry": {
+    "title": "已注册工件",
+    "description": "租户资产的身份、来源声明与已记录的扫描器结果。",
+    "new": "注册工件",
+    "created": "工件已注册。",
+    "deleted": "工件已删除。",
+    "search": "搜索已注册工件…",
+    "empty": "无已注册工件",
+    "emptyHint": "从未注册的工件不会在 Agent 供应链 BOM 中有任何体现。",
+    "filter": {
+      "label": "工件类别",
+      "all": "所有工件类别"
+    },
+    "columns": {
+      "class": "类别",
+      "name": "名称",
+      "version": "版本",
+      "provenance": "来源",
+      "posture": "已记录的扫描结果",
+      "issues": "问题数",
+      "attestedAt": "记录时间"
+    },
+    "provenance": {
+      "claim": "操作员声明",
+      "verified": "来源已审阅",
+      "claimHint": "该来源为操作员声明,尚未标记为已审阅。",
+      "verifiedHint": "操作员已审阅该来源声明;这并非 Olivares 的认证。"
+    },
+    "posture": {
+      "notScanned": "未扫描",
+      "grade": "等级 {{grade}}",
+      "recorded": "已记录的扫描结果",
+      "hint": "等级记录的是连接器扫描器给出的评级,或操作员所记录的内容。本控制台并未执行扫描。"
+    },
+    "drawer": {
+      "description": "存储的注册表元数据及其“声明与已审阅”状态。",
+      "identityNotice": "仅存储元数据。此记录背后不存在任何工件内容。",
+      "postureNotice": "态势等级是已记录的扫描结果,而非本控制台执行的扫描。“未扫描”是中性状态,并非失败。",
+      "id": "注册表 ID",
+      "class": "工件类别",
+      "name": "名称",
+      "version": "版本",
+      "provenance": "来源",
+      "sourceRef": "来源引用",
+      "contentHash": "内容指纹",
+      "posture": "已记录的扫描结果",
+      "issues": "已记录的问题",
+      "verified": "来源状态",
+      "attestedBy": "记录人",
+      "attestedAt": "记录时间",
+      "note": "备注"
+    },
+    "create": {
+      "title": "注册 Agent 工件",
+      "description": "记录身份、来源与态势元数据。绝不会上传工件内容。",
+      "uniqueHint": "类别与名称构成唯一且不可变的注册表身份。不存在更新途径。",
+      "class": "工件类别",
+      "name": "名称",
+      "version": "版本",
+      "provenance": "来源声明",
+      "sourceRef": "来源引用",
+      "contentHash": "内容哈希",
+      "contentAlg": "哈希算法",
+      "posture": "已记录的扫描结果",
+      "issues": "已记录的问题",
+      "issuesHint": "来自已记录结果的问题数量。未扫描时禁用且为零。",
+      "verified": "操作员已审阅来源",
+      "verifiedHint": "此项证明操作员已审阅来源声明;这并非 Olivares 的认证。",
+      "note": "备注",
+      "errorTitle": "工件未被注册",
+      "duplicateTitle": "工件已注册",
+      "duplicate": "已存在具有此类别和名称的工件。不存在更新途径;请选择不同的身份,或先删除现有记录。"
+    },
+    "delete": {
+      "title": "删除已注册工件",
+      "description": "从注册表中删除“{{name}}”?此后生成的实时 BOM 将不再包含它。"
+    },
+    "truncated": "已加载 {{n}} 个制品；还有更多",
+    "truncatedHint": "已登记的制品多于此处所示；本页按行 id（创建时分配）取数，因此更靠后的会缺失，通常是最近登记的。类别筛选由引擎执行，会重新查询；表格的搜索与排序仅作用于已加载的内容。制品未列在此处，并不能证明它未登记。"
+  },
+  "aibom": {
+    "difference": "此覆盖全租户资产的 BOM 涵盖已注册的 Agent 工件;按模型的 AIBOM 则涵盖单个自有模型的谱系。",
+    "coverage": "覆盖范围仅反映已注册的内容:从未注册的工件不会有任何体现。",
+    "live": {
+      "title": "实时 Agent 供应链 BOM",
+      "description": "即时生成——实时、未封存且未经审计。",
+      "notice": "预览会依据当前注册表生成一份全新的 CycloneDX 1.6 文档。该文档为只读,不会产生证据。",
+      "preview": "预览实时 BOM",
+      "loading": "正在生成实时 BOM…",
+      "dialogTitle": "实时 Agent 供应链 BOM",
+      "dialogDescription": "刚刚依据注册表生成。此文档未封存,也未经审计。",
+      "jsonLabel": "实时 CycloneDX JSON",
+      "download": "下载实时 BOM"
+    },
+    "seal": {
+      "action": "封存当前 BOM",
+      "confirmTitle": "封存 Agent 供应链 BOM",
+      "confirmDescription": "此操作会重新生成 BOM,并将其规范化内容哈希提交到审计账本。账本不会归档该文档。",
+      "confirmBody": "请保留返回的回执:其中的 AIBOM 是封存文档的唯一副本。",
+      "confirm": "封存并接收 BOM",
+      "success": "Agent 供应链 BOM 已封存。请立即下载回执中的 BOM。",
+      "receiptTitle": "已封存 BOM 回执",
+      "receiptDescription": "哈希承诺是持久的;此回执包含封存文档的唯一副本。",
+      "download": "下载已封存 BOM"
+    },
+    "history": {
+      "title": "封存历史",
+      "description": "针对已注册 Agent 工件资产的仅追加 models.agent_aibom 承诺记录。",
+      "empty": "尚无已封存的 Agent 供应链 BOM",
+      "emptyHint": "封存会创建一份哈希承诺,并在回执中返回文档的唯一副本。",
+      "loadError": "无法加载封存历史。",
+      "id": "封存 ID",
+      "subject": "主题",
+      "serial": "序列号",
+      "contentHash": "内容哈希",
+      "specVersion": "CycloneDX 版本",
+      "components": "已注册组件",
+      "ledgerSeq": "先前审计序号",
+      "ledgerHash": "先前审计头",
+      "scope": "覆盖范围说明",
+      "generatedBy": "生成人",
+      "generatedAt": "生成时间",
+      "noPriorHead": "{{seq}}(无先前审计头)",
+      "truncated": "已加载 {{n}} 条封存记录；还有更多",
+      "truncatedHint": "已封存的 AI-BOM 多于此处所示；本页按行 id 取数。封存会追加一行，因此缺失的通常是最新的证据。"
+    }
+  }
+}

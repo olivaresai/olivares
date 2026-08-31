@@ -1,0 +1,112 @@
+{
+  "title": "エグゼクティブ概要",
+  "description": "コスト、利用状況、リスク、コンプライアンスを一目で把握できます。詳細は運用ビューでドリルダウンしてください。",
+  "asOfNote": "リスク、コンプライアンス、信頼性は現在の状態を反映します。コストは選択した範囲を対象とします。",
+  "range": {
+    "label": "範囲",
+    "7d": "過去7日間",
+    "30d": "過去30日間",
+    "90d": "過去90日間",
+    "mtd": "今月初めから現在まで"
+  },
+  "export": {
+    "action": "PDFをエクスポート",
+    "hint": "このレポートをPDFとして印刷または保存します"
+  },
+  "report": {
+    "title": "エグゼクティブレポート",
+    "generated": "生成日時 {{date}}",
+    "generatedLabel": "生成日時",
+    "tenant": "組織",
+    "allOrgs": "すべての組織",
+    "range": "コスト範囲",
+    "footer": "Olivares AI コントロールプレーン — 集計されたKPIのみ。ペイロードやシークレットは含みません。"
+  },
+  "empty": {
+    "title": "利用可能なエグゼクティブKPIがありません",
+    "description": "この組織のコスト、リスク、コンプライアンス、信頼性のいずれのソースに対しても読み取りアクセス権がありません。"
+  },
+  "restricted": {
+    "label": "制限あり",
+    "hint": "お使いのロールではこのソースを読み取れません。"
+  },
+  "pillars": {
+    "cost": "支出",
+    "costCaption": "選択した範囲内",
+    "usage": "アクティブなエージェント",
+    "usageCaption": "稼働中 {{live}} · 追跡中 {{entities}}",
+    "risk": "未対応のリスク",
+    "riskCaption": "重大／高 {{count}} 件",
+    "silentEvasion": "サイレント回避 {{count}} 件",
+    "compliance": "統制カバレッジ",
+    "complianceCaption": "ギャップ {{gap}} 件 · 未マッピング {{unmapped}} 件"
+  },
+  "cost": {
+    "title": "コスト",
+    "trendTitle": "支出の推移",
+    "trendDescription": "選択した範囲における日次のトークン支出です。",
+    "seriesCost": "支出",
+    "forecast": "予測",
+    "atRunRate": "予測値（移動ウィンドウのトレンド）",
+    "runRateNote": "移動ウィンドウの日次トレンドから残り期間に外挿した予測値です（予測モデルではありません）。",
+    "deltaUp": "前期比 {{pct}}",
+    "deltaDown": "前期比 {{pct}}",
+    "deltaFlat": "前期と同水準",
+    "tokens": "トークン",
+    "samples": "コスト記録",
+    "models": "アクティブなモデル",
+    "breakdownTitle": "支出の内訳",
+    "breakdownDescription": "支出の行き先 — チーム、プロジェクト、エージェント、モデル、またはプロバイダー別に集計します。",
+    "noAttribution": "選択した範囲では、このディメンションに対する帰属がありません。"
+  },
+  "dimensions": {
+    "team": "チーム別",
+    "project": "プロジェクト別",
+    "agent": "エージェント別",
+    "model": "モデル別",
+    "provider": "プロバイダー別"
+  },
+  "risk": {
+    "title": "リスク態勢",
+    "description": "未対応のセキュリティ検出結果、敵対的堅牢性、アクセスドリフトです。",
+    "openFindings": "未対応の検出結果",
+    "bySeverity": "重大度別の検出結果",
+    "robustness": "レッドチーム堅牢性",
+    "robustnessCaption": "最新の完了した実行",
+    "robustnessPending": "実行保留中",
+    "robustnessPendingHint": "直近のレッドチーム実行はプローブを完了できませんでした。合格を意味するものではありません。",
+    "drift": "アクセスドリフト",
+    "driftFirm": "想定外のアクセス",
+    "driftPending": "アイデンティティのリンク待ち",
+    "driftUnused": "未使用の付与",
+    "coverageNote": "一部のアクセスは部分的なカバレッジ（近似的または不透明な捕捉）で観測されています。ドリフトの数値は下限値です。",
+    "noFindings": "未対応の検出結果はありません。",
+    "noRuns": "レッドチームの実行はまだありません。"
+  },
+  "compliance": {
+    "title": "コンプライアンス",
+    "description": "追跡しているフレームワーク全体の統制ステータスです — 統制カバレッジであり、コンプライアンスの主張ではありません。",
+    "coverage": "統制カバレッジ",
+    "ofControls": "{{frameworks}} 個のフレームワークにわたる {{total}} 件の統制のうち",
+    "satisfied": "充足",
+    "byDesign": "設計上",
+    "partial": "部分的",
+    "gap": "ギャップ",
+    "unmapped": "未マッピング",
+    "frameworks": "フレームワーク",
+    "riskTiers": "エージェントのリスクティア",
+    "noFrameworks": "マッピングされたフレームワークはまだありません。"
+  },
+  "reliability": {
+    "title": "信頼性",
+    "description": "現時点でのエージェントとMCPの健全性、および未対応のインシデントです。",
+    "healthy": "正常",
+    "degraded": "低下",
+    "down": "停止",
+    "unknown": "不明",
+    "slaBreaches": "未対応のSLA違反",
+    "incidents": "未対応のインシデント",
+    "nowNote": "健全性は特定時点のスナップショットです。「不明」は対象を追跡するチェックがないことを意味し、正常を意味するものではありません。",
+    "noData": "健全性チェックの報告はまだありません。"
+  }
+}

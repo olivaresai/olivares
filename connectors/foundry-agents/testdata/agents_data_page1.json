@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "id": "agent-1",
+      "name": "Prompt Agent",
+      "state": "enabled",
+      "versions": {
+        "latest": {
+          "id": "ver-1",
+          "name": "v1",
+          "version": "1",
+          "created_at": 1783276800,
+          "status": "published",
+          "draft": false,
+          "definition": {
+            "kind": "prompt",
+            "model": "gpt-4.1",
+            "instructions": "SENTINEL-SYSTEM-PROMPT",
+            "tools": [{"type": "function", "payload": "SENTINEL-SYSTEM-PROMPT"}]
+          },
+          "metadata": {"owner": "SENTINEL-SYSTEM-PROMPT"}
+        }
+      }
+    }
+  ],
+  "has_more": true,
+  "last_id": "agent-1"
+}

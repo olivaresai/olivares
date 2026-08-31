@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# enforcement-seams.tsv — the POSTURE census behind the public "deny-closed enforcement
+# points" claim (README family x7, org profile, docs-site, launch material).
+#
+# WHY THIS FILE EXISTS. Until 2026-08-05 both counters measured the EXISTENCE OF A FILE:
+#   ai-state.sh          for f in <paths>; do [ -f "$f" ] && echo x; done | wc -l
+#   check-public-counts  enforcement = sum(1 for f in seams if os.path.isfile(f))
+# A seam file present but fail-OPEN counted exactly the same as a deny-closed one, so the
+# published adjective "deny-closed" rested on nothing the gate could see. That the number
+# was right was a coincidence, not a measurement — and the audit that replaced it found
+# TWO of the four paths were not even the enforcement point:
+#
+#   modules/inferenceproxy/api.go   is the module's ADMIN CRUD surface. Its own package
+#                                   doc says so: "This module DECIDES NOTHING about a
+#                                   live request" (modules/inferenceproxy/doc.go:13).
+#                                   The governed decider is cmd/olivares/inferenceproxy.go.
+#   connectors/a2a/a2a.go           is the read-only Agent-Card SourceConnector. It holds
+#                                   no gate at all; the delegation PEP is connectors/a2a/pep.go.
+#
+# A seam now counts only when a test PROVES it denies in the absence of an allow. The
+# proof must live inside the named test function, between its declaration and a closing
+# brace at column 0, AND inside a failing call (t.Fatal/t.Error): a file that merely
+# mentions the string is not a proof, a function gutted to a no-op stops counting even if
+# its name stays, and a t.Log or a comment carrying the same words is text that looks like
+# enforcement. A duplicated seam, proof or label is refused outright — one enforcement
+# point is one row, or three real seams could publish "four" by listing one of them twice.
+# Both counters read THIS file and agree on what a valid row is, so the two cannot drift.
+#
+# WHAT THIS CENSUS DOES NOT PROVE, said plainly so nobody has to discover it. It checks
+# that the proof is THERE, not that it PASSES: neither counter compiles or runs Go, because
+# both must work in the curated public export and in a fast branch lint that deliberately
+# builds nothing. A proof whose assertion is intact but whose product code regressed is
+# caught by `task test` and by mainline-ci, not here. So this number means "four seams
+# still carry an intact deny-by-default proof", which is strictly more than the file-
+# existence check it replaced and strictly less than "four seams are green right now".
+# Closing that last gap means running the named tests from the counter — a real change of
+# what lint:public-counts is, and an owner's call, not a session's.
+#
+# DENY-BY-DEFAULT, precisely: the test drives an ABSENT / UNCONFIGURED / UNREADABLE path
+# — no gate wired, an empty policy document, a store that will not answer — and asserts a
+# refusal. A test proving "an explicit deny rule denies" does NOT qualify and must not be
+# listed here; it proves the engine works, not that silence is safe.
+#
+# Columns, tab-separated:
+#   1 seam_file    the product file where the deny-closed fallback actually lives
+#   2 test_file    the file holding the proof
+#   3 test_func    ERE matching the proof function's declaration line
+#   4 assertion    ERE that must appear INSIDE that function's body
+#   5 label        what the public copy calls this enforcement point
+#
+# Adding a row raises the published count and every public surface must be updated with
+# it; the gate will say so. Removing a proof lowers it and turns lint:public-counts RED —
+# verified by mutation in both directions on 2026-08-05, not merely observed green.
+cmd/olivares/claudehookpep.go	cmd/olivares/claudehookpep_test.go	^func TestHookPEP_DenyClosedWithoutPolicyForTenant\(	empty default must deny-closed	Claude Code PreToolUse/PostToolUse hook
+cmd/olivares/inferenceproxy.go	cmd/olivares/inferenceproxy_test.go	^func TestProxyAuthorizePolicyErrorFailsClosed\(	must FAIL CLOSED	inline /v1/messages inference proxy
+connectors/mcp/gate.go	connectors/mcp/rs_test.go	^func TestRSDestructiveDenyClosedDefaultGate\(	deny-closed gate must not reach the upstream	MCP tools/call gate
+connectors/a2a/pep.go	connectors/a2a/delegate_test.go	^func TestDelegateDenyClosedDefaultGate\(	a Delegator with no gate must deny-closed	A2A delegation gate

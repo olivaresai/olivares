@@ -1,0 +1,40 @@
+{
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "description": "Diese Seite existiert nicht oder wurde verschoben.",
+    "back": "Zurück zur Übersicht"
+  },
+  "forbidden": {
+    "title": "Nicht autorisiert",
+    "description": "Sie haben keine Berechtigung, dies anzuzeigen. Bitten Sie einen Administrator um Zugriff."
+  },
+  "serverError": {
+    "title": "Etwas ist schiefgelaufen",
+    "description": "In der Control Plane ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es erneut.",
+    "back": "Zurück zur Übersicht"
+  },
+  "network": {
+    "title": "Control Plane nicht erreichbar",
+    "description": "Die Control Plane konnte nicht erreicht werden. Prüfen Sie Ihre Verbindung und ob die Engine läuft."
+  },
+  "boundary": {
+    "title": "Diese Ansicht ist abgestürzt",
+    "description": "Beim Rendern ist ein unerwarteter Fehler aufgetreten. Ein erneutes Laden behebt dies meist.",
+    "reload": "Neu laden"
+  },
+  "generic": "Etwas ist schiefgelaufen.",
+  "requestId": "Anfrage-ID",
+  "codes": {
+    "unauthenticated": "Ihre Sitzung ist nicht mehr gültig.",
+    "forbidden": "Sie sind dazu nicht berechtigt.",
+    "not_found": "Nicht gefunden.",
+    "conflict": "Das steht im Konflikt mit dem aktuellen Zustand.",
+    "bad_request": "Die Anfrage war ungültig.",
+    "weak_password": "Wählen Sie ein stärkeres Passwort.",
+    "locked_out": "Zu viele Versuche. Versuchen Sie es in einem Moment erneut.",
+    "setup_required": "Die Control Plane benötigt eine Ersteinrichtung.",
+    "setup_complete": "Die Einrichtung ist bereits abgeschlossen.",
+    "cross_tenant_admin_pool_not_configured": "Diese Bereitstellung hat keinen mandantenübergreifenden Admin-Datenbankpool. Stellen Sie eine NOSUPERUSER BYPASSRLS-Rolle mit `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` bereit (siehe deploy/postgres/README.md) und starten Sie den Server mit --admin-dsn neu, das auf diese Rolle zeigt.",
+    "internal": "Ein interner Fehler ist aufgetreten."
+  }
+}

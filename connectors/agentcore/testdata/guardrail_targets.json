@@ -1,0 +1,10 @@
+{
+  "items": [
+    {
+      "targetId": "target-1",
+      "name": "orders",
+      "targetType": "MCP",
+      "status": "ACTIVE"
+    }
+  ]
+}

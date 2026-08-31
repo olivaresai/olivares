@@ -1,0 +1,67 @@
+name: Connector request
+description: Request a new source or output connector (or report a gap in an existing one).
+title: "connector: "
+labels: ["connector", "enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Connectors are the permissive (Apache-2.0) edge of the project: they import
+        only from `sdk/`, never from `core/`, so anyone can build one — see
+        [`CONTRIBUTING.md`](https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md)
+        for the boundary and the SDK contract.
+
+        This is **not** the place for security reports — see
+        [`SECURITY.md`](https://github.com/olivaresai/olivares/blob/main/SECURITY.md).
+  - type: checkboxes
+    id: preconditions
+    attributes:
+      label: Preconditions
+      options:
+        - label: I searched existing issues and the connectors tree (`connectors/`) and this does not already exist.
+          required: true
+        - label: This is **not** a security vulnerability.
+          required: true
+  - type: input
+    id: system
+    attributes:
+      label: System to connect
+      description: The product/service/protocol, with a link to its docs.
+      placeholder: "e.g. MongoDB Atlas audit log — https://www.mongodb.com/docs/atlas/database-auditing/"
+    validations:
+      required: true
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Direction
+      options:
+        - "Source — observe signals from this system (audit logs, traces, inventory, identity)"
+        - "Output — push findings/events to this system (SIEM, ITSM, chat, webhook)"
+        - "Both / not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: signal
+    attributes:
+      label: What signal does it expose?
+      description: >-
+        How would Olivares AI observe it — an audit log, an API, OTel traces, eBPF?
+        If you know whether the signal distinguishes reads from writes (the R/RW
+        coverage tier: clean / lossy / opaque), say so — honesty about fidelity is
+        part of the connector contract.
+    validations:
+      required: true
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case
+      description: What would this connector let you see or govern that you cannot today?
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to build this connector against the `sdk/` contract (under the DCO/CLA — see CONTRIBUTING.md).
+          required: false

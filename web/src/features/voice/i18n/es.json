@@ -1,0 +1,152 @@
+{
+  "title": "Voz y tiempo real",
+  "description": "Sesiones de voz y tiempo real gobernadas en todo el estate. La consola muestra solo referencias y agregados, nunca audio, texto de transcripción, prompts ni PII.",
+  "tabs": {
+    "sessions": "Sesiones",
+    "policies": "Políticas",
+    "ledger": "Decisiones"
+  },
+  "refresh": "Actualizar",
+  "stats": {
+    "live": "Sesiones en vivo",
+    "liveCaption": "de {{total}} en vista",
+    "avgLatency": "Latencia media",
+    "avgLatencyCaption": "media de las medias por sesión",
+    "governed": "Cuota gobernada",
+    "governedCaption": "{{governed}} de {{total}} pasaron por política"
+  },
+  "sessions": {
+    "title": "Sesiones",
+    "description": "Cada sesión tal como la reporta el motor; el estado se deriva en tiempo de lectura. La transcripción se muestra solo como huella; no hay audio ni texto detrás.",
+    "empty": "Sin sesiones de voz",
+    "emptyHint": "Las sesiones aparecen cuando se despacha una apertura gobernada contra una política de voz.",
+    "governed": "Gobernada",
+    "ungoverned": "Sin gobernar",
+    "transcriptLabel": "transcripción",
+    "turnsBreakdown": "{{user}}u / {{agent}}a",
+    "latencyAvg": "media {{value}}",
+    "latencyMax": "máx {{value}}",
+    "columns": {
+      "state": "Estado",
+      "agent": "Agente",
+      "model": "Modelo / proveedor",
+      "turns": "Turnos",
+      "duration": "Duración",
+      "latency": "Latencia",
+      "governed": "Gobernada",
+      "transcript": "Transcripción",
+      "lastEvent": "Último evento"
+    }
+  },
+  "latency": {
+    "title": "Latencia por sesión",
+    "description": "Latencia media de respuesta por sesión, ordenada. La tabla muestra el máximo al lado; no se muestra p50/p95 sin muestras por turno.",
+    "summary": "Latencia media de respuesta de {{count}} sesiones, ordenada. La más lenta es {{session}} con {{latency}}.",
+    "summaryEmpty": "No hay sesiones que ordenar por latencia.",
+    "colSession": "Sesión",
+    "colLatency": "Latencia media"
+  },
+  "honesty": {
+    "noContent": "Solo referencias y agregados: aquí no se expone audio, texto de transcripción, prompts ni PII.",
+    "findingsNote": "Las violaciones de política, la degradación de latencia y las aperturas sin gobernar afloran por el plano de hallazgos de Seguridad, no por estas rutas."
+  },
+  "policies": {
+    "title": "Políticas de voz",
+    "description": "Denegar por defecto: una política es lo que PERMITE abrir una sesión. Sin política coincidente, la apertura se deniega.",
+    "empty": "Sin políticas de voz",
+    "emptyHint": "Define una política para permitir abrir sesiones de voz a un agente; denegar por defecto significa que nada abre hasta que una coincida.",
+    "all": "Todos",
+    "minutes": "{{value}} min",
+    "new": "Nueva política",
+    "edit": "Editar",
+    "columns": {
+      "agent": "Agente",
+      "model": "Modelo permitido",
+      "provider": "Proveedor permitido",
+      "maxMinutes": "Sesión máx",
+      "maxLatency": "Latencia máx",
+      "setBy": "Definida por",
+      "updated": "Actualizada"
+    },
+    "dialog": {
+      "title": "Política de voz",
+      "description": "Esta política PERMITE abrir sesiones para el agente coincidente (denegar por defecto). Usa '*' para coincidir con todos los agentes, modelos o proveedores.",
+      "agent": "Agente",
+      "agentHint": "Una referencia de agente, o '*' para todos los agentes.",
+      "model": "Modelo permitido",
+      "modelHint": "Una referencia de modelo, o '*' para cualquier modelo.",
+      "provider": "Proveedor permitido",
+      "providerHint": "Una referencia de proveedor, o '*' para cualquier proveedor.",
+      "maxMinutes": "Minutos máx de sesión",
+      "maxLatency": "Latencia máx (ms)",
+      "save": "Guardar política",
+      "saved": "Política de voz guardada"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "Aún no hay latencias de sesión que ordenar",
+      "description": "La latencia media de respuesta puede ordenarse cuando una apertura gobernada o la telemetría en tiempo real crea un registro de sesión de voz."
+    },
+    "policies": {
+      "title": "No hay políticas de voz",
+      "description": "Una política permite abrir sesiones si coinciden agente, modelo y proveedor; sin ella se deniegan todas, y solo un admin la define."
+    },
+    "sessions": {
+      "title": "Aún no se han observado sesiones de voz",
+      "description": "Las sesiones aparecen cuando se registra una apertura gobernada o el observador de tiempo real configurado publica telemetría de sesión."
+    }
+  },
+  "surface": {
+    "chooseSession": "Elige una sesión para ver su superficie viva.",
+    "loading": "Cargando…",
+    "decisionsError": "No se han podido leer las decisiones.",
+    "noDecisions": "Sin decisiones registradas para esta sesión.",
+    "noReason": "sin motivo registrado",
+    "frames": "{{count}} actualización(es) en vivo",
+    "open": "Abrir sesión (gobernado)",
+    "stream": {
+      "connecting": "conectando",
+      "open": "en vivo",
+      "closed": "sin conexión",
+      "error": "el flujo falló"
+    },
+    "outcome": {
+      "opened": "Abierta.",
+      "approval": "Aprobación solicitada — reenvía con esta referencia:",
+      "denied": "Denegada por política: ninguna permite esta combinación (agente, modelo, proveedor). Es una decisión default-deny, no un fallo.",
+      "noGate": "No hay puerta de aprobación cableada en este despliegue, así que la apertura sigue denegada. Es un hueco del patrimonio, no una denegación de política.",
+      "unavailable": "La puerta de aprobación no respondió, así que no se decidió nada."
+    }
+  },
+  "ledger": {
+    "title": "Registro de decisiones de apertura",
+    "description": "Todas las decisiones de abrir una sesión de voz del parque, en registro de solo anexión y de más reciente a más antigua — incluidas las DENEGADAS, que por eso nunca llegaron a ser una sesión.",
+    "caveat": "Una apertura denegada no crea por sí misma fila de sesión, así que ésta es la primera vista dedicada que la enseña entera con sólo `voice:session:read`. Los otros caminos la enseñan a medias o piden otro permiso: el playground de API (admin de tenant), el explorador de auditoría (la acción, sin su motivo) y los hallazgos de Security (sólo algunos caminos).",
+    "empty": "Todavía no hay decisiones de apertura",
+    "emptyHint": "Aquí quedan las decisiones que el motor consiguió persistir. La escritura de evidencia es best-effort a propósito —la denegación vale aunque su fila se pierda—, así que un registro vacío no prueba que no se haya rechazado nada.",
+    "truncated": "Se muestran las {{count}} decisiones más recientes y el motor informa de más: esta lista está RECORTADA. Léela como una muestra, no como el registro completo.",
+    "columns": {
+      "when": "Cuándo",
+      "outcome": "Desenlace",
+      "session": "Ref de sesión",
+      "agent": "Agente",
+      "actor": "Actor",
+      "reason": "Motivo del motor"
+    },
+    "opStatus": {
+      "requested": "Aprobación solicitada",
+      "blocked": "Bloqueada",
+      "dispatched": "Despachada",
+      "declared_not_opened": "Declarada, no abierta",
+      "failed": "Fallida",
+      "budget_blocked": "Bloqueada — presupuesto",
+      "budget_throttled": "Apertura denegada — tope de presupuesto"
+    },
+    "op": {
+      "open_request": "Solicitud de apertura",
+      "open": "Apertura",
+      "close": "Cierre"
+    }
+  }
+}

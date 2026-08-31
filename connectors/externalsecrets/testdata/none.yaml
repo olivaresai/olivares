@@ -1,0 +1,26 @@
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: app
+spec:
+  provider:
+    vault:
+      server: https://vault.example:8200
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: externally-managed
+  namespace: app
+spec:
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: pre-existing-secret
+    creationPolicy: None
+  data:
+    - secretKey: token
+      remoteRef:
+        key: app/token

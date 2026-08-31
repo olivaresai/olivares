@@ -1,0 +1,180 @@
+{
+  "title": "告警",
+  "description": "将发现路由到目标并查看投递日志。路由按名称引用目标；凭据存在于已接线的传输中。",
+  "tabs": {
+    "routes": "路由",
+    "deliveries": "投递",
+    "outbox": "死信"
+  },
+  "severities": {
+    "any": "任意严重级别",
+    "info": "信息",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "严重"
+  },
+  "routes": {
+    "intro": "每条路由按优先级顺序将匹配的发现发送到一个目标。",
+    "add": "新建路由",
+    "empty": "暂无路由",
+    "emptyHint": "添加路由，将匹配的发现发送到某个目标。",
+    "colName": "名称",
+    "colDest": "目标",
+    "colSeverity": "最低严重级别",
+    "colStatus": "状态",
+    "colActions": "操作",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "bulk": {
+      "enable": "启用所选路由",
+      "disable": "禁用所选路由"
+    },
+    "testAction": "测试路由 {{name}}",
+    "editAction": "编辑路由 {{name}}",
+    "deleteAction": "删除路由 {{name}}",
+    "created": "路由已创建",
+    "updated": "路由已更新",
+    "deleted": "路由已删除",
+    "tested": "已向 {{destination}} 发送测试",
+    "deleteDialog": {
+      "title": "删除路由？",
+      "description": "这将删除路由“{{name}}”。它匹配的发现将不再通过它投递。",
+      "confirm": "删除路由"
+    },
+    "dialog": {
+      "title": "新建路由",
+      "editTitle": "编辑路由",
+      "subtitle": "匹配发现并发送到目标。空匹配列表匹配所有内容。",
+      "name": "名称",
+      "destination": "目标",
+      "destinationHint": "已配置的目标（仅名称——其凭据存在于传输中）。",
+      "destinationPlaceholder": "选择一个目标",
+      "minSeverity": "最低严重级别",
+      "matchTypes": "匹配类型",
+      "matchKinds": "匹配种类",
+      "matchSources": "匹配来源",
+      "matchSubjectKinds": "匹配主体种类",
+      "listHint": "以逗号分隔；空则匹配所有。",
+      "dedup": "去重窗口（秒）",
+      "throttle": "限流窗口（秒）",
+      "priority": "优先级",
+      "enabled": "已启用",
+      "enabledHint": "已禁用的路由在重新启用前不匹配任何内容。",
+      "create": "创建路由",
+      "save": "保存路由",
+      "matchTypesHint": "选择一个或多个事件类型。描述来自服务器目录。"
+    }
+  },
+  "deliveries": {
+    "noRead": "你没有查看投递的权限。",
+    "intro": "记录的投递尝试（只读）。使用路由的测试来探测目标。",
+    "filterStatus": "按状态筛选",
+    "allStatuses": "所有状态",
+    "empty": "暂无投递",
+    "colTime": "时间",
+    "colDest": "目标",
+    "colKind": "种类",
+    "colStatus": "状态",
+    "colDetail": "详情",
+    "statuses": {
+      "claimed": "已认领",
+      "delivered": "已投递",
+      "rejected": "已拒绝",
+      "failed": "失败",
+      "no_dispatcher": "无调度器",
+      "unknown_destination": "未知目标"
+    },
+    "loadMore": "加载更多"
+  },
+  "outbox": {
+    "noRead": "你没有查看发件箱的权限。",
+    "intro": "持久发件箱：引擎仍欠投的通知、已经投递的通知，以及已放弃投递的死信。重新入队只是请求一次新的投递尝试，并不等于已投递。",
+    "filterStatus": "按发件箱状态筛选",
+    "colTime": "时间",
+    "colDest": "目标",
+    "colKind": "种类",
+    "colAttempts": "尝试次数",
+    "colStatus": "状态",
+    "colDetail": "最近详情",
+    "colActions": "操作",
+    "statuses": {
+      "dead": "死信",
+      "queued": "队列中",
+      "delivering": "投递中",
+      "delivered": "已投递"
+    },
+    "emptyDead": "暂无死信",
+    "emptyDeadHint": "当重试用尽或目标永久拒绝时，通知会进入这里。目前没有被放弃的通知。",
+    "empty": "没有状态为「{{status}}」的通知",
+    "emptyHint": "换一个状态，或到路由标签页确认有路由匹配你预期的发现。",
+    "redeliverAction": "将此通知重新入队至 {{destination}}",
+    "redeliver": {
+      "queued": "已重新入队至 {{destination}}",
+      "queuedHint": "通知已重新进入队列。下一轮投递才会发起尝试——现在还没有投递成功。",
+      "accepted": "至 {{destination}} 的重新入队已受理，状态为「{{status}}」",
+      "inFlight": "未重新入队：该通知正在发往 {{destination}} 的途中。",
+      "gone": "未重新入队：该通知不在本租户的发件箱中。它可能已被移除，或属于另一个租户。",
+      "forbidden": "未重新入队：控制平面拒绝了发往 {{destination}} 的请求。重新入队需要 notify 路由的管理员权限；策略或作用域限制也可能拒绝它。",
+      "consent": "未重新入队：本界面的录制告知尚未确认。确认后重试——这不是权限缺失。",
+      "stepUp": "尚未重新排队：向 {{destination}} 的重新投递需要已验证的会话。请完成验证后重试。",
+      "failed": "至 {{destination}} 的重新入队失败。通知没有重新进入队列。"
+    },
+    "confirm": {
+      "title": "重新入队该通知？",
+      "description": "这会请求向 {{destination}} 发起一次新的投递尝试。如果之前的尝试其实已经送达，接收方可能会收到多次。",
+      "body": "至今尝试次数：{{attempts}}。最近结果：{{detail}}。",
+      "noDetail": "未记录",
+      "confirm": "重新入队通知"
+    }
+  },
+  "evaluate": {
+    "title": "测试信号",
+    "caption": "仅评估谓词；不模拟去重和节流。",
+    "eventType": "事件类型",
+    "selectType": "选择事件类型",
+    "kind": "类别",
+    "severity": "严重性",
+    "source": "来源",
+    "subjectKind": "主体类别",
+    "submit": "评估",
+    "matchedCount": "匹配路由：{{count}}",
+    "name": "路由",
+    "enabled": "已启用",
+    "matched": "匹配",
+    "mismatches": "不匹配项",
+    "yes": "是",
+    "no": "否",
+    "dimensions": {
+      "type": "类型",
+      "severity": "严重性",
+      "kind": "类别",
+      "source": "来源",
+      "subject_kind": "主体类别",
+      "disabled": "已禁用"
+    }
+  },
+  "history": {
+    "action": "查看 {{name}} 的修订历史",
+    "title": "修订历史 — {{name}}",
+    "description": "此通知路由按时间顺序记录的仅追加快照。",
+    "empty": "没有已记录的修订",
+    "loadMore": "加载更多",
+    "compareTitle": "快照差异",
+    "selectTwo": "选择两个修订以比较其快照。",
+    "selectRevision": "选择由 {{actor}} {{op}}的修订",
+    "originalLabel": "较早的修订",
+    "modifiedLabel": "较晚的修订",
+    "restore": "恢复此修订",
+    "restoreTitle": "恢复修订？",
+    "restoreDescription": "要恢复 {{name}} 所选的路由配置吗？",
+    "restoreConfirm": "恢复修订",
+    "restored": "路由修订已恢复",
+    "operations": {
+      "create": "创建",
+      "update": "更新",
+      "delete": "删除",
+      "restore": "恢复"
+    }
+  }
+}

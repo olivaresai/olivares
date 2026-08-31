@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Code generation for the ControlPlane gRPC contract. Run from core/api/proto:
+#   buf generate
+# Output lands in ../genpb (paths=source_relative keeps the apiv1/ subdir).
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: ../genpb
+    opt: paths=source_relative
+  - local: protoc-gen-go-grpc
+    out: ../genpb
+    opt: paths=source_relative

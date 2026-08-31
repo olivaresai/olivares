@@ -1,0 +1,9 @@
+# Cloudflare Pages/Workers headers, applied to the deployed static docs site
+# (docs.olivares.ai). Astro copies docs-site/public/ verbatim to the dist root, so
+# this file lands at the published root where Cloudflare reads it.
+#
+# RFC 9116 §3 requires /.well-known/security.txt to be served as text/plain with the
+# charset parameter set to utf-8. We set it explicitly rather than relying on a host
+# default that might emit text/plain without a charset (or application/octet-stream).
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8

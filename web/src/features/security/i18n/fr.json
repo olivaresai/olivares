@@ -1,0 +1,255 @@
+{
+  "title": "Sécurité et investigation",
+  "description": "Constats de garde-fous, posture d’application, file des anomalies et investigation d’incidents inviolable. Le plan est détectif par défaut — il enregistre, il ne bloque pas de lui-même tant que l’application n’est pas activée et gouvernée.",
+  "tabs": {
+    "safety": "Posture de sécurité",
+    "findings": "Constats",
+    "guardrails": "Garde-fous",
+    "anomalies": "Anomalies",
+    "forensics": "Investigation"
+  },
+  "findings": {
+    "title": "Constats",
+    "description": "Constats de garde-fous, d’anomalies et d’investigation. La preuve est une empreinte — il n’y a aucune charge utile à déployer.",
+    "empty": "Aucun constat",
+    "emptyHint": "Les constats apparaissent à mesure que les garde-fous, la détection d’anomalies et l’investigation enregistrent des preuves.",
+    "export": {
+      "action": "Exporter en SARIF",
+      "busy": "Export en cours…",
+      "done": "Export SARIF téléchargé.",
+      "truncated": "Export SARIF téléchargé, mais il s'est arrêté au plafond de résultats du serveur : c'est un run valide, pas l'ensemble complet."
+    },
+    "search": "Rechercher des constats",
+    "fingerprint": "fp",
+    "columns": {
+      "severity": "Gravité",
+      "kind": "Type",
+      "source": "Source",
+      "title": "Constat",
+      "evidence": "Preuve",
+      "status": "Statut",
+      "actions": "Actions"
+    },
+    "kind": {
+      "guardrail": "Garde-fou",
+      "anomaly": "Anomalie",
+      "forensic": "Investigation"
+    },
+    "status": {
+      "open": "Ouvert",
+      "triaged": "Trié",
+      "resolved": "Résolu",
+      "dismissed": "Écarté"
+    },
+    "triage": {
+      "action": "Trier",
+      "title": "Trier le constat",
+      "description": "Le tri ne modifie que le statut du flux. La preuve — type, gravité et empreinte du détail — est immuable.",
+      "statusLabel": "Statut",
+      "submit": "Mettre à jour le statut",
+      "updated": "Statut du constat mis à jour",
+      "immutableNote": "La gravité, le type et l’empreinte du détail ne peuvent pas être modifiés — seul le statut du flux l’est."
+    },
+    "subjectKinds": {
+      "local_residency": "Modèle local résident"
+    },
+    "truncated": "Les {{n}} premiers ingérés sont affichés",
+    "truncatedHint": "Il y a plus de findings que ceux affichés, et cette page est triée par identifiant d’ingestion — PAS par la date de l’incident —, elle peut donc omettre des findings récents. Que le reste soit hors de vue ne prouve pas que rien d’autre n’a été trouvé."
+  },
+  "safetyPosture": {
+    "title": "Posture de sécurité du fournisseur",
+    "description": "Posture de sûreté de l'IA en lecture seule, issue des contrôles natifs des fournisseurs — OpenAI Moderation, AWS Bedrock Guardrails et Azure Responsible AI. Le plan la lit et l'enregistre ; l'application reste chez le fournisseur.",
+    "empty": "Aucun constat de posture de sécurité",
+    "emptyHint": "Connectez les connecteurs OpenAI, AWS ou Azure avec leurs lectures de sécurité activées pour alimenter cette vue.",
+    "countsPartial": "Récapitulatif partiel — ce locataire a plus de constats de posture de sécurité que ce que couvre l’analyse récapitulative.",
+    "columns": {
+      "open": "Ouverts"
+    }
+  },
+  "guardrails": {
+    "title": "Inspection des garde-fous",
+    "description": "Exécutez le service d’inspection des garde-fous sur une surface. Le texte est haché et expurgé, jamais stocké — le résultat est un verdict accompagné de preuves minimales, déjà expurgées.",
+    "verdictTitle": "Verdict",
+    "clean": "Aucune détection — propre.",
+    "detectiveNote": "Ce verdict provient du plan détectif : le déclenchement a été détecté et enregistré, non bloqué. Un blocage n’est possible que lorsque l’application est activée et gouvernée.",
+    "wouldBlock": "Bloquerait (appliqué)",
+    "detectOnly": "Détection seule",
+    "findingsRecorded": "{{count}} constat enregistré",
+    "findingsRecorded_one": "{{count}} constat enregistré",
+    "findingsRecorded_many": "{{count}} constat enregistré",
+    "findingsRecorded_other": "{{count}} constats enregistrés",
+    "enforcement": {
+      "detective": "Détectif",
+      "enforced": "Appliqué"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "Injection d’invite",
+      "jailbreak": "Contournement",
+      "content": "Contenu",
+      "output_validation": "Validation de sortie",
+      "owasp_agentic": "OWASP agentique"
+    },
+    "form": {
+      "surface": "Surface",
+      "text": "Texte à inspecter",
+      "textHint": "Inspecté, puis haché et expurgé — jamais stocké ni renvoyé.",
+      "enforce": "Demander l’application",
+      "enforceHint": "Ne bloque que si la politique d’application a cette classe activée et gouvernée ; sinon, le verdict est un signalement.",
+      "submit": "Inspecter",
+      "running": "Inspection…",
+      "surfaceLabel": "Surface"
+    },
+    "surface": {
+      "input": "Entrée",
+      "output": "Sortie",
+      "tool_args": "Arguments d’outil"
+    }
+  },
+  "enforcement": {
+    "title": "Posture d’application",
+    "description": "La seule action qui touche la production. Chaque classe de garde-fou est détective par défaut ; activer l’application en ligne est une action d’administration, gouvernée là où la barrière est câblée.",
+    "defaultDetectiveNote": "Le plan par défaut est détectif : les classes ne bloquent que lorsqu’elles sont explicitement activées ici et gouvernées.",
+    "fullyDetective": "Aucune application n’est activée — le plan est entièrement détectif, le réglage sûr par défaut. Rien ne bloque de lui-même.",
+    "detective": "Détectif",
+    "enforced": "Appliqué",
+    "governed": "Gouverné",
+    "ungoverned": "Activé sans gouvernance humaine",
+    "wildcard": "Toutes les classes",
+    "change": "Modifier",
+    "columns": {
+      "class": "Classe",
+      "posture": "Posture",
+      "minSeverity": "Gravité min.",
+      "governance": "Gouvernance",
+      "updated": "Mis à jour",
+      "actions": "Actions"
+    },
+    "dialog": {
+      "title": "Modifier l’application",
+      "description": "La désactivation (retour au détectif) est toujours autorisée. Activer l’application en ligne est gouverné là où la barrière est câblée — un refus de gouvernance est affiché comme motif.",
+      "enabledLabel": "Activer l’application en ligne",
+      "minSeverity": "Gravité minimale",
+      "reason": "Motif",
+      "reasonHint": "Enregistré avec la modification pour le registre d’audit.",
+      "submit": "Appliquer",
+      "applied": "Posture d’application mise à jour",
+      "ungovernedWarning": "Activer cette classe sans barrière de gouvernance câblée la laisse non gouvernée — la modification est autorisée mais signalée.",
+      "deniedTitle": "La gouvernance a refusé cette modification"
+    }
+  },
+  "anomalies": {
+    "title": "File des anomalies",
+    "description": "Dérive et constats corrélés, classés par priorité. Les entrées approximatives sont des dérives non réconciliées — jamais une violation avérée.",
+    "empty": "Aucune anomalie dans la file",
+    "orderNote": "Classées par priorité, la plus élevée en premier.",
+    "priority": "Priorité",
+    "approximate": "Approximatif",
+    "suspectedTitle": "Suspecté : {{title}}",
+    "unreconciledNote": "Dérive non réconciliée — l’autorité réconciliée est la carte des accès. La priorité est minorée ; il ne s’agit pas d’une violation confirmée.",
+    "kind": {
+      "access_drift": "Dérive d’accès",
+      "egress_exfil_suspected": "Exfiltration en sortie (suspectée)",
+      "anti_evasion_correlated": "Évasion corrélée"
+    }
+  },
+  "forensics": {
+    "title": "Dossiers d’investigation",
+    "description": "Réponse aux incidents — chaque dossier fige son état d’intégrité à l’ouverture, de sorte qu’une altération ultérieure soit détectable. La chronologie est reconstruite à partir du registre en ajout seul.",
+    "empty": "Aucun dossier d’investigation",
+    "openCase": "Ouvrir un dossier",
+    "back": "Retour aux dossiers",
+    "summary": "Résumé",
+    "openedBy": "Ouvert par",
+    "opened": "Ouvert",
+    "closed": "Fermé",
+    "integrity": "Intégrité de la chaîne de possession",
+    "timeline": "Chronologie reconstruite",
+    "timelineNote": "Chaque événement porte seq · hash · prev_hash afin qu’un lecteur puisse revérifier le lien de façon indépendante. Il n’y a jamais de charge utile derrière un événement.",
+    "columns": {
+      "severity": "Gravité",
+      "title": "Dossier",
+      "status": "Statut",
+      "opened": "Ouvert"
+    },
+    "status": {
+      "open": "Ouvert",
+      "investigating": "En cours d’investigation",
+      "contained": "Contenu",
+      "closed": "Fermé"
+    },
+    "truncated": "Les {{n}} premiers ouverts sont affichés",
+    "truncatedHint": "Il y a plus de dossiers que ceux affichés, et cette page est triée par identifiant d’ouverture : elle peut omettre des dossiers récents. Une investigation que vous ne voyez pas ici n’est pas une investigation qui n’existe pas."
+  },
+  "integrity": {
+    "title": "Intégrité du registre",
+    "description": "Deux verdicts : la chaîne de hachage est cohérente en interne, et les points de contrôle signés. La vérification est elle-même enregistrée dans la chaîne qu’elle contrôle.",
+    "chain": "Chaîne de hachage",
+    "chainChecked": "{{count}} événement vérifié",
+    "chainChecked_one": "{{count}} événement vérifié",
+    "chainChecked_many": "{{count}} événement vérifié",
+    "chainChecked_other": "{{count}} événements vérifiés",
+    "checkpoints": "Points de contrôle signés",
+    "checkpointsCount": "{{count}} point de contrôle vérifié",
+    "checkpointsCount_one": "{{count}} point de contrôle vérifié",
+    "checkpointsCount_many": "{{count}} point de contrôle vérifié",
+    "checkpointsCount_other": "{{count}} points de contrôle vérifiés",
+    "signingUnavailable": "Aucune clé de signature n’est câblée — l’attestation signée n’est pas simulée.",
+    "checkpointsPendingNote": "Aucun point de contrôle écrit pour l’instant — c’est le verdict de la chaîne qui prouve ce registre.",
+    "signingSeam": "Signature des points de contrôle non câblée",
+    "attestedSeq": "Seq attesté",
+    "headSeq": "seq de tête du registre {{seq}}",
+    "reverifyNote": "Chaque événement porte seq · hash · prev_hash afin qu’un lecteur puisse revérifier le lien hors ligne par rapport à un magasin WORM externe.",
+    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "Aucune classe de garde-fou configurée",
+      "description": "Les lignes n’apparaissent qu’après la définition de la posture d’une classe de garde-fou ; jusque-là, toutes les classes restent détectives et rien ne bloque en ligne."
+    },
+    "findings": {
+      "title": "Aucun constat de sécurité",
+      "description": "Ils naissent d’un signal d’inspection des garde-fous, de dérive observée ou de posture de sécurité du fournisseur, ou d’un signal grave d’un autre module."
+    }
+  },
+  "cases": {
+    "new": "Nouveau dossier",
+    "newHint": "Ouvre un dossier forensique. Le moteur le met à l’état « ouvert ».",
+    "title": "Titre",
+    "severity": "Gravité",
+    "create": "Créer",
+    "cancel": "Annuler",
+    "created": "Dossier ouvert",
+    "status": "État",
+    "save": "Enregistrer",
+    "updated": "Dossier mis à jour",
+    "statusName": {
+      "open": "Ouvert",
+      "investigating": "En investigation",
+      "contained": "Contenu",
+      "closed": "Clos"
+    },
+    "exportFormat": "Format d’export",
+    "export": "Exporter",
+    "exported": "Export demandé",
+    "links": "Chaîne de possession",
+    "linksHint": "Ce à quoi ce dossier est lié : constats, séquences du registre, anomalies ou notes.",
+    "noLinks": "Rien de lié pour l’instant",
+    "link": "Lier",
+    "linked": "Lié",
+    "linkKindLabel": "Type",
+    "linkRef": "Référence",
+    "linkKind": {
+      "finding": "Constat",
+      "audit_seq": "Séquence du registre",
+      "anomaly": "Anomalie",
+      "note": "Note"
+    }
+  },
+  "severity": {
+    "low": "Faible",
+    "medium": "Moyenne",
+    "high": "Élevée",
+    "critical": "Critique"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "policies": [
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-guard/policy/pol-plain",
+      "policyId": "pol-plain",
+      "name": "allow-orders-plain",
+      "status": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit(principal, action, resource);"
+        }
+      }
+    },
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:us-east-1:123456789012:policy-engine/pe-guard/policy/pol-guardrail",
+      "policyId": "pol-guardrail",
+      "name": "allow-orders-with-guardrails",
+      "status": "ACTIVE",
+      "definition": {
+        "policy": {
+          "statement": "forbid(principal, action, resource) when guardrails { BedrockGuardrails::PromptAttack([\"PROMPT_INJECTION\"], [context.input.prompt]).confidenceScore.greaterThan(decimal(\"0.6\")) };"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,2144 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# pre-push — local quality gate before pushing (see CONTRIBUTING.md).
+# Installed by `task setup` / `task hooks` (git config core.hooksPath .githooks).
+#
+# Runs the GREEN subset of CI: publication, structural and documentation-honesty
+# lints; console typechecking; a full Go build; and the race-enabled test suite.
+# golangci-lint (lint:go / lint:web) is intentionally NOT run here: golangci-lint
+# v2 cannot typecheck under Go 1.26 yet (repo-wide), so it exits non-zero with 0
+# issues and would block every push. The full toolchain in CI covers it.
+#
+# BRANCH-AWARE SINCE 2026-08-02 (GATES v3). What runs depends on WHERE the commits
+# land, not on who is pushing: main and tags take the full gate, feature refs take
+# the fast lints only. The rule itself lives in scripts/prepush-refclass.sh so it can
+# be tested without paying for the gate it decides (scripts/test-prepush-refclass.sh,
+# `task lint:prepush-refclass`). Until today the policy said one thing and this file
+# did another — every lane ran the full gate on every branch and worked around it by
+# hand with OLIVARES_FAST_PUSH=1, which also silently opened the same hole on main.
+#
+# SANCTIONED bypass: git push --no-verify (declare it in the PR). It is not the only
+# technically possible one — a client hook can always be sidestepped (core.hooksPath, or
+# simply editing this file), which is exactly why the boundary that actually enforces
+# anything is mainline-ci plus branch protection on the server, not this script.
+#
+# ============ LIMITATIONS, DECLARED — of THIS piece (2026-08-03) ======================
+# The split landed on its own, deliberately narrowed to what an eleven-round adversarial
+# review verified (an internal design note (not shipped)). These are the
+# things it does NOT promise. Each is something a reader could otherwise infer from the
+# guarantees above, and none of them is closed by the code below.
+#
+#  N-1  THE CLASSIFIER RUNS LIKE ANY OTHER COMMAND THIS HOOK CALLS: in the foreground, with
+#       no deadline of its own. A rule that never returns parks the lane exactly as a wedged
+#       `task test` would. It is a local, hermetic script with no network and no lock. The
+#       base hook already had unbounded commands on content pushes; classification newly
+#       places the same failure mode BEFORE the deletion/skip decisions, which the base hook
+#       answered from its own shell loop without running anything (round 12, M-03).
+#  N-2  THE VERDICT IS JUDGED WHEN THE CLASSIFIER EXITS. Its stdout goes to a file and is
+#       read back as BYTES — a NUL anywhere in it refuses, which a bash variable could not
+#       even represent — but the read happens once, when the process this hook started is
+#       done. A descendant the classifier leaves behind holding the same stdout can still
+#       write after that snapshot, and those bytes are not judged. The classifier in this
+#       tree forks nothing; the limit is on the contract, not on today's implementation.
+#  N-3  THIS HOOK GATES WHAT IT CALLS, NOT WHAT ITS TOOLS RUN. The split's guarantee ("a
+#       feature ref runs no heavy task") is proved by scripts/test-prepush-refclass.sh over
+#       the calls THIS FILE makes. What go-task expands from Taskfile.yml behind one of
+#       those calls, and what a task's own script reaches for (`bash scripts/foo.sh` running
+#       `go test` with no Taskfile edge), are outside that observation and outside the claim.
+#       See DEFERRED D-2: this is the open half of the property, not a satisfied one.
+#  N-4  THE HOST MUTEX IS THE ONE THIS REPOSITORY ALREADY HAD, UNCHANGED. The split moved
+#       WHO takes it: every push classified `full` — main, tags, and any deny-closed
+#       promotion (unknown namespace, malformed line) — instead of every lane on the box.
+#       Nothing else moved. Its known weaknesses are therefore exactly today's: the lock's age is
+#       the commit date, which `git commit-tree` takes from GIT_COMMITTER_DATE and a slow
+#       host clock changes on its own, so a LIVE holder can be presumed dead and robbed;
+#       the takeover is a plain force push, so two lanes that saw the same stale OID can
+#       both believe they won; and release deletes the ref unconditionally and swallows
+#       every error, so a lane that was stolen from can later delete its successor's lock.
+#       Measured in rounds 3 and 5 of the review. See DEFERRED D-1.
+#  N-5  A CLIENT HOOK IS NOT A SECURITY BOUNDARY. `--no-verify`, `core.hooksPath` and an
+#       editor all defeat it, and the classification is only as good as the stdin git hands
+#       it. What enforces anything about `main` is the server: mainline-ci plus branch
+#       protection.
+#
+# ============ DEFERRED WORK — NOT accepted limits, unresolved defects =================
+# These were built, reviewed and TAKEN BACK OUT of this change because they did not pass
+# the contrast. They are named here so nobody reads N-3/N-4 as a decision to live with
+# them. Finding IDs are from an internal design note (not shipped), round 11.
+#
+#  D-1  MUTEX HARDENING — owner-safe release and takeover under --force-with-lease on the
+#       exact OID, liveness from the holder's PROCESS (host + PID namespace + boot id +
+#       /proc start-time) instead of a date the holder wrote, a named door for breaking a
+#       confirmed-live holder, per-call network deadlines and a wait budget that is an
+#       actual deadline. Round 11 left L-02 OPEN: with the shipped defaults
+#       (WAIT == STALE) the promised recovery of an indeterminable holder is UNREACHABLE —
+#       the lane gives up at the threshold before the lease is ever re-evaluated, so an
+#       abandoned lock on another host is never recovered automatically. Landing a mutex
+#       whose advertised recovery cannot fire is worse than the plain one above, which at
+#       least does what its comment says. REOPEN with the ordering of lease vs give-up
+#       fixed, or with WAIT > STALE pinned and stated.
+#       ✅ CERRADO 2026-08-16 por la segunda via: STALE es ahora GATE_LOCK_STALE_SECS y WAIT se
+#       deriva como STALE+1800, con una guarda que lo corrige y lo DICE si alguien lo fija por
+#       debajo. El robo se evalua siempre antes de rendirse. Probado en scripts/test-gate-lock-order.sh.
+#  D-2  TASKFILE-GRAPH OBSERVATION — resolving what go-task expands from Taskfile.yml so a
+#       feature lane cannot buy a heavy task through a `deps:` edge the hook never types
+#       (N-3). Round 11 left L-01 OPEN: the hand-written resolver is blind to syntax go-task
+#       3.51.1 accepts and executes — single-quoted entries and flow mappings
+#       (`deps: ['heavy']`, `deps: [{task: heavy}]`) produced ZERO edges while `task --dry`
+#       ran the task. A closure that silently misses valid forms certifies the property it
+#       cannot see, which is worse than not claiming it. REOPEN using go-task's own graph as
+#       the authority, not another partial YAML parser.
+#       ✅ CERRADO 2026-08-16 (a repository gate) por esa vía exacta: `scripts/check-taskfile-graph.sh`
+#       ⚠ MATIZADO 2026-08-18: la observación era correcta y el CONJUNTO no. El ancla del
+#       carril rápido exigía `task` en columna 0, y este fichero llama a
+#       `lint:commit-identity` INDENTADO dentro de un condicional: 80 tareas observadas
+#       de 81. Verificado por mutación —`deps: [build:cloud]` en esa tarea daba OK— y
+#       corregido con una extracción que pela sangrado y prefijos de entorno, de forma
+#       que `GOFLAGS=… task test` tampoco pueda caerse de la lista PESADA.
+#       pregunta a `task --dry`, que es go-task resolviendo SU grafo, y compara el conjunto
+#       alcanzado con el gate pesado. Las DOS listas —rápidas y pesadas— se derivan de ESTE
+#       fichero cortando por `task lint:prepush-refclass`, el mismo corte que usa la batería, así
+#       que no pueden discrepar sobre dónde está la línea ni caducar cuando alguien añade un lint.
+#       Verificado por mutación con las dos formas a las que el parser a mano era ciego:
+#       `deps: ['test']` y `deps: [{task: build:go}]` — las caza las dos y nombra el cruce.
+#       Coste medido: 3 s para 63 tareas rápidas contra 11 pesadas. Cableado como
+#       `task lint:taskfile-graph` en el carril rápido, con la lista declarada actualizada en el
+#       mismo commit (268 passed, 0 failed).
+#  D-3  DETERMINISM OF THE MUTEX FIXTURES — round 11 measured the same bytes giving
+#       `265 passed, 1 failed` and `266 passed, 0 failed` on two consecutive runs (L-03):
+#       a wait-budget mutant that raced whole-second clock arithmetic. `lint:prepush-refclass`
+#       is in the fast lints of EVERY push with commits, and an intermittent gate is worse
+#       than a slow one — it teaches lanes to re-run until green. Nothing time-dependent
+#       came back with this change; anything that does must force its overshoot
+#       deterministically instead of measuring the wall clock.
+# =====================================================================================
+set -euo pipefail
+
+# ── INSTANTÁNEA: este hook NO se relee del árbol de trabajo mientras corre ───────────
+# bash lee un script POR DESPLAZAMIENTO DE BYTES a la vez que lo ejecuta. Si alguien
+# edita este fichero con un push EN VUELO, bash sigue leyendo desde el offset que tenía
+# guardado, que ahora apunta a otro contenido, y ejecuta el trozo que caiga ahí.
+#
+# Medido el 2026-08-18, y el coste no fue el push: una edición de SEIS líneas en esta
+# cabecera, 14 s antes, mató un push a `main` con
+#     .githooks/pre-push: line 543: the: command not found
+# — prosa de un comentario ejecutada como comando. Y el mensaje MIENTE dos veces: la
+# línea 543 de este fichero es `task lint:verifier-truth`, que corre verde en 1 s, y el
+# número invita a buscar un defecto donde no hay ninguno. Con cinco carriles que editan
+# este hook y empujan a la vez, no es una rareza: es el caso normal de una jornada.
+#
+# El remedio es correr desde una copia y BORRARLA acto seguido. El descriptor sigue
+# abierto, el inodo vive hasta que el proceso termina, y el contenido deja de tener
+# nombre en el sistema de ficheros: no hay nada que editar. No hace falta limpiarla —
+# lo que evita chocar con el `trap release_gate_lock EXIT` de más abajo, que sería el
+# único sitio donde poner una limpieza y que la borraría de un plumazo.
+if [ -z "${OLIVARES_HOOK_SNAPSHOT:-}" ]; then
+	# Si TMPDIR apunta a un directorio que no existe —pasa, y está medido— mktemp falla;
+	# se reintenta en /tmp antes de rendirse. El noexec de /tmp da igual: esto se invoca
+	# como `bash <fichero>`, no se ejecuta el fichero.
+	_snap="$(mktemp "${TMPDIR:-/tmp}/olivares-prepush.XXXXXX" 2>/dev/null || mktemp "/tmp/olivares-prepush.XXXXXX")" || {
+		echo "pre-push: ⛔ NO HE PODIDO MIRAR: no puedo crear la instantánea del hook." >&2
+		exit 2
+	}
+	if ! cat -- "${BASH_SOURCE[0]}" >"$_snap"; then
+		rm -f -- "$_snap"
+		echo "pre-push: ⛔ NO HE PODIDO MIRAR: no puedo leer el hook para la instantánea." >&2
+		exit 2
+	fi
+	OLIVARES_HOOK_SNAPSHOT="$_snap" exec bash "$_snap" "$@"
+fi
+rm -f -- "$OLIVARES_HOOK_SNAPSHOT"
+
+
+# The ambient git environment OUTRANKS `-C`: with GIT_DIR exported — which git does
+# from every LINKED worktree, i.e. from every parallel session — this script's throwaway
+# repositories would be driven into the LIVE repository instead. Measured 2026-08-06;
+# it left the branch of PR #526 pointing at a fixture commit. Fail closed: a missing
+# sanitiser is "I could not isolate", never "isolation was not needed".
+# Resolved from the WORKING DIRECTORY, not from $0, and for the same reason every other
+# path in this hook is: git runs a hook with its cwd at the top of the worktree, which is
+# why `bash scripts/prepush-refclass.sh` below works. Resolving from $0 instead looked
+# equivalent and was not — the battery copies this file to the ROOT of a fixture rather
+# than into a `.githooks/` subdirectory, so `$0/../scripts` pointed one level above the
+# fixture and every e2e case died at exit 2. One idiom for paths, not two.
+_olivares_git_env="scripts/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+	echo "pre-push: cannot source $_olivares_git_env — the throwaway repositories the" >&2
+	echo "pre-push: gate builds could be driven into THIS repository. Refusing." >&2
+	exit 2
+}
+unset _olivares_git_env
+
+# --- WHICH GATE DOES THIS PUSH DESERVE? ---------------------------------------------
+# Git feeds one "<local ref> <local oid> <remote ref> <remote oid>" line per ref on
+# stdin. The remote ref is the load-bearing field and this hook used to discard it.
+#
+# The classifier reads THE HOOK'S OWN stdin, directly. The first revision did
+# `push_refs="$(cat)"` and fed it back through a here-string: that round trip strips
+# trailing newlines and appends one of its own, so the bytes the rule judged were not the
+# bytes git sent. A rule cannot be deny-closed about input it never saw. Nothing
+# downstream reads stdin again — the classifier consumes it to EOF.
+if [ ! -r scripts/prepush-refclass.sh ]; then
+	echo "pre-push: scripts/prepush-refclass.sh is missing — this hook cannot tell which gate" >&2
+	echo "pre-push: the push needs, so it refuses. Not knowing is not the same as being clean." >&2
+	exit 1
+fi
+# CAPTURE BYTES, NOT A BASH STRING. `$(...)` strips EVERY trailing LF — a classifier
+# printing `fast<TAB>reason<LF><LF>` satisfied a contract that says "exactly one line" —
+# and it also DELETES NUL bytes, warning on a stderr nobody reads inside a hook. Measured:
+# `fa<NUL>st<TAB>reason<LF>` arrived as `fast` and bought a MAIN push the fast lane, and
+# `de<NUL>lete` arrived as `delete` and took the no-toolchain exception below. A bash
+# variable cannot even hold that byte, so the verdict does not travel through one: stdout
+# goes to a FILE and is read back byte-exactly. `read -r -d ''` stops at a NUL, so the read
+# SUCCEEDING is the proof one was there; at EOF it fails with every byte read, trailing LFs
+# included. The redirection is not a pipeline, so `$?` is the classifier's OWN status —
+# "the reader worked" is not "the rule agreed" (N-2 states what this does not cover).
+gate_out=""
+if ! gate_out="$(mktemp "${TMPDIR:-/tmp}/olivares-prepush-verdict.XXXXXX" 2>/dev/null)" ||
+	[ -z "$gate_out" ]; then
+	echo "pre-push: could not create a temp file to capture the classification — refusing the" >&2
+	echo "pre-push: push. A verdict this hook could not even receive has cleared nothing." >&2
+	exit 1
+fi
+# STDIN IS CAPTURED TO A FILE FIRST, and both properties the comment above defends survive it.
+# Byte-exactness: the objection was to `$(...)`, which strips trailing LFs and deletes NULs
+# because a bash VARIABLE cannot hold them. A file can, and `cat` copies bytes. Not a pipeline:
+# the classifier still gets a plain `<` redirection, so `$?` is still its OWN status.
+#
+# It is captured because a fast lint may need to know WHICH refs are travelling. The lint that
+# first required it, lint:unpublished-work, was withdrawn from this lane the same day (see below),
+# and the capture stays because it is the correct shape regardless: a hook that consumed its own
+# stdin and could not say what it was pushing had to re-derive it, and re-deriving is where the
+# earlier byte-exactness bugs came from.
+#
+# A capture that FAILS refuses the push: a classifier fed a truncated file would see fewer refs
+# than git sent, and fewer refs is the direction that buys a main push the fast lane.
+push_refs_file=""
+if ! push_refs_file="$(mktemp "${TMPDIR:-/tmp}/olivares-prepush-refs.XXXXXX" 2>/dev/null)" ||
+	[ -z "$push_refs_file" ]; then
+	rm -f "$gate_out"
+	echo "pre-push: could not create a temp file for the pushed refs — refusing the push." >&2
+	exit 1
+fi
+if ! cat >"$push_refs_file"; then
+	rm -f "$gate_out" "$push_refs_file"
+	echo "pre-push: could not read the pushed refs from stdin — refusing. A hook that did not" >&2
+	echo "pre-push: receive the refs has classified nothing." >&2
+	exit 1
+fi
+# Y SE RECOGE AL SALIR, por CUALQUIER camino. Hasta el 2026-08-19 se borraba en una sola
+# rama —la de stdin ilegible, linea de arriba— y en la del EXITO, que es la normal, no se
+# borraba nunca: /tmp acumulaba 47.520 ficheros `olivares-prepush-refs.*`, uno por push, en
+# un tmpfs de 2G que es RAM. No puede borrarse antes de terminar porque se EXPORTA y lo leen
+# check-commit-identity y check-web-bundle-freshness, que sin el responden «NO HE PODIDO
+# MIRAR» — es decir, un borrado temprano convertiria dos gates en ciegos. Por eso va en un
+# trap, y por eso el trap de mas abajo (release_gate_lock) tiene que hacer las DOS cosas: un
+# segundo `trap ... EXIT` SUSTITUYE al primero, no se suma.
+trap 'rm -f "${push_refs_file:-}"' EXIT
+
+# ⛔ Y EL REMOTO AL QUE SE EMPUJA, que hasta hoy no viajaba. El gate de identidad excluye contra
+# `origin/main` para no cobrar por lo ya publicado; si el push va a OTRO remoto, esos commits no
+# están publicados allí y la exclusión mide contra el sitio equivocado, callando. Hoy es inerte —
+# este clon tiene un solo remoto, medido — pero es latente: basta añadir un segundo. Git nos da el
+# nombre en $1 y la URL en $2; no pasarlos era tirar el dato que resuelve la pregunta.
+export OLIVARES_PUSH_REFS_FILE="$push_refs_file"
+export OLIVARES_PUSH_REMOTE_NAME="${1:-}"
+# Y LA URL, que es la que de verdad engaña: `remote.origin.pushurl` puede apuntar a otro sitio con
+# el MISMO nombre, así que comparar sólo el nombre deja pasar exactamente el caso que importa.
+export OLIVARES_PUSH_REMOTE_URL="${2:-}"
+gate_rule_rc=0
+bash scripts/prepush-refclass.sh <"$push_refs_file" >"$gate_out" || gate_rule_rc=$?
+if [ "$gate_rule_rc" != "0" ]; then
+	rm -f "$gate_out"
+	echo "pre-push: ref classification FAILED — refusing the push (a gate that could not look" >&2
+	echo "pre-push: at the refs has not cleared them)." >&2
+	exit 1
+fi
+gate_decision=""
+gate_nul=0
+if IFS= read -r -d '' gate_decision <"$gate_out"; then gate_nul=1; fi
+rm -f "$gate_out"
+if [ "$gate_nul" = "1" ]; then
+	echo "pre-push: the classification carries a NUL byte — refusing the push. The verdict is a" >&2
+	echo "pre-push: contract in BYTES, and a stream this shell cannot even represent is not one" >&2
+	echo "pre-push: line of it." >&2
+	exit 1
+fi
+gate_capture="$gate_decision"
+
+# THE SHAPE OF THE VERDICT IS PART OF THE CONTRACT. Reading the first word of the first
+# line accepted a classifier that printed `fast` and then, on the next line, `full`: the
+# hook believed the first, ran the fast lane on a main push and exited 0. A tool that
+# contradicts itself has classified nothing, and "it said fast somewhere" is not a
+# verdict. Exactly ONE line — one terminating LF and no other — exactly
+# `<full|fast|skip|delete><TAB><non-empty reason>`, no CR, no second TAB. Anything else is
+# the third answer — I COULD NOT LOOK — and refuses.
+gate_tab=$'\t'
+gate_usable=1
+case "$gate_decision" in
+*$'\n')
+	# The ONE LF the contract allows is the one that terminates the line. Whatever is left
+	# after removing it must contain none.
+	gate_decision="${gate_decision%$'\n'}"
+	;;
+*) gate_usable=0 ;; # no terminating LF at all: not a line
+esac
+case "$gate_decision" in
+*$'\n'* | *$'\r'*) gate_usable=0 ;;
+esac
+if [ "$gate_usable" = "1" ] &&
+	[[ ! $gate_decision =~ ^(full|fast|skip|delete)${gate_tab}[^${gate_tab}]+$ ]]; then
+	gate_usable=0
+fi
+if [ "$gate_usable" != "1" ]; then
+	printf 'pre-push: unusable classification %q — refusing the push (one line,\n' \
+		"$gate_capture" >&2
+	echo "pre-push: '<full|fast|skip|delete><TAB><reason>', is the whole contract)." >&2
+	exit 1
+fi
+gate_class="${gate_decision%%"${gate_tab}"*}"
+gate_reason="${gate_decision#*"${gate_tab}"}"
+
+# THE CLASS TRAVELS TO THE LINTS THAT NEED IT, exported HERE -- where it is resolved and long
+# before any lint runs -- because this hook is the only actor that knows the answer.
+# `check-hub-web-fidelity.sh` has to tell a feature-branch push (where drift against the published
+# web is a NOTICE with an owner, because whoever pushes cannot fix the public site) from a push to
+# `main` or a tag (where you are PUBLISHING, and shipping against a desynchronised storefront is
+# the exact harm that gate exists to prevent: 2026-08-14, the OpenAPI an evaluator reads 151 lines
+# behind the real one).
+#
+# IT IS NOT RE-DERIVED DOWNSTREAM. A second copy of this rule would drift from
+# `prepush-refclass.sh` the day someone adds a namespace -- the trap
+# `web-bundle-source-digest.sh` documents with its measurement. The gate RECEIVES the verdict.
+#
+# AND ITS ABSENCE IS STRICT, not permissive: a script invoked by hand, or by a harness that does
+# not export it, gets the blocking behaviour and says so. Same rule this hook already applies to a
+# namespace it does not recognise -- not knowing what something is does not authorise running less.
+export OLIVARES_PUSH_CLASS="$gate_class"
+
+# THE ONE NAMED EXCEPTION: A PURE DELETION PUSH.
+# The `task` check below was moved in FRONT of the skip verdict so the written invariant
+# ("no task -> refusal, never green") would be true with no footnote. Measured with real
+# git on a machine without go-task, that cost this: `git push --delete stale-branch` was
+# REFUSED and the only way to tidy a branch was to disable the entire hook with
+# --no-verify — i.e. the absolute rule made lanes practise the bypass on the one operation
+# that needs no gate at all.
+#
+# So the exception is NAMED rather than left implicit: a push in which EVERY ref line is a
+# deletion carries no commits, so there is nothing any lane could lint, build or test, and
+# it does not need the toolchain to prove that. The classifier decides this — verdict
+# `delete`, which requires deletion_refs == lines_seen — so the hook is not re-deriving it
+# from a reason string, and a deletion travelling with a gate-lock ref, a commit or an
+# unreadable line is NOT this class. Everything else keeps the unconditional check below,
+# `skip` included. Documented in CLAUDE.md and CONTRIBUTING.md under this same name.
+if [ "$gate_class" = "delete" ]; then
+	echo "pre-push: ${gate_reason} — the named deletion exception: no gate, and no toolchain" >&2
+	echo "pre-push: is required to run none. Every other class still refuses without 'task'." >&2
+	exit 0
+fi
+
+# DENY-CLOSED, AND UNCONDITIONALLY SO. A gate that silently skips when its tool is
+# missing is not a gate — this very machine shipped without `task` on PATH and the hook
+# printed a skip and passed. The binary usually exists at ~/go/bin/task; install with
+# `go install github.com/go-task/task/v3/cmd/task@latest`.
+#
+# THIS CHECK RUNS BEFORE THE `skip` VERDICT IS HONOURED, deliberately. It used to sit
+# after it, so the mutex ref and an empty push exited 0 on a machine with no toolchain —
+# and the written invariant ("no task -> refusal, never green") was false as written. The
+# ONE exception is the `delete` class handled above, by name and in the docs; a `skip` is
+# not it. "Nothing to gate" decided by a rule the machine could not run is still an
+# unexamined push, and footnotes are exactly how "the gate did not run" became
+# indistinguishable from "the gate passed" before.
+if ! command -v task >/dev/null 2>&1; then
+	# ${HOME:-} y no $HOME: bajo `set -u` un runner sin HOME —seis de nueve, medido— mata
+	# el hook aqui mismo, y el mensaje que sale no habla de HOME sino de una linea suelta.
+	if [ -x "${HOME:-/nonexistent-home}/go/bin/task" ]; then
+		PATH="${HOME:-/nonexistent-home}/go/bin:$PATH"
+	else
+		echo "pre-push: 'task' not found — the local gate CANNOT run, refusing the push." >&2
+		echo "pre-push: install go-task (go install github.com/go-task/task/v3/cmd/task@latest)" >&2
+		echo "pre-push: or bypass EXPLICITLY with: git push --no-verify" >&2
+		exit 1
+	fi
+fi
+
+# ⛔ GUARDA DEL LECTOR DE CLAIMS, Y VA AQUI: ANTES DE HONRAR EL `skip`.
+#
+# Un claim se clasifica `skip` —«signalling, never content»— y eso es correcto para su CONTENIDO:
+# no hay nada que lintar. Pero de ahi se seguia algo que nadie decidio: que MOVER un claim no pasa
+# por ningun control. `scripts/claim-lector.sh` publica la señal de que alguien lo esta leyendo, y
+# mientras la comprobacion viviera solo en ese guion era una cortesia: quien no lo corriera, movia.
+#
+# Esta guarda solo mira ACTUALIZACIONES de un claim existente. Un alta (oid remoto todo ceros) no
+# puede pisar a nadie, y un borrado tiene su propia excepcion con nombre mas arriba. El coste, por
+# tanto, lo paga unicamente la operacion que puede hacer daño.
+#
+# FALLA CERRADO: si no puedo preguntarle al remoto si hay lector, RECHAZO. «No he podido mirar» no
+# es «no habia nadie», que es la confusion que este repositorio lleva todo el dia corrigiendo.
+#
+# ⚠ Y LO QUE ESTA GUARDA NO ES, dicho aqui para que nadie lo lea como mas de lo que da: NO es
+#   atomica. Entre este `ls-remote` y el push cabe que alguien tome la señal, y entonces el claim
+#   se mueve igual. Cerrar esa ventana desde un hook de cliente no se puede —la gramatica de
+#   `--force-with-lease` compara SIEMPRE el ref que empuja consigo mismo—. Lo que hay DESPUES no
+#   es otra guarda sino DETECCION: la señal pincha el SHA leido, asi que `claim-lector.sh libre`
+#   contesta «MOVIDO BAJO LECTOR» comparandola con el valor de ahora. Nombra el movimiento
+#   cuando ya ocurrio; no lo impide.
+#
+#   ⚠ Y LA DETECCION TAMPOCO CIERRA LA VENTANA — decirlo asi era vender de mas, y un lector lo
+#   midio: `libre` hace DOS `ls-remote` (señal y claim) y entre ellos cabe que aparezca una
+#   señal. Eso ya no da una respuesta falsa —se relee y se contesta 2, «no he podido mirar»—
+#   pero 2 no es «cerrado»: es fallar cerrado. La guarda ESTRECHA la ventana de minutos a
+#   milisegundos y la deteccion la CUBRE despues, nombrando el movimiento cuando ya ocurrio.
+#   Nada de esto es exclusion mutua, y quien lo lea tiene que saberlo antes de confiarle algo.
+_cl_ceros() { case "$1" in *[!0]*) return 1 ;; *) return 0 ;; esac; }
+_cl_rechazo=0
+while read -r _cl_lref _cl_loid _cl_rref _cl_roid; do
+	case "$_cl_rref" in
+	refs/integration-claims/*.lector) continue ;;
+	refs/integration-claims/?*) ;;
+	*) continue ;;
+	esac
+	_cl_ceros "$_cl_roid" && continue   # alta: no hay nada bajo lo que meterse
+	_cl_ceros "$_cl_loid" && continue   # borrado: su excepcion esta arriba, con nombre
+	_cl_sig="refs/integration-claims/${_cl_rref#refs/integration-claims/}.lector"
+	if ! _cl_out="$(git ls-remote "${OLIVARES_PUSH_REMOTE_NAME:-origin}" "$_cl_sig" 2>/dev/null)"; then
+		echo "pre-push: NO HE PODIDO MIRAR si '$_cl_rref' tiene lector — rechazo el push." >&2
+		_cl_rechazo=1
+		continue
+	fi
+	[ -n "$_cl_out" ] || continue
+	echo "pre-push: '$_cl_rref' TIENE LECTOR y este push lo mueve ($_cl_roid -> $_cl_loid)." >&2
+	echo "pre-push:   $(printf '%s' "$_cl_out" | awk 'NR==1{print $1}')  $_cl_sig" >&2
+	echo "pre-push:   quien lo lee, con: bash scripts/claim-lector.sh libre ${_cl_rref#refs/integration-claims/}" >&2
+	echo "pre-push:   publica un claim NUEVO, o espera a que suelte, o pasa con --no-verify y declaralo." >&2
+	_cl_rechazo=1
+done <"$push_refs_file"
+if [ "$_cl_rechazo" != "0" ]; then
+	exit 1
+fi
+
+# The battery injects a forced verdict right below the marker to prove its end-to-end
+# assertions can actually fail: a test that cannot go red is a decoration. If the marker
+# disappears, that battery goes RED rather than quietly stopping to mutate.
+# MUTATION-ANCHOR (scripts/test-prepush-refclass.sh)
+if [ "$gate_class" = "skip" ]; then
+	echo "pre-push: ${gate_reason}." >&2
+	exit 0
+fi
+
+# ⛔ AQUI Y NO ANTES: un ref que no gatea nada —el mutex, un borrado— no ejecuta ni un lint, asi
+# que preguntarle a `task` si puede leer el Taskfile seria una llamada que la bateria observa y
+# que contradice su propiedad «para este ref NO corre ningun task». La comprobacion pertenece al
+# punto en que de verdad vamos a usarlo.
+# ⛔ Y QUE `task` PUEDA LEER EL TASKFILE, NO SOLO QUE EXISTA. Medido el 2026-08-19, y es un
+# FAIL-OPEN del gate entero: con un Taskfile que no parsea, este hook salia **rc=0** —dejaba
+# pasar el push— imprimiendo «task: Failed to parse Taskfile.yml» por el camino. Los 55 lints
+# no corren, ninguno falla, y la puerta se abre. Asi aterrizo en `main` el Taskfile roto del
+# PR #1022: su rama no podia ejecutar un solo gate y el hook no lo impidio.
+#
+# La comprobacion de arriba pregunta si el BINARIO esta. Esta pregunta si puede hacer su
+# trabajo, que es otra cosa: `task --list-all` obliga a parsear el fichero entero y no ejecuta
+# nada. Sin esto, «no he podido mirar» y «esta limpio» son el mismo rc.
+if ! task --list-all >/dev/null 2>&1; then
+	echo "pre-push: 'task' no puede LEER el Taskfile — el gate local no puede correr, rechazo el push." >&2
+	echo "pre-push: el error exacto:" >&2
+	task --list-all 2>&1 | head -3 | sed 's/^/pre-push:   /' >&2
+	echo "pre-push: sin esto los 55 lints no se ejecutan y el push saldria VERDE sin haber mirado nada." >&2
+	echo "pre-push: o lo arreglas, o pasas EXPLICITAMENTE con: git push --no-verify" >&2
+	exit 1
+fi
+
+echo "pre-push: ${gate_reason}." >&2
+
+# The heavy list, WRITTEN ONCE. It used to be typed here and typed again in the calls at
+# the bottom, and the consequence showed up in the battery rather than in the hook:
+# removing `task tokens:check` from the gate left every assertion green, because the
+# end-to-end check asserted six of the seven calls by hand. The battery now compares the
+# tasks it OBSERVES against this declared list, in order — and against the same list in
+# CONTRIBUTING.md — so the banner, the calls and the documentation cannot drift apart
+# again without something going red.
+gate_heavy_list="test:license-worker + build:cloud + test:cloud:norace + check:web + tokens:check + lint:format-ratchet + lint:guide-docs + lint:raw-palette + test:web + web:check + build:go + test + sdk:check"
+echo "pre-push: FAST lints (mid-operation + disk-headroom + overlay-seal + release-anchor-identity:selftest + int-12-no-land + hook-leg-wiring + hook-leg-wiring:selftest + worktree-identity + conflict-markers + run-block-syntax + run-block-syntax:selftest + release-disk-floor + unbound-env +"
+echo "pre-push:   channel-parity +"
+echo "pre-push:   session-record + holds + holds-selftest + inbox + inbox:selftest + publish-inbox-shape + git-env + git-env:selftest +"
+echo "pre-push:   session-numbers + commit-identity + commit-identity-gate + portal-brand + emitted-urls + readme-task-claims +"
+echo "pre-push:   vet + export + js-lexer + export-closure + hooks-path + hooks-path-gate + addon-sets +"
+echo "pre-push:   addon-sets-gate + nul + nul-gate + hub-battery + program-anchors + brief-effort +"
+echo "pre-push:   spdx + spdx-gate + gofmt + brand-parity + email-brand + go-toolchain +"
+echo "pre-push:   boundary + verifier-truth + migrations + d1-migrations + connectors + connector-inventory +"
+echo "pre-push:   cli-registries + agent-surfaces + connector-onboard + migrations:coverage + pin-distance + fiscal-id +"
+echo "pre-push:   unreachable-build-guards + i18n + i18n-anchors + engine-output + datatable-empty + console-perms +"
+echo "pre-push:   docs-parity + adr-not-published + public-counts + cli-coverage + console-route-docs + ci-env-reach +"
+echo "pre-push:   config-coverage + screenshot-freshness + motor-declarado + motor-declarado:selftest + mute-pipefail + cli-transport-exempt + cli-transport-exempt:selftest +"
+echo "pre-push:   watchdog-unpublished-work + gate-lock-order + client-callers + client-callers-selftest + kms-backends +"
+echo "pre-push:   release-version + launch-image-refs + screenshot-coverage + launch-placeholders + launch-counts + cloud-availability-claims + video-scene-anchors + docs-honesty +"
+echo "pre-push:   commerce + commerce-entity-fks + commerce-entity-fks:selftest + security-txt + cosign-pins + release-mechanics +"
+echo "pre-push:   actions + pg-env + json-decoders + error-mappers + build-bin-parity + web-e2e-boot +"
+echo "pre-push:   session-duplicates + sigpipe-booleans:selftest + spdx:awk-selftest + ci:run-skipped-steps:selftest + claim-lector:selftest + npm-vuln-gate + status-ref + ci-ports + cra-pack + decision-index +"
+echo "pre-push:   decision-index:selftest + taskfile-shape + taskfile-shape:selftest + taskfile-graph + taskfile-executable + taskfile-executable:selftest +"
+echo "pre-push:   phone-home-claims + phone-home-claims:selftest + translation-drift + classify-allowlist + classify-allowlist:selftest + docsite-versions + docsite-versions:selftest +"
+echo "pre-push:   docs-redirects + docs-redirects:selftest + md-links + md-links:selftest +"
+echo "pre-push:   download-contract + download-contract:selftest + sigpipe-booleans + hub-web-fidelity +"
+echo "pre-push:   web-bundle-freshness + list-truncation-witness + list-truncation-witness:selftest + badge-vacio-filas + badge-vacio-filas:selftest + capture-view-keys + capture-view-keys:selftest + seed-payloads:selftest + exec-tmpdir:selftest + sembrado-volumen:selftest + adopcion-otlp:selftest + tenant-bound-writes:selftest + tenant-bound-reads + tenant-bound-reads:selftest +"
+echo "pre-push:   0022-published-schema + 0022-published-schema:selftest + ver-10-og + ver-10-og:selftest + baseline-shrink + relay-pointer +"
+echo "pre-push:   test:publish-enterprise-artifacts + test:cli-walk + commit-msg-closing + timeout-headroom + branch-protection + rebase-web-branch +"
+echo "pre-push:   ci-timeout-arithmetic + ci-timeout-arithmetic:selftest + ci-step-guard + ci-step-guard:selftest + ci-inner-clocks + ci-inner-clocks:selftest + ci-sibling-legs + ci-sibling-legs:selftest +"
+echo "pre-push:   test-hook-parallelism + test-hook-parallelism:selftest + ci-secrets-cap + alc-02-f1-hold:selftest + alc-02-f2-hold:selftest + alc-02-f3-hold:selftest +"
+echo "pre-push:   alc-02-f4-hold:selftest + alc-04-xff-hold:selftest + c02-hold-key-until-producer:selftest + c02-r2-key-from-token:selftest + c02-r2-set-key-prep:selftest + c03-02-sign-features-prep:selftest +"
+echo "pre-push:   c03-02-sign-features:selftest + c03-11-fase-r:selftest + c05-14-effect-key-prep:selftest + c13-07-ar-holds-prep:selftest + c13-07-holds + cfg-01-production-hold:selftest + eco-01-activation-hold:selftest +"
+echo "pre-push:   eco-11-reserve-funded:selftest + meta-12-phone-home:selftest + ver-02-cut-hold:selftest + ci-history-depth + ci-history-depth:selftest +"
+echo "pre-push:   openapi-op-descriptions + runbook-coverage + reserve-numbers:selftest + release-diagrams + claim-safety:selftest + classify-paths-parity + classify-paths-parity:selftest + orphan-batteries + orphan-batteries:selftest + purge-scratch:selftest + race-report:selftest + race-groups:selftest + release-smoke-answers + release-smoke-stamp + prepush-treesnap + prepush-refclass)."
+
+
+
+
+if [ "$gate_class" = "full" ]; then
+	echo "pre-push: then the FULL gate (${gate_heavy_list}) under the host mutex."
+	echo "pre-push: Bypass everything with --no-verify."
+else
+	echo "pre-push: the FULL gate does NOT run for this ref. Run it yourself on demand:"
+	echo "pre-push:   task test  (and check:web / web:check / sdk:check)."
+fi
+# lint:disk-headroom BEFORE everything, and it is one `df`. The eleven-module build once died
+# with "no space left on device" and that reads as a COMPILER error: the machine, not the tree,
+# was full. A gate that starts without headroom cannot distinguish "broken" from "could not
+# look", so this answers first and refuses fast rather than half-way through a link.
+# VA EL PRIMERO, y no por gusto: si el árbol está a medias, ningún veredicto de los que vienen
+# detrás significa lo que dice. Medido el 2026-08-19 en el propio hub — un `git rebase` aplanó un
+# commit de merge, se detuvo en conflicto, y la cadena de publicación corrió tres gates de
+# contenido que PASARON sobre el árbol parcial y empujó un HEAD detached a `main`. «Gates OK» era
+# cierto sobre un árbol que no era el que el integrador creía publicar. Cuesta milisegundos: mira
+# .git, no el árbol.
+# --- EL CORCHETE DEL ARBOL: un gate que MODIFICA el arbol mientras lo comprueba ------------
+# `scripts/check-tree-untouched.sh` se construyo el 2026-08-19 exactamente para esto, con sus dos
+# modos (`--snapshot` antes, `--compare` despues) y su bateria. **Y la unica llamada de todo el
+# arbol era su propio `--selftest`**: `lint:tree-untouched` verifica que la herramienta funciona
+# y nadie la usa para lo que existe. Su propia descripcion documenta el hueco —«nada en el hook
+# ni en mainline-ci miraba el arbol despues»— y ese hueco seguia abierto porque la herramienta
+# que lo cierra no estaba cableada.
+#
+# Medido el 2026-08-20 en este worktree: `--snapshot` y `--compare` cuestan **0 s**, `--compare`
+# sobre un arbol intacto da 0 y **da 1 en cuanto se muta un fichero**. No hay razon de coste.
+#
+# ⛔ Y VA COMPUESTO, NO EN UN `trap` PROPIO. La primera version instalaba
+# `trap 'olivares_comparar_arbol' EXIT` aqui y decia «cubre TODAS las salidas». **Era falso en los
+# dos sentidos**, y lo midio el contraste Codex `sol max` del 2026-08-20 (CRITICA, VERIFICADO):
+#
+#   · SUSTITUIA al trap de la linea 240, que recoge `push_refs_file` — es decir, mi guarda nueva
+#     reabria la fuga de /tmp que ese trap existe para cerrar (47.520 ficheros medidos en su dia).
+#   · y el carril completo la SUSTITUIA a ella con `prepush_cleanup`, asi que el control NO CORRIA
+#     en el unico carril que construye y prueba, y encima dejaba su propia foto sin borrar.
+#
+# Lo peor no es el fallo: es que lo anadi doce lineas despues de un comentario que advierte
+# LITERALMENTE de esto — «un segundo `trap ... EXIT` SUSTITUYE al primero, no se suma». Leerlo y
+# repetirlo igual es la razon de que esto vaya ahora en una funcion que los dos traps llaman.
+# ⛔ EL `mktemp` VA DENTRO DE LA GUARDA, Y NO ES ESTILO. Hasta el 2026-08-22 estaba ENCIMA del
+# `if`, asi que el fichero se creaba SIEMPRE y la guarda decidia DESPUES si llegaba a usarse.
+# `scripts/check-tree-untouched.sh` entro el 2026-08-19, y esta guarda mira el arbol de LA RAMA QUE
+# SE EMPUJA, no el del hook: el 2026-08-22 las CUARENTA ramas abiertas eran anteriores, o sea que
+# el `-x` fallaba en todas. El `if` cae entonces sin `else` que recoja —el `else` de abajo solo
+# cubre «la foto fallo»— y el trap activo en este punto es el de la linea 240, que borra el fichero
+# de refs y NADA MAS. Un fichero vacio por push y por carril: 9.691 medidos en /tmp, **todos de 0
+# bytes**, que es la firma de esto y no de otra cosa (una foto de verdad pesa).
+# Y hay una segunda salida por la misma puerta: el `exit 0` de la linea ~1210 ocurre antes de que
+# `trap prepush_cleanup EXIT` se instale, asi que sin la guarda tampoco recogia la foto.
+# Lo cubre `scripts/test-prepush-treesnap.sh` con control negativo: restaurar esta forma vieja
+# vuelve a fugar y el test lo dice.
+OLIVARES_TREE_SNAP=""
+if [ -x scripts/check-tree-untouched.sh ]; then
+	OLIVARES_TREE_SNAP="$(mktemp "${TMPDIR:-/tmp}/prepush-treesnap.XXXXXX" 2>/dev/null || true)"
+fi
+if [ -n "$OLIVARES_TREE_SNAP" ]; then
+	if bash scripts/check-tree-untouched.sh --snapshot "$OLIVARES_TREE_SNAP" >/dev/null 2>&1; then
+		# Se llama desde CADA trap EXIT del hook. Idempotente: se desarma sola borrando la foto,
+		# asi que si dos traps la invocan, la segunda no dice nada.
+		olivares_comparar_arbol() {
+			[ -n "${OLIVARES_TREE_SNAP:-}" ] && [ -r "${OLIVARES_TREE_SNAP:-}" ] || return 0
+			# ⛔ LA ASIGNACION VA DENTRO DEL `if`, Y NO ES ESTILO. Con `salida=$(...)` en su
+			# propia linea, `set -euo pipefail` mata la funcion en cuanto `--compare` devuelve 1
+			# — es decir, EXACTAMENTE en el unico caso para el que existe esta guarda. Medido con
+			# un arnes de seis casos: el arbol mutado salia rc 1 en vez de conservar el veredicto,
+			# NO imprimia el aviso y fugaba los dos temporales. Es la misma forma que corregi en
+			# `check-holds.sh` esta misma noche, repetida doce lineas despues.
+			local salida
+			if salida=$(bash scripts/check-tree-untouched.sh --compare "$OLIVARES_TREE_SNAP" 2>&1); then
+				: # el arbol esta como estaba; en silencio
+			else
+				printf '%s\n' "$salida" >&2
+				echo "pre-push: ⛔ UN GATE MODIFICO EL ARBOL DE TRABAJO mientras lo comprobaba." >&2
+				echo "pre-push:   Lo de arriba es la diferencia. No es tuyo: lo dejo un gate de esta corrida," >&2
+				echo "pre-push:   y en un clon compartido lo recoge el \`git add\` del siguiente carril." >&2
+			fi
+			rm -f -- "$OLIVARES_TREE_SNAP"
+			OLIVARES_TREE_SNAP=""
+		}
+		# Hace las DOS cosas a proposito, igual que `prepush_cleanup` mas abajo y por la misma
+		# razon: instalar aqui la comparacion a secas descartaria el trap que recoge el fichero
+		# de refs, y devolveria la fuga de /tmp.
+		olivares_salida_rapida() {
+			rc_previo=$?
+			olivares_comparar_arbol
+			rm -f "${push_refs_file:-}"
+			return $rc_previo
+		}
+		trap olivares_salida_rapida EXIT
+	else
+		rm -f -- "$OLIVARES_TREE_SNAP"
+	fi
+fi
+
+task lint:mid-operation
+task lint:disk-headroom
+# ⛔ EL ORDEN DE ESTAS TRES PATAS ES EL RESULTADO DE UN CHOQUE, Y NO ES ARBITRARIO. a repository gate
+# adelanto `release-anchor-identity:selftest` e `int-12-no-land` por lo que cuesta su rechazo;
+# a repository gate anadio el sello del clon hermano en esa MISMA posicion. Se resuelven en union y en
+# este orden porque `lint:int-12-no-land` es uno de los siete checkers que EXIGEN el sello: con
+# las patas de a repository gate delante, int-12 no encontraria sello y saldria 2 en CADA push. Quedarse
+# con un solo lado habria perdido una de las dos mejoras en silencio.
+# ⛔ Y AQUI, ANTES QUE CUALQUIER PATA QUE LEA EL CLON HERMANO DEL OVERLAY (a repository gate). Es un solo
+# `git fetch` de ~2,3 s que SELLA la frescura del clon, y a partir de aqui los SIETE checkers que
+# lo leen exigen ese sello: si falta, o es de otro acto, o no describe este clon, salen 2 — «no he
+# podido mirar» — en vez de comparar contra un ref congelado. El 2026-08-29 la caja entera comparo
+# contra un `origin/main` con un merge de retraso durante horas porque el clon TRAE por SSH (que
+# falla EN SILENCIO sin clave) y EMPUJA por HTTPS: ningun gate fallo y todos midieron bien contra
+# un ref viejo. **Un ref congelado no es un veredicto.**
+#
+# ⛔ VA AQUI Y NO MAS ABAJO, y no es estetica: `lint:int-12-no-land` (:1473) es uno de los siete y
+# EXIGE el sello. Si esta pata corriera despues, int-12 no encontraria sello y saldria 2 en CADA
+# push — que es exactamente la averia que este cableado existe para no tener. Se puso al final una
+# vez, en la primera version de este lote, y el contraste `sol max` la caza: sin llamador, el
+# sellador esta MUERTO y la mitad lectora rompe la caja entera.
+# ⛔ EL ID DE ACTO LO GENERA EL GANCHO, UNA VEZ POR CORRIDA, Y SE SOBRESCRIBE SIEMPRE.
+# Si escritor y lector lo derivaran del HEAD, dos reintentos del MISMO push compartirian acto y el
+# sello del intento anterior colaria un ref que nadie ha vuelto a traer (A-04, 2.ª vuelta). Y si se
+# escribiera `${OLIVARES_ACT_ID:-...}`, un id HEREDADO del entorno sobreviviria y dos corridas bajo
+# ese entorno compartirian acto igual (A-04, 3.ª vuelta). El acto es la CORRIDA: se ignora lo que
+# venga puesto. La generacion vive en scripts/lib/act-id.sh para poder PROBARLA, en vez de fiarla a
+# una linea de este fichero que ninguna bateria puede ejecutar.
+# ⚠ Si la lib no esta, NO se mata el gancho ni se inventa un id aqui: se deja SIN poner, y la pata
+# del sello se niega sola con su 2 —«no he podido mirar»—, que es el camino fail-closed que ya
+# existe y esta probado. Matar el gancho seria peor y ademas ACOPLA: la bateria de clasificacion de
+# refs COPIA este fichero a un directorio temporal y lo corre alli (test-prepush-refclass.sh:748,
+# :810), donde `../scripts/lib` no existe; con el `exit 2` que puse primero, esa bateria pasaba de
+# 383/0 a 367/16 por una razon que no tiene nada que ver con lo que mide. Medido antes de dejarlo.
+# ⛔ UNSET PRIMERO, Y LA LIB SE CARGA DESDE EL CWD, NO DESDE BASH_SOURCE. Las dos cosas las
+# encontro el contraste `sol max` (A-04, 4.ª vuelta) y las dos venian de lo mismo: **este hook se
+# COPIA a $TMPDIR y hace `exec bash` desde alli** (arriba, «INSTANTANEA»), asi que dentro de un push
+# REAL `BASH_SOURCE[0]` apunta al temporal y `../scripts/lib` cae FUERA del arbol. Consecuencias
+# medidas: la carga no ocurria nunca ⇒ sin id, `lint:overlay-seal` habria rehusado CADA push; y como
+# no habia `unset`, un id HEREDADO sobrevivia intacto — exactamente el defecto que la vuelta
+# anterior decia cerrar. El resto del gancho resuelve por CWD (git lo fija en la raiz del arbol) y
+# es lo que se hace aqui.
+#
+# ⚠ Y `test-prepush-refclass` NO puede verlo: copia el hook al fixture y sustituye `task` por un
+# stub siempre verde, asi que su 383/0 no prueba esta carga. El testigo vive en el banco del sello.
+unset OLIVARES_ACT_ID
+if [ -r scripts/lib/act-id.sh ] && . scripts/lib/act-id.sh 2>/dev/null; then
+	OLIVARES_ACT_ID="$(olivares_nuevo_act_id)"
+	export OLIVARES_ACT_ID
+fi
+task lint:overlay-seal
+
+# ⛔ a repository gate (2026-08-29): las patas que comparan un REGISTRO contra un objeto vivo corren AQUI,
+# antes que nada que cueste. No cambia lo que comprueban: cambia CUANDO lo dicen.
+#
+# El ordinal de un gate fija lo que cuesta su rechazo, y estas eran las peor colocadas del
+# fichero. MEDIDO el 2026-08-29 sobre este arbol:
+#
+#   lint:int-12-no-land                       280 ms   estaba en el ordinal 157 de 170
+#   lint:release-anchor-identity:selftest     211 ms   estaba en el 84 de 170
+#
+# Medio segundo entre las dos, cobrado tras ~2 h de gancho. El 2026-08-29 un registro INT-12
+# desfasado mato pushes de varios carriles y cada uno lo supo a la hora. Un cuarto de segundo
+# que puede rechazar el push va al principio o no sirve de portero: avisa cuando ya has pagado.
+#
+# Se quedan donde estaban lint:program-anchors (ordinal 27) y lint:pin-distance (45): ya son
+# tempranas y moverlas anade riesgo sin ganancia medible.
+# §C.4.8 identity (2026-08-29, ~1s, hermetic and OFFLINE): the release anchors in effect must BE
+# the reviewed ones. For five days after the 2026-08-23 rotation the production Variables held the
+# anchors whose private halves were exposed, and nothing went red: check-release-pubkey validates
+# FORM, and the preflight only PRINTED a fingerprint. The mutant is in this battery. Only the
+# offline half runs here — the --live form needs the network and would turn contention into a
+# false red on someone else's push (lint:release-anchor-identity:live).
+task lint:release-anchor-identity:selftest
+task lint:int-12-no-land
+# ⛔ Y AQUI TAMBIEN, por la misma razon de a repository gate y con mas motivo: esta compara el gancho
+# consigo mismo. Una pata cableada vive en TRES sitios y el defecto es actualizar uno; el
+# 2026-08-31 eso puso roja `lint:prepush-refclass` —pata de este gancho— en la posicion 1735,
+# con ocho casos que decian rc=0 sin nombrar la causa. Sub-segundo, y rechaza antes de cobrar.
+task lint:hook-leg-wiring
+task lint:hook-leg-wiring:selftest
+# ⛔ AND IMMEDIATELY AFTER IT, BEFORE THE FIRST LINT THAT READS THE TREE: is git even looking at
+# THIS tree? disk-headroom keeps its place because it answers about the MACHINE and is one `df`;
+# this one answers about the LENS, and every gate below it is worthless under a wrong answer.
+# On 2026-08-16 the shared clone's config carried core.worktree pointing at another session's
+# worktree, so `git status` there reported 54 modified, 194 deleted and 214 untracked paths of
+# which all 194 "deleted" existed and none of the 214 "untracked" did. Every tree-reading lint
+# would have judged the wrong files, and the obvious remedy — reset --hard — would have destroyed
+# the OTHER session's work. Third occurrence; the first cost a rescue branch that is still in the
+# hub's config. Under a second, and it names both paths when it refuses.
+task lint:worktree-identity
+# ⛔ AND CONFLICT MARKERS BEFORE ANYTHING ELSE RUNS. One second, and a tree carrying `# is not a tree worth spending the rest of this gate on. It sits here because of what happened on
+# 2026-08-15: a merge reported one conflicted file, four had markers, `git add -A` marked the other
+# three resolved WITH the markers inside, and the only thing that objected was a shell parser two
+# lints later. In prose there is no parser.
+task lint:conflict-markers
+# ⛔ Y QUE EL SHELL DE CADA BLOQUE `run:` PARSEE. 1,9 s. Va aqui arriba por lo mismo que sus
+# vecinas: su defecto NO VIAJA EN EL DIFF de quien empuja —cualquiera puede romper un `run:` de un
+# workflow que no corre hasta el dia del release— y cuando muerde, muerde mudo: bash sale 2 ante un
+# error de sintaxis SIN imprimir nada del guion. El 2026-08-29 tumbo el estreno de `hook-only-legs`
+# y `lint:actions` estuvo verde todo el rato, porque actionlint valida el workflow y no el shell.
+task lint:run-block-syntax
+task lint:run-block-syntax:selftest
+task lint:release-disk-floor
+# Y las variables que este contenedor SIEMPRE tiene y los runners no. Medio segundo. Va aqui
+# arriba porque su defecto no viaja en el diff: un `$HOME` sin guarda bajo `set -u` esta verde en
+# esta caja y mata el guion en el runner, y el rojo sale con el nombre del PASO — el 2026-08-19
+# tumbo `control-plane` entero bajo el rotulo «license boundary» mientras la frontera de licencia
+# acababa de decir OK sobre 259 grafos de paquetes. Cuesta una investigacion entera cada vez.
+task lint:unbound-env
+# Y que los canales de release digan lo mismo en Go y en TypeScript. 14 ms. Ningun compilador ve
+# ese par, y la ultima vez que se separo —el 2026-08-19, en el publicador— el resultado fue que la
+# linea LTS no se podia publicar y `beta`/`edge` subian objetos que nadie puede descargar.
+task lint:channel-parity
+# ⛔ Y AQUI, NO EN LA PATA 115 DE 132, QUE ES DONDE ESTABA. Cuesta 49 ms medidos y es git puro
+# —«¿esta rama toca CODIGO sin anadir un fichero bajo sessions/?»—, asi que su veredicto no
+# depende de nada que corra antes. En el ordinal 115 un rechazo suyo tira 114 patas YA PAGADAS,
+# `export-closure` incluida, que sola cuesta ~10 min; tres veces la noche del 26 mato un push en
+# la ultima pata. **El ORDINAL de un gate fija lo que cuesta su rechazo**, y una pata barata cuyo
+# sujeto es la RAMA —no el arbol construido— pertenece al principio por construccion.
+task lint:session-record
+# ⛔ Y ESTAS CINCO CON ELLA, POR LA MISMA RAZON Y CON LA MISMA MEDIDA (#1790). Son
+# comprobaciones de GIT y de REGISTRO: su sujeto es la rama y el arbol de trabajo, no un binario
+# construido, asi que su veredicto no depende de nada que corra despues. Estaban en las patas
+# 56, 57, 84, 85 y 88 de 132, es decir DETRAS de las dos patas de export, que son las mas caras
+# del carril (`export-closure` sola ~10 min). El ORDINAL de un gate fija lo que cuesta su rechazo.
+task lint:holds
+task lint:holds-selftest
+task lint:inbox
+# Y su bateria, por lo mismo que las otras: el gate acaba de crecer el control del sello y una
+# guarda que nadie ve cortar no es una guarda. ~2 s.
+task lint:inbox:selftest
+# Y la bateria de la guarda de FORMA del publicador (una entrada no es un buzon; la sonda que falla
+# es NO HE PODIDO MIRAR): ~1 s. Hasta el 2026-08-30 vivia sin tarea ni pata — the reviewer cambio sus
+# tres `exit 2` por `exit 0` y siguio 11/0 sin que nada lo viera: un banco huerfano es una intencion.
+task lint:publish-inbox-shape
+task lint:git-env
+task lint:git-env:selftest
+task lint:session-numbers
+# Identity, and it runs here for the same reason disk-headroom does: it is about the state the rest
+# of this file assumes, not about the diff. A private address in a commit is not undone by a later
+# fix — the commit is already on the server.
+# ⛔ ITS ENVIRONMENT IS SCRUBBED FIRST, and this is not tidiness. The gate reads OLIVARES_ROOT to
+# know WHICH repository to judge, and OLIVARES_COMMIT_EMAIL to read the rule it enforces. Both are
+# legitimate for the battery, which drives the gate directly; NEITHER has any business surviving
+# into a real push. The the model contrast of 2026-08-12 walked in through both: with the
+# predicate pointed at the private address the gate answered CLEAN over a commit carrying it, and
+# with the root pointed at another clone it judged a repository nobody was pushing. Two ways to
+# make the identity gate agree with whatever the caller wanted.
+#
+# It is not a subshell for style: the unsets must not leak into the lints that follow either, so
+# the leg runs inside one and the environment is restored by the parenthesis closing.
+#
+# Carried over from hub/identity-gate-failclosed, whose other half is superseded -- main already
+# fixes the published-history range (with TRUNK, a further refinement over --remotes) and already
+# answers UNVERIFIED where that branch found CLEAN. This hardening is the part that had no
+# equivalent, so it lands on its own rather than riding a 44-hour-stale merge of three rewritten
+# security gates.
+(
+	# ⛔ FOUR, not two. The scrub landed covering OLIVARES_ROOT and OLIVARES_COMMIT_EMAIL, which are
+	# the two that decide WHICH repository and WHICH address. The gate's own header names FOUR
+	# values as overridable and singles out the CUTOFF as the one the Codex sol-max contrast
+	# actually demonstrated (report S-07): an ambient cutoff in the future makes a push carrying a
+	# private address print CLEAN. Measured here 2026-08-15 against main, with a real commit
+	# authored with the private consumer-mail address this gate forbids (the literal is
+	# deliberately NOT written here: it ships in .githooks/, so a comment naming it puts it
+	# in the public tree — measured on 2026-08-29 by the R1 dry-run export) and a real
+	# push-refs file:
+	#
+	#   OLIVARES_IDENTITY_CUTOFF='2027-01-01 00:00'  ->  CLEAN, 0 commit(s) examined
+	#
+	# The compensating control does work -- the verdict printed the moved cutoff and the zero, so
+	# the weakened run does not read like a strong one. But a scrub written precisely so the push
+	# path cannot inherit these knobs, that then inherits half of them, is a scrub whose reader
+	# reasonably believes the push path is sealed. Both remaining knobs default to what this hook
+	# wants anyway (cutoff 2026-08-10, trunk origin/main), so unsetting them removes a bypass and
+	# changes no legitimate verdict.
+	#
+	# This does NOT refuse the overrides in the gate itself, and must not: its battery needs them
+	# to build hermetic cases, which is the reason main gives for keeping them and it is right.
+	unset OLIVARES_ROOT OLIVARES_COMMIT_EMAIL OLIVARES_IDENTITY_CUTOFF OLIVARES_IDENTITY_TRUNK
+	task lint:commit-identity
+)
+# ...and its battery immediately after it, for the reason the gate itself proved on 2026-08-13:
+# it shipped on 2026-08-10 with no test, and was found refusing every dependabot commit in the
+# repository. A guard that runs on every push with nothing checking WHAT it refuses can block all
+# three lanes with a false positive, and the only remedy left in that state is --no-verify.
+task lint:commit-identity-gate
+# El portal de licencias es superficie de marca y ningún otro gate lo alcanza: brand-parity mira
+# la web pública y email-brand descubre por marcas de correo. Sin esto, un cambio de marca deja
+# atrás en silencio la primera pantalla que ve quien acaba de pagar.
+task lint:portal-brand
+# A URL the product SENDS must be a URL that answers. The API-stability policy link we put in
+# every deprecation header 404s (measured 5/5, 2026-08-13). No network here: the record carries
+# its measurement date and ages out, and `--probe` is the half that dials.
+task lint:emitted-urls
+# A README that promises "CI walks the same path" must name a path CI walks. The seven we publish
+# named `task smoke:quickstart`, and .github/ referenced it nowhere: the numbers were true and
+# nothing was keeping them true. ~1s, pure python + `task --list-all`, no build.
+task lint:readme-task-claims
+# ⛔ `vet` COMPILA LOS FICHEROS DE TEST; `build:go` NO. Está aquí, en la vía rápida, porque el
+# 2026-08-13 `main` pasó hora y media sin compilar sus propios tests de `modules/sessions` con
+# `build:go` en VERDE: `go build ./...` no mira un solo `_test.go`. La otra pata que lo caza es la
+# corrida completa de tests, que cuesta 50-65 min sólo en `cmd/olivares`; ésta cuesta segundos y
+# contesta la misma pregunta sobre compilabilidad. Un árbol cuyos tests no compilan no es un árbol
+# verde: es uno que nadie ha podido probar.
+task vet
+# ⛔ lint:unpublished-work USED TO RUN HERE AND WAS WITHDRAWN THE SAME DAY IT LANDED (2026-08-10),
+# AND ON 2026-08-29 IT LEFT THE HOOK ALTOGETHER. Read the two dates together, because the second
+# is the consequence of the first: on 08-10 it lost its AUTHORITY (the reasoning below) and was
+# left running behind `|| true`; for nineteen days it therefore charged every push of every lane
+# the full price of a gate that could fail no one. Measured the day it was removed, with its
+# conditions: >30 min and still running (1812 s alive) over 3371 remote branches and 127
+# worktrees, load 15.2-34.1 on 16 cpu with 16 concurrent pushes — while a lot's own push sat
+# inside it enumerating other lanes' worktrees. `lint:watchdog-unpublished-work` (3 s) stays:
+# what left is the CENSUS, not the check that the census works. The census is one command away,
+# `task lint:unpublished-work`. The reasoning that retired it on 08-10 is kept verbatim below,
+# because it is the argument, not the history:
+# It is not disabled for being noisy. Its PREMISE is wrong at this point in the flow, and two lanes
+# measured it independently within four hours.
+#
+# It counts branches that exist only in this clone. But the clone is shared by three containers and
+# by every session running inside each of them, while a push belongs to ONE session — so it charged
+# the pusher for work that was not theirs and that they could not resolve. the orchestrator was blocked
+# by feature/another LIVE session; they published that session's tip half-finished to lower the
+# counter and it went back up, because kept committing while they pushed. With N concurrent
+# sessions the count CANNOT reach zero, and the only remedy left is --no-verify — a rule whose only
+# remedy is the thing it forbids, which is the exact failure the deletion and claim exceptions in
+# this file exist to prevent.
+#
+# the orchestrator supplied the datum that says where the fix is NOT: their push to an already-existing
+# remote branch passed green without --no-verify. So "push to an existing branch" was never broken by
+# construction — N had simply archived their 15 stray branches hours earlier, so the census read zero
+# when they pushed. They did not pass because the gate distinguished their case; they passed because
+# they had cleaned the census in front of it.
+#
+# Cost before withdrawal, stated because it is the argument: two blocked pushes, one --no-verify its
+# author did not want, and another session's tip published half-done. None of the three made anything
+# safer. As N put it, a ratchet that requires everyone else to finish before you may publish is a
+# coordination barrier wearing a quality gate's clothes.
+#
+# The measurement still has value and is NOT deleted: `task lint:unpublished-work` reports, and a
+# watchdog is the right home for it — it wakes its owner without blocking anyone, which is exactly
+# how the mailbox watchdogs already work in this project.
+# lint:export FIRST among the CONTENT lints: it is the #1 publication blocker, so it runs before
+# the heavy build/test
+#
+# ⛔ AQUI DECIA «standalone (~1.2s)» Y «the cheapest gate». LO CORREGI EN EL Taskfile Y ME DEJE
+# ESTA COPIA — que es la que el operador tiene delante cuando el push se para. Medido 2026-08-20:
+# `export-public.sh --check` SOLO cuesta 122s bajo load 9,15 sobre 16 cpu, y la tarea ademas corre
+# `lint:export-license:selftest`. Cien veces la cifra escrita, y no es el gate mas barato: es de
+# los caros.
+#
+# La leccion no es la cifra: **una correccion que no cubre todas las instancias deja viva la que
+# mas se lee.** El Taskfile lo lee quien edita tareas; esto lo lee quien tiene el push rojo. — a curation regression (a new
+# unclassified path or an internal-ref leak) fails the push immediately, decoupled from
+# the memory-heavy `task test`.
+#
+# ⛔ ADELANTADAS AQUI EL 2026-08-26, Y LA RAZON ES UNA MEDIDA, NO UNA PREFERENCIA.
+#
+# Estas cuatro comprobaciones no necesitan NADA salvo git y sus refs: ni compilador, ni `pnpm`,
+# ni `node`, ni binario construido. Estaban en las lineas 894-1061, o sea DESPUES de `lint:export`
+# y `lint:export-closure`, que son las dos caras del carril. Consecuencia medida en carne propia:
+# el 2026-08-25 un push de `feature-bind-writes` murio en `lint:session-numbers` a los
+# **103 minutos** por una colision de numero de sesion que existia ANTES de empezar el push — la
+# comprobacion tenia la respuesta desde el primer segundo y se pago el gate entero para oirla.
+#
+# Coste de adelantarlas, cronometrado: `check-session-numbers.sh` 96 s (los 15 s que imprime son
+# de su AUTOTEST, no de la comprobacion), `check-holds.sh` ~0,4 s, `check-inbox-headings.sh` ~0 s,
+# `check-git-env-isolation.sh` ~2 s. Se paga ese minuto y medio SIEMPRE, y a cambio un rechazo de
+# politica llega en minuto y medio en vez de en hora y media.
+#
+# El ORDEN INTERNO se conserva exactamente: `lint:git-env` sigue yendo ANTES de
+# `lint:session-numbers` —su comentario explica por que, y no es estilo: session-numbers construye
+# repositorios desechables y con el GIT_DIR ambiental puesto los mete en el repositorio VIVO— y
+# `lint:inbox` sigue delante de los dos.
+#
+# ⛔ Y SI SE TOCA ESTO, SE TOCA `FAST_LINTS` EN `scripts/test-prepush-refclass.sh` EN EL MISMO
+# COMMIT: esa bateria exige la lista EXACTA y EN ORDEN, y cuenta como gate PESADO todo lo que va
+# despues de `task lint:prepush-refclass`. Ya tumbo el push de todos los carriles una vez
+# (259/0 -> 251/8, y 254/10 al segundo intento).
+# INT-23: los HOLDs y vetos vigentes se EJECUTAN, no se recuerdan. Su batería va con él porque un
+# gate que nadie corre deja de proteger y su salida sana es silencio. Los dos juntos ~0,4 s.
+# The mailbox check ran in NO gate at all — not here, not in the battery, not in CI — so a
+# branch never paid it and the only lane that did was whoever next published documents to
+# main. The breaker never found out; the next person through the door did, and spent the
+# time proving the red was not theirs. That happened TWICE inside forty minutes on
+# 2026-08-06, both times from the same lane, the second AFTER the first was repaired by
+# hand. A gate whose cost lands on someone other than its cause teaches people to push
+# without looking, which is the exact multiplier this hook exists to prevent. It costs a
+# grep over three files — measured at 0s — so there was never a budget argument either.
+# BEFORE lint:session-numbers, deliberately. A script that builds throwaway repositories
+# while the ambient GIT_DIR is still set drives them into the LIVE repository, and
+# lint:session-numbers is the one measured doing it (2026-08-06): from a linked worktree
+# it left the branch of PR #526 on a fixture commit and stamped core.bare=true on the
+# shared config. Running the isolation gate AFTER it would report the damage the previous
+# line had already done. Two seconds, with its own mutation control.
+# Adelantada con las otras tres: git puro, y es la que costo los 103 minutos.
+# Y la QUINTA, adelantada por la misma razon y con la prueba mas reciente que tengo: el primer
+# push de ESTE mismo commit murio en `lint:session-record` a los **2 718 s** (45 min) porque le
+# faltaba el brief de la sesion — un fichero, comprobable con un `ls`. Es git puro, cuesta
+# segundos, y estaba en la linea 1191 de 126 patas. El reorden no llegaba lo bastante arriba, y
+# quien lo demostro fue el propio reorden.
+
+
+# ⛔ THE NOTE THAT WAS HERE SAID "the load-bearing enforcement is the same task in mainline-ci,
+# which cannot be skipped with `--no-verify`". THAT BACKSTOP DOES NOT RUN. Measured 2026-08-20:
+# `mainline-ci.yml` is `on: workflow_dispatch:` and nothing else, and `export-check.yml` — which
+# does trigger on push, filtered to exactly the paths involved — is scoped `branches: [main]`.
+# On a feature branch THIS CALL IS THE ONLY READER of an export leak.
+#
+# The claim was not idle: it is the sentence that makes `--no-verify` look covered. Measured the
+# same day, five PRs were pulled from one integration batch for leaks that the branch-tip check
+# reports with file and line, i.e. leaks this call would have refused. A named backstop that
+# never runs invites the bypass it claims to cover, so the note is corrected rather than deleted.
+task lint:export
+# lint:export-closure IMMEDIATELY AFTER, and it is the leg that was missing rather than a new
+# idea: until 2026-08-15 this gate ran in NO local gate at all -- only in the export-check
+# workflow, i.e. only AFTER a push had landed. It cost twelve consecutive red runs on main in one
+# day, and the mechanism is worth stating because it is not carelessness: the closure of a
+# reference is a property of TWO commits. A lane curated a path out of the export in one commit
+# while the declaration excusing its callers waited, correctly, in another. Each half was green
+# where it was written; only the pair is measurable, and only a gate that runs on the tree can
+# see it. MEASURED 2026-08-15 in an isolated worktree, load 4.03 over 16 cpu: this leg costs 98s
+# and the whole fast lane 12m41s, 55 of 55 green. The figure first written here was ~56s, taken
+# from one run under different load and without its conditions attached -- which is the same
+# class of number this file already corrected once, when a 4m15s from 2026-08-02 had aged 2.5x
+# in prose. A duration without the load it was taken under is citable, not comparable.
+task lint:js-lexer
+task lint:export-closure
+# SECOND, and ~0s: the gate that decides whether any of the rest of this file is reachable.
+# core.hooksPath lives in .git/config, which every linked worktree of this clone SHARES (39
+# of them as this line was written). `task setup` writes it relative and asserts it — ONCE,
+# at install time. One `git config core.hooksPath /abs/path` afterwards, by a person or a
+# tool, pins every worktree to one fixed tree's hooks: a branch then runs a hook newer than
+# its own checkout while the TASKS that hook invokes resolve against the branch's older
+# Taskfile, and its push fails asking for a task its tree does not define, with a diff that
+# has nothing to do with it. the orchestrator reported exactly that shape on 2026-08-07.
+#
+# The mechanism did NOT reproduce (a probe worktree with a marked hook ran its OWN hook,
+# from the root and from a subdirectory alike), and what the value was at the time cannot be
+# recovered because .git/config is not versioned. The gate exists anyway: nothing was
+# watching, and "correct today" is a photograph. Note the honest limit, written out in
+# scripts/check-hooks-path.sh — from HERE it can only catch the absolute case, because the
+# other three mean no hook ran at all.
+task lint:hooks-path
+# And its battery, in the FAST lane for the same reason the npm one is: a battery nothing
+# runs is a battery that proves nothing. Nine cases against real throwaway repositories,
+# each red one with a mutant that must flip it green. ~1s, no network.
+task lint:hooks-path-gate
+# The add-on set derivation, and its battery right behind it. This is the fact the commercial
+# build tags are about to be derived from, so a canon edit that makes the sets underivable —
+# a renamed key, an add-on left without shipping modules, the same module claimed by two sets —
+# must go red HERE, at the push that edits the canon, and not months later inside a release that
+# quietly shipped somebody the bytes of an add-on they never bought.
+task lint:addon-sets
+task lint:addon-sets-gate
+# A NUL byte in a source turns grep into "binary file matches" — a match with no line and no
+# content — so every source-anchor ratchet that reads lines from that file stops seeing it,
+# silently, while tsc, the unit suites and lint:spdx all stay green. Measured on 2026-08-07 by
+# walking into it: six raw NULs went into two license-worker sources through the whole fast
+# lane without a single red. It costs 0.7s over 10118 tracked files, and it declares what it
+# skipped. Its battery runs next to it for the same reason the npm one does.
+task lint:nul
+task lint:nul-gate
+# La bateria del hub es el UNICO gate del integrador (empuja a main con --no-verify), asi que un
+# defecto en como clasifica un veredicto es un defecto en el ultimo filtro antes de main. Su banco
+# vive dentro del propio guion para que no haya dos implementaciones del discriminador.
+task lint:hub-battery
+# A programme nobody is routed to is a programme that gets lost. Two have been, and both
+# times the analysis existed — only the link did not. Costs a grep over one file.
+task lint:program-anchors
+# A live brief that orders `/effort ultracode` as the session's first action is asking
+# for something a LAUNCHED session cannot do (2026-08-05): /effort is a CLI command and
+# a session cannot invoke it on itself. Twelve briefs carried it, copied from one
+# template, and ultracode ALSO fixes xhigh — below the --effort max used at launch — so
+# the rule read as strictly better while being a downgrade. Cheap, no build.
+task lint:brief-effort
+task lint:spdx
+# The licence gate's own battery, next to it for the reason the nul one is: a gate nobody
+# tests is measured by walking into it, and on 2026-08-14 that is exactly how it went — 44
+# tracked .mjs/.cjs files were invisible, one of them shipping a LicenseRef-Olivares-Internal
+# header inside AGPL scripts/, and the same 200 bytes answered rc=1 as .js and rc=0 as .mjs.
+# It costs ~15s, nearly all of it the one contrafactual run over the real tree, which is the
+# only leg that can say the widening did not cost us the coverage we already had.
+task lint:spdx-gate
+# gofmt over every tracked Go source (~1s, no build). It sits next to lint:spdx because it is
+# the same shape of question — is the header/format of every source what it must be — and
+# because nothing else in this repo was asking it: `fmt:` formats only clients/go, and
+# .golangci.yml lists gofmt under `formatters:`, which golangci-lint v2 APPLIES rather than
+# fails on. Seventy-nine files had drifted before this line existed.
+task lint:gofmt
+# Brand parity (D-08, VP-5): the console's DTCG tokens and the public website's
+# hand-maintained @theme palette must declare the same brand. THIS workspace is
+# where the check has both trees, so this is the run that does the live
+# cross-repo comparison — remote CI on either repo can only pin its own side to
+# the shared committed manifest. Includes its own red-case fixture battery.
+task lint:brand-parity
+# The same brand, on the one surface that leaves our screens. Until 2026-08-06 the
+# three outgoing emails each wrote their own colour and typeface inline, and the
+# hexes were CORRECT — which is why nothing ever failed. This checks that emails do
+# not choose a colour, not that they chose the right one, and it ships with its own
+# red-case battery. Pure Node, no build, ~1s.
+task lint:email-brand
+# A `toolchain` line inside a workspace module is dead where we build and alive where we publish,
+# so the two can disagree for months and only the GOWORK=off build sees it. The ten this repository
+# carried were removed the same day an adversarial contrast measured that NOTHING would stop them
+# coming back. ~0.2s: it reads go.work and eleven go.mod files.
+task lint:go-toolchain
+task lint:boundary
+task lint:verifier-truth
+task lint:migrations
+# ⛔ Y EL DE D1, que existia con su bateria y CERO llamantes. Su descripcion describe exactamente el
+# defecto que medi el 2026-08-17 a mano: wrangler indexa `d1_migrations` por el NOMBRE COMPLETO, asi
+# que dos ficheros con el mismo prefijo se aplican LOS DOS, en orden de `readdir`, que no esta
+# ordenado. `check-migrations.sh` deja ese arbol fuera a proposito y con razon (es SQLite, no
+# Postgres), asi que sin esta linea nadie miraba D1. Cuesta 1 s.
+task lint:d1-migrations
+# ⛔ Y el inventario de conectores, otra tarea con bateria y CERO llamantes (barrido del 2026-08-17).
+# Comprueba senales de honestidad del inventario: ningun `Gather` no-op suelto y ningun directorio
+# de primer nivel sin clasificar. Es exactamente la clase que se pudre en silencio — un conector
+# nuevo entra sin clasificar y nada lo dice. Verificado por mutacion: un directorio sin clasificar lo
+# pone rojo y lo NOMBRA. Cuesta 3 s.
+task lint:connectors
+# Y la tabla que ese gate deliberadamente NO mira. `check-connectors.sh` clasifica desde el CODIGO
+# «rather than trusting docs/ai-context/CONNECTORS.md», que es la decision correcta y deja el
+# inventario sin vigilancia: el 2026-08-18 `connectors/grok` aterrizo con codigo, celdas, registro y
+# los tres gates de Go en verde, y SIN fila. Lo caza una persona o no lo caza nadie. Cuesta <1 s.
+task lint:connector-inventory
+# Y que un comando VISIBLE aparezca en la ayuda por temas. Las dos pruebas que lo demuestran YA
+# existian y no pararon nada: `grok-hook` aterrizo en main visible y sin grupo, y lo cazo una
+# persona al integrar. Solo las alcanza `go test` sobre cmd/olivares, que es el gate PESADO. 2 s.
+task lint:cli-registries
+# Y que el CENSO de superficies de agentes siga a la tabla de tiers del canon. AGT-01 lo dejo
+# como guion «para que no se pudra», y no lo llamaba nadie: estuvo un dia contestando CERO sobre
+# `connectors/grok` —que existia en disco y que habia subido a TIER 1 el 2026-08-17—. Un
+# censo que nadie ejecuta es un documento con pasos de mas. 2 s.
+task lint:agent-surfaces
+# Y que ademas de tener fila, el conector este OFRECIDO y PUBLICADO. Corre las DOS pruebas que ya lo
+# prueban, no una copia: `grok` aterrizo cableado, sin ofrecer en `inProcConnectorKinds` y ausente de
+# la pagina publica, con los tres gates de Go en verde — porque ninguno mira esos registros. Solo las
+# alcanzaba `go test ./...` de cmd/olivares, 4484 s en la corrida que las encontro. Aqui, 2 s.
+task lint:connector-onboard
+# Y las dos baterias que protegian a otros gates y a las que no llamaba nadie (mismo barrido): la de
+# COBERTURA de migraciones (11 casillas) y la de distancia de pines (21). Una bateria que nadie corre
+# no prueba nada, y estas existen justo para que los gates que vigilan no se pudran. 1 s las dos.
+task lint:migrations:coverage
+task lint:pin-distance
+# A Spanish fiscal identifier with a VALID control letter must not sit on the public-export
+# surface. The letter check is what makes it usable: an 8-digit+letter pattern also matches SHAs,
+# ids and versions, and of fourteen matches in this tree ten die on the modulo. The allowlist is
+# by PATH and never by value, because the product's own PII fixture is checksum-valid on purpose.
+#
+# IT RUNS HERE because a gate nobody calls is a decoration: this one was defined and wired to
+# nothing until an adversarial contrast measured it as one of three such gates delivered the same
+# day. A published tax id is not retractable.
+task lint:fiscal-id
+
+# No Dockerfile asserts on `go tool nm` over a binary the same RUN block just stripped with
+# `-s -w`. Such a guard can never pass, so the image is deterministically unbuildable while its
+# labels carry a FIPS/CMVP claim. Dockerfile.fips had it, was repaired, and Dockerfile.stig was
+# left behind — the class outlived the case for months until an external contrast on gate S-5
+# found it.
+#
+# IT RUNS HERE, and that sentence is the whole point. The first cut of this gate defined the task
+# and wired it to NOTHING: not this hook, not CI, not as a dependency. An adversarial contrast
+# measured it as the only `lint:X` in the repository without a caller, which made the PR's own
+# thesis — "repairing the case did not close the class, so the class gets a gate" — false as
+# delivered. A gate nobody calls does not close a class; it decorates a Taskfile. Same shape the
+# repo already paid for with test:license-worker, which gated main in CI and in no local gate.
+# ~0.1s: it reads seven Dockerfiles and never runs docker.
+task lint:unreachable-build-guards
+# A programme document that nothing links from ESTADO-PROYECTO.md WILL be lost, and this
+# repository has paid for it twice -- the licensing programme and the TOPS derivation, both times
+# with the analysis intact and nothing routing anyone to it. Three entries: the licensing
+# programme, the signed product shape, and the pricing canon holding the invariants. Two of the
+# three were measured as orphans the day this landed.
+#
+# IT RUNS HERE because its own header promised to "refuse a push that leaves one orphaned" and,
+# as first delivered, it refused nothing: defined in the Taskfile, called by no one. An
+# adversarial contrast measured it as one of three such gates shipped the same day. ~0.1s.
+# lint:program-anchors is called ABOVE, in the group the FAST banner names. The second call
+# this merge produced was invisible to every human check and only the ratchet saw it: the hook
+# ran it twice while the declared list names it once, and I-04 compares the two.
+# NOTE: open≡enterprise schema-parity moved to the separate, private
+# enterprise distribution: only that repo can build BOTH the community and
+# the -tags enterprise binary, so the parity diff runs there, not in this public gate.
+# Console i18n parity: every UI language must carry the same keys as
+# English (plurals follow CLDR) — pure Node, no pnpm/deps needed.
+task lint:i18n
+# Docs-site in-page anchors must resolve after heading translation; this pure-Node
+# guard complements UI key parity and requires no installed package dependencies.
+task lint:i18n-anchors
+# Every gate above compares docs against docs. None can see the documentation quoting
+# the ENGINE inaccurately, which is how changed the first-boot TLS line, swept
+# reference/, and left troubleshooting.md quoting the deleted line verbatim in seven
+# locales — and how, for longer than anyone noticed, every page documented
+# `grep -A4 "FIRST-BOOT SETUP"` while the banner's Token: line sat SIX lines down, so
+# the documented command printed everything except the token it exists to obtain.
+# This one reads the string literals the binary can emit (comments excluded — the
+# renamed key survived in two of them) and fails when a page quotes one that changed.
+# Pure Node, self-tested, ~10s.
+task lint:engine-output
+# A console table that omits its empty state falls back to a generic "No results".
+# On a clean install every list is empty, so that string was the customer's FIRST
+# screen on 69 surfaces. `empty` is now a required ReactElement (tsc rejects both
+# omission and `empty={undefined}`, the shape six sites shipped); this gate catches
+# the two shapes a type cannot see — an element that renders nothing, and the
+# generic hand-rolled back in. Pure Node, self-tested, ~0.2s.
+task lint:datatable-empty
+# THE CONSOLE DECIDES WITH ITS OWN COPY OF THE ENGINE'S RBAC RULE. rbac.ts
+# re-implements RoleGrants in TypeScript and the copy is the more permissive of the
+# two: verbOf falls back to 'read' where the engine's Verb() returns "", and the verb
+# tier is applied to core permissions where the engine consults an explicit set. So a
+# permission the engine never declared becomes a read every viewer holds, and the
+# operator is shown a button the backend answers 403 to. Measured on main: 13 such
+# permissions plus 6 the engine grants at a higher tier than the console does.
+#
+# FAST LANE ON PURPOSE, same reason as lint:session-numbers and lint:json-decoders:
+# a console gate string is edited on a FEATURE branch, and a feature branch never
+# sees the full gate. Unlike its neighbours above it is NOT dep-free — it parses the
+# console with the console's own TypeScript and runs the engine through `go run` —
+# so the task installs web deps itself rather than going red on a correct tree.
+# Measured ~21s warm, next to lint:session-numbers' 15s.
+task lint:console-perms
+# Neither of the two gates above can see a MISSING PAGE: lint:i18n compares console
+# UI keys, lint:i18n-anchors compares anchors inside pages that already exist. That
+# is how 44 English docs-site pages sat untranslated in all six locales behind a
+# green gate, and how two new ADRs reopened the gap hours after it was cleared.
+# INFORMED since 2026-08-01: a missing page can FAIL the push (Taskfile lint:docs-parity
+# passes --informed --summary at Taskfile.yml:1575 -- NOT --strict, and NOT --report,
+# which was examined and rejected: a gate that cannot fail is not a gate). A page absent
+# in EVERY locale is the English-only backlog and only reports; missing in SOME locales,
+# orphans, route collisions and waiver defects exit 1 (check-docs-parity.mjs:651).
+# Dated waivers live beside the checker. It also runs its own
+# fixture battery, because the properties that matter are the red ones.
+task lint:docs-parity
+# The ADR section was withdrawn from the public docs site on 2026-08-25 by order
+# (internal development documentation does not ship publicly). This holds the line: it fails
+# if a page, an ADR-shaped filename, a live link to the withdrawn route or the generator
+# comes back. It replaces `lint:adr-sync`, which guarded a publication that no longer exists.
+task lint:adr-not-published
+# Every count the product states about itself (README ×7, docs-site, docs/launch,
+# docs/trust, the reel's baked numbers and spelled-out subtitles) must equal the value
+# derived from code. The drift — 28/29 modules, ~140 integrations and 25
+# catalogs living on public surfaces for weeks — is the regression this forbids.
+task lint:public-counts
+# ⛔ Los cinco gates de cobertura, RE-CABLEADOS el 2026-08-16 y en ESTE punto exacto, porque el
+# banner de la línea 313 los declara justo detrás de `public-counts`. Historia corta y medida:
+# los cablée, rompieron `lint:prepush-refclass` (259/0 → 251/8) porque esa batería exige que la
+# lista declarada y la ejecutada sean IGUALES y EN ORDEN; los retiré para desbloquear a los cinco
+# carriles; y #831 declaró el banner correctamente. Con el banner puesto y el hook sin ellos, la
+# batería volvió a romperse en la dirección contraria (13 fallos): el banner prometía lints que
+# nadie corría. La igualdad se cierra por los DOS lados o no se cierra.
+task lint:cli-coverage
+task lint:console-route-docs
+task lint:ci-env-reach
+task lint:config-coverage
+task lint:screenshot-freshness
+# a repository gate: la batería del watchdog de trabajo sin publicar. El watchdog NO corre aquí —ése es el
+# punto entero de la fila, y el ratchet que sí corría se retiró el mismo día— pero su batería sí:
+# un avisador que se pudre deja de avisar y eso no lo nota nadie, porque su salida sana es
+# silencio. ~2s.
+# INT-23: los HOLDs y vetos vigentes se EJECUTAN, no se recuerdan. Su batería va con él porque un
+# gate que nadie corre deja de proteger y su salida sana es silencio. Los dos juntos ~0,4 s.
+task lint:motor-declarado
+task lint:motor-declarado:selftest
+task lint:mute-pipefail
+task lint:cli-transport-exempt
+task lint:cli-transport-exempt:selftest
+task lint:watchdog-unpublished-work
+task lint:gate-lock-order
+# ⛔ RETIRADA DEL PUSH el 2026-08-29, y NO por ruido: por COSTE SIN AUTORIDAD.
+#    El bloque de la linea ~649 ya explica por que perdio la autoridad (su premisa es falsa en un
+#    clon compartido por N sesiones: cobra al que empuja trabajo ajeno que no puede resolver) y
+#    escribe donde deberia vivir: «a watchdog is the right home for it». Lo que quedo fue el `||
+#    true`, es decir, el precio entero sin ninguna de las dos mitades del gate.
+#
+#    MEDIDO HOY, con sus condiciones porque sin ellas no es comparable: >30 min y sin terminar
+#    (1812 s vivos al escribir esto), sobre 3371 ramas remotas y 127 worktrees, load 15,2-34,1
+#    en 16 cpu con 16 procesos de push concurrentes. Lo paga CADA push de CADA carril y no puede
+#    hacer fallar a nadie. Su hermana `lint:watchdog-unpublished-work` (arriba) cuesta 3 s y
+#    sigue corriendo: lo que se retira es el CENSO, no la vigilancia de que el censo funcione.
+#
+#    La medida NO se borra y sigue a un comando: `task lint:unpublished-work`.
+task lint:client-callers
+task lint:client-callers-selftest
+
+# ⛔ LOS CINCO GATES DE COBERTURA SE RETIRARON DE AQUÍ EL 2026-08-16, Y NO POR ESTAR MAL.
+#
+# Al cablearlos, `scripts/test-prepush-refclass.sh` pasó de **259/0 a 251/8**. No fue un falso
+# rojo: esa batería exige que la lista de fast-lints del hook sea EXACTAMENTE la declarada —nada
+# de más, nada de menos, EN ORDEN— y cuenta como GATE PESADO todo lo que va después de
+# `lint:prepush-refclass`. Cuatro lints rápidos sin declarar se leían como tareas pesadas en un
+# push de rama, que es justo lo que la igualdad exacta existe para cazar.
+#
+# Declararlos en la batería tampoco basta a la primera: al añadirlos junto a `prepush-refclass`
+# subió a 254/10, porque el ORDEN también se compara y entre medias hay más lints.
+#
+# Se retira en vez de insistir en caliente porque esto tumbaba el push de TODOS los carriles.
+# Las cinco tareas siguen en `Taskfile.yml` y se ejecutan a mano. Para volver a cablearlas:
+# insertar cada una en `FAST_LINTS` de la batería en la MISMA posición que ocupe aquí, y exigir
+# 259+5 / 0 antes de empujar. Es trabajo de una sesión con la batería delante, no de un hueco.
+# ...and the count public-counts does NOT derive. lint:public-counts covers modules,
+# integrations, catalogues and enforcement points; the KMS backend count is none of those, so
+# on 2026-08-04 the front page, six translations, the launch post, the trust matrix and two
+# design documents advertised FOUR backends over code that has three — the matrix naming a
+# "local" backend that exists nowhere — and lint:i18n, lint:i18n-anchors, lint:docs-parity,
+# lint:public-counts and lint:docs-honesty all passed over it, because not one of them reads
+# the providers from the source. The gate that closes that class was written the same day and
+# then invoked by NOTHING for ten days: measured 2026-08-14 by replanting the literal incident,
+# after which this hook ran all fifty fast lints and exited 0. It costs 0.29s.
+task lint:kms-backends
+# One first-release version everywhere (RELEASE-VERSION is the canon; report-only while
+# the owner's choice is UNDECIDED, enforcing the moment it is set).
+task lint:release-version
+# Public capability and supply-chain wording must remain normalized and must not
+# resurrect known overclaims. Pure POSIX sh, no network.
+# El material de lanzamiento acumulaba huecos de relleno sin que nada los mirase: el inventario
+# del 08-17 midió 104 y al día siguiente eran 122. `export-public.sh` impide que SALGAN, que es otra
+# cosa. Un techo es el instrumento correcto aquí y NO lo es en la frescura de capturas, porque un
+# hueco de relleno lo teclea una persona a propósito y no aparece como efecto secundario de otro
+# trabajo: no puede oscilar. Cuesta 0,1 s. (El token no se deletrea aquí: lleva el nombre de pila
+# del fundador y este fichero SÍ se publica. El script que lo necesita está curado fuera.)
+# La frescura de capturas contesta «¿lo que tenemos está rancio?» y salía VERDE con 40 de 52 rutas
+# sin ninguna captura: una ruta sin captura no está obsoleta, está AUSENTE, y un gate que recorre lo
+# que existe no ve lo que falta. Este contesta la otra mitad. Cuesta 0,2 s.
+# C-27 de los criterios de release pide CERO imágenes rotas en `docs/launch/`, y se medía a mano —
+# es decir, no se medía. Excluye los code spans: la prosa que CITA la sintaxis de una imagen no es
+# una referencia, y contarla infló mis propias cifras de 4 a 9 antes de que existiera este gate.
+task lint:launch-image-refs
+task lint:screenshot-coverage
+task lint:launch-placeholders
+task lint:launch-counts
+# Una superficie publica no puede prometer el cloud ALOJADO en presente mientras el canon de precios
+# diga que ese tier esta `launch-gated`. Medido el 2026-08-28: 18 afirmaciones en OCHO ficheros, con
+# deploy/aws/main.tf declarando NEVER APPLIED. Lo que habia en su lugar era un COMENTARIO, y un
+# comentario no ha parado nunca un push. La condicion se DERIVA del canon: el gate se apaga solo
+# cuando el apply la voltee. ~1s las dos, bateria incluida.
+task lint:cloud-availability-claims
+task lint:video-scene-anchors
+task lint:docs-honesty
+# Commercial canon consistency: every PUBLIC copy surface is checked against
+# an internal design note (not shipped) — the canon's own §Regla ("ninguna superficie pública puede
+# mostrar un plan, precio, seat o cap que no salga de este fichero").
+#
+# ⛔ ESTAS LÍNEAS DECÍAN «REPORT MODE … exits 0; it cannot break anyone's push today», Y ESO YA NO
+# ES VERDAD (corregido el 2026-08-16, a repository gate). La tarea es **STRICT y fijada**: su propia
+# descripción dice *«the mode is not caller-selectable (an ambient variable used to be interpolated
+# as shell text — sol-max B14)»*, y en el hub **un canon ausente FALLA el gate**; el único no-op es
+# un árbol sin la herramienta, es decir el export público (sol-max B15). Para inspeccionar sin
+# fallar existe `lint:commerce:report`, que es el gemelo.
+#
+# Por qué importa que el comentario mintiera: quien lo leyera creería que este lint **no puede**
+# tumbarle el push, así que al verlo rojo buscaría la causa en cualquier otro sitio antes que aquí.
+# Un comentario que describe un modo retirado no es documentación vieja: es una pista falsa dentro
+# del gate que hay que depurar.
+task lint:commerce
+# La lista blanca de FK del postflight de commerce esta TECLEADA y nada la derivaba de las
+# migraciones. La 010 (2026-08-20) anadio una y la lista no se entero: el servicio REHUSABA
+# servir y ocho tests de race-rest llevaban dos dias rojos. 17 ms.
+task lint:commerce-entity-fks
+task lint:commerce-entity-fks:selftest
+# RFC 9116 security.txt honesty/freshness: the published /.well-known/
+# security.txt must keep its mandatory fields, an unexpired (<1yr) Expires, the
+# SECURITY.md security contact, and its text/plain Content-Type — pure POSIX sh.
+task lint:security-txt
+# Every cosign installer in the tree must be the reviewed action revision AND request the
+# ONE version whose signing contract is proven by scripts/check-cosign-contract.sh. It
+# decodes the workflow YAML (no cosign needed) and also runs its own mutation matrix; ~2s
+# total, because two earlier text-scanning versions of this gate passed this very tree
+# while accepting valid YAML that installs an unpinned cosign.
+# It belongs in the LOCAL gate, not only in mainline CI: this repository treats pre-push
+# as a first-class enforcement point, so a supply-chain control that runs only where the
+# gate might be weakest is decorative. The split
+# it prevents — two cosign generations in one release pipeline — is otherwise
+# discoverable only when a `v*` tag is cut, i.e. the worst possible moment.
+task lint:cosign-pins
+# Release-mechanics batteries (~5s, hermetic): the fail-closed target preflight that
+# gates both release callers, the exact bare-manifest digest resolver, and the key-mode
+# signing launcher. Same reasoning as the cosign gates above: these guard the release
+# path, which only ever executes at tag time — the worst moment to discover drift.
+task lint:release-mechanics
+# Workflow validity (2026-07-30): actionlint over every workflow. Nothing local ever
+# parsed these files — GitHub is their only interpreter, and an invalid job-level
+# `${{ runner.temp }}` reached main and made every push an instant startup failure.
+task lint:actions
+# The Postgres gate wiring must keep BOTH branches working — above all the one this
+# machine cannot exercise, where no server is present and the run must still say which
+# coverage it lacks instead of printing an unqualified green.
+task lint:pg-env
+# The rule that decided which of these two lanes you are in. Same class of wiring as
+# lint:pg-env above: hermetic, and it is the only place the branch-aware policy is
+# proved — a classifier is exercised by the gate it selects, so without this battery a
+# regression would show up as "the full gate stopped running", i.e. as a green push.
+# SESSION-NUMBER CLAIMS, IN THE FAST LANE (2026-08-06). Both orchestrators asked for this
+# and it is the integrator's call because GATES v3 is this lane. Wired FAST, not full, for
+# a reason: the collisions this catches are made by pushing a BRIEF to a feature branch,
+# which is precisely the push that never sees the full gate. Measured cost 15s, and the
+# claim that it "times out at two minutes" was the environment, not the gate.
+#
+# It is fail-closed by construction (an unresolvable `origin/main` is `unreadable`, exit 2,
+# never a pass), and it was RED on a correct integrated tree until today: three of its four
+# reported collisions came from audits under design/ naming the worktree they measured
+# against, and the fourth from a session's own RESULTADO document being read as a rival of
+# its own brief. Wiring a gate that cries on a correct tree only teaches the lane to reach
+# for --no-verify, which is how this one got skipped the day it mattered.
+# A REQUEST BODY IS ONE JSON DOCUMENT (2026-08-06). Cheap (a git ls-files plus 22 greps,
+# measured at well under a second) and it belongs in the FAST lane for the same reason the
+# session-number check does: the drift it catches is written on a feature branch, and the
+# full gate never sees one. Twenty-one of the twenty-two streaming decoders had lost the
+# trailing-value rejection that core/api has always had.
+task lint:json-decoders
+# ONE STORE ERROR, ONE ANSWER (2026-08-12). Same lane and the same reason as the decoder
+# gate above: the drift is written on a feature branch, in a file nobody diffs against the
+# other thirty-five copies of itself, and the full gate never sees one. Measured that day:
+# thirty-six copies of the mapper, and store.ErrTenantSuspended / ErrTenantNotInService /
+# ErrNotLeader / ErrResidencyViolation — all four reachable from an ordinary module route,
+# all four mapped by core/api for a long time — were present in AT MOST TWO copies each.
+# The rest answered 500 "internal error", which blames the server for a refusal the server
+# made on purpose and, for the standby, turns a retryable answer into one nobody retries.
+#
+# It builds a small Go helper (GOWORK=off, no deps beyond the standard library) because the
+# question is "does this function reach that one", which is a call graph and not a grep — a
+# text gate is satisfied by a mapper that merely mentions the name, and the self-test has a
+# throwaway tree that does exactly that. Measured well under two seconds, build included.
+task lint:error-mappers
+# The mailbox check ran in NO gate at all — not here, not in the battery, not in CI — so a
+# branch never paid it and the only lane that did was whoever next published documents to
+# main. The breaker never found out; the next person through the door did, and spent the
+# time proving the red was not theirs. That happened TWICE inside forty minutes on
+# 2026-08-06, both times from the same lane, the second AFTER the first was repaired by
+# hand. A gate whose cost lands on someone other than its cause teaches people to push
+# without looking, which is the exact multiplier this hook exists to prevent. It costs a
+# grep over three files — measured at 0s — so there was never a budget argument either.
+# BEFORE lint:session-numbers, deliberately. A script that builds throwaway repositories
+# while the ambient GIT_DIR is still set drives them into the LIVE repository, and
+# lint:session-numbers is the one measured doing it (2026-08-06): from a linked worktree
+# it left the branch of PR #526 on a fixture commit and stamped core.bare=true on the
+# shared config. Running the isolation gate AFTER it would report the damage the previous
+# line had already done. Two seconds, with its own mutation control.
+# Build parity (4.5 s). It catches a raw `go build` writing the canonical bin/olivares, which
+# is how an unstamped, untrimmed binary reaches the path everything else trusts. It was in the
+# tree, correct and unwired, while a merge resolution reverted the very fix it guards.
+task lint:build-bin-parity
+# The engine-boot battery (18 cases, 26 s). It guards the boot path of the web e2e run, whose
+# defect leaked engines that squatted this host's ports for a day and five hours and then made
+# every later run fail blaming a token. It was wired into the HEAVY lane first, on a 142 s
+# figure that turned out to be 120 s of a defect in the battery itself.
+task lint:web-e2e-boot
+# La bateria del censo de duplicados. El censo NO corre aqui —no es una puerta, y su cabecera
+# lo argumenta con las dos medidas—, pero su bateria si: menos de un segundo, señuelos propios.
+task lint:session-duplicates
+# Las tres baterias que el lote de trajo con sus gates y que NO invocaba nadie: ni el hook, ni
+# un workflow, ni otra tarea por dependencia — cada una se mencionaba UNA vez, su propia definicion.
+# Un gate aprobado sobre una bateria que no corre esta aprobado sobre lo que la bateria decia el dia
+# que se escribio, no sobre lo que comprueba hoy. Es la razon que la linea de arriba ya da para el
+# censo de duplicados, aplicada a las tres que llegaron despues.
+task lint:sigpipe-booleans:selftest
+# El banco de `classify()` para `.awk`. Va con el e2e OMITIDO a proposito, y no es una rebaja: esa
+# fila corre el gate REAL de SPDX sobre el arbol entero, que es exactamente lo que `task lint:spdx`
+# ya paga unas lineas mas abajo. Medido: 21 s con la fila, 12 ms sin ella, y lo que se pierde es
+# una segunda pasada del mismo gate. Llamarla dos veces no la comprueba dos veces.
+# ⛔ El env va en su PROPIA linea y no como prefijo de `task`: el extractor de
+# check-gate-parity.sh exige `^[[:space:]]*task `, asi que `VAR=1 task lint:x` es INVISIBLE
+# para la derivacion «lo que el gancho INVOCA». El rotulo lo prometeria y la sonda no lo
+# veria, que es justo la mentira que ese gate existe para cortar. Se desactiva despues para
+# no filtrar el escape a las patas siguientes.
+# ⛔ EN UN SUBSHELL, y el `task` sigue abriendo su propia linea porque el contador del rotulo lo
+#    exige (`^[[:space:]]*task `). La forma anterior era `export` + `task` + `unset`, y `unset`
+#    NO restaura: deja la variable AUSENTE aunque el llamador la trajera PUESTA. Medido con un
+#    centinela: heredada `centinela` salia AUSENTE. El subshell conserva las dos direcciones —
+#    puesta sigue puesta con su valor, ausente sigue ausente— porque no toca el entorno de fuera.
+(
+export OLIVARES_SPDX_AWK_SKIP_E2E=1
+task lint:spdx:awk-selftest
+)
+# La bateria de la sonda de pasos saltados. Vive en el namespace `ci:` porque la sonda NO es una
+# puerta —lee la API de GitHub y no juzga el arbol—, pero su bateria si construye sus propios
+# fixtures y no mira la red: 1,4 s. El nombre `ci:` para algo que corre aqui es una arista que no
+# arreglo en esta pieza, porque renombrarla tocaria un claim en revision; queda dicha.
+task ci:run-skipped-steps:selftest
+# El banco de `claim-lector.sh` Y de la guarda de lector que este mismo gancho corre unas lineas
+# mas arriba. Va cableado desde el primer dia por lo que se midio hoy: tres baterias aterrizaron
+# sin que nadie las invocara. Es hermetica —un `origin` de mentira en TMPDIR, transporte acotado a
+# `file`— y su coste es de contencion, no suyo: 296 ms el gancho, 12 ms el `ls-remote`.
+task lint:claim-lector:selftest
+# The npm/JS vulnerability gate's own battery. FAST lane and not the heavy one because it never
+# touches the registry — it drives the gate with injected audit binaries emitting fixtures, so it
+# is deterministic and costs seconds. The gate ITSELF runs in CI's `web` job, which is a required
+# context; this line is what stops the gate from rotting unnoticed, because a battery nothing runs
+# is a battery that proves nothing.
+#
+# BEFORE lint:prepush-refclass, which is the boundary marker its own battery keys on
+# (scripts/test-prepush-refclass.sh: observed_heavy starts AFTER `task lint:prepush-refclass`).
+# Appending past it would have counted this fast lint as a HEAVY call and reddened both
+# equalities — the ratchet caught it, which is what it is for.
+task lint:npm-vuln-gate
+task lint:status-ref
+# a repository gate y a repository gate, cableados el 2026-08-16. Los dos existían con su batería escrita y CERO
+# llamantes de gate: `lint:ci-ports` (28/28, 7s) sólo se citaba en COMENTARIOS de dos workflows,
+# y `lint:cra-pack` (0s) no se nombraba fuera del Taskfile. Una tarea que nadie invoca no es un
+# gate: es documentación que se cree ejecutable, y esta casa ya midió que toda métrica sin
+# vigilante deriva. Van en el carril rápido porque son shell puro y suman 7 segundos.
+#
+# ⛔ Y van AQUÍ, antes de `lint:prepush-refclass`, con la lista declarada de la batería
+# actualizada EN ESTE MISMO COMMIT. Lo aprendí caro hoy: cablear sin declarar rompió la
+# igualdad en un sentido (259/0 → 251/8) y declarar sin cablear la rompió en el contrario
+# (251/13, con un mensaje de commit que además afirmaba rc=0 sin serlo). Se cierra por los DOS
+# lados o no se cierra.
+task lint:ci-ports
+task lint:cra-pack
+# MEM-03, cableado el 2026-08-22 por la MISMA razon que los dos de arriba y con la misma
+# comprobacion: `scripts/build-decision-index.sh` existe completo —21 testigos verdes, tres
+# respuestas, modo `--check` escrito para ser EL gate— y tenia CERO llamantes en codigo. Sus
+# unicas menciones eran documentacion, que es justo «una tarea que nadie invoca no es un gate:
+# es documentacion que se cree ejecutable».
+#
+# Antes de cablearlo busque la razon de que no lo estuviera —como manda la casa— y no hay
+# ninguna escrita: su cabecera lo declara entry point de MEM-03 y su `--check` se describe
+# como «the GATE».
+#
+# ⛔ AQUI DECIA «coste medido: 0s el check y 0s el selftest», y era falso: el contraste `sol max`
+# del 2026-08-22 lo midio en cinco corridas y da **208 ms** el check y **1894 ms** el selftest,
+# ~2,2 s en total. Sigue siendo barato —que era el punto— pero un «0s» escrito invita a cablear lo
+# siguiente sin medirlo, y asi es como un carril rapido deja de serlo.
+task lint:decision-index
+task lint:decision-index:selftest
+# a repository gate / D-2: el grafo de go-task como autoridad, para que una arista del Taskfile no meta una
+# tarea pesada en el carril rápido sin que nadie la vea. Mutación con las DOS sintaxis a las que el
+# resolutor a mano era ciego: las caza. ~3 s.
+task lint:taskfile-shape
+task lint:taskfile-shape:selftest
+task lint:taskfile-graph
+# lint:taskfile-executable JUNTO A SU VECINA, y por la razon que este dia dejo medida: una tarea
+# puede perder sus claves en una fusion y quedar EJECUTANDO SU PROPIA DESCRIPCION, o no ejecutar
+# nada y salir 0. El 2026-08-20 habia DIECISEIS asi en main, ninguna llamada por este hook ni por
+# CI, y por eso ningun gate estuvo rojo mientras ocho comprobadores reales —de 36 a 152 lineas—
+# no se ejecutaban. Su linea base se deriva de origin/main, asi que hoy no bloquea a nadie por lo
+# heredado y se vuelve estricto solo segun se repara.
+task lint:taskfile-executable
+task lint:taskfile-executable:selftest
+# a repository gate: que no aparezca una promesa NUEVA de «zero phone-home». Trinquete, no prohibición: una
+# cuenta que BAJA es la retirada que C09-05 ejecutó el 2026-08-28 y no enrojece. Vigila también las
+# dos superficies que llegan al cliente —`email/copy` y el portal del Worker de licencias—, que no
+# estaban y por eso el correo salió con la promesa retirada. Su batería va al lado, con un control
+# positivo por locale: un patrón multilingüe sin control por idioma es una conjetura.
+task lint:phone-home-claims
+task lint:phone-home-claims:selftest
+# a repository gate (mitad mecánica): que ninguna traducción NUEVA se quede detrás de su fuente. La deriva de
+# SIGNIFICADO no la ve una marca de tiempo y sigue necesitando una lectura — dicho en el guion.
+task lint:translation-drift
+# ⛔ Los autotests van JUNTO a su gate: un gate cuyo autotest no corre puede dejar de
+#    discriminar en silencio. Censado el 2026-08-24: 219 tareas `:selftest` definidas,
+#    17 cubiertas, 202 HUERFANAS. Estos dos no engordan esa lista.
+task lint:classify-allowlist
+task lint:classify-allowlist:selftest
+task lint:docsite-versions
+task lint:docsite-versions:selftest
+task lint:docs-redirects
+task lint:docs-redirects:selftest
+# El falso negativo por SIGPIPE: `algo | grep -q X` bajo pipefail devuelve 141 CUANDO ACIERTA.
+# Trinquete sobre las tuberias existentes; solo impide que la cifra SUBA (bajarla es una mejora y
+# sale verde). ⛔ LA CIFRA NO SE ESCRIBE AQUI: esta linea decia «68» mientras el arbol tenia 81 —una
+# cifra en prosa envejece sin que nadie toque el fichero, que es la clase que este repo tiene
+# fichada—. El generador es `bash scripts/check-sigpipe-booleans.sh --list`.
+task lint:md-links
+task lint:md-links:selftest
+task lint:download-contract
+task lint:download-contract:selftest
+task lint:sigpipe-booleans
+# INT-05: la re-derivacion hub<->web, que hasta hoy no corria en ningun sitio automatico. Aqui
+# porque es el unico entorno con los DOS arboles, igual que brand-parity. ~2s.
+task lint:hub-web-fidelity
+# El bundle empotrado se quedo atras CUATRO VECES el 2026-08-17, y cada una enrojecio el job `web`
+# sobre `main`, es decir sobre el tronco de los cinco carriles. Un fallo que se repite cuatro veces
+# en un dia y siempre se arregla con la misma orden no es descuido: es un gate que falta. Git puro,
+# sin compilar: si el push cambia fuentes que SI viajan en el bundle y no cambia
+# core/internal/webui/dist, lo dice aqui. Condicion NECESARIA, no suficiente — que el bundle cambie
+# no prueba que sea el correcto, y eso lo demuestra `task web:check` reconstruyendo, en el gate pesado.
+task lint:web-bundle-freshness
+
+# ⛔ CABLEO ESTOS TRES PORQUE LOS ESCRIBI YO Y NO LOS CORRIA NADIE. Medido el 2026-08-24: los dos
+# guiones (`check-list-truncation-witness.sh`, `check-tenant-bound-writes.sh`) aparecian SOLO en su
+# propia tarea del Taskfile y en su propia bateria — ni aqui, ni en `hub-leg.sh`, ni en CI. Colgarlos
+# del agregado `task lint` no cablea nada: este hook lo invoca CERO veces y llama 118 tareas
+# `lint:<x>` sueltas. Es la misma clase que le reporte a comercio esa noche, en mi propio trabajo.
+#
+# El censo va con LINEA BASE (`docs/list-truncation-baseline.txt`) y no como rojo directo: nombra
+# trabajo pendiente —hoy 18 features—, asi que cablearlo crudo bloquearia CADA push de los cinco
+# carriles hasta que aterrizara el ultimo, y el remedio seria `--no-verify`, que apaga el hook
+# entero. Lo que dispara es la APARICION de una feature nueva sin aviso, no la cantidad.
+#
+# Y las baterias van con ellos a proposito: un gate que nunca ha demostrado que MIRA es un gate que
+# certifica. 1,6 s + 6,5 s + 0,14 s.
+task lint:list-truncation-witness
+task lint:list-truncation-witness:selftest
+task lint:badge-vacio-filas
+task lint:badge-vacio-filas:selftest
+# ⛔ Y esta pata va AQUI, con las de consola, porque mira la spec de capturas — no en `web:check`,
+# que mira el bundle y no entra en `e2e/`. Cuesta 30-70 ms (banco ~310 ms) medidos el 2026-08-30 a
+# las 12:33Z con 16 visibles · cuota 4 · load1 4,02; la duracion del carril NO se extrapola desde
+# aqui, se re-mide con `scripts/time-fast-lints.sh`.
+task lint:capture-view-keys
+task lint:capture-view-keys:selftest
+# ⛔ CUATRO BATERIAS QUE ESTABAN HUERFANAS, y no es una omision menor: cero tareas y cero llamadas
+# del gancho, asi que ~80 casos con sus mutantes no ataban NADA. Lo destapo the reviewer sobre una de
+# ellas y al medir las demas con el predicado bueno —por NOMBRE DE TAREA, no por ruta del guion,
+# que es como el gancho llama— salieron cuatro. Vigilan el sembrado que decide los datos del acto.
+# Coste medido el 2026-08-30 (16 visibles · cuota 4 · load1 4,46): 5 s + 1 s + 21 s + 93 s.
+task lint:seed-payloads:selftest
+task lint:exec-tmpdir:selftest
+task lint:sembrado-volumen:selftest
+task lint:adopcion-otlp:selftest
+task lint:tenant-bound-writes:selftest
+task lint:tenant-bound-reads
+task lint:tenant-bound-reads:selftest
+
+# ⛔ DOS GATES HUERFANOS, CABLEADOS CON LA MISMA VARA QUE ME APLIQUE A MI: no van por estar
+# huerfanos, sino porque DEMOSTRARON QUE MIRAN. Censo del 2026-08-24: catorce tareas de gate que
+# ningun runner alcanza; estas dos eran de las tres SIN DUENO, salen rc=0 hoy y cuestan 51 ms y
+# 182 ms. La tercera (`lint:prose`) NO se cablea: tarda 2 min 43 s y eso es una decision de coste
+# que no es mia.
+#
+#   0022-published-schema  M1 un 0022_* que RECREA dodo_line_grants        -> CAZADO
+#                          M2 idem con dodo_cohort_fragments               -> CAZADO
+#                          M3 el INSERT vivo con una columna solo-de-vuelo -> CAZADO
+#   ver-10-og              M1 el documento reclama 14 locales              -> CAZADO
+#                          M2 dice que no miro despues de haber mirado     -> CAZADO
+#
+# El arbol volvio a cero ficheros modificados tras cada mutante. Y sus baterias van con ellos: un
+# gate que nunca ha demostrado que MIRA es un gate que certifica.
+task lint:0022-published-schema
+task lint:0022-published-schema:selftest
+task lint:ver-10-og
+task lint:ver-10-og:selftest
+
+# ⛔ `lint:tenant-bound-writes` (el censo, no su bateria) NO se cablea todavia, y lo digo en vez de
+# omitirlo: hoy sale rc=1 nombrando SIETE escrituras irreversibles sin atar el inquilino
+# (`compliance/api.ts` releaseHold/executeErasure/eraseDataSubject y cuatro mas). Es un hallazgo
+# vivo esperando decision del dueno del modulo, no una regresion que este push introduzca. Cuando
+# se adjudique, se le pone su linea base igual que al censo de arriba y se cablea aqui.
+
+# Una rama que cambia CODIGO debe traer fichero de sesion: sin el, un PR no se puede atribuir a un
+# carril, y todo el protocolo de claims descansa en la atribucion. Git puro, sin red.
+#
+# ⛔ Y ESTA LINEA EXISTE PORQUE CONSTRUI EL GATE Y NO LO LLAME. Medido el 2026-08-18 barriendo las 114
+# tareas `lint:`/`check:`/`test:` del Taskfile contra los hooks, los workflows y el propio Taskfile:
+# DOCE no las invocaba nadie, y dos eran las que yo acababa de escribir esa misma tarde. Ese mismo dia
+# habia medido lo que cuesta un gate jamas ejecutado — `at:gate`, que en su primera corrida encontro
+# una clase MUERTA ocultando tres fallos WCAG reales y un tema entero sin medir nunca.
+task lint:baseline-shrink
+task lint:relay-pointer
+
+# La bateria del publicador de artefactos: 27 casos contra un doble, ~1s. Tambien estaba huerfana, y
+# el 2026-08-17 su sujeto resulto tener un defecto que el doble no podia ver (la sonda de existencia
+# daba falsos "no esta" contra R2 real, dejando MUERTA la garantia de inmutabilidad). Una bateria que
+# no corre no habria cazado ni siquiera las regresiones que si cubre.
+task test:publish-enterprise-artifacts
+
+# La bateria de `cli:walk`: 15 casos contra binarios SENUELO, 0,3 s. Estaba huerfana igual que la de
+# arriba, y ademas PODRIDA de una forma peor que el silencio: con el TMPDIR por defecto salia "3
+# pasan, 12 fallan" -- doce hallazgos FALSOS contra un producto sano, porque /tmp es noexec en el
+# contenedor y los senuelos no arrancan. Medido el 2026-08-23: con TMPDIR ejecutable, 15/0 sobre el
+# mismo arbol. El Taskfile ya le fija TMPDIR y el guion sale 2 NO PUDE MIRAR si aun asi no puede
+# ejecutar, asi que colgarla aqui no puede volver a inventar rojos.
+task test:cli-walk
+
+# La bateria del guard de `commit-msg` contra cierres ACCIDENTALES de issues y PRs. El guard corre en
+# cada commit; lo que no corria era la prueba de que sigue funcionando. Un guard vivo cuya bateria
+# nadie ejecuta es exactamente la forma que este barrido buscaba. 0 s.
+task lint:commit-msg-closing
+
+# ⛔ `lint:commits` NO entra aqui, y la razon se mide, no se supone: sale 201 en un arbol limpio porque
+# `commitlint` vive en el `node_modules` de la RAIZ del repositorio, no en cada worktree — es "no he
+# podido mirar", no "los commits estan mal". Meterlo aqui haria fallar cada push desde un arbol sin
+# `task setup`, que es exactamente por lo que `lint:format-ratchet` vive en el carril pesado. Ademas el
+# hook `commit-msg` ya valida CADA mensaje cuando se escribe, asi que la re-comprobacion en tanda no
+# aporta nada que el carril rapido necesite.
+#
+# `check:claims` tampoco: su propia cabecera declara que no va al carril rapido, porque seria una
+# llamada de red por push de cada carril, sujeta a cortes y a limites de tasa.
+
+
+# lint:timeout-headroom corre la BATERIA de check-test-timeout-headroom.sh, no el gate.
+# El gate mide una corrida de CI y por tanto necesita una llamada de red por push, que es
+# exactamente lo que la nota de `check:claims` de arriba prohibe en este carril. La bateria
+# es hermetica -logs sinteticos- y cuesta lo que un `bash`; el gate vive en
+# `task ci:timeout-headroom` para el integrador y los vigias.
+#
+# Por que existe, medido el 2026-08-19: modules/compliance y modules/governance murieron a
+# los 45m00 del tope por binario nombrando tests que llevaban 22 s y 3 s. No colgaba nada,
+# se agoto el presupuesto del paquete. Y el verde de la vispera no avisaba: 54,0 -> 79,0 min
+# en una noche, verde hasta el ultimo. El Taskfile ya habia calculado un margen A MANO el
+# 2026-07-25 ("93% of a 20m per-binary cap") y nadie volvio a mirarlo.
+task lint:timeout-headroom
+
+# lint:branch-protection corre la BATERIA, no el gate: el gate hace una llamada AUTENTICADA a la
+# API por push, que es lo que la nota de `check:claims` prohibe en este carril. El gate vive en
+# `task ci:branch-protection`.
+#
+# Por que existe, 2026-08-19: `apply-branch-protection.sh` APLICA la proteccion desde hace tiempo y
+# NADA comprobaba que siguiera puesta — la deshace un clic en la UI, sin rastro en el arbol. El
+# empujon vino del repo web, cuyo `Deploy-protection audit` llevaba 17 dias sin pasar por falta de
+# credencial y se NIEGA a fingir verde. Aqui ni se intentaba.
+task lint:branch-protection
+
+# El helper que rebasa ramas de consola se prueba por lo que se NIEGA a hacer. Su primera
+# version avisaba de un choque no reconstruible y seguia, y con eso commiteo marcadores
+# `<<<<<<<` dentro de un `.go` en DOS commits, con `go vet` roto y `git status` limpio.
+task lint:rebase-web-branch
+
+# El paso `gitleaks` de mainline-ci decide entre un rojo CON MOTIVO y la muerte del job, que
+# GitHub etiqueta `cancelled` — indistinguible de una supersesion. El 2026-08-22 nueve de catorce
+# corridas murieron asi y el gate de secretos llevaba dias sin dar veredicto sin que nadie lo
+# viera. Este lint prueba el `run:` REAL extraido del workflow, con control negativo.
+# El techo de un JOB por debajo de la suma de los de sus PASOS no es un backstop: es el limite
+# efectivo, y ademas cancela los pasos que quedan, asi que el reportero no publica y el rojo sale
+# MUDO. El 2026-08-22 le pasaba a `control-plane` —75 contra 150— que es uno de los CUATRO
+# contextos que la proteccion de rama EXIGE: cero exitos en catorce corridas.
+task lint:ci-timeout-arithmetic
+task lint:ci-timeout-arithmetic:selftest
+task lint:ci-step-guard
+task lint:ci-step-guard:selftest
+task lint:ci-inner-clocks
+task lint:ci-inner-clocks:selftest
+task lint:ci-sibling-legs
+task lint:ci-sibling-legs:selftest
+# ⛔ NO BLOQUEANTE, y no es dejadez: el contraste sol max (an internal design note (not shipped))
+#    encontro DOS clases ALTAS que este guion no puede cerrar — falsos NEGATIVOS (un comentario
+#    gofmt-limpio ENTRE `Parallel` y `()`, asignacion antes del t.Parallel(), un *testing.T con
+#    otro nombre) y falsos POSITIVOS que quedan (receptores que solo TERMINAN en `t`, subtests
+#    hermanos, locales con `var`). Su veredicto, literal: los defectos estan en las capas de
+#    token, funcion, ambito lexico e identidad de simbolo A LA VEZ, y «otra rama especifica para
+#    un literal no cerraria la clase». La reparacion es go/parser+go/ast (y go/types para
+#    distinguir paquete de local), y es trabajo propio pendiente.
+#    Salvedad del propio informe, que va aqui para que nadie lea esto como un incendio: esas
+#    formas son ALCANZABLES, no estan OCURRIENDO — el arbol real salio limpio.
+#    Mientras tanto INFORMA y NO RECHAZA: un gate que puede parar a los cinco carriles por una
+#    clase que su autor no sabe cerrar no debe bloquear. Mismo precedente que lint:unpublished-work
+#    (:900), retirado del carril bloqueante el mismo dia que aterrizo, por esto mismo.
+task lint:test-hook-parallelism || true
+task lint:test-hook-parallelism:selftest
+
+task lint:ci-secrets-cap
+
+# El bloque de la FOTO DEL ARBOL de este mismo hook (~linea 448) crea su temporal con `mktemp` y
+# una guarda decide despues si llega a usarse. El 2026-08-22 la guarda miraba el arbol de LA RAMA
+# QUE SE EMPUJA y fallaba en las CUARENTA ramas abiertas, cayendo sin `else` que recogiera:
+# 9.691 ficheros en /tmp, todos de 0 bytes. Cuesta ~1 s y trae control negativo.
+# ⛔ VEINTITRES GATES QUE YA EXISTIAN Y QUE ESTE HOOK NO LLAMABA. No son nuevos: sus tareas
+# estaban DEFINIDAS en Taskfile.yml y sus guiones en scripts/, escritos, con bateria propia y
+# verdes. Simplemente nadie los invocaba, y un control que nadie ejecuta no falla: SE CALLA.
+#
+# Como se encontraron, porque el metodo vale mas que la lista: las cuatro PRs de la familia del
+# hook (#1643, #1661, #1709, #1739) aportan 32 patas entre las cuatro. De esas, 23 ya estaban
+# definidas en `main` — o sea que el valor no dependia de mergear nada, solo de llamarlas.
+#
+# Medidas las 23 sobre `main` cac43293c antes de cablearlas, porque cablear una roja bloquea a los
+# cinco carriles: **23 verdes, 0 rojas, 12 s en total** (11:57:59Z -> 11:58:11Z, carga 20,07 sobre
+# 16 cpu). La mas cara costo 2 s. No es una estimacion: esta en el informe de la sesion.
+#
+# ⛔ Y VAN AQUI, ANTES de lint:prepush-refclass, con su declaracion en la bateria en ESTA MISMA
+# posicion. Lo dice la cabecera de :903 con su medida: cablear cuatro patas sin declararlas dejo
+# `lint:prepush-refclass` en 251/8 — la bateria compara la SECUENCIA observada con la DECLARADA, y
+# lo no declarado se lee como tarea pesada en el carril rapido.
+task lint:alc-02-f1-hold:selftest
+task lint:alc-02-f2-hold:selftest
+task lint:alc-02-f3-hold:selftest
+task lint:alc-02-f4-hold:selftest
+task lint:alc-04-xff-hold:selftest
+task lint:c02-hold-key-until-producer:selftest
+task lint:c02-r2-key-from-token:selftest
+task lint:c02-r2-set-key-prep:selftest
+task lint:c03-02-sign-features-prep:selftest
+task lint:c03-02-sign-features:selftest
+task lint:c03-11-fase-r:selftest
+task lint:c05-14-effect-key-prep:selftest
+task lint:c13-07-ar-holds-prep:selftest
+task lint:c13-07-holds
+task lint:cfg-01-production-hold:selftest
+task lint:eco-01-activation-hold:selftest
+task lint:eco-11-reserve-funded:selftest
+task lint:meta-12-phone-home:selftest
+task lint:ver-02-cut-hold:selftest
+# Un gate que necesita HISTORIA no puede correr en un clon SUPERFICIAL, y el 2026-08-27 eso dejo
+# ROJO a `control-plane` —uno de los cuatro contextos REQUERIDOS— con un `exit 2` («no he podido
+# mirar»), no con un hallazgo. Lo intermitente era peor que el fallo: `actions/checkout` no borra el
+# clon entre jobs en un runner autoalojado, asi que a veces la historia estaba de una corrida
+# anterior. El veredicto dependia del RESIDUO de la caja. Arreglar el checkout de hoy no impide el
+# proximo guion; esta pata si.
+task lint:ci-history-depth
+task lint:ci-history-depth:selftest
+
+# ⛔ DOS GUIONES QUE ESTABAN ESCRITOS, COMMITEADOS Y MUERTOS. Peor que las 23 patas del cableado
+# anterior (#1866): aquellas al menos tenian su tarea en el Taskfile. Estas dos no tenian NADA — ni
+# tarea, ni pata, ni un solo llamador en el arbol. Un control que nadie ejecuta no falla: se calla.
+#
+# Medidos sobre `main` ANTES de cablearlos, porque cablear uno rojo bloquea a los cinco carriles:
+#   check-runbook-coverage         rc=0  «8 paging alerts have annotation links»
+#   check-openapi-op-descriptions  rc=0  «765 published operations, every one with a description»
+#
+# El segundo daba rc=2 la primera vez —«no he podido mirar»— porque su cabecera decia «the caller
+# points TMPDIR at a repo-local directory» y NO HABIA LLAMADOR: un requisito que vive en un
+# comentario es una suposicion sobre alguien que puede no existir, y aqui no existia, asi que ese
+# gate no podia pasar NUNCA en este contenedor. Arreglado EN EL GUION, que ahora ELIGE su scratch
+# (escribible Y ejecutable), no en esta pata ni en su tarea: imponer TMPDIR desde el llamador
+# rechaza en un checkout de CI read-only y anula un TMPDIR bueno que el runner aporte.
+task lint:openapi-op-descriptions
+task lint:runbook-coverage
+task lint:reserve-numbers:selftest
+
+
+
+
+# El pipeline de los cuatro diagramas publicos: comprueba que .github/assets y
+# docs-site/public/diagrams siguen siendo lo que su fuente produce. Va en el carril RAPIDO y no
+# en el pesado —al contrario que lint:guide-docs, doce lineas mas arriba— porque el motivo por el
+# que aquel bajo NO aplica aqui: guide-docs necesita el compilador de TypeScript de node_modules
+# y en un worktree recien creado decia CANNOT LOOK y tumbaba el push de cualquiera. Este guion no
+# importa nada: solo node:crypto, node:fs, node:path y node:url. Medido en esta caja, tres
+# corridas: 134 / 134 / 186 ms. Y sus tres respuestas estan probadas con control positivo en los
+# dos sentidos — 0 limpio, 1 con un fichero alterado, 2 con la fuente de tokens retirada.
+#
+# ⛔ Y VA ANTES DE `lint:prepush-treesnap`, NO DESPUES DE `lint:prepush-refclass`, y la
+# posicion no es estetica. `scripts/test-status-ref.sh:982` DERIVA el tamano del carril
+# contando `task ` hasta que ve `task lint:prepush-refclass`, y ahi para. Una pata puesta
+# despues de ese marcador la invoca el hook pero NO la cuenta el fichero: la bateria mide
+# 169 en ejecucion contra 168 leidos y salen cuatro rojas T-19 que parecen del hook y son
+# de la aritmetica. Medido: eso tumbo un push de 157 minutos. Las dos patas de protocolo
+# de push cierran el carril, y lo que gatea CONTENIDO va antes que ellas.
+task lint:release-diagrams
+
+# ⛔ EL CABLE QUE FALTABA. `lint:claim-safety:selftest` existia en el Taskfile y la bateria de
+#    `prepush-refclass` ya lo declaraba en FAST_LINTS, pero NADIE lo llamaba: dos de las tres
+#    listas puestas y la tercera no. Un gate que nadie ejecuta no falla, se calla. Va aqui y no
+#    en otro sitio porque la lista de la bateria es SENSIBLE AL ORDEN y lo situa entre
+#    `release-diagrams` y `prepush-treesnap`.
+task lint:claim-safety:selftest
+task lint:classify-paths-parity
+task lint:classify-paths-parity:selftest
+task lint:orphan-batteries
+task lint:orphan-batteries:selftest
+# ⛔ VA CABLEADA, y no es celo: el propio `lint:orphan-batteries` la marcaria si no lo estuviera.
+# Publicar una bateria que nadie corre mientras se publica el gate que lo prohibe es incoherente,
+# y el gate lo dijo con su nombre: «48 huerfanas frente a 47 en la base — SIN TAREA». Cuesta <1 s.
+task lint:purge-scratch:selftest
+# ⛔ CABLEADAS el 2026-08-31. Las cuatro tenian tarea en el Taskfile y NADIE las llamaba:
+#    `lint:orphan-batteries` las nombro una a una. Un banco que nadie corre no falla, se calla,
+#    y su verde se lee como cobertura. Verificadas VERDES ANTES de cablear (14/0, 17/0, 7/0,
+#    12/0): cablear una pata roja es peor que dejarla suelta, porque para a las cinco cajas.
+#    Van AQUI y no en otro sitio porque la lista de la bateria es SENSIBLE AL ORDEN.
+task lint:race-report:selftest
+task lint:race-groups:selftest
+task lint:release-smoke-answers
+task lint:release-smoke-stamp
+task lint:prepush-treesnap
+
+task lint:prepush-refclass
+
+# --- FAST LOCAL GATE ENDS HERE ----------------------------------------------------
+# From here on, only the refs that earned it (GATES v3): main and tags. A feature ref
+# stops at the line above with its fast lints green — the heavy gate for that work is
+# the integrator's, run on the Hetzner runners or as a batch `task test`, and this is
+# why the host mutex below is no longer taken by every lane on the box.
+#
+# OLIVARES_FAST_PUSH=1 IS NO LONGER READ HERE. It used to skip the full gate for ANY ref,
+# main included, which is the hole this change closes; the classifier reports it as
+# IGNORED on main and on tags and inert on a feature ref, and the reason it printed above
+# says so. There is exactly one bypass now, and it is --no-verify.
+#
+# WHAT THIS HOOK MAY NOT BE ABLE TO CHECK LOCALLY (so CI must):
+#   * the kind operator e2e — needs a Docker daemon.
+#   * helm chart rendering — needs the helm binary.
+# Both run in CI (hosted or self-hosted via the repository variable CI_RUNNER).
+#
+# A lesson kept from an earlier revision of this list: it once claimed "no Postgres
+# server here, so every Postgres test SKIPS locally" — the first half was FALSE and
+# had never been tested (a provisioned local server was running the whole time). The
+# real gap was that NOTHING SET THE DSN — see the probe below, which now does.
+# An unverified "cannot" in a gate is indistinguishable from a hole, and this one hid
+# the most expensive defect of a month.
+if [ "$gate_class" != "full" ]; then
+	echo "pre-push: fast lints GREEN; the heavy gate is not this ref's gate. Nothing was built" >&2
+	echo "pre-push: and nothing was tested — the PR's CI and the integrator's batch cover it." >&2
+	exit 0
+fi
+echo "pre-push: running the FULL gate locally (build + test + web)." >&2
+
+# ---------------------------------------------------------------------------
+# Host-wide heavy-gate mutex over an atomic remote ref.
+#
+# Guarded below on the generated public-export marker: in a curated public tree
+# (marker present) this section is a no-op — a contributor's clone neither expects
+# refs/gate-locks/* nor wants a hook creating refs on its origin.
+#
+# Rationale: several checkouts of this repository can run this heavy gate
+# concurrently on one machine; their filesystems are separate, so a local flock
+# cannot serialize them. The one shared, atomic medium every checkout already
+# trusts is origin itself: creating a ref fails if it exists, and
+# `--force-with-lease=<ref>:` (empty expected value) makes creation atomic — no
+# check-then-push window.
+#
+# Semantics:
+#   * the lock commit is a FRESH commit-tree of HEAD's tree, so its committer
+#     date is the acquisition time — the ref's age IS the lock's age;
+#   * a holder older than 3h is presumed dead and stolen, loudly;
+#   * we WAIT (60s poll, 3h cap) rather than fail: the gate serializes work,
+#     it does not reject it;
+#   * if origin is unreachable the gate runs WITHOUT the lock, loudly — the
+#     gate must never depend on the network to run;
+#   * refs/gate-locks/* is not a branch: it triggers no workflows and shows in
+#     no PR. This mutex covers concurrent local lanes, which is where the
+#     collisions actually happen.
+GATE_LOCK_REF="refs/gate-locks/heavy"
+# ⛔ D-1 / L-02 CERRADO el 2026-08-16 por la SEGUNDA vía que la propia nota autoriza: «WAIT >
+# STALE fijado y declarado». El defecto era de ORDEN, no de mecanismo: con WAIT == STALE == 10800
+# el carril se rendía EXACTAMENTE en el umbral, y el robo exige `age > STALE`, así que la
+# recuperación ANUNCIADA de un titular indeterminable era INALCANZABLE — un candado abandonado en
+# otro host no se recuperaba nunca. Un mecanismo cuyo comentario promete algo que no puede ocurrir
+# es peor que no tenerlo: se confía en él.
+#
+# Ahora STALE es una variable con nombre y WAIT se DERIVA de ella con margen, así que el robo
+# siempre se evalúa ANTES de rendirse. Si alguien fija WAIT a mano por debajo de STALE, se corrige
+# y se DICE, en vez de dejar la promesa rota en silencio.
+GATE_LOCK_STALE_SECS="${OLIVARES_GATE_LOCK_STALE_SECS:-10800}"
+GATE_LOCK_WAIT_SECS="${OLIVARES_GATE_LOCK_WAIT_SECS:-$((GATE_LOCK_STALE_SECS + 1800))}"
+if [ "$GATE_LOCK_WAIT_SECS" -le "$GATE_LOCK_STALE_SECS" ]; then
+	echo "pre-push: WAIT (${GATE_LOCK_WAIT_SECS}s) <= STALE (${GATE_LOCK_STALE_SECS}s): la recuperacion" >&2
+	echo "pre-push: de un candado abandonado seria inalcanzable. Elevando WAIT a $((GATE_LOCK_STALE_SECS + 1800))s." >&2
+	GATE_LOCK_WAIT_SECS=$((GATE_LOCK_STALE_SECS + 1800))
+fi
+gate_lock_held=0
+
+gate_lock_holder_age() {
+	# Prints the age in seconds of the current lock commit, or nothing if unreadable.
+	local sha
+	sha="$(git ls-remote origin "$GATE_LOCK_REF" 2>/dev/null | cut -f1)" || return 0
+	[ -n "$sha" ] || return 0
+	git fetch -q origin "$GATE_LOCK_REF" 2>/dev/null || return 0
+	local when now
+	when="$(git show -s --format=%ct "$sha" 2>/dev/null)" || return 0
+	now="$(date +%s)"
+	[ -n "$when" ] && echo $((now - when))
+}
+
+# EVERY lock push carries --no-verify: a push of the lock ref would otherwise
+# fire THIS hook, which runs the full gate before pushing — a 2h acquisition at
+# best, a deadlock in spirit. Measured on 2026-07-30: the first live probe of
+# the lock started the whole gate. The lock is signalling, not content.
+release_gate_lock() {
+	if [ "$gate_lock_held" = "1" ]; then
+		git push --no-verify -q origin ":${GATE_LOCK_REF}" 2>/dev/null || true
+		gate_lock_held=0
+	fi
+}
+# Hace las DOS cosas a proposito: instalar aqui `release_gate_lock` a secas descartaria el
+# trap que recoge el fichero de refs, y volveria la fuga de /tmp.
+prepush_cleanup() {
+	rc_previo=$?
+	release_gate_lock
+	# TRES cosas: sin esta linea el carril completo —el unico que construye y prueba— se quedaba
+	# sin el control del arbol y dejaba su foto en /tmp. Medido por el contraste del 2026-08-20.
+	command -v olivares_comparar_arbol >/dev/null 2>&1 && olivares_comparar_arbol
+	rm -f "${push_refs_file:-}"
+	return $rc_previo
+}
+trap prepush_cleanup EXIT
+
+acquire_gate_lock() {
+	local waited=0 lock_commit
+	while :; do
+		lock_commit="$(git commit-tree "HEAD^{tree}" -m "gate-lock $(hostname) pid=$$ $(date -u +%FT%TZ)" 2>/dev/null)" || {
+			echo "pre-push: could not create a lock commit; proceeding WITHOUT the host lock." >&2
+			return 0
+		}
+		if git push --no-verify -q origin "${lock_commit}:${GATE_LOCK_REF}" --force-with-lease="${GATE_LOCK_REF}:" 2>/dev/null; then
+			gate_lock_held=1
+			return 0
+		fi
+		# Push refused: either the ref exists (someone holds it) or origin is down.
+		if ! git ls-remote origin "$GATE_LOCK_REF" >/dev/null 2>&1; then
+			echo "pre-push: origin unreachable; proceeding WITHOUT the host lock (the gate must not depend on the network)." >&2
+			return 0
+		fi
+		local age
+		age="$(gate_lock_holder_age)"
+		if [ -n "$age" ] && [ "$age" -gt "$GATE_LOCK_STALE_SECS" ]; then
+			echo "pre-push: gate lock is ${age}s old (>${GATE_LOCK_STALE_SECS}s); presuming the holder dead and STEALING it." >&2
+			if git push --no-verify -q -f origin "${lock_commit}:${GATE_LOCK_REF}" 2>/dev/null; then
+				gate_lock_held=1
+				return 0
+			fi
+		fi
+		if [ "$waited" -ge "$GATE_LOCK_WAIT_SECS" ]; then
+			echo "pre-push: waited ${waited}s for the heavy-gate lock; giving up. Another lane is running its gate — retry when it finishes, or raise OLIVARES_GATE_LOCK_WAIT_SECS." >&2
+			exit 1
+		fi
+		[ $((waited % 600)) -eq 0 ] && echo "pre-push: heavy-gate lock held by another lane (age ${age:-?}s); waiting (${waited}/${GATE_LOCK_WAIT_SECS}s)..." >&2
+		sleep 60
+		waited=$((waited + 60))
+	done
+}
+# HUB MARKER GUARD (see the section header): only the maintainer hub — the one
+# tree that carries scripts/export-public.sh — acquires the lock. Everywhere
+# else this is a no-op, so a public clone never creates refs on its origin.
+if [ ! -f .olivares-public-export ]; then # hub only: a public clone must never push lock refs to its origin
+	acquire_gate_lock
+fi
+# ---------------------------------------------------------------------------
+
+# THE LICENCE WORKER, FIRST AND CHEAP (2026-08-06). It runs before the hour-long legs
+# on purpose: measured 4.05s wall for the whole task — typecheck + Go-authored wire
+# conformance (Polar AND Dodo) + 15 unit tests + the hermetic E2E with its evidence
+# chain. Until today the ONLY thing that ran it was mainline-ci, so the local gate for
+# a `main` push said "clean" about a directory it had never opened.
+#
+# That is not hypothetical, and it is not the first time. Landed `npm run
+# typecheck` RED on main with ten errors nobody was looking at; the CI job was added
+# for exactly that. Then on 2026-08-05 `test/deployed-portal.run.ts` landed on main
+# with five TS errors (a non-module file using top-level await, and the DOM-only name
+# `RequestRedirect` in a Worker project) — the local full gate passed, the push
+# succeeded, and `main` sat red on the `license-worker` job while every other lane's
+# push was blocked behind it. Four seconds here would have refused that push.
+#
+# private-leg.sh keeps the three answers in the public export: the directory exists
+# (run it), it is missing WITH the export marker (NOT APPLICABLE, exit 0), or it is
+# missing with no marker (exit 1 — refuse to guess). A missing node_modules fails
+# loudly here, which is "I could not look", not a green.
+task test:license-worker
+# cloud/control-plane WAS GATED BY NOTHING, and that is how a canon decision failed to
+# reach it. Measured 2026-08-10: the module is not in go.work (eleven members, none from
+# cloud/), the hook never named these two tasks, and no CI workflow mentions cloud/ at
+# all — so the control plane could break, or keep a live exporter to a provider the canon
+# retired on 2026-07-24, and no automatic gate would ever see it. the orchestrator found the
+# residue; the reason it survived two weeks is this hole.
+#
+# test:cloud:norace already described itself as the "push gate correctness leg". It was
+# designed for this list and simply never wired.
+#
+# Both are safe on the public export: private-leg.sh answers NOT APPLICABLE and exits 0
+# when cloud/ is absent AND the export marker is present, and refuses (exit 1) when the
+# directory is missing with no marker — it will not guess which tree it is in.
+# ⛔ VA AQUÍ Y NO ABAJO CON `pg_partial`: el hook corre con `set -euo pipefail` (línea 117),
+# así que usarla antes de definirla MATA el hook entero. La batería lo cazó con nueve casos
+# —«observed=[test:license-worker build:cloud ]», parado justo donde la leía— y es la razón
+# de que exista: corre el hook de punta a punta contra stubs de `task` y `git`.
+# ⛔ Y LA PATA DEL CLOUD TIENE SU PROPIO ENTORNO, QUE NO ES ÉSTE. Medido el 2026-08-22
+# corriendo el paquete en tres configuraciones contra un PostgreSQL real:
+#
+#   sin ninguna variable  ->   9 PASS · 22 SKIP · 0 FAIL  -> el paquete sale «ok»
+#   sólo DSN de migrador  ->  13 PASS · 15 SKIP
+#   las ONCE DSN (CI)     ->  19 PASS · 10 SKIP · 2 FAIL  <- los dos que CI lleva días enseñando
+#
+# `test:cloud:norace` se cableó a esta lista el 2026-08-10 y eso cerró el hueco de «no lo mira
+# nadie», pero **cablear la TAREA no es cablear su ENTORNO**: la receta del Taskfile es un
+# `go test` pelado, así que sin `DATABASE_MIGRATOR_URL` los tests de integración se SALTAN y el
+# paquete sale verde. Saltado se lee como pasado en el recuento del gate.
+#
+# Y no lo cubre `pg_partial`: ése mira `OLIVARES_TEST_POSTGRES_*`. Con Postgres arrancado
+# `pg_partial=0` y el gate declaraba verde COMPLETO con 22 tests del cloud sin ejecutar.
+cloud_partial=0
+[ -n "${DATABASE_MIGRATOR_URL:-}" ] || cloud_partial=1
+
+task build:cloud
+if [ "$cloud_partial" = "1" ]; then
+	{
+		echo "pre-push: la pata del cloud correrá PARCIALMENTE: sin DATABASE_MIGRATOR_URL sus"
+		echo "pre-push: tests de integración se SALTAN y el paquete sale verde igual (9 de 31 el 2026-08-22)."
+		echo "pre-push: Para correrla entera hacen falta CLOUD_CP_INTEGRATION=1 y las once DSN"
+		echo "pre-push: por capacidad; el emparejamiento variable->rol se DERIVA del workflow:"
+		echo "pre-push:   grep -oE 'DATABASE_[A-Z_]+_URL=postgres://[a-z_]+' .github/workflows/mainline-ci.yml"
+	} >&2
+fi
+task test:cloud:norace
+# Typecheck the embedded console (WS-console-build): the web/ UI is go:embed'd into
+# the binary, so a red `tsc -b` means a release build ships a stale/mismatched dist.
+# This class of drift (FEATURE_VIEWS literal-path types) previously reached main
+# because web/ had no gate. Installs deps (frozen lockfile) then runs tsc -b.
+task check:web
+# DTCG token freshness (ADM-CORE-04): the committed src/styles/tokens.css must
+# match the token sources — a stale build means the console ships colors the
+# contrast gate never measured. Reuses the deps check:web just installed.
+task tokens:check
+# THE FORMATTING RATCHET (2026-08-15). `prettier --check` lives in `format:check`, which hangs off
+# `lint:web` — deliberately skipped by this hook — and off `fmt:check`, and NO workflow invokes
+# either: measured against origin/main, 191 files under web/ do not pass the formatter and
+# nothing in the repository said so. It runs HERE and not in the fast lane because it needs the
+# deps check:web just installed; the fast lane has no node, and a leg that cannot run is a leg
+# that fails every feature push. It prints the census on every run and fails ONLY when the set of
+# offenders grows, so nobody is blocked by a debt they did not create.
+task lint:format-ratchet
+# Aqui y no en el rapido, por la MISMA razon que su vecino de arriba: vuelca las rutas de la
+# consola con el compilador de TypeScript y el carril rapido no puede correr node. Vivia dentro
+# de lint:public-counts y por eso ese gate tumbaba el push de cualquier worktree sin deps web.
+task lint:guide-docs
+# La regla `olivares/no-raw-palette` la imponia UN TEST de vitest, y era el unico sitio que la
+# imponia: `lint:web` lo salta este hook a proposito y NINGUN workflow lo invoca. Dentro del worker
+# costaba 148s solo y se comia su techo de 300s bajo la carga de la suite, asi que fallaba por el
+# reloj y no por la asercion. Aqui y no en el rapido por la MISMA razon que sus dos vecinas de
+# arriba: necesita las deps que `check:web` acaba de instalar, y el carril rapido no tiene node.
+task lint:raw-palette
+# The web unit/component suite: the console's structural guards (a11y
+# route coverage, icon uniqueness, i18n usage) plus ~840 component tests were
+# previously dead weight — vitest ran in NO gate, only tsc.
+# Measured 2026-07-18: 44.81s wall, 1.08% of the 4142.21s constrained local gate.
+task test:web
+# THE ARTIFACT THAT ACTUALLY SHIPS (2026-07-29). Everything above tests web/ SOURCE;
+# what goes into the binary is the COMMITTED bundle at core/internal/webui/dist
+# (//go:embed all:dist), and until today no gate rebuilt it — this hook and
+# mainline-ci call build:go, which does not depend on build:web.
+# Measured: the committed bundle was 214 files against a 213-file rebuild, and
+# `otlp_log_record` appeared 9 times in the rebuild and ZERO times in the commit.
+# A reviewed, unit-tested feature was simply absent from the console that ships.
+# web:check rebuilds and diffs (same shape as proto:check); ~41s measured.
+task web:check
+task build:go
+
+# --- POSTGRES: use it if it is there, and SAY SO when it is not ----------------------
+# Every Postgres-backed test self-skips unless OLIVARES_TEST_POSTGRES_DSN is set, and
+# nothing in this hook or in `task test` ever set it. An earlier revision asserted "no
+# Postgres server here" as settled fact; when someone finally ran `pg_isready` the
+# premise turned out to be false — a provisioned local server with the
+# olivares_app/olivares_admin roles and the `olivares` database had been running the
+# whole time. So the local gate had been silently skipping the exact test class that
+# let a total Postgres boot outage sit on `main` for 17 days behind a green check.
+#
+# Probe, then wire — in scripts/pg-test-env.sh, so BOTH branches are testable. The branch
+# that matters is the one this machine cannot exercise: when there is NO server the gate
+# must still run and must say, out loud, which coverage it is not providing. A wiring that
+# only works where a server happens to exist reintroduces the original defect on every
+# machine without one. scripts/test-pg-test-env.sh forces both branches and asserts the
+# message; `task lint:pg-env` runs it.
+#
+# CAPTURE, CHECK, THEN eval — never `eval "$(...)"` directly. Measured 2026-07-25: eval
+# reports ITS OWN status, so a producer exiting 42 still reached the next command with
+# status 0 even under `set -e`. A helper that died silently would leave every DSN unset and
+# put the whole gate back to skipping Postgres behind a green check.
+# LOCAL DEFAULTS, EXPLICITLY (2026-07-30). scripts/pg-test-env.sh is now FAIL-CLOSED: it
+# refuses to synthesise the 127.0.0.1:5432 defaults unless the caller opts in, because in
+# CI the Postgres service lives on an EPHEMERAL host port and 127.0.0.1:5432 on a shared
+# runner host is another job's cluster (the workflows resolve the real port into
+# $GITHUB_ENV instead). This hook IS the local development loop, so the opt-in lives
+# here — once, versioned and reviewed — and NOT inside the helper or the Taskfile, where
+# it would silently reopen the CI fallback this guard exists to close.
+export OLIVARES_PG_LOCAL_DEFAULTS=1
+if ! pg_exports="$(bash scripts/pg-test-env.sh)"; then
+	echo "pre-push: scripts/pg-test-env.sh FAILED; refusing to run the gate with an unknown Postgres posture." >&2
+	exit 1
+fi
+eval "$pg_exports"
+pg_partial=0
+[ -n "$pg_exports" ] || pg_partial=1
+# Promotion regime (2026-07-30): with OLIVARES_GATE_STRICT_PG=1 a PG-less run must fail
+# NOW, before an hour of suite buys a green that silently skipped RLS/HA/migrations/boot.
+# Development keeps the warning-and-partial behaviour below.
+if [ "$pg_partial" = "1" ] && [ "${OLIVARES_GATE_STRICT_PG:-0}" = "1" ]; then
+	echo "pre-push: OLIVARES_GATE_STRICT_PG=1 and no PostgreSQL server is reachable." >&2
+	echo "pre-push: In the promotion regime a partial gate is not a gate. Start Postgres" >&2
+	echo "pre-push: (scripts/pg-test-env.sh probes 127.0.0.1:5432) or drop the strict flag." >&2
+	exit 1
+fi
+# `task test` re-decides this for itself through scripts/with-pg-env.sh, so a developer
+# running it directly is covered too; existing values win, so the two never disagree.
+
+# Race-enabled tests can be OOM-killed in loaded shared containers. Running the
+# same suite serially preserves the gate's correctness while reducing peak memory
+#; keep the resource limits local so the build and SDK checks are unchanged.
+gate_mem_min_gib=${OLIVARES_GATE_MEM_MIN_GIB:-6}
+if ! [[ "$gate_mem_min_gib" =~ ^[0-9]+$ ]]; then
+	echo "pre-push: OLIVARES_GATE_MEM_MIN_GIB must be a non-negative integer." >&2
+	exit 1
+fi
+
+# ⛔ THE CGROUP FIRST, AND /proc/meminfo ONLY AS A FALLBACK. This read /proc/meminfo alone until
+# 2026-08-10, and /proc/meminfo IS THE HOST: inside a container it reports the machine's free
+# memory, not the share this container may use. Measured that day, minutes apart: host
+# MemAvailable 13.8 GiB while the container had 0.72 GiB free of its 9 GiB cap. With the 6 GiB
+# threshold the check saw 13.8, concluded there was room, and ran the FULL PARALLEL gate — which
+# is how a container at 99 percent of its limit came to launch a -race suite whose binaries are
+# 500 to 750 MB each. The valve built to prevent exactly that had never once fired.
+#
+# It is the same class as measuring a gate in the stale shared clone, or reading a wrapper's CPU
+# instead of the leaf's: an instrument pointed at the wrong subject answers confidently and wrong.
+#
+# What counts as available here is the cap minus what CANNOT be reclaimed — anon, shmem and slab.
+# Not memory.max - memory.current: `current` counts page cache, which the kernel drops under
+# pressure, so that subtraction reads 0.72 GiB on a healthy container and would degrade every
+# single gate to serial. Over-degrading is not free either: it turns a 50 minute leg into hours.
+mem_available_kib=
+if [ -r /sys/fs/cgroup/memory.max ] && [ -r /sys/fs/cgroup/memory.stat ]; then
+	mem_cg_max="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)"
+	if [ "$mem_cg_max" != "max" ] && [ -n "$mem_cg_max" ]; then
+		mem_cg_hard=0
+		while read -r mem_key mem_value _; do
+			case "$mem_key" in
+			anon | shmem | slab)
+				mem_cg_hard=$((mem_cg_hard + mem_value))
+				;;
+			esac
+		done </sys/fs/cgroup/memory.stat
+		if [ "$mem_cg_hard" -gt 0 ] && [ "$mem_cg_max" -gt "$mem_cg_hard" ]; then
+			mem_available_kib=$(((mem_cg_max - mem_cg_hard) / 1024))
+			echo "pre-push: memory measured from the CGROUP (this container), not /proc/meminfo (the host)." >&2
+		fi
+	fi
+fi
+if [ -z "$mem_available_kib" ] && [ -r /proc/meminfo ]; then
+	# No cgroup v2 limit: we are not capped, so the host figure IS the right subject.
+	while read -r mem_key mem_value _; do
+		if [ "$mem_key" = "MemAvailable:" ]; then
+			mem_available_kib=$mem_value
+			break
+		fi
+	done </proc/meminfo
+fi
+
+if [ -n "$mem_available_kib" ] &&
+	[ "$mem_available_kib" -lt "$((10#$gate_mem_min_gib * 1024 * 1024))" ]; then
+	echo "pre-push: MemAvailable=${mem_available_kib} KiB, threshold=${gate_mem_min_gib} GiB; running the test gate in degraded serial mode (same correctness, less memory)." >&2
+	GOFLAGS="-p=1" GOMAXPROCS=2 task test
+else
+	task test
+fi
+# Client SDK codegen drift: regenerates the OpenAPI snapshot and the
+# three SDK operation layers from the Go source of truth and fails if the
+# committed artifacts are stale — Go-toolchain-only, no pnpm/Python needed.
+task sdk:check
+
+# REPEAT THE QUALIFICATION AT THE END. The Postgres verdict is printed before a suite that
+# takes the better part of an hour; by the time the gate goes green nobody is still looking
+# at the first screen. A "PARTIAL" that scrolled past an hour ago is functionally the same
+# silent green this whole change exists to remove.
+if [ "$pg_partial" = "1" ]; then
+	{
+		echo ""
+		echo "pre-push: GATE PASSED — but PARTIALLY. No Postgres server was reachable, so the"
+		echo "pre-push: suites gated on OLIVARES_TEST_POSTGRES_SUPERUSER_DSN were SKIPPED:"
+		echo "pre-push:   RLS/tenant binding, HA failover, online migrations and the boot path."
+		echo "pre-push: The 2026-07-08 boot outage reached main through exactly this gap."
+	} >&2
+fi
+# LA MISMA RAZÓN QUE ARRIBA: una cualificación que se imprimió hace una hora no la lee nadie.
+if [ "$cloud_partial" = "1" ] && [ "$gate_class" = "full" ]; then
+	{
+		echo ""
+		echo "pre-push: GATE PASSED — pero la pata del CLOUD fue PARCIAL. Sin DATABASE_MIGRATOR_URL"
+		echo "pre-push: se ejecutan sólo los que no piden base de datos (9 de 31 el 2026-08-22); el resto se"
+		echo "pre-push: SALTA, y saltado no es pasado. Con el entorno completo main FALLABA dos"
+		echo "pre-push: el 2026-08-22 (los mismos que mainline-ci llevaba siete corridas enseñando)."
+	} >&2
+fi

@@ -1,0 +1,10 @@
+{
+  "data": {
+    "keys": [
+      "default",
+      "app-secrets",
+      "shared-read",
+      "orphan-policy"
+    ]
+  }
+}

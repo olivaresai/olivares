@@ -1,0 +1,210 @@
+---
+title: "Kubernetes で始める (Helm)"
+description: >-
+  同梱の Helm チャートで control plane を Kubernetes にデプロイする — 安全な
+  シングルノードのデフォルトから、Postgres、共有監査署名鍵を用いた
+  active-passive HA、CronJob による暗号化 DR バックアップ、そして
+  collectors DaemonSet まで。
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+`deploy/helm/olivares` の Helm チャートは、ほかのすべての経路と同じ
+セキュアなデフォルトで control plane をデプロイします。すなわち **core
+StatefulSet**（非 root、読み取り専用ルートファイルシステム、すべての capability を削除）、
+TLS 有効、ループバック相当の公開範囲（`ClusterIP` Service — あなたが決めるまで
+公開されるものは何もない）、そしてデフォルト認証情報なしです。そこから
+Postgres、**active-passive HA**、スケジュールされた **暗号化 DR バックアップ**、
+分散取り込み用の **collectors DaemonSet** をオプトインしていきます。
+
+以下のすべては、このリポジトリのチャートに対してレンダリングおよび検証されています
+（`helm lint` + `helm template`、HA とバックアップの構成、そしてチャート自身の
+ガードレールを含む）。このチャートには **Kubernetes ≥ 1.25** が必要です。
+
+<Aside type="caution" title="チャート公開ステータス — 正直に">
+リリース時には、チャートは OCI レジストリに公開され cosign で署名されるため、
+インストール時に検証し、イメージをダイジェストでピン留めできます。チャートは
+コンテナイメージを Docker Hub（`docker.io/olivaresai/olivares`；`ghcr.io/olivaresai/olivares`
+にもあり、ダイジェストで同一）から取得します。**チャート** アーティファクト自体は
+`oci://ghcr.io/olivaresai/charts/olivares` にあります。最初のリリースはまだ
+**ドラフト** です。`chart-v*` タグが切られるまで、レジストリのパスは **空** です。
+それまでは、リポジトリのチェックアウトからインストールしてください（チャート自体は
+完成しており、以下にレンダリングされています）。公開されたら
+`oci://ghcr.io/olivaresai/charts/olivares` に切り替え、
+[ダウンロードしたものを検証](/how-to/verify-a-release/)してください。
+</Aside>
+
+## 1. デフォルトのインストール (シングルノード、SQLite)
+
+<Steps>
+
+1. チェックアウトからインストールします:
+
+   ```bash
+   helm install olivares deploy/helm/olivares
+   ```
+
+   これはちょうど 3 つのワークロードオブジェクトをレンダリングします — `StatefulSet`
+   （1 レプリカ、8 Gi の永続 PVC 上の SQLite）、`ClusterIP` `Service`（8443 HTTPS、
+   8444 gRPC）、そして Kubernetes API 権限を **持たない** `ServiceAccount` です。
+   プローブは `/readyz`（readiness — ストアがダウンしているか、レプリカが leader で
+   ない場合にドレインする）と `/livez`（liveness — プロセスのみ、依存関係は一切見ない。
+   したがってストア障害が再起動ループを引き起こすことは決してない）を叩きます。
+
+2. ポッドのログからワンタイムセットアップトークンを読み取ります（これは stdout にのみ
+   出力されます — Kubernetes ではそれがコンテナログです）:
+
+   ```bash
+   kubectl logs -l app.kubernetes.io/component=core | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. port-forward して初回セットアップを完了します
+   （[どこでも同じフロー](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)）:
+
+   ```bash
+   # Service の名前は <release>-olivares-core:
+   kubectl port-forward svc/olivares-core 8443:8443
+   curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="danger" title="本番環境を `persistence.enabled=false` で実行しないこと">
+永続化を無効にすると、データディレクトリは `emptyDir` になります。すなわち
+**監査署名鍵** とセットアップトークンが再スケジュールのたびに失われ、台帳の検証可能性が
+恒久的に壊れます。デフォルト（`persistence.enabled=true`）が唯一の本番姿勢です。
+それに加えて鍵をボックス外にバックアップしてください
+（[バックアップとリストア](/how-to/backup-and-restore/)）。
+</Aside>
+
+あるいは Helm をまったく使わずに、リポジトリは同じ安全なシングルノードの
+デフォルトを持つフラットなマニフェストを同梱しており、これは CI がチャートから
+再生成しています:
+
+```bash
+kubectl apply -f deploy/manifests/install.yaml
+```
+
+Argo CD / Flux / Kustomize（`kustomize build --enable-helm`）については
+`deploy/gitops/` を参照してください — これと同じチャートをラップした宣言的ラッパーです。
+
+## 2. Postgres (マルチテナント)
+
+エンジンには **最小権限** のデータベースロールが必要です。`LOGIN`、superuser なし、
+**`BYPASSRLS` なし** — 行レベルセキュリティがテナントのバックストップであり、
+エンジンは特権ロールに対しては起動を拒否します。標準の
+`deploy/postgres/01-app-role.sql` でロールをプロビジョニングし（チャートが
+pre-install Job として代わりに実行できます）、DSN を Secret に入れ、チャートを
+そこに向けます:
+
+```bash
+kubectl create secret generic olivares-pg \
+  --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full' \
+  --from-literal=admin-dsn='postgres://olivares_admin:***@db:5432/olivares?sslmode=verify-full'
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set postgres.adminDsnKey=admin-dsn
+```
+
+同じ Secret 内の `admin-dsn` キーは、専用の `NOSUPERUSER BYPASSRLS` ロールを
+保持します。これがオプションなのは **バックアップを一切有効にしない場合に限り** です。
+すなわちこのキーこそが、クロステナントのシステム読み取り — 組織リスト、
+マルチテナントのカバレッジ — を **完全** にするものであり、`backup` の有効化は
+これを **必須** とします（[§4](#4-スケジュールされた暗号化バックアップ)）。
+いま作成しておけば、後のバックアップの手順は 1 行の変更で済みます。
+
+## 3. Active-passive HA
+
+Postgres を共有ストアとして、複数のレプリカを実行します。1 つが leader に選出され
+（Postgres のアドバイザリロック）、standby は `/readyz` に `503 {"status":"standby"}`
+で応答するため、Service は leader にのみルーティングし、leader が失われると
+standby が自動的に引き継ぎます。
+
+構造的に必須なものが 2 つあり、チャートは **その両方を強制** します（ガードが
+警告ではなくハード障害としてレンダリングされることを検証済みです）:
+
+| 要件 | 理由 | 欠如時のチャートガード |
+|---|---|---|
+| `core.engine=postgres` | SQLite ファイルは 1 つのポッドにローカルであり、共有ストアにはなり得ない。 | `core.replicaCount > 1 requires core.engine=postgres …` |
+| `core.auditSigningKeySecret` | すべてのレプリカが **同一の** Ed25519 鍵で監査台帳に署名しなければ、フェイルオーバー時にハッシュチェーンが分岐する。 | `core.replicaCount > 1 requires core.auditSigningKeySecret …` |
+
+```bash
+kubectl create secret generic olivares-audit-key \
+  --from-file=audit-signing.key=<base64-ed25519-private-key-file>
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set core.replicaCount=3 \
+  --set core.auditSigningKeySecret=olivares-audit-key
+```
+
+標準の HA サイズは 3 または 5 レプリカの active-passive です。このシングルライター
+設計は意図的なものです（製品の一貫性モデルに合致します）。
+[本番運用準備の数値](/how-to/monitor-with-prometheus/)が、それが支える可用性ティアを
+記載しています。
+
+## 4. スケジュールされた暗号化バックアップ
+
+チャートは `olivares dr backup` を実行する `CronJob` を同梱しています — 暗号化され、
+**台帳の連続性が保たれる** バンドル（ストアスナップショット + あなたの KEK で
+封印された署名鍵 + テナントごとのチェーン末端マニフェスト）です:
+
+```bash
+kubectl create secret generic dr-kek --from-literal=passphrase='<strong passphrase>'
+
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set backup.enabled=true \
+  --set backup.kekSecret=dr-kek \
+  --set postgres.adminDsnKey=admin-dsn   # Postgres のみ、かつバックアップ利用時は必須
+```
+
+Postgres ではチャートは `postgres.adminDsnKey` なしでのレンダリングを拒否します:
+バックアップの `pg_dump` は `row_security=off` を維持するため、アプリケーションロールでは
+`FORCE ROW LEVEL SECURITY` の下で中断します。したがってアプリケーションの DSN に
+配線された `CronJob` は毎回失敗し、バックアップがまったく残らない状態になります。
+
+デフォルト: 6 時間ごと（`backup.schedule` で RPO を設定）、14 日間のローカル保持、
+専用の保存先 PVC。**保存先をオフサイトにミラーし、KEK をバンドルとは別に保管してください**
+— 同一クラスタ内のバックアップは災害復旧ではありません。`olivares dr verify` で
+リストアの訓練をしてください。完全な手順は
+[バックアップとリストア](/how-to/backup-and-restore/)にあります。
+
+## 5. Collectors DaemonSet (分散取り込み)
+
+分散トポロジーでは、collectors `DaemonSet` がすべてのノードでソースコネクタを実行し、
+gRPC 経由で core に観測結果を **プッシュ** します — collectors にはインバウンドの
+リスナーがありません。チャートには取り込みトークンが必要で、オプションの mTLS
+マテリアルを受け付けます:
+
+```bash
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set collectors.enabled=true \
+  --set collectors.ingestTokenSecret=olivares-ingest-token   # ingest:write bearer token
+```
+
+`collectors.sourcesConfig` で collectors にソースを与え（どこでも同じ
+[sources JSON](/how-to/connect-a-source/)）、`tls.grpcClientCaSecret` で
+collector→core チャネルの検証済みクライアント証明書 mTLS を有効にしてください —
+[ハードニング](/how-to/security-hardening/)を参照してください。
+
+## モニタリング
+
+Prometheus operator を実行している場合は `serviceMonitor` を有効にします。
+いずれにせよエンジンは認証なしで `/metrics` を公開し（テナントデータを含みません）、
+リポジトリは既製のアラートルールを同梱しています。
+[Prometheus でモニタリング](/how-to/monitor-with-prometheus/)を参照してください。
+
+## 次のステップ
+
+- **ソースを接続する:** [ソースを接続](/how-to/connect-a-source/)と
+  [コネクタガイド](/how-to/connectors/pgaudit/)。
+- **障害訓練:** [トラブルシューティング](/how-to/troubleshooting/) — フェイルオーバー
+  挙動、バックプレッシャー、台帳検証。
+- **エアギャップクラスタ?** [エアギャップサイトで始める](/tutorials/getting-started/air-gapped/)。

@@ -1,0 +1,62 @@
+{
+  "name": "@olivaresai/backstage-plugin-catalog-backend-module-olivares",
+  "version": "0.1.0",
+  "description": "Backstage catalog backend module: an Olivares AI entity provider that publishes the Olivares estate into the Backstage Software Catalog (read-first), plus a scaffolder Template to register an agent with Olivares governance.",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "backstage": {
+    "role": "backend-plugin-module",
+    "pluginId": "catalog",
+    "pluginPackages": [
+      "@backstage/plugin-catalog-node"
+    ],
+    "pluginPackage": "@backstage/plugin-catalog-backend"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "package.json": [
+        "package.json"
+      ]
+    }
+  },
+  "files": [
+    "src",
+    "template",
+    "examples"
+  ],
+  "scripts": {
+    "lint": "backstage-cli package lint",
+    "test": "backstage-cli package test",
+    "build": "backstage-cli package build"
+  },
+  "peerDependencies": {
+    "@backstage/backend-plugin-api": "*",
+    "@backstage/catalog-model": "*",
+    "@backstage/plugin-catalog-node": "*"
+  },
+  "keywords": [
+    "backstage",
+    "backstage-plugin",
+    "catalog",
+    "entity-provider",
+    "olivares",
+    "ai-governance"
+  ],
+  "devDependencies": {
+    "@backstage/cli": "0.36.3",
+    "@backstage/cli-defaults": "0.1.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "nanoid": "^3.3.17",
+      "vm2": "^3.11.6",
+      "tar": "^7.5.21"
+    }
+  }
+}

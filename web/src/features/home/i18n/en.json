@@ -1,0 +1,46 @@
+{
+  "title": "Overview",
+  "description": "Your AI estate at a glance — inventory, activity, risk, compliance, spend and health.",
+  "asOfNote": "Live aggregates over the last 30 days, across the modules your role can open. Each tile links to its module; open the executive report for the full rollup and PDF.",
+  "openReport": "Executive report",
+  "range": "last 30 days",
+  "tiles": {
+    "inventory": {
+      "label": "Inventory",
+      "caption": "{{agents}} agents · {{active}} active"
+    },
+    "sessions": {
+      "label": "Live sessions",
+      "caption": "{{idle}} idle now",
+      "silent": "{{count}} gone silent (possible evasion)"
+    },
+    "security": {
+      "label": "Security",
+      "caption": "{{count}} critical or high",
+      "clear": "No open findings"
+    },
+    "compliance": {
+      "label": "Compliance",
+      "caption": "{{gap}} gaps · {{unmapped}} unmapped",
+      "noControls": "No controls mapped yet"
+    },
+    "spend": {
+      "label": "Spend",
+      "caption": "{{range}}",
+      "projected": "{{amount}} projected at run-rate"
+    },
+    "health": {
+      "label": "Health & SLA",
+      "value": "{{healthy}}/{{total}} healthy",
+      "caption": "{{breaches}} SLA breaches · {{incidents}} open incidents",
+      "noChecks": "No health checks yet"
+    }
+  },
+  "state": {
+    "unavailable": "Couldn't load — open to retry"
+  },
+  "empty": {
+    "title": "Nothing to show yet",
+    "description": "Your role doesn't grant read access to any estate module. Ask an administrator for a read grant to see the overview."
+  }
+}

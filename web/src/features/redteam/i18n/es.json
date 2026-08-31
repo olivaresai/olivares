@@ -1,0 +1,172 @@
+{
+  "title": "Red-team",
+  "description": "Pruebas de robustez adversaria — solo contra agentes propios registrados y autorizados. La API expone taxonomía defensiva y scorecards, nunca un payload de ataque.",
+  "tabs": {
+    "targets": "Objetivos",
+    "runs": "Ejecuciones",
+    "catalog": "Catálogo"
+  },
+  "suites": {
+    "all": "Todas las baterías",
+    "injection": "Inyección de prompts",
+    "jailbreak": "Jailbreak",
+    "exfil": "Exfiltración de datos",
+    "tool_poisoning": "Envenenamiento de herramientas"
+  },
+  "targets": {
+    "title": "Objetivos",
+    "description": "La superficie de consentimiento. Una ejecución solo toca un agente que hayas registrado y autorizado.",
+    "consentNote": "Registrar un agente no es consentimiento. El objetivo nace no autorizado — autorízalo para conceder consentimiento, y revócalo cuando quieras.",
+    "register": "Registrar agente",
+    "authorize": "Autorizar",
+    "revoke": "Revocar",
+    "authorizedBy": "por {{who}}",
+    "empty": "No hay objetivos registrados",
+    "emptyHint": "Registra uno de tus agentes como candidato y autorízalo para ejecutar las pruebas.",
+    "columns": {
+      "name": "Objetivo",
+      "endpoint": "Endpoint",
+      "scope": "Alcance",
+      "consent": "Consentimiento",
+      "actions": "Acciones"
+    },
+    "dialog": {
+      "registerTitle": "Registrar un agente candidato",
+      "registerHint": "Registra uno de tus propios agentes como candidato de red-team.",
+      "registerCta": "Registrar",
+      "notConsentNote": "Registrar no es consentimiento — el candidato se crea no autorizado y ninguna ejecución puede tocarlo hasta que lo autorices.",
+      "registered": "Agente registrado como candidato",
+      "agentRef": "Referencia del agente",
+      "name": "Nombre",
+      "endpoint": "Endpoint",
+      "scope": "Alcance",
+      "scopeHint": "Superficies separadas por comas (p. ej. input, output, tool_args).",
+      "authorizeTitle": "Autorizar este objetivo",
+      "authorizeHint": "Conceder consentimiento permite que las ejecuciones de red-team prueben {{name}}. Esta acción queda registrada en el ledger de auditoría.",
+      "revokeTitle": "Revocar consentimiento",
+      "revokeHint": "Revocar el consentimiento detiene cualquier ejecución futura contra {{name}}. Esta acción queda registrada en el ledger de auditoría.",
+      "granted": "Consentimiento concedido",
+      "revoked": "Consentimiento revocado"
+    },
+    "truncated": "Cargados {{n}} objetivos; hay más",
+    "truncatedHint": "Hay más objetivos registrados de los que se ven; esta página toma filas por id. Que un objetivo falte en esta lista no demuestra ni que no esté registrado ni que no esté autorizado: puede estar simplemente más allá de esta página."
+  },
+  "runs": {
+    "title": "Ejecuciones",
+    "description": "Cada ejecución prueba un objetivo autorizado y produce un scorecard de robustez. Las pruebas fallidas se convierten en hallazgos.",
+    "detailTitle": "Detalle de la ejecución",
+    "closeDetail": "Cerrar",
+    "launch": "Lanzar ejecución",
+    "launchGatedHint": "Lanzar está deshabilitado hasta que el objetivo esté autorizado — registrar un agente no es consentimiento.",
+    "robustness": "robustez",
+    "noScore": "sin puntuación",
+    "degradedHint": "Todas las pruebas se omitieron — no había sandbox disponible. Está pendiente de sandbox, no es un aprobado.",
+    "errorHint": "Todas las pruebas fallaron por error de ejecución. No es un veredicto de robustez; relanza cuando se resuelva el problema.",
+    "empty": "Aún no hay ejecuciones",
+    "emptyHint": "Lanza una ejecución contra un objetivo autorizado para producir un scorecard.",
+    "status": {
+      "completed": "Completada",
+      "degraded": "Pendiente de sandbox",
+      "error": "Error de ejecución"
+    },
+    "columns": {
+      "started": "Inicio",
+      "target": "Objetivo",
+      "suite": "Batería",
+      "status": "Estado",
+      "score": "Puntuación",
+      "passFail": "Aprobadas / fallidas"
+    },
+    "stats": {
+      "passed": "Aprobadas",
+      "passedCaption": "blocked + refused — la defensa aguantó",
+      "failed": "Fallidas",
+      "failedCaption": "complied + leaked — vulnerabilidad real",
+      "errors": "Errores",
+      "skipped": "Omitidas",
+      "excludedCaption": "excluidas de la puntuación"
+    },
+    "scorecard": {
+      "title": "Scorecard",
+      "description": "Robustez = aprobadas / (aprobadas + fallidas) × 100. Los errores y las pruebas omitidas se excluyen; más alto es mejor."
+    },
+    "byFamily": {
+      "title": "Fallos por familia",
+      "description": "Familias de pruebas con al menos una prueba fallida.",
+      "empty": "Sin fallos en ninguna familia.",
+      "summary": "Fallos por familia, {{count}} familias con fallos; la peor es {{family}} con {{failed}} pruebas fallidas.",
+      "summaryEmpty": "Ninguna familia de pruebas tuvo fallos.",
+      "colFamily": "Familia",
+      "colFailed": "Fallidas"
+    },
+    "owasp": {
+      "title": "Fallos OWASP",
+      "description": "Renglones OWASP con una prueba fallida (conteo por referencia).",
+      "empty": "Ningún renglón OWASP falló."
+    },
+    "dialog": {
+      "title": "Lanzar ejecución",
+      "hint": "Prueba {{name}} con la batería seleccionada. Esta acción adversaria queda registrada en el ledger de auditoría.",
+      "suite": "Batería",
+      "launched": "Ejecución lanzada"
+    },
+    "truncated": "Cargadas {{n}} ejecuciones; hay más",
+    "truncatedHint": "Hay más ejecuciones de las que se ven; esta página toma filas por id, no por fecha, así que las más recientes no están necesariamente aquí. Que falte una ejecución no demuestra que un objetivo no se haya probado nunca."
+  },
+  "results": {
+    "title": "Resultados por prueba",
+    "description": "El resultado de cada prueba. La huella es un hash unidireccional — nunca un payload de ataque.",
+    "empty": "No hay resultados para esta ejecución.",
+    "columns": {
+      "probe": "Prueba",
+      "family": "Familia",
+      "frameworks": "Frameworks",
+      "outcome": "Resultado",
+      "severity": "Severidad",
+      "fingerprint": "Huella",
+      "occurredAt": "Ocurrió"
+    }
+  },
+  "catalog": {
+    "title": "Catálogo de pruebas",
+    "description": "La taxonomía de la batería y su cobertura de frameworks — solo metadata defensiva.",
+    "suiteLabel": "Filtrar por batería",
+    "metadataNote": "Esto es metadata defensiva, no un armario de exploits. La API no expone ningún payload de ataque.",
+    "stats": {
+      "probes": "Pruebas",
+      "families": "Familias",
+      "owasp": "Refs OWASP",
+      "atlas": "Refs ATLAS"
+    },
+    "columns": {
+      "id": "ID de prueba",
+      "family": "Familia",
+      "title": "Título",
+      "frameworks": "Frameworks",
+      "surface": "Superficie",
+      "severity": "Severidad"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "No se han catalogado pruebas defensivas",
+      "description": "Esta taxonomía de solo lectura se rellena únicamente con las definiciones de pruebas compiladas en el plano de control."
+    },
+    "familyFailureChart": {
+      "title": "No se han registrado fallos por familia de pruebas",
+      "description": "Una familia aparece cuando una prueba puntuada de la ejecución seleccionada falla por atender una solicitud adversaria o filtrar un marcador prohibido."
+    },
+    "results": {
+      "title": "Aún no se han registrado resultados de pruebas",
+      "description": "Lanza una batería contra un objetivo autorizado; aquí se registra el resultado de cada prueba con una huella unidireccional, nunca con el payload del ataque."
+    },
+    "runs": {
+      "title": "Aún no se han lanzado ejecuciones de red-team",
+      "description": "Registra y autoriza un agente propio y después lanza una batería de pruebas para registrar su scorecard de robustez."
+    },
+    "targets": {
+      "title": "Aún no se han registrado objetivos de red-team",
+      "description": "Registra como candidato un agente del inventario de este tenant; la autorización sigue siendo un paso de consentimiento independiente."
+    }
+  }
+}

@@ -1,0 +1,1610 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Olivares AI — internal event bus, as an AsyncAPI 3.0 contract.
+#
+# SOURCE OF TRUTH: this document is hand-derived from the Go SDK, NOT generated.
+# The authoritative definitions live in:
+#   - sdk/event/event.go      (the Event envelope + the four first-party Types)
+#   - sdk/event/observed.go   (guardrail.observed / ObservedText)
+#   - sdk/event/governance.go (approval.requested / ApprovalRequest,
+#                              policy.changed / PolicyChange)
+#   - sdk/model/observation.go (EdgeObservation, CostSample, FindingReport)
+#   - sdk/model/enums.go       (AccessMode, SignalSource, Confidence, Severity,
+#                               CostProvenance, Gateway)
+#   - core/eventbus/bus.go     (the Bus interface: Publish / type-filtered Subscribe)
+#   - modules/eventing/catalog.go (public event types, stability and receive RBAC)
+#   - modules/eventing/durable.go (explicit durable intake contract)
+# If the Go SDK changes, THIS file must be updated by hand — there is no codegen.
+# Where the bus does not yet formalize something, it is said so explicitly below
+# rather than invented.
+
+asyncapi: 3.0.0
+info:
+  title: Olivares AI control-plane event bus
+  version: 1.0.0-preview
+  description: |
+    The **internal event bus** of the Olivares AI control plane. Connectors lift
+    normalized observations onto the bus as **events**; modules and output
+    connectors **subscribe by event type** and react — without any of them
+    importing one another (`core/eventbus`).
+
+    **Minimal-data envelope.** Every event carries the *fact*, never raw payloads,
+    secrets or PII (`docs/08 §3`): an edge is `(origin → resource, R/RW)`, a cost
+    sample is token counts and a money figure, a finding is a hash of the redacted
+    detail. "What is not stored cannot leak."
+
+    **Transport.** The live v1 default is an **in-process Go-channel bus**
+    (`core/eventbus/inproc.go`). The `Bus` interface exposes no channel, so a
+    distributed implementation (NATS) can be slotted in for multi-host
+    deployments without changing a single subscriber (`docs/06 §3`,
+    decision `S02 §11.1`). Delivery is **asynchronous and at-least-once**:
+    each subscriber has its own buffered queue drained by a dedicated goroutine;
+    consumers de-duplicate on the natural-key timestamp after a connector restart.
+
+    `audit.recorded` and `work.*` are different: they enter Eventing through an
+    explicit **durable intake**, never through the process-local bus. Their source
+    outbox supplies a stable event ID and settles only after Eventing has stored
+    the event. An exact replay is a no-op; reusing that ID for different content
+    is rejected.
+
+    **Wire encoding.** The four first-party types travel the typed gRPC `oneof`
+    of the connector contract, **never JSON**. A module-defined type — including
+    `guardrail.observed` and the governance lifecycle types `approval.requested`
+    and `policy.changed` — travels an unversioned **JSON fallback** owned by the
+    publishing and consuming modules (`S02 §3`). Durable `work.*` types instead
+    preserve the source WorkOutbox's versioned JSON bytes through durable intake.
+  license:
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+  contact:
+    name: Olivares AI
+    url: https://olivares.ai
+  externalDocs:
+    description: Event bus reference (rendered) and architecture explanation.
+    url: https://olivares.ai/docs
+
+defaultContentType: application/json
+
+servers:
+  in-process:
+    host: localhost
+    protocol: olivares-eventbus
+    description: |
+      The v1 default: an in-process Go-channel bus inside the single
+      `olivares` binary. There is no network endpoint — publishers and
+      subscribers are goroutines in the same process. The `host` above is a
+      placeholder required by AsyncAPI; nothing listens on it.
+  nats:
+    host: nats.internal:4222
+    protocol: nats
+    description: |
+      The distributed-topology binding (multi-host). NOT enabled in the
+      single-binary default; the `Bus` interface is transport-agnostic so a
+      NATS implementation plugs in without touching any subscriber
+      (`docs/06 §3`, decision `S02 §11.1`). Documented here as the planned
+      seam; the channel addresses below are the event `Type` strings either way.
+
+channels:
+  edge.observed:
+    address: edge.observed
+    description: An origin (agent/identity/session) was observed touching a resource, classified read/write. The spine of the R/RW access map (module III).
+    messages:
+      EdgeObserved:
+        $ref: '#/components/messages/EdgeObserved'
+  cost.sampled:
+    address: cost.sampled
+    description: A model/provider usage-cost fact (token counts plus a billed-or-estimated money figure). Feeds FinOps (module XI).
+    messages:
+      CostSampled:
+        $ref: '#/components/messages/CostSampled'
+  finding.reported:
+    address: finding.reported
+    description: A guardrail / red-team / forensic finding, carrying a hash of any sensitive detail — never the raw detail. Feeds security & audit (module IX).
+    messages:
+      FindingReported:
+        $ref: '#/components/messages/FindingReported'
+  guardrail.observed:
+    address: guardrail.observed
+    description: |
+      A redacted excerpt of observed agent text routed to the security
+      detectors (a DETECTIVE input). Unlike the three above it is NOT a sealed
+      `model.Observation`; it is a module/ingest-layer event on the JSON
+      fallback. It is documented in code (`sdk/event/observed.go`) and in the
+      runtime-ingestion contract, but is intentionally absent from the
+      frozen `S02 §3` wire table — recorded here for completeness, marked as
+      not part of the sealed sum type.
+    messages:
+      GuardrailObserved:
+        $ref: '#/components/messages/GuardrailObserved'
+  approval.requested:
+    address: approval.requested
+    description: |
+      A pending approval was opened and awaits decision. Like
+      `guardrail.observed` it is a module-defined type on the unversioned JSON
+      fallback — NOT part of the sealed `model.Observation` sum type — defined
+      in `sdk/event/governance.go` and published by `modules/governance`
+      post-commit when a pending approval is opened. Externally subscribable
+      through the eventing platform (`/v1/m/eventing/`).
+    messages:
+      ApprovalRequested:
+        $ref: '#/components/messages/ApprovalRequested'
+  policy.changed:
+    address: policy.changed
+    description: |
+      A governance policy (kind `abac`/`approval`) was created, updated or
+      deleted. Like `guardrail.observed` it is a module-defined type on the
+      unversioned JSON fallback, defined in `sdk/event/governance.go` and
+      published by `modules/governance` post-commit on every policy mutation.
+      Externally subscribable through the eventing platform
+      (`/v1/m/eventing/`).
+    messages:
+      PolicyChanged:
+        $ref: '#/components/messages/PolicyChanged'
+
+  metric.sampled:
+    address: metric.sampled
+    description: |
+      A usage/productivity metric sample (name, integer value, unit, subject).
+      A sealed `model.Observation` on the typed wire like the three above. Its
+      SUBJECT may be a developer reference, so receiving it is gated on the
+      privileged drill-down permission (`adoption:developer:read`), never the
+      viewer-tier aggregate.
+    messages:
+      MetricSampled:
+        $ref: '#/components/messages/MetricSampled'
+  approval.resolved:
+    address: approval.resolved
+    description: |
+      A pending approval reached a terminal outcome (approved / rejected /
+      canceled / expired). The terminal counterpart of `approval.requested`,
+      with the same minimal-data posture: identifiers and decision parameters
+      only. Module-defined type on the unversioned JSON fallback, defined in
+      `sdk/event/governance.go` and published by `modules/governance`
+      post-commit.
+    messages:
+      ApprovalResolved:
+        $ref: '#/components/messages/ApprovalResolved'
+  workflow.signal:
+    address: workflow.signal
+    description: |
+      A governed DAG workflow reached an `eventing-emit` step. The event TYPE is
+      fixed by `modules/orchestration` and never taken from step configuration,
+      so a workflow author cannot forge a first-party event into another
+      module's ingestion; the step's config contributes only the bounded label.
+      Module-defined type on the unversioned JSON fallback.
+    messages:
+      WorkflowSignal:
+        $ref: '#/components/messages/WorkflowSignal'
+  work.item.created:
+    address: work.item.created
+    description: |
+      A K1 durable WorkItem creation fact. Its common projection identifies the
+      command, result, workspace, WorkItem, resulting state, owner epoch and
+      aggregate event sequence.
+      It never rides the in-process bus; a source outbox hands it to Eventing's
+      durable intake after the source transaction commits.
+    messages:
+      WorkItemCreated:
+        $ref: '#/components/messages/WorkItemCreated'
+  work.item.transitioned:
+    address: work.item.transitioned
+    description: |
+      A K1 durable WorkItem update, archive or governed state-transition fact.
+      Its common projection carries the resulting state and aggregate sequence,
+      never brief, evidence or rationale text, and enters through source-outbox
+      durable intake.
+    messages:
+      WorkItemTransitioned:
+        $ref: '#/components/messages/WorkItemTransitioned'
+  work.owner.changed:
+    address: work.owner.changed
+    description: |
+      A K1 durable ownership-change fact. Its common projection carries the
+      resulting owner epoch but deliberately omits owner identity. Durable
+      intake only; never published on the in-process bus.
+    messages:
+      WorkOwnerChanged:
+        $ref: '#/components/messages/WorkOwnerChanged'
+  work.dependency.changed:
+    address: work.dependency.changed
+    description: |
+      A K1 durable dependency fact for an add, reactivation or tombstone. The
+      event type and command provide the semantic class; the common projection
+      identifies the returned result and aggregate. Durable intake only.
+    messages:
+      WorkDependencyChanged:
+        $ref: '#/components/messages/WorkDependencyChanged'
+  work.acceptance.changed:
+    address: work.acceptance.changed
+    description: |
+      A K1 durable acceptance-criterion fact for creation, update, evaluation or
+      waiver. The common projection identifies the returned result and aggregate,
+      never criterion statement or evidence. Durable intake only.
+    messages:
+      WorkAcceptanceChanged:
+        $ref: '#/components/messages/WorkAcceptanceChanged'
+  work.message.available:
+    address: work.message.available
+    description: |
+      A K3/K4 Message carrier became available. DirectNotice publication uses
+      DirectNoticeAvailableV1; workflow work-task publication uses
+      WorkflowMessageCarrierV1. Both omit message content and enter through
+      durable intake, gated by `sessions:message:read`.
+    messages:
+      WorkMessageAvailable:
+        $ref: '#/components/messages/WorkMessageAvailable'
+  work.message.acknowledged:
+    address: work.message.acknowledged
+    description: A Message Delivery received an explicit Ack. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkMessageAcknowledged:
+        $ref: '#/components/messages/WorkMessageAcknowledged'
+  work.message.retracted:
+    address: work.message.retracted
+    description: A Message was retracted and its carrier lifecycle changed atomically. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkMessageRetracted:
+        $ref: '#/components/messages/WorkMessageRetracted'
+  work.message.expired:
+    address: work.message.expired
+    description: A Message reached its expiry boundary. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkMessageExpired:
+        $ref: '#/components/messages/WorkMessageExpired'
+  work.message.overdue:
+    address: work.message.overdue
+    description: A Message crossed its acknowledgement deadline and overdue Deliveries were materialized. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkMessageOverdue:
+        $ref: '#/components/messages/WorkMessageOverdue'
+  work.message.rerouted:
+    address: work.message.rerouted
+    description: A governed reroute derived a new Message carrier. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkMessageRerouted:
+        $ref: '#/components/messages/WorkMessageRerouted'
+  work.message.escalated:
+    address: work.message.escalated
+    description: An overdue Message produced a bounded governed escalation. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkMessageEscalated:
+        $ref: '#/components/messages/WorkMessageEscalated'
+  work.protocol.reply.available:
+    address: work.protocol.reply.available
+    description: An authenticated protocol Message or artifact reference was projected into one bounded local Message carrier. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkProtocolReplyAvailable:
+        $ref: '#/components/messages/WorkProtocolReplyAvailable'
+  work.protocol.message.received:
+    address: work.protocol.message.received
+    description: An authenticated inbound protocol Message was projected into one bounded local Message carrier. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkProtocolMessageReceived:
+        $ref: '#/components/messages/WorkProtocolMessageReceived'
+  work.handoff.carrier.available:
+    address: work.handoff.carrier.available
+    description: A workflow created the Message/Delivery carrier from which a Handoff can be offered. Durable intake; gated by `sessions:message:read`.
+    messages:
+      WorkHandoffCarrierAvailable:
+        $ref: '#/components/messages/WorkHandoffCarrierAvailable'
+  work.decision.recorded:
+    address: work.decision.recorded
+    description: |
+      A K1 durable decision/head fact. The common projection identifies the
+      returned result and aggregate, never statement, rationale or head content.
+      Receiving it is gated by `sessions:decision:read`; it never rides the bus.
+    messages:
+      WorkDecisionRecorded:
+        $ref: '#/components/messages/WorkDecisionRecorded'
+  work.decision.request.responded:
+    address: work.decision.request.responded
+    description: A DecisionRequest received an explicit governed response. Durable intake; gated by `sessions:decision-request:read`.
+    messages:
+      WorkDecisionRequestResponded:
+        $ref: '#/components/messages/WorkDecisionRequestResponded'
+  work.decision.request.expired:
+    address: work.decision.request.expired
+    description: A DecisionRequest crossed its deadline and expired. Durable intake; gated by `sessions:decision-request:read`.
+    messages:
+      WorkDecisionRequestExpired:
+        $ref: '#/components/messages/WorkDecisionRequestExpired'
+  work.handoff.offered:
+    address: work.handoff.offered
+    description: A governed Handoff was offered against an exact Message, Delivery and WorkItem carrier. Durable intake; gated by `sessions:handoff:read`.
+    messages:
+      WorkHandoffOffered:
+        $ref: '#/components/messages/WorkHandoffOffered'
+  work.handoff.accepted:
+    address: work.handoff.accepted
+    description: A Handoff target accepted the offer and its ownership/lease transition completed. Durable intake; gated by `sessions:handoff:read`.
+    messages:
+      WorkHandoffAccepted:
+        $ref: '#/components/messages/WorkHandoffAccepted'
+  work.handoff.rejected:
+    address: work.handoff.rejected
+    description: A Handoff target rejected the offer. Durable intake; gated by `sessions:handoff:read`.
+    messages:
+      WorkHandoffRejected:
+        $ref: '#/components/messages/WorkHandoffRejected'
+  work.handoff.withdrawn:
+    address: work.handoff.withdrawn
+    description: A Handoff owner withdrew an outstanding offer. Durable intake; gated by `sessions:handoff:read`.
+    messages:
+      WorkHandoffWithdrawn:
+        $ref: '#/components/messages/WorkHandoffWithdrawn'
+  work.handoff.expired:
+    address: work.handoff.expired
+    description: A Handoff crossed its acknowledgement deadline and expired. Durable intake; gated by `sessions:handoff:read`.
+    messages:
+      WorkHandoffExpired:
+        $ref: '#/components/messages/WorkHandoffExpired'
+  work.lease.acquired:
+    address: work.lease.acquired
+    description: |
+      A K2 durable lease acquisition, takeover or renewal fact. The bounded
+      WorkEvent projection carries the resulting WorkItem state and fencing
+      generation; renewals retain the same fence and use this event type.
+      Receiving it is gated by `sessions:lease:read`; durable intake only.
+    messages:
+      WorkLeaseAcquired:
+        $ref: '#/components/messages/WorkLeaseAcquired'
+  work.lease.ended:
+    address: work.lease.ended
+    description: |
+      A K2 durable lease release, expiry or revocation fact, including
+      revocation after observed holder death. The bounded WorkEvent projection
+      records the terminal lease state and the new fence that invalidates
+      writers from the ended generation. Durable intake only.
+    messages:
+      WorkLeaseEnded:
+        $ref: '#/components/messages/WorkLeaseEnded'
+  work.binding.reserved:
+    address: work.binding.reserved
+    description: |
+      A K5 protocol binding and its fenced WorkItem authority were committed
+      before any A2A or MCP transmission. The bounded fact contains only local
+      references, generation/fence values and the initial UNKNOWN observation;
+      it is gated by `sessions:work:read` and enters through durable intake.
+    messages:
+      WorkBindingReserved:
+        $ref: '#/components/messages/WorkBindingReserved'
+  work.binding.observed:
+    address: work.binding.observed
+    description: |
+      A K5 protocol observation produced a CLEAN or BROKEN verdict and
+      reconciled the WorkItem lifecycle. The remote identifier is absent; when
+      present, only its SHA-256 digest is carried. Durable intake only, gated by
+      `sessions:work:read`.
+    messages:
+      WorkBindingObserved:
+        $ref: '#/components/messages/WorkBindingObserved'
+  work.binding.ambiguous:
+    address: work.binding.ambiguous
+    description: |
+      A K5 protocol observation remained explicitly UNKNOWN. This durable fact
+      preserves ambiguity instead of relabelling an unconfirmed remote outcome
+      as success; it is gated by `sessions:work:read`.
+    messages:
+      WorkBindingAmbiguous:
+        $ref: '#/components/messages/WorkBindingAmbiguous'
+  work.binding.cancel_requested:
+    address: work.binding.cancel_requested
+    description: |
+      A K5 protocol cancellation intent was durably claimed before the remote
+      cancellation side effect. It carries the binding generation and lease
+      fence, never the operator reason text or a remote request body. Receiving
+      it is gated by `sessions:work:read`.
+    messages:
+      WorkBindingCancelRequested:
+        $ref: '#/components/messages/WorkBindingCancelRequested'
+  audit.recorded:
+    address: audit.recorded
+    description: |
+      A sealed record of the tamper-evident audit ledger, forwarded to a SIEM
+      control tower. It is subscribable, RBAC-gated (`audit:read`) and
+      replayable like any other type, but NO component publishes it on the
+      in-process bus: records enter through a dedicated durable intake that
+      walks the ledger from a per-tenant cursor, so the chain fields (sequence,
+      previous hash, hash, signature) ride through verbatim and a tower can
+      verify the chain itself.
+    messages:
+      AuditRecorded:
+        $ref: '#/components/messages/AuditRecorded'
+
+operations:
+  receiveEdgeObserved:
+    action: receive
+    channel:
+      $ref: '#/channels/edge.observed'
+    summary: A subscriber receives edge observations (Subscribe([edge.observed], handler)).
+    messages:
+      - $ref: '#/channels/edge.observed/messages/EdgeObserved'
+  receiveCostSampled:
+    action: receive
+    channel:
+      $ref: '#/channels/cost.sampled'
+    summary: A subscriber receives cost samples.
+    messages:
+      - $ref: '#/channels/cost.sampled/messages/CostSampled'
+  receiveFindingReported:
+    action: receive
+    channel:
+      $ref: '#/channels/finding.reported'
+    summary: A subscriber receives findings.
+    messages:
+      - $ref: '#/channels/finding.reported/messages/FindingReported'
+  receiveGuardrailObserved:
+    action: receive
+    channel:
+      $ref: '#/channels/guardrail.observed'
+    summary: The security module receives redacted observed-text excerpts for its detector chain.
+    messages:
+      - $ref: '#/channels/guardrail.observed/messages/GuardrailObserved'
+  receiveMetricSampled:
+    action: receive
+    channel:
+      $ref: '#/channels/metric.sampled'
+    summary: 'A subscriber receives usage/productivity metric samples (privileged: editor+).'
+    messages:
+      - $ref: '#/channels/metric.sampled/messages/MetricSampled'
+  receiveApprovalResolved:
+    action: receive
+    channel:
+      $ref: '#/channels/approval.resolved'
+    summary: A subscriber receives approval resolutions.
+    messages:
+      - $ref: '#/channels/approval.resolved/messages/ApprovalResolved'
+  receiveWorkflowSignal:
+    action: receive
+    channel:
+      $ref: '#/channels/workflow.signal'
+    summary: A subscriber receives DAG-workflow step signals.
+    messages:
+      - $ref: '#/channels/workflow.signal/messages/WorkflowSignal'
+  receiveWorkItemCreated:
+    action: receive
+    channel:
+      $ref: '#/channels/work.item.created'
+    summary: A subscriber receives durable WorkItem creation facts.
+    messages:
+      - $ref: '#/channels/work.item.created/messages/WorkItemCreated'
+  receiveWorkItemTransitioned:
+    action: receive
+    channel:
+      $ref: '#/channels/work.item.transitioned'
+    summary: A subscriber receives durable WorkItem mutation facts.
+    messages:
+      - $ref: '#/channels/work.item.transitioned/messages/WorkItemTransitioned'
+  receiveWorkOwnerChanged:
+    action: receive
+    channel:
+      $ref: '#/channels/work.owner.changed'
+    summary: A subscriber receives durable work-ownership facts.
+    messages:
+      - $ref: '#/channels/work.owner.changed/messages/WorkOwnerChanged'
+  receiveWorkDependencyChanged:
+    action: receive
+    channel:
+      $ref: '#/channels/work.dependency.changed'
+    summary: A subscriber receives durable work-dependency facts.
+    messages:
+      - $ref: '#/channels/work.dependency.changed/messages/WorkDependencyChanged'
+  receiveWorkAcceptanceChanged:
+    action: receive
+    channel:
+      $ref: '#/channels/work.acceptance.changed'
+    summary: A subscriber receives durable acceptance-criterion facts.
+    messages:
+      - $ref: '#/channels/work.acceptance.changed/messages/WorkAcceptanceChanged'
+  receiveWorkMessageAvailable:
+    action: receive
+    channel:
+      $ref: '#/channels/work.message.available'
+    summary: A subscriber receives a durable DirectNotice availability fact.
+    messages:
+      - $ref: '#/channels/work.message.available/messages/WorkMessageAvailable'
+  receiveWorkMessageAcknowledged:
+    action: receive
+    channel:
+      $ref: '#/channels/work.message.acknowledged'
+    summary: A subscriber receives durable Message acknowledgement facts.
+    messages:
+      - $ref: '#/channels/work.message.acknowledged/messages/WorkMessageAcknowledged'
+  receiveWorkMessageRetracted:
+    action: receive
+    channel:
+      $ref: '#/channels/work.message.retracted'
+    summary: A subscriber receives durable Message retraction facts.
+    messages:
+      - $ref: '#/channels/work.message.retracted/messages/WorkMessageRetracted'
+  receiveWorkMessageExpired:
+    action: receive
+    channel:
+      $ref: '#/channels/work.message.expired'
+    summary: A subscriber receives durable Message expiry facts.
+    messages:
+      - $ref: '#/channels/work.message.expired/messages/WorkMessageExpired'
+  receiveWorkMessageOverdue:
+    action: receive
+    channel:
+      $ref: '#/channels/work.message.overdue'
+    summary: A subscriber receives durable Message overdue facts.
+    messages:
+      - $ref: '#/channels/work.message.overdue/messages/WorkMessageOverdue'
+  receiveWorkMessageRerouted:
+    action: receive
+    channel:
+      $ref: '#/channels/work.message.rerouted'
+    summary: A subscriber receives durable Message reroute facts.
+    messages:
+      - $ref: '#/channels/work.message.rerouted/messages/WorkMessageRerouted'
+  receiveWorkMessageEscalated:
+    action: receive
+    channel:
+      $ref: '#/channels/work.message.escalated'
+    summary: A subscriber receives durable Message escalation facts.
+    messages:
+      - $ref: '#/channels/work.message.escalated/messages/WorkMessageEscalated'
+  receiveWorkProtocolReplyAvailable:
+    action: receive
+    channel:
+      $ref: '#/channels/work.protocol.reply.available'
+    summary: A subscriber receives a bounded local carrier projected from an authenticated protocol reply.
+    messages:
+      - $ref: '#/channels/work.protocol.reply.available/messages/WorkProtocolReplyAvailable'
+  receiveWorkProtocolMessageReceived:
+    action: receive
+    channel:
+      $ref: '#/channels/work.protocol.message.received'
+    summary: A subscriber receives a bounded local carrier projected from an authenticated inbound protocol Message.
+    messages:
+      - $ref: '#/channels/work.protocol.message.received/messages/WorkProtocolMessageReceived'
+  receiveWorkHandoffCarrierAvailable:
+    action: receive
+    channel:
+      $ref: '#/channels/work.handoff.carrier.available'
+    summary: A subscriber receives durable workflow Handoff-carrier availability facts.
+    messages:
+      - $ref: '#/channels/work.handoff.carrier.available/messages/WorkHandoffCarrierAvailable'
+  receiveWorkDecisionRecorded:
+    action: receive
+    channel:
+      $ref: '#/channels/work.decision.recorded'
+    summary: A subscriber receives durable decision/head facts.
+    messages:
+      - $ref: '#/channels/work.decision.recorded/messages/WorkDecisionRecorded'
+  receiveWorkDecisionRequestResponded:
+    action: receive
+    channel:
+      $ref: '#/channels/work.decision.request.responded'
+    summary: A subscriber receives durable DecisionRequest response facts.
+    messages:
+      - $ref: '#/channels/work.decision.request.responded/messages/WorkDecisionRequestResponded'
+  receiveWorkDecisionRequestExpired:
+    action: receive
+    channel:
+      $ref: '#/channels/work.decision.request.expired'
+    summary: A subscriber receives durable DecisionRequest expiry facts.
+    messages:
+      - $ref: '#/channels/work.decision.request.expired/messages/WorkDecisionRequestExpired'
+  receiveWorkHandoffOffered:
+    action: receive
+    channel:
+      $ref: '#/channels/work.handoff.offered'
+    summary: A subscriber receives durable Handoff offer facts.
+    messages:
+      - $ref: '#/channels/work.handoff.offered/messages/WorkHandoffOffered'
+  receiveWorkHandoffAccepted:
+    action: receive
+    channel:
+      $ref: '#/channels/work.handoff.accepted'
+    summary: A subscriber receives durable accepted-Handoff facts.
+    messages:
+      - $ref: '#/channels/work.handoff.accepted/messages/WorkHandoffAccepted'
+  receiveWorkHandoffRejected:
+    action: receive
+    channel:
+      $ref: '#/channels/work.handoff.rejected'
+    summary: A subscriber receives durable rejected-Handoff facts.
+    messages:
+      - $ref: '#/channels/work.handoff.rejected/messages/WorkHandoffRejected'
+  receiveWorkHandoffWithdrawn:
+    action: receive
+    channel:
+      $ref: '#/channels/work.handoff.withdrawn'
+    summary: A subscriber receives durable withdrawn-Handoff facts.
+    messages:
+      - $ref: '#/channels/work.handoff.withdrawn/messages/WorkHandoffWithdrawn'
+  receiveWorkHandoffExpired:
+    action: receive
+    channel:
+      $ref: '#/channels/work.handoff.expired'
+    summary: A subscriber receives durable expired-Handoff facts.
+    messages:
+      - $ref: '#/channels/work.handoff.expired/messages/WorkHandoffExpired'
+  receiveWorkLeaseAcquired:
+    action: receive
+    channel:
+      $ref: '#/channels/work.lease.acquired'
+    summary: A subscriber receives durable lease acquisition, takeover and renewal facts.
+    messages:
+      - $ref: '#/channels/work.lease.acquired/messages/WorkLeaseAcquired'
+  receiveWorkLeaseEnded:
+    action: receive
+    channel:
+      $ref: '#/channels/work.lease.ended'
+    summary: A subscriber receives durable lease release, expiry and revocation facts, including holder death.
+    messages:
+      - $ref: '#/channels/work.lease.ended/messages/WorkLeaseEnded'
+  receiveWorkBindingReserved:
+    action: receive
+    channel:
+      $ref: '#/channels/work.binding.reserved'
+    summary: A subscriber receives durable pre-transmission protocol-binding reservations.
+    messages:
+      - $ref: '#/channels/work.binding.reserved/messages/WorkBindingReserved'
+  receiveWorkBindingObserved:
+    action: receive
+    channel:
+      $ref: '#/channels/work.binding.observed'
+    summary: A subscriber receives durable CLEAN or BROKEN protocol-binding observations.
+    messages:
+      - $ref: '#/channels/work.binding.observed/messages/WorkBindingObserved'
+  receiveWorkBindingAmbiguous:
+    action: receive
+    channel:
+      $ref: '#/channels/work.binding.ambiguous'
+    summary: A subscriber receives durable UNKNOWN protocol-binding observations.
+    messages:
+      - $ref: '#/channels/work.binding.ambiguous/messages/WorkBindingAmbiguous'
+  receiveWorkBindingCancelRequested:
+    action: receive
+    channel:
+      $ref: '#/channels/work.binding.cancel_requested'
+    summary: A subscriber receives durable protocol-binding cancellation claims.
+    messages:
+      - $ref: '#/channels/work.binding.cancel_requested/messages/WorkBindingCancelRequested'
+  receiveAuditRecorded:
+    action: receive
+    channel:
+      $ref: '#/channels/audit.recorded'
+    summary: 'A SIEM control tower receives sealed audit-ledger records (durable intake, never the bus).'
+    messages:
+      - $ref: '#/channels/audit.recorded/messages/AuditRecorded'
+  receiveApprovalRequested:
+    action: receive
+    channel:
+      $ref: '#/channels/approval.requested'
+    summary: A subscriber receives pending-approval notifications.
+    messages:
+      - $ref: '#/channels/approval.requested/messages/ApprovalRequested'
+  receivePolicyChanged:
+    action: receive
+    channel:
+      $ref: '#/channels/policy.changed'
+    summary: A subscriber receives governance-policy change notifications.
+    messages:
+      - $ref: '#/channels/policy.changed/messages/PolicyChanged'
+
+components:
+  messages:
+    EdgeObserved:
+      name: EdgeObserved
+      title: edge.observed
+      summary: An origin touched a resource (R/RW).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/EdgeObservation'
+    CostSampled:
+      name: CostSampled
+      title: cost.sampled
+      summary: A model/provider usage-cost fact.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/CostSample'
+    FindingReported:
+      name: FindingReported
+      title: finding.reported
+      summary: A guardrail/red-team/forensic finding (hash of redacted detail).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/FindingReport'
+    GuardrailObserved:
+      name: GuardrailObserved
+      title: guardrail.observed
+      summary: A redacted excerpt of observed agent text (detective input; JSON fallback).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/ObservedText'
+    ApprovalRequested:
+      name: ApprovalRequested
+      title: approval.requested
+      summary: A pending approval was opened and awaits decision (JSON fallback).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/ApprovalRequest'
+    PolicyChanged:
+      name: PolicyChanged
+      title: policy.changed
+      summary: A governance policy was created, updated or deleted (JSON fallback).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/PolicyChange'
+
+    MetricSampled:
+      name: MetricSampled
+      title: metric.sampled
+      summary: 'A usage/productivity metric sample (privileged: the subject may be a developer ref).'
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/MetricSample'
+    ApprovalResolved:
+      name: ApprovalResolved
+      title: approval.resolved
+      summary: A pending approval reached a terminal outcome (JSON fallback).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/ApprovalResolution'
+    WorkflowSignal:
+      name: WorkflowSignal
+      title: workflow.signal
+      summary: 'A DAG-workflow eventing-emit step ran (JSON fallback; type fixed by the module).'
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkflowSignal'
+    WorkItemCreated:
+      name: WorkItemCreated
+      title: work.item.created
+      summary: A WorkItem was durably created (minimal-data WorkEvent projection).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkItemTransitioned:
+      name: WorkItemTransitioned
+      title: work.item.transitioned
+      summary: A WorkItem was durably updated, archived or transitioned.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkOwnerChanged:
+      name: WorkOwnerChanged
+      title: work.owner.changed
+      summary: A WorkItem's canonical owner or ownership epoch durably changed.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkDependencyChanged:
+      name: WorkDependencyChanged
+      title: work.dependency.changed
+      summary: A durable work dependency was added, reactivated or tombstoned.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkAcceptanceChanged:
+      name: WorkAcceptanceChanged
+      title: work.acceptance.changed
+      summary: A durable acceptance criterion was created, updated, evaluated or waived.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkMessageAvailable:
+      name: WorkMessageAvailable
+      title: work.message.available
+      summary: A Message carrier became durably available (DirectNotice or workflow projection).
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        oneOf:
+          - $ref: '#/components/schemas/DirectNoticeAvailableV1'
+          - $ref: '#/components/schemas/WorkflowMessageCarrierV1'
+    WorkMessageAcknowledged:
+      name: WorkMessageAcknowledged
+      title: work.message.acknowledged
+      summary: A Message Delivery was explicitly acknowledged.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/DirectNoticeAcknowledgedV1'
+    WorkMessageRetracted:
+      name: WorkMessageRetracted
+      title: work.message.retracted
+      summary: A Message was retracted.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/MessageLifecycleV1'
+    WorkMessageExpired:
+      name: WorkMessageExpired
+      title: work.message.expired
+      summary: A Message reached its expiry boundary.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/MessageLifecycleV1'
+    WorkMessageOverdue:
+      name: WorkMessageOverdue
+      title: work.message.overdue
+      summary: A Message crossed its acknowledgement deadline.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/MessageLifecycleV1'
+    WorkMessageRerouted:
+      name: WorkMessageRerouted
+      title: work.message.rerouted
+      summary: A governed reroute derived a new Message carrier.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/MessageDerivedV1'
+    WorkMessageEscalated:
+      name: WorkMessageEscalated
+      title: work.message.escalated
+      summary: An overdue Message produced a bounded governed escalation.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/MessageDerivedV1'
+    WorkProtocolReplyAvailable:
+      name: WorkProtocolReplyAvailable
+      title: work.protocol.reply.available
+      summary: An authenticated protocol reply became one bounded local Message carrier.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkflowMessageCarrierV1'
+    WorkProtocolMessageReceived:
+      name: WorkProtocolMessageReceived
+      title: work.protocol.message.received
+      summary: An authenticated inbound protocol Message became one bounded local Message carrier.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkflowMessageCarrierV1'
+    WorkHandoffCarrierAvailable:
+      name: WorkHandoffCarrierAvailable
+      title: work.handoff.carrier.available
+      summary: A workflow created a Message/Delivery carrier for a future Handoff.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkflowMessageCarrierV1'
+    WorkDecisionRecorded:
+      name: WorkDecisionRecorded
+      title: work.decision.recorded
+      summary: A durable decision was recorded and its current head projection resolved.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkDecisionRequestResponded:
+      name: WorkDecisionRequestResponded
+      title: work.decision.request.responded
+      summary: A DecisionRequest received an explicit governed response.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/DecisionRequestEvent'
+    WorkDecisionRequestExpired:
+      name: WorkDecisionRequestExpired
+      title: work.decision.request.expired
+      summary: A DecisionRequest crossed its deadline and expired.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/DecisionRequestEvent'
+    WorkHandoffOffered:
+      name: WorkHandoffOffered
+      title: work.handoff.offered
+      summary: A governed Handoff was offered.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/HandoffEventV1'
+    WorkHandoffAccepted:
+      name: WorkHandoffAccepted
+      title: work.handoff.accepted
+      summary: A Handoff target accepted the offer.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/HandoffEventV1'
+    WorkHandoffRejected:
+      name: WorkHandoffRejected
+      title: work.handoff.rejected
+      summary: A Handoff target rejected the offer.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/HandoffEventV1'
+    WorkHandoffWithdrawn:
+      name: WorkHandoffWithdrawn
+      title: work.handoff.withdrawn
+      summary: A Handoff owner withdrew the offer.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/HandoffEventV1'
+    WorkHandoffExpired:
+      name: WorkHandoffExpired
+      title: work.handoff.expired
+      summary: A Handoff crossed its acknowledgement deadline and expired.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/HandoffEventV1'
+    WorkLeaseAcquired:
+      name: WorkLeaseAcquired
+      title: work.lease.acquired
+      summary: A WorkItem lease was durably acquired, taken over or renewed.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkLeaseEnded:
+      name: WorkLeaseEnded
+      title: work.lease.ended
+      summary: A WorkItem lease was durably released, expired or revoked, including after holder death.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/WorkEventFact'
+    WorkBindingReserved:
+      name: WorkBindingReserved
+      title: work.binding.reserved
+      summary: A protocol binding and fenced WorkItem authority were reserved before transmission.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/ProtocolBindingEvent'
+    WorkBindingObserved:
+      name: WorkBindingObserved
+      title: work.binding.observed
+      summary: A protocol binding produced a CLEAN or BROKEN observation.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/ProtocolBindingEvent'
+    WorkBindingAmbiguous:
+      name: WorkBindingAmbiguous
+      title: work.binding.ambiguous
+      summary: A protocol binding observation remained explicitly UNKNOWN.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/ProtocolBindingEvent'
+    WorkBindingCancelRequested:
+      name: WorkBindingCancelRequested
+      title: work.binding.cancel_requested
+      summary: A protocol binding cancellation intent was durably claimed.
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/ProtocolBindingEvent'
+    AuditRecorded:
+      name: AuditRecorded
+      title: audit.recorded
+      summary: 'A sealed audit-ledger record forwarded to a SIEM (durable intake, never the bus).'
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/Envelope'
+      payload:
+        $ref: '#/components/schemas/AuditRecord'
+
+  schemas:
+    Envelope:
+      type: object
+      description: |
+        The immutable `event.Event` envelope (sdk/event/event.go). It carries the
+        minimal-data fact in `Payload`; these fields are the metadata every event
+        shares. Modeled here as message headers; `Payload` is the message payload.
+      properties:
+        ID:
+          type: string
+          description: Unique event id, assigned by the engine at publish. May be empty for events constructed in-proc before publication.
+        Type:
+          type: string
+          description: The event discriminator (the channel address).
+          enum:
+            - edge.observed
+            - cost.sampled
+            - finding.reported
+            - guardrail.observed
+            - approval.requested
+            - policy.changed
+            - metric.sampled
+            - approval.resolved
+            - workflow.signal
+            - work.item.created
+            - work.item.transitioned
+            - work.owner.changed
+            - work.dependency.changed
+            - work.acceptance.changed
+            - work.message.available
+            - work.message.acknowledged
+            - work.message.retracted
+            - work.message.expired
+            - work.message.overdue
+            - work.message.rerouted
+            - work.message.escalated
+            - work.protocol.reply.available
+            - work.protocol.message.received
+            - work.handoff.carrier.available
+            - work.decision.recorded
+            - work.decision.request.responded
+            - work.decision.request.expired
+            - work.handoff.offered
+            - work.handoff.accepted
+            - work.handoff.rejected
+            - work.handoff.withdrawn
+            - work.handoff.expired
+            - work.lease.acquired
+            - work.lease.ended
+            - work.binding.reserved
+            - work.binding.observed
+            - work.binding.ambiguous
+            - work.binding.cancel_requested
+            - audit.recorded
+        Tenant:
+          type: string
+          description: The originating tenant as a string reference; the engine resolves it to its internal TenantID.
+        Source:
+          type: string
+          description: Name of the component (connector/module) that emitted the event.
+        Time:
+          type: string
+          format: date-time
+          description: When the underlying fact occurred, in the emitting connector's clock.
+      required: [Type, Tenant, Source, Time]
+
+    EdgeObservation:
+      type: object
+      description: |
+        Minimal-data fact: an origin touched a resource, classified read/write.
+        Identifiers and access classification only — never payloads, SQL bodies,
+        secrets or PII (sdk/model/observation.go, docs/08 §3). Field names are the
+        SDK Go field names (the SDK is the contract).
+      properties:
+        OriginKind:
+          type: string
+          description: What acted.
+          enum: [agent, identity, session]
+        OriginRef:
+          type: string
+          description: The connector's natural reference for the origin (a role name, an application_name, an agent external id).
+        ResourceKind:
+          type: string
+          description: The class of resource (e.g. "postgres.table", "s3.bucket", "http.api").
+        ResourceRef:
+          type: string
+          description: The connector's natural reference for the resource (e.g. "public.customers", "arn:aws:s3:::bucket").
+        Mode:
+          $ref: '#/components/schemas/AccessMode'
+        Source:
+          $ref: '#/components/schemas/SignalSource'
+        Confidence:
+          $ref: '#/components/schemas/Confidence'
+        ToolRef:
+          type: string
+          description: Optionally names the tool/operation that performed the access.
+        ObservedAt:
+          type: string
+          format: date-time
+          description: When the access happened (the connector's clock); the natural-key timestamp consumers de-duplicate on (at-least-once delivery).
+      required: [OriginKind, OriginRef, ResourceKind, ResourceRef, Mode, Source, Confidence, ObservedAt]
+
+    CostSample:
+      type: object
+      description: |
+        A normalized model-usage cost fact. Monetary amounts are integer
+        micro-units of USD (no floating point in money). The fields below the
+        original seven are an ADDITIVE, provider-neutral extension, aligned
+        to OpenTelemetry gen_ai.* and FOCUS; zero/empty means "not reported",
+        never "zero" — consumers must not infer absence from a missing dimension.
+      properties:
+        ProviderRef: { type: string, description: The connector's natural provider reference. }
+        ModelRef: { type: string, description: The connector's natural model reference. }
+        SessionRef: { type: string, description: Optionally ties the cost to an agent session. }
+        InputTokens:
+          type: integer
+          format: int64
+          description: TOTAL input volume (uncached + cache-write + cache-read). The cache split is a breakdown OF this, not additional to it.
+        OutputTokens: { type: integer, format: int64, description: Output token count. }
+        CostMicroUSD: { type: integer, format: int64, description: Cost in millionths of a US dollar. }
+        OccurredAt: { type: string, format: date-time, description: When the usage happened. }
+        CacheReadTokens: { type: integer, format: int64, description: 'Additive: cache-hit input tokens (a subset of InputTokens; 0 = not reported).' }
+        CacheCreation1hTokens: { type: integer, format: int64, description: 'Additive: 1h-TTL cache-write tokens.' }
+        CacheCreation5mTokens: { type: integer, format: int64, description: 'Additive: 5m-TTL cache-write tokens.' }
+        WorkspaceRef: { type: string, description: 'Additive: billing workspace/project (empty = not reported).' }
+        APIKeyRef: { type: string, description: 'Additive: a MASKED api-key/service-account reference, never the secret value (docs/08 §3).' }
+        Actor: { type: string, description: 'Additive: the principal that incurred the cost (developer/account or service identity) — the "who" for chargeback.' }
+        ServiceTier: { type: string, description: 'Additive: billing tier (provider vocabulary, e.g. standard|batch|priority|flex).' }
+        ContextWindow: { type: string, description: 'Additive: context band (e.g. "0-200k"|"200k-1M").' }
+        InferenceGeo: { type: string, description: 'Additive: data-residency region (e.g. global|us|not_available).' }
+        Gateway:
+          $ref: '#/components/schemas/Gateway'
+        Provenance:
+          $ref: '#/components/schemas/CostProvenance'
+        CostType: { type: string, description: 'Additive: classifies non-token server-tool charges (e.g. web_search|code_execution); empty = ordinary token cost.' }
+      required: [ProviderRef, ModelRef, InputTokens, OutputTokens, CostMicroUSD, OccurredAt]
+
+    FindingReport:
+      type: object
+      description: |
+        A normalized guardrail/red-team/forensic finding. Carries a hash of any
+        sensitive detail, never the raw detail (minimal-data, docs/08 §3).
+      properties:
+        Kind: { type: string, description: 'Classifies the finding (e.g. "guardrail", "redteam", "forensic").' }
+        Severity:
+          $ref: '#/components/schemas/Severity'
+        SubjectKind: { type: string, description: What the finding is about (kind). }
+        SubjectRef: { type: string, description: What the finding is about (reference). }
+        Title: { type: string, description: A short, non-sensitive summary safe to display. }
+        DetailHash: { type: string, description: A hex SHA-256 of the redacted detail; the raw detail is never transmitted or stored. }
+        OccurredAt: { type: string, format: date-time, description: When the finding was produced. }
+        OWASPLLM:
+          type: array
+          items: { type: string }
+          description: 'OWASP Top 10 for LLM Applications ids (e.g. "LLM01:2025"). Sorted, de-duped; nil if none.'
+        OWASPASI:
+          type: array
+          items: { type: string }
+          description: 'OWASP Top 10 for Agentic Applications ids (e.g. "ASI01").'
+        ATLAS:
+          type: array
+          items: { type: string }
+          description: 'MITRE ATLAS technique ids (e.g. "AML.T0051.001"). A single finding may map to several axes at once.'
+      required: [Kind, Severity, SubjectKind, SubjectRef, Title, OccurredAt]
+
+    ObservedText:
+      type: object
+      description: |
+        The minimal-data payload of guardrail.observed: a bounded, ALREADY-REDACTED
+        excerpt of observed agent text plus non-sensitive context, so the security
+        detectors can run on real traffic without a raw-payload path on the bus.
+        The PRODUCER must redact secrets/PII and bound the excerpt before emitting.
+        Deliberately NOT a model.Observation — the sealed sum type stays the
+        frozen three (sdk/event/observed.go).
+      properties:
+        Surface:
+          type: string
+          description: Which piece of agent text this is.
+          enum: [input, output, tool_args]
+        Text: { type: string, description: The already-redacted, bounded excerpt the detectors inspect (carries no secret/PII; the consumer clamps it again defensively). }
+        AgentRef: { type: string, description: Non-sensitive context reference (may be empty). }
+        SessionRef: { type: string, description: Non-sensitive context reference (may be empty). }
+        ResourceRef: { type: string, description: Non-sensitive context reference (may be empty). }
+      required: [Surface, Text]
+
+    ApprovalRequest:
+      type: object
+      description: |
+        The minimal-data payload of approval.requested: identifiers and the
+        approval's decision parameters only. It deliberately carries NEITHER the
+        requester's free-text reason NOR the subject reference (minimal-data,
+        docs/08 §3); a consumer authorized for governance:approval:read fetches
+        the full approval by ApprovalID. Field names are the SDK Go field names
+        (the SDK is the contract; sdk/event/governance.go).
+      properties:
+        ApprovalID: { type: string, description: "The approval's id — the reference a consumer uses to fetch, decide or watch the request." }
+        Action: { type: string, description: The requested action (a bounded short identifier). }
+        SubjectKind: { type: string, description: "The kind of subject the action targets (a bounded short identifier; the subject's reference is deliberately not carried)." }
+        RiskTier: { type: string, description: 'The risk classification under which the request was opened (e.g. "critical"); it determines the dual-control floor.' }
+        RequiredApprovals: { type: integer, format: int64, description: The number of distinct approvers needed. }
+        PolicyRef: { type: string, description: 'The id of the approval policy that matched; empty when the request used caller-supplied parameters.' }
+        ExpiresAt: { type: string, format: date-time, description: 'When the pending request lapses; absent when it never expires.' }
+        EscalateAt: { type: string, format: date-time, description: 'When an undecided request escalates; absent when it never does.' }
+      required: [ApprovalID, Action, RiskTier, RequiredApprovals]
+
+    MetricSample:
+      type: object
+      description: |
+        A usage/productivity measure. Value is an INTEGER in its natural unit so
+        measure/money arithmetic stays exact across the plane; a producer with a
+        fractional source rounds to the unit. The SUBJECT may be a developer
+        reference (the org-internal email/key-name the ROI subject needs — never
+        a credential), which is why receiving is gated on adoption:developer:read.
+        Field names are the SDK Go field names (sdk/model/observation.go).
+      properties:
+        Name: { type: string, description: 'The metric''s natural name (e.g. claude_code.lines_of_code.count).' }
+        Value: { type: integer, format: int64, description: The measure in its natural integer unit. }
+        Additive: { type: boolean, description: 'true = Value is a delta/increment to SUM; false = a level/snapshot to keep as latest.' }
+        Unit: { type: string, description: 'Names Value''s unit (lines|commits|sessions|tokens|ms|1|…); empty = a dimensionless count.' }
+        SubjectKind: { type: string, description: 'The aggregation subject class (developer|team|session|account|org|agent).' }
+        SubjectRef: { type: string, description: "The subject's natural reference." }
+        OccurredAt: { type: string, format: date-time, description: 'The datapoint''s instant (delta) or bucket day (snapshot); also the producer-controlled idempotency key.' }
+        Dimensions: { type: object, additionalProperties: { type: string }, description: 'The metric''s own breakdown axes; structural labels, never payload/PII. They JOIN the natural key.' }
+        Labels: { type: object, additionalProperties: { type: string }, description: 'Operator-supplied attribution tags (team/project/cost_center), scrubbed at collection. They never join the natural key.' }
+      required: [Name, Value, SubjectKind, SubjectRef, OccurredAt]
+
+    ApprovalResolution:
+      type: object
+      description: |
+        The terminal counterpart of approval.requested, with the same
+        minimal-data posture: identifiers and decision parameters only, never
+        the subject reference or a free-text reason. Field names are the SDK Go
+        field names (sdk/event/governance.go).
+      properties:
+        ApprovalID: { type: string, description: "The resolved approval's id — the reference a consumer uses to fetch the record." }
+        Action: { type: string, description: The requested action (a bounded short identifier). }
+        SubjectKind: { type: string, description: "The kind of subject the action targeted (the subject's reference is deliberately not carried)." }
+        RiskTier: { type: string, description: The live-derived risk classification at resolution time. }
+        Outcome: { type: string, description: 'The terminal result. OPEN on the wire — tolerate values you do not know. Currently emitted: approved, rejected, canceled, expired.' }
+        RequiredApprovals: { type: integer, format: int64, description: Distinct approvers needed at resolution time. }
+        ApproveCount: { type: integer, format: int64, description: Recorded approve decisions. }
+        RejectCount: { type: integer, format: int64, description: Recorded reject decisions. }
+        PolicyRef: { type: string, description: 'The approval policy that matched; empty when caller-supplied parameters were used.' }
+        DecidedAt: { type: string, format: date-time, description: When the terminal outcome was reached. }
+      required: [ApprovalID, Action, Outcome]
+
+    WorkflowSignal:
+      type: object
+      description: |
+        The minimal-data payload of workflow.signal: references plus a bounded
+        operator label. It carries no step configuration and no secret. The
+        event TYPE is fixed by modules/orchestration and is never taken from
+        step config, so a workflow author cannot forge a first-party event.
+      properties:
+        WorkflowRef: { type: string, description: The workflow whose run emitted the signal. }
+        RunRef: { type: string, description: 'The run — pair with StepRef to locate the moment in the run timeline.' }
+        StepRef: { type: string, description: "The emitting step's ref within the graph." }
+        Label: { type: string, description: "The operator-supplied label from the step's config, bounded and non-sensitive." }
+      required: [WorkflowRef, RunRef, StepRef, Label]
+
+    DirectNoticeAvailableV1:
+      type: object
+      additionalProperties: false
+      description: |
+        The immutable v1 payload written by the DirectNotice source transaction
+        into sessions WorkEvent/WorkOutbox and handed to Eventing unchanged. The
+        Message is the event subject: `message_id` MUST equal `result_id`, whose
+        kind is fixed to `sessions.message`. The event exposes only identifiers,
+        initial delivery/ack counts and content/audience/plan digests; it never
+        carries recipient identity or message content. The source WorkOutbox
+        event ID remains the envelope `ID` across intake retries and Eventing
+        replay, so consumers de-duplicate on `X-Olivares-Event`.
+      properties:
+        schema_version: { type: integer, format: int64, const: 1, description: The immutable DirectNotice event-payload version. }
+        command: { type: string, const: message.publish.direct, description: The closed mutation that made the DirectNotice available. }
+        result_kind: { type: string, const: sessions.message, description: The result/subject kind. }
+        result_id: { type: string, format: uuid, description: The Message subject; byte-identical to message_id. }
+        channel_id: { type: string, format: uuid, description: The governed Channel reference. }
+        message_id: { type: string, format: uuid, description: The Message subject; byte-identical to result_id. }
+        message_kind: { type: string, enum: [notice], description: This first K3 write vertical is DirectNotice only. }
+        state: { type: string, enum: [published], description: The Message state at the availability event. }
+        version: { type: integer, format: int64, const: 2, description: The Message version after draft-to-published commit. }
+        event_sequence: { type: integer, format: int64, const: 1, description: The first append-only event of this Message aggregate. }
+        delivery_count: { type: integer, format: int64, const: 1, description: DirectNotice resolves exactly one initial Delivery. }
+        required_count: { type: integer, format: int64, minimum: 0, maximum: 1, description: Whether that Delivery requires explicit acknowledgement. }
+        ack_quorum: { type: integer, format: int64, minimum: 0, maximum: 1, description: Initial acknowledgement quorum. }
+        fulfillment:
+          $ref: '#/components/schemas/DirectNoticeFulfillmentV1'
+        audience_hash: { type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 hex binding the resolved audience graph without disclosing its recipient. }
+        payload_digest: { type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 hex of canonical message content; content is not carried. }
+        plan_hash: { type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 hex of the authorized publish plan. }
+      required: [schema_version, command, result_kind, result_id, channel_id, message_id, message_kind, state, version, event_sequence, delivery_count, required_count, ack_quorum, fulfillment, audience_hash, payload_digest, plan_hash]
+
+    DirectNoticeFulfillmentV1:
+      type: object
+      additionalProperties: false
+      description: The initial bounded acknowledgement projection committed with the DirectNotice.
+      properties:
+        state: { type: string, enum: [not_required, pending], description: Initial fulfillment state at publication. }
+        required: { type: integer, format: int64, minimum: 0, maximum: 1 }
+        acknowledged: { type: integer, format: int64, minimum: 0, maximum: 0 }
+        viable: { type: integer, format: int64, minimum: 0, maximum: 1 }
+        unmet: { type: integer, format: int64, minimum: 0, maximum: 0 }
+        quorum: { type: integer, format: int64, minimum: 0, maximum: 1, description: Omitted when zero by the v1 encoder. }
+      required: [state, required, acknowledged, viable, unmet]
+
+    DirectNoticeAcknowledgedV1:
+      type: object
+      additionalProperties: false
+      description: The immutable v1 result projection committed with an explicit DirectNotice Delivery Ack.
+      properties:
+        schema_version: { type: integer, format: int64, const: 1 }
+        command: { type: string, const: message.delivery.ack }
+        result_kind: { type: string, const: sessions.message_ack }
+        result_id: { type: string, format: uuid }
+        ack_id: { type: string, format: uuid }
+        delivery_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        event_sequence: { type: integer, format: int64, minimum: 1 }
+        delivery_version: { type: integer, format: int64, minimum: 1 }
+        delivery_state: { type: string, enum: [acknowledged, expired, retracted] }
+        late: { type: boolean }
+        fulfillment:
+          $ref: '#/components/schemas/CommunicationFulfillment'
+        plan_hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+      required: [schema_version, command, result_kind, result_id, ack_id, delivery_id, message_id, event_sequence, delivery_version, delivery_state, late, fulfillment, plan_hash]
+
+    WorkflowMessageCarrierV1:
+      type: object
+      additionalProperties: false
+      description: A workflow-authored or protocol-projected Message/Delivery carrier; content, recipient and remote payload are absent.
+      properties:
+        schema_version: { type: integer, format: int64, const: 1 }
+        command:
+          type: string
+          enum: [workflow.message.work-task, workflow.message.handoff-carrier, workflow.message.protocol-reply, workflow.message.protocol-inbound]
+        work_item_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        delivery_id: { type: string, format: uuid }
+        message_kind: { type: string, enum: [request, handoff_offer, notice] }
+        state: { type: string, const: published }
+        version: { type: integer, format: int64, minimum: 1 }
+        event_seq: { type: integer, format: int64, minimum: 1 }
+        plan_hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+      required: [schema_version, command, work_item_id, message_id, delivery_id, message_kind, state, version, event_seq, plan_hash]
+
+    MessageLifecycleV1:
+      type: object
+      additionalProperties: false
+      description: A bounded Message retraction, expiry or overdue projection; protected content and recipient identity are absent.
+      properties:
+        schema_version: { type: integer, format: int64, const: 1 }
+        command: { type: string, enum: [retract, expire, overdue] }
+        message_id: { type: string, format: uuid }
+        work_item_id: { type: string, format: uuid }
+        state: { type: string, enum: [published, retracted, expired] }
+        version: { type: integer, format: int64, minimum: 1 }
+        delivery_count: { type: integer, format: int64, minimum: 0 }
+        decision_request_id: { type: string, format: uuid }
+        handoff_id: { type: string, format: uuid }
+        fulfillment:
+          $ref: '#/components/schemas/CommunicationFulfillment'
+        plan_hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+      required: [schema_version, command, message_id, state, version, delivery_count, plan_hash]
+
+    MessageDerivedV1:
+      type: object
+      additionalProperties: false
+      description: A bounded reroute or overdue-escalation projection that identifies the source and newly derived Message.
+      properties:
+        schema_version: { type: integer, format: int64, const: 1 }
+        command: { type: string, enum: [reroute, escalate_overdue] }
+        source_message_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        work_item_id: { type: string, format: uuid }
+        origin_event_id: { type: string, format: uuid }
+        step: { type: integer, format: int64, minimum: 1 }
+        recipient:
+          $ref: '#/components/schemas/CommunicationRecipientRef'
+        automation_depth: { type: integer, format: int64, minimum: 0 }
+        state: { type: string, const: published }
+        version: { type: integer, format: int64, minimum: 1 }
+        plan_hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+      required: [schema_version, command, source_message_id, message_id, recipient, automation_depth, state, version, plan_hash]
+
+    DecisionRequestEvent:
+      type: object
+      additionalProperties: false
+      description: A bounded DecisionRequest response or deadline-expiry projection; the protected response remains represented only by its digest.
+      properties:
+        command: { type: string, enum: [decision.request.respond, decision.request.expire] }
+        transition: { type: string, enum: [accept, block, reject, cancel, expire] }
+        request_id: { type: string, format: uuid }
+        response_id: { type: string, format: uuid }
+        work_item_id: { type: string, format: uuid }
+        state: { type: string, enum: [accepted, blocked, rejected, canceled, expired] }
+        response_digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+      required: [command, transition, request_id, response_id, work_item_id, state, response_digest]
+
+    HandoffEventV1:
+      type: object
+      additionalProperties: false
+      description: A bounded Handoff lifecycle projection; payload and terminal-reason content are absent.
+      properties:
+        schema_version: { type: integer, format: int64, const: 1 }
+        command: { type: string, enum: [handoff.offer, handoff.respond, handoff.cancel, handoff.expire] }
+        transition: { type: string, enum: [accept, reject, withdraw, expire] }
+        handoff_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        delivery_id: { type: string, format: uuid }
+        work_item_id: { type: string, format: uuid }
+        state: { type: string, enum: [offered, accepted, rejected, withdrawn, expired] }
+        owner_epoch: { type: integer, format: int64, minimum: 1 }
+        lease_fence: { type: integer, format: int64, minimum: 0 }
+        plan_hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+      required: [schema_version, command, handoff_id, message_id, delivery_id, work_item_id, state, owner_epoch, lease_fence, plan_hash]
+
+    CommunicationRecipientRef:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [user, agent, session] }
+        ref: { type: string }
+      required: [kind, ref]
+
+    CommunicationFulfillment:
+      type: object
+      additionalProperties: false
+      properties:
+        state: { type: string, enum: [not_required, pending, met, unmet_terminal] }
+        required: { type: integer, format: int64, minimum: 0 }
+        acknowledged: { type: integer, format: int64, minimum: 0 }
+        viable: { type: integer, format: int64, minimum: 0 }
+        unmet: { type: integer, format: int64, minimum: 0 }
+        quorum: { type: integer, format: int64, minimum: 0 }
+      required: [state, required, acknowledged, viable, unmet]
+
+    ProtocolBindingEvent:
+      type: object
+      additionalProperties: false
+      description: |
+        The bounded K5 WorkEvent projection committed by ProtocolBinding
+        reservation, observation and cancellation transactions. It contains
+        only local aggregate references, immutable binding generations, the
+        fencing generation and a closed observation verdict/code. Remote
+        identifiers are omitted; `external_id_hash`, when present, is their
+        one-way SHA-256 correlation value. Remote payloads, tool arguments,
+        task results, message content and operator-authored reason text are
+        never included.
+      properties:
+        binding_id: { type: string, format: uuid, description: The durable ProtocolBinding reference. }
+        binding_spec_id: { type: string, format: uuid, description: The immutable ProtocolBindingSpec reference pinned by this binding. }
+        binding_spec_generation: { type: integer, format: int64, minimum: 1, description: The pinned spec generation. }
+        binding_generation: { type: integer, format: int64, minimum: 1, description: The exact external-resource generation represented by this binding. }
+        protocol: { type: string, enum: [a2a, mcp], description: The bound interoperability protocol. }
+        work_item_id: { type: string, format: uuid, description: The governed WorkItem aggregate. }
+        workspace_id: { type: string, format: uuid, description: The governed workspace reference. }
+        work_status: { type: string, enum: [active, review, blocked, canceled], description: The resulting WorkItem lifecycle state. }
+        lease_fence: { type: integer, format: int64, minimum: 1, description: The fencing generation assigned to the binding's synthetic session. }
+        verdict: { type: string, enum: [CLEAN, BROKEN, UNKNOWN], description: The observed protocol outcome; UNKNOWN is never collapsed into CLEAN. }
+        code: { type: string, minLength: 1, maxLength: 128, pattern: '^[a-z0-9][a-z0-9._-]*$', description: A bounded system reason code, never free text. }
+        terminal: { type: boolean, description: Whether the observation proves a terminal remote outcome. }
+        event_seq: { type: integer, format: int64, minimum: 1, description: The resulting monotonic sequence within the WorkItem aggregate. }
+        external_id_hash: { type: string, pattern: '^[a-f0-9]{64}$', description: Optional SHA-256 hex for correlating a bound remote identifier without disclosing it. }
+      required: [binding_id, binding_spec_id, binding_spec_generation, binding_generation, protocol, work_item_id, workspace_id, work_status, lease_fence, verdict, code, terminal, event_seq]
+
+    WorkEventFact:
+      type: object
+      additionalProperties: true
+      description: |
+        The bounded `payload_json` projection shared by append-only K1 and K2
+        WorkEvents. The event type carries the semantic class; the payload
+        identifies the command, result and resulting aggregate state. It never
+        contains WorkItem brief text, acceptance statements, decision
+        statements, rationale or owner-authored free text. Holder fields are
+        stable identity references, not display names. Consumers must tolerate
+        additive fields while the channel is beta.
+      properties:
+        command: { type: string, description: The closed durable-work mutation name that produced the fact. }
+        result_kind: { type: string, description: The kind of entity returned by the mutation. }
+        result_id: { type: string, format: uuid, description: The returned entity reference. }
+        workspace_id: { type: string, format: uuid, description: The governed workspace reference. }
+        work_item_id: { type: string, format: uuid, description: The WorkItem reference. }
+        status: { type: string, description: The resulting WorkItem state. }
+        owner_epoch: { type: integer, format: int64, description: The resulting monotonic ownership epoch. }
+        event_seq: { type: integer, format: int64, description: The resulting monotonic sequence within the WorkItem. }
+        lease_id: { type: string, format: uuid, description: 'K2 lease event only: the stable WorkLease row reference.' }
+        lease_state: { type: string, description: 'K2 lease event only: the resulting lease state.' }
+        holder_sid: { type: string, description: 'K2 lease event only: the canonical holder SID; empty after an unheld initial state.' }
+        holder_run_ref: { type: string, description: 'K2 lease event only: the linked managed-run reference, when present.' }
+        holder_agent_ref: { type: string, description: 'K2 lease event only: the holder agent reference, when present.' }
+        fence: { type: integer, format: int64, description: 'K2 lease event only: the resulting monotonic fencing generation.' }
+        expires_at: { type: string, format: date-time, description: 'K2 lease event only: the database-clock expiry, when the lease is active.' }
+        end_reason_code: { type: string, description: 'K2 ended event only: a server-defined reason class; never operator-authored text.' }
+        end_reason_hash: { type: string, description: 'K2 ended event only: SHA-256 hex of the stored reason, for correlation without disclosure.' }
+        forced: { type: boolean, const: true, description: 'K2 force-takeover only: true when a live lease authority was overridden.' }
+        severity: { type: string, enum: [high], description: 'K2 force-takeover only: the fixed high severity of the authority override.' }
+        decision_id: { type: string, format: uuid, description: 'K2 force-takeover only: the effective governance Decision that authorized the override.' }
+        takeover_reason_hash: { type: string, pattern: '^[a-f0-9]{64}$', description: 'K2 force-takeover only: SHA-256 hex of the operator-authored reason; the reason itself is never published.' }
+      required: [command, result_kind, result_id, workspace_id, work_item_id, status, owner_epoch, event_seq]
+
+    AuditRecord:
+      type: object
+      description: |
+        One sealed record of the tamper-evident audit ledger, forwarded to a
+        SIEM. It does NOT ride the in-process bus: the ledger forwarder walks
+        the chain from a per-tenant cursor and hands each record to a durable
+        intake, so Payload carries the integrity fields (sequence, previous
+        hash, hash, signature) VERBATIM and a control tower can verify the chain
+        itself. Payload is opaque to the engine and is re-shaped into the
+        tower's dialect by the sink renderer at send time.
+      properties:
+        EventID: { type: string, description: "The audit event's id — the stable idempotency key a consumer dedups on." }
+        Seq: { type: integer, format: int64, description: 'The per-tenant ledger sequence — the natural key; gaps are detectable.' }
+        OccurredAt: { type: string, format: date-time, description: When the audited action happened. }
+        Source: { type: string, description: The emitting component. }
+        Payload: { type: string, format: byte, description: The already-encoded minimal-data record, carrying the chain fields verbatim. }
+      required: [EventID, Payload]
+
+    PolicyChange:
+      type: object
+      description: |
+        The minimal-data payload of policy.changed. It mirrors what the policy
+        mutation's audit record keeps — kind and enabled — plus the id and the
+        operation; it never carries the operator-supplied policy name or the
+        policy spec (the sensitive policy content, docs/08 §3). A consumer
+        authorized for governance:policy:read fetches the policy by PolicyID.
+      properties:
+        PolicyID: { type: string, description: The changed policy's id. }
+        Kind:
+          type: string
+          description: The policy kind.
+          enum: [abac, approval]
+        Op:
+          type: string
+          description: The mutation. Open on the wire — a consumer must tolerate values it does not know; these are the ones the governance module emits.
+          enum: [created, updated, deleted]
+        Enabled: { type: boolean, description: "The policy's enabled flag after the change; false for a deletion." }
+      required: [PolicyID, Kind, Op]
+
+    AccessMode:
+      type: string
+      description: The read/write classification of an access (the spine of the R/RW map). "unknown" is explicit — the product shows honest confidence rather than fabricate a classification.
+      enum: [unknown, read, write, readwrite]
+    SignalSource:
+      type: string
+      description: Which collector produced the observation. Provenance is shown per edge because a pgAudit READ and an MCP annotation carry very different trust. Open string — a third-party connector may add its own.
+      enum: [otel, mcp_annotation, pg_audit, cloudtrail, ebpf, policy, a2a]
+    Confidence:
+      type: string
+      description: Qualitative trust in the attribution — shown to the operator so the product never fakes certainty.
+      enum: [attributed, approximate]
+    Severity:
+      type: string
+      description: The shared, ordered severity scale for findings and notifications.
+      enum: [info, low, medium, high, critical]
+    CostProvenance:
+      type: string
+      description: Whether the money figure is the provider's authoritative billed amount or one the engine estimated from list pricing. Empty is treated as estimated.
+      enum: [estimated, billed]
+    Gateway:
+      type: string
+      description: The deployment surface that served a model call (the same model is reachable direct or via a cloud gateway, each with a different id space/billing/residency). Open string; empty is treated as direct.
+      enum: [direct, bedrock-mantle, bedrock-legacy, vertex, foundry, claude-platform-aws]

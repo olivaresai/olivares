@@ -1,0 +1,295 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+The control-plane engine, a StatefulSet whose topology depends on the engine:
+  * sqlite / single replica: the data dir (a PVC) holds the Ed25519 audit signing
+    key, TLS material and the store — state that must survive reschedule.
+  * postgres + replicaCount>1: ACTIVE-PASSIVE HA. The store is the shared
+    Postgres, the audit signing key is a shared Secret, so the per-pod data dir
+    holds only the setup token + self-signed TLS and is an emptyDir. A Postgres
+    advisory lock elects one active writer; /readyz drains the standbys.
+*/ -}}
+{{- include "olivares.validate" . -}}
+{{- if .Values.core.enabled }}
+{{- $ha := and (eq .Values.core.engine "postgres") (gt (int .Values.core.replicaCount) 1) -}}
+{{- /* The catalog (artifact) signing key defaults to the audit key's Secret, so one
+shared Secret holding both audit-signing.key + catalog-signing.key is the natural HA
+setup. A single-key audit Secret still boots: the engine mints a per-node catalog key
+(honest unpinned posture) rather than failing, because the catalog key is artifact
+verification, not ledger integrity. */ -}}
+{{- $catalogKeySecret := .Values.core.catalogSigningKeySecret | default .Values.core.auditSigningKeySecret -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "olivares.core.fullname" . }}
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  serviceName: {{ include "olivares.core.fullname" . }}
+  replicas: {{ .Values.core.replicaCount }}
+  # HA standbys are intentionally NOT Ready (/readyz drains the non-leader), so
+  # OrderedReady — which waits for each pod to be Ready before starting the next —
+  # would wedge a scale-up. Parallel brings all replicas up together; the advisory
+  # lock still guarantees a single active writer.
+  podManagementPolicy: {{ if $ha }}Parallel{{ else }}OrderedReady{{ end }}
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "olivares.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  template:
+    metadata:
+      labels:
+        {{- include "olivares.labels" . | nindent 8 }}
+        app.kubernetes.io/component: core
+      {{- with .Values.commonAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "olivares.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.core.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.core.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.core.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.core.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.core.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: olivares
+          image: {{ include "olivares.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - serve
+            - --listen={{ .Values.core.listen }}
+            - --grpc-listen={{ .Values.core.grpcListen }}
+            - --data-dir={{ .Values.core.dataDir }}
+            - --checkpoint-interval={{ .Values.core.checkpointInterval }}
+            {{- if eq .Values.core.engine "postgres" }}
+            - --engine=postgres
+            - --dsn=$(OLIVARES_DSN)
+            {{- if .Values.postgres.adminDsnKey }}
+            - --admin-dsn=$(OLIVARES_ADMIN_DSN)
+            {{- end }}
+            {{- end }}
+            {{- if .Values.tls.existingSecret }}
+            - --tls-cert=/etc/olivares/tls/{{ .Values.tls.certPath }}
+            - --tls-key=/etc/olivares/tls/{{ .Values.tls.keyPath }}
+            {{- end }}
+            {{- if .Values.tls.grpcClientCaSecret }}
+            - --grpc-client-ca=/etc/olivares/grpc-ca/{{ .Values.tls.grpcClientCaPath }}
+            {{- end }}
+            {{- if .Values.core.licenseSecret }}
+            - --license=/etc/olivares/license/license
+            {{- end }}
+            {{- with .Values.core.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: OLIVARES_DATA_DIR
+              value: {{ .Values.core.dataDir | quote }}
+            {{- if .Values.core.auditSigningKeySecret }}
+            # Shared audit signing key: every replica reads the SAME key from a
+            # mounted Secret (fail-closed; the engine refuses to boot if it is absent),
+            # so the audit hash-chain does not fork when a standby is promoted.
+            - name: OLIVARES_AUDIT_SIGNING_KEY_FILE
+              value: /etc/olivares/audit-key/audit-signing.key
+            {{- end }}
+            {{- if $catalogKeySecret }}
+            - name: OLIVARES_CATALOG_SIGNING_KEY_FILE
+              value: /etc/olivares/catalog-key/catalog-signing.key
+            {{- end }}
+            {{- if eq .Values.core.engine "postgres" }}
+            - name: OLIVARES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.dsnSecret | required "postgres.dsnSecret is required for engine=postgres" }}
+                  key: {{ .Values.postgres.dsnKey }}
+            {{- if .Values.postgres.adminDsnKey }}
+            # OPT-IN cross-tenant admin pool (postgres.adminDsnKey). The engine
+            # eagerly opens and probes this pool at boot and fails closed on a
+            # bad/absent DSN, so the env is NOT optional: if you name the key it
+            # must exist. (Leaving adminDsnKey empty keeps cross-tenant System reads
+            # RLS-scoped — the engine's own default — instead of crashlooping boot
+            # on an unresolved $(OLIVARES_ADMIN_DSN).)
+            - name: OLIVARES_ADMIN_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.dsnSecret }}
+                  key: {{ .Values.postgres.adminDsnKey }}
+            {{- end }}
+            {{- if and (gt (int .Values.core.replicaCount) 1) (not (hasKey (default dict .Values.core.env) "OLIVARES_RATELIMIT_STORE")) }}
+            # Shared rate-limit buckets: with more than one replica,
+            # per-node buckets would silently multiply every tenant quota by the
+            # replica count. Postgres-backed global buckets are therefore the HA
+            # default; override via core.env.OLIVARES_RATELIMIT_STORE=in-process.
+            - name: OLIVARES_RATELIMIT_STORE
+              value: postgres
+            {{- end }}
+            {{- end }}
+            {{- range $k, $v := .Values.core.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- if .Values.core.envFromSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.core.envFromSecret }}
+          {{- end }}
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: grpc
+              containerPort: 8444
+              protocol: TCP
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.core.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.core.dataDir }}
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.core.auditSigningKeySecret }}
+            - name: audit-key
+              mountPath: /etc/olivares/audit-key
+              readOnly: true
+            {{- end }}
+            {{- if $catalogKeySecret }}
+            - name: catalog-key
+              mountPath: /etc/olivares/catalog-key
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.existingSecret }}
+            - name: tls
+              mountPath: /etc/olivares/tls
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.grpcClientCaSecret }}
+            - name: grpc-ca
+              mountPath: /etc/olivares/grpc-ca
+              readOnly: true
+            {{- end }}
+            {{- if .Values.core.licenseSecret }}
+            - name: license
+              mountPath: /etc/olivares/license
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.core.auditSigningKeySecret }}
+        - name: audit-key
+          secret:
+            secretName: {{ .Values.core.auditSigningKeySecret }}
+            # 0400 so the engine's fail-closed owner-only secret check accepts it
+            # (a default 0644 Secret mount would be refused).
+            defaultMode: 0440
+        {{- end }}
+        {{- if $catalogKeySecret }}
+        - name: catalog-key
+          secret:
+            secretName: {{ $catalogKeySecret }}
+            defaultMode: 0440
+            # The catalog key may live alongside the audit key in one Secret; project
+            # only catalog-signing.key so a single-key audit Secret mounts cleanly and
+            # the engine falls back to a per-node catalog key when the item is absent.
+            optional: true
+            items:
+              - key: catalog-signing.key
+                path: catalog-signing.key
+        {{- end }}
+        {{- if .Values.tls.existingSecret }}
+        - name: tls
+          secret:
+            secretName: {{ .Values.tls.existingSecret }}
+        {{- end }}
+        {{- if .Values.tls.grpcClientCaSecret }}
+        - name: grpc-ca
+          secret:
+            secretName: {{ .Values.tls.grpcClientCaSecret }}
+        {{- end }}
+        {{- if .Values.core.licenseSecret }}
+        - name: license
+          secret:
+            secretName: {{ .Values.core.licenseSecret }}
+        {{- end }}
+        {{- if or $ha (not .Values.core.persistence.enabled) }}
+        # HA mode keeps NO per-node persistent state — the store is the shared
+        # Postgres and the signing key is a shared Secret — so the data dir (setup
+        # token + self-signed TLS) is ephemeral. Provide tls.existingSecret in HA so
+        # every replica serves the same certificate.
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if and .Values.core.persistence.enabled (not $ha) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "olivares.labels" . | nindent 10 }}
+          app.kubernetes.io/component: core
+      spec:
+        accessModes:
+          {{- toYaml .Values.core.persistence.accessModes | nindent 10 }}
+        {{- if .Values.core.persistence.storageClass }}
+        {{- if (eq "-" .Values.core.persistence.storageClass) }}
+        storageClassName: ""
+        {{- else }}
+        storageClassName: {{ .Values.core.persistence.storageClass | quote }}
+        {{- end }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.core.persistence.size | quote }}
+  {{- end }}
+{{- end }}

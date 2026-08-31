@@ -1,0 +1,126 @@
+{
+  "title": "会话录制查看器",
+  "subtitle": "单个会话的代理活动和治理证据的统一时间线。",
+  "back": "返回录制列表",
+  "header": {
+    "subject": "主体",
+    "status": "状态",
+    "opened": "开始时间",
+    "duration": "时长",
+    "model": "模型",
+    "frames": "帧数",
+    "live": "直播",
+    "tipHash": "链末端",
+    "openSeq": "开启账本 seq",
+    "anchorSeq": "最新锚点 seq",
+    "sealSeq": "封存账本 seq"
+  },
+  "lanes": {
+    "activity": "代理活动",
+    "evidence": "治理证据"
+  },
+  "panels": {
+    "tools": "已用工具",
+    "files": "涉及文件",
+    "decisions": "决策"
+  },
+  "timeline": {
+    "loadMore": "加载更多",
+    "empty": "暂无已记录事件",
+    "activityUnavailable": "时间线解析器未接入或未响应，因此智能体活动不可用。治理证据仍然可用。",
+    "tool": "工具调用",
+    "mcp": "MCP 调用",
+    "cost": "费用样本",
+    "finding": "发现"
+  },
+  "redaction": {
+    "hidden": "[已编辑 — 点击以显示]",
+    "reveal": "显示",
+    "hide": "隐藏"
+  },
+  "verify": {
+    "passive": "内联验证",
+    "fresh": "重新验证",
+    "intact": "链完整",
+    "broken": "链已损坏",
+    "frames": "已验证 {{count}} 帧",
+    "anchors": "已验证 {{count}} 个锚点",
+    "tipMatch": "末端匹配",
+    "tipMismatch": "末端不匹配",
+    "anchorsOk": "已验证 {{count}} 个锚点",
+    "anchorsBroken": "{{count}} 个锚点验证失败",
+    "anchoredThrough": "已验证的账本锚点覆盖至帧 {{idx}}。",
+    "breakAt": "在帧 {{idx}} 处断裂——{{reason}}",
+    "gap": "帧缺口",
+    "failures": "锚点验证失败",
+    "failure": "{{kind}} 锚点 · seq {{seq}} · 帧 {{idx}} · {{reason}}",
+    "failed": "验证失败"
+  },
+  "export": {
+    "json": "导出 JSON",
+    "summary": "导出摘要",
+    "verify": "验证链"
+  },
+  "tools": {
+    "success": "成功",
+    "fail": "失败",
+    "calls": "{{count}} 次调用"
+  },
+  "files": {
+    "read": "读取",
+    "write": "写入",
+    "edit": "编辑",
+    "create": "创建"
+  },
+  "decisions": {
+    "group": "任务 {{idx}}",
+    "tools": "{{count}} 次工具调用",
+    "fileCount": "{{count}} 个文件"
+  },
+  "detail": {
+    "toolRef": "工具引用",
+    "resourceRef": "资源引用",
+    "mode": "模式",
+    "source": "来源",
+    "titleField": "标题",
+    "at": "时间",
+    "frameIdx": "#",
+    "namespace": "命名空间",
+    "method": "方法",
+    "pattern": "路径模式",
+    "outcome": "结果",
+    "actor": "操作者",
+    "actAs": "代理为",
+    "params": "参数",
+    "httpStatus": "HTTP 状态",
+    "durMs": "耗时",
+    "hash": "帧哈希",
+    "prevHash": "前一哈希",
+    "anchorSeq": "锚点 seq",
+    "close": "关闭事件详情"
+  },
+  "seal": {
+    "action": "封存会话",
+    "title": "封存此录制会话？",
+    "body": "封存不可逆：它会关闭会话、固定其链末端，并阻止追加任何后续帧。",
+    "confirm": "封存会话",
+    "done": "会话已封存",
+    "alreadySealed": "此会话已封存。"
+  },
+  "summarize": {
+    "action": "生成摘要",
+    "done": "摘要已生成。",
+    "unavailable": "未配置摘要生成器；录制仍可作为原始证据使用。",
+    "disabled": "此租户已禁用 AI 摘要，因为会话转录会离开信任边界。",
+    "active": "此会话仍处于活动状态。请先封存，再生成完整摘要。",
+    "failed": "无法生成摘要；录制本身不受影响。"
+  },
+  "ledger": {
+    "title": "账本",
+    "subtitle": "来自证据账本的关联语义事件。",
+    "seq": "seq {{seq}}",
+    "empty": "暂无关联的账本事件",
+    "truncated": "账本视图已截断；在此有界窗口之外还存在更多关联事件。"
+  },
+  "notFound": "未找到录制会话"
+}

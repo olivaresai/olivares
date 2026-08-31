@@ -1,0 +1,5 @@
+{
+  "policy": {
+    "statement": "permit(principal, action, resource);"
+  }
+}

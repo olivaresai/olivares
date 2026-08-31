@@ -1,0 +1,13 @@
+{
+  "records": [
+    {
+      "attributes": {"type": "Knowledge__kav"},
+      "Id": "ka0Dn000000EXAMPLE",
+      "Name": "VPN Setup Guide",
+      "Description": "Step-by-step guide for configuring the corporate VPN client on macOS and Windows.",
+      "SystemModstamp": "2026-05-15T14:22:00.000Z",
+      "SharingModel": "ReadWrite",
+      "OwnerId": "005Dn000001EXAMPLE"
+    }
+  ]
+}

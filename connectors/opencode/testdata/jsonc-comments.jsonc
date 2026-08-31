@@ -1,0 +1,10 @@
+{
+  // opencode schema permits comments.
+  "permission": {
+    "edit": "ask",
+    "bash": "ask",
+  },
+  "tools": {
+    "read": true,
+  },
+}

@@ -1,0 +1,155 @@
+{
+  "title": "Backup & Restore",
+  "description": "Manage disaster-recovery snapshots of the control plane.",
+  "tabs": {
+    "backups": "Backups",
+    "schedule": "Schedule"
+  },
+  "actions": {
+    "restore": "Restore",
+    "createBackup": "Create Backup",
+    "cancel": "Cancel",
+    "close": "Close",
+    "upload": "Upload",
+    "delete": "Delete"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "Backups",
+    "searchPlaceholder": "Search backups...",
+    "deleted": "Backup deleted",
+    "deleteTitle": "Delete Backup",
+    "deleteDescription": "Permanently delete \"{{filename}}\"? This cannot be undone.",
+    "columns": {
+      "date": "Date",
+      "filename": "Filename",
+      "size": "Size",
+      "engine": "Engine",
+      "tenants": "Tenants",
+      "notes": "Notes"
+    },
+    "actions": {
+      "download": "Download",
+      "inspect": "Inspect",
+      "downloadAria": "Download {{filename}}",
+      "inspectAria": "Inspect {{filename}}",
+      "deleteAria": "Delete {{filename}}",
+      "downloadFailed": "Download failed: {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "Backup schedule updated",
+    "loading": "Loading schedule...",
+    "title": "Automated Backup Schedule",
+    "description": "Configure recurring backups. The engine runs the schedule; passphrase is derived from the instance secret.",
+    "enableAria": "Enable automated backups",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "cronLabel": "Cron Expression",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "Daily at midnight",
+      "daily0200": "Daily at 02:00",
+      "daily0300": "Daily at 03:00",
+      "weeklySundayMidnight": "Weekly on Sunday at midnight",
+      "weeklyMondayMidnight": "Weekly on Monday at midnight",
+      "monthlyFirstMidnight": "Monthly on the 1st at midnight",
+      "dailyAt": "Daily at {{time}}"
+    },
+    "retentionLabel": "Retention (days)",
+    "retentionDescription": "Backups older than this are automatically pruned.",
+    "dualControlAria": "Require dual-control for restore",
+    "dualControlLabel": "Require dual-control for restore",
+    "dualControlDescription": "When enabled, a restore started from THIS CONSOLE must be approved by a second, distinct administrator before it runs. Turning it off is recorded and takes effect one hour later — the gate cannot be removed in the same sitting as the restore it guards; re-enabling cancels a pending removal. It does not cover `olivares dr restore` on the host, which replaces an estate outside this gate and records a declared operator instead (Postgres estates restore only that way). Leave off for a solo operator.",
+    "dualControlDisarmPending": "Removal requested — recorded, and it takes effect {{when}}. Until then a restore still needs a second administrator. Re-enable to cancel.",
+    "dualControlDisarmRequestedBy": "Requested by {{who}}.",
+    "save": "Save Schedule"
+  },
+  "trigger": {
+    "started": "Backup started",
+    "title": "Create Backup",
+    "description": "Create an encrypted snapshot of the entire control plane.",
+    "notes": "Notes",
+    "notesPlaceholder": "Optional description for this backup",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Used to encrypt the backup bundle.",
+    "start": "Start Backup"
+  },
+  "job": {
+    "initializing": "Initializing",
+    "status": {
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "progressAria": "{{phase}} {{progress}}%",
+    "complete": "{{progress}}% complete"
+  },
+  "pending": {
+    "title": "Restores awaiting approval (dual-control)",
+    "requestedByPrefix": "Requested by",
+    "approveRestore": "Approve & Restore",
+    "approved": "Restore approved",
+    "dialogTitle": "Approve Restore",
+    "dialogDescription": "You are approving a restore requested by {{initiator}}. You must be a different administrator than the requester.",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Enter the passphrase the backup was created with.",
+    "confirmTitle": "Confirm Restore",
+    "confirmDescription": "This will overwrite all current data with the backup contents once verified. This operation cannot be undone.",
+    "confirmLabel": "Approve & Restore Now"
+  },
+  "restore": {
+    "notAuthorized": "Not authorized",
+    "uploadFailed": "Upload failed",
+    "started": "Restore started",
+    "title": "Restore from Backup",
+    "description": "Upload a .drbundle file to restore the control plane state.",
+    "apply": "Apply Restore",
+    "confirmTitle": "Confirm Restore",
+    "confirmDescription": "This will overwrite all current data with the backup contents. This operation cannot be undone.",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "Restore Now",
+    "confirmSummaryPrefix": "Restoring from",
+    "confirmSummarySuffix": "with {{count}} tenant(s).",
+    "awaitingTitle": "Awaiting a second approver",
+    "awaitingDescription": "Dual-control is enabled. This restore will not run until a different administrator approves it and supplies the passphrase from the Backups tab.",
+    "requestId": "Request ID",
+    "selectFile": "Select a .drbundle file",
+    "chooseFile": "Choose File",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Enter the passphrase used when this backup was created.",
+    "manifestTitle": "Bundle Manifest",
+    "manifest": {
+      "file": "File",
+      "engine": "Engine",
+      "created": "Created",
+      "tenants": "Tenants",
+      "keys": "Keys"
+    }
+  },
+  "inspect": {
+    "title": "Backup detail",
+    "description": "Decoded manifest of the sealed bundle — exactly what a restore would bring back.",
+    "filename": "Filename",
+    "size": "Size",
+    "engine": "Engine",
+    "createdAt": "Created",
+    "tenants": "Tenants",
+    "keys": "Sealed keys",
+    "empty": "None",
+    "loadFailed": "Failed to load the backup detail."
+  },
+  "empty": {
+    "backup": {
+      "title": "No backup snapshots created yet",
+      "description": "Create an encrypted backup from this console on SQLite; for PostgreSQL, create the bundle with the DR CLI in the configured backup directory."
+    }
+  }
+}

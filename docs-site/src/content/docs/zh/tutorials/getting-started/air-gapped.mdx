@@ -1,0 +1,124 @@
+---
+title: "在隔离网络（air-gapped）站点中上手"
+description: >-
+  在一个断网的网络上搭建 control plane：将一个经过验证的产物带过隔离边界（静态二进制，或用于集群的已签名 bundle），
+  离线验证它、安装，并在零出站的情况下到达首个价值。
+sidebar:
+  order: 4
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Olivares AI 在设计上**为 air-gap（隔离网络）就绪**：一个静态二进制、一个嵌入式 SQLite 存储、离线（Ed25519）
+license 验证，且**启动时没有任何强制的出站调用**——没有需要关闭的“回家遥测”。本教程在一个**完全没有互联网**的网络上
+到达首个价值，可走以下两条诚实路径之一：
+
+- **路径 A —— 静态二进制。** 最简单的隔离网络方式：将一个经过验证的文件带过隔离边界并运行它（用 systemd，
+  如[单节点教程](/zh/tutorials/getting-started/single-node/)中所示）。
+- **路径 B —— 已签名 bundle，用于集群。** 带上发布 bundle，**完全离线**验证每个镜像与 chart，
+  **按 digest** 镜像到你的私有 registry，并用 Helm 安装。
+
+bundle 脚本的机制（`airgap-bundle.sh`、`airgap-mirror.sh`、离线 cosign 验证）记录在
+[在隔离网络环境中安装](/zh/how-to/air-gap-install/)——本页面是使用它们的端到端演练。
+
+## 路径 A —— 静态二进制
+
+<Steps>
+
+1. **在联网侧**，构建（或者，一旦发布版本上线后，下载并
+   [验证](/zh/how-to/verify-a-release/)）该二进制，并记录其 digest：
+
+   ```bash
+   task build
+   sha256sum bin/olivares > olivares.sha256
+   ```
+
+2. **将两个文件都带过隔离边界**，使用你批准的介质，并在断网侧验证 digest：
+
+   ```bash
+   sha256sum --check olivares.sha256
+   ```
+
+3. **安装并运行**，与[单节点教程](/zh/tutorials/getting-started/single-node/)中完全一样——
+   systemd unit、一次性安装 token、第一个组织。该流程中没有任何环节触及网络：TLS 材料在本地生成，
+   license（如果你有的话）离线验证，存储是嵌入式 SQLite。
+
+4. **接入观测本地系统的数据源**——pgAudit 日志尾部、在边界内交付的 CloudTrail 文件、eBPF/Tetragon 流。
+   [sources 配置](/zh/how-to/connect-a-source/)是一个本地文件；除非你配置某个 connector 去访问某物，
+   否则没有 connector 会向外拨号。
+
+</Steps>
+
+对于一个断网站点，这是推荐的起始形态：单节点、SQLite、本地数据源。这是同一个引擎——你之后可以成长为集群路径，
+而无需改变你已学到的东西。
+
+## 路径 B —— 已签名 bundle，用于集群
+
+<Steps>
+
+1. **联网侧，一次性：** 由一名维护者构建自包含的 bundle——每个镜像按 digest 锁定，Helm chart 被打包并签名，
+   收集 SBOM/OpenVEX/provenance，外加公钥和一份带有确切离线演练步骤的 `VERIFY.md`：
+
+   ```bash
+   scripts/airgap-bundle.sh --version <v> \
+     --image <olivares-image-ref> \
+     --chart deploy/helm/olivares \
+     --cosign-key cosign.key
+   ```
+
+2. **在隔离边界内，离线验证一切。** 你只需要 `cosign`、`crane`、`helm` 与 `tar`——信任来自 bundle 中的
+   `cosign.pub`，而非任何在线透明日志：
+
+   ```bash
+   for d in images/*/; do
+     cosign verify --local-image "$d" --insecure-ignore-tlog --key cosign.pub
+   done
+   cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
+     --signature chart/*.tgz.sig chart/*.tgz
+   ```
+
+3. **按 digest 镜像到你的私有 registry**（脚本会重新锁定并确认 digest 在镜像过程中保持不变）：
+
+   ```bash
+   scripts/airgap-mirror.sh --bundle olivares-airgap-<v>.tar.gz \
+     --registry registry.internal:5000
+   ```
+
+4. **按 digest 安装，绝不按 tag**，然后从首次启动 token 开始遵循
+   [Kubernetes 教程](/zh/tutorials/getting-started/kubernetes/)——它是同一个 chart 和同一套流程：
+
+   ```bash
+   helm install olivares \
+     oci://registry.internal:5000/charts/olivares \
+     --version <chart-version> \
+     --set image.repository=registry.internal:5000/olivares \
+     --set image.digest=<digest-from-digests.txt>
+   ```
+
+</Steps>
+
+<Aside type="note" title="“air-gapped”诚实地涵盖什么">
+**control plane** 完全运行在你的边界内——治理、观测、访问图、audit ledger（审计账本）。它做不到的是让一个
+受代理的前沿模型离线运行：**Claude 推理始终会到达 Anthropic 的 API**（直接，或经由 Bedrock/Vertex/Foundry），
+因为 Anthropic 不公开权重。air-gapped 意味着*你 estate 的数据及其治理平面留在本地*；你真正自托管的模型可以
+完全离线。参见[诚实度与限制](/zh/start/honesty-and-limits/)。
+</Aside>
+
+## 断网运营
+
+- **备份**的工作方式完全相同（`olivares dr backup`——加密 bundle，本地 KEK）：
+  [备份与恢复](/zh/how-to/backup-and-restore/)。将 bundle 存放在独立介质上；在没有异地网络的情况下，
+  3-2-1 规则加倍适用。
+- **Ledger 验证**在设计上完全离线：
+  用你锁定的公钥执行 `olivares audit verify --strict`——
+  [troubleshooting § ledger](/zh/how-to/troubleshooting/#ledger-验证失败)。
+- **监控**是本地 Prometheus 抓取 `/metrics`；随附的告警规则不需要任何外部依赖——
+  [监控](/zh/how-to/monitor-with-prometheus/)。
+- **更新**会以一个新的 bundle 重复 carry-verify-mirror（携带-验证-镜像）循环。digest manifest
+  （`digests.txt`）就是你对正在运行之物的确切记录。
+
+## 下一步
+
+- [在隔离网络环境中安装](/zh/how-to/air-gap-install/)——bundle/mirror 参考，包括 FIPS/STIG 变体状态。
+- [验证一个发布版本](/zh/how-to/verify-a-release/)——本流程离线应用的完整验证链。
+- [安全加固](/zh/how-to/security-hardening/)——其余的防御性姿态。

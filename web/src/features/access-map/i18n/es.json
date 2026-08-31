@@ -1,0 +1,186 @@
+{
+  "title": "Mapa de acceso",
+  "subtitle": "Qué lee y escribe cada agente en tu infraestructura — orígenes a la izquierda, los recursos que tocan a la derecha, R/RW por color.",
+  "auditedNote": "Abrir este mapa es una acción privilegiada y auditada. Solo para revisión defensiva: muestra relaciones, nunca SQL, payloads ni secretos.",
+  "refresh": "Actualizar",
+  "stats": {
+    "origins": "Orígenes",
+    "resources": "Recursos",
+    "read": "Lectura",
+    "write": "Escritura / RW",
+    "approximate": "Aproximados",
+    "unexpected": "Inesperados",
+    "truncated": "Primeros {{n}}",
+    "truncatedHint": "La infraestructura tiene más aristas de las mostradas; acota con filtros o expande un nodo para ver sus vecinos."
+  },
+  "webgl": {
+    "badge": "Vista de alta densidad",
+    "hint": "Mostrando {{n}} nodos — se cambió al renderizador WebGL acelerado por escala.",
+    "clustered": "A esta escala los recursos se agrupan por host; un grupo se lee como «host (N)». No se oculta ningún hallazgo: todo grupo con acceso inesperado queda marcado."
+  },
+  "filters": {
+    "search": "Buscar origen, recurso, herramienta…",
+    "mode": "Modo de acceso",
+    "attributedOnly": "Solo atribuidos",
+    "attributedHint": "Oculta las aristas aproximadas (inferidas) y muestra solo el acceso atribuido con firmeza.",
+    "signal": "Señal",
+    "allSignals": "Todas las señales",
+    "clear": "Limpiar",
+    "drift": "Permitido vs observado",
+    "driftHint": "Superpone el diff de mínimo privilegio: resalta accesos inesperados (observados sin permitir) y permisos sin usar.",
+    "driftForbidden": "Requiere el permiso de drift (accessmap:drift:read)."
+  },
+  "legend": {
+    "read": "Lectura",
+    "write": "Escritura",
+    "writeRw": "Escritura / RW",
+    "unknown": "Desconocido",
+    "approximate": "Aproximado",
+    "unexpected": "Acceso inesperado",
+    "pending": "Pendiente (sin decidir)",
+    "unused": "Permiso sin usar"
+  },
+  "drift": {
+    "title": "Drift de mínimo privilegio",
+    "cleanTitle": "Sin drift",
+    "cleanHint": "Todo acceso observado está permitido y todos los permisos se usan.",
+    "unexpectedTitle": "Acceso inesperado",
+    "unexpectedHint": "Observado pero NO permitido — el hallazgo de mayor prioridad.",
+    "pendingTitle": "Pendiente de reconciliar",
+    "pendingHint": "Observado sin una concesión que lo cubra, y el motor todavía no puede decidir si está permitido: un vínculo agente↔identidad sin resolver, un modo de concesión desconocido o un modo observado indecidible. No dice cuál, así que aún no es una violación firme.",
+    "unusedTitle": "Permisos sin usar",
+    "unusedHint": "Permitido pero nunca observado — sobreaprovisionamiento que conviene ajustar.",
+    "forbiddenTitle": "Drift no autorizado",
+    "forbiddenHint": "Tu rol puede ver el grafo pero no el diff permitido-vs-observado (accessmap:drift:read).",
+    "partial": "Resultado parcial: el motor reconcilió esta diferencia sobre una ventana de deriva truncada, así que estos recuentos no son todo el entorno y una arista que falte aquí puede estar simplemente más allá del límite.",
+    "emptyWindowTitle": "Sin hallazgos en la ventana analizada",
+    "emptyWindowHint": "El análisis se detuvo en su límite de página, así que esto no dice nada sobre todo el entorno."
+  },
+  "detail": {
+    "edgeTitle": "Arista de acceso",
+    "nodeSubtitle": "Un nodo del grafo — expande para ver con qué conecta.",
+    "ref": "Referencia",
+    "id": "ID",
+    "expand": "Expandir vecinos",
+    "unexpectedFlag": "Observado sin un permiso que cuadre",
+    "origin": "Origen",
+    "kind": "Tipo",
+    "bridge": "Puente",
+    "unbridged": "Agente sin resolver",
+    "resource": "Recurso",
+    "coverage": "Cobertura",
+    "tool": "Herramienta",
+    "attribution": "Atribución por agente",
+    "signal": "Señal y confianza",
+    "confidence": "Confianza",
+    "sources": "Fuentes",
+    "reason": "Atribución",
+    "diff": "Permitido vs observado",
+    "observed": "Observado",
+    "permitted": "Permitido",
+    "activity": "Actividad",
+    "occurrences": "Ocurrencias",
+    "firstSeen": "Primera vez",
+    "lastSeen": "Última vez",
+    "yes": "Sí",
+    "no": "No",
+    "minimalData": "Solo se muestran metadatos. Por diseño el motor nunca transporta aquí SQL, payloads ni secretos (mínimo dato)."
+  },
+  "authority": {
+    "title": "Autoridad y siguiente paso",
+    "declaredBy": "Señales en esta arista:",
+    "multiple": "Aquí hay registrado más de un permiso independiente. Atender uno deja el otro en pie.",
+    "noRetraction": "El mapa registra señales y nunca las retira, así que esta arista puede seguir ahí después de cambiar el origen. Vuelve a comprobar en vez de suponer.",
+    "explain": {
+      "sourceScope": "Un vínculo origen→ámbito registró el permiso de esta arista. Ese plano de vínculos es donde se configura.",
+      "declared": "Se registró una señal de permiso declarado para esta arista. El mapa no lleva qué sistema la emitió —un proveedor de identidad, un despliegue, o una ACL de repositorio o de almacén de secretos—, así que no puede señalarte uno.",
+      "unattributed": "Este acceso está permitido, pero en la arista no hay ninguna señal que nombre un permiso. Aquí no hay nada que identifique al sistema propietario, y adivinarlo sería peor que decirlo.",
+      "unpermitted": "En este mapa no hay ninguna señal de permiso para este acceso. Eso es lo que lo convierte en hallazgo, pero no prueba que nada lo permita: un resolutor vivo puede permitir accesos que este mapa nunca ve.",
+      "undetermined": "Ni observado ni permitido. Es una capacidad declarada, no evidencia de acceso, así que no hay nada que remediar.",
+      "undecided": "Todavía no puede decidirse si esta arista está permitida, así que no es una violación confirmada. El motor no dice qué condición está sin resolver —un vínculo agente↔identidad, un modo de concesión desconocido o un modo observado indecidible—, así que no se ofrece un arreglo concreto.",
+      "unchecked": "Este mapa muestra el acceso sin ninguna señal de permiso, pero el estado de deriva de esta arista no ha quedado establecido aquí. Sólo la comparación de mínimo privilegio dice si el motor ha confirmado un hallazgo o sigue reconciliando, y esta hoja no tiene respuesta de ella. Hasta entonces esto no es un hallazgo, y tampoco una arista limpia.",
+      "reconciled": "El motor leyó la comparación de mínimo privilegio y no incluyó este acceso, así que no es un hallazgo confirmado y aquí no hay nada que remediar. Lo que el mapa no dice es POR QUÉ: puede haber una concesión que lo cubra registrada en otra arista, o puede que un permiso haya llegado a ésta — el grafo y la comparación son lecturas separadas, así que esta hoja no puede decirte cuál."
+    },
+    "target": {
+      "sourceBindings": "Abrir vínculos de origen",
+      "nhiRoster": "Abrir el inventario de NHI"
+    },
+    "needsPermission": "{{action}} requiere el permiso {{permission}}, que este rol no tiene.",
+    "recheck": "Volver a comprobar la deriva",
+    "verdict": {
+      "clear": "Comprobado de nuevo: esta arista ya no está en el conjunto de deriva. La explicación de arriba describe el estado anterior a esa comprobación.",
+      "present": "Comprobado de nuevo: esta arista sigue en el conjunto de deriva.",
+      "unknown": "No se ha podido confirmar: la lectura de deriva no ha respondido, o sólo cubría parte del entorno. Ninguna de las dos cosas es estar limpio."
+    },
+    "checkDrift": "Leer la deriva de esta arista",
+    "closes": "Registrar un permiso es lo que cierra este hallazgo, aunque no necesariamente en esta arista: una concesión sobre la identidad a la que resuelve el acceso lo cierra desde otra. La proyección origen→ámbito es best-effort, y los vínculos de grupo, rol y carpeta aplican sin proyectar nada en el mapa, así que puede existir un permiso real que esta comparación no vea. Detener el acceso tampoco lo cierra: una observación no se retira nunca. Vuelve a comprobar en vez de suponer.",
+    "cannotClose": "Borrar la concesión no va a bajar el flag de permitido de esta arista —el mapa nunca retira un permiso—, así que este hallazgo no desaparece por ese borrado. (Puede salir del diff por otro motivo ajeno, por ejemplo que el acceso llegue a observarse.) Verifica la eliminación en la superficie que la posee, no aquí.",
+    "signalsNotFused": "Esta arista sólo trae su señal más reciente: el conjunto de señales que la corroboran no venía en esta respuesta, así que pueden existir otras —incluidos otros permisos— que aquí no se ven."
+  },
+  "kinds": {
+    "agent": "Agente",
+    "session": "Sesión",
+    "identity": "Identidad",
+    "resource": "Recurso"
+  },
+  "coverage": {
+    "clean": "Limpia",
+    "lossy": "Parcial",
+    "opaque": "Opaca",
+    "mixed": "Mixta"
+  },
+  "coverageHint": {
+    "clean": "Captura de alta fidelidad (p. ej. audit de SQL/objeto/warehouse).",
+    "lossy": "Captura parcial — parte del acceso no es clasificable.",
+    "opaque": "No capturable de forma pasiva (p. ej. Redis/SQLite).",
+    "mixed": "Fidelidad mixta entre señales."
+  },
+  "attributionTier": {
+    "firm": "Firme",
+    "approximate": "Aproximada",
+    "unknown": "Desconocida"
+  },
+  "attributionTierHint": {
+    "firm": "Ligada a un agente/NHI concreto vía SVID, WIF o credencial dedicada.",
+    "approximate": "Una cuenta compartida — se conoce la identidad, pero no un único agente.",
+    "unknown": "Sin audit por-identidad (p. ej. Redis/SQLite/D1) — atribución imposible."
+  },
+  "empty": {
+    "title": "Aún no hay acceso observado",
+    "description": "Cuando los conectores reporten actividad de los agentes, las relaciones R/RW aparecerán aquí."
+  },
+  "forbidden": {
+    "title": "Mapa de acceso no autorizado",
+    "description": "Tu rol no incluye permiso para ver el grafo de acceso."
+  },
+  "mobile": {
+    "title": "El mapa necesita más ancho",
+    "hint": "Abre esta vista en una pantalla mayor para el grafo R/RW interactivo."
+  },
+  "attackPaths": {
+    "chooseAgent": "Elige un agente en el grafo para ver sus caminos de ataque.",
+    "auditedNote": "Cada una de estas lecturas queda sellada en el libro de auditoría, igual que el grafo.",
+    "loading": "Calculando…",
+    "error": "No se ha podido leer este análisis.",
+    "none": "No se encontraron caminos.",
+    "weakestLink": "eslabón más débil:",
+    "sensitivity": "sensibilidad máxima",
+    "sensitivityAbsent": "no consta",
+    "sensitivityAbsentHint": "El motor omite este campo cuando está vacío, así que un valor ausente NO afirma que no haya nada sensible.",
+    "kind": {
+      "reachability": "Hasta dónde llega",
+      "escalation": "Dónde podría escalar",
+      "exfil": "Rutas de exfiltración"
+    },
+    "attribution": {
+      "firm": "firme",
+      "approximate": "aproximada",
+      "unknown": "sin atribuir"
+    },
+    "confidence": {
+      "attributed": "atribuida",
+      "approximate": "aproximada"
+    },
+    "analyse": "Analizar caminos de ataque (auditado)"
+  }
+}

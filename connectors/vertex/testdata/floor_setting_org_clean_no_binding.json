@@ -1,0 +1,13 @@
+{
+  "name": "organizations/123/locations/global/floorSetting",
+  "enableFloorSettingEnforcement": true,
+  "integratedServices": [],
+  "filterConfig": {
+    "raiSettings": {
+      "raiFilters": [
+        { "filterType": "HATE_SPEECH", "confidenceLevel": "LOW_AND_ABOVE" }
+      ]
+    },
+    "piAndJailbreakFilterSettings": { "filterEnforcement": "ENABLED" }
+  }
+}

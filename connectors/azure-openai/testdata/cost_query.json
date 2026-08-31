@@ -1,0 +1,20 @@
+{
+  "id": "subscriptions/sub-1/providers/Microsoft.CostManagement/query",
+  "name": "q",
+  "type": "Microsoft.CostManagement/query",
+  "properties": {
+    "columns": [
+      { "name": "PreTaxCost", "type": "Number" },
+      { "name": "ResourceId", "type": "String" },
+      { "name": "Meter", "type": "String" },
+      { "name": "UsageDate", "type": "Number" },
+      { "name": "Currency", "type": "String" }
+    ],
+    "rows": [
+      [ 12.5, "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct1", "gpt-4o-Input-glbl", 20260619, "USD" ],
+      [ -1.25, "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct1", "gpt-4o-Output-glbl", 20260619, "USD" ],
+      [ 0, "/subscriptions/sub-1/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/acct1", "zero-meter", 20260619, "USD" ]
+    ],
+    "nextLink": ""
+  }
+}

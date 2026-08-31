@@ -1,0 +1,107 @@
+{
+  "title": "監査台帳",
+  "subtitle": "改ざん検知可能な証拠チェーン。検証して、WORM/SIEM へエクスポートします。",
+  "subtitleSystem": "テナント横断の管理操作を記録するシステムテナントのチェーン（読み取り専用）。",
+  "searchLoaded": "読み込み済みの行のみをフィルター（クライアント側）…",
+  "filters": {
+    "title": "サーバー側の台帳フィルター",
+    "q": "台帳を検索",
+    "qPlaceholder": "操作、実行者、対象種別または ID",
+    "actor": "実行者",
+    "actorPlaceholder": "実行者（完全一致）",
+    "action": "操作プレフィックス",
+    "actionPlaceholder": "例: agent.",
+    "targetKind": "対象種別",
+    "targetKindPlaceholder": "対象種別（完全一致）",
+    "targetId": "対象 ID",
+    "targetIdPlaceholder": "対象 ID（完全一致）",
+    "since": "開始日時",
+    "until": "終了日時",
+    "clearOne": "{{filter}} フィルターをクリア",
+    "clearAll": "すべてのフィルターをクリア"
+  },
+  "scan": {
+    "incomplete": "seq {{seq}} までスキャン済み — 台帳全体ではありません。「さらに読み込む」でスキャンを続行します。"
+  },
+  "scope": {
+    "label": "台帳のスコープ",
+    "tenant": "テナント台帳",
+    "system": "システム台帳",
+    "systemHint": "システムテナントのチェーンはテナント横断の管理操作を記録し、ここでは読み取り専用です。検証とエクスポートはテナント台帳に対して行われます。"
+  },
+  "cols": {
+    "seq": "連番",
+    "occurred": "日時",
+    "action": "操作",
+    "actor": "実行者",
+    "target": "対象",
+    "hash": "ハッシュ"
+  },
+  "actorKind": {
+    "user": "ユーザー",
+    "agent": "エージェント",
+    "connector": "コネクター",
+    "system": "システム"
+  },
+  "verify": {
+    "action": "チェーンを検証",
+    "failed": "検証を完了できませんでした。",
+    "chain": "チェーン · {{checked}} リンク",
+    "checkpoints": "チェックポイント · 署名済み {{count}} 件",
+    "noCheckpoints": "署名済みのチェックポイントはまだありません",
+    "attested": "連番 {{seq}} まで証明済み",
+    "chainBreak": "連番 {{seq}} でチェーンが破損",
+    "checkpointBreak": "連番 {{seq}} でチェックポイント署名の検証に失敗"
+  },
+  "pubkey": {
+    "action": "検証鍵",
+    "label": "台帳署名鍵",
+    "key": "鍵",
+    "hint": "このEd25519公開鍵を共有すると、第三者がエクスポートしたイベントとチェックポイントの両方をオフラインで検証できます（同じ鍵が両方に署名します）。",
+    "failed": "検証鍵を利用できません。"
+  },
+  "export": {
+    "action": "エクスポート",
+    "formatLabel": "エクスポート形式",
+    "fromSeq": "開始 seq",
+    "toSeq": "終了 seq",
+    "optional": "任意",
+    "useCurrent": "現在のフィルターと範囲を使用",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "OTLP リクエスト",
+      "otlp_envelope": "OTLP リクエスト (エイリアス)",
+      "otlp_log_record": "OTLP LogRecord 行",
+      "ocsf": "OCSF"
+    },
+    "done": "エクスポートをダウンロードしました。",
+    "failed": "エクスポートに失敗しました。",
+    "forbidden": "台帳をエクスポートする権限がありません。"
+  },
+  "detail": {
+    "title": "証拠イベント",
+    "seqTitle": "イベント #{{seq}}",
+    "signed": "署名済みイベント — この行はチェーンハッシュに対する独自の署名を持ちます",
+    "seq": "シーケンス",
+    "occurred": "発生",
+    "action": "操作",
+    "actor": "実行者",
+    "actorSystem": "システム",
+    "target": "対象",
+    "id": "イベント ID",
+    "chainTitle": "チェーンの整合性",
+    "prevHash": "前のハッシュ",
+    "prev": "前",
+    "hash": "イベントハッシュ",
+    "this": "本",
+    "sig": "イベント署名",
+    "checkpoint": "署名",
+    "chainHint": "各イベントのハッシュは前のイベントに連鎖します。フィンガープリントの背後にペイロードはありません。ハッシュそのものが証拠です（設計上の最小データ）。"
+  },
+  "empty": {
+    "title": "まだ証拠はありません",
+    "description": "このスコープの台帳は空です。統制された操作は、発生のたびに改ざん検知可能なイベントを追記します。"
+  }
+}

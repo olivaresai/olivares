@@ -1,0 +1,388 @@
+name: aws-images
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# ⛔ QUÉ PROBLEMA CIERRA, Y ES UN HUECO MEDIDO, NO UNA MEJORA.
+#
+# `deploy/aws/modules/compute/main.tf` crea el repositorio ECR `olivares-pilot` y luego
+# deja `var.image` y `var.engine_image` en "", así que sus `count = var.image == "" ? 0 : 1`
+# valen 0: **un apply completo creaba el registro y ni una sola tarea**. No existía ningún
+# camino, en ningún sitio del árbol, que construyera esas dos imágenes y las pusiera en ese
+# registro. Éste es ese camino.
+#
+# ⛔ Y LA SECUENCIA, PORQUE HAY UN HUEVO Y UNA GALLINA Y NADIE LO HABÍA ESCRITO: el registro
+# lo crea el propio apply. Antes del primer apply no hay dónde empujar. El orden real es:
+#
+#   1 · aws-terraform.yml apply, las cuatro TF_VAR vacías  -> VPC, RDS, ECR, secretos, ingress
+#   2 · ESTE workflow, confirm=push-images-to-ecr          -> construye, firma, empuja, imprime digests
+#   3 · aws-terraform.yml apply con image/engine_image     -> task definitions + services
+#
+# Los digests del paso 2 se pegan como entradas de dispatch del paso 3
+# (`TF_VAR_image` / `TF_VAR_engine_image`, `aws-terraform.yml`). No hay estado compartido
+# entre las dos corridas y es deliberado: un artefacto que decide qué se despliega no debe
+# viajar por un canal que nadie mira.
+#
+# ⛔ SOLO POR DISPATCH CONFIRMADO. Sin `push:` ni `pull_request:` ni `schedule:`: esto
+# publica en NUESTRA cuenta de AWS, y la orden 12 —el apply de AWS/cloud va AL FINAL— no
+# distingue entre crear un recurso y publicar un artefacto dentro de él. La invariante la
+# comprueba `scripts/aws-apply-guard` POR AUSENCIA (el conjunto de disparadores tiene que
+# ser exactamente uno), no por presencia: exigir «tiene workflow_dispatch» dejaría pasar un
+# fichero que ADEMÁS tuviera `push:`.
+#
+# ⚠ REEJECUTAR SOBRE EL MISMO COMMIT SE RECHAZA, Y ES LA PROPIEDAD, NO UN FALLO.
+# `aws_ecr_repository.cp` declara `image_tag_mutability = "IMMUTABLE"`, así que un segundo
+# push de `cp-<sha>` falla aunque los bytes sean idénticos. Una etiqueta que apunta a dos
+# cosas distintas a lo largo del tiempo es exactamente lo que la inmutabilidad compra.
+#
+# ⚠ LO QUE ESTE WORKFLOW NO HA HECHO NUNCA: correr. Cero dispatches. Su forma la verifica
+# `scripts/check-aws-estate.sh` (que lo tiene por sujeto) en cada push de cada carril; que
+# construya de verdad sólo lo dirá la primera corrida, y ésa va después del primer apply.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type push-images-to-ecr to build, sign and push. Anything else is refused."
+        required: true
+        default: "refuse"
+      ecr_repository:
+        description: "ECR repository name. Matches olivares-${var.environment} in deploy/aws."
+        required: false
+        default: "olivares-pilot"
+      aws_region:
+        description: "Region of the ECR registry. Ratified: us-east-1 (D10-bis §2.6)."
+        required: false
+        default: "us-east-1"
+
+permissions:
+  contents: read
+
+jobs:
+  # ⛔ ESTE JOB ES LA PUERTA DEL DE ABAJO, y existe por el mismo argumento que
+  # `aws-terraform.yml` ya tenía escrito para su `apply`: un `if` decide SI un job corre;
+  # sólo `needs` decide CUÁNDO. Sin él, un dispatch confirmado construiría y empujaría a
+  # ECR con el gate del estate en rojo — y un efecto externo no se deshace porque la
+  # corrida acabe en rojo después.
+  #
+  # No toca AWS por ningún camino y no pide `id-token`: el guard trata unas credenciales
+  # fuera del job privilegiado como hallazgo, precisamente para que esta puerta no pueda
+  # convertirse en una segunda vía de acceso.
+  validate:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Mismo orden que en `aws-terraform.yml` y por la misma medida: las cachés van bajo
+      # $RUNNER_TEMP ANTES de setup-go, porque en un runner auto-hospedado no se puede dar
+      # por supuesto el $HOME y setup-go muere dentro con «GOCACHE is not defined».
+      # ⛔ `TMPDIR` VA AQUÍ, Y SU AUSENCIA TUMBÓ `validate` HOY (actions-runner-3, medido por
+      # the planner). `check-aws-estate.sh:72` hace `_tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"`
+      # y acto seguido `mkdir -p` con `|| cannot`: ese respaldo es la ruta de ESTAS CAJAS, no la de
+      # un runner de GitHub, donde `/workspace` no existe. ⇒ el gate contestaba `2 · no he podido
+      # mirar` — el veredicto correcto, por un motivo que no era el estate.
+      #
+      # Es la clase «un requisito que vive en un comentario es una suposición sobre el llamador»:
+      # el guion documentaba que el llamador apunta TMPDIR, y ningún llamador lo apuntaba. Se fija
+      # donde ya se fijan las cachés de Go, y por la misma razón — `$RUNNER_TEMP` lo purga el
+      # runner entre jobs y es escribible, que `/tmp` en estos runners no lo es.
+      - name: Go caches and TMPDIR under RUNNER_TEMP (this runner may have no $HOME)
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+            echo "GOTMPDIR=$RUNNER_TEMP/tmp"
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+
+      # `check-aws-estate.sh` tiene ESTE fichero por sujeto: comprueba que su único
+      # disparador es el dispatch, que el canje OIDC está pinchado por digest y ordenado,
+      # y que lo que se empuja se firma. Su batería lo verifica por mutación.
+      - name: estate shape and delivery wiring (no apply, no AWS)
+        run: bash scripts/check-aws-estate.sh
+      - name: estate shape selftest
+        run: bash scripts/test-aws-estate.sh
+
+  push:
+    needs: validate
+    # ⛔ EL TOKEN DE CONFIRMACIÓN ES LA PUERTA, y va en el `if` del JOB y no dentro de un
+    # `run:`: un `run` que se niega ya ha hecho `checkout` y ya ha arrancado el job. Misma
+    # forma que `aws-terraform.yml` job `apply`, a propósito — dos puertas con la misma
+    # forma se auditan juntas; dos puertas distintas se auditan mal.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'push-images-to-ecr'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    # Techo de JOB por encima de la SUMA de los de sus pasos (25+20 = 45 < 75), que es la
+    # invariante de `scripts/check-ci-timeout-arithmetic.sh`; y con guardas de PASO porque
+    # el techo supera los 30 min de `scripts/check-ci-step-guard.sh` — sin ellas este job
+    # sólo podría morir de la forma que no se sabe leer (el techo de job cancela los pasos
+    # que quedan, así que el reportero de fallos no llega a publicar).
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      id-token: write # OIDC: STS para ECR y Fulcio para la firma keyless
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      # ⛔ LA MISMA FASE DE IAM QUE `aws-terraform.yml`, Y NO ES COPIA CIEGA: este job
+      # asume EL MISMO rol. Si alguien le devolviera AdministratorAccess o volviera a
+      # abrir el `sub` de la trust, este camino privilegiado quedaría igual de expuesto
+      # que el del apply — un control que sólo cubre uno de los dos jobs que asumen el
+      # rol es un control con un agujero del tamaño del otro. Se mueve a "2" en el mismo
+      # commit que la de `aws-terraform.yml`; un gate compara que no diverjan.
+      IAM_PHASE: "1"
+      AWSCLI_VERSION: "2.31.9"
+      # sha256 del zip oficial, calculado sobre la descarga del 2026-08-29. AWS no publica
+      # un fichero de checksums junto al zip (sólo una firma GPG), así que este valor se
+      # re-calcula al bumpear: `sha256sum awscli-exe-linux-x86_64-<v>.zip`.
+      AWSCLI_SHA256: "bf1150ac34672ebec370f724578c85f6a49f72390670022a06b9cf0f68b6d36e"
+      ECR_REPOSITORY: ${{ github.event.inputs.ecr_repository }}
+      AWS_REGION: ${{ github.event.inputs.aws_region }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # `git describe --tags` de abajo necesita las etiquetas; con el checkout
+          # superficial por defecto describiría contra un historial sin ninguna y la
+          # imagen saldría marcada `dev` sin que nada lo dijera.
+          fetch-depth: 0
+
+      # Misma refutación que en `aws-terraform.yml`: un secreto vacío con el token de
+      # confirmación puesto es un RECHAZO (exit 1), nunca un salto que parece limpio.
+      - name: refuse to publish without the role
+        run: |
+          set -euo pipefail
+          if [ -z "${AWS_ROLE_ARN}" ]; then
+            echo "aws-images: confirm was push-images-to-ecr but AWS_ROLE_ARN is empty." >&2
+            echo "There is no credential path to ECR — this is a refusal, not a skip." >&2
+            exit 1
+          fi
+          case "${ECR_REPOSITORY}" in
+            ''|*[!a-z0-9._/-]*)
+              echo "aws-images: ECR_REPOSITORY='${ECR_REPOSITORY}' is not a valid repository name." >&2
+              exit 1 ;;
+          esac
+          # El digest sale del fichero de metadatos de buildx, y ese fichero se lee con jq.
+          # Sin jq el digest saldría vacío y la firma iría sobre una referencia inexistente:
+          # se contesta «no he podido mirar», que no es lo mismo que «está limpio».
+          command -v jq >/dev/null || {
+            echo "aws-images: NO HE PODIDO MIRAR — jq no está en este runner." >&2
+            exit 2; }
+
+      # El mismo canje, el mismo pin y el mismo argumento que en `aws-terraform.yml`:
+      # un OID de commit, no una etiqueta móvil, en un job que asume un rol de la cuenta.
+      # ⛔ EL CLI DE AWS, PINCHADO Y SIN ROOT, y está aquí por un fallo medido, no por
+      # completitud: el run 33240917638 murió en la comprobación de fase de IAM con
+      # «NO HE PODIDO MIRAR — no hay AWS CLI en esta caja» (rc=2). El runner `srv17` no lo
+      # trae. Falló CERRADO —antes de que OpenTofu tocara nada, cero recursos creados—, que
+      # es lo que ese control promete; pero un control que no puede correr no protege nada,
+      # así que la respuesta es darle la herramienta, no aflojarlo.
+      #
+      # Es la MISMA lección que el `sudo`: en un pool de runners heterogéneo, **una
+      # herramienta que no instalas tú es una moneda al aire**. Se instala pinchada por
+      # versión Y por sha256 —el instalador oficial de AWS no publica un fichero de
+      # checksums junto al zip, sólo una firma GPG, así que este valor lo calculé yo sobre
+      # la descarga— y sin root, con el `-i`/`-b` que el propio instalador documenta.
+      #
+      # ⛔ VA ANTES DEL CANJE OIDC A PROPÓSITO: no necesita credenciales, y colocarlo
+      # DESPUÉS metería un paso entre el canje y la comprobación de fase, que
+      # `scripts/aws-apply-guard` exige contiguos — el orden es parte de la invariante.
+      - name: install the AWS CLI (pinned, no root)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/awscli.zip" \
+            "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"
+          echo "${AWSCLI_SHA256}  $RUNNER_TEMP/awscli.zip" | sha256sum -c -
+          unzip -q -o "$RUNNER_TEMP/awscli.zip" -d "$RUNNER_TEMP/awscli-src"
+          "$RUNNER_TEMP/awscli-src/aws/install" --update \
+            -i "$RUNNER_TEMP/awscli" -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/aws" --version
+
+      - name: assume the sandbox role (OIDC → STS)
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: olivares-images-${{ github.run_id }}
+          mask-aws-account-id: true
+          # En un runner PERSISTENTE las credenciales de una corrida anterior siguen en el
+          # entorno y la propia acción documenta que pueden interferir. Cuesta una línea.
+          unset-current-credentials: true
+
+      # El registro NO se escribe a mano: sale del rol que se acaba de asumir, así que no
+      # puede derivar del identificador de cuenta que alguien copió en un documento.
+      # Falla cerrado también en «no he podido mirar»: empujar imágenes firmadas a ECR
+      # con un rol cuyo estado de permisos no se ha podido leer es exactamente la clase
+      # de verde que no significa nada.
+      - name: the role is in the IAM phase this repository declares
+        run: bash scripts/aws-iam-phase2.sh check "$GITHUB_REPOSITORY" design
+
+      - name: log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # Instalador y versión APROBADOS: `scripts/check-cosign-pins.sh` barre TODOS los
+      # workflows, así que este pin no es una elección de este fichero — es la única que
+      # el árbol acepta (`cmd/olivares/tools/checkcosignpins/main.go:97,102`).
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert the cosign binary is the reviewed artifact
+        run: bash scripts/assert-cosign-binary.sh --isolate
+
+      - name: build and push the control plane
+        id: cp
+        timeout-minutes: 25
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          ref="${REGISTRY}/${ECR_REPOSITORY}"
+          # El contexto es `cloud/control-plane`: su Dockerfile hace `COPY go.mod go.sum ./`
+          # desde la raíz del contexto, no desde la del repositorio.
+          docker buildx build \
+            --file cloud/control-plane/Dockerfile \
+            --tag "${ref}:cp-${GITHUB_SHA}" \
+            --provenance=false \
+            --metadata-file cp-metadata.json \
+            --push \
+            cloud/control-plane
+          digest="$(jq -r '."containerimage.digest" // empty' cp-metadata.json)"
+          # Un digest vacío firmaría la referencia "<ref>@": el paso de firma pondría una
+          # firma sobre algo que no existe y saldría verde. Se corta aquí.
+          # ⛔ FORMA EXACTA, no prefijo. `sha256:*` acepta `sha256:` vacío y `sha256:zz`,
+          # y lo que pase por ahí se FIRMA. 64 hex, ni uno más (contraste `sol max`, E-02).
+          _hex="${digest#sha256:}"
+          case "${digest}:${#_hex}:${_hex}" in
+            sha256:*:64:*[!0-9a-f]*) echo "aws-images: control-plane digest is not 64 lowercase hex (got '${digest}')" >&2; exit 1 ;;
+            sha256:*:64:*) : ;;
+            *) echo "aws-images: buildx did not report a valid control-plane digest (got '${digest}')" >&2
+               exit 1 ;;
+          esac
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      - name: build and push the engine
+        id: engine
+        timeout-minutes: 20
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          ref="${REGISTRY}/${ECR_REPOSITORY}"
+          # El Dockerfile de la raíz necesita el workspace entero en el contexto (go.work
+          # y web/), por eso el contexto es `.` y no el directorio del fichero.
+          # SOURCE_DATE_EPOCH sale del commit: el propio Dockerfile documenta que de ahí
+          # viene la reproducibilidad byte a byte para un commit dado.
+          docker buildx build \
+            --file Dockerfile \
+            --build-arg VERSION="$(git describe --tags --always --dirty)" \
+            --build-arg COMMIT="$(git rev-parse --short HEAD)" \
+            --build-arg SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
+            --tag "${ref}:engine-${GITHUB_SHA}" \
+            --provenance=false \
+            --metadata-file engine-metadata.json \
+            --push \
+            .
+          digest="$(jq -r '."containerimage.digest" // empty' engine-metadata.json)"
+          # ⛔ FORMA EXACTA, no prefijo. `sha256:*` acepta `sha256:` vacío y `sha256:zz`,
+          # y lo que pase por ahí se FIRMA. 64 hex, ni uno más (contraste `sol max`, E-02).
+          _hex="${digest#sha256:}"
+          case "${digest}:${#_hex}:${_hex}" in
+            sha256:*:64:*[!0-9a-f]*) echo "aws-images: engine digest is not 64 lowercase hex (got '${digest}')" >&2; exit 1 ;;
+            sha256:*:64:*) : ;;
+            *) echo "aws-images: buildx did not report an valid engine digest (got '${digest}')" >&2
+               exit 1 ;;
+          esac
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      # Firma POR DIGEST y no por etiqueta: una etiqueta se puede repuntar, un digest no.
+      # A través del lanzador y no de `cosign` a pelo — entre la aserción de arriba y esta
+      # línea han corrido buildx, el login de registro y dos subidas, así que el firmante
+      # re-autentica los bytes justo antes de firmar (`scripts/cosign-verified.sh`).
+      #
+      # ⛔ TRES COSAS QUE NO ESTABAN, Y LAS TRES SALEN DEL CONTRASTE `sol max` (E-01, ALTO).
+      # Este paso podía terminar EN VERDE dejando las dos imágenes SIN FIRMA publicada:
+      #
+      #   1 · `--upload` vale true por defecto **sólo si el flag no es explícito**. cosign v2
+      #       vincula `COSIGN_UPLOAD` al flag cuando falta, así que en un runner PERSISTENTE
+      #       un `COSIGN_UPLOAD=false` heredado calcula la firma y no la publica — rc 0.
+      #       Un flag explícito gana al entorno, y por eso va escrito.
+      #   2 · `COSIGN_REPOSITORY` redirige la firma a OTRO repositorio. Se limpia aquí.
+      #   3 · Firmar y no leer la firma de vuelta es una afirmación, no una prueba. Las dos
+      #       `verify` van contra el MISMO `@digest`, con el emisor OIDC y la identidad de
+      #       este workflow anclados — el mismo patrón que `release.yml:1127-1130`.
+      #
+      # Y el resumen se escribe DESPUÉS, en su propio paso: un resumen que dice «both are
+      # signed» antes de comprobarlo es exactamente el claim sin evidencia que el canon
+      # prohíbe.
+      - name: cosign sign both images, then read the signatures back
+        env:
+          CP_REF: ${{ steps.cp.outputs.ref }}
+          CP_DIGEST: ${{ steps.cp.outputs.digest }}
+          ENGINE_REF: ${{ steps.engine.outputs.ref }}
+          ENGINE_DIGEST: ${{ steps.engine.outputs.digest }}
+          CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          unset COSIGN_REPOSITORY COSIGN_UPLOAD
+          # ⛔ LA IDENTIDAD DEL CERTIFICADO SE DERIVA, NO SE ESCRIBE. La primera versión la
+          # llevaba literal y `lint:export` la rechazó con razón: `scripts/` y
+          # `.github/workflows/` SÍ viajan al árbol público, así que un nombre de repositorio
+          # privado escrito aquí se publica. `GITHUB_REPOSITORY` da lo mismo en ejecución y no
+          # deja el literal en el fichero.
+          #
+          # Y se escapa antes de meterlo en una expresión regular: el nombre lleva puntos, y
+          # un punto sin escapar casa con cualquier carácter — el ancla se aflojaría justo
+          # donde tiene que ser estricta.
+          # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          CERT_IDENTITY_REGEXP="^https://github\.com/${repo_rx}/\.github/workflows/aws-images\.yml@refs/heads/.+$"
+          bash scripts/cosign-verified.sh sign --yes --upload=true "${CP_REF}@${CP_DIGEST}"
+          bash scripts/cosign-verified.sh sign --yes --upload=true "${ENGINE_REF}@${ENGINE_DIGEST}"
+          bash scripts/cosign-verified.sh verify \
+            --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+            --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+            "${CP_REF}@${CP_DIGEST}" >/dev/null
+          bash scripts/cosign-verified.sh verify \
+            --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+            --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+            "${ENGINE_REF}@${ENGINE_DIGEST}" >/dev/null
+
+      # Lo que esta corrida produce para la SIGUIENTE: las dos referencias por digest, tal
+      # cual se pegan en las entradas `image` y `engine_image` del dispatch de
+      # `aws-terraform.yml`. En el resumen del job y no sólo en el log, porque un log se
+      # rota y un resumen se enlaza.
+      # Sólo se llega aquí con las dos firmas publicadas Y leídas de vuelta: el paso
+      # anterior corre con `set -e` y las dos `verify` son las últimas en fallar.
+      - name: what to paste into the next apply
+        env:
+          CP_REF: ${{ steps.cp.outputs.ref }}
+          CP_DIGEST: ${{ steps.cp.outputs.digest }}
+          ENGINE_REF: ${{ steps.engine.outputs.ref }}
+          ENGINE_DIGEST: ${{ steps.engine.outputs.digest }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### aws-terraform.yml -> Run workflow"
+            echo
+            echo '| input | value |'
+            echo '|---|---|'
+            echo "| image | ${CP_REF}@${CP_DIGEST} |"
+            echo "| engine_image | ${ENGINE_REF}@${ENGINE_DIGEST} |"
+            echo
+            echo "Both signatures were published AND read back with cosign verify against these"
+            echo "exact digests. Both tags are immutable, so re-running this commit is refused."
+          } >> "$GITHUB_STEP_SUMMARY"

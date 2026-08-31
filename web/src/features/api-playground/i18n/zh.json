@@ -1,0 +1,68 @@
+{
+  "title": "API 演练场",
+  "description": "交互式探索和测试控制平面 API",
+  "filterPlaceholder": "筛选端点…",
+  "selectEndpoint": "从左侧面板选择一个端点",
+  "send": "发送",
+  "sending": "发送中…",
+  "streaming": "流式传输中…",
+  "cancel": "取消",
+  "requiredPermission": "所需权限",
+  "copyAsCurl": "复制为 curl",
+  "response": "响应",
+  "history": "历史记录",
+  "clearHistory": "清除",
+  "noRequests": "暂无请求",
+  "noMatch": "没有端点匹配你的筛选条件。",
+  "pathParams": "路径参数",
+  "queryParams": "查询",
+  "headers": "请求头",
+  "body": "请求体",
+  "networkError": "网络错误",
+  "beta": "测试版",
+  "summary": "{{groups}} 个分组中的 {{endpoints}} 个端点",
+  "summaryWithBeta": "{{groups}} 个分组中的 {{endpoints}} 个端点 · {{beta}} 个测试版模块路由",
+  "endpointTree": {
+    "ariaLabel": "API 端点"
+  },
+  "errors": {
+    "loadSpec": "无法加载 OpenAPI 规范"
+  },
+  "request": {
+    "networkError": "网络错误",
+    "failedNetworkHint": "请求失败 — 请检查网络连接。",
+    "blockedDestination": "目标地址已被阻止",
+    "blockedDestinationHint": "API Playground 只能向此控制平面发送请求。",
+    "enterPathParam": "输入 {{name}}",
+    "headerNamePlaceholder": "请求头名称",
+    "headerValuePlaceholder": "值",
+    "curlCommand": "curl",
+    "removeHeaderAria": "删除 {{header}} 请求头",
+    "addHeaderAria": "添加自定义请求头",
+    "bodyAria": "请求体"
+  },
+  "responsePanel": {
+    "empty": "选择一个端点并发送请求",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "响应头 ({{count}})",
+    "bodyAria": "响应体"
+  },
+  "historyPanel": {
+    "recentCount": "最近 ({{count}})",
+    "clearAria": "清除请求历史记录",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "刚刚",
+      "minutes": "{{count}} 分钟前",
+      "hours": "{{count}} 小时前",
+      "days": "{{count}} 天前"
+    }
+  }
+}

@@ -1,0 +1,263 @@
+{
+  "title": "编排与 A2A",
+  "description": "智能体到智能体的拓扑——谁向谁委派、实时的委派流，以及声明的执行节奏。对通信图的读取属于特权操作并自审计。",
+  "tabs": {
+    "graph": "通信图",
+    "flows": "流",
+    "schedules": "计划"
+  },
+  "graph": {
+    "title": "通信图",
+    "description": "由已观测信号推导出的委派与 MCP 拓扑。主管位于顶层，工作者与 MCP 对端位于其下。",
+    "truncated": "仅显示前 {{n}} 条边——如需更多请提高上限。",
+    "empty": {
+      "title": "未观测到通信",
+      "description": "在观测窗口内没有委派或 MCP 边。这是已观测到的内容，而非全部存在的内容——请阅读上方的覆盖率说明。"
+    },
+    "kind": {
+      "session": "会话",
+      "agent": "智能体",
+      "mcp_server": "MCP 服务器",
+      "mcp_tool": "MCP 工具"
+    },
+    "role": {
+      "supervisor": "主管",
+      "worker": "工作者",
+      "peer": "对端"
+    },
+    "legend": {
+      "attributed": "已归因",
+      "approximate": "近似（推断）",
+      "missed": "错过执行节奏"
+    }
+  },
+  "flows": {
+    "title": "委派流",
+    "description": "主管 → 工作者集群。状态在读取时根据时近性推导得出；停滞表示主管有一项已逾期的活跃计划。",
+    "filter": "按状态筛选",
+    "allStates": "全部状态",
+    "empty": "此状态下没有流",
+    "columns": {
+      "supervisor": "主管",
+      "workers": "工作者",
+      "delegations": "委派",
+      "state": "状态",
+      "lastSeen": "最后可见"
+    },
+    "state": {
+      "active": "活跃",
+      "idle": "空闲",
+      "stalled": "停滞",
+      "completed": "已完成"
+    }
+  },
+  "schedules": {
+    "title": "计划",
+    "description": "为智能体与集群声明的执行节奏。健康状态反映已观测的执行节奏与预期间隔的对比——错过的触发会显示为停滞，绝不隐藏。",
+    "empty": "未声明任何计划",
+    "emptyHint": "声明一个 cron、事件或手动执行节奏，以追踪某个对象是否真正按时触发。",
+    "new": "新建计划",
+    "columns": {
+      "name": "名称",
+      "trigger": "触发器",
+      "cadence": "执行节奏",
+      "desired": "期望状态",
+      "health": "健康状态",
+      "lastFired": "最后触发",
+      "actions": "操作"
+    },
+    "subjectKind": {
+      "agent": "智能体",
+      "swarm": "集群"
+    },
+    "trigger": {
+      "cron": "Cron",
+      "event": "事件",
+      "manual": "手动"
+    },
+    "desired": {
+      "active": "活跃",
+      "paused": "已暂停",
+      "retired": "已退役"
+    },
+    "actions": {
+      "menu": "{{name}} 的操作",
+      "edit": "编辑",
+      "history": "历史",
+      "pause": "暂停",
+      "resume": "恢复",
+      "retire": "退役",
+      "fire": "触发"
+    },
+    "form": {
+      "createTitle": "新建计划",
+      "editTitle": "编辑计划",
+      "createDescription": "为智能体或集群声明受治理的执行节奏。新计划创建后即为活跃状态。",
+      "editDescription": "更改对象或执行节奏。标识和触发器字段不可修改。",
+      "name": "名称",
+      "subjectKind": "对象类型",
+      "subjectRef": "对象引用",
+      "triggerKind": "触发器类型",
+      "cadenceSpec": "执行节奏规范",
+      "cadenceHint": {
+        "cron": "不透明的 cron 执行节奏文本。仅由已配置的派发器解释其语法。",
+        "event": "不透明的事件引用或执行节奏文本。",
+        "manual": "此手动计划的可选不透明备注。"
+      },
+      "expectedInterval": "预期间隔（秒）",
+      "expectedIntervalHint": "用于检测错过的 cron 执行节奏。",
+      "graceFactor": "宽限系数",
+      "graceFactorHint": "将执行节奏标记为错过前应用的倍数。",
+      "immutableHint": "创建后不可修改。",
+      "create": "创建计划",
+      "update": "保存更改",
+      "created": "计划已创建",
+      "updated": "计划已更新",
+      "createFailed": "无法创建计划",
+      "updateFailed": "无法更新计划",
+      "errors": {
+        "required": "此字段为必填项。",
+        "intervalRange": "请输入 {{min}} 到 {{max}} 之间的整数。",
+        "intervalCronOnly": "预期间隔仅适用于 cron 触发器。",
+        "graceRange": "请输入 {{min}} 到 {{max}} 之间的整数。"
+      }
+    },
+    "status": {
+      "pauseTitle": "暂停 {{name}}？",
+      "pauseDescription": "{{name}} 将保留声明，但不再要求按计划触发。",
+      "pauseConfirm": "暂停计划",
+      "resumeTitle": "恢复 {{name}}？",
+      "resumeDescription": "{{name}} 将恢复为活跃状态，并重新开始执行节奏监控。",
+      "resumeConfirm": "恢复计划",
+      "retireTitle": "退役 {{name}}？",
+      "retireDescription": "{{name}} 将永久退役，且无法再触发。",
+      "retireConfirm": "退役计划",
+      "changed": {
+        "active": "计划已恢复",
+        "paused": "计划已暂停",
+        "retired": "计划已退役"
+      }
+    },
+    "fire": {
+      "title": "触发 {{name}}",
+      "description": "受治理的触发在派发前需要绑定到当前计划的审批。",
+      "step1Title": "1. 请求审批",
+      "step1Description": "为这一确切对象和执行节奏创建 governance 审批。",
+      "request": "请求审批",
+      "requested": "已请求审批",
+      "requestFailed": "无法请求审批",
+      "requiresApproval": "需要审批",
+      "copy": "复制",
+      "copied": "审批引用已复制",
+      "copyFailed": "无法复制审批引用",
+      "governanceLink": "打开 governance 审批队列",
+      "step2Title": "2. 执行已批准的触发",
+      "step2Description": "审批获准后，提交其引用以派发计划。",
+      "approvalRef": "审批引用",
+      "execute": "执行",
+      "dispatched": "计划已派发",
+      "notDispatched": "计划未派发",
+      "executeFailed": "无法执行已批准的触发",
+      "receipt": "触发回执",
+      "planHash": "计划哈希",
+      "gateStatus": "门控状态",
+      "dispatchRef": "派发引用",
+      "detail": "详情",
+      "opStatus": {
+        "requested": "已请求",
+        "blocked": "已拒绝",
+        "dispatched": "已派发",
+        "declared_not_fired": "已批准，未实际执行",
+        "failed": "已失败",
+        "budget_blocked": "因预算被阻止",
+        "budget_throttled": "因预算被限流"
+      }
+    }
+  },
+  "decisions": {
+    "title": "决策账本",
+    "description": "所选计划触发决策的仅追加记录。决策按其实际解析结果原样显示——审批并不等于实际执行。",
+    "pick": "选择一个计划",
+    "pickHint": "选择一个计划以查看其决策账本。",
+    "empty": "未记录任何决策",
+    "gate": "门控",
+    "plan": "计划",
+    "op": {
+      "fire": "触发",
+      "run_request": "运行请求",
+      "run": "运行",
+      "run_step": "步骤",
+      "run_end": "运行结束",
+      "cadence_miss": "节奏缺失"
+    },
+    "opStatus": {
+      "requested": "已请求",
+      "blocked": "已阻止",
+      "dispatched": "已派发",
+      "declared_not_fired": "已批准，未实际执行（无派发器）",
+      "failed": "已失败",
+      "budget_blocked": "因预算被阻止",
+      "budget_throttled": "因预算被限流",
+      "missed": "已错过",
+      "skipped": "已跳过（上游步骤失败或被拒绝）",
+      "gate_passed": "审批通过",
+      "completed": "已完成",
+      "reconciled": "已对账（记录迟到结果）"
+    },
+    "estate": "全部决策（整个环境）",
+    "estateCaveat": "整个环境的台账，按时间倒序。这是控制台中唯一能显示工作流运行完整台账记录的视图——审计、检测和运行详情可以显示相关事实，但不包含这条记录。",
+    "truncated": "仅显示最近 {{count}} 条决策，而引擎报告还有更多：此列表已被截断。请将其视为样本，而非完整台账。",
+    "noSchedule": "无调度引用",
+    "subjectKind": {
+      "agent": "代理",
+      "swarm": "集群",
+      "workflow": "工作流"
+    },
+    "estateDescription": "整个环境所有决策的仅追加台账，按时间倒序。包含不属于任何调度的决策。",
+    "forbidden": "你的角色无法读取调度决策。"
+  },
+  "timeline": {
+    "title": "活动时间线",
+    "description": "该对象近期的通信事件。",
+    "kind": {
+      "delegation": "委派",
+      "mcp_server": "MCP 服务器",
+      "mcp_tool": "MCP 工具",
+      "fire": "触发",
+      "cadence_miss": "错过执行节奏"
+    }
+  },
+  "history": {
+    "title": "修订历史 — {{name}}",
+    "description": "此调度按时间顺序记录的仅追加快照。",
+    "scopeCaption": "恢复只会重新应用可变字段，绝不会更改名称、主体类别或触发类别。",
+    "empty": "没有已记录的修订",
+    "loadMore": "加载更多",
+    "compareTitle": "快照差异",
+    "selectTwo": "选择两个修订以比较其快照。",
+    "selectRevision": "选择由 {{actor}} {{op}}的修订",
+    "originalLabel": "较早的修订",
+    "modifiedLabel": "较晚的修订",
+    "restore": "恢复此修订",
+    "restoreTitle": "恢复修订？",
+    "restoreDescription": "要恢复 {{name}} 所选的可变调度字段吗？",
+    "restoreConfirm": "恢复修订",
+    "restored": "调度修订已恢复",
+    "operations": {
+      "create": "创建",
+      "update": "更新",
+      "delete": "删除",
+      "restore": "恢复"
+    }
+  },
+  "empty": {
+    "flows": {
+      "title": "尚未观测到委派流",
+      "description": "当观测到的运行时信号记录了从主管会话到工作者的委派边时，委派流才会显示。"
+    },
+    "schedules": {
+      "title": "尚未声明计划",
+      "description": "为智能体或集群声明 cron、事件或手动执行节奏，以跟踪其期望状态和观测到的健康状态。"
+    }
+  }
+}

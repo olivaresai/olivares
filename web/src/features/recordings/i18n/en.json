@@ -1,0 +1,119 @@
+{
+  "title": "Recordings",
+  "subtitle": "Privileged session recording — every administrative action on a recorded surface is captured as a hash-chained frame, anchored to the evidence ledger.",
+  "search": {
+    "field": "Search field",
+    "subject": "Subject contains",
+    "grant": "Grant ID",
+    "input": "Recording search",
+    "subjectPlaceholder": "Subject text",
+    "grantPlaceholder": "Exact grant ID",
+    "submit": "Search",
+    "clear": "Clear"
+  },
+  "allStatuses": "All statuses",
+  "filterByStatus": "Filter by status",
+  "filterBySealReason": "Filter by seal reason",
+  "allSealReasons": "All seal reasons",
+  "filterOpenedAfter": "Opened after",
+  "filterOpenedBefore": "Opened before",
+  "sealReasonOption": {
+    "idle": "Idle",
+    "closed": "Closed",
+    "breakglass_review": "Break-glass review",
+    "sweep": "Sweep",
+    "consent_change": "Consent change"
+  },
+  "status": {
+    "active": "Active",
+    "sealed": "Sealed"
+  },
+  "kind": {
+    "user": "User",
+    "token": "Token"
+  },
+  "cols": {
+    "subject": "Subject",
+    "kind": "Kind",
+    "status": "Status",
+    "opened": "Opened",
+    "frames": "Frames written",
+    "flags": "Flags",
+    "sealReason": "Seal reason"
+  },
+  "badge": {
+    "gap": "GAP",
+    "gapHint": "Frames were reserved but never written — the recording has a permanent, evident gap.",
+    "breakglass": "Break-glass",
+    "breakglassHint": "Opened under a break-glass grant — always recorded."
+  },
+  "empty": {
+    "title": "No recording sessions yet",
+    "description": "When operators act on a recorded privileged surface, their sessions appear here."
+  },
+  "notice": {
+    "strip": "This is a recorded privileged surface — actions are captured to the evidence ledger."
+  },
+  "consent": {
+    "title": "Recording notice (AC-8)",
+    "body": "Privileged actions on this control plane are recorded: each administrative request is captured as a hash-chained frame anchored to the evidence ledger — route shape, identifiers and a one-way body digest only, never payloads or secrets. Break-glass sessions are always recorded. Continuing requires acknowledging this notice.",
+    "ack": "Acknowledge and continue",
+    "ackDone": "Recording notice acknowledged",
+    "cancel": "Cancel"
+  },
+  "policy": {
+    "title": "Recording policy",
+    "subtitle": "What is recorded on this control plane, and how the evidence is classified. Editing requires the recording:config:admin permission; every change here is itself a recorded privileged action.",
+    "loading": "Loading recording policy…",
+    "saved": "Recording policy saved",
+    "save": "Save policy",
+    "saveFailed": "The policy was not saved.",
+    "forbidden": {
+      "title": "Editing the recording policy requires recording:config:admin",
+      "description": "Your role can administer recording sessions, but changing the recording policy needs the distinct recording:config:admin permission. Ask an administrator to grant it."
+    },
+    "error": {
+      "title": "Could not load the recording policy",
+      "description": "The recording policy could not be read. Retry, or check that the module is mounted."
+    },
+    "breakglass": {
+      "label": "Break-glass sessions",
+      "hint": "Emergency break-glass access is always recorded — no policy can turn it off. The recording floor is permission-based, not namespace-based.",
+      "badge": "Always on"
+    },
+    "namespaces": {
+      "label": "Recorded namespaces",
+      "hint": "The module surfaces whose privileged actions are captured. Each must name a mounted module; an unknown name is rejected by the server.",
+      "empty": "No namespaces recorded — privileged actions are not captured on any module surface.",
+      "placeholder": "e.g. governance",
+      "addLabel": "Add a recorded namespace",
+      "add": "Add",
+      "remove": "Remove {{name}}",
+      "shape": "A namespace is lowercase letters, digits, - or _, starting with a letter and not ending in - or _.",
+      "duplicate": "That namespace is already in the list.",
+      "tooLong": "A namespace is at most {{max}} characters.",
+      "tooMany": "At most {{max}} namespaces can be recorded."
+    },
+    "consent": {
+      "label": "Require acknowledgement before privileged actions",
+      "hint": "Deny-closed (\"required\"): operators must acknowledge the AC-8 recording notice before acting. Off leaves the notice as a banner only (\"notice\")."
+    },
+    "idle": {
+      "label": "Idle-seal timeout (seconds)",
+      "hint": "An open recording session is sealed after this much inactivity. Between 60 and 86400 seconds.",
+      "error": "Enter a whole number of seconds between 60 and 86400."
+    },
+    "retention": {
+      "label": "Retention class (days)",
+      "hint": "A classification tag applied to sealed recordings — it labels how long they should be kept. Between 1 and 3650 days.",
+      "tag": "Tag only",
+      "enforced": "Enforced",
+      "notEnforced": "Retention is a classification tag only — recordings are labelled, never purged. No policy removes a recording yet (no purge is wired).",
+      "error": "Enter a whole number of days between 1 and 3650."
+    },
+    "ai": {
+      "label": "AI-derived summaries",
+      "hint": "Allow generating model-derived session summaries. A summary is a derived narrative, never evidence — the hash-chained frames remain the record."
+    }
+  }
+}

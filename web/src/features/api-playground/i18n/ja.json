@@ -1,0 +1,68 @@
+{
+  "title": "API プレイグラウンド",
+  "description": "コントロールプレーン API をインタラクティブに探索・テスト",
+  "filterPlaceholder": "エンドポイントを絞り込む…",
+  "selectEndpoint": "左パネルからエンドポイントを選択してください",
+  "send": "送信",
+  "sending": "送信中…",
+  "streaming": "ストリーミング中…",
+  "cancel": "キャンセル",
+  "requiredPermission": "必要な権限",
+  "copyAsCurl": "curl としてコピー",
+  "response": "レスポンス",
+  "history": "履歴",
+  "clearHistory": "クリア",
+  "noRequests": "リクエストはまだありません",
+  "noMatch": "フィルターに一致するエンドポイントがありません。",
+  "pathParams": "パスパラメータ",
+  "queryParams": "クエリ",
+  "headers": "ヘッダー",
+  "body": "ボディ",
+  "networkError": "ネットワークエラー",
+  "beta": "ベータ",
+  "summary": "{{groups}} グループにわたる {{endpoints}} 個のエンドポイント",
+  "summaryWithBeta": "{{groups}} グループにわたる {{endpoints}} 個のエンドポイント · {{beta}} 個のベータモジュールルート",
+  "endpointTree": {
+    "ariaLabel": "API エンドポイント"
+  },
+  "errors": {
+    "loadSpec": "OpenAPI 仕様を読み込めませんでした"
+  },
+  "request": {
+    "networkError": "ネットワークエラー",
+    "failedNetworkHint": "リクエストに失敗しました — ネットワーク接続を確認してください。",
+    "blockedDestination": "送信先がブロックされました",
+    "blockedDestinationHint": "API Playground は、このコントロールプレーンにのみリクエストを送信できます。",
+    "enterPathParam": "{{name}} を入力",
+    "headerNamePlaceholder": "ヘッダー名",
+    "headerValuePlaceholder": "値",
+    "curlCommand": "curl",
+    "removeHeaderAria": "{{header}} ヘッダーを削除",
+    "addHeaderAria": "カスタムヘッダーを追加",
+    "bodyAria": "リクエストボディ"
+  },
+  "responsePanel": {
+    "empty": "エンドポイントを選択してリクエストを送信してください",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "ヘッダー ({{count}})",
+    "bodyAria": "レスポンスボディ"
+  },
+  "historyPanel": {
+    "recentCount": "最近 ({{count}})",
+    "clearAria": "リクエスト履歴をクリア",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "たった今",
+      "minutes": "{{count}}分前",
+      "hours": "{{count}}時間前",
+      "days": "{{count}}日前"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "memberships": [
+    {
+      "id": "pm-2",
+      "roles": [{ "id": "r-5", "role": "viewer", "isTemporary": false }],
+      "user": {
+        "id": "user-bob",
+        "username": "bob",
+        "email": "bob@corp.example"
+      }
+    },
+    {
+      "id": "pm-3",
+      "roles": [{ "id": "r-6", "role": "no-access", "isTemporary": false }],
+      "user": {
+        "id": "user-carol",
+        "username": "carol",
+        "email": "carol@corp.example",
+        "firstName": "Carol",
+        "lastName": "Reyes"
+      }
+    }
+  ]
+}

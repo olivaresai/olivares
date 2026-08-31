@@ -1,0 +1,150 @@
+{
+  "title": "Observabilidad e interoperabilidad",
+  "description": "Salud de ingesta basada en estándares y desglose de trazas correlacionadas con el libro mayor. Las cifras son de todo el motor (globales del proceso), no por inquilino; los estándares se fijan a las versiones y madureces que declaran los organismos correspondientes.",
+  "tabs": {
+    "ingestion": "Salud de ingesta",
+    "traces": "Desglose de trazas"
+  },
+  "engineScope": {
+    "badge": "Todo el motor",
+    "note": "Estas cifras son de todo el motor (globales del proceso), no por inquilino. Los contadores del modelo de lectura se acumulan desde el arranque del motor y se reinician al reiniciarlo: el mismo ciclo de vida que el /metrics de Prometheus del motor, nunca por inquilino."
+  },
+  "ingestion": {
+    "title": "Salud de ingesta por estándar",
+    "description": "Cada estándar de interoperabilidad que el motor ingiere o emite, con su versión fijada, su madurez declarada y el estado del canal.",
+    "liveNote": "Modelo de lectura en vivo: el motor cuenta registros por fuente del bus desde el arranque. Una fila por estándar solo lleva contador cuando la atribución es sólida: nunca se inventa una cifra, y un valor ausente significa \"no atribuible con solidez\", no cero.",
+    "columns": {
+      "standard": "Estándar",
+      "direction": "Dirección",
+      "version": "Versión",
+      "maturity": "Madurez",
+      "status": "Estado",
+      "records": "Registros",
+      "lastSeen": "Visto por última vez"
+    },
+    "direction": {
+      "in": "Ingesta",
+      "out": "Emisión"
+    },
+    "status": {
+      "active": "Activo",
+      "available": "Disponible",
+      "opt_in_off": "Opcional desactivado",
+      "blocked": "Bloqueado"
+    },
+    "optInOff": "Convención en Desarrollo: desactivada por defecto; actívala mediante la puerta del conector.",
+    "gate": "Puerta",
+    "gateOff": "desactivada",
+    "gateOn": "activada",
+    "gateNoEvidence": "sin evidencia aún",
+    "blockedNote": "El transporte de envío está bloqueado por la conexión al colector externo; la exportación por extracción sigue siendo la vía de reverificación sin conexión.",
+    "recordsPending": "—"
+  },
+  "sources": {
+    "title": "Contadores en vivo por fuente del bus",
+    "description": "Una fila por fuente del bus (conector/módulo) con sus registros por tipo de observación y, para los edges, por señal del colector.",
+    "columns": {
+      "source": "Fuente",
+      "records": "Registros",
+      "kinds": "Por tipo",
+      "signals": "Por señal",
+      "firstSeen": "Visto por primera vez",
+      "lastSeen": "Visto por última vez"
+    },
+    "kind": {
+      "edge": "Edge",
+      "cost": "Coste",
+      "finding": "Hallazgo"
+    },
+    "empty": "No se han observado registros en el bus desde el arranque del motor",
+    "emptyHint": "Los contadores parten de cero en cada arranque del motor; todavía no ha fluido nada — es una observación, no un fallo.",
+    "sinceNote": "Los contadores son globales del proceso y se acumulan desde el arranque del motor ({{since}}); se reinician al reiniciarlo, como /metrics."
+  },
+  "maturity": {
+    "title": "Madurez",
+    "development": "Desarrollo",
+    "ga": "GA",
+    "pre_1_0": "Pre-1.0",
+    "stable": "Estable",
+    "developmentHint": "convención en Desarrollo",
+    "preReleaseHint": "esquema pre-1.0"
+  },
+  "traces": {
+    "title": "Desglose de W3C Trace Context",
+    "description": "Trazas correlacionadas por los identificadores W3C estampados en los eventos del libro mayor de auditoría, agrupadas por tramo del motor.",
+    "listTitle": "Trazas recientes",
+    "listDescription": "Selecciona una traza para abrir su vista de tramos derivada del libro mayor.",
+    "empty": "Sin trazas",
+    "emptyHint": "Ningún evento del libro mayor en la ventana de recorrido (últimos 20.000 eventos) lleva un identificador de traza W3C: los llamantes no propagan traceparent, o la ventana ya los dejó atrás.",
+    "noResults": "Ninguna traza coincide con la búsqueda.",
+    "filterNoResults": "Ninguna traza coincide con los filtros activos.",
+    "searchPlaceholder": "Buscar por ID de traza…",
+    "filters": {
+      "service": "Filtrar por servicio",
+      "servicePlaceholder": "Servicio (exacto)…",
+      "status": "Filtrar por estado",
+      "allStatuses": "Todos los estados",
+      "from": "Desde",
+      "to": "Hasta"
+    },
+    "loadMore": "Cargar más",
+    "loadingMore": "Cargando…",
+    "waterfallTitle": "Cascada de tramos",
+    "selectPrompt": "Selecciona una traza para ver su cascada de tramos.",
+    "exportBtn": "Exportar OTLP",
+    "exportTitle": "Descargar JSON compatible con OTLP para Jaeger / Tempo / Datadog",
+    "legend": "Leyenda de actores",
+    "liveNote": "Modelo de lectura por correlación con el libro mayor: las filas se derivan de los identificadores W3C estampados en los eventos del libro mayor de auditoría (ventana de recorrido: los últimos 20.000 eventos). Las barras son ventanas de EVENTOS DEL LIBRO MAYOR agrupadas por identificador de tramo del motor: el motor no almacena tramos OTel; los tramos completos viven en el colector OTLP del operador.",
+    "columns": {
+      "trace": "Traza",
+      "started": "Inicio",
+      "duration": "Duración",
+      "spans": "Tramos",
+      "agents": "Agentes",
+      "services": "Servicios",
+      "status": "Estado",
+      "span": "Tramo",
+      "actor": "Actor",
+      "service": "Servicio",
+      "kind": "Tipo",
+      "timing": "Tiempos"
+    },
+    "detail": {
+      "title": "Detalle del tramo",
+      "spanId": "ID de tramo",
+      "name": "Nombre",
+      "timing": "Tiempos",
+      "actor": "Actor",
+      "actorKind": "Tipo de actor",
+      "entityRef": "Entidad",
+      "kind": "Tipo",
+      "status": "Estado",
+      "attributes": "Atributos"
+    },
+    "chartSummary": "Cascada de tramos: {{count}} tramos en {{duration}}, sangrados por profundidad padre-hijo y dimensionados por duración.",
+    "level1Note": "W3C Trace Context solo se valida en su Nivel 1 Estable (traceparent / tracestate v00). No se reivindica ninguna semántica de Nivel 2.",
+    "status": {
+      "ok": "OK",
+      "error": "Error",
+      "unset": "Sin definir"
+    }
+  },
+  "empty": {
+    "ingestionHealth": {
+      "title": "No se han declarado estándares de ingesta",
+      "description": "El inventario de estándares compilado en el motor debe proporcionar estas filas; los operadores no las añaden desde la consola."
+    },
+    "ingestionSources": {
+      "title": "No se han observado fuentes del bus desde el arranque del motor",
+      "description": "Un conector o módulo debe publicar una arista, un registro de coste o un hallazgo en el bus de eventos para que aquí aparezcan sus contadores de fuente en vivo."
+    },
+    "trace": {
+      "title": "Aún no se han observado trazas W3C",
+      "description": "Los llamantes deben propagar el contexto de traza W3C para que los eventos de las últimas 20.000 entradas del libro mayor de auditoría lleven identificadores de traza."
+    },
+    "traceWaterfallChart": {
+      "title": "No se han registrado tiempos de tramos para esta traza",
+      "description": "Los eventos del libro mayor deben llevar identificadores de tramo del motor para que esta vista muestre el desfase inicial, la duración, el actor y el estado de cada tramo."
+    }
+  }
+}

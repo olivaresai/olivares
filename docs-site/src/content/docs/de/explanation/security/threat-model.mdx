@@ -1,0 +1,131 @@
+---
+title: Bedrohungsmodell (STRIDE / DFD)
+description: >-
+  Das veröffentlichte Bedrohungsmodell: Assets, Trust Boundaries, ein Datenfluss-Diagramm
+  und die wichtigste STRIDE-Bedrohung samt Mitigation je Komponente. Defensiv per Design —
+  Posture und Mitigationen, nie eine Angriffskarte.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Olivares AI ist ein Sicherheitsprodukt, das auf Ihren eigenen Hosts läuft und eine Karte
+dessen erstellt, was jeder Agent berühren kann. Das macht einen Anbieterfehler gleichbedeutend
+mit einem Kunden-Breach — daher ist das Produkt darauf ausgelegt, von Tag eins an einen
+Enterprise-Pentest zu bestehen, und das Bedrohungsmodell wird veröffentlicht, nicht versteckt.
+
+<Aside type="caution" title="Dies ist ein defensives Dokument">
+Diese Seite beschreibt **Trust Boundaries und Mitigationen**. Sie legt bewusst **nicht** die
+Inhalte des Access-Graphen irgendeines Estate offen, nicht die internen Autorisierungs-Identifier,
+nicht die Namen von On-Disk-Geheimnissen und nichts, das sich zu einer Angriffsanleitung umdeuten
+ließe. Das Produkt liefert **keine offensiven Funktionen** aus — es ist kein
+Command-and-Control-Framework und scannt nicht die Credentials anderer. Diese Linie ist
+beabsichtigt und wird explizit gehalten.
+</Aside>
+
+## Methode
+
+Das Modell verwendet **STRIDE** (Spoofing, Tampering, Repudiation, Information disclosure,
+Denial of service, Elevation of privilege) über einem **Datenfluss-Diagramm** mit seinen Trust
+Boundaries. Die hier aufgeführten Mitigationen sind gegen die interne Härtungsmatrix des Produkts
+verifiziert; diese Seite veröffentlicht die *Posture*, nicht die Evidenz auf Code-Ebene.
+
+## Leitende Prinzipien
+
+- **Read-first = niedriges asymmetrisches Risiko.** Die Engine beobachtet über Logs,
+  OpenTelemetry und eBPF. Sie sitzt **nicht** im Datenpfad des Agenten, sodass ein
+  Collector-Ausfall den Produktionsverkehr nicht brechen kann.
+- **Minimale Daten.** Der Graph speichert **Relationen** — Ursprung → Ressource, read/write,
+  Quelle, Confidence, Zeitstempel — **nie** Payloads, SQL-Bodies, Geheimnisse oder PII.
+  *Was nicht gespeichert wird, kann nicht leaken.*
+- **Self-hosted = kein Anbieter im Datenpfad.** Es gibt keine verpflichtende Telemetrie,
+  standardmäßig keinen Egress der Control Plane, und Olivares AI liegt nie im Datenpfad.
+  Der Anbieter wird nur erreicht, wenn Sie etwas von ihm anfordern — `olivares upgrade` oder
+  ein Abo-Download kommerzieller Add-ons und ihrer Updates — nie als Nebeneffekt des Betriebs. Und `olivares upgrade --endpoint` richtet selbst das auf Ihren eigenen Mirror.
+  Den Kundenperimeter überschreitet nur, was der Kunde dafür konfiguriert — Aufrufe an seine
+  Modell-APIs, die von ihm eingerichteten SIEM-/Webhook-Ausgaben und ein externer
+  Embedding-Anbieter, falls er einen bereitstellt. Das sind vom Kunden gewählte Dritte;
+  die Aussage über den Anbieter bezieht sich auf **Olivares AI** und nicht auf diese Dritten.
+
+## Assets
+
+| Asset | Warum es sensibel ist |
+|---|---|
+| **Der Access-Graph** | Eine Karte dessen, was jeder Agent berühren kann. **Das einzelne sensibelste Asset** — es wird entsprechend governt (siehe Mitigationen). |
+| **Der Host-Zugriff des Collectors** | Er liest Logs/OTEL/eBPF auf Produktions-Hosts; eine Kompromittierung wäre ein Pivot. |
+| **Das Evidenz-/Audit-Ledger** | Würde es still verändert, würde das Produkt lügen. Integrität ist alles. |
+| **Lizenzschlüssel** | Eine Fälschung würde das kommerzielle Gate umgehen. |
+| **Panel-Credentials** | Zugriff bedeutet, das gesamte Agenten-Estate des Kunden zu sehen. |
+
+Weil der Access-Graph das sensibelste Asset ist, ist **das Ansehen eine privilegierte Aktion** —
+ab der *Editor*-Rolle aufwärts gewährt, **nie** der niedrigsten *Viewer*-Rolle — **auf den
+Tenant gescopt**, und **jeder Lesevorgang wird auditiert**. Verteidigung in Schichten: Privileg,
+Tenant-Isolation und Self-Audit.
+
+## Trust Boundaries und Datenfluss
+
+Es gibt **vier Trust Boundaries**:
+
+1. `host sources → collector`
+2. `collector → core` (die Netzwerkgrenze)
+3. `user → panel`
+4. `core → store`
+
+```text
+  CUSTOMER INFRASTRUCTURE                         CONTROL PLANE (self-hosted or managed)
+  ┌─ Collectors (edge) ───────────────┐           ┌─ Engine (Go) ───────────────────────────┐
+  │ • OTLP receiver (agents)          │           │ Ingest + event bus                       │
+  │ • MCP / skills introspection      │ ──mTLS──▶  │ Connector SDK · Module runtime           │
+  │ • Tail audit (pgAudit/CloudTrail) │  gRPC     │ Multi-tenant data model                  │
+  │ • eBPF backstop (Tetragon)        │  +bearer  │ REST/gRPC API · AuthN/Z                   │
+  └───────────────────────────────────┘           │ Append-only, hash-chained audit          │
+        (1) host sources → collector               └──────────────┬───────────────────────────┘
+        (2) collector → core (network)                            │ go:embed         (4) core → store
+                                                     ┌────────────▼─────────┐   ┌──────────────────┐
+                                       (3) user ───▶ │ Web panel (React)    │   │ Access-graph     │
+                                           → panel   └──────────────────────┘   │ store + ledger   │
+                                                                                 └──────────────────┘
+```
+
+Die Data Plane (Collectoren) läuft **immer** auf Kundeninfrastruktur. Collectoren **pushen** zum
+Core; sie exponieren **keinen eingehenden Listener**.
+
+## STRIDE — wichtigste Bedrohung und Mitigation je Komponente
+
+Das Modell hält die **wichtigste(n)** Bedrohung(en) je Komponente fest sowie die Mitigation, die
+sie adressiert (kein vollständiges Raster).
+
+| Komponente | Wichtigste Bedrohung | Mitigation |
+|---|---|---|
+| **Collector** | *Elevation* (eBPF braucht Kernel-Capabilities), *Tampering* der Binary | minimale Capabilities (`CAP_BPF`/`CAP_PERFMON`, **nicht** voller Root); signierte Binary; **kein eingehender Listener** (Push-Modell) |
+| **Collector → core** | *Information disclosure*, *Spoofing* | TLS ≥ 1.2 standardmäßig, **kein Klartext-Fallback** (fail-closed) + Bearer-Token; AutoMTLS auf dem lokalen Plugin-Kanal; **opt-in verifizierte Client-Zertifikat-mTLS** für Remote-Collectoren |
+| **Access-graph store** | *Information disclosure* im Ruhezustand | vom Deployment bereitgestellte At-Rest-Verschlüsselung (LUKS/FS/TDE); Maskierung/Hash sensibler Werte engine-seitig auf dem Schreibpfad erzwungen |
+| **Evidence ledger** | *Tampering*, *Repudiation* | append-only + Hash-Chain (+ Ed25519-signierte Checkpoints); Export in eine externe WORM/SIEM-Kopie |
+| **Panel** | *Spoofing*, *Elevation* | keine Standard-Credentials; einmaliger First-Boot-Setup-Token; RBAC; sichere Sessions; Self-Audit (wer sah/änderte was) |
+| **License key** | *Spoofing* | Ed25519-Signatur, Offline-Validierung; Widerruf über Abo-Ablauf |
+
+## Wovor dieses Modell *nicht* schützt
+
+Ehrlich über die Ränder des Modells zu sein, ist Teil des Modells:
+
+- **Ein Host-Root / Datenbank-Superuser** kann das lokale Ledger auf der Platte verändern. Die
+  Hash-Chain macht Umschreibungen vor dem Checkpoint kryptografisch *erkennbar*, aber die echte
+  Anti-Tamper-Kontrolle ist der **Export des Ledgers in eine externe WORM/SIEM**-Kopie, die der
+  lokale Betreiber nicht erreichen kann. Aktivieren Sie ihn.
+- **Die At-Rest-Verschlüsselung des Stores ist Verantwortung des Betreibers** — das Produkt
+  maskiert/hasht sensible Werte, aber das Deployment stellt die Disk-/FS-/TDE-Verschlüsselung
+  bereit.
+- **Die Abdeckung der Access Map ist gestuft** (sauber bei auditierten Stores, verlustbehaftet bei
+  einigen, passiv nicht rekonstruierbar bei anderen). Eine fehlende Kante ist kein Beweis, dass
+  ein Zugriff nicht stattfand — lesen Sie [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/).
+- **Ein kompromittierter Collector-Host** ist ein ernstes Ereignis; der Collector läuft
+  schreibgeschützt mit minimalen Privilegien und ohne eingehenden Listener, um diesen
+  Wirkungsradius zu verkleinern, aber eine Host-Kompromittierung liegt außerhalb dessen, was die
+  Control Plane allein verhindern kann.
+
+## Verwandt
+
+- [Sicherheitsmodell](/de/explanation/security/security-model/) — die Posture und das *Warum* hinter
+  diesen Mitigationen.
+- [Verifizieren Sie, was Sie heruntergeladen haben](/de/how-to/verify-a-release/) —
+  Lieferketten-Integrität.
+- [Architekturüberblick](/de/explanation/architecture/overview/) — die Komponenten im DFD, im Detail.

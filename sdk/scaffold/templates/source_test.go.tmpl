@@ -1,0 +1,119 @@
+// SPDX-FileCopyrightText: [[.Year]] <your name>
+// SPDX-License-Identifier: Apache-2.0
+
+package [[.Package]]
+
+import (
+	"context"
+	"testing"
+
+	"github.com/olivaresai/olivares/sdk"
+	"github.com/olivaresai/olivares/sdk/model"
+)
+
+// memSink is a tiny in-memory sdk.Sink standing in for the engine: it collects
+// every observation the connector emits so the test can assert on the facts.
+type memSink struct{ got []model.Observation }
+
+// Compile-time proof memSink satisfies the Sink contract.
+var _ sdk.Sink = (*memSink)(nil)
+
+// Emit records the observation. The real engine blocks until accepted; an
+// in-memory append accepts immediately.
+func (m *memSink) Emit(_ context.Context, obs model.Observation) error {
+	m.got = append(m.got, obs)
+	return nil
+}
+
+// TestLifecycle drives the full Open → Gather → Close lifecycle exactly as the
+// engine does, and proves the connector actually emits. Grow this test with
+// every real fact your connector learns to observe.
+func TestLifecycle(t *testing.T) {
+	ctx := context.Background()
+	c := New()
+
+	d := c.Descriptor()
+	if d.Name != Name {
+		t.Fatalf("Descriptor().Name = %q, want %q", d.Name, Name)
+	}
+	if d.Type != sdk.TypeSource {
+		t.Fatalf("Descriptor().Type = %q, want %q", d.Type, sdk.TypeSource)
+	}
+	wantSurfaces := []string{
+[[- range .Surfaces]]
+		"[[.]]",
+[[- end]]
+	}
+	if len(d.Surfaces) != len(wantSurfaces) {
+		t.Fatalf("Descriptor().Surfaces = %v, want %v", d.Surfaces, wantSurfaces)
+	}
+	for i, want := range wantSurfaces {
+		if d.Surfaces[i] != want {
+			t.Fatalf("Descriptor().Surfaces = %v, want %v", d.Surfaces, wantSurfaces)
+		}
+	}
+
+	if err := c.Open(ctx, sdk.Config{Settings: map[string]string{
+[[- if .IsAgentSurface]]
+		"endpoint": "https://agent-runtime.example.invalid",
+		"log_path": "/var/log/example-agent-runtime.log",
+[[- else if .IsModelProvider]]
+		"provider_api_base": "https://models.example.invalid",
+		"api_key": "resolved-test-secret",
+[[- else]]
+		"endpoint": "https://example.invalid",
+[[- end]]
+	}}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	sink := &memSink{}
+	if err := c.Gather(ctx, sink); err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+[[- if .IsAgentSurface]]
+	if len(sink.got) != 2 {
+		t.Fatalf("Gather emitted %d observations, want edge + finding", len(sink.got))
+	}
+	if _, ok := sink.got[0].(model.EdgeObservation); !ok {
+		t.Fatalf("first observation = %T, want model.EdgeObservation", sink.got[0])
+	}
+	if _, ok := sink.got[1].(model.FindingReport); !ok {
+		t.Fatalf("second observation = %T, want model.FindingReport", sink.got[1])
+	}
+[[- else if .IsModelProvider]]
+	if len(sink.got) != 2 {
+		t.Fatalf("Gather emitted %d observations, want cost + usage edge", len(sink.got))
+	}
+	if _, ok := sink.got[0].(model.CostSample); !ok {
+		t.Fatalf("first observation = %T, want model.CostSample", sink.got[0])
+	}
+	if _, ok := sink.got[1].(model.EdgeObservation); !ok {
+		t.Fatalf("second observation = %T, want model.EdgeObservation", sink.got[1])
+	}
+[[- else]]
+	if len(sink.got) == 0 {
+		t.Fatal("Gather emitted no observations; the connector must emit at least one fact")
+	}
+	if _, ok := sink.got[0].(model.EdgeObservation); !ok {
+		t.Fatalf("Gather emitted %T, want model.EdgeObservation", sink.got[0])
+	}
+[[- end]]
+	if err := c.Close(ctx); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// TestGatherHonorsContext proves a canceled engine context stops Gather: the
+// engine owns scheduling and cancellation, and a connector that ignores ctx
+// cannot be supervised.
+func TestGatherHonorsContext(t *testing.T) {
+	c := New()
+	if err := c.Open(context.Background(), sdk.Config{}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := c.Gather(ctx, &memSink{}); err == nil {
+		t.Fatal("Gather with a canceled context should return the context error")
+	}
+}

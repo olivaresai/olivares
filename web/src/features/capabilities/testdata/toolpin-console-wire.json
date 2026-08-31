@@ -1,0 +1,47 @@
+{
+  "pin": {
+    "tool": "github.search",
+    "fingerprint": "sha256:pinned-fingerprint-1234567890",
+    "pinned_at": "2026-07-20T09:00:00Z",
+    "updated_at": "2026-07-20T10:00:00Z",
+    "pin_count": 3,
+    "version": 7,
+    "drift_fingerprint": "sha256:drifted-fingerprint-0987654321",
+    "drift_at": "2026-07-20T10:00:00Z"
+  },
+  "idempotency_key": "3f2a1c64-8b7d-4e19-9a05-6c8d2e4f7b31",
+  "requests": {
+    "approve": {
+      "method": "POST",
+      "path": "/v1/m/capabilities/toolpins/approve",
+      "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer test-token",
+        "content-type": "application/json",
+        "idempotency-key": "3f2a1c64-8b7d-4e19-9a05-6c8d2e4f7b31",
+        "x-olivares-tenant": "t1"
+      },
+      "body": {
+        "tool": "github.search",
+        "from_drift": true,
+        "expected_version": 7,
+        "expected_drift_fingerprint": "sha256:drifted-fingerprint-0987654321"
+      }
+    },
+    "unpin": {
+      "method": "POST",
+      "path": "/v1/m/capabilities/toolpins/unpin",
+      "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer test-token",
+        "content-type": "application/json",
+        "idempotency-key": "3f2a1c64-8b7d-4e19-9a05-6c8d2e4f7b31",
+        "x-olivares-tenant": "t1"
+      },
+      "body": {
+        "tool": "github.search",
+        "expected_version": 7
+      }
+    }
+  }
+}

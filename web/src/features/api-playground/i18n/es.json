@@ -1,0 +1,68 @@
+{
+  "title": "API Playground",
+  "description": "Explora y prueba la API del control plane de forma interactiva",
+  "filterPlaceholder": "Filtrar endpoints…",
+  "selectEndpoint": "Selecciona un endpoint del panel izquierdo",
+  "send": "Enviar",
+  "sending": "Enviando…",
+  "streaming": "Transmitiendo…",
+  "cancel": "Cancelar",
+  "requiredPermission": "Permiso requerido",
+  "copyAsCurl": "Copiar como curl",
+  "response": "Respuesta",
+  "history": "Historial",
+  "clearHistory": "Limpiar",
+  "noRequests": "Sin peticiones",
+  "noMatch": "Ningún endpoint coincide con tu filtro.",
+  "pathParams": "Parámetros de ruta",
+  "queryParams": "Consulta",
+  "headers": "Cabeceras",
+  "body": "Cuerpo",
+  "networkError": "Error de red",
+  "beta": "beta",
+  "summary": "{{endpoints}} endpoints en {{groups}} grupos",
+  "summaryWithBeta": "{{endpoints}} endpoints en {{groups}} grupos · {{beta}} rutas de módulo beta",
+  "endpointTree": {
+    "ariaLabel": "Endpoints de la API"
+  },
+  "errors": {
+    "loadSpec": "No se pudo cargar la especificación OpenAPI"
+  },
+  "request": {
+    "networkError": "Error de red",
+    "failedNetworkHint": "La petición falló — comprueba tu conexión de red.",
+    "blockedDestination": "Destino bloqueado",
+    "blockedDestinationHint": "API Playground solo puede enviar peticiones a este control plane.",
+    "enterPathParam": "Introduce {{name}}",
+    "headerNamePlaceholder": "Nombre de cabecera",
+    "headerValuePlaceholder": "Valor",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Eliminar cabecera {{header}}",
+    "addHeaderAria": "Añadir cabecera personalizada",
+    "bodyAria": "Cuerpo de la petición"
+  },
+  "responsePanel": {
+    "empty": "Selecciona un endpoint y envía una petición",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "Cabeceras ({{count}})",
+    "bodyAria": "Cuerpo de la respuesta"
+  },
+  "historyPanel": {
+    "recentCount": "Recientes ({{count}})",
+    "clearAria": "Limpiar historial de peticiones",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "ahora mismo",
+      "minutes": "hace {{count}} min",
+      "hours": "hace {{count}} h",
+      "days": "hace {{count}} d"
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/copilot/admin/catalog/packages?$skiptoken=PAGE2",
+  "value": [
+    {
+      "id": "P_19ae1b6cf2a04a5d8d9f1b3c4e5f6a7b",
+      "displayName": "Sales Research Agent",
+      "shortDescription": "Researches sales accounts",
+      "assetId": "asset-sales-research",
+      "type": "custom",
+      "isBlocked": false,
+      "supportedHosts": ["BizChat"],
+      "lastModifiedDateTime": "2026-05-20T11:04:00Z",
+      "publisher": "Contoso IT",
+      "version": "1.4.0",
+      "manifestVersion": "1.19",
+      "manifestId": "manifest-sales-research",
+      "appId": "aaaa1111-2222-3333-4444-555566667777",
+      "elementTypes": ["DeclarativeAgent"],
+      "platform": "m365",
+      "availableTo": "all",
+      "deployedTo": "some"
+    },
+    {
+      "id": "P_2b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e",
+      "displayName": "Legacy Helpdesk Bot",
+      "shortDescription": "Legacy helpdesk automation",
+      "assetId": "asset-helpdesk",
+      "type": "external",
+      "isBlocked": true,
+      "supportedHosts": ["Teams"],
+      "lastModifiedDateTime": "2025-11-02T08:30:00Z",
+      "publisher": "Fabrikam Software",
+      "version": "0.9.2",
+      "manifestId": "manifest-helpdesk",
+      "appId": "bbbb1111-2222-3333-4444-555566667777",
+      "elementTypes": ["Bots", "CustomEngineAgent"],
+      "availableTo": "some",
+      "deployedTo": "all"
+    }
+  ]
+}

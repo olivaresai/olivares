@@ -1,0 +1,12 @@
+[
+  {
+    "id": "0oa1deploy",
+    "label": "Deploy Service",
+    "status": "ACTIVE"
+  },
+  {
+    "id": "0oa2legacy",
+    "label": "Legacy App",
+    "status": "INACTIVE"
+  }
+]

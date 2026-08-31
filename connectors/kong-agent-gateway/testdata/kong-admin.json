@@ -1,0 +1,15 @@
+{
+  "services": [{"id": "s1", "name": "admin-svc"}],
+  "routes": [{"id": "r1", "name": "admin-route", "service": {"id": "s1"}}],
+  "plugins": [
+    {
+      "name": "ai-proxy",
+      "enabled": true,
+      "route": {"id": "r1"},
+      "config": {
+        "model": {"name": "gpt-4o-mini", "provider": "openai"},
+        "auth": {"header_value": "SECRETVALUE-admin"}
+      }
+    }
+  ]
+}

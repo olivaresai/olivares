@@ -1,0 +1,11 @@
+{
+  "credentialProviders": [
+    {
+      "name": "github-oauth",
+      "credentialProviderArn": "arn:aws:acps:eu-west-1:123456789012:token-vault/default/oauth2credentialprovider/github-oauth",
+      "credentialProviderVendor": "GithubOauth2",
+      "createdTime": 1748995200,
+      "lastUpdatedTime": 1748995200
+    }
+  ]
+}

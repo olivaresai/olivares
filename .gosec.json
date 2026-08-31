@@ -1,0 +1,31 @@
+{
+  "_comment": "SAST gate policy. This file is consumed by scripts/sast.sh (it is NOT a gosec -conf file). The blocking gate runs ONLY the high-signal rules in block_rules and requires ZERO findings: every real finding is fixed, every justified exception carries a dedicated '// #nosec Gxxx -- <reason>' comment. -nosec-require-rules and -nosec-require-justification make a bare or reason-less #nosec fail the gate. Every OTHER gosec rule still runs in the informational full scan (task security:report -> docs/security/gate-report.md) so nothing is invisible; it is just not release-blocking. Per-class rationale: docs/security/SECURITY-GATE.md.",
+  "gosec_version": "v2.28.0",
+  "block_rules": [
+    "G201",
+    "G202",
+    "G203",
+    "G204",
+    "G107",
+    "G401",
+    "G402",
+    "G403",
+    "G404",
+    "G501",
+    "G502",
+    "G503",
+    "G504",
+    "G505"
+  ],
+  "block_rules_rationale": {
+    "G201,G202": "SQL built with string formatting/concatenation (SQL injection).",
+    "G203": "Template method that does not auto-escape HTML (template/XSS injection).",
+    "G204": "Subprocess launched with a variable (command injection).",
+    "G107": "HTTP request to a URL taken from a variable (SSRF).",
+    "G401,G404": "Weak cryptographic primitive / weak (non-crypto) RNG in a security context.",
+    "G402,G403": "TLS misconfiguration (InsecureSkipVerify, bad certificate handling).",
+    "G501,G502,G503,G504,G505": "Blocklisted weak-crypto imports (md5/des/rc4/sha1)."
+  },
+  "excluded_from_block_note": "Rules NOT in block_rules (e.g. G101 name-matched credentials, G104 unhandled errors, G115/G703/G705 integer-overflow-on-conversion, G304 file-path-from-variable, G301/G302/G306 file permissions, G103 unsafe.Pointer) are high-false-positive in this tree and are non-blocking. Their real-risk counterparts are covered elsewhere: gitleaks (task lint:secrets) + the no-secrets-in-logs invariant for credentials; the plugin/rich-doc sandboxes for hostile path handling; go vet + review for error discipline. They remain visible in the informational full scan.",
+  "suppression_policy": "docs/security/SECURITY-GATE.md#justifying-a-finding"
+}

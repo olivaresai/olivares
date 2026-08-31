@@ -1,0 +1,71 @@
+{
+  "title": "清单",
+  "subtitle": "在您的资产域中发现的每个智能体、会话、MCP、模型和身份。",
+  "refresh": "刷新",
+  "summary": {
+    "total": "实体",
+    "active": "活跃",
+    "stale": "陈旧",
+    "kinds": "类型"
+  },
+  "tabs": {
+    "catalog": "目录",
+    "topology": "拓扑"
+  },
+  "facets": {
+    "allKinds": "全部类型",
+    "allStatus": "全部状态"
+  },
+  "status": {
+    "active": "活跃",
+    "stale": "陈旧"
+  },
+  "cols": {
+    "name": "名称",
+    "kind": "类型",
+    "status": "状态",
+    "signals": "信号",
+    "hosts": "主机",
+    "lastSeen": "最后发现",
+    "occurrences": "出现次数"
+  },
+  "searchPlaceholder": "搜索名称、引用、信号…",
+  "hostCount": "{{count}} 个主机",
+  "kinds": {
+    "agent": "智能体",
+    "session": "会话",
+    "identity": "身份",
+    "mcp_server": "MCP 服务器",
+    "tool": "工具",
+    "resource": "资源",
+    "skill": "技能",
+    "model": "模型",
+    "provider": "提供方"
+  },
+  "detail": {
+    "ref": "引用",
+    "id": "ID",
+    "firstSeen": "首次发现",
+    "lastSeen": "最后发现",
+    "relations": "关系",
+    "viewAccess": "访问映射",
+    "viewSessions": "会话"
+  },
+  "topology": {
+    "note": "按类型划分的资产域构成。运行时使用情况（哪个智能体运行哪个模型/MCP）显示在「会话」中；资源访问（R/RW）显示在「访问映射」中。",
+    "bands": {
+      "origins": "谁在执行",
+      "capabilities": "可使用的能力",
+      "resources": "所触及的资源"
+    },
+    "emptyTitle": "尚未发现任何内容",
+    "emptyHint": "随着连接器报告活动，您的资产域将在此处编入清单。",
+    "truncated": "显示前 {{n}} 个实体"
+  },
+  "empty": {
+    "catalog": {
+      "title": "尚未发现资产域实体",
+      "description": "连接器上报对智能体、会话、身份、MCP 能力、模型、提供方或资源的观测后，相应实体才会显示。"
+    }
+  }
+}

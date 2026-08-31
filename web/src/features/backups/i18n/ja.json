@@ -1,0 +1,155 @@
+{
+  "title": "バックアップと復元",
+  "description": "コントロールプレーンの災害復旧スナップショットを管理します。",
+  "tabs": {
+    "backups": "バックアップ",
+    "schedule": "スケジュール"
+  },
+  "actions": {
+    "restore": "復元",
+    "createBackup": "バックアップを作成",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "upload": "アップロード",
+    "delete": "削除"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "バックアップ",
+    "searchPlaceholder": "バックアップを検索...",
+    "deleted": "バックアップを削除しました",
+    "deleteTitle": "バックアップを削除",
+    "deleteDescription": "\"{{filename}}\" を完全に削除しますか？この操作は元に戻せません。",
+    "columns": {
+      "date": "日時",
+      "filename": "ファイル名",
+      "size": "サイズ",
+      "engine": "エンジン",
+      "tenants": "テナント",
+      "notes": "メモ"
+    },
+    "actions": {
+      "download": "ダウンロード",
+      "inspect": "検査",
+      "downloadAria": "{{filename}} をダウンロード",
+      "inspectAria": "{{filename}} を検査",
+      "deleteAria": "{{filename}} を削除",
+      "downloadFailed": "ダウンロードに失敗しました: {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "バックアップスケジュールを更新しました",
+    "loading": "スケジュールを読み込み中...",
+    "title": "自動バックアップスケジュール",
+    "description": "定期バックアップを設定します。スケジュールはエンジンが実行し、パスフレーズはインスタンスシークレットから導出されます。",
+    "enableAria": "自動バックアップを有効にする",
+    "enabled": "有効",
+    "disabled": "無効",
+    "cronLabel": "cron 式",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "毎日 0:00",
+      "daily0200": "毎日 02:00",
+      "daily0300": "毎日 03:00",
+      "weeklySundayMidnight": "毎週日曜日 0:00",
+      "weeklyMondayMidnight": "毎週月曜日 0:00",
+      "monthlyFirstMidnight": "毎月1日 0:00",
+      "dailyAt": "毎日 {{time}}"
+    },
+    "retentionLabel": "保持期間（日）",
+    "retentionDescription": "これより古いバックアップは自動的に削除されます。",
+    "dualControlAria": "復元にデュアルコントロールを要求",
+    "dualControlLabel": "復元にデュアルコントロールを要求",
+    "dualControlDescription": "有効にすると、このコンソールから開始した復元は、実行前に別の管理者による承認が必要になります。無効化は記録され、1 時間後に初めて有効になります — 保護対象の復元と同じ作業のなかでこのゲートを外すことはできません。再度有効にすると、保留中の無効化は取り消されます。ホスト上の `olivares dr restore` はこのゲートの対象外で、ゲートの外側で estate を置き換え、代わりに申告された操作者を記録します（Postgres の estate はこの経路でしか復元できません）。単独運用の場合はオフのままにしてください。",
+    "dualControlDisarmPending": "無効化が要求されました。記録済みで、{{when}} に有効になります。それまでは復元に別の管理者の承認が必要です。取り消すには再度有効にしてください。",
+    "dualControlDisarmRequestedBy": "要求者: {{who}}。",
+    "save": "スケジュールを保存"
+  },
+  "trigger": {
+    "started": "バックアップを開始しました",
+    "title": "バックアップを作成",
+    "description": "コントロールプレーン全体の暗号化スナップショットを作成します。",
+    "notes": "メモ",
+    "notesPlaceholder": "このバックアップの任意の説明",
+    "passphrase": "パスフレーズ",
+    "passphraseDescription": "バックアップバンドルの暗号化に使用します。",
+    "start": "バックアップを開始"
+  },
+  "job": {
+    "initializing": "初期化中",
+    "status": {
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗"
+    },
+    "progressAria": "{{phase}} {{progress}}%",
+    "complete": "{{progress}}% 完了"
+  },
+  "pending": {
+    "title": "承認待ちの復元（デュアルコントロール）",
+    "requestedByPrefix": "リクエスト元",
+    "approveRestore": "承認して復元",
+    "approved": "復元を承認しました",
+    "dialogTitle": "復元を承認",
+    "dialogDescription": "{{initiator}} がリクエストした復元を承認します。リクエストした管理者とは別の管理者である必要があります。",
+    "passphrase": "パスフレーズ",
+    "passphraseDescription": "バックアップ作成時に使用したパスフレーズを入力してください。",
+    "confirmTitle": "復元を確認",
+    "confirmDescription": "検証後、現在のすべてのデータがバックアップ内容で上書きされます。この操作は元に戻せません。",
+    "confirmLabel": "今すぐ承認して復元"
+  },
+  "restore": {
+    "notAuthorized": "権限がありません",
+    "uploadFailed": "アップロードに失敗しました",
+    "started": "復元を開始しました",
+    "title": "バックアップから復元",
+    "description": "コントロールプレーンの状態を復元する .drbundle ファイルをアップロードします。",
+    "apply": "復元を適用",
+    "confirmTitle": "復元を確認",
+    "confirmDescription": "現在のすべてのデータがバックアップ内容で上書きされます。この操作は元に戻せません。",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "今すぐ復元",
+    "confirmSummaryPrefix": "復元元:",
+    "confirmSummarySuffix": "{{count}} テナントを含みます。",
+    "awaitingTitle": "2人目の承認者を待っています",
+    "awaitingDescription": "デュアルコントロールが有効です。この復元は、別の管理者がバックアップタブから承認し、パスフレーズを入力するまで実行されません。",
+    "requestId": "リクエスト ID",
+    "selectFile": ".drbundle ファイルを選択",
+    "chooseFile": "ファイルを選択",
+    "passphrase": "パスフレーズ",
+    "passphraseDescription": "このバックアップの作成時に使用したパスフレーズを入力してください。",
+    "manifestTitle": "バンドルマニフェスト",
+    "manifest": {
+      "file": "ファイル",
+      "engine": "エンジン",
+      "created": "作成日時",
+      "tenants": "テナント",
+      "keys": "キー"
+    }
+  },
+  "inspect": {
+    "title": "バックアップの詳細",
+    "description": "封印されたバンドルのデコード済みマニフェスト。リストアで復元される内容そのものです。",
+    "filename": "ファイル名",
+    "size": "サイズ",
+    "engine": "エンジン",
+    "createdAt": "作成日時",
+    "tenants": "テナント",
+    "keys": "封印済みキー",
+    "empty": "なし",
+    "loadFailed": "バックアップの詳細を読み込めませんでした。"
+  },
+  "empty": {
+    "backup": {
+      "title": "バックアップスナップショットはまだ作成されていません",
+      "description": "SQLite ではこのコンソールから暗号化バックアップを作成し、PostgreSQL では設定済みのバックアップディレクトリに DR CLI でバンドルを作成してください。"
+    }
+  }
+}

@@ -1,0 +1,189 @@
+{
+  "$description": "GENERATED — DO NOT EDIT (node email/build.mjs). The EMAIL subset of the Olivares brand, resolved verbatim from the DTCG sources in web/tokens/ that also generate the console. `task lint:email-brand` re-resolves it on every push and fails if this file, or either generated template bundle, no longer matches: an email cannot wear a brand the console has stopped wearing.",
+  "brand": "brandv4 (2026-06-10)",
+  "source": "web/tokens/*.tokens.json",
+  "roles": {
+    "color": {
+      "canvas": "background",
+      "surface": "surface",
+      "text": "foreground",
+      "textMuted": "muted-foreground",
+      "border": "border",
+      "accent": "accent",
+      "accentText": "accent-foreground",
+      "well": "muted"
+    },
+    "font": {
+      "sans": "font-sans",
+      "mono": "font-mono",
+      "display": "font-display"
+    },
+    "radius": {
+      "sm": "radius-sm",
+      "md": "radius-md",
+      "lg": "radius-lg"
+    }
+  },
+  "theme": {
+    "light": {
+      "canvas": "#fafaf9",
+      "surface": "#ffffff",
+      "text": "#28282b",
+      "textMuted": "#5c564e",
+      "border": "#e6e6e4",
+      "accent": "#f08000",
+      "accentText": "#1a1206",
+      "well": "#f1f1f0"
+    },
+    "dark": {
+      "canvas": "#28282b",
+      "surface": "#2f2f33",
+      "text": "#fafaf9",
+      "textMuted": "#aaaab3",
+      "border": "#3a3a40",
+      "accent": "#f08000",
+      "accentText": "#1a1206",
+      "well": "#323237"
+    }
+  },
+  "font": {
+    "sans": "'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    "mono": "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
+    "display": "'Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', system-ui, sans-serif"
+  },
+  "radius": {
+    "sm": "0.25rem",
+    "md": "0.375rem",
+    "lg": "0.5rem"
+  },
+  "contrast": [
+    {
+      "theme": "light",
+      "what": "body text on card",
+      "fg": "#28282b",
+      "bg": "#ffffff",
+      "min": 4.5,
+      "ratio": 14.7,
+      "raw": 14.699463404100612
+    },
+    {
+      "theme": "light",
+      "what": "heading on card",
+      "fg": "#28282b",
+      "bg": "#ffffff",
+      "min": 3,
+      "large": true,
+      "ratio": 14.7,
+      "raw": 14.699463404100612
+    },
+    {
+      "theme": "light",
+      "what": "muted text on card",
+      "fg": "#5c564e",
+      "bg": "#ffffff",
+      "min": 4.5,
+      "ratio": 7.25,
+      "raw": 7.250907179196364
+    },
+    {
+      "theme": "light",
+      "what": "button label on accent",
+      "fg": "#1a1206",
+      "bg": "#f08000",
+      "min": 4.5,
+      "ratio": 6.88,
+      "raw": 6.877500460537974
+    },
+    {
+      "theme": "light",
+      "what": "wordmark on card",
+      "fg": "#28282b",
+      "bg": "#ffffff",
+      "min": 4.5,
+      "ratio": 14.7,
+      "raw": 14.699463404100612
+    },
+    {
+      "theme": "light",
+      "what": "code in well",
+      "fg": "#28282b",
+      "bg": "#f1f1f0",
+      "min": 4.5,
+      "ratio": 13.01,
+      "raw": 13.005894348657442
+    },
+    {
+      "theme": "light",
+      "what": "muted text on canvas",
+      "fg": "#5c564e",
+      "bg": "#fafaf9",
+      "min": 4.5,
+      "ratio": 6.94,
+      "raw": 6.9425544727505395
+    },
+    {
+      "theme": "dark",
+      "what": "body text on card",
+      "fg": "#fafaf9",
+      "bg": "#2f2f33",
+      "min": 4.5,
+      "ratio": 12.76,
+      "raw": 12.764075026862267
+    },
+    {
+      "theme": "dark",
+      "what": "heading on card",
+      "fg": "#fafaf9",
+      "bg": "#2f2f33",
+      "min": 3,
+      "large": true,
+      "ratio": 12.76,
+      "raw": 12.764075026862267
+    },
+    {
+      "theme": "dark",
+      "what": "muted text on card",
+      "fg": "#aaaab3",
+      "bg": "#2f2f33",
+      "min": 4.5,
+      "ratio": 5.78,
+      "raw": 5.783132168745692
+    },
+    {
+      "theme": "dark",
+      "what": "button label on accent",
+      "fg": "#1a1206",
+      "bg": "#f08000",
+      "min": 4.5,
+      "ratio": 6.88,
+      "raw": 6.877500460537974
+    },
+    {
+      "theme": "dark",
+      "what": "wordmark on card",
+      "fg": "#fafaf9",
+      "bg": "#2f2f33",
+      "min": 4.5,
+      "ratio": 12.76,
+      "raw": 12.764075026862267
+    },
+    {
+      "theme": "dark",
+      "what": "code in well",
+      "fg": "#fafaf9",
+      "bg": "#323237",
+      "min": 4.5,
+      "ratio": 12.21,
+      "raw": 12.208006760547033
+    },
+    {
+      "theme": "dark",
+      "what": "muted text on canvas",
+      "fg": "#aaaab3",
+      "bg": "#28282b",
+      "min": 4.5,
+      "ratio": 6.38,
+      "raw": 6.376791265799848
+    }
+  ]
+}

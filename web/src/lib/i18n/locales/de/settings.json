@@ -1,0 +1,34 @@
+{
+  "title": "Einstellungen",
+  "subtitle": "Verwalten Sie Ihr Konto und das Erscheinungsbild der Konsole.",
+  "tabs": {
+    "profile": "Profil",
+    "appearance": "Erscheinungsbild",
+    "about": "Info"
+  },
+  "profile": {
+    "title": "Profil",
+    "email": "E-Mail",
+    "displayName": "Anzeigename",
+    "role": "Rolle in dieser Organisation",
+    "memberships": "Organisationen",
+    "actor": "Principal"
+  },
+  "appearance": {
+    "title": "Erscheinungsbild",
+    "theme": "Design",
+    "themeHint": "Wählen Sie hell, dunkel oder folgen Sie Ihrem System.",
+    "density": "Tabellendichte",
+    "densityHint": "Kompakt zeigt mehr Zeilen; komfortabel ist großzügiger.",
+    "language": "Sprache",
+    "languageHint": "Die Sprache der Konsolenoberfläche."
+  },
+  "about": {
+    "title": "Info",
+    "version": "Version",
+    "engine": "Speicher-Engine",
+    "license": "Lizenzstatus",
+    "licensee": "Lizenziert für",
+    "none": "Keine"
+  }
+}

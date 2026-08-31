@@ -1,0 +1,10 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/acct1",
+      "name": "acct1",
+      "kind": "AIServices"
+    }
+  ],
+  "nextLink": "https://management.test/subscriptions/sub-1/providers/Microsoft.CognitiveServices/accounts?page=2&api-version=2024-10-01"
+}

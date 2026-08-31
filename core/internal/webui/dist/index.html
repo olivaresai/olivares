@@ -1,0 +1,89 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/favicon-48.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta
+      name="description"
+      content="Olivares AI — integrate, manage and secure the AI in your enterprise. Self-hosted, multi-provider: Claude Code and Codex today, Grok Build in development."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Olivares AI — Ground truth for enterprise AI" />
+    <meta
+      property="og:description"
+      content="Know what your AI touches, decide what it can do, and prove it. Self-hosted governance for Claude and enterprise AI."
+    />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://olivares.ai" />
+    <meta property="og:site_name" content="Olivares AI" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Olivares AI — Ground truth for enterprise AI" />
+    <meta
+      name="twitter:description"
+      content="Know what your AI touches, decide what it can do, and prove it. Self-hosted governance for Claude and enterprise AI."
+    />
+    <meta name="twitter:image" content="/og-image.png" />
+    <title>Olivares AI — Ground truth for enterprise AI</title>
+    <!--
+      No-FOUC theme bootstrap. Applies the persisted theme (or the OS preference)
+      to <html> BEFORE first paint, so the operator never sees a light flash on a
+      dark setup. Under the CSP Level 3 policy (script-src 'nonce-…' 'strict-dynamic',
+      see cmd/olivares/webui.go), this inline script is authorized by the same
+      per-response nonce the server injects into the __CSP_NONCE__ placeholder.
+    -->
+    <script nonce="__CSP_NONCE__">
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('olivares.theme')
+          var prefersDark = window.matchMedia(
+            '(prefers-color-scheme: dark)',
+          ).matches
+          var dark =
+            stored === 'dark' ||
+            ((stored === 'system' || !stored) && prefersDark)
+          var root = document.documentElement
+          root.classList.toggle('dark', dark)
+          root.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {
+          /* localStorage may be unavailable (private mode); default theme applies. */
+        }
+      })()
+    </script>
+    <meta property="csp-nonce" nonce="__CSP_NONCE__">
+    <script type="module" crossorigin src="/assets/index-Ck2CFqtD.js" nonce="__CSP_NONCE__"></script>
+    <link rel="modulepreload" crossorigin href="/assets/client-BfQVG9-m.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/badge-BCcl7-td.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/useStore-CPjKgCt8.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/context-BhOZ7n6B.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/useMutation-CaSshVDz.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-DbaHU0sX.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/toaster-BlWz6JMp.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/es2015-Bql3Iolw.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-C_QD9Oy8.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/check-ByaOaNKG.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/chevron-down-CTm_vXeE.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/search-CUyB1Kkx.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/x-CuieVwGw.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-CWhZ0a2x.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/chevron-up-BOExS6ss.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/label-d0dTPYCh.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/field-zFVOlmgE.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/select-DvHTOviW.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-DLAF_KsQ.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/api-DcDt3aaL.js" nonce="__CSP_NONCE__">
+    <link rel="stylesheet" crossorigin href="/assets/index-9o6sd4-P.css" nonce="__CSP_NONCE__">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,0 +1,134 @@
+/* SPDX-FileCopyrightText: 2026 Olivares.AI */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/*
+ * Olivares AI docs — the motion layer.
+ *
+ * WHAT IS PORTED AND WHAT IS NEW — the first version of this header said "NOTHING HERE IS NEW"
+ * and "ported verbatim", and that claimed more than it showed. Ported verbatim from the console:
+ * the keyframe, the 240ms duration, the curve (via the token) and the reduced-motion damper. NEW
+ * decisions belonging to this site: which elements move at all, the card hover, the scroll-driven
+ * reveal and its range. Those are not in the console and are not covered by the word "verbatim".
+ *
+ * The console's grammar, which the ported half comes from:
+ *
+ *   web/src/index.css:151-169   `enter` — opacity 0 -> 1 with a 6px rise, 240ms on --ease-out,
+ *                               declared INSIDE `prefers-reduced-motion: no-preference` "so a
+ *                               reduced-motion user never sees a delayed invisible flash (the
+ *                               element just renders at rest)".
+ *   web/src/index.css:128-135   the global `reduce` damper.
+ *   web/src/index.css:139-149   `pulse-live`, "the one sanctioned looping animation" — and it is
+ *                               deliberately NOT ported: a live-attribution pulse means something
+ *                               in an operator console and nothing on a documentation page. There
+ *                               are no loops here.
+ *
+ * The curve is not authored here either: --olv-ease-out comes out of the generated brand.css,
+ * which reads it from web/tokens/primitives.tokens.json:36-44.
+ *
+ * Hand-authored on purpose (brand.css is generated and stays purely token-derived; these are
+ * component selectors, not brand values), and loaded after it in astro.config.mjs.
+ *
+ * THREE CONSTRAINTS, because a documentation site is read, not demoed:
+ *   1. No motion on the LCP element. Starting the hero at opacity 0 would delay the largest
+ *      contentful paint by the length of its own animation — a page that measures worse to look
+ *      livelier. Reveals are for content BELOW the fold.
+ *   2. No layout shift. Everything animates `opacity` and `transform` only; neither contributes
+ *      to CLS, and neither triggers layout. This file must not move the 0 that D5 measured.
+ *   3. Reduced motion wins, in both mechanisms — the media query below and the damper.
+ */
+
+/* ── 1 · The damper, copied from the console ───────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── 2 · Hover, which is where a page feels alive at zero cost ───────────────────────────────
+ * ⛔ These transitions used to sit OUTSIDE the media query, with only the damper above shortening
+ * them to 0.01ms. That is not the same as not having them, and this file claimed the stronger
+ * thing. Inside `no-preference` a reduced-motion visitor gets no transition at all — the hover
+ * still changes colour, it just changes instantly, which is what the preference asks for. */
+@media (prefers-reduced-motion: no-preference) {
+/* Cards lift their hairline to the accent and raise the ink; no shadow, no scale — the console
+ * does not bounce and neither does this. */
+.sl-link-card,
+.card {
+  transition:
+    border-color 160ms var(--olv-ease-out, ease-out),
+    background-color 160ms var(--olv-ease-out, ease-out);
+}
+.sl-link-card:hover,
+.card:hover {
+  border-color: var(--sl-color-accent);
+  background-color: var(--sl-color-gray-6);
+}
+/* The card's arrow is the only thing that travels, and only 2px. */
+.sl-link-card .icon {
+  transition: transform 160ms var(--olv-ease-out, ease-out);
+}
+.sl-link-card:hover .icon {
+  transform: translateX(2px);
+}
+
+/* Sidebar and table-of-contents entries: colour only. These are dense lists; anything that moves
+ * in them reads as a glitch rather than as feedback. */
+.sidebar-content a,
+starlight-toc a {
+  transition: color 120ms var(--olv-ease-out, ease-out);
+}
+
+}
+
+/* ── 3 · The reveal, and it costs no JavaScript ────────────────────────────────────────────── */
+/*
+ * `animation-timeline: view()` drives the reveal from the element's own position in the
+ * scrollport — no IntersectionObserver, no client script, nothing to hydrate, and no work at all
+ * on a browser that does not implement it (the @supports guard leaves those elements at rest,
+ * which is the correct resting state, not a broken one).
+ *
+ * Scoped to CARD GRIDS specifically, not to `.sl-markdown-content > *`: revealing every paragraph
+ * of a reference page as it scrolls is the animation a marketing site does to a reader who is
+ * trying to look something up. The cards are the one place on these pages where a reveal reads as
+ * composition rather than as decoration.
+ */
+/*
+ * ⛔ THE FIRST CARD GRID DELIBERATELY DOES NOT MOVE, and this is the correction of a real defect.
+ * An earlier version gave it the console's mount-in: `opacity:0` with `both`, staggered 60/120/180
+ * ms on top of a 240 ms animation. `:first-of-type` cannot know whether that element is the
+ * largest contentful paint or whether it is even above the fold, so a card carrying a heading or
+ * an image could sit invisible for up to 420 ms — a page that measures worse in order to look
+ * livelier, and a direct contradiction of the rule stated at the top of this file.
+ *
+ * So there is no mount-in at all. The only reveal is scroll-driven and it is scoped to grids that
+ * are NOT the first, which is the one selector that can promise "never the first screen" without
+ * knowing anything about the page.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .sl-markdown-content > .card-grid:not(:first-of-type) > .sl-link-card,
+    .sl-markdown-content > .card-grid:not(:first-of-type) > .card {
+      animation: olv-enter linear both;
+      animation-timeline: view();
+      /* Finish well before the element is centred, so a fast scroll never leaves a card faded. */
+      animation-range: entry 0% cover 22%;
+    }
+  }
+}
+
+/* The console's `enter`, to the frame: web/src/index.css:151-158. */
+@keyframes olv-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

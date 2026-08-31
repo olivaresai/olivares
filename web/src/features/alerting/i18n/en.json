@@ -1,0 +1,180 @@
+{
+  "title": "Alerting",
+  "description": "Route findings to destinations and inspect the delivery log. A route references a destination by name; the credential lives in the wired transport.",
+  "tabs": {
+    "routes": "Routes",
+    "deliveries": "Deliveries",
+    "outbox": "Dead letters"
+  },
+  "severities": {
+    "any": "Any severity",
+    "info": "Info",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "routes": {
+    "intro": "Each route sends matching findings to one destination, in priority order.",
+    "add": "New route",
+    "empty": "No routes yet",
+    "emptyHint": "Add a route to send matching findings to a destination.",
+    "colName": "Name",
+    "colDest": "Destination",
+    "colSeverity": "Min severity",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "bulk": {
+      "enable": "Enable selected",
+      "disable": "Disable selected"
+    },
+    "testAction": "Test route {{name}}",
+    "editAction": "Edit route {{name}}",
+    "deleteAction": "Delete route {{name}}",
+    "created": "Route created",
+    "updated": "Route updated",
+    "deleted": "Route deleted",
+    "tested": "Test sent to {{destination}}",
+    "deleteDialog": {
+      "title": "Delete route?",
+      "description": "This removes the route “{{name}}”. Findings it matched will no longer be delivered by it.",
+      "confirm": "Delete route"
+    },
+    "dialog": {
+      "title": "New route",
+      "editTitle": "Edit route",
+      "subtitle": "Match findings and send them to a destination. Blank match lists match everything.",
+      "name": "Name",
+      "destination": "Destination",
+      "destinationHint": "A provisioned destination (name only — its credential lives in the transport).",
+      "destinationPlaceholder": "Select a destination",
+      "minSeverity": "Min severity",
+      "matchTypes": "Match types",
+      "matchKinds": "Match kinds",
+      "matchSources": "Match sources",
+      "matchSubjectKinds": "Match subject kinds",
+      "listHint": "Comma-separated; blank matches any.",
+      "dedup": "Dedup window (s)",
+      "throttle": "Throttle window (s)",
+      "priority": "Priority",
+      "enabled": "Enabled",
+      "enabledHint": "A disabled route matches nothing until re-enabled.",
+      "create": "Create route",
+      "save": "Save route",
+      "matchTypesHint": "Select one or more event types. Descriptions come from the server catalog."
+    }
+  },
+  "deliveries": {
+    "noRead": "You do not have permission to view deliveries.",
+    "intro": "The recorded delivery attempts (read-only). Use a route's test to probe a destination.",
+    "filterStatus": "Filter by status",
+    "allStatuses": "All statuses",
+    "empty": "No deliveries",
+    "colTime": "Time",
+    "colDest": "Destination",
+    "colKind": "Kind",
+    "colStatus": "Status",
+    "colDetail": "Detail",
+    "statuses": {
+      "claimed": "Claimed",
+      "delivered": "Delivered",
+      "rejected": "Rejected",
+      "failed": "Failed",
+      "no_dispatcher": "No dispatcher",
+      "unknown_destination": "Unknown destination"
+    },
+    "loadMore": "Load more"
+  },
+  "outbox": {
+    "noRead": "You do not have permission to view the outbox.",
+    "intro": "The durable outbox: notifications the engine still owes, those it has already delivered, and the dead letters it gave up on. Requeuing one asks for a new delivery attempt; it does not deliver.",
+    "filterStatus": "Filter by outbox status",
+    "colTime": "Time",
+    "colDest": "Destination",
+    "colKind": "Kind",
+    "colAttempts": "Attempts",
+    "colStatus": "Status",
+    "colDetail": "Last detail",
+    "colActions": "Actions",
+    "statuses": {
+      "dead": "Dead-lettered",
+      "queued": "Queued",
+      "delivering": "Delivering",
+      "delivered": "Delivered"
+    },
+    "emptyDead": "No dead letters",
+    "emptyDeadHint": "A notification lands here when its retries are exhausted or the destination refused it permanently. Nothing has been given up on.",
+    "empty": "No notifications with status “{{status}}”",
+    "emptyHint": "Choose another status, or check the routes tab to confirm a route matches the findings you expect.",
+    "redeliverAction": "Requeue this notification to {{destination}}",
+    "redeliver": {
+      "queued": "Requeued for {{destination}}",
+      "queuedHint": "The notification is queued again. The next delivery run makes the attempt — it has not been delivered yet.",
+      "accepted": "Requeue for {{destination}} accepted with status “{{status}}”",
+      "inFlight": "Not requeued: this notification is already in flight to {{destination}}.",
+      "gone": "Not requeued: this notification is not in this tenant's outbox. It may have been removed, or belong to another tenant.",
+      "forbidden": "Not requeued: the control plane refused the request for {{destination}}. Requeuing needs the notify route admin permission; a policy or a scoped restriction can also refuse it.",
+      "consent": "Not requeued: the recording notice for this surface has not been acknowledged yet. Acknowledge it and try again — this is not a missing permission.",
+      "stepUp": "Not requeued yet: the requeue for {{destination}} needs a verified session. Complete the verification and try again.",
+      "failed": "The requeue for {{destination}} failed. The notification was not queued again."
+    },
+    "confirm": {
+      "title": "Requeue this notification?",
+      "description": "This asks for a new delivery attempt to {{destination}}. The recipient may receive it more than once if an earlier attempt arrived after all.",
+      "body": "Attempts so far: {{attempts}}. Last outcome: {{detail}}.",
+      "noDetail": "not recorded",
+      "confirm": "Requeue notification"
+    }
+  },
+  "evaluate": {
+    "title": "Test signal",
+    "caption": "Predicate evaluation only; deduplication and throttling are not simulated.",
+    "eventType": "Event type",
+    "selectType": "Select an event type",
+    "kind": "Kind",
+    "severity": "Severity",
+    "source": "Source",
+    "subjectKind": "Subject kind",
+    "submit": "Evaluate",
+    "matchedCount": "Matched routes: {{count}}",
+    "name": "Route",
+    "enabled": "Enabled",
+    "matched": "Matched",
+    "mismatches": "Mismatches",
+    "yes": "Yes",
+    "no": "No",
+    "dimensions": {
+      "type": "Type",
+      "severity": "Severity",
+      "kind": "Kind",
+      "source": "Source",
+      "subject_kind": "Subject kind",
+      "disabled": "Disabled"
+    }
+  },
+  "history": {
+    "action": "View revision history for {{name}}",
+    "title": "Revision history — {{name}}",
+    "description": "Chronological, append-only snapshots of this notification route.",
+    "empty": "No revisions recorded",
+    "loadMore": "Load more",
+    "compareTitle": "Snapshot diff",
+    "selectTwo": "Select two revisions to compare their snapshots.",
+    "selectRevision": "Select {{op}} revision by {{actor}}",
+    "originalLabel": "Earlier revision",
+    "modifiedLabel": "Later revision",
+    "restore": "Restore this revision",
+    "restoreTitle": "Restore revision?",
+    "restoreDescription": "Restore the selected route configuration for {{name}}?",
+    "restoreConfirm": "Restore revision",
+    "restored": "Route revision restored",
+    "operations": {
+      "create": "Created",
+      "update": "Updated",
+      "delete": "Deleted",
+      "restore": "Restored"
+    }
+  }
+}

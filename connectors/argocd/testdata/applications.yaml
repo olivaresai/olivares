@@ -1,0 +1,48 @@
+# Exported with `kubectl get applications -A -o yaml` (item list flattened to docs).
+# A healthy, in-sync application: yields Info sync + Info health, no operation finding.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payments-api
+  namespace: argocd
+status:
+  sync:
+    status: Synced
+    revision: a1b2c3d
+  health:
+    status: Healthy
+  operationState:
+    phase: Succeeded
+---
+# A drifted, degraded application whose last sync failed: OutOfSync (Medium) +
+# Degraded (High) + operation Failed (High).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: billing-worker
+  namespace: argocd
+status:
+  sync:
+    status: OutOfSync
+    revision: deadbee
+  health:
+    status: Degraded
+  operationState:
+    phase: Failed
+---
+# An application with no status yet (just registered): Unknown sync + Unknown
+# health, both Medium — never silently treated as Synced/Healthy.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fresh-app
+  namespace: argocd
+---
+# A non-Application object sharing the directory: must be ignored.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  url: https://argocd.example.com

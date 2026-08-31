@@ -1,0 +1,155 @@
+{
+  "title": "Backup und Wiederherstellung",
+  "description": "Disaster-Recovery-Snapshots der Control Plane verwalten.",
+  "tabs": {
+    "backups": "Backups",
+    "schedule": "Zeitplan"
+  },
+  "actions": {
+    "restore": "Wiederherstellen",
+    "createBackup": "Backup erstellen",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "upload": "Hochladen",
+    "delete": "Löschen"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "Backups",
+    "searchPlaceholder": "Backups suchen...",
+    "deleted": "Backup gelöscht",
+    "deleteTitle": "Backup löschen",
+    "deleteDescription": "\"{{filename}}\" dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "columns": {
+      "date": "Datum",
+      "filename": "Dateiname",
+      "size": "Größe",
+      "engine": "Engine",
+      "tenants": "Tenants",
+      "notes": "Notizen"
+    },
+    "actions": {
+      "download": "Herunterladen",
+      "inspect": "Prüfen",
+      "downloadAria": "{{filename}} herunterladen",
+      "inspectAria": "{{filename}} prüfen",
+      "deleteAria": "{{filename}} löschen",
+      "downloadFailed": "Download fehlgeschlagen: {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "Backup-Zeitplan aktualisiert",
+    "loading": "Zeitplan wird geladen...",
+    "title": "Automatischer Backup-Zeitplan",
+    "description": "Konfigurieren Sie wiederkehrende Backups. Die Engine führt den Zeitplan aus; die Passphrase wird aus dem Instanz-Secret abgeleitet.",
+    "enableAria": "Automatische Backups aktivieren",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "cronLabel": "Cron-Ausdruck",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "Täglich um Mitternacht",
+      "daily0200": "Täglich um 02:00",
+      "daily0300": "Täglich um 03:00",
+      "weeklySundayMidnight": "Wöchentlich am Sonntag um Mitternacht",
+      "weeklyMondayMidnight": "Wöchentlich am Montag um Mitternacht",
+      "monthlyFirstMidnight": "Monatlich am 1. um Mitternacht",
+      "dailyAt": "Täglich um {{time}}"
+    },
+    "retentionLabel": "Aufbewahrung (Tage)",
+    "retentionDescription": "Ältere Backups werden automatisch bereinigt.",
+    "dualControlAria": "Vier-Augen-Prinzip für Wiederherstellung verlangen",
+    "dualControlLabel": "Vier-Augen-Prinzip für Wiederherstellung verlangen",
+    "dualControlDescription": "Wenn aktiviert, muss eine über DIESE KONSOLE gestartete Wiederherstellung vor der Ausführung von einem zweiten, anderen Administrator genehmigt werden. Das Deaktivieren wird protokolliert und wird erst eine Stunde später wirksam — die Sperre lässt sich nicht in derselben Sitzung entfernen wie die Wiederherstellung, die sie schützt; erneutes Aktivieren bricht eine ausstehende Entfernung ab. Sie erfasst NICHT `olivares dr restore` auf dem Host, das ein Estate außerhalb dieser Sperre ersetzt und stattdessen einen deklarierten Operator protokolliert (Postgres-Estates werden nur so wiederhergestellt). Für Einzelbetrieb deaktiviert lassen.",
+    "dualControlDisarmPending": "Entfernung angefordert — protokolliert, wirksam am {{when}}. Bis dahin benötigt eine Wiederherstellung weiterhin einen zweiten Administrator. Zum Abbrechen erneut aktivieren.",
+    "dualControlDisarmRequestedBy": "Angefordert von {{who}}.",
+    "save": "Zeitplan speichern"
+  },
+  "trigger": {
+    "started": "Backup gestartet",
+    "title": "Backup erstellen",
+    "description": "Erstellen Sie einen verschlüsselten Snapshot der gesamten Control Plane.",
+    "notes": "Notizen",
+    "notesPlaceholder": "Optionale Beschreibung für dieses Backup",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Wird zum Verschlüsseln des Backup-Pakets verwendet.",
+    "start": "Backup starten"
+  },
+  "job": {
+    "initializing": "Initialisierung",
+    "status": {
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "progressAria": "{{phase}} {{progress}} %",
+    "complete": "{{progress}} % abgeschlossen"
+  },
+  "pending": {
+    "title": "Wiederherstellungen warten auf Genehmigung (Vier-Augen-Prinzip)",
+    "requestedByPrefix": "Angefordert von",
+    "approveRestore": "Genehmigen und wiederherstellen",
+    "approved": "Wiederherstellung genehmigt",
+    "dialogTitle": "Wiederherstellung genehmigen",
+    "dialogDescription": "Sie genehmigen eine von {{initiator}} angeforderte Wiederherstellung. Sie müssen ein anderer Administrator als der Anforderer sein.",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Geben Sie die Passphrase ein, mit der das Backup erstellt wurde.",
+    "confirmTitle": "Wiederherstellung bestätigen",
+    "confirmDescription": "Dies überschreibt nach der Verifizierung alle aktuellen Daten mit dem Backup-Inhalt. Diese Operation kann nicht rückgängig gemacht werden.",
+    "confirmLabel": "Jetzt genehmigen und wiederherstellen"
+  },
+  "restore": {
+    "notAuthorized": "Nicht autorisiert",
+    "uploadFailed": "Upload fehlgeschlagen",
+    "started": "Wiederherstellung gestartet",
+    "title": "Aus Backup wiederherstellen",
+    "description": "Laden Sie eine .drbundle-Datei hoch, um den Zustand der Control Plane wiederherzustellen.",
+    "apply": "Wiederherstellung anwenden",
+    "confirmTitle": "Wiederherstellung bestätigen",
+    "confirmDescription": "Dies überschreibt alle aktuellen Daten mit dem Backup-Inhalt. Diese Operation kann nicht rückgängig gemacht werden.",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "Jetzt wiederherstellen",
+    "confirmSummaryPrefix": "Wiederherstellung aus",
+    "confirmSummarySuffix": "mit {{count}} Tenant(s).",
+    "awaitingTitle": "Warten auf einen zweiten Genehmiger",
+    "awaitingDescription": "Das Vier-Augen-Prinzip ist aktiviert. Diese Wiederherstellung wird erst ausgeführt, wenn ein anderer Administrator sie genehmigt und die Passphrase im Backups-Tab bereitstellt.",
+    "requestId": "Anfrage-ID",
+    "selectFile": "Eine .drbundle-Datei auswählen",
+    "chooseFile": "Datei auswählen",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Geben Sie die Passphrase ein, die beim Erstellen dieses Backups verwendet wurde.",
+    "manifestTitle": "Bundle-Manifest",
+    "manifest": {
+      "file": "Datei",
+      "engine": "Engine",
+      "created": "Erstellt",
+      "tenants": "Tenants",
+      "keys": "Schlüssel"
+    }
+  },
+  "inspect": {
+    "title": "Backup-Detail",
+    "description": "Dekodiertes Manifest des versiegelten Bundles — genau das, was eine Wiederherstellung zurückbringen würde.",
+    "filename": "Dateiname",
+    "size": "Größe",
+    "engine": "Engine",
+    "createdAt": "Erstellt",
+    "tenants": "Mandanten",
+    "keys": "Versiegelte Schlüssel",
+    "empty": "Keine",
+    "loadFailed": "Das Backup-Detail konnte nicht geladen werden."
+  },
+  "empty": {
+    "backup": {
+      "title": "Noch keine Backup-Snapshots erstellt",
+      "description": "Erstellen Sie bei SQLite über diese Konsole ein verschlüsseltes Backup; bei PostgreSQL erstellen Sie das Bundle per DR-CLI im konfigurierten Backup-Verzeichnis."
+    }
+  }
+}

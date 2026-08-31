@@ -1,0 +1,4 @@
+{
+  "requests_per_minute": 60,
+  "tokens_per_minute": 100000
+}

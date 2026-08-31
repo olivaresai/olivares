@@ -1,0 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  gateway: {
+    bind: 'loopback',
+    auth: {mode: 'password', password: {source: 'env', name: 'OPENCLAW_GATEWAY_PASSWORD'}},
+    tls: {enabled: true},
+  },
+}

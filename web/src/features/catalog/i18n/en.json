@@ -1,0 +1,329 @@
+{
+  "title": "Catalog",
+  "subtitle": "The curated catalog of approved capabilities — agents, MCPs, skills, templates, models and connectors — plus governed self-service instantiations.",
+  "tabs": {
+    "entries": "Entries",
+    "instances": "Instances",
+    "policy": "Admission policy"
+  },
+  "kind": {
+    "agent": "Agent",
+    "mcp": "MCP",
+    "skill": "Skill",
+    "template": "Template",
+    "model": "Model",
+    "connector": "Connector"
+  },
+  "entries": {
+    "search": "Search entries…",
+    "name": "Name",
+    "kind": "Kind",
+    "slug": "Slug",
+    "version": "Version",
+    "status": "Status",
+    "owner": "Owner",
+    "signing": "Signing",
+    "verification": "Verification",
+    "newEntry": "New entry",
+    "empty": "No catalog entries",
+    "emptyHint": "Create a draft entry, submit it for review, and approve it to publish a frozen, hash-pinned version.",
+    "filters": {
+      "kind": "Kind",
+      "status": "Status",
+      "all": "All"
+    },
+    "truncated": "Loaded {{n}} catalog entries; there are more",
+    "truncatedHint": "There are more catalog entries than shown; this page takes rows by id. An entry missing from this list does not prove it does not exist."
+  },
+  "signing": {
+    "signed": "Signed",
+    "unsigned": "Unsigned",
+    "signedHint": "Ed25519-signed; signer fingerprint {{fingerprint}}.",
+    "unsignedHint": "Hash-pinned and ledger-attested, but not signed (no catalog signing key configured at approval).",
+    "notPinned": "—"
+  },
+  "verify": {
+    "title": "Integrity",
+    "caption": "Recomputed at open time. The signing key never leaves the engine — only its fingerprint is shown.",
+    "verified": "Signature verified",
+    "verifiedHashOnly": "Hash-pinned",
+    "notVerified": "Not verified",
+    "pending": "Not pinned yet",
+    "verifiedHint": "The content hash matches the pinned hash and the signature is valid.",
+    "verifiedHashOnlyHint": "The content hash matches the pinned hash. This version is hash-pinned and ledger-attested, but unsigned.",
+    "notVerifiedHint": "The recomputed hash or signature does not match what was pinned at approval. Do not treat this version as approved.",
+    "pendingHint": "Nothing is pinned until the entry is approved. Verification applies to approved and deprecated versions.",
+    "contentHash": "Pinned hash",
+    "recomputedHash": "Recomputed hash",
+    "signedBy": "Signer fingerprint",
+    "reason": "Reason",
+    "reverify": "Re-verify"
+  },
+  "posture": {
+    "title": "Catalog signing posture",
+    "enabled": "Signing enabled",
+    "disabled": "Signing not configured",
+    "algorithm": "Algorithm",
+    "fingerprint": "Key fingerprint",
+    "publicKey": "Public key",
+    "publicKeyHint": "The Ed25519 public key for external verification — intentionally public, not a secret.",
+    "disabledNote": "No catalog signing key is configured. Approved entries are hash-pinned and ledger-attested, but unsigned."
+  },
+  "detail": {
+    "title": "Entry detail",
+    "identity": "Identity",
+    "kind": "Kind",
+    "slug": "Slug",
+    "version": "Version",
+    "status": "Status",
+    "summary": "Summary",
+    "owner": "Owner",
+    "spec": "Specification",
+    "specCaption": "Read-only definition. Secrets are referenced inside the spec by name or locator — never as values. Inline credentials are rejected on write.",
+    "specEmpty": "No specification",
+    "integrity": "Integrity & approval",
+    "contentHash": "Content hash",
+    "signed": "Signed",
+    "sigAlg": "Signature algorithm",
+    "signedBy": "Signer fingerprint",
+    "approvedBy": "Approved by",
+    "approvedAt": "Approved at",
+    "notApprovedYet": "Not approved yet — nothing is pinned or signed.",
+    "actions": {
+      "edit": "Edit draft",
+      "delete": "Delete draft",
+      "submit": "Submit for review",
+      "approve": "Approve",
+      "deprecate": "Deprecate",
+      "instantiate": "Instantiate"
+    }
+  },
+  "editor": {
+    "createTitle": "New catalog entry",
+    "editTitle": "Edit draft entry",
+    "kind": "Kind",
+    "name": "Display name",
+    "slug": "Slug",
+    "slugHint": "Lowercase letters, digits, “-” and “_”, up to 64 characters.",
+    "version": "Version",
+    "versionHint": "Semantic version, e.g. 1.2.3 or 1.0.0-beta.1.",
+    "summary": "Summary",
+    "ownerRef": "Owner reference",
+    "ownerRefHint": "Optional owner label, e.g. platform-team.",
+    "spec": "Specification (JSON)",
+    "specHint": "Optional JSON object. Reference secrets by name or locator — never embed a credential. Inline credentials are rejected.",
+    "specPlaceholder": "{\n  \"command\": \"npx\",\n  \"token_ref\": \"$GITHUB_TOKEN\"\n}",
+    "specInvalid": "The specification must be a valid JSON object.",
+    "credentialWarning": "That looks like a credential value. Reference secrets by name or locator (e.g. $GITHUB_TOKEN or a vault path), never the secret itself.",
+    "draftNotice": "New entries are created as a draft. Lifecycle and integrity fields (status, hash, signature, approver) are managed by the engine — never set here.",
+    "create": "Create draft",
+    "save": "Save changes",
+    "created": "Draft entry created",
+    "updated": "Draft entry updated",
+    "admissionStaleWarning": "This {{kind}} entry has a recorded admission verdict. Saving a changed specification invalidates it — you must admit a fresh attestation before it can be approved."
+  },
+  "admission": {
+    "title": "Attestation admission",
+    "caption": "The recorded provenance/SBOM verdict that gates approval into the served catalog — the durable record of why this entry was admitted or refused.",
+    "verified": "Attestation verified",
+    "signedUnbound": "Signature verified, digest unbound",
+    "notVerified": "Not verified",
+    "none": "No admission verdict recorded",
+    "noneHint": "Under an enforcing admission policy this entry cannot be approved until a verified attestation is admitted.",
+    "reason": "Reason",
+    "noReason": "No reason recorded.",
+    "subjectDigest": "Subject digest",
+    "subjectName": "Subject",
+    "method": "Method",
+    "signer": "Signer",
+    "transparencyLog": "Transparency log",
+    "tlogVerified": "Inclusion verified",
+    "tlogPresent": "Present, not verified",
+    "tlogAbsent": "Not present",
+    "coverage": "Coverage",
+    "attestedBy": "Attested by",
+    "attestedAt": "Attested at",
+    "admit": "Admit attestation",
+    "admitTitle": "Admit an attestation",
+    "admitBodyMcp": "Verify a Sigstore attestation bundle (cosign download attestation / gh attestation download) for this MCP server against the tenant trust root. Only a verified verdict lets an enforcing policy approve it into the served registry.",
+    "admitBodyConnector": "Verify a Sigstore attestation bundle for this connector artifact against the tenant trust root. The expected digest defaults from spec.artifact_digest; only a verified verdict lets an enforcing policy approve it as a verified connector.",
+    "bundle": "Attestation bundle (JSON)",
+    "bundleHint": "Paste the Sigstore bundle JSON. It is verified server-side; nothing is recorded until it is parsed.",
+    "bundleInvalid": "The bundle must be valid JSON.",
+    "bundlePlaceholder": "{ \"mediaType\": \"application/vnd.dev.sigstore.bundle.v0.3+json\", … }",
+    "expectedDigest": "Expected artifact digest",
+    "expectedDigestHint": "Optional sha256 the attested subject must match (e.g. sha256:…). For connectors it defaults from spec.artifact_digest.",
+    "note": "Note",
+    "admitSubmit": "Verify and admit",
+    "admitted": "Attestation admitted",
+    "recordedNotAdmitted": "Recorded, but the attestation did not satisfy the policy — see the verdict."
+  },
+  "confirm": {
+    "deleteTitle": "Delete this draft entry?",
+    "deleteBody": "Delete this draft entry permanently? This cannot be undone. Only drafts can be deleted; approved entries must be deprecated instead.",
+    "deleteConfirm": "Delete permanently",
+    "deletePhrase": "DELETE",
+    "deleted": "Draft entry deleted",
+    "submitTitle": "Submit this draft for review?",
+    "submitBody": "It moves to “pending” and is no longer editable as a draft until decided.",
+    "submitConfirm": "Submit for review",
+    "submitted": "Entry submitted for review",
+    "approveTitle": "Approve this entry?",
+    "approveBody": "Approval is FINAL: the version is frozen and made immutable, its content hash is pinned (and signed if signing is enabled), and it becomes available for self-service instantiation. To retire it later you must deprecate, not delete.",
+    "approveConfirm": "Approve and freeze",
+    "approvePhrase": "APPROVE",
+    "approved": "Entry approved and frozen",
+    "deprecateTitle": "Deprecate this approved entry?",
+    "deprecateBody": "It will be retired and hidden from new instantiations, but its history and signature are kept so it stays verifiable. This cannot be reversed — publish a new version instead.",
+    "deprecateConfirm": "Deprecate",
+    "deprecated": "Entry deprecated"
+  },
+  "instantiate": {
+    "title": "Request an instantiation",
+    "body": "This creates a governance request (status “requested”) attributed to you — it does NOT provision anything yet. The approval decision is governance’s and provisioning is deployment’s; an admin must approve and activate it.",
+    "name": "Instance name",
+    "nameHint": "A unique name for this instantiation of the entry.",
+    "targetRef": "Target reference",
+    "targetRefHint": "Optional deployment target, e.g. env:prod.",
+    "note": "Note",
+    "submit": "Request instantiation",
+    "requested": "Instantiation requested",
+    "notApproved": "Only an approved entry can be instantiated."
+  },
+  "instances": {
+    "search": "Search instances…",
+    "name": "Name",
+    "entry": "Source entry",
+    "kind": "Kind",
+    "version": "Version",
+    "status": "Status",
+    "target": "Target",
+    "requestedBy": "Requested by",
+    "decidedBy": "Decided by",
+    "note": "Note",
+    "empty": "No instantiation requests",
+    "emptyHint": "Self-service instantiations of approved entries appear here with their governance status.",
+    "filters": {
+      "status": "Status",
+      "all": "All"
+    },
+    "liveNote": "Live — refreshing while requests await a governance decision.",
+    "truncated": "Loaded {{n}} instances; there are more",
+    "truncatedHint": "There are more instances than shown; this page takes rows by id. An instance missing from this list does not prove it does not exist."
+  },
+  "instanceDetail": {
+    "title": "Instance detail",
+    "provenance": "Provenance",
+    "entryId": "Entry id",
+    "entryKind": "Entry kind",
+    "entrySlug": "Entry slug",
+    "entryVersion": "Entry version",
+    "governance": "Governance",
+    "note": "Note",
+    "governanceCaption": "Transitions follow the allowed flow and are recorded against your identity. The policy/HITL is governance; real provisioning is deployment.",
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "activate": "Activate"
+    }
+  },
+  "transition": {
+    "approveTitle": "Approve this instance request?",
+    "rejectTitle": "Reject this instance request?",
+    "activateTitle": "Activate this instance?",
+    "body": "Approving, rejecting or activating is recorded against your identity in the audit ledger and follows the allowed flow (requested → approved/rejected, approved → active/rejected).",
+    "noteLabel": "Decision note (optional)",
+    "notePlaceholder": "Reason for this decision…",
+    "approveConfirm": "Approve",
+    "rejectConfirm": "Reject",
+    "activateConfirm": "Activate",
+    "done": "Governance decision applied"
+  },
+  "status": {
+    "draft": "Draft",
+    "pending": "Pending",
+    "approved": "Approved",
+    "deprecated": "Deprecated",
+    "requested": "Requested",
+    "rejected": "Rejected",
+    "active": "Active"
+  },
+  "empty": {
+    "entry": {
+      "title": "No catalog entries created yet",
+      "description": "Create a draft entry, submit it for review, and approve it to publish a frozen, hash-pinned catalog version."
+    },
+    "instance": {
+      "title": "No instantiation requests yet",
+      "description": "Approve a catalog entry, then request an instantiation to create its governed instance record here."
+    }
+  },
+  "policy": {
+    "kind": {
+      "mcp": {
+        "title": "MCP entries",
+        "body": "Trust anchors that gate federated MCP entries into the served sub-registry.",
+        "editTitle": "Edit MCP admission policy"
+      },
+      "connector": {
+        "title": "Connector entries",
+        "body": "Trust anchors that gate third-party connector entries before approval.",
+        "editTitle": "Edit connector admission policy"
+      }
+    },
+    "state": {
+      "unconfigured": {
+        "title": "No policy — every entry is admitted",
+        "body": "With no policy configured, entries are admitted WITHOUT any signature check. Configure a trust anchor to gate admission."
+      },
+      "observe": {
+        "title": "Configured — observe only",
+        "body": "Signatures are verified and recorded, but a failure does not block admission. Turn on “require signed” to enforce."
+      },
+      "enforce": {
+        "title": "Enforcing",
+        "body": "Entries that do not verify against these trust anchors are refused admission."
+      }
+    },
+    "modeName": {
+      "keyless": "Keyless (identity-pinned)",
+      "certificate-pki": "Certificate PKI",
+      "bare-key": "Bare key",
+      "empty": "No anchor"
+    },
+    "mode": "Trust method",
+    "derivedMode": "Derived trust method",
+    "on": "On",
+    "off": "Off",
+    "requireSigned": "Require signed entries",
+    "requireSignedHint": "When on, an entry that does not verify is refused.",
+    "requireSubjectDigest": "Require subject digest",
+    "requireSubjectDigestHint": "Bind the attestation to the entry’s digest, not just its name.",
+    "identities": "Allowed identities",
+    "identitiesHint": "One per line. Must be set together with issuers.",
+    "issuers": "Allowed issuers",
+    "issuersHint": "One per line. Must be set together with identities.",
+    "predicates": "Allowed predicates",
+    "predicatesHint": "One per line, e.g. the provenance predicate type. Blank lines are rejected.",
+    "trustedRoots": "Trusted roots",
+    "trustedRootsHint": "CA certificates in PEM. Only whole BEGIN…END blocks are saved.",
+    "trustedKeys": "Trusted keys",
+    "trustedKeysHint": "PUBLIC keys in PEM. Only whole BEGIN…END blocks are saved.",
+    "note": "Note",
+    "attestedBy": "Last changed by",
+    "attestedAt": "Last changed",
+    "edit": "Edit policy",
+    "editBody": "Changes take effect on the next admission.",
+    "saved": "Admission policy saved",
+    "loadFailed": "Could not load the admission policy.",
+    "confirmTitle": "Confirm trust change",
+    "confirmBody": "This tightens admission or removes a trust anchor. Entries admitted under the old policy are not re-checked, but new admissions may fail until they are re-signed.",
+    "err": {
+      "privateKey": "Trust material must be public — remove any PRIVATE KEY block.",
+      "pemResidual": "Only whole BEGIN…END blocks are saved; remove the leftover text.",
+      "emptyPredicate": "Predicates must not contain blank entries.",
+      "anchorMissing": "Enforcement needs at least one trusted root or key, or nothing would be admitted.",
+      "identityIssuer": "Identities and issuers must be set together, or neither."
+    }
+  }
+}

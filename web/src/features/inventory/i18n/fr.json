@@ -1,0 +1,71 @@
+{
+  "title": "Inventaire",
+  "subtitle": "Chaque agent, session, MCP, modèle et identité découvert dans votre parc.",
+  "refresh": "Actualiser",
+  "summary": {
+    "total": "Entités",
+    "active": "Actif",
+    "stale": "Non observées récemment",
+    "kinds": "Types"
+  },
+  "tabs": {
+    "catalog": "Catalogue",
+    "topology": "Topologie"
+  },
+  "facets": {
+    "allKinds": "Tous les types",
+    "allStatus": "Tous les statuts"
+  },
+  "status": {
+    "active": "Actif",
+    "stale": "Non observée récemment"
+  },
+  "cols": {
+    "name": "Nom",
+    "kind": "Type",
+    "status": "Statut",
+    "signals": "Signaux",
+    "hosts": "Hôtes",
+    "lastSeen": "Vu pour la dernière fois",
+    "occurrences": "Vu"
+  },
+  "searchPlaceholder": "Rechercher un nom, une référence, un signal…",
+  "hostCount": "{{count}} hôtes",
+  "kinds": {
+    "agent": "Agent",
+    "session": "Session",
+    "identity": "Identité",
+    "mcp_server": "Serveur MCP",
+    "tool": "Outil",
+    "resource": "Ressource",
+    "skill": "Compétence",
+    "model": "Modèle",
+    "provider": "Fournisseur"
+  },
+  "detail": {
+    "ref": "Référence",
+    "id": "ID",
+    "firstSeen": "Vu pour la première fois",
+    "lastSeen": "Vu pour la dernière fois",
+    "relations": "Relations",
+    "viewAccess": "Carte des accès",
+    "viewSessions": "Sessions"
+  },
+  "topology": {
+    "note": "Composition du parc par type. L’usage à l’exécution (quel agent exécute quel modèle/MCP) apparaît dans Sessions ; l’accès aux ressources (R/RW) dans la carte des accès.",
+    "bands": {
+      "origins": "Qui agit",
+      "capabilities": "Ce qu’ils peuvent utiliser",
+      "resources": "Ce qu’ils touchent"
+    },
+    "emptyTitle": "Rien de découvert pour l’instant",
+    "emptyHint": "À mesure que les connecteurs signalent une activité, votre parc est catalogué ici.",
+    "truncated": "Affichage des {{n}} premières entités"
+  },
+  "empty": {
+    "catalog": {
+      "title": "Aucune entité du parc découverte",
+      "description": "Les entités apparaissent lorsque les observations des connecteurs signalent des agents, des sessions, des identités, des capacités MCP, des modèles, des fournisseurs ou des ressources."
+    }
+  }
+}

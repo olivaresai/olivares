@@ -1,0 +1,7 @@
+{
+  "permission": {
+    "edit": "ask",
+    "bash": "ask"
+  },
+  "share": "auto"
+}

@@ -1,0 +1,31 @@
+{
+  "menu": {
+    "trigger": "Saved views",
+    "myViews": "My views",
+    "shared": "Shared",
+    "empty": "No saved views",
+    "loading": "Loading saved views…",
+    "loadFailed": "Saved views could not be loaded.",
+    "save": "Save current view…",
+    "delete": "Delete",
+    "deleteAria": "Delete saved view {{name}}"
+  },
+  "save": {
+    "title": "Save current view",
+    "description": "Store the current filters and scope so you can apply them again.",
+    "name": "Name",
+    "viewDescription": "Description",
+    "share": "Share with this tenant",
+    "shareHint": "Anyone with saved-view access in this tenant can apply it.",
+    "cancel": "Cancel",
+    "submit": "Save view",
+    "failed": "The saved view could not be created."
+  },
+  "delete": {
+    "title": "Delete saved view?",
+    "description": "Delete “{{name}}”. This cannot be undone.",
+    "confirm": "Delete view",
+    "cancel": "Cancel",
+    "failed": "The saved view could not be deleted."
+  }
+}

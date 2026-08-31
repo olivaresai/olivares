@@ -1,0 +1,17 @@
+[
+  {
+    "id": "00u3carol",
+    "scope": "USER",
+    "status": "ACTIVE"
+  },
+  {
+    "id": "00u4dead",
+    "scope": "USER",
+    "status": "DEPROVISIONED"
+  },
+  {
+    "id": "00u5gone",
+    "scope": "GROUP",
+    "status": "REVOKED"
+  }
+]

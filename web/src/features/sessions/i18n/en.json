@@ -1,0 +1,190 @@
+{
+  "title": "Sessions",
+  "subtitle": "Live agent operation — what each session is doing right now, its tokens, cost and cadence, updated over a live stream.",
+  "refresh": "Refresh",
+  "search": "Search session, agent, action…",
+  "allStates": "All states",
+  "summary": {
+    "active": "Active",
+    "idle": "Idle",
+    "silentEvasion": "Possible evasion",
+    "total": "Sessions",
+    "launched": "Launched",
+    "discovered": "Discovered",
+    "attention": "Needs attention"
+  },
+  "cols": {
+    "session": "Session",
+    "agent": "Agent",
+    "state": "State",
+    "action": "Current action",
+    "model": "Model",
+    "tokens": "Tokens (in / out)",
+    "cost": "Cost",
+    "duration": "Duration",
+    "lastSeen": "Last seen",
+    "provenance": "Origin",
+    "control": "Control"
+  },
+  "state": {
+    "active": "Active",
+    "idle": "Idle",
+    "ended": "Ended",
+    "silent_evasion": "Possible evasion"
+  },
+  "stateHint": {
+    "active": "Working now — events within the expected cadence.",
+    "idle": "Quiet, but within tolerance.",
+    "ended": "Finished or closed.",
+    "silent_evasion": "Gone silent inside its expected cadence — a signal worth your eye, not an error."
+  },
+  "evasionBanner": "This session went silent within its expected cadence. The engine flags it as a possible evasion — review the timeline.",
+  "detail": {
+    "title": "Session",
+    "goal": "Goal",
+    "summary": "Summary",
+    "noGoal": "No goal reported",
+    "noSummary": "No summary reported",
+    "agent": "Agent",
+    "model": "Model",
+    "state": "State",
+    "action": "Current action",
+    "resource": "Resource",
+    "mode": "Mode",
+    "inputTokens": "Input tokens",
+    "outputTokens": "Output tokens",
+    "cost": "Cost",
+    "events": "Events",
+    "toolCalls": "Tool calls",
+    "duration": "Duration",
+    "firstSeen": "First event",
+    "lastSeen": "Last event",
+    "minimalData": "Only metadata is shown. By design the engine never carries SQL, payloads or secrets here (minimal-data).",
+    "viewAccess": "Access map",
+    "viewInventory": "Inventory"
+  },
+  "timeline": {
+    "title": "Timeline",
+    "subtitle": "Reconstructed ingest order — newest events appear as they arrive.",
+    "loadMore": "Load more",
+    "empty": "No timeline events yet",
+    "emptyHint": "As the session emits tool, MCP, cost and finding events, they appear here.",
+    "all": "All kinds",
+    "source": "Source"
+  },
+  "kind": {
+    "tool": "Tool",
+    "mcp": "MCP",
+    "cost": "Cost",
+    "finding": "Finding"
+  },
+  "empty": {
+    "title": "No sessions yet",
+    "description": "Sessions appear here as soon as agents start working — the ones Olivares discovers through its connectors, and the ones you launch from this screen."
+  },
+  "forbidden": {
+    "title": "Sessions not authorized",
+    "description": "Your role does not include permission to view live sessions."
+  },
+  "operateTitle": "Claude Code",
+  "operateSubtitle": "Create, attach to and govern Claude Code sessions — no SSH. The sessions Olivares only observes are in this same list, and open the same card.",
+  "unifiedSubtitle": "Every agent session on this plane — the ones Olivares discovered and the ones it launched — in one list, with what each is doing and what can be done with it.",
+  "launch": "New session",
+  "allSources": "All sources",
+  "tabs": {
+    "sessions": "Sessions",
+    "workspaces": "Workspaces"
+  },
+  "partial": {
+    "noLiveRead": "Observed sessions are not shown: your role does not include sessions:live:read. The launched ones below are the part that could be read, not the whole picture.",
+    "noRunRead": "Launched sessions are not shown: your role does not include sessions:run:read. A session below reading as discovered may still have been launched by Olivares — this list could not check.",
+    "truncated": "This is the most recent page, not the whole estate. Origin here is joined over what is loaded, so a session whose run has scrolled off can read as discovered; open a session to have the engine answer for it.",
+    "runLookupFailed": "The launched half could not be read: the run lookup failed. Rows below show what the observed half returned; origin is reported as not read rather than guessed.",
+    "liveLookupFailed": "The observed half could not be read: the live lookup failed. Rows below are the launched ones; the telemetry columns are empty because nothing could be read, not because there is none."
+  },
+  "card": {
+    "tabs": {
+      "overview": "Overview",
+      "live": "Live",
+      "governance": "Governance",
+      "lifecycle": "Lifecycle",
+      "details": "Details"
+    },
+    "provenance": {
+      "launched": "Launched",
+      "discovered": "Discovered",
+      "launchedExplain": "A launch record links this session to Olivares: it started this session. What can be done with it now is below — a launch is not the same as a live process.",
+      "discoveredExplain": "No launch record links this session, so as far as this plane can prove, Olivares did not start it. It can be read and audited, not steered.",
+      "unknownExplain": "Whether Olivares launched this session could not be checked — no permission for sessions:run:read, or the lookup failed. This is “not read”, not “not launched”.",
+      "multipleRuns": "{{n}} runs drive this session",
+      "unknown": "Origin not read"
+    },
+    "control": {
+      "title": "What can be done with it",
+      "full": "Full control",
+      "lifecycle": "Lifecycle only",
+      "observe": "Observe only",
+      "fullExplain": "Olivares holds the process and bridges its I/O: it can be watched, driven and stopped.",
+      "lifecycleExplain": "Start and stop, nothing in between: either Olivares holds the process but not its I/O, or the process is stopped and can be resumed.",
+      "observeExplain": "Olivares holds no process for this session. It can be read and audited; stopping it is not something this plane can do.",
+      "unknownExplain": "The operate half was not read (sessions:run:read), so this is what is visible from the observed half alone."
+    },
+    "cap": {
+      "watch": "Watch its live telemetry and timeline",
+      "attach": "See its I/O as it happens",
+      "drive": "Send input to it",
+      "stop": "Stop it",
+      "resume": "Resume it",
+      "cleanup": "Clean up its workspace",
+      "delete": "Delete its record",
+      "reason": {
+        "no-run": "no process: Olivares did not launch this session",
+        "no-observation": "nothing observed for this session yet",
+        "transport": "its I/O is relayed to Anthropic’s cloud, so Olivares cannot show or drive it",
+        "state": "not in a state that allows it",
+        "permission": "your role does not include it"
+      },
+      "sharedReason": "Unavailable: {{reason}}."
+    },
+    "actions": {
+      "stop": "Stop",
+      "resume": "Resume",
+      "cleanup": "Clean up",
+      "delete": "Delete",
+      "cleanupHint": "Closes the run and releases its resume handle, so it can no longer be resumed. The lifecycle ledger is kept.",
+      "deleteHint": "Removes the run record. The anchored lifecycle events stay in the audit ledger."
+    },
+    "transport": {
+      "stream-json": "Governed (stream-json)",
+      "remote-control": "Remote-control"
+    },
+    "postureValue": {
+      "enforced": "Enforced — its tool calls are policed in line",
+      "observed": "Observed — its tool calls are recorded, not policed"
+    },
+    "sessionRef": "Session reference",
+    "engine": "Engine",
+    "posture": "Posture",
+    "none": "None",
+    "notDeclared": "Not declared",
+    "unclaimed": "Activity seen from a session holding no live claim. The engine reports it; it is not the same signal as a possible evasion.",
+    "relayedIO": "Its I/O is relayed to Anthropic’s cloud, so Olivares cannot show it here. Lifecycle control still applies.",
+    "observedNotRead": "The observed half was not read: your role does not include sessions:live:read.",
+    "noObservationYet": "Nothing observed for this session yet — no telemetry has reached the plane under this reference.",
+    "actionFailed": "The action could not be completed.",
+    "activeRun": "acting on",
+    "pickRun": "Several runs drive this session. Pick one to attach, govern or stop it."
+  },
+  "facet": {
+    "observed": "Observed: {{state}}",
+    "run": "Run: {{state}}"
+  },
+  "runState": {
+    "pending": "Pending",
+    "running": "Running",
+    "idle": "Idle",
+    "stopped": "Stopped",
+    "failed": "Failed",
+    "cleaned": "Cleaned"
+  }
+}

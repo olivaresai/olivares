@@ -1,0 +1,49 @@
+{
+  "snapshot_at": "2026-06-03T14:05:00Z",
+  "grants": [
+    {
+      "principal": "role:analysts",
+      "table": "prod.sales.customers",
+      "privilege": "TABLE_READ_DATA"
+    },
+    {
+      "principal": "role:etl_writer",
+      "table": "prod.sales.orders",
+      "privilege": "TABLE_WRITE_DATA"
+    },
+    {
+      "principal": "role:shared_svc",
+      "table": "prod.sales.customers",
+      "privilege": "TABLE_READ_DATA"
+    },
+    {
+      "principal": "role:admins",
+      "table": "prod.sales.orders",
+      "privilege": "TABLE_CREATE"
+    },
+    {
+      "principal": "role:admins",
+      "table": "prod.sales.customers",
+      "privilege": "TABLE_READ_PROPERTIES"
+    }
+  ],
+  "vended_credentials": [
+    {
+      "principal": "vended:abc123",
+      "table": "prod.sales.customers",
+      "privileges": ["TABLE_READ_DATA"],
+      "expires_at": "2026-06-03T15:05:00Z",
+      "storage_credential": "AKIAEXAMPLESECRET0001",
+      "secret_access_key": "wJalrXUtnFEMI-K7MDENG-bPxRfiCYEXAMPLEKEY",
+      "session_token": "FQoGZXIvYXdzEExampleSessionTokenDoNotLeak=="
+    },
+    {
+      "principal": "vended:def456",
+      "table": "prod.sales.orders",
+      "privileges": ["TABLE_READ_DATA", "TABLE_WRITE_DATA", "TABLE_DROP"],
+      "expires_at": "2026-06-03T15:10:00Z",
+      "storage_credential": "AKIAEXAMPLESECRET0002",
+      "secret_access_key": "abcdefgVENDEDSECRETMUSTNOTAPPEAR1234567"
+    }
+  ]
+}

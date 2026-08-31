@@ -1,0 +1,460 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+
+// Olivares AI connector/module wire contract, v1.
+//
+// This is the STABLE, versioned contract that every out-of-process connector
+// and module speaks to the engine. Changes are gated by buf's breaking-change
+// detector; an incompatible change requires a new major package (olivares.sdk.v2)
+// and a bump of the go-plugin protocol version (see handshake.go).
+//
+// Vocabulary fields (access mode, signal source, confidence, severity, event
+// type) are strings, not closed proto enums, because the Go SDK models them as
+// open string types — a third-party connector may introduce its own signal
+// source without an SDK release. The payload shape, by contrast, is closed: an
+// Observation/Event payload is a oneof of the known message types plus a JSON
+// fallback for module-defined event payloads.
+syntax = "proto3";
+
+package olivares.sdk.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/olivaresai/olivares/sdk/plugin/genpb/olivaresv1;olivaresv1";
+
+// ---------------------------------------------------------------------------
+// Self-description
+// ---------------------------------------------------------------------------
+
+// ComponentType mirrors sdk.ComponentType.
+enum ComponentType {
+  COMPONENT_TYPE_UNSPECIFIED = 0;
+  COMPONENT_TYPE_SOURCE = 1;
+  COMPONENT_TYPE_OUTPUT = 2;
+  COMPONENT_TYPE_MODULE = 3;
+  COMPONENT_TYPE_CONTENT_SOURCE = 4;
+}
+
+// ConfigField mirrors sdk.ConfigField.
+message ConfigField {
+  string key = 1;
+  string type = 2; // sdk.ConfigFieldType string
+  bool required = 3;
+  string default = 4;
+  bool secret = 5;
+  string description = 6;
+}
+
+// Descriptor mirrors sdk.Descriptor.
+message Descriptor {
+  string name = 1;
+  string version = 2;
+  string api_version = 3;
+  ComponentType type = 4;
+  string title = 5;
+  string description = 6;
+  repeated ConfigField config_fields = 7;
+  // Advisory, open-vocabulary governance surfaces (e.g. "knowledge.document").
+  // Display/catalog metadata only; never an enforcement input.
+  repeated string surfaces = 8;
+}
+
+// Config mirrors sdk.Config.
+message Config {
+  map<string, string> settings = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Observations (what a SourceConnector emits)
+// ---------------------------------------------------------------------------
+
+// EdgeObservation mirrors model.EdgeObservation.
+message EdgeObservation {
+  string origin_kind = 1;
+  string origin_ref = 2;
+  string resource_kind = 3;
+  string resource_ref = 4;
+  string mode = 5; // model.AccessMode string
+  string source = 6; // model.SignalSource string
+  string confidence = 7; // model.Confidence string
+  string tool_ref = 8;
+  google.protobuf.Timestamp observed_at = 9;
+  // Operator-supplied attribution labels (additive - empty = none): the
+  // allowlisted OTEL_RESOURCE_ATTRIBUTES a connector honors. Never part of any
+  // natural identity/dedup key.
+  map<string, string> labels = 10;
+}
+
+// CostSample mirrors model.CostSample. Fields 8-19 are an additive, provider-neutral
+// extension: zero-valued for emitters that do not report them, so this is a
+// backward-compatible wire change (buf breaking-check safe).
+message CostSample {
+  string provider_ref = 1;
+  string model_ref = 2;
+  string session_ref = 3;
+  int64 input_tokens = 4;
+  int64 output_tokens = 5;
+  int64 cost_micro_usd = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+  // Cache breakdown (a subset of input_tokens; 0 = not reported).
+  int64 cache_read_tokens = 8;
+  int64 cache_creation_1h_tokens = 9;
+  int64 cache_creation_5m_tokens = 10;
+  // Attribution dimensions (empty = not reported).
+  string workspace_ref = 11;
+  string api_key_ref = 12;
+  string service_tier = 13;
+  string context_window = 14;
+  string inference_geo = 15;
+  // Surface + provenance.
+  string gateway = 16; // model.Gateway string
+  string provenance = 17; // model.CostProvenance string
+  string cost_type = 18;
+  string actor = 19;
+  // Operator-supplied attribution labels (additive - empty = none); see
+  // EdgeObservation.labels.
+  map<string, string> labels = 20;
+  // Speed mirrors model.CostSample.Speed: the inference-speed band orthogonal to
+  // service_tier (e.g. standard|fast for Claude fast-mode). Empty = not
+  // reported / not split by speed. Additive (S142) — previously this dimension
+  // was silently dropped on the wire.
+  string speed = 21;
+}
+
+// FindingReport mirrors model.FindingReport.
+message FindingReport {
+  string kind = 1;
+  string severity = 2; // model.Severity string
+  string subject_kind = 3;
+  string subject_ref = 4;
+  string title = 5;
+  string detail_hash = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+  // Multi-taxonomy framework references mirroring model.FindingReport:
+  // OWASP Top 10 for LLM Applications ids, OWASP Top 10 for Agentic Applications
+  // ids, and MITRE ATLAS technique ids. Each axis is a deterministic set (sorted,
+  // de-duped by the producer); empty = none. Additive (S142) — previously these
+  // were silently dropped on the wire.
+  repeated string owasp_llm = 8;
+  repeated string owasp_asi = 9;
+  repeated string atlas = 10;
+}
+
+// MetricSample mirrors model.MetricSample: a non-cost MEASURE a source emits — one
+// metric datapoint (a count, a token tally, a duration) attributed to a subject and an
+// instant (the Claude Code productivity/adoption metrics). Additive — a new
+// observation payload, a backward-compatible wire change (buf breaking-check safe: it
+// only ADDS a message and oneof fields).
+message MetricSample {
+  string name = 1;
+  int64 value = 2;
+  string unit = 3;
+  string subject_kind = 4;
+  string subject_ref = 5;
+  google.protobuf.Timestamp occurred_at = 6;
+  // The metric's own breakdown attributes (tool, decision, type, model, language, …);
+  // they DO join the consumer's natural key. Empty = none.
+  map<string, string> dimensions = 7;
+  // Operator-supplied attribution labels (the allowlisted OTEL_RESOURCE_ATTRIBUTES a
+  // connector honors); like EdgeObservation.labels they never join any natural key.
+  map<string, string> labels = 8;
+  // Aggregation semantics: true = Value is a delta to SUM (an OTLP delta counter);
+  // false = a level/snapshot to keep as the latest/max for its bucket (a daily total).
+  bool additive = 9;
+}
+
+// Observation is the sealed sum type a source streams to the host. The set of
+// payloads is closed (it matches model.Observation); an unknown payload is a
+// contract error, never silently dropped.
+message Observation {
+  oneof payload {
+    EdgeObservation edge = 1;
+    CostSample cost = 2;
+    FindingReport finding = 3;
+    MetricSample metric = 4;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Events (what flows on the bus) and Notifications (what an output delivers)
+// ---------------------------------------------------------------------------
+
+// Event mirrors event.Event. First-party payloads travel the typed oneof; a
+// module-defined payload travels json_payload (unversioned, owned by the
+// publishing and consuming modules).
+message Event {
+  string id = 1;
+  string type = 2; // event.Type string
+  string tenant = 3;
+  string source = 4;
+  google.protobuf.Timestamp time = 5;
+  oneof payload {
+    EdgeObservation edge = 6;
+    CostSample cost = 7;
+    FindingReport finding = 8;
+    bytes json_payload = 9;
+    MetricSample metric = 10;
+  }
+}
+
+// Notification mirrors sdk.Notification.
+message Notification {
+  string type = 1;
+  string title = 2;
+  string body = 3;
+  string severity = 4; // model.Severity string
+  string tenant = 5;
+  map<string, string> fields = 6;
+  google.protobuf.Timestamp time = 7;
+  // Interactive choices an output may render as controls (e.g. Slack buttons).
+  // Added field, backward-compatible: an old peer omits it and the output falls
+  // back to title/body. Mirrors sdk.Notification.Actions.
+  repeated NotificationAction actions = 8;
+}
+
+// NotificationAction mirrors sdk.NotificationAction: one interactive choice
+// (label + decision id + opaque value + style hint), carried so an out-of-process
+// output renders the same buttons as in-process (HITL chat round-trip).
+message NotificationAction {
+  string label = 1;
+  string id = 2;
+  string value = 3;
+  string style = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Content sources (what governed knowledge pulls)
+// ---------------------------------------------------------------------------
+
+// ContentDocRef mirrors sdk.DocRef. On the List stream a message with an EMPTY doc_id is
+// the page TERMINATOR: it carries no ref, only next_cursor — the opaque resume cursor for
+// the next page ("" when the source is exhausted). Real refs always have a non-empty doc_id
+// and leave next_cursor empty.
+message ContentDocRef {
+  string doc_id = 1;
+  string title = 2;
+  string content_type = 3;
+  google.protobuf.Timestamp modified_at = 4;
+  string next_cursor = 5;
+}
+
+// ContentListRequest bounds one List page (F5): the host passes the resume cursor
+// ("" starts from the beginning) plus explicit per-page ceilings so an external content
+// source cannot stream its whole corpus into host RAM in one call. max_items/max_bytes <= 0
+// mean "no explicit ceiling on that axis"; the host still enforces its own hard ceiling and
+// treats a page it had to truncate as an incomplete listing.
+message ContentListRequest {
+  string cursor = 1;
+  int32 max_items = 2;
+  int64 max_bytes = 3;
+}
+
+// ContentDocument mirrors sdk.Document. Body is bytes on the wire; the engine
+// adapter converts it to the in-tree contentsource.Document textual body.
+message ContentDocument {
+  string source = 1;
+  string doc_id = 2;
+  string title = 3;
+  bytes body = 4;
+  string content_type = 5;
+  repeated string acl = 6;
+  string classification = 7;
+  string space_ref = 8;
+  google.protobuf.Timestamp modified_at = 9;
+  map<string, string> attributes = 10;
+  repeated string external_labels = 11;
+}
+
+message ContentFetchRequest {
+  string doc_id = 1;
+}
+
+// ContentACLResult mirrors sdk.ACLResult. Empty acl means "inherit the knowledge
+// base default ACL"; values are permission references, never credential material.
+message ContentACLResult {
+  repeated string acl = 1;
+  repeated string external_labels = 2;
+  string classification = 3;
+}
+
+message ContentDeltaRequest {
+  string cursor = 1;
+}
+
+// ContentChange mirrors one sdk.Change plus page metadata from sdk.DeltaPage.
+// kind is an open string vocabulary: content|metadata|acl|deleted.
+message ContentChange {
+  string kind = 1;
+  ContentDocRef ref = 2;
+  // cursor carries the resume cursor for peers that only need one token; the
+  // explicit fields below preserve the in-tree NextToken/ResumeToken split.
+  string cursor = 3;
+  string next_token = 4;
+  string resume_token = 5;
+  bool expired = 6;
+}
+
+// ---------------------------------------------------------------------------
+// Services
+// ---------------------------------------------------------------------------
+
+message DescribeResponse {
+  Descriptor descriptor = 1;
+  repeated string capabilities = 2;
+}
+
+message OpenRequest {
+  Config config = 1;
+}
+
+message Empty {}
+
+// SourceService is served by a SourceConnector plugin. Gather is server-
+// streaming: the plugin streams observations to the host, which lifts each onto
+// the event bus. The stream ends when the source's run completes (batch) or the
+// host cancels the RPC (streaming source).
+service SourceService {
+  rpc Describe(Empty) returns (DescribeResponse);
+  rpc Open(OpenRequest) returns (Empty);
+  rpc Gather(Empty) returns (stream Observation);
+  rpc Close(Empty) returns (Empty);
+}
+
+message NotifyRequest {
+  Notification notification = 1;
+}
+
+// NotifyResponse carries the connector's verdict about what the DESTINATION did
+// with the notification.
+//
+// It exists because a gRPC error alone cannot express it. Every SIEM destination
+// can answer HTTP 200 and still refuse the payload, and the distinction between
+// "refused deterministically" and "temporarily unavailable" decides whether the
+// host retries — for OTLP the specification forbids retrying a partial success
+// outright. Without a response message the report was lost at the process
+// boundary, so an out-of-process plugin could not state a verdict and every
+// failure it reported was retried as though transient.
+//
+// The fields mirror sdk.DeliveryReport. A plugin that leaves them unset reports
+// outcome 0 (indeterminate), which is the safe reading and matches what an
+// in-process connector that returns a plain error produces.
+message NotifyResponse {
+  // outcome mirrors sdk.DeliveryOutcome; 0 is indeterminate.
+  uint32 outcome = 1;
+  // sent is how many records the request carried.
+  int32 sent = 2;
+  // rejected is how many the destination refused, -1 when it reported a refusal
+  // without a count.
+  int32 rejected = 3;
+  // locator mirrors sdk.RejectionLocator.
+  uint32 locator = 4;
+  // first_rejected is the position of the first refused record, -1 when unknown.
+  int32 first_rejected = 5;
+  // code is the destination's own numeric status. It is a NUMBER on purpose: it is
+  // safe to record, unlike the remote text that accompanies it.
+  int32 code = 6;
+  // error_message is the connector's diagnostic text when the delivery did not
+  // succeed, empty when it did.
+  //
+  // The failure travels HERE rather than as a gRPC error, and that is the whole
+  // reason this message exists: gRPC discards the response when the handler returns
+  // an error, so a verdict returned beside an error never reaches the host. An
+  // application-level outcome is part of the answer, not a transport fault. A gRPC
+  // error still means what it always meant — the plugin crashed, the stream broke —
+  // and the host reads that as indeterminate.
+  string error_message = 7;
+}
+
+// OutputService is served by an OutputConnector plugin.
+service OutputService {
+  rpc Describe(Empty) returns (DescribeResponse);
+  rpc Open(OpenRequest) returns (Empty);
+  rpc Notify(NotifyRequest) returns (NotifyResponse);
+  rpc Close(Empty) returns (Empty);
+}
+
+// ContentSourceService is served by a ContentSource plugin. List and DeltaList
+// are server-streaming so a host can pull refs/changes without embedding the
+// connector. FetchACL and DeltaList are called only when Describe.capabilities
+// includes "content.delta".
+service ContentSourceService {
+  rpc Describe(Empty) returns (DescribeResponse);
+  rpc Open(OpenRequest) returns (Empty);
+  rpc List(ContentListRequest) returns (stream ContentDocRef);
+  rpc Fetch(ContentFetchRequest) returns (ContentDocument);
+  rpc FetchACL(ContentFetchRequest) returns (ContentACLResult);
+  rpc DeltaList(ContentDeltaRequest) returns (stream ContentChange);
+  rpc Close(Empty) returns (Empty);
+}
+
+// ---------------------------------------------------------------------------
+// Ingest (the distributed collector→core push plane, ARCHITECTURE.md)
+// ---------------------------------------------------------------------------
+
+// IngestEnvelope is one pushed observation plus its routing context. It is the
+// reverse direction of SourceService: there the host DIALS a connector plugin and
+// PULLS a Gather stream; here a COLLECTOR daemon dials the core and PUSHES the
+// observations its locally-run SourceConnectors emit. The collector therefore has
+// no inbound listener — the secure-default data plane of the distributed topology.
+message IngestEnvelope {
+  string tenant = 1; // tenant reference the observation belongs to
+  string source = 2; // logical source name (the collector's connector)
+  Observation observation = 3;
+}
+
+// IngestSummary acknowledges a completed Push stream.
+message IngestSummary {
+  uint64 accepted = 1; // observations the core accepted onto the bus
+}
+
+// IngestService is served BY THE CORE and dialed by a collector daemon. Push is
+// client-streaming: the collector streams observations to the core, which lifts
+// each onto the event bus exactly as an in-process source's Sink would, so the
+// SAME SourceConnector contract drives both the in-host (B) and remote (C)
+// transports. The channel is gRPC + mTLS (a verified collector client cert); the
+// collector additionally presents a bearer token and the core authorizes ingest
+// per tenant (docs/SECURITY-HARDENING.md, §3). The observation payload is the SAME sealed oneof a
+// plugin streams over SourceService — no new wire shape, no raw payload.
+service IngestService {
+  rpc Push(stream IngestEnvelope) returns (IngestSummary);
+}
+
+// --- Module + Host: contract LOCKED in v1, glue implemented in a later session.
+// The out-of-process module transport (the reverse HostService over the
+// go-plugin broker) is not wired in S02; modules run in-process. Defining the
+// messages and services now freezes the wire shape so buf guards it from the
+// start and implements the glue without a breaking change.
+
+message InitRequest {
+  Config config = 1;
+  // host_broker_id is the go-plugin broker stream id the module dials back on to
+  // reach the host's HostService (Publish/Subscribe/Log).
+  uint32 host_broker_id = 2;
+}
+
+// ModuleService is served by a Module plugin.
+service ModuleService {
+  rpc Describe(Empty) returns (DescribeResponse);
+  rpc Init(InitRequest) returns (Empty);
+  rpc Start(Empty) returns (Empty);
+  rpc Stop(Empty) returns (Empty);
+}
+
+message SubscribeRequest {
+  repeated string types = 1; // event.Type strings; empty = all
+}
+
+message LogRecord {
+  string level = 1;
+  string message = 2;
+  map<string, string> fields = 3;
+}
+
+// HostService is served by the ENGINE and dialed by a module plugin through the
+// go-plugin broker, giving an out-of-process module the same bus/log surface an
+// in-process module gets from sdk.Host.
+service HostService {
+  rpc Publish(Event) returns (Empty);
+  rpc Subscribe(SubscribeRequest) returns (stream Event);
+  rpc Log(LogRecord) returns (Empty);
+}

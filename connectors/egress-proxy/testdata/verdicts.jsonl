@@ -1,0 +1,9 @@
+{"ts":"2026-06-06T10:00:00Z","identity":"ns/payments-agent","fqdn":"api.anthropic.com","port":443,"method":"POST","decision":"allow","reason":"on allowlist"}
+{"time":"2026-06-06T10:01:00Z","workload":"ns/scraper","host":"evil.example.com","dest_port":443,"verdict":"denied","reason":"fqdn not in egress allowlist; attacker key AKIAIOSFODNN7EXAMPLE in body"}
+{"timestamp":"2026-06-06T10:02:00Z","principal":"ns/reader","destination":"files.internal","port":8443,"method":"GET","action":"permitted"}
+{"@timestamp":"2026-06-06T10:03:00Z","agent":"ns/exfil","sni":"raw.githubusercontent.com","action":"block","message":"blocked: payload=SUPERSECRETPAYLOAD_MUST_NOT_LEAK"}
+
+   
+not json at all, should be tolerated
+{"ts":"2026-06-06T10:04:00Z","source":"ns/maybe","host":"weird.example","decision":"quarantine"}
+{"ts":"2026-06-06T10:05:00Z","identity":"ns/nohost","decision":"allow"}

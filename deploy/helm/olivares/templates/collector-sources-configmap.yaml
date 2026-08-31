@@ -1,0 +1,20 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+Non-secret source wiring (OLIVARES_SOURCES_CONFIG). Credentials belong in
+collectors.sourcesConfigSecret, never here. The engine never persists this file
+(docs/contracts) — secrets stay in the operator's material.
+*/ -}}
+{{- if and .Values.collectors.enabled (not .Values.collectors.sourcesConfigSecret) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "olivares.collector.fullname" . }}-sources
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collector
+data:
+  sources.json: |-
+    {{- .Values.collectors.sourcesConfig | nindent 4 }}
+{{- end }}

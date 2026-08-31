@@ -1,0 +1,68 @@
+# Exported with `kubectl get xrd -o yaml` (item list flattened to docs).
+# A composite resource definition with TWO versions: v1alpha1 still served, and
+# v1beta1 declared but no longer served (deprecated) — the inventory records both
+# and annotates each version's served/referenceable posture verbatim.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabases.custom-api.example.org
+spec:
+  group: custom-api.example.org
+  names:
+    kind: XDatabase
+    plural: xdatabases
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          # Only the top-level required field NAMES may be counted; the property
+          # values below (the connection secret namespace) must never leak.
+          required:
+            - parameters
+          properties:
+            parameters:
+              type: object
+              description: secret-namespace=team-platform-secrets-a1b2c3d
+    - name: v1beta1
+      served: false
+      referenceable: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - parameters
+            - region
+---
+# A second composite type with a single served version.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xnetworks.custom-api.example.org
+spec:
+  group: custom-api.example.org
+  names:
+    kind: XNetwork
+    plural: xnetworks
+  versions:
+    - name: v1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - cidrBlock
+---
+# A non-XRD object sharing the directory: a Crossplane Composition is NOT an XRD and
+# must be ignored.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xdatabases.aws
+spec:
+  compositeTypeRef:
+    apiVersion: custom-api.example.org/v1alpha1
+    kind: XDatabase

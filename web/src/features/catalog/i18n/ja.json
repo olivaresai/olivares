@@ -1,0 +1,329 @@
+{
+  "title": "カタログ",
+  "subtitle": "承認されたケーパビリティ（エージェント、MCP、スキル、テンプレート、モデル、コネクタ）の厳選されたカタログと、ガバナンス下でのセルフサービス・インスタンス化。",
+  "tabs": {
+    "entries": "エントリ",
+    "instances": "インスタンス",
+    "policy": "受け入れポリシー"
+  },
+  "kind": {
+    "agent": "エージェント",
+    "mcp": "MCP",
+    "skill": "スキル",
+    "template": "テンプレート",
+    "model": "モデル",
+    "connector": "コネクタ"
+  },
+  "entries": {
+    "search": "エントリを検索…",
+    "name": "名前",
+    "kind": "種別",
+    "slug": "スラッグ",
+    "version": "バージョン",
+    "status": "ステータス",
+    "owner": "オーナー",
+    "signing": "署名",
+    "verification": "検証",
+    "newEntry": "新規エントリ",
+    "empty": "カタログエントリがありません",
+    "emptyHint": "ドラフトエントリを作成してレビューに提出し、承認することで、凍結されハッシュで固定されたバージョンを公開します。",
+    "filters": {
+      "kind": "種別",
+      "status": "ステータス",
+      "all": "すべて"
+    },
+    "truncated": "{{n}} 件のカタログエントリを読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くのカタログエントリがあります。このページは ID 順に行を取得します。この一覧にないことは、存在しないことを示しません。"
+  },
+  "signing": {
+    "signed": "署名済み",
+    "unsigned": "未署名",
+    "signedHint": "Ed25519で署名されています。署名者フィンガープリント {{fingerprint}}。",
+    "unsignedHint": "ハッシュで固定され台帳で証明されていますが、署名されていません（承認時にカタログ署名鍵が設定されていませんでした）。",
+    "notPinned": "—"
+  },
+  "verify": {
+    "title": "完全性",
+    "caption": "開いた時点で再計算されます。署名鍵がエンジンから外に出ることはなく、表示されるのはフィンガープリントのみです。",
+    "verified": "署名を検証しました",
+    "verifiedHashOnly": "ハッシュ固定",
+    "notVerified": "未検証",
+    "pending": "未固定",
+    "verifiedHint": "コンテンツハッシュが固定されたハッシュと一致し、署名が有効です。",
+    "verifiedHashOnlyHint": "コンテンツハッシュが固定されたハッシュと一致します。このバージョンはハッシュで固定され台帳で証明されていますが、未署名です。",
+    "notVerifiedHint": "再計算されたハッシュまたは署名が、承認時に固定された内容と一致しません。このバージョンを承認済みとして扱わないでください。",
+    "pendingHint": "エントリが承認されるまで何も固定されません。検証は承認済みおよび非推奨のバージョンに適用されます。",
+    "contentHash": "固定されたハッシュ",
+    "recomputedHash": "再計算されたハッシュ",
+    "signedBy": "署名者フィンガープリント",
+    "reason": "理由",
+    "reverify": "再検証"
+  },
+  "posture": {
+    "title": "カタログ署名態勢",
+    "enabled": "署名が有効",
+    "disabled": "署名が未設定",
+    "algorithm": "アルゴリズム",
+    "fingerprint": "鍵フィンガープリント",
+    "publicKey": "公開鍵",
+    "publicKeyHint": "外部検証のためのEd25519公開鍵です。意図的に公開されており、シークレットではありません。",
+    "disabledNote": "カタログ署名鍵が設定されていません。承認されたエントリはハッシュで固定され台帳で証明されますが、未署名です。"
+  },
+  "detail": {
+    "title": "エントリ詳細",
+    "identity": "アイデンティティ",
+    "kind": "種別",
+    "slug": "スラッグ",
+    "version": "バージョン",
+    "status": "ステータス",
+    "summary": "概要",
+    "owner": "オーナー",
+    "spec": "仕様",
+    "specCaption": "読み取り専用の定義です。シークレットは仕様内で名前またはロケーターによって参照され、値としては記述されません。インラインのクレデンシャルは書き込み時に拒否されます。",
+    "specEmpty": "仕様がありません",
+    "integrity": "完全性と承認",
+    "contentHash": "コンテンツハッシュ",
+    "signed": "署名済み",
+    "sigAlg": "署名アルゴリズム",
+    "signedBy": "署名者フィンガープリント",
+    "approvedBy": "承認者",
+    "approvedAt": "承認日時",
+    "notApprovedYet": "未承認です。固定も署名もされていません。",
+    "actions": {
+      "edit": "ドラフトを編集",
+      "delete": "ドラフトを削除",
+      "submit": "レビューに提出",
+      "approve": "承認",
+      "deprecate": "非推奨にする",
+      "instantiate": "インスタンス化"
+    }
+  },
+  "editor": {
+    "createTitle": "新規カタログエントリ",
+    "editTitle": "ドラフトエントリを編集",
+    "kind": "種別",
+    "name": "表示名",
+    "slug": "スラッグ",
+    "slugHint": "英小文字、数字、「-」、「_」を使用し、最大64文字までです。",
+    "version": "バージョン",
+    "versionHint": "セマンティックバージョン。例: 1.2.3 または 1.0.0-beta.1。",
+    "summary": "概要",
+    "ownerRef": "オーナー参照",
+    "ownerRefHint": "任意のオーナーラベル。例: platform-team。",
+    "spec": "仕様（JSON）",
+    "specHint": "任意のJSONオブジェクトです。シークレットは名前またはロケーターで参照し、クレデンシャルを埋め込まないでください。インラインのクレデンシャルは拒否されます。",
+    "specPlaceholder": "{\n  \"command\": \"npx\",\n  \"token_ref\": \"$GITHUB_TOKEN\"\n}",
+    "specInvalid": "仕様は有効なJSONオブジェクトである必要があります。",
+    "credentialWarning": "これはクレデンシャルの値のように見えます。シークレットは名前またはロケーター（例: $GITHUB_TOKEN または vault のパス）で参照し、シークレット自体は記述しないでください。",
+    "draftNotice": "新規エントリはドラフトとして作成されます。ライフサイクルおよび完全性のフィールド（ステータス、ハッシュ、署名、承認者）はエンジンが管理するため、ここで設定しないでください。",
+    "create": "ドラフトを作成",
+    "save": "変更を保存",
+    "created": "ドラフトエントリを作成しました",
+    "updated": "ドラフトエントリを更新しました",
+    "admissionStaleWarning": "この {{kind}} エントリには受け入れ判定が記録されています。仕様を変更して保存すると無効になります。承認できるようにするには、新しい証明を受け入れる必要があります。"
+  },
+  "admission": {
+    "title": "証明の受け入れ",
+    "caption": "提供対象のカタログへの承認を制御する、記録された来歴／SBOM 判定です。このエントリがなぜ受け入れられた、または拒否されたのかを示す永続的な記録です。",
+    "verified": "証明を検証しました",
+    "signedUnbound": "署名は検証済み、ダイジェストは未バインド",
+    "notVerified": "未検証",
+    "none": "受け入れ判定は記録されていません",
+    "noneHint": "強制モードの受け入れポリシーの下では、検証済みの証明が受け入れられるまで、このエントリは承認できません。",
+    "reason": "理由",
+    "noReason": "理由は記録されていません。",
+    "subjectDigest": "対象ダイジェスト",
+    "subjectName": "対象",
+    "method": "方式",
+    "signer": "署名者",
+    "transparencyLog": "透明性ログ",
+    "tlogVerified": "包含を検証しました",
+    "tlogPresent": "存在しますが未検証",
+    "tlogAbsent": "存在しません",
+    "coverage": "カバレッジ",
+    "attestedBy": "証明者",
+    "attestedAt": "証明日時",
+    "admit": "証明を受け入れる",
+    "admitTitle": "証明を受け入れる",
+    "admitBodyMcp": "この MCP サーバーの Sigstore 証明バンドル（cosign download attestation / gh attestation download）を、テナントのトラストルートに照らして検証します。検証済みの判定のみが、強制ポリシーによる提供対象レジストリへの承認を可能にします。",
+    "admitBodyConnector": "このコネクタ成果物の Sigstore 証明バンドルを、テナントのトラストルートに照らして検証します。期待されるダイジェストは既定で spec.artifact_digest から取得されます。検証済みの判定のみが、強制ポリシーによる検証済みコネクタとしての承認を可能にします。",
+    "bundle": "証明バンドル（JSON）",
+    "bundleHint": "Sigstore バンドルの JSON を貼り付けてください。サーバー側で検証されます。解析されるまで何も記録されません。",
+    "bundleInvalid": "バンドルは有効な JSON である必要があります。",
+    "bundlePlaceholder": "{ \"mediaType\": \"application/vnd.dev.sigstore.bundle.v0.3+json\", … }",
+    "expectedDigest": "期待される成果物ダイジェスト",
+    "expectedDigestHint": "証明対象が一致すべき任意の sha256（例: sha256:…）。コネクタの場合は既定で spec.artifact_digest から取得されます。",
+    "note": "メモ",
+    "admitSubmit": "検証して受け入れる",
+    "admitted": "証明を受け入れました",
+    "recordedNotAdmitted": "記録されましたが、証明はポリシーを満たしませんでした。判定を確認してください。"
+  },
+  "confirm": {
+    "deleteTitle": "このドラフトエントリを削除しますか？",
+    "deleteBody": "このドラフトエントリを完全に削除しますか？この操作は取り消せません。削除できるのはドラフトのみです。承認済みのエントリは削除ではなく非推奨にする必要があります。",
+    "deleteConfirm": "完全に削除",
+    "deletePhrase": "DELETE",
+    "deleted": "ドラフトエントリを削除しました",
+    "submitTitle": "このドラフトをレビューに提出しますか？",
+    "submitBody": "「保留中」に移行し、決定が下されるまでドラフトとして編集できなくなります。",
+    "submitConfirm": "レビューに提出",
+    "submitted": "エントリをレビューに提出しました",
+    "approveTitle": "このエントリを承認しますか？",
+    "approveBody": "承認は最終的なものです。バージョンは凍結されて不変になり、コンテンツハッシュが固定され（署名が有効な場合は署名もされ）、セルフサービスでのインスタンス化が可能になります。後で廃止する場合は、削除ではなく非推奨にする必要があります。",
+    "approveConfirm": "承認して凍結",
+    "approvePhrase": "APPROVE",
+    "approved": "エントリを承認し凍結しました",
+    "deprecateTitle": "この承認済みエントリを非推奨にしますか？",
+    "deprecateBody": "廃止され、新規のインスタンス化から非表示になりますが、検証可能な状態を保つため履歴と署名は保持されます。この操作は元に戻せません。代わりに新しいバージョンを公開してください。",
+    "deprecateConfirm": "非推奨にする",
+    "deprecated": "エントリを非推奨にしました"
+  },
+  "instantiate": {
+    "title": "インスタンス化を申請",
+    "body": "これはあなたに帰属するガバナンス申請（ステータス「申請済み」）を作成します。まだ何もプロビジョニングされません。承認の決定はガバナンスの責務であり、プロビジョニングはデプロイの責務です。管理者が承認してアクティブ化する必要があります。",
+    "name": "インスタンス名",
+    "nameHint": "このエントリのインスタンス化に対する一意の名前です。",
+    "targetRef": "ターゲット参照",
+    "targetRefHint": "任意のデプロイターゲット。例: env:prod。",
+    "note": "メモ",
+    "submit": "インスタンス化を申請",
+    "requested": "インスタンス化を申請しました",
+    "notApproved": "インスタンス化できるのは承認済みのエントリのみです。"
+  },
+  "instances": {
+    "search": "インスタンスを検索…",
+    "name": "名前",
+    "entry": "ソースエントリ",
+    "kind": "種別",
+    "version": "バージョン",
+    "status": "ステータス",
+    "target": "ターゲット",
+    "requestedBy": "申請者",
+    "decidedBy": "決定者",
+    "note": "メモ",
+    "empty": "インスタンス化の申請がありません",
+    "emptyHint": "承認済みエントリのセルフサービス・インスタンス化が、そのガバナンスステータスとともにここに表示されます。",
+    "filters": {
+      "status": "ステータス",
+      "all": "すべて"
+    },
+    "liveNote": "ライブ — 申請がガバナンスの決定を待つ間、更新されます。",
+    "truncated": "{{n}} 件のインスタンスを読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くのインスタンスがあります。このページは ID 順に行を取得します。この一覧にないことは、存在しないことを示しません。"
+  },
+  "instanceDetail": {
+    "title": "インスタンス詳細",
+    "provenance": "来歴",
+    "entryId": "エントリID",
+    "entryKind": "エントリ種別",
+    "entrySlug": "エントリスラッグ",
+    "entryVersion": "エントリバージョン",
+    "governance": "ガバナンス",
+    "note": "メモ",
+    "governanceCaption": "遷移は許可されたフローに従い、あなたのアイデンティティに対して記録されます。ポリシー／HITL はガバナンスであり、実際のプロビジョニングはデプロイです。",
+    "actions": {
+      "approve": "承認",
+      "reject": "却下",
+      "activate": "アクティブ化"
+    }
+  },
+  "transition": {
+    "approveTitle": "このインスタンス申請を承認しますか？",
+    "rejectTitle": "このインスタンス申請を却下しますか？",
+    "activateTitle": "このインスタンスをアクティブ化しますか？",
+    "body": "承認、却下、またはアクティブ化は、監査台帳にあなたのアイデンティティに対して記録され、許可されたフロー（申請済み → 承認済み/却下、承認済み → アクティブ/却下）に従います。",
+    "noteLabel": "決定メモ（任意）",
+    "notePlaceholder": "この決定の理由…",
+    "approveConfirm": "承認",
+    "rejectConfirm": "却下",
+    "activateConfirm": "アクティブ化",
+    "done": "ガバナンスの決定を適用しました"
+  },
+  "status": {
+    "draft": "ドラフト",
+    "pending": "保留中",
+    "approved": "承認済み",
+    "deprecated": "非推奨",
+    "requested": "申請済み",
+    "rejected": "却下",
+    "active": "アクティブ"
+  },
+  "empty": {
+    "entry": {
+      "title": "カタログエントリはまだ作成されていません",
+      "description": "ドラフトエントリを作成してレビューに提出し、承認すると、凍結されハッシュで固定されたカタログバージョンが公開されます。"
+    },
+    "instance": {
+      "title": "インスタンス化の申請はまだありません",
+      "description": "カタログエントリを承認してからインスタンス化を申請すると、そのガバナンス対象のインスタンスレコードがここに作成されます。"
+    }
+  },
+  "policy": {
+    "kind": {
+      "mcp": {
+        "title": "MCP エントリ",
+        "body": "提供中のサブレジストリに連合 MCP エントリを受け入れる際の信頼アンカー。",
+        "editTitle": "MCP 受け入れポリシーを編集"
+      },
+      "connector": {
+        "title": "コネクタ エントリ",
+        "body": "承認前にサードパーティ製コネクタを検査する信頼アンカー。",
+        "editTitle": "コネクタ受け入れポリシーを編集"
+      }
+    },
+    "state": {
+      "unconfigured": {
+        "title": "ポリシーなし — すべて受け入れられます",
+        "body": "ポリシーが未設定のため、エントリは署名検証を一切行わずに受け入れられます。受け入れを制御するには信頼アンカーを設定してください。"
+      },
+      "observe": {
+        "title": "設定済み — 観測のみ",
+        "body": "署名は検証され記録されますが、失敗しても受け入れは妨げられません。強制するには「署名を必須にする」を有効にしてください。"
+      },
+      "enforce": {
+        "title": "強制中",
+        "body": "これらの信頼アンカーで検証できないエントリは受け入れを拒否されます。"
+      }
+    },
+    "modeName": {
+      "keyless": "キーレス（ID 紐付け）",
+      "certificate-pki": "証明書 PKI",
+      "bare-key": "素の鍵",
+      "empty": "アンカーなし"
+    },
+    "mode": "信頼方式",
+    "derivedMode": "導出された信頼方式",
+    "on": "オン",
+    "off": "オフ",
+    "requireSigned": "署名済みエントリを必須にする",
+    "requireSignedHint": "オンの場合、検証できないエントリは拒否されます。",
+    "requireSubjectDigest": "サブジェクトのダイジェストを必須にする",
+    "requireSubjectDigestHint": "名前だけでなく、エントリのダイジェストに証明を紐付けます。",
+    "identities": "許可する ID",
+    "identitiesHint": "1 行に 1 件。発行者と必ず一緒に設定します。",
+    "issuers": "許可する発行者",
+    "issuersHint": "1 行に 1 件。ID と必ず一緒に設定します。",
+    "predicates": "許可する述語",
+    "predicatesHint": "1 行に 1 件（例: 来歴の述語型）。空行は拒否されます。",
+    "trustedRoots": "信頼するルート",
+    "trustedRootsHint": "PEM 形式の CA 証明書。BEGIN…END ブロック全体のみ保存されます。",
+    "trustedKeys": "信頼する鍵",
+    "trustedKeysHint": "PEM 形式の公開鍵。BEGIN…END ブロック全体のみ保存されます。",
+    "note": "メモ",
+    "attestedBy": "最終変更者",
+    "attestedAt": "最終変更",
+    "edit": "ポリシーを編集",
+    "editBody": "変更は次回の受け入れから有効になります。",
+    "saved": "受け入れポリシーを保存しました",
+    "loadFailed": "受け入れポリシーを読み込めませんでした。",
+    "confirmTitle": "信頼の変更を確認",
+    "confirmBody": "この変更は受け入れを厳しくするか、信頼アンカーを削除します。既に受け入れ済みのものは再検査されませんが、再署名するまで新規の受け入れが失敗する場合があります。",
+    "err": {
+      "privateKey": "信頼マテリアルは公開鍵である必要があります — PRIVATE KEY ブロックを削除してください。",
+      "pemResidual": "BEGIN…END ブロック全体のみが保存されます。残った文字列を削除してください。",
+      "emptyPredicate": "述語に空の項目を含めることはできません。",
+      "anchorMissing": "強制するには信頼するルートまたは鍵が少なくとも 1 つ必要です。ないと何も受け入れられません。",
+      "identityIssuer": "ID と発行者は両方設定するか、どちらも設定しないかのいずれかです。"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "file_search": {"enabled": true},
+  "web_search": {"enabled": true},
+  "image_generation": {"enabled": false},
+  "mcp": {"enabled": true},
+  "code_interpreter": {"enabled": true}
+}

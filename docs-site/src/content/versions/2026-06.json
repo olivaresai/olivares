@@ -1,0 +1,341 @@
+{
+  "sidebar": [
+    {
+      "label": "Start here",
+      "items": [
+        {
+          "label": "What is Olivares AI?",
+          "slug": "start/what-is-olivares-ai"
+        },
+        {
+          "label": "Quickstart",
+          "slug": "start/quickstart"
+        },
+        {
+          "label": "Paths by role",
+          "slug": "start/paths-by-role"
+        },
+        {
+          "label": "How this documentation is organized",
+          "slug": "start/how-the-docs-are-organized"
+        },
+        {
+          "label": "Honesty & limits",
+          "slug": "start/honesty-and-limits"
+        }
+      ]
+    },
+    {
+      "label": "Tutorials",
+      "collapsed": false,
+      "items": [
+        {
+          "label": "From zero to a read/write access graph",
+          "slug": "tutorials/zero-to-graph"
+        },
+        {
+          "label": "Getting started by scenario",
+          "items": [
+            {
+              "autogenerate": {
+                "directory": "tutorials/getting-started"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "How-to guides",
+      "collapsed": true,
+      "items": [
+        {
+          "label": "Install & operate",
+          "items": [
+            {
+              "label": "Self-host the control plane",
+              "slug": "how-to/self-hosting"
+            },
+            {
+              "label": "Install air-gapped",
+              "slug": "how-to/air-gap-install"
+            },
+            {
+              "label": "Verify a release",
+              "slug": "how-to/verify-a-release"
+            },
+            {
+              "label": "Harden a deployment",
+              "slug": "how-to/security-hardening"
+            },
+            {
+              "label": "Back up and restore",
+              "slug": "how-to/backup-and-restore"
+            },
+            {
+              "label": "Monitor with Prometheus",
+              "slug": "how-to/monitor-with-prometheus"
+            },
+            {
+              "label": "Troubleshooting",
+              "slug": "how-to/troubleshooting"
+            }
+          ]
+        },
+        {
+          "label": "Connect & observe",
+          "items": [
+            {
+              "label": "Connect a source",
+              "slug": "how-to/connect-a-source"
+            },
+            {
+              "label": "Connect Claude Code",
+              "slug": "how-to/connect-claude-code"
+            },
+            {
+              "label": "Enterprise OTel for Claude Code",
+              "slug": "how-to/claude-code-enterprise-otel"
+            },
+            {
+              "label": "Forward to Splunk",
+              "slug": "how-to/forward-audit-to-splunk"
+            }
+          ]
+        },
+        {
+          "label": "Connector guides",
+          "items": [
+            {
+              "autogenerate": {
+                "directory": "how-to/connectors"
+              }
+            }
+          ]
+        },
+        {
+          "label": "Cookbook",
+          "items": [
+            {
+              "autogenerate": {
+                "directory": "how-to/cookbook"
+              }
+            }
+          ]
+        },
+        {
+          "label": "Govern & build",
+          "items": [
+            {
+              "label": "Govern and approve",
+              "slug": "how-to/govern-and-approve"
+            },
+            {
+              "label": "Manage as code (Terraform)",
+              "slug": "how-to/manage-as-code"
+            },
+            {
+              "label": "Use the client SDKs",
+              "slug": "how-to/use-the-client-sdks"
+            },
+            {
+              "label": "Build and ship a connector",
+              "slug": "how-to/build-a-connector"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Reference",
+      "collapsed": true,
+      "items": [
+        {
+          "label": "Overview",
+          "slug": "reference"
+        },
+        {
+          "label": "REST API",
+          "items": [
+            {
+              "collapsed": false,
+              "items": [],
+              "label": "Symbol(bOxTF738JFknjeeW8HAOgSSETk7m_XKo)"
+            }
+          ]
+        },
+        {
+          "label": "API stability & deprecation policy",
+          "slug": "reference/api-stability"
+        },
+        {
+          "label": "Event bus (AsyncAPI 3.0)",
+          "slug": "reference/events"
+        },
+        {
+          "label": "Connectors & coverage tiers",
+          "slug": "reference/connectors"
+        },
+        {
+          "label": "Verified connectors (third-party)",
+          "slug": "reference/verified-connectors"
+        },
+        {
+          "label": "Modules catalog",
+          "items": [
+            {
+              "label": "Overview",
+              "slug": "reference/modules/overview"
+            },
+            {
+              "label": "I — Inventory & discovery",
+              "slug": "reference/modules/i-inventory"
+            },
+            {
+              "label": "II — Live operation & sessions",
+              "slug": "reference/modules/ii-sessions"
+            },
+            {
+              "label": "III — Access & resource map (R/RW)",
+              "slug": "reference/modules/iii-access-map"
+            },
+            {
+              "label": "IV — Orchestration & A2A",
+              "slug": "reference/modules/iv-orchestration"
+            },
+            {
+              "label": "V — MCP, skills & capabilities",
+              "slug": "reference/modules/v-capabilities"
+            },
+            {
+              "label": "VI — Identity, permissions & governance",
+              "slug": "reference/modules/vi-governance"
+            },
+            {
+              "label": "VII — Deployment & integration",
+              "slug": "reference/modules/vii-deploy"
+            },
+            {
+              "label": "VIII — Data, knowledge & context",
+              "slug": "reference/modules/viii-knowledge"
+            },
+            {
+              "label": "IX — Security, guardrails & audit",
+              "slug": "reference/modules/ix-security"
+            },
+            {
+              "label": "X — Model & provider management",
+              "slug": "reference/modules/x-models"
+            },
+            {
+              "label": "XI — Cost & AI FinOps",
+              "slug": "reference/modules/xi-finops"
+            },
+            {
+              "label": "XII — Quality, evals & testing",
+              "slug": "reference/modules/xii-evals"
+            },
+            {
+              "label": "XIII — Compliance & regulatory",
+              "slug": "reference/modules/xiii-compliance"
+            },
+            {
+              "label": "XIV — Internal catalog & marketplace",
+              "slug": "reference/modules/xiv-catalog"
+            },
+            {
+              "label": "XV — Output integrations & notifications",
+              "slug": "reference/modules/xv-notify"
+            },
+            {
+              "label": "XVI — Voice & realtime agents",
+              "slug": "reference/modules/xvi-voice"
+            },
+            {
+              "label": "XVII — Agent simulation/testing sandbox",
+              "slug": "reference/modules/xvii-sandbox"
+            },
+            {
+              "label": "XVIII — Red-teaming & adversarial testing",
+              "slug": "reference/modules/xviii-redteam"
+            },
+            {
+              "label": "XIX — Own API + manage-as-code",
+              "slug": "reference/modules/xix-api-manage-as-code"
+            },
+            {
+              "label": "XX — Multi-tenancy & org management",
+              "slug": "reference/modules/xx-multi-tenancy"
+            },
+            {
+              "label": "XXI — Executive dashboards & reporting",
+              "slug": "reference/modules/xxi-executive-dashboards"
+            },
+            {
+              "label": "XXII — Health, SLA & uptime",
+              "slug": "reference/modules/xxii-health"
+            },
+            {
+              "label": "XXIII — Own-model management / fine-tuning",
+              "slug": "reference/modules/xxiii-fine-tuning"
+            },
+            {
+              "label": "Live-ingest (supporting)",
+              "slug": "reference/modules/live-ingest"
+            },
+            {
+              "label": "Observability (supporting)",
+              "slug": "reference/modules/observability"
+            }
+          ]
+        },
+        {
+          "label": "CLI",
+          "slug": "reference/cli"
+        },
+        {
+          "label": "Configuration",
+          "slug": "reference/configuration"
+        },
+        {
+          "label": "Glossary",
+          "slug": "reference/glossary"
+        }
+      ]
+    },
+    {
+      "label": "Explanation",
+      "collapsed": true,
+      "items": [
+        {
+          "label": "Overview",
+          "slug": "explanation"
+        },
+        {
+          "label": "Architecture",
+          "items": [
+            {
+              "autogenerate": {
+                "directory": "explanation/architecture"
+              }
+            }
+          ]
+        },
+        {
+          "label": "Security & threat model",
+          "items": [
+            {
+              "autogenerate": {
+                "directory": "explanation/security"
+              }
+            }
+          ]
+        },
+        {
+          "label": "Open core & licensing",
+          "slug": "explanation/open-core-and-licensing"
+        }
+      ]
+    }
+  ]
+}

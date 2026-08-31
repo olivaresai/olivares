@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "id": "prj_abc123",
+      "name": "Production Chatbot",
+      "description": "Main production chatbot project",
+      "created_at": "2026-01-15T10:00:00Z",
+      "organization_id": "org_test"
+    },
+    {
+      "id": "prj_def456",
+      "name": "Internal Tools",
+      "description": "Internal tooling project",
+      "created_at": "2026-03-01T10:00:00Z",
+      "archived_at": "2026-05-01T10:00:00Z",
+      "organization_id": "org_test"
+    }
+  ],
+  "has_more": false,
+  "first_id": "prj_abc123",
+  "last_id": "prj_def456"
+}

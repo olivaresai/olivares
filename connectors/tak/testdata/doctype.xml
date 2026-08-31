@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!DOCTYPE lolz [
+  <!ENTITY lol "lol">
+  <!ENTITY lol1 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol2 "&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;">
+]>
+<event version="2.0" uid="x-1" type="a-f-G" how="m-g" time="2021-06-01T12:00:00Z" start="2021-06-01T12:00:00Z" stale="2021-06-01T12:10:00Z"><point lat="0" lon="0" hae="0" ce="1" le="1"/></event>

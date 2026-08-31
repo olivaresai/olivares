@@ -1,0 +1,51 @@
+{
+  "title": "态势导出",
+  "description": "导出只读的真实态势（清点、最小权限偏移和发现），供控制塔接入。",
+  "filters": {
+    "title": "导出筛选",
+    "severity": "最低严重级别",
+    "severityHint": "仅包含达到或高于此严重级别的发现。",
+    "severityAny": "任意严重级别",
+    "category": "类别",
+    "categoryHint": "匹配发现类型或主体类型。",
+    "categoryPlaceholder": "例如 policy_drift",
+    "kind": "清点类型",
+    "kindHint": "将清点限定为单一实体类型。",
+    "kindPlaceholder": "例如 agent",
+    "none": "无筛选"
+  },
+  "severity": {
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "严重"
+  },
+  "notes": {
+    "pull": "这是一份只读、最小数据的投影（仅含引用和哈希），由控制塔拉取；在你导出之前不会离开本机。"
+  },
+  "export": {
+    "action": "导出态势",
+    "done": "已导出态势。",
+    "failed": "态势导出失败。"
+  },
+  "summary": {
+    "title": "最近一次导出",
+    "inventory": "清点实体",
+    "findings": "发现",
+    "unexpected": "意外访问",
+    "drift": "偏移信号",
+    "truncated": "已截断",
+    "truncatedHint": "一个或多个部分达到导出上限并且不完整——计数为下限而非总数。",
+    "severityFloor": "严重级别 ≥ {{severity}}"
+  },
+  "history": {
+    "title": "本次会话的导出",
+    "note": "此列表仅涵盖本浏览器会话中进行的导出。每次导出都会记录在防篡改的审计账本中（操作 posture.export）——",
+    "auditLink": "打开审计浏览器",
+    "empty": "本次会话尚无导出。",
+    "colTime": "时间",
+    "colFilters": "筛选",
+    "colCounts": "计数",
+    "counts": "{{inventory}} 清点 · {{findings}} 发现 · {{drift}} 偏移"
+  }
+}

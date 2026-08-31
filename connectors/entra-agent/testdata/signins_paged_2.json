@@ -1,0 +1,23 @@
+{
+  "@odata.nextLink": "https://graph.microsoft.com/beta/auditLogs/signIns?$skiptoken=SIGNIN3",
+  "value": [
+    {
+      "id": "si-page-2",
+      "createdDateTime": "2026-06-11T10:01:00Z",
+      "servicePrincipalId": "aid-page-2",
+      "servicePrincipalName": "Page Two Agent",
+      "appId": "sp-app-page-2",
+      "resourceId": "res-page-2",
+      "resourceDisplayName": "Page Two API",
+      "status": {
+        "errorCode": 0
+      },
+      "agent": {
+        "agentType": "AgentIdentity",
+        "agentSubjectType": "servicePrincipal",
+        "agentSubjectParentId": "aid-page-2",
+        "parentAppId": "bp-app-1"
+      }
+    }
+  ]
+}

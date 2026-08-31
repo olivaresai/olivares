@@ -1,0 +1,9 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "key_codex", "object": "organization.admin_api_key", "name": "codex-ci", "status": "active", "redacted_value": "sk-admin-...AbCd", "created_at": 1700000000 }
+  ],
+  "has_more": false,
+  "first_id": "key_codex",
+  "last_id": "key_codex"
+}

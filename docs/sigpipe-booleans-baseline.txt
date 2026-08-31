@@ -1,0 +1,67 @@
+# LÍNEA BASE de check-sigpipe-booleans — deuda ANOTADA, no una lista de rutas.
+#
+# Formato: `<nº de tuberías><TAB><ruta>`. Las líneas que empiezan por `#` y las vacías se ignoran
+# al comparar Y al contar, así que se puede anotar cada entrada sin falsear el recuento.
+#
+# ⛔ POR QUÉ SUBE de 45 a 81 el 2026-08-30, y por qué eso NO es deuda nueva. La sonda exigía que
+# `grep` fuese lo PRIMERO tras la barra, así que `| command grep -q` era invisible para ella. Las
+# 36 tuberías que aparecen hoy llevan aquí desde siempre: lo que cambia es que se VEN. Anotarlas es
+# el precio de poder verlas; borrarlas de la vista era gratis y falso. Cada una lleva abajo la
+# forma que la hacía invisible, para que quien la cure pueda bajar la deuda una a una.
+#
+# ⚠ ESTE FICHERO SE REGENERA SOBRE UN ÁRBOL LIMPIO, y lo digo porque la primera versión no lo hizo:
+# la generé en un worktree con ficheros SIN TRACKEAR y coló una entrada fantasma
+# (`scripts/test-claim-lector.sh`, 6 tuberías) para un fichero que no existe en el repositorio. Un
+# censo hecho sobre el disco mide el disco, no el commit.
+#
+# ⛔ Y NO SE MATERIALIZA SIN LÍNEA DE the planner or the kernel lane: subir la deuda declarada es gobierno del
+# trinquete, no decisión de quien la mide.
+#
+#
+# ⚠ 2026-08-30, v2: la sonda añade `--quiet` (+0 hoy) y la forma «asignación cuyo rc se prueba»
+# (`VAR="$( … | head|read|grep -q … )"` seguida de `||`/`&&`), que aportó **+1**:
+# `scripts/check-channel-parity.sh` — DEUDA YA PAGADA el mismo día, y su entrada retirada de
+# aquí en una pieza aparte. Bajar la línea base es la MITAD que la cura original se dejó: el
+# fichero pasó a 0 tuberías y el suelo siguió reservando 1, así que restaurar la tubería vieja
+# daba 1 — igual al suelo, ninguna subida — y el trinquete NO la habría nombrado. Un suelo
+# desfasado no es contabilidad: es el detector apagado para ese fichero. `head`/`read` a secas quedan FUERA DE ALCANCE con su censo
+# en la cabecera del checker: 180 candidatos, 10 en línea con un booleano y CERO verdaderos
+# positivos. Un trinquete de 266 entradas con 180 de ruido no se lee.
+#
+# --- ya visibles con la sonda original (deuda previa, sin cambio) ---
+1	scripts/ai-state.sh
+1	scripts/alias-image-digest.sh
+5	scripts/aws-iam-phase2.sh
+4	scripts/census-blind-verdict.sh
+1	scripts/check-gate-parity.sh
+# ⚠ 2026-08-30: BAJADA de 4 a 3. La cura de LEG C retiro una tuberia de este fichero y dejo el
+# suelo donde estaba, que es la MITAD que una cura de esta clase se deja siempre: con el suelo en
+# 4 y el fichero en 3, restaurar la tuberia vieja habria dado 4 — igual al suelo, ninguna subida —
+# y el trinquete NO la habria nombrado. Un suelo desfasado es el detector apagado para ese
+# fichero. Lo señalo P a las 20:31Z y es la segunda vez hoy: la primera fue check-channel-parity.
+3	scripts/check-git-env-isolation.sh
+1	scripts/check-migration-contiguity.sh
+7	scripts/check-migrations.sh
+1	scripts/check-ocsf-claims.sh
+1	scripts/check-taskfile-graph.sh
+1	scripts/check-taskfile-shape.sh
+1	scripts/deploy-status-channel.sh
+1	scripts/hub-battery.sh
+1	scripts/release-preflight.sh
+1	scripts/report-orphan-branches.sh
+2	scripts/resolve-bare-manifest-digest.sh
+1	scripts/test-brief-effort.sh
+1	scripts/test-ci-timeout-arithmetic.sh
+1	scripts/test-conflict-markers.sh
+1	scripts/test-docs-parity.sh
+1	scripts/test-export-license.sh
+1	scripts/test-fiscal-id.sh
+1	scripts/test-hub-hygiene.sh
+1	scripts/test-npm-vuln-gate.sh
+3	scripts/test-release-security-producer.sh
+22	scripts/test-release-security-sig-guard.sh
+2	scripts/test-status-ref.sh
+11	scripts/test-unreachable-build-guards.sh
+1	scripts/test-web-e2e-boot.sh
+
+# --- PRE-EXISTENTES, visibles al ensanchar la sonda ---

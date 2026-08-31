@@ -1,0 +1,91 @@
+{
+  // Olivares AI documentation site — the Worker that SERVES docs-site/dist on docs.olivares.ai.
+  //
+  // ⛔ POR QUÉ ESTE FICHERO EXISTE, y por qué no existía. `docs-site/README.md` lo declaraba con
+  // todas las letras: «This tree contains the static-site build, but no `wrangler` configuration»
+  // y «as of 2026-08-01 no workflow publishes this site». El sitio se construía en CI
+  // (`mainline-ci.yml` corre `npm --prefix docs-site test`, que encadena `build`) y NO SE PUBLICABA
+  // EN NINGUNA PARTE: 2458 páginas verificadas en cada push y servidas a nadie.
+  //
+  // El coste era visible desde fuera: `docs.olivares.ai` daba NXDOMAIN hasta el 2026-08-23, y
+  // cuando se arregló (PR #82 del repo web) pasó a hacer 301 al apex — donde
+  // `/docs/reference/api-stability` responde 404, porque esa profundidad vive AQUÍ y no estaba
+  // desplegada. El nombre prometía documentación y entregaba una redirección a un 404.
+  //
+  // ⇒ Forma decidida por the planner el 2026-08-23 (13:02Z y 13:09Z), con N como dueño: docs-site se
+  // despliega como PROYECTO PROPIO desde este repo, y el custom domain se MUEVE del Worker de
+  // marketing a éste. No se sirve desde el Worker de marketing: no debe cargar con 142 páginas de
+  // otro repo ni con su versionado.
+  //
+  // Worker de assets y no Pages, y no es preferencia: medido el 2026-08-23, la credencial de esta
+  // caja lista Workers y zonas pero la API de Pages le devuelve `Authentication error` (10000).
+  // Con ESTA credencial, Pages no es una opción.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "olivares-docs",
+  "compatibility_date": "2026-08-23",
+
+  // Sitio estático puro: no hay `main`. El runtime de assets sirve `dist/` directamente, así que
+  // no hay código nuestro en la ruta de servicio — nada que revisar, nada que se pueda inyectar.
+  "assets": {
+    "directory": "./dist",
+    // Starlight emite un árbol de directorios con `index.html` y enlaza sin extensión
+    // (`trailingSlash: 'ignore'` en astro.config.mjs), así que el manejo automático de HTML es el
+    // que hace que `/reference/api-stability` encuentre `reference/api-stability/index.html`.
+    "html_handling": "auto-trailing-slash",
+    // `dist/404.html` existe (verificado tras el build). Sin esto, un enlace roto devuelve el
+    // index y el visitante cree estar en una página que no existe — un 404 honesto vale más.
+    "not_found_handling": "404-page"
+  },
+
+  "observability": { "enabled": true },
+
+  // ⛔ LA RUTA, Y POR QUÉ ES UNA `route` Y NO UN `custom_domain`. Declarada el 2026-08-27 por el
+  // carril del escaparate, midiendo la cuenta en vivo en vez de deducirla — porque lo que había
+  // aquí («SIN
+  // `routes` a propósito, la ruta se añade en la MISMA ventana en que el repo web la retira»)
+  // describía una ventana QUE YA PASÓ, y el resultado era una topología que no vive en ningún
+  // repositorio.
+  //
+  // Estado MEDIDO el 2026-08-27 contra la API de Cloudflare, y son dos mecanismos a la vez:
+  //
+  //   GET /accounts/{id}/workers/domains   docs.olivares.ai -> olivaresai-web   (custom domain)
+  //   GET /zones/{id}/workers/routes       docs.olivares.ai/* -> olivares-docs  (route)
+  //
+  // y en vivo GANA LA RUTA: `curl -I https://docs.olivares.ai/reference/api-stability/` responde
+  // **200** con el docs-site, no el 301 al apex que el Worker de marketing sigue llevando en su
+  // código (`src/worker.ts:223` del repo web). Es decir: el nombre lo SIRVE este Worker y el
+  // registro DNS lo sostiene el custom domain del otro.
+  //
+  // ⇒ Por eso `custom_domain: true` AQUÍ sería un error hoy: un hostname sólo puede ser custom
+  //   domain de UN Worker, así que el deploy fallaría mientras `olivaresai-web` lo tenga. Y por
+  //   eso el repo web NO puede simplemente borrarlo de su fichero: el custom domain es lo que
+  //   crea el registro DNS, y quitarlo devuelve el nombre a NXDOMAIN — que es exactamente lo que
+  //   pasó del 08-13 al 08-23.
+  //
+  // ⇒ Lo que se declara es la RUTA QUE YA SIRVE. Sin esta línea la ruta sólo existía en el panel:
+  //   creada a mano, en ningún fichero, y por tanto invisible para cualquiera que lea los dos
+  //   repositorios. La documentación de Cloudflare es explícita sobre el riesgo
+  //   (`workers/wrangler/configuration/` §Source of truth, verificada hoy): *«If you change your
+  //   routes in the dashboard, Wrangler will override them in the next deploy with the routes you
+  //   have set in your Wrangler configuration file»*. Declararla es lo único que garantiza que el
+  //   próximo `wrangler deploy` de este Worker la re-afirme en vez de poder retirarla.
+  //
+  // ✅ Y HAY UNA OBSERVACIÓN QUE CONVIERTE ESTO DE RAZONAMIENTO EN MEDIDA. El 2026-08-27 a las
+  // 22:44Z se mergeó web#93, y en ese repo mergear DESPLIEGA (Workers Builds). Es decir: el Worker
+  // de marketing se desplegó con el `wrangler.jsonc` que sigue reclamando `docs.olivares.ai` como
+  // custom domain. Comprobado DESPUÉS del despliegue: `docs.olivares.ai/reference/api-stability/`
+  // sigue respondiendo **200** con el docs-site, y la route del panel sigue apuntando a
+  // `olivares-docs`. ⇒ un deploy del Worker de marketing RE-AFIRMA su custom domain y **no
+  // desprende la route de otro Worker**: son dos objetos distintos y wrangler reconcilia el suyo.
+  // Que la convivencia aguante un deploy es exactamente lo que hacía falta saber antes de dejarla
+  // declarada, y ahora está medido en vez de deducido.
+  //
+  // MIGRACIÓN PENDIENTE, escrita aquí porque su ORDEN importa y equivocarlo tira el nombre:
+  //   1 · el repo web retira `docs.olivares.ai` de sus `routes` y despliega  → suelta el custom
+  //       domain (y con él el DNS: hay una ventana de caída)
+  //   2 · este fichero cambia la ruta por `{"pattern": "docs.olivares.ai", "custom_domain": true}`
+  //       y se despliega                                                    → recrea DNS + cert
+  // Es una migración de DNS de producción con ventana de caída: no la ejecuta una sesión de
+  // carril por su cuenta. Mientras no se haga, lo de arriba es la verdad y está declarada.
+  "routes": [{ "pattern": "docs.olivares.ai/*", "zone_name": "olivares.ai" }]
+}

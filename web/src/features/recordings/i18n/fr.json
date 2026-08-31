@@ -1,0 +1,119 @@
+{
+  "title": "Enregistrements",
+  "subtitle": "Enregistrement des sessions privilégiées — chaque action administrative sur une surface enregistrée est capturée sous forme de trame chaînée par hachage, ancrée au registre de preuves.",
+  "search": {
+    "field": "Champ de recherche",
+    "subject": "Le sujet contient",
+    "grant": "ID d’octroi",
+    "input": "Rechercher des enregistrements",
+    "subjectPlaceholder": "Texte du sujet",
+    "grantPlaceholder": "ID d’octroi exact",
+    "submit": "Rechercher",
+    "clear": "Effacer"
+  },
+  "allStatuses": "Tous les statuts",
+  "filterByStatus": "Filtrer par statut",
+  "filterBySealReason": "Filtrer par motif de scellement",
+  "allSealReasons": "Tous les motifs de scellement",
+  "filterOpenedAfter": "Ouvert après",
+  "filterOpenedBefore": "Ouvert avant",
+  "sealReasonOption": {
+    "idle": "Inactif",
+    "closed": "Fermé",
+    "breakglass_review": "Révision d'accès d'urgence",
+    "sweep": "Balayage",
+    "consent_change": "Modification du consentement"
+  },
+  "status": {
+    "active": "Actif",
+    "sealed": "Scellé"
+  },
+  "kind": {
+    "user": "Utilisateur",
+    "token": "Token"
+  },
+  "cols": {
+    "subject": "Sujet",
+    "kind": "Type",
+    "status": "Statut",
+    "opened": "Ouvert",
+    "frames": "Trames écrites",
+    "flags": "Indicateurs",
+    "sealReason": "Motif du scellement"
+  },
+  "badge": {
+    "gap": "LACUNE",
+    "gapHint": "Des trames ont été réservées mais jamais écrites — l’enregistrement présente une lacune permanente et manifeste.",
+    "breakglass": "Accès d’urgence",
+    "breakglassHint": "Ouvert dans le cadre d’un octroi d’accès d’urgence — toujours enregistré."
+  },
+  "empty": {
+    "title": "Aucune session d’enregistrement pour l’instant",
+    "description": "Lorsque les opérateurs agissent sur une surface privilégiée enregistrée, leurs sessions apparaissent ici."
+  },
+  "notice": {
+    "strip": "Ceci est une surface privilégiée enregistrée — les actions sont capturées dans le registre de preuves."
+  },
+  "consent": {
+    "title": "Avis d’enregistrement (AC-8)",
+    "body": "Les actions privilégiées sur ce plan de contrôle sont enregistrées : chaque requête administrative est capturée sous forme de trame chaînée par hachage et ancrée au registre de preuves — uniquement la forme de la route, les identifiants et un condensé unidirectionnel du corps, jamais les charges utiles ni les secrets. Les sessions d’accès d’urgence sont toujours enregistrées. Pour continuer, vous devez accuser réception de cet avis.",
+    "ack": "Accuser réception et continuer",
+    "ackDone": "Avis d’enregistrement pris en compte",
+    "cancel": "Annuler"
+  },
+  "policy": {
+    "title": "Politique d’enregistrement",
+    "subtitle": "Ce qui est enregistré sur ce plan de contrôle et comment les preuves sont classées. La modification requiert la permission recording:config:admin ; chaque changement ici est lui-même une action privilégiée enregistrée.",
+    "loading": "Chargement de la politique d’enregistrement…",
+    "saved": "Politique d’enregistrement enregistrée",
+    "save": "Enregistrer la politique",
+    "saveFailed": "La politique n’a pas été enregistrée.",
+    "forbidden": {
+      "title": "Modifier la politique d’enregistrement requiert recording:config:admin",
+      "description": "Votre rôle peut administrer les sessions d’enregistrement, mais modifier la politique d’enregistrement nécessite la permission distincte recording:config:admin. Demandez à un administrateur de vous l’accorder."
+    },
+    "error": {
+      "title": "Impossible de charger la politique d’enregistrement",
+      "description": "La politique d’enregistrement n’a pas pu être lue. Réessayez ou vérifiez que le module est monté."
+    },
+    "breakglass": {
+      "label": "Sessions break-glass",
+      "hint": "L’accès d’urgence break-glass est toujours enregistré — aucune politique ne peut le désactiver. Le plancher d’enregistrement repose sur les permissions, pas sur les espaces de noms.",
+      "badge": "Toujours actif"
+    },
+    "namespaces": {
+      "label": "Espaces de noms enregistrés",
+      "hint": "Les surfaces de module dont les actions privilégiées sont capturées. Chacun doit nommer un module monté ; un nom inconnu est rejeté par le serveur.",
+      "empty": "Aucun espace de noms enregistré — les actions privilégiées ne sont capturées sur aucune surface de module.",
+      "placeholder": "p. ex. governance",
+      "addLabel": "Ajouter un espace de noms enregistré",
+      "add": "Ajouter",
+      "remove": "Supprimer {{name}}",
+      "shape": "Un espace de noms est composé de lettres minuscules, chiffres, - ou _, commence par une lettre et ne se termine pas par - ni _.",
+      "duplicate": "Cet espace de noms est déjà dans la liste.",
+      "tooLong": "Un espace de noms fait au plus {{max}} caractères.",
+      "tooMany": "Au plus {{max}} espaces de noms peuvent être enregistrés."
+    },
+    "consent": {
+      "label": "Exiger l’acquittement avant les actions privilégiées",
+      "hint": "Fermé par défaut (\"required\") : les opérateurs doivent acquitter l’avis d’enregistrement AC-8 avant d’agir. Désactivé, l’avis reste une simple bannière (\"notice\")."
+    },
+    "idle": {
+      "label": "Délai de scellement par inactivité (secondes)",
+      "hint": "Une session d’enregistrement ouverte est scellée après cette inactivité. Entre 60 et 86400 secondes.",
+      "error": "Saisissez un nombre entier de secondes entre 60 et 86400."
+    },
+    "retention": {
+      "label": "Classe de rétention (jours)",
+      "hint": "Une étiquette de classification appliquée aux enregistrements scellés — elle indique combien de temps ils devraient être conservés. Entre 1 et 3650 jours.",
+      "tag": "Étiquette seule",
+      "enforced": "Appliquée",
+      "notEnforced": "La rétention n’est qu’une étiquette de classification — les enregistrements sont étiquetés, jamais purgés. Aucune politique ne supprime encore un enregistrement (aucune purge n’est câblée).",
+      "error": "Saisissez un nombre entier de jours entre 1 et 3650."
+    },
+    "ai": {
+      "label": "Résumés dérivés par IA",
+      "hint": "Autoriser la génération de résumés de session dérivés d’un modèle. Un résumé est un récit dérivé, jamais une preuve — les frames chaînés par hash restent l’enregistrement."
+    }
+  }
+}

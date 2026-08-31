@@ -1,0 +1,25 @@
+{
+  "truncation": {
+    "label": "{{n}} lignes chargées ; il y en a d'autres",
+    "hint": "Cet aperçu du workspace est plafonné. Utilisez Tout afficher pour parcourir un inventaire plus large."
+  },
+  "title": "Vue de l'espace de travail",
+  "selectPrompt": "Sélectionnez un espace de travail depuis le sélecteur dans la barre supérieure pour afficher son tableau de bord.",
+  "agents": "Agents",
+  "sessions": "Sessions",
+  "resources": "Ressources",
+  "groups": "Groupes d'agents",
+  "recentAgents": "Agents dans l'espace de travail",
+  "recentGroups": "Groupes d'agents",
+  "status": "Statut",
+  "kind": "Type",
+  "slug": "Slug",
+  "name": "Nom",
+  "noAgents": "Aucun agent dans cet espace de travail pour le moment.",
+  "noGroups": "Aucun groupe d'agents dans cet espace de travail pour le moment.",
+  "viewAll": "Voir tout",
+  "defaultBadge": "Par défaut",
+  "workspaceInfo": "Informations de l'espace de travail",
+  "created": "Créé",
+  "lastUpdated": "Dernière mise à jour"
+}

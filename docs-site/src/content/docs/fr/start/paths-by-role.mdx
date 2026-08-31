@@ -1,0 +1,120 @@
+---
+title: "Parcours par rôle"
+description: >-
+  Trois parcours de lecture à travers la même documentation : platform
+  engineering (installer et opérer), security engineering (gouverner et
+  contenir), et compliance (preuves et audit) — plus le parcours du builder
+  pour les auteurs de connecteurs.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+La documentation est organisée par [mode Diátaxis](/fr/start/how-the-docs-are-organized/)
+— tutoriels, how-to, référence, explication — parce que c'est ainsi que les docs
+restent utilisables. Mais on arrive avec un *rôle*, pas un mode. Voici les cinq
+parcours à travers les mêmes pages, dans l'ordre de lecture.
+
+## Platform engineering — l'installer, l'opérer
+
+Vous possédez le déploiement : disponibilité, sauvegardes, mises à niveau,
+capacité.
+
+1. **Voyez-le fonctionner :** le [quickstart](/fr/start/quickstart/) (cinq
+   minutes), puis le [tutoriel zero-to-graph](/fr/tutorials/zero-to-graph/) si vous
+   voulez la version guidée.
+2. **Installez pour de vrai**, par scénario :
+   [nœud unique (systemd)](/fr/tutorials/getting-started/single-node/) ·
+   [Docker Compose](/fr/tutorials/getting-started/docker-compose/) ·
+   [Kubernetes/Helm avec HA](/fr/tutorials/getting-started/kubernetes/) ·
+   [air-gapped](/fr/tutorials/getting-started/air-gapped/).
+3. **Câblez les signaux :** [connecter une source](/fr/how-to/connect-a-source/),
+   puis les guides par connecteur ([pgAudit](/fr/how-to/connectors/pgaudit/),
+   [CloudTrail](/fr/how-to/connectors/cloudtrail/),
+   [eBPF/Tetragon](/fr/how-to/connectors/ebpf-tetragon/)).
+4. **Opérez :** [monitoring et SLO](/fr/how-to/monitor-with-prometheus/) ·
+   [sauvegarde et restauration](/fr/how-to/backup-and-restore/) ·
+   [dépannage](/fr/how-to/troubleshooting/).
+
+La référence où vous vivrez : [configuration](/fr/reference/configuration/),
+[CLI](/fr/reference/cli/), [connecteurs et paliers](/fr/reference/connectors/).
+
+## Security engineering — le gouverner, le contenir
+
+Vous possédez le moindre privilège, l'application et la réponse aux incidents
+pour l'estate d'agents.
+
+1. **Le modèle d'abord :** [ce qu'est l'access map](/fr/start/what-is-olivares-ai/)
+   et [honnêteté et limites](/fr/start/honesty-and-limits/) — ce que le produit va
+   et ne va pas revendiquer.
+2. **Gouvernez :** [gouverner et approuver](/fr/how-to/govern-and-approve/) (RBAC,
+   le PDP restrict-only, les décisions enregistrées), puis les recettes :
+   [politiques deny-closed](/fr/how-to/cookbook/deny-closed-policies/) ·
+   [approbations HITL](/fr/how-to/cookbook/hitl-approvals/) ·
+   [triage de dérive](/fr/how-to/cookbook/drift-triage/).
+3. **Appliquez sur la surface d'agents :**
+   [hooks Claude Code et le PEP](/fr/how-to/connectors/claude-code-hooks-pep/) ·
+   [gouvernance MCP](/fr/how-to/connectors/mcp-governance/) ·
+   [budgets comme guardrails](/fr/how-to/cookbook/budgets-and-finops-guardrails/).
+4. **Contenez :** le [drill de kill-switch](/fr/how-to/cookbook/kill-switch-drill/),
+   et [durcissez le déploiement](/fr/how-to/security-hardening/).
+
+Contexte approfondi : le
+[modèle de sécurité](/fr/explanation/security/security-model/) et le
+[modèle de menace](/fr/explanation/security/threat-model/).
+
+## Compliance — preuves, audit, résidence
+
+Vous rendez des comptes aux auditeurs et aux régulateurs ; vous avez besoin
+d'enregistrements qui se prouvent eux-mêmes.
+
+1. **Ce que sont les preuves :** la garantie des décisions enregistrées dans
+   [gouverner et approuver](/fr/how-to/govern-and-approve/#la-posture-human-in-the-loop)
+   — le ledger append-only et signé sous chaque décision.
+2. **Sortez-les :** [poussez-les vers votre SIEM](/fr/how-to/cookbook/push-to-siem/),
+   ou [tirez-les/suivez-les en flux](/fr/how-to/forward-audit-to-splunk/) pour
+   l'archivage WORM — et vérifiez-les hors ligne
+   ([dépannage § ledger](/fr/how-to/troubleshooting/#le-ledger-échoue-à-la-vérification)).
+3. **Gardez-les survivables :** [sauvegarde et restauration](/fr/how-to/backup-and-restore/)
+   — des bundles sûrs pour la continuité, la règle de la clé hors-machine, le
+   drill de restauration.
+4. **Résidence et provenance :**
+   [opération air-gapped](/fr/tutorials/getting-started/air-gapped/) ·
+   [vérifier une version](/fr/how-to/verify-a-release/) ·
+   [open core et licensing](/fr/explanation/open-core-and-licensing/).
+
+La base honnête à citer dans les évaluations :
+[Honnêteté et limites](/fr/start/honesty-and-limits/) — ce qui tourne, ce qui est à
+la demande, ce qui est au stade de conception.
+
+## L'exécuter vous-même — une machine, une personne
+
+Pas d'équipe plateforme, pas de service conformité : un homelab, un serveur domestique,
+une installation de freelance ou de petite entreprise où la personne qui l'installe est
+aussi celle qui l'utilise. Rien ici n'est un produit réduit — c'est le même binaire
+unique, lu dans l'ordre qui rend une machine utile le plus rapidement.
+
+<CardGrid>
+  <LinkCard title="Déployer avec Docker" href="/fr/how-to/docker-deployment/"
+    description="Un fichier Compose, un conteneur, votre propre machine. Le chemin le plus court entre rien et un plan de contrôle opérationnel." />
+  <LinkCard title="Démarrage rapide" href="/fr/start/quickstart/"
+    description="Premier lancement, premier agent, première session gouvernée — les dix minutes qui suivent son démarrage." />
+  <LinkCard title="Coûts et budgets" href="/fr/reference/modules/xi-finops/"
+    description="Ce que vous coûtent vos modèles, par agent et par session, avec des budgets qui répondent avant la facture." />
+  <LinkCard title="Sauvegarder et restaurer" href="/fr/how-to/backup-and-restore/"
+    description="L'habitude opérationnelle qui mérite d'être prise dès le premier jour, quelle que soit la personne responsable de la machine." />
+</CardGrid>
+
+## Builders — l'étendre
+
+Vous écrivez un connecteur ou pilotez l'API.
+
+<CardGrid>
+  <LinkCard title="Construire et livrer un connecteur" href="/fr/how-to/build-a-connector/"
+    description="Scaffold, implémenter, signer, distribuer — avec une admission signée deny-closed." />
+  <LinkCard title="Utiliser les SDK client" href="/fr/how-to/use-the-client-sdks/"
+    description="Clients Go, Java, Python et TypeScript sur le contrat REST publié." />
+  <LinkCard title="Gérer en tant que code" href="/fr/how-to/manage-as-code/"
+    description="Le provider Terraform/OpenTofu sur l'API gouvernée." />
+  <LinkCard title="Référence API et événements" href="/reference/api/"
+    description="La surface REST rendue par OpenAPI et le bus d'événements AsyncAPI." />
+</CardGrid>

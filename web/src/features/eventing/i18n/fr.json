@@ -1,0 +1,263 @@
+{
+  "title": "Webhooks et abonnements aux événements",
+  "description": "Abonnements aux événements sortants — configurer les points de terminaison webhook, inspecter les événements livrés et gérer la file d'attente des messages morts.",
+  "tabs": {
+    "subscriptions": "Abonnements",
+    "events": "Événements",
+    "deliveries": "Livraisons",
+    "deadLetters": "Messages morts"
+  },
+  "subscriptions": {
+    "title": "Abonnements webhook",
+    "description": "Points de terminaison recevant des notifications d'événements. Chaque abonnement filtre par type d'événement et s'authentifie avec la méthode configurée.",
+    "new": "Nouvel abonnement",
+    "empty": "Aucun abonnement",
+    "emptyHint": "Créez un abonnement pour commencer à recevoir des événements webhook.",
+    "columns": {
+      "name": "Nom",
+      "endpoint": "Endpoint",
+      "enabled": "Statut",
+      "eventTypes": "Types d'événement",
+      "authType": "Auth",
+      "role": "Rôle",
+      "secret": "Secret",
+      "created": "Créé"
+    },
+    "enabled": "Actif",
+    "disabled": "Inactif",
+    "bulk": {
+      "enable": "Activer la sélection",
+      "disable": "Désactiver la sélection"
+    },
+    "test": "Tester",
+    "testing": "Test en cours…",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "rotateSecret": "Rotation du secret",
+    "rotateAuth": "Rotation de l'auth",
+    "testSuccess": "Livraison de test réussie",
+    "testFailed": "Livraison de test échouée",
+    "deleted": "Abonnement supprimé",
+    "rotated": "Secret modifié",
+    "authRotated": "Identifiants d'auth modifiés",
+    "confirmDelete": "Supprimer cet abonnement ? Cette action est irréversible.",
+    "authTypes": {
+      "none": "Aucun",
+      "bearer": "Bearer",
+      "basic": "Basic",
+      "header": "Header"
+    },
+    "actions": "Actions pour {{name}}",
+    "replay": "Rejouer"
+  },
+  "dialog": {
+    "createTitle": "Nouvel abonnement",
+    "editTitle": "Modifier l'abonnement",
+    "description": "Description",
+    "name": "Nom",
+    "endpoint": "URL du endpoint",
+    "eventTypes": "Types d'événement",
+    "eventTypesHint": "Sélectionnez les types d'événement reçus par cet abonnement.",
+    "matchSources": "Filtre de sources",
+    "matchSourcesHint": "Sources séparées par des virgules (vide = toutes les sources).",
+    "role": "Rôle",
+    "authType": "Type d'auth",
+    "authValue": "Valeur d'auth",
+    "authValueHint": "Token Bearer, identifiants Basic ou valeur d'en-tête.",
+    "authHeaderName": "Nom de l'en-tête d'auth",
+    "authHeaderNameHint": "Nom d'en-tête personnalisé (uniquement pour le type 'header').",
+    "maxAttempts": "Tentatives max",
+    "maxAttemptsHint": "0 = utiliser la valeur par défaut du serveur.",
+    "initialInterval": "Intervalle initial (s)",
+    "initialIntervalHint": "Valeur initiale de backoff en secondes. 0 = par défaut.",
+    "enabled": "Actif",
+    "create": "Créer l'abonnement",
+    "update": "Enregistrer les modifications",
+    "created": "Abonnement créé",
+    "updated": "Abonnement mis à jour",
+    "sinkKind": "Sink SIEM",
+    "sinkKindHint": "Profil de sink fournisseur optionnel. Aucun = webhook HMAC générique.",
+    "sinkNone": "Aucun (webhook générique)",
+    "sinkKinds": {
+      "https": "HTTPS (OCSF)",
+      "splunk_hec": "Splunk HEC",
+      "sentinel_dcr": "Microsoft Sentinel",
+      "datadog": "Datadog",
+      "newrelic": "New Relic"
+    },
+    "sinkFormat": "Format du sink",
+    "sinkFormatHint": "Dialecte de transmission du sink. Par défaut = OCSF.",
+    "sinkFormatDefault": "Par défaut (OCSF)",
+    "sinkCred": "Identifiant du sink",
+    "sinkCredHint": "Jeton/clé du collecteur pour ce sink — scellé au repos, jamais réaffiché.",
+    "sinkCredKeepHint": "Laissez vide pour conserver l'identifiant actuel ({{hint}}).",
+    "sinkCredRequired": "Un identifiant est requis pour ce sink.",
+    "errors": {
+      "maxAttempts": "Le nombre maximal de tentatives doit être 0 ou compris entre 1 et 20.",
+      "initialInterval": "L’intervalle initial doit être 0 ou compris entre 5 et 3600 secondes."
+    }
+  },
+  "secret": {
+    "title": "Secret de l'abonnement",
+    "description": "Ce secret de signature HMAC n'est affiché qu'une seule fois. Copiez-le maintenant — il ne pourra pas être récupéré ultérieurement.",
+    "copied": "Secret copié dans le presse-papiers",
+    "done": "Terminé"
+  },
+  "events": {
+    "title": "Événements capturés",
+    "description": "Journal des événements avec curseur de séquence. Filtrez par type d'événement pour affiner les résultats.",
+    "empty": "Aucun événement capturé",
+    "typeFilter": "Filtrer par type",
+    "allTypes": "Tous les types",
+    "columns": {
+      "seq": "Seq",
+      "type": "Type",
+      "source": "Source",
+      "occurredAt": "Survenu le",
+      "payload": "Payload"
+    },
+    "loadMore": "Charger plus",
+    "noMore": "Plus d'événements"
+  },
+  "deliveries": {
+    "title": "Livraisons",
+    "description": "État de livraison des événements webhook. Filtrez par abonnement, statut ou type d'événement.",
+    "empty": "Aucune livraison",
+    "subscriptionFilter": "Abonnement",
+    "statusFilter": "Statut",
+    "typeFilter": "Type d'événement",
+    "allSubscriptions": "Tous",
+    "allStatuses": "Tous",
+    "allTypes": "Tous",
+    "columns": {
+      "eventType": "Type d'événement",
+      "eventSeq": "Seq",
+      "subscription": "Abonnement",
+      "status": "Statut",
+      "origin": "Origine",
+      "attempts": "Tentatives",
+      "lastAttempt": "Dernière tentative",
+      "nextAttempt": "Prochaine tentative"
+    },
+    "statuses": {
+      "queued": "En attente",
+      "delivering": "En livraison",
+      "delivered": "Livré",
+      "dead": "Mort",
+      "denied": "Refusé"
+    },
+    "origins": {
+      "live": "En direct",
+      "replay": "Replay"
+    },
+    "loadMore": "Charger plus",
+    "originFilter": "Origine",
+    "allOrigins": "Toutes les origines",
+    "nextRetry": "Prochaine tentative {{time}}"
+  },
+  "deadLetters": {
+    "title": "File d'attente des messages morts",
+    "description": "Livraisons échouées ayant épuisé toutes les tentatives de réessai. Relivrer des éléments individuels ou enquêter sur la cause.",
+    "empty": "Aucun message mort",
+    "emptyHint": "Les messages morts apparaissent ici lorsque les livraisons épuisent toutes les tentatives.",
+    "redeliver": "Relivrer",
+    "redelivered": "Livraison remise en file d'attente",
+    "loadMore": "Charger plus"
+  },
+  "rotateAuthDialog": {
+    "title": "Faire pivoter l'identifiant d'authentification — {{name}}",
+    "description": "Saisissez le nouvel identifiant pour ce point de terminaison. Il est scellé au repos et ne sera plus jamais affiché ; la carte n'affiche qu'une empreinte.",
+    "value": "Nouvel identifiant",
+    "valueHint": "Jeton bearer, identifiants basic ou valeur d'en-tête — envoyé une seule fois, jamais renvoyé.",
+    "submit": "Faire pivoter l'identifiant"
+  },
+  "replay": {
+    "title": "Rejouer les événements — {{name}}",
+    "description": "Choisissez la plage de séquences à remettre en file.",
+    "fromSeq": "Séquence de début",
+    "toSeq": "Séquence de fin (facultatif)",
+    "submit": "Rejouer",
+    "continue": "Continuer le rejeu",
+    "total": "Total rejoué : {{count}}",
+    "viewDeliveries": "Voir les livraisons rejouées",
+    "completed": "{{count}} événements rejoués"
+  },
+  "history": {
+    "action": "Afficher l’historique des révisions de {{name}}",
+    "title": "Historique des révisions — {{name}}",
+    "description": "Instantanés chronologiques de cet abonnement dans un journal en ajout seul.",
+    "scopeCaption": "La restauration réapplique uniquement la structure de livraison — jamais les identifiants ni le profil de destination.",
+    "empty": "Aucune révision enregistrée",
+    "loadMore": "Charger plus",
+    "compareTitle": "Différence entre les instantanés",
+    "selectTwo": "Sélectionnez deux révisions pour comparer leurs instantanés.",
+    "selectRevision": "Sélectionner la révision « {{op}} » de {{actor}}",
+    "originalLabel": "Révision antérieure",
+    "modifiedLabel": "Révision ultérieure",
+    "restore": "Restaurer cette révision",
+    "restoreTitle": "Restaurer la révision ?",
+    "restoreDescription": "Restaurer la structure de livraison sélectionnée pour {{name}} ?",
+    "restoreConfirm": "Restaurer la révision",
+    "restored": "Révision de l’abonnement restaurée",
+    "operations": {
+      "create": "Créée",
+      "update": "Mise à jour",
+      "delete": "Supprimée",
+      "restore": "Restaurée"
+    }
+  },
+  "egress": {
+    "title": "Politique de destinations",
+    "description": "Si ce déploiement restreint la destination de votre flux d'événements, et ce que son application romprait. Le levier est une cérémonie d'opérateur sur l'hôte ; ceci est l'état sur lequel il agit.",
+    "unknown": "Inconnu",
+    "unreadable": "L'état de la politique n'a pas pu être lu.",
+    "unreadablePolicy": "Illisible",
+    "inForce": "Politique en vigueur",
+    "inForceYes": "Oui",
+    "inForceNo": "Aucune rédigée",
+    "source": "Origine",
+    "mode": "Mode du déploiement",
+    "classifiedMode": "Classé comme",
+    "committed": "Application engagée",
+    "committedYes": "Engagée",
+    "committedNo": "Non engagée",
+    "fence": {
+      "title": "Barrière d'écriture",
+      "armed": "Armée",
+      "armedYes": "Armée",
+      "armedNo": "Dormante",
+      "mode": "Mode",
+      "required": "Capacité exigée",
+      "binary": "Ce binaire",
+      "generation": "Génération"
+    },
+    "compat": {
+      "title": "Compatibilité",
+      "seeded": "Enregistrement",
+      "drawn": "Tracé",
+      "notDrawn": "Non tracé",
+      "recorded": "Destinations enregistrées",
+      "stillNeeded": "Cesseraient de fonctionner",
+      "unparsable": "Non analysables",
+      "notIntact": "L'enregistrement de compatibilité n'est plus intact : il paraît complet et décrit un ensemble qui a perdu des membres. Ne planifiez pas d'actuation à partir de lui.",
+      "notServed": "Non servi à votre niveau d'autorisation.",
+      "notProvided": "Absent de cette réponse."
+    },
+    "report": {
+      "title": "Ce que son application romprait",
+      "description": "Les destinations que ce locataire ne conserve que parce que le déploiement précède le contrôle.",
+      "unreadable": "Le rapport de compatibilité n'a pas pu être lu.",
+      "notSeeded": "L'enregistrement de compatibilité n'a jamais été tracé, ce rapport ne décrit donc rien.",
+      "subscriptions": "Abonnements au tracé",
+      "unparsed": "Destinations non analysées",
+      "seededAt": "Tracé le",
+      "noAuthorities": "Aucune destination héritée.",
+      "authority": "Destination",
+      "kind": "Type",
+      "uses": "Abonnements",
+      "effect": "À l'application",
+      "survives": "Survit",
+      "breaks": "Cesse de fonctionner"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "data": [
+    {
+      "model": "mistral-large-latest",
+      "input_tokens": 500000,
+      "output_tokens": 200000,
+      "amount": 0.55,
+      "currency": "USD"
+    },
+    {
+      "model": "mistral-small-latest",
+      "input_tokens": 1000000,
+      "output_tokens": 300000,
+      "amount": 0.19,
+      "currency": "USD"
+    }
+  ]
+}

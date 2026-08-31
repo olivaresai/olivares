@@ -1,0 +1,73 @@
+listen:
+  public_url: https://gateway-full.example.com
+  tls:
+    cert_file: /etc/claude-gateway/tls.crt
+  trusted_proxies:
+    - 10.0.0.0/8
+oidc:
+  issuer: https://idp.example.com/oauth
+  allowed_email_domains:
+    - example.com
+    - example.eu
+  allowed_groups:
+    - engineering
+  use_pkce: false
+  client_secret: literal-client-secret
+session:
+  ttl_hours: 24
+  jwt_secret:
+    - ${JWT_SECRET_CURRENT}
+    - ${file:/run/secrets/jwt_next}
+store:
+  postgres_url: ${POSTGRES_URL}
+  password: ${POSTGRES_PASSWORD}
+admin:
+  write_keys:
+    - ${ADMIN_WRITE_KEY}
+  read_keys:
+    - ${ADMIN_READ_KEY}
+  admin_groups:
+    - platform-admins
+enforcement:
+  fail_closed_on_error: false
+upstreams:
+  - provider: anthropic
+    region: us-east-1
+    name: direct-us
+  - provider: anthropicAws
+    region: us-west-2
+    name: aws-us
+auto_include_builtin_models: false
+models:
+  - id: claude-sonnet-4-20250514
+  - id: claude-opus-4-20250514
+  - id: claude-haiku-3-5-20241022
+managed:
+  policies:
+    - match:
+        groups:
+          - engineering
+      cli:
+        availableModels:
+          - claude-sonnet-4-20250514
+          - claude-opus-4-20250514
+        permissions:
+          allow:
+            - Read(*)
+        env:
+          OLIVARES_MODE: governed
+    - match: {}
+      settings:
+        availableModels:
+          - claude-haiku-3-5-20241022
+        permissions:
+          allow:
+            - Read(*)
+telemetry:
+  forward_to:
+    - url: https://otel.example.com/v1/traces
+      metrics: true
+      logs: true
+      traces: true
+      headers:
+        authorization: telemetry-header-secret

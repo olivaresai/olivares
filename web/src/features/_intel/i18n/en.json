@@ -1,0 +1,119 @@
+{
+  "severity": {
+    "label": "Severity",
+    "info": "Info",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "outcome": {
+    "pass": "Pass",
+    "fail": "Fail",
+    "error": "Error",
+    "skipped": "Skipped",
+    "blocked": "Blocked",
+    "refused": "Refused",
+    "complied": "Complied",
+    "leaked": "Leaked"
+  },
+  "verdict": {
+    "allow": "Allow",
+    "flag": "Flag",
+    "block": "Block",
+    "detective": "Detective",
+    "enforced": "Enforced"
+  },
+  "integrity": {
+    "verified": "Integrity verified",
+    "failed": "Integrity failed",
+    "unavailable": "Signing not available",
+    "pending": "Not attested yet",
+    "tamperEvident": "Tamper-evident",
+    "chainOk": "Hash chain consistent",
+    "chainBroken": "Chain broken at seq {{seq}}",
+    "reverifyHint": "Each event carries seq · hash · prev_hash so a reader can re-verify the link offline.",
+    "attestedSeq": "Attested through seq {{seq}}",
+    "headSeq": "Ledger head seq {{seq}}"
+  },
+  "consent": {
+    "registered": "Registered",
+    "authorized": "Authorized",
+    "revoked": "Revoked",
+    "notAuthorizedHint": "Registering is not consent — a run is blocked until a target is authorized."
+  },
+  "risk": {
+    "unacceptable": "Unacceptable",
+    "high": "High",
+    "limited": "Limited",
+    "minimal": "Minimal",
+    "suggested": "Suggested",
+    "approved": "Approved",
+    "overridden": "Overridden"
+  },
+  "control": {
+    "satisfied": "Satisfied",
+    "by_design": "Design-ready",
+    "partial": "Partial",
+    "gap": "Gap",
+    "unmapped": "Unmapped",
+    "operational": "Operational",
+    "architectural": "Architectural"
+  },
+  "hash": {
+    "fingerprint": "Fingerprint",
+    "hint": "A one-way fingerprint — never a payload (minimal data).",
+    "copy": "Copy full value",
+    "copied": "Copied"
+  },
+  "notices": {
+    "truncated": "Partial data",
+    "truncatedHint": "This aggregate reached the scan ceiling — it is partial, not an exact total.",
+    "selfAudited": "Privileged read — recorded in the audit ledger.",
+    "seam": "Not wired yet",
+    "seamBody": "Declared contract — the {{what}} is not wired to the backend yet, so this shows the declared shape, not live data.",
+    "minimalData": "Aggregates and metadata only — no prompts, outputs or secrets.",
+    "declared": "Declared reference",
+    "noConnector": "No connector — absent, not zero.",
+    "listTruncated": "Loaded {{n}} rows; there are more",
+    "listTruncatedHint": "The engine returned one page, not the whole set. The total CANNOT be inferred from the rows loaded, and rows that are not shown may exist."
+  },
+  "badges": {
+    "signed": "Signed",
+    "linked": "Chain of custody",
+    "governed": "Governed",
+    "ungoverned": "Ungoverned",
+    "approximate": "Approximate",
+    "attributed": "Attributed",
+    "isolated": "Isolated",
+    "destroyed": "Destroyed"
+  },
+  "timeline": {
+    "title": "Reconstructed timeline",
+    "empty": "No events in range.",
+    "seq": "seq"
+  },
+  "consumption": {
+    "projected": "projected {{pct}}",
+    "label": "Budget consumption",
+    "valueText": "{{consumed}} consumed, {{projected}} projected"
+  },
+  "disclaimers": {
+    "report": "Technical control-status mapping derived from observed platform evidence. NOT a certification and NOT legal advice."
+  },
+  "gate": {
+    "approved": "Approved",
+    "pending": "Pending",
+    "rejected": "Rejected",
+    "expired": "Expired",
+    "no_gate": "No gate",
+    "not_required": "Not required",
+    "approvedHint": "Governance approved this plan — execute to proceed.",
+    "pendingHint": "Awaiting a governance decision (deny-by-default).",
+    "rejectedHint": "Governance rejected this plan — re-request with a fresh plan.",
+    "expiredHint": "The approval expired — re-plan and request again.",
+    "no_gateHint": "No approval gate is configured — the action cannot proceed.",
+    "not_requiredHint": "No approval is required for this action.",
+    "displayNotice": "Gate status is a reported decision shown here only. Authorization is enforced server-side; the console never grants access from this value."
+  }
+}

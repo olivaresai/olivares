@@ -1,0 +1,57 @@
+{
+  "policies": [
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-export/policy/pol-drift",
+      "policyId": "pol-drift",
+      "name": "olv_tenant_a_g_drift",
+      "description": "olivares-export v1 tenant=tenant-a sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit drifted;"
+        }
+      }
+    },
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-export/policy/pol-failed",
+      "policyId": "pol-failed",
+      "name": "olv_tenant_a_g_failed",
+      "description": "olivares-export v1 tenant=tenant-a sha256=2916b425027ad485b10fd376575d03c54a9616536722ea1450648c82d69ff9ac",
+      "status": "UPDATE_FAILED",
+      "statusReasons": ["remote analyzer rejected update"],
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit failed;"
+        }
+      }
+    },
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-export/policy/pol-manual",
+      "policyId": "pol-manual",
+      "name": "manual_policy",
+      "description": "operator-owned policy",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit manual;"
+        }
+      }
+    },
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-export/policy/pol-foreign",
+      "policyId": "pol-foreign",
+      "name": "olv_tenant_b_g_keep",
+      "description": "olivares-export v1 tenant=tenant-b sha256=0233a1068da178a92f41ac6700cdb460e4f7b68ae002241e7484b89bff5c7674",
+      "status": "ACTIVE",
+      "enforcementMode": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit other tenant;"
+        }
+      }
+    }
+  ]
+}

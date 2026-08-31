@@ -1,0 +1,204 @@
+{
+  "errors": {
+    "generic": "出现错误"
+  },
+  "app": {
+    "name": "Olivares AI",
+    "tagline": "控制平面"
+  },
+  "actions": {
+    "save": "保存",
+    "cancel": "取消",
+    "close": "关闭",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "retry": "重试",
+    "search": "搜索",
+    "filter": "筛选",
+    "refresh": "刷新",
+    "copy": "复制",
+    "copied": "已复制",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "viewAll": "查看全部",
+    "learnMore": "了解更多",
+    "openMenu": "打开菜单",
+    "expandSidebar": "展开侧边栏",
+    "collapseSidebar": "折叠侧边栏",
+    "help": "打开此视图的文档"
+  },
+  "states": {
+    "loading": "加载中…",
+    "empty": "此处暂无内容",
+    "noResults": "无结果",
+    "comingSoon": "敬请期待",
+    "loaded": "已加载",
+    "yes": "是",
+    "no": "否"
+  },
+  "theme": {
+    "label": "主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统",
+    "toggle": "切换主题"
+  },
+  "density": {
+    "label": "密度",
+    "comfortable": "宽松",
+    "compact": "紧凑"
+  },
+  "language": {
+    "label": "语言"
+  },
+  "table": {
+    "label": "数据表",
+    "rowsPerPage": "每页行数",
+    "page": "页",
+    "of": "共",
+    "noRows": "无可显示的行",
+    "loadMore": "加载更多",
+    "sortAscending": "升序排列",
+    "sortDescending": "降序排列",
+    "search": "搜索行…",
+    "selectAllVisible": "选择所有可见行",
+    "selectRow": "选择行 {{id}}"
+  },
+  "bulk": {
+    "selected": "已选择 {{count}} 项",
+    "clear": "清除选择",
+    "progress": "正在处理第 {{current}} 项，共 {{total}} 项",
+    "summary": "{{success}} 项成功，{{failed}} 项失败",
+    "confirmTitle": "确认批量操作",
+    "confirmDescription": "“{{action}}”将分别对 {{count}} 个已选项目执行。"
+  },
+  "chart": {
+    "showTable": "以表格显示",
+    "showChart": "显示图表"
+  },
+  "commandPalette": {
+    "placeholder": "搜索或跳转至…",
+    "empty": "无匹配项。",
+    "navigation": "导航",
+    "actions": "操作",
+    "results": "结果",
+    "searchResults": "数据中的结果",
+    "searchTruncated": "还有更多匹配项 — 请细化搜索。",
+    "searchDegraded": "部分来源无法搜索 — 此列表不完整。"
+  },
+  "status": {
+    "active": "活跃",
+    "inactive": "未活跃",
+    "healthy": "健康",
+    "degraded": "降级",
+    "pending": "待处理",
+    "error": "错误",
+    "revoked": "已吊销",
+    "unknown": "未知",
+    "running": "运行中",
+    "ok": "正常",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "approved": "已批准",
+    "rejected": "已拒绝",
+    "requested": "已请求",
+    "queued": "已排队",
+    "provisioning": "预配中",
+    "draft": "草稿",
+    "warning": "警告",
+    "deprecated": "已弃用",
+    "unused": "未使用",
+    "failed": "失败",
+    "down": "已宕机",
+    "unexpected": "意外",
+    "idle": "空闲",
+    "completed": "已完成",
+    "archived": "已归档",
+    "retired": "已退役",
+    "drifted": "已漂移",
+    "declared": "已声明",
+    "applied": "已应用"
+  },
+  "accessMode": {
+    "read": "读取",
+    "readwrite": "读/写（R/RW）",
+    "write": "写入",
+    "unknown": "未知"
+  },
+  "confidence": {
+    "attributed": "已归属",
+    "attributedHint": "已确凿归属于该智能体。",
+    "approximate": "近似",
+    "approximateHint": "通过推断归属——尚未与该智能体核对一致。"
+  },
+  "validation": {
+    "required": "此字段为必填项。",
+    "email": "请输入有效的电子邮件地址。"
+  },
+  "a11y": {
+    "breadcrumb": "面包屑导航",
+    "skipToContent": "跳至正文内容",
+    "primarySidebar": "主侧栏",
+    "mainNavigation": "主导航",
+    "graphControls": "图形控件",
+    "graphMinimap": "图形小地图"
+  },
+  "privileged": {
+    "auditedNotice": "此操作已记录到防篡改审计账本中。",
+    "confirm": "确认",
+    "typeToConfirm": "键入 {{phrase}} 以确认",
+    "typeToConfirmAria": "确认短语",
+    "notAuthorized": "您的角色可以查看此内容，但无法执行此操作。",
+    "notAuthorizedToast": "未授权——您的角色无法执行此操作。",
+    "tenantChangedToast": "验证期间组织已切换，操作未继续执行。请切回原组织后重试。",
+    "stepUp": {
+      "title": "此操作需要提升会话等级",
+      "description": "您的角色具备此权限；此会话的保证等级已过期。完成下方的提升后操作将继续。关闭则该操作仍被拒绝。",
+      "busyToast": "已有另一项提升正在进行。请先完成，然后重试此操作。",
+      "abandonedToast": "该操作在提升完成前已关闭，因此未继续执行。请重新发起。",
+      "descriptionNoResume": "您的角色允许此操作；本会话的保证级别已失效。请完成提升，然后重新发起该操作。关闭将保持拒绝状态。"
+    },
+    "working": "处理中…"
+  },
+  "secretRef": {
+    "label": "密钥引用",
+    "hint": "对存储在控制台之外的密钥的引用——其值绝不会在此处显示。",
+    "none": "无密钥",
+    "prefix": "ref"
+  },
+  "untrusted": {
+    "label": "未验证",
+    "hint": "由能力自行上报——仅作为信号。控制平面不会对其进行验证，也绝不会据此强制执行。"
+  },
+  "risk": {
+    "low": "低风险",
+    "medium": "中风险",
+    "high": "高风险"
+  },
+  "notifications": {
+    "title": "最近活动",
+    "empty": "没有最近的活动。",
+    "viewAll": "在审计账本中查看全部"
+  },
+  "passphrase": {
+    "tooShort": "密码短语长度至少为 {{min}} 个字符",
+    "strengthLabel": "密码短语强度",
+    "strength": {
+      "weak": "弱",
+      "fair": "一般",
+      "good": "良好",
+      "strong": "强"
+    }
+  },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "description": "无需离开键盘即可浏览控制台。",
+    "general": "通用",
+    "navigation": "前往",
+    "openPalette": "打开命令面板",
+    "showHelp": "显示此帮助"
+  }
+}

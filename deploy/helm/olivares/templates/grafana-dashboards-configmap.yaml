@@ -1,0 +1,61 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+Optional Grafana dashboard ConfigMaps. One ConfigMap per dashboard, labeled for
+the Grafana sidecar (kiwigrid/k8s-sidecar) to auto-discover and provision. The
+sidecar watches ConfigMaps with the configured label (default: grafana_dashboard)
+and mounts them into Grafana's provisioning directory at runtime.
+
+Gated by grafana.dashboards.enabled — disabled by default.
+*/ -}}
+{{- if .Values.grafana.dashboards.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "olivares.fullname" . }}-grafana-overview
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    {{ .Values.grafana.dashboards.label }}: {{ .Values.grafana.dashboards.labelValue | quote }}
+  {{- with .Values.grafana.dashboards.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  olivares-overview.json: |-
+    {{- .Files.Get "files/dashboards/olivares-overview.json" | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "olivares.fullname" . }}-grafana-policy
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    {{ .Values.grafana.dashboards.label }}: {{ .Values.grafana.dashboards.labelValue | quote }}
+  {{- with .Values.grafana.dashboards.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  olivares-policy-compliance.json: |-
+    {{- .Files.Get "files/dashboards/olivares-policy-compliance.json" | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "olivares.fullname" . }}-grafana-performance
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    {{ .Values.grafana.dashboards.label }}: {{ .Values.grafana.dashboards.labelValue | quote }}
+  {{- with .Values.grafana.dashboards.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  olivares-performance.json: |-
+    {{- .Files.Get "files/dashboards/olivares-performance.json" | nindent 4 }}
+{{- end }}

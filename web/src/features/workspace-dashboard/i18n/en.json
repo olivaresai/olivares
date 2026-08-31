@@ -1,0 +1,25 @@
+{
+  "truncation": {
+    "label": "Loaded {{n}} rows; there are more",
+    "hint": "This workspace preview is capped. Use View all to inspect the wider inventory."
+  },
+  "title": "Workspace overview",
+  "selectPrompt": "Select a workspace from the switcher in the top bar to view its dashboard.",
+  "agents": "Agents",
+  "sessions": "Sessions",
+  "resources": "Resources",
+  "groups": "Agent groups",
+  "recentAgents": "Agents in workspace",
+  "recentGroups": "Agent groups",
+  "status": "Status",
+  "kind": "Kind",
+  "slug": "Slug",
+  "name": "Name",
+  "noAgents": "No agents in this workspace yet.",
+  "noGroups": "No agent groups in this workspace yet.",
+  "viewAll": "View all",
+  "defaultBadge": "Default",
+  "workspaceInfo": "Workspace info",
+  "created": "Created",
+  "lastUpdated": "Last updated"
+}

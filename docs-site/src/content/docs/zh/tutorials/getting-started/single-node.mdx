@@ -1,0 +1,282 @@
+---
+title: "在单节点上快速上手（二进制 + systemd）"
+description: >-
+  将 Olivares AI 作为加固的 systemd 服务安装在单台 Linux 主机上：
+  构建静态二进制、领取一次性 setup token、创建你的第一个
+  租户、接入真实 source 并到达访问图（access graph）—— 开启 TLS 且无默认凭据。
+sidebar:
+  order: 1
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+这是贴近生产形态的首次安装：**一台 Linux 主机、一个静态
+二进制、systemd、内嵌的 SQLite 存储** —— 以及真实的首次运行路径（一个
+一次性 setup token、默认开启 TLS、无默认凭据、无演示数据）。
+完成后，你将拥有一个作为加固服务运行的 Olivares AI，
+并已接入一个真实 source、填充好一张访问图。
+
+它与[快速开始](/zh/start/quickstart/)在五分钟内演示的是同一个引擎；
+区别在于姿态。如果你想先即时浏览一番，
+先做快速开始，然后回到这里进行真正的安装。
+
+本页的每条命令都已按原样针对当前二进制运行过
+（首次启动横幅、token 恢复路径、pgAudit 接入以及下文的
+图，都由 `scripts/quickstart-smoke.sh` 执行，并已为本指南
+重新验证）。
+
+## 先决条件
+
+- 一台带有 systemd 和 `curl` 的 Linux 主机。
+- **Go 1.26+** 用于构建二进制（存储是纯 Go 的 SQLite，因此无需 C
+  工具链）。带签名预构建工件的发布会在首次公开
+  发布时提供 —— 在此之前你需从 checkout 构建，而
+  [验证一次发布](/zh/how-to/verify-a-release/)记录了你在它们存在后将
+  使用的信任链。
+
+## 1. 构建并安装二进制
+
+<Steps>
+
+1. 构建这一个静态工件（引擎 + 内嵌 web UI + 第一方
+   connectors）：
+
+   ```bash
+   task build                      # produces ./bin/olivares
+   ./bin/olivares version
+   ```
+
+2. 安装它并创建服务用户：
+
+   ```bash
+   sudo install -m 0755 bin/olivares /usr/local/bin/olivares
+   sudo useradd --system --home /var/lib/olivares --shell /usr/sbin/nologin olivares
+   ```
+
+</Steps>
+
+## 2. 将它作为加固的 systemd 服务运行
+
+创建 `/etc/systemd/system/olivares.service`：
+
+```ini
+[Unit]
+Description=Olivares AI — self-hosted engine for enterprise AI
+Documentation=https://olivares.ai/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olivares
+Group=olivares
+ExecStart=/usr/local/bin/olivares serve \
+  --listen 127.0.0.1:8443 \
+  --grpc-listen 127.0.0.1:8444 \
+  --data-dir /var/lib/olivares
+Restart=on-failure
+RestartSec=5
+
+# The data directory holds the SQLite store, the audit signing key and the TLS
+# material. StateDirectory creates /var/lib/olivares owned by the service user.
+StateDirectory=olivares
+StateDirectoryMode=0700
+UMask=0077
+
+# Hardening (mirrors the container posture: non-root, read-only, no escalation)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/olivares
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now olivares
+```
+
+引擎默认绑定 **loopback** —— `127.0.0.1:8443` 是有意为之。
+之后再将它对外暴露，置于你自己的 ingress 和 TLS 之后，作为一个明确的决定
+（参见[加固](/zh/how-to/security-hardening/)）。
+
+<Aside type="note" title="TLS 已开启，使用自签名证书">
+在没有 `--tls-cert`/`--tls-key` 的情况下，引擎会在首次启动时于
+数据目录中生成一个自签名证书，并记录它的两个摘要：`cert_fingerprint_sha256`，
+即浏览器显示的证书摘要；以及 `pin_sha256`，即叶证书的 SPKI 摘要。下面的
+`curl -k` 仅在引导阶段跳过验证 —— 在对外暴露之前，请为该服务提供一个真实证书，
+或将日志中记录的 `pin_sha256` 值原样传给 `--pin-sha256` 来固定它。证书指纹是
+另一个摘要——解析本身能通过，随后在握手阶段以 `TLS SPKI pin mismatch` 失败。
+</Aside>
+
+## 3. 领取一次性 setup token
+
+全新安装 **没有默认凭据**。在首次启动时，引擎会铸造
+一个一次性 setup token（`olst_…`），并 **仅打印到 stdout** —— 在
+systemd 下，也就是 journal：
+
+```bash
+journalctl -u olivares -o cat | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+```
+
+```text
+=== FIRST-BOOT SETUP ===
+No accounts exist yet. Open the console and create the first administrator
+with this one-time token — setup also creates your first organization and
+makes that administrator its owner:
+
+  Console:  https://127.0.0.1:8443
+  Token:    olst_…
+
+The console serves HTTPS with a self-signed certificate on first boot — your
+browser will warn once; that is expected. The token is shown ONCE and is
+single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
+"password":"…"} — add "organization":"…" to name it (default: "Default
+Organization"). The reply carries the new organization's tenant_id.
+========================
+```
+
+创建第一个管理员并登录：
+
+```bash
+SETUP="olst_…"        # from the banner above
+
+curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+  -H 'Content-Type: application/json' \
+  -d "{\"token\":\"$SETUP\",\"email\":\"you@example.com\",\"password\":\"<strong-password>\"}"
+
+TOKEN="$(curl -ksf -X POST https://127.0.0.1:8443/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"<strong-password>"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+```
+
+<Aside type="tip" title="错过了 token？恢复路径是安全的">
+仅存储 token 的 SHA-256（位于数据目录中的 `setup.token`），
+因此错过的 token **无法恢复** —— 而且重启不会
+重新打印它。在尚无用户的全新安装上，恢复方式是：停止
+服务、从数据目录删除 `setup.token`、再次启动它 —— 一个新的
+token 会被铸造并打印。此方式已针对当前二进制验证；它
+仅在尚无用户时有效，因此绝不可能被用来接管一个
+已配置的安装。
+</Aside>
+
+## 4. 创建你的第一个组织
+
+产品中的一切都是租户范围的，因此请创建你的
+sources 将上报到的组织：
+
+```bash
+TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Production","slug":"prod"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+echo "tenant: $TENANT"
+```
+
+## 5. 接入你的第一个真实 source
+
+Sources 在一个由 `OLIVARES_SOURCES_CONFIG` 命名的、运维方拥有的 JSON 文件中
+声明，在引擎启动前读取。下面是
+PostgreSQL **pgAudit** source（clean-tier 的 R/RW 信号 —— 关于
+Postgres 侧的设置见 [pgAudit 指南](/zh/how-to/connectors/pgaudit/)）：
+
+```bash
+sudo tee /etc/olivares/sources.json >/dev/null <<JSON
+{"sources":[{
+  "name": "salesdb-pgaudit",
+  "kind": "pgaudit",
+  "tenant": "$TENANT",
+  "config": { "log_path": "/var/log/postgresql/postgresql.csv", "format": "csvlog" }
+}]}
+JSON
+sudo chmod 0600 /etc/olivares/sources.json && sudo chown olivares: /etc/olivares/sources.json
+```
+
+用一个 drop-in 将服务指向它，然后重启：
+
+```bash
+sudo systemctl edit olivares
+```
+
+```ini
+[Service]
+Environment=OLIVARES_SOURCES_CONFIG=/etc/olivares/sources.json
+ReadOnlyPaths=/etc/olivares
+```
+
+```bash
+sudo systemctl restart olivares
+journalctl -u olivares -o cat | grep "ingest: wired source"
+```
+
+```text
+ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
+```
+
+如果什么都没接入，引擎会如实说明，而不是在一张空图上
+看起来健康 —— 关于确切的警告及其各自的含义，参见
+[故障排查](/zh/how-to/troubleshooting/)。
+
+## 6. 到达图
+
+```bash
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/graph?limit=200" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/drift" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+```
+
+同一张图也会渲染在 `https://127.0.0.1:8443` 处内嵌的 web UI 中
+（从工作站访问时，请隧道转发：`ssh -L 8443:127.0.0.1:8443 <host>`）。
+
+## 7. 在你认为完成之前
+
+数据目录中有两个工件决定了你的证据能否在
+事故中存续 —— 请 **现在** 就处理它们，而不是事后：
+
+| 工件 | 为何重要 | 操作 |
+|---|---|---|
+| `audit-signing.key` | 签署 append-only 的审计账本。若丢失，账本将无法再被重新验证。引擎仅在首次启动时 **警告** —— 没有强制的密钥托管。 | 今天就把它在主机外备份，权限为 `0600`。 |
+| 账本公钥 | 公钥的一份 **主机外** 副本，是在主机被攻陷后使验证仍能抵抗攻击者的关键。 | `curl -ksf https://127.0.0.1:8443/v1/audit/pubkey` 并将结果保存在主机外。 |
+
+然后安排真正的备份 —— `olivares dr backup` 会生成一个加密的、
+对账本连续性安全的备份包；[备份与恢复指南](/zh/how-to/backup-and-restore/)
+是完整流程，包括恢复演练。
+
+## 健康与监控
+
+引擎在 HTTP 监听器上暴露 `/livez`（进程存活）、`/readyz`（存储可达 —— 这是
+可用性 SLI）和 `/metrics`（Prometheus）：
+
+```bash
+curl -ks https://127.0.0.1:8443/readyz
+# {"leader":true,"setup_required":false,"status":"ok","store":"up"}
+```
+
+关于指标集、SLO 目标和随附的告警规则，参见
+[用 Prometheus 监控](/zh/how-to/monitor-with-prometheus/)。
+
+## 后续步骤
+
+- **接入更多信号：**[connector 指南](/zh/how-to/connectors/pgaudit/)
+  —— pgAudit、CloudTrail、Claude Code、eBPF，以及目录的其余部分。
+- **加固部署：**[安全加固](/zh/how-to/security-hardening/) ——
+  暴露、collectors 的 mTLS、审批。
+- **治理：**[治理与审批](/zh/how-to/govern-and-approve/) —— RBAC、
+  策略，以及决策记录保证。

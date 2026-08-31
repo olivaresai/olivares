@@ -1,0 +1,42 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  channels: {
+    telegram: {enabled: true, dmPolicy: 'pairing', groupPolicy: 'allowlist'},
+  },
+  tools: {
+    deny: ['group:runtime'],
+    exec: {security: 'ask', applyPatch: {workspaceOnly: true}},
+    fs: {workspaceOnly: true},
+  },
+  mcp: {
+    servers: {
+      // Launched via an ephemeral package runner → code resolved from a remote
+      // registry at start time (remote_runner).
+      postgres: {command: 'npx', args: ['-y', '@modelcontextprotocol/server-postgres'], transport: 'stdio'},
+      // Non-loopback HTTP/SSE endpoint (remote_url).
+      webfetch: {url: 'https://mcp.example.net/sse', transport: 'sse'},
+      // Pinned local binary over stdio → no posture finding.
+      localfs: {command: '/opt/mcp/fs', transport: 'stdio'},
+      // Inline literal credential in env (env_credential).
+      vault: {command: 'node', args: ['vault.js'], transport: 'stdio', env: {API_TOKEN: 'sk-inline-secret-value'}},
+      // A loopback URL must NOT be flagged as remote_url.
+      loopback: {url: 'http://127.0.0.1:8931/sse', transport: 'sse'},
+    },
+  },
+  agents: {
+    defaults: {
+      sandbox: {mode: 'all'},
+      model: {primary: 'anthropic/claude-sonnet-4-20250514'},
+      models: {'anthropic/*': true},
+      skills: ['baseline'],
+    },
+    list: [
+      {id: 'default', default: true},
+      {id: 'research', mcpServers: ['postgres']},
+    ],
+  },
+  logging: {file: '/var/log/openclaw/openclaw.log', redactSensitive: 'tools'},
+  diagnostics: {otel: {enabled: true}},
+  session: {dmScope: 'per-peer'},
+}

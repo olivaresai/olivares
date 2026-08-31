@@ -1,0 +1,119 @@
+{
+  "severity": {
+    "label": "Gravité",
+    "info": "Information",
+    "low": "Faible",
+    "medium": "Moyenne",
+    "high": "Élevée",
+    "critical": "Critique"
+  },
+  "outcome": {
+    "pass": "Réussite",
+    "fail": "Échec",
+    "error": "Erreur",
+    "skipped": "Ignoré",
+    "blocked": "Bloqué",
+    "refused": "Refusé",
+    "complied": "Conforme",
+    "leaked": "Divulgué"
+  },
+  "verdict": {
+    "allow": "Autoriser",
+    "flag": "Signaler",
+    "block": "Bloquer",
+    "detective": "Détection",
+    "enforced": "Appliqué"
+  },
+  "integrity": {
+    "verified": "Intégrité vérifiée",
+    "failed": "Échec de l’intégrité",
+    "unavailable": "Signature non disponible",
+    "pending": "Pas encore attesté",
+    "tamperEvident": "Inviolable",
+    "chainOk": "Chaîne de hachage cohérente",
+    "chainBroken": "Chaîne rompue à la séquence {{seq}}",
+    "reverifyHint": "Chaque événement porte seq · hash · prev_hash afin qu’un lecteur puisse revérifier le lien hors ligne.",
+    "attestedSeq": "Attesté jusqu’à la séquence {{seq}}",
+    "headSeq": "Séquence de tête du registre {{seq}}"
+  },
+  "consent": {
+    "registered": "Enregistré",
+    "authorized": "Autorisé",
+    "revoked": "Révoqué",
+    "notAuthorizedHint": "L’enregistrement ne vaut pas consentement : une exécution est bloquée tant qu’une cible n’est pas autorisée."
+  },
+  "risk": {
+    "unacceptable": "Inacceptable",
+    "high": "Élevé",
+    "limited": "Limité",
+    "minimal": "Minimal",
+    "suggested": "Suggéré",
+    "approved": "Approuvé",
+    "overridden": "Dérogé"
+  },
+  "control": {
+    "satisfied": "Satisfait",
+    "by_design": "Prêt par conception",
+    "partial": "Partiel",
+    "gap": "Lacune",
+    "unmapped": "Non mappé",
+    "operational": "Opérationnel",
+    "architectural": "Architectural"
+  },
+  "hash": {
+    "fingerprint": "Empreinte",
+    "hint": "Une empreinte à sens unique : jamais une charge utile (données minimales).",
+    "copy": "Copier la valeur complète",
+    "copied": "Copié"
+  },
+  "notices": {
+    "truncated": "Données partielles",
+    "truncatedHint": "Cet agrégat a atteint le plafond d’analyse : il est partiel, et non un total exact.",
+    "selfAudited": "Lecture privilégiée : consignée dans le registre d’audit.",
+    "seam": "Pas encore câblé",
+    "seamBody": "Contrat déclaré : le {{what}} n’est pas encore câblé au backend, ce qui affiche donc la structure déclarée et non des données en direct.",
+    "minimalData": "Agrégats et métadonnées uniquement : aucune invite, sortie ni secret.",
+    "declared": "Référence déclarée",
+    "noConnector": "Aucun connecteur : absent, et non nul.",
+    "listTruncated": "{{n}} lignes chargées ; il y en a d'autres",
+    "listTruncatedHint": "Le moteur a renvoyé une seule page, et non l’ensemble complet. Le total NE PEUT PAS être déduit des lignes chargées, et il se peut que des lignes non affichées existent."
+  },
+  "badges": {
+    "signed": "Signé",
+    "linked": "Chaîne de traçabilité",
+    "governed": "Gouverné",
+    "ungoverned": "Non gouverné",
+    "approximate": "Approximatif",
+    "attributed": "Attribué",
+    "isolated": "Isolé",
+    "destroyed": "Détruit"
+  },
+  "timeline": {
+    "title": "Chronologie reconstituée",
+    "empty": "Aucun événement dans la plage.",
+    "seq": "séq"
+  },
+  "consumption": {
+    "projected": "projeté {{pct}}",
+    "label": "Consommation du budget",
+    "valueText": "{{consumed}} consommé, {{projected}} prévu"
+  },
+  "disclaimers": {
+    "report": "Correspondance technique de l'état des contrôles, dérivée des preuves observées sur la plateforme. Il ne s'agit PAS d'une certification NI d'un avis juridique."
+  },
+  "gate": {
+    "approved": "Approuvé",
+    "pending": "En attente",
+    "rejected": "Rejeté",
+    "expired": "Expiré",
+    "no_gate": "Aucun contrôle",
+    "not_required": "Non requis",
+    "approvedHint": "La gouvernance a approuvé ce plan — exécutez pour continuer.",
+    "pendingHint": "En attente d’une décision de gouvernance (refus par défaut).",
+    "rejectedHint": "La gouvernance a rejeté ce plan — redemandez avec un nouveau plan.",
+    "expiredHint": "L’approbation a expiré — replanifiez et redemandez.",
+    "no_gateHint": "Aucun contrôle d’approbation n’est configuré — l’action ne peut pas continuer.",
+    "not_requiredHint": "Aucune approbation n’est requise pour cette action.",
+    "displayNotice": "Le statut du contrôle est une décision rapportée, affichée ici uniquement. L’autorisation est appliquée côté serveur ; la console n’accorde jamais d’accès à partir de cette valeur."
+  }
+}

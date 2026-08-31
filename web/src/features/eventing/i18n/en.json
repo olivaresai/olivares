@@ -1,0 +1,263 @@
+{
+  "title": "Webhooks & event subscriptions",
+  "description": "Outbound event subscriptions — configure webhook endpoints, inspect delivered events, and manage the dead-letter queue.",
+  "tabs": {
+    "subscriptions": "Subscriptions",
+    "events": "Events",
+    "deliveries": "Deliveries",
+    "deadLetters": "Dead letters"
+  },
+  "subscriptions": {
+    "title": "Webhook subscriptions",
+    "description": "Endpoints that receive event notifications. Each subscription filters by event type and authenticates with the configured method.",
+    "new": "New subscription",
+    "empty": "No subscriptions",
+    "emptyHint": "Create a subscription to start receiving webhook events.",
+    "columns": {
+      "name": "Name",
+      "endpoint": "Endpoint",
+      "enabled": "Status",
+      "eventTypes": "Event types",
+      "authType": "Auth",
+      "role": "Role",
+      "secret": "Secret",
+      "created": "Created"
+    },
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "bulk": {
+      "enable": "Enable selected",
+      "disable": "Disable selected"
+    },
+    "test": "Test",
+    "testing": "Testing…",
+    "delete": "Delete",
+    "edit": "Edit",
+    "rotateSecret": "Rotate secret",
+    "rotateAuth": "Rotate auth",
+    "testSuccess": "Test delivery succeeded",
+    "testFailed": "Test delivery failed",
+    "deleted": "Subscription deleted",
+    "rotated": "Secret rotated",
+    "authRotated": "Auth credential rotated",
+    "confirmDelete": "Delete this subscription? This cannot be undone.",
+    "authTypes": {
+      "none": "None",
+      "bearer": "Bearer",
+      "basic": "Basic",
+      "header": "Header"
+    },
+    "actions": "Actions for {{name}}",
+    "replay": "Replay"
+  },
+  "dialog": {
+    "createTitle": "New subscription",
+    "editTitle": "Edit subscription",
+    "description": "Description",
+    "name": "Name",
+    "endpoint": "Endpoint URL",
+    "eventTypes": "Event types",
+    "eventTypesHint": "Select the event types this subscription receives.",
+    "matchSources": "Match sources",
+    "matchSourcesHint": "Comma-separated source filters (empty = all sources).",
+    "role": "Role",
+    "authType": "Auth type",
+    "authValue": "Auth value",
+    "authValueHint": "Bearer token, basic credentials, or header value.",
+    "authHeaderName": "Auth header name",
+    "authHeaderNameHint": "Custom header name (only for auth type 'header').",
+    "maxAttempts": "Max attempts",
+    "maxAttemptsHint": "0 = use server default.",
+    "initialInterval": "Initial interval (s)",
+    "initialIntervalHint": "Retry backoff seed in seconds. 0 = default.",
+    "enabled": "Enabled",
+    "create": "Create subscription",
+    "update": "Save changes",
+    "created": "Subscription created",
+    "updated": "Subscription updated",
+    "sinkKind": "SIEM sink",
+    "sinkKindHint": "Optional vendor sink profile. None = generic HMAC webhook.",
+    "sinkNone": "None (generic webhook)",
+    "sinkKinds": {
+      "https": "HTTPS (OCSF)",
+      "splunk_hec": "Splunk HEC",
+      "sentinel_dcr": "Microsoft Sentinel",
+      "datadog": "Datadog",
+      "newrelic": "New Relic"
+    },
+    "sinkFormat": "Sink format",
+    "sinkFormatHint": "Wire dialect for the sink. Default = OCSF.",
+    "sinkFormatDefault": "Default (OCSF)",
+    "sinkCred": "Sink credential",
+    "sinkCredHint": "Tower token/key for this sink — sealed at rest, never shown again.",
+    "sinkCredKeepHint": "Leave empty to keep the current credential ({{hint}}).",
+    "sinkCredRequired": "A credential is required for this sink.",
+    "errors": {
+      "maxAttempts": "Max attempts must be 0 or between 1 and 20.",
+      "initialInterval": "Initial interval must be 0 or between 5 and 3600 seconds."
+    }
+  },
+  "secret": {
+    "title": "Subscription secret",
+    "description": "This HMAC signing secret is shown only once. Copy it now — it cannot be retrieved later.",
+    "copied": "Secret copied to clipboard",
+    "done": "Done"
+  },
+  "events": {
+    "title": "Captured events",
+    "description": "The event log with sequence cursor. Filter by event type to narrow results.",
+    "empty": "No events captured",
+    "typeFilter": "Filter by type",
+    "allTypes": "All types",
+    "columns": {
+      "seq": "Seq",
+      "type": "Type",
+      "source": "Source",
+      "occurredAt": "Occurred at",
+      "payload": "Payload"
+    },
+    "loadMore": "Load more",
+    "noMore": "No more events"
+  },
+  "deliveries": {
+    "title": "Deliveries",
+    "description": "Delivery state for webhook event dispatches. Filter by subscription, status, or event type.",
+    "empty": "No deliveries",
+    "subscriptionFilter": "Subscription",
+    "statusFilter": "Status",
+    "typeFilter": "Event type",
+    "allSubscriptions": "All subscriptions",
+    "allStatuses": "All statuses",
+    "allTypes": "All types",
+    "columns": {
+      "eventType": "Event type",
+      "eventSeq": "Seq",
+      "subscription": "Subscription",
+      "status": "Status",
+      "origin": "Origin",
+      "attempts": "Attempts",
+      "lastAttempt": "Last attempt",
+      "nextAttempt": "Next attempt"
+    },
+    "statuses": {
+      "queued": "Queued",
+      "delivering": "Delivering",
+      "delivered": "Delivered",
+      "dead": "Dead",
+      "denied": "Denied"
+    },
+    "origins": {
+      "live": "Live",
+      "replay": "Replay"
+    },
+    "loadMore": "Load more",
+    "originFilter": "Origin",
+    "allOrigins": "All origins",
+    "nextRetry": "Next retry {{time}}"
+  },
+  "deadLetters": {
+    "title": "Dead-letter queue",
+    "description": "Failed deliveries that exhausted all retry attempts. Redeliver individual items or investigate the cause.",
+    "empty": "No dead letters",
+    "emptyHint": "Dead letters appear here when deliveries exhaust all retry attempts.",
+    "redeliver": "Redeliver",
+    "redelivered": "Delivery requeued",
+    "loadMore": "Load more"
+  },
+  "rotateAuthDialog": {
+    "title": "Rotate auth credential — {{name}}",
+    "description": "Provide the new credential for this endpoint. It is sealed at rest and never shown again; the card only displays a fingerprint.",
+    "value": "New credential",
+    "valueHint": "Bearer token, basic credentials, or header value — sent once, never echoed back.",
+    "submit": "Rotate credential"
+  },
+  "replay": {
+    "title": "Replay events — {{name}}",
+    "description": "Choose the event sequence range to enqueue again.",
+    "fromSeq": "From sequence",
+    "toSeq": "To sequence (optional)",
+    "submit": "Replay",
+    "continue": "Continue replay",
+    "total": "Total replayed: {{count}}",
+    "viewDeliveries": "View replayed deliveries",
+    "completed": "Replayed {{count}} events"
+  },
+  "history": {
+    "action": "View revision history for {{name}}",
+    "title": "Revision history — {{name}}",
+    "description": "Chronological, append-only snapshots of this subscription.",
+    "scopeCaption": "Restore re-applies only the delivery shape — never credentials or the sink profile.",
+    "empty": "No revisions recorded",
+    "loadMore": "Load more",
+    "compareTitle": "Snapshot diff",
+    "selectTwo": "Select two revisions to compare their snapshots.",
+    "selectRevision": "Select {{op}} revision by {{actor}}",
+    "originalLabel": "Earlier revision",
+    "modifiedLabel": "Later revision",
+    "restore": "Restore this revision",
+    "restoreTitle": "Restore revision?",
+    "restoreDescription": "Restore the selected delivery shape for {{name}}?",
+    "restoreConfirm": "Restore revision",
+    "restored": "Subscription revision restored",
+    "operations": {
+      "create": "Created",
+      "update": "Updated",
+      "delete": "Deleted",
+      "restore": "Restored"
+    }
+  },
+  "egress": {
+    "title": "Destination policy",
+    "description": "Whether this deployment restricts where your event stream may be sent, and what enforcing it would break. The lever is an operator ceremony on the host; this is the state it acts on.",
+    "unknown": "Unknown",
+    "unreadable": "The policy status could not be read.",
+    "unreadablePolicy": "Unreadable",
+    "inForce": "Policy in force",
+    "inForceYes": "Yes",
+    "inForceNo": "None authored",
+    "source": "Source",
+    "mode": "Deployment mode",
+    "classifiedMode": "Classified as",
+    "committed": "Enforcement committed",
+    "committedYes": "Committed",
+    "committedNo": "Not committed",
+    "fence": {
+      "title": "Writer fence",
+      "armed": "Armed",
+      "armedYes": "Armed",
+      "armedNo": "Dormant",
+      "mode": "Mode",
+      "required": "Required capability",
+      "binary": "This binary",
+      "generation": "Generation"
+    },
+    "compat": {
+      "title": "Compatibility",
+      "seeded": "Record",
+      "drawn": "Drawn",
+      "notDrawn": "Not drawn",
+      "recorded": "Destinations recorded",
+      "stillNeeded": "Would stop working",
+      "unparsable": "Unparsable",
+      "notIntact": "The compatibility record is no longer intact: it looks complete but describes a set that has lost members. Do not plan an actuation against it.",
+      "notServed": "Not served at your permission level.",
+      "notProvided": "Not provided in this response."
+    },
+    "report": {
+      "title": "What enforcing would break",
+      "description": "The destinations this tenant keeps only because the deployment predates the control.",
+      "unreadable": "The compatibility report could not be read.",
+      "notSeeded": "The compatibility record was never drawn, so this report describes nothing.",
+      "subscriptions": "Subscriptions at the line",
+      "unparsed": "Unparsed endpoints",
+      "seededAt": "Line drawn",
+      "noAuthorities": "No legacy destination.",
+      "authority": "Destination",
+      "kind": "Kind",
+      "uses": "Subscriptions",
+      "effect": "On enforcement",
+      "survives": "Survives",
+      "breaks": "Stops working"
+    }
+  }
+}

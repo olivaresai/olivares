@@ -1,0 +1,31 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "page",
+      "id": "page-notion-1",
+      "last_edited_time": "2026-06-20T09:00:00.000Z",
+      "properties": {
+        "title": {
+          "title": [
+            {"plain_text": "Architecture Overview"}
+          ]
+        }
+      }
+    },
+    {
+      "object": "page",
+      "id": "page-notion-2",
+      "last_edited_time": "2026-06-25T14:30:00.000Z",
+      "properties": {
+        "title": {
+          "title": [
+            {"plain_text": "Deployment Guide"}
+          ]
+        }
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}

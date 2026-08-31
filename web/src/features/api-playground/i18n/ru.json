@@ -1,0 +1,68 @@
+{
+  "title": "API-плейграунд",
+  "description": "Интерактивное изучение и тестирование API управляющего контура",
+  "filterPlaceholder": "Фильтр эндпоинтов…",
+  "selectEndpoint": "Выберите эндпоинт на левой панели",
+  "send": "Отправить",
+  "sending": "Отправка…",
+  "streaming": "Потоковая передача…",
+  "cancel": "Отменить",
+  "requiredPermission": "Требуемое разрешение",
+  "copyAsCurl": "Скопировать как curl",
+  "response": "Ответ",
+  "history": "История",
+  "clearHistory": "Очистить",
+  "noRequests": "Запросов пока нет",
+  "noMatch": "Ни один эндпоинт не соответствует фильтру.",
+  "pathParams": "Параметры пути",
+  "queryParams": "Query",
+  "headers": "Заголовки",
+  "body": "Тело",
+  "networkError": "Ошибка сети",
+  "beta": "бета",
+  "summary": "{{endpoints}} эндпоинтов в {{groups}} группах",
+  "summaryWithBeta": "{{endpoints}} эндпоинтов в {{groups}} группах · {{beta}} бета-маршрутов модулей",
+  "endpointTree": {
+    "ariaLabel": "API-эндпоинты"
+  },
+  "errors": {
+    "loadSpec": "Не удалось загрузить спецификацию OpenAPI"
+  },
+  "request": {
+    "networkError": "Ошибка сети",
+    "failedNetworkHint": "Запрос не выполнен — проверьте сетевое подключение.",
+    "blockedDestination": "Адрес назначения заблокирован",
+    "blockedDestinationHint": "API Playground может отправлять запросы только в эту плоскость управления.",
+    "enterPathParam": "Введите {{name}}",
+    "headerNamePlaceholder": "Имя заголовка",
+    "headerValuePlaceholder": "Значение",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Удалить заголовок {{header}}",
+    "addHeaderAria": "Добавить пользовательский заголовок",
+    "bodyAria": "Тело запроса"
+  },
+  "responsePanel": {
+    "empty": "Выберите эндпоинт и отправьте запрос",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "Заголовки ({{count}})",
+    "bodyAria": "Тело ответа"
+  },
+  "historyPanel": {
+    "recentCount": "Недавние ({{count}})",
+    "clearAria": "Очистить историю запросов",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "только что",
+      "minutes": "{{count}} мин назад",
+      "hours": "{{count}} ч назад",
+      "days": "{{count}} д назад"
+    }
+  }
+}

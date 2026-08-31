@@ -1,0 +1,42 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "asst_abc123",
+      "object": "assistant",
+      "name": "Data Analyst",
+      "model": "gpt-4o",
+      "tools": [
+        {"type": "code_interpreter"},
+        {"type": "file_search"}
+      ],
+      "metadata": {"team": "analytics"},
+      "created_at": 1717200000
+    },
+    {
+      "id": "asst_def456",
+      "object": "assistant",
+      "name": "Customer Support Bot",
+      "model": "gpt-4o-mini",
+      "tools": [
+        {"type": "file_search"}
+      ],
+      "metadata": {},
+      "created_at": 1717300000
+    },
+    {
+      "id": "asst_ghi789",
+      "object": "assistant",
+      "name": "Code Reviewer",
+      "model": "o3-pro",
+      "tools": [
+        {"type": "code_interpreter"},
+        {"type": "function"}
+      ],
+      "metadata": {"team": "engineering"},
+      "created_at": 1717400000
+    }
+  ],
+  "has_more": false,
+  "last_id": "asst_ghi789"
+}

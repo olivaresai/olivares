@@ -1,0 +1,172 @@
+{
+  "title": "红队",
+  "description": "对抗性鲁棒性测试——仅针对您自己已注册并已授权的智能体。API 仅传递防御性分类法与评分卡，绝不传递攻击载荷。",
+  "tabs": {
+    "targets": "目标",
+    "runs": "运行",
+    "catalog": "目录"
+  },
+  "suites": {
+    "all": "全部测试套件",
+    "injection": "提示词注入",
+    "jailbreak": "越狱",
+    "exfil": "数据外泄",
+    "tool_poisoning": "工具投毒"
+  },
+  "targets": {
+    "title": "目标",
+    "description": "同意层。运行只会触及您已注册并已授权的智能体。",
+    "consentNote": "注册智能体并不等于同意。目标在创建时即为未授权状态——授权即授予同意，且可随时吊销。",
+    "register": "注册智能体",
+    "authorize": "授权",
+    "revoke": "吊销",
+    "authorizedBy": "由 {{who}}",
+    "empty": "尚未注册任何目标",
+    "emptyHint": "将您自己的某个智能体注册为候选目标，然后授权它以运行探测。",
+    "columns": {
+      "name": "目标",
+      "endpoint": "端点",
+      "scope": "范围",
+      "consent": "同意",
+      "actions": "操作"
+    },
+    "dialog": {
+      "registerTitle": "注册候选智能体",
+      "registerHint": "将您自己的某个智能体注册为红队候选目标。",
+      "registerCta": "注册",
+      "notConsentNote": "注册并不等于同意——候选目标创建时即为未授权状态，在您授权之前，任何运行都无法触及它。",
+      "registered": "智能体已注册为候选目标",
+      "agentRef": "智能体引用",
+      "name": "显示名称",
+      "endpoint": "端点",
+      "scope": "范围",
+      "scopeHint": "以逗号分隔的探测面（例如 input、output、tool_args）。",
+      "authorizeTitle": "授权此目标",
+      "authorizeHint": "授予同意后，红队运行即可探测 {{name}}。此操作将记录到审计账本中。",
+      "revokeTitle": "吊销同意",
+      "revokeHint": "吊销同意将停止对 {{name}} 的任何后续运行。此操作将记录到审计账本中。",
+      "granted": "同意已授予",
+      "revoked": "同意已吊销"
+    },
+    "truncated": "已加载 {{n}} 个目标；还有更多",
+    "truncatedHint": "已注册目标多于所显示的；本页按 id 取行。列表中没有某个目标并不能证明它未注册或未获授权——它可能只是超出了本页范围。"
+  },
+  "runs": {
+    "title": "运行",
+    "description": "每次运行都会探测一个已授权目标，并生成一份鲁棒性评分卡。未通过的探测将成为发现项。",
+    "detailTitle": "运行详情",
+    "closeDetail": "关闭",
+    "launch": "启动运行",
+    "launchGatedHint": "在此目标获得授权之前，启动功能将被禁用——注册智能体并不等于同意。",
+    "robustness": "鲁棒性",
+    "noScore": "无评分",
+    "degradedHint": "所有探测均被跳过——没有可用的沙箱。这表示沙箱处于待处理状态，而非通过。",
+    "errorHint": "所有探测均因执行错误而失败。这并非鲁棒性裁定；问题解决后请重新运行。",
+    "empty": "尚无运行",
+    "emptyHint": "针对已授权目标启动一次运行，以生成评分卡。",
+    "status": {
+      "completed": "已完成",
+      "degraded": "沙箱待处理",
+      "error": "执行错误"
+    },
+    "columns": {
+      "started": "开始时间",
+      "target": "目标",
+      "suite": "套件",
+      "status": "状态",
+      "score": "评分",
+      "passFail": "通过 / 失败"
+    },
+    "stats": {
+      "passed": "通过",
+      "passedCaption": "已拦截 + 已拒绝——防御生效",
+      "failed": "失败",
+      "failedCaption": "已遵从 + 已泄露——真实漏洞",
+      "errors": "错误",
+      "skipped": "已跳过",
+      "excludedCaption": "已排除在评分之外"
+    },
+    "scorecard": {
+      "title": "评分卡",
+      "description": "鲁棒性 = 通过 / （通过 + 失败）× 100。错误与已跳过的探测均被排除；数值越高越好。"
+    },
+    "byFamily": {
+      "title": "按族类划分的失败",
+      "description": "至少有一个探测失败的探测族类。",
+      "empty": "各族类均无失败。",
+      "summary": "按族类划分的失败，{{count}} 个族类存在失败，最严重的是 {{family}}，有 {{failed}} 个探测失败。",
+      "summaryEmpty": "没有任何探测族类出现失败。",
+      "colFamily": "族类",
+      "colFailed": "失败"
+    },
+    "owasp": {
+      "title": "OWASP 失败项",
+      "description": "存在探测失败的 OWASP 条目（按引用计数）。",
+      "empty": "无 OWASP 条目失败。"
+    },
+    "dialog": {
+      "title": "启动运行",
+      "hint": "使用所选套件探测 {{name}}。此对抗性操作将记录到审计账本中。",
+      "suite": "套件",
+      "launched": "运行已启动"
+    },
+    "truncated": "已加载 {{n}} 次运行；还有更多",
+    "truncatedHint": "运行记录多于所显示的；本页按 id 取行而非按日期，因此最新的未必在此。缺少某次运行并不能证明该目标从未被探测过。"
+  },
+  "results": {
+    "title": "逐探测结果",
+    "description": "每个探测的结果。指纹是一种单向哈希——绝非攻击载荷。",
+    "empty": "此次运行没有结果。",
+    "columns": {
+      "probe": "探测",
+      "family": "族类",
+      "frameworks": "框架",
+      "outcome": "结果",
+      "severity": "严重程度",
+      "fingerprint": "指纹",
+      "occurredAt": "发生时间"
+    }
+  },
+  "catalog": {
+    "title": "探测目录",
+    "description": "测试组分类法及其框架覆盖率——仅为防御性元数据。",
+    "suiteLabel": "按套件筛选",
+    "metadataNote": "这是防御性元数据，而非漏洞利用工具库。API 不传递任何攻击载荷。",
+    "stats": {
+      "probes": "探测",
+      "families": "族类",
+      "owasp": "OWASP 引用",
+      "atlas": "ATLAS 引用"
+    },
+    "columns": {
+      "id": "探测 ID",
+      "family": "族类",
+      "title": "标题",
+      "frameworks": "框架",
+      "surface": "探测面",
+      "severity": "严重程度"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "尚未收录防御性探测",
+      "description": "此只读分类法仅由编译进控制平面的探测定义填充。"
+    },
+    "familyFailureChart": {
+      "title": "尚无探测族类失败记录",
+      "description": "当所选运行中一个已评分探测因遵从对抗性请求或泄露禁止外泄的标记而失败时，相应族类才会显示。"
+    },
+    "results": {
+      "title": "尚无探测结果记录",
+      "description": "针对已授权目标启动套件；每个探测结果都会连同单向指纹记录于此，绝不记录攻击载荷。"
+    },
+    "runs": {
+      "title": "尚未启动红队运行",
+      "description": "注册并授权自有智能体，再启动探测套件以记录其鲁棒性评分卡。"
+    },
+    "targets": {
+      "title": "尚未注册红队目标",
+      "description": "将本租户清单中的智能体注册为候选目标；授权仍是单独的同意步骤。"
+    }
+  }
+}

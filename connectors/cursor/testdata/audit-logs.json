@@ -1,0 +1,8 @@
+{
+  "events": [
+    { "event_id": "evt-1", "timestamp": "1717200000000", "ip_address": "203.0.113.4", "user_email": "alice@example.com", "event_type": "member.role_changed", "event_data": { "from": "member", "to": "admin" } },
+    { "event_id": "evt-2", "timestamp": "1717203600000", "ip_address": "203.0.113.5", "user_email": "bob@example.com", "event_type": "sso.login", "event_data": { "provider": "okta" } }
+  ],
+  "pagination": { "numPages": 1, "currentPage": 1, "pageSize": 100, "hasNextPage": false },
+  "params": { "startTime": 1717200000000, "endTime": 1717290000000 }
+}

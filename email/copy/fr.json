@@ -1,0 +1,55 @@
+{
+  "$locale": "fr",
+  "common": {
+    "wordmark": "Olivares AI",
+    "footerNote": "Ceci est un message transactionnel envoyé par Olivares AI.",
+    "fallbackIntro": "Si le bouton ne fonctionne pas, copiez cette adresse dans votre navigateur :",
+    "signoff": "Olivares AI"
+  },
+  "signin": {
+    "subject": "Connectez-vous à votre portail Olivares AI",
+    "preheader": "Utilisez ce lien à usage unique pour accéder à votre portail client Olivares AI.",
+    "heading": "Connectez-vous à votre portail client",
+    "intro": "Utilisez le bouton ci-dessous pour accéder à votre portail client Olivares AI.",
+    "cta": "Accéder au portail",
+    "expiry": "Ce lien ne fonctionne qu'une seule fois et expire dans {{MINUTES}} minutes.",
+    "sameBrowser": "Ouvrez-le là où vous l'avez demandé : dans le même navigateur, avec le même profil et dans le même mode de navigation. Le lien est lié à un cookie qui y est stocké ; il ne fonctionnera pas si vous changez l'un de ces éléments ou effacez les cookies.",
+    "ignore": "Ce lien donne accès à votre portail. Si vous ne l'avez pas demandé, ignorez ce message ; rien ne se passe tant que le lien n'est pas utilisé.",
+    "textIntro": "Utilisez ce lien pour accéder à votre portail client Olivares AI :"
+  },
+  "license": {
+    "subject": "Votre licence commerciale Olivares AI",
+    "preheader": "Votre clé de licence signée et les informations de téléchargement d'entreprise sont prêtes.",
+    "preheaderNoDownload": "Votre clé de licence signée est prête. Le lien de téléchargement ne figure pas dans ce message.",
+    "noDownloadNote": "Votre licence est jointe et active : rien n'est en attente la concernant. Le lien de téléchargement d'entreprise ne figure pas dans ce message.",
+    "noDownloadPortalNote": "Votre licence est jointe et active : rien n'est en attente la concernant. Le lien de téléchargement d'entreprise ne figure pas dans ce message ; les téléchargements passent par votre portail client.",
+    "heading": "Votre licence commerciale",
+    "greeting": "Bonjour {{LICENSEE}},",
+    "intro": "Votre clé de licence signée est jointe sous le nom olivares-license.key et reproduite ci-dessous.",
+    "installHeading": "Installez-la",
+    "installNote": "Aucun redémarrage du moteur en cours d'exécution n'est nécessaire.",
+    "installStdinNote": "Pour coller la clé plutôt que d'utiliser le fichier joint, exécutez la commande ci-dessous et appuyez sur Ctrl-D lorsque vous avez terminé.",
+    "verifyNote": "Après l'installation, vérifiez la licence avec la commande ci-dessous.",
+    "statusPerpetual": "Cette licence est perpétuelle.",
+    "statusUntil": "Cette licence est valable jusqu'au {{DATE}}.",
+    "downloadHeading": "Téléchargez le binaire d'entreprise",
+    "downloadNote": "Ce lien de téléchargement est associé à votre achat.",
+    "downloadCta": "Télécharger le binaire",
+    "portalHeading": "Votre portail client",
+    "portalNote": "Connectez-vous à tout moment avec cette adresse e-mail : nous envoyons un lien à usage unique, il n'y a donc aucun mot de passe à retenir. Vos licences, vos téléchargements et les informations de votre compte s'y trouvent.",
+    "portalCta": "Ouvrir le portail",
+    "keyHeading": "Votre clé de licence",
+    "attestation": "Cette licence fondée uniquement sur l'attestation consigne votre exception commerciale et vous donne droit aux modules complémentaires d'entreprise. Elle ne limite jamais le nombre d'utilisateurs (les comptes utilisateurs auto-hébergés sont illimités dans toutes les éditions), et sa vérification ne nous contacte jamais : elle se valide entièrement hors ligne, sans interrupteur d'arrêt à distance. Télécharger ce que vous avez payé, en revanche, nous contacte : cet abonnement est le justificatif d'accès aux modules complémentaires d'entreprise, à leurs mises à jour et à leurs correctifs. Il n'y a aucune télémétrie obligatoire ni aucun egress vers le plan de contrôle par défaut."
+  },
+  "invite": {
+    "subject": "Configurez votre compte Olivares AI",
+    "preheader": "Acceptez l'invitation et choisissez un mot de passe pour votre compte Olivares AI.",
+    "heading": "Configurez votre compte Olivares AI",
+    "intro": "Un administrateur vous a invité à configurer votre compte Olivares AI pour son organisation.",
+    "cta": "Configurer votre compte",
+    "expiry": "Cette invitation ne peut être utilisée qu'une seule fois et expire le {{EXPIRES_AT}}.",
+    "setPassword": "Vous choisirez votre propre mot de passe ; l'administrateur qui vous a invité ne le verra jamais.",
+    "ignore": "Si vous ne vous attendiez pas à recevoir ce message, n'utilisez pas le lien et contactez l'administrateur qui vous a invité. Le compte existe déjà ; si vous ignorez ce message, seul son mot de passe restera non défini.",
+    "textIntro": "Utilisez ce lien d'invitation pour configurer votre compte Olivares AI :"
+  }
+}

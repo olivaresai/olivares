@@ -1,0 +1,41 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "vs_abc123",
+      "object": "vector_store",
+      "name": "Knowledge Base",
+      "status": "completed",
+      "file_counts": {
+        "in_progress": 0,
+        "completed": 10,
+        "failed": 0,
+        "cancelled": 0,
+        "total": 10
+      },
+      "usage_bytes": 2097152,
+      "metadata": {"env": "production"},
+      "created_at": 1717200000,
+      "expires_at": 0
+    },
+    {
+      "id": "vs_def456",
+      "object": "vector_store",
+      "name": "Staging KB",
+      "status": "completed",
+      "file_counts": {
+        "in_progress": 1,
+        "completed": 5,
+        "failed": 2,
+        "cancelled": 0,
+        "total": 8
+      },
+      "usage_bytes": 524288,
+      "metadata": {},
+      "created_at": 1717300000,
+      "expires_at": 1719792000
+    }
+  ],
+  "has_more": false,
+  "last_id": "vs_def456"
+}

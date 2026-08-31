@@ -1,0 +1,13 @@
+This directory holds the first-party source-connector plugin binaries embedded
+into the single control-plane artifact (CB-1 transport B, see ../embed.go).
+
+It is populated by `task build:connectors`, which compiles each first-party
+SOURCE connector (e.g. connectors/claude/cmd/claude-source) to a standalone
+binary here for the build's target platform. Those binaries are NOT committed
+(they are build artifacts, and platform-specific); only this placeholder is, so
+the //go:embed pattern stays valid on a connector-less `go build`/`go test`.
+
+At runtime the engine extracts a needed binary to a private temp dir and launches
+it as an isolated go-plugin subprocess (AutoMTLS), so a connector's dependency
+tree never links into the core. When a configured plugin source has no embedded
+binary, the composition root warns and skips it — never a silent no-op.

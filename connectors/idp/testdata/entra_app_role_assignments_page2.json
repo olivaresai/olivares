@@ -1,0 +1,12 @@
+{
+  "value": [
+    {
+      "principalId": "99999999-9999-9999-9999-999999999999",
+      "principalType": "Group"
+    },
+    {
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000000",
+      "principalType": "User"
+    }
+  ]
+}

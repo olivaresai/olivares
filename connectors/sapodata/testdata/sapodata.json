@@ -1,0 +1,13 @@
+{
+  "value": [
+    {
+      "@odata.id": "Materials('MAT001')",
+      "@odata.etag": "W/\"20260420083000\"",
+      "Name": "Steel Plate A4",
+      "Description": "High-grade steel plate for structural assembly, specification DIN EN 10025.",
+      "LastChangeDateTime": "2026-04-20T08:30:00Z",
+      "AuthorizationGroup": "MM_PURCHASER",
+      "_attributes": {"plant": "1000", "material_type": "ROH"}
+    }
+  ]
+}

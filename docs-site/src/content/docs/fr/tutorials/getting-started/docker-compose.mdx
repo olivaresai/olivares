@@ -1,0 +1,170 @@
+---
+title: "Démarrer avec Docker Compose"
+description: >-
+  Exécutez le control plane avec la stack Compose livrée : un nœud unique SQLite
+  durci par défaut, un override Postgres multi-tenant, et un profil de sauvegarde
+  de reprise après sinistre chiffré — jeton de configuration de premier démarrage
+  inclus.
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Le dépôt livre une stack Compose sous `deploy/compose/` : un déploiement nœud unique durci
+(SQLite embarqué, zéro dépendance externe) plus deux overlays — un override **Postgres
+multi-tenant** et un profil de **sauvegarde de reprise après sinistre**. Ce tutoriel vous
+mène de `up -d` à un control plane configuré avec des sauvegardes.
+
+Le conteneur enveloppe le **même binaire unique** que toute autre installation ; seul
+l'emballage diffère. Les commandes ci-dessous sont les points d'entrée documentés de la
+stack elle-même (`deploy/compose/*.yml`), et le flux de premier démarrage qu'elles pilotent
+est le même que celui vérifié de bout en bout contre le binaire dans le
+[tutoriel nœud unique](/tutorials/getting-started/single-node/).
+
+<Aside type="caution" title="Jusqu'à la première release, compilez l'image localement">
+Les images de release sont publiées sur `docker.io/olivaresai/olivares` sur Docker Hub (signées,
+épinglées par digest) **lorsque la première release publique sortira** — le chemin du
+registre est vide jusqu'à ce que ce tag soit coupé (le même contenu est aussi mis en miroir
+vers `ghcr.io/olivaresai/olivares`, identique par digest). Aujourd'hui, compilez la même
+image distroless durcie à partir des sources et pointez la stack vers elle :
+
+```bash
+task image                                   # builds olivares:dev
+echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
+```
+
+Une fois les releases existantes : définissez
+`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` et
+[vérifiez-la](/how-to/verify-a-release/) d'abord — par digest, jamais par tag.
+</Aside>
+
+## 1. Démarrer la stack nœud unique (SQLite)
+
+<Steps>
+
+1. Démarrez-la :
+
+   ```bash
+   docker compose -f deploy/compose/docker-compose.yml up -d
+   ```
+
+   Ce que vous obtenez, par conception :
+
+   | Propriété | Valeur |
+   |---|---|
+   | Ports | `127.0.0.1:8443` (HTTPS : REST + interface web), `127.0.0.1:8444` (gRPC) — liés à **localhost sur l'hôte** ; exposez délibérément |
+   | Données | volume nommé `olivares-data` → `/var/lib/olivares` (store SQLite, clé de signature d'audit, matériel TLS) |
+   | Durcissement | tourne en `65532:65532`, racine en lecture seule, toutes les capabilities supprimées, `no-new-privileges`, tmpfs `/tmp` |
+   | Healthcheck | aucun en-conteneur (l'image est distroless — pas de shell). Sondez `/livez` et `/readyz` depuis l'hôte |
+
+2. Lisez le jeton de configuration à usage unique depuis les journaux :
+
+   ```bash
+   docker compose -f deploy/compose/docker-compose.yml logs olivares \
+     | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. Créez le premier administrateur, connectez-vous, et créez votre organisation —
+   exactement comme dans le [tutoriel nœud unique](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)
+   (l'API est la même ; le certificat TLS est auto-signé au premier démarrage, donc
+   `curl -k` pour le bootstrap) :
+
+   ```bash
+   curl -ksf -X POST https://localhost:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="tip" title="Jeton manqué ?">
+Un redémarrage ne le réaffiche pas (seul son hash est stocké). Tant qu'aucun utilisateur
+n'existe encore, la récupération est sûre : `docker compose down`, supprimez `setup.token`
+du volume `olivares-data` (ou supprimez entièrement le volume sur une installation neuve),
+et `up -d` à nouveau — un nouveau jeton est émis.
+</Aside>
+
+## 2. Câbler les sources
+
+Les sources sont déclarées dans un seul fichier opérateur nommé par
+`OLIVARES_SOURCES_CONFIG` ([connecter une source](/how-to/connect-a-source/)). Pour le
+conteneur, montez le fichier et définissez la variable avec un petit override :
+
+```yaml
+# deploy/compose/docker-compose.sources.yml (yours — not shipped)
+services:
+  olivares:
+    environment:
+      OLIVARES_SOURCES_CONFIG: /etc/olivares/sources.json
+    volumes:
+      - ./sources.json:/etc/olivares/sources.json:ro
+```
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.sources.yml up -d
+docker compose -f deploy/compose/docker-compose.yml logs olivares | grep "ingest: wired source"
+```
+
+Rappelez-vous que les chemins à l'intérieur de `sources.json` sont des chemins
+**conteneur** — une traînée de journal pgAudit, par exemple, nécessite que le répertoire de
+journaux Postgres soit monté en lecture seule dans le conteneur également.
+
+## 3. Sauvegardes DR chiffrées (le profil `backup`)
+
+La stack livre un service de sauvegarde one-shot qui produit un bundle **chiffré et sûr pour
+la continuité du ledger** (`olivares dr backup`) et élague les bundles de plus de 14 jours :
+
+```bash
+# Write your KEK passphrase once (keep it OUT of the repo / image):
+printf 'a strong DR passphrase' > deploy/compose/dr-pass
+
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.backup.yml \
+               --profile backup run --rm backup
+```
+
+Enveloppez cette commande dans un cron de l'hôte pour un RPO planifié, et **mettez en miroir
+le volume `olivares-backups` hors site** — une sauvegarde sur le même hôte n'est pas une
+reprise après sinistre, et la passphrase doit voyager séparément des bundles (3-2-1). La
+procédure complète, y compris l'exercice de restauration (`olivares dr verify`), est dans
+[sauvegarde & restauration](/how-to/backup-and-restore/).
+
+## 4. Optionnel : l'override Postgres multi-tenant
+
+Pour la topologie multi-tenant, superposez l'override Postgres. Il démarre un Postgres 16,
+provisionne le **rôle `olivares_app` à moindre privilège** (pas de superuser, pas de
+`BYPASSRLS` — le moteur *refuse* de démarrer contre un rôle privilégié, car la sécurité au
+niveau ligne est le filet de sécurité du tenant), et y pointe le moteur :
+
+```bash
+cp deploy/compose/.env.example deploy/compose/.env
+# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.postgres.yml up -d
+```
+
+<Aside type="caution" title="Le Postgres compose est une topologie de démonstration">
+L'override se connecte avec `sslmode=disable` à l'intérieur du réseau compose — acceptable
+pour l'évaluation, **pas** pour la production. Un déploiement Postgres de production utilise
+TLS avec `sslmode=verify-full` et un secret DSN — c'est la
+[voie Kubernetes/Helm](/tutorials/getting-started/kubernetes/).
+</Aside>
+
+## Santé
+
+```bash
+curl -ks https://localhost:8443/readyz
+# {"leader":true,"setup_required":false,"status":"ok","store":"up"}
+curl -ks https://localhost:8443/metrics | grep olivares_store_up
+```
+
+## Étapes suivantes
+
+- **Câbler de vrais signaux :** les [guides de connecteurs](/how-to/connectors/pgaudit/).
+- **Planifier et exercer les sauvegardes :** [sauvegarde & restauration](/how-to/backup-and-restore/).
+- **Le superviser :** [métriques Prometheus, SLO et alertes](/how-to/monitor-with-prometheus/).
+- **Passer en multi-nœuds ?** [Kubernetes avec Helm](/tutorials/getting-started/kubernetes/),
+  y compris la HA et le DaemonSet des collecteurs.

@@ -1,0 +1,336 @@
+{
+  "title": "Привязки протоколов",
+  "subtitle": "Создание, проверка и сверка управляемых привязок A2A и MCP без выдачи недоступных свидетельств за успех.",
+  "actions": {
+    "newDraft": "Новый черновик",
+    "refresh": "Обновить",
+    "activate": "Активировать",
+    "disable": "Отключить",
+    "reconcile": "Сверить",
+    "test": "Test remote state",
+    "recordObservation": "Record observation",
+    "retrySameKey": "Retry with same key",
+    "rereadReplan": "Re-read and re-plan"
+  },
+  "common": {
+    "back": "Back",
+    "next": "Next",
+    "remove": "Remove"
+  },
+  "workspace": {
+    "requiredTitle": "Выберите рабочее пространство",
+    "requiredBody": "Protocol bindings require an explicit workspace scope. Choose one in the workspace switcher.",
+    "scope": "Workspace scope"
+  },
+  "tabs": {
+    "specs": "Спецификации",
+    "bindings": "Экземпляры"
+  },
+  "specs": {
+    "title": "Binding specifications",
+    "description": "Immutable desired generations and their server-observed activation witness.",
+    "emptyTitle": "No binding specifications",
+    "emptyBody": "No specification matches this workspace and filter."
+  },
+  "bindings": {
+    "title": "Binding instances",
+    "description": "Runtime instances pinned to one exact specification generation.",
+    "emptyTitle": "No binding instances",
+    "emptyBody": "No runtime instance matches this workspace and filter."
+  },
+  "filters": {
+    "protocol": "Protocol filter",
+    "state": "State filter",
+    "verdict": "Evidence verdict filter",
+    "allProtocols": "All protocols",
+    "allStates": "All states",
+    "allVerdicts": "All verdicts"
+  },
+  "state": {
+    "draft": "Черновик",
+    "active": "Активна",
+    "disabled": "Отключена",
+    "superseded": "Заменена"
+  },
+  "verdict": {
+    "CLEAN": "Чисто",
+    "BROKEN": "Нарушено",
+    "UNKNOWN": "Не наблюдалось",
+    "LIMPIO": "Чисто",
+    "ROTO": "Нарушено",
+    "NO_HE_PODIDO_MIRAR": "Невозможно наблюдать"
+  },
+  "outcome": {
+    "unknownTitle": "Состояние не подтверждено",
+    "unknownBody": "Плоскость управления не смогла завершить наблюдение. Перечитайте свидетельства.",
+    "brokenTitle": "The requested condition was not met",
+    "brokenBody": "Review the reported code and plan before continuing.",
+    "replayed": "The control plane replayed the already committed result; it did not apply a second change."
+  },
+  "composer": {
+    "title": "Compose protocol binding draft",
+    "description": "Define one pinned, declarative A2A or MCP generation. Validation and planning do not write state.",
+    "progress": "Composer progress",
+    "steps": {
+      "connection": "Connection",
+      "resources": "Resources",
+      "mapping": "Mapping",
+      "governance": "Governance",
+      "review": "Review"
+    },
+    "pinnedVersionHelp": "Use an exact protocol version; latest, current, and * are rejected.",
+    "pinnedVersionError": "Enter an exact pinned version.",
+    "peerHelp": "Use the onboarded peer authority. Do not paste credentials or secret-bearing URLs.",
+    "resourceHelp": "The local selector is stored as an exact id selector. The remote reference remains opaque and contains no credential.",
+    "ruleRefsHelp": "One durable rule reference per line.",
+    "intentKey": "Idempotency key",
+    "generationMode": {
+      "label": "Generation workflow",
+      "help": "Create generation 1 or derive an immutable successor from one active specification.",
+      "initial": "Initial generation (generation 1)",
+      "successor": "Successor of an active generation",
+      "predecessor": "Active predecessor",
+      "predecessorHelp": "The successor copies the exact desired configuration, increments generation, and never copies validation evidence.",
+      "partialCatalog": "Only the loaded active-specification page is shown; refresh the list if the predecessor is absent.",
+      "selectPredecessor": "Select an active specification"
+    },
+    "endpointCatalog": {
+      "label": "Known active-spec peer",
+      "help": "Choices come from active specifications visible to you. They are references, not a live endpoint heartbeat.",
+      "select": "Reuse a known peer and remote resource",
+      "none": "No known peer is available"
+    },
+    "resourceCatalog": {
+      "label": "Authorized local resource catalog",
+      "help": "The picker uses the existing permission-filtered product API.",
+      "loading": "Loading authorized resources…",
+      "unavailable": "No list API or effective read permission is available for this resource kind.",
+      "truncated": "The server reported more resources than this page contains; an exact ID remains available below.",
+      "select": "Select a local resource",
+      "exactFallback": "Exact IDs are still checked by server validation and do not grant access."
+    },
+    "mapping": {
+      "title": "Typed mappings",
+      "help": "Only the allowlisted declarative transforms below can be sent; executable code is not accepted.",
+      "add": "Add mapping"
+    },
+    "losses": {
+      "title": "Known semantic losses",
+      "help": "Every accepted loss needs an explicit durable acceptance reference before activation.",
+      "add": "Add loss",
+      "none": "No known semantic loss is declared."
+    },
+    "coverage": {
+      "title": "Mapping versus accepted-loss matrix",
+      "help": "Every row comes from the executable mapping catalog. Required rows must be mapped or backed by an accepted loss reference.",
+      "route": "Route",
+      "field": "Catalog field",
+      "result": "Coverage",
+      "action": "Action",
+      "source": "source",
+      "target": "target",
+      "required": "Required",
+      "declareLoss": "Declare loss",
+      "status": {
+        "mapped": "Mapped",
+        "accepted_loss": "Accepted loss",
+        "declared_loss": "Loss needs acceptance",
+        "missing": "Required coverage missing",
+        "optional": "Optional, unmapped"
+      }
+    },
+    "permissions": {
+      "title": "Effective permission preview",
+      "help": "These memberships come from the engine-issued whoami permission set. Exact resource policy and capability are still decided by server validation.",
+      "granted": "In effective set",
+      "notGranted": "Not in effective set",
+      "unknown": "Not observed",
+      "knownProfiles": "Known permission profiles",
+      "knownProfilesHelp": "Profiles are reused only from visible active specifications; the exact reference remains editable.",
+      "selectProfile": "Select a known profile"
+    },
+    "review": {
+      "unverifiedTitle": "This browser cannot issue the activation witness",
+      "unverifiedBody": "Браузер не отправляет свидетельство только для чтения. Проверка и план показывают результат сервера; для активации требуется сохранённое сервером свидетельство CLEAN с отметкой времени.",
+      "resources": "Resources",
+      "mappings": "Mappings",
+      "losses": "Known losses",
+      "validation": "Server-derived validation",
+      "plan": "Planned write",
+      "result": "Apply result",
+      "exportJSON": "Export desired spec and server evidence as JSON"
+    },
+    "diff": {
+      "title": "Plan → apply comparison",
+      "plannedHelp": "The server plan pins this exact operation, lineage, and hash set before any write.",
+      "appliedHelp": "The returned write is compared field-for-field with the pinned plan.",
+      "match": "Matches plan",
+      "mismatch": "Returned value differs",
+      "fields": {
+        "operation": "Operation",
+        "workspace_id": "Workspace",
+        "generation": "Generation",
+        "prior_active_id": "Prior active specification",
+        "plan_hash": "Plan hash",
+        "spec_hash": "Specification hash",
+        "mapping_hash": "Mapping hash",
+        "losses_hash": "Losses hash"
+      }
+    },
+    "flow": {
+      "validating": "Validating the draft without writing…",
+      "planning": "Computing the canonical plan and hashes…",
+      "applying": "Creating the exact planned draft…",
+      "failed": "The request failed. No draft state is claimed.",
+      "created": "Draft created",
+      "createdVerified": "Сервер вернул свидетельство CLEAN с отметкой времени. Ресурс остаётся черновиком до отдельной успешной активации.",
+      "createdUnverified": "The returned resource is a draft and remains unverified; it is not active.",
+      "createDraft": "Create planned draft",
+      "retrySameKey": "Retry apply with same key",
+      "inspect": "Validate and plan"
+    }
+  },
+  "fields": {
+    "id": "ID",
+    "bindingKey": "Binding key",
+    "generation": "Generation",
+    "supersedesId": "Supersedes specification ID",
+    "protocol": "Protocol",
+    "protocolVersion": "Protocol version",
+    "direction": "Direction",
+    "peerAuthority": "Peer authority",
+    "localKind": "Local resource kind",
+    "localRef": "Local resource ID",
+    "remoteResourceKind": "Remote resource kind",
+    "remoteResourceRef": "Remote resource reference",
+    "mappingSchema": "Mapping schema",
+    "source": "Source path",
+    "target": "Target path",
+    "cardinality": "Cardinality",
+    "transform": "Transform",
+    "lossField": "Lost field",
+    "reasonCode": "Reason code",
+    "lossAccepted": "Loss explicitly accepted",
+    "acceptanceRef": "Acceptance reference",
+    "ruleRefs": "Rule references",
+    "permissionProfile": "Permission profile reference",
+    "currency": "Currency policy",
+    "code": "Code",
+    "planHash": "Plan hash",
+    "specHash": "Specification hash",
+    "mappingHash": "Mapping hash",
+    "lossesHash": "Losses hash",
+    "etag": "ETag",
+    "priorActive": "Prior active specification",
+    "bindingSpec": "Pinned specification"
+  },
+  "direction": {
+    "inbound": "Inbound",
+    "outbound": "Outbound",
+    "bidirectional": "Bidirectional"
+  },
+  "localKind": {
+    "work_item": "Work item",
+    "agent": "Agent",
+    "model": "Model",
+    "channel": "Channel"
+  },
+  "cardinality": {
+    "one_to_one": "One to one",
+    "one_to_many": "One to many",
+    "many_to_one": "Many to one"
+  },
+  "transform": {
+    "identity": "Identity",
+    "text": "Text",
+    "reference": "Reference",
+    "metadata": "Metadata",
+    "status": "Status"
+  },
+  "currency": {
+    "pinned": "Pinned"
+  },
+  "detail": {
+    "specTitle": "Binding specification",
+    "specDescription": "Desired generation, hashes, losses, and activation evidence.",
+    "bindingTitle": "Binding instance",
+    "bindingDescription": "Pinned runtime identity, state, and observation evidence.",
+    "localResource": "Local resource",
+    "remoteResource": "Remote resource",
+    "validation": "Activation witness",
+    "notObserved": "No completed observation",
+    "mapping": "Typed mapping",
+    "losses": "Known losses",
+    "noLosses": "No known losses are declared.",
+    "accepted": "Accepted with evidence",
+    "notAccepted": "Not accepted",
+    "lifecycle": "Lifecycle"
+  },
+  "activation": {
+    "blocker": {
+      "state": "Only a draft can be activated.",
+      "witness": "Activation requires a timestamped CLEAN witness issued by the server.",
+      "currency": "Activation requires pinned currency.",
+      "losses": "Every known loss must be accepted with a durable reference.",
+      "disable": "Only a draft or active specification can be disabled."
+    }
+  },
+  "transition": {
+    "activate": {
+      "title": "Activate specification",
+      "description": "Re-read, validate, and plan the exact draft before activating it.",
+      "applied": "The returned specification is active."
+    },
+    "disable": {
+      "title": "Disable specification",
+      "description": "Re-read, validate, and plan the exact specification before disabling it.",
+      "applied": "The returned specification is disabled."
+    },
+    "phase": {
+      "refreshing": "Reading the latest specification and ETag…",
+      "validating": "Validating without writing…",
+      "planning": "Computing the exact transition plan…",
+      "applying": "Applying the approved plan…"
+    },
+    "plan": "Transition plan",
+    "broken": "The transition preconditions were not met.",
+    "failed": "The transition failed. The previous state remains the only state shown.",
+    "conflict": "The specification changed after it was read. Re-read and review a new plan."
+  },
+  "binding": {
+    "terminal": "Terminal",
+    "nonTerminal": "Non-terminal",
+    "external": "External identity",
+    "states": "Local / remote state",
+    "owner": "Owner / fence",
+    "evidenceTitle": "Observation evidence",
+    "created": "Instance created",
+    "lastObservation": "Last completed observation",
+    "lastEvent": "Last durable event / command"
+  },
+  "reconcile": {
+    "title": "Reconcile binding instance",
+    "description": "Validate and plan locally, test the peer without writing, then record the exact observed result.",
+    "phase": {
+      "refreshing": "Reading the latest instance and ETag…",
+      "validating": "Validating reconciliation without writing…",
+      "planning": "Computing the canonical reconciliation plan…",
+      "testing": "Reading remote state without changing local state…",
+      "applying": "Recording the tested observation…"
+    },
+    "plan": "Reconciliation plan",
+    "testResult": "Remote test result",
+    "recordedResult": "Recorded observation",
+    "rowEffects": "Planned row effects",
+    "externalCalls": "Remote reads",
+    "noExternalCalls": "No remote read is planned",
+    "checks": "Evidence checks",
+    "unknown": "The remote observation could not be completed. Nothing is recorded as clean or broken.",
+    "broken": "Local validation or planning found a broken precondition.",
+    "failed": "Reconciliation failed. No new observation is claimed.",
+    "conflict": "The instance changed after it was read. Re-read and review a new plan."
+  },
+  "pagination": {
+    "truncated": "More results exist. Narrow the filters to inspect the complete relevant set."
+  }
+}

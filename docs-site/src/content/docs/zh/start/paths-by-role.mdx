@@ -1,0 +1,111 @@
+---
+title: "按角色划分的路径"
+description: >-
+  穿越同一套文档的三条阅读路径：平台工程（安装与运维）、安全工程（治理与遏制），
+  以及合规（证据与审计）—— 外加面向连接器作者的构建者路径。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+本文档按 [Diátaxis 模式](/zh/start/how-the-docs-are-organized/)
+组织 —— 教程、操作指南、参考、解释 —— 因为这是文档保持
+可用的方式。但人们到来时带着的是一个*角色*，而非一种模式。以下是穿越
+同一批页面的五条路径，按阅读顺序排列。
+
+## 平台工程 —— 安装它、运维它
+
+你负责部署：可用性、备份、升级、容量。
+
+1. **看它运转：** [快速上手](/zh/start/quickstart/)（五分钟），然后
+   如果你想要引导版，再看[零到图谱教程](/zh/tutorials/zero-to-graph/)。
+2. **真正安装**，按场景：
+   [单节点（systemd）](/zh/tutorials/getting-started/single-node/) ·
+   [Docker Compose](/zh/tutorials/getting-started/docker-compose/) ·
+   [带 HA 的 Kubernetes/Helm](/zh/tutorials/getting-started/kubernetes/) ·
+   [气隙](/zh/tutorials/getting-started/air-gapped/)。
+3. **接好信号：** [连接一个源](/zh/how-to/connect-a-source/)，然后是
+   按连接器的指南（[pgAudit](/zh/how-to/connectors/pgaudit/)、
+   [CloudTrail](/zh/how-to/connectors/cloudtrail/)、
+   [eBPF/Tetragon](/zh/how-to/connectors/ebpf-tetragon/)）。
+4. **运维：** [监控与 SLO](/zh/how-to/monitor-with-prometheus/) ·
+   [备份与恢复](/zh/how-to/backup-and-restore/) ·
+   [故障排查](/zh/how-to/troubleshooting/)。
+
+你会常驻其中的参考：[配置](/zh/reference/configuration/)、
+[CLI](/zh/reference/cli/)、[连接器与分层](/zh/reference/connectors/)。
+
+## 安全工程 —— 治理它、遏制它
+
+你负责代理资产域的最小权限、强制执行和事件响应。
+
+1. **先看模型：** [访问映射是什么](/zh/start/what-is-olivares-ai/)
+   和[诚实与边界](/zh/start/honesty-and-limits/) —— 产品
+   会与不会声称什么。
+2. **治理：** [治理与审批](/zh/how-to/govern-and-approve/)（RBAC、
+   仅限制（restrict-only）的 PDP、已记录的决策），然后是配方：
+   [deny-closed 策略](/zh/how-to/cookbook/deny-closed-policies/) ·
+   [HITL 审批](/zh/how-to/cookbook/hitl-approvals/) ·
+   [漂移分诊](/zh/how-to/cookbook/drift-triage/)。
+3. **在代理表面强制执行：**
+   [Claude Code 钩子与 PEP](/zh/how-to/connectors/claude-code-hooks-pep/) ·
+   [MCP 治理](/zh/how-to/connectors/mcp-governance/) ·
+   [作为护栏的预算](/zh/how-to/cookbook/budgets-and-finops-guardrails/)。
+4. **遏制：** [kill-switch 演练](/zh/how-to/cookbook/kill-switch-drill/)，
+   以及[加固部署](/zh/how-to/security-hardening/)。
+
+深度背景：[安全模型](/zh/explanation/security/security-model/)
+和[威胁模型](/zh/explanation/security/threat-model/)。
+
+## 合规 —— 证据、审计、驻留
+
+你要对审计师和监管者负责；你需要能自我证明的记录。
+
+1. **证据是什么：** [治理与审批](/zh/how-to/govern-and-approve/#human-in-the-loop-态势)
+   中的已记录决策保证
+   —— 每个决策之下那本 append-only、已签名的账本。
+2. **把它取出来：** [推送到你的 SIEM](/zh/how-to/cookbook/push-to-siem/)，
+   或[拉取/跟踪它](/zh/how-to/forward-audit-to-splunk/)用于 WORM 归档 ——
+   并离线验证它
+   （[故障排查 § 账本](/zh/how-to/troubleshooting/#ledger-验证失败)）。
+3. **让它可幸存：** [备份与恢复](/zh/how-to/backup-and-restore/) ——
+   连续性安全的包、密钥离机规则、恢复演练。
+4. **驻留与来源：**
+   [气隙运行](/zh/tutorials/getting-started/air-gapped/) ·
+   [验证发布版本](/zh/how-to/verify-a-release/) ·
+   [开放核心与许可](/zh/explanation/open-core-and-licensing/)。
+
+在评估中可引用的诚实基线：
+[诚实与边界](/zh/start/honesty-and-limits/) —— 哪些在运行、哪些是
+按需的、哪些处于设计阶段。
+
+## 自行运行 —— 一台机器，一个人
+
+没有平台团队，也没有合规部门：可以是家庭实验室、家用服务器，也可以是自由职业者或
+小型企业的环境，其中安装者也是使用者。这里并不存在一个缩小版产品 —— 它仍是同一个
+单一二进制文件，只是按能让一台机器最快发挥作用的顺序来阅读。
+
+<CardGrid>
+  <LinkCard title="使用 Docker 部署" href="/zh/how-to/docker-deployment/"
+    description="一个 Compose 文件、一个容器、你自己的机器。从一无所有到控制平面正常运行的最短路径。" />
+  <LinkCard title="快速上手" href="/zh/start/quickstart/"
+    description="首次运行、第一个智能体、首个受治理会话 —— 启动后的十分钟。" />
+  <LinkCard title="成本与预算" href="/zh/reference/modules/xi-finops/"
+    description="按智能体、按会话了解你的模型成本，并设置能在账单到来前给出答案的预算。" />
+  <LinkCard title="备份与恢复" href="/zh/how-to/backup-and-restore/"
+    description="无论机器归谁负责，这都是值得从第一天养成的一项运维习惯。" />
+</CardGrid>
+
+## 构建者 —— 扩展它
+
+你正在编写连接器或驱动 API。
+
+<CardGrid>
+  <LinkCard title="构建并发布连接器" href="/zh/how-to/build-a-connector/"
+    description="脚手架、实现、签名、分发 —— 带有 deny-closed 的已签名准入。" />
+  <LinkCard title="使用客户端 SDK" href="/zh/how-to/use-the-client-sdks/"
+    description="基于已发布 REST 契约的 Go、Java、Python 和 TypeScript 客户端。" />
+  <LinkCard title="以代码方式管理" href="/zh/how-to/manage-as-code/"
+    description="基于受治理 API 的 Terraform/OpenTofu provider。" />
+  <LinkCard title="API 与事件参考" href="/reference/api/"
+    description="由 OpenAPI 渲染的 REST 表面和 AsyncAPI 事件总线。" />
+</CardGrid>

@@ -1,0 +1,55 @@
+{
+  "revision": "2026-07-28",
+  "source_url": "https://modelcontextprotocol.io/specification/2026-07-28/server/tools",
+  "request_headers": {
+    "MCP-Protocol-Version": "2026-07-28",
+    "Mcp-Method": "tools/call",
+    "Mcp-Name": "search"
+  },
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "method": "tools/call",
+    "params": {
+      "name": "search",
+      "arguments": {
+        "query": "needs input"
+      },
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {
+          "name": "olivares-mcp-connector",
+          "version": "0.1.0"
+        },
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "result": {
+      "resultType": "input_required",
+      "inputRequests": {
+        "approval": {
+          "method": "elicitation/create",
+          "params": {
+            "mode": "form",
+            "message": "Approve search?",
+            "requestedSchema": {
+              "type": "object",
+              "properties": {
+                "approved": {
+                  "type": "boolean",
+                  "description": "Approve the search?"
+                }
+              },
+              "required": ["approved"]
+            }
+          }
+        }
+      },
+      "requestState": "fixture-state"
+    }
+  }
+}

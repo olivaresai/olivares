@@ -1,0 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  channels: {
+    telegram: {enabled: true},
+  },
+  agents: {
+    defaults: {
+      model: {primary: 'anthropic/claude-sonnet-4-20250514'},
+    },
+  },
+}

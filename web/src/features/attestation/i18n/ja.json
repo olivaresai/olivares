@@ -1,0 +1,202 @@
+{
+  "title": "サプライチェーン証明",
+  "description": "実行中のバイナリに関する実測された真実と、宣言されたリリース検証契約 — 各リリースに同梱されるものと、それを正確に検証する方法です。ブラウザ内では何も再検証されません。",
+  "forbiddenTitle": "権限がありません",
+  "forbidden": "証明契約を閲覧するには compliance:read 権限が必要です。",
+  "disclaimer": {
+    "tag": "Beta",
+    "body": "本プロジェクトはベータ版です。リリースはまだ存在せず、リリースパイプラインは記述済みですが有効化されていません。実行中バイナリのパネルはこのプロセスから実測されています。契約タブは宣言された契約であり、公開済みリリースやライブの暗号検証ではありません — このコンソールはブラウザ内で署名を再検証することはありません。",
+    "declaredRef": "宣言された参照 — 基準時点 {{date}}。docs/RELEASE-VERIFICATION.md、SECURITY.md、.goreleaser.yaml、ならびに release / scorecard / patch-velocity の各ワークフローからそのまま取得しています。エンジンはリポジトリや CI の状態を観測できないため、この半面はライブでは提供されません。"
+  },
+  "live": {
+    "title": "実行中バイナリ（実測）",
+    "description": "このエンジンプロセスが自身について証明できること — バイナリからライブで読み取られます（ldflags、debug.ReadBuildInfo、crypto/fips140、実行ファイルの自己ハッシュ） — および誠実なリリース状態。v* タグがパイプラインを起動するまで、何も公開・検証されません。",
+    "status": {
+      "measured": "実測済み"
+    },
+    "fields": {
+      "commit": "コミット",
+      "buildDate": "ビルド日時",
+      "goVersion": "Go バージョン",
+      "platform": "OS / アーキテクチャ",
+      "mainModule": "メインモジュール",
+      "moduleSums": "モジュールサム",
+      "vcsStamp": "VCS スタンプ",
+      "selfHash": "自己 SHA256",
+      "capturedAt": "取得日時",
+      "releaseReason": "リリース状態",
+      "signature": "署名",
+      "verifier": "検証ツール",
+      "transparencyLog": "透明性ログ",
+      "workflows": "パイプラインワークフロー"
+    },
+    "fipsOn": "FIPS 140-3: 有効",
+    "fipsOff": "FIPS 140-3: 無効",
+    "sums": "{{n}} 件の外部依存関係が go.sum ハッシュを保持しています",
+    "sumsAbsent": "記録された依存関係サムはありません",
+    "vcsAvailable": "Go ツールチェーンによってスタンプされた VCS 設定",
+    "vcsUnavailable": "VCS スタンプなし",
+    "selfHashHint": "自己 SHA256 は実行中の実行ファイルのストリームハッシュであり、初回読み取り時に一度だけ計算されます。将来の署名付き checksums.txt とオフラインで照合してください — ブラウザは署名を検証せず、ハッシュ単体ではアイデンティティは証明できても来歴は証明できません。",
+    "published": "公開済み",
+    "notPublished": "未公開",
+    "verifierAvailable": "ネイティブ検証ツールがコンパイル済み（core/secure/modelsign）",
+    "verifierUnavailable": "利用可能な検証ツールはありません",
+    "pipelineStatus": {
+      "declared": "宣言済み。"
+    }
+  },
+  "status": {
+    "declared": "宣言済み",
+    "skip_when_absent": "不在時はスキップ",
+    "not_run": "未実行"
+  },
+  "trust": {
+    "keyless": "キーレス（Fulcio/Rekor）",
+    "key_based": "キーベース（エアギャップ）",
+    "both": "キーレス + キーベース",
+    "transitive": "推移的（署名付きチェックサム）"
+  },
+  "tabs": {
+    "artifacts": "アーティファクト",
+    "provenance": "来歴 & VEX",
+    "sbom": "SBOM",
+    "scorecard": "Scorecard",
+    "remediation": "修正 SLA",
+    "airgap": "エアギャップ & チャート"
+  },
+  "artifacts": {
+    "title": "リリースアーティファクト",
+    "description": "リリースに同梱されるものと、各アーティファクトの信頼がどのように確立されるか。キーレス（Fulcio/Rekor）署名とキーベース（エアギャップ）署名はいずれも第一級であり、どちらが正規というわけではありません。",
+    "identityNote": "キーレス署名アイデンティティ（宣言済み）: OIDC 発行者 {{issuer}} · cosign 証明書アイデンティティ {{regexp}}",
+    "columns": {
+      "artifact": "アーティファクト",
+      "producedBy": "生成元",
+      "signatureTrust": "署名 / 信頼",
+      "mechanism": "メカニズム",
+      "status": "ステータス",
+      "control": "統制"
+    }
+  },
+  "slsa": {
+    "title": "SLSA ビルド来歴",
+    "description": "slsa-github-generator によって生成され、slsa-verifier で検証される in-toto / ITE-6 来歴です。",
+    "buildLevel": "SLSA Build {{level}}",
+    "predicate": "述語タイプ",
+    "generator": "ジェネレーター",
+    "pin": "再利用可能ワークフローのピン",
+    "pinKind": {
+      "semver_tag": "Semver タグ",
+      "sha": "SHA"
+    },
+    "verifyCommand": "検証コマンド",
+    "honesty": "構造上 L3: 署名はビルドステップが到達できない隔離されたコンテキストで実行されます。再利用可能ワークフローは（SHA ではなく）semver タグでピン留めされています — slsa-verifier はビルダー ID をタグに対して検証するため、SHA ピンでは検証が破綻します。すべての依存関係が SHA でピン留めされているわけではありません。"
+  },
+  "sbom": {
+    "title": "ソフトウェア部品表（SBOM）",
+    "description": "アーカイブごとおよびコンテナイメージ向けの SPDX 2.3 と CycloneDX 1.6 で、署名付き in-toto 証明として添付されます。",
+    "attestation": "証明述語",
+    "linter": "CISA リンター",
+    "cisa": {
+      "title": "CISA 最小要素チェックリスト",
+      "draftTag": "ドラフト",
+      "draft": "CISA 2025 SBOM の「最小要素」はドラフト（決定前・パブリックコメント中）であり、法律でも確定した連邦要件でもありません。リンターはフィールドタイプが全面的に不在の場合に失敗し（ハード）、ドラフト自体が許容するコンポーネントごとの省略については警告します（ソフト）。",
+      "columns": {
+        "element": "要素",
+        "enforcement": "適用",
+        "carriedBy": "保持元"
+      },
+      "enforcement": {
+        "hard": "ハード",
+        "soft": "ソフト"
+      }
+    }
+  },
+  "vex": {
+    "title": "OpenVEX ステートメント",
+    "description": "到達可能性に基づく悪用可能性ステートメント（govulncheck）で、署名付き in-toto 証明として添付されます。",
+    "columns": {
+      "vuln": "脆弱性",
+      "status": "ステータス",
+      "justification": "根拠",
+      "author": "作成者"
+    },
+    "status": {
+      "not_affected": "影響なし",
+      "affected": "影響あり",
+      "fixed": "修正済み",
+      "under_investigation": "調査中"
+    }
+  },
+  "scorecard": {
+    "title": "OpenSSF Scorecard",
+    "description": "セルフホスト型セキュリティ製品にとって最も重要な 4 つのサプライチェーンチェックです。",
+    "checksTitle": "追跡対象チェック",
+    "schedule": "スケジュール",
+    "gauge": {
+      "title": "宣言された Scorecard チェック",
+      "summary": "追跡対象の OpenSSF Scorecard チェック {{total}} 件のうち {{declared}} 件が契約で宣言されています。これは宣言されたチェックのカバレッジ件数であり、数値の Scorecard スコアではありません。",
+      "caption": "宣言済み"
+    },
+    "columns": {
+      "check": "チェック",
+      "what": "評価内容",
+      "evidence": "証拠"
+    }
+  },
+  "sla": {
+    "title": "CVE 修正 SLA",
+    "description": "出荷済みアーティファクトで到達可能な脆弱性について、上流で修正が利用可能になった時点からの修正目標です。これらは最初のタグ付きリリースで発効します。",
+    "cadenceTitle": "パッチ速度のケイデンス",
+    "schedule": "スケジュール",
+    "columns": {
+      "severity": "重大度（CVSS v3.1）",
+      "cvss": "スコア範囲",
+      "target": "パッチ適用済み・署名付きリリースまでの目標"
+    },
+    "severity": {
+      "critical": "重大",
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    }
+  },
+  "airgap": {
+    "title": "エアギャップバンドル & OCI Helm チャート",
+    "description": "オフラインで検証できるバンドルと、二重署名された OCI Helm チャート。この経路では外部への通信は行いません。",
+    "bundleTitle": "エアギャップバンドル",
+    "bundleIntro": "キーベースの経路には Rekor も Fulcio も不要です。メンテナーはオンラインで自己完結型バンドルを一度ビルドし、切断された拠点がそれを検証してミラーします。",
+    "buildCommand": "ビルド（オンラインで一度）",
+    "mirrorCommand": "ミラー（インターネット不要）",
+    "chartTitle": "OCI Helm チャート",
+    "ociCoordinate": "OCI 座標",
+    "cosignManifest": "cosign（マニフェスト）",
+    "gpgProv": "GPG .prov",
+    "verifyCommand": "検証コマンド"
+  },
+  "empty": {
+    "artifact": {
+      "title": "リリースアーティファクトは宣言されていません",
+      "description": "このテーブルは宣言済みのリリース検証契約からコンパイルされ、その契約にリリースアーティファクトが列挙されている場合にのみ行が表示されます。"
+    },
+    "checkChart": {
+      "title": "Scorecard チェックは宣言されていません",
+      "description": "宣言済みチェックのカバレッジは、コンパイル済みリリース契約に追跡対象の OpenSSF Scorecard チェックが列挙されている場合にのみ表示されます。"
+    },
+    "sbom": {
+      "title": "SBOM チェックリストの要素は宣言されていません",
+      "description": "このチェックリストは宣言済みの SBOM 契約からコンパイルされ、その契約に CISA ドラフトの最小要素が列挙されている場合にのみ行が表示されます。"
+    },
+    "scorecard": {
+      "title": "追跡対象の Scorecard チェックは宣言されていません",
+      "description": "このテーブルは宣言済みのリリース契約からコンパイルされ、その契約に追跡対象の OpenSSF Scorecard チェックが列挙されている場合にのみ行が表示されます。"
+    },
+    "sla": {
+      "title": "修正目標は宣言されていません",
+      "description": "このテーブルは宣言済みのパッチ速度契約からコンパイルされ、その契約で CVE の重大度帯に修正目標が割り当てられている場合にのみ行が表示されます。"
+    },
+    "vex": {
+      "title": "OpenVEX ステートメントは宣言されていません",
+      "description": "このテーブルは宣言済みのリリース契約からコンパイルされ、その契約に例示的な OpenVEX ステートメントが含まれる場合にのみ行が表示されます。"
+    }
+  }
+}

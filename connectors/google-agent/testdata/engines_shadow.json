@@ -1,0 +1,31 @@
+{
+  "reasoningEngines": [
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/matched-agent",
+      "displayName": "Matched Agent",
+      "spec": {
+        "agentFramework": "google-adk",
+        "identityType": "AGENT_IDENTITY",
+        "effectiveIdentity": "agents.global.org-123456789012.system.id.goog/resources/aiplatform/projects/9876543210/locations/us-central1/reasoningEngines/matched-agent"
+      }
+    },
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/shadow-sa",
+      "displayName": "Shadow SA",
+      "spec": {
+        "agentFramework": "langchain",
+        "identityType": "SERVICE_ACCOUNT",
+        "serviceAccount": "shadow-sa@test-project-id.iam.gserviceaccount.com",
+        "effectiveIdentity": "shadow-sa@test-project-id.iam.gserviceaccount.com"
+      }
+    },
+    {
+      "name": "projects/9876543210/locations/us-central1/reasoningEngines/shadow-empty",
+      "displayName": "Shadow Empty",
+      "spec": {
+        "agentFramework": "custom",
+        "identityType": "AGENT_IDENTITY"
+      }
+    }
+  ]
+}

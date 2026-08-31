@@ -1,0 +1,9 @@
+{
+  "data": [
+    {
+      "id": "log_codex_1",
+      "event_type": "CODEX_LOG",
+      "created_at": "2026-06-01T12:00:00Z"
+    }
+  ]
+}

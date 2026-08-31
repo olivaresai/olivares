@@ -1,0 +1,6 @@
+{
+  "data": {
+    "name": "default",
+    "policy": "path \"auth/token/lookup-self\" {\n  capabilities = [\"read\"]\n}\n"
+  }
+}

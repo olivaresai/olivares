@@ -1,0 +1,17 @@
+{
+  "value": [
+    {
+      "id": "ca-3",
+      "displayName": "High-risk agents",
+      "state": "enabled",
+      "conditions": {
+        "clientApplications": {
+          "includeAgentIdServicePrincipals": [],
+          "excludeAgentIdServicePrincipals": [],
+          "agentIdServicePrincipalFilter": null
+        },
+        "agentIdRiskLevels": ["high"]
+      }
+    }
+  ]
+}

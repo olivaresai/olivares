@@ -1,0 +1,22 @@
+{
+  "value": [
+    {
+      "name": "gpt4o-prod",
+      "sku": { "name": "Standard", "capacity": 50 },
+      "properties": {
+        "model": { "format": "OpenAI", "name": "gpt-4o", "version": "2024-08-06" },
+        "provisioningState": "Succeeded",
+        "raiPolicyName": "Microsoft.DefaultV2",
+        "versionUpgradeOption": "OnceCurrentVersionExpired"
+      }
+    },
+    {
+      "name": "claude-sonnet",
+      "sku": { "name": "GlobalStandard", "capacity": 0 },
+      "properties": {
+        "model": { "format": "Anthropic", "name": "claude-sonnet-4-5", "version": "1" },
+        "provisioningState": "Succeeded"
+      }
+    }
+  ]
+}

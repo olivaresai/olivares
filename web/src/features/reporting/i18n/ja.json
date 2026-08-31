@@ -1,0 +1,80 @@
+{
+  "title": "レポート",
+  "description": "ガバナンスレポートをオンデマンドで生成・ダウンロードし、スケジュール配信を管理します。",
+  "catalog": {
+    "title": "オンデマンドレポート",
+    "empty": "利用可能なレポートの種類がありません。",
+    "colReport": "レポート",
+    "colFormats": "形式",
+    "colActions": "操作",
+    "generate": "生成"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "{{title}}を生成",
+    "subtitle": "形式と期間を選択してください。準備ができるとレポートがダウンロードされます。",
+    "format": "形式",
+    "from": "開始",
+    "to": "終了",
+    "framework": "フレームワーク",
+    "frameworkHint": "任意 — 証跡を単一のコンプライアンスフレームワークに限定します。",
+    "frameworkPlaceholder": "例: soc2",
+    "team": "チーム",
+    "teamHint": "任意 — コストの内訳を単一のチームに限定します。",
+    "teamPlaceholder": "例: platform",
+    "download": "ダウンロード",
+    "done": "{{title}}を生成しました。",
+    "failed": "レポートの生成に失敗しました。",
+    "pdfUnavailable": "このビルドではPDF生成を利用できません。HTMLを選択してください。"
+  },
+  "schedules": {
+    "title": "スケジュール済みレポート",
+    "new": "新しいスケジュール",
+    "enterprise": "スケジュール済みレポートはEnterprise機能であり、このビルドでは有効になっていません。",
+    "empty": "スケジュール済みレポートはまだありません。",
+    "colReport": "レポート",
+    "colCron": "Cron",
+    "colStatus": "状態",
+    "colActions": "操作",
+    "enabled": "有効",
+    "disabled": "無効",
+    "delete": "スケジュールを削除",
+    "deleted": "スケジュールを削除しました。",
+    "newTitle": "新しいスケジュール済みレポート",
+    "newSubtitle": "レポートはcronの間隔で生成され、ダウンロード用に保持されます。",
+    "report": "レポート",
+    "cron": "cron式",
+    "cronHint": "標準の5フィールドcron、例: 0 8 * * 1（毎週月曜08:00）。",
+    "create": "作成",
+    "created": "スケジュールを作成しました。"
+  },
+  "enterprise": {
+    "title": "エンタープライズレポート",
+    "description": "コンプライアンス状況のライブ表示、経営向けリスク要約、および署名済みの監査証跡パック。",
+    "request": "要求",
+    "done": "レポートをダウンロードしました",
+    "seam": "このレポートは、この配備に連携していないアドオンにあります。故障ではありません。",
+    "posture": {
+      "title": "コンプライアンス状況",
+      "description": "フレームワークおよび統制ごとの状態を、その場で算出します。"
+    },
+    "risk": {
+      "title": "リスク要約",
+      "description": "経営向けのリスク概要を 1 ページで。"
+    },
+    "bundle": {
+      "title": "証跡パック",
+      "description": "署名済みの監査証跡パック — 外部監査人に手渡すものです。"
+    }
+  },
+  "runs": {
+    "open": "実行履歴",
+    "title": "実行履歴",
+    "description": "このスケジュールの記録済み実行すべて。いつ実行され、失敗した場合はその理由。",
+    "notAnArchive": "プロバイダーはこの一覧を制限し、古い実行を削除します。運用上の便宜であり、アーカイブではありません。一覧が短くても、スケジュールが数回しか実行されていないという意味ではありません。",
+    "empty": "記録された実行はありません"
+  }
+}

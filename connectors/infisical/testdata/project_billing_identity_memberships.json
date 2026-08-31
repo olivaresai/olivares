@@ -1,0 +1,13 @@
+{
+  "identityMemberships": [
+    {
+      "id": "pim-2",
+      "roles": [{ "id": "r-4", "role": "member", "isTemporary": false }],
+      "identity": {
+        "id": "id-backup-agent",
+        "name": "backup-agent"
+      }
+    }
+  ],
+  "totalCount": 1
+}

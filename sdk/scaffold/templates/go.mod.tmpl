@@ -1,0 +1,34 @@
+// [[.Name]] — an Olivares AI [[.Template]] connector, built out-of-tree against
+// the Apache-2.0 SDK. It must NEVER import the upstream AGPL engine module;
+// scripts/check-boundary.sh enforces that on the real build graph — keep it in CI.
+module [[.Module]]
+
+go 1.26.5
+
+require (
+	github.com/olivaresai/olivares/sdk v0.0.0-00010101000000-000000000000
+[[- if .WithPlugin]]
+	github.com/olivaresai/olivares/sdk/plugin v0.0.0-00010101000000-000000000000
+[[- end]]
+)
+[[- if .SDKPath]]
+
+// DEV: build against a local checkout of the upstream repo's sdk/ (the
+// scaffold was invoked with an SDK path). Swap these for tagged versions once
+// the first public sdk tags are published.
+replace github.com/olivaresai/olivares/sdk => [[.SDKPath]]
+[[- if .WithPlugin]]
+
+replace github.com/olivaresai/olivares/sdk/plugin => [[.SDKPluginPath]]
+[[- end]]
+[[- else]]
+
+// NOTE: until the first public tags of github.com/olivaresai/olivares/sdk are
+// published, point the require(s) above at a local checkout of the upstream
+// repo by adding (see README.md):
+//
+//	replace github.com/olivaresai/olivares/sdk => /path/to/olivares/sdk
+[[- if .WithPlugin]]
+//	replace github.com/olivaresai/olivares/sdk/plugin => /path/to/olivares/sdk/plugin
+[[- end]]
+[[- end]]

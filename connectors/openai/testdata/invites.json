@@ -1,0 +1,23 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "inv_abc123",
+      "email": "newuser@example.com",
+      "role": "member",
+      "status": "pending",
+      "invited_at": 1717200000,
+      "expires_at": 1717804800
+    },
+    {
+      "id": "inv_def456",
+      "email": "olduser@example.com",
+      "role": "reader",
+      "status": "expired",
+      "invited_at": 1716000000,
+      "expires_at": 1716604800
+    }
+  ],
+  "has_more": false,
+  "last_id": "inv_def456"
+}

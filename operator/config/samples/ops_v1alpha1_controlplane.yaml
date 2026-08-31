@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# A sample ControlPlane: a single-writer sqlite engine with a nightly, real
+# disaster-recovery backup. Applying this (after the CRD in config/crd) makes the
+# operator reconcile a StatefulSet + headless Service + backup CronJob (running the
+# real `olivares dr backup`) + a destination PVC, all owned by this object.
+#
+#   kubectl apply -f config/crd/ops.olivares.ai_controlplanes.yaml
+#   kubectl create secret generic dr-kek --from-literal=passphrase='a strong DR passphrase'
+#   kubectl apply -f config/samples/ops_v1alpha1_controlplane.yaml
+#
+# UPGRADE: edit spec.image and re-apply — the operator rolls the StatefulSet and
+# reports status.phase=Progressing (reason Upgrading) until the new image is Ready.
+# RECONFIGURE: point spec.configRef at a ConfigMap/Secret; editing it rolls pods.
+apiVersion: ops.olivares.ai/v1alpha1
+kind: ControlPlane
+metadata:
+  name: sample
+  namespace: default
+spec:
+  image: docker.io/olivaresai/olivares:26.8.0   # official registry; ghcr.io/olivaresai/olivares is the fallback (same digest)
+  replicas: 1
+  engine: sqlite
+  resources:
+    requests: {cpu: "100m", memory: "256Mi"}
+    limits: {cpu: "1000m", memory: "1Gi"}
+  # configRef: olivares-extra-env   # optional ConfigMap/Secret, loaded via envFrom
+  backup:
+    schedule: "0 3 * * *"           # nightly at 03:00 UTC
+    kekSecret: dr-kek               # Secret with key `passphrase` (seals the signing keys)
+    retentionDays: 14               # prune local bundles older than 14d (mirror offsite!)
+    destination:
+      size: 16Gi                    # operator creates `<name>-backups` PVC (kept on delete)
+---
+# An active-passive HA example (engine=postgres, 3 replicas). REQUIRES a shared
+# audit signing key Secret (so the audit hash-chain does not fork at failover) and
+# a Postgres DSN Secret — the CRD's admission CEL rules reject the spec otherwise.
+#
+#   kubectl create secret generic olivares-audit-key --from-file=audit-signing.key=./audit.key
+#   kubectl create secret generic pg-dsn \
+#     --from-literal=dsn='postgres://olivares_app:...@pg:5432/olivares?sslmode=require' \
+#     --from-literal=admin-dsn='postgres://olivares_admin:...@pg:5432/olivares?sslmode=require'
+#
+# apiVersion: ops.olivares.ai/v1alpha1
+# kind: ControlPlane
+# metadata:
+#   name: ha
+#   namespace: default
+# spec:
+#   image: docker.io/olivaresai/olivares:26.8.0
+#   replicas: 3
+#   engine: postgres
+#   haRouting: LeaderRouting                    # pod-health readiness + a leader-selecting
+#                                               # Service (`ha-leader`), so a rolling update
+#                                               # COMPLETES and the CR can reach Ready.
+#                                               # Requires an engine that serves /pod-readyz
+#                                               # and clients pointed at `<name>-leader`.
+#                                               # Omit it (or set Legacy) to keep the old
+#                                               # leader-only readiness layout.
+#                                               # See docs/HA-LEADER-ROUTING.md.
+#   auditSigningKeySecret: olivares-audit-key   # shared key, mounted into every replica
+#   postgres:
+#     dsnSecret: pg-dsn
+#     dsnKey: dsn
+#     adminDsnKey: admin-dsn                     # cross-tenant admin pool; REQUIRED when backup is set (pg_dump needs BYPASSRLS)
+#   resources:
+#     requests: {cpu: "500m", memory: "512Mi"}
+#     limits: {cpu: "2000m", memory: "2Gi"}
+#   backup:
+#     schedule: "0 */6 * * *"
+#     kekSecret: dr-kek
+#     pgClientImage: postgres:16-alpine          # provides pg_dump (distroless engine has none)

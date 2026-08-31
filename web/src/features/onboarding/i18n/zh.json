@@ -1,0 +1,97 @@
+{
+  "title": "开始使用",
+  "subtitle": "逐步设置你的部署——每一步都会针对实时控制平面进行验证。",
+  "progress": "已验证 {{done}}/{{total}}",
+  "refresh": "刷新",
+  "dismiss": "忽略",
+  "allDone": "你的部署已设置完成。",
+  "allDoneHint": "每一步都会针对控制平面进行验证。你可以随时重新打开此向导。",
+  "dismissed": {
+    "title": "设置向导已隐藏",
+    "description": "向导在此浏览器中已隐藏。你的部署仍在正常运行——你可以随时恢复已验证的步骤。",
+    "resume": "恢复设置向导"
+  },
+  "status": {
+    "verified": "已验证",
+    "pending": "待处理",
+    "awaiting": "等待主机"
+  },
+  "steps": {
+    "infra": {
+      "title": "基础设施",
+      "hint": "在其他一切之前，数据库必须可达。",
+      "ready": "控制平面可以访问其数据库。此步骤会自动验证。",
+      "notReady": "控制平面尚无法访问其数据库。"
+    },
+    "workspace": {
+      "title": "创建你的第一个工作区",
+      "hint": "工作区界定智能体、来源和策略的范围。",
+      "name": "工作区名称",
+      "namePlaceholder": "例如 平台团队",
+      "slug": "标识符",
+      "create": "创建工作区",
+      "addAnother": "再创建一个",
+      "created": "已创建工作区 {{name}}。"
+    },
+    "identity": {
+      "title": "邀请管理员",
+      "hint": "邀请第二位管理员，或连接你的身份提供方。",
+      "email": "邮箱",
+      "role": "角色",
+      "mode": "方式",
+      "modeInvite": "发送邀请",
+      "modePassword": "设置密码",
+      "invite": "邀请",
+      "inviteAnother": "再邀请一位",
+      "invited": "已邀请 {{email}}。",
+      "or": "或",
+      "ssoCta": "连接 SSO",
+      "password": "密码",
+      "passwordHint": "至少 8 个字符。新管理员之后可以更改。",
+      "memberCount_other": "此租户中有 {{count}} 名成员。"
+    },
+    "source": {
+      "title": "注册你的第一个来源",
+      "hint": "连接内容或治理来源。凭据按引用存储。",
+      "kind": "连接器",
+      "kindPlaceholder": "选择连接器",
+      "name": "来源名称",
+      "namePlaceholder": "例如 my-wiki",
+      "tenant": "租户",
+      "noFields": "此连接器无需进一步配置。",
+      "secretHint": "输入要封存的值，或 store:<name> 引用。",
+      "test": "测试",
+      "tested": "连接成功。",
+      "testOk": "连接器已成功打开。",
+      "testFail": "连接器无法打开——请检查配置。",
+      "register": "注册",
+      "addAnother": "再注册一个",
+      "registered": "已注册 {{name}}。",
+      "notRunning": "已注册一个来源，但尚未运行——请查看上方的状态。",
+      "credByRef": "机密字段会封存到存储中并以 store:<name> 引用——凭据值绝不会内联存储。"
+    },
+    "pep": {
+      "title": "激活你的第一个策略执行点",
+      "hint": "发布 managed-settings 策略并确认某个主机已应用它。",
+      "notPublished": "尚未发布任何 managed-settings 策略。",
+      "authorCta": "编写策略",
+      "active": "某个主机已证实此策略——执行点已激活。",
+      "awaitingHint": "策略已发布并签名，但尚无主机报到。请部署代码片段并刷新。",
+      "revision": "修订版",
+      "fingerprint": "密钥指纹",
+      "snippet": "managed-settings 代码片段",
+      "copy": "复制",
+      "copied": "已复制到剪贴板。",
+      "copyFailed": "无法复制到剪贴板。",
+      "checkins": "主机报到",
+      "noCheckins": "尚无主机报到。",
+      "colScope": "范围",
+      "colReporter": "报告方",
+      "colRevision": "修订版",
+      "colVerified": "已验证",
+      "verifiedCurrent": "已验证（最新）",
+      "verifiedStale": "已验证（非最新）",
+      "unverified": "未验证"
+    }
+  }
+}

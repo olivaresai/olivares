@@ -1,0 +1,6 @@
+20260603 10:23:40,dbserver1,app_rw,10.0.0.5,42,0,CONNECT,salesdb,,0
+20260603 10:23:45,dbserver1,app_rw,10.0.0.5,42,1001,READ,salesdb,customers,0
+20260603 10:23:46,dbserver1,app_rw,10.0.0.5,42,1002,WRITE,salesdb,orders,0
+20260603 10:23:47,dbserver1,etl,10.0.0.9,43,1003,CREATE,salesdb,staging,0
+20260603 10:23:48,dbserver1,app_rw,10.0.0.5,42,1004,QUERY,salesdb,'SELECT id, name FROM customers WHERE id = 7',0
+20260603 10:23:50,dbserver1,app_rw,10.0.0.5,42,0,DISCONNECT,,,0

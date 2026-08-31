@@ -1,0 +1,44 @@
+{
+  "truncation": {
+    "label": "{{n}} Organisationen geladen; es gibt weitere",
+    "hint": "Die Engine hat eine Seite des Verzeichnisses geliefert, nicht den gesamten Bestand. Die Gesamtzahl LÄSST SICH NICHT aus den geladenen Zeilen ableiten — eine hier nicht aufgeführte Organisation kann trotzdem existieren."
+  },
+  "title": "Datenresidenz",
+  "description": "Binden Sie die Control-Plane-Daten jeder Organisation an eine Region oder lassen Sie sie ungebunden. Nur Superadmin; jede Änderung wird im Audit-Ledger erfasst.",
+  "registry": {
+    "summary": "Status des Residenzregisters",
+    "homeRegion": "Heimatregion",
+    "notConfigured": "Nicht konfiguriert",
+    "enforcement": "Residenz-Durchsetzung",
+    "enforced": "Durchgesetzt",
+    "notEnforced": "Nicht durchgesetzt"
+  },
+  "orgs": {
+    "title": "Organisationen",
+    "empty": "Noch keine Organisationen",
+    "colOrg": "Organisation",
+    "colRegion": "Regionsbindung",
+    "colActions": "Aktionen",
+    "unpinned": "Ungebunden",
+    "setRegion": "Region festlegen"
+  },
+  "dialog": {
+    "knownRegionHint": "Wählen Sie eine Region aus dem konfigurierten Register dieser Bereitstellung.",
+    "fallbackRegionHint": "Es ist kein Regionsregister konfiguriert. Diese Bereitstellung befindet sich im Single-Region-/Standardmodus; der Server kann eine nicht leere Bindung ablehnen.",
+    "clearPin": "Bindung lösen (ungebunden)",
+    "selectClearHint": "Wählen Sie „Bindung lösen (ungebunden)“, um die Bindung zu entfernen. Dies verschiebt bereits gespeicherte Daten nicht — das ist eine separate Migration.",
+    "title": "Region für {{name}}",
+    "subtitle": "Binden Sie die Daten dieser Organisation an eine Region oder lösen Sie die Bindung.",
+    "regionLabel": "Regionscode",
+    "regionPlaceholder": "z. B. eu",
+    "clearHint": "Leer lassen, um die Bindung zu lösen (ungebunden). Dies verschiebt bereits gespeicherte Daten nicht — das ist eine separate Migration.",
+    "review": "Änderung prüfen",
+    "back": "Zurück",
+    "apply": "Änderung anwenden",
+    "summaryPin": "{{name}} an Region {{region}} binden.",
+    "summaryClear": "Regionsbindung für {{name}} lösen (ungebunden).",
+    "implications": "Dies legt fest, wo die Daten dieser Organisation bei neuen Schreibvorgängen zugesichert verbleiben. Bereits anderswo gespeicherte Daten werden nicht migriert.",
+    "pinned": "{{name}} an {{region}} gebunden",
+    "cleared": "Regionsbindung für {{name}} gelöst"
+  }
+}

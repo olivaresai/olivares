@@ -1,0 +1,28 @@
+[
+  {
+    "id": "00u1alice",
+    "scope": "USER",
+    "status": "ACTIVE",
+    "credentials": {
+      "userName": "alice@corp.example",
+      "password": {
+        "value": "hunter2-fixture-password"
+      }
+    },
+    "profile": {
+      "email": "alice@corp.example",
+      "nickName": "ally",
+      "ssn": "123-45-6789"
+    }
+  },
+  {
+    "id": "00u2bob",
+    "scope": "GROUP",
+    "status": "PROVISIONED"
+  },
+  {
+    "id": "00u9ghost",
+    "scope": "USER",
+    "status": "ACTIVE"
+  }
+]

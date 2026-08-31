@@ -1,0 +1,96 @@
+{
+  "title": "Proxy d'inférence",
+  "description": "Le proxy d'application des politiques, par organisation, devant chaque appel de modèle : gates de requête/réponse, règles DLP de sortie et approbations d'autorisation d'appareil.",
+  "config": {
+    "title": "Gates et plafonds",
+    "intro": "Chaque gate est appliquée sur le chemin de la requête avant l'appel du modèle. En désactiver une cesse d'appliquer ce contrôle ; le changement est consigné dans le journal d'audit.",
+    "failOpen": "Fail-open",
+    "failOpenHint": "Quand le proxy ne peut pas obtenir une décision de politique, autoriser l'appel au lieu de le bloquer. Désactivé = fail-closed.",
+    "recordMandatory": "Exiger l'enregistrement",
+    "recordMandatoryHint": "Refuser un appel qui ne peut pas être enregistré dans le journal de session.",
+    "gates": {
+      "gate_model_access": "Accès aux modèles",
+      "gate_budget": "Budget",
+      "gate_residency": "Résidence",
+      "gate_context_window": "Fenêtre de contexte",
+      "gate_dlp_request": "DLP requête",
+      "gate_dlp_response": "DLP réponse"
+    },
+    "gatesHint": {
+      "gate_model_access": "Appliquer quels modèles chaque sujet peut appeler.",
+      "gate_budget": "Appliquer les plafonds de budget avant que l'appel n'engendre un coût.",
+      "gate_residency": "Appliquer la région de résidence des données de l'organisation.",
+      "gate_context_window": "Appliquer le plafond de fenêtre de contexte par surface.",
+      "gate_dlp_request": "Analyser la requête sortante à la recherche de classifications interdites.",
+      "gate_dlp_response": "Analyser la réponse du modèle selon le mode DLP de réponse."
+    },
+    "responseDlpMode": "Mode DLP de réponse",
+    "responseDlpModeHint": "Comment le DLP de réponse traite une correspondance : off (pas d'analyse), flag (annoter) ou buffer (retenir pour analyse avant de renvoyer).",
+    "dlpModes": {
+      "off": "Désactivé",
+      "flag": "Marquer",
+      "buffer": "Mettre en tampon"
+    },
+    "ceilingsEnforce": "Appliquer les plafonds",
+    "ceilingsEnforceHint": "Plafonner les tokens, usages d'outils et budget de tâche par appel. Désactivé = pas de plafond par appel.",
+    "ceilingMaxTokens": "Tokens max",
+    "ceilingMaxToolUses": "Usages d'outils max",
+    "ceilingTaskBudget": "Budget de tâche (tokens)",
+    "ceilingTaskBudgetHint": "0 = non défini, sinon au moins {{min}}.",
+    "ceilingTaskBudgetError": "Doit être 0 ou au moins {{min}}.",
+    "reset": "Réinitialiser",
+    "save": "Enregistrer la configuration",
+    "saved": "Configuration du proxy enregistrée"
+  },
+  "dlp": {
+    "title": "Règles DLP de sortie",
+    "intro": "Associez une classification de contenu à autoriser ou refuser en sortie. La classification s'exécute côté serveur lors de l'appel du modèle ; ces règles décident de l'effet d'une correspondance.",
+    "truncated": "{{n}} règles DLP chargées ; il y en a d’autres",
+    "truncatedHint": "Il existe plus de règles DLP que celles affichées ; cette page prend les lignes par id. L’absence d’une règle ici ne prouve pas qu’elle n’existe pas : la sortie peut être régie par des règles que vous ne voyez pas.",
+    "add": "Ajouter une règle",
+    "noRead": "Vous n'avez pas la permission de voir les règles DLP.",
+    "empty": "Aucune règle DLP",
+    "emptyHint": "Ajoutez une règle pour autoriser ou refuser une classification en sortie.",
+    "colClass": "Classification",
+    "colAction": "Action",
+    "colNote": "Note",
+    "colActions": "Actions",
+    "actions": {
+      "allow": "Autoriser",
+      "deny": "Refuser"
+    },
+    "editAction": "Modifier la règle pour {{class}}",
+    "deleteAction": "Supprimer la règle pour {{class}}",
+    "created": "Règle DLP créée",
+    "updated": "Règle DLP mise à jour",
+    "deleted": "Règle DLP supprimée",
+    "deleteDialog": {
+      "title": "Supprimer la règle DLP ?",
+      "description": "Cela supprime la règle de sortie pour « {{class}} ». Le contenu correspondant reviendra au traitement par défaut.",
+      "confirm": "Supprimer la règle"
+    },
+    "dialog": {
+      "title": "Ajouter une règle DLP",
+      "editTitle": "Modifier la règle DLP",
+      "subtitle": "Une classification est autorisée ou refusée en sortie. La règle est identifiée par sa classification.",
+      "class": "Classification",
+      "classHint": "La classification de contenu à laquelle cette règle s'applique (ex. pii, secret).",
+      "action": "Action",
+      "note": "Note",
+      "create": "Ajouter une règle",
+      "save": "Enregistrer la règle"
+    }
+  },
+  "device": {
+    "title": "Autorisation d'appareil",
+    "intro": "Approuvez ou refusez une demande d'autorisation d'appareil par son code utilisateur (le code affiché sur l'écran d'appairage de l'appareil).",
+    "userCode": "Code utilisateur",
+    "userCodePlaceholder": "ex. WDJB-MJHT",
+    "approve": "Approuver",
+    "deny": "Refuser",
+    "approved": "Code d'appareil {{code}} approuvé",
+    "denied": "Code d'appareil {{code}} refusé",
+    "notFound": "Aucune demande en attente pour ce code utilisateur.",
+    "expired": "Cette demande a expiré ou a déjà été utilisée."
+  }
+}

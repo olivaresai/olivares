@@ -1,0 +1,194 @@
+{
+  "truncation": {
+    "label": "Loaded {{n}} rows; there are more",
+    "hint": "This list is capped. Only the loaded rows are shown; absence here does not prove that an evaluation record does not exist."
+  },
+  "title": "Evals",
+  "description": "Quality scorecards, run results, A/B comparisons and drift — measured against versioned golden suites. Outputs are never stored; only scores and hash fingerprints.",
+  "forbidden": {
+    "title": "Not authorized",
+    "description": "You need the evals read permission to view quality measurements."
+  },
+  "tabs": {
+    "scorecards": "Scorecards",
+    "runs": "Runs",
+    "ab": "A/B",
+    "drift": "Drift",
+    "gate": "CI gate",
+    "calibration": "Judge calibration"
+  },
+  "subjectKind": {
+    "suite": "Suite",
+    "agent": "Agent",
+    "model": "Model",
+    "prompt_variant": "Prompt variant",
+    "prompt": "Prompt",
+    "session": "Session",
+    "sandbox_run": "Sandbox run"
+  },
+  "scorecards": {
+    "title": "Quality scorecards",
+    "description": "Mean score, pass-rate and trend per subject, aggregated on read.",
+    "groupBy": "Group by",
+    "by": {
+      "agent": "By agent",
+      "model": "By model",
+      "suite": "By suite",
+      "prompt_variant": "By prompt variant"
+    },
+    "meanScore": "Mean score",
+    "passRate": "Pass-rate",
+    "runs": "Runs",
+    "lastScore": "Last score",
+    "regressed": "Regressed",
+    "empty": "No scorecards yet — run an eval against a golden suite."
+  },
+  "runs": {
+    "title": "Eval runs",
+    "description": "Each run scores a subject against a suite version. A regression is marked here; the finding is handled by the security view.",
+    "columns": {
+      "subject": "Subject",
+      "status": "Status",
+      "score": "Score",
+      "passRate": "Pass-rate",
+      "regression": "Regression",
+      "startedAt": "Started"
+    },
+    "regressed": "Regressed · drift {{drift}}",
+    "noRegression": "None",
+    "empty": "No runs in range.",
+    "overN": "over {{n}}",
+    "notScored": "not scored — no verdict",
+    "noBaseline": "no baseline — nothing compared"
+  },
+  "cases": {
+    "title": "{{subject}} — case results",
+    "titleEmpty": "Case results",
+    "description": "Per-case outcome and score for this run.",
+    "noPayload": "The candidate output is never stored — each case carries only a one-way fingerprint and a short clamped label, never an expandable payload.",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "Case",
+      "outcome": "Outcome",
+      "score": "Score",
+      "label": "Label",
+      "fingerprint": "Fingerprint"
+    },
+    "empty": "No case results for this run."
+  },
+  "ab": {
+    "title": "A/B comparison",
+    "description": "Two prompt variants scored against the same suite; the higher score wins, ties are explicit.",
+    "winner": "Winner: {{label}} · Δ {{delta}}",
+    "winnerTag": "Winner",
+    "tie": "Tie",
+    "passRate": "Pass-rate {{value}}",
+    "seamNote": "An A/B comparison is a privileged write through POST /ab; the engine exposes no stored comparison to read back.",
+    "seamLabel": "Privileged write",
+    "pickerTitle": "Run an A/B comparison",
+    "pickerDescription": "Pick the suite, then provide the candidate outputs each variant produced.",
+    "runComparison": "Run comparison",
+    "runError": "The A/B comparison could not be run. Try again.",
+    "empty": "No A/B comparison has been run in this session.",
+    "emptyDescription": "A result appears only after the privileged POST /ab write completes. There is no GET endpoint for a stored comparison.",
+    "suiteLabel": "Suite",
+    "selectSuite": "Select a suite",
+    "noSuites": "No suites yet. A comparison is scored against a suite's cases, so create one first.",
+    "labelA": "Variant A label",
+    "labelB": "Variant B label",
+    "outputsA": "Variant A outputs",
+    "outputsB": "Variant B outputs",
+    "outputsHint": "JSON object mapping case_key to the output that variant produced. The engine scores them and keeps only a hash — the text is never stored.",
+    "outputsInvalid": "Not a JSON object mapping case_key to output text.",
+    "outputsEmpty": "Provide at least one case output. An empty set scores nothing and would be stored as a run with no result.",
+    "pairwiseLabel": "Also judge the variants head-to-head",
+    "pairwiseHint": "Judges each shared case twice with the two candidates' order swapped, and counts a win only when both orders agree. Two judge calls per case (billable) and the suite must carry a criterion.",
+    "pairwiseTitle": "Judged head-to-head",
+    "pairwiseSkippedTag": "Skipped",
+    "pairwiseWinner": "Judged winner: {{label}}",
+    "pairwiseCounts": "{{compared}} compared · {{aWins}} A · {{bWins}} B · {{ties}} ties · {{inconsistent}} order-inconsistent · {{errors}} errors",
+    "pairwiseConsistency": "Position consistency {{rate}} (n={{n}}, 95% CI {{lo}}–{{hi}})",
+    "outputsTooLong": "A case key must be at most {{maxKey}} characters and an output at most {{maxOutput}}. The engine truncates longer values and scores the truncated text.",
+    "outputsPlaceholder": "{\"case-1\": \"the output that variant produced\"}",
+    "pairwiseSkippedBody": "The engine did not run the judged comparison. Its reason:"
+  },
+  "drift": {
+    "title": "Drift — {{subject}}",
+    "description": "Score over time against the suite pass threshold; a sustained decline is degradation.",
+    "score": "Score",
+    "threshold": "Pass threshold",
+    "pickerTitle": "Subject",
+    "note": "The threshold line is the suite pass threshold; points below it failed the bar at that time.",
+    "empty": "No trend data yet."
+  },
+  "outcomeBar": {
+    "passed": "Passed",
+    "failed": "Failed",
+    "errors": "Errors",
+    "skipped": "Skipped"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "No case outcomes recorded for this run",
+      "description": "The run must score or skip cases from its selected suite before per-case outcomes, scores and fingerprints appear here."
+    },
+    "runs": {
+      "title": "No eval runs recorded yet",
+      "description": "A caller must submit candidate outputs against a versioned golden suite through the eval run API before a scored run appears here."
+    }
+  },
+  "gate": {
+    "title": "CI gate",
+    "description": "Regression gate evaluations: what the gate measured, and what CI must act on.",
+    "empty": "No gate evaluations",
+    "measured": "measured {{verdict}}",
+    "effective": "CI acts on {{verdict}}",
+    "sampled": "{{sampled}} of {{total}} cases sampled",
+    "overriddenBy": "overridden by {{actor}}",
+    "override": "Override",
+    "overrideTitle": "Override a {{verdict}} gate",
+    "overrideDescription": "A written reason is required. It is recorded beside the original verdict, in the row and in the evidence ledger.",
+    "reason": "Reason",
+    "reasonHint": "Why this gate is being overridden. The original verdict is not erased.",
+    "confirmOverride": "Override gate",
+    "overrideDone": "Gate overridden",
+    "cancel": "Cancel",
+    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
+    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+  },
+  "calibration": {
+    "title": "Judge calibration",
+    "description": "How far the LLM judge agrees with human labels. A set that cannot measure chance-corrected agreement cannot certify anything.",
+    "empty": "No calibration reports",
+    "meets": "meets target",
+    "below": "below target",
+    "cannotCertify": "cannot certify — kappa undefined",
+    "agreement": "Agreement",
+    "kappa": "Kappa",
+    "sensitivity": "Sensitivity",
+    "specificity": "Specificity",
+    "ciOverN": "95% CI {{lo}}–{{hi}} over n={{n}}",
+    "degradedWithErrors": "degraded · {{n}} errored",
+    "verbosityCorr": "Verbosity corr."
+  },
+  "calibItems": {
+    "title": "Reference set",
+    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "run": "Run calibration",
+    "empty": "No labelled items yet",
+    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
+    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "humanPass": "human: pass",
+    "humanFail": "human: fail",
+    "unscored": "unscored",
+    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+  },
+  "baseline": {
+    "pin": "Pin as baseline",
+    "confirm": "Replace the baseline",
+    "pinned": "Baseline pinned",
+    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
+    "thisRunScores": "This run passed {{score}} over n={{n}}.",
+    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+  }
+}

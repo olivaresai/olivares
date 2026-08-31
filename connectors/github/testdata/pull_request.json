@@ -1,0 +1,21 @@
+{
+  "action": "closed",
+  "pull_request": {
+    "merged": true,
+    "base": {
+      "ref": "main"
+    },
+    "head": {
+      "ref": "feature/dashboard"
+    }
+  },
+  "repository": {
+    "full_name": "acme-corp/web-app",
+    "private": true
+  },
+  "sender": {
+    "login": "fran-dev",
+    "name": "Octocat",
+    "email": ""
+  }
+}

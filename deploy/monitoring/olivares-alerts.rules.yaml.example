@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Example alert rules for the Olivares control-plane /metrics endpoint.
+# These are EXAMPLES — tune thresholds to your deployment before applying.
+# The production SLO-based alerts are in olivares-slo.rules.yaml.
+#
+# Usage:
+#   kubectl apply -f olivares-alerts.rules.yaml.example  # (after renaming)
+#   Or lift spec.groups: into prometheus.yml rule_files: for non-operator setups.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: olivares-alerts-example
+  labels:
+    app.kubernetes.io/part-of: olivares
+    role: alerts-example
+spec:
+  groups:
+    - name: olivares.example.alerts
+      rules:
+        # High HTTP error rate (>5% of requests are 5xx over 5 minutes).
+        - alert: OlivaresHighErrorRate
+          expr: |
+            sum(rate(olivares_http_requests_total{code=~"5.."}[5m]))
+              / clamp_min(sum(rate(olivares_http_requests_total[5m])), 1) > 0.05
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "Control-plane HTTP 5xx rate above 5%"
+            description: "{{ $value | humanizePercentage }} of HTTP requests are returning 5xx."
+
+        # High API latency (p99 > 1s over 5 minutes).
+        - alert: OlivaresHighAPILatency
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(olivares_http_request_duration_seconds_bucket[5m]))) > 1
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "Control-plane API p99 latency above 1s"
+            description: "HTTP p99 = {{ $value | humanizeDuration }}."
+
+        # High memory usage (heap in-use > 768MiB).
+        - alert: OlivaresHighMemory
+          expr: go_memstats_heap_inuse_bytes > 805306368
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Control-plane heap in-use above 768MiB"
+            description: "Heap in-use = {{ $value | humanize1024 }}B."
+
+        # Event bus queue near capacity (>80% for any subscriber).
+        - alert: OlivaresEventBusQueueHigh
+          expr: |
+            max by (subscriber) (olivares_eventbus_queue_depth)
+              / clamp_min(max by (subscriber) (olivares_eventbus_queue_capacity), 1) > 0.8
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "Event-bus subscriber queue above 80%"
+            description: "Subscriber {{ $labels.subscriber }} is at {{ $value | humanizePercentage }} queue capacity."
+
+        # Login brute-force detection (>10 failed login attempts in 5 minutes).
+        - alert: OlivaresLoginBruteForce
+          expr: |
+            sum(increase(olivares_auth_login_attempts_total{outcome="failed"}[5m])) > 10
+          for: 0m
+          labels: { severity: warning }
+          annotations:
+            summary: "Possible login brute-force detected"
+            description: "{{ $value }} failed login attempts in the last 5 minutes."

@@ -1,0 +1,18 @@
+[
+  {
+    "full_name": "acme-corp/web-app",
+    "permissions": {
+      "admin": false,
+      "push": true,
+      "pull": true
+    }
+  },
+  {
+    "full_name": "acme-corp/api-server",
+    "permissions": {
+      "admin": true,
+      "push": true,
+      "pull": true
+    }
+  }
+]

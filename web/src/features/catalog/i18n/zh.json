@@ -1,0 +1,329 @@
+{
+  "title": "目录",
+  "subtitle": "经过整理的已批准能力目录——智能体、MCP、技能、模板、模型与连接器——以及受治理的自助实例化。",
+  "tabs": {
+    "entries": "条目",
+    "instances": "实例",
+    "policy": "准入策略"
+  },
+  "kind": {
+    "agent": "智能体",
+    "mcp": "MCP",
+    "skill": "技能",
+    "template": "模板",
+    "model": "模型",
+    "connector": "连接器"
+  },
+  "entries": {
+    "search": "搜索条目……",
+    "name": "名称",
+    "kind": "类型",
+    "slug": "标识串",
+    "version": "版本",
+    "status": "状态",
+    "owner": "负责人",
+    "signing": "签名",
+    "verification": "验证",
+    "newEntry": "新建条目",
+    "empty": "暂无目录条目",
+    "emptyHint": "创建草稿条目，提交审核，并批准以发布一个已冻结、哈希固定的版本。",
+    "filters": {
+      "kind": "类型",
+      "status": "状态",
+      "all": "全部"
+    },
+    "truncated": "已加载 {{n}} 个目录条目；还有更多",
+    "truncatedHint": "目录条目多于所显示的；本页按 id 取行。列表中没有某项并不能证明它不存在。"
+  },
+  "signing": {
+    "signed": "已签名",
+    "unsigned": "未签名",
+    "signedHint": "已使用 Ed25519 签名；签名者指纹 {{fingerprint}}。",
+    "unsignedHint": "已哈希固定并经账本证明，但未签名（批准时未配置目录签名密钥）。",
+    "notPinned": "—"
+  },
+  "verify": {
+    "title": "完整性",
+    "caption": "打开时重新计算。签名密钥永不离开引擎——仅显示其指纹。",
+    "verified": "签名已验证",
+    "verifiedHashOnly": "已哈希固定",
+    "notVerified": "未验证",
+    "pending": "尚未固定",
+    "verifiedHint": "内容哈希与固定哈希一致，且签名有效。",
+    "verifiedHashOnlyHint": "内容哈希与固定哈希一致。此版本已哈希固定并经账本证明，但未签名。",
+    "notVerifiedHint": "重新计算的哈希或签名与批准时所固定的内容不一致。请勿将此版本视为已批准。",
+    "pendingHint": "条目获批准前不会固定任何内容。验证适用于已批准和已弃用的版本。",
+    "contentHash": "固定哈希",
+    "recomputedHash": "重新计算的哈希",
+    "signedBy": "签名者指纹",
+    "reason": "原因",
+    "reverify": "重新验证"
+  },
+  "posture": {
+    "title": "目录签名态势",
+    "enabled": "签名已启用",
+    "disabled": "签名未配置",
+    "algorithm": "算法",
+    "fingerprint": "密钥指纹",
+    "publicKey": "公钥",
+    "publicKeyHint": "用于外部验证的 Ed25519 公钥——有意公开，并非密钥。",
+    "disabledNote": "未配置目录签名密钥。已批准的条目已哈希固定并经账本证明，但未签名。"
+  },
+  "detail": {
+    "title": "条目详情",
+    "identity": "身份",
+    "kind": "类型",
+    "slug": "标识串",
+    "version": "版本",
+    "status": "状态",
+    "summary": "摘要",
+    "owner": "负责人",
+    "spec": "规格",
+    "specCaption": "只读定义。密钥在规格中按名称或定位符引用——绝不以明文值出现。写入时内联凭据将被拒绝。",
+    "specEmpty": "暂无规格",
+    "integrity": "完整性与批准",
+    "contentHash": "内容哈希",
+    "signed": "已签名",
+    "sigAlg": "签名算法",
+    "signedBy": "签名者指纹",
+    "approvedBy": "批准人",
+    "approvedAt": "批准时间",
+    "notApprovedYet": "尚未批准——未固定或签名任何内容。",
+    "actions": {
+      "edit": "编辑草稿",
+      "delete": "删除草稿",
+      "submit": "提交审核",
+      "approve": "批准",
+      "deprecate": "弃用",
+      "instantiate": "实例化"
+    }
+  },
+  "editor": {
+    "createTitle": "新建目录条目",
+    "editTitle": "编辑草稿条目",
+    "kind": "类型",
+    "name": "显示名称",
+    "slug": "标识串",
+    "slugHint": "小写字母、数字、“-”和“_”，最多 64 个字符。",
+    "version": "版本",
+    "versionHint": "语义化版本，例如 1.2.3 或 1.0.0-beta.1。",
+    "summary": "摘要",
+    "ownerRef": "负责人引用",
+    "ownerRefHint": "可选的负责人标签，例如 platform-team。",
+    "spec": "规格（JSON）",
+    "specHint": "可选的 JSON 对象。按名称或定位符引用密钥——绝不内嵌凭据。内联凭据将被拒绝。",
+    "specPlaceholder": "{\n  \"command\": \"npx\",\n  \"token_ref\": \"$GITHUB_TOKEN\"\n}",
+    "specInvalid": "规格必须是有效的 JSON 对象。",
+    "credentialWarning": "这看起来像一个凭据值。请按名称或定位符引用密钥（例如 $GITHUB_TOKEN 或 vault 路径），绝不要使用密钥本身。",
+    "draftNotice": "新条目以草稿形式创建。生命周期和完整性字段（状态、哈希、签名、批准人）由引擎管理——切勿在此设置。",
+    "create": "创建草稿",
+    "save": "保存更改",
+    "created": "草稿条目已创建",
+    "updated": "草稿条目已更新",
+    "admissionStaleWarning": "此 {{kind}} 条目已记录准入裁定。保存已更改的规格会使其失效——在获得批准之前，你必须准入一份新的证明。"
+  },
+  "admission": {
+    "title": "证明准入",
+    "caption": "已记录的溯源/SBOM 裁定，用于把关进入对外提供目录的批准——记录此条目为何被准入或拒绝的持久凭证。",
+    "verified": "证明已验证",
+    "signedUnbound": "签名已验证，摘要未绑定",
+    "notVerified": "未验证",
+    "none": "未记录准入裁定",
+    "noneHint": "在强制模式的准入策略下，须先准入一份已验证的证明，此条目才能被批准。",
+    "reason": "原因",
+    "noReason": "未记录原因。",
+    "subjectDigest": "主体摘要",
+    "subjectName": "主体",
+    "method": "方式",
+    "signer": "签名者",
+    "transparencyLog": "透明日志",
+    "tlogVerified": "包含已验证",
+    "tlogPresent": "存在，但未验证",
+    "tlogAbsent": "不存在",
+    "coverage": "覆盖范围",
+    "attestedBy": "证明人",
+    "attestedAt": "证明时间",
+    "admit": "准入证明",
+    "admitTitle": "准入一份证明",
+    "admitBodyMcp": "针对租户信任根，验证此 MCP 服务器的 Sigstore 证明捆绑包（cosign download attestation / gh attestation download）。只有已验证的裁定才能让强制策略将其批准进入对外提供的注册表。",
+    "admitBodyConnector": "针对租户信任根，验证此连接器工件的 Sigstore 证明捆绑包。预期摘要默认取自 spec.artifact_digest；只有已验证的裁定才能让强制策略将其批准为已验证的连接器。",
+    "bundle": "证明捆绑包（JSON）",
+    "bundleHint": "粘贴 Sigstore 捆绑包的 JSON。它在服务器端验证；在解析之前不会记录任何内容。",
+    "bundleInvalid": "捆绑包必须是有效的 JSON。",
+    "bundlePlaceholder": "{ \"mediaType\": \"application/vnd.dev.sigstore.bundle.v0.3+json\", … }",
+    "expectedDigest": "预期的工件摘要",
+    "expectedDigestHint": "可选的 sha256，被证明的主体须与之匹配（例如 sha256:…）。对于连接器，默认取自 spec.artifact_digest。",
+    "note": "备注",
+    "admitSubmit": "验证并准入",
+    "admitted": "证明已准入",
+    "recordedNotAdmitted": "已记录，但该证明不满足策略——请查看裁定。"
+  },
+  "confirm": {
+    "deleteTitle": "删除此草稿条目？",
+    "deleteBody": "永久删除此草稿条目？此操作无法撤销。只有草稿可被删除；已批准的条目须改为弃用。",
+    "deleteConfirm": "永久删除",
+    "deletePhrase": "DELETE",
+    "deleted": "草稿条目已删除",
+    "submitTitle": "提交此草稿以供审核？",
+    "submitBody": "它将转为“待处理”状态，在作出裁定前不再可作为草稿编辑。",
+    "submitConfirm": "提交审核",
+    "submitted": "条目已提交审核",
+    "approveTitle": "批准此条目？",
+    "approveBody": "批准是最终决定：该版本将被冻结并设为不可变，其内容哈希将被固定（若启用签名则同时签名），并可用于自助实例化。日后若要退役，须弃用而非删除。",
+    "approveConfirm": "批准并冻结",
+    "approvePhrase": "APPROVE",
+    "approved": "条目已批准并冻结",
+    "deprecateTitle": "弃用此已批准的条目？",
+    "deprecateBody": "它将被退役并对新的实例化隐藏，但其历史记录和签名将予以保留，以便保持可验证性。此操作不可逆——请改为发布新版本。",
+    "deprecateConfirm": "弃用",
+    "deprecated": "条目已弃用"
+  },
+  "instantiate": {
+    "title": "请求实例化",
+    "body": "此操作将创建一个归属于你的治理请求（状态为“已请求”）——尚不会预置任何内容。批准裁定属于治理，预置属于部署；须由管理员批准并激活。",
+    "name": "实例名称",
+    "nameHint": "此条目实例化的唯一名称。",
+    "targetRef": "目标引用",
+    "targetRefHint": "可选的部署目标，例如 env:prod。",
+    "note": "备注",
+    "submit": "请求实例化",
+    "requested": "已请求实例化",
+    "notApproved": "只有已批准的条目才能被实例化。"
+  },
+  "instances": {
+    "search": "搜索实例……",
+    "name": "名称",
+    "entry": "来源条目",
+    "kind": "类型",
+    "version": "版本",
+    "status": "状态",
+    "target": "目标",
+    "requestedBy": "请求人",
+    "decidedBy": "裁定人",
+    "note": "备注",
+    "empty": "暂无实例化请求",
+    "emptyHint": "已批准条目的自助实例化将在此显示，并附带其治理状态。",
+    "filters": {
+      "status": "状态",
+      "all": "全部"
+    },
+    "liveNote": "实时——在请求等待治理裁定期间持续刷新。",
+    "truncated": "已加载 {{n}} 个实例；还有更多",
+    "truncatedHint": "实例多于所显示的；本页按 id 取行。列表中没有某项并不能证明它不存在。"
+  },
+  "instanceDetail": {
+    "title": "实例详情",
+    "provenance": "溯源",
+    "entryId": "条目 ID",
+    "entryKind": "条目类型",
+    "entrySlug": "条目标识串",
+    "entryVersion": "条目版本",
+    "governance": "治理",
+    "note": "备注",
+    "governanceCaption": "状态转换遵循允许的流程，并依据你的身份记录在案。策略/人工介入属于治理；真正的预置属于部署。",
+    "actions": {
+      "approve": "批准",
+      "reject": "拒绝",
+      "activate": "激活"
+    }
+  },
+  "transition": {
+    "approveTitle": "批准此实例请求？",
+    "rejectTitle": "拒绝此实例请求？",
+    "activateTitle": "激活此实例？",
+    "body": "批准、拒绝或激活操作将依据你的身份记录在审计账本中，并遵循允许的流程（已请求 → 已批准/已拒绝，已批准 → 活跃/已拒绝）。",
+    "noteLabel": "裁定备注（可选）",
+    "notePlaceholder": "此裁定的原因……",
+    "approveConfirm": "批准",
+    "rejectConfirm": "拒绝",
+    "activateConfirm": "激活",
+    "done": "治理裁定已应用"
+  },
+  "status": {
+    "draft": "草稿",
+    "pending": "待处理",
+    "approved": "已批准",
+    "deprecated": "已弃用",
+    "requested": "已请求",
+    "rejected": "已拒绝",
+    "active": "活跃"
+  },
+  "empty": {
+    "entry": {
+      "title": "尚未创建目录条目",
+      "description": "创建草稿条目，提交审核，并批准以发布一个已冻结、哈希固定的目录版本。"
+    },
+    "instance": {
+      "title": "尚无实例化请求",
+      "description": "批准一个目录条目，然后请求实例化，以在此创建其受治理的实例记录。"
+    }
+  },
+  "policy": {
+    "kind": {
+      "mcp": {
+        "title": "MCP 条目",
+        "body": "用于把联邦 MCP 条目放入所提供子注册表的信任锚。",
+        "editTitle": "编辑 MCP 准入策略"
+      },
+      "connector": {
+        "title": "连接器条目",
+        "body": "在批准前校验第三方连接器的信任锚。",
+        "editTitle": "编辑连接器准入策略"
+      }
+    },
+    "state": {
+      "unconfigured": {
+        "title": "无策略 — 一律准入",
+        "body": "未配置策略时，条目将在不做任何签名校验的情况下被准入。请配置信任锚以管控准入。"
+      },
+      "observe": {
+        "title": "已配置 — 仅观察",
+        "body": "签名会被校验并记录，但校验失败不会阻止准入。启用「要求签名」后才会强制执行。"
+      },
+      "enforce": {
+        "title": "强制执行中",
+        "body": "无法通过这些信任锚校验的条目将被拒绝准入。"
+      }
+    },
+    "modeName": {
+      "keyless": "无密钥（绑定身份）",
+      "certificate-pki": "证书 PKI",
+      "bare-key": "裸密钥",
+      "empty": "无信任锚"
+    },
+    "mode": "信任方式",
+    "derivedMode": "推导出的信任方式",
+    "on": "开",
+    "off": "关",
+    "requireSigned": "要求条目已签名",
+    "requireSignedHint": "启用后，校验不通过的条目会被拒绝。",
+    "requireSubjectDigest": "要求主体摘要",
+    "requireSubjectDigestHint": "将证明绑定到条目的摘要，而不仅是名称。",
+    "identities": "允许的身份",
+    "identitiesHint": "每行一个。必须与签发者一同设置。",
+    "issuers": "允许的签发者",
+    "issuersHint": "每行一个。必须与身份一同设置。",
+    "predicates": "允许的谓词",
+    "predicatesHint": "每行一个，例如来源谓词类型。空行会被拒绝。",
+    "trustedRoots": "受信任的根",
+    "trustedRootsHint": "PEM 格式的 CA 证书。仅保存完整的 BEGIN…END 块。",
+    "trustedKeys": "受信任的密钥",
+    "trustedKeysHint": "PEM 格式的公钥。仅保存完整的 BEGIN…END 块。",
+    "note": "备注",
+    "attestedBy": "最后修改者",
+    "attestedAt": "最后修改",
+    "edit": "编辑策略",
+    "editBody": "更改将在下一次准入时生效。",
+    "saved": "准入策略已保存",
+    "loadFailed": "无法加载准入策略。",
+    "confirmTitle": "确认信任变更",
+    "confirmBody": "此操作会收紧准入或移除一个信任锚。已准入的条目不会被重新校验，但在重新签名之前，新的准入可能失败。",
+    "err": {
+      "privateKey": "信任材料必须是公开的 — 请移除任何 PRIVATE KEY 块。",
+      "pemResidual": "仅保存完整的 BEGIN…END 块；请移除多余文本。",
+      "emptyPredicate": "谓词中不能包含空条目。",
+      "anchorMissing": "强制执行至少需要一个受信任的根或密钥，否则将不会准入任何内容。",
+      "identityIssuer": "身份与签发者必须同时设置，或者都不设置。"
+    }
+  }
+}

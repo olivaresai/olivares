@@ -1,0 +1,209 @@
+/* SPDX-FileCopyrightText: 2026 Olivares.AI */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/*
+ * Olivares Operations Console — design tokens (brand-aligned, dark-first).
+ *
+ * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/*.tokens.json (DTCG
+ * 2025.10). Regenerate with `pnpm tokens`; `pnpm tokens:check` guards drift in CI.
+ * The :root{} / .dark{} CSS-var blocks and the Tailwind 4 @theme inline{} block
+ * below are emitted from the final Olivares brand identity (brandv4, 2026-06-10): brand neutrals #28282b / #fafaf9, the single brand orange #f08000 — the FILL
+ * (--accent) in BOTH themes, deepened to #b45500 only where it is TEXT on the light
+ * canvas (--accent-text) — and the attributed/approximate confidence
+ * axis. Every TEXT pair is AA or better in both themes; the light accent FILL against
+ * the canvas is deliberately below the 3:1 non-text threshold (2.58:1), because the
+ * brand orange cannot reach it there — a declared trade-off, not an oversight. The tokens are not hand-authored (ADM-CORE-04): they are generated from a
+ * standard, interoperable DTCG source via Style Dictionary.
+ */
+
+:root {
+  /* Surfaces & text — LIGHT */
+  --background: #fafaf9;
+  --surface: #ffffff;
+  --elevated: #ffffff;
+  --overlay: rgba(24, 24, 27, 0.45);
+  --muted: #f1f1f0;
+  --muted-foreground: #5c564e;
+  --foreground: #28282b;
+  --border: #e6e6e4;
+  --border-strong: #d6d6d3;
+  --ring: #b45500;
+
+  /* Brand accent (single orange) — LIGHT */
+  --accent: #f08000;
+  --accent-foreground: #1a1206;
+  --accent-hover: #d87000;
+  --accent-active: #cc6a00;
+  --accent-text: #a84f00;
+  --accent-soft: #fdeedf;
+  --accent-soft-foreground: #8a3f00;
+  --accent-line: #f2c49e;
+
+  /* Semantics — LIGHT (text/solid; soft fill + line derived below) */
+  --success: #2f6b2c;
+  --warning: #8a5300;
+  --danger: #b0201b;
+  --info: #1e5a86;
+  --danger-solid: #b0201b;
+  --danger-solid-foreground: #fff8f0;
+
+  /* Access-graph confidence (orthogonal cool axis) — LIGHT */
+  --confidence-attributed: #0a7c77;
+  --confidence-approximate: #5b6470;
+
+  /* Elevation — LIGHT (depth from layered surfaces + hairlines) */
+  --elev-xs: 0 1px 1px rgba(28, 28, 31, 0.04);
+  --elev-sm: 0 1px 2px rgba(28, 28, 31, 0.06), 0 1px 1px rgba(28, 28, 31, 0.04);
+  --elev-md:
+    0 2px 6px -1px rgba(28, 28, 31, 0.08), 0 1px 2px rgba(28, 28, 31, 0.06);
+  --elev-lg:
+    0 8px 24px -6px rgba(28, 28, 31, 0.12),
+    0 2px 6px -2px rgba(28, 28, 31, 0.08);
+  --elev-xl:
+    0 20px 48px -12px rgba(28, 28, 31, 0.18),
+    0 4px 12px -4px rgba(28, 28, 31, 0.1);
+
+  /* Semantic soft fills + lines — derived from the (theme-switched) hue */
+  --success-soft: color-mix(in oklab, var(--success) 12%, var(--surface));
+  --success-line: color-mix(in oklab, var(--success) 32%, var(--surface));
+  --warning-soft: color-mix(in oklab, var(--warning) 12%, var(--surface));
+  --warning-line: color-mix(in oklab, var(--warning) 32%, var(--surface));
+  --danger-soft: color-mix(in oklab, var(--danger) 7%, var(--surface));
+  --danger-line: color-mix(in oklab, var(--danger) 32%, var(--surface));
+  --info-soft: color-mix(in oklab, var(--info) 12%, var(--surface));
+  --info-line: color-mix(in oklab, var(--info) 32%, var(--surface));
+
+  /* Selection/active indicator — accent held at >=3:1 vs surface & background (SC 1.4.11) */
+  --accent-strong: #c26000;
+}
+
+.dark {
+  /* Surfaces & text — DARK (primary operator surface) */
+  --background: #28282b;
+  --surface: #2f2f33;
+  --elevated: #38383d;
+  --overlay: rgba(16, 16, 18, 0.88);
+  --muted: #323237;
+  --muted-foreground: #aaaab3;
+  --foreground: #fafaf9;
+  --border: #3a3a40;
+  --border-strong: #4c4c54;
+  --ring: #f0974a;
+
+  /* Brand accent — DARK */
+  --accent: #f08000;
+  --accent-foreground: #1a1206;
+  --accent-hover: #f89020;
+  --accent-active: #d87000;
+  --accent-text: #f08000;
+  --accent-soft: #34250f;
+  --accent-soft-foreground: #f0974a;
+  --accent-line: #5a3d17;
+
+  /* Selection/active indicator — DARK */
+  --accent-strong: color-mix(in oklab, var(--accent) 85%, var(--surface));
+
+  /* Semantics — DARK */
+  --success: #86c58a;
+  --warning: #e7b65a;
+  --danger: #f7928b;
+  --info: #6fb6e6;
+  --danger-solid: #c5362f;
+  --danger-solid-foreground: #fff1ef;
+
+  /* Confidence — DARK */
+  --confidence-attributed: #5be0d8;
+  --confidence-approximate: #9aa3b0;
+
+  /* Elevation — DARK (borders + inset top highlight carry the lit edge) */
+  --elev-xs: none;
+  --elev-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --elev-md: 0 2px 8px -2px rgba(0, 0, 0, 0.6);
+  --elev-lg:
+    0 10px 30px -8px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 rgba(250, 250, 249, 0.04);
+  --elev-xl:
+    0 28px 64px -16px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 0 rgba(250, 250, 249, 0.05);
+}
+
+@theme inline {
+  /* Surfaces, accent, semantics & confidence — mapped to the theme vars */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-overlay: var(--overlay);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-foreground: var(--accent-soft-foreground);
+  --color-accent-line: var(--accent-line);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-foreground: var(--danger-solid-foreground);
+  --color-confidence-attributed: var(--confidence-attributed);
+  --color-confidence-approximate: var(--confidence-approximate);
+  --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+  --color-accent-strong: var(--accent-strong);
+
+  /* Neutral graphite ramp — surfaces/wells + access-graph neutrals beyond the semantic tokens */
+  --color-graphite-50: #fafafa;
+  --color-graphite-100: #f3f3f4;
+  --color-graphite-200: #e4e4e6;
+  --color-graphite-300: #c9c9cd;
+  --color-graphite-400: #9c9ca3;
+  --color-graphite-500: #71717a;
+  --color-graphite-600: #52525a;
+  --color-graphite-700: #3f3f45;
+  --color-graphite-800: #2e2e32;
+  --color-graphite-900: #232327;
+  --color-graphite-950: #1b1b1e;
+
+  /* Typography (all self-hosted via @fontsource-variable in main.tsx) */
+  --font-sans:
+    'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular,
+    Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-display:
+    'Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', system-ui,
+    sans-serif;
+
+  /* Radii — tight/instrument-grade */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Elevation (theme-switched via --elev-*) */
+  --shadow-xs: var(--elev-xs);
+  --shadow-sm: var(--elev-sm);
+  --shadow-md: var(--elev-md);
+  --shadow-lg: var(--elev-lg);
+  --shadow-xl: var(--elev-xl);
+
+  /* Motion — fast, mechanical, no bounce */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --animate-pulse-live: pulse-live 2s ease-in-out infinite;
+}

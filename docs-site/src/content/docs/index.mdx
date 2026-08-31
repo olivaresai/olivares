@@ -1,0 +1,185 @@
+---
+title: Olivares AI documentation
+description: >-
+  Product documentation for Olivares AI — integrate, manage and secure the AI you run,
+  from a single machine to a whole estate. One ground truth: Claude Code at the deepest
+  level, Codex and Grok Build alongside. Self-hosted: see what your AI does, decide what
+  it can do, and prove it.
+template: splash
+hero:
+  tagline: "Integrate, manage and secure the AI you run — one machine or a whole estate. Self-hosted, one ground truth: Claude Code at the deepest level, Codex and Grok Build alongside. Honest about its limits."
+  actions:
+    - text: Start here
+      link: /start/what-is-olivares-ai/
+      icon: right-arrow
+      variant: primary
+    - text: Find your path
+      link: /start/paths-by-role/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+These docs are organized with the [Diátaxis](https://diataxis.fr/start-here/)
+framework — four modes, each answering a different need. Pick the one that
+matches what you are trying to do.
+
+<CardGrid>
+  <LinkCard
+    title="Tutorials"
+    href="/tutorials/zero-to-graph/"
+    description="Learning-oriented. Run the single binary and reach a populated read/write access graph, step by step."
+  />
+  <LinkCard
+    title="How-to guides"
+    href="/how-to/self-hosting/"
+    description="Task-oriented. Connect a source, self-host, install air-gapped, verify a release, forward audit to Splunk."
+  />
+  <LinkCard
+    title="Reference"
+    href="/reference/"
+    description="Information-oriented. The REST API, the event bus (AsyncAPI), the modules, the CLI and configuration."
+  />
+  <LinkCard
+    title="Explanation"
+    href="/explanation/"
+    description="Understanding-oriented. Architecture, the access graph, the security & threat model, licensing."
+  />
+</CardGrid>
+
+## What is this?
+
+Olivares AI **integrates, manages and secures the AI you run** — on one machine or across
+a whole estate, one ground truth: Claude Code at the deepest level, Codex and Grok Build
+alongside, complementing those agents rather than competing. A single
+self-hosted binary gives your AI the context, resource access and managed sessions it
+needs to do real work, and gives you the granular permissions, policies,
+budgets and audit evidence to run all of it — models, agents, MCP servers, the identities
+behind them and the data they touch — across your infrastructure. It still shows you a
+read/write access map of what each one can reach and the drift between *Permitted* and
+*Observed*; all **self-hosted**, with no mandatory telemetry and no control-plane egress
+by default — what crosses your perimeter is what **you** configure to cross it: calls to
+your model APIs, the SIEM/webhook outputs you wire, an external embedding provider if you
+provision one — and honest about what runs today versus what is pre-v1.
+
+<CardGrid>
+  <Card title="Honest by design" icon="approve-check">
+    We document what runs today and what is pre-v1. Tutorial commands are tested;
+    where the contract does not yet cover something, the docs say so. See
+    [Honesty & limits](/start/honesty-and-limits/).
+  </Card>
+  <Card title="Open core" icon="open-book">
+    The product (engine, modules, web) is AGPL-3.0-only; the SDK and connectors
+    are Apache-2.0; enterprise modules are commercial. See
+    [Open core & licensing](/explanation/open-core-and-licensing/).
+  </Card>
+</CardGrid>
+
+{/* GALERIA-CONSOLA:INICIO — generada; el orden es el del README. */}
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-dark.png" />
+  <img src="/console/access-map-light.png" width="960" alt="Access map: What each agent reads and writes across your estate — origins on the left, the resources they touch on the right, R/RW by color." />
+</picture>
+<figcaption><strong>Access map</strong> — What each agent reads and writes across your estate — origins on the left, the resources they touch on the right, R/RW by color.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-drift-dark.png" />
+  <img src="/console/access-map-drift-light.png" alt="Least-privilege drift: Overlay the least-privilege diff: highlight unexpected access (observed, not permitted) and unused grants." />
+</picture>
+<figcaption><strong>Least-privilege drift</strong> — Overlay the least-privilege diff: highlight unexpected access (observed, not permitted) and unused grants.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/orchestration-dark.png" />
+  <img src="/console/orchestration-light.png" alt="Orchestration &amp; A2A: Agent-to-agent topology — who delegates to whom, the live delegation flows, and declared cadences. Reads of the communication graph are privileged and self-audited." />
+</picture>
+<figcaption><strong>Orchestration &amp; A2A</strong> — Agent-to-agent topology — who delegates to whom, the live delegation flows, and declared cadences. Reads of the communication graph are privileged and self-audited.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/inventory-dark.png" />
+  <img src="/console/inventory-light.png" alt="Inventory: Every agent, session, MCP, model and identity discovered across your estate." />
+</picture>
+<figcaption><strong>Inventory</strong> — Every agent, session, MCP, model and identity discovered across your estate.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/observability-dark.png" />
+  <img src="/console/observability-light.png" alt="Observability &amp; interop: Standards-based ingestion health and ledger-correlated trace drill-down. Figures are engine-wide (process-global), not per-tenant; standards are pinned to the versions and maturities the upstream bodies declare." />
+</picture>
+<figcaption><strong>Observability &amp; interop</strong> — Standards-based ingestion health and ledger-correlated trace drill-down. Figures are engine-wide (process-global), not per-tenant; standards are pinned to the versions and maturities the upstream bodies declare.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/dashboards-dark.png" />
+  <img src="/console/dashboards-light.png" alt="Executive overview: Cost, usage, risk and compliance at a glance — drill down to the operational view for the detail." />
+</picture>
+<figcaption><strong>Executive overview</strong> — Cost, usage, risk and compliance at a glance — drill down to the operational view for the detail.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/home-dark.png" />
+  <img src="/console/home-light.png" alt="Overview: Your AI estate at a glance — inventory, activity, risk, compliance, spend and health." />
+</picture>
+<figcaption><strong>Overview</strong> — Your AI estate at a glance — inventory, activity, risk, compliance, spend and health.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/security-dark.png" />
+  <img src="/console/security-light.png" alt="Security &amp; forensics: Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. The plane is detective by default — it records, it does not block on its own unless enforcement is enabled and governed." />
+</picture>
+<figcaption><strong>Security &amp; forensics</strong> — Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. The plane is detective by default — it records, it does not block on its own unless enforcement is enabled and governed.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/session-viewer-dark.png" />
+  <img src="/console/session-viewer-light.png" alt="Session Recording Viewer: Unified timeline of agent activity and governance evidence for a single session." />
+</picture>
+<figcaption><strong>Session Recording Viewer</strong> — Unified timeline of agent activity and governance evidence for a single session.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/identity-dark.png" />
+  <img src="/console/identity-light.png" alt="Identity &amp; NHI: SSO, SCIM, identity inventory, the NHI lifecycle, the WIF graph and privileged login — observed, governed and audited." />
+</picture>
+<figcaption><strong>Identity &amp; NHI</strong> — SSO, SCIM, identity inventory, the NHI lifecycle, the WIF graph and privileged login — observed, governed and audited.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/knowledge-dark.png" />
+  <img src="/console/knowledge-light.png" alt="Data, knowledge &amp; context: Governed knowledge bases, retrieval lineage, the prompt registry, agent memory and context policies." />
+</picture>
+<figcaption><strong>Data, knowledge &amp; context</strong> — Governed knowledge bases, retrieval lineage, the prompt registry, agent memory and context policies.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/work-apply-refused-dark.png" />
+  <img src="/console/work-apply-refused-light.png" alt="Plan: Planning the change. Nothing is written in this step." />
+</picture>
+<figcaption><strong>Plan</strong> — Planning the change. Nothing is written in this step.</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/killswitch-dark.png" />
+  <img src="/console/killswitch-light.png" alt="Kill switch: The estate emergency stop: one click halts every governed actuation surface. Engaging is deliberately cheap; recovery requires two distinct user accounts and a forced post-review." />
+</picture>
+<figcaption><strong>Kill switch</strong> — The estate emergency stop: one click halts every governed actuation surface. Engaging is deliberately cheap; recovery requires two distinct user accounts and a forced post-review.</figcaption>
+</figure>
+
+{/* GALERIA-CONSOLA:FIN */}

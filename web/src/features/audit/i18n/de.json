@@ -1,0 +1,107 @@
+{
+  "title": "Audit-Hauptbuch",
+  "subtitle": "Die manipulationssichere Nachweiskette. Verifizieren und in Ihr WORM/SIEM exportieren.",
+  "subtitleSystem": "Die Kette des System-Mandanten mit den mandantenübergreifenden Verwaltungsvorgängen (schreibgeschützt).",
+  "searchLoaded": "Nur geladene Zeilen filtern (clientseitig)…",
+  "filters": {
+    "title": "Serverseitige Hauptbuch-Filter",
+    "q": "Hauptbuch durchsuchen",
+    "qPlaceholder": "Aktion, Akteur, Zielart oder ID",
+    "actor": "Akteur",
+    "actorPlaceholder": "Exakter Akteur",
+    "action": "Aktionspräfix",
+    "actionPlaceholder": "z. B. agent.",
+    "targetKind": "Zielart",
+    "targetKindPlaceholder": "Exakte Zielart",
+    "targetId": "Ziel-ID",
+    "targetIdPlaceholder": "Exakte Ziel-ID",
+    "since": "Seit",
+    "until": "Bis",
+    "clearOne": "{{filter}}-Filter zurücksetzen",
+    "clearAll": "Alle Filter zurücksetzen"
+  },
+  "scan": {
+    "incomplete": "Durchsucht bis seq {{seq}} — nicht das gesamte Hauptbuch; „Mehr laden“ setzt den Scan fort."
+  },
+  "scope": {
+    "label": "Hauptbuch-Bereich",
+    "tenant": "Mandanten-Hauptbuch",
+    "system": "System-Hauptbuch",
+    "systemHint": "Die Kette des System-Mandanten zeichnet mandantenübergreifende Verwaltungsvorgänge auf und ist hier schreibgeschützt. Verifizierung und Export beziehen sich auf Mandanten-Hauptbücher."
+  },
+  "cols": {
+    "seq": "Nr.",
+    "occurred": "Wann",
+    "action": "Aktion",
+    "actor": "Akteur",
+    "target": "Ziel",
+    "hash": "Hash"
+  },
+  "actorKind": {
+    "user": "Benutzer",
+    "agent": "Agent",
+    "connector": "Konnektor",
+    "system": "System"
+  },
+  "verify": {
+    "action": "Kette verifizieren",
+    "failed": "Die Verifizierung konnte nicht abgeschlossen werden.",
+    "chain": "Kette · {{checked}} Glieder",
+    "checkpoints": "Prüfpunkte · {{count}} signiert",
+    "noCheckpoints": "Noch keine signierten Prüfpunkte",
+    "attested": "Bestätigt bis Nr. {{seq}}",
+    "chainBreak": "Kette unterbrochen bei Nr. {{seq}}",
+    "checkpointBreak": "Prüfpunkt-Signatur fehlgeschlagen bei Nr. {{seq}}"
+  },
+  "pubkey": {
+    "action": "Verifizierungsschlüssel",
+    "label": "Signaturschlüssel des Ledgers",
+    "key": "Schlüssel",
+    "hint": "Geben Sie diesen öffentlichen Ed25519-Schlüssel weiter, damit Dritte exportierte Ereignisse UND Prüfpunkte offline verifizieren können – derselbe Schlüssel signiert beide.",
+    "failed": "Der Verifizierungsschlüssel ist nicht verfügbar."
+  },
+  "export": {
+    "action": "Exportieren",
+    "formatLabel": "Exportformat",
+    "fromSeq": "Von seq",
+    "toSeq": "Bis seq",
+    "optional": "Optional",
+    "useCurrent": "Aktuelle Filter & Bereich verwenden",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "OTLP-Request",
+      "otlp_envelope": "OTLP-Request (Alias)",
+      "otlp_log_record": "OTLP-LogRecord-Zeilen",
+      "ocsf": "OCSF"
+    },
+    "done": "Export heruntergeladen.",
+    "failed": "Export fehlgeschlagen.",
+    "forbidden": "Sie sind nicht berechtigt, das Hauptbuch zu exportieren."
+  },
+  "detail": {
+    "title": "Nachweisereignis",
+    "seqTitle": "Ereignis Nr. {{seq}}",
+    "signed": "Signiertes Ereignis – diese Zeile trägt ihre eigene Signatur über ihrem Ketten-Hash",
+    "seq": "Sequenz",
+    "occurred": "Aufgetreten",
+    "action": "Aktion",
+    "actor": "Akteur",
+    "actorSystem": "System",
+    "target": "Ziel",
+    "id": "Ereignis-ID",
+    "chainTitle": "Ketten-Integrität",
+    "prevHash": "Vorheriger Hash",
+    "prev": "vorh.",
+    "hash": "Ereignis-Hash",
+    "this": "dieser",
+    "sig": "Ereignis-Signatur",
+    "checkpoint": "Sig.",
+    "chainHint": "Der Hash jedes Ereignisses ist mit dem vorherigen verkettet. Hinter einem Fingerabdruck steckt keine Nutzlast — der Hash ist der Nachweis (Datensparsamkeit by Design)."
+  },
+  "empty": {
+    "title": "Noch keine Nachweise",
+    "description": "Das Hauptbuch ist für diesen Bereich leer. Geregelte Vorgänge hängen manipulationssichere Ereignisse an, sobald sie auftreten."
+  }
+}

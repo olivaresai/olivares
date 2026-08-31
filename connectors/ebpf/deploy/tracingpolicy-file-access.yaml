@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+#
+# Tetragon TracingPolicy: file access (R/RW backstop).
+#
+# Hooks the LSM permission check security_file_permission(struct file *, int mask)
+# and forwards (path, mask) so the Olivares eBPF connector can classify the access
+# into the R/RW access map (MAY_READ 0x04 / MAY_WRITE 0x02 / MAY_APPEND 0x08 /
+# MAY_EXEC 0x01 — see connectors/ebpf/filemask.go). The connector parses the
+# resulting process_kprobe events (arg0 file_arg{path}, arg1 int_arg=mask); it
+# matches by argument SHAPE, so the exact kprobe naming may vary across versions.
+#
+# Scope it down in production (a host-wide file hook is high-volume): add selectors
+# to restrict to the directories or the binaries you care about. Validate against
+# your kernel before rolling out. Minimum Tetragon: v1.0.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: olivares-file-access
+spec:
+  kprobes:
+    - call: "security_file_permission"
+      syscall: false
+      return: false
+      args:
+        - index: 0
+          type: "file"
+        - index: 1
+          type: "int"
+      selectors:
+        # Example narrowing (commented out): only writes to /etc and /var. Remove
+        # the matchArgs block to capture all file permission checks.
+        # - matchArgs:
+        #     - index: 1
+        #       operator: "Mask"
+        #       values: ["2"]   # MAY_WRITE
+        - matchActions:
+            - action: Post

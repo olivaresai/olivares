@@ -1,0 +1,39 @@
+{
+  "mcpServers": [
+    {
+      "name": "projects/test-project-id/locations/global/mcpServers/risky-tools",
+      "mcpServerId": "risky-tools",
+      "displayName": "Risky Tools",
+      "tools": [
+        {
+          "name": "open-net",
+          "description": "SENTINEL-TOOL-DESC",
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          }
+        },
+        {
+          "name": "delete-world",
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+          }
+        },
+        {
+          "name": "lookup",
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+          }
+        }
+      ]
+    }
+  ]
+}

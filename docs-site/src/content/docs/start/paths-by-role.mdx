@@ -1,0 +1,117 @@
+---
+title: "Paths by role"
+description: >-
+  Three reading paths through the same documentation: platform engineering
+  (install and operate), security engineering (govern and contain), and
+  compliance (evidence and audit) — plus the builder's path for connector
+  authors.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+The documentation is organized by [Diátaxis mode](/start/how-the-docs-are-organized/)
+— tutorials, how-to, reference, explanation — because that is how docs stay
+usable. But people arrive with a *role*, not a mode. These are the five
+paths through the same pages, in reading order.
+
+## Platform engineering — install it, operate it
+
+You own the deployment: uptime, backups, upgrades, capacity.
+
+1. **See it work:** the [quickstart](/start/quickstart/) (five minutes), then
+   the [zero-to-graph tutorial](/tutorials/zero-to-graph/) if you want the
+   guided version.
+2. **Install for real**, by scenario:
+   [single node (systemd)](/tutorials/getting-started/single-node/) ·
+   [Docker Compose](/tutorials/getting-started/docker-compose/) ·
+   [Kubernetes/Helm with HA](/tutorials/getting-started/kubernetes/) ·
+   [air-gapped](/tutorials/getting-started/air-gapped/).
+3. **Wire signals:** [connect a source](/how-to/connect-a-source/), then the
+   per-connector guides ([pgAudit](/how-to/connectors/pgaudit/),
+   [CloudTrail](/how-to/connectors/cloudtrail/),
+   [eBPF/Tetragon](/how-to/connectors/ebpf-tetragon/)).
+4. **Operate:** [monitoring & SLOs](/how-to/monitor-with-prometheus/) ·
+   [backup & restore](/how-to/backup-and-restore/) ·
+   [troubleshooting](/how-to/troubleshooting/).
+
+Reference you will live in: [configuration](/reference/configuration/),
+[CLI](/reference/cli/), [connectors & tiers](/reference/connectors/).
+
+## Security engineering — govern it, contain it
+
+You own least privilege, enforcement and incident response for the agent
+estate.
+
+1. **The model first:** [what the access map is](/start/what-is-olivares-ai/)
+   and [honesty & limits](/start/honesty-and-limits/) — what the product
+   will and will not claim.
+2. **Govern:** [govern and approve](/how-to/govern-and-approve/) (RBAC, the
+   restrict-only PDP, recorded decisions), then the recipes:
+   [deny-closed policies](/how-to/cookbook/deny-closed-policies/) ·
+   [HITL approvals](/how-to/cookbook/hitl-approvals/) ·
+   [drift triage](/how-to/cookbook/drift-triage/).
+3. **Enforce on the agent surface:**
+   [Claude Code hooks & the PEP](/how-to/connectors/claude-code-hooks-pep/) ·
+   [MCP governance](/how-to/connectors/mcp-governance/) ·
+   [budgets as guardrails](/how-to/cookbook/budgets-and-finops-guardrails/).
+4. **Contain:** the [kill-switch drill](/how-to/cookbook/kill-switch-drill/),
+   and [harden the deployment](/how-to/security-hardening/).
+
+Deep background: the [security model](/explanation/security/security-model/)
+and [threat model](/explanation/security/threat-model/).
+
+## Compliance — evidence, audit, residency
+
+You answer to auditors and regulators; you need records that prove
+themselves.
+
+1. **What the evidence is:** the recorded-decisions guarantee in
+   [govern and approve](/how-to/govern-and-approve/#the-human-in-the-loop-posture)
+   — the append-only, signed ledger under every decision.
+2. **Get it out:** [push it to your SIEM](/how-to/cookbook/push-to-siem/),
+   or [pull/tail it](/how-to/forward-audit-to-splunk/) for WORM archival —
+   and verify it offline
+   ([troubleshooting § ledger](/how-to/troubleshooting/#the-ledger-fails-verification)).
+3. **Keep it survivable:** [backup & restore](/how-to/backup-and-restore/) —
+   continuity-safe bundles, the off-box key rule, the restore drill.
+4. **Residency and provenance:**
+   [air-gapped operation](/tutorials/getting-started/air-gapped/) ·
+   [verify a release](/how-to/verify-a-release/) ·
+   [open core & licensing](/explanation/open-core-and-licensing/).
+
+The honest baseline to cite in assessments:
+[Honesty & limits](/start/honesty-and-limits/) — what runs, what is
+on-demand, what is design-stage.
+
+## Running it yourself — one machine, one person
+
+No platform team, no compliance office: a homelab, a home server, a freelance or
+small-business setup where the person installing it is also the person using it. Nothing
+here is a smaller product — it is the same single binary, read in the order that gets one
+machine useful fastest.
+
+<CardGrid>
+  <LinkCard title="Deploy with Docker" href="/how-to/docker-deployment/"
+    description="One compose file, one container, your own machine. The shortest path from nothing to a running control plane." />
+  <LinkCard title="Quickstart" href="/start/quickstart/"
+    description="First run, first agent, first governed session — the ten minutes after it starts." />
+  <LinkCard title="Cost & budgets" href="/reference/modules/xi-finops/"
+    description="What your models are costing you, per agent and per session, with budgets that answer before the invoice does." />
+  <LinkCard title="Back up and restore" href="/how-to/backup-and-restore/"
+    description="The one operational habit worth having on day one, whoever owns the box." />
+</CardGrid>
+
+## Builders — extend it
+
+You are writing a connector or driving the API.
+
+<CardGrid>
+  <LinkCard title="Build and ship a connector" href="/how-to/build-a-connector/"
+    description="Scaffold, implement, sign, distribute — with deny-closed signed admission." />
+  <LinkCard title="Use the client SDKs" href="/how-to/use-the-client-sdks/"
+    description="Go, Java, Python and TypeScript clients over the published REST contract." />
+  <LinkCard title="Manage as code" href="/how-to/manage-as-code/"
+    description="The Terraform/OpenTofu provider over the governed API." />
+  <LinkCard title="API & events reference" href="/reference/api/"
+    description="The OpenAPI-rendered REST surface and the AsyncAPI event bus." />
+</CardGrid>

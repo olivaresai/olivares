@@ -1,0 +1,26 @@
+{
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/servicePrincipals/microsoft.graph.agentIdentity?$skiptoken=PAGE2",
+  "value": [
+    {
+      "id": "aid-1111",
+      "displayName": "Invoice Copilot",
+      "accountEnabled": true,
+      "agentIdentityBlueprintId": "bp-app-1",
+      "createdByAppId": "creator-app-9",
+      "createdDateTime": "2026-05-20T10:00:00Z",
+      "disabledByMicrosoftStatus": null,
+      "servicePrincipalType": "ServiceIdentity",
+      "tags": ["agent"]
+    },
+    {
+      "id": "aid-2222",
+      "displayName": "Orphan Agent",
+      "accountEnabled": true,
+      "agentIdentityBlueprintId": "bp-gone",
+      "createdByAppId": "creator-app-9",
+      "createdDateTime": "2026-05-21T10:00:00Z",
+      "disabledByMicrosoftStatus": "NotDisabled",
+      "servicePrincipalType": "ServiceIdentity"
+    }
+  ]
+}

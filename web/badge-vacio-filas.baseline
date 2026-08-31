@@ -1,0 +1,38 @@
+# Baseline de check-badge-vacio-filas.sh — SOLO PUEDE BAJAR.
+# Cada linea: <ruta><TAB><cuantos avisos sin `filas` conviven con un <EmptyState>>.
+# Al arreglar uno, baja su numero aqui EN EL MISMO COMMIT; el gate exige que casen.
+web/src/features/capabilities/capabilities-view.tsx	6
+web/src/features/capabilities/revisions.tsx	1
+web/src/features/catalog/catalog-view.tsx	2
+web/src/features/claude-policy/drift.tsx	1
+web/src/features/claude-policy/managed-agents-hitl.tsx	1
+web/src/features/deploy/deploy-view.tsx	1
+web/src/features/deploy/operations-table.tsx	1
+web/src/features/deploy/wirings-table.tsx	1
+web/src/features/evals/evals-view.tsx	6
+web/src/features/finops/finops-view.tsx	7
+web/src/features/health/dependency-map.tsx	1
+web/src/features/health/reliability-timeline.tsx	1
+web/src/features/inference-proxy/inference-proxy-view.tsx	1
+web/src/features/killswitch/guardian.tsx	2
+web/src/features/killswitch/killswitch-view.tsx	1
+web/src/features/knowledge/data-product-detail.tsx	2
+web/src/features/knowledge/data-product-list.tsx	1
+web/src/features/knowledge/kb-detail.tsx	1
+web/src/features/knowledge/knowledge-view.tsx	6
+web/src/features/model-ops/admission.tsx	1
+web/src/features/model-ops/datasets.tsx	1
+web/src/features/model-ops/deployments.tsx	1
+web/src/features/model-ops/documents.tsx	1
+web/src/features/model-ops/evidence.tsx	1
+web/src/features/model-ops/finetune.tsx	1
+web/src/features/model-ops/owned-models.tsx	2
+web/src/features/models/gpai.tsx	1
+web/src/features/models/models-view.tsx	6
+web/src/features/redteam/redteam-view.tsx	2
+web/src/features/residency/residency-view.tsx	1
+web/src/features/sandbox/sandbox-view.tsx	3
+web/src/features/security/security-view.tsx	2
+web/src/features/tenants/tenants-view.tsx	1
+web/src/features/work/work-view.tsx	1
+web/src/features/workspace-dashboard/workspace-dashboard-view.tsx	2

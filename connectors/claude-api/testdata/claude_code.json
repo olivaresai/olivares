@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "date": "2026-06-02T00:00:00Z",
+      "customer_type": "subscription",
+      "actor": { "type": "user_actor", "email_address": "dev@example.com" },
+      "model_breakdown": [
+        {
+          "model": "claude-sonnet-4-6",
+          "tokens": { "input": 1000, "output": 500, "cache_read": 200, "cache_creation": 100 },
+          "estimated_cost": { "amount": 186, "currency": "USD" }
+        }
+      ]
+    },
+    {
+      "date": "2026-06-02T00:00:00Z",
+      "customer_type": "api",
+      "actor": { "type": "api_actor", "api_key_name": "ci-bot" },
+      "model_breakdown": [
+        {
+          "model": "claude-haiku-4-5",
+          "tokens": { "input": 5000, "output": 1000, "cache_read": 0, "cache_creation": 0 },
+          "estimated_cost": { "amount": 50, "currency": "USD" }
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

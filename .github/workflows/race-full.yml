@@ -1,0 +1,474 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# race-full — the WEEKLY full-fidelity race sweep. The push gate (mainline-ci)
+# runs test:functional + test:race-hot: the whole suite without -race plus -race
+# on the concurrency-hot paths, a deliberate race-DETECTION reduction on the slow
+# cmd/olivares e2e tail that keeps pushes inside the 2-vCPU runner's budget. This
+# workflow closes that gap on a weekly cadence so nothing is permanently unraced,
+# and it is the mandatory pre-release evidence: a release must point at a green
+# race-full run on the EXACT tagged SHA (equality since 2026-07-30 — an ancestor
+# green does not cover the diff that came after it).
+#
+# TWO jobs, deliberately split: the pathological cmd/olivares ROOT package is
+# isolated in its own job so its (long, wall-clock-bound) run — or its timeout —
+# can never mask race results for core/modules/connectors/sdk/operator/cloud.
+# Both jobs provision the same real Postgres as mainline-ci so the HA/failover/
+# RLS tests are raced BY EXECUTION, not self-skipped.
+#
+# Cadence: weekly. workflow_dispatch is the on-demand lever for high-risk PRs
+# (enforcement/bus/proxy rewrites). Cron fires off minute 0 — GitHub
+# delays/drops top-of-hour scheduled runs under load.
+name: race-full
+
+on:
+  schedule:
+    - cron: "17 4 * * 0" # weekly, Sunday 04:17 UTC (before bench-nightly's 05:00)
+  workflow_dispatch: # manual trigger: pre-release evidence or high-risk PR backstop
+
+permissions:
+  contents: read
+
+# A dispatch superseding a still-running weekly (or vice versa) should not double-bill.
+concurrency:
+  group: race-full
+  cancel-in-progress: false
+
+jobs:
+  # The matrix is BUILT from scripts/race-groups.json, never written here too: a
+  # fact typed in two places drifts in silence, and this one would drift into a
+  # package nobody races.
+  setup:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    outputs:
+      groups: ${{ steps.spec.outputs.groups }}
+      cloud_group: ${{ steps.spec.outputs.cloud_group }}
+      root_shards: ${{ steps.spec.outputs.root_shards }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: the union control — every test-bearing package belongs to exactly one group
+        # ⛔ ANTES DE GASTAR SIETE POSTGRES. Si un paquete no está en ningún grupo,
+        # la matriz saldría VERDE sin haberlo corrido, y un verde que no cubre es
+        # peor que un rojo: `release.yml` publica binarios sobre él.
+        run: bash scripts/race-groups.sh check
+      - id: spec
+        run: |
+          set -euo pipefail
+          {
+            echo "groups=$(bash scripts/race-groups.sh groups)"
+            echo "cloud_group=$(python3 -c 'import json;print(json.load(open("scripts/race-groups.json"))["cloud_task_group"])')"
+            echo "root_shards=$(bash scripts/race-groups.sh root-shards)"
+          } >> "$GITHUB_OUTPUT"
+
+  # Every workspace package under -race EXCEPT the cmd/olivares root package
+  # (raced in race-root below), SPLIT INTO GROUPS so each fits a job.
+  #
+  # ⛔ POR QUÉ SE PARTIÓ, con la medida: en UN solo paso, este barrido murió en el
+  # techo de los 75 min con CATORCE paquetes verdes y finops/governance sin
+  # empezar — core/auth 1325 s, core/api 1321 s, modules/compliance 1185 s,
+  # sqlstore 1018 s, eventing 674 s… Un barrido que no termina no es evidencia de
+  # nada, y `release.yml` EXIGE un race-full verde sobre el SHA etiquetado.
+  #
+  # Y partirlo compra una segunda cosa que el paso único no daba: un timeout ahora
+  # NOMBRA el grupo que lo causó, en vez de dejar un log mudo de 75 minutos.
+  race-workspace:
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(needs.setup.outputs.groups) }}
+    name: race-workspace (${{ matrix.group }})
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    services:
+      postgres:
+        # pgvector/pgvector = the official postgres image + the compiled vector
+        # extension (pinned by digest, tag pg16, 2026-07-30). B5: docs call pgvector
+        # the self-host production default, yet no gate ever executed it — the real
+        # integration test gates on OLIVARES_TEST_VECTOR_DSN below.
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          # EPHEMERAL HOST PORT (2026-07-30). `5432:5432` reserved the HOST's 5432;
+          # a second job on the SAME host died in "Initialize containers" with
+          #   Bind for :::5432 failed: port is already allocated
+          # (measured: run 30541550811, job 90901999419, dead in 10 s). This host
+          # runs THREE runner installations, so the repo trips over itself. A bare
+          # container port lets Docker pick a free host port; it is read below with
+          # job.services.postgres.ports['5432'] from a STEP — the `job` context
+          # does NOT exist in jobs.<id>.env (actionlint availability.go, case
+          # "jobs.<job_id>.env").
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      # The four OLIVARES_TEST_*_DSN CANNOT live here: they depend on the ephemeral
+      # host port, and the `job` context is not available in jobs.<id>.env
+      # (actionlint availability.go: jobs.<job_id>.env → github, inputs, matrix,
+      # needs, secrets, strategy, vars — no `job`). The first step, "resolve the
+      # ephemeral Postgres port into the test DSNs", writes them to $GITHUB_ENV.
+      # Promotion regime (2026-07-30): this sweep IS release evidence, so a PG-less
+      # partial run must fail instead of skipping the RLS/HA/migration/boot suites.
+      OLIVARES_GATE_STRICT_PG: "1"
+    steps:
+      - name: resolve the ephemeral Postgres port into the test DSNs
+        id: pg-port
+        env:
+          # `job` is only available in steps.env/steps.run/steps.with.
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          case "${PGPORT_HOST:-}" in
+            '' | *[!0-9]*)
+              echo "::error::mapped host port for services.postgres:5432 is empty or non-numeric (got '${PGPORT_HOST:-}')" >&2
+              exit 1 ;;
+          esac
+          # The port MUST come from THIS runner's kernel ephemeral range. Not a
+          # cosmetic assertion: if Docker ever handed back 5432, the helper
+          # scripts/pg-test-env.sh would reject it further down (its anti-5432
+          # guard), so an out-of-range port has to die HERE, with a message that
+          # says why, and not six steps later with an opaque error.
+          read -r LOPORT HIPORT < /proc/sys/net/ipv4/ip_local_port_range
+          if [ "$PGPORT_HOST" -lt "$LOPORT" ] || [ "$PGPORT_HOST" -gt "$HIPORT" ]; then
+            echo "::error::docker published Postgres on ${PGPORT_HOST}, outside this host's ephemeral range ${LOPORT}-${HIPORT}; refusing to continue" >&2
+            exit 1
+          fi
+          {
+            echo "PGHOSTPORT=127.0.0.1:${PGPORT_HOST}"
+            # app = NOSUPERUSER NOBYPASSRLS owner of olivares (FORCE-RLS genuinely
+            # exercised); admin = NOSUPERUSER BYPASSRLS for cross-tenant reads. The
+            # superuser (maintenance) DSN targets /postgres, NOT /olivares: pgtest
+            # only CREATE/DROP DATABASEs through it, and PostgreSQL refuses to drop
+            # the database the session is connected to (scripts/pg-test-env.sh:64).
+            echo "OLIVARES_TEST_POSTGRES_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_ADMIN_DSN=postgres://olivares_admin:adminpw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_SUPERUSER_DSN=postgres://postgres:postgres@127.0.0.1:${PGPORT_HOST}/postgres?sslmode=disable"
+            # This job HAS a Postgres service, so an unreachable server here is a broken
+            # job — not an absence to skip past. `pgtest.Available` only learns that from the
+            # RUN (core/internal/pgtest/pgtest.go:88-96): without this line the reachability
+            # probe answers `false` and the whole Postgres leg vanishes QUIETLY, which is the
+            # failure that probe was added to end. The declaration belongs to whoever
+            # provisioned the server, and that is this job.
+            echo "OLIVARES_TEST_POSTGRES_REQUIRED=1"
+            # B5 (2026-07-30): the REAL pgvector integration test runs in this job —
+            # the service image ships the extension and provisioning creates it. Docs
+            # may call pgvector the self-host default only while this stays wired.
+            echo "OLIVARES_TEST_VECTOR_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+          } >> "$GITHUB_ENV"
+          echo "resolved Postgres host port: ${PGPORT_HOST} (ephemeral range ${LOPORT}-${HIPORT})"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: install go-task (pinned)
+        run: |
+          # ⛔ TRES PARTES, NO UNA — la doctrina vive en mainline-ci.yml:642-646 desde el 08-18 y
+          # llevaba ONCE DIAS sin propagarse. La cobro `export-check` el 2026-08-29 en
+          # `ci-runner-3`: el paso «install go-task» salio **success** y el siguiente murio con
+          # `task: command not found`, exit 127; el job midio 1 de 14 pasos y el fail-closed del
+          # propio instrumento quedo SALTADO (corrida 33278242758, curada por r26 en #2149).
+          #
+          #   GOBIN explicito .... `go install` honra un GOBIN del entorno POR ENCIMA de
+          #                        $GOPATH/bin. En un runner auto-alojado PERSISTENTE ese GOBIN
+          #                        puede venir del servicio, y entonces el binario aterriza fuera
+          #                        del PATH que el job acaba de componer — **sin fallar**, porque
+          #                        instalar si instalo.
+          #   su bin al PATH ..... para el paso siguiente (GITHUB_PATH) y para ESTE (export PATH).
+          #   la GUARDA .......... «instalar no es alcanzar». Convierte «instalado e inalcanzable»
+          #                        en un rojo NOMBRADO aqui, en vez de un 127 opaco mas adelante
+          #                        que manda a investigar el PATH en vez de la instalacion.
+          #
+          # ⚠ Y la causa esta CONFIRMADA por una medida que no estaba en el diagnostico original:
+          # en esa corrida los dos jobs corrieron en maquinas DISTINTAS — el que fallo en
+          # `ci-runner-3`, el que paso en `srv17`— con los MISMOS pasos. No era el orden de los
+          # pasos: era el entorno del runner, que es exactamente lo que GOBIN explicito neutraliza.
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install dijo OK y task no esta en PATH (GOBIN=$GOBIN, PATH=$PATH)"; exit 1; }
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Conditional like mainline-ci: on a self-hosted runner with
+          # postgresql-client preinstalled this step needs NO sudo at all — the
+          # runner user deliberately has none (2026-07-30).
+          command -v psql >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client; }
+          # The app role + olivares DB it owns (NOSUPERUSER NOBYPASSRLS).
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 \
+            -v app_password=apppw -f deploy/postgres/01-app-role.sql
+          # The cross-tenant admin role (BYPASSRLS, NOSUPERUSER) + read grants.
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 -c \
+            "DROP ROLE IF EXISTS olivares_admin; CREATE ROLE olivares_admin LOGIN PASSWORD 'adminpw' NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION;"
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 -c \
+            "GRANT CONNECT ON DATABASE olivares TO olivares_admin;"
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
+            "GRANT USAGE ON SCHEMA public TO olivares_admin; ALTER DEFAULT PRIVILEGES FOR ROLE olivares_app IN SCHEMA public GRANT SELECT ON TABLES TO olivares_admin;"
+          # pgvector (B5): the extension is not trusted, so the app role cannot create
+          # it — the superuser does, once per database; the backend's own
+          # CREATE EXTENSION IF NOT EXISTS then no-ops harmlessly.
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
+            "CREATE EXTENSION IF NOT EXISTS vector;"
+      - name: race this group
+        # ⛔ 45 de techo con `-timeout 35m` de Go DENTRO. Los dos números viven en
+        # scripts/race-groups.json y el banco comprueba que el de Go es el menor: el
+        # reloj de `-timeout` arranca DESPUÉS de compilar con -race, así que igualarlo
+        # al techo del paso garantiza que gane el techo y que el volcado de goroutines
+        # —lo único que dice DÓNDE colgó— no llegue a imprimirse. Es exactamente como
+        # murió race-root a los 152 min, mudo.
+        timeout-minutes: 45
+        # `-json` + `tee`: el fichero es el que sube el paso siguiente. `pipefail` porque sin
+        # el, el rc de la tuberia es el del awk y un FAIL se publicaria verde.
+        run: |
+          set -euo pipefail
+          bash scripts/race-groups.sh run "${{ matrix.group }}" --json \
+            | tee "$RUNNER_TEMP/race-group-${{ matrix.group }}.jsonl" \
+            | awk -F'"' '
+                /"Action":"output"/ && (/\.go:[0-9]/ || /--- FAIL/) {
+                  sub(/^.*"Output":"/, ""); sub(/"}[ \t]*$/, "");
+                  gsub(/\\n$/, ""); gsub(/\\t/, "  ");
+                  printf "    | %s\n", $0; fflush(); next;
+                }
+                /"Action":"(pass|fail|skip)"/ && /"Test":/ {
+                  for (i = 1; i < NF; i++) {
+                    if ($i == "Action") a = $(i + 2);
+                    if ($i == "Test")   n = $(i + 2);
+                  }
+                  printf "%s %s\n", toupper(a), n; fflush();
+                }' 
+      - name: keep the per-group timings even when the step died
+        # ⛔ MI DEUDA, y la pago aqui: cuando escribi el reparto cablee el artefacto SOLO en el
+        # paso de la RAIZ. La noche que `modules-sessions` murio no habia `.jsonl` de grupo, asi
+        # que el diagnostico hubo que sacarlo del volcado del panic — y ahi lei de mas y acuse a
+        # dos tests que iban BIEN. Con el artefacto, la proxima vez se mira el dato.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: race-group-timings-${{ matrix.group }}
+          path: ${{ runner.temp }}/race-group-${{ matrix.group }}.jsonl
+          if-no-files-found: warn
+          retention-days: 7
+      - name: race the cloud control plane
+        # UNA sola vez, en el grupo que la especificación nombra — y el control de
+        # unión comprueba que ese nombre existe, para que renombrar un grupo no
+        # DESACTIVE esta pata en silencio.
+        #
+        # No va como paquetes de la matriz a propósito: `task test:cloud` arrastra el
+        # cableado de Postgres (with-pg-env.sh), y correrlo como `go test` pelado
+        # dejaría las patas de Postgres desapareciendo calladas.
+        if: matrix.group == needs.setup.outputs.cloud_group
+        run: task test:cloud
+
+  # The cmd/olivares ROOT package, PARTIDO EN CUATRO TURNOS por `-run`.
+  #
+  # ⛔ POR QUE SE PARTIO, con la medida: en UN solo job este paquete tardo 120,05 min el dia
+  # que salio verde (medido en un runner que NO era alojado) y en hosted no
+  # cabe: en una corrida alojada del 2026-08-31 paso de los 132 min con un reloj de Go de 130. Un paso
+  # que no termina no es evidencia de nada, y `release.yml` EXIGE un race-full verde sobre
+  # el SHA etiquetado.
+  #
+  # Los turnos salen de scripts/race-groups.json y el `-run` lo compone `race-groups.sh`:
+  # el reparto esta CERRADO POR PREFIJO, porque `-run ^Test(Auth)` casa tambien
+  # `TestAuthorizeX` y sin esa clausura habria tests corriendo en DOS turnos. El control de
+  # union del job `setup` comprueba las dos mitades —ningun test sin turno, ninguno en dos—
+  # ANTES de gastar cuatro Postgres.
+  #
+  # ⛔ Y el fallo silencioso que hace falta cortar aqui es otro que en los grupos: **un
+  # `-run` que no casa con nada SALE 0 y parece verde**. Un turno con familias rancias
+  # publicaria un exito sin ejecutar un test; por eso `root-run` cuenta los tests que casa
+  # y se niega si son cero.
+  race-root:
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.setup.outputs.root_shards) }}
+    name: race-root (${{ matrix.shard }})
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    services:
+      postgres:
+        # pgvector/pgvector = the official postgres image + the compiled vector
+        # extension (pinned by digest, tag pg16, 2026-07-30). B5: docs call pgvector
+        # the self-host production default, yet no gate ever executed it — the real
+        # integration test gates on OLIVARES_TEST_VECTOR_DSN below.
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          # EPHEMERAL HOST PORT (2026-07-30). `5432:5432` reserved the HOST's 5432;
+          # a second job on the SAME host died in "Initialize containers" with
+          #   Bind for :::5432 failed: port is already allocated
+          # (measured: run 30541550811, job 90901999419, dead in 10 s). This host
+          # runs THREE runner installations, so the repo trips over itself. A bare
+          # container port lets Docker pick a free host port; it is read below with
+          # job.services.postgres.ports['5432'] from a STEP — the `job` context
+          # does NOT exist in jobs.<id>.env (actionlint availability.go, case
+          # "jobs.<job_id>.env").
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      # The four OLIVARES_TEST_*_DSN CANNOT live here: they depend on the ephemeral
+      # host port, and the `job` context is not available in jobs.<id>.env
+      # (actionlint availability.go: jobs.<job_id>.env → github, inputs, matrix,
+      # needs, secrets, strategy, vars — no `job`). The first step, "resolve the
+      # ephemeral Postgres port into the test DSNs", writes them to $GITHUB_ENV.
+      # Promotion regime (2026-07-30): this sweep IS release evidence, so a PG-less
+      # partial run must fail instead of skipping the RLS/HA/migration/boot suites.
+      OLIVARES_GATE_STRICT_PG: "1"
+    steps:
+      - name: resolve the ephemeral Postgres port into the test DSNs
+        id: pg-port
+        env:
+          # `job` is only available in steps.env/steps.run/steps.with.
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          case "${PGPORT_HOST:-}" in
+            '' | *[!0-9]*)
+              echo "::error::mapped host port for services.postgres:5432 is empty or non-numeric (got '${PGPORT_HOST:-}')" >&2
+              exit 1 ;;
+          esac
+          # The port MUST come from THIS runner's kernel ephemeral range. Not a
+          # cosmetic assertion: if Docker ever handed back 5432, the helper
+          # scripts/pg-test-env.sh would reject it further down (its anti-5432
+          # guard), so an out-of-range port has to die HERE, with a message that
+          # says why, and not six steps later with an opaque error.
+          read -r LOPORT HIPORT < /proc/sys/net/ipv4/ip_local_port_range
+          if [ "$PGPORT_HOST" -lt "$LOPORT" ] || [ "$PGPORT_HOST" -gt "$HIPORT" ]; then
+            echo "::error::docker published Postgres on ${PGPORT_HOST}, outside this host's ephemeral range ${LOPORT}-${HIPORT}; refusing to continue" >&2
+            exit 1
+          fi
+          {
+            echo "PGHOSTPORT=127.0.0.1:${PGPORT_HOST}"
+            # app = NOSUPERUSER NOBYPASSRLS owner of olivares (FORCE-RLS genuinely
+            # exercised); admin = NOSUPERUSER BYPASSRLS for cross-tenant reads. The
+            # superuser (maintenance) DSN targets /postgres, NOT /olivares: pgtest
+            # only CREATE/DROP DATABASEs through it, and PostgreSQL refuses to drop
+            # the database the session is connected to (scripts/pg-test-env.sh:64).
+            echo "OLIVARES_TEST_POSTGRES_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_ADMIN_DSN=postgres://olivares_admin:adminpw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+            echo "OLIVARES_TEST_POSTGRES_SUPERUSER_DSN=postgres://postgres:postgres@127.0.0.1:${PGPORT_HOST}/postgres?sslmode=disable"
+            # This job HAS a Postgres service, so an unreachable server here is a broken
+            # job — not an absence to skip past. `pgtest.Available` only learns that from the
+            # RUN (core/internal/pgtest/pgtest.go:88-96): without this line the reachability
+            # probe answers `false` and the whole Postgres leg vanishes QUIETLY, which is the
+            # failure that probe was added to end. The declaration belongs to whoever
+            # provisioned the server, and that is this job.
+            echo "OLIVARES_TEST_POSTGRES_REQUIRED=1"
+            # B5 (2026-07-30): the REAL pgvector integration test runs in this job —
+            # the service image ships the extension and provisioning creates it. Docs
+            # may call pgvector the self-host default only while this stays wired.
+            echo "OLIVARES_TEST_VECTOR_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
+          } >> "$GITHUB_ENV"
+          echo "resolved Postgres host port: ${PGPORT_HOST} (ephemeral range ${LOPORT}-${HIPORT})"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Conditional like mainline-ci: on a self-hosted runner with
+          # postgresql-client preinstalled this step needs NO sudo at all — the
+          # runner user deliberately has none (2026-07-30).
+          command -v psql >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client; }
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 \
+            -v app_password=apppw -f deploy/postgres/01-app-role.sql
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 -c \
+            "DROP ROLE IF EXISTS olivares_admin; CREATE ROLE olivares_admin LOGIN PASSWORD 'adminpw' NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION;"
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/postgres" -v ON_ERROR_STOP=1 -c \
+            "GRANT CONNECT ON DATABASE olivares TO olivares_admin;"
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
+            "GRANT USAGE ON SCHEMA public TO olivares_admin; ALTER DEFAULT PRIVILEGES FOR ROLE olivares_app IN SCHEMA public GRANT SELECT ON TABLES TO olivares_admin;"
+          # pgvector (B5): the extension is not trusted, so the app role cannot create
+          # it — the superuser does, once per database; the backend's own
+          # CREATE EXTENSION IF NOT EXISTS then no-ops harmlessly.
+          psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
+            "CREATE EXTENSION IF NOT EXISTS vector;"
+      - name: race this root shard
+        # ⛔ EL TECHO Y EL `-timeout` SALEN DE LA SPEC (45 / 35), no se teclean aqui, y la
+        # formula es la MISMA que la de los grupos: el reloj de `-timeout` de Go arranca
+        # DESPUES de compilar con -race, asi que igualarlo al techo del paso garantiza que
+        # gane el techo y que el volcado de goroutines —lo unico que dice DONDE colgo— no
+        # llegue a imprimirse. Es como murio race-root a los 152 min, mudo; y como volvio a
+        # morir en una corrida alojada del 2026-08-31, pasando de 132 min con el reloj en 130.
+        #
+        # `-json` para que el paso no muera mudo, `pipefail` porque sin el el rc de la
+        # tuberia es el del awk —que siempre sale 0— y un FAIL se publicaria verde.
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          bash scripts/race-groups.sh root-run "${{ matrix.shard }}" \
+            | tee "$RUNNER_TEMP/race-root-${{ matrix.shard }}.jsonl" \
+            | awk -F'"' '
+                # ⛔ LAS LINEAS DEL FALLO PASAN, y esto lo escribo por una medida: la primera
+                # version imprimia SOLO «ACCION NOMBRE» y se comia la salida del test. El primer
+                # fallo real de la race-full publica dejo un log donde se leia
+                # `FAIL TestMCPDurableTask…` y NADA MAS: el motivo —`open ../../design/…: no such
+                # file`— sólo estaba en el .jsonl, y hubo que descargar el artefacto para saber
+                # que no era un flake sino una ruta ausente. Un progreso que oculta el motivo
+                # convierte cada rojo en una descarga.
+                #
+                # Pasan solo las que traen `fichero.go:linea` o el `--- FAIL`, para que el log
+                # siga siendo legible: el volcado entero es lo que el artefacto ya guarda.
+                /"Action":"output"/ && (/\.go:[0-9]/ || /--- FAIL/) {
+                  sub(/^.*"Output":"/, ""); sub(/"}[ \t]*$/, "");
+                  gsub(/\\n$/, ""); gsub(/\\t/, "  ");
+                  printf "    | %s\n", $0; fflush(); next;
+                }
+                /"Action":"(pass|fail|skip)"/ && /"Test":/ {
+                  for (i = 1; i < NF; i++) {
+                    if ($i == "Action") a = $(i + 2);
+                    if ($i == "Test")   n = $(i + 2);
+                  }
+                  printf "%s %s\n", toupper(a), n;
+                  fflush();
+                }'
+      - name: keep the per-test timings even when the step died
+        # `if: always()`: el caso en que estas medidas valen MAS es el del timeout, y un
+        # upload condicionado al exito las perderia exactamente ahi. El nombre lleva el
+        # turno porque dos artefactos no pueden llamarse igual en la misma corrida — y
+        # ademas es lo que permite recalibrar el reparto turno a turno.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: race-root-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/race-root-${{ matrix.shard }}.jsonl
+          if-no-files-found: warn
+          retention-days: 7

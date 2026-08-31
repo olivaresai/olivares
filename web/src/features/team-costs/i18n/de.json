@@ -1,0 +1,38 @@
+{
+  "title": "Teamkosten",
+  "subtitle": "Kostenzuweisung nach Team — Sitzungen, Tokens und Ausgaben mit täglichem Trend und Projekt-/Modellaufschlüsselung.",
+  "period": {
+    "label": "Zeitraum",
+    "7d": "Letzte 7 Tage",
+    "30d": "Letzte 30 Tage",
+    "90d": "Letzte 90 Tage"
+  },
+  "cols": {
+    "team": "Team",
+    "sessions": "Sitzungen",
+    "tokensIn": "Tokens eingehend",
+    "tokensOut": "Tokens ausgehend",
+    "cost": "Kosten",
+    "trend": "Trend"
+  },
+  "breakdown": {
+    "projects": "Projekte",
+    "models": "Modelle",
+    "project": "Projekt",
+    "model": "Modell",
+    "sessions": "Sitzungen",
+    "tokensIn": "Tokens eingehend",
+    "tokensOut": "Tokens ausgehend",
+    "cost": "Kosten",
+    "noProjects": "Keine Projektaufschlüsselung.",
+    "noModels": "Keine Modellaufschlüsselung."
+  },
+  "export": "CSV exportieren",
+  "empty": {
+    "title": "Keine Teamkostendaten",
+    "description": "Für diesen Zeitraum wurden keine Kostendatensätze mit Teambezeichnungen gefunden. Versehen Sie Ihre Sitzungen mit einem Teamlabel, um eine Zuweisung zu sehen."
+  },
+  "errors": {
+    "loadFailed": "Teamkostendaten konnten nicht geladen werden."
+  }
+}

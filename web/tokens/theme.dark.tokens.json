@@ -1,0 +1,107 @@
+{
+  "$description": "Olivares console — DARK theme color + elevation tokens (primary operator surface, dark-first). Emitted to the .dark{} block of src/styles/tokens.css by tokens/build.mjs. Re-derived from the final brand identity (brandv4, 2026-06-10): the canonical brand dark #28282b is the app canvas, neutrals are a near-neutral cool ramp, and the single brand orange #f08000 is the accent. The semantic axes are preserved (success/warning/danger/info + the cool confidence axis: teal attributed / slate approximate), AA+ on the new charcoal surfaces (ADM-CORE-04).",
+  "color": {
+    "$type": "color",
+    "background": {
+      "$value": "#28282b"
+    },
+    "surface": {
+      "$value": "#2f2f33"
+    },
+    "elevated": {
+      "$value": "#38383d"
+    },
+    "overlay": {
+      "$value": "rgba(16, 16, 18, 0.88)"
+    },
+    "muted": {
+      "$value": "#323237"
+    },
+    "muted-foreground": {
+      "$value": "#aaaab3"
+    },
+    "foreground": {
+      "$value": "#fafaf9"
+    },
+    "border": {
+      "$value": "#3a3a40"
+    },
+    "border-strong": {
+      "$value": "#4c4c54"
+    },
+    "ring": {
+      "$value": "#f0974a"
+    },
+    "accent": {
+      "$value": "#f08000"
+    },
+    "accent-foreground": {
+      "$value": "#1a1206"
+    },
+    "accent-hover": {
+      "$value": "#f89020"
+    },
+    "accent-active": {
+      "$value": "#d87000"
+    },
+    "accent-text": {
+      "$value": "#f08000"
+    },
+    "accent-soft": {
+      "$value": "#34250f"
+    },
+    "accent-soft-foreground": {
+      "$value": "#f0974a"
+    },
+    "accent-line": {
+      "$value": "#5a3d17"
+    },
+    "accent-strong": {
+      "$description": "El OSCURO conserva exactamente lo que heredaba: `derived` solo se carga en el bloque claro, asi que al fijar el claro a un hex explicito el oscuro se habria quedado SIN definicion — un token invalido en el tema que hoy esta en CERO bloqueantes. Esto no ajusta el oscuro: lo conserva.",
+      "$value": "color-mix(in oklab, var(--accent) 85%, var(--surface))"
+    },
+    "success": {
+      "$value": "#86c58a"
+    },
+    "warning": {
+      "$value": "#e7b65a"
+    },
+    "danger": {
+      "$value": "#f7928b",
+      "$description": "Danger as TEXT on dark surfaces. #f38881 -> #f7928b el 2026-08-29: axe midio 4.42 sobre --danger-soft en el badge de /dashboards (at:gate, run 33263227272), por debajo del 4.5 de AA. Y no basta con mirar el par token-contra-token: ese calculo da 4.561 y PASA — el render pierde ~0.14, asi que la medida que manda es la de axe sobre la pagina. Aclararlo sube TODAS las parejas y no puede bajar ninguna: en tema oscuro un primer plano mas claro solo gana contraste contra superficies oscuras (soft 4.561->4.978, surface 5.491->5.992, background 6.054->6.607, elevated 4.802->5.240). --danger nunca es fondo: el relleno es --danger-solid, que no se toca."
+    },
+    "info": {
+      "$value": "#6fb6e6"
+    },
+    "danger-solid": {
+      "$value": "#c5362f"
+    },
+    "danger-solid-foreground": {
+      "$value": "#fff1ef"
+    },
+    "confidence-attributed": {
+      "$value": "#5be0d8"
+    },
+    "confidence-approximate": {
+      "$value": "#9aa3b0"
+    }
+  },
+  "elevation": {
+    "$type": "shadow",
+    "elev-xs": {
+      "$value": "none"
+    },
+    "elev-sm": {
+      "$value": "0 1px 2px rgba(0, 0, 0, 0.5)"
+    },
+    "elev-md": {
+      "$value": "0 2px 8px -2px rgba(0, 0, 0, 0.6)"
+    },
+    "elev-lg": {
+      "$value": "0 10px 30px -8px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(250, 250, 249, 0.04)"
+    },
+    "elev-xl": {
+      "$value": "0 28px 64px -16px rgba(0, 0, 0, 0.8), inset 0 1px 0 0 rgba(250, 250, 249, 0.05)"
+    }
+  }
+}

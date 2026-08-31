@@ -1,0 +1,28 @@
+{
+  "revision": "2025-11-25",
+  "source_url": "https://modelcontextprotocol.io/specification/2025-11-25/server/tools",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "method": "tools/call",
+    "params": {
+      "name": "search",
+      "arguments": {
+        "query": "rain"
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "legacy gated result"
+        }
+      ],
+      "isError": false
+    }
+  }
+}

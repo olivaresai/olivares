@@ -1,0 +1,48 @@
+{
+  "timeSeries": [
+    {
+      "metric": {
+        "type": "aiplatform.googleapis.com/publisher/online_serving/token_count",
+        "labels": { "type": "input" }
+      },
+      "resource": {
+        "type": "aiplatform.googleapis.com/PublisherModel",
+        "labels": {
+          "model_user_id": "gemini-2.0-flash",
+          "model_version_id": "001",
+          "publisher": "google",
+          "location": "us-central1",
+          "resource_container": "projects/123"
+        }
+      },
+      "points": [
+        {
+          "interval": { "startTime": "2026-06-20T10:00:00Z", "endTime": "2026-06-20T11:00:00Z" },
+          "value": { "int64Value": "1000" }
+        }
+      ]
+    },
+    {
+      "metric": {
+        "type": "aiplatform.googleapis.com/publisher/online_serving/token_count",
+        "labels": { "type": "output" }
+      },
+      "resource": {
+        "type": "aiplatform.googleapis.com/PublisherModel",
+        "labels": {
+          "model_user_id": "publishers/google/models/gemini-2.0-flash",
+          "model_version_id": "001",
+          "publisher": "google",
+          "location": "us-central1",
+          "resource_container": "projects/123"
+        }
+      },
+      "points": [
+        {
+          "interval": { "startTime": "2026-06-20T10:00:00Z", "endTime": "2026-06-20T11:00:00Z" },
+          "value": { "int64Value": "200" }
+        }
+      ]
+    }
+  ]
+}

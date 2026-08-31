@@ -1,0 +1,180 @@
+{
+  "title": "Benachrichtigungen",
+  "description": "Leiten Sie Befunde an Ziele weiter und prüfen Sie das Zustellungsprotokoll. Eine Route referenziert ein Ziel per Name; das Credential liegt im verdrahteten Transport.",
+  "tabs": {
+    "routes": "Routen",
+    "deliveries": "Zustellungen",
+    "outbox": "Unzustellbar"
+  },
+  "severities": {
+    "any": "Beliebiger Schweregrad",
+    "info": "Info",
+    "low": "Niedrig",
+    "medium": "Mittel",
+    "high": "Hoch",
+    "critical": "Kritisch"
+  },
+  "routes": {
+    "intro": "Jede Route sendet passende Befunde an ein Ziel, in Prioritätsreihenfolge.",
+    "add": "Neue Route",
+    "empty": "Noch keine Routen",
+    "emptyHint": "Fügen Sie eine Route hinzu, um passende Befunde an ein Ziel zu senden.",
+    "colName": "Name",
+    "colDest": "Ziel",
+    "colSeverity": "Min. Schweregrad",
+    "colStatus": "Status",
+    "colActions": "Aktionen",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "bulk": {
+      "enable": "Ausgewählte aktivieren",
+      "disable": "Ausgewählte deaktivieren"
+    },
+    "testAction": "Route {{name}} testen",
+    "editAction": "Route {{name}} bearbeiten",
+    "deleteAction": "Route {{name}} löschen",
+    "created": "Route erstellt",
+    "updated": "Route aktualisiert",
+    "deleted": "Route gelöscht",
+    "tested": "Test an {{destination}} gesendet",
+    "deleteDialog": {
+      "title": "Route löschen?",
+      "description": "Dies entfernt die Route „{{name}}“. Von ihr abgeglichene Befunde werden nicht mehr über sie zugestellt.",
+      "confirm": "Route löschen"
+    },
+    "dialog": {
+      "title": "Neue Route",
+      "editTitle": "Route bearbeiten",
+      "subtitle": "Befunde abgleichen und an ein Ziel senden. Leere Abgleichlisten passen auf alles.",
+      "name": "Name",
+      "destination": "Ziel",
+      "destinationHint": "Ein bereitgestelltes Ziel (nur Name — sein Credential liegt im Transport).",
+      "destinationPlaceholder": "Ziel auswählen",
+      "minSeverity": "Min. Schweregrad",
+      "matchTypes": "Übereinstimmende Typen",
+      "matchKinds": "Übereinstimmende Arten",
+      "matchSources": "Übereinstimmende Quellen",
+      "matchSubjectKinds": "Übereinstimmende Subjektarten",
+      "listHint": "Kommagetrennt; leer passt auf alles.",
+      "dedup": "Dedup-Fenster (s)",
+      "throttle": "Throttle-Fenster (s)",
+      "priority": "Priorität",
+      "enabled": "Aktiviert",
+      "enabledHint": "Eine deaktivierte Route passt auf nichts, bis sie reaktiviert wird.",
+      "create": "Route erstellen",
+      "save": "Route speichern",
+      "matchTypesHint": "Wählen Sie einen oder mehrere Ereignistypen. Beschreibungen stammen aus dem Serverkatalog."
+    }
+  },
+  "deliveries": {
+    "noRead": "Sie haben keine Berechtigung, Zustellungen anzuzeigen.",
+    "intro": "Die aufgezeichneten Zustellungsversuche (schreibgeschützt). Verwenden Sie den Test einer Route, um ein Ziel zu prüfen.",
+    "filterStatus": "Nach Status filtern",
+    "allStatuses": "Alle Status",
+    "empty": "Keine Zustellungen",
+    "colTime": "Zeit",
+    "colDest": "Ziel",
+    "colKind": "Art",
+    "colStatus": "Status",
+    "colDetail": "Detail",
+    "statuses": {
+      "claimed": "Beansprucht",
+      "delivered": "Zugestellt",
+      "rejected": "Abgelehnt",
+      "failed": "Fehlgeschlagen",
+      "no_dispatcher": "Kein Dispatcher",
+      "unknown_destination": "Unbekanntes Ziel"
+    },
+    "loadMore": "Mehr laden"
+  },
+  "outbox": {
+    "noRead": "Sie haben keine Berechtigung, den Postausgang anzuzeigen.",
+    "intro": "Der dauerhafte Postausgang: Benachrichtigungen, die die Engine noch schuldet, die bereits zugestellten und die aufgegebenen. Erneutes Einreihen fordert einen neuen Zustellversuch an; es stellt nicht zu.",
+    "filterStatus": "Nach Postausgangsstatus filtern",
+    "colTime": "Zeit",
+    "colDest": "Ziel",
+    "colKind": "Art",
+    "colAttempts": "Versuche",
+    "colStatus": "Status",
+    "colDetail": "Letztes Detail",
+    "colActions": "Aktionen",
+    "statuses": {
+      "dead": "Unzustellbar",
+      "queued": "In Warteschlange",
+      "delivering": "Wird zugestellt",
+      "delivered": "Zugestellt"
+    },
+    "emptyDead": "Keine unzustellbaren Benachrichtigungen",
+    "emptyDeadHint": "Eine Benachrichtigung landet hier, wenn ihre Wiederholungen erschöpft sind oder das Ziel sie dauerhaft abgelehnt hat. Es wurde nichts aufgegeben.",
+    "empty": "Keine Benachrichtigungen mit Status „{{status}}“",
+    "emptyHint": "Wählen Sie einen anderen Status oder prüfen Sie im Reiter „Routen“, ob eine Route zu den erwarteten Funden passt.",
+    "redeliverAction": "Diese Benachrichtigung erneut an {{destination}} einreihen",
+    "redeliver": {
+      "queued": "Erneut eingereiht für {{destination}}",
+      "queuedHint": "Die Benachrichtigung steht wieder in der Warteschlange. Der nächste Zustelllauf unternimmt den Versuch — zugestellt ist sie noch nicht.",
+      "accepted": "Erneutes Einreihen für {{destination}} mit Status „{{status}}“ angenommen",
+      "inFlight": "Nicht erneut eingereiht: Diese Benachrichtigung ist bereits zu {{destination}} unterwegs.",
+      "gone": "Nicht erneut eingereiht: Diese Benachrichtigung ist nicht im Postausgang dieses Tenants. Sie wurde entweder entfernt oder gehört zu einem anderen Tenant.",
+      "forbidden": "Nicht erneut eingereiht: Die Control Plane hat die Anfrage an {{destination}} abgelehnt. Dafür wird die Admin-Berechtigung für notify-Routen benötigt; auch eine Richtlinie oder eine Bereichseinschränkung kann sie ablehnen.",
+      "consent": "Nicht erneut eingereiht: Der Aufzeichnungshinweis für diese Oberfläche wurde noch nicht bestätigt. Bestätigen Sie ihn und versuchen Sie es erneut — es fehlt keine Berechtigung.",
+      "stepUp": "Noch nicht erneut eingereiht: Die erneute Zustellung an {{destination}} erfordert eine verifizierte Sitzung. Schließe die Verifizierung ab und versuche es erneut.",
+      "failed": "Das erneute Einreihen für {{destination}} ist fehlgeschlagen. Die Benachrichtigung wurde nicht erneut eingereiht."
+    },
+    "confirm": {
+      "title": "Diese Benachrichtigung erneut einreihen?",
+      "description": "Damit wird ein neuer Zustellversuch an {{destination}} angefordert. Die Empfängerseite kann sie mehrfach erhalten, falls ein früherer Versuch doch ankam.",
+      "body": "Bisherige Versuche: {{attempts}}. Letztes Ergebnis: {{detail}}.",
+      "noDetail": "nicht erfasst",
+      "confirm": "Benachrichtigung erneut einreihen"
+    }
+  },
+  "evaluate": {
+    "title": "Signal testen",
+    "caption": "Nur Prädikatauswertung; Deduplizierung und Drosselung werden nicht simuliert.",
+    "eventType": "Ereignistyp",
+    "selectType": "Ereignistyp auswählen",
+    "kind": "Art",
+    "severity": "Schweregrad",
+    "source": "Quelle",
+    "subjectKind": "Subjektart",
+    "submit": "Auswerten",
+    "matchedCount": "Passende Routen: {{count}}",
+    "name": "Route",
+    "enabled": "Aktiviert",
+    "matched": "Passend",
+    "mismatches": "Abweichungen",
+    "yes": "Ja",
+    "no": "Nein",
+    "dimensions": {
+      "type": "Typ",
+      "severity": "Schweregrad",
+      "kind": "Art",
+      "source": "Quelle",
+      "subject_kind": "Subjektart",
+      "disabled": "Deaktiviert"
+    }
+  },
+  "history": {
+    "action": "Revisionsverlauf für {{name}} anzeigen",
+    "title": "Revisionsverlauf — {{name}}",
+    "description": "Chronologische, ausschließlich ergänzte Snapshots dieser Benachrichtigungsroute.",
+    "empty": "Keine Revisionen aufgezeichnet",
+    "loadMore": "Mehr laden",
+    "compareTitle": "Snapshot-Unterschiede",
+    "selectTwo": "Wählen Sie zwei Revisionen aus, um ihre Snapshots zu vergleichen.",
+    "selectRevision": "Revision „{{op}}“ von {{actor}} auswählen",
+    "originalLabel": "Frühere Revision",
+    "modifiedLabel": "Spätere Revision",
+    "restore": "Diese Revision wiederherstellen",
+    "restoreTitle": "Revision wiederherstellen?",
+    "restoreDescription": "Die ausgewählte Routenkonfiguration für {{name}} wiederherstellen?",
+    "restoreConfirm": "Revision wiederherstellen",
+    "restored": "Routenrevision wiederhergestellt",
+    "operations": {
+      "create": "Erstellt",
+      "update": "Aktualisiert",
+      "delete": "Gelöscht",
+      "restore": "Wiederhergestellt"
+    }
+  }
+}

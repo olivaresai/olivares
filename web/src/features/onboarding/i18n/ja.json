@@ -1,0 +1,97 @@
+{
+  "title": "はじめに",
+  "subtitle": "デプロイをステップごとに設定します。各ステップはライブのコントロールプレーンに対して検証されます。",
+  "progress": "{{total}}件中{{done}}件を検証済み",
+  "refresh": "更新",
+  "dismiss": "非表示",
+  "allDone": "デプロイの設定が完了しました。",
+  "allDoneHint": "各ステップはコントロールプレーンに対して検証されます。このウィザードはいつでも再表示できます。",
+  "dismissed": {
+    "title": "セットアップガイドは非表示です",
+    "description": "このブラウザーではガイドが非表示になっています。デプロイは動作し続けます。検証済みのステップはいつでも再開できます。",
+    "resume": "セットアップガイドを再開"
+  },
+  "status": {
+    "verified": "検証済み",
+    "pending": "保留中",
+    "awaiting": "ホスト待ち"
+  },
+  "steps": {
+    "infra": {
+      "title": "インフラストラクチャ",
+      "hint": "何よりも先にデータベースに到達できる必要があります。",
+      "ready": "コントロールプレーンはデータベースに到達できます。このステップは自動的に検証されます。",
+      "notReady": "コントロールプレーンはまだデータベースに到達できません。"
+    },
+    "workspace": {
+      "title": "最初のワークスペースを作成",
+      "hint": "ワークスペースはエージェント、ソース、ポリシーのスコープを定めます。",
+      "name": "ワークスペース名",
+      "namePlaceholder": "例: プラットフォームチーム",
+      "slug": "スラッグ",
+      "create": "ワークスペースを作成",
+      "addAnother": "別のものを作成",
+      "created": "ワークスペース{{name}}を作成しました。"
+    },
+    "identity": {
+      "title": "管理者を招待",
+      "hint": "2人目の管理者を招待するか、IDプロバイダーを接続します。",
+      "email": "メール",
+      "role": "ロール",
+      "mode": "方法",
+      "modeInvite": "招待を送信",
+      "modePassword": "パスワードを設定",
+      "invite": "招待",
+      "inviteAnother": "別の人を招待",
+      "invited": "{{email}}を招待しました。",
+      "or": "または",
+      "ssoCta": "SSOを接続",
+      "password": "パスワード",
+      "passwordHint": "8文字以上。新しい管理者は後で変更できます。",
+      "memberCount_other": "このテナントに{{count}}人のメンバー。"
+    },
+    "source": {
+      "title": "最初のソースを登録",
+      "hint": "コンテンツまたはガバナンスのソースを接続します。認証情報は参照で保存されます。",
+      "kind": "コネクタ",
+      "kindPlaceholder": "コネクタを選択",
+      "name": "ソース名",
+      "namePlaceholder": "例: my-wiki",
+      "tenant": "テナント",
+      "noFields": "このコネクタに追加の設定は不要です。",
+      "secretHint": "封印する値、または store:<name> 参照を入力します。",
+      "test": "テスト",
+      "tested": "接続に成功しました。",
+      "testOk": "コネクタが正常に開きました。",
+      "testFail": "コネクタを開けませんでした。設定を確認してください。",
+      "register": "登録",
+      "addAnother": "別のものを登録",
+      "registered": "{{name}}を登録しました。",
+      "notRunning": "ソースは登録されていますが、まだ実行されていません。上でステータスを確認してください。",
+      "credByRef": "シークレットフィールドはストアに封印され、store:<name> として参照されます。認証情報の値がインラインで保存されることはありません。"
+    },
+    "pep": {
+      "title": "最初のポリシー適用ポイントを有効化",
+      "hint": "managed-settings ポリシーを公開し、ホストが適用したことを確認します。",
+      "notPublished": "managed-settings ポリシーはまだ公開されていません。",
+      "authorCta": "ポリシーを作成",
+      "active": "ホストがこのポリシーを証明しました。適用ポイントは有効です。",
+      "awaitingHint": "ポリシーは公開・署名されていますが、まだどのホストも報告していません。スニペットを配布して更新してください。",
+      "revision": "リビジョン",
+      "fingerprint": "鍵のフィンガープリント",
+      "snippet": "managed-settings スニペット",
+      "copy": "コピー",
+      "copied": "クリップボードにコピーしました。",
+      "copyFailed": "クリップボードにコピーできませんでした。",
+      "checkins": "ホストの報告",
+      "noCheckins": "まだどのホストも報告していません。",
+      "colScope": "スコープ",
+      "colReporter": "報告元",
+      "colRevision": "リビジョン",
+      "colVerified": "検証",
+      "verifiedCurrent": "検証済み（最新）",
+      "verifiedStale": "検証済み（古い）",
+      "unverified": "未検証"
+    }
+  }
+}

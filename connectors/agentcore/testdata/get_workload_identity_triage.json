@@ -1,0 +1,7 @@
+{
+  "name": "triage-agent",
+  "workloadIdentityArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:workload-identity-directory/default/workload-identity/triage-agent",
+  "createdTime": 1749254400,
+  "lastUpdatedTime": 1749254400,
+  "allowedResourceOauth2ReturnUrls": []
+}

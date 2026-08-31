@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Argo CD reconciling the "control plane as code" estate.
+#
+# HONESTY: Argo CD has NO built-in Terraform/OpenTofu runner — it
+# reconciles Kubernetes manifests. To run the HCL in ../terraform you register a
+# Config Management Plugin (CMP) sidecar that shells out to `tofu`/`terraform`
+# (several community CMPs exist; verify the one you adopt — none is pinned here).
+# The Application below assumes such a CMP registered under the name "tofu".
+#
+# ALTERNATIVE (often cleaner): let Argo CD sync the Flux tofu-controller
+# `Terraform` CR in ../flux instead, and let that controller run OpenTofu — point
+# `source.path` at deploy/gitops/olivares-as-code/flux and drop the `plugin`
+# block. Then Argo owns the GitOps sync of the declarative CR and tofu-controller
+# is the executor. See ../README.md.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: olivares-estate
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/acme/olivares-estate # replace with your estate repo
+    targetRevision: main # pin to a tag/commit in production (OpenGitOps #2)
+    path: deploy/gitops/olivares-as-code/terraform
+    plugin:
+      name: tofu # a registered CMP that runs `tofu init/plan/apply`
+      env:
+        # The provider reads these from the plugin runner's environment; source
+        # the token from a secret, never commit it.
+        - name: OLIVARES_ENDPOINT
+          value: "https://olivares.internal:8443"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # Sync is MANUAL by default: a governance-estate change is a reviewed action.
+  # Opt into continuous auto-reconcile (OpenGitOps #4) by uncommenting:
+  # syncPolicy:
+  #   automated:
+  #     prune: true
+  #     selfHeal: true

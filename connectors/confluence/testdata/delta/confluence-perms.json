@@ -1,0 +1,40 @@
+{
+  "results": [
+    {
+      "id": "perm-1",
+      "principal": {
+        "type": "group",
+        "id": "grp-engineers",
+        "name": "engineers"
+      },
+      "operation": {
+        "key": "read",
+        "targetType": "space"
+      }
+    },
+    {
+      "id": "perm-2",
+      "principal": {
+        "type": "user",
+        "id": "user-admin",
+        "name": "admin"
+      },
+      "operation": {
+        "key": "read",
+        "targetType": "space"
+      }
+    },
+    {
+      "id": "perm-3",
+      "principal": {
+        "type": "group",
+        "id": "grp-editors",
+        "name": "editors"
+      },
+      "operation": {
+        "key": "write",
+        "targetType": "space"
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+listen:
+  public_url: https://gateway.example.com
+oidc:
+  issuer: https://idp.example.com/oauth
+  allowed_email_domains:
+    - example.com
+  client_secret: ${OIDC_CLIENT_SECRET}
+session:
+  jwt_secret: ${JWT_SECRET}
+store:
+  postgres_url: ${POSTGRES_URL}
+upstreams:
+  - provider: anthropic
+    region: us-east-1
+    name: primary

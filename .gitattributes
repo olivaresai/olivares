@@ -1,0 +1,27 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Append-heavy maintainer status journal: union-merge so concurrent edits
+# auto-combine instead of conflicting on every line. Inert where the file is absent.
+ESTADO-PROYECTO.md merge=union
+
+# Signed .mcpb test fixtures are binary (genuine node-forge PKCS#7 bundles) — never
+# line-ending-normalize them or the embedded signature/zip offsets break.
+connectors/mcpb/testdata/*.mcpb binary
+
+# Mailboxes between lanes: append-only entries, written concurrently from separate
+# containers. Without union-merge two lanes appending at the same time produce an
+# added-by-both over the whole tail — measured 2026-08-04 on a 1158-line file, and a
+# session had to leave its own report OUT of its branch to avoid it. Union is safe here
+# for the reason it is safe for the journal: nobody edits an existing entry, they append.
+# The structural risk union cannot see — a heading that appears twice, or a body line
+# starting with '##' — is exactly what `task lint:inbox` refuses, so the two controls
+# cover each other.
+sessions/status/inbox/*.md merge=union
+
+# A thumbnail with no extension. Declared binary for two reasons that agree: git must not
+# line-ending-normalize it, and `task lint:nul` — which refuses a NUL byte in anything it
+# treats as text, because a NUL makes grep report "binary file matches" and print no line,
+# silently blinding every source-anchor ratchet that reads lines — has no extension to
+# classify it by. Found by that gate on its first run, 2026-08-07.
+design/logo-olivaresai-01-resources/.thumbnail binary

@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+#
+# buf module config for the Olivares AI connector/module wire contract.
+# Lint with `buf lint`; check backward compatibility with
+# `buf breaking --against '.git#branch=main,subdir=sdk/plugin/proto'`.
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # We keep a flat olivaresv1/ directory instead of olivares/sdk/v1/ so the
+    # generated Go import path is short (.../genpb/olivaresv1). The package is
+    # still correctly versioned (olivares.sdk.v1); only the directory differs.
+    - PACKAGE_DIRECTORY_MATCH
+    # The three component services (Source/Output/Module) share UNIFORM lifecycle
+    # shapes on purpose: Describe/Open/Close have the same request/response across
+    # all of them, and the lifecycle RPCs that carry no data share Empty. That
+    # uniformity is a feature of the contract, not an oversight, so we relax the
+    # rules that would force per-service-per-RPC message names (e.g.
+    # SourceServiceCloseRequest) — pure boilerplate here. Field-level additions
+    # remain backward-compatible; the breaking-change gate (FILE) still applies.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE

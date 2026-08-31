@@ -1,0 +1,1 @@
+{"id":"auth_1","log_type":"auth","type":"auth.login","timestamp":"2026-06-01T09:00:00Z","workspace_id":"ws_eng","actor":{"type":"user","id":"user_alice","email":"alice@example.com","ip_address":"203.0.113.5"}}

@@ -1,0 +1,184 @@
+{
+  "truncation": {
+    "label": "Loaded {{n}} rows; there are more",
+    "hint": "This sandbox list is capped. Only the loaded rows are shown."
+  },
+  "title": "Testing sandbox",
+  "description": "Isolated, ephemeral runs against mocked resources — scenario sims, deterministic replays and pre/post-deploy comparisons. Outputs are synthetic; no real target text is ever stored.",
+  "tabs": {
+    "runs": "Runs",
+    "comparisons": "Comparisons",
+    "scenarios": "Scenarios"
+  },
+  "kind": {
+    "scenario": "Scenario",
+    "replay": "Replay",
+    "compare": "Compare"
+  },
+  "runner": {
+    "inproc-mock": "in-proc mock",
+    "container": "Container",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "Agent",
+    "model": "Model",
+    "prompt": "Prompt",
+    "session": "Session",
+    "sandbox_run": "Sandbox run"
+  },
+  "verdict": {
+    "improved": "Improved",
+    "regressed": "Regressed",
+    "unchanged": "Unchanged",
+    "inconclusive": "Inconclusive"
+  },
+  "run": {
+    "isolated": "Isolated",
+    "isolatedHint": "The runner guarantees isolation: no egress, no secrets, no production. Recorded as reported by the runner, not inferred.",
+    "notIsolated": "Not isolated",
+    "notIsolatedHint": "This backend does not guarantee isolation — shown literally, not hidden.",
+    "destroyed": "Destroyed",
+    "destroyedHint": "The ephemeral environment's state was discarded after the run.",
+    "notScored": "Executed, not scored",
+    "pass": "Pass",
+    "fail": "Fail"
+  },
+  "runs": {
+    "title": "Runs",
+    "description": "Every isolated execution, with the backend that ran it and whether it was scored.",
+    "isolationNote": "Isolation is real, not faked: the runner and isolated flag are shown exactly as recorded. A degraded run was executed but not scored — it is not a pass.",
+    "empty": "No runs yet",
+    "errored": "{{count}} error",
+    "errored_one": "{{count}} error",
+    "errored_other": "{{count}} errors",
+    "columns": {
+      "kind": "Kind",
+      "subject": "Subject",
+      "runner": "Runner",
+      "isolation": "Isolation",
+      "status": "Status",
+      "steps": "Steps",
+      "score": "Score",
+      "started": "Started"
+    }
+  },
+  "outputs": {
+    "title": "Step outputs",
+    "empty": "No outputs recorded",
+    "syntheticNote": "These are bounded synthetic outputs from the mock runner — not production output. A mock-miss is a deterministic marker; it never reached a real resource.",
+    "mockHit": "Mock hit",
+    "mockMiss": "Mock-miss"
+  },
+  "stream": {
+    "replayNote": "The engine replays this run's recorded step outputs over one connection and then closes it. A sandbox run executes synchronously when it is launched, so this is committed evidence arriving progressively — not the view of an execution still in flight.",
+    "waiting": "Waiting for the first step output — the connection state is shown above.",
+    "connecting": "Connecting…",
+    "receiving": "Receiving the replay",
+    "complete": "Replay complete",
+    "completePartial": "Replay ended, but it is not the whole record",
+    "unreadable": "Frames this view could not read: {{n}}. They arrived and were discarded, so the evidence they carried is missing here — this is not a clean replay.",
+    "emptyUnreadable": "No step output could be read",
+    "disconnected": "Not connected",
+    "lost": "Connection lost — you have stopped seeing this run.",
+    "lostHint": "This is NOT the run finishing: the connection ended before the engine signalled the end of the replay. The run's status is the one the engine recorded, shown in the runs table — it is never derived from this connection. Reconnect to resume; outputs already shown are not repeated.",
+    "reconnect": "Reconnect",
+    "snapshot": "The stream delivered nothing, so these are the stored outputs read over the JSON API — a snapshot, not the live view.",
+    "summary": "Engine summary: {{ok}} of {{total}} steps resolved against a mock, {{error}} mock-misses."
+  },
+  "comparisons": {
+    "title": "Pre/post-deploy comparisons",
+    "description": "Baseline versus candidate scored against the same suite — the verdict that gates a deploy.",
+    "empty": "No comparisons yet",
+    "emptyHint": "Run a compare to evaluate a candidate variant against its baseline.",
+    "baseline": "Baseline",
+    "candidate": "Candidate",
+    "delta": "Delta",
+    "decidedBy": "Decided by",
+    "scoredAgainst": "Scored against",
+    "noSuite": "No suite — verdict is inconclusive without a scored baseline and candidate."
+  },
+  "scenarios": {
+    "title": "Scenarios",
+    "description": "Reusable specs of synthetic step inputs plus mocked MCP/resource responses.",
+    "empty": "No scenarios yet",
+    "emptyHintAuthor": "Record the first synthetic fixture: the step inputs a subject receives, plus the mocked responses they resolve against.",
+    "emptyHintReadOnly": "Scenarios are authored by a caller holding the sandbox scenario write permission. Without it you can read the ones that exist, and their runs.",
+    "emptyHintConfined": "Your membership is confined to a workspace. A scenario is a tenant-level fixture, so the engine refuses to record one from a confined membership — a tenant-wide member has to author it.",
+    "columns": {
+      "name": "Name",
+      "subjectKind": "Subject",
+      "steps": "Steps",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "create": {
+      "action": "New scenario",
+      "title": "New scenario",
+      "description": "A scenario is a synthetic fixture: the step inputs a subject receives, and the mocked MCP/resource responses they resolve against. Nothing here reaches a real resource.",
+      "name": "Name",
+      "namePlaceholder": "Checkout agent — happy path",
+      "subjectKind": "Subject",
+      "subjectKindHint": "What the scenario exercises — agent, model, prompt or session. Free text, trimmed and stored up to 200 characters.",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "What this fixture exercises, and why it exists.",
+      "steps": "Steps",
+      "stepsHint": "The inputs the subject receives, in order. Leave a key blank and the engine assigns step-1, step-2, and so on.",
+      "stepsEmpty": "No steps yet — a run of this scenario would produce no output.",
+      "addStep": "Add step",
+      "removeStep": "Remove step {{index}}",
+      "stepKey": "Step {{index}} key",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "Step {{index}} input",
+      "stepInputPlaceholder": "Classify this refund request.",
+      "mocks": "Mocks",
+      "mocksHint": "The response each mocked MCP/resource returns. A step that finds no mock records a deterministic mock-miss marker — it never calls out.",
+      "mocksEmpty": "No mocks yet — every step would record a mock-miss marker.",
+      "addMock": "Add mock",
+      "removeMock": "Remove mock {{index}}",
+      "mockResource": "Mock {{index}} resource",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "Mock {{index}} response",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "Enter synthetic text only: nothing here is classified, redacted or rejected, so a secret you paste is a secret you have stored. The engine only bounds length — a name to 200 characters, a description to 1024, each step or mock body to 8192 — appending an ellipsis when it truncates.",
+      "submit": "Create scenario",
+      "submitting": "Creating…",
+      "success": "Scenario created",
+      "failed": "The scenario was not created."
+    },
+    "archive": {
+      "action": "Archive",
+      "alreadyArchived": "Already archived",
+      "confirmTitle": "Archive this scenario?",
+      "confirmBody": "“{{name}}” is marked archived and the decision is recorded in the audit ledger. Runs and comparisons that already used it are kept — archiving never deletes evidence. It is a status change, not a block: the engine still runs a scenario in this state if something asks it to.",
+      "success": "Scenario archived"
+    }
+  },
+  "seam": {
+    "synthetic": "Synthetic data: not wired",
+    "syntheticData": "Synthetic-data generation is a documented post-v1 extension point — not implemented in this version."
+  },
+  "empty": {
+    "runs": {
+      "title": "No sandbox runs recorded yet",
+      "description": "Runs appear after an authorized caller starts a stored scenario, replay or comparison through the sandbox API."
+    },
+    "scenarios": {
+      "title": "No sandbox scenarios defined yet",
+      "description": "A scenario is an operator-authored synthetic fixture, recorded by a caller who holds the sandbox scenario write permission — from this screen or through the sandbox API."
+    }
+  },
+  "actions": {
+    "replay": "Replay a session",
+    "compare": "Compare variants",
+    "run": "Replay",
+    "compareRun": "Compare",
+    "sessionRef": "Session ref",
+    "scenarioRef": "Scenario ref (optional)",
+    "baseline": "Baseline variant",
+    "candidate": "Candidate variant",
+    "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
+    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs."
+  }
+}

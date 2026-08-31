@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "Loaded {{n}} findings; there are more",
+    "hint": "Only the loaded findings were searched for the rate-limit summary. A missing summary may exist beyond this page."
+  },
+  "title": "Rate Limits",
+  "description": "Read-only inventory of the organization- and workspace-scoped rate limits a gateway or proxy must keep in sync. Sourced from the Anthropic Rate Limits API (read-only); this view never changes a limit.",
+  "caveats": {
+    "keepInSync": "Gateways/proxies must keep in sync: these limits are the inventory an upstream gateway or proxy must mirror. They are not enforced here, and changing them is done at the provider, not in this console.",
+    "managedAgents": "Managed Agents are NOT covered by the Rate Limits API. Their limits are a documented gap, not a value of zero — no Managed-Agents row is shown because the API does not report one."
+  },
+  "summary": {
+    "title": "Sync status",
+    "description": "How many rate limits a gateway or proxy must keep in sync, as reported by the read-only governance ingest."
+  },
+  "count": {
+    "label": "Limits to keep in sync",
+    "observedAt": "Observed {{at}}",
+    "unknown": "Count unavailable"
+  },
+  "degraded": {
+    "title": "Admin-API governance ingest unavailable",
+    "hint": "This deployment surface (for example a Bedrock, Vertex or Foundry gateway) does not expose the Anthropic Admin API, so the rate-limit inventory cannot be read here. This is honest unavailability, not an empty inventory."
+  },
+  "inventory": {
+    "title": "Per-limiter inventory",
+    "description": "Each limiter the provider reports, grouped by scope: organization-wide groups first, then workspace override groups.",
+    "unavailable": "Inventory unavailable",
+    "unavailableHint": "The read-only Admin connector is not wired, so the per-limiter inventory cannot be read here. This is honest unavailability, not an empty inventory.",
+    "tableLabel": "Rate-limit inventory",
+    "empty": "No rate limits reported",
+    "emptyHint": "The provider returned no per-limiter entries for this organization.",
+    "scope": {
+      "org": "Organization"
+    },
+    "columns": {
+      "scope": "Scope",
+      "groupType": "Group",
+      "models": "Models",
+      "limiterType": "Limiter",
+      "value": "Value",
+      "orgLimit": "Org limit"
+    }
+  },
+  "groupType": {
+    "model_group": "Model group",
+    "batch": "Batch",
+    "token_count": "Token count",
+    "files": "Files",
+    "skills": "Skills",
+    "web_search": "Web search"
+  },
+  "limitType": {
+    "requests_per_minute": "Requests per minute",
+    "input_tokens_per_minute": "Input tokens per minute",
+    "output_tokens_per_minute": "Output tokens per minute",
+    "enqueued_batch_requests": "Enqueued batch requests"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "No rate limits reported yet",
+      "description": "Entries appear once the read-only Anthropic Rate Limits API returns per-limiter limits for this organization."
+    }
+  },
+  "effectiveState": {
+    "label": "What you can change here:",
+    "proxy": "Inference proxy",
+    "finops": "Spend"
+  }
+}

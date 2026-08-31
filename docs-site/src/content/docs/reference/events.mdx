@@ -1,0 +1,532 @@
+---
+title: Event bus reference (AsyncAPI 3.0)
+description: >-
+  The eventing platform as an AsyncAPI 3.0 contract — its catalogued event types,
+  their envelope and payloads, live-bus and durable-intake semantics, wire
+  encoding, and external webhook subscriptions. The async counterpart of the
+  REST reference.
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components'
+
+Connectors lift normalized observations onto the engine's **internal event bus** as
+**events**; modules and output connectors **subscribe by event type** and react —
+without any of them importing one another. This page is that contract, expressed as
+**AsyncAPI 3.0** — the async counterpart of the [REST API reference](/reference/api/).
+
+<Aside type="note" title="Machine-readable spec">
+The full validated AsyncAPI 3.0 document is available to download:
+**[`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)**. It is **hand-derived from
+the Go SDK and Eventing catalog** (there is no codegen), so the authoritative
+sources are the SDK envelope/payloads and `modules/eventing/catalog.go`; this page
+and the YAML are kept in step with them by hand.
+</Aside>
+
+## The bus model
+
+- **Transport.** The v1 default is an **in-process Go-channel bus** inside the single
+  `olivares` binary. The `Bus` interface exposes no channel, so a distributed
+  implementation (**NATS**) can be slotted in for multi-host deployments without
+  changing a single subscriber. NATS is the planned distributed binding, **not**
+  required for the default.
+- **Subscription.** A subscriber registers a handler filtered by a set of event
+  types; an empty set means *every* event. The bus owns the goroutine that runs the
+  handler.
+- **Delivery.** Asynchronous and **at-least-once**: each subscriber has its own
+  buffered queue drained by a dedicated goroutine; a slow subscriber applies
+  backpressure; a handler panic is isolated. Consumers **de-duplicate** on the
+  natural-key timestamp after a connector restart.
+- **Minimal-data.** Every event carries the *fact*, **never** raw payloads, secrets
+  or PII. An edge is `(origin → resource, R/RW)`; a finding carries a *hash* of the
+  redacted detail, never the detail.
+- **Durable intake.** `audit.recorded` and the durable `work.*` types never ride the
+  process-local bus. Their source outbox supplies a stable ID and settles only
+  after Eventing persists the event. An exact replay is a no-op; reusing the same
+  ID for different type, source, time or payload is rejected.
+
+## The envelope
+
+Every event shares the immutable `Event` envelope; the observation rides in
+`Payload`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ID` | string | Unique event id, assigned by the engine for bus traffic and required from a durable source before intake. |
+| `Type` | string | The discriminator — one of the channel addresses below. |
+| `Tenant` | string | The originating tenant as a string reference; the engine resolves it internally. |
+| `Source` | string | Name of the component (connector/module) that emitted it. |
+| `Time` | timestamp | When the underlying fact occurred, in the connector's clock. |
+| `Payload` | object | The fact — one of the payload schemas below. |
+
+## Channels
+
+The catalog combines first-party sealed observations, module-defined live-bus
+events and the durable-intake-only channels listed below.
+Each type carries its own **stability tier**, driven from the in-code catalog
+(see [API stability](/reference/api-stability/): stable = 24-month
+deprecation→sunset window, beta = 12-month, binding from GA; a beta payload may
+still gain fields, never lose them silently).
+
+| Channel (`Type`) | Payload | Purpose | Transport | Stability |
+|---|---|---|---|---|
+| `edge.observed` | `EdgeObservation` | an origin touched a resource (R/RW) — the spine of the access map | typed gRPC `oneof` | **stable** |
+| `cost.sampled` | `CostSample` | a model/provider usage-cost fact | typed gRPC `oneof` | **stable** |
+| `finding.reported` | `FindingReport` | a guardrail/red-team/forensic finding | typed gRPC `oneof` | **stable** |
+| `guardrail.observed` | `ObservedText` | a redacted excerpt of observed agent text (detective input) | JSON fallback | **beta** |
+| `approval.requested` | `ApprovalRequest` | a pending approval was opened and awaits decision | JSON fallback | **beta** |
+| `policy.changed` | `PolicyChange` | a governance policy was created, updated or deleted | JSON fallback | **beta** |
+| `metric.sampled` | `MetricSample` | a usage/productivity metric sample; its subject may be a developer reference | typed gRPC `oneof` | **beta** |
+| `approval.resolved` | `ApprovalResolution` | a pending approval reached a terminal outcome | JSON fallback | **beta** |
+| `workflow.signal` | `WorkflowSignal` | a DAG-workflow `eventing-emit` step ran | JSON fallback | **beta** |
+| `work.item.created` | `WorkEventFact` | a durable WorkItem creation fact | durable intake | **beta** |
+| `work.item.transitioned` | `WorkEventFact` | a durable WorkItem update, archive or governed state transition | durable intake | **beta** |
+| `work.owner.changed` | `WorkEventFact` | canonical owner or ownership epoch changed | durable intake | **beta** |
+| `work.dependency.changed` | `WorkEventFact` | a dependency was added, reactivated or tombstoned | durable intake | **beta** |
+| `work.acceptance.changed` | `WorkEventFact` | an acceptance criterion was created, updated, evaluated or waived | durable intake | **beta** |
+| `work.message.available` | `DirectNoticeAvailableV1` or `WorkflowMessageCarrierV1` | a DirectNotice or workflow work-task Message carrier became available | durable intake | **beta** |
+| `work.message.acknowledged` | `DirectNoticeAcknowledgedV1` | a Delivery received an explicit Ack, punctual or late | durable intake | **beta** |
+| `work.message.retracted` | `MessageLifecycleV1` | a Message was retracted | durable intake | **beta** |
+| `work.message.expired` | `MessageLifecycleV1` | a Message reached its expiry boundary | durable intake | **beta** |
+| `work.message.overdue` | `MessageLifecycleV1` | a Message crossed its acknowledgement deadline | durable intake | **beta** |
+| `work.message.rerouted` | `MessageDerivedV1` | a governed reroute derived a new Message carrier | durable intake | **beta** |
+| `work.message.escalated` | `MessageDerivedV1` | an overdue Message produced a bounded escalation | durable intake | **beta** |
+| `work.protocol.reply.available` | `WorkflowMessageCarrierV1` | an authenticated protocol reply became one bounded local Message carrier | durable intake | **beta** |
+| `work.protocol.message.received` | `WorkflowMessageCarrierV1` | an authenticated inbound protocol Message became one bounded local Message carrier | durable intake | **beta** |
+| `work.handoff.carrier.available` | `WorkflowMessageCarrierV1` | a workflow created the Message/Delivery carrier for a future Handoff | durable intake | **beta** |
+| `work.decision.recorded` | `WorkEventFact` | an append-only decision and its current head projection were recorded | durable intake | **beta** |
+| `work.decision.request.responded` | `DecisionRequestEvent` | a DecisionRequest received an explicit governed response | durable intake | **beta** |
+| `work.decision.request.expired` | `DecisionRequestEvent` | a DecisionRequest crossed its deadline | durable intake | **beta** |
+| `work.handoff.offered` | `HandoffEventV1` | a governed Handoff was offered | durable intake | **beta** |
+| `work.handoff.accepted` | `HandoffEventV1` | a Handoff target accepted the offer | durable intake | **beta** |
+| `work.handoff.rejected` | `HandoffEventV1` | a Handoff target rejected the offer | durable intake | **beta** |
+| `work.handoff.withdrawn` | `HandoffEventV1` | a Handoff owner withdrew the offer | durable intake | **beta** |
+| `work.handoff.expired` | `HandoffEventV1` | a Handoff crossed its acknowledgement deadline | durable intake | **beta** |
+| `work.lease.acquired` | `WorkEventFact` | a lease was acquired, taken over or renewed; renew keeps its fence | durable intake | **beta** |
+| `work.lease.ended` | `WorkEventFact` | a lease was released, expired or revoked (including holder death) and its old generation invalidated | durable intake | **beta** |
+| `work.binding.reserved` | `ProtocolBindingEvent` | a protocol binding and fenced WorkItem authority were reserved before transmission | durable intake | **beta** |
+| `work.binding.observed` | `ProtocolBindingEvent` | a protocol observation produced a CLEAN or BROKEN outcome | durable intake | **beta** |
+| `work.binding.ambiguous` | `ProtocolBindingEvent` | a protocol observation remained explicitly UNKNOWN | durable intake | **beta** |
+| `work.binding.cancel_requested` | `ProtocolBindingEvent` | a cancellation intent was durably claimed before the remote side effect | durable intake | **beta** |
+| `audit.recorded` | `AuditRecord` | a sealed audit-ledger record forwarded to a SIEM — **never on the bus** (see below) | durable intake | **stable** |
+
+<Aside type="caution" title="Wire encoding differs by type">
+The four first-party types (`edge.observed`, `cost.sampled`, `finding.reported`,
+`metric.sampled`) travel the **typed gRPC `oneof`** of the connector contract,
+never JSON. The module-defined types are **not** sealed observations — they
+use module-owned JSON payloads. The five live-bus types travel an **unversioned
+JSON fallback** owned by the publishing and consuming modules:
+`guardrail.observed` is a module/ingest-layer detective input
+documented in the runtime-ingestion contract; `approval.requested`,
+`approval.resolved` and `policy.changed` are governance lifecycle events
+published post-commit; `workflow.signal` is published by the orchestration
+module when a DAG workflow reaches an `eventing-emit` step. They are
+deliberately absent from the frozen first-party wire table; they are recorded
+here for completeness and marked as not part of the sealed sum type. The
+durable-only types use the intake contract described next, not this fallback.
+</Aside>
+
+<Aside type="note" title="Durable channels do not ride the bus">
+`audit.recorded` and `work.*` are subscribable, RBAC-gated and replayable like
+any other type, but **no component publishes them on the in-process bus**.
+Sealed ledger records enter through their dedicated chain cursor. K1/K2
+WorkItem and lease facts, K3/K4 Message, DecisionRequest and Handoff facts, and
+K5 ProtocolBinding facts enter through a source-side outbox and generic durable
+intake after the source transaction commits. Subscribing is normal; these
+channels simply never appear in the bus fan-out.
+</Aside>
+
+## Payloads
+
+### `EdgeObservation` — `edge.observed`
+
+Minimal-data: identifiers and the access classification only.
+
+| Field | Type | Notes |
+|---|---|---|
+| `OriginKind` | enum | `agent` \| `identity` \| `session` |
+| `OriginRef` | string | the connector's natural reference for the origin |
+| `ResourceKind` | string | e.g. `postgres.table`, `s3.bucket`, `http.api` |
+| `ResourceRef` | string | e.g. `public.customers`, `arn:aws:s3:::bucket` |
+| `Mode` | enum | `unknown` \| `read` \| `write` \| `readwrite` |
+| `Source` | enum | `otel` \| `mcp_annotation` \| `pg_audit` \| `cloudtrail` \| `ebpf` \| `policy` \| `a2a` |
+| `Confidence` | enum | `attributed` \| `approximate` |
+| `ToolRef` | string | optional tool/operation that performed the access |
+| `ObservedAt` | timestamp | the natural-key timestamp consumers de-duplicate on |
+
+`mcp_annotation` is treated as **untrusted** (corroborated, never trusted alone);
+`unknown` mode and `approximate` confidence are explicit, so the product never
+fabricates certainty.
+
+### `CostSample` — `cost.sampled`
+
+Money is integer **micro-USD** (millionths of a dollar). The fields below the first
+seven are an additive, provider-neutral extension aligned to OpenTelemetry `gen_ai.*`
+and FOCUS; **zero/empty means "not reported", never "zero"**.
+
+| Field | Type | Notes |
+|---|---|---|
+| `ProviderRef`, `ModelRef` | string | natural provider/model references |
+| `SessionRef` | string | optional session tie |
+| `InputTokens` | int64 | TOTAL input (the cache split below is a breakdown *of* this) |
+| `OutputTokens` | int64 | output count |
+| `CostMicroUSD` | int64 | cost in micro-USD |
+| `OccurredAt` | timestamp | when the usage happened |
+| `CacheReadTokens` | int64 | cache-hit input tokens |
+| `CacheCreation1hTokens`, `CacheCreation5mTokens` | int64 | cache-write tokens by TTL |
+| `WorkspaceRef` | string | billing workspace/project |
+| `APIKeyRef` | string | **masked** key/service-account reference, never the secret |
+| `Actor` | string | the principal that incurred the cost (chargeback "who") |
+| `ServiceTier`, `ContextWindow`, `InferenceGeo` | string | provider vocabulary (tier / context band / residency) |
+| `Gateway` | enum | `direct` \| `bedrock-mantle` \| `bedrock-legacy` \| `vertex` \| `foundry` \| `claude-platform-aws` (open string) |
+| `Provenance` | enum | `estimated` \| `billed` — empty treated as estimated |
+| `CostType` | string | non-token server-tool charge class (empty = ordinary token cost) |
+
+### `FindingReport` — `finding.reported`
+
+| Field | Type | Notes |
+|---|---|---|
+| `Kind` | string | e.g. `guardrail`, `redteam`, `forensic` |
+| `Severity` | enum | `info` \| `low` \| `medium` \| `high` \| `critical` |
+| `SubjectKind`, `SubjectRef` | string | what the finding is about |
+| `Title` | string | short, non-sensitive summary safe to display |
+| `DetailHash` | string | hex SHA-256 of the redacted detail; the raw detail is never transmitted or stored |
+| `OccurredAt` | timestamp | when the finding was produced |
+| `OWASPLLM`, `OWASPASI`, `ATLAS` | string[] | framework references (OWASP LLM Top 10, OWASP Agentic Top 10, MITRE ATLAS); a finding may map to several at once |
+
+### `ObservedText` — `guardrail.observed`
+
+A bounded, **already-redacted** excerpt of observed agent text. The producer must
+redact secrets/PII before emitting; the consumer clamps it again defensively.
+
+| Field | Type | Notes |
+|---|---|---|
+| `Surface` | enum | `input` \| `output` \| `tool_args` |
+| `Text` | string | the redacted, bounded excerpt the detectors inspect |
+| `AgentRef`, `SessionRef`, `ResourceRef` | string | non-sensitive context references (any may be empty) |
+
+### `ApprovalRequest` — `approval.requested`
+
+Minimal-data: identifiers and the approval's decision parameters only. It
+deliberately carries **neither** the requester's free-text reason **nor** the
+subject reference; a consumer authorized for `governance:approval:read` fetches
+the full approval by `ApprovalID`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `ApprovalID` | string | the approval's id — the reference to fetch, decide or watch the request |
+| `Action` | string | the requested action (a bounded short identifier) |
+| `SubjectKind` | string | the kind of subject the action targets (the subject's *reference* is deliberately not carried) |
+| `RiskTier` | string | the risk classification the request was opened under (e.g. `critical`); determines the dual-control floor |
+| `RequiredApprovals` | int64 | the number of distinct approvers needed |
+| `PolicyRef` | string | the approval policy that matched; empty when the request used caller-supplied parameters |
+| `ExpiresAt` | timestamp | when the pending request lapses (absent = never expires) |
+| `EscalateAt` | timestamp | when an undecided request escalates (absent = never) |
+
+### `MetricSample` — `metric.sampled`
+
+A usage/productivity measure. The subject may be a **developer reference** (the
+org-internal email or key name the ROI subject needs), which is why receiving it
+is gated on the privileged drill-down permission rather than the viewer-tier
+aggregate.
+
+| Field | Type | Notes |
+|---|---|---|
+| `Name` | string | the metric's natural name (e.g. `claude_code.lines_of_code.count`) |
+| `Value` | int64 | the measure in its natural integer unit; integer keeps measure/money arithmetic exact |
+| `Additive` | bool | `true` = a delta to SUM; `false` = a level/snapshot to keep as latest |
+| `Unit` | string | `lines` \| `commits` \| `sessions` \| `tokens` \| `ms` \| `1` \| … ; empty = dimensionless |
+| `SubjectKind`, `SubjectRef` | string | who/what the measure is about — `developer` \| `team` \| `session` \| `account` \| `org` \| `agent` and its reference |
+| `OccurredAt` | timestamp | the datapoint's instant (delta) or bucket day (snapshot); also the producer-controlled idempotency key |
+| `Dimensions` | map | the metric's own breakdown axes; structural labels, never payload/PII — they JOIN the natural key |
+| `Labels` | map | operator-supplied attribution tags (team/project/cost centre); they never join the natural key |
+
+### `ApprovalResolution` — `approval.resolved`
+
+The terminal counterpart of `approval.requested`, with the same minimal-data
+posture: identifiers and decision parameters only, never the subject reference
+or a free-text reason.
+
+| Field | Type | Notes |
+|---|---|---|
+| `ApprovalID` | string | the resolved approval's id — the reference to fetch the full record |
+| `Action` | string | the requested action (a bounded short identifier) |
+| `SubjectKind` | string | the kind of subject the action targeted |
+| `RiskTier` | string | the live-derived risk classification at resolution time |
+| `Outcome` | string | `approved` \| `rejected` \| `canceled` \| `expired` — **open on the wire**; tolerate values you do not know |
+| `RequiredApprovals` | int64 | distinct approvers needed at resolution time |
+| `ApproveCount`, `RejectCount` | int64 | recorded decisions of each kind |
+| `PolicyRef` | string | the approval policy that matched; empty when caller-supplied parameters were used |
+| `DecidedAt` | timestamp | when the terminal outcome was reached |
+
+### `WorkflowSignal` — `workflow.signal`
+
+Published by the orchestration module when a governed DAG workflow reaches an
+`eventing-emit` step. The **type is fixed by the module**, never taken from step
+configuration, so a workflow author can never forge a first-party event into
+another module's ingestion; the step's config contributes only the bounded
+label.
+
+| Field | Type | Notes |
+|---|---|---|
+| `WorkflowRef` | string | the workflow whose run emitted the signal |
+| `RunRef` | string | the run — pair it with `StepRef` to locate the moment in the run timeline |
+| `StepRef` | string | the emitting step's ref within the graph |
+| `Label` | string | the operator-supplied label from the step's config, bounded and non-sensitive |
+
+### `WorkEventFact` — K1/K2 `work.*`
+
+The eight K1/K2 work channels expose the same bounded `payload_json` projection of
+an append-only WorkEvent. The event type carries the semantic class; this
+payload identifies the command, result and resulting aggregate state. It never
+contains WorkItem brief text, acceptance statements, decision statements,
+rationale or owner-authored free text. Holder fields are stable identity
+references, not display names. Consumers must tolerate additive fields while the
+channels are beta.
+
+| Field | Type | Notes |
+|---|---|---|
+| `command` | string | closed durable-work mutation name that produced the fact |
+| `result_kind` | string | kind of entity returned by the mutation |
+| `result_id` | UUID | returned entity reference |
+| `workspace_id` | UUID | governed workspace reference |
+| `work_item_id` | UUID | WorkItem reference |
+| `status` | string | resulting WorkItem state |
+| `owner_epoch` | int64 | resulting monotonic ownership epoch |
+| `event_seq` | int64 | resulting monotonic sequence within the WorkItem |
+| `lease_id` | UUID | K2 lease event only: stable WorkLease row reference |
+| `lease_state` | string | K2 lease event only: resulting lease state |
+| `holder_sid` | string | K2 lease event only: canonical holder SID |
+| `holder_run_ref`, `holder_agent_ref` | string | K2 lease event only: bounded execution/agent references when present |
+| `fence` | int64 | K2 lease event only: resulting monotonic fencing generation |
+| `expires_at` | timestamp | K2 lease event only: database-clock expiry while active |
+| `end_reason_code` | string | K2 ended event only: server-defined reason class, never operator-authored text |
+| `end_reason_hash` | string | K2 ended event only: SHA-256 hex of the stored reason for non-disclosing correlation |
+| `forced` | boolean | K2 force-takeover only: always `true`, marking an override of live lease authority |
+| `severity` | string | K2 force-takeover only: fixed to `high` |
+| `decision_id` | UUID | K2 force-takeover only: effective governance Decision that authorized the override |
+| `takeover_reason_hash` | string | K2 force-takeover only: SHA-256 hex for correlation; the operator-authored reason is never published |
+
+The four force-takeover fields are an optional projection on
+`work.lease.acquired`: ordinary acquire, renew and non-force takeover events do
+not carry them. A consumer that needs the restricted operator-authored reason
+must follow the Decision/audit references through an authorized surface; it
+cannot recover that text from this event.
+
+### `DirectNoticeAvailableV1` — `work.message.available`
+
+The immutable v1 fact written by the DirectNotice source transaction into its
+WorkEvent and WorkOutbox. The **Message is the subject**: `message_id` and
+`result_id` are the same UUID, and `result_kind` is fixed to
+`sessions.message`. Recipient identity and message content are deliberately
+absent; an authorized consumer follows the Message reference through the
+governed read surface.
+
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version` | int64 | fixed to `1`; a later writer adds a new schema instead of relabelling retained v1 facts |
+| `command` | string | fixed to `message.publish.direct` |
+| `result_kind` | string | fixed to `sessions.message` |
+| `result_id`, `message_id` | UUID | identical Message subject references |
+| `channel_id` | UUID | governed Channel reference |
+| `message_kind` | string | fixed to `notice` for this first K3 write vertical |
+| `state` | string | fixed to `published` at availability |
+| `version` | int64 | `2`, after the atomic draft→published transition |
+| `event_sequence` | int64 | `1`, the first append-only event of the Message aggregate |
+| `delivery_count` | int64 | `1`, because DirectNotice resolves one initial Delivery |
+| `required_count`, `ack_quorum` | int64 | initial acknowledgement requirement, each `0` or `1` |
+| `fulfillment` | object | initial `not_required` or `pending` projection with required/acknowledged/viable/unmet/quorum counts |
+| `audience_hash` | SHA-256 hex | binds the audience graph without disclosing the recipient |
+| `payload_digest` | SHA-256 hex | binds canonical message content without carrying it |
+| `plan_hash` | SHA-256 hex | binds the authorized publish plan |
+
+The WorkOutbox supplies the envelope `ID`; retries after ambiguous settlement use
+that same ID and byte-identical payload, so Eventing intake treats them as one
+event. A different type, source, occurrence time, payload or Message subject under
+that ID is rejected. Webhook consumers de-duplicate on `X-Olivares-Event`; an
+operator replay creates a new `X-Olivares-Delivery` but keeps the event ID.
+
+### K3/K4 communication lifecycle facts
+
+The remaining communication WorkEvents use closed, minimal-data projections.
+They carry IDs, states, monotonic versions/fences and plan or protected-value
+digests; they never carry Message content, DecisionResponse content or Handoff
+payload/reason text. Full field constraints are published in the AsyncAPI
+schemas.
+
+| Schema | Channels | Subject fields |
+|---|---|---|
+| `DirectNoticeAcknowledgedV1` | `work.message.acknowledged` | Ack, Delivery and Message IDs; Delivery version/state; late flag; fulfillment; plan hash |
+| `WorkflowMessageCarrierV1` | workflow form of `work.message.available`; `work.handoff.carrier.available`; `work.protocol.reply.available`; `work.protocol.message.received` | WorkItem, Message and Delivery IDs; kind/state/version; event sequence; plan hash; no remote content or artifact bytes |
+| `MessageLifecycleV1` | `work.message.retracted`, `work.message.expired`, `work.message.overdue` | Message/optional WorkItem and linked aggregate IDs; state/version; affected Delivery count; optional fulfillment; plan hash |
+| `MessageDerivedV1` | `work.message.rerouted`, `work.message.escalated` | source/new Message IDs, bounded recipient reference, automation depth and plan hash |
+| `DecisionRequestEvent` | `work.decision.request.responded`, `work.decision.request.expired` | request/response/WorkItem IDs, transition/state and response digest |
+| `HandoffEventV1` | `work.handoff.offered`, `work.handoff.accepted`, `work.handoff.rejected`, `work.handoff.withdrawn`, `work.handoff.expired` | Handoff/Message/Delivery/WorkItem IDs, state, owner epoch, lease fence and plan hash |
+
+### `ProtocolBindingEvent` — K5 `work.binding.*`
+
+ProtocolBinding writes one bounded projection into the WorkItem event stream
+when it reserves an outbound or inbound binding, reconciles an observation, or
+claims a cancellation intent. The four channels share the same exact schema;
+the event type supplies the mutation class. These are ordinary WorkItem
+aggregate facts and receiving them is gated by `sessions:work:read`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `binding_id` | UUID | durable ProtocolBinding reference |
+| `binding_spec_id` | UUID | immutable ProtocolBindingSpec pinned by the binding |
+| `binding_spec_generation` | int64 | pinned spec generation, at least `1` |
+| `binding_generation` | int64 | exact external-resource generation represented by the binding |
+| `protocol` | enum | `a2a` \| `mcp` |
+| `workspace_id`, `work_item_id` | UUID | governed workspace and WorkItem aggregate references |
+| `work_status` | enum | resulting `active` \| `review` \| `blocked` \| `canceled` WorkItem state |
+| `lease_fence` | int64 | fencing generation assigned to the binding's synthetic session |
+| `verdict` | enum | `CLEAN` \| `BROKEN` \| `UNKNOWN`; UNKNOWN is never treated as success |
+| `code` | string | bounded system reason code (maximum 128 bytes), never free text |
+| `terminal` | boolean | whether the observation proves a terminal remote outcome |
+| `event_seq` | int64 | monotonic sequence within the WorkItem aggregate |
+| `external_id_hash` | SHA-256 hex | optional one-way correlation of a bound remote ID; the ID itself is absent |
+
+The payload deliberately excludes the remote resource reference and state,
+request/tool arguments, task or message results, message content, observation
+detail and operator-authored cancellation reason. Those values remain behind
+their governed stores; the event exposes only the minimal reconciliation fact.
+
+### `AuditRecord` — `audit.recorded`
+
+A sealed record of the tamper-evident audit ledger, forwarded to a SIEM control
+tower. It does **not** ride the bus (see the note above): the ledger forwarder
+walks the chain from a per-tenant cursor and hands each record to a durable
+intake, so the integrity fields ride through untouched and a control tower can
+verify the chain itself.
+
+| Field | Type | Notes |
+|---|---|---|
+| `EventID` | string | the audit event's id — the stable idempotency key a consumer dedups on |
+| `Seq` | int64 | the per-tenant ledger sequence — the natural key; gaps are detectable |
+| `OccurredAt` | timestamp | when the audited action happened |
+| `Source` | string | the emitting component |
+| `Payload` | bytes | the already-encoded minimal-data record, carrying the chain fields (sequence, previous hash, hash, signature) verbatim |
+
+### `PolicyChange` — `policy.changed`
+
+Mirrors what the policy mutation's audit record keeps — kind and enabled — plus
+the id and the operation. It **never** carries the operator-supplied policy name
+or the policy spec; a consumer authorized for `governance:policy:read` fetches
+the policy by `PolicyID`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `PolicyID` | string | the changed policy's id |
+| `Kind` | enum | `abac` \| `approval` |
+| `Op` | enum | `created` \| `updated` \| `deleted` — open on the wire; tolerate values you do not know |
+| `Enabled` | bool | the enabled flag after the change; `false` for a deletion |
+
+## External subscriptions (eventing platform)
+
+The eventing module forwards the catalogued event types to **external HTTPS
+endpoints** as signed webhooks. Subscriptions are managed at
+`/v1/m/eventing/subscriptions` — a module route, deliberately **outside** the
+REST OpenAPI contract — while the **event types** it delivers carry the
+per-type stability tiers above.
+
+### The delivery
+
+Each delivery is an HTTPS `POST` whose body is the JSON **envelope plus
+`Seq`** — the same field names as the envelope above (the SDK is the contract),
+with one additive field: `Seq`, the per-tenant cursor a replay starts from. The
+typed payload rides under `Payload`.
+
+```json
+{
+  "ID": "0197a2b4-6e1d-7c3a-9f4e-2d8b5c1a0e7f",
+  "Type": "cost.sampled",
+  "Tenant": "…",
+  "Source": "…",
+  "Time": "2026-06-11T12:00:00Z",
+  "Seq": 42,
+  "Payload": { "ProviderRef": "…" }
+}
+```
+
+| Header | Meaning |
+|---|---|
+| `X-Olivares-Timestamp` | the Unix-seconds timestamp the signature covers |
+| `X-Olivares-Signature` | `t=<ts>,v1=<hexsig>` — HMAC-SHA256 over `<ts>.<body>` with the subscription secret; verify with `connectors/webhook.VerifyWithin` |
+| `X-Olivares-Event` | the **stable event id** — your idempotency key, identical across every retry and replay of one event |
+| `X-Olivares-Event-Type` | the event type (the channel address) |
+| `X-Olivares-Delivery` | the delivery id — a replay is a *new delivery* of the *same event* |
+
+- **At-least-once.** The same event may arrive more than once; **de-duplicate on
+  `X-Olivares-Event`**.
+- **Retries.** A `408`, `425`, `429`, any `5xx` or a network failure is retried
+  on an exponential backoff ladder — 30s, 2m, 10m, 30m, 1h, 2h, 4h, 8h (±20%
+  jitter) — then the delivery **dead-letters** (the DLQ). Any other non-2xx
+  response is terminal.
+- **Replay.** A subscription can be replayed from a `Seq` cursor; a replay keeps
+  the event's `X-Olivares-Event` id under a fresh `X-Olivares-Delivery`.
+- **Redirects are never followed** — a redirect would re-route the signed body.
+- **Secret rotation is immediate.** The platform holds exactly one signing
+  secret per subscription: after `POST …/rotate-secret`, every later attempt —
+  including retries of already-queued deliveries — signs with the **new**
+  secret. Update your verifier first, then rotate.
+- **Narrowing `event_types` is not a recall.** Deliveries already captured for
+  the subscription stay queued and are delivered (the per-type permission still
+  applies); the narrowed filter governs what is captured from then on.
+
+### Per-type receive permission
+
+A subscription names a role; before **every** delivery attempt that role is
+evaluated against the event type's permission, through the full RBAC+ABAC
+pipeline (deny-closed). The mapping mirrors each type's read surface in the
+product API:
+
+| Event type | Permission | Stability |
+|---|---|---|
+| `edge.observed` | `accessgraph:read` (privileged: editor+) | stable |
+| `cost.sampled` | `finops:spend:read` | stable |
+| `finding.reported` | `security:finding:read` | stable |
+| `guardrail.observed` | `security:observed:read` (privileged: editor+) | beta |
+| `approval.requested` | `governance:approval:read` | beta |
+| `policy.changed` | `governance:policy:read` | beta |
+| `metric.sampled` | `adoption:developer:read` (privileged: editor+) | beta |
+| `approval.resolved` | `governance:approval:read` | beta |
+| `workflow.signal` | `orchestration:workflow:read` | beta |
+| `work.item.created` | `sessions:work:read` | beta |
+| `work.item.transitioned` | `sessions:work:read` | beta |
+| `work.owner.changed` | `sessions:work:read` | beta |
+| `work.dependency.changed` | `sessions:work:read` | beta |
+| `work.acceptance.changed` | `sessions:work:read` | beta |
+| `work.message.available` | `sessions:message:read` | beta |
+| `work.message.acknowledged` | `sessions:message:read` | beta |
+| `work.message.retracted` | `sessions:message:read` | beta |
+| `work.message.expired` | `sessions:message:read` | beta |
+| `work.message.overdue` | `sessions:message:read` | beta |
+| `work.message.rerouted` | `sessions:message:read` | beta |
+| `work.message.escalated` | `sessions:message:read` | beta |
+| `work.protocol.reply.available` | `sessions:message:read` | beta |
+| `work.protocol.message.received` | `sessions:message:read` | beta |
+| `work.handoff.carrier.available` | `sessions:message:read` | beta |
+| `work.decision.recorded` | `sessions:decision:read` | beta |
+| `work.decision.request.responded` | `sessions:decision-request:read` | beta |
+| `work.decision.request.expired` | `sessions:decision-request:read` | beta |
+| `work.handoff.offered` | `sessions:handoff:read` | beta |
+| `work.handoff.accepted` | `sessions:handoff:read` | beta |
+| `work.handoff.rejected` | `sessions:handoff:read` | beta |
+| `work.handoff.withdrawn` | `sessions:handoff:read` | beta |
+| `work.handoff.expired` | `sessions:handoff:read` | beta |
+| `work.lease.acquired` | `sessions:lease:read` | beta |
+| `work.lease.ended` | `sessions:lease:read` | beta |
+| `work.binding.reserved` | `sessions:work:read` | beta |
+| `work.binding.observed` | `sessions:work:read` | beta |
+| `work.binding.ambiguous` | `sessions:work:read` | beta |
+| `work.binding.cancel_requested` | `sessions:work:read` | beta |
+| `audit.recorded` | `audit:read` | stable |
+
+## See also
+
+- [REST API reference](/reference/api/) — the synchronous contract (OpenAPI 3.1).
+- [API stability](/reference/api-stability/) — the windows behind the per-type
+  stability tiers.
+- [Architecture overview](/explanation/architecture/overview/) — how observations
+  become edges and reach the access map.
+- The raw spec: [`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml).

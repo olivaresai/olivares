@@ -1,0 +1,12 @@
+# Legacy v1alpha1 apiVersion (still accepted) and the BoolValue WRAPPER form on
+# accessLogging.disabled ({value: true}) — the connector must detect the disable in
+# both YAML shapes so a blind spot is never under-reported.
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: legacy-quiet
+  namespace: legacy
+spec:
+  accessLogging:
+    - disabled:
+        value: true

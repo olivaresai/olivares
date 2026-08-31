@@ -1,0 +1,40 @@
+{
+  "notFound": {
+    "title": "Página no encontrada",
+    "description": "Esta página no existe o se ha movido.",
+    "back": "Volver al resumen"
+  },
+  "forbidden": {
+    "title": "Sin autorización",
+    "description": "No tienes permiso para ver esto. Solicita acceso a un administrador."
+  },
+  "serverError": {
+    "title": "Algo ha salido mal",
+    "description": "El control plane ha encontrado un error inesperado. Inténtalo de nuevo.",
+    "back": "Volver al resumen"
+  },
+  "network": {
+    "title": "Control plane inaccesible",
+    "description": "No hemos podido contactar con el control plane. Comprueba tu conexión y que el motor esté en ejecución."
+  },
+  "boundary": {
+    "title": "Esta vista ha fallado",
+    "description": "Se ha producido un error inesperado al renderizar. Recargar suele solucionarlo.",
+    "reload": "Recargar"
+  },
+  "generic": "Algo ha salido mal.",
+  "requestId": "ID de petición",
+  "codes": {
+    "unauthenticated": "Tu sesión ya no es válida.",
+    "forbidden": "No tienes autorización para hacer eso.",
+    "not_found": "No encontrado.",
+    "conflict": "Eso entra en conflicto con el estado actual.",
+    "bad_request": "La solicitud no era válida.",
+    "weak_password": "Elige una contraseña más segura.",
+    "locked_out": "Demasiados intentos. Inténtalo de nuevo en un momento.",
+    "setup_required": "El control plane necesita la configuración inicial.",
+    "setup_complete": "La configuración ya está completada.",
+    "cross_tenant_admin_pool_not_configured": "Este despliegue no tiene un pool de administración de base de datos entre tenants. Provisiona un rol NOSUPERUSER BYPASSRLS con `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (ver deploy/postgres/README.md) y reinicia el servidor con --admin-dsn apuntando a ese rol.",
+    "internal": "Se ha producido un error interno."
+  }
+}

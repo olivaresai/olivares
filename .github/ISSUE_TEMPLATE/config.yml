@@ -1,0 +1,29 @@
+# Issue template chooser configuration.
+# Disabling blank issues forces contributors to pick a template (bug/feature)
+# or one of the redirected channels below — in particular, it keeps security
+# reports OUT of the public tracker (see SECURITY.md: an issue is not a channel
+# for secrets/PII).
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability (private)
+    url: https://github.com/olivaresai/olivares/blob/main/SECURITY.md
+    about: "Do NOT open a public issue for a vulnerability. Report it privately per SECURITY.md (security@olivares.ai / GitHub Private Vulnerability Reporting)."
+  # ⛔ THIS LINK POINTED AT GITHUB DISCUSSIONS AND DISCUSSIONS DOES NOT EXIST YET.
+  # Measured 2026-08-27: `has_discussions=false` on the repository and the /discussions URL
+  # answers 404. A chooser entry called "Questions & usage help" that lands a first-time
+  # visitor on a 404 is the first thing they see of this project, and the standing
+  # adjudication for this class is that a URL is not emitted until the page exists (the same
+  # rule applied to the launch copy). SUPPORT.md is the documented routing for exactly
+  # this question, ships in the export, and starts answering the moment the repository is
+  # pushed — it needs no second manual act the way enabling Discussions does.
+  # RESTORE THE DISCUSSIONS LINK when Discussions is enabled: the step is in
+  # docs/RELEASE-GO-LIVE-RUNBOOK.md §4, beside the flip that enables it.
+  - name: 💬 Questions & usage help
+    url: https://github.com/olivaresai/olivares/blob/main/SUPPORT.md
+    about: Questions are not bugs — SUPPORT.md says where to ask and what response to expect.
+  - name: 💼 Commercial license & enterprise enquiries
+    url: mailto:enterprise@olivares.ai
+    about: For the commercial AGPL exception, larger deals, or custom terms (see LICENSING.md). Not for bugs or security.
+  - name: 🤝 Code of Conduct concerns
+    url: mailto:conduct@olivares.ai
+    about: Report Code of Conduct concerns to the dedicated conduct alias (see CODE_OF_CONDUCT.md).

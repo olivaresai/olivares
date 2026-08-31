@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The PACKAGE list for the pg-majors matrix (.github/workflows/pg-majors.yml).
+# Selection is by PACKAGE, never by -run filter: `go test ./pkg` sustains the
+# claim "the package ran on major N"; a -run filter sustains nothing (project
+# memory: a filtered run is NOT package coverage), and `-run '<no match>'`
+# exits 0 with "no tests to run" — the exact false green this matrix exists
+# to prevent. Spec: an internal design note (not shipped) §2.3.
+#
+# lint:pg-majors-coverage (spec §2.6.5, pending) will fail when a *_test.go
+# referencing pg_catalog / information_schema / pg_has_role appears in a
+# package absent from this list.
+# core/store and core/engine/enginetest appeared in the spec's list but are
+# MEASURED (2026-07-31, main) to have NO test files — `go test -json` reports
+# "[no test files]", zero *_test.go on disk. Listing them today buys two
+# guaranteed-empty greens. They return here WITH a measured floor when the
+# guard lane lands its tests (see the workflow header for what a green run
+# does and does not claim). The evaluator enforces packages == floors and
+# floor > 0, so a test-less package cannot ride along silently.
+core/internal/store/sqlstore
+core/api/ratelimit/pgstore
+core/internal/store/dialect

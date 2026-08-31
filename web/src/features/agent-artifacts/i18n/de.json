@@ -1,0 +1,147 @@
+{
+  "title": "Agent Artifacts",
+  "subtitle": "Verwalten Sie mandantenweit Registry, erfasste Sicherheitslage und Supply-Chain-BOM für Artefakte, die Agents ausführen.",
+  "intro": "Diese Registry speichert ausschließlich Identität, Provenienz und erfasste Sicherheitslage — niemals Skill-Inhalte, Manifeste oder Instruktionstexte.",
+  "tabs": {
+    "registry": "Artefakt-Registry",
+    "aibom": "Agent-Supply-Chain-AIBOM"
+  },
+  "classes": {
+    "skill": "Skill",
+    "mcpb_extension": "MCPB-Erweiterung",
+    "mcp_app_template": "MCP-App-Vorlage",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "registry": {
+    "title": "Registrierte Artefakte",
+    "description": "Identitäten des Mandantenbestands, Provenienzangaben und erfasste Scanner-Ergebnisse.",
+    "new": "Artefakt registrieren",
+    "created": "Artefakt registriert.",
+    "deleted": "Artefakt gelöscht.",
+    "search": "Registrierte Artefakte durchsuchen…",
+    "empty": "Keine Artefakte registriert",
+    "emptyHint": "Ein nie registriertes Artefakt ist im Agent-Supply-Chain-BOM nicht repräsentiert.",
+    "filter": {
+      "label": "Artefaktklasse",
+      "all": "Alle Artefaktklassen"
+    },
+    "columns": {
+      "class": "Klasse",
+      "name": "Name",
+      "version": "Version",
+      "provenance": "Provenienz",
+      "posture": "Erfasstes Scan-Ergebnis",
+      "issues": "Befunde",
+      "attestedAt": "Erfasst"
+    },
+    "provenance": {
+      "claim": "Angabe des Operators",
+      "verified": "Provenienz geprüft",
+      "claimHint": "Die Provenienz ist eine Angabe des Operators und wurde nicht als geprüft markiert.",
+      "verifiedHint": "Der Operator hat die Provenienzangabe geprüft; dies ist keine Zertifizierung durch Olivares."
+    },
+    "posture": {
+      "notScanned": "Nicht gescannt",
+      "grade": "Note {{grade}}",
+      "recorded": "Erfasstes Scan-Ergebnis",
+      "hint": "Eine Note gibt wieder, was ein Connector-Scanner bewertet oder ein Operator erfasst hat. Die Konsole hat keinen Scan durchgeführt."
+    },
+    "drawer": {
+      "description": "Gespeicherte Registry-Metadaten und ihr Status: Angabe oder geprüft.",
+      "identityNotice": "Es werden nur Metadaten gespeichert. Hinter diesem Eintrag liegt kein Artefaktinhalt.",
+      "postureNotice": "Eine Sicherheitsnote ist ein erfasstes Scan-Ergebnis, kein von dieser Konsole durchgeführter Scan. „Nicht gescannt“ ist neutral, kein Fehlschlag.",
+      "id": "Registry-ID",
+      "class": "Artefaktklasse",
+      "name": "Name",
+      "version": "Version",
+      "provenance": "Provenienz",
+      "sourceRef": "Quellreferenz",
+      "contentHash": "Inhalts-Fingerprint",
+      "posture": "Erfasstes Scan-Ergebnis",
+      "issues": "Erfasste Befunde",
+      "verified": "Provenienzstatus",
+      "attestedBy": "Erfasst von",
+      "attestedAt": "Erfasst am",
+      "note": "Notiz"
+    },
+    "create": {
+      "title": "Agent-Artefakt registrieren",
+      "description": "Erfassen Sie Identitäts-, Provenienz- und Lage-Metadaten. Der Artefaktinhalt wird niemals hochgeladen.",
+      "uniqueHint": "Klasse und Name bilden eine eindeutige, unveränderliche Registry-Identität. Es gibt keinen Aktualisierungspfad.",
+      "class": "Artefaktklasse",
+      "name": "Name",
+      "version": "Version",
+      "provenance": "Provenienzangabe",
+      "sourceRef": "Quellreferenz",
+      "contentHash": "Inhalts-Hash",
+      "contentAlg": "Hash-Algorithmus",
+      "posture": "Erfasstes Scan-Ergebnis",
+      "issues": "Erfasste Befunde",
+      "issuesHint": "Anzahl der Befunde aus dem erfassten Ergebnis. Deaktiviert und null, wenn nicht gescannt.",
+      "verified": "Operator hat Provenienz geprüft",
+      "verifiedHint": "Dies bestätigt, dass der Operator die Provenienzangabe geprüft hat; es ist keine Zertifizierung durch Olivares.",
+      "note": "Notiz",
+      "errorTitle": "Artefakt wurde nicht registriert",
+      "duplicateTitle": "Artefakt bereits registriert",
+      "duplicate": "Ein Artefakt mit dieser Klasse und diesem Namen existiert bereits. Es gibt keinen Aktualisierungspfad; wählen Sie eine andere Identität oder löschen Sie zuerst den vorhandenen Eintrag."
+    },
+    "delete": {
+      "title": "Registriertes Artefakt löschen",
+      "description": "„{{name}}“ aus der Registry löschen? Künftige Live-BOMs enthalten es nicht mehr."
+    },
+    "truncated": "{{n}} Artefakte geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr registrierte Artefakte als angezeigt; diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere fehlen, normalerweise das zuletzt Registrierte. Der Klassenfilter wird von der ENGINE angewendet und fragt neu ab; Tabellensuche und -sortierung wirken nur auf das Geladene. Ein hier nicht gelistetes Artefakt ist damit nicht als unregistriert belegt."
+  },
+  "aibom": {
+    "difference": "Dieses bestandweite BOM umfasst registrierte Agent-Artefakte; das AIBOM pro Modell umfasst die Herkunftslinie eines eigenen Modells.",
+    "coverage": "Die Abdeckung spiegelt wider, was registriert wurde: Ein nie registriertes Artefakt ist nicht repräsentiert.",
+    "live": {
+      "title": "Live-Agent-Supply-Chain-BOM",
+      "description": "Jetzt generiert — live, unversiegelt und ungeprüft.",
+      "notice": "Die Vorschau generiert ein frisches CycloneDX-1.6-Dokument aus der aktuellen Registry. Sie ist schreibgeschützt und erzeugt keine Evidenz.",
+      "preview": "Live-BOM anzeigen",
+      "loading": "Live-BOM wird generiert…",
+      "dialogTitle": "Live-Agent-Supply-Chain-BOM",
+      "dialogDescription": "Soeben aus der Registry generiert. Dieses Dokument ist weder versiegelt noch auditiert.",
+      "jsonLabel": "Live-CycloneDX-JSON",
+      "download": "Live-BOM herunterladen"
+    },
+    "seal": {
+      "action": "Aktuelles BOM versiegeln",
+      "confirmTitle": "Agent-Supply-Chain-BOM versiegeln",
+      "confirmDescription": "Dies generiert das BOM neu und schreibt seinen kanonischen Inhalts-Hash in das Audit-Ledger. Das Ledger archiviert das Dokument nicht.",
+      "confirmBody": "Bewahren Sie die zurückgegebene Quittung auf: Ihr AIBOM ist die einzige Kopie des versiegelten Dokuments.",
+      "confirm": "Versiegeln und BOM erhalten",
+      "success": "Agent-Supply-Chain-BOM versiegelt. Laden Sie das BOM der Quittung jetzt herunter.",
+      "receiptTitle": "Quittung des versiegelten BOM",
+      "receiptDescription": "Die Hash-Festschreibung ist dauerhaft; diese Quittung enthält die einzige Kopie des versiegelten Dokuments.",
+      "download": "Versiegeltes BOM herunterladen"
+    },
+    "history": {
+      "title": "Versiegelungshistorie",
+      "description": "Append-only models.agent_aibom-Festschreibungen für den registrierten Agent-Artefakt-Bestand.",
+      "empty": "Keine Agent-Supply-Chain-BOMs versiegelt",
+      "emptyHint": "Das Versiegeln erzeugt eine Hash-Festschreibung und liefert die einzige Dokumentkopie in seiner Quittung.",
+      "loadError": "Die Versiegelungshistorie konnte nicht geladen werden.",
+      "id": "Versiegelungs-ID",
+      "subject": "Subjekt",
+      "serial": "Seriennummer",
+      "contentHash": "Inhalts-Hash",
+      "specVersion": "CycloneDX-Version",
+      "components": "Registrierte Komponenten",
+      "ledgerSeq": "Vorherige Audit-Sequenz",
+      "ledgerHash": "Vorheriger Audit-Head",
+      "scope": "Abdeckungshinweis",
+      "generatedBy": "Generiert von",
+      "generatedAt": "Generiert am",
+      "noPriorHead": "{{seq}} (kein vorheriger Audit-Head)",
+      "truncated": "{{n}} Siegel geladen; es gibt mehr",
+      "truncatedHint": "Es gibt mehr versiegelte AI-BOMs als angezeigt; diese Seite nimmt Zeilen nach ID. Versiegeln hängt eine Zeile an, es fehlen also normalerweise die neuesten Nachweise."
+    }
+  }
+}

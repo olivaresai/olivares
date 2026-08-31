@@ -1,0 +1,31 @@
+{
+  "menu": {
+    "trigger": "Gespeicherte Ansichten",
+    "myViews": "Meine Ansichten",
+    "shared": "Geteilt",
+    "empty": "Keine gespeicherten Ansichten",
+    "loading": "Gespeicherte Ansichten werden geladen…",
+    "loadFailed": "Gespeicherte Ansichten konnten nicht geladen werden.",
+    "save": "Aktuelle Ansicht speichern…",
+    "delete": "Löschen",
+    "deleteAria": "Gespeicherte Ansicht „{{name}}“ löschen"
+  },
+  "save": {
+    "title": "Aktuelle Ansicht speichern",
+    "description": "Speichert die aktuellen Filter und den Bereich, damit Sie sie später erneut anwenden können.",
+    "name": "Name",
+    "viewDescription": "Beschreibung",
+    "share": "Mit diesem Mandanten teilen",
+    "shareHint": "Jeder mit Zugriff auf gespeicherte Ansichten in diesem Mandanten kann sie anwenden.",
+    "cancel": "Abbrechen",
+    "submit": "Ansicht speichern",
+    "failed": "Die gespeicherte Ansicht konnte nicht erstellt werden."
+  },
+  "delete": {
+    "title": "Gespeicherte Ansicht löschen?",
+    "description": "„{{name}}“ wird gelöscht. Dies kann nicht rückgängig gemacht werden.",
+    "confirm": "Ansicht löschen",
+    "cancel": "Abbrechen",
+    "failed": "Die gespeicherte Ansicht konnte nicht gelöscht werden."
+  }
+}

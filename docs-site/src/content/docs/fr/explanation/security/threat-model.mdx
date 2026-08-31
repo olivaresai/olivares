@@ -1,0 +1,138 @@
+---
+title: Modèle de menace (STRIDE / DFD)
+description: >-
+  Le modèle de menace publié : actifs, frontières de confiance, un diagramme de flux de
+  données, et la principale menace STRIDE et sa mitigation par composant. Défensif par
+  conception — posture et mitigations, jamais une carte d'attaque.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Olivares AI est un produit de sécurité qui s'exécute sur vos propres hôtes et construit
+une carte de ce que chaque agent peut toucher. Cela rend un défaut du fournisseur
+équivalent à une compromission du client — le produit est donc conçu pour passer un
+pentest d'entreprise dès le premier jour, et le modèle de menace est publié, non caché.
+
+<Aside type="caution" title="Ceci est un document défensif">
+Cette page décrit des **frontières de confiance et des mitigations**. Elle n'expose
+délibérément **pas** le contenu du graphe d'accès d'un parc, les identifiants
+d'autorisation internes, les noms de secrets sur disque, ni quoi que ce soit qui
+pourrait être recadré en guide d'attaque. Le produit ne livre **aucune fonctionnalité
+offensive** — ce n'est pas un framework de commande et contrôle et il ne scanne les
+credentials de personne d'autre. Cette ligne est intentionnelle et gardée explicite.
+</Aside>
+
+## Méthode
+
+Le modèle utilise **STRIDE** (Spoofing, Tampering, Repudiation, Information disclosure,
+Denial of service, Elevation of privilege — usurpation, altération, répudiation,
+divulgation d'information, déni de service, élévation de privilèges) sur un **diagramme
+de flux de données** avec ses frontières de confiance. Les mitigations listées ici sont
+vérifiées par rapport à la matrice de durcissement interne du produit ; cette page
+publie la *posture*, non les preuves au niveau du code.
+
+## Principes directeurs
+
+- **Lecture d'abord = faible risque asymétrique.** Le moteur observe via les logs,
+  OpenTelemetry et eBPF. Il ne **se place pas** dans le chemin de données de l'agent, de
+  sorte qu'une défaillance de collecteur ne peut pas casser le trafic de production.
+- **Données minimales.** Le graphe stocke des **relations** — origine → ressource,
+  lecture/écriture, source, confiance, horodatage — **jamais** de charges utiles, corps
+  SQL, secrets ou données personnelles. *Ce qui n'est pas stocké ne peut pas fuiter.*
+- **Auto-hébergé = aucun fournisseur dans le chemin des données.** Il n'y a pas de
+  télémétrie obligatoire, aucune sortie du plan de contrôle par défaut, et Olivares AI n'est
+  jamais dans le chemin des données. L'éditeur n'est contacté que lorsque vous lui demandez
+  quelque chose — `olivares upgrade`, ou un téléchargement par abonnement des add-ons
+  commerciaux et de leurs mises à jour — jamais comme effet de bord de l'exécution. Et `olivares upgrade --endpoint` dirige même cela vers votre propre miroir.
+  Ne franchit le périmètre du client que ce que celui-ci configure à cette fin :
+  les appels à ses API de modèles, les sorties SIEM/webhook qu'il raccorde et, s'il en
+  provisionne un, un fournisseur externe d'embeddings. Ce sont des tiers choisis par le
+  client ; l'affirmation ci-dessus concerne **Olivares AI** et ne s'étend pas à eux.
+
+## Actifs
+
+| Actif | Pourquoi il est sensible |
+|---|---|
+| **Le graphe d'accès** | Une carte de ce que chaque agent peut toucher. **L'actif le plus sensible** — il est gouverné en conséquence (voir mitigations). |
+| **L'accès hôte du collecteur** | Il lit logs/OTEL/eBPF sur les hôtes de production ; une compromission serait un pivot. |
+| **Les preuves / le journal d'audit** | S'il est altéré silencieusement, le produit mentirait. L'intégrité est tout. |
+| **Les clés de licence** | Une falsification contournerait le verrou commercial. |
+| **Les credentials du panel** | L'accès signifie voir l'ensemble du parc d'agents du client. |
+
+Parce que le graphe d'accès est l'actif le plus sensible, **le consulter est une action
+privilégiée** — accordée à partir du rôle *éditeur* et au-dessus, **jamais** au rôle de
+*visualiseur* le plus bas — **limitée au tenant**, et **chaque lecture est auditée**.
+Défense en couches : privilège, isolation des tenants, et auto-audit.
+
+## Frontières de confiance et flux de données
+
+Il y a **quatre frontières de confiance** :
+
+1. `host sources → collector`
+2. `collector → core` (la frontière réseau)
+3. `user → panel`
+4. `core → store`
+
+```text
+  CUSTOMER INFRASTRUCTURE                         CONTROL PLANE (self-hosted or managed)
+  ┌─ Collectors (edge) ───────────────┐           ┌─ Engine (Go) ───────────────────────────┐
+  │ • OTLP receiver (agents)          │           │ Ingest + event bus                       │
+  │ • MCP / skills introspection      │ ──mTLS──▶  │ Connector SDK · Module runtime           │
+  │ • Tail audit (pgAudit/CloudTrail) │  gRPC     │ Multi-tenant data model                  │
+  │ • eBPF backstop (Tetragon)        │  +bearer  │ REST/gRPC API · AuthN/Z                   │
+  └───────────────────────────────────┘           │ Append-only, hash-chained audit          │
+        (1) host sources → collector               └──────────────┬───────────────────────────┘
+        (2) collector → core (network)                            │ go:embed         (4) core → store
+                                                     ┌────────────▼─────────┐   ┌──────────────────┐
+                                       (3) user ───▶ │ Web panel (React)    │   │ Access-graph     │
+                                           → panel   └──────────────────────┘   │ store + ledger   │
+                                                                                 └──────────────────┘
+```
+
+Le plan de données (les collecteurs) s'exécute **toujours** sur l'infrastructure du
+client. Les collecteurs **poussent** vers le cœur ; ils n'exposent **aucun listener
+entrant**.
+
+## STRIDE — principale menace et mitigation par composant
+
+Le modèle consigne la ou les menaces **principales** pour chaque composant et la
+mitigation qui y répond (non une grille exhaustive).
+
+| Composant | Menace principale | Mitigation |
+|---|---|---|
+| **Collector** | *Élévation* (eBPF nécessite des capacités noyau), *Altération* du binaire | capacités minimales (`CAP_BPF`/`CAP_PERFMON`, **pas** root complet) ; binaire signé ; **aucun listener entrant** (modèle push) |
+| **Collector → core** | *Divulgation d'information*, *Usurpation* | TLS ≥ 1.2 par défaut, **aucun repli en clair** (échec fermé) + token bearer ; AutoMTLS sur le canal de plugin local ; **mTLS à certificat client vérifié, opt-in** pour les collecteurs distants |
+| **Access-graph store** | *Divulgation d'information* au repos | chiffrement au repos fourni par le déploiement (LUKS/FS/TDE) ; expurgation/hachage des valeurs sensibles imposé côté moteur sur le chemin d'écriture |
+| **Evidence ledger** | *Altération*, *Répudiation* | ajout seul + chaînage de hachage (+ points de contrôle signés Ed25519) ; export vers une copie WORM/SIEM externe |
+| **Panel** | *Usurpation*, *Élévation* | aucun credential par défaut ; token de configuration au premier démarrage à usage unique ; RBAC ; sessions sécurisées ; auto-audit (qui a consulté/modifié quoi) |
+| **License key** | *Usurpation* | signature Ed25519, validation hors ligne ; révocation via expiration de l'abonnement |
+
+## Ce contre quoi ce modèle ne protège *pas*
+
+Être honnête sur les bords du modèle fait partie du modèle :
+
+- **Un root de l'hôte / superutilisateur de base de données** peut altérer le journal
+  local sur disque. Le chaînage de hachage rend les réécritures antérieures à un point
+  de contrôle cryptographiquement *détectables*, mais le véritable contrôle
+  anti-altération est **l'export du journal vers une copie WORM/SIEM externe** que
+  l'opérateur local ne peut pas atteindre. Activez-le.
+- **Le chiffrement au repos du stockage est la responsabilité de l'opérateur** — le
+  produit expurge/hache les valeurs sensibles, mais le déploiement fournit le
+  chiffrement disque/FS/TDE.
+- **La couverture de la carte d'accès est par paliers** (propre sur les stockages
+  audités, avec pertes sur certains, impossible à reconstruire passivement sur
+  d'autres). Une arête absente n'est pas la preuve qu'un accès n'a pas eu lieu — lisez
+  [Honnêteté & limites](/fr/start/honesty-and-limits/).
+- **Un hôte de collecteur compromis** est un événement grave ; le collecteur s'exécute
+  en lecture seule avec des privilèges minimaux et aucun listener entrant pour réduire
+  ce rayon d'explosion, mais la compromission de l'hôte dépasse ce que le control plane
+  seul peut prévenir.
+
+## Voir aussi
+
+- [Modèle de sécurité](/fr/explanation/security/security-model/) — la posture et le
+  *pourquoi* derrière ces mitigations.
+- [Vérifier ce que vous avez téléchargé](/fr/how-to/verify-a-release/) — intégrité de la
+  chaîne d'approvisionnement.
+- [Aperçu de l'architecture](/fr/explanation/architecture/overview/) — les composants du
+  DFD, en profondeur.

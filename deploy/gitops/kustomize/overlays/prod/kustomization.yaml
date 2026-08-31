@@ -1,0 +1,41 @@
+# Kustomize OVERLAY (prod) for the Olivares AI control plane.
+#
+# Demonstrates the two production-critical customizations on top of the base:
+#   1) namespace  — install the control plane into `olivares-system`;
+#   2) image digest pinning — pin the engine image BY DIGEST (the air-gap /
+#      supply-chain posture of values.yaml, SCP-06), via the Helm chart
+#      inflation generator's per-overlay values.
+#
+# Render with:  kustomize build --enable-helm deploy/gitops/kustomize/overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# All inflated objects land in this namespace (and `createNamespace` is left to
+# the platform / a Namespace resource — Kustomize sets the field, it does not
+# create the namespace).
+namespace: olivares-system
+
+# Re-inflate the chart with the prod values. (Kustomize's helmCharts generator is
+# overlay-local; the overlay restates the chart ref and adds the digest pin.)
+helmCharts:
+  - name: olivares
+    repo: oci://ghcr.io/olivaresai/charts
+    version: 0.2.4
+    releaseName: olivares
+    valuesInline:
+      core:
+        engine: sqlite
+      image:
+        repository: docker.io/olivaresai/olivares
+        # PLACEHOLDER all-zero sha256 — replace with the digest you verified for
+        # the appVersion this chart targets. Empty tag => pinned by content.
+        digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        tag: ""
+
+# Belt-and-braces: a Kustomize `images` transformer ALSO pins the digest on any
+# rendered container spec, so even a manifest that hardcoded a tag is rewritten to
+# the digest. (Harmless overlap with the Helm value above — both converge on the
+# same content-addressed ref.)
+images:
+  - name: docker.io/olivaresai/olivares
+    digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"

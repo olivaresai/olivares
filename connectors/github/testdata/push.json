@@ -1,0 +1,37 @@
+{
+  "ref": "refs/heads/main",
+  "repository": {
+    "full_name": "acme-corp/web-app",
+    "private": true
+  },
+  "pusher": {
+    "login": "fran-dev",
+    "name": "Octocat",
+    "email": ""
+  },
+  "sender": {
+    "login": "fran-dev",
+    "name": "Octocat",
+    "email": ""
+  },
+  "commits": [
+    {
+      "id": "abc123def456",
+      "message": "feat: add user dashboard\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+      "author": {
+        "login": "fran-dev",
+        "name": "Octocat",
+        "email": ""
+      }
+    },
+    {
+      "id": "def789abc012",
+      "message": "fix: correct date formatting",
+      "author": {
+        "login": "fran-dev",
+        "name": "Octocat",
+        "email": ""
+      }
+    }
+  ]
+}

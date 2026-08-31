@@ -1,0 +1,112 @@
+{
+  "title": "Executive overview",
+  "description": "Cost, usage, risk and compliance at a glance — drill down to the operational view for the detail.",
+  "asOfNote": "Risk, compliance and reliability reflect the current state; cost spans the selected range.",
+  "range": {
+    "label": "Range",
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days",
+    "mtd": "Month to date"
+  },
+  "export": {
+    "action": "Export PDF",
+    "hint": "Print or save this report as a PDF"
+  },
+  "report": {
+    "title": "Executive report",
+    "generated": "Generated {{date}}",
+    "generatedLabel": "Generated",
+    "tenant": "Organization",
+    "allOrgs": "All organizations",
+    "range": "Cost range",
+    "footer": "Olivares AI control plane — aggregated KPIs only; no payloads or secrets."
+  },
+  "empty": {
+    "title": "No executive KPIs available",
+    "description": "You don't have read access to any of the cost, risk, compliance or reliability sources for this organization."
+  },
+  "restricted": {
+    "label": "Restricted",
+    "hint": "Your role can't read this source."
+  },
+  "pillars": {
+    "cost": "Spend",
+    "costCaption": "in the selected range",
+    "usage": "Active agents",
+    "usageCaption": "{{live}} live · {{entities}} tracked",
+    "risk": "Open risk",
+    "riskCaption": "{{count}} critical/high",
+    "silentEvasion": "{{count}} silent-evasion",
+    "compliance": "Control coverage",
+    "complianceCaption": "{{gap}} gaps · {{unmapped}} unmapped"
+  },
+  "cost": {
+    "title": "Cost",
+    "trendTitle": "Spend trend",
+    "trendDescription": "Daily token spend across the selected range.",
+    "seriesCost": "Spend",
+    "forecast": "Forecast",
+    "atRunRate": "projected (trailing-window trend)",
+    "runRateNote": "Projection from the trailing-window daily trend, scaled across the rest of the period — not a forecasting model.",
+    "deltaUp": "{{pct}} vs the prior period",
+    "deltaDown": "{{pct}} vs the prior period",
+    "deltaFlat": "level vs the prior period",
+    "tokens": "Tokens",
+    "samples": "Cost records",
+    "models": "Active models",
+    "breakdownTitle": "Spend breakdown",
+    "breakdownDescription": "Where the spend goes — summarize by team, project, agent, model or provider.",
+    "noAttribution": "No attribution for this dimension in the selected range."
+  },
+  "dimensions": {
+    "team": "By team",
+    "project": "By project",
+    "agent": "By agent",
+    "model": "By model",
+    "provider": "By provider"
+  },
+  "risk": {
+    "title": "Risk posture",
+    "description": "Open security findings, adversarial robustness and access drift.",
+    "openFindings": "Open findings",
+    "bySeverity": "Findings by severity",
+    "robustness": "Red-team robustness",
+    "robustnessCaption": "latest completed run",
+    "robustnessPending": "Run pending",
+    "robustnessPendingHint": "The most recent red-team run could not complete its probes — not a pass.",
+    "drift": "Access drift",
+    "driftFirm": "Unexpected accesses",
+    "driftPending": "Awaiting identity link",
+    "driftUnused": "Unused grants",
+    "coverageNote": "Some access is observed with partial coverage (approximate or opaque capture); the drift figures are a lower bound.",
+    "noFindings": "No open findings.",
+    "noRuns": "No red-team runs yet."
+  },
+  "compliance": {
+    "title": "Compliance",
+    "description": "Control status across the frameworks you track — control coverage, never a compliance claim.",
+    "coverage": "Control coverage",
+    "ofControls": "of {{total}} controls across {{frameworks}} frameworks",
+    "satisfied": "Satisfied",
+    "byDesign": "By design",
+    "partial": "Partial",
+    "gap": "Gap",
+    "unmapped": "Unmapped",
+    "frameworks": "Frameworks",
+    "riskTiers": "Agent risk tiers",
+    "noFrameworks": "No frameworks mapped yet."
+  },
+  "reliability": {
+    "title": "Reliability",
+    "description": "Agent and MCP health right now, plus open incidents.",
+    "healthy": "Healthy",
+    "degraded": "Degraded",
+    "down": "Down",
+    "unknown": "Unknown",
+    "slaBreaches": "Open SLA breaches",
+    "incidents": "Open incidents",
+    "nowNote": "Health is a point-in-time snapshot; \"unknown\" means no check tracks the subject — not healthy.",
+    "noData": "No health checks reporting yet."
+  }
+}

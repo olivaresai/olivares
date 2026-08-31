@@ -1,0 +1,150 @@
+{
+  "title": "可观测性与互操作",
+  "description": "基于标准的摄取健康度，以及与账本关联的追踪下钻。各项数据为引擎级（进程全局），而非按租户统计；标准固定到上游机构所声明的版本与成熟度。",
+  "tabs": {
+    "ingestion": "摄取健康度",
+    "traces": "追踪下钻"
+  },
+  "engineScope": {
+    "badge": "引擎级",
+    "note": "这些数据为引擎级（进程全局），而非按租户统计。读取模型计数器自引擎启动起累加，重启时重置——与引擎的 Prometheus /metrics 生命周期相同，绝非按租户统计。"
+  },
+  "ingestion": {
+    "title": "各标准摄取健康度",
+    "description": "引擎所摄取或发出的每一项互操作标准，附其固定版本、所声明的成熟度及管道状态。",
+    "liveNote": "实时读取模型：引擎自启动起按总线来源统计记录数。仅在归因可靠时，单个标准行才携带计数器——绝不臆造数据，缺失值意味着「无法可靠归因」，而非零。",
+    "columns": {
+      "standard": "标准",
+      "direction": "方向",
+      "version": "版本",
+      "maturity": "成熟度",
+      "status": "状态",
+      "records": "记录数",
+      "lastSeen": "最近一次出现"
+    },
+    "direction": {
+      "in": "摄取",
+      "out": "发出"
+    },
+    "status": {
+      "active": "活跃",
+      "available": "可用",
+      "opt_in_off": "未启用",
+      "blocked": "已阻断"
+    },
+    "optInOff": "约定处于开发阶段——默认关闭；通过连接器门控启用。",
+    "gate": "门控",
+    "gateOff": "关",
+    "gateOn": "开",
+    "gateNoEvidence": "尚无证据",
+    "blockedNote": "推送传输因外置收集器接缝而被阻断；拉取导出仍是离线重新验证的路径。",
+    "recordsPending": "—"
+  },
+  "sources": {
+    "title": "按总线来源的实时计数",
+    "description": "每个总线来源（连接器/模块）一行，列出其按观测类型的记录数，对边而言还包括按收集器信号的记录数。",
+    "columns": {
+      "source": "来源",
+      "records": "记录数",
+      "kinds": "按类型",
+      "signals": "按信号",
+      "firstSeen": "首次出现",
+      "lastSeen": "最近一次出现"
+    },
+    "kind": {
+      "edge": "边",
+      "cost": "成本",
+      "finding": "发现项"
+    },
+    "empty": "自引擎启动起，总线上未观测到任何记录",
+    "emptyHint": "每次引擎启动时计数器均从零开始；目前尚无数据流入——这是一项观测，而非故障。",
+    "sinceNote": "计数器为进程全局，自引擎启动（{{since}}）起累加；重启时重置，与 /metrics 一致。"
+  },
+  "maturity": {
+    "title": "成熟度",
+    "development": "开发",
+    "ga": "GA",
+    "pre_1_0": "1.0 前",
+    "stable": "稳定",
+    "developmentHint": "约定处于开发阶段",
+    "preReleaseHint": "1.0 前架构"
+  },
+  "traces": {
+    "title": "W3C Trace Context 下钻",
+    "description": "依据审计账本事件上加盖的 W3C 追踪 ID 关联追踪，并按引擎 span 分组。",
+    "listTitle": "近期追踪",
+    "listDescription": "选择一条追踪以打开其源自账本的 span 视图。",
+    "empty": "无追踪",
+    "emptyHint": "遍历窗口（最近 20,000 条事件）内没有任何审计账本事件携带 W3C 追踪 ID——调用方未传播 traceparent，或这些事件已滚出窗口。",
+    "noResults": "没有匹配搜索的追踪。",
+    "filterNoResults": "没有匹配当前筛选器的追踪。",
+    "searchPlaceholder": "按追踪 ID 搜索…",
+    "filters": {
+      "service": "按服务筛选",
+      "servicePlaceholder": "服务（精确匹配）…",
+      "status": "按状态筛选",
+      "allStatuses": "所有状态",
+      "from": "起始时间",
+      "to": "截止时间"
+    },
+    "loadMore": "加载更多",
+    "loadingMore": "加载中…",
+    "waterfallTitle": "Span 瀑布图",
+    "selectPrompt": "选择一条追踪以查看其 span 瀑布图。",
+    "exportBtn": "导出 OTLP",
+    "exportTitle": "下载兼容 OTLP 的 JSON，适用于 Jaeger / Tempo / Datadog",
+    "legend": "参与者图例",
+    "liveNote": "账本关联读取模型：各行源自审计账本事件上加盖的 W3C 追踪 ID（遍历窗口：最近 20,000 条事件）。条形为按引擎 span ID 分组的「账本事件」窗口——引擎不存储 OTel span；完整的 span 存于运维方的 OTLP 收集器中。",
+    "columns": {
+      "trace": "追踪",
+      "started": "开始时间",
+      "duration": "时长",
+      "spans": "Span 数",
+      "agents": "代理",
+      "services": "服务",
+      "status": "状态",
+      "span": "Span",
+      "actor": "参与者",
+      "service": "服务",
+      "kind": "类型",
+      "timing": "时序"
+    },
+    "detail": {
+      "title": "Span 详情",
+      "spanId": "Span ID",
+      "name": "名称",
+      "timing": "时序",
+      "actor": "参与者",
+      "actorKind": "参与者类型",
+      "entityRef": "实体",
+      "kind": "类型",
+      "status": "状态",
+      "attributes": "属性"
+    },
+    "chartSummary": "Span 瀑布图：{{count}} 个 span，跨越 {{duration}}，按父子深度缩进，并按时长确定大小。",
+    "level1Note": "W3C Trace Context 仅在其稳定的 Level 1（v00 traceparent / tracestate）层级进行校验。不声明任何 Level 2 语义。",
+    "status": {
+      "ok": "OK",
+      "error": "错误",
+      "unset": "未设置"
+    }
+  },
+  "empty": {
+    "ingestionHealth": {
+      "title": "尚未声明摄取标准",
+      "description": "这些行必须由引擎在编译时内置的标准清单提供；运维人员无法通过控制台添加。"
+    },
+    "ingestionSources": {
+      "title": "引擎启动后尚未观测到总线来源",
+      "description": "连接器或模块必须先在事件总线上发布边、成本记录或发现项，其实时来源计数器才会在此显示。"
+    },
+    "trace": {
+      "title": "尚未观测到 W3C 追踪",
+      "description": "调用方必须传播 W3C 追踪上下文，最近 20,000 条审计账本事件中才会有事件携带追踪 ID。"
+    },
+    "traceWaterfallChart": {
+      "title": "此追踪尚无 span 时序记录",
+      "description": "账本事件必须携带引擎 span ID，此视图才能显示每个 span 的起始偏移、时长、参与者和状态。"
+    }
+  }
+}

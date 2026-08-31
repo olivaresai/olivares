@@ -1,0 +1,142 @@
+{
+  "$description": "GENERATED — DO NOT EDIT (node scripts/check-brand-parity.mjs --write). Canonical Olivares brand-token manifest: the shared subset of the brand declared by the console DTCG sources (web/tokens/*.tokens.json — the single source of truth) and mirrored by the stylesheet of the olivares.ai website. `task lint:brand-parity` pins this file to the DTCG sources on every push; the website vendors a byte-identical copy and pins its live palette to it in its own CI — the two surfaces cannot drift apart without one of the two gates going red.",
+  "brand": "brandv4 (2026-06-10)",
+  "entries": [
+    {
+      "id": "orange-dark",
+      "hubFile": "theme.dark.tokens.json",
+      "hubPath": "color.accent",
+      "webVar": "--color-primary",
+      "webTheme": "dark",
+      "value": "#f08000"
+    },
+    {
+      "id": "on-orange-dark",
+      "hubFile": "theme.dark.tokens.json",
+      "hubPath": "color.accent-foreground",
+      "webVar": "--color-on-primary",
+      "webTheme": "dark",
+      "value": "#1a1206"
+    },
+    {
+      "id": "canvas-dark",
+      "hubFile": "theme.dark.tokens.json",
+      "hubPath": "color.background",
+      "webVar": "--color-bg",
+      "webTheme": "dark",
+      "value": "#28282b"
+    },
+    {
+      "id": "text-on-dark",
+      "hubFile": "theme.dark.tokens.json",
+      "hubPath": "color.foreground",
+      "webVar": "--color-text",
+      "webTheme": "dark",
+      "value": "#fafaf9"
+    },
+    {
+      "id": "orange-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.accent",
+      "webVar": "--color-primary-fill",
+      "webTheme": "light",
+      "value": "#f08000"
+    },
+    {
+      "id": "on-orange-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.accent-foreground",
+      "webVar": "--color-on-primary",
+      "webTheme": "light",
+      "value": "#1a1206"
+    },
+    {
+      "id": "canvas-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.background",
+      "webVar": "--color-bg",
+      "webTheme": "light",
+      "value": "#fafaf9"
+    },
+    {
+      "id": "text-on-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.foreground",
+      "webVar": "--color-text",
+      "webTheme": "light",
+      "value": "#28282b"
+    },
+    {
+      "id": "orange-text-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.accent-text",
+      "webVar": "--color-primary",
+      "webTheme": "light",
+      "value": "#a84f00"
+    },
+    {
+      "id": "surface-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.surface",
+      "webVar": "--color-surface",
+      "webTheme": "light",
+      "value": "#ffffff"
+    },
+    {
+      "id": "border-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.border",
+      "webVar": "--color-border",
+      "webTheme": "light",
+      "value": "#e6e6e4"
+    },
+    {
+      "id": "border-strong-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.border-strong",
+      "webVar": "--color-border-strong",
+      "webTheme": "light",
+      "value": "#d6d6d3"
+    },
+    {
+      "id": "text-muted-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.muted-foreground",
+      "webVar": "--color-text-muted",
+      "webTheme": "light",
+      "value": "#5c564e"
+    },
+    {
+      "id": "ok-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.success",
+      "webVar": "--color-ok",
+      "webTheme": "light",
+      "value": "#2f6b2c"
+    },
+    {
+      "id": "warn-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.warning",
+      "webVar": "--color-warn",
+      "webTheme": "light",
+      "value": "#8a5300"
+    },
+    {
+      "id": "danger-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.danger",
+      "webVar": "--color-danger",
+      "webTheme": "light",
+      "value": "#b0201b"
+    },
+    {
+      "id": "info-light",
+      "hubFile": "theme.light.tokens.json",
+      "hubPath": "color.info",
+      "webVar": "--color-info",
+      "webTheme": "light",
+      "value": "#1e5a86"
+    }
+  ]
+}

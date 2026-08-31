@@ -1,0 +1,40 @@
+{
+  "title": "Log-Anzeige",
+  "controls": {
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "pauseAria": "Automatisches Scrollen pausieren",
+    "resumeAria": "Automatisches Scrollen fortsetzen",
+    "clear": "Leeren",
+    "clearAria": "Log-Einträge leeren",
+    "entryCount": "{{value}} Einträge"
+  },
+  "filters": {
+    "levelAria": "{{level}}-Logs filtern",
+    "modulePlaceholder": "Modul...",
+    "moduleAria": "Nach Modul filtern",
+    "searchPlaceholder": "Suchen...",
+    "searchAria": "In Log-Nachrichten suchen",
+    "clearAria": "Filter löschen"
+  },
+  "capture": {
+    "debugUnavailable": "DEBUG-Einträge werden auf dem aktuellen Log-Level der Engine nicht erfasst — setzen Sie OLIVARES_LOG_LEVEL=debug."
+  },
+  "stream": {
+    "empty": "Keine Log-Einträge anzuzeigen.",
+    "ariaLabel": "Log-Stream",
+    "attrsAriaLabel": "Strukturierte Log-Attribute"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  }
+}

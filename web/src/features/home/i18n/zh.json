@@ -1,0 +1,46 @@
+{
+  "title": "概览",
+  "description": "一览您的 AI 资产域——清单、活动、风险、合规、支出与健康状况。",
+  "asOfNote": "以下为最近 30 天的实时聚合数据，涵盖您的角色可打开的各模块。每个磁贴均链接至对应模块；打开高管报告可查看完整汇总与 PDF。",
+  "openReport": "高管报告",
+  "range": "最近 30 天",
+  "tiles": {
+    "inventory": {
+      "label": "清单",
+      "caption": "{{agents}} 个智能体 · {{active}} 个活跃"
+    },
+    "sessions": {
+      "label": "实时会话",
+      "caption": "当前 {{idle}} 个空闲",
+      "silent": "{{count}} 个已静默（可能存在规避行为）"
+    },
+    "security": {
+      "label": "安全",
+      "caption": "{{count}} 个严重或高危",
+      "clear": "无未处理的发现项"
+    },
+    "compliance": {
+      "label": "合规",
+      "caption": "{{gap}} 个缺口 · {{unmapped}} 个未映射",
+      "noControls": "尚未映射任何控制项"
+    },
+    "spend": {
+      "label": "支出",
+      "caption": "{{range}}",
+      "projected": "按当前运行速率预计 {{amount}}"
+    },
+    "health": {
+      "label": "健康状况与 SLA",
+      "value": "{{healthy}}/{{total}} 项正常",
+      "caption": "{{breaches}} 次 SLA 违约 · {{incidents}} 个未结事件",
+      "noChecks": "尚无健康检查"
+    }
+  },
+  "state": {
+    "unavailable": "加载失败——打开以重试"
+  },
+  "empty": {
+    "title": "暂无可显示内容",
+    "description": "您的角色未被授予对任何资产域模块的读取权限。请向管理员申请读取授权以查看概览。"
+  }
+}

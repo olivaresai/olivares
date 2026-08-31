@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+
+title: ""
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask anything about deploying, configuring or operating Olivares AI.
+        Check the [documentation](https://olivares.ai/docs) and existing
+        discussions first — your question may already have an answer.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What do you need help with?
+      placeholder: "Describe what you're trying to do, what you expected, and what happened instead."
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Version, deployment method, and OS (if relevant).
+      placeholder: |
+        - Olivares AI version: (output of `olivares version`)
+        - Deployment: Docker / Kubernetes / binary
+        - OS: (e.g. Ubuntu 24.04, Arch Linux)
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Logs, config snippets (redact secrets), screenshots.
+    validations:
+      required: false

@@ -1,0 +1,12 @@
+# Olivares AI — security contact (RFC 9116: https://www.rfc-editor.org/rfc/rfc9116).
+# Olivares AI is a self-hosted security product; report privately, never in a public
+# issue or pull request. The full coordinated-disclosure policy, response timelines,
+# remediation SLA and supply-chain / build-integrity details live in SECURITY.md
+# (linked as Policy below).
+Contact: mailto:security@olivares.ai
+Expires: 2027-06-01T00:00:00.000Z
+Policy: https://github.com/olivaresai/olivares/blob/main/SECURITY.md
+Preferred-Languages: es, en
+Canonical: https://olivares.ai/.well-known/security.txt
+# No Encryption field: a PGP key is available on request (see SECURITY.md), but none is
+# published, so we do not advertise a key URI that does not exist.

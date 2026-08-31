@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share how you're using Olivares AI — a deployment story, an
+        integration, a policy you wrote, a custom connector, anything that
+        might help others. Screenshots, architecture diagrams and config
+        snippets are welcome (redact secrets).
+
+  - type: textarea
+    id: showcase
+    attributes:
+      label: What did you build or deploy?
+      description: Describe what you did and why.
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Config snippets, screenshots, architecture diagrams.
+    validations:
+      required: false

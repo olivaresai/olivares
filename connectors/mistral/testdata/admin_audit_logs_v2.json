@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "log_id": 101,
+      "actor_type": "HUMAN",
+      "actor_metadata": {
+        "user_id": "usr_admin",
+        "email": "admin@example.com"
+      },
+      "event_type": "user.create",
+      "event_metadata": {
+        "source": "backoffice"
+      },
+      "target_type": "USER",
+      "target_metadata": {
+        "user_id": "usr_new",
+        "email": "new.user@example.com"
+      },
+      "created_at": "2026-07-04T10:00:00Z"
+    },
+    {
+      "log_id": 102,
+      "actor_type": "HUMAN",
+      "actor_metadata": {
+        "user_id": "usr_owner",
+        "email": "owner@example.com"
+      },
+      "event_type": "workspace.update",
+      "event_metadata": {
+        "field": "spend_limit"
+      },
+      "target_type": "WORKSPACE",
+      "target_metadata": {
+        "uuid": "ws_live"
+      },
+      "created_at": "2026-07-04T11:30:00Z"
+    }
+  ]
+}

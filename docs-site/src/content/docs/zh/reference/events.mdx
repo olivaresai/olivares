@@ -1,0 +1,470 @@
+---
+title: 事件总线参考（AsyncAPI 3.0）
+description: >-
+  eventing 平台作为一份 AsyncAPI 3.0 契约——其已编目的事件类型、信封与 payload、
+  live-bus 与 durable-intake 语义、协议编码及外部 webhook 订阅。REST 参考的异步对应物。
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components'
+
+连接器将规整后的观测提升到引擎的**内部事件总线**上，作为**事件**；模块与输出连接器**按事件类型
+订阅**并作出反应——彼此之间无需任何导入。本页就是那份契约，以 **AsyncAPI 3.0** 表达——
+[REST API 参考](/reference/api/)的异步对应物。
+
+<Aside type="note" title="机器可读规范">
+完整且已校验的 AsyncAPI 3.0 文档可供下载：
+**[`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)**。它是**从 Go SDK 与 Eventing
+目录手工推导而来的**（没有代码生成），因此权威来源是 SDK 信封/payload 和
+`modules/eventing/catalog.go`；本页与该 YAML 由人工同它们保持同步。
+</Aside>
+
+## 总线模型
+
+- **传输。**v1 默认是单一 `olivares` 二进制内的**进程内 Go-channel 总线**。`Bus` 接口不暴露任何
+  channel，因此一个分布式实现（**NATS**）可以为多 host 部署插入，而无需改动任何一个订阅者。NATS
+  是计划中的分布式绑定，**并非**默认所需。
+- **订阅。**一个订阅者注册一个由一组事件类型过滤的 handler；空集表示*每一个*事件。总线拥有运行该
+  handler 的 goroutine。
+- **投递。**异步且**至少一次**：每个订阅者拥有自己的带缓冲队列，由一个专属 goroutine 排空；
+  慢订阅者施加背压；handler panic 被隔离。消费者在连接器重启后按 natural-key 时间戳进行**去重**。
+- **Minimal-data。**每个事件携带*事实*，**绝不**携带原始 payload、secret 或 PII。一条 edge 是
+  `(发起方 → 资源, R/RW)`；一条 finding 携带脱敏明细的*哈希*，绝不携带明细本身。
+- **Durable intake。**`audit.recorded` 与持久化 `work.*` 类型绝不经过进程本地总线。其源 outbox
+  提供稳定 ID，并只在 Eventing 持久化事件后完成结算。完全相同的重放是 no-op；同一 ID 若被复用
+  于不同类型、来源、时间或 payload，则会被拒绝。
+
+## 信封
+
+每个事件共享不可变的 `Event` 信封；观测搭载于 `Payload`。
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `ID` | string | 唯一事件 id；总线流量由引擎分配，持久化来源则必须在摄取前提供。 |
+| `Type` | string | 判别符——下文 channel 地址之一。 |
+| `Tenant` | string | 发起 tenant 的字符串引用；引擎在内部解析它。 |
+| `Source` | string | 发出它的组件（连接器/模块）名称。 |
+| `Time` | timestamp | 底层事实发生的时间，以连接器的时钟计。 |
+| `Payload` | object | 事实——下文 payload schema 之一。 |
+
+## Channels
+
+目录组合了第一方已封存观测、模块定义的 live-bus 事件，以及下列仅限 durable-intake 的 channel。
+每种类型携带其自身的**稳定性层级**，由代码内目录驱动
+（见 [API stability](/zh/reference/api-stability/)：stable = 24 个月弃用→停用窗口，
+beta = 12 个月，自 GA 起具约束力；beta payload 仍可新增字段，绝不静默丢失字段）。
+
+| Channel（`Type`） | Payload | 用途 | 传输 | 稳定性 |
+|---|---|---|---|---|
+| `edge.observed` | `EdgeObservation` | 一个发起方触及了一个 resource（R/RW）—— access map 的脊柱 | 类型化 gRPC `oneof` | **stable** |
+| `cost.sampled` | `CostSample` | 一项 model/provider 用量成本事实 | 类型化 gRPC `oneof` | **stable** |
+| `finding.reported` | `FindingReport` | 一项 guardrail/red-team/forensic finding | 类型化 gRPC `oneof` | **stable** |
+| `guardrail.observed` | `ObservedText` | 已观测 agent 文本的脱敏摘录（侦测输入） | JSON fallback | **beta** |
+| `approval.requested` | `ApprovalRequest` | 一项待决审批被开启并等待裁决 | JSON fallback | **beta** |
+| `policy.changed` | `PolicyChange` | 一项治理策略被创建、更新或删除 | JSON fallback | **beta** |
+| `metric.sampled` | `MetricSample` | 用量/生产力 metric 样本；其 subject 可为 developer 引用 | 类型化 gRPC `oneof` | **beta** |
+| `approval.resolved` | `ApprovalResolution` | 一项待决审批到达终结结果 | JSON fallback | **beta** |
+| `workflow.signal` | `WorkflowSignal` | DAG-workflow 的 `eventing-emit` 步骤已运行 | JSON fallback | **beta** |
+| `work.item.created` | `WorkEventFact` | 持久化 WorkItem 创建事实 | durable intake | **beta** |
+| `work.item.transitioned` | `WorkEventFact` | 持久化 WorkItem 更新、归档或受治理状态迁移事实 | durable intake | **beta** |
+| `work.owner.changed` | `WorkEventFact` | canonical owner 或 ownership epoch 发生变化 | durable intake | **beta** |
+| `work.dependency.changed` | `WorkEventFact` | dependency 被添加、重新激活或 tombstone | durable intake | **beta** |
+| `work.acceptance.changed` | `WorkEventFact` | acceptance criterion 被创建、更新、评估或豁免 | durable intake | **beta** |
+| `work.message.available` | `DirectNoticeAvailableV1` 或 `WorkflowMessageCarrierV1` | DirectNotice 或 workflow work-task Message carrier 变为可用 | durable intake | **beta** |
+| `work.message.acknowledged` | `DirectNoticeAcknowledgedV1` | Delivery 收到一个显式 Ack，无论准时或逾期 | durable intake | **beta** |
+| `work.message.retracted` | `MessageLifecycleV1` | Message 被撤回 | durable intake | **beta** |
+| `work.message.expired` | `MessageLifecycleV1` | Message 到达其过期边界 | durable intake | **beta** |
+| `work.message.overdue` | `MessageLifecycleV1` | Message 越过其确认截止时间 | durable intake | **beta** |
+| `work.message.rerouted` | `MessageDerivedV1` | 受治理的重新路由派生出新的 Message carrier | durable intake | **beta** |
+| `work.message.escalated` | `MessageDerivedV1` | 逾期 Message 产生一次有界升级 | durable intake | **beta** |
+| `work.protocol.reply.available` | `WorkflowMessageCarrierV1` | 已认证 protocol reply 成为一个有界本地 Message carrier | durable intake | **beta** |
+| `work.protocol.message.received` | `WorkflowMessageCarrierV1` | 已认证入站 protocol Message 成为一个有界本地 Message carrier | durable intake | **beta** |
+| `work.handoff.carrier.available` | `WorkflowMessageCarrierV1` | workflow 为未来 Handoff 创建 Message/Delivery carrier | durable intake | **beta** |
+| `work.decision.recorded` | `WorkEventFact` | 已记录 append-only decision 及其当前 head projection | durable intake | **beta** |
+| `work.decision.request.responded` | `DecisionRequestEvent` | DecisionRequest 收到显式的受治理响应 | durable intake | **beta** |
+| `work.decision.request.expired` | `DecisionRequestEvent` | DecisionRequest 越过其截止时间 | durable intake | **beta** |
+| `work.handoff.offered` | `HandoffEventV1` | 一个受治理的 Handoff 被提出 | durable intake | **beta** |
+| `work.handoff.accepted` | `HandoffEventV1` | Handoff target 接受要约 | durable intake | **beta** |
+| `work.handoff.rejected` | `HandoffEventV1` | Handoff target 拒绝要约 | durable intake | **beta** |
+| `work.handoff.withdrawn` | `HandoffEventV1` | Handoff owner 撤回要约 | durable intake | **beta** |
+| `work.handoff.expired` | `HandoffEventV1` | Handoff 越过其确认截止时间 | durable intake | **beta** |
+| `work.lease.acquired` | `WorkEventFact` | lease 被获取、接管或续期；续期保留其 fence | durable intake | **beta** |
+| `work.lease.ended` | `WorkEventFact` | lease 被释放、过期或撤销（包括 holder 死亡），其旧 generation 失效 | durable intake | **beta** |
+| `work.binding.reserved` | `ProtocolBindingEvent` | protocol binding 与带 fence 的 WorkItem authority 在传输前被预留 | durable intake | **beta** |
+| `work.binding.observed` | `ProtocolBindingEvent` | protocol observation 产生 CLEAN 或 BROKEN 结果 | durable intake | **beta** |
+| `work.binding.ambiguous` | `ProtocolBindingEvent` | protocol observation 仍明确为 UNKNOWN | durable intake | **beta** |
+| `work.binding.cancel_requested` | `ProtocolBindingEvent` | cancellation intent 在远端副作用前被持久化认领 | durable intake | **beta** |
+| `audit.recorded` | `AuditRecord` | 转发至 SIEM 的已封存 audit-ledger record——**绝不在总线上**（见下文） | durable intake | **stable** |
+
+<Aside type="caution" title="协议编码因类型而异">
+四种第一方类型（`edge.observed`、`cost.sampled`、`finding.reported`、
+`metric.sampled`）走连接器契约的**类型化 gRPC `oneof`**，绝不走 JSON。模块定义的类型**不是**
+已封存观测——它们使用模块拥有的 JSON payload。五种 live-bus 类型走由发布与消费模块拥有的
+**无版本 JSON fallback**：`guardrail.observed` 是运行时摄取契约中记载的模块/摄取层侦测输入；
+`approval.requested`、`approval.resolved` 与 `policy.changed` 是提交后发布的治理生命周期事件；
+`workflow.signal` 由 orchestration 模块在 DAG workflow 到达 `eventing-emit` 步骤时发布。它们被
+刻意排除在已冻结的第一方协议表之外；此处记录它们是为求完整，并标记为不属于已封存的 sum 类型。
+仅限持久化的类型使用下一节所述的 intake 契约，而不是该 fallback。
+</Aside>
+
+<Aside type="note" title="持久化 channel 不经过总线">
+`audit.recorded` 与 `work.*` 像任何其他类型一样可订阅、受 RBAC 限制且可重放，但**没有任何组件
+将它们发布到进程内总线**。已封存 ledger record 经其专用 chain cursor 进入。K1/K2 WorkItem 与
+lease 事实、K3/K4 Message、DecisionRequest 与 Handoff 事实，以及 K5 ProtocolBinding 事实，都在
+源事务提交后从源端 outbox 经通用 durable intake 进入。订阅方式正常；这些 channel 只是绝不会出现
+在总线 fan-out 中。
+</Aside>
+
+## Payloads
+
+### `EdgeObservation` —— `edge.observed`
+
+Minimal-data：仅标识符与访问分类。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `OriginKind` | enum | `agent` \| `identity` \| `session` |
+| `OriginRef` | string | 连接器对该发起方的自然引用 |
+| `ResourceKind` | string | 例如 `postgres.table`、`s3.bucket`、`http.api` |
+| `ResourceRef` | string | 例如 `public.customers`、`arn:aws:s3:::bucket` |
+| `Mode` | enum | `unknown` \| `read` \| `write` \| `readwrite` |
+| `Source` | enum | `otel` \| `mcp_annotation` \| `pg_audit` \| `cloudtrail` \| `ebpf` \| `policy` \| `a2a` |
+| `Confidence` | enum | `attributed` \| `approximate` |
+| `ToolRef` | string | 执行该访问的可选 tool/operation |
+| `ObservedAt` | timestamp | 消费者据以去重的 natural-key 时间戳 |
+
+`mcp_annotation` 被视为**不可信**（需佐证，绝不单独信任）；`unknown` 模式与 `approximate` 置信度
+是显式的，因此本产品绝不编造确定性。
+
+### `CostSample` —— `cost.sampled`
+
+金额为整数**微美元**（百万分之一美元）。前七个之后的字段是一项可叠加、provider 无关的扩展，
+与 OpenTelemetry `gen_ai.*` 和 FOCUS 对齐；**零/空表示“未报告”，绝非“零”**。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `ProviderRef`、`ModelRef` | string | 自然的 provider/model 引用 |
+| `SessionRef` | string | 可选的 session 关联 |
+| `InputTokens` | int64 | 输入总量（下方的 cache 拆分是*对此*的细分） |
+| `OutputTokens` | int64 | 输出计数 |
+| `CostMicroUSD` | int64 | 以微美元计的成本 |
+| `OccurredAt` | timestamp | 用量发生的时间 |
+| `CacheReadTokens` | int64 | cache 命中的输入 token |
+| `CacheCreation1hTokens`、`CacheCreation5mTokens` | int64 | 按 TTL 的 cache 写入 token |
+| `WorkspaceRef` | string | 计费 workspace/project |
+| `APIKeyRef` | string | **掩码**的 key/service-account 引用，绝非 secret |
+| `Actor` | string | 产生该成本的 principal（成本回拨的“谁”） |
+| `ServiceTier`、`ContextWindow`、`InferenceGeo` | string | provider 词汇（tier / 上下文带 / 驻留） |
+| `Gateway` | enum | `direct` \| `bedrock-mantle` \| `bedrock-legacy` \| `vertex` \| `foundry` \| `claude-platform-aws`（开放字符串） |
+| `Provenance` | enum | `estimated` \| `billed`——空视为 estimated |
+| `CostType` | string | 非 token 的 server-tool 计费类别（空 = 普通 token 成本） |
+
+### `FindingReport` —— `finding.reported`
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `Kind` | string | 例如 `guardrail`、`redteam`、`forensic` |
+| `Severity` | enum | `info` \| `low` \| `medium` \| `high` \| `critical` |
+| `SubjectKind`、`SubjectRef` | string | 该 finding 所关于的对象 |
+| `Title` | string | 简短、非敏感、可安全展示的摘要 |
+| `DetailHash` | string | 脱敏明细的十六进制 SHA-256；原始明细绝不传输或存储 |
+| `OccurredAt` | timestamp | finding 产生的时间 |
+| `OWASPLLM`、`OWASPASI`、`ATLAS` | string[] | 框架引用（OWASP LLM Top 10、OWASP Agentic Top 10、MITRE ATLAS）；一条 finding 可同时映射到多个 |
+
+### `ObservedText` —— `guardrail.observed`
+
+已观测 agent 文本的有界、**已脱敏**摘录。生产者必须在发出前脱敏 secret/PII；消费者会防御性地
+再次截断。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `Surface` | enum | `input` \| `output` \| `tool_args` |
+| `Text` | string | 检测器所检查的脱敏、有界摘录 |
+| `AgentRef`、`SessionRef`、`ResourceRef` | string | 非敏感的上下文引用（任一可为空） |
+
+### `ApprovalRequest` —— `approval.requested`
+
+Minimal-data：仅标识符与审批的裁决参数。它刻意**既不**携带请求者的自由文本理由，**也不**携带
+subject 引用；一个被授权 `governance:approval:read` 的消费者通过 `ApprovalID` 拉取完整审批。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `ApprovalID` | string | 审批的 id——用于拉取、裁决或监视该请求的引用 |
+| `Action` | string | 被请求的动作（一个有界的短标识符） |
+| `SubjectKind` | string | 该动作所针对 subject 的种类（subject 的*引用*被刻意不携带） |
+| `RiskTier` | string | 该请求开启时所依据的风险分类（例如 `critical`）；决定 dual-control 下限 |
+| `RequiredApprovals` | int64 | 所需的不同审批人数量 |
+| `PolicyRef` | string | 匹配到的审批策略；请求使用调用方提供的参数时为空 |
+| `ExpiresAt` | timestamp | 待决请求失效的时间（缺省 = 永不过期） |
+| `EscalateAt` | timestamp | 未裁决请求升级的时间（缺省 = 永不） |
+
+### `MetricSample` —— `metric.sampled`
+
+一项用量/生产力度量。subject 可为**开发者引用**（ROI subject 所需的组织内部邮箱或 key 名称），
+因此其接收受特权下钻权限限制，而非 viewer 层级的聚合权限。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `Name` | string | metric 的自然名称（例如 `claude_code.lines_of_code.count`） |
+| `Value` | int64 | 以自然整数单位计的度量；整数使度量/金额运算保持精确 |
+| `Additive` | bool | `true` = 加入 SUM 的 delta；`false` = 保留为最新值的 level/snapshot |
+| `Unit` | string | `lines` \| `commits` \| `sessions` \| `tokens` \| `ms` \| `1` \| …；空 = 无量纲 |
+| `SubjectKind`、`SubjectRef` | string | 度量关于谁/什么——`developer` \| `team` \| `session` \| `account` \| `org` \| `agent` 及其引用 |
+| `OccurredAt` | timestamp | datapoint 的时刻（delta）或 bucket 日（snapshot）；也是生产者控制的幂等键 |
+| `Dimensions` | map | metric 自身的拆分轴；结构标签，绝非 payload/PII——它们参与 natural key |
+| `Labels` | map | 运营方提供的归因标签（team/project/cost centre）；它们绝不参与 natural key |
+
+### `ApprovalResolution` —— `approval.resolved`
+
+`approval.requested` 的终结对应物，具有相同的 minimal-data 姿态：仅标识符与裁决参数，绝不包含
+subject 引用或自由文本理由。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `ApprovalID` | string | 已解决审批的 id——用于拉取完整记录的引用 |
+| `Action` | string | 被请求的动作（有界短标识符） |
+| `SubjectKind` | string | 动作所针对 subject 的种类 |
+| `RiskTier` | string | 裁决时从实时状态推导的风险分类 |
+| `Outcome` | string | `approved` \| `rejected` \| `canceled` \| `expired`——**协议中的开放字段**；请容忍未知值 |
+| `RequiredApprovals` | int64 | 裁决时所需的不同审批人数量 |
+| `ApproveCount`、`RejectCount` | int64 | 各类已记录裁决的数量 |
+| `PolicyRef` | string | 匹配的审批策略；使用调用方参数时为空 |
+| `DecidedAt` | timestamp | 到达终结结果的时间 |
+
+### `WorkflowSignal` —— `workflow.signal`
+
+当受治理的 DAG workflow 到达 `eventing-emit` 步骤时由 orchestration 模块发布。**类型由模块固定**，
+绝不取自步骤配置，因此 workflow 作者绝不可能伪造第一方事件并送入另一模块的摄取；步骤配置仅提供
+有界 label。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `WorkflowRef` | string | 其 run 发出该 signal 的 workflow |
+| `RunRef` | string | 该 run——与 `StepRef` 配对以定位 run 时间线中的时刻 |
+| `StepRef` | string | graph 内发出 signal 的步骤引用 |
+| `Label` | string | 来自步骤配置、由运营方提供的有界非敏感 label |
+
+### `WorkEventFact` —— K1/K2 `work.*`
+
+八个 K1/K2 work channel 暴露 append-only WorkEvent 的同一份有界 `payload_json` projection。
+事件类型承载语义类别；此 payload 标识 command、result 与最终 aggregate state。它绝不包含 WorkItem
+brief 文本、acceptance statement、decision statement、rationale 或 owner 所写的自由文本。
+holder 字段是稳定 identity 引用，而非 display name。channel 处于 beta 时，消费者必须容忍新增字段。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `command` | string | 产生该事实的封闭 durable-work mutation 名称 |
+| `result_kind` | string | mutation 返回的实体种类 |
+| `result_id` | UUID | 返回实体引用 |
+| `workspace_id` | UUID | 受治理 workspace 引用 |
+| `work_item_id` | UUID | WorkItem 引用 |
+| `status` | string | 最终 WorkItem 状态 |
+| `owner_epoch` | int64 | 最终单调递增 ownership epoch |
+| `event_seq` | int64 | WorkItem 内最终单调递增 sequence |
+| `lease_id` | UUID | 仅 K2 lease 事件：稳定 WorkLease row 引用 |
+| `lease_state` | string | 仅 K2 lease 事件：最终 lease state |
+| `holder_sid` | string | 仅 K2 lease 事件：canonical holder SID |
+| `holder_run_ref`、`holder_agent_ref` | string | 仅 K2 lease 事件：存在时的有界 execution/agent 引用 |
+| `fence` | int64 | 仅 K2 lease 事件：最终单调递增 fencing generation |
+| `expires_at` | timestamp | 仅 K2 lease 事件：活跃时按数据库时钟计的过期时间 |
+| `end_reason_code` | string | 仅 K2 ended 事件：server 定义的理由类别，绝非运营方编写的文本 |
+| `end_reason_hash` | string | 仅 K2 ended 事件：所存理由的 SHA-256 十六进制值，用于不泄露的关联 |
+| `forced` | boolean | 仅 K2 force-takeover：始终为 `true`，标记对活跃 lease authority 的覆盖 |
+| `severity` | string | 仅 K2 force-takeover：固定为 `high` |
+| `decision_id` | UUID | 仅 K2 force-takeover：授权该覆盖的有效治理 Decision |
+| `takeover_reason_hash` | string | 仅 K2 force-takeover：用于关联的 SHA-256 十六进制值；运营方编写的理由绝不发布 |
+
+四个 force-takeover 字段是 `work.lease.acquired` 上的可选 projection：普通 acquire、renew 与
+非 force takeover 事件不携带它们。需要受限的运营方所写理由的消费者，必须经授权 surface 沿
+Decision/audit 引用取得；无法从该事件恢复此文本。
+
+### `DirectNoticeAvailableV1` —— `work.message.available`
+
+由 DirectNotice 源事务写入 WorkEvent 与 WorkOutbox 的不可变 v1 事实。**Message 是 subject**：
+`message_id` 与 `result_id` 是同一 UUID，`result_kind` 固定为 `sessions.message`。recipient identity
+与 message content 被刻意省略；获授权的消费者经受治理 read surface 沿 Message 引用取得它。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `schema_version` | int64 | 固定为 `1`；后续 writer 会添加新 schema，而非重新标记已保留的 v1 事实 |
+| `command` | string | 固定为 `message.publish.direct` |
+| `result_kind` | string | 固定为 `sessions.message` |
+| `result_id`、`message_id` | UUID | 相同的 Message subject 引用 |
+| `channel_id` | UUID | 受治理 Channel 引用 |
+| `message_kind` | string | 对第一个 K3 write vertical 固定为 `notice` |
+| `state` | string | 可用时固定为 `published` |
+| `version` | int64 | `2`，在 atomic draft→published transition 后 |
+| `event_sequence` | int64 | `1`，Message aggregate 的第一个 append-only event |
+| `delivery_count` | int64 | `1`，因为 DirectNotice 解析出一个初始 Delivery |
+| `required_count`、`ack_quorum` | int64 | 初始 acknowledgement requirement，各为 `0` 或 `1` |
+| `fulfillment` | object | 初始 `not_required` 或 `pending` projection，含 required/acknowledged/viable/unmet/quorum 计数 |
+| `audience_hash` | SHA-256 hex | 绑定 audience graph 而不披露 recipient |
+| `payload_digest` | SHA-256 hex | 绑定 canonical message content 而不携带它 |
+| `plan_hash` | SHA-256 hex | 绑定已授权 publish plan |
+
+WorkOutbox 提供信封 `ID`；结算结果不明确后的重试使用同一 ID 与逐字节相同的 payload，因此 Eventing
+intake 将其视为同一事件。同一 ID 下若 type、source、发生时间、payload 或 Message subject 不同，
+则被拒绝。Webhook 消费者按 `X-Olivares-Event` 去重；运营方重放会创建新的
+`X-Olivares-Delivery`，但保留 event ID。
+
+### K3/K4 通信生命周期事实
+
+其余通信 WorkEvent 使用封闭的 minimal-data projection。它们携带 ID、状态、单调递增
+version/fence，以及 plan 或 protected-value digest；绝不携带 Message content、
+DecisionResponse content、Handoff payload/reason 文本。完整字段约束发布于 AsyncAPI schema。
+
+| Schema | Channel | Subject 字段 |
+|---|---|---|
+| `DirectNoticeAcknowledgedV1` | `work.message.acknowledged` | Ack、Delivery 与 Message ID；Delivery version/state；late 标志；fulfillment；plan hash |
+| `WorkflowMessageCarrierV1` | `work.message.available` 的 workflow 形式；`work.handoff.carrier.available`；`work.protocol.reply.available`；`work.protocol.message.received` | WorkItem、Message 与 Delivery ID；kind/state/version；event sequence；plan hash；无 remote content 或 artifact byte |
+| `MessageLifecycleV1` | `work.message.retracted`、`work.message.expired`、`work.message.overdue` | Message/可选 WorkItem 与 linked aggregate ID；state/version；受影响 Delivery 数；可选 fulfillment；plan hash |
+| `MessageDerivedV1` | `work.message.rerouted`、`work.message.escalated` | source/new Message ID、有界 recipient 引用、automation depth 与 plan hash |
+| `DecisionRequestEvent` | `work.decision.request.responded`、`work.decision.request.expired` | request/response/WorkItem ID、transition/state 与 response digest |
+| `HandoffEventV1` | `work.handoff.offered`、`work.handoff.accepted`、`work.handoff.rejected`、`work.handoff.withdrawn`、`work.handoff.expired` | Handoff/Message/Delivery/WorkItem ID、state、owner epoch、lease fence 与 plan hash |
+
+### `ProtocolBindingEvent` —— K5 `work.binding.*`
+
+ProtocolBinding 在预留 outbound/inbound binding、调和 observation 或认领 cancellation intent 时，
+将一份有界 projection 写入 WorkItem event stream。四个 channel 共享完全相同的 schema；事件类型
+提供 mutation class。这些是普通 WorkItem aggregate 事实，其接收受 `sessions:work:read` 限制。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `binding_id` | UUID | 持久化 ProtocolBinding 引用 |
+| `binding_spec_id` | UUID | binding 固定的不可变 ProtocolBindingSpec |
+| `binding_spec_generation` | int64 | 固定的 spec generation，至少为 `1` |
+| `binding_generation` | int64 | binding 所表示 external-resource 的确切 generation |
+| `protocol` | enum | `a2a` \| `mcp` |
+| `workspace_id`、`work_item_id` | UUID | 受治理 workspace 与 WorkItem aggregate 引用 |
+| `work_status` | enum | 最终 `active` \| `review` \| `blocked` \| `canceled` WorkItem state |
+| `lease_fence` | int64 | 分配给 binding synthetic session 的 fencing generation |
+| `verdict` | enum | `CLEAN` \| `BROKEN` \| `UNKNOWN`；UNKNOWN 绝不视为成功 |
+| `code` | string | 有界 system reason code（最多 128 byte），绝非自由文本 |
+| `terminal` | boolean | observation 是否证明终结性的远端结果 |
+| `event_seq` | int64 | WorkItem aggregate 内的单调递增 sequence |
+| `external_id_hash` | SHA-256 hex | 绑定 remote ID 的可选单向关联；ID 本身不存在 |
+
+payload 刻意排除远端 resource reference 与 state、request/tool argument、task 或 message result、
+message content、observation detail，以及运营方编写的 cancellation reason。这些值保留在其受治理
+store 后；事件仅暴露最小 reconciliation fact。
+
+### `AuditRecord` —— `audit.recorded`
+
+转发至 SIEM control tower 的一条篡改可检测 audit ledger 封存记录。它**不**经过总线（见上文说明）：
+ledger forwarder 从 per-tenant cursor 遍历 chain，并将每条记录交给 durable intake，因此完整性字段
+不变地通过，control tower 可自行验证 chain。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `EventID` | string | audit event id——消费者据以去重的稳定幂等键 |
+| `Seq` | int64 | per-tenant ledger sequence——natural key；gap 可被检测 |
+| `OccurredAt` | timestamp | 被审计动作发生的时间 |
+| `Source` | string | 发出记录的组件 |
+| `Payload` | bytes | 已编码的 minimal-data record，逐字携带 chain 字段（sequence、previous hash、hash、signature） |
+
+### `PolicyChange` —— `policy.changed`
+
+镜像策略变更的审计记录所保留的内容——kind 与 enabled——外加 id 和操作。它**绝不**携带运营方
+提供的策略名称或策略规范；一个被授权 `governance:policy:read` 的消费者通过 `PolicyID` 拉取该策略。
+
+| 字段 | 类型 | 备注 |
+|---|---|---|
+| `PolicyID` | string | 被变更策略的 id |
+| `Kind` | enum | `abac` \| `approval` |
+| `Op` | enum | `created` \| `updated` \| `deleted`——协议中的开放字段；请容忍你不认识的值 |
+| `Enabled` | bool | 变更后的 enabled 标志；删除时为 `false` |
+
+## 外部订阅（eventing 平台）
+
+eventing 模块将已编目的事件类型作为已签名 webhook 转发到**外部 HTTPS 端点**。订阅在
+`/v1/m/eventing/subscriptions` 处管理——一条模块路由，刻意**位于** REST OpenAPI 契约**之外**
+——而它所投递的**事件类型**携带上文按类型的稳定性层级。
+
+### 投递
+
+每次投递是一个 HTTPS `POST`，其主体为 JSON **信封加 `Seq`**——字段名与上文信封相同（SDK 即契约），
+外加一个可叠加字段：`Seq`，即重放从其开始的每 tenant 游标。类型化的 payload 搭载于 `Payload` 之下。
+
+```json
+{
+  "ID": "0197a2b4-6e1d-7c3a-9f4e-2d8b5c1a0e7f",
+  "Type": "cost.sampled",
+  "Tenant": "…",
+  "Source": "…",
+  "Time": "2026-06-11T12:00:00Z",
+  "Seq": 42,
+  "Payload": { "ProviderRef": "…" }
+}
+```
+
+| Header | 含义 |
+|---|---|
+| `X-Olivares-Timestamp` | 签名所覆盖的 Unix-秒时间戳 |
+| `X-Olivares-Signature` | `t=<ts>,v1=<hexsig>`——以订阅 secret 对 `<ts>.<body>` 的 HMAC-SHA256；用 `connectors/webhook.VerifyWithin` 验证 |
+| `X-Olivares-Event` | **稳定事件 id**——你的幂等键，跨同一事件的每次重试与重放都相同 |
+| `X-Olivares-Event-Type` | 事件类型（channel 地址） |
+| `X-Olivares-Delivery` | 投递 id——一次重放是同一*事件*的一次*新投递* |
+
+- **至少一次。**同一事件可能到达多次；**按 `X-Olivares-Event` 去重**。
+- **重试。**`408`、`425`、`429`、任意 `5xx` 或网络故障会按指数退避梯度重试——30s、2m、10m、30m、
+  1h、2h、4h、8h（±20% 抖动）——然后该投递**死信**（DLQ）。任何其他非 2xx 响应是终结性的。
+- **重放。**一个订阅可从一个 `Seq` 游标重放；重放在一个全新的 `X-Olivares-Delivery` 下保持该事件
+  的 `X-Olivares-Event` id。
+- **绝不跟随重定向**——重定向会把已签名的主体重新路由。
+- **secret 轮换即时生效。**平台每个订阅恰好持有一个签名 secret：在 `POST …/rotate-secret` 之后，
+  之后的每次尝试——包括已排队投递的重试——都以**新** secret 签名。请先更新你的验证器，再轮换。
+- **收窄 `event_types` 不是召回。**已为该订阅捕获的投递仍排队并被投递（每类型权限仍适用）；
+  收窄后的过滤器只治理从此以后捕获什么。
+
+### 按类型的接收权限
+
+一个订阅命名一个角色；在**每**次投递尝试之前，该角色都会经完整的 RBAC+ABAC 管线
+（deny-closed）针对该事件类型的权限进行评估。该映射镜像产品 API 中每种类型的读取面：
+
+| 事件类型 | 权限 | 稳定性 |
+|---|---|---|
+| `edge.observed` | `accessgraph:read`（特权：editor+） | stable |
+| `cost.sampled` | `finops:spend:read` | stable |
+| `finding.reported` | `security:finding:read` | stable |
+| `guardrail.observed` | `security:observed:read`（特权：editor+） | beta |
+| `approval.requested` | `governance:approval:read` | beta |
+| `policy.changed` | `governance:policy:read` | beta |
+| `metric.sampled` | `adoption:developer:read`（特权：editor+） | beta |
+| `approval.resolved` | `governance:approval:read` | beta |
+| `workflow.signal` | `orchestration:workflow:read` | beta |
+| `work.item.created` | `sessions:work:read` | beta |
+| `work.item.transitioned` | `sessions:work:read` | beta |
+| `work.owner.changed` | `sessions:work:read` | beta |
+| `work.dependency.changed` | `sessions:work:read` | beta |
+| `work.acceptance.changed` | `sessions:work:read` | beta |
+| `work.message.available` | `sessions:message:read` | beta |
+| `work.message.acknowledged` | `sessions:message:read` | beta |
+| `work.message.retracted` | `sessions:message:read` | beta |
+| `work.message.expired` | `sessions:message:read` | beta |
+| `work.message.overdue` | `sessions:message:read` | beta |
+| `work.message.rerouted` | `sessions:message:read` | beta |
+| `work.message.escalated` | `sessions:message:read` | beta |
+| `work.protocol.reply.available` | `sessions:message:read` | beta |
+| `work.protocol.message.received` | `sessions:message:read` | beta |
+| `work.handoff.carrier.available` | `sessions:message:read` | beta |
+| `work.decision.recorded` | `sessions:decision:read` | beta |
+| `work.decision.request.responded` | `sessions:decision-request:read` | beta |
+| `work.decision.request.expired` | `sessions:decision-request:read` | beta |
+| `work.handoff.offered` | `sessions:handoff:read` | beta |
+| `work.handoff.accepted` | `sessions:handoff:read` | beta |
+| `work.handoff.rejected` | `sessions:handoff:read` | beta |
+| `work.handoff.withdrawn` | `sessions:handoff:read` | beta |
+| `work.handoff.expired` | `sessions:handoff:read` | beta |
+| `work.lease.acquired` | `sessions:lease:read` | beta |
+| `work.lease.ended` | `sessions:lease:read` | beta |
+| `work.binding.reserved` | `sessions:work:read` | beta |
+| `work.binding.observed` | `sessions:work:read` | beta |
+| `work.binding.ambiguous` | `sessions:work:read` | beta |
+| `work.binding.cancel_requested` | `sessions:work:read` | beta |
+| `audit.recorded` | `audit:read` | stable |
+
+## 另见
+
+- [REST API 参考](/reference/api/) —— 同步契约（OpenAPI 3.1）。
+- [API stability](/zh/reference/api-stability/) —— 按类型稳定性层级背后的窗口。
+- [架构概览](/zh/explanation/architecture/overview/) —— 观测如何变成 edge 并到达 access map。
+- 原始规范：[`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)。

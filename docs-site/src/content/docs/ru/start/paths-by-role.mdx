@@ -1,0 +1,119 @@
+---
+title: "Пути по ролям"
+description: >-
+  Три пути чтения одной и той же документации: платформенная инженерия
+  (установка и эксплуатация), инженерия безопасности (управление и сдерживание)
+  и комплаенс (доказательства и аудит) — плюс путь строителя для авторов
+  коннекторов.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+Документация организована по [режимам Diátaxis](/ru/start/how-the-docs-are-organized/)
+— учебники, практические руководства, справочник, объяснение — потому что именно
+так документация остаётся пригодной. Но люди приходят с *ролью*, а не с режимом.
+Вот пять путей через одни и те же страницы, в порядке чтения.
+
+## Платформенная инженерия — установить, эксплуатировать
+
+Вы владеете развёртыванием: аптайм, резервные копии, обновления, ёмкость.
+
+1. **Увидеть в работе:** [быстрый старт](/ru/start/quickstart/) (пять минут), затем
+   [учебник zero-to-graph](/ru/tutorials/zero-to-graph/), если хотите управляемую
+   версию.
+2. **Установить по-настоящему**, по сценарию:
+   [один узел (systemd)](/ru/tutorials/getting-started/single-node/) ·
+   [Docker Compose](/ru/tutorials/getting-started/docker-compose/) ·
+   [Kubernetes/Helm с HA](/ru/tutorials/getting-started/kubernetes/) ·
+   [air-gapped](/ru/tutorials/getting-started/air-gapped/).
+3. **Подключить сигналы:** [подключить источник](/ru/how-to/connect-a-source/), затем
+   руководства по коннекторам ([pgAudit](/ru/how-to/connectors/pgaudit/),
+   [CloudTrail](/ru/how-to/connectors/cloudtrail/),
+   [eBPF/Tetragon](/ru/how-to/connectors/ebpf-tetragon/)).
+4. **Эксплуатировать:** [мониторинг и SLO](/ru/how-to/monitor-with-prometheus/) ·
+   [резервное копирование и восстановление](/ru/how-to/backup-and-restore/) ·
+   [устранение неполадок](/ru/how-to/troubleshooting/).
+
+Справочник, в котором вы будете жить: [конфигурация](/ru/reference/configuration/),
+[CLI](/ru/reference/cli/), [коннекторы и уровни](/ru/reference/connectors/).
+
+## Инженерия безопасности — управлять, сдерживать
+
+Вы владеете наименьшими привилегиями, применением и реагированием на инциденты
+для estate агентов.
+
+1. **Сначала модель:** [что такое access map](/ru/start/what-is-olivares-ai/)
+   и [честность и ограничения](/ru/start/honesty-and-limits/) — что продукт будет и
+   что не будет заявлять.
+2. **Управлять:** [управление и согласование](/ru/how-to/govern-and-approve/) (RBAC,
+   restrict-only PDP, записанные решения), затем рецепты:
+   [deny-closed-политики](/ru/how-to/cookbook/deny-closed-policies/) ·
+   [HITL-согласования](/ru/how-to/cookbook/hitl-approvals/) ·
+   [разбор дрейфа](/ru/how-to/cookbook/drift-triage/).
+3. **Применять на поверхности агента:**
+   [хуки Claude Code и PEP](/ru/how-to/connectors/claude-code-hooks-pep/) ·
+   [управление MCP](/ru/how-to/connectors/mcp-governance/) ·
+   [бюджеты как guardrails](/ru/how-to/cookbook/budgets-and-finops-guardrails/).
+4. **Сдерживать:** [учения с аварийным выключателем](/ru/how-to/cookbook/kill-switch-drill/)
+   и [закалка развёртывания](/ru/how-to/security-hardening/).
+
+Глубокая теория: [модель безопасности](/ru/explanation/security/security-model/)
+и [модель угроз](/ru/explanation/security/threat-model/).
+
+## Комплаенс — доказательства, аудит, резидентность
+
+Вы отвечаете перед аудиторами и регуляторами; вам нужны записи, которые
+доказывают сами себя.
+
+1. **Что является доказательством:** гарантия записанных решений в
+   [управлении и согласовании](/ru/how-to/govern-and-approve/#постура-human-in-the-loop)
+   — работающий только на добавление, подписанный журнал под каждым решением.
+2. **Вынести его наружу:** [протолкнуть в ваш SIEM](/ru/how-to/cookbook/push-to-siem/)
+   или [вытянуть/прочитать его хвост](/ru/how-to/forward-audit-to-splunk/) для
+   WORM-архивирования — и проверить его офлайн
+   ([устранение неполадок § журнал](/ru/how-to/troubleshooting/#ledger-не-проходит-проверку)).
+3. **Сохранить его живучим:** [резервное копирование и восстановление](/ru/how-to/backup-and-restore/) —
+   безопасные для непрерывности пакеты, правило хранения ключа вне коробки,
+   учения по восстановлению.
+4. **Резидентность и происхождение:**
+   [air-gapped-эксплуатация](/ru/tutorials/getting-started/air-gapped/) ·
+   [проверка релиза](/ru/how-to/verify-a-release/) ·
+   [open core и лицензирование](/ru/explanation/open-core-and-licensing/).
+
+Честная база для ссылок в оценках:
+[Честность и ограничения](/ru/start/honesty-and-limits/) — что работает, что по
+требованию, что на стадии проектирования.
+
+## Самостоятельный запуск — одна машина, один человек
+
+Нет ни платформенной команды, ни отдела комплаенса: homelab, домашний сервер или
+установка для фрилансера либо малого бизнеса, где устанавливает и использует продукт
+один и тот же человек. Здесь нет уменьшенной версии продукта — это тот же единый
+бинарник, а страницы расположены в порядке, который быстрее всего делает одну машину
+полезной.
+
+<CardGrid>
+  <LinkCard title="Развёртывание с Docker" href="/ru/how-to/docker-deployment/"
+    description="Один Compose-файл, один контейнер, ваша собственная машина. Кратчайший путь от ничего до работающей управляющей плоскости." />
+  <LinkCard title="Быстрый старт" href="/ru/start/quickstart/"
+    description="Первый запуск, первый агент, первая управляемая сессия — десять минут после старта." />
+  <LinkCard title="Затраты и бюджеты" href="/ru/reference/modules/xi-finops/"
+    description="Сколько стоят ваши модели, по агентам и сессиям, с бюджетами, которые дают ответ раньше счёта." />
+  <LinkCard title="Резервное копирование и восстановление" href="/ru/how-to/backup-and-restore/"
+    description="Та операционная привычка, которую стоит завести с первого дня, кто бы ни владел машиной." />
+</CardGrid>
+
+## Строители — расширить
+
+Вы пишете коннектор или работаете с API.
+
+<CardGrid>
+  <LinkCard title="Создание и поставка коннектора" href="/ru/how-to/build-a-connector/"
+    description="Каркас, реализация, подпись, распространение — с deny-closed подписанным допуском." />
+  <LinkCard title="Использование клиентских SDK" href="/ru/how-to/use-the-client-sdks/"
+    description="Клиенты на Go, Java, Python и TypeScript поверх опубликованного контракта REST." />
+  <LinkCard title="Управление как код" href="/ru/how-to/manage-as-code/"
+    description="Провайдер Terraform/OpenTofu поверх управляемого API." />
+  <LinkCard title="Справочник по API и событиям" href="/reference/api/"
+    description="Поверхность REST, отрисованная из OpenAPI, и шина событий AsyncAPI." />
+</CardGrid>

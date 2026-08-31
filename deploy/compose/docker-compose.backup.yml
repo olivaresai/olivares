@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# One-shot disaster-recovery backup for the compose (SQLite) deployment (docs/DR-RUNBOOK.md). Layer it on the base file and run the `backup` profile:
+#
+#   # write your KEK passphrase once (keep it OUT of the repo / image):
+#   printf 'a strong DR passphrase' > deploy/compose/dr-pass
+#   # the host supplies the bundle timestamp (the distroless image has no `date`):
+#   BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
+#   docker compose -f deploy/compose/docker-compose.yml \
+#                  -f deploy/compose/docker-compose.backup.yml \
+#                  --profile backup run --rm backup
+#
+# It shares the engine's data volume (read) and writes a ledger-continuity-safe
+# bundle to the `olivares-backups` volume. The release image is distroless, so the
+# host supplies the bundle timestamp (BACKUP_TS) and owns retention/pruning. Wrap
+# this in host cron for a scheduled RPO, and COPY the bundle volume OFFSITE — a
+# same-host backup is not disaster recovery.
+services:
+  backup:
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:latest}
+    profiles: ["backup"]
+    # The release image is distroless (no shell / date / find): run the `olivares`
+    # binary directly via the image ENTRYPOINT. The host supplies the bundle
+    # timestamp (BACKUP_TS); retention/pruning is a host-side task (see README).
+    command:
+      - dr
+      - backup
+      - --data-dir=/var/lib/olivares
+      - --engine=sqlite
+      - --out=/backups/olivares-dr-${BACKUP_TS:?set BACKUP_TS on the host, e.g. BACKUP_TS=$(date -u +%Y%m%dT%H%M%SZ)}.drbundle
+      - --passphrase-file=/run/secrets/dr-pass
+    environment:
+      HOME: /tmp
+      OLIVARES_DATA_DIR: /var/lib/olivares
+    volumes:
+      - olivares-data:/var/lib/olivares
+      - olivares-backups:/backups
+      - ./dr-pass:/run/secrets/dr-pass:ro
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+volumes:
+  olivares-backups:

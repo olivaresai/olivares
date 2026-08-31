@@ -1,0 +1,8 @@
+{
+  "coreInvoice": {
+    "amountAfterVat": "3.75",
+    "lines": [
+      { "clusterName": "us-east-1", "description": "Grok 4.3 input tokens", "amount": "3.75" }
+    ]
+  }
+}

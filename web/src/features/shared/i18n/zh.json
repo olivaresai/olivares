@@ -1,0 +1,39 @@
+{
+  "live": {
+    "open": "实时",
+    "connecting": "连接中…",
+    "error": "重新连接中…",
+    "closed": "离线"
+  },
+  "graph": {
+    "empty": "暂无可显示的关系",
+    "emptyHint": "尚无内容匹配当前筛选条件。",
+    "mobileTitle": "图谱需要更宽的屏幕",
+    "mobileHint": "请在更大的显示屏上打开此视图以使用交互式映射。",
+    "fit": "适应视图",
+    "minimap": "缩略图",
+    "controls": {
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "reset": "重置视图"
+    }
+  },
+  "sourceModes": {
+    "export": "导出",
+    "live": "实时",
+    "direct": "直接",
+    "hints": {
+      "export": "内容来自导出/离线源，或未声明模式。",
+      "live": "内容来自实时上游源。",
+      "direct": "内容被直接推送到知识库。"
+    }
+  },
+  "urlState": {
+    "urlRejected": "此链接中有 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
+    "urlRejected_other": "此链接中有 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
+    "savedViewRejected": "“{{name}}”中保存的 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
+    "savedViewRejected_other": "“{{name}}”中保存的 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
+    "thisSavedView": "这个保存的视图",
+    "dismiss": "关闭"
+  }
+}

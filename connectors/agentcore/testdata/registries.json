@@ -1,0 +1,13 @@
+{
+  "registries": [
+    {
+      "registryId": "reg-alpha",
+      "registryArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:registry/reg-alpha",
+      "name": "prod-registry",
+      "description": "Production agent registry",
+      "status": "ACTIVE",
+      "createdAt": 1748995200,
+      "updatedAt": 1749081600
+    }
+  ]
+}

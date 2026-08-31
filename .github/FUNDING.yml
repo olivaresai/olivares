@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Sponsorship / funding — displayed in the "Sponsor" button on GitHub.
+# Commercial licensing and enterprise enquiries: enterprise@olivares.ai
+#
+# ⛔ THE ORGANISATION HANDLE WAS REMOVED ON 2026-08-27, AND IT WAS THE ONE THIS FILE CALLED
+# "the principal channel". Measured that day: https://github.com/sponsors/olivaresai does not
+# serve a Sponsors profile — it REDIRECTS to https://github.com/olivaresai, which is what GitHub
+# does when an account is not enrolled — while https://github.com/sponsors/fran-olivares answers
+# 200 with a live "Sponsor @fran-olivares". Listing an account that cannot receive sponsorship is
+# a promise the button cannot keep, and this file was making it about the channel it named first.
+#
+# RESTORE IT by enrolling the `olivaresai` organisation in GitHub Sponsors and putting the handle
+# back at the head of the array. That is a maintainer action (bank/tax details), not a code change,
+# and it is listed with the other day-D maintainer acts in docs/RELEASE-GO-LIVE-RUNBOOK.md §4.
+#
+# WHY THESE DESTINATIONS ARE NOT IN scripts/check-emitted-urls.sh, decided here rather than left
+# unstated: that gate's verdict is an HTTP status, and a sponsors handle with NO profile answers
+# 200 after the redirect above. A record row would therefore certify a dead channel as healthy —
+# the same shape as the github.com `blob` 200 that gate already has to work around. A row that
+# cannot fail for the reason it exists is worse than no row. Re-check these by hand, without
+# following redirects: an enrolled handle answers 200 at /sponsors/<handle>; an unenrolled one
+# answers a 3xx to /<handle>.
+github: [fran-olivares]
+ko_fi: franolivares
+custom: ["https://olivares.ai/pricing"]

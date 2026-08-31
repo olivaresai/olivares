@@ -1,0 +1,1 @@
+import{ir as e,qn as t}from"./index-Ck2CFqtD.js";function n(n){return e(t,n)}export{n as t};

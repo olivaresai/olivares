@@ -1,0 +1,44 @@
+{
+  "truncation": {
+    "label": "Cargados {{n}} orgs; hay más",
+    "hint": "El motor devolvió una página del roster, no el censo entero. El total NO se puede inferir de las filas cargadas — un org que no aparezca aquí puede existir igual."
+  },
+  "title": "Residencia de datos",
+  "description": "Fija los datos del control-plane de cada organización a una región, o déjalos sin fijar. Solo superadmin; cada cambio queda registrado en el ledger de auditoría.",
+  "registry": {
+    "summary": "Postura del registro de residencia",
+    "homeRegion": "Región de origen",
+    "notConfigured": "Sin configurar",
+    "enforcement": "Aplicación de residencia",
+    "enforced": "Se aplica",
+    "notEnforced": "No se aplica"
+  },
+  "orgs": {
+    "title": "Organizaciones",
+    "empty": "Aún no hay organizaciones",
+    "colOrg": "Organización",
+    "colRegion": "Región fijada",
+    "colActions": "Acciones",
+    "unpinned": "Sin fijar",
+    "setRegion": "Fijar región"
+  },
+  "dialog": {
+    "knownRegionHint": "Elige una región del registro configurado de este despliegue.",
+    "fallbackRegionHint": "No hay registro de regiones configurado. Este despliegue está en la postura por defecto de región única; el servidor puede rechazar una fijación no vacía.",
+    "clearPin": "Quitar fijación (sin fijar)",
+    "selectClearHint": "Elige «Quitar fijación (sin fijar)» para quitar la fijación. Esto no mueve los datos ya almacenados: eso es una migración aparte.",
+    "title": "Región de {{name}}",
+    "subtitle": "Fija los datos de esta organización a una región, o quita la fijación.",
+    "regionLabel": "Código de región",
+    "regionPlaceholder": "p. ej. eu",
+    "clearHint": "Déjalo vacío para quitar la fijación (sin fijar). Esto no mueve los datos ya almacenados: eso es una migración aparte.",
+    "review": "Revisar cambio",
+    "back": "Atrás",
+    "apply": "Aplicar cambio",
+    "summaryPin": "Fijar {{name}} a la región {{region}}.",
+    "summaryClear": "Quitar la fijación de región de {{name}} (sin fijar).",
+    "implications": "Esto define dónde se promete que residen los datos de esta organización para las nuevas escrituras. No migra los datos ya almacenados en otro lugar.",
+    "pinned": "{{name}} fijada a {{region}}",
+    "cleared": "Fijación de región de {{name}} eliminada"
+  }
+}

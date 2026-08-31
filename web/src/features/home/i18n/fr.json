@@ -1,0 +1,46 @@
+{
+  "title": "Vue d’ensemble",
+  "description": "Votre parc d’IA en un coup d’œil — inventaire, activité, risque, conformité, dépense et état.",
+  "asOfNote": "Agrégats en temps réel sur les 30 derniers jours, sur les modules que votre rôle peut ouvrir. Chaque tuile renvoie à son module ; ouvrez le rapport exécutif pour la synthèse complète et le PDF.",
+  "openReport": "Rapport exécutif",
+  "range": "30 derniers jours",
+  "tiles": {
+    "inventory": {
+      "label": "Inventaire",
+      "caption": "{{agents}} agents · {{active}} actifs"
+    },
+    "sessions": {
+      "label": "Sessions en direct",
+      "caption": "{{idle}} inactives à présent",
+      "silent": "{{count}} devenues silencieuses (évasion possible)"
+    },
+    "security": {
+      "label": "Sécurité",
+      "caption": "{{count}} critiques ou élevés",
+      "clear": "Aucun constat ouvert"
+    },
+    "compliance": {
+      "label": "Conformité",
+      "caption": "{{gap}} écarts · {{unmapped}} non rattachés",
+      "noControls": "Aucun contrôle rattaché pour l’instant"
+    },
+    "spend": {
+      "label": "Dépense",
+      "caption": "{{range}}",
+      "projected": "{{amount}} projetés au rythme actuel"
+    },
+    "health": {
+      "label": "État et SLA",
+      "value": "{{healthy}}/{{total}} sains",
+      "caption": "{{breaches}} manquements aux SLA · {{incidents}} incidents ouverts",
+      "noChecks": "Aucune vérification d’état pour l’instant"
+    }
+  },
+  "state": {
+    "unavailable": "Échec du chargement — ouvrez pour réessayer"
+  },
+  "empty": {
+    "title": "Rien à afficher pour l’instant",
+    "description": "Votre rôle n’accorde aucun accès en lecture à un module du parc. Demandez à un administrateur un octroi en lecture pour voir la vue d’ensemble."
+  }
+}

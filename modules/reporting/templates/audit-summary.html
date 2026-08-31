@@ -1,0 +1,69 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Locale}}">
+<head>
+<meta charset="utf-8">
+<title>{{t .Locale "report.audit_summary.title"}}</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>{{t .Locale "report.audit_summary.title"}}</h1>
+    <div class="subtitle">{{if .Branding.CompanyName}}{{.Branding.CompanyName}} — {{end}}{{t .Locale "report.period"}}: {{formatDate .Report.From}} — {{formatDate .Report.To}}</div>
+  </div>
+  {{if .Branding.LogoPath}}<img class="header-logo" src="{{.Branding.LogoPath}}" alt="Logo">{{end}}
+</div>
+
+<h2>{{t .Locale "audit.integrity"}}</h2>
+<div class="stat-grid">
+  <div class="stat-card">
+    {{if .Report.CheckpointOK}}
+    <div class="stat-value" style="color:#166534">✓</div>
+    <div class="stat-label">{{t .Locale "audit.integrity_ok"}}</div>
+    {{else}}
+    <div class="stat-value" style="color:#991b1b">✗</div>
+    <div class="stat-label">{{t .Locale "audit.integrity_fail"}}</div>
+    {{end}}
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{.Report.CheckpointCount}}</div>
+    <div class="stat-label">{{t .Locale "audit.checkpoints"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{formatNumber .Report.LedgerHead}}</div>
+    <div class="stat-label">{{t .Locale "audit.ledger_head"}}</div>
+  </div>
+</div>
+
+{{if not .Report.CheckpointOK}}
+<p><span class="badge badge-fail">{{t .Locale "audit.integrity_fail"}}</span> {{.Report.CheckpointReason}} ({{t .Locale "audit.checkpoints"}}: seq {{.Report.FirstBadSeq}})</p>
+{{end}}
+
+<h2>{{t .Locale "audit.total_events"}}: {{formatNumber .Report.TotalEvents}}</h2>
+
+<h3>{{t .Locale "audit.events_by_action"}}</h3>
+<table>
+<thead>
+<tr>
+  <th>{{t .Locale "audit.action"}}</th>
+  <th style="text-align:right">{{t .Locale "audit.count"}}</th>
+</tr>
+</thead>
+<tbody>
+{{range .Report.EventsByAction}}
+<tr>
+  <td>{{.Action}}</td>
+  <td style="text-align:right">{{formatNumber .Count}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+
+<div class="disclaimer">{{t .Locale "report.disclaimer"}}</div>
+<div class="footer">{{t .Locale "report.powered_by"}}{{if .Branding.FooterText}} — {{.Branding.FooterText}}{{end}}</div>
+</body>
+</html>

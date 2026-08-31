@@ -1,0 +1,267 @@
+{
+  "acceptance": {
+    "draftNotice": "This item is in draft, so its criteria can still be corrected. The criterion key is permanent identity and is never reassigned.",
+    "lockedNotice": "This item has left draft, so criteria can no longer be edited — only evaluated. The criterion key is permanent identity.",
+    "none": "No acceptance criteria.",
+    "required": "Required",
+    "state": {
+      "pending": "Pending",
+      "passed": "Passed",
+      "failed": "Failed",
+      "waived": "Waived"
+    }
+  },
+  "apply": {
+    "planning": "Planning the change. Nothing is written in this step.",
+    "planTitle": "Plan",
+    "command": "Command",
+    "permission": "Permission",
+    "eventType": "Event",
+    "rowEffects": "Rows this would write",
+    "noRowEffects": "This command writes no rows.",
+    "externalCalls": "External calls",
+    "planHash": "Plan hash",
+    "keyTitle": "Idempotency key for this change",
+    "keyHelp": "Generated once for this intention and reused on every retry. Keep it: if the network drops mid-apply, retrying with this exact key is what stops one change becoming two.",
+    "confirm": "Apply",
+    "applying": "Applying…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "appliedTitle": "Applied",
+    "replayedTitle": "Already applied",
+    "replayedBody": "The engine recognised this idempotency key and replayed the original result. Nothing was written a second time.",
+    "commandId": "Command id",
+    "resultId": "Result id",
+    "status": "New status",
+    "etag": "New version tag",
+    "auditSeq": "Audit sequence",
+    "reread": "Re-read and compare",
+    "retrySameKey": "Retry with the same key",
+    "failure": {
+      "conflict-version": "Someone else changed this item",
+      "version-required": "Missing version precondition",
+      "conflict-idempotency": "This key was already used for a different change",
+      "conflict-domain": "The engine refused this command",
+      "unknown": "Could not look",
+      "other": "The change failed",
+      "plan-changed": "The plan is no longer current"
+    },
+    "conflictVersionBody": "The item moved between reading it and applying this change, so the change was refused rather than applied on top. Re-read it and compare before deciding — re-sending would overwrite whatever the other change did.",
+    "versionRequiredBody": "This command requires the item's current version and none was sent. Re-open the item so its version tag is read again.",
+    "conflictIdempotencyBody": "This idempotency key was already used with a different body, version or plan. The engine refused rather than guess which one you meant. Start the change again to get a new key.",
+    "conflictDomainBody": "The kernel's own rules refused this command — for example an illegal transition or a dependency cycle. Re-reading will not change the answer; the command has to change.",
+    "otherBody": "The change did not go through.",
+    "continue": "Continue",
+    "inputIntro": "The engine requires these before the change can be planned. Without them it refuses the command outright.",
+    "planChangedBody": "The plan changed between showing it and applying it, so nothing was written. Re-open the action to plan again and read the new one before confirming.",
+    "field": {
+      "code": {
+        "label": "Code",
+        "hint": "A short machine token: lowercase letters, digits, dot, dash or underscore.",
+        "placeholder": "e.g. blocked_on_review"
+      },
+      "reason": {
+        "label": "Reason",
+        "hint": "Free text, recorded with the change. This is what another session will read.",
+        "placeholder": "Why this is happening"
+      },
+      "evidence_ref": {
+        "label": "Evidence reference",
+        "hint": "Where the evidence for this verdict lives. Required to record passed or failed.",
+        "placeholder": "e.g. run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "Evidence hash",
+        "hint": "A sha256 digest of that evidence. Required to record passed.",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "Waiver decision",
+        "hint": "The decision that authorises waiving this criterion, if there is one.",
+        "placeholder": "Decision id (optional)"
+      },
+      "holder_sid": {
+        "label": "Holder session",
+        "hint": "The canonical session id that will hold the lease. The engine refuses anything that is not one.",
+        "placeholder": "the holding session id"
+      },
+      "fence": {
+        "label": "Fence",
+        "hint": "The lease fence you are acting on. The engine refuses anything below 1, and a stale one loses to the current holder.",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "Decision",
+        "hint": "The decision this act rests on. Rebasing a clock is evidence-bearing: the engine will not take it unnamed.",
+        "placeholder": "the decision id"
+      }
+    }
+  },
+  "checks": {
+    "evidence": "evidence {{ref}}"
+  },
+  "common": {
+    "refresh": "Refresh",
+    "loadMore": "Load more"
+  },
+  "decisions": {
+    "title": "Decisions",
+    "subtitle": "The append-only decision record and its current-state projection.",
+    "view": {
+      "effective": "In force",
+      "revoked": "Revoked",
+      "history": "Full history"
+    },
+    "historyNotice": "This is the append-only history. The engine does not attribute current state to these rows, so none of them is labelled in force or revoked — switch to one of the other views to ask that question.",
+    "state": {
+      "effective": "In force",
+      "revoked": "Revoked",
+      "notAttributed": "State not attributed in this view"
+    },
+    "meta": "{{subject}} · decided by {{actor}} · {{at}}",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke decision",
+    "revokeBody": "Revoking is recorded as a new entry; the original decision is never deleted.",
+    "empty": {
+      "effective": {
+        "title": "No decisions in force",
+        "body": "The engine read the current-state projection and found none in force."
+      },
+      "revoked": {
+        "title": "No revoked decisions",
+        "body": "The engine read the current-state projection and found none revoked."
+      },
+      "history": {
+        "title": "No decisions recorded",
+        "body": "Nothing has been decided here yet."
+      }
+    }
+  },
+  "dependencies": {
+    "none": "No dependencies."
+  },
+  "detail": {
+    "subtitle": "{{kind}} · version {{version}}",
+    "applyTitle": "Apply change",
+    "owner": "Owner",
+    "provenance": "Provenance",
+    "priority": "Priority",
+    "blocked": "Blocked",
+    "terminal": "Outcome",
+    "etag": "Version tag",
+    "tabs": {
+      "overview": "Overview",
+      "acceptance": "Acceptance",
+      "dependencies": "Dependencies",
+      "events": "Events",
+      "lease": "Lease"
+    }
+  },
+  "events": {
+    "none": "No events recorded for this item."
+  },
+  "filters": {
+    "status": "Status",
+    "allStatus": "Any status",
+    "priority": "Priority",
+    "allPriority": "Any priority",
+    "archived": {
+      "label": "Archived",
+      "any": "Archived and not",
+      "false": "Not archived only",
+      "true": "Archived only"
+    }
+  },
+  "items": {
+    "title": "Work items",
+    "subtitle": "Filters narrow the whole store, not just the page you are looking at.",
+    "empty": {
+      "title": "No work items match",
+      "body": "Nothing in the store matches these filters. This is a real, complete answer — the engine read the store and found none."
+    }
+  },
+  "lease": {
+    "none": "No lease on this item.",
+    "holder": "Holder",
+    "state": "State",
+    "fence": "Fence",
+    "expires": "Expires",
+    "renewals": "Renewals",
+    "liveness": "Liveness",
+    "live": "Live",
+    "notLive": "Not live",
+    "unknown": "Could not look",
+    "reason": "Reason",
+    "ttl": "TTL (seconds)",
+    "noWrite": "Your role cannot change this lease.",
+    "noAdmin": "Taking over, revoking and rebasing need lease admin.",
+    "actions": {
+      "acquire": "Acquire",
+      "renew": "Renew",
+      "release": "Release",
+      "takeover": "Take over",
+      "revoke": "Revoke",
+      "clockRebase": "Rebase clock"
+    },
+    "noRead": "Your role cannot read this lease."
+  },
+  "status": {
+    "draft": "Draft",
+    "ready": "Ready",
+    "active": "Active",
+    "blocked": "Blocked",
+    "review": "In review",
+    "completed": "Completed",
+    "failed": "Failed",
+    "canceled": "Cancelled",
+    "dependencyBlocked": "Dependency open",
+    "archived": "Archived"
+  },
+  "stream": {
+    "open": "Live",
+    "connecting": "Reconnecting…",
+    "closed": "Not streaming",
+    "error": "Stream interrupted",
+    "unavailableBody": "The list on screen may be out of date, and nothing else will tell you so. Refresh to read the store directly."
+  },
+  "subtitle": "The durable cross-session backlog: work items, ownership, dependencies, acceptance criteria and decisions. Every change is planned before it is applied.",
+  "tabs": {
+    "items": "Work items",
+    "decisions": "Decisions"
+  },
+  "title": "Work",
+  "transition": {
+    "item.ready": "Mark ready",
+    "item.block": "Block",
+    "item.unblock": "Unblock",
+    "item.submit": "Submit for review",
+    "item.complete": "Complete",
+    "item.fail": "Fail",
+    "item.cancel": "Cancel",
+    "item.archive": "Archive"
+  },
+  "truncation": {
+    "label": "Loaded {{n}} rows; there are more",
+    "hint": "This list is paged by keyset and the engine caps a page at 200. Only the loaded rows are shown; use the filters to narrow it."
+  },
+  "unavailable": {
+    "title": "Could not look",
+    "body": "The engine could not complete this observation, so it is reporting an unknown outcome rather than a result. Treat nothing on this panel as confirmed.",
+    "retryHint": "Whether the change was written is undetermined. Retry with the SAME idempotency key — that is what makes the retry safe, because the engine will recognise it as the same intention rather than a second one.",
+    "code": "Engine code: {{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "Clean",
+      "help": "The engine looked and found nothing wrong."
+    },
+    "ROTO": {
+      "label": "Broken",
+      "help": "The engine looked and found a rule violation."
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "Could not look",
+      "help": "The engine could NOT complete the observation. This is not a pass and not an empty result — the answer is unknown."
+    }
+  }
+}

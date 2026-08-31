@@ -1,0 +1,98 @@
+{
+  "title": "Erste Schritte",
+  "subtitle": "Richten Sie Ihre Bereitstellung Schritt für Schritt ein — jeder Schritt wird gegen die aktive Control Plane verifiziert.",
+  "progress": "{{done}} von {{total}} verifiziert",
+  "refresh": "Aktualisieren",
+  "dismiss": "Ausblenden",
+  "allDone": "Ihre Bereitstellung ist eingerichtet.",
+  "allDoneHint": "Jeder Schritt wird gegen die Control Plane verifiziert. Sie können diesen Assistenten jederzeit erneut aufrufen.",
+  "dismissed": {
+    "title": "Einrichtungsleitfaden ausgeblendet",
+    "description": "Der Leitfaden ist in diesem Browser ausgeblendet. Ihre Bereitstellung läuft weiter — Sie können die verifizierten Schritte jederzeit fortsetzen.",
+    "resume": "Einrichtungsleitfaden fortsetzen"
+  },
+  "status": {
+    "verified": "Verifiziert",
+    "pending": "Ausstehend",
+    "awaiting": "Warte auf Host"
+  },
+  "steps": {
+    "infra": {
+      "title": "Infrastruktur",
+      "hint": "Die Datenbank muss zuerst erreichbar sein.",
+      "ready": "Die Control Plane erreicht ihre Datenbank. Dieser Schritt wird automatisch verifiziert.",
+      "notReady": "Die Control Plane kann ihre Datenbank noch nicht erreichen."
+    },
+    "workspace": {
+      "title": "Erstellen Sie Ihren ersten Workspace",
+      "hint": "Ein Workspace grenzt Agenten, Quellen und Richtlinien ab.",
+      "name": "Workspace-Name",
+      "namePlaceholder": "z. B. Plattform-Team",
+      "slug": "Slug",
+      "create": "Workspace erstellen",
+      "addAnother": "Weiteren erstellen",
+      "created": "Workspace {{name}} erstellt."
+    },
+    "identity": {
+      "title": "Laden Sie einen Administrator ein",
+      "hint": "Laden Sie einen zweiten Administrator ein oder verbinden Sie Ihren Identitätsanbieter.",
+      "email": "E-Mail",
+      "role": "Rolle",
+      "mode": "Methode",
+      "modeInvite": "Einladung senden",
+      "modePassword": "Passwort festlegen",
+      "invite": "Einladen",
+      "inviteAnother": "Weiteren einladen",
+      "invited": "{{email}} eingeladen.",
+      "or": "oder",
+      "ssoCta": "SSO verbinden",
+      "password": "Passwort",
+      "passwordHint": "Mindestens 8 Zeichen. Der neue Administrator kann es später ändern.",
+      "memberCount_one": "{{count}} Mitglied in diesem Mandanten.",
+      "memberCount_other": "{{count}} Mitglieder in diesem Mandanten."
+    },
+    "source": {
+      "title": "Registrieren Sie Ihre erste Quelle",
+      "hint": "Verbinden Sie eine Inhalts- oder Governance-Quelle. Anmeldedaten werden per Referenz gespeichert.",
+      "kind": "Konnektor",
+      "kindPlaceholder": "Konnektor wählen",
+      "name": "Quellenname",
+      "namePlaceholder": "z. B. my-wiki",
+      "tenant": "Mandant",
+      "noFields": "Dieser Konnektor benötigt keine weitere Konfiguration.",
+      "secretHint": "Geben Sie einen zu versiegelnden Wert oder eine store:<name>-Referenz ein.",
+      "test": "Testen",
+      "tested": "Verbindung erfolgreich.",
+      "testOk": "Der Konnektor wurde erfolgreich geöffnet.",
+      "testFail": "Der Konnektor konnte nicht geöffnet werden — prüfen Sie die Konfiguration.",
+      "register": "Registrieren",
+      "addAnother": "Weitere registrieren",
+      "registered": "{{name}} registriert.",
+      "notRunning": "Eine Quelle ist registriert, läuft aber noch nicht — prüfen Sie oben ihren Status.",
+      "credByRef": "Geheime Felder werden im Speicher versiegelt und als store:<name> referenziert — ein Anmeldewert wird nie im Klartext gespeichert."
+    },
+    "pep": {
+      "title": "Aktivieren Sie Ihren ersten Policy Enforcement Point",
+      "hint": "Veröffentlichen Sie eine managed-settings-Richtlinie und bestätigen Sie, dass ein Host sie angewendet hat.",
+      "notPublished": "Es ist noch keine managed-settings-Richtlinie veröffentlicht.",
+      "authorCta": "Richtlinie verfassen",
+      "active": "Ein Host hat diese Richtlinie attestiert — der Enforcement Point ist aktiv.",
+      "awaitingHint": "Die Richtlinie ist veröffentlicht und signiert, aber noch hat sich kein Host gemeldet. Verteilen Sie den Snippet und aktualisieren Sie.",
+      "revision": "Revision",
+      "fingerprint": "Schlüssel-Fingerabdruck",
+      "snippet": "Managed-settings-Snippet",
+      "copy": "Kopieren",
+      "copied": "In die Zwischenablage kopiert.",
+      "copyFailed": "Konnte nicht in die Zwischenablage kopieren.",
+      "checkins": "Host-Meldungen",
+      "noCheckins": "Noch hat sich kein Host gemeldet.",
+      "colScope": "Geltungsbereich",
+      "colReporter": "Melder",
+      "colRevision": "Revision",
+      "colVerified": "Verifiziert",
+      "verifiedCurrent": "Verifiziert (aktuell)",
+      "verifiedStale": "Verifiziert (veraltet)",
+      "unverified": "Nicht verifiziert"
+    }
+  }
+}

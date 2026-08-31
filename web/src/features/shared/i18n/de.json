@@ -1,0 +1,41 @@
+{
+  "live": {
+    "open": "Live",
+    "connecting": "Verbindung wird hergestellt…",
+    "error": "Verbindung wird wiederhergestellt…",
+    "closed": "Offline"
+  },
+  "graph": {
+    "empty": "Keine Beziehungen anzuzeigen",
+    "emptyHint": "Noch nichts entspricht den aktuellen Filtern.",
+    "mobileTitle": "Der Graph benötigt einen größeren Bildschirm",
+    "mobileHint": "Öffnen Sie diese Ansicht auf einem größeren Display für die interaktive Karte.",
+    "fit": "An Ansicht anpassen",
+    "minimap": "Übersichtskarte",
+    "controls": {
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern",
+      "reset": "Ansicht zurücksetzen"
+    }
+  },
+  "sourceModes": {
+    "export": "Export",
+    "live": "Live",
+    "direct": "Direkt",
+    "hints": {
+      "export": "Der Inhalt stammt aus einer Export-/Offline-Quelle oder der Modus wurde nicht angegeben.",
+      "live": "Der Inhalt stammt aus einer Live-Upstream-Quelle.",
+      "direct": "Der Inhalt wurde direkt in die Wissensdatenbank eingespielt."
+    }
+  },
+  "urlState": {
+    "urlRejected": "{{count}} Wert aus diesem Link konnte nicht verwendet werden ({{keys}}); die Ansicht hat auf ihren Standard zurückgesetzt.",
+    "urlRejected_one": "{{count}} Wert aus diesem Link konnte nicht verwendet werden ({{keys}}); die Ansicht hat auf ihren Standard zurückgesetzt.",
+    "urlRejected_other": "{{count}} Werte aus diesem Link konnten nicht verwendet werden ({{keys}}); die Ansicht hat auf ihre Standardwerte zurückgesetzt.",
+    "savedViewRejected": "{{count}} in „{{name}}“ gespeicherter Wert konnte nicht verwendet werden ({{keys}}); die Ansicht hat auf ihren Standard zurückgesetzt.",
+    "savedViewRejected_one": "{{count}} in „{{name}}“ gespeicherter Wert konnte nicht verwendet werden ({{keys}}); die Ansicht hat auf ihren Standard zurückgesetzt.",
+    "savedViewRejected_other": "{{count}} in „{{name}}“ gespeicherte Werte konnten nicht verwendet werden ({{keys}}); die Ansicht hat auf ihre Standardwerte zurückgesetzt.",
+    "thisSavedView": "diese gespeicherte Ansicht",
+    "dismiss": "Schliessen"
+  }
+}

@@ -1,0 +1,37 @@
+# A workload-scoped Telemetry that DISABLES access logging (a deliberate blind spot)
+# and DISABLES span reporting (tracing) via the distinct disableSpanReporting field.
+# Also exercises the BoolValue wrapper form (disabled: {value: true}) on metrics
+# overrides, plus a non-Telemetry document in the same multi-doc stream that MUST be
+# ignored. The secret in the comment/label is the no-leak canary.
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: payments-quiet
+  namespace: payments
+spec:
+  selector:
+    matchLabels:
+      app: payments
+      version: v2
+  accessLogging:
+    - providers:
+        - name: envoy
+      disabled: true
+  tracing:
+    - disableSpanReporting: true
+  metrics:
+    - overrides:
+        - disabled:
+            value: true
+---
+# A non-Telemetry CRD sharing the export — must be skipped, no finding.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: payments-route
+  namespace: payments
+spec:
+  hosts:
+    - payments.payments.svc.cluster.local
+---
+# A genuinely empty document (a stray separator) — skipped.

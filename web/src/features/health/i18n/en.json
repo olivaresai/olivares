@@ -1,0 +1,477 @@
+{
+  "title": "Health & SLA",
+  "subtitle": "Liveness, reliability and dependencies across your estate — derived from observed activity and the staleness sweep, never by probing infrastructure.",
+  "auditedNote": "The live stream and any resolve/edit action are privileged, audited operations. Health is derived; the engine never carries error text or payloads here.",
+  "refresh": "Refresh",
+  "statusPageLink": "Public status page",
+  "tabs": {
+    "status": "Status",
+    "checks": "Checks",
+    "sla": "SLA",
+    "incidents": "Incidents",
+    "timeline": "Timeline",
+    "connectors": "Connectors",
+    "dependencies": "Dependencies",
+    "system": "System"
+  },
+  "state": {
+    "healthy": "Healthy",
+    "degraded": "Degraded",
+    "down": "Down",
+    "observed": "Observed",
+    "unknown": "Unknown"
+  },
+  "stateHint": {
+    "unknown": "No check tracks this subject — not the same as healthy.",
+    "observed": "Seen alive by an edge, but no check is declared — health is not measured (neither healthy nor unknown)."
+  },
+  "desired": {
+    "active": "Active",
+    "paused": "Paused",
+    "retired": "Retired"
+  },
+  "desiredHint": {
+    "paused": "Not alerting — paused by an operator.",
+    "retired": "Not alerting — retired."
+  },
+  "subjectKind": {
+    "agent": "Agent",
+    "mcp": "MCP",
+    "session": "Session",
+    "mcp_tool": "Tool"
+  },
+  "tiles": {
+    "healthy": "Healthy",
+    "degraded": "Degraded",
+    "down": "Down",
+    "unknown": "Unknown"
+  },
+  "facets": {
+    "allStates": "All states",
+    "allKinds": "All kinds"
+  },
+  "status": {
+    "title": "Monitored subjects",
+    "slaBreach": "SLA breach",
+    "slaBreachHint": "An SLA breach is open for this subject.",
+    "notAlerting": "Not alerting",
+    "cols": {
+      "subject": "Subject",
+      "kind": "Kind",
+      "state": "State",
+      "desired": "Intent",
+      "sla": "SLA",
+      "latency": "Latency",
+      "lastSeen": "Last seen"
+    },
+    "searchPlaceholder": "Search subject…",
+    "empty": {
+      "title": "No subjects monitored yet",
+      "description": "Once a health check is declared for an agent or MCP server, its liveness appears here."
+    }
+  },
+  "checks": {
+    "title": "Health checks",
+    "description": "Declare and govern the cadence, grace window, SLA target and lifecycle intent for monitored agents and MCP servers.",
+    "create": "Create check",
+    "created": "Health check created",
+    "updated": "Health check updated",
+    "deleted": "Health check deleted",
+    "failed": "The health check operation failed.",
+    "duplicate": "A health check already exists for this subject.",
+    "searchPlaceholder": "Search health checks…",
+    "reportTooltipLabel": "About probe reports",
+    "reportTooltip": "Probe report ingestion is machine-facing and is intentionally omitted from the console.",
+    "seconds": "{{count}}s",
+    "cols": {
+      "subject": "Subject",
+      "kind": "Kind",
+      "state": "State",
+      "intent": "Intent",
+      "cadence": "Cadence",
+      "sla": "SLA",
+      "lastChecked": "Last checked",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "editAria": "Edit health check for {{subject}}",
+      "pause": "Pause",
+      "pauseAria": "Pause health check for {{subject}}",
+      "resume": "Resume",
+      "resumeAria": "Resume health check for {{subject}}",
+      "retire": "Retire",
+      "retireAria": "Retire health check for {{subject}}",
+      "delete": "Delete",
+      "deleteAria": "Delete health check for {{subject}}"
+    },
+    "form": {
+      "name": "Name",
+      "subjectKind": "Subject kind",
+      "subjectRef": "Subject reference",
+      "expectedInterval": "Expected interval (seconds)",
+      "graceFactor": "Grace factor",
+      "slaTarget": "SLA target (PPM)",
+      "slaTargetHint": "0 clears the SLA target; 999000 means 99.9%.",
+      "desiredStatus": "Desired status",
+      "validation": "Enter a subject reference, positive whole-number cadence and grace values, and an SLA target from 0 to 1000000."
+    },
+    "createDialog": {
+      "title": "Create health check",
+      "description": "Declare one monitored agent or MCP server. A subject can have only one health check."
+    },
+    "edit": {
+      "title": "Edit health check",
+      "description": "The subject is immutable. Update the displayed configuration and lifecycle intent."
+    },
+    "delete": {
+      "title": "Delete health check",
+      "description": "Permanently delete the health check for {{subject}}. This admin action is recorded in the audit ledger."
+    },
+    "empty": {
+      "title": "No health checks declared",
+      "description": "Create a check to govern the expected liveness cadence of an agent or MCP server."
+    }
+  },
+  "sla": {
+    "title": "Reliability (SLA)",
+    "pick": "Subject",
+    "pickPlaceholder": "Pick a subject…",
+    "pickEmpty": "No monitored subjects to report on yet.",
+    "pickPrompt": {
+      "title": "Pick a subject",
+      "description": "Choose a monitored subject to see its uptime against target, reconstructed from the reliability ledger."
+    },
+    "window": "Window",
+    "uptime": "Uptime",
+    "target": "Target",
+    "noTarget": "No target",
+    "breaching": "Breaching",
+    "withinTarget": "Within target",
+    "downtime": "Downtime",
+    "degraded": "Degraded",
+    "degradedNote": "Degraded counts as up for the SLA — shown separately, not as downtime.",
+    "currentState": "Current state",
+    "noCheck": {
+      "title": "No check declared",
+      "description": "There is no health check for this subject, so no reliability can be reported. This is honest state, not a failure."
+    },
+    "noData": {
+      "title": "No history yet",
+      "description": "This subject has a check but no reliability history in the window — uptime is undefined, not 0%. It appears once transitions are recorded."
+    }
+  },
+  "incidents": {
+    "title": "Incidents",
+    "filterState": "State",
+    "allStates": "All",
+    "open": "Open",
+    "resolved": "Resolved",
+    "resolve": "Resolve",
+    "resolving": "Resolving…",
+    "resolveTitle": "Close this incident record",
+    "resolveHint": "Resolving acknowledges the period closes — it does NOT claim the subject recovered. Recovery comes from real liveness. This action is privileged and audited.",
+    "cols": {
+      "subject": "Subject",
+      "subjectKind": "Type",
+      "incidentKind": "Incident",
+      "severity": "Severity",
+      "opened": "Opened",
+      "state": "State",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "Degraded",
+      "down": "Down",
+      "sla_breach": "SLA breach"
+    },
+    "possibleEvasion": "Possible evasion",
+    "possibleEvasionHint": "A subject went silent within its expected cadence (a sweep-detected down). A subject that stops emitting is itself a signal, not a UI failure.",
+    "searchPlaceholder": "Search incident…",
+    "empty": {
+      "title": "No incidents",
+      "description": "No reliability incidents match this filter. Open incidents appear here as subjects degrade or go down."
+    },
+    "truncated": "Showing the first {{n}}",
+    "truncatedHint": "There are more incidents than shown; this page is capped, so an empty rest is NOT proof there are none."
+  },
+  "timeline": {
+    "title": "Reliability timeline",
+    "pick": "Subject",
+    "pickPlaceholder": "Pick a subject…",
+    "pickPrompt": {
+      "title": "Pick a subject",
+      "description": "Choose a monitored subject to trace its reliability transitions from the append-only ledger."
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "Latency",
+    "latencyUnknown": "Unknown",
+    "cause": {
+      "edge": "Observed liveness",
+      "report": "Active probe",
+      "sweep": "Staleness sweep"
+    },
+    "causeHint": {
+      "edge": "Inferred from observed activity (a liveness edge).",
+      "report": "An active health probe reported this state.",
+      "sweep": "Detected by the staleness sweep — silence within the expected cadence."
+    },
+    "possibleEvasion": "Possible evasion",
+    "possibleEvasionHint": "A down detected by the staleness sweep means silence within the expected cadence — surfaced as possible evasion, not a load error.",
+    "empty": {
+      "title": "No transitions recorded",
+      "description": "This subject has no reliability transitions in the ledger yet."
+    },
+    "truncated": "Showing the first {{n}}",
+    "truncatedHint": "There are more events than shown. The page is ordered by id (oldest first), so what is cut off is the MOST RECENT stretch — an event you do not see here is not an event that did not happen."
+  },
+  "deps": {
+    "title": "Dependency map",
+    "subtitle": "Auto-discovered from observed activity. Each node is colored by its current health — a node seen alive but with no check is \"observed\" (blue, health not measured), a node with no signal at all stays gray (unknown); neither is ever green.",
+    "legendTitle": "Health",
+    "relation": {
+      "uses_mcp": "Uses MCP",
+      "uses_tool": "Uses tool",
+      "delegates_to": "Delegates to"
+    },
+    "observed": "Observed",
+    "truncated": "Showing first {{n}}",
+    "truncatedHint": "The dependency graph has more nodes than shown; this is the first keyset page.",
+    "empty": {
+      "title": "No dependencies discovered yet",
+      "description": "Once agents call MCP servers and tools, the observed dependency graph appears here."
+    },
+    "mobile": {
+      "title": "The map needs a wider screen",
+      "summary": "{{nodes}} nodes · {{edges}} dependencies",
+      "hint": "Open this view on a larger display for the interactive dependency graph."
+    }
+  },
+  "detail": {
+    "statusTitle": "Subject health",
+    "incidentTitle": "Incident",
+    "ref": "Reference",
+    "id": "ID",
+    "name": "Name",
+    "kind": "Kind",
+    "state": "State",
+    "desired": "Intent",
+    "cadence": "Expected cadence",
+    "grace": "Grace factor",
+    "slaTarget": "SLA target",
+    "slaBreach": "SLA breach open",
+    "latency": "Last latency",
+    "lastSeen": "Last seen",
+    "lastChecked": "Last checked",
+    "owner": "Owner",
+    "lastDetail": "Last detail",
+    "severity": "Severity",
+    "opened": "Opened",
+    "resolved": "Resolved",
+    "summary": "Summary",
+    "viewSla": "View SLA",
+    "viewTimeline": "View timeline",
+    "yes": "Yes",
+    "no": "No",
+    "minimalData": "Only metadata is shown. By design the engine never carries error text, payloads or secrets here (minimal-data)."
+  },
+  "live": {
+    "note": "Rows update live as health changes; reconciled by id, not by assuming continuity."
+  },
+  "empty": {
+    "title": "Nothing to show",
+    "description": "There is no health data for this tenant yet."
+  },
+  "forbidden": {
+    "title": "Health not authorized",
+    "description": "Your role does not include permission to view health and SLA."
+  },
+  "forbiddenResolve": {
+    "title": "Resolve not authorized",
+    "description": "Resolving an incident requires the check-admin permission (health:check:admin)."
+  },
+  "connectors": {
+    "autoRefresh": "Auto-refreshes every 15 seconds.",
+    "searchPlaceholder": "Search connector…",
+    "modeFilter": "Mode filter",
+    "modeAll": "All modes",
+    "summary": {
+      "running": "Running",
+      "failed": "Failed",
+      "stopped": "Stopped",
+      "disabled": "Disabled"
+    },
+    "cols": {
+      "name": "Connector",
+      "kind": "Kind",
+      "mode": "Mode",
+      "health": "Health",
+      "status": "Status",
+      "trend": "Trend",
+      "lastPoll": "Last poll"
+    },
+    "status": {
+      "running": "Running",
+      "failed": "Failed",
+      "stopped": "Stopped",
+      "disabled": "Disabled",
+      "not_wired": "Not wired"
+    },
+    "trend": {
+      "up": "Improving",
+      "down": "Declining",
+      "stable": "Stable"
+    },
+    "empty": {
+      "title": "No connectors configured",
+      "description": "Once connectors are onboarded, their operational health appears here."
+    },
+    "emptyMode": {
+      "title": "No connectors match this mode",
+      "description": "Change the mode filter to see other connectors."
+    }
+  },
+  "statusPage": {
+    "title": "Olivares Control Plane — Status",
+    "subtitle": "Current operational status of all components.",
+    "unavailable": "Status information is currently unavailable.",
+    "lastUpdated": "Last updated: {{time}}",
+    "overall": {
+      "operational": "All Systems Operational",
+      "not_configured": "Operational — optional capabilities not configured",
+      "degraded": "Partial System Outage",
+      "outage": "Major System Outage"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "Knowledge retrieval",
+      "store": "Database",
+      "connectors": "Connectors",
+      "ingest": "Data Ingestion",
+      "audit_spool": "Audit spool"
+    },
+    "status": {
+      "operational": "Operational",
+      "not_configured": "Not configured",
+      "degraded": "Degraded",
+      "outage": "Outage"
+    }
+  },
+  "update": {
+    "title": "Updates",
+    "available": "Update available",
+    "security": "Security update",
+    "channel": "Channel",
+    "upToDate": "Up to date",
+    "notChecked": "No recent check",
+    "failed": "Update check failed",
+    "checked": "Update check completed",
+    "advisories": "Security advisories fixed",
+    "checkNow": "Check now",
+    "unconfigured": "Update checking is not configured. This is expected for air-gapped deployments."
+  },
+  "system": {
+    "title": "System health",
+    "systemStatus": "System status",
+    "healthy": "Healthy",
+    "unhealthy": "Unhealthy",
+    "ready": "Ready",
+    "notReady": "Not ready",
+    "storeEngine": "Store engine",
+    "version": "Version",
+    "connectors": "Connectors",
+    "connectorsRunning": "{{count}} running",
+    "connectorsConfigured": "{{count}} configured",
+    "connectorsAvailable": "{{count}} available to configure",
+    "connectorsError": "{{count}} in error",
+    "noConnectors": "No connectors configured",
+    "users": "Users",
+    "usersCount": "{{count}} registered",
+    "identity": "Identity",
+    "ssoConfigured": "SSO configured",
+    "ssoNotConfigured": "SSO not configured",
+    "unavailable": "Operational data is unavailable or not authorized."
+  },
+  "tls": {
+    "title": "TLS certificate",
+    "notAfter": "Not after",
+    "daysLeft": "{{count}} days left",
+    "expired": "Expired {{count}} days ago"
+  },
+  "keys": {
+    "title": "Key custody",
+    "empty": "No key custody metadata is available.",
+    "sealers": "Symmetric sealers",
+    "sourceUnknown": "source unavailable",
+    "copyFingerprint": "Copy full fingerprint for {{purpose}}",
+    "copied": "Fingerprint copied",
+    "cols": {
+      "purpose": "Purpose",
+      "algorithm": "Algorithm",
+      "mode": "Custody mode",
+      "kek": "KEK",
+      "created": "Created",
+      "fingerprint": "Fingerprint",
+      "prior": "Prior keys"
+    }
+  },
+  "config": {
+    "title": "Effective configuration",
+    "empty": "No effective configuration entries are available.",
+    "strictViolations": "Strict configuration violations",
+    "redacted": "Redacted",
+    "cols": {
+      "key": "Key",
+      "value": "Effective value",
+      "source": "Source"
+    }
+  },
+  "bus": {
+    "title": "Event bus",
+    "noSubscribers": "No event-bus subscribers are registered.",
+    "depthAria": "Queue depth for {{subscriber}}",
+    "counters": {
+      "publishBlocked": "Publish blocked",
+      "dropped": "Dropped",
+      "droppedTelemetry": "Telemetry dropped",
+      "droppedNotify": "Notifications dropped",
+      "handlerErrors": "Handler errors",
+      "enqueued": "Enqueued",
+      "handled": "Handled"
+    },
+    "bridge": {
+      "title": "Bridge",
+      "pendingMessages": "Pending messages",
+      "pendingBytes": "Pending bytes",
+      "dropped": "Dropped",
+      "publishErrors": "Publish errors",
+      "decodeErrors": "Decode errors",
+      "gateSkipped": "Gate skipped",
+      "invalidSubject": "Invalid subject"
+    }
+  },
+  "support": {
+    "title": "Support bundle",
+    "description": "Generate a diagnostic archive for support without exposing stored secret values.",
+    "download": "Download support bundle",
+    "generate": "Generate and download",
+    "confirmTitle": "Generate a support bundle?",
+    "confirmDescription": "This privileged AAL3 action is recorded in the audit ledger.",
+    "contents": "The bundle contains redacted effective configuration, operational status and logs. Review it before sharing.",
+    "downloaded": "Support bundle downloaded",
+    "needsAal3": "Hardware-backed AAL3 step-up is required to generate a support bundle.",
+    "failed": "Support bundle generation failed."
+  },
+  "auditSpool": {
+    "title": "Audit spool",
+    "withinBudget": "Within budget",
+    "nearFull": "Near budget",
+    "engaged": "Budget engaged",
+    "modes": {
+      "block": "Block on full",
+      "degrade": "Degrade on full"
+    },
+    "usage": "{{used}} of {{max}} used ({{pct}})",
+    "pendingDrops": "{{drops}} unsealed evidence drops across {{tenants}} tenants"
+  }
+}

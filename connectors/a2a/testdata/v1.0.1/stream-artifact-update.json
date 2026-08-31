@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "stream-artifact-1",
+  "result": {
+    "artifactUpdate": {
+      "taskId": "task-v101-1",
+      "contextId": "context-v101-1",
+      "artifact": {
+        "artifactId": "artifact-v101-1",
+        "parts": [
+          {"text": "artifact available"},
+          {"data": {"objectRef": "urn:object:42"}},
+          {"url": "https://files.example.test/report?q=removed#removed"}
+        ]
+      },
+      "lastChunk": true
+    }
+  }
+}

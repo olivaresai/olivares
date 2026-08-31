@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "occurred_at": "2026-06-01T00:00:00Z",
+      "results": [
+        {
+          "model": "gemini-2.5-pro",
+          "input_tokens": 1000,
+          "output_tokens": 200,
+          "cached_input_tokens": 400
+        },
+        {
+          "model": "gemini-experimental-x",
+          "input_tokens": 5000,
+          "output_tokens": 1000,
+          "cached_input_tokens": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "live": {
+    "open": "Live",
+    "connecting": "Connecting…",
+    "error": "Reconnecting…",
+    "closed": "Offline"
+  },
+  "sourceModes": {
+    "export": "Export",
+    "live": "Live",
+    "direct": "Direct",
+    "hints": {
+      "export": "Content came from an export/offline source, or the mode was not declared.",
+      "live": "Content came from a live upstream source.",
+      "direct": "Content was pushed directly into the knowledge base."
+    }
+  },
+  "graph": {
+    "empty": "No relationships to show",
+    "emptyHint": "Nothing matches the current filters yet.",
+    "mobileTitle": "Graph needs a wider screen",
+    "mobileHint": "Open this view on a larger display for the interactive map.",
+    "fit": "Fit to view",
+    "minimap": "Minimap",
+    "controls": {
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "reset": "Reset view"
+    }
+  },
+  "urlState": {
+    "urlRejected": "{{count}} value in this link could not be used ({{keys}}); the view fell back to its default.",
+    "urlRejected_one": "{{count}} value in this link could not be used ({{keys}}); the view fell back to its defaults.",
+    "urlRejected_other": "{{count}} values in this link could not be used ({{keys}}); the view fell back to its defaults.",
+    "savedViewRejected": "{{count}} value saved in “{{name}}” could not be used ({{keys}}); the view fell back to its default.",
+    "savedViewRejected_one": "{{count}} value saved in “{{name}}” could not be used ({{keys}}); the view fell back to its defaults.",
+    "savedViewRejected_other": "{{count}} values saved in “{{name}}” could not be used ({{keys}}); the view fell back to its defaults.",
+    "thisSavedView": "this saved view",
+    "dismiss": "Dismiss"
+  }
+}

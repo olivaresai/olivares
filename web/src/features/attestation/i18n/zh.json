@@ -1,0 +1,202 @@
+{
+  "title": "供应链证明",
+  "description": "对运行中二进制文件的实测事实，以及声明的发布验证契约——每个发布版本附带的内容，以及验证它的确切方法。浏览器中不会重新验证任何内容。",
+  "forbiddenTitle": "未授权",
+  "forbidden": "查看证明契约需要 compliance:read 权限。",
+  "disclaimer": {
+    "tag": "Beta",
+    "body": "本项目处于 beta 阶段：尚无任何发布版本，发布流水线已编写但尚未启用。运行中二进制文件面板是从本进程中实测得出的；契约标签页展示的是声明的契约，而非已发布版本或实时的加密验证——本控制台从不在浏览器中重新验证签名。",
+    "declaredRef": "声明的引用——截至 {{date}}。逐字取自 docs/RELEASE-VERIFICATION.md、SECURITY.md、.goreleaser.yaml 以及 release / scorecard / patch-velocity 工作流。引擎无法观测仓库或 CI 状态，因此这一部分不提供实时数据。"
+  },
+  "live": {
+    "title": "运行中二进制文件（实测）",
+    "description": "本引擎进程能够对自身证明的内容——从二进制文件中实时读取（ldflags、debug.ReadBuildInfo、crypto/fips140、可执行文件的自哈希）——以及真实的发布状态：在 v* 标签触发流水线之前，不会发布或验证任何内容。",
+    "status": {
+      "measured": "已实测"
+    },
+    "fields": {
+      "commit": "提交",
+      "buildDate": "构建日期",
+      "goVersion": "Go 版本",
+      "platform": "OS / 架构",
+      "mainModule": "主模块",
+      "moduleSums": "模块校验和",
+      "vcsStamp": "VCS 戳记",
+      "selfHash": "Self-SHA256",
+      "capturedAt": "捕获于",
+      "releaseReason": "发布状态",
+      "signature": "签名",
+      "verifier": "验证器",
+      "transparencyLog": "透明度日志",
+      "workflows": "流水线工作流"
+    },
+    "fipsOn": "FIPS 140-3：开启",
+    "fipsOff": "FIPS 140-3：关闭",
+    "sums": "{{n}} 个外部依赖项带有 go.sum 哈希",
+    "sumsAbsent": "未记录依赖项校验和",
+    "vcsAvailable": "由 Go 工具链戳记的 VCS 设置",
+    "vcsUnavailable": "无 VCS 戳记",
+    "selfHashHint": "self-SHA256 是运行中可执行文件的流式哈希，在首次读取时计算一次。请将其离线与未来已签名的 checksums.txt 进行比对——浏览器从不验证签名，且仅凭哈希只能证明身份，而非溯源。",
+    "published": "已发布",
+    "notPublished": "未发布",
+    "verifierAvailable": "已编译内置原生验证器（core/secure/modelsign）",
+    "verifierUnavailable": "无可用验证器",
+    "pipelineStatus": {
+      "declared": "已声明。"
+    }
+  },
+  "status": {
+    "declared": "已声明",
+    "skip_when_absent": "缺失时跳过",
+    "not_run": "尚未运行"
+  },
+  "trust": {
+    "keyless": "无密钥（Fulcio/Rekor）",
+    "key_based": "基于密钥（隔离网络）",
+    "both": "无密钥 + 基于密钥",
+    "transitive": "传递式（已签名校验和）"
+  },
+  "tabs": {
+    "artifacts": "制品",
+    "provenance": "溯源与 VEX",
+    "sbom": "SBOM",
+    "scorecard": "Scorecard",
+    "remediation": "修复 SLA",
+    "airgap": "隔离网络与 chart"
+  },
+  "artifacts": {
+    "title": "发布制品",
+    "description": "发布版本附带的内容，以及每个制品如何建立信任。无密钥（Fulcio/Rekor）和基于密钥（隔离网络）的签名均为一等公民——两者均非唯一规范。",
+    "identityNote": "无密钥签名身份（声明）：OIDC 颁发者 {{issuer}} · cosign 证书身份 {{regexp}}",
+    "columns": {
+      "artifact": "制品",
+      "producedBy": "产出方",
+      "signatureTrust": "签名 / 信任",
+      "mechanism": "机制",
+      "status": "状态",
+      "control": "控制项"
+    }
+  },
+  "slsa": {
+    "title": "SLSA 构建溯源",
+    "description": "由 slsa-github-generator 生成、并经 slsa-verifier 验证的 In-toto / ITE-6 溯源。",
+    "buildLevel": "SLSA Build {{level}}",
+    "predicate": "谓词类型",
+    "generator": "生成器",
+    "pin": "可复用工作流固定项",
+    "pinKind": {
+      "semver_tag": "Semver 标签",
+      "sha": "SHA"
+    },
+    "verifyCommand": "验证命令",
+    "honesty": "构造上即为 L3：签名在构建步骤无法触及的隔离上下文中运行。可复用工作流由 semver 标签（而非 SHA）固定——slsa-verifier 依据该标签校验构建器 ID，因此用 SHA 固定会破坏验证。并非每个依赖项都用 SHA 固定。"
+  },
+  "sbom": {
+    "title": "软件物料清单（SBOM）",
+    "description": "为每个归档文件及容器镜像生成的 SPDX 2.3 和 CycloneDX 1.6，作为已签名的 In-toto 证明附加。",
+    "attestation": "证明谓词",
+    "linter": "CISA linter",
+    "cisa": {
+      "title": "CISA 最小要素核对清单",
+      "draftTag": "草案",
+      "draft": "CISA 2025 SBOM「最小要素」尚为草案（决策前、公开征询）——并非法律或最终确定的联邦要求。当某类字段完全缺失时 linter 会失败（硬性），并对草案本身允许的逐组件省略发出警告（软性）。",
+      "columns": {
+        "element": "要素",
+        "enforcement": "强制级别",
+        "carriedBy": "承载于"
+      },
+      "enforcement": {
+        "hard": "硬性",
+        "soft": "软性"
+      }
+    }
+  },
+  "vex": {
+    "title": "OpenVEX 声明",
+    "description": "由可达性驱动的可利用性声明（govulncheck），作为已签名的 In-toto 证明附加。",
+    "columns": {
+      "vuln": "漏洞",
+      "status": "状态",
+      "justification": "理由",
+      "author": "作者"
+    },
+    "status": {
+      "not_affected": "不受影响",
+      "affected": "受影响",
+      "fixed": "已修复",
+      "under_investigation": "调查中"
+    }
+  },
+  "scorecard": {
+    "title": "OpenSSF Scorecard",
+    "description": "对自托管安全产品最为关键的四项供应链检查。",
+    "checksTitle": "已跟踪的检查",
+    "schedule": "调度",
+    "gauge": {
+      "title": "已声明的 Scorecard 检查",
+      "summary": "契约中已声明 {{total}} 项已跟踪的 OpenSSF Scorecard 检查中的 {{declared}} 项。这是已声明检查的覆盖率计数，而非数值化的 Scorecard 评分。",
+      "caption": "已声明"
+    },
+    "columns": {
+      "check": "检查",
+      "what": "评估内容",
+      "evidence": "证据"
+    }
+  },
+  "sla": {
+    "title": "CVE 修复 SLA",
+    "description": "自上游针对我方发布制品中可达漏洞的修复可用之时起算的修复目标。这些目标自首个打标签的发布版本起生效。",
+    "cadenceTitle": "补丁速率节奏",
+    "schedule": "调度",
+    "columns": {
+      "severity": "严重程度（CVSS v3.1）",
+      "cvss": "评分区间",
+      "target": "至已修补、已签名发布版本的目标"
+    },
+    "severity": {
+      "critical": "严重",
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    }
+  },
+  "airgap": {
+    "title": "隔离网络捆绑包与 OCI Helm chart",
+    "description": "可离线验证的捆绑包，以及双重签名的 OCI Helm chart。此路径不会发起任何外部调用。",
+    "bundleTitle": "隔离网络捆绑包",
+    "bundleIntro": "基于密钥的路径无需 Rekor 或 Fulcio。维护者在线一次性构建自包含捆绑包；离线站点对其进行验证并镜像。",
+    "buildCommand": "构建（在线一次）",
+    "mirrorCommand": "镜像（无需互联网）",
+    "chartTitle": "OCI Helm chart",
+    "ociCoordinate": "OCI 坐标",
+    "cosignManifest": "cosign（清单）",
+    "gpgProv": "GPG .prov",
+    "verifyCommand": "验证命令"
+  },
+  "empty": {
+    "artifact": {
+      "title": "尚未声明发布制品",
+      "description": "此表根据已声明的发布验证契约编译生成；仅当该契约列出发布制品时，才会显示相应行。"
+    },
+    "checkChart": {
+      "title": "尚未声明 Scorecard 检查",
+      "description": "仅当编译时内置的发布契约列出已跟踪的 OpenSSF Scorecard 检查时，才会显示已声明检查的覆盖率。"
+    },
+    "sbom": {
+      "title": "尚未声明 SBOM 核对清单要素",
+      "description": "此核对清单根据已声明的 SBOM 契约编译生成；仅当该契约列出 CISA 草案最小要素时，才会显示相应行。"
+    },
+    "scorecard": {
+      "title": "尚未声明已跟踪的 Scorecard 检查",
+      "description": "此表根据已声明的发布契约编译生成；仅当该契约列出已跟踪的 OpenSSF Scorecard 检查时，才会显示相应行。"
+    },
+    "sla": {
+      "title": "尚未声明修复目标",
+      "description": "此表根据已声明的补丁速率契约编译生成；仅当该契约为各 CVE 严重程度区间指定修复目标时，才会显示相应行。"
+    },
+    "vex": {
+      "title": "尚无 OpenVEX 声明",
+      "description": "此表根据已声明的发布契约编译生成；仅当该契约包含示例性 OpenVEX 声明时，才会显示相应行。"
+    }
+  }
+}

@@ -1,0 +1,182 @@
+---
+title: Olivares AI 文档
+description: >-
+  Olivares AI 的产品文档 —— 集成、管理并保护你所运行的 AI，从一台机器到整套基础设施。
+  唯一可信事实源：Claude Code 处于最深层次，Codex 与 Grok Build 并列其旁。自托管：
+  看清你的 AI 在做什么，决定它能做什么，并加以证明。
+template: splash
+hero:
+  tagline: 集成、管理并保护你所运行的 AI —— 无论是一台机器还是整套基础设施。自托管，唯一可信事实源：Claude Code 处于最深层次，Codex 与 Grok Build 并列其旁。对自身局限诚实以待。
+  actions:
+    - text: 从这里开始
+      link: /start/what-is-olivares-ai/
+      icon: right-arrow
+      variant: primary
+    - text: 找到适合你的路径
+      link: /zh/start/paths-by-role/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+本文档采用 [Diátaxis](https://diataxis.fr/start-here/) 框架组织 ——
+四种模式，各自回应一种不同的需求。请挑选与你当前目标相符的那一种。
+
+<CardGrid>
+  <LinkCard
+    title="教程"
+    href="/zh/tutorials/zero-to-graph/"
+    description="面向学习。运行单一二进制文件，一步步抵达一张已填充数据的读/写访问图谱。"
+  />
+  <LinkCard
+    title="操作指南"
+    href="/zh/how-to/self-hosting/"
+    description="面向任务。连接一个数据源、自托管、离线（air-gapped）安装、验证一次发布、将审计转发到 Splunk。"
+  />
+  <LinkCard
+    title="参考"
+    href="/zh/reference/"
+    description="面向信息。REST API、事件总线（AsyncAPI）、各模块、CLI 与配置。"
+  />
+  <LinkCard
+    title="说明"
+    href="/zh/explanation/"
+    description="面向理解。架构、访问图谱、安全与威胁模型、许可。"
+  />
+</CardGrid>
+
+## 这是什么？
+
+Olivares AI **集成、管理并保护你所运行的 AI** —— 无论是在一台机器上，还是遍及整套
+基础设施；唯一可信事实源：Claude Code 处于最深层次，Codex 与 Grok Build 并列其旁，
+是对它们的补充而非竞争。单一的自托管二进制文件，为你的 AI 提供完成实际工作所需的
+上下文、资源访问能力与受管会话，
+同时给你提供细粒度权限、策略、预算与审计证据，让你得以在自有基础设施之上运营
+全部这些 —— 模型、智能体、MCP 服务器、它们背后的身份以及它们所触及的数据。
+它仍然向你展示一张读/写访问图谱（access map），呈现各对象能够触及什么，
+以及 *Permitted（已许可）* 与 *Observed（已观测）* 之间的偏移（drift）；这一切都是
+**自托管**，没有强制遥测，控制平面默认也不产生出站流量。只有你明确配置为跨越边界的内容才会
+跨越你的边界——对你的模型 API 的调用、你接入的 SIEM/webhook 输出，以及你配置时使用的外部嵌入
+提供商。同时，文档也如实说明今天实际运行的内容与尚处 v1 之前的内容。
+
+<CardGrid>
+  <Card title="设计上即诚实" icon="approve-check">
+    我们如实记录今天实际运行的内容以及尚处 v1 之前的内容。教程命令均经过测试；
+    凡是契约尚未覆盖之处，文档都会明言。参见
+    [诚实与局限](/zh/start/honesty-and-limits/)。
+  </Card>
+  <Card title="开放内核" icon="open-book">
+    产品本体（引擎、各模块、Web）采用 AGPL-3.0-only；SDK 与连接器
+    采用 Apache-2.0；企业版模块为商业授权。参见
+    [开放内核与许可](/zh/explanation/open-core-and-licensing/)。
+  </Card>
+</CardGrid>
+
+{/* GALERIA-CONSOLA:INICIO — generada; el orden es el del README. */}
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-dark.png" />
+  <img src="/console/access-map-light.png" width="960" alt="访问映射: 展示每个智能体在你的资产域中读取和写入了哪些内容——左侧为来源，右侧为其触及的资源，读/写（R/RW）以颜色区分。" />
+</picture>
+<figcaption><strong>访问映射</strong> — 展示每个智能体在你的资产域中读取和写入了哪些内容——左侧为来源，右侧为其触及的资源，读/写（R/RW）以颜色区分。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/access-map-drift-dark.png" />
+  <img src="/console/access-map-drift-light.png" alt="最小权限漂移: 叠加最小权限差异：高亮显示异常访问（已观测但未许可）以及未使用的授权。" />
+</picture>
+<figcaption><strong>最小权限漂移</strong> — 叠加最小权限差异：高亮显示异常访问（已观测但未许可）以及未使用的授权。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/orchestration-dark.png" />
+  <img src="/console/orchestration-light.png" alt="编排与 A2A: 智能体到智能体的拓扑——谁向谁委派、实时的委派流，以及声明的执行节奏。对通信图的读取属于特权操作并自审计。" />
+</picture>
+<figcaption><strong>编排与 A2A</strong> — 智能体到智能体的拓扑——谁向谁委派、实时的委派流，以及声明的执行节奏。对通信图的读取属于特权操作并自审计。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/inventory-dark.png" />
+  <img src="/console/inventory-light.png" alt="清单: 在您的资产域中发现的每个智能体、会话、MCP、模型和身份。" />
+</picture>
+<figcaption><strong>清单</strong> — 在您的资产域中发现的每个智能体、会话、MCP、模型和身份。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/observability-dark.png" />
+  <img src="/console/observability-light.png" alt="可观测性与互操作: 基于标准的摄取健康度，以及与账本关联的追踪下钻。各项数据为引擎级（进程全局），而非按租户统计；标准固定到上游机构所声明的版本与成熟度。" />
+</picture>
+<figcaption><strong>可观测性与互操作</strong> — 基于标准的摄取健康度，以及与账本关联的追踪下钻。各项数据为引擎级（进程全局），而非按租户统计；标准固定到上游机构所声明的版本与成熟度。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/dashboards-dark.png" />
+  <img src="/console/dashboards-light.png" alt="高管概览: 一览成本、用量、风险与合规——深入操作视图可查看明细。" />
+</picture>
+<figcaption><strong>高管概览</strong> — 一览成本、用量、风险与合规——深入操作视图可查看明细。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/home-dark.png" />
+  <img src="/console/home-light.png" alt="概览: 一览您的 AI 资产域——清单、活动、风险、合规、支出与健康状况。" />
+</picture>
+<figcaption><strong>概览</strong> — 一览您的 AI 资产域——清单、活动、风险、合规、支出与健康状况。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/security-dark.png" />
+  <img src="/console/security-light.png" alt="安全与取证: 护栏发现项、强制执行态势、异常队列以及防篡改的事件取证。该平面默认仅作探测——它进行记录，除非已启用并受治理的强制执行，否则不会自行阻断。" />
+</picture>
+<figcaption><strong>安全与取证</strong> — 护栏发现项、强制执行态势、异常队列以及防篡改的事件取证。该平面默认仅作探测——它进行记录，除非已启用并受治理的强制执行，否则不会自行阻断。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/session-viewer-dark.png" />
+  <img src="/console/session-viewer-light.png" alt="会话录制查看器: 单个会话的代理活动和治理证据的统一时间线。" />
+</picture>
+<figcaption><strong>会话录制查看器</strong> — 单个会话的代理活动和治理证据的统一时间线。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/identity-dark.png" />
+  <img src="/console/identity-light.png" alt="身份与 NHI: SSO、SCIM、身份清单、NHI 生命周期、WIF 图谱与特权登录——经观测、治理与审计。" />
+</picture>
+<figcaption><strong>身份与 NHI</strong> — SSO、SCIM、身份清单、NHI 生命周期、WIF 图谱与特权登录——经观测、治理与审计。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/knowledge-dark.png" />
+  <img src="/console/knowledge-light.png" alt="数据、知识与上下文: 受治理的知识库、检索溯源、提示词注册表、智能体记忆与上下文策略。" />
+</picture>
+<figcaption><strong>数据、知识与上下文</strong> — 受治理的知识库、检索溯源、提示词注册表、智能体记忆与上下文策略。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/work-apply-refused-dark.png" />
+  <img src="/console/work-apply-refused-light.png" alt="计划: 正在规划变更。此步骤不写入任何内容。" />
+</picture>
+<figcaption><strong>计划</strong> — 正在规划变更。此步骤不写入任何内容。</figcaption>
+</figure>
+
+<figure>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="/console/killswitch-dark.png" />
+  <img src="/console/killswitch-light.png" alt="紧急关停开关: 资产域紧急停止：一键即可中止所有受治理的执行面。触发的代价被刻意设计得很低；恢复则需要两个不同的用户账户以及一次强制的事后复核。" />
+</picture>
+<figcaption><strong>紧急关停开关</strong> — 资产域紧急停止：一键即可中止所有受治理的执行面。触发的代价被刻意设计得很低；恢复则需要两个不同的用户账户以及一次强制的事后复核。</figcaption>
+</figure>
+
+{/* GALERIA-CONSOLA:FIN */}

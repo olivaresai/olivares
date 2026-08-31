@@ -1,0 +1,25 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "role",
+      "id": "role_owner",
+      "name": "Owner",
+      "description": "Built-in owner role",
+      "permissions": ["organization.read", "organization.write"],
+      "resource_type": "api.organization",
+      "predefined_role": true
+    },
+    {
+      "object": "role",
+      "id": "role_finops_auditor",
+      "name": "FinOps Auditor",
+      "description": "Custom read-only finance role",
+      "permissions": ["projects.read", "usage.read", "costs.read"],
+      "resource_type": "api.project",
+      "predefined_role": false
+    }
+  ],
+  "has_more": false,
+  "next": null
+}

@@ -1,0 +1,41 @@
+# Claves de consulta GLOBALES: sin inquilino A PROPOSITO, con la razon MEDIDA en el motor.
+# Generada el 2026-08-24 desde el propio censo. Cada familia lleva por que su handler NO es
+# por inquilino; anadir una linea aqui sin esa razon es un perdon, no una exencion.
+#
+#   console/* y logs/*            /v1/console/* : handler con authzSystem(), superadmin
+#   backups/*                     handleListBackups usa authzSystem(system:admin)
+#   tenants/*                     el recurso ES el inquilino: cross-tenant por definicion
+#   residency/registry            handleResidencyRegistry, authzSystem
+#   residency/orgs                orgs de sistema
+#   health/publicStatus           superficie publica
+#   reporting/reports             handleListReports IGNORA peticion y contexto: catalogo
+#   governance/emergingStandards  handleEmergingStandards idem: registro estatico
+features/backups/api.ts	all
+features/backups/api.ts	backup
+features/backups/api.ts	backups
+features/backups/api.ts	jobs
+features/backups/api.ts	pending
+features/backups/api.ts	schedule
+features/console/api.ts	activation
+features/console/api.ts	busSnapshot
+features/console/api.ts	connectors
+features/console/api.ts	effectiveConfig
+features/console/api.ts	healthSummary
+features/console/api.ts	keyCustody
+features/console/api.ts	license
+features/console/api.ts	rbacCatalog
+features/console/api.ts	secrets
+features/console/api.ts	setupStatus
+features/console/api.ts	sources
+features/console/api.ts	sso
+features/console/api.ts	ssoIdps
+features/console/api.ts	superadmins
+features/governance/api.ts	emergingStandards
+features/health/api.ts	publicStatus
+features/logs/api.ts	all
+features/logs/api.ts	buffer
+features/reporting/api.ts	reports
+features/residency/api.ts	orgs
+features/residency/api.ts	registry
+features/tenants/api.ts	all
+features/tenants/api.ts	list

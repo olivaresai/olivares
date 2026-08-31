@@ -1,0 +1,12 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/acct1/projects/projA",
+      "name": "projA"
+    },
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/acct1/projects/projB",
+      "name": "projB"
+    }
+  ]
+}

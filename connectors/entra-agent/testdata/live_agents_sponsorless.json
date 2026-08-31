@@ -1,0 +1,7 @@
+{
+  "value": [
+    {"id": "agent-with-owner", "displayName": "Agent With Owner"},
+    {"id": "agent-sponsorless", "displayName": "Sponsorless Agent"},
+    {"id": "agent-denied", "displayName": "Denied Agent"}
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "usageEvents": [
+    {
+      "timestamp": "1717200000000",
+      "userEmail": "alice@example.com",
+      "model": "claude-3.5-sonnet",
+      "kind": "agent",
+      "maxMode": true,
+      "isTokenBasedCall": true,
+      "isChargeable": true,
+      "isHeadless": false,
+      "chargedCents": 20.18232,
+      "tokenUsage": {
+        "inputTokens": 12000,
+        "outputTokens": 800,
+        "cacheWriteTokens": 4000,
+        "cacheReadTokens": 30000,
+        "totalCents": 18.5
+      }
+    },
+    {
+      "timestamp": "1717203600000",
+      "userEmail": "bob@example.com",
+      "model": "gpt-4o",
+      "kind": "chat",
+      "maxMode": false,
+      "isTokenBasedCall": false,
+      "isChargeable": true,
+      "isHeadless": false,
+      "chargedCents": 4.0
+    },
+    {
+      "timestamp": "1717207200000",
+      "serviceAccountId": "svc_ci_runner",
+      "serviceAccountName": "ci-runner",
+      "model": "claude-3.5-sonnet",
+      "kind": "agent",
+      "isTokenBasedCall": true,
+      "isChargeable": true,
+      "isHeadless": true,
+      "chargedCents": 7.5,
+      "tokenUsage": { "inputTokens": 5000, "outputTokens": 200, "cacheReadTokens": 0, "cacheWriteTokens": 0, "totalCents": 7.0 }
+    },
+    {
+      "timestamp": "1717210800000",
+      "userEmail": "bob@example.com",
+      "model": "gpt-4o-mini",
+      "kind": "tab",
+      "isTokenBasedCall": false,
+      "isChargeable": false,
+      "isHeadless": false,
+      "chargedCents": 0
+    }
+  ],
+  "pagination": { "numPages": 1, "currentPage": 1, "pageSize": 100, "hasNextPage": false },
+  "period": { "startDate": 1717200000000, "endDate": 1717290000000 },
+  "totalUsageEventsCount": 4
+}

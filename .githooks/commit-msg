@@ -1,0 +1,143 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# commit-msg — enforce Conventional Commits (https://www.conventionalcommits.org).
+#
+# Two-tier strategy (Go-primary repo; the only Node lives in /web and the root
+# commit tooling):
+#   1. If commitlint is available (root deps, web deps, or a global install),
+#      defer to it — it is the canonical, spec-complete linter this repo
+#      standardizes on.
+#   2. Otherwise fall back to a self-contained POSIX regex check, so a fresh
+#      clone / air-gapped / Node-less environment can still commit and is still
+#      held to the convention.
+#
+# Installed repo-wide via `git config core.hooksPath .githooks` (see Taskfile
+# `hooks` task). Allowed types are kept in lockstep with .commitlintrc.json.
+
+set -eu
+
+MSG_FILE="$1"
+
+# --- tier 0: GitHub closing keywords in a commit that ships no code ----------
+# WHY THIS EXISTS, with the incident that produced it. A commit that changed ONE
+# documentation file and no code carried, in its body, a sentence of the form
+# "... and is closed: #<n> ...". GitHub read that as an instruction and closed a
+# live pull request holding 25 files of work. Undoing the close took a minute.
+# The SILENCE cost an hour: the work was treated as delivered while it sat
+# unintegrated, because nothing announced that the pull request had gone.
+#
+# The keyword set closes an issue or PR from ANYWHERE in the message body — not
+# only the header, not only inside a pull request, not only in commits that touch
+# code. Documentation that narrates project state BY NUMBER therefore carries more
+# of this risk than any source file in the repository.
+#
+# THE RULE IS NOT "never write these words". Closing an issue from a commit is a
+# legitimate, useful GitHub feature and this repo does not remove features. The
+# rule is that it must be DELIBERATE: a commit that ships no code has no business
+# closing anything, so there the keyword is refused and the writer is told how to
+# say the same thing harmlessly. In a commit that does touch code the keyword
+# passes untouched.
+closing_keyword_guard() {
+  # Only meaningful with a staged tree to inspect; a bare `git commit -m` during
+  # a rebase or an amend without an index still has one, so this is not a skip.
+  staged="$(git diff --cached --name-only 2>/dev/null || true)"
+  [ -n "$staged" ] || return 0
+
+  # "Ships code" = anything that is not documentation or board narration.
+  if printf '%s\n' "$staged" | grep -qvE '(\.md|\.txt)$'; then
+    return 0 # a code-bearing commit may close things on purpose
+  fi
+
+  offenders="$(grep -v '^#' "$MSG_FILE" |
+    grep -inE '(clos(e|es|ed)|fix(|es|ed)|resolv(e|es|ed))[[:space:]]*:?[[:space:]]*#[0-9]+' ||
+    true)"
+  [ -n "$offenders" ] || return 0
+
+  printf 'commit-msg: REFUSED — a documentation-only commit must not close an issue or PR.\n\n' >&2
+  printf '  GitHub closes on these keywords from anywhere in the body:\n' >&2
+  printf '    close/closes/closed · fix/fixes/fixed · resolve/resolves/resolved  + #<number>\n\n' >&2
+  printf '  Found:\n' >&2
+  printf '%s\n' "$offenders" | sed 's/^/    /' >&2
+  printf '\n  This commit touches only documentation, so the close is almost certainly\n' >&2
+  printf '  accidental. This exact shape once closed a live pull request holding 25\n' >&2
+  printf '  files, silently, and the work was treated as delivered for an hour after.\n\n' >&2
+  printf '  Say it without the trigger — the meaning survives:\n' >&2
+  printf '    "closed: #484"      ->  "#484 is closed"      /  "closure of #484"\n' >&2
+  printf '    "fixes #123"        ->  "the fix for #123"    /  "#123 is fixed"\n' >&2
+  printf '    "resolves #7"       ->  "#7 is resolved"      /  "resolution of #7"\n\n' >&2
+  printf '  If you REALLY mean to close it from a docs commit, that is a deliberate act:\n' >&2
+  printf '  use `git commit --no-verify` and say so in the body.\n' >&2
+  return 1
+}
+
+closing_keyword_guard || exit 1
+
+# --- tier 1: commitlint, if present -----------------------------------------
+run_commitlint() {
+  if [ -x "node_modules/.bin/commitlint" ]; then
+    node_modules/.bin/commitlint --edit "$MSG_FILE"
+    return $?
+  fi
+  if [ -x "web/node_modules/.bin/commitlint" ]; then
+    web/node_modules/.bin/commitlint --edit "$MSG_FILE"
+    return $?
+  fi
+  if command -v commitlint >/dev/null 2>&1; then
+    commitlint --edit "$MSG_FILE"
+    return $?
+  fi
+  return 127 # not available
+}
+
+if run_commitlint; then
+  exit 0
+else
+  rc=$?
+  # rc 127 = commitlint not found -> fall through to the native check.
+  # Any other non-zero = commitlint ran and rejected the message -> fail.
+  if [ "$rc" -ne 127 ]; then
+    exit "$rc"
+  fi
+fi
+
+# --- tier 2: native POSIX fallback ------------------------------------------
+# First non-blank, non-comment line is the Conventional Commits header.
+header="$(grep -v '^#' "$MSG_FILE" | sed '/^[[:space:]]*$/d' | head -n 1)"
+
+# Let merge / revert / fixup / squash auto-messages through.
+case "$header" in
+  "Merge "*|"Revert "*|"Reapply "*|"fixup! "*|"squash! "*|"amend! "*)
+    exit 0 ;;
+esac
+
+# Keep this list identical to .commitlintrc.json type-enum.
+TYPES='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert'
+
+# <type>[optional (scope)][optional !]: <description>
+if printf '%s\n' "$header" \
+   | grep -Eq "^(${TYPES})(\([a-z0-9 ,_/.-]+\))?(!)?: .+"; then
+  desc="${header#*: }"
+  if [ -n "$(printf '%s' "$desc" | tr -d '[:space:]')" ]; then
+    exit 0
+  fi
+  echo "commit-msg: empty description after the colon." >&2
+fi
+
+cat >&2 <<EOF
+commit-msg: message does not follow Conventional Commits.
+
+  Got:      ${header}
+  Expected: <type>[(scope)][!]: <description>
+  Types:    feat fix docs style refactor perf test build ci chore revert
+
+  Examples:
+    feat(core): add module runtime over go-plugin gRPC
+    fix(connectors): handle nil OTLP resource attributes
+    docs: document SPDX header policy
+    refactor(web)!: drop legacy access-map props (BREAKING CHANGE)
+
+  Spec: https://www.conventionalcommits.org/en/v1.0.0/
+EOF
+exit 1

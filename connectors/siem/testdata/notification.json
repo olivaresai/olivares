@@ -1,0 +1,13 @@
+{
+  "type": "finding.reported",
+  "title": "least-privilege drift",
+  "body": "role billing can write public.invoices",
+  "severity": "high",
+  "tenant": "acme",
+  "fields": {
+    "resource": "public.invoices",
+    "origin": "billing",
+    "mode": "readwrite"
+  },
+  "time": "2026-06-03T10:30:00Z"
+}

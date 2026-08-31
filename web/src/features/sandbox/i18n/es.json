@@ -1,0 +1,185 @@
+{
+  "truncation": {
+    "label": "Cargadas {{n}} filas; hay más",
+    "hint": "Esta lista de sandbox tiene un techo. Sólo se muestran las filas cargadas."
+  },
+  "title": "Sandbox de pruebas",
+  "description": "Ejecuciones aisladas y efímeras contra recursos simulados: simulaciones de escenarios, replays deterministas y comparaciones pre/post-despliegue. Las salidas son sintéticas; nunca se almacena texto real de un objetivo.",
+  "tabs": {
+    "runs": "Ejecuciones",
+    "comparisons": "Comparaciones",
+    "scenarios": "Escenarios"
+  },
+  "kind": {
+    "scenario": "Escenario",
+    "replay": "Replay",
+    "compare": "Comparar"
+  },
+  "runner": {
+    "inproc-mock": "mock in-proc",
+    "container": "Contenedor",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "Agente",
+    "model": "Modelo",
+    "prompt": "Prompt",
+    "session": "Sesión",
+    "sandbox_run": "Ejecución sandbox"
+  },
+  "verdict": {
+    "improved": "Mejora",
+    "regressed": "Regresión",
+    "unchanged": "Sin cambios",
+    "inconclusive": "No concluyente"
+  },
+  "run": {
+    "isolated": "Aislada",
+    "isolatedHint": "El runner garantiza aislamiento: sin egress, sin secretos, sin producción. Se registra tal y como lo reporta el runner, no se infiere.",
+    "notIsolated": "No aislada",
+    "notIsolatedHint": "Este backend no garantiza aislamiento — se muestra literalmente, no se oculta.",
+    "destroyed": "Destruida",
+    "destroyedHint": "El estado del entorno efímero se descartó tras la ejecución.",
+    "notScored": "Ejecutada, no puntuada",
+    "pass": "Pasa",
+    "fail": "Falla"
+  },
+  "runs": {
+    "title": "Ejecuciones",
+    "description": "Cada ejecución aislada, con el backend que la corrió y si fue puntuada.",
+    "isolationNote": "El aislamiento es real, no fingido: el runner y el flag de aislamiento se muestran exactamente como se registraron. Una ejecución degradada se ejecutó pero no se puntuó — no es un aprobado.",
+    "empty": "Aún no hay ejecuciones",
+    "errored": "{{count}} error",
+    "errored_one": "{{count}} error",
+    "errored_many": "{{count}} errores",
+    "errored_other": "{{count}} errores",
+    "columns": {
+      "kind": "Tipo",
+      "subject": "Sujeto",
+      "runner": "Runner",
+      "isolation": "Aislamiento",
+      "status": "Estado",
+      "steps": "Pasos",
+      "score": "Puntuación",
+      "started": "Inicio"
+    }
+  },
+  "outputs": {
+    "title": "Salidas por paso",
+    "empty": "No hay salidas registradas",
+    "syntheticNote": "Son salidas sintéticas acotadas del runner mock — no son salida de producción. Un mock-miss es un marcador determinista; nunca alcanzó un recurso real.",
+    "mockHit": "Mock acertado",
+    "mockMiss": "Mock-miss"
+  },
+  "stream": {
+    "replayNote": "El motor reproduce por esta conexión las salidas por paso ya registradas de esta ejecución y después la cierra. Una ejecución de sandbox se ejecuta de forma síncrona al lanzarla, así que esto es evidencia ya registrada que llega de forma progresiva, no la vista de una ejecución todavía en curso.",
+    "waiting": "Esperando la primera salida de paso; el estado de la conexión se indica arriba.",
+    "connecting": "Conectando…",
+    "receiving": "Recibiendo la reproducción",
+    "complete": "Reproducción completa",
+    "completePartial": "La reproducción terminó, pero no es el registro completo",
+    "unreadable": "Frames que esta vista no ha podido leer: {{n}}. Llegaron y se descartaron, así que falta aquí la evidencia que traían: esto no es una reproducción limpia.",
+    "emptyUnreadable": "No se ha podido leer ninguna salida de paso",
+    "disconnected": "Sin conexión",
+    "lost": "Conexión perdida — has dejado de ver esta ejecución.",
+    "lostHint": "Esto NO es que la ejecución haya terminado: la conexión se cortó antes de que el motor señalara el final de la reproducción. El estado de la ejecución es el que registró el motor, el que muestra la tabla de ejecuciones; nunca se deduce de esta conexión. Reconecta para reanudar; las salidas ya mostradas no se repiten.",
+    "reconnect": "Reconectar",
+    "snapshot": "El stream no entregó nada, así que éstas son las salidas almacenadas leídas por la API JSON: una instantánea, no la vista en vivo.",
+    "summary": "Resumen del motor: {{ok}} de {{total}} pasos resueltos contra un mock, {{error}} mock-misses."
+  },
+  "comparisons": {
+    "title": "Comparaciones pre/post-despliegue",
+    "description": "Baseline frente a candidato puntuados contra la misma suite — el veredicto que controla un despliegue.",
+    "empty": "Aún no hay comparaciones",
+    "emptyHint": "Lanza una comparación para evaluar una variante candidata frente a su baseline.",
+    "baseline": "Baseline",
+    "candidate": "Candidato",
+    "delta": "Delta",
+    "decidedBy": "Decidido por",
+    "scoredAgainst": "Puntuado contra",
+    "noSuite": "Sin suite — el veredicto es no concluyente sin un baseline y un candidato puntuados."
+  },
+  "scenarios": {
+    "title": "Escenarios",
+    "description": "Especificaciones reutilizables de pasos de entrada sintéticos más respuestas simuladas de MCP/recursos.",
+    "empty": "Aún no hay escenarios",
+    "emptyHintAuthor": "Registra el primer fixture sintético: los pasos de entrada que recibe un sujeto, más las respuestas simuladas contra las que se resuelven.",
+    "emptyHintReadOnly": "Los escenarios los crea un llamante con el permiso de escritura de escenarios de sandbox. Sin él puedes leer los que existan y sus ejecuciones.",
+    "emptyHintConfined": "Tu pertenencia está confinada a un workspace. Un escenario es un fixture de ámbito de tenant, así que el motor se niega a registrarlo desde una pertenencia confinada — tiene que crearlo un miembro con alcance de tenant.",
+    "columns": {
+      "name": "Nombre",
+      "subjectKind": "Sujeto",
+      "steps": "Pasos",
+      "status": "Estado",
+      "actions": "Acciones"
+    },
+    "create": {
+      "action": "Nuevo escenario",
+      "title": "Nuevo escenario",
+      "description": "Un escenario es un fixture sintético: los pasos de entrada que recibe un sujeto y las respuestas simuladas de MCP/recursos contra las que se resuelven. Nada de esto alcanza un recurso real.",
+      "name": "Nombre",
+      "namePlaceholder": "Agente de checkout — camino feliz",
+      "subjectKind": "Sujeto",
+      "subjectKindHint": "Qué ejercita el escenario — agente, modelo, prompt o sesión. Texto libre, recortado y almacenado hasta 200 caracteres.",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "Descripción",
+      "descriptionPlaceholder": "Qué ejercita este fixture y por qué existe.",
+      "steps": "Pasos",
+      "stepsHint": "Las entradas que recibe el sujeto, en orden. Deja una clave en blanco y el motor asigna step-1, step-2, etcétera.",
+      "stepsEmpty": "Aún no hay pasos — una ejecución de este escenario no produciría ninguna salida.",
+      "addStep": "Añadir paso",
+      "removeStep": "Eliminar el paso {{index}}",
+      "stepKey": "Clave del paso {{index}}",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "Entrada del paso {{index}}",
+      "stepInputPlaceholder": "Clasifica esta solicitud de reembolso.",
+      "mocks": "Mocks",
+      "mocksHint": "La respuesta que devuelve cada MCP/recurso simulado. Un paso que no encuentra mock registra un marcador determinista de mock-miss — nunca llama fuera.",
+      "mocksEmpty": "Aún no hay mocks — cada paso registraría un marcador de mock-miss.",
+      "addMock": "Añadir mock",
+      "removeMock": "Eliminar el mock {{index}}",
+      "mockResource": "Recurso del mock {{index}}",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "Respuesta del mock {{index}}",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "Escribe sólo texto sintético: aquí nada se clasifica, se enmascara ni se rechaza, así que un secreto que pegues es un secreto que has almacenado. El motor sólo acota la longitud —el nombre a 200 caracteres, la descripción a 1024, el cuerpo de cada paso o mock a 8192— y añade puntos suspensivos cuando trunca.",
+      "submit": "Crear escenario",
+      "submitting": "Creando…",
+      "success": "Escenario creado",
+      "failed": "El escenario no se creó."
+    },
+    "archive": {
+      "action": "Archivar",
+      "alreadyArchived": "Ya archivado",
+      "confirmTitle": "¿Archivar este escenario?",
+      "confirmBody": "«{{name}}» queda marcado como archivado y la decisión se registra en el libro de auditoría. Las ejecuciones y comparaciones que ya lo usaron se conservan — archivar nunca borra evidencia. Es un cambio de estado, no un bloqueo: el motor sigue ejecutando un escenario en ese estado si algo se lo pide.",
+      "success": "Escenario archivado"
+    }
+  },
+  "seam": {
+    "synthetic": "Datos sintéticos: no cableado",
+    "syntheticData": "La generación de datos sintéticos es un punto de extensión documentado post-v1 — no implementado en esta versión."
+  },
+  "empty": {
+    "runs": {
+      "title": "Aún no se han registrado ejecuciones de sandbox",
+      "description": "Las ejecuciones aparecen cuando un llamante autorizado inicia mediante la API de sandbox un escenario almacenado, un replay o una comparación."
+    },
+    "scenarios": {
+      "title": "Aún no se han definido escenarios de sandbox",
+      "description": "Un escenario es un fixture sintético escrito por un operador, registrado por un llamante con el permiso de escritura de escenarios de sandbox — desde esta pantalla o mediante la API de sandbox."
+    }
+  },
+  "actions": {
+    "replay": "Repetir una sesión",
+    "compare": "Comparar variantes",
+    "run": "Repetir",
+    "compareRun": "Comparar",
+    "sessionRef": "Ref de la sesión",
+    "scenarioRef": "Ref del escenario (opcional)",
+    "baseline": "Variante base",
+    "candidate": "Variante candidata",
+    "replayHint": "Re-ejecuta una sesión histórica de forma determinista contra mocks. Si la línea temporal no se puede reconstruir, la repetición vuelve DEGRADADA con cero pasos: eso no es una sesión que no hizo nada, es una línea temporal que no se pudo reconstruir.",
+    "compareHint": "Una comparación es EVIDENCIA DE DECISIÓN pre/post-despliegue y se guarda append-only; por eso exige el nivel admin y no el de simplemente ejecutar."
+  }
+}

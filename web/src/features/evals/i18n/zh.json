@@ -1,0 +1,194 @@
+{
+  "truncation": {
+    "label": "已加载 {{n}} 行；还有更多",
+    "hint": "此列表有上限，仅显示已加载的行；此处没有某条评估记录并不能证明它不存在。"
+  },
+  "title": "评估",
+  "description": "质量评分卡、运行结果、A/B 对比与漂移——以版本化的黄金套件为基准进行度量。输出从不存储；仅保留分数与哈希指纹。",
+  "forbidden": {
+    "title": "未授权",
+    "description": "您需要 evals 读取权限才能查看质量度量结果。"
+  },
+  "tabs": {
+    "scorecards": "评分卡",
+    "runs": "运行",
+    "ab": "A/B",
+    "drift": "漂移",
+    "gate": "CI 门禁",
+    "calibration": "评判器校准"
+  },
+  "subjectKind": {
+    "suite": "套件",
+    "agent": "智能体",
+    "model": "模型",
+    "prompt_variant": "提示词变体",
+    "prompt": "提示词",
+    "session": "会话",
+    "sandbox_run": "沙箱运行"
+  },
+  "scorecards": {
+    "title": "质量评分卡",
+    "description": "每个对象的平均分、通过率与趋势，于读取时聚合。",
+    "groupBy": "分组依据",
+    "by": {
+      "agent": "按智能体",
+      "model": "按模型",
+      "suite": "按套件",
+      "prompt_variant": "按提示词变体"
+    },
+    "meanScore": "平均分",
+    "passRate": "通过率",
+    "runs": "运行",
+    "lastScore": "最近分数",
+    "regressed": "已回退",
+    "empty": "暂无评分卡——请对黄金套件运行一次评估。"
+  },
+  "runs": {
+    "title": "评估运行",
+    "description": "每次运行都以某个套件版本为基准对对象评分。回退会在此标记；相应的发现项由安全视图处理。",
+    "columns": {
+      "subject": "对象",
+      "status": "状态",
+      "score": "分数",
+      "passRate": "通过率",
+      "regression": "回退",
+      "startedAt": "开始时间"
+    },
+    "regressed": "已回退 · 漂移 {{drift}}",
+    "noRegression": "无",
+    "empty": "该范围内无运行。",
+    "overN": "共 {{n}}",
+    "notScored": "not scored — no verdict",
+    "noBaseline": "no baseline — nothing compared"
+  },
+  "cases": {
+    "title": "{{subject}} —— 用例结果",
+    "titleEmpty": "用例结果",
+    "description": "本次运行中每个用例的结果与分数。",
+    "noPayload": "候选输出从不存储——每个用例仅携带一个单向指纹和一段截断的短标签，绝不包含可展开的载荷。",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "用例",
+      "outcome": "结果",
+      "score": "分数",
+      "label": "标签",
+      "fingerprint": "指纹"
+    },
+    "empty": "本次运行无用例结果。"
+  },
+  "ab": {
+    "title": "A/B 对比",
+    "description": "两个提示词变体以同一套件为基准评分；分数较高者胜出，平局会明确标示。",
+    "winner": "胜出：{{label}} · Δ {{delta}}",
+    "winnerTag": "胜出",
+    "tie": "平局",
+    "passRate": "通过率 {{value}}",
+    "seamNote": "A/B 对比是通过 POST /ab 执行的特权写入；引擎不会暴露可回读的已存储对比。",
+    "seamLabel": "特权写入",
+    "pickerTitle": "运行 A/B 对比",
+    "pickerDescription": "选择套件，然后提供每个变体所产生的候选输出。",
+    "runComparison": "运行对比",
+    "runError": "无法运行 A/B 对比。请重试。",
+    "empty": "此会话中尚未运行 A/B 对比。",
+    "emptyDescription": "只有在特权写入 POST /ab 完成后才会显示结果。没有用于读取已存储对比的 GET 端点。",
+    "suiteLabel": "套件",
+    "selectSuite": "选择套件",
+    "noSuites": "尚无套件。比较是针对套件的用例进行评分的，请先创建一个。",
+    "labelA": "变体 A 标签",
+    "labelB": "变体 B 标签",
+    "outputsA": "变体 A 的输出",
+    "outputsB": "变体 B 的输出",
+    "outputsHint": "将 case_key 映射到该变体所产生输出的 JSON 对象。引擎评分后仅保留哈希，正文不会被存储。",
+    "outputsInvalid": "不是将 case_key 映射到输出文本的 JSON 对象。",
+    "outputsEmpty": "请至少提供一个用例的输出。空集合不会评出任何分数，并会被保存为没有结果的运行。",
+    "pairwiseLabel": "同时对变体进行两两评判",
+    "pairwiseHint": "对每个共有用例交换两个候选的顺序各评判一次，只有两种顺序结果一致才计为胜出。每个用例两次评判调用（按量计费），且套件必须带有评判标准。",
+    "pairwiseTitle": "两两评判",
+    "pairwiseSkippedTag": "已跳过",
+    "pairwiseWinner": "评判胜出：{{label}}",
+    "pairwiseCounts": "已比较 {{compared}} · A {{aWins}} · B {{bWins}} · 平局 {{ties}} · 顺序不一致 {{inconsistent}} · 错误 {{errors}}",
+    "pairwiseConsistency": "位置一致性 {{rate}}（n={{n}}，95% CI {{lo}}–{{hi}}）",
+    "outputsTooLong": "用例键最多 {{maxKey}} 个字符，输出最多 {{maxOutput}} 个字符。引擎会截断更长的值，并对截断后的文本评分。",
+    "outputsPlaceholder": "{\"case-1\": \"该变体产生的输出\"}",
+    "pairwiseSkippedBody": "引擎未运行评判比较。其原因："
+  },
+  "drift": {
+    "title": "漂移 —— {{subject}}",
+    "description": "分数随时间相对于套件通过阈值的变化；持续下降即为劣化。",
+    "score": "分数",
+    "threshold": "通过阈值",
+    "pickerTitle": "对象",
+    "note": "阈值线即套件通过阈值；低于该线的点表示当时未达标。",
+    "empty": "暂无趋势数据。"
+  },
+  "outcomeBar": {
+    "passed": "已通过",
+    "failed": "未通过",
+    "errors": "错误",
+    "skipped": "已跳过"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "本次运行尚无用例结果记录",
+      "description": "本次运行必须对所选套件中的用例评分或将其跳过，之后才会显示各用例的结果、分数和指纹。"
+    },
+    "runs": {
+      "title": "尚无评估运行记录",
+      "description": "调用方必须通过评估运行 API 提交候选输出，按版本化黄金套件进行评估后，已评分的运行才会显示。"
+    }
+  },
+  "gate": {
+    "title": "CI 门禁",
+    "description": "回归门禁的评估结果：门禁测得的结论，以及 CI 必须遵循的结论。",
+    "empty": "没有门禁评估",
+    "measured": "测得 {{verdict}}",
+    "effective": "CI 遵循 {{verdict}}",
+    "sampled": "已抽取 {{total}} 个用例中的 {{sampled}} 个",
+    "overriddenBy": "由 {{actor}} 覆盖",
+    "override": "覆盖",
+    "overrideTitle": "覆盖状态为 {{verdict}} 的门禁",
+    "overrideDescription": "必须填写书面理由。它会与原始结论一并记录在该行和证据台账中。",
+    "reason": "理由",
+    "reasonHint": "覆盖此门禁的原因。原始结论不会被删除。",
+    "confirmOverride": "覆盖门禁",
+    "overrideDone": "门禁已覆盖",
+    "cancel": "取消",
+    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
+    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+  },
+  "calibration": {
+    "title": "评判器校准",
+    "description": "LLM 评判器与人工标注的一致程度。无法测量经随机性校正一致度的集合，不能证明任何结论。",
+    "empty": "没有校准报告",
+    "meets": "达到目标",
+    "below": "低于目标",
+    "cannotCertify": "无法认定 — kappa 未定义",
+    "agreement": "一致度",
+    "kappa": "Kappa",
+    "sensitivity": "灵敏度",
+    "specificity": "特异度",
+    "ciOverN": "95% 置信区间 {{lo}}–{{hi}}（n={{n}}）",
+    "degradedWithErrors": "降级 · {{n}} 项出错",
+    "verbosityCorr": "冗长度相关性"
+  },
+  "calibItems": {
+    "title": "Reference set",
+    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "run": "Run calibration",
+    "empty": "No labelled items yet",
+    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
+    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "humanPass": "human: pass",
+    "humanFail": "human: fail",
+    "unscored": "unscored",
+    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+  },
+  "baseline": {
+    "pin": "Pin as baseline",
+    "confirm": "Replace the baseline",
+    "pinned": "Baseline pinned",
+    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
+    "thisRunScores": "This run passed {{score}} over n={{n}}.",
+    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+  }
+}

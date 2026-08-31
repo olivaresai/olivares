@@ -1,0 +1,13 @@
+{"evt":"config.load","sub":"sub-123","email":"alice@example.com"}
+{"evt":"session.mint","sub":"sub-123","email":"alice@example.com"}
+{"evt":"session.refresh","sub":"sub-123"}
+{"evt":"device.authorize","sub":"sub-123"}
+{"evt":"device.verify","sub":"sub-123"}
+{"evt":"auth.denied","reason":"domain not allowed","email":"blocked@example.com"}
+{"evt":"access.denied","reason":"model blocked","sub":"sub-456"}
+{"evt":"inference","sub":"sub-123","upstream":"anthropicAws","prompt":"SECRET_PROMPT_SHOULD_NOT_LEAK"}
+{"evt":"managed.serve","sub":"sub-123"}
+{"evt":"spend.blocked","reason":"limit reached","email":"finance@example.com"}
+{"evt":"admin.denied","reason":"missing group","email":"admin@example.com"}
+not-json
+{"evt":"future.event","sub":"sub-999","email":"future@example.com"}

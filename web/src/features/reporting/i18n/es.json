@@ -1,0 +1,80 @@
+{
+  "title": "Informes",
+  "description": "Genera y descarga informes de gobernanza bajo demanda, y gestiona los envíos programados.",
+  "catalog": {
+    "title": "Informes bajo demanda",
+    "empty": "No hay tipos de informe disponibles.",
+    "colReport": "Informe",
+    "colFormats": "Formatos",
+    "colActions": "Acciones",
+    "generate": "Generar"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "Generar {{title}}",
+    "subtitle": "Elige el formato y el intervalo de fechas; el informe se descarga cuando está listo.",
+    "format": "Formato",
+    "from": "Desde",
+    "to": "Hasta",
+    "framework": "Marco",
+    "frameworkHint": "Opcional: limita la evidencia a un único marco de cumplimiento.",
+    "frameworkPlaceholder": "p. ej. soc2",
+    "team": "Equipo",
+    "teamHint": "Opcional: limita el desglose de gasto a un único equipo.",
+    "teamPlaceholder": "p. ej. platform",
+    "download": "Descargar",
+    "done": "Se ha generado {{title}}.",
+    "failed": "No se ha podido generar el informe.",
+    "pdfUnavailable": "La generación de PDF no está disponible en esta edición. Elige HTML."
+  },
+  "schedules": {
+    "title": "Informes programados",
+    "new": "Nueva programación",
+    "enterprise": "Los informes programados son una capacidad Enterprise y no están habilitados en esta edición.",
+    "empty": "Aún no hay informes programados.",
+    "colReport": "Informe",
+    "colCron": "Cron",
+    "colStatus": "Estado",
+    "colActions": "Acciones",
+    "enabled": "Activado",
+    "disabled": "Desactivado",
+    "delete": "Eliminar programación",
+    "deleted": "Programación eliminada.",
+    "newTitle": "Nuevo informe programado",
+    "newSubtitle": "El informe se genera según la cadencia cron y se conserva para su descarga.",
+    "report": "Informe",
+    "cron": "Expresión cron",
+    "cronHint": "Un cron estándar de 5 campos, p. ej. 0 8 * * 1 (lunes a las 08:00).",
+    "create": "Crear",
+    "created": "Programación creada."
+  },
+  "enterprise": {
+    "title": "Informes enterprise",
+    "description": "Postura de cumplimiento en vivo, el resumen ejecutivo de riesgo y el paquete de evidencia de auditoría firmado.",
+    "request": "Pedir",
+    "done": "Informe descargado",
+    "seam": "Este informe vive en un complemento que no está enlazado a este despliegue. No hay nada roto.",
+    "posture": {
+      "title": "Postura de cumplimiento",
+      "description": "Estado por marco y control, calculado en vivo."
+    },
+    "risk": {
+      "title": "Resumen de riesgo",
+      "description": "La vista ejecutiva de riesgo, en una página."
+    },
+    "bundle": {
+      "title": "Paquete de evidencia",
+      "description": "El paquete de evidencia de auditoría FIRMADO — lo que se entrega a un auditor externo."
+    }
+  },
+  "runs": {
+    "open": "Historial",
+    "title": "Historial de ejecuciones",
+    "description": "Cada ejecución registrada de esta programación: cuándo corrió y, si falló, por qué.",
+    "notAnArchive": "Los proveedores acotan esta lista y podan las ejecuciones viejas — es una comodidad operativa, no un archivo. Una lista corta no significa que la programación sólo haya corrido unas pocas veces.",
+    "empty": "Sin ejecuciones registradas"
+  }
+}

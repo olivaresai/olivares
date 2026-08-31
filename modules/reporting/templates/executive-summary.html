@@ -1,0 +1,98 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Locale}}">
+<head>
+<meta charset="utf-8">
+<title>{{t .Locale "report.executive_summary.title"}}</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>{{t .Locale "report.executive_summary.title"}}</h1>
+    <div class="subtitle">{{if .Branding.CompanyName}}{{.Branding.CompanyName}} — {{end}}{{t .Locale "report.period"}}: {{formatDate .Report.From}} — {{formatDate .Report.To}}</div>
+  </div>
+  {{if .Branding.LogoPath}}<img class="header-logo" src="{{.Branding.LogoPath}}" alt="Logo">{{end}}
+</div>
+
+<h2>{{t .Locale "executive.compliance_posture"}}</h2>
+{{if .Report.ComplianceSummary}}
+<table>
+<thead>
+<tr>
+  <th>{{t .Locale "compliance.framework"}}</th>
+  <th style="text-align:right">{{t .Locale "compliance.coverage"}}</th>
+  <th style="text-align:right">{{t .Locale "compliance.gap"}}</th>
+</tr>
+</thead>
+<tbody>
+{{range .Report.ComplianceSummary}}
+<tr>
+  <td>{{.Name}}</td>
+  <td style="text-align:right">
+    {{formatPct .SatisfiedPct}}
+    <div class="progress-bar"><div class="progress-fill {{if ge .SatisfiedPct 80}}progress-ok{{else if ge .SatisfiedPct 50}}progress-warn{{else}}progress-over{{end}}" style="width:{{.SatisfiedPct}}%"></div></div>
+  </td>
+  <td style="text-align:right">{{.GapCount}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}
+<p>{{t .Locale "report.no_data"}}</p>
+{{end}}
+
+<h2>{{t .Locale "executive.financial_overview"}}</h2>
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">${{printf "%.2f" .Report.TotalSpendUSD}}</div>
+    <div class="stat-label">{{t .Locale "finops.total_spend"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{printf "%+.0f" .Report.SpendTrendPct}}%</div>
+    <div class="stat-label">{{t .Locale "executive.spend_trend"}}</div>
+  </div>
+</div>
+
+<h2>{{t .Locale "executive.operational_health"}}</h2>
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{.Report.ActiveAgents}}</div>
+    <div class="stat-label">{{t .Locale "executive.active_agents"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{.Report.ActiveSessions}}</div>
+    <div class="stat-label">{{t .Locale "executive.active_sessions"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{.Report.ActiveUsers}}</div>
+    <div class="stat-label">{{t .Locale "executive.active_users"}}</div>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{.Report.FindingsOpen}}</div>
+    <div class="stat-label">{{t .Locale "executive.findings_open"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" {{if gt .Report.FindingsCritical 0}}style="color:#991b1b"{{end}}>{{.Report.FindingsCritical}}</div>
+    <div class="stat-label">{{t .Locale "executive.findings_critical"}}</div>
+  </div>
+  <div class="stat-card">
+    {{if .Report.AuditIntegrityOK}}
+    <div class="stat-value" style="color:#166534">✓</div>
+    {{else}}
+    <div class="stat-value" style="color:#991b1b">✗</div>
+    {{end}}
+    <div class="stat-label">{{t .Locale "executive.audit_integrity"}}</div>
+  </div>
+</div>
+
+<div class="disclaimer">{{t .Locale "report.disclaimer"}}</div>
+<div class="footer">{{t .Locale "report.powered_by"}}{{if .Branding.FooterText}} — {{.Branding.FooterText}}{{end}}</div>
+</body>
+</html>

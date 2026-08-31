@@ -1,0 +1,130 @@
+{
+  "title": "Claude Code Adoption",
+  "description": "How much Claude Code is used, and how much of what it proposes developers keep.",
+  "range": {
+    "label": "Time range",
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days",
+    "mtd": "Month to date"
+  },
+  "tabs": {
+    "overview": "Overview",
+    "teams": "Teams",
+    "developers": "Developers",
+    "trend": "Trend"
+  },
+  "boundary": {
+    "note": "Covers only Claude API traffic — the admin Analytics feed and the OTLP telemetry plane. Usage served by {{providers}} is not included, so absence of adoption here is not proof of absence.",
+    "providers": {
+      "claude-platform-aws": "Claude Platform on AWS",
+      "microsoft-foundry": "Microsoft Foundry",
+      "amazon-bedrock": "Amazon Bedrock",
+      "vertex-ai": "Vertex AI"
+    }
+  },
+  "lenses": {
+    "analytics": {
+      "title": "Per developer (admin Analytics)",
+      "description": "Authoritative per-developer/day totals from the admin Analytics feed across {{developers}} developer(s)."
+    },
+    "telemetry": {
+      "title": "Per session (live telemetry)",
+      "description": "Real-time per-session activity from the OTLP plane across {{teams}} team(s); includes active time."
+    }
+  },
+  "comparison": {
+    "title": "Official vs observed",
+    "description": "Shared Claude Code activity metrics compared between the admin Analytics API and local OTLP telemetry.",
+    "official": "official (Analytics API)",
+    "observed": "observed (OTLP)",
+    "withinThreshold": "Within threshold",
+    "empty": "No shared-metric activity in this range.",
+    "boundaryNote": "The official Analytics API does not cover 3P surfaces such as {{providers}}; telemetry-only usage is a review signal, not a misuse conclusion.",
+    "metrics": {
+      "sessions": "Sessions",
+      "tokens": "Tokens",
+      "linesAdded": "Lines added",
+      "commits": "Commits",
+      "pullRequests": "Pull requests"
+    },
+    "directions": {
+      "aligned": "Within threshold",
+      "telemetry_exceeds_official": "Observed exceeds official by {{ratio}}",
+      "official_exceeds_telemetry": "Official exceeds observed by {{ratio}}",
+      "official_plane_absent": "Official plane absent",
+      "telemetry_plane_absent": "Observed plane absent"
+    }
+  },
+  "stats": {
+    "sessions": "Sessions",
+    "linesNet": "Net lines of code",
+    "addedRemoved": "+{{added}} / -{{removed}}",
+    "commits": "Commits",
+    "pullRequests": "Pull requests",
+    "acceptance": "Tool acceptance",
+    "acceptedOfTotal": "{{accepted}} of {{total}} accepted",
+    "tokens": "Tokens",
+    "activeTime": "Active time"
+  },
+  "models": {
+    "total": "Total tokens",
+    "empty": "No model usage in this range."
+  },
+  "acceptance": {
+    "empty": "No tool decisions in this range.",
+    "columns": {
+      "tool": "Tool",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "rate": "Acceptance"
+    }
+  },
+  "trend": {
+    "title": "Daily trend",
+    "description": "Productivity over time for the selected lens.",
+    "lensLabel": "Lens",
+    "empty": "No activity in this range."
+  },
+  "teams": {
+    "title": "By team",
+    "description": "Per-team activity from the live telemetry plane (operator team labels).",
+    "empty": "No team-attributed telemetry in this range.",
+    "emptyHint": "Set OTEL_RESOURCE_ATTRIBUTES (e.g. team=…) on the Claude Code fleet to attribute by team.",
+    "unassigned": "(unassigned)",
+    "columns": {
+      "team": "Team"
+    }
+  },
+  "developers": {
+    "title": "By developer",
+    "description": "Per-developer ROI from the admin Analytics feed.",
+    "empty": "No per-developer activity in this range.",
+    "locked": "Per-developer view restricted",
+    "lockedHint": "Viewing individual developer productivity requires the adoption:developer:read permission (deny-closed).",
+    "columns": {
+      "developer": "Developer"
+    }
+  },
+  "columns": {
+    "sessions": "Sessions",
+    "commits": "Commits",
+    "pullRequests": "PRs",
+    "linesNet": "Net LoC",
+    "acceptance": "Acceptance"
+  },
+  "empty": {
+    "acceptance": {
+      "title": "No tool decisions observed yet",
+      "description": "Accepted and rejected tool decisions appear once the admin Analytics feed or OTLP telemetry reports them."
+    },
+    "developer": {
+      "title": "No developer activity reported yet",
+      "description": "Per-developer rows appear once the Claude admin Analytics feed reports developer activity."
+    },
+    "team": {
+      "title": "No team-attributed telemetry yet",
+      "description": "Attribution needs both halves: the connector's resource_labels allowlist must name the team key — it is empty by default — and the fleet must send it."
+    }
+  }
+}

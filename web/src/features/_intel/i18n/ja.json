@@ -1,0 +1,119 @@
+{
+  "severity": {
+    "label": "重大度",
+    "info": "情報",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "重大"
+  },
+  "outcome": {
+    "pass": "合格",
+    "fail": "不合格",
+    "error": "エラー",
+    "skipped": "スキップ",
+    "blocked": "ブロック",
+    "refused": "拒否",
+    "complied": "応諾",
+    "leaked": "漏洩"
+  },
+  "verdict": {
+    "allow": "許可",
+    "flag": "フラグ",
+    "block": "ブロック",
+    "detective": "検出型",
+    "enforced": "強制適用"
+  },
+  "integrity": {
+    "verified": "完全性を検証済み",
+    "failed": "完全性の検証に失敗",
+    "unavailable": "署名は利用できません",
+    "pending": "まだ証明されていません",
+    "tamperEvident": "改ざん検知可能",
+    "chainOk": "ハッシュチェーンは整合しています",
+    "chainBroken": "seq {{seq}} でチェーンが破損しています",
+    "reverifyHint": "各イベントは seq・hash・prev_hash を保持しているため、読み手はオフラインでリンクを再検証できます。",
+    "attestedSeq": "seq {{seq}} まで証明済み",
+    "headSeq": "台帳のヘッド seq {{seq}}"
+  },
+  "consent": {
+    "registered": "登録済み",
+    "authorized": "認可済み",
+    "revoked": "撤回済み",
+    "notAuthorizedHint": "登録は同意ではありません。対象が認可されるまで実行はブロックされます。"
+  },
+  "risk": {
+    "unacceptable": "許容不可",
+    "high": "高",
+    "limited": "限定的",
+    "minimal": "最小",
+    "suggested": "推奨",
+    "approved": "承認済み",
+    "overridden": "オーバーライド済み"
+  },
+  "control": {
+    "satisfied": "充足",
+    "by_design": "設計対応済み",
+    "partial": "部分的",
+    "gap": "ギャップ",
+    "unmapped": "未マッピング",
+    "operational": "運用上",
+    "architectural": "アーキテクチャ上"
+  },
+  "hash": {
+    "fingerprint": "フィンガープリント",
+    "hint": "一方向のフィンガープリントであり、ペイロードではありません（最小データ）。",
+    "copy": "完全な値をコピー",
+    "copied": "コピーしました"
+  },
+  "notices": {
+    "truncated": "部分的なデータ",
+    "truncatedHint": "この集計はスキャン上限に達したため、正確な合計ではなく部分的な値です。",
+    "selfAudited": "特権読み取り — 監査台帳に記録されます。",
+    "seam": "未配線",
+    "seamBody": "宣言された契約です。{{what}} はまだバックエンドに配線されていないため、ライブデータではなく宣言された形状を表示しています。",
+    "minimalData": "集計とメタデータのみ — プロンプト、出力、シークレットは含みません。",
+    "declared": "宣言された参照",
+    "noConnector": "コネクターなし — ゼロではなく不在です。",
+    "listTruncated": "{{n}} 件の行を読み込みました。さらに存在します",
+    "listTruncatedHint": "エンジンが返したのは1ページだけで、全件ではありません。読み込まれた行から合計件数を推定することはできません。また、表示されていない行が存在する可能性があります。"
+  },
+  "badges": {
+    "signed": "署名済み",
+    "linked": "管理の連鎖",
+    "governed": "ガバナンス対象",
+    "ungoverned": "ガバナンス対象外",
+    "approximate": "概算",
+    "attributed": "帰属済み",
+    "isolated": "隔離済み",
+    "destroyed": "破棄済み"
+  },
+  "timeline": {
+    "title": "再構成されたタイムライン",
+    "empty": "範囲内にイベントはありません。",
+    "seq": "seq"
+  },
+  "consumption": {
+    "projected": "予測 {{pct}}",
+    "label": "予算消費",
+    "valueText": "{{consumed}} 消費、{{projected}} 予測"
+  },
+  "disclaimers": {
+    "report": "プラットフォームで観測された証跡から導出した統制状況の技術的マッピングです。認証ではなく、法的助言でもありません。"
+  },
+  "gate": {
+    "approved": "承認済み",
+    "pending": "保留中",
+    "rejected": "却下済み",
+    "expired": "期限切れ",
+    "no_gate": "ゲートなし",
+    "not_required": "不要",
+    "approvedHint": "ガバナンスがこのプランを承認しました。続行するには実行してください。",
+    "pendingHint": "ガバナンスの判定を待機中です（デフォルト拒否）。",
+    "rejectedHint": "ガバナンスがこのプランを却下しました。新しいプランで再リクエストしてください。",
+    "expiredHint": "承認の期限が切れました。再度プランを実行してリクエストし直してください。",
+    "no_gateHint": "承認ゲートが構成されていません。この操作は続行できません。",
+    "not_requiredHint": "この操作に承認は不要です。",
+    "displayNotice": "ゲートのステータスはここに表示されるだけの報告された判定です。認可はサーバー側で適用されます。コンソールはこの値からアクセスを付与することは決してありません。"
+  }
+}

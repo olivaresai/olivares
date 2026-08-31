@@ -1,0 +1,107 @@
+{
+  "title": "审计账本",
+  "subtitle": "防篡改的证据链。验证它，并导出到你的 WORM/SIEM。",
+  "subtitleSystem": "记录跨租户管理操作的系统租户链（只读）。",
+  "searchLoaded": "仅筛选已加载的行（客户端）…",
+  "filters": {
+    "title": "服务端账本筛选器",
+    "q": "搜索账本",
+    "qPlaceholder": "操作、主体、目标类型或 ID",
+    "actor": "主体",
+    "actorPlaceholder": "精确主体",
+    "action": "操作前缀",
+    "actionPlaceholder": "例如 agent.",
+    "targetKind": "目标类型",
+    "targetKindPlaceholder": "精确目标类型",
+    "targetId": "目标 ID",
+    "targetIdPlaceholder": "精确目标 ID",
+    "since": "起始时间",
+    "until": "截止时间",
+    "clearOne": "清除 {{filter}} 筛选器",
+    "clearAll": "清除所有筛选器"
+  },
+  "scan": {
+    "incomplete": "已扫描至 seq {{seq}}——非完整账本；点击「加载更多」继续扫描。"
+  },
+  "scope": {
+    "label": "账本范围",
+    "tenant": "租户账本",
+    "system": "系统账本",
+    "systemHint": "系统租户链记录跨租户的管理操作，此处仅供只读。验证与导出针对租户账本进行。"
+  },
+  "cols": {
+    "seq": "序号",
+    "occurred": "时间",
+    "action": "操作",
+    "actor": "主体",
+    "target": "目标",
+    "hash": "哈希"
+  },
+  "actorKind": {
+    "user": "用户",
+    "agent": "智能体",
+    "connector": "连接器",
+    "system": "系统"
+  },
+  "verify": {
+    "action": "验证链",
+    "failed": "无法完成验证。",
+    "chain": "链 · {{checked}} 个环节",
+    "checkpoints": "检查点 · 已签名 {{count}} 个",
+    "noCheckpoints": "尚无已签名的检查点",
+    "attested": "已认证至序号 {{seq}}",
+    "chainBreak": "链在序号 {{seq}} 处断裂",
+    "checkpointBreak": "检查点签名在序号 {{seq}} 处验证失败"
+  },
+  "pubkey": {
+    "action": "验证密钥",
+    "label": "账本签名密钥",
+    "key": "密钥",
+    "hint": "共享此 Ed25519 公钥，外部方即可离线验证导出的事件与检查点 — 二者由同一密钥签名。",
+    "failed": "验证密钥不可用。"
+  },
+  "export": {
+    "action": "导出",
+    "formatLabel": "导出格式",
+    "fromSeq": "起始 seq",
+    "toSeq": "结束 seq",
+    "optional": "可选",
+    "useCurrent": "使用当前筛选器与范围",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "OTLP 请求",
+      "otlp_envelope": "OTLP 请求（别名）",
+      "otlp_log_record": "OTLP LogRecord 行",
+      "ocsf": "OCSF"
+    },
+    "done": "导出已下载。",
+    "failed": "导出失败。",
+    "forbidden": "你无权导出该账本。"
+  },
+  "detail": {
+    "title": "证据事件",
+    "seqTitle": "事件 #{{seq}}",
+    "signed": "已签名事件 — 此行携带其对链式哈希的独立签名",
+    "seq": "序号",
+    "occurred": "发生时间",
+    "action": "操作",
+    "actor": "主体",
+    "actorSystem": "系统",
+    "target": "目标",
+    "id": "事件 ID",
+    "chainTitle": "链完整性",
+    "prevHash": "前一哈希",
+    "prev": "前",
+    "hash": "事件哈希",
+    "this": "本",
+    "sig": "事件签名",
+    "checkpoint": "签名",
+    "chainHint": "每个事件的哈希都与前一个相连。指纹背后没有任何载荷——哈希本身即是证据（按设计的最小化数据）。"
+  },
+  "empty": {
+    "title": "暂无证据",
+    "description": "此范围下账本为空。受治理的操作会在发生时追加防篡改事件。"
+  }
+}

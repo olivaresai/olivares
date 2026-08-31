@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# "Operate Claude Code" co-deployment override (FASE V). Layer it ON TOP of the
+# base engine compose so the single `olivares` service runs the COMBINED image
+# (engine + the official Claude Code CLI) and the control plane CONDUCTS governed
+# `claude` sessions as child processes via the native procRunner — one
+# container, no Docker socket, no privilege escalation (Decision,
+# 2026-06-16). The engine owns claude's stdin/stdout (the stream-json governed
+# transport); a session is launched with isolation=native (the proven path) since
+# the engine and claude already share this container.
+#
+#   docker compose -f deploy/compose/docker-compose.yml \
+#                  -f deploy/compose/docker-compose.agentops.yml up -d
+#
+# Secure-by-default, identical to the base: host ports stay bound to 127.0.0.1, the
+# container runs NON-ROOT (65532) with a READ-ONLY root filesystem, cap-drop ALL and
+# no-new-privileges. Only the workspace, claude's HOME (~/.claude) and the short-lived
+# inference token are writable — each its own volume; everything else stays read-only.
+#
+# Supply chain: set OLIVARES_AGENTOPS_IMAGE to a DIGEST-pinned image you built from
+# Dockerfile.agentops and verified (the engine layer is the cosign-signed release;
+# claude is installed from Anthropic's signed apt repo at build — see Dockerfile.agentops).
+#
+# First governed session needs an inference credential. The deny-closed
+# CredentialSource reads a SHORT-LIVED bearer token from OLIVARES_SESSION_RUNTIME_TOKEN_FILE
+# (below): point your WIF/SPIFFE/OIDC refresher at the `olivares-runtime` volume so it
+# writes /run/olivares/session-token (wires the live in-process exchange). Until a
+# token is present, stream-json launches fail CLOSED — the engine still runs and is
+# governable; auth is your deliberate step. See the how-to:
+# docs-site/.../how-to/run-claude-code-with-olivares.md.
+services:
+  olivares:
+    # The combined engine+claude image (opt-in; built from Dockerfile.agentops). NOT
+    # the distroless base image — this one carries claude and a minimal Debian userland.
+    image: ${OLIVARES_AGENTOPS_IMAGE:-olivares-agentops:latest}
+    # data-dir matches the base; the engine conducts claude from here. (command is
+    # inherited from the base file: the engine listens on :8443/:8444 INSIDE the
+    # container for dual-stack; the host port mapping 127.0.0.1:8443 below is the
+    # real exposure boundary. Never publish these ports on a non-loopback host addr
+    # without your own auth/TLS proxy.)
+    environment:
+      # claude's config/session history live under HOME, on a writable volume (the
+      # root filesystem is read-only). sanitizedEnv forwards HOME to the child.
+      HOME: /home/olivares
+      # Pinned, reproducible image — never let a running container self-update.
+      DISABLE_AUTOUPDATER: "1"
+      # Deny-closed inference credential: the engine reads this short-lived bearer per
+      # launch and discards it (only the non-sensitive credential_id is persisted).
+      OLIVARES_SESSION_RUNTIME_TOKEN_FILE: /run/olivares/session-token
+      # Assert the refresher's rotation cadence so a stale token is re-read in time.
+      OLIVARES_SESSION_RUNTIME_TOKEN_TTL: 15m
+      # Default executable is `claude` on PATH. Override for a BYO mount, e.g.
+      # OLIVARES_SESSION_RUNTIME_CLAUDE_BIN: /opt/claude/bin/claude
+      #
+      # Optional: route the operated session's inference through Olivares' own gateway
+      # so it is PEP/budget/model-governed in-band. Leave unset for v1.
+      # OLIVARES_SESSION_RUNTIME_BASE_URL: https://127.0.0.1:8443/v1
+    volumes:
+      # Engine store + audit signing key + TLS material (from the base file too).
+      - olivares-data:/var/lib/olivares
+      # Code workspaces — a SEPARATE volume from the engine store, so the directories
+      # claude reads/writes have their own backup/retention lifecycle. The file API
+      # and the session both see this path; register a workspace under it.
+      - olivares-workspaces:/var/lib/olivares/workspaces
+      # claude's HOME (~/.claude: settings, transcripts) — writable under read-only root.
+      - olivares-claude-home:/home/olivares
+      # Short-lived inference token (tmpfs-like: a small dedicated volume your refresher
+      # populates; nothing else writes here). 0700, owned by 65532 (set in the image).
+      - olivares-runtime:/run/olivares
+    # --- hardening is INHERITED from the base service (user 65532, read_only root,
+    # tmpfs /tmp, cap_drop ALL, no-new-privileges, restart). The writable surfaces are
+    # exactly the four volumes above — nothing else.
+    # Raise the ceiling: the base sizes the engine alone (1G); here a conducted claude
+    # runs in the same container, so give it headroom (tune for your concurrency).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+volumes:
+  olivares-workspaces:
+  olivares-claude-home:
+  olivares-runtime:

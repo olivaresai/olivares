@@ -1,0 +1,9 @@
+{
+  "spendingLimits": {
+    "hardSlOverride": { "val": "" },
+    "hardSlAuto": { "val": "" },
+    "effectiveHardSl": { "val": "" },
+    "softSl": { "val": "" },
+    "effectiveSl": { "val": "" }
+  }
+}

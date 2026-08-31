@@ -1,0 +1,477 @@
+{
+  "title": "健康状况与 SLA",
+  "subtitle": "覆盖整个资产域的存活性、可靠性与依赖关系——基于观测到的活动与陈旧性扫描推导得出，从不主动探测基础设施。",
+  "auditedNote": "实时数据流以及任何解析/编辑操作均为特权操作，会被审计。健康状况为推导得出；引擎从不在此处携带错误文本或负载。",
+  "refresh": "刷新",
+  "statusPageLink": "公开状态页",
+  "tabs": {
+    "status": "状态",
+    "sla": "SLA",
+    "incidents": "事件",
+    "timeline": "时间线",
+    "connectors": "连接器",
+    "dependencies": "依赖关系",
+    "system": "系统",
+    "checks": "检查"
+  },
+  "state": {
+    "healthy": "健康",
+    "degraded": "降级",
+    "down": "宕机",
+    "observed": "已观测",
+    "unknown": "未知"
+  },
+  "stateHint": {
+    "unknown": "没有任何检查追踪该对象——这与健康并不相同。",
+    "observed": "通过某条边观测到其存活，但未声明任何检查——健康状况未被测量（既非健康也非未知）。"
+  },
+  "desired": {
+    "active": "活跃",
+    "paused": "已暂停",
+    "retired": "已停用"
+  },
+  "desiredHint": {
+    "paused": "不告警——已由操作员暂停。",
+    "retired": "不告警——已停用。"
+  },
+  "subjectKind": {
+    "agent": "智能体",
+    "mcp": "MCP",
+    "session": "会话",
+    "mcp_tool": "工具"
+  },
+  "tiles": {
+    "healthy": "健康",
+    "degraded": "降级",
+    "down": "宕机",
+    "unknown": "未知"
+  },
+  "facets": {
+    "allStates": "全部状态",
+    "allKinds": "全部类型"
+  },
+  "status": {
+    "title": "受监控的对象",
+    "slaBreach": "SLA 违约",
+    "slaBreachHint": "该对象存在一项未关闭的 SLA 违约。",
+    "notAlerting": "不告警",
+    "cols": {
+      "subject": "对象",
+      "kind": "类型",
+      "state": "状态",
+      "desired": "意图",
+      "sla": "SLA",
+      "latency": "延迟",
+      "lastSeen": "最后可见"
+    },
+    "searchPlaceholder": "搜索对象…",
+    "empty": {
+      "title": "暂无受监控的对象",
+      "description": "一旦为某个智能体或 MCP 服务器声明了健康检查，其存活性便会显示在此处。"
+    }
+  },
+  "sla": {
+    "title": "可靠性（SLA）",
+    "pick": "对象",
+    "pickPlaceholder": "选择一个对象…",
+    "pickEmpty": "暂无可供报告的受监控对象。",
+    "pickPrompt": {
+      "title": "选择一个对象",
+      "description": "选择一个受监控的对象，以查看其相对于目标的正常运行时间，该数据基于可靠性账本重建得出。"
+    },
+    "window": "时间窗口",
+    "uptime": "正常运行时间",
+    "target": "目标",
+    "noTarget": "无目标",
+    "breaching": "违约中",
+    "withinTarget": "符合目标",
+    "downtime": "停机时间",
+    "degraded": "降级",
+    "degradedNote": "降级在 SLA 中计为正常运行——单独显示，不计入停机时间。",
+    "currentState": "当前状态",
+    "noCheck": {
+      "title": "未声明任何检查",
+      "description": "该对象没有健康检查，因此无法报告可靠性。这是真实状态，并非失败。"
+    },
+    "noData": {
+      "title": "暂无历史记录",
+      "description": "该对象有检查，但在此时间窗口内没有可靠性历史——正常运行时间为未定义，而非 0%。一旦记录到状态转换，便会显示出来。"
+    }
+  },
+  "incidents": {
+    "title": "事件",
+    "filterState": "状态",
+    "allStates": "全部",
+    "open": "未关闭",
+    "resolved": "已解决",
+    "resolve": "解决",
+    "resolving": "解决中…",
+    "resolveTitle": "关闭此事件记录",
+    "resolveHint": "解决即确认该时段已关闭——它并不声称对象已恢复。恢复来自真实的存活性。此操作为特权操作，会被审计。",
+    "cols": {
+      "subject": "对象",
+      "subjectKind": "种类",
+      "incidentKind": "事件",
+      "severity": "严重程度",
+      "opened": "发生时间",
+      "state": "状态",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "降级",
+      "down": "宕机",
+      "sla_breach": "SLA 违约"
+    },
+    "possibleEvasion": "可能的规避",
+    "possibleEvasionHint": "某对象在其预期节奏内陷入静默（扫描检测到的宕机）。停止发信号的对象本身就是一个信号，而非 UI 故障。",
+    "searchPlaceholder": "搜索事件…",
+    "empty": {
+      "title": "暂无事件",
+      "description": "没有与此筛选条件匹配的可靠性事件。当对象降级或宕机时，未关闭的事件会显示在此处。"
+    },
+    "truncated": "仅显示前 {{n}} 条",
+    "truncatedHint": "事件数量多于所显示；本页已被截断，因此其余为空并不能证明没有更多事件。"
+  },
+  "timeline": {
+    "title": "可靠性时间线",
+    "pick": "对象",
+    "pickPlaceholder": "选择一个对象…",
+    "pickPrompt": {
+      "title": "选择一个对象",
+      "description": "选择一个受监控的对象，以从仅追加账本中追溯其可靠性状态转换。"
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "延迟",
+    "latencyUnknown": "未知",
+    "cause": {
+      "edge": "观测到的存活性",
+      "report": "主动探测",
+      "sweep": "陈旧性扫描"
+    },
+    "causeHint": {
+      "edge": "从观测到的活动推断得出（一条存活性边）。",
+      "report": "一次主动健康探测报告了此状态。",
+      "sweep": "由陈旧性扫描检测到——在预期节奏内陷入静默。"
+    },
+    "possibleEvasion": "可能的规避",
+    "possibleEvasionHint": "由陈旧性扫描检测到的宕机意味着在预期节奏内陷入静默——呈现为可能的规避，而非加载错误。",
+    "empty": {
+      "title": "未记录任何状态转换",
+      "description": "该对象在账本中尚无任何可靠性状态转换。"
+    },
+    "truncated": "仅显示前 {{n}} 条",
+    "truncatedHint": "事件数量多于所显示。本页按 id 升序（由旧到新）排列，因此被截断的是最新的部分——你在这里看不到的事件，并不是没有发生的事件。"
+  },
+  "deps": {
+    "title": "依赖关系图",
+    "subtitle": "从观测到的活动中自动发现。每个节点按其当前健康状况着色——观测到存活但无任何检查的节点为「已观测」（蓝色，健康状况未被测量），完全没有信号的节点保持灰色（未知）；二者从不会显示为绿色。",
+    "legendTitle": "健康状况",
+    "relation": {
+      "uses_mcp": "使用 MCP",
+      "uses_tool": "使用工具",
+      "delegates_to": "委派给"
+    },
+    "observed": "已观测",
+    "truncated": "显示前 {{n}} 项",
+    "truncatedHint": "依赖关系图的节点数多于所显示的；这是第一个键集分页。",
+    "empty": {
+      "title": "尚未发现任何依赖关系",
+      "description": "一旦智能体调用 MCP 服务器和工具，观测到的依赖关系图便会显示在此处。"
+    },
+    "mobile": {
+      "title": "此图需要更宽的屏幕",
+      "summary": "{{nodes}} 个节点 · {{edges}} 项依赖关系",
+      "hint": "请在更大的显示屏上打开此视图，以查看交互式依赖关系图。"
+    }
+  },
+  "detail": {
+    "statusTitle": "对象健康状况",
+    "incidentTitle": "事件",
+    "ref": "引用",
+    "id": "ID",
+    "name": "名称",
+    "kind": "类型",
+    "state": "状态",
+    "desired": "意图",
+    "cadence": "预期节奏",
+    "grace": "宽限系数",
+    "slaTarget": "SLA 目标",
+    "slaBreach": "存在未关闭的 SLA 违约",
+    "latency": "最后延迟",
+    "lastSeen": "最后可见",
+    "lastChecked": "最后检查",
+    "owner": "负责人",
+    "lastDetail": "最后详情",
+    "severity": "严重程度",
+    "opened": "发生时间",
+    "resolved": "已解决",
+    "summary": "摘要",
+    "viewSla": "查看 SLA",
+    "viewTimeline": "查看时间线",
+    "yes": "是",
+    "no": "否",
+    "minimalData": "仅显示元数据。按照设计，引擎从不在此处携带错误文本、负载或密钥（最小化数据）。"
+  },
+  "live": {
+    "note": "随着健康状况变化，各行会实时更新；按 id 对账，而非假定连续性。"
+  },
+  "empty": {
+    "title": "暂无可显示内容",
+    "description": "该租户暂无健康状况数据。"
+  },
+  "forbidden": {
+    "title": "无权查看健康状况",
+    "description": "您的角色不包含查看健康状况与 SLA 的权限。"
+  },
+  "forbiddenResolve": {
+    "title": "无权解决",
+    "description": "解决事件需要 check-admin 权限（health:check:admin）。"
+  },
+  "connectors": {
+    "autoRefresh": "每15秒自动刷新。",
+    "searchPlaceholder": "搜索连接器…",
+    "summary": {
+      "running": "运行中",
+      "failed": "失败",
+      "stopped": "已停止",
+      "disabled": "已禁用"
+    },
+    "cols": {
+      "name": "连接器",
+      "kind": "类型",
+      "health": "健康状态",
+      "status": "状态",
+      "trend": "趋势",
+      "lastPoll": "最后轮询",
+      "mode": "模式"
+    },
+    "status": {
+      "running": "运行中",
+      "failed": "失败",
+      "stopped": "已停止",
+      "disabled": "已禁用",
+      "not_wired": "未连接"
+    },
+    "trend": {
+      "up": "改善中",
+      "down": "恶化中",
+      "stable": "稳定"
+    },
+    "empty": {
+      "title": "未配置连接器",
+      "description": "连接器接入后，其运行状态将显示在此处。"
+    },
+    "modeAll": "所有模式",
+    "modeFilter": "模式筛选",
+    "emptyMode": {
+      "title": "没有匹配此模式的连接器",
+      "description": "更改模式筛选以查看其他连接器。"
+    }
+  },
+  "statusPage": {
+    "title": "Olivares Control Plane — 状态",
+    "subtitle": "所有组件的当前运行状态。",
+    "unavailable": "状态信息当前不可用。",
+    "lastUpdated": "最后更新: {{time}}",
+    "overall": {
+      "operational": "所有系统正常运行",
+      "not_configured": "正常运行 — 可选功能未配置",
+      "degraded": "部分系统故障",
+      "outage": "重大系统故障"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "知识检索",
+      "store": "数据库",
+      "connectors": "连接器",
+      "ingest": "数据摄取",
+      "audit_spool": "审计缓冲池"
+    },
+    "status": {
+      "operational": "正常",
+      "not_configured": "未配置",
+      "degraded": "降级",
+      "outage": "故障"
+    }
+  },
+  "update": {
+    "available": "有可用更新",
+    "security": "安全更新",
+    "channel": "通道",
+    "upToDate": "已是最新",
+    "title": "更新",
+    "notChecked": "近期未检查",
+    "failed": "更新检查失败",
+    "checked": "更新检查已完成",
+    "advisories": "已修复的安全公告",
+    "checkNow": "立即检查",
+    "unconfigured": "未配置更新检查。对于隔离（air-gapped）部署而言，这是预期情况。"
+  },
+  "system": {
+    "title": "系统健康状况",
+    "systemStatus": "系统状态",
+    "healthy": "健康",
+    "unhealthy": "异常",
+    "ready": "就绪",
+    "notReady": "未就绪",
+    "storeEngine": "存储引擎",
+    "version": "版本",
+    "connectors": "连接器",
+    "connectorsRunning": "{{count}} 个运行中",
+    "connectorsConfigured": "{{count}} 个已配置",
+    "connectorsAvailable": "{{count}} 个可配置",
+    "connectorsError": "{{count}} 个异常",
+    "noConnectors": "未配置连接器",
+    "users": "用户",
+    "usersCount": "{{count}} 个已注册",
+    "identity": "身份认证",
+    "ssoConfigured": "SSO 已配置",
+    "ssoNotConfigured": "SSO 未配置",
+    "unavailable": "运行数据不可用或未获授权。"
+  },
+  "auditSpool": {
+    "title": "审计缓冲池",
+    "withinBudget": "预算内",
+    "nearFull": "接近上限",
+    "engaged": "预算已耗尽",
+    "modes": {
+      "block": "满时阻断",
+      "degrade": "满时降级"
+    },
+    "usage": "已使用 {{used}}/{{max}}（{{pct}}）",
+    "pendingDrops": "{{tenants}} 个租户存在 {{drops}} 条未封存的证据丢失"
+  },
+  "checks": {
+    "title": "健康检查",
+    "description": "为受监控的智能体和 MCP 服务器声明并治理其节奏、宽限窗口、SLA 目标与生命周期意图。",
+    "create": "创建检查",
+    "created": "健康检查已创建",
+    "updated": "健康检查已更新",
+    "deleted": "健康检查已删除",
+    "failed": "健康检查操作失败。",
+    "duplicate": "该对象已存在健康检查。",
+    "searchPlaceholder": "搜索健康检查…",
+    "reportTooltipLabel": "关于探测报告",
+    "reportTooltip": "探测报告的摄取面向机器，已刻意从控制台中省略。",
+    "seconds": "{{count}}秒",
+    "cols": {
+      "subject": "对象",
+      "kind": "类型",
+      "state": "状态",
+      "intent": "意图",
+      "cadence": "节奏",
+      "sla": "SLA",
+      "lastChecked": "最后检查",
+      "actions": "操作"
+    },
+    "actions": {
+      "edit": "编辑",
+      "editAria": "编辑 {{subject}} 的健康检查",
+      "pause": "暂停",
+      "pauseAria": "暂停 {{subject}} 的健康检查",
+      "resume": "恢复",
+      "resumeAria": "恢复 {{subject}} 的健康检查",
+      "retire": "停用",
+      "retireAria": "停用 {{subject}} 的健康检查",
+      "delete": "删除",
+      "deleteAria": "删除 {{subject}} 的健康检查"
+    },
+    "form": {
+      "name": "名称",
+      "subjectKind": "对象类型",
+      "subjectRef": "对象引用",
+      "expectedInterval": "预期间隔（秒）",
+      "graceFactor": "宽限系数",
+      "slaTarget": "SLA 目标（PPM）",
+      "slaTargetHint": "0 表示清除 SLA 目标；999000 表示 99.9%。",
+      "desiredStatus": "期望状态",
+      "validation": "请输入对象引用、正整数的节奏与宽限值，以及 0 到 1000000 之间的 SLA 目标。"
+    },
+    "createDialog": {
+      "title": "创建健康检查",
+      "description": "声明一个受监控的智能体或 MCP 服务器。每个对象只能有一个健康检查。"
+    },
+    "edit": {
+      "title": "编辑健康检查",
+      "description": "对象不可变更。请更新所显示的配置与生命周期意图。"
+    },
+    "delete": {
+      "title": "删除健康检查",
+      "description": "永久删除 {{subject}} 的健康检查。此管理操作会记录在审计账本中。"
+    },
+    "empty": {
+      "title": "未声明任何健康检查",
+      "description": "创建检查，以治理智能体或 MCP 服务器的预期存活节奏。"
+    }
+  },
+  "tls": {
+    "title": "TLS 证书",
+    "notAfter": "有效期至",
+    "daysLeft": "剩余 {{count}} 天",
+    "expired": "已于 {{count}} 天前过期"
+  },
+  "keys": {
+    "title": "密钥保管",
+    "empty": "暂无密钥保管元数据。",
+    "sealers": "对称封存密钥",
+    "sourceUnknown": "来源不可用",
+    "copyFingerprint": "复制 {{purpose}} 的完整指纹",
+    "copied": "指纹已复制",
+    "cols": {
+      "purpose": "用途",
+      "algorithm": "算法",
+      "mode": "保管模式",
+      "kek": "KEK",
+      "created": "创建时间",
+      "fingerprint": "指纹",
+      "prior": "历史密钥"
+    }
+  },
+  "config": {
+    "title": "生效配置",
+    "empty": "暂无生效配置条目。",
+    "strictViolations": "严格配置违规",
+    "redacted": "已脱敏",
+    "cols": {
+      "key": "键",
+      "value": "生效值",
+      "source": "来源"
+    }
+  },
+  "bus": {
+    "title": "事件总线",
+    "noSubscribers": "未注册任何事件总线订阅者。",
+    "depthAria": "{{subscriber}} 的队列深度",
+    "counters": {
+      "publishBlocked": "发布被阻断",
+      "dropped": "已丢弃",
+      "droppedTelemetry": "遥测已丢弃",
+      "droppedNotify": "通知已丢弃",
+      "handlerErrors": "处理器错误",
+      "enqueued": "已入队",
+      "handled": "已处理"
+    },
+    "bridge": {
+      "title": "桥接",
+      "pendingMessages": "待处理消息",
+      "pendingBytes": "待处理字节数",
+      "dropped": "已丢弃",
+      "publishErrors": "发布错误",
+      "decodeErrors": "解码错误",
+      "gateSkipped": "已跳过门控",
+      "invalidSubject": "无效主题"
+    }
+  },
+  "support": {
+    "title": "支持包",
+    "description": "生成用于支持的诊断归档，不会暴露已存储的机密值。",
+    "download": "下载支持包",
+    "generate": "生成并下载",
+    "confirmTitle": "生成支持包？",
+    "confirmDescription": "此 AAL3 特权操作会记录在审计账本中。",
+    "contents": "该包包含经脱敏的生效配置、运行状态与日志。分享前请先审阅。",
+    "downloaded": "支持包已下载",
+    "needsAal3": "生成支持包需要基于硬件的 AAL3 升级验证。",
+    "failed": "支持包生成失败。"
+  }
+}

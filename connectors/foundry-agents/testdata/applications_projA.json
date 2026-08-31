@@ -1,0 +1,49 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/acct1/projects/projA/applications/appNoIdentity",
+      "name": "appNoIdentity",
+      "properties": {
+        "displayName": "No Identity App",
+        "baseUrl": "https://invoke.example/noid",
+        "agents": [
+          {"agentId": "agent-a", "agentName": "Alpha Agent"},
+          {"agentId": "agent-helper", "agentName": "Helper Agent"}
+        ],
+        "isEnabled": true,
+        "provisioningState": "Succeeded"
+      }
+    },
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/acct1/projects/projA/applications/appFailed",
+      "name": "appFailed",
+      "properties": {
+        "displayName": "Failed Deploy App",
+        "baseUrl": "https://invoke.example/failed",
+        "agents": [{"agentId": "agent-b", "agentName": "Beta Agent"}],
+        "isEnabled": true,
+        "provisioningState": "Succeeded",
+        "agentIdentityBlueprint": {
+          "clientId": "blueprint-client",
+          "principalId": "blueprint-principal",
+          "tenantId": "tenant-1"
+        }
+      }
+    },
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/acct1/projects/projA/applications/appWithIdentity",
+      "name": "appWithIdentity",
+      "properties": {
+        "displayName": "Healthy Identity App",
+        "baseUrl": "https://invoke.example/healthy",
+        "isEnabled": true,
+        "provisioningState": "Succeeded",
+        "defaultInstanceIdentity": {
+          "clientId": "instance-client",
+          "principalId": "instance-principal",
+          "tenantId": "tenant-1"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,267 @@
+{
+  "acceptance": {
+    "draftNotice": "Diese Einheit ist im Entwurf, ihre Kriterien können also noch korrigiert werden. Der Kriteriumsschlüssel ist dauerhafte Identität und wird nie neu vergeben.",
+    "lockedNotice": "Diese Einheit hat den Entwurf verlassen, Kriterien können daher nicht mehr bearbeitet, sondern nur noch bewertet werden. Der Kriteriumsschlüssel ist dauerhafte Identität.",
+    "none": "Keine Abnahmekriterien.",
+    "required": "Erforderlich",
+    "state": {
+      "pending": "Ausstehend",
+      "passed": "Bestanden",
+      "failed": "Nicht bestanden",
+      "waived": "Erlassen"
+    }
+  },
+  "apply": {
+    "planning": "Die Änderung wird geplant. In diesem Schritt wird nichts geschrieben.",
+    "planTitle": "Plan",
+    "command": "Befehl",
+    "permission": "Berechtigung",
+    "eventType": "Ereignis",
+    "rowEffects": "Zeilen, die geschrieben würden",
+    "noRowEffects": "Dieser Befehl schreibt keine Zeilen.",
+    "externalCalls": "Externe Aufrufe",
+    "planHash": "Plan-Hash",
+    "keyTitle": "Idempotenzschlüssel dieser Änderung",
+    "keyHelp": "Einmal pro Absicht erzeugt und bei jeder Wiederholung wiederverwendet. Bewahren Sie ihn auf: Bricht das Netz mitten in der Anwendung ab, verhindert genau dieser Schlüssel, dass aus einer Änderung zwei werden.",
+    "confirm": "Anwenden",
+    "applying": "Wird angewendet…",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "appliedTitle": "Angewendet",
+    "replayedTitle": "War bereits angewendet",
+    "replayedBody": "Die Engine hat diesen Idempotenzschlüssel erkannt und das ursprüngliche Ergebnis erneut ausgegeben. Es wurde nichts ein zweites Mal geschrieben.",
+    "commandId": "Befehls-ID",
+    "resultId": "Ergebnis-ID",
+    "status": "Neuer Status",
+    "etag": "Neues Versionskennzeichen",
+    "auditSeq": "Audit-Sequenz",
+    "reread": "Neu lesen und vergleichen",
+    "retrySameKey": "Mit demselben Schlüssel wiederholen",
+    "failure": {
+      "conflict-version": "Jemand anderes hat diese Einheit geändert",
+      "version-required": "Versions-Vorbedingung fehlt",
+      "conflict-idempotency": "Dieser Schlüssel wurde bereits für eine andere Änderung verwendet",
+      "conflict-domain": "Die Engine hat diesen Befehl abgelehnt",
+      "unknown": "Konnte nicht nachsehen",
+      "other": "Die Änderung ist fehlgeschlagen",
+      "plan-changed": "Der Plan ist nicht mehr aktuell"
+    },
+    "conflictVersionBody": "Die Einheit hat sich zwischen dem Lesen und dem Anwenden dieser Änderung verändert, daher wurde die Änderung abgelehnt statt darübergelegt. Lesen Sie sie neu und vergleichen Sie, bevor Sie entscheiden — ein erneutes Senden würde überschreiben, was die andere Änderung bewirkt hat.",
+    "versionRequiredBody": "Dieser Befehl setzt die aktuelle Version der Einheit voraus, es wurde jedoch keine gesendet. Öffnen Sie die Einheit erneut, damit ihr Versionskennzeichen neu gelesen wird.",
+    "conflictIdempotencyBody": "Dieser Idempotenzschlüssel wurde bereits mit einem anderen Rumpf, einer anderen Version oder einem anderen Plan verwendet. Die Engine hat abgelehnt, statt zu raten, welcher gemeint war. Beginnen Sie die Änderung neu, um einen neuen Schlüssel zu erhalten.",
+    "conflictDomainBody": "Die eigenen Regeln des Kernels haben diesen Befehl abgelehnt — etwa ein unzulässiger Übergang oder ein Abhängigkeitszyklus. Neu lesen ändert die Antwort nicht; der Befehl muss sich ändern.",
+    "otherBody": "Die Änderung ist nicht durchgegangen.",
+    "continue": "Weiter",
+    "inputIntro": "Die Engine verlangt diese Angaben, bevor die Änderung geplant werden kann. Ohne sie weist sie den Befehl direkt ab.",
+    "planChangedBody": "Der Plan hat sich zwischen Anzeige und Anwendung geändert, daher wurde nichts geschrieben. Öffnen Sie die Aktion erneut, planen Sie noch einmal und lesen Sie den neuen Plan, bevor Sie bestätigen.",
+    "field": {
+      "code": {
+        "label": "Code",
+        "hint": "Ein kurzes Maschinen-Token: Kleinbuchstaben, Ziffern, Punkt, Bindestrich oder Unterstrich.",
+        "placeholder": "z. B. blocked_on_review"
+      },
+      "reason": {
+        "label": "Begründung",
+        "hint": "Freitext, wird mit der Änderung verzeichnet. Genau das liest eine andere Sitzung.",
+        "placeholder": "Warum das geschieht"
+      },
+      "evidence_ref": {
+        "label": "Nachweisreferenz",
+        "hint": "Wo der Nachweis für dieses Urteil liegt. Für bestanden oder nicht bestanden erforderlich.",
+        "placeholder": "z. B. run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "Nachweis-Hash",
+        "hint": "Ein sha256-Digest dieses Nachweises. Für bestanden erforderlich.",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "Erlass-Entscheidung",
+        "hint": "Die Entscheidung, die den Erlass dieses Kriteriums autorisiert, falls vorhanden.",
+        "placeholder": "Entscheidungs-ID (optional)"
+      },
+      "holder_sid": {
+        "label": "Inhaber-Session",
+        "hint": "Die kanonische Session-ID, die das Lease hält. Alles andere lehnt die Engine ab.",
+        "placeholder": "ID der haltenden Session"
+      },
+      "fence": {
+        "label": "Fence",
+        "hint": "Der Fence, auf den du wirkst. Unter 1 lehnt die Engine ab; ein veralteter verliert gegen den aktuellen Inhaber.",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "Entscheidung",
+        "hint": "Die Entscheidung, auf der dieser Akt beruht. Ohne sie nimmt die Engine ihn nicht an.",
+        "placeholder": "ID der Entscheidung"
+      }
+    }
+  },
+  "checks": {
+    "evidence": "Nachweis {{ref}}"
+  },
+  "common": {
+    "refresh": "Aktualisieren",
+    "loadMore": "Mehr laden"
+  },
+  "decisions": {
+    "title": "Entscheidungen",
+    "subtitle": "Das append-only geführte Entscheidungsregister und seine Projektion des aktuellen Stands.",
+    "view": {
+      "effective": "In Kraft",
+      "revoked": "Widerrufen",
+      "history": "Vollständige Historie"
+    },
+    "historyNotice": "Dies ist die append-only Historie. Die Engine schreibt diesen Zeilen keinen aktuellen Stand zu, daher ist keine davon als in Kraft oder widerrufen gekennzeichnet — wechseln Sie in eine der anderen Ansichten, um diese Frage zu stellen.",
+    "state": {
+      "effective": "In Kraft",
+      "revoked": "Widerrufen",
+      "notAttributed": "Diese Ansicht schreibt keinen Stand zu"
+    },
+    "meta": "{{subject}} · entschieden von {{actor}} · {{at}}",
+    "revoke": "Widerrufen",
+    "revokeTitle": "Entscheidung widerrufen",
+    "revokeBody": "Der Widerruf wird als neuer Eintrag verzeichnet; die ursprüngliche Entscheidung wird nie gelöscht.",
+    "empty": {
+      "effective": {
+        "title": "Keine Entscheidung in Kraft",
+        "body": "Die Engine hat die Projektion des aktuellen Stands gelesen und keine in Kraft befindliche gefunden."
+      },
+      "revoked": {
+        "title": "Keine widerrufenen Entscheidungen",
+        "body": "Die Engine hat die Projektion des aktuellen Stands gelesen und keine widerrufene gefunden."
+      },
+      "history": {
+        "title": "Keine Entscheidungen verzeichnet",
+        "body": "Hier wurde noch nichts entschieden."
+      }
+    }
+  },
+  "dependencies": {
+    "none": "Keine Abhängigkeiten."
+  },
+  "detail": {
+    "subtitle": "{{kind}} · Version {{version}}",
+    "applyTitle": "Änderung anwenden",
+    "owner": "Zuständig",
+    "provenance": "Herkunft",
+    "priority": "Priorität",
+    "blocked": "Blockierung",
+    "terminal": "Ergebnis",
+    "etag": "Versionskennzeichen",
+    "tabs": {
+      "overview": "Übersicht",
+      "acceptance": "Abnahme",
+      "dependencies": "Abhängigkeiten",
+      "events": "Ereignisse",
+      "lease": "Lease"
+    }
+  },
+  "events": {
+    "none": "Für diese Einheit sind keine Ereignisse verzeichnet."
+  },
+  "filters": {
+    "status": "Status",
+    "allStatus": "Beliebiger Status",
+    "priority": "Priorität",
+    "allPriority": "Beliebige Priorität",
+    "archived": {
+      "label": "Archiviert",
+      "any": "Archivierte und nicht archivierte",
+      "false": "Nur nicht archivierte",
+      "true": "Nur archivierte"
+    }
+  },
+  "items": {
+    "title": "Arbeitseinheiten",
+    "subtitle": "Filter schränken den gesamten Speicher ein, nicht nur die angezeigte Seite.",
+    "empty": {
+      "title": "Keine Arbeitseinheit passt",
+      "body": "Nichts im Speicher entspricht diesen Filtern. Das ist eine echte, vollständige Antwort: Die Engine hat den Speicher gelesen und keine gefunden."
+    }
+  },
+  "lease": {
+    "none": "Kein Lease auf diesem Element.",
+    "holder": "Inhaber",
+    "state": "Status",
+    "fence": "Fence",
+    "expires": "Läuft ab",
+    "renewals": "Erneuerungen",
+    "liveness": "Lebendigkeit",
+    "live": "Aktiv",
+    "notLive": "Nicht aktiv",
+    "unknown": "Konnte nicht nachsehen",
+    "reason": "Grund",
+    "ttl": "TTL (Sekunden)",
+    "noWrite": "Deine Rolle kann dieses Lease nicht ändern.",
+    "noAdmin": "Übernehmen, Widerrufen und Neusetzen erfordern Lease-Admin.",
+    "actions": {
+      "acquire": "Übernehmen",
+      "renew": "Erneuern",
+      "release": "Freigeben",
+      "takeover": "Lease übernehmen",
+      "revoke": "Widerrufen",
+      "clockRebase": "Uhr neu setzen"
+    },
+    "noRead": "Deine Rolle kann dieses Lease nicht lesen."
+  },
+  "status": {
+    "draft": "Entwurf",
+    "ready": "Bereit",
+    "active": "Aktiv",
+    "blocked": "Blockiert",
+    "review": "In Prüfung",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "canceled": "Abgebrochen",
+    "dependencyBlocked": "Abhängigkeit offen",
+    "archived": "Archiviert"
+  },
+  "stream": {
+    "open": "Live",
+    "connecting": "Verbindung wird wiederhergestellt…",
+    "closed": "Kein Stream",
+    "error": "Stream unterbrochen",
+    "unavailableBody": "Die angezeigte Liste kann veraltet sein, und nichts anderes wird Sie darauf hinweisen. Aktualisieren Sie, um den Speicher direkt zu lesen."
+  },
+  "subtitle": "Das dauerhafte sitzungsübergreifende Backlog: Arbeitseinheiten, Zuständigkeit, Abhängigkeiten, Abnahmekriterien und Entscheidungen. Jede Änderung wird geplant, bevor sie angewendet wird.",
+  "tabs": {
+    "items": "Arbeitseinheiten",
+    "decisions": "Entscheidungen"
+  },
+  "title": "Arbeit",
+  "transition": {
+    "item.ready": "Als bereit markieren",
+    "item.block": "Blockieren",
+    "item.unblock": "Blockierung aufheben",
+    "item.submit": "Zur Prüfung einreichen",
+    "item.complete": "Abschließen",
+    "item.fail": "Als fehlgeschlagen markieren",
+    "item.cancel": "Abbrechen",
+    "item.archive": "Archivieren"
+  },
+  "truncation": {
+    "label": "{{n}} Zeilen geladen; es gibt mehr",
+    "hint": "Diese Liste wird per Keyset paginiert und die Engine begrenzt eine Seite auf 200. Es werden nur die geladenen Zeilen angezeigt; grenze sie mit den Filtern ein."
+  },
+  "unavailable": {
+    "title": "Konnte nicht nachsehen",
+    "body": "Die Engine konnte diese Beobachtung nicht abschließen und meldet daher ein unbekanntes Ergebnis statt eines Resultats. Betrachten Sie nichts in diesem Bereich als bestätigt.",
+    "retryHint": "Ob die Änderung geschrieben wurde, ist ungeklärt. Wiederholen Sie den Versuch mit DEMSELBEN Idempotenzschlüssel — genau das macht die Wiederholung sicher, denn die Engine erkennt sie als dieselbe Absicht und nicht als eine zweite.",
+    "code": "Engine-Code: {{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "Sauber",
+      "help": "Die Engine hat nachgesehen und nichts Fehlerhaftes gefunden."
+    },
+    "ROTO": {
+      "label": "Defekt",
+      "help": "Die Engine hat nachgesehen und einen Regelverstoß gefunden."
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "Konnte nicht nachsehen",
+      "help": "Die Engine konnte die Beobachtung NICHT abschließen. Das ist weder ein Bestanden noch ein leeres Ergebnis — die Antwort ist unbekannt."
+    }
+  }
+}

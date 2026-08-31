@@ -1,0 +1,152 @@
+{
+  "title": "Voice & realtime",
+  "description": "Governed voice and realtime sessions across the estate. The console shows references and aggregates only — never audio, transcription text, prompts or PII.",
+  "tabs": {
+    "sessions": "Sessions",
+    "policies": "Policies",
+    "ledger": "Decisions"
+  },
+  "refresh": "Refresh",
+  "stats": {
+    "live": "Live sessions",
+    "liveCaption": "of {{total}} in view",
+    "avgLatency": "Avg latency",
+    "avgLatencyCaption": "mean of per-session averages",
+    "governed": "Governed share",
+    "governedCaption": "{{governed}} of {{total}} were policy-gated"
+  },
+  "sessions": {
+    "title": "Sessions",
+    "description": "Each session as the engine reports it — state is derived at read-time. The transcript is shown only as a fingerprint; there is no audio or text behind it.",
+    "empty": "No voice sessions",
+    "emptyHint": "Sessions appear once a governed open is dispatched against a voice policy.",
+    "governed": "Governed",
+    "ungoverned": "Ungoverned",
+    "transcriptLabel": "transcript",
+    "turnsBreakdown": "{{user}}u / {{agent}}a",
+    "latencyAvg": "avg {{value}}",
+    "latencyMax": "max {{value}}",
+    "columns": {
+      "state": "State",
+      "agent": "Agent",
+      "model": "Model / provider",
+      "turns": "Turns",
+      "duration": "Duration",
+      "latency": "Latency",
+      "governed": "Governed",
+      "transcript": "Transcript",
+      "lastEvent": "Last event"
+    }
+  },
+  "latency": {
+    "title": "Latency by session",
+    "description": "Average response latency per session, ranked. The table carries the max alongside — no p50/p95 is shown without per-turn samples.",
+    "summary": "Average response latency for {{count}} sessions, ranked. The slowest is {{session}} at {{latency}}.",
+    "summaryEmpty": "No sessions to rank by latency.",
+    "colSession": "Session",
+    "colLatency": "Avg latency"
+  },
+  "honesty": {
+    "noContent": "References and aggregates only — no audio, transcription text, prompts or PII are exposed here.",
+    "findingsNote": "Policy violations, latency degradation and ungoverned opens surface through the Security findings plane, not these routes."
+  },
+  "policies": {
+    "title": "Voice policies",
+    "description": "Default-DENY: a policy is what PERMITS opening a session. With no matching policy, an open is denied.",
+    "empty": "No voice policies",
+    "emptyHint": "Define a policy to permit opening voice sessions for an agent — default-deny means nothing opens until one matches.",
+    "all": "All",
+    "minutes": "{{value}} min",
+    "new": "New policy",
+    "edit": "Edit",
+    "columns": {
+      "agent": "Agent",
+      "model": "Allowed model",
+      "provider": "Allowed provider",
+      "maxMinutes": "Max session",
+      "maxLatency": "Max latency",
+      "setBy": "Set by",
+      "updated": "Updated"
+    },
+    "dialog": {
+      "title": "Voice policy",
+      "description": "This policy PERMITS opening sessions for the matching agent (default-deny). Use '*' to match all agents, models or providers.",
+      "agent": "Agent",
+      "agentHint": "An agent reference, or '*' for every agent.",
+      "model": "Allowed model",
+      "modelHint": "A model reference, or '*' for any model.",
+      "provider": "Allowed provider",
+      "providerHint": "A provider reference, or '*' for any provider.",
+      "maxMinutes": "Max session minutes",
+      "maxLatency": "Max latency (ms)",
+      "save": "Save policy",
+      "saved": "Voice policy saved"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "No session latency to rank yet",
+      "description": "Average response latency can be ranked once a governed open or realtime telemetry creates a voice session record."
+    },
+    "policies": {
+      "title": "No voice policies defined yet",
+      "description": "A policy permits matching agent, model and provider opens; without one, every voice session open is denied. Setting one is admin-tier."
+    },
+    "sessions": {
+      "title": "No voice sessions observed yet",
+      "description": "Sessions appear after a governed open is recorded or the configured realtime observer publishes session telemetry."
+    }
+  },
+  "surface": {
+    "chooseSession": "Choose a session to see its live surface.",
+    "loading": "Loading…",
+    "decisionsError": "The decisions could not be read.",
+    "noDecisions": "No decisions recorded for this session.",
+    "noReason": "no reason recorded",
+    "frames": "{{count}} live update(s)",
+    "open": "Open session (governed)",
+    "stream": {
+      "connecting": "connecting",
+      "open": "live",
+      "closed": "not connected",
+      "error": "stream failed"
+    },
+    "outcome": {
+      "opened": "Opened.",
+      "approval": "Approval requested — re-send with this approval reference:",
+      "denied": "Denied by policy: no voice policy permits this (agent, model, provider). This is a default-deny decision, not a failure.",
+      "noGate": "No approval gate is wired in this deployment, so the open stays denied. This is an estate gap, not a policy denial.",
+      "unavailable": "The approval gate did not answer, so nothing was decided."
+    }
+  },
+  "ledger": {
+    "title": "Open decision ledger",
+    "description": "Every decision to open a voice session across the estate, append-only and newest first — including the ones that were DENIED and therefore never became a session.",
+    "caveat": "A denied open does not create a session row of its own, so this is the first dedicated view that shows it in full with only `voice:session:read`. Other paths show it partially or need another permission: the API playground (tenant admin), the audit explorer (the action, without its reason) and Security findings (some paths only).",
+    "empty": "No open decisions yet",
+    "emptyHint": "This records the decisions the engine managed to persist. The evidence write is best-effort by design — a denial stands even if its ledger row is lost — so an empty ledger is not proof that nothing was refused.",
+    "truncated": "Showing the most recent {{count}} decisions and the engine reports more: this list is TRUNCATED. Read it as a sample, not as the whole ledger.",
+    "columns": {
+      "when": "When",
+      "outcome": "Outcome",
+      "session": "Session ref",
+      "agent": "Agent",
+      "actor": "Actor",
+      "reason": "Engine's reason"
+    },
+    "opStatus": {
+      "requested": "Approval requested",
+      "blocked": "Blocked",
+      "dispatched": "Dispatched",
+      "declared_not_opened": "Declared, not opened",
+      "failed": "Failed",
+      "budget_blocked": "Blocked — budget",
+      "budget_throttled": "Open denied — budget throttle"
+    },
+    "op": {
+      "open_request": "Open request",
+      "open": "Open",
+      "close": "Close"
+    }
+  }
+}

@@ -1,0 +1,200 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# docs-site-deploy — the half docs-site-artifact.yml deliberately left out.
+#
+# ============ WHY THIS EXISTS =================================================================
+# `docs-site-artifact.yml` builds the site and uploads `dist/` as a run artifact, and says in its
+# own header that it "deliberately does NOT deploy: it has no credential". That was the right call
+# while the destination was undecided. It is decided now and MEASURED (2026-08-27):
+# `docs.olivares.ai/*` is a zone route onto the `olivares-docs` Worker, whose configuration lives
+# at `docs-site/wrangler.jsonc` in this repository.
+#
+# What the missing deploy leg COSTS, measured the same day, and it is not hypothetical:
+#   · `docs-site/public/_redirects` landed on main in 31e13c238 and production does NOT serve it:
+#     https://docs.olivares.ai/cli and /quickstart answer 404 while the committed file promises a
+#     301 for both — derived from 35 measured external mentions.
+#   · the live build carries the ADR sweep of 08-25 22:56 and NOTHING after it. The deploy window
+#     was 08-25 22:56 -> 08-27 00:09, by hand, and anything that lands after it stays unpublished
+#     until somebody remembers.
+# A site that can only be published by remembering WILL go stale, and nothing says so.
+#
+# ⛔ DISPATCH ONLY, and that is not timidity. Publishing is deployment-class work, so somebody
+# asks for it by name — the same rule publish-enterprise-artifacts.yml:18-21 states for its own
+# job. There is no push trigger on purpose: docs-site changes land in ordinary code lots, and a
+# push trigger would publish a half-finished lot the moment it merged.
+#
+# ⛔ FAIL-CLOSED ON THE CREDENTIAL, AND IT SAYS WHICH ANSWER IT IS GIVING. This repository does not
+# hold CLOUDFLARE_API_TOKEN today (publish-enterprise-artifacts.yml:23 says so and is the only
+# other workflow that asks). Without it this job REFUSES and names the missing secret. It does not
+# skip, and it does not pass: "I could not look" is not "clean" — the third answer this repository
+# insists on. The moment the secret exists, the path works with no other change.
+#
+# ⛔ AND IT CANNOT BE EXERCISED BEFORE IT LANDS, which docs-site-artifact.yml already learned the
+# hard way and wrote down: `gh workflow run` resolves the workflow on the DEFAULT branch, so a
+# dispatch-only workflow's first real run is in production. What was done instead of "it cannot be
+# tested, so it was not tested":
+#   · every build step is copied from docs-site-artifact.yml, which mainline-ci exercises on
+#     every code push (`npm --prefix docs-site ci` + the `test` script that chains `build`);
+#   · the two NEW guards — the credential refusal and the post-deploy verification — were each
+#     exercised outside the workflow: no token -> refusal with the secret named; a live probe
+#     against docs.olivares.ai -> the four URLs the verification asserts;
+#   · `task lint:actions` (actionlint), `lint:ci-timeout-arithmetic`, `lint:ci-ports`: green.
+name: docs-site-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PUBLISH to confirm this deploys docs.olivares.ai for real'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+# Two deploys of the same Worker racing would make "which build is live" unanswerable, which is
+# the question this whole workflow exists to keep answerable. Never cancel-in-progress: killing a
+# deploy half-way is worse than queueing behind it.
+concurrency:
+  group: docs-site-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    steps:
+      - name: refuse anything but an explicit PUBLISH, from main
+        run: |
+          set -u
+          if [ "${CONFIRM}" != "PUBLISH" ]; then
+            echo "::error::This job publishes https://docs.olivares.ai. Re-run it with confirm=PUBLISH."
+            exit 1
+          fi
+          # ⛔ workflow_dispatch LETS THE OPERATOR PICK THE REF, and GitHub documents that branch
+          # selector explicitly. Without this, anyone with write could publish an unintegrated
+          # branch to the production docs host by choosing it in the dropdown — the confirmation
+          # word says "yes, publish", never "publish THIS". The ref is the second question and it
+          # was not being asked.
+          if [ "${REF}" != "refs/heads/main" ]; then
+            echo "::error::REFUSING: this workflow publishes production and may only run from main."
+            echo "::error::It was dispatched from '${REF}'. Land the change first, then dispatch from main."
+            exit 1
+          fi
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          REF: ${{ github.ref }}
+
+      # THE THIRD ANSWER, FIRST: without the credential this job has not published and has not
+      # verified anything, and it must not read as either. Named secret, so the reader knows what
+      # to fix rather than what to guess.
+      - name: refuse without the credential, and NAME it
+        run: |
+          set -u
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "::error::NO HE PODIDO PUBLICAR: the repository secret CLOUDFLARE_API_TOKEN is not set."
+            echo "::error::This is not a green and it is not a skip. Nothing was deployed and nothing"
+            echo "::error::was verified. The token needs Workers Scripts:Edit on the account that owns"
+            echo "::error::the olivares-docs Worker, plus Zone:Workers Routes:Edit on the olivares.ai"
+            echo "::error::zone (docs-site/wrangler.jsonc declares docs.olivares.ai/* as a route)."
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      # `npm ci`, never `npm install`: the lockfile is the input. Same call as the artifact job.
+      - name: install docs-site deps (locked)
+        run: npm --prefix docs-site ci
+
+      # ⛔ `test`, NOT `build`. This step used to run `npm run build`, which is ONLY `astro build`
+      # — while the OpenAPI/AsyncAPI spec lints, the spec-drift check, module coverage and the
+      # internal link check all live in the `test` script (docs-site/package.json). The comment in
+      # this file claimed to inherit the gates mainline-ci runs; it inherited the build alone, so
+      # a publish could ship a site that fails drift or carries broken links. `test` chains the
+      # build, so nothing is lost by running the one that checks more.
+      - name: build docs-site AND run its full gate suite
+        run: npm --prefix docs-site test
+
+      # Identical guard to docs-site-artifact.yml, and it belongs BEFORE the deploy rather than
+      # after: a build that produced nothing must never be published over a working site. Deleting
+      # a thousand pages is the one failure here that is not recoverable by re-running.
+      - name: refuse to publish an empty or truncated build
+        run: |
+          set -u
+          if [ ! -d docs-site/dist ]; then
+            echo "::error::docs-site/dist does not exist after a build that exited 0. Nothing to publish."
+            exit 1
+          fi
+          n="$(find docs-site/dist -type f | wc -l)"
+          if [ "$n" -lt 100 ]; then
+            echo "::error::docs-site/dist has only ${n} file(s). The site is ~1000 pages; that is a"
+            echo "::error::broken build reported as a pass, and publishing it would delete the site."
+            exit 1
+          fi
+          # ⛔ A FILE COUNT IS NOT A SITE. A hundred hashed assets with no page among them would
+          # have passed the check above and published an empty site over a working one. Name the
+          # pages whose absence means the build is broken, and DERIVE the section list from the
+          # content tree rather than typing it, so a new section is demanded automatically.
+          missing=""
+          for must in index.html 404.html; do
+            [ -f "docs-site/dist/$must" ] || missing="$missing $must"
+          done
+          while IFS= read -r seccion; do
+            [ -n "$seccion" ] || continue
+            [ -f "docs-site/dist/$seccion/index.html" ] || missing="$missing $seccion/index.html"
+          done <<SECCIONES
+          $(cd docs-site/src/content/docs && for d in */; do
+              d="${d%/}"
+              if [ -f "$d/index.md" ] || [ -f "$d/index.mdx" ]; then echo "$d"; fi
+            done)
+          SECCIONES
+          if [ -n "$missing" ]; then
+            echo "::error::docs-site/dist has ${n} files but is MISSING pages the tree declares:${missing}"
+            echo "::error::That is a broken build with enough assets to look like a whole site."
+            exit 1
+          fi
+          # `_redirects` is the reason this workflow exists at all: it is committed and unserved.
+          # Astro copies public/ into dist/, so its absence here means the copy silently stopped.
+          if [ ! -f docs-site/dist/_redirects ]; then
+            echo "::error::docs-site/dist/_redirects is missing. It is committed at"
+            echo "::error::docs-site/public/_redirects and Astro copies public/ into dist/, so this"
+            echo "::error::build would publish the site WITHOUT the redirects it promises."
+            exit 1
+          fi
+          echo "docs-site/dist: ${n} files, _redirects present"
+
+      # ⛔ WRANGLER IS NOT A DEPENDENCY OF docs-site, so `npx wrangler` would DOWNLOAD it and run
+      # unpinned code with a production Cloudflare token in its environment — undoing the `npm ci`
+      # of the step above, which exists precisely so the lockfile decides what executes. npm
+      # documents that npx installs a missing package into the cache and puts it on PATH.
+      # `--no-install` makes the absence LOUD instead of a silent fetch; the version is then
+      # whatever the lockfile pinned, and nothing else can run here.
+      - name: refuse an unpinned wrangler
+        run: |
+          set -u
+          if ! npm --prefix docs-site exec --no-install -- wrangler --version >/dev/null 2>&1; then
+            echo "::error::wrangler is not installed from docs-site's lockfile, and this step will"
+            echo "::error::NOT fetch it: that would run unpinned code with CLOUDFLARE_API_TOKEN in"
+            echo "::error::its environment. Add wrangler to docs-site/package.json devDependencies,"
+            echo "::error::commit the lockfile, and re-dispatch."
+            exit 1
+          fi
+          npm --prefix docs-site exec --no-install -- wrangler --version
+
+      - name: deploy the olivares-docs Worker
+        run: npm --prefix docs-site exec --no-install -- wrangler deploy --cwd docs-site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # A deploy that exits 0 is not a published site: this repository has measured that gap in
+      # both directions. Probe the live host for the depth that was broken, and for the redirect
+      # this deploy exists to publish.
+      - name: verify the live site, not the exit code
+        run: bash scripts/check-docs-site-live.sh

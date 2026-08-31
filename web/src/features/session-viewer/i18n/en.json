@@ -1,0 +1,126 @@
+{
+  "title": "Session Recording Viewer",
+  "subtitle": "Unified timeline of agent activity and governance evidence for a single session.",
+  "back": "Back to recordings",
+  "header": {
+    "subject": "Subject",
+    "status": "Status",
+    "opened": "Opened",
+    "duration": "Duration",
+    "model": "Model",
+    "frames": "Frames",
+    "live": "LIVE",
+    "tipHash": "Chain tip",
+    "openSeq": "Open ledger seq",
+    "anchorSeq": "Latest anchor seq",
+    "sealSeq": "Seal ledger seq"
+  },
+  "lanes": {
+    "activity": "Agent Activity",
+    "evidence": "Governance Evidence"
+  },
+  "panels": {
+    "tools": "Tools Used",
+    "files": "Files Touched",
+    "decisions": "Decisions"
+  },
+  "timeline": {
+    "loadMore": "Load more",
+    "empty": "No events recorded",
+    "activityUnavailable": "Agent activity is unavailable because the timeline resolver is not wired or did not answer. Governance evidence remains available.",
+    "tool": "Tool call",
+    "mcp": "MCP invocation",
+    "cost": "Cost sample",
+    "finding": "Finding"
+  },
+  "redaction": {
+    "hidden": "[REDACTED — click to reveal]",
+    "reveal": "Reveal",
+    "hide": "Hide"
+  },
+  "verify": {
+    "passive": "Inline verification",
+    "fresh": "Fresh verification",
+    "intact": "Chain intact",
+    "broken": "Chain broken",
+    "frames": "{{count}} frames verified",
+    "anchors": "{{count}} anchors verified",
+    "anchorsOk": "{{count}} anchors verified",
+    "anchorsBroken": "{{count}} anchors failed",
+    "tipMatch": "Tip match",
+    "tipMismatch": "Tip mismatch",
+    "anchoredThrough": "Verified ledger anchors cover through frame {{idx}}.",
+    "breakAt": "Break at frame {{idx}} — {{reason}}",
+    "gap": "Frame gap",
+    "failures": "Anchor failures",
+    "failure": "{{kind}} anchor · seq {{seq}} · frame {{idx}} · {{reason}}",
+    "failed": "Verification failed"
+  },
+  "export": {
+    "json": "Export JSON",
+    "summary": "Export Summary",
+    "verify": "Verify Chain"
+  },
+  "tools": {
+    "success": "success",
+    "fail": "fail",
+    "calls": "{{count}} calls"
+  },
+  "files": {
+    "read": "Read",
+    "write": "Write",
+    "edit": "Edit",
+    "create": "Create"
+  },
+  "decisions": {
+    "group": "Task {{idx}}",
+    "tools": "{{count}} tool calls",
+    "fileCount": "{{count}} files"
+  },
+  "detail": {
+    "toolRef": "Tool ref",
+    "resourceRef": "Resource ref",
+    "mode": "Mode",
+    "source": "Source",
+    "titleField": "Title",
+    "at": "At",
+    "frameIdx": "#",
+    "namespace": "Namespace",
+    "method": "Method",
+    "pattern": "Pattern",
+    "outcome": "Outcome",
+    "actor": "Actor",
+    "actAs": "Act as",
+    "params": "Params",
+    "httpStatus": "HTTP status",
+    "durMs": "Duration",
+    "hash": "Frame hash",
+    "prevHash": "Previous hash",
+    "anchorSeq": "Anchor seq",
+    "close": "Close event details"
+  },
+  "seal": {
+    "action": "Seal session",
+    "title": "Seal this recording session?",
+    "body": "Sealing is irreversible: it closes the session, fixes its chain tip, and prevents any further frames from being appended.",
+    "confirm": "Seal session",
+    "done": "Session sealed",
+    "alreadySealed": "This session is already sealed."
+  },
+  "summarize": {
+    "action": "Generate summary",
+    "done": "Summary generated.",
+    "unavailable": "No summarizer is configured; the recording remains available as raw evidence.",
+    "disabled": "AI summaries are disabled for this tenant because the transcript would leave the trust boundary.",
+    "active": "This session is still active. Seal it before generating a complete summary.",
+    "failed": "The summary could not be generated; the recording itself is unaffected."
+  },
+  "ledger": {
+    "title": "Ledger",
+    "subtitle": "Correlated semantic events from the evidence ledger.",
+    "seq": "seq {{seq}}",
+    "empty": "No correlated ledger events",
+    "truncated": "The ledger view is truncated; additional correlated events exist beyond this bounded window."
+  },
+  "notFound": "Recording session not found"
+}

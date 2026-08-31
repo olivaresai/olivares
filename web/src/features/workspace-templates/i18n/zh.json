@@ -1,0 +1,90 @@
+{
+  "truncation": {
+    "label": "已加载 {{n}} 个模板；还有更多",
+    "hint": "此目录仅提供已加载的模板；未显示的模板可能位于后续页面。"
+  },
+  "title": "工作区模板",
+  "subtitle": "工作区会话的 Hooks、设置、连接器和策略的可复用快照。",
+  "catalog": {
+    "builtin": "内置",
+    "version": "v{{version}}",
+    "author": "作者：{{author}}",
+    "archived": "已归档",
+    "noTemplates": "未找到模板。",
+    "noTemplatesHint": "创建您的第一个模板以复用工作区配置。",
+    "filterAll": "全部",
+    "filterBuiltin": "内置",
+    "filterCustom": "自定义",
+    "showArchived": "显示已归档"
+  },
+  "editor": {
+    "nameLabel": "名称",
+    "namePlaceholder": "例如：安全编码会话",
+    "descriptionLabel": "描述",
+    "descriptionPlaceholder": "此模板配置了什么？",
+    "sections": {
+      "hooks": "Hooks",
+      "hooksHint": "在工具和会话前后执行的命令。",
+      "settings": "代理设置",
+      "settingsHint": "权限模式、努力程度、模型和自定义指令。",
+      "connectors": "连接器",
+      "connectorsHint": "应用此模板时要附加的连接器 ID。",
+      "policies": "治理策略",
+      "policiesHint": "DLP 模式、会话时长限制、允许的工具和 I/O 记录。"
+    },
+    "hooks": {
+      "preTool": "工具前",
+      "postTool": "工具后",
+      "preSession": "会话前",
+      "postSession": "会话后",
+      "command": "命令",
+      "timeoutMs": "超时时间 (ms)",
+      "addHook": "添加 Hook",
+      "removeHook": "删除"
+    },
+    "settings": {
+      "permissionMode": "权限模式",
+      "effort": "努力程度",
+      "model": "模型",
+      "customInstructions": "自定义指令"
+    },
+    "policies": {
+      "dlpMode": "DLP 模式",
+      "maxDuration": "最大会话时长（分钟）",
+      "allowedTools": "允许的工具",
+      "allowedToolsPlaceholder": "例如：Bash,Read,Edit",
+      "recordIo": "记录 I/O"
+    }
+  },
+  "actions": {
+    "create": "新建模板",
+    "edit": "编辑",
+    "duplicate": "复制",
+    "archive": "归档",
+    "restore": "恢复",
+    "apply": "应用到会话",
+    "save": "保存",
+    "cancel": "取消",
+    "confirmArchive": "归档此模板？",
+    "confirmArchiveHint": "已归档的模板将从目录中隐藏，但可以恢复。",
+    "confirmApply": "应用模板？",
+    "confirmApplyHint": "当前会话设置将被模板值覆盖。",
+    "duplicateName": "{{name}} 的副本"
+  },
+  "apply": {
+    "success": "模板已应用。",
+    "conflicts": "已应用，存在 {{count}} 个冲突。",
+    "conflictField": "字段",
+    "conflictOld": "原值",
+    "conflictNew": "新值",
+    "unenforceable": "无法应用此模板：{{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "加载模板失败。",
+    "saveFailed": "保存模板失败。",
+    "applyFailed": "应用模板失败。",
+    "archiveFailed": "归档模板失败。",
+    "duplicateFailed": "复制模板失败。"
+  },
+  "notFound": "未找到模板。"
+}

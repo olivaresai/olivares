@@ -1,0 +1,583 @@
+{
+  "title": "身份与 NHI",
+  "subtitle": "SSO、SCIM、身份清单、NHI 生命周期、WIF 图谱与特权登录——经观测、治理与审计。",
+  "tabs": {
+    "federation": "SSO 与 SCIM",
+    "inventory": "身份清单",
+    "lifecycle": "NHI 生命周期",
+    "mcp": "MCP 认证",
+    "wif": "WIF 图谱",
+    "posture": "密钥与驻留态势",
+    "login": "特权登录"
+  },
+  "seam": {
+    "badge": "后端待接入",
+    "body": "{{what}} 是一份已声明的契约——后端端点尚未上线，因此暂无可展示内容。该端点一旦上线，本面板将立即填充数据；它绝不伪造数据。"
+  },
+  "assurance": {
+    "stepUpTitle": "需要升级认证",
+    "stepUpBody": "{{action}} 需要 {{required}}。当前会话为 {{current}}。请使用硬件安全密钥完成认证以继续。",
+    "authenticate": "使用安全密钥认证",
+    "authenticatePiv": "使用 PIV/CAC 卡进行身份验证",
+    "authenticating": "正在等待您的认证器……",
+    "seamWhat": "特权登录流程（WebAuthn 升级认证）",
+    "unsupported": "此浏览器不支持 WebAuthn。特权操作需要支持抗钓鱼认证器的平台。",
+    "failed": "升级认证未完成。该操作仍被拒绝。",
+    "actions": {
+      "wif": "查看 Workload Identity Federation 图谱",
+      "identity": "管理身份",
+      "nhiLifecycleRotate": "轮换非人类身份凭据",
+      "nhiLifecycleFinalize": "最终完成非人类身份下线",
+      "generic": "此操作"
+    },
+    "aal": {
+      "aal1": "AAL1（密码）",
+      "aal2": "AAL2（多因素）",
+      "aal3": "AAL3（硬件、抗钓鱼）"
+    },
+    "unenrolled": "您的账户尚未注册任何通行密钥。请先在「特权登录」选项卡中注册硬件安全密钥，然后重试升级认证。"
+  },
+  "references": {
+    "note": "本面板所遵循的标准。面板进行观测与验证；它不声称获得认证。",
+    "labels": {
+      "scim": "SCIM 2.0（RFC 7644）",
+      "prm": "Protected Resource Metadata（RFC 9728）",
+      "asMetadata": "Authorization Server Metadata（RFC 8414）",
+      "resourceIndicators": "Resource Indicators（RFC 8707）",
+      "pkce": "PKCE（RFC 7636）",
+      "oauthSecurityBcp": "OAuth 2.0 Security BCP（RFC 9700）",
+      "webauthn": "NIST SP 800-63B-4（认证器保证）",
+      "piv": "FIPS 201-3（PIV）",
+      "certManager": "cert-manager（CNCF）",
+      "pqc": "NIST SP 800-57 Part 1 r6（密钥管理）",
+      "wifReference": "Anthropic WIF 参考",
+      "workloadIdentity": "Anthropic Workload Identity Federation",
+      "externalKeys": "Anthropic External Keys（CMEK）",
+      "workspaceUpdate": "Anthropic 工作区驻留"
+    },
+    "sso": {
+      "title": "SSO 与 SCIM 标准"
+    },
+    "mcpAuth": {
+      "title": "MCP 授权标准"
+    },
+    "wif": {
+      "title": "Workload Identity Federation 参考"
+    },
+    "posture": {
+      "title": "密钥与驻留参考"
+    },
+    "login": {
+      "title": "特权登录标准"
+    }
+  },
+  "sso": {
+    "title": "单点登录（OIDC / SAML）",
+    "description": "联合身份登录已在商业版构建中实现，并在启动时按环境配置。本面板记录该配置、校验精确的重定向 URI 并呈现连接状态——它不写入配置。",
+    "notConfigured": "未配置",
+    "notConfiguredHint": "未配置任何身份提供方，因此联合身份请求返回 501。请设置下方的环境密钥并重启引擎以启用 SSO。",
+    "seamWhat": "SSO 连接状态摘要",
+    "protocol": "协议",
+    "state": "连接",
+    "redirectUri": "重定向 URI（精确）",
+    "pkce": "PKCE",
+    "pkceValue": "Authorization Code + S256（始终）",
+    "redirectCheckLabel": "校验您的 IdP 重定向 URI",
+    "redirectCheckHint": "粘贴在您的身份提供方中配置的重定向/ACS URI。它必须与上方的值完全一致（RFC 9700）。",
+    "redirectMatch": "完全匹配——此重定向 URI 有效。",
+    "redirectMismatch": "不完全匹配。IdP 必须逐字符使用上方的重定向 URI。",
+    "proto": {
+      "common": "通用",
+      "oidc": "OIDC",
+      "saml": "SAML"
+    },
+    "required": "必填",
+    "secret": "密钥",
+    "envNote": "配置在启动时从环境中读取一次；不存在配置写入 API。密钥永不回读。",
+    "testLogin": "发起一次测试登录"
+  },
+  "scim": {
+    "title": "SCIM 2.0 预配",
+    "description": "用户与组的入站预配。以只读方式呈现服务提供方状态、已同步的用户以及离职证据。",
+    "seamWhat": "SCIM 服务提供方配置",
+    "patch": "PATCH",
+    "filter": "筛选",
+    "filterMax": "支持（最多 {{n}}）",
+    "auth": "认证",
+    "bearerName": "租户 SCIM bearer",
+    "bearerNote": "认证采用与租户绑定的 bearer 令牌。令牌值永不显示——仅显示其引用。",
+    "usersTitle": "已同步的用户",
+    "noUsers": "尚无已同步的用户",
+    "noUsersHint": "一旦您的 IdP 通过 SCIM 预配用户，他们便会显示在此处。被停用的（调动/离职）用户显示为非活跃。",
+    "groupsSupported": "支持入站组预配（组及其成员关系）。将目录组映射到角色仍仅限运维人员操作，位于“身份 → 组”。",
+    "leaverTitle": "离职证据",
+    "leaverSeamWhat": "离职审计证据",
+    "noLeaver": "无解除预配事件",
+    "noLeaverHint": "当处理一次 SCIM 离职（delete / prov:delete）时，后端会吊销该用户的会话与令牌并在此记录。",
+    "revoked": "会话与令牌已吊销",
+    "col": {
+      "userName": "用户",
+      "state": "状态",
+      "externalId": "External ID",
+      "lastModified": "最后修改时间"
+    }
+  },
+  "console": {
+    "title": "Claude 控制台态势",
+    "description": "Anthropic Admin API 允许——以及不允许——我们验证的关于您组织身份态势的内容。如实呈现，绝不冒充完整名册。",
+    "seamWhat": "claude-console 态势发现项",
+    "noFindings": "无态势发现项",
+    "noFindingsHint": "claude-console 连接器在配置后会发出一个结构性态势发现项。",
+    "blindSpotTitle": "Admin-API 盲区（结构性——并非配置错误）",
+    "blindSpots": {
+      "ssoEnforcement": "SSO 强制状态未由 Admin API 暴露（API 无法获知）。",
+      "scimProvisioning": "SCIM 预配状态未由 Admin API 暴露（API 无法获知）。",
+      "members": "组织成员可通过 Admin API 列举。",
+      "ssoJit": "SSO / JIT 是 Team 套餐及以上的能力。",
+      "auditExport": "SCIM / 审计导出受 Enterprise 套餐限制。",
+      "continuousAudit": "持续审计采用 Compliance Activity Feed，而非可轮询的 API（180 天 CSV 是仅限所有者的 Console 下载）。"
+    }
+  },
+  "roster": {
+    "label": "非人类与人类身份",
+    "search": "搜索身份……",
+    "convergenceNote": "此身份按其 External ID 收敛——与观测侧所用的同一 id——因此访问映射可对其「已许可」与「已观测」的行为进行差异比对。",
+    "openInAccessMap": "在访问映射中查看",
+    "col": {
+      "name": "名称",
+      "externalId": "External ID",
+      "kind": "类别",
+      "principalType": "主体",
+      "source": "来源",
+      "state": "状态"
+    },
+    "principal": {
+      "nhi": "非人类",
+      "human": "人类",
+      "unknown": "未知"
+    },
+    "filter": {
+      "principalType": "按主体筛选",
+      "kind": "按类别筛选",
+      "all": "全部"
+    }
+  },
+  "lifecycle": {
+    "loading": "正在加载 NHI 生命周期……",
+    "unknown": "未知",
+    "notSet": "未设置",
+    "orphaned": "孤立",
+    "forbidden": {
+      "title": "未获授权",
+      "description": "您的角色无权读取 NHI 生命周期。"
+    },
+    "posture": {
+      "title": "生命周期态势",
+      "description": "租户范围内的过期、执行、责任归属和关键性态势。",
+      "total": "总数",
+      "stale": "陈旧",
+      "blocked": "已阻止",
+      "alerting": "告警中",
+      "orphaned": "孤立",
+      "critical": "关键"
+    },
+    "filters": {
+      "criticality": "按关键性筛选",
+      "enforcement": "按执行状态筛选",
+      "allCriticality": "全部关键性",
+      "allEnforcement": "全部执行状态"
+    },
+    "criticality": {
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "critical": "关键"
+    },
+    "staleness": {
+      "ok": "有效",
+      "stale": "陈旧",
+      "unknown": "未知"
+    },
+    "enforcement": {
+      "monitor": "监控",
+      "alert": "告警",
+      "blocked": "已阻止"
+    },
+    "offboard": {
+      "none": "有效",
+      "soft_deleted": "可恢复删除",
+      "finalized": "已最终完成"
+    },
+    "table": {
+      "title": "受治理的非人类身份",
+      "description": "轮换态势、执行状态、负责人和下线状态。选择身份可查看事件轨迹和操作。",
+      "identity": "身份",
+      "criticality": "关键性",
+      "staleness": "过期状态",
+      "enforcement": "执行",
+      "ownership": "所有者与担保人",
+      "offboarding": "下线",
+      "ownerValue": "所有者：{{ref}}",
+      "sponsorValue": "担保人：{{ref}}",
+      "openDetail": "打开 {{ref}} 的生命周期详情",
+      "truncated_other": "仅显示前 {{count}} 个身份；符合此筛选条件的身份多于所列。请缩小筛选范围以查看其余项。"
+    },
+    "empty": {
+      "title": "无生命周期记录",
+      "description": "运行经确认的扫描，以注册清单中的 NHI 并实体化其生命周期态势。"
+    },
+    "detail": {
+      "description": "当前生命周期状态及仅追加的治理轨迹。",
+      "posture": "生命周期详情",
+      "enforcementReason": "执行原因",
+      "owner": "人类所有者",
+      "sponsor": "人类担保人",
+      "rotatedAt": "上次轮换",
+      "maxAge": "最长有效期",
+      "seconds": "{{count}} 秒",
+      "inherited": "继承关键性默认值",
+      "rotationTarget": "轮换目标",
+      "recoveryUntil": "恢复窗口结束"
+    },
+    "events": {
+      "title": "仅追加事件轨迹",
+      "description": "后端记录的生命周期变更和执行状态转换。",
+      "empty": "尚未记录生命周期事件。",
+      "event": "事件",
+      "actor": "操作者",
+      "detail": "详情",
+      "when": "时间"
+    },
+    "actions": {
+      "title": "生命周期操作",
+      "reason": "原因",
+      "critical": {
+        "twoAccountsAal3": "此关键操作在执行前需要两个不同用户账户的批准，且每个账户均通过 AAL3 会话。引擎强制的是不同的“账户”：它无法证明两个账户属于两个不同的人。 这两个条件取决于当前的风险等级，审批策略可以将其调低。",
+        "breakGlassPossible": "在两个不同用户账户各自通过硬件验证会话批准之前，不会执行任何操作。有效的紧急破窗授权可以替代批准——该次使用会被记录并事后复核。 这两个条件取决于当前的风险等级，审批策略可以将其调低。",
+        "noBreakGlass": "在两个不同用户账户各自通过硬件验证会话批准之前，不会执行任何操作。此操作无法使用破窗授权：不存在绕过第二位批准者的紧急通道。 这两个条件取决于当前的风险等级，审批策略可以将其调低。"
+      },
+      "ownership": {
+        "button": "分配负责人",
+        "title": "分配人类责任人",
+        "description": "使用清单中的身份引用设置负责的所有者和担保人。",
+        "owner": "所有者身份引用",
+        "sponsor": "担保人身份引用",
+        "humanOnly": "所有者和担保人都必须解析为清单中的人类身份。",
+        "noChanges": "请先更改所有者或担保人，然后再保存。",
+        "cannotClear": "无法在此清除所有者和担保人的引用。请改为分配其他人类身份。",
+        "confirm": "保存负责人",
+        "saved": "已保存 NHI 责任归属。"
+      },
+      "policy": {
+        "button": "编辑策略",
+        "title": "编辑轮换策略",
+        "description": "设置凭据关键性、轮换周期、目标和已知的上次轮换时间。",
+        "enforcementWarning": "保存此策略可能间接改变执行状态：关键性决定过期后告警还是阻止；已过期的关键凭据可能在下次扫描时被阻止。",
+        "criticality": "凭据关键性",
+        "maxAge": "最长有效秒数",
+        "maxAgeHint": "设为零将继承所选关键性的默认值。",
+        "rotationTarget": "轮换目标",
+        "rotatedAt": "已知的上次轮换",
+        "confirm": "保存策略",
+        "saved": "已保存 NHI 轮换策略。",
+        "partialUpdateNote": "留空或填 0 会保留当前值——这些设置可以修改但无法清除，因此已设定的轮换周期或目标会一直保留，直到你替换它。"
+      },
+      "rotate": {
+        "button": "轮换",
+        "title": "请求凭据轮换",
+        "description": "创建受治理的关键轮换请求。",
+        "target": "执行器目标",
+        "confirm": "请求轮换",
+        "credentialTitle": "新凭据——仅显示一次",
+        "credentialWarning": "请立即复制并安全保存此凭据。它仅显示一次，不会由 Olivares AI 持久化，关闭此对话框后无法恢复。",
+        "credential": "新凭据",
+        "credentialRef": "新凭据引用：{{ref}}",
+        "credentialSaved": "我已安全保存"
+      },
+      "offboard": {
+        "button": "下线",
+        "title": "可恢复删除此 NHI",
+        "description": "创建由一名批准者处理的高风险下线请求。",
+        "warning": "此可恢复步骤会阻止 NHI 及其绑定的代理，并打开恢复窗口。不要求 AAL3。",
+        "confirm": "请求可恢复删除"
+      },
+      "finalize": {
+        "button": "最终完成",
+        "title": "最终完成下线",
+        "description": "永久吊销先前已可恢复删除的 NHI。",
+        "irreversible": "最终完成不可逆。此处不适用 break-glass；无法绕过第二个不同用户账户和 AAL3 的要求。",
+        "confirm": "永久最终完成"
+      },
+      "restore": {
+        "button": "恢复",
+        "title": "恢复 NHI",
+        "description": "在恢复窗口内撤销删除。此管理操作有意不设置双人控制。",
+        "confirm": "恢复 NHI"
+      },
+      "sweep": {
+        "button": "运行生命周期扫描",
+        "title": "运行生命周期扫描",
+        "description": "重新计算此租户的过期状态、责任归属和执行状态。",
+        "warning": "此扫描是幂等的，但会改变状态。它可能将身份转为阻止状态，并拒绝其受治理的操作。",
+        "confirm": "运行状态变更扫描",
+        "done": "NHI 生命周期扫描已完成。",
+        "result": "已扫描 {{scanned}} 个；新阻止 {{blocked}} 个。"
+      },
+      "result": {
+        "title": "受治理请求状态",
+        "done": "生命周期操作已完成。",
+        "pending": "请求正在等待批准；尚未执行任何操作。",
+        "rejected": "请求已被拒绝；未执行任何操作。",
+        "expired": "请求已过期；如仍有需要，请提交新请求。",
+        "noGate": "未配置批准关卡，因此操作仍被拒绝。",
+        "unavailable": "请求已批准，但此来源没有自动执行器。请按照供应商的手动流程操作。",
+        "breakGlass": "操作已通过受审计的紧急路径完成。",
+        "received": "后端返回了受治理请求状态。",
+        "approval": "批准引用：{{ref}}"
+      }
+    },
+    "errors": {
+      "mutation": "无法完成生命周期操作。请检查请求后重试。",
+      "forbidden": "未获授权：您的角色不允许执行此生命周期操作。",
+      "humanOwnerRequired": "所有者和担保人必须是清单中的人类身份；非人类身份不能担任任一角色。",
+      "softDeleteRequired": "最终完成前必须先进行可恢复删除。请先将 NHI 下线，再在作出恢复决定后最终完成。",
+      "gate": {
+        "rejected": "审核人已拒绝此请求。这不是权限问题——请联系审核人，或补充所缺背景后重新发起请求。",
+        "expired": "此请求的批准在执行前已过期。请重新发起；先前的决定不再授权任何操作。",
+        "no_gate": "未接入审批门控，因此该操作无法接受治理并被拒绝。运维人员需先配置治理。"
+      }
+    }
+  },
+  "mcp": {
+    "title": "MCP 授权",
+    "description": "每个 MCP 服务器的 OAuth 令牌绑定是否已被验证。仅为防御性态势——本面板绝不代理或重放令牌。",
+    "seamWhat": "MCP 授权发现项",
+    "noFindings": "无 MCP 授权发现项",
+    "noFindingsHint": "当发现一个受 OAuth 保护的 MCP 服务器时，其令牌绑定态势会记录在此处。",
+    "prmTitle": "受众绑定授权（RFC 9728）",
+    "prmDescription": "受 OAuth 保护的 MCP 服务器如何将令牌绑定到一个具体资源——使为某服务器签发的令牌无法在另一服务器重放。",
+    "flow": {
+      "prm": {
+        "title": "Protected Resource Metadata",
+        "body": "服务器在 /.well-known/oauth-protected-resource 处公告其授权服务器（RFC 9728）。"
+      },
+      "asDiscovery": {
+        "title": "授权服务器发现",
+        "body": "获取所公告授权服务器的元数据（RFC 8414）。"
+      },
+      "pkce": {
+        "title": "PKCE S256",
+        "body": "授权码流程使用 S256 质询（RFC 7636）——绝不使用 plain。"
+      },
+      "resourceBound": {
+        "title": "资源绑定令牌",
+        "body": "资源指示符（RFC 8707）是规范的服务器 URI，因此令牌的受众为一个具体服务器。"
+      },
+      "introspect": {
+        "title": "只读内省",
+        "body": "通过只读内省验证令牌绑定；本面板绝不调用工具或代理令牌。"
+      }
+    },
+    "noPassthrough": "令牌透传按设计被禁止：本面板进行观测与内省，绝不转发或重放 MCP 令牌。"
+  },
+  "wif": {
+    "gatedNote": "Workload Identity Federation 图谱是一个特权、受审计的视图；它需要硬件升级认证。",
+    "consoleOnly": "工作负载身份联合对象（颁发者、规则、服务账户）仅在 Anthropic Console 中管理。本面板将其可视化并加以检查——它绝不创建或编辑它们。",
+    "openConsole": "在 Anthropic Console 中打开",
+    "graphTitle": "WIF 对象图谱",
+    "graphDescription": "联合身份颁发者 → 规则 → 服务账户 → OAuth 范围，由检查器标记过宽的边界。",
+    "empty": "未声明任何联合身份",
+    "emptyHint": "此组织未配置任何 Workload Identity Federation 颁发者、规则或服务账户。请在 Anthropic Console 中声明联合身份，以在不使用静态密钥的情况下治理非人类访问。",
+    "lintClean": "检查通过",
+    "lintErrors": "{{n}} 个错误",
+    "lintWarnings": "{{n}} 个警告",
+    "lintInfo": "{{n}} 条信息",
+    "lintNoFindings": "无检查发现项——联合身份图谱的范围划定良好。",
+    "lintLabel": "WIF 检查发现项",
+    "lintRulesTitle": "检查器已就绪。图谱加载后将应用以下规则：",
+    "legend": {
+      "issuer": "联合身份颁发者（fdis_）",
+      "rule": "联合身份规则（fdrl_）",
+      "svac": "服务账户（svac_）",
+      "scope": "OAuth 范围"
+    },
+    "lint": {
+      "cel-over-broad": {
+        "title": "过宽的联合身份规则",
+        "detail": "此规则的匹配过于宽松。CEL 条件是安全边界——请收窄 subject_prefix、audience、claims 或 CEL 条件。",
+        "rule": "标记其 subject / audience / claims / CEL 匹配过于宽松的规则。"
+      },
+      "key-shadow": {
+        "title": "静态密钥屏蔽联合身份",
+        "detail": "存在 {{var}}——静态 Anthropic 密钥具有优先级，会静默禁用 Workload Identity Federation，因此一个「无密钥」组织仍在使用长期有效的密钥。",
+        "recommendation": "运行 `ant auth status` 确认当前生效的凭据，然后取消设置该静态密钥以真正使用联合身份。",
+        "rule": "标记屏蔽 WIF 的静态 ANTHROPIC_API_KEY / AUTH_TOKEN。"
+      },
+      "token-lifetime": {
+        "title": "令牌有效期问题",
+        "detail": "token_lifetime_seconds = {{lifetime}}。请将其保持在 {{max}}s 上限以下并处于受支持的区间内——令牌越短，影响范围越小。",
+        "rule": "标记 token_lifetime_seconds 超出 60–86400s，或接近 24 小时上限的情况。"
+      },
+      "scope-over-broad": {
+        "title": "过宽的 OAuth 范围",
+        "detail": "范围 {{scope}} 授予了超出单个工作区的权限。除非确实需要组织级管理，否则优先使用 workspace:developer。",
+        "rule": "标记 org:manage_tunnels 或无法识别的范围；优先采用最小权限。"
+      },
+      "jwks-insecure": {
+        "title": "内联 JWKS 无法轮换",
+        "detail": "此规则固定了一个内联 JWKS（{{mode}}）。优先使用发现机制，以便颁发者的密钥能够轮换。",
+        "rule": "标记无法轮换的内联 JWKS。"
+      },
+      "drift": {
+        "title": "联邦配置漂移",
+        "detail": "此对象与受治理的联邦配置存在差异（{{reason}}）。请将声明的规则与 Anthropic 的实际配置进行核对。",
+        "rule": "检测“声明与实际”的漂移：未声明（未受治理）的实时规则、实际中已不存在的声明规则，或孤立的规则/颁发者。",
+        "reason": {
+          "undeclared-rule": "未声明的实时规则",
+          "declared-not-live": "已声明但不存在",
+          "orphan-rule": "孤立规则",
+          "orphan-issuer": "孤立颁发者"
+        }
+      }
+    },
+    "recon": {
+      "declaredOnly": "正在显示已声明的联邦配置。配置 org:admin OAuth 令牌以与 Anthropic 的实际配置进行核对。",
+      "reconciled": "已于 {{at}} 与实际配置完成核对。",
+      "unavailable": "实时核对不可用 — 正在显示已声明的基线。请检查 org:admin OAuth 令牌。"
+    }
+  },
+  "posture": {
+    "ek": {
+      "title": "外部密钥（CMEK）",
+      "description": "由您的工作区引用的客户托管加密密钥。仅为态势——绝不涉及密钥材料。",
+      "seamWhat": "外部密钥态势",
+      "immutable": "使用中——不可变",
+      "never": "从未验证",
+      "col": {
+        "id": "密钥引用",
+        "provider": "提供方",
+        "state": "状态",
+        "inUse": "已引用",
+        "validated": "上次验证时间"
+      }
+    },
+    "residency": {
+      "title": "工作区驻留",
+      "description": "各工作区的数据驻留与 CMEK 绑定。主区域和所引用的 CMEK 不可变。",
+      "seamWhat": "工作区驻留态势",
+      "none": "未报告任何工作区。",
+      "workspace": "工作区",
+      "geo": "主区域",
+      "cmek": "CMEK",
+      "providerManaged": "提供方托管（无 CMEK）",
+      "compartment": "KMS 分区",
+      "inferenceGeos": "允许的推理区域",
+      "unrestricted": "不受限 / 未报告"
+    },
+    "tls": {
+      "title": "面板 TLS（cert-manager）",
+      "description": "面板自身的 TLS 态势：颁发者、到期时间、轮换与证书链。",
+      "seamWhat": "面板 cert-manager TLS 态势",
+      "issuer": "颁发者",
+      "notAfter": "到期时间",
+      "autoRenew": "自动续期",
+      "chain": "证书链"
+    },
+    "crypto": {
+      "title": "加密敏捷性 / PQC 清单",
+      "description": "整个身份资产域中的传统算法与后量子算法对比，以及哪些槽位可轮换至 PQC（NIST SP 800-57 r6）。",
+      "seamWhat": "加密敏捷性 / PQC 清单",
+      "ready": "PQC 就绪",
+      "notReady": "仅传统算法",
+      "family": {
+        "classic": "传统",
+        "pqc": "后量子",
+        "hybrid": "混合"
+      },
+      "col": {
+        "usage": "用途",
+        "algorithm": "算法",
+        "family": "族系",
+        "pqcReady": "PQC 敏捷性"
+      }
+    },
+    "unavailable": {
+      "badge": "无法读取",
+      "fallback": "在此部署中无法读取该安全态势。"
+    }
+  },
+  "login": {
+    "statusTitle": "会话保证",
+    "statusDescription": "当前会话的认证器保证级别。敏感视图需要硬件升级认证。",
+    "currentAal": "当前级别",
+    "methods": "方法",
+    "methodsUnknown": "未报告",
+    "targetStandardsNote": "AAL3（NIST SP 800-63B-4）与 PIV/CAC（FIPS 201-3）是特权登录的目标标准。本面板反映后端所强制执行的内容；它不声称获得任何认证。",
+    "passkeyTitle": "注册通行密钥",
+    "passkeyDescription": "注册硬件安全密钥或平台认证器（WebAuthn / FIDO2），用于抗钓鱼的特权登录。",
+    "registerPasskey": "注册通行密钥",
+    "registering": "请跟随您的认证器操作……",
+    "passkeySeamWhat": "WebAuthn 通行密钥注册",
+    "registered": "通行密钥已注册。",
+    "unsupported": "此浏览器不支持 WebAuthn。",
+    "registerFailed": "注册未完成。",
+    "pivTitle": "PIV / CAC（智能卡）",
+    "pivDescription": "X.509 客户端证书登录，具备证书到角色的映射与 OCSP 吊销，读取自 mTLS 连接。",
+    "pivSeamWhat": "PIV/CAC 客户端证书状态",
+    "pivPresented": "客户端证书",
+    "pivAbsent": "未出示",
+    "pivSubject": "Subject",
+    "pivRole": "映射的角色",
+    "pivOcsp": "OCSP",
+    "pivNote": "证书链与 OCSP 验证由后端执行；本面板反映其结果。",
+    "pivNotConfigured": "此部署未配置 PIV/CAC。运营者可通过在引擎上设置 OLIVARES_PIV_CONFIG（机构 CA、证书到角色映射）来启用它。",
+    "ocsp": {
+      "good": "良好",
+      "revoked": "已吊销",
+      "unknown": "未知"
+    },
+    "passkeys": {
+      "title": "已注册的通行密钥",
+      "description": "管理您的 FIDO2/WebAuthn 认证器。每个通行密钥提供抗钓鱼的硬件绑定登录。",
+      "register": "注册通行密钥",
+      "registerTitle": "注册新通行密钥",
+      "registerHint": "为您的通行密钥命名以便后续识别。",
+      "nameLabel": "通行密钥名称",
+      "namePlaceholder": "例如 YubiKey 5C、MacBook Touch ID",
+      "registering": "正在完成仪式…",
+      "registered": "通行密钥已注册。",
+      "registerFailed": "注册失败。您的浏览器可能不支持 WebAuthn 或仪式被取消。",
+      "unsupported": "此浏览器不支持 WebAuthn/FIDO2。",
+      "none": "未注册通行密钥",
+      "noneHint": "注册通行密钥以启用抗钓鱼的硬件绑定登录 (AAL3)。",
+      "colName": "名称",
+      "colCreated": "注册时间",
+      "colBackup": "备份",
+      "backupEligible": "多设备",
+      "backupBound": "硬件绑定",
+      "rename": "重命名",
+      "renameTitle": "重命名通行密钥",
+      "renamed": "通行密钥已重命名。",
+      "delete": "删除",
+      "deleteTitle": "删除通行密钥",
+      "deleteBody": "删除通行密钥 \"{{name}}\"？此操作不可撤销。您需要另一个已注册的通行密钥来维持 AAL3 访问。",
+      "deleted": "通行密钥已删除。",
+      "lastCredential": "无法删除您唯一的通行密钥。请先注册另一个。",
+      "stepUpRequired": "删除通行密钥需要活跃的 AAL3 会话。请先完成升级认证。"
+    }
+  },
+  "empty": {
+    "cryptoInventory": {
+      "title": "尚未盘点加密资产",
+      "description": "此构建声明了 TLS 与后量子态势契约但未提供服务；在其实现能够响应之前，契约待实现通知会取代此面板。"
+    },
+    "externalKeys": {
+      "title": "尚未报告外部密钥引用",
+      "description": "此组织未报告任何客户托管加密密钥。清单已成功读取——这是真实的零，而非缺失的后端。"
+    },
+    "nhiRoster": {
+      "title": "尚无人类或非人类身份",
+      "description": "配置目录来源后，重新同步身份名册，以填充人类与非人类身份及其 External ID。"
+    }
+  }
+}

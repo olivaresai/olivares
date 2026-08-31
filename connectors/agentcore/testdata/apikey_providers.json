@@ -1,0 +1,16 @@
+{
+  "credentialProviders": [
+    {
+      "name": "serpapi-key",
+      "credentialProviderArn": "arn:aws:acps:eu-west-1:123456789012:token-vault/default/apikeycredentialprovider/serpapi-key",
+      "createdTime": 1749081600,
+      "lastUpdatedTime": 1749081600
+    },
+    {
+      "name": "weather-key",
+      "credentialProviderArn": "arn:aws:acps:eu-west-1:123456789012:token-vault/default/apikeycredentialprovider/weather-key",
+      "createdTime": 1749168000,
+      "lastUpdatedTime": 1749168000
+    }
+  ]
+}

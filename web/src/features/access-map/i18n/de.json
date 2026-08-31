@@ -1,0 +1,186 @@
+{
+  "title": "Zugriffskarte",
+  "subtitle": "Was jeder Agent über Ihren Bestand hinweg liest und schreibt — Ursprünge links, die berührten Ressourcen rechts, R/RW nach Farbe.",
+  "auditedNote": "Das Öffnen dieser Karte ist eine privilegierte, auditierte Aktion. Nur zur defensiven Überprüfung — sie zeigt Beziehungen, niemals SQL, Nutzdaten oder Geheimnisse.",
+  "refresh": "Aktualisieren",
+  "stats": {
+    "origins": "Ursprünge",
+    "resources": "Ressourcen",
+    "read": "Lesen",
+    "write": "Schreiben / RW",
+    "approximate": "Näherungsweise",
+    "unexpected": "Unerwartet",
+    "truncated": "Zeige die ersten {{n}}",
+    "truncatedHint": "Der Bestand hat mehr Kanten als angezeigt; grenzen Sie mit Filtern ein oder erweitern Sie einen Knoten, um seine Nachbarn zu sehen."
+  },
+  "webgl": {
+    "badge": "Hochdichte-Ansicht",
+    "hint": "Zeige {{n}} Knoten — für die Skalierung zum beschleunigten WebGL-Renderer gewechselt.",
+    "clustered": "Ressourcen werden bei dieser Skalierung nach Host gruppiert; eine Gruppe erscheint als „Host (N)“. Kein Befund wird verborgen — jede Gruppe mit unerwartetem Zugriff wird gekennzeichnet."
+  },
+  "filters": {
+    "search": "Ursprung, Ressource, Werkzeug suchen…",
+    "mode": "Zugriffsmodus",
+    "attributedOnly": "Nur zugeordnete",
+    "attributedHint": "Näherungsweise (abgeleitete) Kanten ausblenden und nur fest zugeordneten Zugriff anzeigen.",
+    "signal": "Signal",
+    "allSignals": "Alle Signale",
+    "clear": "Leeren",
+    "drift": "Gestattet vs. beobachtet",
+    "driftHint": "Den Abgleich der geringsten Rechte überlagern: unerwarteten Zugriff (beobachtet, nicht gestattet) und ungenutzte Gewährungen hervorheben.",
+    "driftForbidden": "Erfordert die Abweichungs-Berechtigung (accessmap:drift:read)."
+  },
+  "legend": {
+    "read": "Lesen",
+    "write": "Schreiben",
+    "writeRw": "Schreiben / RW",
+    "unknown": "Unbekannt",
+    "approximate": "Näherungsweise",
+    "unexpected": "Unerwarteter Zugriff",
+    "pending": "Ausstehend (unentschieden)",
+    "unused": "Ungenutzte Gewährung"
+  },
+  "drift": {
+    "title": "Abweichung der geringsten Rechte",
+    "cleanTitle": "Keine Abweichung gefunden",
+    "cleanHint": "Jeder beobachtete Zugriff ist gestattet, und jede Gewährung wird genutzt.",
+    "unexpectedTitle": "Unerwarteter Zugriff",
+    "unexpectedHint": "Beobachtet, aber NICHT gestattet — der Befund mit höchster Priorität.",
+    "pendingTitle": "Ausstehender Abgleich",
+    "pendingHint": "Beobachtet ohne passende Berechtigung, und die Engine kann noch nicht entscheiden, ob er erlaubt ist — eine ungelöste Agent-Identitäts-Verknüpfung, ein unbekannter Berechtigungsmodus oder ein unentscheidbarer beobachteter Modus. Sie sagt nicht welcher, also ist dies noch kein bestätigter Verstoß.",
+    "unusedTitle": "Ungenutzte Gewährungen",
+    "unusedHint": "Gestattet, aber nie beobachtet — zu straffende Überbereitstellung.",
+    "forbiddenTitle": "Abweichung nicht autorisiert",
+    "forbiddenHint": "Ihre Rolle kann den Graphen sehen, aber nicht den Abgleich gestattet vs. beobachtet (accessmap:drift:read).",
+    "partial": "Teilergebnis: Die Engine hat diesen Abgleich über ein abgeschnittenes Drift-Fenster durchgeführt. Diese Zahlen umfassen daher nicht die gesamte Umgebung, und eine hier fehlende Kante kann schlicht jenseits der Grenze liegen.",
+    "emptyWindowTitle": "Keine Befunde im gescannten Fenster",
+    "emptyWindowHint": "Der Scan endete an seiner Seitengrenze; dies ist daher keine Aussage über die gesamte Umgebung."
+  },
+  "detail": {
+    "edgeTitle": "Zugriffskante",
+    "nodeSubtitle": "Ein Graph-Knoten — erweitern Sie ihn, um zu sehen, womit er verbunden ist.",
+    "ref": "Referenz",
+    "id": "ID",
+    "expand": "Nachbarn erweitern",
+    "unexpectedFlag": "Beobachtet ohne passende Gewährung",
+    "origin": "Ursprung",
+    "kind": "Art",
+    "bridge": "Brücke",
+    "unbridged": "Agent nicht aufgelöst",
+    "resource": "Ressource",
+    "coverage": "Abdeckung",
+    "tool": "Werkzeug",
+    "attribution": "Zuordnung je Agent",
+    "signal": "Signal & Konfidenz",
+    "confidence": "Konfidenz",
+    "sources": "Quellen",
+    "reason": "Zuordnung",
+    "diff": "Gestattet vs. beobachtet",
+    "observed": "Beobachtet",
+    "permitted": "Gestattet",
+    "activity": "Aktivität",
+    "occurrences": "Vorkommen",
+    "firstSeen": "Zuerst gesehen",
+    "lastSeen": "Zuletzt gesehen",
+    "yes": "Ja",
+    "no": "Nein",
+    "minimalData": "Es werden nur Metadaten angezeigt. Per Design führt die Engine hier niemals SQL, Nutzdaten oder Geheimnisse mit (Datenminimierung)."
+  },
+  "authority": {
+    "title": "Autorität & nächster Schritt",
+    "declaredBy": "Signale an dieser Kante:",
+    "multiple": "Hier ist mehr als eine unabhängige Berechtigung erfasst. Eine zu bearbeiten lässt die andere bestehen.",
+    "noRetraction": "Die Karte erfasst Signale und nimmt sie nie zurück; diese Kante kann also bestehen bleiben, nachdem Sie die Quelle geändert haben. Prüfen Sie erneut, statt es anzunehmen.",
+    "explain": {
+      "sourceScope": "Eine Quelle-zu-Geltungsbereich-Bindung hat die Berechtigung für diese Kante erfasst. Auf dieser Bindungsebene wird sie konfiguriert.",
+      "declared": "Für diese Kante wurde ein deklariertes Berechtigungssignal erfasst. Die Karte führt nicht mit, welches System es ausgesendet hat — ein Identitätsanbieter, ein Deployment oder eine Repository- bzw. Secret-Store-ACL —, kann Sie also auf keines verweisen.",
+      "unattributed": "Dieser Zugriff ist erlaubt, aber an der Kante liegt kein Signal vor, das eine Berechtigung benennt. Hier gibt es nichts, was das besitzende System identifiziert, und zu raten wäre schlechter, als das zu sagen.",
+      "unpermitted": "In dieser Karte liegt kein Berechtigungssignal für diesen Zugriff vor. Das macht ihn zum Befund — es ist aber kein Beweis, dass ihn nichts erlaubt: ein aktiver Resolver kann Zugriffe erlauben, die diese Karte nie sieht.",
+      "undetermined": "Weder beobachtet noch erlaubt. Dies ist eine deklarierte Fähigkeit, kein Zugriffsnachweis — es gibt nichts zu beheben.",
+      "undecided": "Ob diese Kante erlaubt ist, lässt sich noch nicht entscheiden, es ist also kein bestätigter Verstoß. Die Engine sagt nicht, welche Bedingung offen ist — eine Agent-Identitäts-Verknüpfung, ein unbekannter Berechtigungsmodus oder ein unentscheidbarer beobachteter Modus —, daher wird keine konkrete Behebung angeboten.",
+      "unchecked": "Diese Karte zeigt den Zugriff ohne Berechtigungssignal, aber der Drift-Zustand dieser Kante wurde hier nicht ermittelt. Nur der Least-Privilege-Abgleich sagt, ob die Engine einen Befund bestätigt hat oder noch abgleicht, und dieses Blatt hat von ihm keine Antwort. Bis dahin ist dies kein Befund, aber auch keine saubere Kante.",
+      "reconciled": "Die Engine hat den Least-Privilege-Abgleich gelesen und diesen Zugriff nicht darin geführt; er ist also kein bestätigter Befund und hier gibt es nichts zu beheben. Was die Karte nicht sagt, ist WARUM: eine deckende Berechtigung kann an einer anderen Kante erfasst sein, oder eine Berechtigung kann diese hier erreicht haben — Graph und Abgleich sind getrennte Lesungen, dieses Blatt kann es nicht unterscheiden."
+    },
+    "target": {
+      "sourceBindings": "Quellbindungen öffnen",
+      "nhiRoster": "NHI-Bestand öffnen"
+    },
+    "needsPermission": "{{action}} erfordert die Berechtigung {{permission}}, über die diese Rolle nicht verfügt.",
+    "recheck": "Drift erneut prüfen",
+    "verdict": {
+      "clear": "Erneut geprüft: Diese Kante ist nicht mehr im Drift-Satz. Die Erklärung oben beschreibt den Zustand vor dieser Prüfung.",
+      "present": "Erneut geprüft: Diese Kante ist weiterhin im Drift-Satz.",
+      "unknown": "Nicht bestätigt — die Drift-Abfrage kam nicht zurück oder deckte nur einen Teil der Umgebung ab. Beides ist nicht dasselbe wie sauber."
+    },
+    "checkDrift": "Drift für diese Kante lesen",
+    "closes": "Eine erfasste Berechtigung behebt diesen Befund — nicht zwingend an dieser Kante: eine Berechtigung auf der Identität, zu der der Zugriff auflöst, behebt ihn von einer anderen aus. Die Quelle-zu-Geltungsbereich-Projektion ist Best-Effort, und Gruppen-, Rollen- und Ordner-Bindungen greifen, ohne etwas auf die Karte zu projizieren; es kann also eine echte Berechtigung geben, die dieser Abgleich nie sieht. Den Zugriff zu unterbinden behebt ihn ebenso wenig: eine Beobachtung wird nie zurückgenommen. Prüfen Sie erneut, statt es anzunehmen.",
+    "cannotClose": "Die Berechtigung zu löschen setzt das Erlaubt-Flag dieser Kante nicht zurück — die Karte nimmt eine Berechtigung nie zurück —, dieser Befund verschwindet also nicht durch diese Löschung. (Aus einem anderen Grund kann er den Diff dennoch verlassen, etwa wenn der Zugriff endlich beobachtet wird.) Prüfen Sie die Entfernung auf der besitzenden Oberfläche, nicht hier.",
+    "signalsNotFused": "Diese Kante führt nur ihr jüngstes Signal — der bestätigende Signalsatz war in dieser Antwort nicht enthalten. Es kann also weitere Signale geben, auch weitere Berechtigungen, die hier nicht gezeigt werden."
+  },
+  "kinds": {
+    "agent": "Agent",
+    "session": "Sitzung",
+    "identity": "Identität",
+    "resource": "Ressource"
+  },
+  "coverage": {
+    "clean": "Sauber",
+    "lossy": "Verlustbehaftet",
+    "opaque": "Undurchsichtig",
+    "mixed": "Gemischt"
+  },
+  "coverageHint": {
+    "clean": "Hochwertige Erfassung (z. B. SQL-/Objekt-/Warehouse-Audit).",
+    "lossy": "Teilweise Erfassung — ein Teil des Zugriffs ist nicht klassifizierbar.",
+    "opaque": "Kann nicht passiv erfasst werden (z. B. Redis/SQLite).",
+    "mixed": "Gemischte Erfassungsqualität über Signale hinweg."
+  },
+  "attributionTier": {
+    "firm": "Fest",
+    "approximate": "Näherungsweise",
+    "unknown": "Unbekannt"
+  },
+  "attributionTierHint": {
+    "firm": "Über ein SVID, WIF oder dedizierte Anmeldedaten an einen konkreten Agent/NHI gebunden.",
+    "approximate": "Ein gemeinsam genutztes Konto — die Identität ist bekannt, aber nicht ein einzelner Agent.",
+    "unknown": "Kein Audit je Identität (z. B. Redis/SQLite/D1) — Zuordnung nicht möglich."
+  },
+  "empty": {
+    "title": "Noch kein Zugriff beobachtet",
+    "description": "Sobald Konnektoren Agentenaktivität melden, erscheinen die R/RW-Beziehungen hier."
+  },
+  "forbidden": {
+    "title": "Zugriffskarte nicht autorisiert",
+    "description": "Ihre Rolle umfasst keine Berechtigung zum Anzeigen des Zugriffsgraphen."
+  },
+  "mobile": {
+    "title": "Die Karte benötigt einen breiteren Bildschirm",
+    "hint": "Öffnen Sie diese Ansicht auf einem größeren Display, um den interaktiven R/RW-Graphen zu sehen."
+  },
+  "attackPaths": {
+    "chooseAgent": "Wählen Sie im Graphen einen Agenten, um seine Angriffspfade zu sehen.",
+    "auditedNote": "Jeder dieser Lesevorgänge wird im Auditprotokoll versiegelt, genau wie der Graph selbst.",
+    "loading": "Wird berechnet…",
+    "error": "Diese Analyse konnte nicht gelesen werden.",
+    "none": "Keine Pfade gefunden.",
+    "weakestLink": "schwächstes Glied:",
+    "sensitivity": "maximale Sensibilität",
+    "sensitivityAbsent": "nicht angegeben",
+    "sensitivityAbsentHint": "Die Engine lässt dieses Feld weg, wenn es leer ist. Ein fehlender Wert behauptet daher NICHT, dass nichts Sensibles beteiligt ist.",
+    "kind": {
+      "reachability": "Was er erreichen kann",
+      "escalation": "Wo er eskalieren könnte",
+      "exfil": "Exfiltrationswege"
+    },
+    "attribution": {
+      "firm": "gesichert",
+      "approximate": "ungefähr",
+      "unknown": "nicht zugeordnet"
+    },
+    "confidence": {
+      "attributed": "zugeordnet",
+      "approximate": "ungefähr"
+    },
+    "analyse": "Angriffspfade analysieren (auditiert)"
+  }
+}

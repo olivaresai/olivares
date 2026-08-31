@@ -1,0 +1,15 @@
+{
+  "permission": {
+    "edit": "ask",
+    "bash": "deny"
+  },
+  "share": "disabled",
+  "experimental": {
+    "openTelemetry": true
+  },
+  "autoupdate": false,
+  "model": "anthropic/claude-sonnet-4-20250514",
+  "small_model": "anthropic/claude-haiku-4-20250514",
+  "enabled_providers": ["anthropic"],
+  "instructions": ["AGENTS.md"]
+}

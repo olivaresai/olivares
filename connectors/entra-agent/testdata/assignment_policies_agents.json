@@ -1,0 +1,9 @@
+{
+  "value": [
+    {
+      "id": "ap-agent",
+      "displayName": "Agent identities",
+      "allowedTargetScope": "allDirectoryAgentIdentities"
+    }
+  ]
+}

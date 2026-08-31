@@ -1,0 +1,68 @@
+{
+  "title": "API Playground",
+  "description": "Explorez et testez l'API du control plane de manière interactive",
+  "filterPlaceholder": "Filtrer les endpoints…",
+  "selectEndpoint": "Sélectionnez un endpoint dans le panneau de gauche",
+  "send": "Envoyer",
+  "sending": "Envoi…",
+  "streaming": "Diffusion en cours…",
+  "cancel": "Annuler",
+  "requiredPermission": "Autorisation requise",
+  "copyAsCurl": "Copier comme curl",
+  "response": "Réponse",
+  "history": "Historique",
+  "clearHistory": "Effacer",
+  "noRequests": "Aucune requête pour l'instant",
+  "noMatch": "Aucun endpoint ne correspond à votre filtre.",
+  "pathParams": "Paramètres de chemin",
+  "queryParams": "Requête",
+  "headers": "En-têtes",
+  "body": "Corps",
+  "networkError": "Erreur réseau",
+  "beta": "bêta",
+  "summary": "{{endpoints}} points de terminaison dans {{groups}} groupes",
+  "summaryWithBeta": "{{endpoints}} points de terminaison dans {{groups}} groupes · {{beta}} routes de module bêta",
+  "endpointTree": {
+    "ariaLabel": "Endpoints API"
+  },
+  "errors": {
+    "loadSpec": "Impossible de charger la spécification OpenAPI"
+  },
+  "request": {
+    "networkError": "Erreur réseau",
+    "failedNetworkHint": "La requête a échoué — vérifiez votre connexion réseau.",
+    "blockedDestination": "Destination bloquée",
+    "blockedDestinationHint": "API Playground ne peut envoyer des requêtes qu'à ce plan de contrôle.",
+    "enterPathParam": "Saisir {{name}}",
+    "headerNamePlaceholder": "Nom de l'en-tête",
+    "headerValuePlaceholder": "Valeur",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Supprimer l'en-tête {{header}}",
+    "addHeaderAria": "Ajouter un en-tête personnalisé",
+    "bodyAria": "Corps de la requête"
+  },
+  "responsePanel": {
+    "empty": "Sélectionnez un endpoint et envoyez une requête",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "En-têtes ({{count}})",
+    "bodyAria": "Corps de la réponse"
+  },
+  "historyPanel": {
+    "recentCount": "Récentes ({{count}})",
+    "clearAria": "Effacer l'historique des requêtes",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "à l'instant",
+      "minutes": "il y a {{count}} min",
+      "hours": "il y a {{count}} h",
+      "days": "il y a {{count}} j"
+    }
+  }
+}

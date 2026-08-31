@@ -1,0 +1,31 @@
+{
+  "revision": "2025-11-25",
+  "source_url": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-11-25",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "olivares-mcp-connector",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocolVersion": "2025-11-25",
+      "capabilities": {
+        "tools": {}
+      },
+      "serverInfo": {
+        "name": "fixture-legacy",
+        "version": "1.0.0"
+      }
+    }
+  }
+}

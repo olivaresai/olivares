@@ -1,0 +1,423 @@
+{
+  "title": "Opérations sur les modèles",
+  "subtitle": "Gouvernez les modèles que vous possédez, leur admission par signature et les déploiements d'inférence locale.",
+  "tabs": {
+    "owned": "Modèles possédés",
+    "admission": "Admission",
+    "deployments": "Déploiements",
+    "datasets": "Jeux de données",
+    "finetune": "Tâches de fine-tuning",
+    "evidence": "Scellés AIBOM"
+  },
+  "owned": {
+    "title": "Modèles possédés",
+    "description": "Le registre gouverné des modèles que vous possédez — hébergés, affinés ou importés.",
+    "new": "Nouveau modèle",
+    "search": "Rechercher des modèles…",
+    "created": "Modèle créé.",
+    "updated": "Modèle mis à jour.",
+    "deleted": "Modèle supprimé.",
+    "newTitle": "Nouveau modèle possédé",
+    "editTitle": "Modifier le modèle possédé",
+    "formBody": "Enregistrez un modèle que vous possédez. Métadonnées de gouvernance uniquement — jamais un secret.",
+    "deleteTitle": "Supprimer le modèle possédé",
+    "deleteBody": "Supprimer « {{name}} » ? Ses versions et références de lignée sont retirées. Ceci est consigné dans le registre d'audit.",
+    "columns": {
+      "name": "Nom",
+      "kind": "Type",
+      "provider": "Fournisseur",
+      "visibility": "Visibilité",
+      "status": "Statut"
+    },
+    "drawer": {
+      "subtitle": "Vue d'ensemble, versions et preuve d'admission par version."
+    },
+    "form": {
+      "name": "Nom",
+      "kind": "Type",
+      "status": "Statut",
+      "baseRef": "Référence de base",
+      "providerRef": "Référence du fournisseur",
+      "visibility": "Visibilité",
+      "ownerRef": "Référence du propriétaire",
+      "note": "Note"
+    },
+    "truncated": "{{n}} modèles chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de modèles enregistrés que ceux affichés ; cette page prend des lignes par id — attribué à la création —, les suivantes manquent, normalement les plus récemment enregistrés. La recherche et le tri du tableau ne portent que sur ce qui est chargé. Un modèle absent ici n'est pas pour autant non enregistré."
+  },
+  "versions": {
+    "title": "Versions",
+    "new": "Nouvelle version",
+    "admit": "Admettre",
+    "empty": "Aucune version pour l'instant",
+    "emptyHint": "Créez une version pour enregistrer un artefact et admettre sa signature.",
+    "created": "Version créée.",
+    "deleted": "Version supprimée.",
+    "newTitle": "Nouvelle version de modèle",
+    "formBody": "Une version est immuable une fois créée — enregistrez-la, puis admettez son artefact signé.",
+    "deleteTitle": "Supprimer la version",
+    "deleteBody": "Supprimer la version « {{version}} » ? Son verdict d'admission est retiré. Ceci est consigné dans le registre d'audit.",
+    "form": {
+      "version": "Version",
+      "status": "Statut",
+      "artifactRef": "Référence de l'artefact",
+      "parentRef": "Référence parente",
+      "sourceRef": "Référence source",
+      "note": "Note"
+    },
+    "truncated": "{{n}} versions chargées ; il y en a d'autres",
+    "truncatedHint": "Ce modèle a plus de versions que celles affichées ; la page prend des lignes par id, les suivantes peuvent manquer. Une version invisible ici est aussi une version dont la preuve d'admission est inatteignable depuis cet écran.",
+    "loadError": "La liste des versions n'a pas pu être lue — ce n'est PAS « aucune version »"
+  },
+  "deployments": {
+    "title": "Déploiements",
+    "description": "Déploiements d'inférence locale pour tous les modèles. Régis par le portail d'admission.",
+    "new": "Nouveau déploiement",
+    "search": "Rechercher des déploiements…",
+    "created": "Déploiement créé.",
+    "updated": "Déploiement mis à jour.",
+    "deleted": "Déploiement supprimé.",
+    "governed": "Gouverné",
+    "newTitle": "Nouveau déploiement",
+    "editTitle": "Modifier le déploiement",
+    "formBody": "Pointez un runtime vers une version de modèle gouvernée. L'admission est appliquée à l'enregistrement.",
+    "deleteTitle": "Supprimer le déploiement",
+    "deleteBody": "Supprimer « {{name}} » ? Ceci est consigné dans le registre d'audit.",
+    "deniedTitle": "Bloqué par l'admission",
+    "deniedHint": "Admettez la version référencée sous les ancres de confiance actuelles, puis réessayez — votre saisie est conservée.",
+    "columns": {
+      "name": "Nom",
+      "runtime": "Runtime",
+      "version": "Version",
+      "governed": "Gouverné",
+      "status": "Statut"
+    },
+    "filters": {
+      "allRuntimes": "Tous les runtimes",
+      "allStatuses": "Tous les statuts"
+    },
+    "form": {
+      "name": "Nom",
+      "runtime": "Runtime",
+      "status": "Statut",
+      "ownedRef": "Référence du modèle",
+      "versionRef": "Référence de la version",
+      "endpointRef": "Référence du point de terminaison",
+      "governed": "Gouverné",
+      "governedHint": "Un indicateur de posture déclaré — pas un contournement de l'admission.",
+      "note": "Note",
+      "deploymentType": "Type de déploiement",
+      "deploymentTypeHint": "Local sert une version de modèle auto-hébergée et passe par le contrôle d'admission ; brokered appelle un fournisseur hébergé et non.",
+      "providerRef": "Point de terminaison du fournisseur",
+      "providerHint": "Le fournisseur hébergé vers lequel ce déploiement redirige (par ex. un point de terminaison d'API)."
+    },
+    "types": {
+      "local": "Local (auto-hébergé)",
+      "brokered": "Brokered (fournisseur hébergé)"
+    },
+    "truncated": "{{n}} déploiements chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de déploiements que ceux affichés ; cette page prend des lignes par id. Les filtres runtime et statut sont appliqués par le MOTEUR et relancent la requête — la coupe porte sur l'ensemble déjà filtré. Un déploiement absent ici ne démontre pas que rien ne tourne. La recherche et le tri du tableau ne portent que sur ce qui est chargé."
+  },
+  "policy": {
+    "title": "Politique d'admission",
+    "description": "La politique de confiance du locataire pour l'admission par signature. La méthode de signature est déduite de ce que vous configurez.",
+    "edit": "Modifier la politique",
+    "editTitle": "Modifier la politique d'admission",
+    "editBody": "Rédigez les ancres de confiance. Enregistrées de façon atomique ; le moteur reste l'autorité.",
+    "loadError": "Impossible de charger la politique d'admission.",
+    "saved": "Politique d'admission enregistrée.",
+    "mode": "Mode déduit",
+    "derivedMode": "Mode de signature déduit",
+    "requireSigned": "Exiger des modèles signés",
+    "requireSignedHint": "Appliquer : refuser le déploiement de toute version sans verdict d'admission vérifié.",
+    "requireDigests": "Exiger les empreintes d'artefact",
+    "requireDigestsHint": "Exiger aussi que le re-hachage sur disque des artefacts signés corresponde.",
+    "identities": "Identités autorisées",
+    "identitiesHint": "Une regex d'identité de signataire par ligne (Sigstore keyless).",
+    "issuers": "Émetteurs autorisés",
+    "issuersHint": "Une URL d'émetteur OIDC par ligne. Doit être définie conjointement avec les identités, ou aucune.",
+    "trustedRoots": "Racines de confiance",
+    "trustedRootsHint": "Certificats CA au format PEM (Fulcio ou PKI privée). Matériel public uniquement.",
+    "trustedKeys": "Clés de confiance",
+    "trustedKeysHint": "Clés publiques PEM pour les signatures bare-key. Matériel public uniquement.",
+    "note": "Note",
+    "on": "Activé",
+    "off": "Désactivé",
+    "attestedBy": "Attesté par",
+    "attestedAt": "Attesté le",
+    "confirmTitle": "Confirmer le changement de confiance",
+    "confirmBody": "Activer l'application ou retirer une ancre de confiance peut faire échouer les créations et mises à jour de déploiement futures jusqu'à ce que les versions concernées soient ré-admises. Continuer ?",
+    "state": {
+      "unconfigured": {
+        "title": "Mode observation — non configuré",
+        "body": "Aucune politique n'est définie. Les verdicts d'admission sont enregistrés mais rien n'est refusé."
+      },
+      "observe": {
+        "title": "Mode observation",
+        "body": "Une politique est configurée mais l'application est désactivée. Les verdicts sont enregistrés ; les déploiements ne sont pas refusés."
+      },
+      "enforce": {
+        "title": "Mode application",
+        "body": "Le déploiement d'une version sans verdict d'admission vérifié et toujours ancré est refusé."
+      }
+    },
+    "err": {
+      "privateKey": "Le matériel de confiance doit être public — retirez tout bloc PRIVATE KEY.",
+      "pemResidual": "Supprimez le bloc PEM incomplet — seuls les blocs BEGIN…END complets sont enregistrés.",
+      "anchorMissing": "L'application nécessite au moins une racine ou une clé de confiance.",
+      "identityIssuer": "Les identités et les émetteurs doivent être définis conjointement, ou aucun."
+    }
+  },
+  "verdicts": {
+    "title": "Verdicts d'admission",
+    "description": "Le verdict COURANT enregistré, un par version — ré-admettre le REMPLACE, cela n'ajoute pas de ligne. Une version sans tentative n'apparaît pas ici.",
+    "search": "Rechercher des verdicts…",
+    "reAdmit": "Ré-admettre",
+    "drawerSubtitle": "Le verdict enregistré — chaque fait montré indépendamment.",
+    "columns": {
+      "version": "Version",
+      "posture": "Posture",
+      "method": "Méthode",
+      "roots": "Racines de signataires",
+      "tlog": "Journal de transparence",
+      "attestedAt": "Enregistré"
+    },
+    "filters": {
+      "all": "Tous",
+      "verified": "Vérifiés uniquement",
+      "unverified": "Non vérifiés uniquement"
+    },
+    "truncated": "{{n}} verdicts chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de verdicts d'admission que ceux affichés ; cette page prend des lignes par id. Il y a UN verdict par version — ré-admettre le REMPLACE, cela n'ajoute pas de ligne, et l'id conserve la position de la PREMIÈRE tentative —, une version absente ici n'est donc pas nécessairement non admise."
+  },
+  "admit": {
+    "title": "Admettre un modèle signé",
+    "reAdmitTitle": "Ré-admettre sous la confiance actuelle",
+    "body": "Vérifiez et enregistrez une signature pour la version {{version}}. Un verdict enregistré est une preuve, qu'il soit admis ou non.",
+    "bundle": "Bundle de signature",
+    "bundleHint": "Le JSON brut du bundle OMS / Sigstore.",
+    "bundlePlaceholder": "{ \"mediaType\": \"…\", … }",
+    "bundleInvalid": "Objet JSON attendu.",
+    "digests": "Empreintes résolues",
+    "digestsHint": "Table optionnelle fichier → empreinte hex, pour re-hacher l'artefact sur disque.",
+    "digestsInvalid": "Objet JSON de valeurs de type chaîne attendu.",
+    "modelRef": "Référence du modèle",
+    "aibomRef": "Référence AIBOM",
+    "note": "Note",
+    "submit": "Admettre",
+    "admitted": "Version admise.",
+    "recordedNotAdmitted": "Verdict enregistré, mais la signature n'a pas satisfait la politique."
+  },
+  "admission": {
+    "mode": {
+      "keyless": "sigstore-keyless",
+      "certificate-pki": "certificate-pki",
+      "bare-key": "bare-key",
+      "empty": "n'admet rien"
+    },
+    "posture": {
+      "verified": "Vérifié",
+      "signedUnbound": "Signé, artefact non lié",
+      "denied": "Non vérifié"
+    }
+  },
+  "evidence": {
+    "reason": "Motif",
+    "noReason": "Aucun motif n'a été enregistré.",
+    "subjectName": "Sujet",
+    "subjectDigest": "Empreinte du sujet",
+    "signer": "Signataire",
+    "signerRoots": "Racines de signataires",
+    "artifact": "Re-hachage de l'artefact",
+    "artifactVerified": "Correspond",
+    "artifactUnverified": "Non vérifié",
+    "tlog": "Journal de transparence",
+    "tlogVerified": "Vérifié",
+    "tlogPresent": "Présent (inclusion non vérifiée)",
+    "tlogAbsent": "Absent",
+    "resourceCount": "Ressources signées",
+    "coverage": "Couverture",
+    "attestedBy": "Attesté par",
+    "attestedAt": "Enregistré",
+    "none": "Aucune tentative d'admission enregistrée",
+    "noneHint": "Admettez cette version pour enregistrer un verdict de signature."
+  },
+  "datasets": {
+    "title": "Jeux de données",
+    "description": "Composants de traçabilité AIBOM — un nom, une référence de contenu et une empreinte. Jamais les données elles-mêmes.",
+    "new": "Nouveau jeu de données",
+    "search": "Rechercher des jeux de données…",
+    "created": "Jeu de données enregistré.",
+    "deleted": "Jeu de données supprimé.",
+    "claimed": "Déclaration de l'opérateur",
+    "newTitle": "Enregistrer un jeu de données",
+    "formBody": "Un enregistrement de traçabilité à données minimales : identité, classification et une référence de contenu — jamais le contenu du jeu de données.",
+    "deleteTitle": "Supprimer le jeu de données",
+    "deleteBody": "Supprimer « {{name}} » ? Sa référence de traçabilité est retirée, ce qui modifie les BOM futures (jamais un scellé passé). Cette action est consignée dans le journal d'audit.",
+    "drawerSubtitle": "Enregistrement de traçabilité — classification, référence de contenu et déclaration de provenance.",
+    "provenanceLabel": "Provenance",
+    "provenanceClaimed": "Assertion de l'opérateur enregistrée — l'opérateur déclare avoir examiné la provenance consignée. Olivares n'a pas vérifié cryptographiquement le jeu de données ni inspecté son contenu.",
+    "provenanceNotClaimed": "Aucune assertion de provenance enregistrée par l'opérateur.",
+    "attestedBy": "Enregistré par",
+    "columns": {
+      "name": "Nom",
+      "classification": "Classification",
+      "ownedRef": "Référence de modèle",
+      "provenance": "Provenance",
+      "recorded": "Enregistré"
+    },
+    "form": {
+      "name": "Nom",
+      "classification": "Classification",
+      "ownedRef": "Référence de modèle",
+      "ownedRefHint": "Facultatif — rattache ce jeu de données à un modèle possédé. La référence doit se résoudre, sinon l'enregistrement est refusé.",
+      "sourceRef": "Référence de source",
+      "contentHash": "Empreinte de contenu",
+      "contentAlg": "Algorithme d'empreinte",
+      "contentAlgHint": "sha256 par défaut lorsqu'une empreinte est définie.",
+      "governance": "Étiquette de gouvernance",
+      "verified": "Provenance examinée (déclaration de l'opérateur)",
+      "verifiedHint": "Attestez avoir examiné la provenance de ce jeu de données. Ceci enregistre une déclaration de l'opérateur — non une vérification effectuée par Olivares. Aucune mise à jour n'est possible : pour la corriger, supprimez et recréez.",
+      "note": "Note"
+    },
+    "truncated": "{{n}} jeux de données chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de jeux de données enregistrés que ceux affichés ; cette page prend des lignes par id. Ces lignes sont des composants de lignage de l'AI-BOM : un jeu de données absent ici ne démontre pas que le lignage ne le contient pas. La recherche et le tri du tableau ne portent que sur ce qui est chargé."
+  },
+  "finetune": {
+    "title": "Tâches de fine-tuning",
+    "description": "Enregistrements des tâches de fine-tuning et des versions qu'elles ont produites. Le plan n'entraîne jamais de modèle et ne détient aucun poids.",
+    "new": "Nouvel enregistrement de tâche",
+    "search": "Rechercher des tâches…",
+    "created": "Tâche enregistrée.",
+    "updated": "Tâche mise à jour.",
+    "newTitle": "Enregistrer une tâche de fine-tuning",
+    "editTitle": "Mettre à jour la tâche de fine-tuning",
+    "formBody": "Enregistrez l'état d'une tâche et la version qu'elle a produite. Il s'agit d'un enregistrement d'inventaire — le control plane n'exécute pas d'entraînement.",
+    "columns": {
+      "name": "Nom",
+      "runtime": "Runtime",
+      "status": "État",
+      "resultVersion": "Version résultante",
+      "started": "Démarrée"
+    },
+    "filters": {
+      "allStatuses": "Tous les états"
+    },
+    "form": {
+      "name": "Nom",
+      "status": "État",
+      "runtime": "Runtime",
+      "runtimeNone": "Non spécifié",
+      "baseRef": "Référence de base",
+      "datasetRef": "Référence de jeu de données",
+      "resultVersionRef": "Référence de version résultante",
+      "resultVersionRefHint": "La version de modèle produite par cette tâche. Doit se résoudre vers une version existante, sinon l'enregistrement est refusé.",
+      "startedAt": "Démarrée le",
+      "endedAt": "Terminée le",
+      "note": "Note",
+      "clearHint": "Effacer un horodatage enregistré n'a aucun effet — le moteur conserve la valeur précédente."
+    },
+    "trackBanner": "Ceci consigne un travail de fine-tuning exécuté à l'extérieur. Olivares ne démarre, n'annule ni n'exécute aucun entraînement et ne stocke aucun poids ni contenu de jeu de données.",
+    "truncated": "{{n}} tâches chargées ; il y en a d'autres",
+    "truncatedHint": "Il y a plus d'enregistrements de fine-tuning que ceux affichés ; cette page prend des lignes par id. Le filtre de statut est appliqué par le MOTEUR et relance la requête. Une tâche absente ici ne démontre pas qu'elle n'a jamais tourné. La recherche et le tri du tableau ne portent que sur ce qui est chargé."
+  },
+  "evidenceLedger": {
+    "title": "Scellés AIBOM",
+    "description": "Le journal des scellés AIBOM couvrant tous les modèles — inviolabilité durable, en ajout seul et ancrée au journal. Chaque ligne est un engagement sur une empreinte de contenu, non le document BOM.",
+    "search": "Rechercher des scellés…",
+    "drawerSubtitle": "Un AIBOM scellé — l'inviolabilité ancrée au journal d'audit.",
+    "serialNumber": "Numéro de série",
+    "ledgerHash": "Empreinte du journal",
+    "generatedBy": "Scellé par",
+    "scopeNote": "Portée",
+    "columns": {
+      "ownedRef": "Référence de modèle",
+      "contentHash": "Empreinte de contenu",
+      "components": "Composants",
+      "spec": "Spéc.",
+      "ledgerSeq": "Séq. du journal",
+      "sealed": "Scellé"
+    },
+    "sealMeaning": "Un scellé est un engagement en ajout seul sur une empreinte de contenu, ancré au journal d'audit — non une archive de la BOM. Le document complet n'est pas stocké et ne peut pas être récupéré à partir d'un scellé.",
+    "noPriorHead": "0 (aucune tête d'audit antérieure)",
+    "truncated": "{{n}} scellés chargés ; il y en a d'autres",
+    "truncatedHint": "Il y a plus d'AI-BOM scellés que ceux affichés. Cette page prend des lignes par id — attribué à la création —, les lignes suivantes manquent donc, ce qui en exploitation normale correspond aux preuves récentes. La recherche et le tri du tableau ne portent que sur ce qui est chargé. L'absence d'un modèle ici ne démontre pas qu'il n'a jamais été scellé."
+  },
+  "documents": {
+    "live": "En direct",
+    "preview": "Aperçu",
+    "export": "Exporter",
+    "loadError": "Impossible de générer le document.",
+    "aibom": {
+      "title": "AIBOM",
+      "cyclonedx": "CycloneDX (JSON)",
+      "spdx": "SPDX 3.0.1 (JSON)",
+      "seal": "Sceller l'AIBOM",
+      "sealHint": "Le scellement crée un engagement CycloneDX en ajout seul sur une empreinte de contenu, ancré au journal d'audit. Il n'archive pas le document BOM. Toujours CycloneDX — l'export SPDX ne peut jamais être scellé.",
+      "previewTitle": "AIBOM (en direct)",
+      "previewBody": "Un inventaire CycloneDX (ou SPDX) en direct, en lecture seule — non scellé tant que vous ne le scellez pas."
+    },
+    "card": {
+      "title": "Fiche de modèle",
+      "markdown": "Markdown (.md)",
+      "json": "JSON",
+      "previewTitle": "Fiche de modèle (en direct)",
+      "previewBody": "Générée à partir de l'inventaire gouverné. Les sections sans preuve enregistrée sont marquées comme non enregistrées — jamais inventées.",
+      "name": "Nom",
+      "kind": "Type",
+      "status": "État",
+      "intendedUse": "Usage prévu",
+      "versions": "Versions",
+      "noVersions": "Aucune version enregistrée.",
+      "admitted": "Admis",
+      "notVerified": "Enregistré, non vérifié",
+      "noVerdict": "Aucun verdict",
+      "trainingData": "Données d'entraînement",
+      "notRecorded": "Non enregistré.",
+      "admissionsRecorded": "Admissions signées enregistrées",
+      "admissionsVerified": "Admissions signées vérifiées",
+      "gpaiRecorded": "Posture GPAI du fournisseur enregistrée",
+      "yes": "Oui",
+      "no": "Non"
+    },
+    "liveTitle": "Documents générés — en direct",
+    "liveSubtitle": "Générés à l'instant à partir de l'état actuel du registre. Non scellés et non audités.",
+    "sealsTitle": "Engagements AIBOM scellés",
+    "sealRecorded": "Scellé AIBOM enregistré",
+    "receiptBody": "Le journal ne stocke que l'empreinte de contenu — le document CycloneDX scellé n'existe qu'ici. Téléchargez-le maintenant pour en conserver une copie.",
+    "downloadSealed": "Télécharger la BOM scellée",
+    "noSeals": "Aucun scellé pour l'instant",
+    "noSealsHint": "Scellez l'AIBOM pour ancrer un engagement sur une empreinte de contenu au journal d'audit.",
+    "sealConfirmTitle": "Sceller cet AIBOM ?",
+    "sealConfirmBody": "Créer un engagement CycloneDX en ajout seul sur une empreinte de contenu à partir de l'état actuel du registre ? Ceci n'archive pas le document BOM.",
+    "sealsTruncated": "{{n}} scellés chargés ; il y en a d'autres",
+    "sealsTruncatedHint": "Ce modèle a plus de scellés que ceux affichés ; la page prend des lignes par id, les suivantes — normalement le dernier scellé — peuvent manquer. L'absence d'une empreinte ici ne démontre pas que le document n'a jamais été scellé.",
+    "sealsLoadError": "L'historique des scellés n'a pas pu être lu — ce n'est PAS « aucun scellé »"
+  },
+  "empty": {
+    "datasets": {
+      "title": "Aucun jeu de données enregistré",
+      "description": "Enregistrez l’identité et la classification d’un jeu de données, avec une référence de contenu et une empreinte facultatives, pour l’ajouter à la traçabilité AIBOM sans stocker son contenu."
+    },
+    "deployments": {
+      "title": "Aucun déploiement d’inférence enregistré",
+      "description": "Enregistrez un déploiement d’inférence local ou brokered ; une entrée locale exige une version de modèle existante et n’est contrôlée que si une politique d’admission impose une signature."
+    },
+    "finetune": {
+      "title": "Aucun enregistrement de tâche de fine-tuning",
+      "description": "Enregistrez une tâche de fine-tuning exécutée hors d’Olivares pour suivre son état, sa traçabilité et la version produite ; le plan de contrôle n’exécute aucun entraînement."
+    },
+    "modelEvidence": {
+      "title": "Aucun scellé AIBOM enregistré",
+      "description": "Ouvrez un modèle possédé et scellez son AIBOM pour ancrer dans le journal d’audit un engagement en ajout seul sur une empreinte de contenu."
+    },
+    "ownedModels": {
+      "title": "Aucun modèle possédé enregistré",
+      "description": "Enregistrez un modèle hébergé, affiné ou importé afin de gérer ses versions, ses preuves d’admission et ses documents AIBOM."
+    },
+    "verdict": {
+      "title": "Aucun verdict d’admission enregistré",
+      "description": "Créez une version sous un modèle possédé, puis admettez son artefact signé ; chaque version conserve un seul verdict, remplacé lors d’une nouvelle admission."
+    }
+  }
+}

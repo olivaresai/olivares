@@ -1,0 +1,69 @@
+name: Feature request
+description: Propose a feature, connector, or change to Olivares AI.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement.
+
+        For anything **non-trivial**, please open this for discussion **before**
+        writing code, so the approach can be agreed early — see
+        [`CONTRIBUTING.md`](https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md)
+        and [`GOVERNANCE.md`](https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md).
+
+        This is **not** the place for security reports — see
+        [`SECURITY.md`](https://github.com/olivaresai/olivares/blob/main/SECURITY.md).
+  - type: checkboxes
+    id: preconditions
+    attributes:
+      label: Preconditions
+      options:
+        - label: This is **not** a security vulnerability.
+          required: true
+        - label: I searched existing issues and discussions and this has not already been proposed.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and what is in the way today? Describe the need, not just a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Olivares AI do? Be concrete.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the product would this touch?
+      options:
+        - "core (engine)"
+        - "modules (a product module)"
+        - "web (the UI)"
+        - "sdk / connectors (a new or improved connector)"
+        - "deploy / packaging"
+        - "docs"
+        - "other / cross-cutting"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed, and why this one. Workarounds you use today.
+    validations:
+      required: false
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to help implement this (under the DCO/CLA — see CONTRIBUTING.md).
+          required: false

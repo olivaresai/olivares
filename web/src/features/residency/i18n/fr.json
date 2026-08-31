@@ -1,0 +1,44 @@
+{
+  "truncation": {
+    "label": "{{n}} organisations chargées ; il y en a d'autres",
+    "hint": "Le moteur a renvoyé une page du répertoire, pas l'ensemble du parc. Le total NE PEUT PAS être déduit des lignes chargées — une organisation absente d'ici peut malgré tout exister."
+  },
+  "title": "Résidence des données",
+  "description": "Épinglez les données du control plane de chaque organisation à une région, ou laissez-les non épinglées. Superadmin uniquement ; chaque changement est consigné dans le journal d'audit.",
+  "registry": {
+    "summary": "Posture du registre de résidence",
+    "homeRegion": "Région d'origine",
+    "notConfigured": "Non configurée",
+    "enforcement": "Application de la résidence",
+    "enforced": "Appliquée",
+    "notEnforced": "Non appliquée"
+  },
+  "orgs": {
+    "title": "Organisations",
+    "empty": "Aucune organisation pour l'instant",
+    "colOrg": "Organisation",
+    "colRegion": "Région épinglée",
+    "colActions": "Actions",
+    "unpinned": "Non épinglé",
+    "setRegion": "Définir la région"
+  },
+  "dialog": {
+    "knownRegionHint": "Choisissez une région dans le registre configuré de ce déploiement.",
+    "fallbackRegionHint": "Aucun registre de régions n'est configuré. Ce déploiement est dans la posture mono-région/par défaut ; le serveur peut rejeter un épinglage non vide.",
+    "clearPin": "Retirer l'épinglage (non épinglé)",
+    "selectClearHint": "Choisissez « Retirer l'épinglage (non épinglé) » pour supprimer l'épinglage. Cela ne déplace pas les données déjà stockées : c'est une migration distincte.",
+    "title": "Région pour {{name}}",
+    "subtitle": "Épinglez les données de cette organisation à une région, ou retirez l'épinglage.",
+    "regionLabel": "Code de région",
+    "regionPlaceholder": "ex. eu",
+    "clearHint": "Laissez vide pour retirer l'épinglage (non épinglé). Cela ne déplace pas les données déjà stockées : c'est une migration distincte.",
+    "review": "Vérifier le changement",
+    "back": "Retour",
+    "apply": "Appliquer le changement",
+    "summaryPin": "Épingler {{name}} à la région {{region}}.",
+    "summaryClear": "Retirer l'épinglage de région pour {{name}} (non épinglé).",
+    "implications": "Cela définit l’endroit où il est promis que les données de cette organisation résideront pour les nouvelles écritures. Cela ne migre pas les données déjà stockées ailleurs.",
+    "pinned": "{{name}} épinglé à {{region}}",
+    "cleared": "Épinglage de région retiré pour {{name}}"
+  }
+}

@@ -1,0 +1,255 @@
+{
+  "title": "Seguridad y forense",
+  "description": "Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencia a prueba de manipulación. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.",
+  "tabs": {
+    "safety": "Postura de seguridad",
+    "findings": "Hallazgos",
+    "guardrails": "Guardrails",
+    "anomalies": "Anomalías",
+    "forensics": "Forense"
+  },
+  "findings": {
+    "title": "Hallazgos",
+    "description": "Hallazgos de guardrail, anomalía y forense. La evidencia es una huella — no hay payload que expandir.",
+    "empty": "Sin hallazgos",
+    "emptyHint": "Los hallazgos aparecen a medida que guardrails, detección de anomalías y forense registran evidencia.",
+    "export": {
+      "action": "Exportar SARIF",
+      "busy": "Exportando…",
+      "done": "Export SARIF descargado.",
+      "truncated": "Export SARIF descargado, pero se detuvo en el tope de resultados del servidor: es un run válido, no el conjunto completo."
+    },
+    "search": "Buscar hallazgos",
+    "fingerprint": "hu",
+    "columns": {
+      "severity": "Severidad",
+      "kind": "Tipo",
+      "source": "Origen",
+      "title": "Hallazgo",
+      "evidence": "Evidencia",
+      "status": "Estado",
+      "actions": "Acciones"
+    },
+    "kind": {
+      "guardrail": "Guardrail",
+      "anomaly": "Anomalía",
+      "forensic": "Forense"
+    },
+    "status": {
+      "open": "Abierto",
+      "triaged": "Triado",
+      "resolved": "Resuelto",
+      "dismissed": "Descartado"
+    },
+    "triage": {
+      "action": "Triar",
+      "title": "Triar hallazgo",
+      "description": "El triage solo cambia el estado de flujo. La evidencia — tipo, severidad y la huella de detalle — es inmutable.",
+      "statusLabel": "Estado",
+      "submit": "Actualizar estado",
+      "updated": "Estado del hallazgo actualizado",
+      "immutableNote": "La severidad, el tipo y la huella de detalle no se pueden cambiar — solo el estado de flujo."
+    },
+    "subjectKinds": {
+      "local_residency": "Modelo local residente"
+    },
+    "truncated": "Se muestran los {{n}} primeros ingeridos",
+    "truncatedHint": "Hay más hallazgos de los que se ven, y esta página va ordenada por id de ingesta —NO por cuándo ocurrió el problema—, así que puede estar dejando fuera hallazgos recientes. Que el resto quede fuera no es prueba de que no se encontrara nada más."
+  },
+  "safetyPosture": {
+    "title": "Postura de seguridad del proveedor",
+    "description": "Postura de AI-safety en modo lectura, ingerida de los controles nativos de los proveedores: OpenAI Moderation, AWS Bedrock Guardrails y Azure Responsible AI. El plano la lee y la registra; el bloqueo sigue en el proveedor.",
+    "empty": "Sin hallazgos de postura de seguridad",
+    "emptyHint": "Conecta los conectores de OpenAI, AWS o Azure con sus lecturas de seguridad activadas para rellenar esta vista.",
+    "countsPartial": "Resumen parcial: este tenant tiene más hallazgos de postura de seguridad de los que cubre el escaneo del resumen.",
+    "columns": {
+      "open": "Abiertos"
+    }
+  },
+  "guardrails": {
+    "title": "Inspección de guardrail",
+    "description": "Ejecuta el servicio de inspección de guardrail sobre una superficie. El texto se hashea redactado y nunca se almacena — el resultado es un veredicto más evidencia mínima ya redactada.",
+    "verdictTitle": "Veredicto",
+    "clean": "Sin detecciones — limpio.",
+    "detectiveNote": "Este veredicto viene del plano detective: la activación se detectó y registró, no se bloqueó. Un bloqueo solo es alcanzable cuando el enforcement está habilitado y gobernado.",
+    "wouldBlock": "Bloquearía (enforced)",
+    "detectOnly": "Solo detección",
+    "findingsRecorded": "{{count}} hallazgo registrado",
+    "findingsRecorded_one": "{{count}} hallazgo registrado",
+    "findingsRecorded_many": "{{count}} hallazgos registrados",
+    "findingsRecorded_other": "{{count}} hallazgos registrados",
+    "enforcement": {
+      "detective": "Detective",
+      "enforced": "Enforced"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "Inyección de prompt",
+      "jailbreak": "Jailbreak",
+      "content": "Contenido",
+      "output_validation": "Validación de salida",
+      "owasp_agentic": "OWASP agéntico"
+    },
+    "form": {
+      "surface": "Superficie",
+      "text": "Texto a inspeccionar",
+      "textHint": "Inspeccionado y hasheado redactado — nunca se almacena ni se devuelve.",
+      "enforce": "Solicitar enforcement",
+      "enforceHint": "Solo bloquea si la política de enforcement tiene esta clase habilitada y gobernada; si no, el veredicto es un flag.",
+      "submit": "Inspeccionar",
+      "running": "Inspeccionando…",
+      "surfaceLabel": "Superficie"
+    },
+    "surface": {
+      "input": "Entrada",
+      "output": "Salida",
+      "tool_args": "Argumentos de herramienta"
+    }
+  },
+  "enforcement": {
+    "title": "Postura de enforcement",
+    "description": "La única acción que toca producción. Cada clase de guardrail es detective por defecto; habilitar enforcement inline es una acción de admin, gobernada donde el gate esté cableado.",
+    "defaultDetectiveNote": "El plano por defecto es detective: las clases solo bloquean cuando se habilitan aquí explícitamente y están gobernadas.",
+    "fullyDetective": "No hay enforcement habilitado — el plano es totalmente detective, el default seguro. Nada bloquea por su cuenta.",
+    "detective": "Detective",
+    "enforced": "Enforced",
+    "governed": "Gobernado",
+    "ungoverned": "Habilitado sin gobernanza humana",
+    "wildcard": "Todas las clases",
+    "change": "Cambiar",
+    "columns": {
+      "class": "Clase",
+      "posture": "Postura",
+      "minSeverity": "Severidad mín.",
+      "governance": "Gobernanza",
+      "updated": "Actualizado",
+      "actions": "Acciones"
+    },
+    "dialog": {
+      "title": "Cambiar enforcement",
+      "description": "Deshabilitar (volver a detective) está siempre permitido. Habilitar enforcement inline está gobernado donde el gate esté cableado — una denegación de gobernanza se muestra como el motivo.",
+      "enabledLabel": "Habilitar enforcement inline",
+      "minSeverity": "Severidad mínima",
+      "reason": "Motivo",
+      "reasonHint": "Se registra con el cambio en la cadena de auditoría.",
+      "submit": "Aplicar",
+      "applied": "Postura de enforcement actualizada",
+      "ungovernedWarning": "Habilitar esta clase sin un gate de gobernanza cableado la deja sin gobernar — el cambio se permite pero queda señalado.",
+      "deniedTitle": "La gobernanza denegó este cambio"
+    }
+  },
+  "anomalies": {
+    "title": "Cola de anomalías",
+    "description": "Deriva y hallazgos correlados, ordenados por prioridad. Las entradas aproximadas son deriva sin reconciliar — nunca una violación firme.",
+    "empty": "Sin anomalías en la cola",
+    "orderNote": "Ordenadas por prioridad, de mayor a menor.",
+    "priority": "Prioridad",
+    "approximate": "Aproximada",
+    "suspectedTitle": "Sospecha: {{title}}",
+    "unreconciledNote": "Deriva sin reconciliar — la autoridad reconciliada es el mapa de accesos. La prioridad se descuenta; esto no es una violación confirmada.",
+    "kind": {
+      "access_drift": "Deriva de acceso",
+      "egress_exfil_suspected": "Exfiltración por egress (sospecha)",
+      "anti_evasion_correlated": "Evasión correlada"
+    }
+  },
+  "forensics": {
+    "title": "Casos forenses",
+    "description": "Respuesta a incidentes — cada caso congela su estado de integridad al abrirse, así un tamper posterior es detectable. La línea temporal se reconstruye desde el ledger append-only.",
+    "empty": "Sin casos forenses",
+    "openCase": "Abrir caso",
+    "back": "Volver a casos",
+    "summary": "Resumen",
+    "openedBy": "Abierto por",
+    "opened": "Abierto",
+    "closed": "Cerrado",
+    "integrity": "Integridad de la cadena de custodia",
+    "timeline": "Línea temporal reconstruida",
+    "timelineNote": "Cada evento lleva seq · hash · prev_hash para que un lector re-verifique el enlace por su cuenta. Nunca hay un payload tras un evento.",
+    "columns": {
+      "severity": "Severidad",
+      "title": "Caso",
+      "status": "Estado",
+      "opened": "Abierto"
+    },
+    "status": {
+      "open": "Abierto",
+      "investigating": "Investigando",
+      "contained": "Contenido",
+      "closed": "Cerrado"
+    },
+    "truncated": "Se muestran los {{n}} primeros abiertos",
+    "truncatedHint": "Hay más expedientes de los que se ven, y esta página va ordenada por id de apertura, así que puede dejar fuera expedientes recientes. Una investigación que no ves aquí no es una investigación que no exista."
+  },
+  "integrity": {
+    "title": "Integridad del ledger",
+    "description": "Dos veredictos: la cadena hash es internamente consistente, y los checkpoints firmados. Verificar se registra en la propia cadena que comprueba.",
+    "chain": "Cadena hash",
+    "chainChecked": "{{count}} evento comprobado",
+    "chainChecked_one": "{{count}} evento comprobado",
+    "chainChecked_many": "{{count}} eventos comprobados",
+    "chainChecked_other": "{{count}} eventos comprobados",
+    "checkpoints": "Checkpoints firmados",
+    "checkpointsCount": "{{count}} checkpoint verificado",
+    "checkpointsCount_one": "{{count}} checkpoint verificado",
+    "checkpointsCount_many": "{{count}} checkpoints verificados",
+    "checkpointsCount_other": "{{count}} checkpoints verificados",
+    "signingUnavailable": "No hay clave de firma cableada — la atestación firmada no se finge.",
+    "checkpointsPendingNote": "Aún no se ha escrito ningún checkpoint — el veredicto de la cadena es lo que prueba este ledger.",
+    "signingSeam": "Firma de checkpoints sin cablear",
+    "attestedSeq": "Seq atestado",
+    "headSeq": "seq cabeza del ledger {{seq}}",
+    "reverifyNote": "Cada evento lleva seq · hash · prev_hash para que un lector re-verifique el enlace offline contra un WORM externo.",
+    "chainEmptyNote": "Todavía no hay nada que verificar: el ledger no tiene eventos."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "No se han configurado clases de enforcement",
+      "description": "Las filas solo aparecen después de definir la postura de una clase de guardrail; hasta entonces, todas las clases siguen en modo detective y nada se bloquea inline."
+    },
+    "findings": {
+      "title": "Sin hallazgos de seguridad",
+      "description": "Surgen de señales de inspección de guardrails, deriva observada o postura de seguridad del proveedor, o de una señal de severidad alta de otro módulo."
+    }
+  },
+  "cases": {
+    "new": "Nuevo caso",
+    "newHint": "Abre un caso forense. El motor lo deja en estado «abierto».",
+    "title": "Título",
+    "severity": "Severidad",
+    "create": "Crear",
+    "cancel": "Cancelar",
+    "created": "Caso abierto",
+    "status": "Estado",
+    "save": "Guardar cambios",
+    "updated": "Caso actualizado",
+    "statusName": {
+      "open": "Abierto",
+      "investigating": "En investigación",
+      "contained": "Contenido",
+      "closed": "Cerrado"
+    },
+    "exportFormat": "Formato de exportación",
+    "export": "Exportar",
+    "exported": "Exportación solicitada",
+    "links": "Cadena de custodia",
+    "linksHint": "A qué está enlazado este caso: hallazgos, secuencias del ledger, anomalías o notas.",
+    "noLinks": "Todavía no hay nada enlazado",
+    "link": "Enlazar",
+    "linked": "Enlazado",
+    "linkKindLabel": "Clase",
+    "linkRef": "Referencia",
+    "linkKind": {
+      "finding": "Hallazgo",
+      "audit_seq": "Secuencia del ledger",
+      "anomaly": "Anomalía",
+      "note": "Nota"
+    }
+  },
+  "severity": {
+    "low": "Baja",
+    "medium": "Media",
+    "high": "Alta",
+    "critical": "Crítica"
+  }
+}

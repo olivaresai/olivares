@@ -1,0 +1,69 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Locale}}">
+<head>
+<meta charset="utf-8">
+<title>{{t .Locale "report.compliance_evidence.title"}}</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>{{t .Locale "report.compliance_evidence.title"}}</h1>
+    <div class="subtitle">{{if .Branding.CompanyName}}{{.Branding.CompanyName}} — {{end}}{{t .Locale "report.generated_at"}}: {{formatDateTime .Report.Generated}}</div>
+  </div>
+  {{if .Branding.LogoPath}}<img class="header-logo" src="{{.Branding.LogoPath}}" alt="Logo">{{end}}
+</div>
+
+{{range .Report.Frameworks}}
+<h2>{{.Name}} {{.Version}}</h2>
+<div class="meta">{{t $.Locale "compliance.authority"}}: {{.Authority}}</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{.Summary.Total}}</div>
+    <div class="stat-label">{{t $.Locale "compliance.total_controls"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{coveragePct .Summary}}%</div>
+    <div class="stat-label">{{t $.Locale "compliance.coverage"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{.Summary.Satisfied}}</div>
+    <div class="stat-label">{{t $.Locale "compliance.satisfied"}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{.Summary.Gap}}</div>
+    <div class="stat-label">{{t $.Locale "compliance.gap"}}</div>
+  </div>
+</div>
+
+<table>
+<thead>
+<tr>
+  <th>{{t $.Locale "compliance.control_id"}}</th>
+  <th>{{t $.Locale "compliance.control_title"}}</th>
+  <th>{{t $.Locale "compliance.status"}}</th>
+  <th>{{t $.Locale "compliance.requirement"}}</th>
+</tr>
+</thead>
+<tbody>
+{{range .Controls}}
+<tr>
+  <td><strong>{{.ID}}</strong></td>
+  <td>{{.Title}}</td>
+  <td><span class="badge {{statusBadge .Status}}">{{.Status}}</span></td>
+  <td>{{.Requirement}}{{if .Note}}<br><em>{{.Note}}</em>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{end}}
+
+<div class="disclaimer">{{.Report.Disclaimer}}</div>
+<div class="footer">{{t .Locale "report.powered_by"}}{{if .Branding.FooterText}} — {{.Branding.FooterText}}{{end}}</div>
+</body>
+</html>

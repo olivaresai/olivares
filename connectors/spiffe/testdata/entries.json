@@ -1,0 +1,46 @@
+{
+  "entries": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "spiffe_id": { "trust_domain": "corp.example", "path": "/ns/prod/sa/web" },
+      "parent_id": { "trust_domain": "corp.example", "path": "/spire/agent/k8s/node1" },
+      "selectors": [
+        { "type": "k8s", "value": "ns:prod" },
+        { "type": "k8s", "value": "sa:web" }
+      ],
+      "x509_svid_ttl": 3600,
+      "admin": false
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "spiffe_id": "spiffe://corp.example/ns/prod/sa/worker",
+      "parent_id": "spiffe://corp.example/spire/agent/k8s/node1",
+      "selectors": [
+        { "type": "k8s", "value": "ns:prod" },
+        { "type": "k8s", "value": "sa:worker" }
+      ],
+      "x509_svid_ttl": 1800,
+      "admin": true
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "spiffe_id": { "trust_domain": "corp.example", "path": "/ns/staging/sa/db" },
+      "parent_id": "spiffe://corp.example/spire/agent/k8s/node2",
+      "selectors": [
+        { "type": "unix", "value": "uid:1000" }
+      ],
+      "x509_svid_ttl": 7200,
+      "admin": false
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "spiffe_id": "spiffe://other.example/svc/payments",
+      "parent_id": { "trust_domain": "other.example", "path": "/spire/agent/vm/edge1" },
+      "selectors": [
+        { "type": "aws_iid", "value": "instance-id:i-abc123" }
+      ],
+      "x509_svid_ttl": 600,
+      "admin": false
+    }
+  ]
+}

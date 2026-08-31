@@ -1,0 +1,11 @@
+{
+  "teamMemberSpend": [
+    { "userId": "user_alice", "name": "Alice", "email": "alice@example.com", "role": "admin", "spendCents": 9500, "overallSpendCents": 9500, "monthlyLimitDollars": 100 },
+    { "userId": "user_bob", "name": "Bob", "email": "bob@example.com", "role": "member", "spendCents": 12000, "overallSpendCents": 12000, "monthlyLimitDollars": 100 },
+    { "userId": "user_dave", "name": "Dave", "email": "dave@example.com", "role": "member", "spendCents": 5000, "overallSpendCents": 5000, "monthlyLimitDollars": null },
+    { "userId": "user_erin", "name": "Erin", "email": "erin@example.com", "role": "member", "spendCents": 1000, "overallSpendCents": 1000, "monthlyLimitDollars": 100 }
+  ],
+  "subscriptionCycleStart": "1717200000000",
+  "totalMembers": 4,
+  "totalPages": 1
+}

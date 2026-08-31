@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Flux source for the "control plane as code" estate: the Git repo holding the
+# HCL in ../terraform. Flux PULLS it on an interval (OpenGitOps #3) and pins the
+# desired state to an immutable ref (#2 — prefer a tag/commit over a branch in
+# production so a rollback is a revert).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: olivares-estate
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: https://github.com/acme/olivares-estate # replace with your estate repo
+  ref:
+    branch: main # in production, pin to a tag or commit, not a moving branch
+  # For a private repo, reference a credentials secret:
+  # secretRef:
+  #   name: olivares-estate-git-auth

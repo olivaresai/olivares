@@ -1,0 +1,28 @@
+# Redirecciones de CORTESIA de docs.olivares.ai
+#
+# Que son y que NO son. Estas rutas NO las emite hoy ningun codigo: se derivo el 2026-08-25
+# recorriendo los dos repositorios y el producto emite UNA sola ruta de docs
+# (/reference/api-stability/). Existen porque se PROMETIERON en su dia y un enlace externo o
+# marcado no se retira: una cortesia es justamente para lo que ya no emites.
+#
+# Derivadas, no inventadas. Recuento de menciones de `docs.olivares.ai/<ruta>` en el arbol:
+#   /cli         25 menciones  -> destino reference/cli.md      EXISTE
+#   /quickstart  10 menciones  -> destino start/quickstart.md   EXISTE
+#
+# ⛔ Lo que NO se redirige, y por que:
+#   /X /y /a/b-c /x /...        marcadores de EJEMPLO en prosa, no rutas
+#   /how-to/migrate-example     ejemplo dentro de una cabecera `Link:` de api-stability
+#   /.well-known/security.txt   YA se sirve desde public/, no necesita redireccion
+#   /og-image.png               idem
+#   variantes por locale        cero menciones medidas (/es/cli, /ja/quickstart, ...)
+#
+# Mecanismo: Workers static assets honra `_redirects` de forma nativa cuando el fichero esta
+# en el directorio de assets (aqui public/ -> dist/, y wrangler.jsonc declara directory ./dist).
+# Limites de la plataforma: 2.000 estaticas, 100 dinamicas, 1.000 caracteres por regla.
+#
+# El trailing slash lo resuelve `html_handling: auto-trailing-slash` del propio Worker.
+
+/cli/*         /reference/cli/    301
+/cli           /reference/cli/    301
+/quickstart/*  /start/quickstart/ 301
+/quickstart    /start/quickstart/ 301

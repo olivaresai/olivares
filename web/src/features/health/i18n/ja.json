@@ -1,0 +1,477 @@
+{
+  "title": "ヘルス＆SLA",
+  "subtitle": "エステート全体の稼働状況、信頼性、依存関係。観測されたアクティビティと陳腐化スイープから導出され、インフラを能動的に探査することはありません。",
+  "auditedNote": "ライブストリームおよびあらゆる解決／編集操作は、特権的で監査対象の操作です。ヘルスは導出値であり、エンジンはここでエラーテキストやペイロードを保持することはありません。",
+  "refresh": "更新",
+  "statusPageLink": "公開ステータスページ",
+  "tabs": {
+    "status": "ステータス",
+    "sla": "SLA",
+    "incidents": "インシデント",
+    "timeline": "タイムライン",
+    "connectors": "コネクター",
+    "dependencies": "依存関係",
+    "system": "システム",
+    "checks": "チェック"
+  },
+  "state": {
+    "healthy": "正常",
+    "degraded": "低下",
+    "down": "ダウン",
+    "observed": "観測済み",
+    "unknown": "不明"
+  },
+  "stateHint": {
+    "unknown": "このサブジェクトを追跡するチェックがありません。正常とは異なります。",
+    "observed": "エッジによって稼働が確認されていますが、チェックが宣言されていません。ヘルスは測定されていません（正常でも不明でもありません）。"
+  },
+  "desired": {
+    "active": "アクティブ",
+    "paused": "一時停止",
+    "retired": "廃止"
+  },
+  "desiredHint": {
+    "paused": "アラートなし。オペレーターによって一時停止されています。",
+    "retired": "アラートなし。廃止されています。"
+  },
+  "subjectKind": {
+    "agent": "エージェント",
+    "mcp": "MCP",
+    "session": "セッション",
+    "mcp_tool": "ツール"
+  },
+  "tiles": {
+    "healthy": "正常",
+    "degraded": "低下",
+    "down": "ダウン",
+    "unknown": "不明"
+  },
+  "facets": {
+    "allStates": "すべての状態",
+    "allKinds": "すべての種別"
+  },
+  "status": {
+    "title": "監視対象サブジェクト",
+    "slaBreach": "SLA違反",
+    "slaBreachHint": "このサブジェクトについてSLA違反がオープン状態です。",
+    "notAlerting": "アラートなし",
+    "cols": {
+      "subject": "サブジェクト",
+      "kind": "種別",
+      "state": "状態",
+      "desired": "意図",
+      "sla": "SLA",
+      "latency": "レイテンシ",
+      "lastSeen": "最終確認"
+    },
+    "searchPlaceholder": "サブジェクトを検索…",
+    "empty": {
+      "title": "監視対象のサブジェクトはまだありません",
+      "description": "エージェントまたはMCPサーバーにヘルスチェックが宣言されると、その稼働状況がここに表示されます。"
+    }
+  },
+  "sla": {
+    "title": "信頼性（SLA）",
+    "pick": "サブジェクト",
+    "pickPlaceholder": "サブジェクトを選択…",
+    "pickEmpty": "レポート対象となる監視対象サブジェクトはまだありません。",
+    "pickPrompt": {
+      "title": "サブジェクトを選択",
+      "description": "監視対象のサブジェクトを選択すると、信頼性台帳から再構築された目標に対する稼働率を確認できます。"
+    },
+    "window": "ウィンドウ",
+    "uptime": "稼働率",
+    "target": "目標",
+    "noTarget": "目標なし",
+    "breaching": "違反中",
+    "withinTarget": "目標範囲内",
+    "downtime": "ダウンタイム",
+    "degraded": "低下",
+    "degradedNote": "低下はSLA上では稼働として扱われます。別途表示され、ダウンタイムには含まれません。",
+    "currentState": "現在の状態",
+    "noCheck": {
+      "title": "チェックが宣言されていません",
+      "description": "このサブジェクトにはヘルスチェックがないため、信頼性を報告できません。これは正直な状態であり、障害ではありません。"
+    },
+    "noData": {
+      "title": "履歴はまだありません",
+      "description": "このサブジェクトにはチェックがありますが、ウィンドウ内に信頼性の履歴がありません。稼働率は未定義であり、0%ではありません。遷移が記録されると表示されます。"
+    }
+  },
+  "incidents": {
+    "title": "インシデント",
+    "filterState": "状態",
+    "allStates": "すべて",
+    "open": "オープン",
+    "resolved": "解決済み",
+    "resolve": "解決",
+    "resolving": "解決中…",
+    "resolveTitle": "このインシデント記録をクローズします",
+    "resolveHint": "解決はその期間がクローズされたことを認めるものであり、サブジェクトが回復したことを主張するものではありません。回復は実際の稼働状況から判断されます。この操作は特権的で監査対象です。",
+    "cols": {
+      "subject": "サブジェクト",
+      "subjectKind": "種類",
+      "incidentKind": "インシデント",
+      "severity": "重大度",
+      "opened": "オープン日時",
+      "state": "状態",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "低下",
+      "down": "ダウン",
+      "sla_breach": "SLA違反"
+    },
+    "possibleEvasion": "回避の可能性",
+    "possibleEvasionHint": "サブジェクトが期待されるケイデンス内で沈黙しました（スイープで検出されたダウン）。送信を停止したサブジェクト自体がシグナルであり、UIの障害ではありません。",
+    "searchPlaceholder": "インシデントを検索…",
+    "empty": {
+      "title": "インシデントはありません",
+      "description": "このフィルターに一致する信頼性インシデントはありません。サブジェクトが低下またはダウンすると、オープンなインシデントがここに表示されます。"
+    },
+    "truncated": "先頭の{{n}}件を表示",
+    "truncatedHint": "表示されているより多くのインシデントがあります。このページは上限で切られているため、以降が空でも存在しない証拠にはなりません。"
+  },
+  "timeline": {
+    "title": "信頼性タイムライン",
+    "pick": "サブジェクト",
+    "pickPlaceholder": "サブジェクトを選択…",
+    "pickPrompt": {
+      "title": "サブジェクトを選択",
+      "description": "監視対象のサブジェクトを選択すると、追記専用の台帳からその信頼性の遷移をたどることができます。"
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "レイテンシ",
+    "latencyUnknown": "不明",
+    "cause": {
+      "edge": "観測された稼働",
+      "report": "能動的探査",
+      "sweep": "陳腐化スイープ"
+    },
+    "causeHint": {
+      "edge": "観測されたアクティビティ（稼働エッジ）から推測されました。",
+      "report": "能動的なヘルス探査がこの状態を報告しました。",
+      "sweep": "陳腐化スイープによって検出されました。期待されるケイデンス内での沈黙です。"
+    },
+    "possibleEvasion": "回避の可能性",
+    "possibleEvasionHint": "陳腐化スイープによって検出されたダウンは、期待されるケイデンス内での沈黙を意味します。読み込みエラーではなく、回避の可能性として表示されます。",
+    "empty": {
+      "title": "記録された遷移はありません",
+      "description": "このサブジェクトには台帳にまだ信頼性の遷移がありません。"
+    },
+    "truncated": "先頭の{{n}}件を表示",
+    "truncatedHint": "表示されているより多くのイベントがあります。ページはid順（古い順）なので、切り落とされるのは最も新しい範囲です。ここに見えないイベントは、起きなかったイベントではありません。"
+  },
+  "deps": {
+    "title": "依存関係マップ",
+    "subtitle": "観測されたアクティビティから自動検出されます。各ノードは現在のヘルスに応じて色付けされます。稼働が確認されてもチェックのないノードは「観測済み」（青、ヘルスは未測定）、シグナルがまったくないノードはグレー（不明）のままです。いずれも緑になることはありません。",
+    "legendTitle": "ヘルス",
+    "relation": {
+      "uses_mcp": "MCPを使用",
+      "uses_tool": "ツールを使用",
+      "delegates_to": "委任先"
+    },
+    "observed": "観測済み",
+    "truncated": "先頭の{{n}}件を表示",
+    "truncatedHint": "依存関係グラフには表示されているよりも多くのノードがあります。これは最初のキーセットページです。",
+    "empty": {
+      "title": "検出された依存関係はまだありません",
+      "description": "エージェントがMCPサーバーやツールを呼び出すと、観測された依存関係グラフがここに表示されます。"
+    },
+    "mobile": {
+      "title": "このマップにはより広い画面が必要です",
+      "summary": "{{nodes}}ノード · {{edges}}依存関係",
+      "hint": "インタラクティブな依存関係グラフを表示するには、このビューをより大きなディスプレイで開いてください。"
+    }
+  },
+  "detail": {
+    "statusTitle": "サブジェクトのヘルス",
+    "incidentTitle": "インシデント",
+    "ref": "参照",
+    "id": "ID",
+    "name": "名前",
+    "kind": "種別",
+    "state": "状態",
+    "desired": "意図",
+    "cadence": "期待されるケイデンス",
+    "grace": "猶予係数",
+    "slaTarget": "SLA目標",
+    "slaBreach": "SLA違反オープン",
+    "latency": "最終レイテンシ",
+    "lastSeen": "最終確認",
+    "lastChecked": "最終チェック",
+    "owner": "オーナー",
+    "lastDetail": "最終詳細",
+    "severity": "重大度",
+    "opened": "オープン日時",
+    "resolved": "解決済み",
+    "summary": "概要",
+    "viewSla": "SLAを表示",
+    "viewTimeline": "タイムラインを表示",
+    "yes": "はい",
+    "no": "いいえ",
+    "minimalData": "メタデータのみが表示されます。設計上、エンジンはここでエラーテキスト、ペイロード、シークレットを保持することはありません（最小データ）。"
+  },
+  "live": {
+    "note": "行はヘルスの変化に応じてライブで更新されます。連続性を前提とせず、idによって照合されます。"
+  },
+  "empty": {
+    "title": "表示するものがありません",
+    "description": "このテナントのヘルスデータはまだありません。"
+  },
+  "forbidden": {
+    "title": "ヘルスへのアクセスが許可されていません",
+    "description": "お使いのロールには、ヘルスおよびSLAを閲覧する権限が含まれていません。"
+  },
+  "forbiddenResolve": {
+    "title": "解決が許可されていません",
+    "description": "インシデントの解決にはcheck-admin権限（health:check:admin）が必要です。"
+  },
+  "connectors": {
+    "autoRefresh": "15秒ごとに自動更新されます。",
+    "searchPlaceholder": "コネクターを検索…",
+    "summary": {
+      "running": "実行中",
+      "failed": "失敗",
+      "stopped": "停止",
+      "disabled": "無効"
+    },
+    "cols": {
+      "name": "コネクター",
+      "kind": "種類",
+      "health": "状態",
+      "status": "ステータス",
+      "trend": "傾向",
+      "lastPoll": "最終ポーリング",
+      "mode": "モード"
+    },
+    "status": {
+      "running": "実行中",
+      "failed": "失敗",
+      "stopped": "停止",
+      "disabled": "無効",
+      "not_wired": "未接続"
+    },
+    "trend": {
+      "up": "改善中",
+      "down": "悪化中",
+      "stable": "安定"
+    },
+    "empty": {
+      "title": "コネクターが設定されていません",
+      "description": "コネクターが導入されると、その運用状態がここに表示されます。"
+    },
+    "modeAll": "すべてのモード",
+    "modeFilter": "モードフィルター",
+    "emptyMode": {
+      "title": "このモードに一致するコネクタはありません",
+      "description": "モードフィルターを変更すると他のコネクタが表示されます。"
+    }
+  },
+  "statusPage": {
+    "title": "Olivares Control Plane — ステータス",
+    "subtitle": "すべてのコンポーネントの現在の稼働状況。",
+    "unavailable": "ステータス情報は現在利用できません。",
+    "lastUpdated": "最終更新: {{time}}",
+    "overall": {
+      "operational": "すべてのシステムが正常稼働中",
+      "not_configured": "正常稼働中 — 任意機能が未設定",
+      "degraded": "一部システムに障害",
+      "outage": "重大なシステム障害"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "ナレッジ検索",
+      "store": "データベース",
+      "connectors": "コネクター",
+      "ingest": "データ取り込み",
+      "audit_spool": "監査スプール"
+    },
+    "status": {
+      "operational": "正常",
+      "not_configured": "未設定",
+      "degraded": "劣化",
+      "outage": "障害"
+    }
+  },
+  "update": {
+    "available": "アップデートが利用可能",
+    "security": "セキュリティアップデート",
+    "channel": "チャンネル",
+    "upToDate": "最新です",
+    "title": "アップデート",
+    "notChecked": "最近のチェックはありません",
+    "failed": "アップデートチェックに失敗しました",
+    "checked": "アップデートチェックが完了しました",
+    "advisories": "修正済みセキュリティアドバイザリ",
+    "checkNow": "今すぐチェック",
+    "unconfigured": "アップデートチェックは設定されていません。エアギャップ環境では想定どおりの状態です。"
+  },
+  "system": {
+    "title": "システムヘルス",
+    "systemStatus": "システム状態",
+    "healthy": "正常",
+    "unhealthy": "異常",
+    "ready": "準備完了",
+    "notReady": "未準備",
+    "storeEngine": "ストアエンジン",
+    "version": "バージョン",
+    "connectors": "コネクタ",
+    "connectorsRunning": "{{count}}件稼働中",
+    "connectorsConfigured": "{{count}}件設定済み",
+    "connectorsAvailable": "{{count}}件が設定可能",
+    "connectorsError": "{{count}}件エラー",
+    "noConnectors": "コネクタが設定されていません",
+    "users": "ユーザー",
+    "usersCount": "{{count}}件登録済み",
+    "identity": "ID管理",
+    "ssoConfigured": "SSO設定済み",
+    "ssoNotConfigured": "SSO未設定",
+    "unavailable": "運用データが利用できないか、権限がありません。"
+  },
+  "auditSpool": {
+    "title": "監査スプール",
+    "withinBudget": "予算内",
+    "nearFull": "上限接近",
+    "engaged": "予算超過",
+    "modes": {
+      "block": "満杯時ブロック",
+      "degrade": "満杯時デグレード"
+    },
+    "usage": "{{max}} 中 {{used}} 使用（{{pct}}）",
+    "pendingDrops": "{{tenants}} テナントで {{drops}} 件の未封印の証跡損失"
+  },
+  "checks": {
+    "title": "ヘルスチェック",
+    "description": "監視対象のエージェントとMCPサーバーについて、ケイデンス、猶予ウィンドウ、SLA目標、ライフサイクルの意図を宣言し、統制します。",
+    "create": "チェックを作成",
+    "created": "ヘルスチェックを作成しました",
+    "updated": "ヘルスチェックを更新しました",
+    "deleted": "ヘルスチェックを削除しました",
+    "failed": "ヘルスチェックの操作に失敗しました。",
+    "duplicate": "このサブジェクトにはヘルスチェックが既に存在します。",
+    "searchPlaceholder": "ヘルスチェックを検索…",
+    "reportTooltipLabel": "探査レポートについて",
+    "reportTooltip": "探査レポートの取り込みはマシン向けのため、コンソールからは意図的に省略されています。",
+    "seconds": "{{count}}秒",
+    "cols": {
+      "subject": "サブジェクト",
+      "kind": "種別",
+      "state": "状態",
+      "intent": "意図",
+      "cadence": "ケイデンス",
+      "sla": "SLA",
+      "lastChecked": "最終チェック",
+      "actions": "操作"
+    },
+    "actions": {
+      "edit": "編集",
+      "editAria": "{{subject}} のヘルスチェックを編集",
+      "pause": "一時停止",
+      "pauseAria": "{{subject}} のヘルスチェックを一時停止",
+      "resume": "再開",
+      "resumeAria": "{{subject}} のヘルスチェックを再開",
+      "retire": "廃止",
+      "retireAria": "{{subject}} のヘルスチェックを廃止",
+      "delete": "削除",
+      "deleteAria": "{{subject}} のヘルスチェックを削除"
+    },
+    "form": {
+      "name": "名前",
+      "subjectKind": "サブジェクト種別",
+      "subjectRef": "サブジェクト参照",
+      "expectedInterval": "期待される間隔（秒）",
+      "graceFactor": "猶予係数",
+      "slaTarget": "SLA目標（PPM）",
+      "slaTargetHint": "0でSLA目標をクリアします。999000は99.9%を意味します。",
+      "desiredStatus": "意図するステータス",
+      "validation": "サブジェクト参照、正の整数のケイデンスと猶予の値、および0から1000000までのSLA目標を入力してください。"
+    },
+    "createDialog": {
+      "title": "ヘルスチェックを作成",
+      "description": "監視対象のエージェントまたはMCPサーバーを1つ宣言します。1つのサブジェクトに持てるヘルスチェックは1つだけです。"
+    },
+    "edit": {
+      "title": "ヘルスチェックを編集",
+      "description": "サブジェクトは変更できません。表示されている設定とライフサイクルの意図を更新します。"
+    },
+    "delete": {
+      "title": "ヘルスチェックを削除",
+      "description": "{{subject}} のヘルスチェックを完全に削除します。この管理操作は監査台帳に記録されます。"
+    },
+    "empty": {
+      "title": "宣言されたヘルスチェックはありません",
+      "description": "チェックを作成して、エージェントまたはMCPサーバーに期待される稼働ケイデンスを統制してください。"
+    }
+  },
+  "tls": {
+    "title": "TLS証明書",
+    "notAfter": "有効期限",
+    "daysLeft": "残り{{count}}日",
+    "expired": "{{count}}日前に期限切れ"
+  },
+  "keys": {
+    "title": "鍵カストディ",
+    "empty": "鍵カストディのメタデータはありません。",
+    "sealers": "対称封印鍵",
+    "sourceUnknown": "ソース不明",
+    "copyFingerprint": "{{purpose}} の完全なフィンガープリントをコピー",
+    "copied": "フィンガープリントをコピーしました",
+    "cols": {
+      "purpose": "用途",
+      "algorithm": "アルゴリズム",
+      "mode": "カストディモード",
+      "kek": "KEK",
+      "created": "作成日時",
+      "fingerprint": "フィンガープリント",
+      "prior": "過去の鍵"
+    }
+  },
+  "config": {
+    "title": "実効設定",
+    "empty": "実効設定のエントリはありません。",
+    "strictViolations": "厳格設定の違反",
+    "redacted": "秘匿済み",
+    "cols": {
+      "key": "キー",
+      "value": "実効値",
+      "source": "ソース"
+    }
+  },
+  "bus": {
+    "title": "イベントバス",
+    "noSubscribers": "イベントバスのサブスクライバーは登録されていません。",
+    "depthAria": "{{subscriber}} のキュー深度",
+    "counters": {
+      "publishBlocked": "パブリッシュブロック",
+      "dropped": "ドロップ",
+      "droppedTelemetry": "テレメトリードロップ",
+      "droppedNotify": "通知ドロップ",
+      "handlerErrors": "ハンドラーエラー",
+      "enqueued": "エンキュー済み",
+      "handled": "処理済み"
+    },
+    "bridge": {
+      "title": "ブリッジ",
+      "pendingMessages": "保留中メッセージ",
+      "pendingBytes": "保留中バイト",
+      "dropped": "ドロップ",
+      "publishErrors": "パブリッシュエラー",
+      "decodeErrors": "デコードエラー",
+      "gateSkipped": "ゲートスキップ",
+      "invalidSubject": "無効なサブジェクト"
+    }
+  },
+  "support": {
+    "title": "サポートバンドル",
+    "description": "保存されたシークレット値を公開せずに、サポート用の診断アーカイブを生成します。",
+    "download": "サポートバンドルをダウンロード",
+    "generate": "生成してダウンロード",
+    "confirmTitle": "サポートバンドルを生成しますか？",
+    "confirmDescription": "この特権的なAAL3操作は監査台帳に記録されます。",
+    "contents": "バンドルには秘匿化された実効設定、運用ステータス、ログが含まれます。共有する前に内容を確認してください。",
+    "downloaded": "サポートバンドルをダウンロードしました",
+    "needsAal3": "サポートバンドルの生成には、ハードウェア裏付けのAAL3ステップアップが必要です。",
+    "failed": "サポートバンドルの生成に失敗しました。"
+  }
+}

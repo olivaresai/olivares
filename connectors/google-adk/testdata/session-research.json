@@ -1,0 +1,23 @@
+{
+  "id": "sess-research-1",
+  "app_name": "research-assistant",
+  "user_id": "alice",
+  "state": {"topic": "quantum"},
+  "events": [
+    {
+      "id": "e1", "invocation_id": "inv-1", "author": "orchestrator",
+      "content": {"role": "model", "parts": [{"function_call": {"name": "google_search"}}]},
+      "actions": {"state_delta": {"step": 1}, "transfer_to_agent": "researcher"}
+    },
+    {
+      "id": "e2", "invocation_id": "inv-1", "author": "researcher",
+      "content": {"role": "model", "parts": [{"function_call": {"name": "shell_exec"}}]},
+      "actions": {"escalate": true}
+    },
+    {
+      "id": "e3", "invocation_id": "inv-1", "author": "researcher",
+      "content": {"role": "tool", "parts": [{"function_response": {"name": "shell_exec"}}]},
+      "error_code": "TOOL_EXECUTION_FAILED"
+    }
+  ]
+}

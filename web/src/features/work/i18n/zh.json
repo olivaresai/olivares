@@ -1,0 +1,267 @@
+{
+  "acceptance": {
+    "draftNotice": "该工作项处于草稿状态，验收标准仍可修正。标准键是永久标识，绝不会被重新分配。",
+    "lockedNotice": "该工作项已离开草稿状态，验收标准不能再编辑，只能评估。标准键是永久标识。",
+    "none": "没有验收标准。",
+    "required": "必需",
+    "state": {
+      "pending": "待定",
+      "passed": "通过",
+      "failed": "未通过",
+      "waived": "豁免"
+    }
+  },
+  "apply": {
+    "planning": "正在规划变更。此步骤不写入任何内容。",
+    "planTitle": "计划",
+    "command": "命令",
+    "permission": "权限",
+    "eventType": "事件",
+    "rowEffects": "将要写入的行",
+    "noRowEffects": "此命令不写入任何行。",
+    "externalCalls": "外部调用",
+    "planHash": "计划哈希",
+    "keyTitle": "本次变更的幂等键",
+    "keyHelp": "每个意图只生成一次，并在每次重试时重复使用。请保存它：如果应用过程中网络中断，用这个完全相同的键重试，正是防止一次变更变成两次的关键。",
+    "confirm": "应用",
+    "applying": "正在应用…",
+    "cancel": "取消",
+    "close": "关闭",
+    "appliedTitle": "已应用",
+    "replayedTitle": "此前已应用",
+    "replayedBody": "引擎识别出这个幂等键并重放了原始结果。没有进行第二次写入。",
+    "commandId": "命令 ID",
+    "resultId": "结果 ID",
+    "status": "新状态",
+    "etag": "新版本标记",
+    "auditSeq": "审计序号",
+    "reread": "重新读取并比较",
+    "retrySameKey": "用同一个键重试",
+    "failure": {
+      "conflict-version": "其他人修改了此工作项",
+      "version-required": "缺少版本前置条件",
+      "conflict-idempotency": "该键已用于另一次变更",
+      "conflict-domain": "引擎拒绝了此命令",
+      "unknown": "无法查看",
+      "other": "变更失败",
+      "plan-changed": "计划已不是最新"
+    },
+    "conflictVersionBody": "在读取与应用这次变更之间，该工作项发生了改变，因此变更被拒绝而不是覆盖上去。请先重新读取并比较再做决定——重新发送会覆盖对方所做的修改。",
+    "versionRequiredBody": "此命令需要工作项的当前版本，但没有发送任何版本。请重新打开该工作项，以便重新读取其版本标记。",
+    "conflictIdempotencyBody": "该幂等键已经用于不同的请求体、版本或计划。引擎选择拒绝，而不是猜测你指的是哪一个。请重新开始该变更以获得新的键。",
+    "conflictDomainBody": "内核自身的规则拒绝了此命令——例如非法的状态转换或依赖成环。重新读取不会改变答案；需要改变的是命令本身。",
+    "otherBody": "变更没有成功。",
+    "continue": "继续",
+    "inputIntro": "引擎在规划此变更前需要这些信息。缺少它们，命令会被直接拒绝。",
+    "planChangedBody": "计划在展示与应用之间发生了变化，因此没有写入任何内容。请重新打开该操作、再次规划，并在确认前阅读新的计划。",
+    "field": {
+      "code": {
+        "label": "代码",
+        "hint": "一个简短的机器令牌：小写字母、数字、点、连字符或下划线。",
+        "placeholder": "例如 blocked_on_review"
+      },
+      "reason": {
+        "label": "原因",
+        "hint": "自由文本，随变更一起记录。这正是其他会话会读到的内容。",
+        "placeholder": "为什么会这样"
+      },
+      "evidence_ref": {
+        "label": "证据引用",
+        "hint": "该判定的证据所在位置。记录通过或未通过时必填。",
+        "placeholder": "例如 run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "证据哈希",
+        "hint": "该证据的 sha256 摘要。记录通过时必填。",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "豁免决定",
+        "hint": "授权豁免此标准的决定（如果有）。",
+        "placeholder": "决定 ID（可选）"
+      },
+      "holder_sid": {
+        "label": "持有会话",
+        "hint": "将持有该租约的规范会话 ID。其他一律被引擎拒绝。",
+        "placeholder": "持有会话的 ID"
+      },
+      "fence": {
+        "label": "Fence",
+        "hint": "你所操作的 fence。低于 1 时引擎拒绝；非当前的 fence 会输给当前持有者。",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "决定",
+        "hint": "该操作所依据的决定。没有它，引擎不会接受。",
+        "placeholder": "决定的 ID"
+      }
+    }
+  },
+  "checks": {
+    "evidence": "证据 {{ref}}"
+  },
+  "common": {
+    "refresh": "刷新",
+    "loadMore": "加载更多"
+  },
+  "decisions": {
+    "title": "决定",
+    "subtitle": "仅追加的决定记录，及其当前状态投影。",
+    "view": {
+      "effective": "生效中",
+      "revoked": "已撤销",
+      "history": "完整历史"
+    },
+    "historyNotice": "这是仅追加的历史记录。引擎不为这些行赋予当前状态，因此没有任何一行会被标记为生效或已撤销——若要提出这个问题，请切换到其他视图。",
+    "state": {
+      "effective": "生效中",
+      "revoked": "已撤销",
+      "notAttributed": "此视图不判定状态"
+    },
+    "meta": "{{subject}} · 由 {{actor}} 决定 · {{at}}",
+    "revoke": "撤销",
+    "revokeTitle": "撤销决定",
+    "revokeBody": "撤销会记录为一条新条目；原有决定绝不会被删除。",
+    "empty": {
+      "effective": {
+        "title": "没有生效中的决定",
+        "body": "引擎读取了当前状态投影，未发现任何生效中的决定。"
+      },
+      "revoked": {
+        "title": "没有已撤销的决定",
+        "body": "引擎读取了当前状态投影，未发现任何已撤销的决定。"
+      },
+      "history": {
+        "title": "没有记录任何决定",
+        "body": "这里还没有做出任何决定。"
+      }
+    }
+  },
+  "dependencies": {
+    "none": "没有依赖。"
+  },
+  "detail": {
+    "subtitle": "{{kind}} · 版本 {{version}}",
+    "applyTitle": "应用变更",
+    "owner": "负责人",
+    "provenance": "来源",
+    "priority": "优先级",
+    "blocked": "阻塞原因",
+    "terminal": "结局",
+    "etag": "版本标记",
+    "tabs": {
+      "overview": "概览",
+      "acceptance": "验收",
+      "dependencies": "依赖",
+      "events": "事件",
+      "lease": "租约"
+    }
+  },
+  "events": {
+    "none": "该工作项没有记录任何事件。"
+  },
+  "filters": {
+    "status": "状态",
+    "allStatus": "任意状态",
+    "priority": "优先级",
+    "allPriority": "任意优先级",
+    "archived": {
+      "label": "已归档",
+      "any": "已归档与未归档",
+      "false": "仅未归档",
+      "true": "仅已归档"
+    }
+  },
+  "items": {
+    "title": "工作项",
+    "subtitle": "筛选作用于整个存储，而不只是当前这一页。",
+    "empty": {
+      "title": "没有符合条件的工作项",
+      "body": "存储中没有符合这些筛选条件的内容。这是一个真实而完整的答案：引擎读取了存储，确实一个也没有。"
+    }
+  },
+  "lease": {
+    "none": "此条目没有租约。",
+    "holder": "持有者",
+    "state": "状态",
+    "fence": "Fence",
+    "expires": "到期",
+    "renewals": "续期次数",
+    "liveness": "存活性",
+    "live": "存活",
+    "notLive": "非存活",
+    "unknown": "无法查看",
+    "reason": "原因",
+    "ttl": "TTL（秒）",
+    "noWrite": "你的角色无法更改此租约。",
+    "noAdmin": "接管、撤销与重设需要 lease admin 权限。",
+    "actions": {
+      "acquire": "获取",
+      "renew": "续期",
+      "release": "释放",
+      "takeover": "接管",
+      "revoke": "撤销",
+      "clockRebase": "重设时钟"
+    },
+    "noRead": "你的角色无法读取此租约。"
+  },
+  "status": {
+    "draft": "草稿",
+    "ready": "就绪",
+    "active": "进行中",
+    "blocked": "已阻塞",
+    "review": "评审中",
+    "completed": "已完成",
+    "failed": "已失败",
+    "canceled": "已取消",
+    "dependencyBlocked": "依赖未解决",
+    "archived": "已归档"
+  },
+  "stream": {
+    "open": "实时",
+    "connecting": "正在重连…",
+    "closed": "无数据流",
+    "error": "数据流中断",
+    "unavailableBody": "屏幕上的列表可能已过时，而且不会有别的提示。请刷新以直接读取存储。"
+  },
+  "subtitle": "跨会话的持久待办：工作项、归属、依赖、验收标准与决定。任何变更都先规划、后应用。",
+  "tabs": {
+    "items": "工作项",
+    "decisions": "决定"
+  },
+  "title": "工作",
+  "transition": {
+    "item.ready": "标记为就绪",
+    "item.block": "阻塞",
+    "item.unblock": "解除阻塞",
+    "item.submit": "提交评审",
+    "item.complete": "完成",
+    "item.fail": "标记为失败",
+    "item.cancel": "取消",
+    "item.archive": "归档"
+  },
+  "truncation": {
+    "label": "已加载 {{n}} 行；还有更多",
+    "hint": "此列表按 keyset 分页，引擎将每页限制为 200 条。仅显示已加载的行；请使用筛选器缩小范围。"
+  },
+  "unavailable": {
+    "title": "无法查看",
+    "body": "引擎未能完成这次观测，因此报告的是未知结局而不是结果。请勿把本面板上的任何内容当作已确认。",
+    "retryHint": "变更是否已写入尚未确定。请使用同一个幂等键重试：正因如此重试才是安全的，引擎会把它识别为同一个意图，而不是第二个。",
+    "code": "引擎代码：{{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "干净",
+      "help": "引擎已查看，未发现问题。"
+    },
+    "ROTO": {
+      "label": "违规",
+      "help": "引擎已查看，发现违反规则。"
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "无法查看",
+      "help": "引擎未能完成观测。这既不是通过，也不是空结果——答案是未知的。"
+    }
+  }
+}

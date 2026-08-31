@@ -1,0 +1,32 @@
+# Kustomize BASE for the Olivares AI control plane.
+#
+# Kustomize inflates the SAME OCI Helm chart published by release-chart.yml via
+# its built-in Helm chart inflation generator (`helmCharts`). This base sets the
+# common, environment-independent posture; the `overlays/prod` overlay layers
+# namespace + image-digest pinning on top (a base + simple overlay, the standard
+# Kustomize shape). See deploy/gitops/README.md for when to prefer this over the
+# Argo CD / Flux HelmRelease paths (rule of thumb: use it when you already render
+# with `kustomize build --enable-helm` in your pipeline).
+#
+# NOTE: `kustomize build` requires `--enable-helm` (and Helm on PATH) for the
+# Helm inflation generator to run — it shells out to `helm template`. Argo CD and
+# Flux both honour this when their kustomize integration has Helm enabled; if your
+# environment forbids the inflation generator, render the chart once
+# (`helm template`) and commit the manifests as a plain `resources:` base instead
+# — both are valid Kustomize.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+helmCharts:
+  - name: olivares
+    # OCI repo (the `oci://` scheme is required for an OCI registry).
+    repo: oci://ghcr.io/olivaresai/charts
+    # CHART SemVer — matches Chart.yaml's current 0.2.5; pin to the verified
+    # version before rollout.
+    version: 0.2.5
+    releaseName: olivares
+    # Base values: secure single-node default. The overlay pins the image digest
+    # and namespace.
+    valuesInline:
+      core:
+        engine: sqlite

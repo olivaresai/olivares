@@ -1,0 +1,477 @@
+{
+  "title": "Santé et SLA",
+  "subtitle": "Disponibilité, fiabilité et dépendances de votre parc — dérivées de l’activité observée et du balayage d’obsolescence, jamais par sondage de l’infrastructure.",
+  "auditedNote": "Le flux en direct et toute action de résolution ou de modification sont des opérations privilégiées et auditées. La santé est dérivée ; le moteur ne transporte ici aucun texte d’erreur ni aucune charge utile.",
+  "refresh": "Actualiser",
+  "statusPageLink": "Page d’état publique",
+  "tabs": {
+    "status": "État",
+    "sla": "SLA",
+    "incidents": "Incidents",
+    "timeline": "Chronologie",
+    "connectors": "Connecteurs",
+    "dependencies": "Dépendances",
+    "system": "Système",
+    "checks": "Contrôles"
+  },
+  "state": {
+    "healthy": "Sain",
+    "degraded": "Dégradé",
+    "down": "Hors service",
+    "observed": "Observé",
+    "unknown": "Inconnu"
+  },
+  "stateHint": {
+    "unknown": "Aucun contrôle ne suit ce sujet — ce n’est pas équivalent à sain.",
+    "observed": "Vu actif par une bordure, mais aucun contrôle n’est déclaré — la santé n’est pas mesurée (ni saine ni inconnue)."
+  },
+  "desired": {
+    "active": "Actif",
+    "paused": "En pause",
+    "retired": "Retiré"
+  },
+  "desiredHint": {
+    "paused": "Sans alerte — mis en pause par un opérateur.",
+    "retired": "Sans alerte — retiré."
+  },
+  "subjectKind": {
+    "agent": "Agent",
+    "mcp": "MCP",
+    "session": "Session",
+    "mcp_tool": "Outil"
+  },
+  "tiles": {
+    "healthy": "Sain",
+    "degraded": "Dégradé",
+    "down": "Hors service",
+    "unknown": "Inconnu"
+  },
+  "facets": {
+    "allStates": "Tous les états",
+    "allKinds": "Tous les types"
+  },
+  "status": {
+    "title": "Sujets surveillés",
+    "slaBreach": "Manquement au SLA",
+    "slaBreachHint": "Un manquement au SLA est ouvert pour ce sujet.",
+    "notAlerting": "Sans alerte",
+    "cols": {
+      "subject": "Sujet",
+      "kind": "Type",
+      "state": "État",
+      "desired": "Intention",
+      "sla": "SLA",
+      "latency": "Latence",
+      "lastSeen": "Dernière activité"
+    },
+    "searchPlaceholder": "Rechercher un sujet…",
+    "empty": {
+      "title": "Aucun sujet surveillé pour l’instant",
+      "description": "Dès qu’un contrôle de santé est déclaré pour un agent ou un serveur MCP, sa disponibilité apparaît ici."
+    }
+  },
+  "sla": {
+    "title": "Fiabilité (SLA)",
+    "pick": "Sujet",
+    "pickPlaceholder": "Choisir un sujet…",
+    "pickEmpty": "Aucun sujet surveillé à signaler pour l’instant.",
+    "pickPrompt": {
+      "title": "Choisir un sujet",
+      "description": "Choisissez un sujet surveillé pour voir sa disponibilité par rapport à la cible, reconstruite à partir du registre de fiabilité."
+    },
+    "window": "Fenêtre",
+    "uptime": "Disponibilité",
+    "target": "Cible",
+    "noTarget": "Aucune cible",
+    "breaching": "En manquement",
+    "withinTarget": "Conforme à la cible",
+    "downtime": "Indisponibilité",
+    "degraded": "Dégradé",
+    "degradedNote": "L’état dégradé compte comme disponible pour le SLA — affiché séparément, et non comme indisponibilité.",
+    "currentState": "État actuel",
+    "noCheck": {
+      "title": "Aucun contrôle déclaré",
+      "description": "Il n’existe aucun contrôle de santé pour ce sujet, aucune fiabilité ne peut donc être signalée. C’est un état honnête, et non un échec."
+    },
+    "noData": {
+      "title": "Aucun historique pour l’instant",
+      "description": "Ce sujet dispose d’un contrôle mais d’aucun historique de fiabilité dans la fenêtre — la disponibilité est indéfinie, et non 0 %. Elle apparaît dès que des transitions sont enregistrées."
+    }
+  },
+  "incidents": {
+    "title": "Incidents",
+    "filterState": "État",
+    "allStates": "Tous",
+    "open": "Ouvert",
+    "resolved": "Résolu",
+    "resolve": "Résoudre",
+    "resolving": "Résolution en cours…",
+    "resolveTitle": "Clôturer cet enregistrement d’incident",
+    "resolveHint": "Résoudre revient à reconnaître que la période se clôt — cela n’affirme PAS que le sujet a récupéré. La récupération provient d’une disponibilité réelle. Cette action est privilégiée et auditée.",
+    "cols": {
+      "subject": "Sujet",
+      "subjectKind": "Type",
+      "incidentKind": "Incident",
+      "severity": "Gravité",
+      "opened": "Ouvert",
+      "state": "État",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "Dégradé",
+      "down": "Hors service",
+      "sla_breach": "Manquement au SLA"
+    },
+    "possibleEvasion": "Évasion possible",
+    "possibleEvasionHint": "Un sujet est devenu silencieux dans sa cadence attendue (état hors service détecté par balayage). Un sujet qui cesse d’émettre est lui-même un signal, et non une défaillance de l’UI.",
+    "searchPlaceholder": "Rechercher un incident…",
+    "empty": {
+      "title": "Aucun incident",
+      "description": "Aucun incident de fiabilité ne correspond à ce filtre. Les incidents ouverts apparaissent ici à mesure que les sujets se dégradent ou tombent hors service."
+    },
+    "truncated": "Les {{n}} premiers sont affichés",
+    "truncatedHint": "Il y a plus d’incidents que ceux affichés ; cette page est plafonnée, donc un reste vide ne prouve PAS qu’il n’y en a pas."
+  },
+  "timeline": {
+    "title": "Chronologie de fiabilité",
+    "pick": "Sujet",
+    "pickPlaceholder": "Choisir un sujet…",
+    "pickPrompt": {
+      "title": "Choisir un sujet",
+      "description": "Choisissez un sujet surveillé pour retracer ses transitions de fiabilité à partir du registre en ajout seul."
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "Latence",
+    "latencyUnknown": "Inconnue",
+    "cause": {
+      "edge": "Disponibilité observée",
+      "report": "Sonde active",
+      "sweep": "Balayage d’obsolescence"
+    },
+    "causeHint": {
+      "edge": "Déduit de l’activité observée (une bordure de disponibilité).",
+      "report": "Une sonde de santé active a signalé cet état.",
+      "sweep": "Détecté par le balayage d’obsolescence — silence dans la cadence attendue."
+    },
+    "possibleEvasion": "Évasion possible",
+    "possibleEvasionHint": "Un état hors service détecté par le balayage d’obsolescence signifie un silence dans la cadence attendue — présenté comme une évasion possible, et non comme une erreur de chargement.",
+    "empty": {
+      "title": "Aucune transition enregistrée",
+      "description": "Ce sujet n’a encore aucune transition de fiabilité dans le registre."
+    },
+    "truncated": "Les {{n}} premiers sont affichés",
+    "truncatedHint": "Il y a plus d’événements que ceux affichés. La page est triée par id (du plus ancien au plus récent) : ce qui est coupé est donc la période LA PLUS RÉCENTE — un événement que vous ne voyez pas ici n’est pas un événement qui n’a pas eu lieu."
+  },
+  "deps": {
+    "title": "Carte des dépendances",
+    "subtitle": "Découverte automatiquement à partir de l’activité observée. Chaque nœud est coloré selon sa santé actuelle — un nœud vu actif mais sans contrôle est « observé » (bleu, santé non mesurée), un nœud sans aucun signal reste gris (inconnu) ; ni l’un ni l’autre n’est jamais vert.",
+    "legendTitle": "Santé",
+    "relation": {
+      "uses_mcp": "Utilise MCP",
+      "uses_tool": "Utilise un outil",
+      "delegates_to": "Délègue à"
+    },
+    "observed": "Observé",
+    "truncated": "Affichage des {{n}} premiers",
+    "truncatedHint": "Le graphe de dépendances comporte plus de nœuds qu’affiché ; ceci est la première page par jeu de clés.",
+    "empty": {
+      "title": "Aucune dépendance découverte pour l’instant",
+      "description": "Dès que des agents appellent des serveurs MCP et des outils, le graphe de dépendances observé apparaît ici."
+    },
+    "mobile": {
+      "title": "La carte nécessite un écran plus large",
+      "summary": "{{nodes}} nœuds · {{edges}} dépendances",
+      "hint": "Ouvrez cette vue sur un écran plus grand pour le graphe de dépendances interactif."
+    }
+  },
+  "detail": {
+    "statusTitle": "Santé du sujet",
+    "incidentTitle": "Incident",
+    "ref": "Référence",
+    "id": "ID",
+    "name": "Nom",
+    "kind": "Type",
+    "state": "État",
+    "desired": "Intention",
+    "cadence": "Cadence attendue",
+    "grace": "Facteur de tolérance",
+    "slaTarget": "Cible SLA",
+    "slaBreach": "Manquement au SLA ouvert",
+    "latency": "Dernière latence",
+    "lastSeen": "Dernière activité",
+    "lastChecked": "Dernier contrôle",
+    "owner": "Propriétaire",
+    "lastDetail": "Dernier détail",
+    "severity": "Gravité",
+    "opened": "Ouvert",
+    "resolved": "Résolu",
+    "summary": "Résumé",
+    "viewSla": "Voir le SLA",
+    "viewTimeline": "Voir la chronologie",
+    "yes": "Oui",
+    "no": "Non",
+    "minimalData": "Seules les métadonnées sont affichées. Par conception, le moteur ne transporte ici aucun texte d’erreur, aucune charge utile ni aucun secret (données minimales)."
+  },
+  "live": {
+    "note": "Les lignes se mettent à jour en direct à mesure que la santé évolue ; réconciliées par identifiant, sans présumer de continuité."
+  },
+  "empty": {
+    "title": "Rien à afficher",
+    "description": "Il n’existe encore aucune donnée de santé pour ce locataire."
+  },
+  "forbidden": {
+    "title": "Santé non autorisée",
+    "description": "Votre rôle n’inclut pas la permission de consulter la santé et le SLA."
+  },
+  "forbiddenResolve": {
+    "title": "Résolution non autorisée",
+    "description": "Résoudre un incident nécessite la permission d’administration des contrôles (health:check:admin)."
+  },
+  "connectors": {
+    "autoRefresh": "Actualisation automatique toutes les 15 secondes.",
+    "searchPlaceholder": "Rechercher un connecteur…",
+    "summary": {
+      "running": "En cours",
+      "failed": "En échec",
+      "stopped": "Arrêtés",
+      "disabled": "Désactivés"
+    },
+    "cols": {
+      "name": "Connecteur",
+      "kind": "Type",
+      "health": "Santé",
+      "status": "Statut",
+      "trend": "Tendance",
+      "lastPoll": "Dernier sondage",
+      "mode": "Mode"
+    },
+    "status": {
+      "running": "En cours",
+      "failed": "En échec",
+      "stopped": "Arrêté",
+      "disabled": "Désactivé",
+      "not_wired": "Non connecté"
+    },
+    "trend": {
+      "up": "En amélioration",
+      "down": "En déclin",
+      "stable": "Stable"
+    },
+    "empty": {
+      "title": "Aucun connecteur configuré",
+      "description": "Lorsque des connecteurs seront intégrés, leur santé opérationnelle apparaîtra ici."
+    },
+    "modeAll": "Tous les modes",
+    "modeFilter": "Filtre de mode",
+    "emptyMode": {
+      "title": "Aucun connecteur ne correspond à ce mode",
+      "description": "Modifiez le filtre de mode pour voir d'autres connecteurs."
+    }
+  },
+  "statusPage": {
+    "title": "Olivares Control Plane — Statut",
+    "subtitle": "Statut opérationnel actuel de tous les composants.",
+    "unavailable": "Les informations de statut sont actuellement indisponibles.",
+    "lastUpdated": "Dernière mise à jour : {{time}}",
+    "overall": {
+      "operational": "Tous les systèmes opérationnels",
+      "not_configured": "Opérationnel — capacités optionnelles non configurées",
+      "degraded": "Panne partielle du système",
+      "outage": "Panne majeure du système"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "Recherche de connaissances",
+      "store": "Base de données",
+      "connectors": "Connecteurs",
+      "ingest": "Ingestion de données",
+      "audit_spool": "Spool d'audit"
+    },
+    "status": {
+      "operational": "Opérationnel",
+      "not_configured": "Non configuré",
+      "degraded": "Dégradé",
+      "outage": "Panne"
+    }
+  },
+  "update": {
+    "available": "Mise à jour disponible",
+    "security": "Mise à jour de sécurité",
+    "channel": "Canal",
+    "upToDate": "À jour",
+    "title": "Mises à jour",
+    "notChecked": "Aucune vérification récente",
+    "failed": "Échec de la vérification des mises à jour",
+    "checked": "Vérification des mises à jour terminée",
+    "advisories": "Avis de sécurité corrigés",
+    "checkNow": "Vérifier maintenant",
+    "unconfigured": "La vérification des mises à jour n’est pas configurée. C’est attendu pour les déploiements air-gap."
+  },
+  "system": {
+    "title": "Santé du système",
+    "systemStatus": "État du système",
+    "healthy": "Sain",
+    "unhealthy": "Défaillant",
+    "ready": "Prêt",
+    "notReady": "Non prêt",
+    "storeEngine": "Moteur de stockage",
+    "version": "Version",
+    "connectors": "Connecteurs",
+    "connectorsRunning": "{{count}} en cours d'exécution",
+    "connectorsConfigured": "{{count}} configurés",
+    "connectorsAvailable": "{{count}} disponibles à configurer",
+    "connectorsError": "{{count}} en erreur",
+    "noConnectors": "Aucun connecteur configuré",
+    "users": "Utilisateurs",
+    "usersCount": "{{count}} inscrits",
+    "identity": "Identité",
+    "ssoConfigured": "SSO configuré",
+    "ssoNotConfigured": "SSO non configuré",
+    "unavailable": "Les données opérationnelles sont indisponibles ou non autorisées."
+  },
+  "auditSpool": {
+    "title": "Spool d'audit",
+    "withinBudget": "Dans le budget",
+    "nearFull": "Proche de la limite",
+    "engaged": "Budget épuisé",
+    "modes": {
+      "block": "Bloquer si plein",
+      "degrade": "Dégrader si plein"
+    },
+    "usage": "{{used}} sur {{max}} utilisés ({{pct}})",
+    "pendingDrops": "{{drops}} pertes de preuves non scellées sur {{tenants}} tenants"
+  },
+  "checks": {
+    "title": "Contrôles de santé",
+    "description": "Déclarez et gouvernez la cadence, la fenêtre de tolérance, la cible SLA et l’intention de cycle de vie des agents et serveurs MCP surveillés.",
+    "create": "Créer un contrôle",
+    "created": "Contrôle de santé créé",
+    "updated": "Contrôle de santé mis à jour",
+    "deleted": "Contrôle de santé supprimé",
+    "failed": "L’opération sur le contrôle de santé a échoué.",
+    "duplicate": "Un contrôle de santé existe déjà pour ce sujet.",
+    "searchPlaceholder": "Rechercher des contrôles de santé…",
+    "reportTooltipLabel": "À propos des rapports de sonde",
+    "reportTooltip": "L’ingestion des rapports de sonde est destinée aux machines ; elle est volontairement omise de la console.",
+    "seconds": "{{count}} s",
+    "cols": {
+      "subject": "Sujet",
+      "kind": "Type",
+      "state": "État",
+      "intent": "Intention",
+      "cadence": "Cadence",
+      "sla": "SLA",
+      "lastChecked": "Dernier contrôle",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Modifier",
+      "editAria": "Modifier le contrôle de santé de {{subject}}",
+      "pause": "Mettre en pause",
+      "pauseAria": "Mettre en pause le contrôle de santé de {{subject}}",
+      "resume": "Reprendre",
+      "resumeAria": "Reprendre le contrôle de santé de {{subject}}",
+      "retire": "Retirer",
+      "retireAria": "Retirer le contrôle de santé de {{subject}}",
+      "delete": "Supprimer",
+      "deleteAria": "Supprimer le contrôle de santé de {{subject}}"
+    },
+    "form": {
+      "name": "Nom",
+      "subjectKind": "Type de sujet",
+      "subjectRef": "Référence du sujet",
+      "expectedInterval": "Intervalle attendu (secondes)",
+      "graceFactor": "Facteur de tolérance",
+      "slaTarget": "Cible SLA (PPM)",
+      "slaTargetHint": "0 efface la cible SLA ; 999000 signifie 99,9 %.",
+      "desiredStatus": "Statut désiré",
+      "validation": "Saisissez une référence de sujet, des valeurs de cadence et de tolérance entières positives, et une cible SLA de 0 à 1000000."
+    },
+    "createDialog": {
+      "title": "Créer un contrôle de santé",
+      "description": "Déclarez un agent ou serveur MCP surveillé. Un sujet ne peut avoir qu’un seul contrôle de santé."
+    },
+    "edit": {
+      "title": "Modifier le contrôle de santé",
+      "description": "Le sujet est immuable. Mettez à jour la configuration affichée et l’intention de cycle de vie."
+    },
+    "delete": {
+      "title": "Supprimer le contrôle de santé",
+      "description": "Supprime définitivement le contrôle de santé de {{subject}}. Cette action d’administration est consignée dans le registre d’audit."
+    },
+    "empty": {
+      "title": "Aucun contrôle de santé déclaré",
+      "description": "Créez un contrôle pour gouverner la cadence de vivacité attendue d’un agent ou d’un serveur MCP."
+    }
+  },
+  "tls": {
+    "title": "Certificat TLS",
+    "notAfter": "Expire le",
+    "daysLeft": "{{count}} jours restants",
+    "expired": "Expiré il y a {{count}} jours"
+  },
+  "keys": {
+    "title": "Garde des clés",
+    "empty": "Aucune métadonnée de garde des clés n’est disponible.",
+    "sealers": "Scelleurs symétriques",
+    "sourceUnknown": "source indisponible",
+    "copyFingerprint": "Copier l’empreinte complète pour {{purpose}}",
+    "copied": "Empreinte copiée",
+    "cols": {
+      "purpose": "Usage",
+      "algorithm": "Algorithme",
+      "mode": "Mode de garde",
+      "kek": "KEK",
+      "created": "Créée",
+      "fingerprint": "Empreinte",
+      "prior": "Clés antérieures"
+    }
+  },
+  "config": {
+    "title": "Configuration effective",
+    "empty": "Aucune entrée de configuration effective n’est disponible.",
+    "strictViolations": "Violations de configuration stricte",
+    "redacted": "Expurgé",
+    "cols": {
+      "key": "Clé",
+      "value": "Valeur effective",
+      "source": "Source"
+    }
+  },
+  "bus": {
+    "title": "Bus d’événements",
+    "noSubscribers": "Aucun abonné au bus d’événements n’est enregistré.",
+    "depthAria": "Profondeur de file d’attente pour {{subscriber}}",
+    "counters": {
+      "publishBlocked": "Publications bloquées",
+      "dropped": "Perdus",
+      "droppedTelemetry": "Télémétrie perdue",
+      "droppedNotify": "Notifications perdues",
+      "handlerErrors": "Erreurs de gestionnaire",
+      "enqueued": "Mis en file",
+      "handled": "Traités"
+    },
+    "bridge": {
+      "title": "Pont",
+      "pendingMessages": "Messages en attente",
+      "pendingBytes": "Octets en attente",
+      "dropped": "Perdus",
+      "publishErrors": "Erreurs de publication",
+      "decodeErrors": "Erreurs de décodage",
+      "gateSkipped": "Gate ignoré",
+      "invalidSubject": "Sujet invalide"
+    }
+  },
+  "support": {
+    "title": "Lot de support",
+    "description": "Générez une archive de diagnostic pour le support sans exposer les valeurs des secrets stockés.",
+    "download": "Télécharger le lot de support",
+    "generate": "Générer et télécharger",
+    "confirmTitle": "Générer un lot de support ?",
+    "confirmDescription": "Cette action privilégiée AAL3 est consignée dans le registre d’audit.",
+    "contents": "Le lot contient la configuration effective expurgée, l’état opérationnel et les journaux. Examinez-le avant de le partager.",
+    "downloaded": "Lot de support téléchargé",
+    "needsAal3": "Une élévation AAL3 matérielle est requise pour générer un lot de support.",
+    "failed": "La génération du lot de support a échoué."
+  }
+}

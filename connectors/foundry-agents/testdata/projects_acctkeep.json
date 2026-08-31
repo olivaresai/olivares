@@ -1,0 +1,8 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-keep/providers/Microsoft.CognitiveServices/accounts/acctkeep/projects/projKeep",
+      "name": "projKeep"
+    }
+  ]
+}

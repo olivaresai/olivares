@@ -1,0 +1,105 @@
+{
+  "title": "Plattformen & Lebenszyklus",
+  "description": "Die oberflächenübergreifende Bereitstellungsmatrix und der plattformspezifische Modell-Lebenszyklus für den Claude-Bestand — Compliance-Sicherheitslage je Oberfläche und divergierende Abschaltfristen. Referenz wird von der Engine bereitgestellt, niemals neu berechnet.",
+  "tabs": {
+    "surfaces": "Oberflächen & Compliance",
+    "lifecycle": "Modell-Lebenszyklus"
+  },
+  "liveReference": "Von der Engine bereitgestellte Referenz — Stand {{date}}, Quelle {{source}}.",
+  "unavailable": "Die Plattform-Referenz ist auf dieser Engine nicht verfügbar",
+  "confirm": {
+    "confirmed": "Bestätigt",
+    "toConfirm": "Zu bestätigen"
+  },
+  "surfaces": {
+    "title": "Bereitstellungsoberflächen",
+    "description": "Die sechs modellierten Claude-Oberflächen (ANT2-01/17). Jede unterscheidet sich in Basis-URL, Authentifizierung, Modell-ID-Form, Abrechnung, Datenresidenz und Compliance-Sicherheitslage — sie sind nicht austauschbar.",
+    "matrixTitle": "Attributmatrix der Oberflächen",
+    "matrixSummary": "Sechs Bereitstellungsoberflächen im Vergleich über Betreiber, Endpunkt, Authentifizierung, Modell-ID-Form, API-Unterstützung, Abrechnung, HIPAA, ZDR und Datenresidenz.",
+    "unmodeled": "Nicht modellierte Oberfläche — keine Attributmatrix.",
+    "unmodeledHint": "Dieses Gateway gehört nicht zu den sechs modellierten Claude-Oberflächen; seine Compliance- und Residenz-Attribute werden nicht deklariert und nicht abgeleitet.",
+    "deprecatedBadge": "Veraltet",
+    "noWorkspaceHeader": "keiner",
+    "noSigv4": "k. A.",
+    "apiSupportTitle": "Anthropic-API-Unterstützung je Oberfläche",
+    "apiSupportDescription": "Welche Anthropic-API-Familien je Oberfläche gelten. Eine Oberfläche ohne die Admin-/Models-/Compliance-APIs kann keine Anthropic-seitige Governance-Aufnahme bereitstellen — sie wird ehrlich beeinträchtigt und meldet eine leere Antwort niemals als \"keine Befunde\".",
+    "columns": {
+      "surface": "Oberfläche",
+      "operator": "Betreiber",
+      "baseUrl": "Basis-URL",
+      "sigv4": "SigV4-Dienst",
+      "workspaceHeader": "Workspace-Header",
+      "modelIdForm": "Modell-ID-Form",
+      "billing": "Abrechnung",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "Datenresidenz / Inferenz-Geo",
+      "apiSupport": "API-Unterstützung",
+      "messages": "Messages",
+      "admin": "Admin",
+      "compliance": "Compliance",
+      "models": "Models",
+      "batches": "Batches",
+      "mcp": "MCP-Konnektor"
+    },
+    "api": {
+      "supported": "Unterstützt",
+      "unsupported": "Nicht unterstützt"
+    },
+    "fedramp": {
+      "eligible": "HIPAA / FedRAMP / IL4-5 geeignet",
+      "na": "Nicht deklariert"
+    },
+    "notesTitle": "Anmerkungen zu Oberflächen",
+    "compliance": {
+      "title": "Compliance-Sicherheitslage",
+      "description": "HIPAA / FedRAMP / IL / ZDR bilden eine oberflächenspezifische Achse (wo die Inferenz läuft), getrennt von der GPAI-Sicherheitslage eines Modells oder Anbieters. Vermischen Sie diese nicht.",
+      "hipaaNote": "HIPAA wird mit seinem Bestätigungsstatus angezeigt. Eine \"zu bestätigende\" Sicherheitslage wird niemals als hartes Ja oder Nein dargestellt."
+    }
+  },
+  "lifecycle": {
+    "title": "Plattformspezifischer Modell-Lebenszyklus",
+    "description": "Die Modellabschaltung erfolgt plattformspezifisch, nicht global (ANT2-03). Anthropic-betriebene Oberflächen schalten ein Modell zu einem anderen Datum ab als Bedrock und Vertex — ein einzelnes \"abgeschaltet\"-Flag würde auf der Hälfte des Bestands eine falsche Migrationsfrist ergeben.",
+    "datePending": "Datum nicht veröffentlicht / zu bestätigen",
+    "noSuccessor": "Kein Nachfolger deklariert",
+    "noSuccessorHint": "Die Autorität hat für diese Familie kein Ersatzmodell benannt. Es wird keines abgeleitet.",
+    "matrixTitle": "Abschaltfristen je Oberfläche",
+    "columns": {
+      "model": "Modell",
+      "surface": "Oberfläche",
+      "retiresOn": "Abschaltung am",
+      "status": "Status",
+      "replacement": "Ersatz"
+    },
+    "paramDeprecation": {
+      "title": "Vorabhinweis zur Parameter-Deprecation",
+      "badge": "Informativ",
+      "body": "{{affected}} lehnen ein nicht standardmäßiges {{params}} mit einem HTTP {{status}} ab. Dies ist Anthropics Deprecation (ANT2-03), kein Produktfehler und kein behebbarer Fehler — die Inferenzebene hält diese Parameter als Vorabhinweis zurück.",
+      "paramsJoin": ", "
+    },
+    "notes": {
+      "title": "Anmerkungen zu Bedrock-ID & Datenresidenz",
+      "declaredNote": "Web-deklarierte Referenz: Diese Anmerkungen zitieren Honesty-Fakten aus modules/models/bedrock.go, die der Plattform-Endpunkt nicht bereitstellt. Jede trägt ihren eigenen Bestätigungsstatus.",
+      "crisIdFormat": "Das ID-Format des oberflächenübergreifenden Inferenzprofils lautet \"<geo>.anthropic.<model>\", geo ∈ {us, eu, apac, global}. Die aktuelle Bedrock-Mantle-Oberfläche verwendet die bloße ID \"anthropic.<model>\".",
+      "crisOpusId": "Die konkrete ID des Bedrock-Global-CRIS-Opus-Inferenzprofils ist nicht gegen die AWS-Seite verifiziert — das Format ist bestätigt, diese spezifische ID wird nicht als maßgeblich dargestellt.",
+      "globalRegionalPremium": "Die AWS-Dokumentation deutet darauf hin, dass regionale Inferenzprofile gegenüber global einen Aufschlag von ~10 % tragen (global ist die günstigere Basis) — das Gegenteil einer \"global +10 %\"-Annahme; der genaue Faktor ist unverifiziert, daher wird kein Aufschlag modelliert.",
+      "usBurndown": "Die reine US-Inferenz-Burndown beträgt 1,1× (Opus 4.6 / Sonnet 4.6+, inference_geo=\"us\")."
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "Keine Modellabschaltpläne deklariert",
+      "description": "Die einkompilierte Claude-Lebenszyklusreferenz der Engine liefert diese Fristen; Mandantenaktivität und Konsoleneingaben befüllen sie nicht."
+    },
+    "surface": {
+      "title": "Keine Bereitstellungsoberflächen deklariert",
+      "description": "Die einkompilierte Claude-Oberflächenreferenz der Engine liefert diese Zeilen; Mandantenaktivität und Konsoleneingaben befüllen sie nicht."
+    }
+  },
+  "effectiveState": {
+    "label": "In dieser Umgebung:",
+    "models": "Modellkatalog",
+    "modelOps": "Modellbetrieb"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "live": {
+    "open": "En direct",
+    "connecting": "Connexion…",
+    "error": "Reconnexion…",
+    "closed": "Hors ligne"
+  },
+  "graph": {
+    "empty": "Aucune relation à afficher",
+    "emptyHint": "Rien ne correspond encore aux filtres actuels.",
+    "mobileTitle": "Le graphe nécessite un écran plus large",
+    "mobileHint": "Ouvrez cette vue sur un écran plus grand pour accéder à la carte interactive.",
+    "fit": "Ajuster à la vue",
+    "minimap": "Mini-carte",
+    "controls": {
+      "zoomIn": "Zoom avant",
+      "zoomOut": "Zoom arrière",
+      "reset": "Réinitialiser la vue"
+    }
+  },
+  "sourceModes": {
+    "export": "Export",
+    "live": "En direct",
+    "direct": "Direct",
+    "hints": {
+      "export": "Le contenu provient d'une source export/hors ligne, ou le mode n'a pas été déclaré.",
+      "live": "Le contenu provient d'une source upstream en direct.",
+      "direct": "Le contenu a été envoyé directement dans la base de connaissances."
+    }
+  },
+  "urlState": {
+    "urlRejected": "{{count}} valeur de ce lien n’a pas pu être utilisée ({{keys}}) ; la vue est revenue à sa valeur par défaut.",
+    "urlRejected_one": "{{count}} valeur de ce lien n’a pas pu être utilisée ({{keys}}) ; la vue est revenue à sa valeur par défaut.",
+    "urlRejected_many": "{{count}} de valeurs de ce lien n’ont pas pu être utilisées ({{keys}}) ; la vue est revenue à ses valeurs par défaut.",
+    "urlRejected_other": "{{count}} valeurs de ce lien n’ont pas pu être utilisées ({{keys}}) ; la vue est revenue à ses valeurs par défaut.",
+    "savedViewRejected": "{{count}} valeur enregistrée dans « {{name}} » n’a pas pu être utilisée ({{keys}}) ; la vue est revenue à sa valeur par défaut.",
+    "savedViewRejected_one": "{{count}} valeur enregistrée dans « {{name}} » n’a pas pu être utilisée ({{keys}}) ; la vue est revenue à sa valeur par défaut.",
+    "savedViewRejected_many": "{{count}} de valeurs enregistrées dans « {{name}} » n’ont pas pu être utilisées ({{keys}}) ; la vue est revenue à ses valeurs par défaut.",
+    "savedViewRejected_other": "{{count}} valeurs enregistrées dans « {{name}} » n’ont pas pu être utilisées ({{keys}}) ; la vue est revenue à ses valeurs par défaut.",
+    "thisSavedView": "cette vue enregistrée",
+    "dismiss": "Fermer"
+  }
+}

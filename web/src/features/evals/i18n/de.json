@@ -1,0 +1,194 @@
+{
+  "truncation": {
+    "label": "{{n}} Zeilen geladen; es gibt weitere",
+    "hint": "Diese Liste ist begrenzt. Nur geladene Zeilen werden angezeigt; ein hier fehlender Evaluierungsdatensatz kann dennoch existieren."
+  },
+  "title": "Evals",
+  "description": "Qualitäts-Scorecards, Laufergebnisse, A/B-Vergleiche und Abweichungen — gemessen an versionierten Golden Suites. Ausgaben werden niemals gespeichert; nur Bewertungen und Hash-Fingerabdrücke.",
+  "forbidden": {
+    "title": "Nicht autorisiert",
+    "description": "Sie benötigen die Lese-Berechtigung für Evals, um Qualitätsmessungen anzuzeigen."
+  },
+  "tabs": {
+    "scorecards": "Scorecards",
+    "runs": "Läufe",
+    "ab": "A/B",
+    "drift": "Abweichung",
+    "gate": "CI-Gate",
+    "calibration": "Judge-Kalibrierung"
+  },
+  "subjectKind": {
+    "suite": "Suite",
+    "agent": "Agent",
+    "model": "Modell",
+    "prompt_variant": "Prompt-Variante",
+    "prompt": "Prompt",
+    "session": "Sitzung",
+    "sandbox_run": "Sandbox-Lauf"
+  },
+  "scorecards": {
+    "title": "Qualitäts-Scorecards",
+    "description": "Durchschnittliche Bewertung, Bestehensquote und Trend pro Subjekt, beim Lesen aggregiert.",
+    "groupBy": "Gruppieren nach",
+    "by": {
+      "agent": "Nach Agent",
+      "model": "Nach Modell",
+      "suite": "Nach Suite",
+      "prompt_variant": "Nach Prompt-Variante"
+    },
+    "meanScore": "Durchschnittliche Bewertung",
+    "passRate": "Bestehensquote",
+    "runs": "Läufe",
+    "lastScore": "Letzte Bewertung",
+    "regressed": "Regressiert",
+    "empty": "Noch keine Scorecards — führen Sie eine Bewertung gegen eine Golden Suite aus."
+  },
+  "runs": {
+    "title": "Eval-Läufe",
+    "description": "Jeder Lauf bewertet ein Subjekt gegen eine Suite-Version. Eine Regression wird hier markiert; der Befund wird in der Sicherheitsansicht behandelt.",
+    "columns": {
+      "subject": "Subjekt",
+      "status": "Status",
+      "score": "Bewertung",
+      "passRate": "Bestehensquote",
+      "regression": "Regression",
+      "startedAt": "Gestartet"
+    },
+    "regressed": "Regressiert · Abweichung {{drift}}",
+    "noRegression": "Keine",
+    "empty": "Keine Läufe im Bereich.",
+    "overN": "von {{n}}",
+    "notScored": "not scored — no verdict",
+    "noBaseline": "no baseline — nothing compared"
+  },
+  "cases": {
+    "title": "{{subject}} — Fallergebnisse",
+    "titleEmpty": "Fallergebnisse",
+    "description": "Ergebnis und Bewertung pro Fall für diesen Lauf.",
+    "noPayload": "Die Kandidatenausgabe wird niemals gespeichert — jeder Fall trägt nur einen einseitigen Fingerabdruck und ein kurzes, begrenztes Label, niemals eine erweiterbare Nutzlast.",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "Fall",
+      "outcome": "Ergebnis",
+      "score": "Bewertung",
+      "label": "Label",
+      "fingerprint": "Fingerabdruck"
+    },
+    "empty": "Keine Fallergebnisse für diesen Lauf."
+  },
+  "ab": {
+    "title": "A/B-Vergleich",
+    "description": "Zwei Prompt-Varianten werden gegen dieselbe Suite bewertet; die höhere Bewertung gewinnt, Gleichstände werden explizit ausgewiesen.",
+    "winner": "Gewinner: {{label}} · Δ {{delta}}",
+    "winnerTag": "Gewinner",
+    "tie": "Gleichstand",
+    "passRate": "Bestehensquote {{value}}",
+    "seamNote": "Ein A/B-Vergleich ist ein privilegierter Schreibvorgang über POST /ab; die Engine stellt keinen gespeicherten Vergleich zum Rücklesen bereit.",
+    "seamLabel": "Privilegierter Schreibvorgang",
+    "pickerTitle": "A/B-Vergleich ausführen",
+    "pickerDescription": "Wählen Sie die Suite und geben Sie dann die Ausgaben an, die jede Variante erzeugt hat.",
+    "runComparison": "Vergleich ausführen",
+    "runError": "Der A/B-Vergleich konnte nicht ausgeführt werden. Versuchen Sie es erneut.",
+    "empty": "In dieser Sitzung wurde noch kein A/B-Vergleich ausgeführt.",
+    "emptyDescription": "Ein Ergebnis erscheint erst nach Abschluss des privilegierten Schreibvorgangs POST /ab. Es gibt keinen GET-Endpunkt für einen gespeicherten Vergleich.",
+    "suiteLabel": "Suite",
+    "selectSuite": "Suite auswählen",
+    "noSuites": "Noch keine Suites. Ein Vergleich wird gegen die Fälle einer Suite bewertet — legen Sie zuerst eine an.",
+    "labelA": "Bezeichnung Variante A",
+    "labelB": "Bezeichnung Variante B",
+    "outputsA": "Ausgaben der Variante A",
+    "outputsB": "Ausgaben der Variante B",
+    "outputsHint": "JSON-Objekt, das case_key auf die Ausgabe dieser Variante abbildet. Die Engine bewertet sie und behält nur einen Hash — der Text wird nie gespeichert.",
+    "outputsInvalid": "Kein JSON-Objekt, das case_key auf Ausgabetext abbildet.",
+    "outputsEmpty": "Geben Sie mindestens eine Fallausgabe an. Eine leere Menge bewertet nichts und würde als Lauf ohne Ergebnis gespeichert.",
+    "pairwiseLabel": "Varianten zusätzlich direkt gegeneinander bewerten",
+    "pairwiseHint": "Bewertet jeden gemeinsamen Fall zweimal mit vertauschter Reihenfolge der Kandidaten und zählt einen Sieg nur, wenn beide Reihenfolgen übereinstimmen. Zwei Judge-Aufrufe pro Fall (kostenpflichtig), und die Suite braucht ein Kriterium.",
+    "pairwiseTitle": "Direkter Vergleich",
+    "pairwiseSkippedTag": "Übersprungen",
+    "pairwiseWinner": "Bewerteter Sieger: {{label}}",
+    "pairwiseCounts": "{{compared}} verglichen · {{aWins}} A · {{bWins}} B · {{ties}} Unentschieden · {{inconsistent}} reihenfolgeabhängig · {{errors}} Fehler",
+    "pairwiseConsistency": "Positionskonsistenz {{rate}} (n={{n}}, 95-%-KI {{lo}}–{{hi}})",
+    "outputsTooLong": "Ein Fallschlüssel darf höchstens {{maxKey}} Zeichen haben und eine Ausgabe höchstens {{maxOutput}}. Die Engine kürzt längere Werte und bewertet den gekürzten Text.",
+    "outputsPlaceholder": "{\"fall-1\": \"die Ausgabe dieser Variante\"}",
+    "pairwiseSkippedBody": "Die Engine hat den bewerteten Vergleich nicht ausgeführt. Ihre Begründung:"
+  },
+  "drift": {
+    "title": "Abweichung — {{subject}}",
+    "description": "Bewertung im Zeitverlauf gegen die Bestehensschwelle der Suite; ein anhaltender Rückgang ist eine Beeinträchtigung.",
+    "score": "Bewertung",
+    "threshold": "Bestehensschwelle",
+    "pickerTitle": "Subjekt",
+    "note": "Die Schwellenlinie ist die Bestehensschwelle der Suite; Punkte darunter haben die Schwelle zu jenem Zeitpunkt nicht erreicht.",
+    "empty": "Noch keine Trenddaten."
+  },
+  "outcomeBar": {
+    "passed": "Bestanden",
+    "failed": "Fehlgeschlagen",
+    "errors": "Fehler",
+    "skipped": "Übersprungen"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "Keine Fallergebnisse für diesen Lauf erfasst",
+      "description": "Der Lauf muss Fälle seiner Suite bewerten oder überspringen, bevor Ergebnisse, Bewertungen und Fingerabdrücke je Fall hier erscheinen."
+    },
+    "runs": {
+      "title": "Noch keine Eval-Läufe erfasst",
+      "description": "Ein Aufrufer muss Kandidatenausgaben über die Eval-Run-API gegen eine versionierte Golden Suite einreichen, bevor hier ein bewerteter Lauf erscheint."
+    }
+  },
+  "gate": {
+    "title": "CI-Gate",
+    "description": "Auswertungen des Regressions-Gates: was das Gate gemessen hat und wonach CI handeln muss.",
+    "empty": "Keine Gate-Auswertungen",
+    "measured": "gemessen {{verdict}}",
+    "effective": "CI handelt nach {{verdict}}",
+    "sampled": "{{sampled}} von {{total}} Fällen ausgewertet",
+    "overriddenBy": "überschrieben von {{actor}}",
+    "override": "Überschreiben",
+    "overrideTitle": "Ein {{verdict}}-Gate überschreiben",
+    "overrideDescription": "Eine schriftliche Begründung ist erforderlich. Sie wird neben dem ursprünglichen Urteil festgehalten, in der Zeile und im Nachweisregister.",
+    "reason": "Begründung",
+    "reasonHint": "Warum dieses Gate überschrieben wird. Das ursprüngliche Urteil wird nicht gelöscht.",
+    "confirmOverride": "Gate überschreiben",
+    "overrideDone": "Gate überschrieben",
+    "cancel": "Abbrechen",
+    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
+    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+  },
+  "calibration": {
+    "title": "Judge-Kalibrierung",
+    "description": "Wie weit der LLM-Judge mit menschlichen Kennzeichnungen übereinstimmt. Ein Satz, der zufallskorrigierte Übereinstimmung nicht messen kann, kann nichts zertifizieren.",
+    "empty": "Keine Kalibrierungsberichte",
+    "meets": "Ziel erreicht",
+    "below": "unter dem Ziel",
+    "cannotCertify": "nicht zertifizierbar — Kappa undefiniert",
+    "agreement": "Übereinstimmung",
+    "kappa": "Kappa",
+    "sensitivity": "Sensitivität",
+    "specificity": "Spezifität",
+    "ciOverN": "95 %-KI {{lo}}–{{hi}} über n={{n}}",
+    "degradedWithErrors": "beeinträchtigt · {{n}} fehlerhaft",
+    "verbosityCorr": "Wortfülle-Korr."
+  },
+  "calibItems": {
+    "title": "Reference set",
+    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "run": "Run calibration",
+    "empty": "No labelled items yet",
+    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
+    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "humanPass": "human: pass",
+    "humanFail": "human: fail",
+    "unscored": "unscored",
+    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+  },
+  "baseline": {
+    "pin": "Pin as baseline",
+    "confirm": "Replace the baseline",
+    "pinned": "Baseline pinned",
+    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
+    "thisRunScores": "This run passed {{score}} over n={{n}}.",
+    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+  }
+}

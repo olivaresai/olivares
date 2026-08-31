@@ -1,0 +1,48 @@
+{
+  "title": "オートメーション",
+  "description": "3つのオートメーションレールを一箇所に：ガバナンスされたスケジュール、イベントサブスクリプション、アラートルート、そして反応できるトリガーカタログ。",
+  "tabs": {
+    "overview": "概要",
+    "workflows": "ワークフロー"
+  },
+  "rails": {
+    "openAction": "{{feature}}を開く",
+    "countLabel": "合計 {{count}} 件",
+    "loadFailed": "このレールを読み込めませんでした。",
+    "forbidden": "このレールを表示する権限がありません。",
+    "schedules": {
+      "title": "スケジュール",
+      "description": "ガバナンスされたケイデンス：スケジュール → 2段階HITL実行、ケイデンスミス検出付き。",
+      "active": "アクティブ {{count}} 件",
+      "stalled": "停滞 {{count}} 件",
+      "paused": "一時停止 {{count}} 件"
+    },
+    "subscriptions": {
+      "title": "イベントサブスクリプション",
+      "description": "イベント → sink/SIEM 配信。リトライ、リプレイ、配信台帳付き。",
+      "enabled": "有効 {{count}} 件",
+      "disabled": "無効 {{count}} 件"
+    },
+    "routes": {
+      "title": "アラートルート",
+      "description": "finding/承認 → 宛先へのルーティング。重大度しきい値とドライラン付き。",
+      "enabled": "有効 {{count}} 件",
+      "disabled": "無効 {{count}} 件"
+    },
+    "truncated": "{{n}} 件の行を読み込みました。さらに存在します",
+    "truncatedHint": "表示分より多くの行があります。このレールは行 id（作成時に採番）で取得するため、それ以降が欠けます。スケジュール・サブスクリプション・ルートがここに無いことは、存在しないことの証明にはなりません。",
+    "countLoaded": "{{count}} 件を読み込み"
+  },
+  "triggers": {
+    "title": "トリガーカタログ",
+    "description": "オートメーションが反応できるすべて。サブスクリプションはカタログ化された任意のイベントタイプをキャプチャでき、アラートルートはルーティング可能なサブセットをマッチします。",
+    "typeColumn": "タイプ",
+    "stabilityColumn": "安定性",
+    "permissionColumn": "必要な権限",
+    "descriptionColumn": "説明",
+    "routable": "ルーティング可能",
+    "routableHint": "このタイプはアラートルートでマッチできます。",
+    "empty": "トリガーカタログはありません。",
+    "loadFailed": "トリガーカタログを読み込めませんでした。"
+  }
+}

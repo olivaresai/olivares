@@ -1,0 +1,119 @@
+{
+  "title": "Grabaciones",
+  "subtitle": "Grabación de sesiones privilegiadas: cada acción administrativa sobre una superficie grabada se captura como un frame encadenado por hash y anclado al registro de evidencia.",
+  "search": {
+    "field": "Campo de búsqueda",
+    "subject": "El sujeto contiene",
+    "grant": "ID del grant",
+    "input": "Buscar grabaciones",
+    "subjectPlaceholder": "Texto del sujeto",
+    "grantPlaceholder": "ID exacto del grant",
+    "submit": "Buscar",
+    "clear": "Limpiar"
+  },
+  "allStatuses": "Todos los estados",
+  "filterByStatus": "Filtrar por estado",
+  "filterBySealReason": "Filtrar por motivo de sellado",
+  "allSealReasons": "Todos los motivos de sellado",
+  "filterOpenedAfter": "Abierta después de",
+  "filterOpenedBefore": "Abierta antes de",
+  "sealReasonOption": {
+    "idle": "Inactiva",
+    "closed": "Cerrada",
+    "breakglass_review": "Revisión break-glass",
+    "sweep": "Barrido",
+    "consent_change": "Cambio de consentimiento"
+  },
+  "status": {
+    "active": "Activa",
+    "sealed": "Sellada"
+  },
+  "kind": {
+    "user": "Usuario",
+    "token": "Token"
+  },
+  "cols": {
+    "subject": "Sujeto",
+    "kind": "Tipo",
+    "status": "Estado",
+    "opened": "Abierta",
+    "frames": "Frames escritos",
+    "flags": "Indicadores",
+    "sealReason": "Motivo de sellado"
+  },
+  "badge": {
+    "gap": "GAP",
+    "gapHint": "Se reservaron frames que nunca se escribieron: la grabación tiene un hueco permanente y evidente.",
+    "breakglass": "Break-glass",
+    "breakglassHint": "Abierta bajo un grant de break-glass — siempre se graba."
+  },
+  "empty": {
+    "title": "Aún no hay sesiones de grabación",
+    "description": "Cuando los operadores actúen sobre una superficie privilegiada grabada, sus sesiones aparecerán aquí."
+  },
+  "notice": {
+    "strip": "Esta es una superficie privilegiada grabada: las acciones se capturan en el registro de evidencia."
+  },
+  "consent": {
+    "title": "Aviso de grabación (AC-8)",
+    "body": "Las acciones privilegiadas en este plano de control se graban: cada petición administrativa se captura como un frame encadenado por hash y anclado al registro de evidencia — solo la forma de la ruta, identificadores y un digest unidireccional del cuerpo; nunca payloads ni secretos. Las sesiones break-glass se graban siempre. Para continuar es necesario aceptar este aviso.",
+    "ack": "Aceptar y continuar",
+    "ackDone": "Aviso de grabación aceptado",
+    "cancel": "Cancelar"
+  },
+  "policy": {
+    "title": "Política de grabación",
+    "subtitle": "Qué se graba en este plano de control y cómo se clasifica la evidencia. Editar requiere el permiso recording:config:admin; cada cambio aquí es en sí mismo una acción privilegiada grabada.",
+    "loading": "Cargando la política de grabación…",
+    "saved": "Política de grabación guardada",
+    "save": "Guardar política",
+    "saveFailed": "La política no se guardó.",
+    "forbidden": {
+      "title": "Editar la política de grabación requiere recording:config:admin",
+      "description": "Tu rol puede administrar las sesiones de grabación, pero cambiar la política de grabación necesita el permiso distinto recording:config:admin. Pídele a un administrador que te lo conceda."
+    },
+    "error": {
+      "title": "No se pudo cargar la política de grabación",
+      "description": "No se pudo leer la política de grabación. Reinténtalo o comprueba que el módulo esté montado."
+    },
+    "breakglass": {
+      "label": "Sesiones break-glass",
+      "hint": "El acceso de emergencia break-glass siempre se graba: ninguna política puede desactivarlo. El suelo de grabación se basa en permisos, no en espacios de nombres.",
+      "badge": "Siempre activo"
+    },
+    "namespaces": {
+      "label": "Espacios de nombres grabados",
+      "hint": "Las superficies de módulo cuyas acciones privilegiadas se capturan. Cada una debe nombrar un módulo montado; un nombre desconocido lo rechaza el servidor.",
+      "empty": "No hay espacios de nombres grabados: no se capturan acciones privilegiadas en ninguna superficie de módulo.",
+      "placeholder": "p. ej. governance",
+      "addLabel": "Añadir un espacio de nombres grabado",
+      "add": "Añadir",
+      "remove": "Eliminar {{name}}",
+      "shape": "Un espacio de nombres son letras minúsculas, dígitos, - o _, empieza por una letra y no termina en - ni _.",
+      "duplicate": "Ese espacio de nombres ya está en la lista.",
+      "tooLong": "Un espacio de nombres tiene como máximo {{max}} caracteres.",
+      "tooMany": "Se pueden grabar como máximo {{max}} espacios de nombres."
+    },
+    "consent": {
+      "label": "Exigir aceptación antes de las acciones privilegiadas",
+      "hint": "Cerrado por defecto (\"required\"): los operadores deben aceptar el aviso de grabación AC-8 antes de actuar. Desactivado deja el aviso solo como banner (\"notice\")."
+    },
+    "idle": {
+      "label": "Tiempo de sellado por inactividad (segundos)",
+      "hint": "Una sesión de grabación abierta se sella tras esta inactividad. Entre 60 y 86400 segundos.",
+      "error": "Introduce un número entero de segundos entre 60 y 86400."
+    },
+    "retention": {
+      "label": "Clase de retención (días)",
+      "hint": "Una etiqueta de clasificación aplicada a las grabaciones selladas: indica cuánto deberían conservarse. Entre 1 y 3650 días.",
+      "tag": "Solo etiqueta",
+      "enforced": "Aplicada",
+      "notEnforced": "La retención es solo una etiqueta de clasificación: las grabaciones se etiquetan, nunca se purgan. Ninguna política elimina todavía una grabación (no hay purga cableada).",
+      "error": "Introduce un número entero de días entre 1 y 3650."
+    },
+    "ai": {
+      "label": "Resúmenes derivados por IA",
+      "hint": "Permitir generar resúmenes de sesión derivados de un modelo. Un resumen es una narrativa derivada, nunca evidencia: el registro son los frames encadenados por hash."
+    }
+  }
+}

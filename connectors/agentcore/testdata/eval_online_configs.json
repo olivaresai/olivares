@@ -1,0 +1,19 @@
+{
+  "onlineEvaluationConfigs": [
+    {
+      "onlineEvaluationConfigId": "cfg-failed",
+      "onlineEvaluationConfigArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:online-evaluation-config/cfg-failed",
+      "onlineEvaluationConfigName": "prod-online-eval",
+      "status": "ACTIVE",
+      "executionStatus": "FAILED",
+      "failureReason": "timeout"
+    },
+    {
+      "onlineEvaluationConfigId": "cfg-ok",
+      "onlineEvaluationConfigArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:online-evaluation-config/cfg-ok",
+      "onlineEvaluationConfigName": "staging-online-eval",
+      "status": "ACTIVE",
+      "executionStatus": "SUCCEEDED"
+    }
+  ]
+}

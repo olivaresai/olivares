@@ -1,0 +1,208 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Patch-velocity program (SCP-11). Hardening is a CADENCE, not a one-time build:
+# a shipped image's CVE posture decays the day after release. This scheduled job
+# rebuilds the image from the latest patched base, re-runs the reachability gate
+# (govulncheck) and the image scanners (grype + trivy), checks whether the pinned
+# distroless base has a newer digest, and REFRESHES the SBOM + OpenVEX. On any
+# finding it opens/updates a tracking issue against the published CVE-remediation
+# targets (SECURITY.md §"Vulnerability remediation targets" — targets, never an SLA).
+#
+# It does NOT auto-publish: republishing a signed release is a human-cut patch tag
+# (which runs release.yml) — releases are cut manually by a maintainer; never automated.
+# The refreshed SBOM/VEX are uploaded as run artifacts for the human cutting the tag.
+# The distroless base digest itself is bumped by Dependabot (docker ecosystem).
+#
+# POSIX cron, UTC, DOW 1=Monday (NOT Quartz). Tuesday 06:00 so it follows the
+# weekly Scorecard/Dependabot cadence.
+name: patch-velocity
+
+on:
+  schedule:
+    - cron: "0 6 * * 2" # weekly, Tuesday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOVULNCHECK_VERSION: "v1.3.0"
+  IMAGE_REF: ghcr.io/olivaresai/olivares:latest
+  BASE_IMAGE: gcr.io/distroless/static-debian12:nonroot
+
+jobs:
+  rescan:
+    # On olivaresai/olivares the scheduled cadence runs by default; on any other
+    # clone or mirror, scheduled runs are gated on the repository variable
+    # CI_NIGHTLIES=true (manual `gh workflow run <file>` always works).
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'olivaresai/olivares' || vars.CI_NIGHTLIES == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      security-events: write # upload grype/trivy SARIF to code-scanning
+      issues: write # open/update the remediation tracking issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+
+      # --- reachability gate on HEAD (the strongest signal) ---------------------
+      - name: govulncheck (workspace)
+        id: govuln
+        run: |
+          set -uo pipefail
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          if bash scripts/go-work-each.sh govulncheck ./... > govuln.txt 2>&1; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+          tail -40 govuln.txt >> "$GITHUB_STEP_SUMMARY" || true
+
+      # --- distroless base digest drift -----------------------------------------
+      - name: base image digest drift
+        id: base
+        run: |
+          set -euo pipefail
+          go install github.com/google/go-containerregistry/cmd/crane@latest
+          pinned="$(grep -hoE 'static-debian12:nonroot@sha256:[0-9a-f]+' Dockerfile.release | head -1 | sed 's/.*@//')"
+          current="$(crane digest "${BASE_IMAGE}")"
+          echo "pinned=$pinned"  >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          if [ "$pinned" != "$current" ]; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::distroless base drifted: pinned $pinned != current $current (Dependabot should PR the bump)"
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          fi
+          { echo "### Base image"; echo "- pinned:  \`$pinned\`"; echo "- current: \`$current\`"; } >> "$GITHUB_STEP_SUMMARY"
+
+      # --- rebuild the image from the (patched) base, then scan it --------------
+      - name: rebuild image from source
+        run: |
+          docker build \
+            --build-arg VERSION="patch-velocity-$(date -u +%Y%m%d)" \
+            --build-arg COMMIT="$(git rev-parse --short HEAD)" \
+            --build-arg SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
+            -t olivares:rescan .
+
+      - name: grype scan (image)
+        id: grype
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: olivares:rescan
+          fail-build: false
+          output-format: sarif
+          severity-cutoff: high
+
+      - name: upload grype SARIF
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: grype
+
+      - name: trivy scan (image)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        with:
+          image-ref: olivares:rescan
+          format: sarif
+          output: trivy.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+
+      # The scanners above are deliberately NON-BLOCKING as scanners (SARIF is the
+      # product, and a scheduled job that dies on a fresh CVE stops refreshing the
+      # SBOM precisely when it matters). But until 2026-08-01 nothing READ their
+      # verdicts either: grype carries `fail-build: false`, trivy `exit-code: "0"`,
+      # and the tracking-issue step below keyed only on govulncheck and base drift.
+      # So a HIGH/CRITICAL image finding failed nothing AND opened nothing, while
+      # this file's header said "On any finding it opens/updates a tracking issue".
+      # This step turns the two SARIF files into a verdict the issue step consumes.
+      - name: image scanner findings at or above HIGH
+        id: scanners
+        run: |
+          set -uo pipefail
+          count_sarif() { # count_sarif <file> -> results whose level is error/warning
+            [ -f "$1" ] || { echo "MISSING"; return; }
+            jq '[.runs[]?.results[]? | select((.level // "warning") == "error" or (.level // "warning") == "warning")] | length' "$1" 2>/dev/null || echo "UNREADABLE"
+          }
+          g="$(count_sarif "${{ steps.grype.outputs.sarif }}")"
+          t="$(count_sarif trivy.sarif)"
+          echo "grype=$g trivy=$t"
+          # THREE answers, not two: a scan that could not be READ is not a scan
+          # that found nothing, and it must not be reported as clean.
+          case "$g$t" in
+          *MISSING* | *UNREADABLE*)
+            echo "found=unknown" >>"$GITHUB_OUTPUT"
+            echo "detail=grype=$g trivy=$t (a scanner report could not be read — treat as UNVERIFIED)" >>"$GITHUB_OUTPUT"
+            ;;
+          *)
+            if [ "$g" -gt 0 ] || [ "$t" -gt 0 ]; then
+              echo "found=true" >>"$GITHUB_OUTPUT"
+            else
+              echo "found=false" >>"$GITHUB_OUTPUT"
+            fi
+            echo "detail=grype=$g trivy=$t findings at/above HIGH" >>"$GITHUB_OUTPUT"
+            ;;
+          esac
+
+      - name: upload trivy SARIF
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+
+      # --- refresh SBOM + VEX (artifacts for the human cutting the patch tag) ----
+      - name: install syft + cosign tooling
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+      - name: refresh SBOM + OpenVEX
+        run: |
+          set -euo pipefail
+          syft olivares:rescan -o spdx-json=refreshed.image.spdx.json -o cyclonedx-json@1.6=refreshed.image.cdx.json
+          # `|| true` on both: this job REFRESHES artifacts for a human to use, and
+          # a CISA-conformance complaint about the refreshed SBOM must not stop the
+          # VEX from being produced. The conformance verdict is not lost — it is in
+          # this step's log, and the release path (release.yml) is where it BLOCKS.
+          bash scripts/sbom-check-cisa.sh refreshed.image.spdx.json --cyclonedx refreshed.image.cdx.json || true
+          bash scripts/gen-vex.sh --mode source --out refreshed.vex.openvex.json || true
+      - name: upload refreshed SBOM/VEX
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: refreshed-sbom-vex
+          path: |
+            refreshed.image.spdx.json
+            refreshed.image.cdx.json
+            refreshed.vex.openvex.json
+          retention-days: 14
+
+      # --- alert: open/update a tracking issue if anything needs a patch release -
+      - name: open remediation issue on findings
+        if: steps.govuln.outputs.found == 'true' || steps.base.outputs.drift == 'true' || steps.scanners.outputs.found != 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          title="patch-velocity: remediation needed ($(date -u +%Y-%m-%d))"
+          body=$(cat <<EOF
+          Automated patch-velocity scan found work (SECURITY.md remediation targets apply):
+
+          - govulncheck reachable vulns: \`${{ steps.govuln.outputs.found }}\`
+          - image scanners (grype + trivy) at/above HIGH: \`${{ steps.scanners.outputs.found }}\` — ${{ steps.scanners.outputs.detail }}
+          - distroless base drift: \`${{ steps.base.outputs.drift }}\` (pinned \`${{ steps.base.outputs.pinned }}\` vs current \`${{ steps.base.outputs.current }}\`)
+
+          Next step (human): cut a patch tag \`vX.Y.Z\` to rebuild + re-sign + republish via release.yml. Refreshed SBOM/VEX are attached to this workflow run.
+          See the run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )
+          existing="$(gh issue list --label patch-velocity --state open --search "$title" --json number --jq '.[0].number' || true)"
+          if [ -n "${existing:-}" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --label patch-velocity --body "$body" || \
+            gh issue create --title "$title" --body "$body"
+          fi

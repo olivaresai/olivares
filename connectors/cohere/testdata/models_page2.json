@@ -1,0 +1,13 @@
+{
+  "models": [
+    {
+      "name": "embed-english-v3.0",
+      "endpoints": ["embed"],
+      "context_length": 512,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": ""
+    }
+  ],
+  "next_page_token": ""
+}

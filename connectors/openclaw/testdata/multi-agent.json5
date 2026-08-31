@@ -1,0 +1,34 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  channels: {
+    telegram: {enabled: true, dmPolicy: 'pairing', groupPolicy: 'allowlist'},
+  },
+  tools: {
+    deny: ['group:runtime'],
+    exec: {security: 'ask', applyPatch: {workspaceOnly: true}},
+    fs: {workspaceOnly: true},
+  },
+  agents: {
+    defaults: {
+      sandbox: {mode: 'all'},
+      model: {primary: 'anthropic/claude-sonnet-4-20250514'},
+      models: {'anthropic/*': true},
+      skills: ['baseline'],
+    },
+    list: [
+      {id: 'default', default: true},
+      {
+        id: 'research',
+        model: {
+          primary: 'openai/gpt-4.1',
+          fallbacks: ['anthropic/claude-haiku-3-5-20241022'],
+        },
+        skills: ['researcher'],
+      },
+    ],
+  },
+  logging: {file: '/var/log/openclaw/openclaw.log', redactSensitive: 'tools'},
+  diagnostics: {otel: {enabled: true}},
+  session: {dmScope: 'per-peer'},
+}

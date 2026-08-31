@@ -1,0 +1,14 @@
+{
+  "value": [
+    {
+      "id": "ap-1",
+      "displayName": "Employees only",
+      "allowedTargetScope": "allMemberUsers"
+    },
+    {
+      "id": "ap-2",
+      "displayName": "Specific humans",
+      "allowedTargetScope": "specificDirectoryUsers"
+    }
+  ]
+}

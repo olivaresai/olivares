@@ -1,0 +1,263 @@
+{
+  "title": "Webhooks & Ereignis-Abonnements",
+  "description": "Ausgehende Ereignis-Abonnements — Webhook-Endpunkte konfigurieren, zugestellte Ereignisse prüfen und die Dead-Letter-Warteschlange verwalten.",
+  "tabs": {
+    "subscriptions": "Abonnements",
+    "events": "Ereignisse",
+    "deliveries": "Zustellungen",
+    "deadLetters": "Dead Letters"
+  },
+  "subscriptions": {
+    "title": "Webhook-Abonnements",
+    "description": "Endpunkte, die Ereignisbenachrichtigungen empfangen. Jedes Abonnement filtert nach Ereignistyp und authentifiziert mit der konfigurierten Methode.",
+    "new": "Neues Abonnement",
+    "empty": "Keine Abonnements",
+    "emptyHint": "Erstellen Sie ein Abonnement, um Webhook-Ereignisse zu empfangen.",
+    "columns": {
+      "name": "Name",
+      "endpoint": "Endpunkt",
+      "enabled": "Status",
+      "eventTypes": "Ereignistypen",
+      "authType": "Auth",
+      "role": "Rolle",
+      "secret": "Secret",
+      "created": "Erstellt"
+    },
+    "enabled": "Aktiv",
+    "disabled": "Inaktiv",
+    "bulk": {
+      "enable": "Ausgewählte aktivieren",
+      "disable": "Ausgewählte deaktivieren"
+    },
+    "test": "Testen",
+    "testing": "Teste…",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "rotateSecret": "Secret rotieren",
+    "rotateAuth": "Auth rotieren",
+    "testSuccess": "Test-Zustellung erfolgreich",
+    "testFailed": "Test-Zustellung fehlgeschlagen",
+    "deleted": "Abonnement gelöscht",
+    "rotated": "Secret rotiert",
+    "authRotated": "Auth-Anmeldedaten rotiert",
+    "confirmDelete": "Dieses Abonnement löschen? Dies kann nicht rückgängig gemacht werden.",
+    "authTypes": {
+      "none": "Keine",
+      "bearer": "Bearer",
+      "basic": "Basic",
+      "header": "Header"
+    },
+    "actions": "Aktionen für {{name}}",
+    "replay": "Wiederholen"
+  },
+  "dialog": {
+    "createTitle": "Neues Abonnement",
+    "editTitle": "Abonnement bearbeiten",
+    "description": "Beschreibung",
+    "name": "Name",
+    "endpoint": "Endpunkt-URL",
+    "eventTypes": "Ereignistypen",
+    "eventTypesHint": "Wählen Sie die Ereignistypen, die dieses Abonnement empfängt.",
+    "matchSources": "Quellenfilter",
+    "matchSourcesHint": "Kommagetrennte Quellenfilter (leer = alle Quellen).",
+    "role": "Rolle",
+    "authType": "Auth-Typ",
+    "authValue": "Auth-Wert",
+    "authValueHint": "Bearer-Token, Basic-Anmeldedaten oder Header-Wert.",
+    "authHeaderName": "Auth-Header-Name",
+    "authHeaderNameHint": "Benutzerdefinierter Header-Name (nur für Typ 'header').",
+    "maxAttempts": "Max. Versuche",
+    "maxAttemptsHint": "0 = Server-Standard verwenden.",
+    "initialInterval": "Anfangsintervall (s)",
+    "initialIntervalHint": "Retry-Backoff-Startwert in Sekunden. 0 = Standard.",
+    "enabled": "Aktiv",
+    "create": "Abonnement erstellen",
+    "update": "Änderungen speichern",
+    "created": "Abonnement erstellt",
+    "updated": "Abonnement aktualisiert",
+    "sinkKind": "SIEM-Sink",
+    "sinkKindHint": "Optionales Hersteller-Sink-Profil. Keiner = generischer HMAC-Webhook.",
+    "sinkNone": "Keiner (generischer Webhook)",
+    "sinkKinds": {
+      "https": "HTTPS (OCSF)",
+      "splunk_hec": "Splunk HEC",
+      "sentinel_dcr": "Microsoft Sentinel",
+      "datadog": "Datadog",
+      "newrelic": "New Relic"
+    },
+    "sinkFormat": "Sink-Format",
+    "sinkFormatHint": "Übertragungsdialekt des Sinks. Standard = OCSF.",
+    "sinkFormatDefault": "Standard (OCSF)",
+    "sinkCred": "Sink-Zugangsdaten",
+    "sinkCredHint": "Collector-Token/-Schlüssel für diesen Sink — versiegelt gespeichert, nie wieder angezeigt.",
+    "sinkCredKeepHint": "Leer lassen, um die aktuellen Zugangsdaten zu behalten ({{hint}}).",
+    "sinkCredRequired": "Für diesen Sink sind Zugangsdaten erforderlich.",
+    "errors": {
+      "maxAttempts": "Maximale Versuche müssen 0 oder zwischen 1 und 20 liegen.",
+      "initialInterval": "Das Anfangsintervall muss 0 oder zwischen 5 und 3600 Sekunden liegen."
+    }
+  },
+  "secret": {
+    "title": "Abonnement-Secret",
+    "description": "Dieses HMAC-Signatur-Secret wird nur einmal angezeigt. Kopieren Sie es jetzt — es kann später nicht abgerufen werden.",
+    "copied": "Secret in die Zwischenablage kopiert",
+    "done": "Fertig"
+  },
+  "events": {
+    "title": "Erfasste Ereignisse",
+    "description": "Ereignisprotokoll mit Sequenz-Cursor. Nach Ereignistyp filtern, um Ergebnisse einzugrenzen.",
+    "empty": "Keine erfassten Ereignisse",
+    "typeFilter": "Nach Typ filtern",
+    "allTypes": "Alle Typen",
+    "columns": {
+      "seq": "Seq",
+      "type": "Typ",
+      "source": "Quelle",
+      "occurredAt": "Aufgetreten am",
+      "payload": "Payload"
+    },
+    "loadMore": "Mehr laden",
+    "noMore": "Keine weiteren Ereignisse"
+  },
+  "deliveries": {
+    "title": "Zustellungen",
+    "description": "Zustellungsstatus der Webhook-Ereignis-Dispatches. Nach Abonnement, Status oder Ereignistyp filtern.",
+    "empty": "Keine Zustellungen",
+    "subscriptionFilter": "Abonnement",
+    "statusFilter": "Status",
+    "typeFilter": "Ereignistyp",
+    "allSubscriptions": "Alle",
+    "allStatuses": "Alle",
+    "allTypes": "Alle",
+    "columns": {
+      "eventType": "Ereignistyp",
+      "eventSeq": "Seq",
+      "subscription": "Abonnement",
+      "status": "Status",
+      "origin": "Ursprung",
+      "attempts": "Versuche",
+      "lastAttempt": "Letzter Versuch",
+      "nextAttempt": "Nächster Versuch"
+    },
+    "statuses": {
+      "queued": "In Warteschlange",
+      "delivering": "Wird zugestellt",
+      "delivered": "Zugestellt",
+      "dead": "Tot",
+      "denied": "Abgelehnt"
+    },
+    "origins": {
+      "live": "Live",
+      "replay": "Replay"
+    },
+    "loadMore": "Mehr laden",
+    "originFilter": "Ursprung",
+    "allOrigins": "Alle Ursprünge",
+    "nextRetry": "Nächster Versuch {{time}}"
+  },
+  "deadLetters": {
+    "title": "Dead-Letter-Warteschlange",
+    "description": "Fehlgeschlagene Zustellungen, die alle Wiederholungsversuche ausgeschöpft haben. Einzelne Elemente erneut zustellen oder die Ursache untersuchen.",
+    "empty": "Keine Dead Letters",
+    "emptyHint": "Dead Letters erscheinen hier, wenn Zustellungen alle Wiederholungsversuche ausschöpfen.",
+    "redeliver": "Erneut zustellen",
+    "redelivered": "Zustellung erneut in Warteschlange",
+    "loadMore": "Mehr laden"
+  },
+  "rotateAuthDialog": {
+    "title": "Auth-Zugangsdaten rotieren — {{name}}",
+    "description": "Geben Sie die neuen Zugangsdaten für diesen Endpunkt an. Sie werden versiegelt gespeichert und nie wieder angezeigt; die Karte zeigt nur einen Fingerabdruck.",
+    "value": "Neue Zugangsdaten",
+    "valueHint": "Bearer-Token, Basic-Zugangsdaten oder Header-Wert — wird einmal gesendet und nie zurückgegeben.",
+    "submit": "Zugangsdaten rotieren"
+  },
+  "replay": {
+    "title": "Ereignisse wiederholen — {{name}}",
+    "description": "Wählen Sie den Sequenzbereich, der erneut eingereiht wird.",
+    "fromSeq": "Ab Sequenz",
+    "toSeq": "Bis Sequenz (optional)",
+    "submit": "Wiederholen",
+    "continue": "Wiederholung fortsetzen",
+    "total": "Insgesamt wiederholt: {{count}}",
+    "viewDeliveries": "Wiederholte Zustellungen anzeigen",
+    "completed": "{{count}} Ereignisse wiederholt"
+  },
+  "history": {
+    "action": "Revisionsverlauf für {{name}} anzeigen",
+    "title": "Revisionsverlauf — {{name}}",
+    "description": "Chronologische, ausschließlich ergänzte Snapshots dieses Abonnements.",
+    "scopeCaption": "Eine Wiederherstellung wendet nur die Zustellungsstruktur erneut an — niemals Anmeldedaten oder das Senkenprofil.",
+    "empty": "Keine Revisionen aufgezeichnet",
+    "loadMore": "Mehr laden",
+    "compareTitle": "Snapshot-Unterschiede",
+    "selectTwo": "Wählen Sie zwei Revisionen aus, um ihre Snapshots zu vergleichen.",
+    "selectRevision": "Revision „{{op}}“ von {{actor}} auswählen",
+    "originalLabel": "Frühere Revision",
+    "modifiedLabel": "Spätere Revision",
+    "restore": "Diese Revision wiederherstellen",
+    "restoreTitle": "Revision wiederherstellen?",
+    "restoreDescription": "Die ausgewählte Zustellungsstruktur für {{name}} wiederherstellen?",
+    "restoreConfirm": "Revision wiederherstellen",
+    "restored": "Abonnementrevision wiederhergestellt",
+    "operations": {
+      "create": "Erstellt",
+      "update": "Aktualisiert",
+      "delete": "Gelöscht",
+      "restore": "Wiederhergestellt"
+    }
+  },
+  "egress": {
+    "title": "Zielrichtlinie",
+    "description": "Ob diese Installation einschränkt, wohin Ihr Ereignisstrom gesendet werden darf, und was die Durchsetzung unterbrechen würde. Der Hebel ist eine Betreiber-Zeremonie auf dem Host; dies ist der Zustand, auf den er wirkt.",
+    "unknown": "Unbekannt",
+    "unreadable": "Der Richtlinienstatus konnte nicht gelesen werden.",
+    "unreadablePolicy": "Nicht lesbar",
+    "inForce": "Richtlinie in Kraft",
+    "inForceYes": "Ja",
+    "inForceNo": "Keine verfasst",
+    "source": "Quelle",
+    "mode": "Installationsmodus",
+    "classifiedMode": "Eingestuft als",
+    "committed": "Durchsetzung festgeschrieben",
+    "committedYes": "Festgeschrieben",
+    "committedNo": "Nicht festgeschrieben",
+    "fence": {
+      "title": "Schreibsperre",
+      "armed": "Scharf",
+      "armedYes": "Scharf",
+      "armedNo": "Ruhend",
+      "mode": "Modus",
+      "required": "Geforderte Fähigkeit",
+      "binary": "Diese Binärdatei",
+      "generation": "Generation"
+    },
+    "compat": {
+      "title": "Kompatibilität",
+      "seeded": "Aufzeichnung",
+      "drawn": "Gezogen",
+      "notDrawn": "Nicht gezogen",
+      "recorded": "Erfasste Ziele",
+      "stillNeeded": "Würden ausfallen",
+      "unparsable": "Nicht auswertbar",
+      "notIntact": "Die Kompatibilitätsaufzeichnung ist nicht mehr intakt: Sie wirkt vollständig, beschreibt aber eine Menge, die Mitglieder verloren hat. Planen Sie keine Umstellung dagegen.",
+      "notServed": "Wird auf Ihrer Berechtigungsstufe nicht ausgeliefert.",
+      "notProvided": "In dieser Antwort nicht enthalten."
+    },
+    "report": {
+      "title": "Was die Durchsetzung unterbrechen würde",
+      "description": "Die Ziele, die dieser Mandant nur behält, weil die Installation älter als die Kontrolle ist.",
+      "unreadable": "Der Kompatibilitätsbericht konnte nicht gelesen werden.",
+      "notSeeded": "Die Kompatibilitätsaufzeichnung wurde nie gezogen, daher beschreibt dieser Bericht nichts.",
+      "subscriptions": "Abonnements bei Ziehung",
+      "unparsed": "Nicht auswertbare Ziele",
+      "seededAt": "Gezogen am",
+      "noAuthorities": "Kein Altbestandsziel.",
+      "authority": "Ziel",
+      "kind": "Art",
+      "uses": "Abonnements",
+      "effect": "Bei Durchsetzung",
+      "survives": "Bleibt bestehen",
+      "breaks": "Fällt aus"
+    }
+  }
+}

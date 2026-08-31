@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Helm chart for the Olivares AI engine and its edge collectors.
+# This is the K8s distribution channel for the product (SCP-05): a single-replica
+# stateful core (the deployment topology described in ARCHITECTURE.md) plus an optional
+# DaemonSet of edge collectors that push observations to the core over gRPC+mTLS
+# (the distributed plane "C" of). Helm is OCI-default since v3.8.0, so this
+# chart is published and consumed as an OCI artifact (ghcr.io) and is signed with
+# cosign over the OCI manifest (keyless OIDC; the pipeline emits no GPG .prov —
+# cosign-only policy) — see deploy/helm/README.md.
+apiVersion: v2
+name: olivares
+description: Self-hosted engine for enterprise AI — integrate, manage and secure your AI across your infrastructure, with a hardened, signed, air-gap-ready deployment.
+type: application
+
+# Chart SemVer. Bump on any chart change (templates/values), independently of the
+# engine version (appVersion). cosign/.prov sign the packaged chart at THIS version.
+# 0.2.0: active-passive HA — replicaCount>1 with Postgres + a shared audit
+# signing key Secret, Parallel pod management, emptyDir data dir, maxUnavailable PDB.
+# 0.2.1: engine image published to Docker Hub (docker.io/olivaresai/olivares).
+# 0.2.2: image.repository default -> ghcr.io/olivaresai/olivares (the canonical,
+#        always-published registry; Docker Hub is an optional mirror). appVersion
+#        tracks the engine CalVer.
+# 0.2.3: appVersion restamped to the current engine CalVer release (forward-facing).
+# 0.2.4: image.repository default -> docker.io/olivaresai/olivares. Docker Hub is the
+#        OFFICIAL primary registry from v26.8.0; ghcr.io stays the always-published
+#        fallback (same digest, same signatures) and is the coordinate to prefer under
+#        Docker Hub anonymous-pull rate limits. The CHART itself is still published
+#        only to oci://ghcr.io/olivaresai/charts (release-chart.yml) — unchanged.
+version: 0.2.4
+
+# The default engine image tag this chart targets (engine CalVer). Overridden
+# per-release by `--set image.tag=` / `image.digest=` (air-gap pins by digest).
+appVersion: "26.8.0"
+
+kubeVersion: ">=1.25.0-0"
+
+home: https://olivares.ai
+sources:
+  - https://github.com/olivaresai/olivares
+icon: https://olivares.ai/favicon.svg
+
+keywords:
+  - security
+  - ai-agents
+  - observability
+  - access-graph
+  - self-hosted
+  - air-gap
+
+maintainers:
+  - name: Olivares.AI
+    email: security@olivares.ai
+
+annotations:
+  # Surfaced by Artifact Hub / OCI tooling. Licenses are SPDX identifiers.
+  artifacthub.io/license: AGPL-3.0-only
+  # No artifacthub.io/signKey: the chart is cosign-signed ONLY (no GPG .prov —
+  # cosign-only policy). Artifact Hub auto-detects the cosign signature on the
+  # OCI registry; verification identity + commands live in deploy/helm/README.md.
+  artifacthub.io/containsSecurityUpdates: "false"

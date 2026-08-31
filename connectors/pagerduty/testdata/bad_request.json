@@ -1,0 +1,7 @@
+{
+  "status": "invalid event",
+  "message": "Event object is invalid",
+  "errors": [
+    "'routing_key' is invalid (must be a 32 character string)"
+  ]
+}

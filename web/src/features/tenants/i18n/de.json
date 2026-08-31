@@ -1,0 +1,49 @@
+{
+  "truncation": {
+    "label": "{{n}} Mandanten geladen; es gibt weitere",
+    "hint": "Die Engine hat eine Seite des Verzeichnisses geliefert, nicht alle Mandanten. Die Gesamtzahl LÄSST SICH NICHT aus den geladenen Zeilen ableiten — ein hier nicht aufgeführter Mandant kann trotzdem existieren und weiterhin bedient werden."
+  },
+  "title": "Mandanten",
+  "description": "Den Dienst eines Mandanten entziehen oder wiederherstellen — das ist verlustfrei. Einen Mandanten zu löschen ist eine separate, dauerhafte Aktion.",
+  "roster": "Organisationen",
+  "empty": "Keine Organisationen",
+  "emptyHint": "Das System-Register ist leer, oder dieses Deployment hat einen einzigen Mandanten.",
+  "forbidden": "Der Mandanten-Lebenszyklus ist nur für Superadmins.",
+  "columns": {
+    "name": "Organisation",
+    "slug": "Slug",
+    "status": "Dienst",
+    "region": "Region",
+    "created": "Erstellt"
+  },
+  "status": {
+    "active": "Aktiv",
+    "suspended": "Entzogen",
+    "unknown": "Unbekannt"
+  },
+  "unknownHint": "Die Engine meldet einen Dienstzustand, den diese Konsole nicht kennt. Er wird unverändert angezeigt, statt ihn als aktiv anzunehmen.",
+  "unpinned": "Nicht festgelegt",
+  "suspend": "Dienst entziehen",
+  "restore": "Dienst wiederherstellen",
+  "suspendTitle": "Dienst für {{name}} entziehen?",
+  "suspendDescription": "Änderungen und interaktiver Dienst werden mit 423 tenant_suspended abgelehnt, bis der Dienst wiederhergestellt ist.",
+  "keeps": "Drei Dinge laufen bewusst weiter:",
+  "keepsAuth": "Authentifizierung und die System-Routen des Betreibers, damit der Mandant erklärt und wiederhergestellt werden kann.",
+  "keepsExport": "Der Export der eigenen Daten des Mandanten — ein Dienstentzug darf die Daten eines Kunden nicht als Geisel nehmen. Ein Export während des Entzugs wird in der Audit-Kette des Mandanten festgehalten.",
+  "keepsCustody": "Die Verwahrung: Die Kette wird weiter mit Checkpoints versehen und bleibt prüfbar und sicherungszertifizierbar.",
+  "notDelete": "Dies löscht nichts. Einen Mandanten zu löschen ist ein separater, destruktiver Vorgang.",
+  "confirmSuspend": "Dienst entziehen",
+  "suspended": "Dienst für {{name}} entzogen",
+  "restoreTitle": "Dienst für {{name}} wiederherstellen?",
+  "restoreDescription": "Der Dienst wird verlustfrei wiederhergestellt: Während des Entzugs wurde nichts gelöscht.",
+  "confirmRestore": "Dienst wiederherstellen",
+  "restored": "Dienst für {{name}} wiederhergestellt",
+  "delete": "Löschen",
+  "deleteTitle": "{{name}} und alle Inhalte löschen",
+  "deleteDescription": "Löscht den Mandanten und seine Daten sofort. Das lässt sich nicht rückgängig machen, und in dieser Engine gibt es kein Wiederherstellungsfenster.",
+  "confirmDelete": "Endgültig löschen",
+  "deleteGrace": "Die in der API dokumentierte Kulanzfrist von 30 Tagen gehört zur Cloud-Steuerungsebene, nicht zu dieser Engine. Hier erfolgt die Löschung im Moment der Bestätigung.",
+  "deleteInstead": "Um einen Kunden nicht mehr zu bedienen, ohne etwas zu zerstören, sperren Sie stattdessen: Sperren ist verlustfrei und umkehrbar.",
+  "deleteDone": "{{name}} gelöscht",
+  "deleteSystem": "Der System-Mandant kann nicht gelöscht werden"
+}

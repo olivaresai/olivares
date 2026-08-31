@@ -1,0 +1,590 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# GoReleaser — the single source of truth for how an Olivares AI release is built,
+# bill-of-materialed, checksummed and SIGNED (docs/SECURITY-HARDENING.md, docs/SECURITY-HARDENING.md).
+# For a security product the build pipeline IS part of the trust model.
+#
+# What this produces for every tagged release:
+#   - A reproducible-leaning static binary (CGO off, -trimpath, build id stripped,
+#     build date pinned to the commit timestamp) for linux/darwin × amd64/arm64.
+#   - tar.gz archives bundling LICENSE / NOTICE / SECURITY.md / README.
+#   - A SHA-256 checksums.txt over every artifact.
+#   - An SPDX SBOM per archive (syft).
+#   - A distroless, non-root container image (Dockerfile.release).
+#   - cosign signatures (keyless / Sigstore by default) over the checksums file AND
+#     the container image, with the certificate + transparency log entry (Rekor).
+#
+# Verify a release (any user, offline-capable for checksums):  scripts/verify-release.sh
+#
+# Run modes:
+#   goreleaser check                      # validate this config (CI + locally)
+#   goreleaser release --snapshot --clean # local dry run: build + SBOM + checksums, NO publish/sign
+#   goreleaser release --clean            # real release (CI on a tag; keyless cosign needs OIDC)
+#
+# ONE definition, TWO reviewed profiles (release-rehearsal design §B mechanism B/§C.2).
+# Every destination below — GitHub Release owner/name, OCI image repository, OCI source
+# label — and the signing/Homebrew behaviour renders from REQUIRED environment values:
+#   RELEASE_GITHUB_OWNER / RELEASE_GITHUB_NAME   GitHub Release destination
+#   OCI_IMAGE_REPO                               e.g. ghcr.io/olivaresai/olivares
+#   SOURCE_REPOSITORY_URL                        org.opencontainers.image.source label
+#   COSIGN_MODE                                  keyless (production) | key (rehearsal);
+#                                                consumed by scripts/cosign-verified.sh
+#   PUBLISH_HOMEBREW                             auto (production) | false (rehearsal)
+# The production caller (.github/workflows/release.yml) and the internal rehearsal
+# harness each declare one FIXED profile, validated fail-closed by scripts/release-preflight.sh
+# BEFORE goreleaser runs. `{{ .Env.X }}` renders with missingkey=error, so an unclassified
+# direct `goreleaser release` invocation FAILS instead of silently publishing to production
+# (§C.2) — `task release:snapshot` exports the production-shaped tuple for local dry runs.
+#
+# Air-gapped / key-based signing (no OIDC): the rehearsal profile IS this path — set
+# COSIGN_MODE=key, COSIGN_KEY=<abs path> and COSIGN_TLOG_UPLOAD=false, and the launcher
+# appends `--key`/`--tlog-upload=false` to every signing call
+# (documented in docs/SECURITY-HARDENING.md §"Signing without OIDC").
+#
+# WHY THE SIGNING `cmd:` IS `bash` AND THE REAL COMMAND IS THE FIRST ARGUMENT. Signing goes
+# through scripts/cosign-verified.sh, which requires OLIVARES_COSIGN_BIN — the absolute path
+# that scripts/assert-cosign-binary.sh authenticated against the upstream published digests
+# earlier in the same job — and RE-HASHES those bytes immediately before each invocation.
+# Signing with whatever `cosign` PATH resolves to would leave that verification decorative.
+#
+# It is in `args:` and not in `cmd:` because GORELEASER DOES NOT TEMPLATE `cmd`. A previous
+# revision set `cmd: "{{ .Env.OLIVARES_COSIGN_BIN }}"`; `goreleaser check` accepted it and
+# every real release would have tried to execute a file with that literal name, because
+# v2.17.0 passes cmd straight to exec (internal/pipe/sign/sign.go:249) while templating
+# args, signature, certificate and stdin. A clean `goreleaser check` is not evidence that
+# the command can run. Snapshot builds skip signing, so local dry runs are unaffected.
+version: 2
+
+project_name: olivares
+
+before:
+  hooks:
+    # ⛔ THE RELEASE EVIDENCE IS WRITTEN HERE, AND THE POSITION IS THE POINT.
+    # release-commit.txt records the commit this run built; phase 2 downloads it, checks its
+    # digest against the cosign-verified checksums.txt and binds its whole ceremony to those
+    # bytes. It used to be written by a workflow step immediately BEFORE this action, which
+    # left `?? release-commit.txt` in the tree — the file is neither tracked nor ignored — and
+    # goreleaser refuses to release from a dirty tree, using exactly that shape as its own
+    # example (goreleaser.com/resources/errors/dirty/). Every legitimate release died at the
+    # build (the model, 2026-08-15, P0-A, NO-LAND).
+    #
+    # A `before` hook is the earliest point AFTER that validation, measured on the pinned
+    # engine: v2.17.0 orders the pipeline `dist.CleanPipe → env → git → semver → defaults →
+    # partial → snapshot → before → dist → …` (internal/pipeline/pipeline.go:63-104) and the
+    # dirty check is inside the git pipe (internal/pipe/git/git.go:194-224). Nothing re-reads
+    # the tree state afterwards — `CheckDirty` has no other caller on this path.
+    # The rule is NOT relaxed to make room for it: the workflow guard that runs after this
+    # action still allow-lists that ONE untracked name and then pins its BYTES to GITHUB_SHA.
+    # `{{ .IsSnapshot }}` is passed so a local `task release:snapshot` writes nothing, and so a
+    # real release with no GITHUB_SHA REFUSES instead of inventing one.
+    - bash scripts/release-commit-evidence.sh {{ .IsSnapshot }}
+    # Validate both independent public anchors (non-empty, base64-std,
+    # exactly 32 bytes, and different) BEFORE any release build. goreleaser's
+    # `{{ .Env.X }}` only HARD-FAILS when the variable is ABSENT; a present-but-EMPTY
+    # repo variable would otherwise silently build a binary that trusts nothing.
+    # This hook runs on `release`/`build` but NOT on `goreleaser check`.
+    - sh scripts/check-release-pubkey.sh
+    # The web UI must be built into the Go embed dir BEFORE the Go build, so the
+    # single binary ships the cockpit. (core/internal/webui/dist is build.outDir.)
+    - bash -c "pnpm --dir web install --frozen-lockfile && pnpm --dir web run build"
+    - go mod download
+
+builds:
+  - id: olivares
+    main: ./cmd/olivares
+    binary: olivares
+    # NOT plain `go`: the wrapper first compiles the first-party connector
+    # plugins FOR THIS TARGET (GOOS/GOARCH from the env goreleaser sets) into the
+    # go:embed dir cmd/olivares/firstparty/bins, under a lock (goreleaser builds
+    # targets in parallel and that dir is shared state), then execs `go` with the
+    # unchanged args. Without it every released artifact embedded ZERO plugins —
+    # the flagship claude source included — while dev builds (task build) worked
+    # (E1). The Extract path is asserted on the artifact by
+    # scripts/release-smoke.sh after a snapshot run.
+    tool: scripts/goreleaser-build-wrapper.sh
+    env:
+      - CGO_ENABLED=0 # modernc.org/sqlite is pure Go: fully static, memory-safe.
+    flags:
+      - -trimpath
+    # -tags release drops the dev license seed from the binary (core/license:
+    # embedded_dev.go is excluded; embedded_release.go has no seed). The verification
+    # anchor is then the license public key injected below. OLIVARES_LICENSE_PUBKEY
+    # and OLIVARES_OTA_PUBKEY are PUBLIC repo variables, not secrets. Their private
+    # halves have different custody: the license signer is the narrow online Worker;
+    # the OTA signer stays off-box/HSM and signs only during the release ceremony.
+    # The before hook rejects either empty/malformed anchor and rejects equality.
+    tags:
+      - release
+    ldflags:
+      - -s -w -buildid=
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .CommitDate }}
+      - -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64={{ .Env.OLIVARES_LICENSE_PUBKEY }}
+      # A DEDICATED OTA anchor authenticates update manifests. It must never be
+      # the license key whose private half is online in the fulfilment Worker.
+      - -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64={{ .Env.OLIVARES_OTA_PUBKEY }}
+    # Pin the embedded timestamp to the commit so the same source → same bytes.
+    # NOTE: the embedded pubkey is now part of the reproducible input vector — a
+    # third-party rebuild must pass -tags release AND both published public anchors
+    # to match SHA-256 (docs/RELEASE-VERIFICATION.md).
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+  # ---- FIPS 140-3 build variant (SCP-09) — a SEPARATE, opt-in artifact -----------
+  # IDENTICAL to the `olivares` build above (same -trimpath / -ldflags /
+  # mod_timestamp → same reproducibility guarantees, still CGO_ENABLED=0 / pure-Go
+  # static) EXCEPT it sets GOFIPS140=v1.0.0, which selects Go's native FIPS 140-3
+  # mode at BUILD time (https://go.dev/doc/security/fips140). That links the in-tree
+  # crypto/internal/fips140 module v1.0.0 — the "FIPS 140-3 Go Cryptographic Module
+  # v1.0.0", CMVP Certificate #5247 (ACTIVE/validated, frozen from Go 1.24). Native
+  # mode needs NO CGO/BoringCrypto, so the binary is still fully static.
+  #
+  # HONESTY (docs/SCP-09-FIPS-STIG.md): GOFIPS140=v1.0.0 → CMVP-validated module
+  # #5247. GOFIPS140=v1.26.0/latest would also enable FIPS mode but that module is
+  # "Pending Review" on the CMVP Modules-In-Process List (2026-04-28, CAVP A8028) —
+  # NOT yet validated — so we pin v1.0.0 here. The binary still ships with FIPS
+  # enforcement OFF unless launched with GODEBUG=fips140=on (Dockerfile.fips sets it).
+  # This does NOT replace the base build above: that pure-Go reproducible binary is
+  # what release packaging ships by default and is byte-for-byte unchanged.
+  - id: olivares-fips
+    main: ./cmd/olivares
+    binary: olivares-fips
+    # Same connector-embed wrapper as the base build (the FIPS artifact must ship
+    # the same plugin set; GOFIPS140 in this build's env applies to the plugin
+    # builds too, so the whole FIPS artifact is FIPS-mode-built).
+    tool: scripts/goreleaser-build-wrapper.sh
+    env:
+      - CGO_ENABLED=0 # native FIPS 140-3 mode keeps the pure-Go static build.
+      - GOFIPS140=v1.0.0 # CMVP cert #5247 (validated). NOT v1.26.0 (pending review).
+    flags:
+      - -trimpath
+    # IDENTICAL two-anchor handling to the base build above (kept in lockstep so
+    # both artifacts report the same license and OTA fingerprints).
+    tags:
+      - release
+    ldflags:
+      - -s -w -buildid=
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .CommitDate }}
+      - -X github.com/olivaresai/olivares/core/license.releasePublicKeyB64={{ .Env.OLIVARES_LICENSE_PUBKEY }}
+      - -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64={{ .Env.OLIVARES_OTA_PUBKEY }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  # Base archive: pinned to the base build by `ids` so the FIPS variant added below
+  # never leaks into the default artifact (a bare `archives` entry would otherwise
+  # bundle EVERY build). The base build's binary bytes are unchanged by this — only
+  # which builds this archive packages is made explicit.
+  - id: olivares
+    ids: [olivares]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - LICENSING.md
+      - NOTICE
+      # DISCLAIMER.md carries the warranty/liability terms that SUPPLEMENT the AGPL
+      # under its section 7(a). NOTICE points at it by name as "distributed with this
+      # software"; if it does not ride along, that pointer resolves to nothing in the
+      # hands of the person who downloaded the artifact.
+      - DISCLAIMER.md
+      - SECURITY.md
+      - README.md
+      # The canonical texts of every licence used in the tree (REUSE). LICENSING.md and
+      # NOTICE both cite them BY PATH; shipping the pointers without the documents leaves an
+      # Apache-2.0 recipient holding a reference to a file that is not there.
+      - LICENSES/
+
+  # Parallel FIPS archive: distinctly named (…_fips_…) and built ONLY from the
+  # olivares-fips binary, so the validated-crypto artifact is never confused
+  # with the default one. The FIPS gate doc rides along so the honesty ledger
+  # travels with the binary.
+  - id: olivares-fips
+    ids: [olivares-fips]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_fips_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - LICENSING.md
+      - NOTICE
+      - DISCLAIMER.md
+      - SECURITY.md
+      - README.md
+      # The canonical texts of every licence used in the tree (REUSE). LICENSING.md and
+      # NOTICE both cite them BY PATH; shipping the pointers without the documents leaves an
+      # Apache-2.0 recipient holding a reference to a file that is not there.
+      - LICENSES/
+      - docs/SCP-09-FIPS-STIG.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+  # THE COMMIT EVIDENCE, INSIDE THE SIGNED CHECKSUM SET. The release workflow cosign-signs
+  # checksums.txt, and phase 2 refuses to continue unless the release-commit.txt it downloaded
+  # digests to the line recorded here. Without this entry the file would be an unsigned asset
+  # anyone with contents:write could swap, and the ceremony's own comment CLAIMED this
+  # declaration existed while the config did not carry it (the model, 2026-08-15, P0-A).
+  # This declaration checksums; it does NOT upload — v2.17.0 appends extra files to a LOCAL
+  # artifact list (internal/pipe/checksums/checksums.go:174-198), so `release.extra_files`
+  # below is what actually puts the file on the draft. Both are required; neither is a
+  # duplicate of the other.
+  extra_files:
+    - glob: release-commit.txt
+
+# Per-archive SBOMs as SIDECAR files. SPDX-2.3 (the interchange baseline) AND
+# CycloneDX 1.6 (security-native) are generated through scripts/sbom-generate.sh:
+# the wrapper invokes syft, then records the CISA-2025-DRAFT "Generation Context"
+# truthfully as an SPDX creationInfo.comment and as CycloneDX metadata.lifecycles
+# [{phase: "build"}]. .syft.yaml allows only local Go module-cache/vendor license
+# lookup (populated by go mod download) and keeps remote license lookup disabled,
+# so air-gapped and reproduced builds stay honest (SCP-03). These sidecars are ALSO
+# attached as signed in-toto ATTESTATIONS in the release workflow (cosign
+# attest-blob over each archive) so a scanner discovers and trusts them via the
+# signature, not as a swappable loose file. The SBOM of the container IMAGE (not
+# just the archive) is generated with the same wrapper and attested in the
+# workflow too, where the pushed image digest is available (SCP-03).
+sboms:
+  - id: archive-sbom-spdx
+    artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.spdx.sbom.json"
+    cmd: bash
+    args:
+      # envOrDefault (never hard-fails on an absent var, unlike .Env.X): on GitHub
+      # Actions the runner guarantees GITHUB_WORKSPACE but NOT PWD (no shell in the
+      # process chain); locally the launching shell exports PWD = repo root.
+      - '{{ envOrDefault "GITHUB_WORKSPACE" (envOrDefault "PWD" ".") }}/scripts/sbom-generate.sh'
+      - "$artifact"
+      - spdx-json
+      - "$document"
+  - id: archive-sbom-cyclonedx
+    artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.cdx.sbom.json"
+    cmd: bash
+    args:
+      # Same envOrDefault rationale as the SPDX entry above.
+      - '{{ envOrDefault "GITHUB_WORKSPACE" (envOrDefault "PWD" ".") }}/scripts/sbom-generate.sh'
+      - "$artifact"
+      - cyclonedx-json@1.6
+      - "$document"
+
+# Cosign signing of the checksums file. Verifying the checksums file then
+# transitively trusts every artifact listed in it (each line is a SHA-256).
+# MODE-AWARE through the launcher: keyless/Sigstore in production, per-run key with NO
+# transparency-log upload in rehearsal (COSIGN_MODE, injected by cosign-verified.sh).
+# The `certificate:` field renders EMPTY in key mode — a key signature has no Fulcio
+# certificate, and goreleaser only registers/uploads the certificate artifact when the
+# templated value is non-empty (v2.16.0 internal/pipe/sign/sign.go:296-307). The
+# `--output-certificate` flag left in `args:` is harmless in key mode: measured with
+# cosign v2.6.4, it is accepted and simply writes nothing. `.Env.COSIGN_MODE` renders
+# with missingkey=error, so an unclassified caller fails loudly instead of guessing.
+signs:
+  - id: checksums
+    cmd: bash
+    signature: "${artifact}.sig"
+    certificate: '{{ if eq .Env.COSIGN_MODE "keyless" }}${artifact}.pem{{ end }}'
+    args:
+      - scripts/cosign-verified.sh
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+# Native Linux packages (.deb / .rpm / .apk) from the BASE binary only — the FIPS
+# variant ships as the *_fips_* archive and the *-fips image, never as the default
+# package. Each package carries the systemd unit and an example env file; the
+# postinstall creates a hardened service user + /var/lib/olivares and reloads systemd,
+# but never enables/starts the service (the operator opts in: systemctl enable --now).
+nfpms:
+  - id: olivares-nfpm
+    package_name: olivares
+    ids: [olivares]
+    vendor: Olivares.AI
+    homepage: https://olivares.ai
+    maintainer: Olivares.AI <enterprise@olivares.ai>
+    description: |-
+      Ground truth for enterprise AI — open, self-hosted AI governance control plane.
+      Discover the agents on your infrastructure, map what they can touch (the read/write
+      access map), surface least-privilege drift, and prove it — without standing in the
+      data path. Single static binary, embedded console, SQLite or Postgres.
+    license: AGPL-3.0-only
+    formats: [deb, rpm, apk]
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    contents:
+      # The licence texts ship WITH the package. Before 2026-08-04 `contents` listed only
+      # the unit, the env sample and the data dir, so installing the .deb/.rpm/.apk left an
+      # AGPL binary on disk with no LICENSE, no NOTICE and no warranty disclaimer anywhere —
+      # while the .tar.gz beside it carried all of them. The `license:` field above is
+      # package metadata, not the document AGPL sections 4 and 5 ask you to pass on.
+      - src: LICENSE
+        dst: /usr/share/doc/olivares/LICENSE
+      - src: NOTICE
+        dst: /usr/share/doc/olivares/NOTICE
+      - src: LICENSING.md
+        dst: /usr/share/doc/olivares/LICENSING.md
+      - src: DISCLAIMER.md
+        dst: /usr/share/doc/olivares/DISCLAIMER.md
+      - src: LICENSES
+        dst: /usr/share/doc/olivares/LICENSES
+      - src: packaging/systemd/olivares.service
+        dst: /usr/lib/systemd/system/olivares.service
+      - src: packaging/olivares.env.example
+        dst: /etc/olivares/olivares.env
+        type: "config|noreplace"
+      - dst: /var/lib/olivares
+        type: dir
+        file_info:
+          mode: 0750
+    scripts:
+      postinstall: packaging/nfpm/postinstall.sh
+      preremove: packaging/nfpm/preremove.sh
+      postremove: packaging/nfpm/postremove.sh
+
+# Homebrew tap, as a CASK (the non-deprecated successor to `brews`; Homebrew now wants
+# casks for pre-built binaries). A cask auto-strips the Gatekeeper quarantine xattr on
+# install, so it doubles as the macOS-notarization stopgap until an Apple Developer ID
+# notarizes the darwin binaries (a documented later step). Pushes to olivaresai/homebrew-tap.
+# PREREQUISITE (before the first public release): create the public repo
+# olivaresai/homebrew-tap and add a HOMEBREW_TAP_GITHUB_TOKEN secret (a token with
+# contents:write on that tap repo) to the release workflow — until then, set it up or
+# comment this block out (a real `release` push would otherwise fail to publish the cask).
+homebrew_casks:
+  - name: olivares
+    ids: [olivares]
+    repository:
+      owner: olivaresai
+      name: homebrew-tap
+      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
+    # Self-gating, now mode-aware (§C.2): PUBLISH_HOMEBREW is a REQUIRED profile value.
+    #   auto  — production: publish ONLY when the tap token is set, so a release never
+    #           fails just because olivaresai/homebrew-tap isn't wired up yet.
+    #   false — rehearsal: never publish, token or not (the rehearsal repo holds no tap
+    #           token anyway — the preflight rejects one — but the skip must not depend
+    #           on that absence alone).
+    #   true  — force-publish; fails loudly without a token rather than skipping.
+    # `.Env.PUBLISH_HOMEBREW` renders with missingkey=error: an unclassified caller fails.
+    skip_upload: '{{ if eq .Env.PUBLISH_HOMEBREW "true" }}false{{ else if and (eq .Env.PUBLISH_HOMEBREW "auto") (index .Env "HOMEBREW_TAP_GITHUB_TOKEN") }}false{{ else }}true{{ end }}'
+    homepage: https://olivares.ai
+    description: Ground truth for enterprise AI — self-hosted AI governance control plane
+    caveats: |
+      Loopback-only by default; the engine prints a first-boot setup token. Verify any
+      release with scripts/verify-release.sh in the source repository.
+
+# PARAMETERIZED DESTINATIONS, VERSIONED OUTPUTS ONLY (design §A.2.4-6, §B rec. 3-4).
+# The image repository and source label render from the validated profile. No `latest*`
+# tag exists ANYWHERE in this shared build phase: mutable aliases are created exclusively
+# by the production-only `promote-latest` job in release.yml, AFTER verification, by
+# digest. A rehearsal run therefore CANNOT publish a mutable alias — the plan simply does
+# not contain one — and the build invariant is reviewable in one line: versioned outputs
+# only.
+dockers:
+  - id: olivares-image
+    ids: [olivares] # base image carries the base binary, never the FIPS one.
+    dockerfile: Dockerfile.release
+    # The Dockerfile COPYs the licence texts, so they must be IN the build context;
+    # goreleaser's context is a temp dir holding the binary and nothing else.
+    extra_files:
+      - LICENSE
+      - NOTICE
+      - LICENSING.md
+      - DISCLAIMER.md
+      - LICENSES
+    use: buildx
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .CommitDate }}"
+      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
+      - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
+
+  # Base image, arm64 (Graviton / Apple Silicon). Same Dockerfile.release; goreleaser
+  # feeds it the arm64 binary (ids + goarch). Combined with the amd64 image into a
+  # multi-arch manifest below. fips/stig stay amd64-only (x86 gov/compliance estates).
+  - id: olivares-image-arm64
+    ids: [olivares]
+    dockerfile: Dockerfile.release
+    # The Dockerfile COPYs the licence texts, so they must be IN the build context;
+    # goreleaser's context is a temp dir holding the binary and nothing else.
+    extra_files:
+      - LICENSE
+      - NOTICE
+      - LICENSING.md
+      - DISCLAIMER.md
+      - LICENSES
+    use: buildx
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .CommitDate }}"
+      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
+      - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
+
+  # ---- FIPS image (SCP-09): the FIPS binary on the same distroless static base ----
+  # Same hardened, non-root, distroless runtime as the default image, but built FROM
+  # the olivares-fips binary and launched with GODEBUG=fips140=on (set in
+  # Dockerfile.fips) so the CMVP v1.0.0 module's self-tests run and only approved
+  # algorithms are permitted. Distinct `…-fips` tags — never overwrites :latest.
+  # NOTE: distroless has no OS/package DB, so there is nothing for an OSCAP scan to
+  # evaluate here — STIG verification is the *-stig image below.
+  - id: olivares-fips-image
+    ids: [olivares-fips]
+    dockerfile: Dockerfile.fips
+    # The Dockerfile COPYs the licence texts, so they must be IN the build context;
+    # goreleaser's context is a temp dir holding the binary and nothing else.
+    extra_files:
+      - LICENSE
+      - NOTICE
+      - LICENSING.md
+      - DISCLAIMER.md
+      - LICENSES
+    use: buildx
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-fips-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}-fips"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .CommitDate }}"
+      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
+      - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
+      - "--label=ai.olivares.fips140.mode=v1.0.0"
+      - "--label=ai.olivares.fips140.cmvp-certificate=5247"
+
+  # ---- STIG image (SCP-09): the FIPS binary on a SCANNABLE, STIG-profiled base ----
+  # OSCAP/STIG evaluation needs a real OS with a SCAP datastream (distroless has
+  # none). This variant bases on Red Hat UBI micro (ships DISA STIG SCAP content),
+  # carries the FIPS binary, runs non-root, and is self-verifiable with the published
+  # OpenSCAP profile referenced in oscap/. It is the hardened *deployment* image —
+  # separate from the reproducible base image above.
+  - id: olivares-stig-image
+    ids: [olivares-fips]
+    dockerfile: Dockerfile.stig
+    # The Dockerfile COPYs the licence texts, so they must be IN the build context;
+    # goreleaser's context is a temp dir holding the binary and nothing else.
+    extra_files:
+      - LICENSE
+      - NOTICE
+      - LICENSING.md
+      - DISCLAIMER.md
+      - LICENSES
+    use: buildx
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-stig-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}-stig"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .CommitDate }}"
+      - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
+      - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
+      - "--label=ai.olivares.fips140.mode=v1.0.0"
+      - "--label=ai.olivares.stig.oscap-profile=xccdf_org.ssgproject.content_profile_stig"
+
+# Manifest lists so the BARE tags resolve to a multi-arch image. Without these the
+# per-arch `…-amd64` / `…-arm64` tags exist but `docker pull …:<version>` 404s. The base
+# image is multi-arch (amd64+arm64); the fips/stig variants stay amd64-only
+# (x86 gov/compliance), so their bare `…-fips` / `…-stig` tags are single-arch manifests.
+# NO `latest` manifest here — see the `dockers:` header: aliases are promotion, not build.
+docker_manifests:
+  - name_template: "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}"
+    image_templates:
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-amd64"
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-arm64"
+  - name_template: "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-fips"
+    image_templates:
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-fips-amd64"
+  - name_template: "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-stig"
+    image_templates:
+      - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-stig-amd64"
+
+# Cosign signing of the published container images AND the bare manifests (by digest).
+# Mode-aware exactly like `signs:` above — the launcher injects the per-run key and
+# `--tlog-upload=false` in rehearsal, so image signatures land only in the disposable
+# registry and never in the public transparency log.
+docker_signs:
+  - id: image
+    cmd: bash
+    artifacts: images
+    args:
+      - scripts/cosign-verified.sh
+      - sign
+      - "--yes"
+      - "${artifact}"
+    output: true
+  # Sign the manifest lists too, so `cosign verify …:{version}` (the tag users actually pull) checks out.
+  - id: manifest
+    cmd: bash
+    artifacts: manifests
+    args:
+      - scripts/cosign-verified.sh
+      - sign
+      - "--yes"
+      - "${artifact}"
+    output: true
+
+# This config builds & signs; whether to PUBLISH is a deliberate human action
+# (a maintainer cuts the tag). The GitHub release workflow gates on a tag push.
+# Owner/name render from the validated profile (goreleaser templates them in its release
+# pipe defaults — v2.16.0 internal/pipe/release/scm.go:19-23 — with missingkey=error, so
+# an unclassified caller fails before creating any release).
+release:
+  github:
+    owner: "{{ .Env.RELEASE_GITHUB_OWNER }}"
+    name: "{{ .Env.RELEASE_GITHUB_NAME }}"
+  draft: true # never auto-publish; a human reviews and publishes the draft
+  prerelease: auto
+  mode: replace
+  # THE OTHER HALF OF THE EVIDENCE CONTRACT. `checksum.extra_files` puts the digest of
+  # release-commit.txt inside the signed checksums.txt; only this uploads the file itself, as
+  # artifact.UploadableFile (v2.17.0 internal/pipe/release/release.go:160-174). Phase 2 fetches
+  # it by name (`gh release download --pattern release-commit.txt`) and fails closed if the
+  # draft does not carry it, so dropping this line stops the ceremony rather than weakening it.
+  extra_files:
+    - glob: release-commit.txt
+  header: |
+    ## Olivares AI {{ .Tag }}
+
+    Welcome to the {{ .Tag }} release.
+
+    Support period: see [SECURITY.md §Supported versions](https://github.com/olivaresai/olivares/blob/main/SECURITY.md#supported-versions) and [docs/CRA-READINESS.md §Support-period declarations](https://github.com/olivaresai/olivares/blob/main/docs/CRA-READINESS.md#support-period-declarations).
+
+    Verify artifacts before installing with `scripts/verify-release.sh`.
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

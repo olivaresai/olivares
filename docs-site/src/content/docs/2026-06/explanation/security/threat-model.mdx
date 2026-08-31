@@ -1,0 +1,125 @@
+---
+title: Threat model (STRIDE / DFD)
+description: "The published threat model: assets, trust boundaries, a data-flow
+  diagram, and the principal STRIDE threat and mitigation per component.
+  Defensive by design — posture and mitigations, never an attack map."
+slug: 2026-06/explanation/security/threat-model
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Olivares AI is a security product that runs on your own hosts and builds a map of
+what every agent can touch. That makes a vendor flaw equivalent to a customer
+breach — so the product is designed to pass an enterprise pentest from day one, and
+the threat model is published, not hidden.
+
+<Aside type="caution" title="This is a defensive document">
+  This page describes **trust boundaries and mitigations**. It deliberately does **not**
+  expose the contents of any estate's access graph, the internal authorization
+  identifiers, on-disk secret names, or anything that could be reframed as an attack
+  guide. The product ships **no offensive features** — it is not a command-and-control
+  framework and it does not scan anyone else's credentials. That line is intentional
+  and kept explicit.
+</Aside>
+
+## Method
+
+The model uses **STRIDE** (Spoofing, Tampering, Repudiation, Information disclosure,
+Denial of service, Elevation of privilege) over a **data-flow diagram** with its
+trust boundaries. The mitigations listed here are verified against the product's
+internal hardening matrix; this page publishes the *posture*, not the code-level
+evidence.
+
+## Governing principles
+
+* **Read-first = low asymmetric risk.** The engine observes through logs,
+  OpenTelemetry and eBPF. It does **not** sit in the agent's data path, so a
+  collector failure cannot break production traffic.
+* **Minimal data.** The graph stores **relations** — origin → resource, read/write,
+  source, confidence, timestamp — **never** payloads, SQL bodies, secrets or PII.
+  *What is not stored cannot leak.*
+* **Self-hosted = data stays.** The sensitive data never leaves the customer's
+  perimeter; the vendor does not see it.
+
+## Assets
+
+| Asset | Why it is sensitive |
+|---|---|
+| **The access graph** | A map of what each agent can touch. **The single most sensitive asset** — it is governed accordingly (see mitigations). |
+| **The collector's host access** | It reads logs/OTEL/eBPF on production hosts; a compromise would be a pivot. |
+| **The evidence / audit ledger** | If silently altered, the product would lie. Integrity is everything. |
+| **License keys** | Forgery would bypass the commercial gate. |
+| **Panel credentials** | Access means seeing the customer's entire agent estate. |
+
+Because the access graph is the most sensitive asset, **viewing it is a privileged
+action** — granted from the *editor* role upward, **never** to the lowest *viewer*
+role — **scoped to the tenant**, and **every read is audited**. Defense in layers:
+privilege, tenant isolation, and self-audit.
+
+## Trust boundaries and data flow
+
+There are **four trust boundaries**:
+
+1. `host sources → collector`
+2. `collector → core` (the network boundary)
+3. `user → panel`
+4. `core → store`
+
+```text
+  CUSTOMER INFRASTRUCTURE                         CONTROL PLANE (self-hosted or managed)
+  ┌─ Collectors (edge) ───────────────┐           ┌─ Engine (Go) ───────────────────────────┐
+  │ • OTLP receiver (agents)          │           │ Ingest + event bus                       │
+  │ • MCP / skills introspection      │ ──mTLS──▶  │ Connector SDK · Module runtime           │
+  │ • Tail audit (pgAudit/CloudTrail) │  gRPC     │ Multi-tenant data model                  │
+  │ • eBPF backstop (Tetragon)        │  +bearer  │ REST/gRPC API · AuthN/Z                   │
+  └───────────────────────────────────┘           │ Append-only, hash-chained audit          │
+        (1) host sources → collector               └──────────────┬───────────────────────────┘
+        (2) collector → core (network)                            │ go:embed         (4) core → store
+                                                     ┌────────────▼─────────┐   ┌──────────────────┐
+                                       (3) user ───▶ │ Web panel (React)    │   │ Access-graph     │
+                                           → panel   └──────────────────────┘   │ store + ledger   │
+                                                                                 └──────────────────┘
+```
+
+The data-plane (collectors) **always** runs on customer infrastructure. Collectors
+**push** to the core; they expose **no inbound listener**.
+
+## STRIDE — principal threat and mitigation per component
+
+The model records the **principal** threat(s) for each component and the mitigation
+that addresses it (not an exhaustive grid).
+
+| Component | Principal threat | Mitigation |
+|---|---|---|
+| **Collector** | *Elevation* (eBPF needs kernel capabilities), *Tampering* of the binary | minimal capabilities (`CAP_BPF`/`CAP_PERFMON`, **not** full root); signed binary; **no inbound listener** (push model) |
+| **Collector → core** | *Information disclosure*, *Spoofing* | TLS ≥ 1.2 by default, **no cleartext fallback** (fail-closed) + bearer token; AutoMTLS on the local plugin channel; **opt-in verified-client-cert mTLS** for remote collectors |
+| **Access-graph store** | *Information disclosure* at rest | deployment-provided at-rest encryption (LUKS/FS/TDE); redaction/hash of sensitive values enforced engine-side on the write path |
+| **Evidence ledger** | *Tampering*, *Repudiation* | append-only + hash-chain (+ Ed25519-signed checkpoints); export to an external WORM/SIEM copy |
+| **Panel** | *Spoofing*, *Elevation* | no default credentials; one-time first-boot setup token; RBAC; secure sessions; self-audit (who viewed/changed what) |
+| **License key** | *Spoofing* | Ed25519 signature, offline validation; revocation via subscription expiry |
+
+## What this model does *not* protect against
+
+Being honest about the edges of the model is part of the model:
+
+* **A host root / database superuser** can alter the local ledger on disk. The
+  hash-chain makes pre-checkpoint rewrites cryptographically *detectable*, but the
+  real anti-tamper control is **exporting the ledger to an external WORM/SIEM** copy
+  the local operator cannot reach. Enable it.
+* **At-rest encryption of the store is the operator's responsibility** — the product
+  redacts/hashes sensitive values, but the deployment provides disk/FS/TDE
+  encryption.
+* **Coverage of the access map is tiered** (clean on audited stores, lossy on some,
+  impossible to reconstruct passively on others). An absent edge is not proof that an
+  access did not happen — read [Honesty & limits](/2026-06/start/honesty-and-limits/).
+* **A compromised collector host** is a serious event; the collector runs read-only
+  with minimal privileges and no inbound listener to shrink that blast radius, but
+  host compromise is outside what the control plane alone can prevent.
+
+## Related
+
+* [Security model](/2026-06/explanation/security/security-model/) — the posture and the
+  *why* behind these mitigations.
+* [Verify what you downloaded](/2026-06/how-to/verify-a-release/) — supply-chain integrity.
+* [Architecture overview](/2026-06/explanation/architecture/overview/) — the components in
+  the DFD, in depth.

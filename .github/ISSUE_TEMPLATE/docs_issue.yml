@@ -1,0 +1,50 @@
+name: Documentation issue
+description: Report something wrong, unclear or missing in the documentation.
+title: "docs: "
+labels: ["docs", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The documentation holds itself to the same honesty bar as the product:
+        nothing documented that the binary does not do. If a page claims something
+        the product does not deliver, that is a bug worth filing.
+
+        Usage questions are not documentation bugs —
+        [`SUPPORT.md`](https://github.com/olivaresai/olivares/blob/main/SUPPORT.md)
+        says where to ask; security reports follow
+        [`SECURITY.md`](https://github.com/olivaresai/olivares/blob/main/SECURITY.md).
+  - type: input
+    id: page
+    attributes:
+      label: Page or file
+      description: Path or URL of the affected page (README, docs-site page, …).
+      placeholder: "e.g. docs-site/src/content/docs/start/quickstart.md"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of issue
+      options:
+        - "Incorrect — the docs say something the product does not do"
+        - "Outdated — it was true, but the product moved"
+        - "Unclear — technically right, hard to follow"
+        - "Missing — a topic that should be covered is not"
+        - "Broken link / formatting"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong?
+      description: Quote the problematic passage if you can, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+      description: Optional — proposed wording, or what the page should explain.
+    validations:
+      required: false

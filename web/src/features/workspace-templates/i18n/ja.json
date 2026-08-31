@@ -1,0 +1,90 @@
+{
+  "truncation": {
+    "label": "{{n}} 件のテンプレートを読み込みました。さらに存在します",
+    "hint": "このカタログでは読み込み済みのテンプレートだけが利用できます。表示されないテンプレートが次のページに存在する可能性があります。"
+  },
+  "title": "ワークスペーステンプレート",
+  "subtitle": "ワークスペースセッション用のフック、設定、コネクター、ポリシーの再利用可能なスナップショット。",
+  "catalog": {
+    "builtin": "組み込み",
+    "version": "v{{version}}",
+    "author": "作成者: {{author}}",
+    "archived": "アーカイブ済み",
+    "noTemplates": "テンプレートが見つかりません。",
+    "noTemplatesHint": "最初のテンプレートを作成してワークスペース構成を再利用しましょう。",
+    "filterAll": "すべて",
+    "filterBuiltin": "組み込み",
+    "filterCustom": "カスタム",
+    "showArchived": "アーカイブ済みを表示"
+  },
+  "editor": {
+    "nameLabel": "名前",
+    "namePlaceholder": "例: セキュアなコーディングセッション",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "このテンプレートは何を設定しますか？",
+    "sections": {
+      "hooks": "フック",
+      "hooksHint": "ツールやセッションの前後に実行されるコマンド。",
+      "settings": "エージェント設定",
+      "settingsHint": "権限モード、努力レベル、モデル、カスタム指示。",
+      "connectors": "コネクター",
+      "connectorsHint": "このテンプレートを適用するときに接続するコネクターID。",
+      "policies": "ガバナンスポリシー",
+      "policiesHint": "DLPモード、セッション時間制限、許可ツール、I/O記録。"
+    },
+    "hooks": {
+      "preTool": "ツール前",
+      "postTool": "ツール後",
+      "preSession": "セッション前",
+      "postSession": "セッション後",
+      "command": "コマンド",
+      "timeoutMs": "タイムアウト (ms)",
+      "addHook": "フックを追加",
+      "removeHook": "削除"
+    },
+    "settings": {
+      "permissionMode": "権限モード",
+      "effort": "努力レベル",
+      "model": "モデル",
+      "customInstructions": "カスタム指示"
+    },
+    "policies": {
+      "dlpMode": "DLPモード",
+      "maxDuration": "最大セッション時間 (分)",
+      "allowedTools": "許可ツール",
+      "allowedToolsPlaceholder": "例: Bash,Read,Edit",
+      "recordIo": "I/Oを記録"
+    }
+  },
+  "actions": {
+    "create": "新規テンプレート",
+    "edit": "編集",
+    "duplicate": "複製",
+    "archive": "アーカイブ",
+    "restore": "復元",
+    "apply": "セッションに適用",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "confirmArchive": "このテンプレートをアーカイブしますか？",
+    "confirmArchiveHint": "アーカイブされたテンプレートはカタログから非表示になりますが、復元できます。",
+    "confirmApply": "テンプレートを適用しますか？",
+    "confirmApplyHint": "現在のセッション設定がテンプレートの値で上書きされます。",
+    "duplicateName": "{{name}} のコピー"
+  },
+  "apply": {
+    "success": "テンプレートを適用しました。",
+    "conflicts": "{{count}} 件の競合とともに適用されました。",
+    "conflictField": "フィールド",
+    "conflictOld": "以前の値",
+    "conflictNew": "新しい値",
+    "unenforceable": "このテンプレートは適用できません: {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "テンプレートの読み込みに失敗しました。",
+    "saveFailed": "テンプレートの保存に失敗しました。",
+    "applyFailed": "テンプレートの適用に失敗しました。",
+    "archiveFailed": "テンプレートのアーカイブに失敗しました。",
+    "duplicateFailed": "テンプレートの複製に失敗しました。"
+  },
+  "notFound": "テンプレートが見つかりません。"
+}

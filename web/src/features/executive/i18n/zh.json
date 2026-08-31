@@ -1,0 +1,112 @@
+{
+  "title": "高管概览",
+  "description": "一览成本、用量、风险与合规——深入操作视图可查看明细。",
+  "asOfNote": "风险、合规与可靠性反映当前状态；成本覆盖所选时间范围。",
+  "range": {
+    "label": "时间范围",
+    "7d": "最近 7 天",
+    "30d": "最近 30 天",
+    "90d": "最近 90 天",
+    "mtd": "本月至今"
+  },
+  "export": {
+    "action": "导出 PDF",
+    "hint": "打印此报告或将其保存为 PDF"
+  },
+  "report": {
+    "title": "高管报告",
+    "generated": "生成于 {{date}}",
+    "generatedLabel": "生成时间",
+    "tenant": "组织",
+    "allOrgs": "所有组织",
+    "range": "成本范围",
+    "footer": "Olivares AI 控制平面——仅含聚合 KPI；不含载荷或密钥。"
+  },
+  "empty": {
+    "title": "暂无可用的高管 KPI",
+    "description": "您对该组织的成本、风险、合规或可靠性来源均无读取权限。"
+  },
+  "restricted": {
+    "label": "受限",
+    "hint": "您的角色无法读取此来源。"
+  },
+  "pillars": {
+    "cost": "支出",
+    "costCaption": "所选时间范围内",
+    "usage": "活跃智能体",
+    "usageCaption": "{{live}} 个在线 · {{entities}} 个已跟踪",
+    "risk": "未处理风险",
+    "riskCaption": "{{count}} 项严重/高危",
+    "silentEvasion": "{{count}} 项静默规避",
+    "compliance": "控制项覆盖率",
+    "complianceCaption": "{{gap}} 项缺口 · {{unmapped}} 项未映射"
+  },
+  "cost": {
+    "title": "成本",
+    "trendTitle": "支出趋势",
+    "trendDescription": "所选时间范围内的每日 token 支出。",
+    "seriesCost": "支出",
+    "forecast": "预测",
+    "atRunRate": "预测值（滑动窗口趋势）",
+    "runRateNote": "基于滑动窗口的每日趋势，按剩余周期外推——并非预测模型。",
+    "deltaUp": "较上一周期 {{pct}}",
+    "deltaDown": "较上一周期 {{pct}}",
+    "deltaFlat": "与上一周期持平",
+    "tokens": "Tokens",
+    "samples": "成本记录",
+    "models": "活跃模型",
+    "breakdownTitle": "支出明细",
+    "breakdownDescription": "了解支出去向——按团队、项目、智能体、模型或提供方汇总。",
+    "noAttribution": "所选时间范围内此维度无归因数据。"
+  },
+  "dimensions": {
+    "team": "按团队",
+    "project": "按项目",
+    "agent": "按智能体",
+    "model": "按模型",
+    "provider": "按提供方"
+  },
+  "risk": {
+    "title": "风险态势",
+    "description": "未处理的安全发现项、对抗鲁棒性与访问漂移。",
+    "openFindings": "未处理发现项",
+    "bySeverity": "按严重程度划分的发现项",
+    "robustness": "红队鲁棒性",
+    "robustnessCaption": "最近一次完成的运行",
+    "robustnessPending": "运行待处理",
+    "robustnessPendingHint": "最近一次红队运行未能完成其探测——并非通过。",
+    "drift": "访问漂移",
+    "driftFirm": "意外访问",
+    "driftPending": "等待身份关联",
+    "driftUnused": "未使用的授权",
+    "coverageNote": "部分访问以局部覆盖率被观测（近似或不透明捕获）；漂移数值为下限。",
+    "noFindings": "无未处理发现项。",
+    "noRuns": "尚无红队运行。"
+  },
+  "compliance": {
+    "title": "合规",
+    "description": "您所跟踪框架的控制项状态——仅为控制项覆盖率，绝非合规声明。",
+    "coverage": "控制项覆盖率",
+    "ofControls": "共 {{total}} 个控制项，横跨 {{frameworks}} 个框架",
+    "satisfied": "已满足",
+    "byDesign": "设计即满足",
+    "partial": "部分满足",
+    "gap": "缺口",
+    "unmapped": "未映射",
+    "frameworks": "框架",
+    "riskTiers": "智能体风险层级",
+    "noFrameworks": "尚未映射任何框架。"
+  },
+  "reliability": {
+    "title": "可靠性",
+    "description": "当前智能体与 MCP 的健康状况，以及未处理的事件。",
+    "healthy": "健康",
+    "degraded": "降级",
+    "down": "宕机",
+    "unknown": "未知",
+    "slaBreaches": "未处理的 SLA 违约",
+    "incidents": "未处理事件",
+    "nowNote": "健康状况为某一时间点的快照；「未知」表示没有任何检查跟踪该对象——并非健康。",
+    "noData": "尚无健康检查上报数据。"
+  }
+}

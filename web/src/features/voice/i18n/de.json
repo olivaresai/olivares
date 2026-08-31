@@ -1,0 +1,152 @@
+{
+  "title": "Sprache & Echtzeit",
+  "description": "Gesteuerte Sprach- und Echtzeit-Sitzungen über den gesamten Bestand. Die Konsole zeigt ausschließlich Referenzen und Aggregate — niemals Audio, Transkriptionstext, Prompts oder PII.",
+  "tabs": {
+    "sessions": "Sitzungen",
+    "policies": "Richtlinien",
+    "ledger": "Entscheidungen"
+  },
+  "refresh": "Aktualisieren",
+  "stats": {
+    "live": "Aktive Sitzungen",
+    "liveCaption": "von {{total}} in der Ansicht",
+    "avgLatency": "Durchschn. Latenz",
+    "avgLatencyCaption": "Mittel der Sitzungsdurchschnitte",
+    "governed": "Gesteuerter Anteil",
+    "governedCaption": "{{governed}} von {{total}} waren richtliniengesteuert"
+  },
+  "sessions": {
+    "title": "Sitzungen",
+    "description": "Jede Sitzung so, wie die Engine sie meldet — der Zustand wird zum Lesezeitpunkt abgeleitet. Das Transkript wird nur als Fingerabdruck angezeigt; dahinter stehen weder Audio noch Text.",
+    "empty": "Keine Sprachsitzungen",
+    "emptyHint": "Sitzungen erscheinen, sobald ein gesteuertes Öffnen gegen eine Sprachrichtlinie ausgelöst wird.",
+    "governed": "Gesteuert",
+    "ungoverned": "Ungesteuert",
+    "transcriptLabel": "Transkript",
+    "turnsBreakdown": "{{user}}N / {{agent}}A",
+    "latencyAvg": "Durchschn. {{value}}",
+    "latencyMax": "Max. {{value}}",
+    "columns": {
+      "state": "Zustand",
+      "agent": "Agent",
+      "model": "Modell / Anbieter",
+      "turns": "Beiträge",
+      "duration": "Dauer",
+      "latency": "Latenz",
+      "governed": "Gesteuert",
+      "transcript": "Transkript",
+      "lastEvent": "Letztes Ereignis"
+    }
+  },
+  "latency": {
+    "title": "Latenz nach Sitzung",
+    "description": "Durchschnittliche Antwortlatenz pro Sitzung, nach Rang. Die Tabelle führt das Maximum mit — ohne Beiträge je Beitrag werden weder p50 noch p95 angezeigt.",
+    "summary": "Durchschnittliche Antwortlatenz für {{count}} Sitzungen, nach Rang. Die langsamste ist {{session}} mit {{latency}}.",
+    "summaryEmpty": "Keine Sitzungen, die nach Latenz sortiert werden können.",
+    "colSession": "Sitzung",
+    "colLatency": "Durchschn. Latenz"
+  },
+  "honesty": {
+    "noContent": "Ausschließlich Referenzen und Aggregate — hier werden weder Audio, Transkriptionstext, Prompts noch PII offengelegt.",
+    "findingsNote": "Richtlinienverstöße, Latenzverschlechterung und ungesteuertes Öffnen erscheinen über die Ebene der Sicherheitsbefunde, nicht über diese Routen."
+  },
+  "policies": {
+    "title": "Sprachrichtlinien",
+    "description": "Standardmäßig DENY: Eine Richtlinie ist das, was das Öffnen einer Sitzung GESTATTET. Ohne passende Richtlinie wird ein Öffnen verweigert.",
+    "empty": "Keine Sprachrichtlinien",
+    "emptyHint": "Definieren Sie eine Richtlinie, um das Öffnen von Sprachsitzungen für einen Agenten zu gestatten — Standard-Deny bedeutet, dass nichts öffnet, bis eine Richtlinie passt.",
+    "all": "Alle",
+    "minutes": "{{value}} Min.",
+    "new": "Neue Richtlinie",
+    "edit": "Bearbeiten",
+    "columns": {
+      "agent": "Agent",
+      "model": "Gestattetes Modell",
+      "provider": "Gestatteter Anbieter",
+      "maxMinutes": "Max. Sitzung",
+      "maxLatency": "Max. Latenz",
+      "setBy": "Festgelegt von",
+      "updated": "Aktualisiert"
+    },
+    "dialog": {
+      "title": "Sprachrichtlinie",
+      "description": "Diese Richtlinie GESTATTET das Öffnen von Sitzungen für den passenden Agenten (Standard-Deny). Verwenden Sie '*', um alle Agenten, Modelle oder Anbieter zu erfassen.",
+      "agent": "Agent",
+      "agentHint": "Eine Agentenreferenz oder '*' für jeden Agenten.",
+      "model": "Gestattetes Modell",
+      "modelHint": "Eine Modellreferenz oder '*' für jedes Modell.",
+      "provider": "Gestatteter Anbieter",
+      "providerHint": "Eine Anbieterreferenz oder '*' für jeden Anbieter.",
+      "maxMinutes": "Max. Sitzungsminuten",
+      "maxLatency": "Max. Latenz (ms)",
+      "save": "Richtlinie speichern",
+      "saved": "Sprachrichtlinie gespeichert"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "Keine Sitzungslatenzen für die Rangfolge",
+      "description": "Durchschnittliche Antwortlatenzen lassen sich ordnen, sobald ein gesteuertes Öffnen oder Echtzeittelemetrie eine Sprachsitzung erfasst."
+    },
+    "policies": {
+      "title": "Keine Sprachrichtlinien",
+      "description": "Eine Richtlinie erlaubt Starts bei passendem Agenten, Modell und Anbieter; ohne sie wird jeder abgelehnt, Setzen braucht Adminrechte."
+    },
+    "sessions": {
+      "title": "Noch keine Sprachsitzungen beobachtet",
+      "description": "Sitzungen erscheinen nach einem erfassten gesteuerten Öffnen oder sobald die konfigurierte Echtzeitüberwachung Sitzungstelemetrie meldet."
+    }
+  },
+  "surface": {
+    "chooseSession": "Wählen Sie eine Sitzung, um ihre Live-Ansicht zu sehen.",
+    "loading": "Wird geladen…",
+    "decisionsError": "Die Entscheidungen konnten nicht gelesen werden.",
+    "noDecisions": "Keine Entscheidungen für diese Sitzung erfasst.",
+    "noReason": "kein Grund erfasst",
+    "frames": "{{count}} Live-Aktualisierung(en)",
+    "open": "Sitzung öffnen (geregelt)",
+    "stream": {
+      "connecting": "verbindet",
+      "open": "live",
+      "closed": "nicht verbunden",
+      "error": "Stream fehlgeschlagen"
+    },
+    "outcome": {
+      "opened": "Geöffnet.",
+      "approval": "Freigabe angefordert — mit dieser Referenz erneut senden:",
+      "denied": "Durch Richtlinie abgelehnt: keine erlaubt diese Kombination (Agent, Modell, Anbieter). Das ist eine Default-Deny-Entscheidung, kein Fehler.",
+      "noGate": "In dieser Installation ist kein Freigabe-Gate verdrahtet, daher bleibt das Öffnen abgelehnt. Das ist eine Lücke im Bestand, keine Richtlinien-Ablehnung.",
+      "unavailable": "Das Freigabe-Gate hat nicht geantwortet, es wurde also nichts entschieden."
+    }
+  },
+  "ledger": {
+    "title": "Protokoll der Öffnungsentscheidungen",
+    "description": "Jede Entscheidung, eine Sprachsitzung im Bestand zu öffnen — reines Anhängen, neueste zuerst, einschließlich der VERWEIGERTEN, die deshalb nie zu einer Sitzung wurden.",
+    "caveat": "Ein verweigertes Öffnen erzeugt selbst keine Sitzungszeile, daher ist dies die erste eigene Ansicht, die es vollständig und allein mit `voice:session:read` zeigt. Andere Wege zeigen es nur teilweise oder verlangen eine andere Berechtigung: das API-Playground (Tenant-Admin), der Audit-Explorer (die Aktion, ohne ihren Grund) und die Security-Findings (nur einzelne Pfade).",
+    "empty": "Noch keine Öffnungsentscheidungen",
+    "emptyHint": "Hier stehen die Entscheidungen, die die Engine persistieren konnte. Der Evidenz-Schreibvorgang ist absichtlich best-effort — eine Verweigerung gilt auch dann, wenn ihre Zeile verloren geht —, ein leeres Protokoll ist also kein Beweis dafür, dass nichts verweigert wurde.",
+    "truncated": "Angezeigt werden die {{count}} neuesten Entscheidungen, und die Engine meldet mehr: diese Liste ist GEKÜRZT. Lies sie als Stichprobe, nicht als das vollständige Protokoll.",
+    "columns": {
+      "when": "Wann",
+      "outcome": "Ergebnis",
+      "session": "Sitzungs-Ref",
+      "agent": "Agent",
+      "actor": "Akteur",
+      "reason": "Begründung der Engine"
+    },
+    "opStatus": {
+      "requested": "Freigabe angefordert",
+      "blocked": "Blockiert",
+      "dispatched": "Zugestellt",
+      "declared_not_opened": "Deklariert, nicht geöffnet",
+      "failed": "Fehlgeschlagen",
+      "budget_blocked": "Blockiert — Budget",
+      "budget_throttled": "Öffnen verweigert — Budget-Drosselung"
+    },
+    "op": {
+      "open_request": "Öffnungsanfrage",
+      "open": "Öffnen",
+      "close": "Schließen"
+    }
+  }
+}

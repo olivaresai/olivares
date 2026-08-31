@@ -1,0 +1,18 @@
+{
+  "memberships": [
+    {
+      "id": "pm-1",
+      "roles": [
+        { "id": "r-2", "role": "admin", "isTemporary": false },
+        { "id": "r-3", "role": "viewer", "isTemporary": false }
+      ],
+      "user": {
+        "id": "user-alice",
+        "username": "alice",
+        "email": "alice@corp.example",
+        "firstName": "Alice",
+        "lastName": "Smith"
+      }
+    }
+  ]
+}

@@ -1,0 +1,423 @@
+{
+  "title": "Model Operations",
+  "subtitle": "Govern owned models, their signed-model admission and local inference deployments.",
+  "tabs": {
+    "owned": "Owned models",
+    "admission": "Admission",
+    "deployments": "Deployments",
+    "datasets": "Datasets",
+    "finetune": "Fine-tune jobs",
+    "evidence": "AIBOM seals"
+  },
+  "owned": {
+    "title": "Owned models",
+    "description": "The governed registry of models you own — hosted, fine-tuned or imported.",
+    "new": "New model",
+    "search": "Search models…",
+    "created": "Model created.",
+    "updated": "Model updated.",
+    "deleted": "Model deleted.",
+    "newTitle": "New owned model",
+    "editTitle": "Edit owned model",
+    "formBody": "Register a model you own. Governance metadata only — never a secret.",
+    "deleteTitle": "Delete owned model",
+    "deleteBody": "Delete “{{name}}”? Its versions and lineage references are removed. This is recorded in the audit ledger.",
+    "columns": {
+      "name": "Name",
+      "kind": "Kind",
+      "provider": "Provider",
+      "visibility": "Visibility",
+      "status": "Status"
+    },
+    "drawer": {
+      "subtitle": "Overview, versions and per-version admission evidence."
+    },
+    "form": {
+      "name": "Name",
+      "kind": "Kind",
+      "status": "Status",
+      "baseRef": "Base reference",
+      "providerRef": "Provider reference",
+      "visibility": "Visibility",
+      "ownerRef": "Owner reference",
+      "note": "Note"
+    },
+    "truncated": "Loaded {{n}} models; there are more",
+    "truncatedHint": "There are more registered models than shown; this page takes rows by id — assigned at creation — so rows beyond it are missing, normally the most recently registered. Table search and sorting apply only to what is loaded. A model not listed here does not demonstrate that it is unregistered."
+  },
+  "versions": {
+    "title": "Versions",
+    "new": "New version",
+    "admit": "Admit",
+    "empty": "No versions yet",
+    "emptyHint": "Create a version to record an artifact and admit its signature.",
+    "created": "Version created.",
+    "deleted": "Version deleted.",
+    "newTitle": "New model version",
+    "formBody": "A version is immutable once created — record it, then admit its signed artifact.",
+    "deleteTitle": "Delete version",
+    "deleteBody": "Delete version “{{version}}”? Its admission verdict is removed. This is recorded in the audit ledger.",
+    "form": {
+      "version": "Version",
+      "status": "Status",
+      "artifactRef": "Artifact reference",
+      "parentRef": "Parent reference",
+      "sourceRef": "Source reference",
+      "note": "Note"
+    },
+    "truncated": "Loaded {{n}} versions; there are more",
+    "truncatedHint": "This model has more versions than shown; the page takes rows by id, so later ones can be missing. A version you cannot see here is also a version whose admission evidence you cannot reach from this screen.",
+    "loadError": "The version list could not be read — this is NOT \"no versions\""
+  },
+  "deployments": {
+    "title": "Deployments",
+    "description": "Local inference deployments across all models. Governed by the admission gate.",
+    "new": "New deployment",
+    "search": "Search deployments…",
+    "created": "Deployment created.",
+    "updated": "Deployment updated.",
+    "deleted": "Deployment deleted.",
+    "governed": "Governed",
+    "newTitle": "New deployment",
+    "editTitle": "Edit deployment",
+    "formBody": "Point a runtime at a governed model version. Admission is enforced on save.",
+    "deleteTitle": "Delete deployment",
+    "deleteBody": "Delete “{{name}}”? This is recorded in the audit ledger.",
+    "deniedTitle": "Blocked by admission",
+    "deniedHint": "Admit the referenced version under the current trust anchors, then retry — your input is kept.",
+    "columns": {
+      "name": "Name",
+      "runtime": "Runtime",
+      "version": "Version",
+      "governed": "Governed",
+      "status": "Status"
+    },
+    "filters": {
+      "allRuntimes": "All runtimes",
+      "allStatuses": "All statuses"
+    },
+    "form": {
+      "name": "Name",
+      "runtime": "Runtime",
+      "status": "Status",
+      "ownedRef": "Model reference",
+      "versionRef": "Version reference",
+      "endpointRef": "Endpoint reference",
+      "governed": "Governed",
+      "governedHint": "A declared posture flag — not an admission bypass.",
+      "note": "Note",
+      "deploymentType": "Deployment type",
+      "deploymentTypeHint": "Local serves a self-hosted model version and is admission-gated; brokered calls a hosted provider and is not.",
+      "providerRef": "Provider endpoint",
+      "providerHint": "The hosted provider this deployment brokers to (e.g. an API endpoint)."
+    },
+    "types": {
+      "local": "Local (self-hosted)",
+      "brokered": "Brokered (hosted provider)"
+    },
+    "truncated": "Loaded {{n}} deployments; there are more",
+    "truncatedHint": "There are more deployments than shown; this page takes rows by id. The runtime and status filters are applied by the ENGINE, so they re-query — the cut is of the already-filtered set. A deployment not listed here does not demonstrate that nothing is running. Table search and sorting apply only to what is loaded."
+  },
+  "policy": {
+    "title": "Admission policy",
+    "description": "The tenant trust policy for signed-model admission. The signing method is derived from what you configure.",
+    "edit": "Edit policy",
+    "editTitle": "Edit admission policy",
+    "editBody": "Author the trust anchors. Saved atomically; the engine remains the authority.",
+    "loadError": "Could not load the admission policy.",
+    "saved": "Admission policy saved.",
+    "mode": "Derived mode",
+    "derivedMode": "Derived signing mode",
+    "requireSigned": "Require signed models",
+    "requireSignedHint": "Enforce: deny deployment of any version without a verified admission verdict.",
+    "requireDigests": "Require artifact digests",
+    "requireDigestsHint": "Also require an on-disk re-hash of the signed artifacts to match.",
+    "identities": "Allowed identities",
+    "identitiesHint": "One signer identity regex per line (Sigstore keyless).",
+    "issuers": "Allowed issuers",
+    "issuersHint": "One OIDC issuer URL per line. Must be set together with identities, or neither.",
+    "trustedRoots": "Trusted roots",
+    "trustedRootsHint": "PEM CA certificates (Fulcio or private PKI). Public material only.",
+    "trustedKeys": "Trusted keys",
+    "trustedKeysHint": "PEM public keys for bare-key signatures. Public material only.",
+    "note": "Note",
+    "on": "On",
+    "off": "Off",
+    "attestedBy": "Attested by",
+    "attestedAt": "Attested at",
+    "confirmTitle": "Confirm trust change",
+    "confirmBody": "Enabling enforcement or removing a trust anchor can make future deployment creates and updates fail until affected versions are re-admitted. Continue?",
+    "state": {
+      "unconfigured": {
+        "title": "Observe mode — not configured",
+        "body": "No policy is set. Admission verdicts are recorded but nothing is denied."
+      },
+      "observe": {
+        "title": "Observe mode",
+        "body": "A policy is configured but enforcement is off. Verdicts are recorded; deployments are not denied."
+      },
+      "enforce": {
+        "title": "Enforce mode",
+        "body": "Deployment of a version without a verified, still-anchored admission verdict is denied."
+      }
+    },
+    "err": {
+      "privateKey": "Trust material must be public — remove any PRIVATE KEY block.",
+      "pemResidual": "Remove the incomplete PEM block — only whole BEGIN…END blocks are saved.",
+      "anchorMissing": "Enforcement needs at least one trusted root or key.",
+      "identityIssuer": "Identities and issuers must be set together, or neither."
+    }
+  },
+  "verdicts": {
+    "title": "Admission verdicts",
+    "description": "The recorded CURRENT verdict, one per version — re-admitting REPLACES it, it does not add a row. A version with no attempt does not appear here.",
+    "search": "Search verdicts…",
+    "reAdmit": "Re-admit",
+    "drawerSubtitle": "The recorded verdict — each truth shown independently.",
+    "columns": {
+      "version": "Version",
+      "posture": "Posture",
+      "method": "Method",
+      "roots": "Signer roots",
+      "tlog": "Transparency log",
+      "attestedAt": "Recorded"
+    },
+    "filters": {
+      "all": "All",
+      "verified": "Verified only",
+      "unverified": "Unverified only"
+    },
+    "truncated": "Loaded {{n}} verdicts; there are more",
+    "truncatedHint": "There are more admission verdicts than shown; this page takes rows by id. There is one verdict per version — re-admitting REPLACES it, it does not add a row, and the id keeps the FIRST attempt's position — so a version missing here has not necessarily gone unadmitted."
+  },
+  "admit": {
+    "title": "Admit a signed model",
+    "reAdmitTitle": "Re-admit under current trust",
+    "body": "Verify and record a signature for version {{version}}. A recorded verdict is evidence, admitted or not.",
+    "bundle": "Signature bundle",
+    "bundleHint": "The raw OMS / Sigstore bundle JSON.",
+    "bundlePlaceholder": "{ \"mediaType\": \"…\", … }",
+    "bundleInvalid": "Expected a JSON object.",
+    "digests": "Resolved digests",
+    "digestsHint": "Optional map of file → hex digest, to re-hash the on-disk artifact.",
+    "digestsInvalid": "Expected a JSON object of string values.",
+    "modelRef": "Model reference",
+    "aibomRef": "AIBOM reference",
+    "note": "Note",
+    "submit": "Admit",
+    "admitted": "Version admitted.",
+    "recordedNotAdmitted": "Verdict recorded, but the signature did not satisfy the policy."
+  },
+  "admission": {
+    "mode": {
+      "keyless": "sigstore-keyless",
+      "certificate-pki": "certificate-pki",
+      "bare-key": "bare-key",
+      "empty": "admits nothing"
+    },
+    "posture": {
+      "verified": "Verified",
+      "signedUnbound": "Signed, artifact unbound",
+      "denied": "Not verified"
+    }
+  },
+  "evidence": {
+    "reason": "Reason",
+    "noReason": "No reason was recorded.",
+    "subjectName": "Subject",
+    "subjectDigest": "Subject digest",
+    "signer": "Signer",
+    "signerRoots": "Signer roots",
+    "artifact": "Artifact re-hash",
+    "artifactVerified": "Matched",
+    "artifactUnverified": "Not checked",
+    "tlog": "Transparency log",
+    "tlogVerified": "Verified",
+    "tlogPresent": "Present (inclusion not checked)",
+    "tlogAbsent": "Absent",
+    "resourceCount": "Signed resources",
+    "coverage": "Coverage",
+    "attestedBy": "Attested by",
+    "attestedAt": "Recorded",
+    "none": "No admission attempt recorded",
+    "noneHint": "Admit this version to record a signature verdict."
+  },
+  "datasets": {
+    "title": "Datasets",
+    "description": "AIBOM lineage components — a name, a content reference and a hash. Never the data itself.",
+    "new": "New dataset",
+    "search": "Search datasets…",
+    "created": "Dataset recorded.",
+    "deleted": "Dataset deleted.",
+    "claimed": "Operator claim",
+    "newTitle": "Record a dataset",
+    "formBody": "A minimal-data lineage record: identity, classification and a content reference — never the dataset contents.",
+    "deleteTitle": "Delete dataset",
+    "deleteBody": "Delete “{{name}}”? Its lineage reference is removed, which changes future BOMs (never a past seal). This is recorded in the audit ledger.",
+    "drawerSubtitle": "Lineage record — classification, content reference and provenance claim.",
+    "provenanceLabel": "Provenance",
+    "provenanceClaimed": "Operator assertion recorded — the operator states the recorded provenance was reviewed. Olivares did not cryptographically verify the dataset or inspect its contents.",
+    "provenanceNotClaimed": "No provenance assertion recorded by the operator.",
+    "attestedBy": "Recorded by",
+    "columns": {
+      "name": "Name",
+      "classification": "Classification",
+      "ownedRef": "Model reference",
+      "provenance": "Provenance",
+      "recorded": "Recorded"
+    },
+    "form": {
+      "name": "Name",
+      "classification": "Classification",
+      "ownedRef": "Model reference",
+      "ownedRefHint": "Optional — link this dataset to an owned model. Must resolve, or the save is refused.",
+      "sourceRef": "Source reference",
+      "contentHash": "Content hash",
+      "contentAlg": "Hash algorithm",
+      "contentAlgHint": "Defaults to sha256 when a hash is set.",
+      "governance": "Governance label",
+      "verified": "Provenance reviewed (operator claim)",
+      "verifiedHint": "Assert that you reviewed this dataset's provenance. This records an operator claim — not verification performed by Olivares. There is no update: correcting it means delete and recreate.",
+      "note": "Note"
+    },
+    "truncated": "Loaded {{n}} datasets; there are more",
+    "truncatedHint": "There are more registered datasets than shown; this page takes rows by id. These rows are AI-BOM lineage components: a dataset missing here does not demonstrate that the lineage lacks it. Table search and sorting apply only to what is loaded."
+  },
+  "finetune": {
+    "title": "Fine-tune jobs",
+    "description": "Records of fine-tuning jobs and the versions they produced. The plane never trains a model or holds weights.",
+    "new": "New job record",
+    "search": "Search jobs…",
+    "created": "Job recorded.",
+    "updated": "Job updated.",
+    "newTitle": "Record a fine-tune job",
+    "editTitle": "Update fine-tune job",
+    "formBody": "Record a job's state and the version it produced. This is an inventory record — the control plane does not run training.",
+    "trackBanner": "This records externally run fine-tuning work. Olivares does not start, cancel, or execute training and stores no weights or dataset contents.",
+    "columns": {
+      "name": "Name",
+      "runtime": "Runtime",
+      "status": "Status",
+      "resultVersion": "Result version",
+      "started": "Started"
+    },
+    "filters": {
+      "allStatuses": "All statuses"
+    },
+    "form": {
+      "name": "Name",
+      "status": "Status",
+      "runtime": "Runtime",
+      "runtimeNone": "Unspecified",
+      "baseRef": "Base reference",
+      "datasetRef": "Dataset reference",
+      "resultVersionRef": "Result version reference",
+      "resultVersionRefHint": "The model version this job produced. Must resolve to an existing version, or the save is refused.",
+      "startedAt": "Started at",
+      "endedAt": "Ended at",
+      "clearHint": "Clearing a recorded timestamp has no effect — the engine keeps the previous value.",
+      "note": "Note"
+    },
+    "truncated": "Loaded {{n}} jobs; there are more",
+    "truncatedHint": "There are more fine-tune records than shown; this page takes rows by id. The status filter is applied by the ENGINE, so it re-queries. A job not listed here does not demonstrate that it never ran. Table search and sorting apply only to what is loaded."
+  },
+  "evidenceLedger": {
+    "title": "AIBOM seals",
+    "description": "The sealed AIBOM ledger across all models — durable, append-only, ledger-anchored tamper-evidence. Each row is a content-hash commitment, not the BOM document.",
+    "search": "Search seals…",
+    "drawerSubtitle": "A sealed AIBOM — the tamper-evidence anchored to the audit ledger.",
+    "sealMeaning": "A seal is an append-only content-hash commitment anchored to the audit ledger — not an archive of the BOM. The full document is not stored and cannot be retrieved from a seal.",
+    "noPriorHead": "0 (no prior audit head)",
+    "serialNumber": "Serial number",
+    "ledgerHash": "Ledger hash",
+    "generatedBy": "Sealed by",
+    "scopeNote": "Scope",
+    "columns": {
+      "ownedRef": "Model reference",
+      "contentHash": "Content hash",
+      "components": "Components",
+      "spec": "Spec",
+      "ledgerSeq": "Ledger seq",
+      "sealed": "Sealed"
+    },
+    "truncated": "Loaded {{n}} seals; there are more",
+    "truncatedHint": "There are more sealed AI-BOMs than shown. This page takes rows by id — assigned at creation — so rows beyond it are missing, which in normal operation means recent evidence. Table search and sorting apply only to what is loaded. A model with no seal here does not demonstrate that it was never sealed."
+  },
+  "documents": {
+    "liveTitle": "Generated documents — live",
+    "liveSubtitle": "Generated now from the current registry state. Not sealed and not audited.",
+    "sealsTitle": "Sealed AIBOM commitments",
+    "live": "Live",
+    "preview": "Preview",
+    "export": "Export",
+    "loadError": "Could not generate the document.",
+    "sealRecorded": "AIBOM seal recorded",
+    "receiptBody": "The ledger stores only the content hash — the sealed CycloneDX document exists only here. Download it now to keep a copy.",
+    "downloadSealed": "Download sealed BOM",
+    "noSeals": "No seals yet",
+    "noSealsHint": "Seal the AIBOM to anchor a content-hash commitment to the audit ledger.",
+    "sealConfirmTitle": "Seal this AIBOM?",
+    "sealConfirmBody": "Create an append-only CycloneDX content-hash commitment from the current registry state? This does not archive the BOM document.",
+    "aibom": {
+      "title": "AIBOM",
+      "cyclonedx": "CycloneDX (JSON)",
+      "spdx": "SPDX 3.0.1 (JSON)",
+      "seal": "Seal AIBOM",
+      "sealHint": "Sealing creates an append-only CycloneDX content-hash commitment anchored to the audit ledger. It does not archive the BOM document. Always CycloneDX — the SPDX export can never be sealed.",
+      "previewTitle": "AIBOM (live)",
+      "previewBody": "A live, read-only CycloneDX (or SPDX) inventory — not sealed until you seal it."
+    },
+    "card": {
+      "title": "Model card",
+      "markdown": "Markdown (.md)",
+      "json": "JSON",
+      "previewTitle": "Model card (live)",
+      "previewBody": "Generated from the governed inventory. Sections without recorded evidence are marked not recorded — never fabricated.",
+      "name": "Name",
+      "kind": "Kind",
+      "status": "Status",
+      "intendedUse": "Intended use",
+      "versions": "Versions",
+      "noVersions": "No versions recorded.",
+      "admitted": "Admitted",
+      "notVerified": "Recorded, not verified",
+      "noVerdict": "No verdict",
+      "trainingData": "Training data",
+      "notRecorded": "Not recorded.",
+      "admissionsRecorded": "Signed admissions recorded",
+      "admissionsVerified": "Signed admissions verified",
+      "gpaiRecorded": "Supplier GPAI posture recorded",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "sealsTruncated": "Loaded {{n}} seals; there are more",
+    "sealsTruncatedHint": "This model has more seals than shown; the page takes rows by id, so later rows — normally the latest seal — can be missing. The absence of a hash here does not demonstrate that the document was never sealed.",
+    "sealsLoadError": "The seal history could not be read — this is NOT \"no seals\""
+  },
+  "empty": {
+    "datasets": {
+      "title": "No datasets recorded yet",
+      "description": "Record a dataset's identity and classification, with an optional content reference and hash, to add it to AIBOM lineage without storing its contents."
+    },
+    "deployments": {
+      "title": "No inference deployments recorded yet",
+      "description": "Record a local or brokered inference deployment; a local entry needs an existing model version, and is gated only where an admission policy requires signing."
+    },
+    "finetune": {
+      "title": "No fine-tune job records yet",
+      "description": "Record a fine-tune job run outside Olivares to track its state, lineage and produced model version; the control plane does not run training."
+    },
+    "modelEvidence": {
+      "title": "No AIBOM seals recorded yet",
+      "description": "Open an owned model and seal its AIBOM to anchor an append-only content-hash commitment to the audit ledger."
+    },
+    "ownedModels": {
+      "title": "No owned models registered yet",
+      "description": "Register a hosted, fine-tuned or imported model to manage its versions, admission evidence and AIBOM documents."
+    },
+    "verdict": {
+      "title": "No admission verdicts recorded yet",
+      "description": "Create a version under an owned model, then admit its signed artifact. Each version keeps one verdict, replaced when it is admitted again."
+    }
+  }
+}

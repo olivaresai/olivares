@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+
+model:
+  provider: openai
+  default: gpt-4.1
+  api_key: sk-live-literal
+fallback_providers:
+  - anthropic
+custom_providers:
+  local-lab:
+    base_url: http://127.0.0.1:1234
+    api_key: local-literal-secret
+terminal:
+  backend: docker
+  docker_run_as_host_user: true
+  docker_mount_cwd_to_workspace: true
+  docker_forward_env:
+    - AWS_PROFILE
+  docker_volumes:
+    - /:/host
+  sudo_password: plaintext-password
+security:
+  redact_secrets: false
+  allow_private_urls: true
+  allow_lazy_installs: true
+approvals:
+  mode: off
+  command_allowlist:
+    - rm -rf *
+skills:
+  write_approval: false
+  guard_agent_created: false
+  config:
+    shell-helper:
+      enabled: true
+memory:
+  write_approval: false
+platforms:
+  slack:
+    enabled: true
+  weixin:
+    enabled: true
+dashboard:
+  basic_auth:
+    username: admin
+    password: plaintext-dashboard-password
+mcp_servers:
+  filesystem:
+    command: npx
+    args:
+      - "@modelcontextprotocol/server-filesystem"

@@ -1,0 +1,35 @@
+# Auto-generated release-notes configuration (GitHub native).
+# Categorizes PRs by label when a release is drafted. The canonical, curated
+# changelog remains CHANGELOG.md (Keep a Changelog 1.1) — these generated notes
+# complement it with the raw PR list, they do not replace it.
+# Labels are defined as code in .github/labels.json (applied by
+# scripts/apply-github-presence.sh).
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking
+    - title: Security
+      labels:
+        - security
+    - title: Features
+      labels:
+        - enhancement
+    - title: Connectors
+      labels:
+        - connector
+    - title: Fixes
+      labels:
+        - bug
+    - title: Documentation
+      labels:
+        - docs
+    - title: Dependencies
+      labels:
+        - dependencies
+    - title: Other changes
+      labels:
+        - "*"

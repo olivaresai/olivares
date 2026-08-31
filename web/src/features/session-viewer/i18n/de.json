@@ -1,0 +1,126 @@
+{
+  "title": "Viewer für Sitzungsaufzeichnungen",
+  "subtitle": "Einheitliche Zeitachse der Agentenaktivität und Governance-Nachweise für eine einzelne Sitzung.",
+  "back": "Zurück zu Aufzeichnungen",
+  "header": {
+    "subject": "Subjekt",
+    "status": "Status",
+    "opened": "Geöffnet",
+    "duration": "Dauer",
+    "model": "Modell",
+    "frames": "Frames",
+    "live": "LIVE",
+    "tipHash": "Ketten-Tip",
+    "openSeq": "Hauptbuch-seq (Öffnung)",
+    "anchorSeq": "Letzte Anker-seq",
+    "sealSeq": "Hauptbuch-seq (Siegel)"
+  },
+  "lanes": {
+    "activity": "Agentenaktivität",
+    "evidence": "Governance-Nachweise"
+  },
+  "panels": {
+    "tools": "Verwendete Werkzeuge",
+    "files": "Berührte Dateien",
+    "decisions": "Entscheidungen"
+  },
+  "timeline": {
+    "loadMore": "Mehr laden",
+    "empty": "Keine Ereignisse aufgezeichnet",
+    "activityUnavailable": "Die Agentenaktivität ist nicht verfügbar, weil der Timeline-Resolver nicht eingebunden ist oder nicht geantwortet hat. Governance-Nachweise bleiben verfügbar.",
+    "tool": "Werkzeugaufruf",
+    "mcp": "MCP-Aufruf",
+    "cost": "Kostenabfrage",
+    "finding": "Befund"
+  },
+  "redaction": {
+    "hidden": "[GESCHWÄRZT — zum Aufdecken klicken]",
+    "reveal": "Aufdecken",
+    "hide": "Ausblenden"
+  },
+  "verify": {
+    "passive": "Inline-Verifizierung",
+    "fresh": "Neue Verifizierung",
+    "intact": "Kette intakt",
+    "broken": "Kette unterbrochen",
+    "frames": "{{count}} Frames überprüft",
+    "anchors": "{{count}} Anker überprüft",
+    "tipMatch": "Tip-Übereinstimmung",
+    "tipMismatch": "Tip-Abweichung",
+    "anchorsOk": "{{count}} Anker verifiziert",
+    "anchorsBroken": "{{count}} Anker fehlgeschlagen",
+    "anchoredThrough": "Verifizierte Hauptbuch-Anker decken bis Frame {{idx}} ab.",
+    "breakAt": "Unterbrechung bei Frame {{idx}} — {{reason}}",
+    "gap": "Frame-Lücke",
+    "failures": "Anker-Fehler",
+    "failure": "{{kind}}-Anker · seq {{seq}} · Frame {{idx}} · {{reason}}",
+    "failed": "Verifizierung fehlgeschlagen"
+  },
+  "export": {
+    "json": "JSON exportieren",
+    "summary": "Zusammenfassung exportieren",
+    "verify": "Kette überprüfen"
+  },
+  "tools": {
+    "success": "Erfolg",
+    "fail": "Fehler",
+    "calls": "{{count}} Aufrufe"
+  },
+  "files": {
+    "read": "Lesen",
+    "write": "Schreiben",
+    "edit": "Bearbeiten",
+    "create": "Erstellen"
+  },
+  "decisions": {
+    "group": "Aufgabe {{idx}}",
+    "tools": "{{count}} Werkzeugaufrufe",
+    "fileCount": "{{count}} Dateien"
+  },
+  "detail": {
+    "toolRef": "Tool-Referenz",
+    "resourceRef": "Ressourcenreferenz",
+    "mode": "Modus",
+    "source": "Quelle",
+    "titleField": "Titel",
+    "at": "Zeitpunkt",
+    "frameIdx": "#",
+    "namespace": "Namespace",
+    "method": "Methode",
+    "pattern": "Muster",
+    "outcome": "Ergebnis",
+    "actor": "Akteur",
+    "actAs": "Handeln als",
+    "params": "Parameter",
+    "httpStatus": "HTTP-Status",
+    "durMs": "Dauer",
+    "hash": "Frame-Hash",
+    "prevHash": "Vorheriger Hash",
+    "anchorSeq": "Anker-seq",
+    "close": "Ereignisdetails schließen"
+  },
+  "seal": {
+    "action": "Sitzung versiegeln",
+    "title": "Diese Aufzeichnungssitzung versiegeln?",
+    "body": "Das Versiegeln ist unumkehrbar: Es schließt die Sitzung, fixiert ihren Ketten-Tip und verhindert das Anhängen weiterer Frames.",
+    "confirm": "Sitzung versiegeln",
+    "done": "Sitzung versiegelt",
+    "alreadySealed": "Diese Sitzung ist bereits versiegelt."
+  },
+  "summarize": {
+    "action": "Zusammenfassung erstellen",
+    "done": "Zusammenfassung erstellt.",
+    "unavailable": "Es ist kein Zusammenfassungsdienst konfiguriert; die Aufzeichnung bleibt als Rohnachweis verfügbar.",
+    "disabled": "KI-Zusammenfassungen sind für diesen Mandanten deaktiviert, da das Transkript die Vertrauensgrenze verlassen würde.",
+    "active": "Diese Sitzung ist noch aktiv. Versiegeln Sie sie, bevor Sie eine vollständige Zusammenfassung erstellen.",
+    "failed": "Die Zusammenfassung konnte nicht erstellt werden; die Aufzeichnung selbst ist davon nicht betroffen."
+  },
+  "ledger": {
+    "title": "Hauptbuch",
+    "subtitle": "Korrelierte semantische Ereignisse aus dem Nachweis-Hauptbuch.",
+    "seq": "seq {{seq}}",
+    "empty": "Keine korrelierten Hauptbuch-Ereignisse",
+    "truncated": "Die Hauptbuch-Ansicht ist gekürzt; jenseits dieses begrenzten Fensters existieren weitere korrelierte Ereignisse."
+  },
+  "notFound": "Aufzeichnungssitzung nicht gefunden"
+}

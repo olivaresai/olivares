@@ -1,0 +1,202 @@
+{
+  "title": "Atestación de cadena de suministro",
+  "description": "Verdad medida sobre el binario en ejecución, más el contrato declarado de verificación de releases: qué acompaña a cada release y cómo verificarlo exactamente. Nada se reverifica en el navegador.",
+  "forbiddenTitle": "Sin autorización",
+  "forbidden": "Ver el contrato de atestación requiere el permiso compliance:read.",
+  "disclaimer": {
+    "tag": "Beta",
+    "body": "El proyecto está en beta: todavía no existe ningún release y la canalización de release está escrita pero no activada. El panel del binario en ejecución está MEDIDO desde este proceso; las pestañas del contrato son el contrato declarado, no un release publicado ni una verificación criptográfica en vivo; esta consola nunca reverifica firmas en el navegador.",
+    "declaredRef": "Referencia declarada — AsOf {{date}}. Tomada textualmente de docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml y los workflows de release, scorecard y patch-velocity. El motor no puede observar el estado del repositorio ni de la CI, así que esta mitad no se sirve en vivo."
+  },
+  "live": {
+    "title": "Binario en ejecución (medido)",
+    "description": "Lo que ESTE proceso del motor puede demostrar sobre sí mismo — leído en vivo del binario (ldflags, debug.ReadBuildInfo, crypto/fips140, un autohash del ejecutable) — y el estado honesto del release: nada está publicado ni verificado hasta que una etiqueta v* dispare la canalización.",
+    "status": {
+      "measured": "Medido"
+    },
+    "fields": {
+      "commit": "Commit",
+      "buildDate": "Fecha de build",
+      "goVersion": "Versión de Go",
+      "platform": "SO / arquitectura",
+      "mainModule": "Módulo principal",
+      "moduleSums": "Sumas de módulos",
+      "vcsStamp": "Sello VCS",
+      "selfHash": "Auto-SHA256",
+      "capturedAt": "Capturado",
+      "releaseReason": "Estado del release",
+      "signature": "Firma",
+      "verifier": "Verificador",
+      "transparencyLog": "Registro de transparencia",
+      "workflows": "Workflows de la canalización"
+    },
+    "fipsOn": "FIPS 140-3: activado",
+    "fipsOff": "FIPS 140-3: desactivado",
+    "sums": "{{n}} dependencias externas llevan hashes de go.sum",
+    "sumsAbsent": "sin sumas de dependencias registradas",
+    "vcsAvailable": "Ajustes VCS sellados por la toolchain de Go",
+    "vcsUnavailable": "Sin sello VCS",
+    "selfHashHint": "El auto-SHA256 es un hash en streaming del ejecutable en ejecución, calculado una vez en la primera lectura. Compáralo SIN CONEXIÓN con un futuro checksums.txt firmado: el navegador nunca verifica firmas, y un hash por sí solo demuestra identidad, no procedencia.",
+    "published": "Publicado",
+    "notPublished": "No publicado",
+    "verifierAvailable": "Verificador nativo compilado (core/secure/modelsign)",
+    "verifierUnavailable": "Sin verificador disponible",
+    "pipelineStatus": {
+      "declared": "Declarado."
+    }
+  },
+  "status": {
+    "declared": "Declarado",
+    "skip_when_absent": "Se omite si falta",
+    "not_run": "Aún no ejecutado"
+  },
+  "trust": {
+    "keyless": "Sin clave (Fulcio/Rekor)",
+    "key_based": "Con clave (air-gap)",
+    "both": "Sin clave + con clave",
+    "transitive": "Transitiva (checksums firmados)"
+  },
+  "tabs": {
+    "artifacts": "Artefactos",
+    "provenance": "Procedencia y VEX",
+    "sbom": "SBOM",
+    "scorecard": "Scorecard",
+    "remediation": "SLA de remediación",
+    "airgap": "Air-gap y chart"
+  },
+  "artifacts": {
+    "title": "Artefactos del release",
+    "description": "Qué acompaña a un release y cómo se establece la confianza de cada artefacto. La firma sin clave (Fulcio/Rekor) y con clave (air-gap) son ambas de primer nivel; ninguna es canónica.",
+    "identityNote": "Identidad de firma sin clave (declarada): emisor OIDC {{issuer}} · identidad del certificado cosign {{regexp}}",
+    "columns": {
+      "artifact": "Artefacto",
+      "producedBy": "Producido por",
+      "signatureTrust": "Firma / confianza",
+      "mechanism": "Mecanismo",
+      "status": "Estado",
+      "control": "Control"
+    }
+  },
+  "slsa": {
+    "title": "Procedencia de build SLSA",
+    "description": "Procedencia in-toto / ITE-6 generada por slsa-github-generator y verificada con slsa-verifier.",
+    "buildLevel": "SLSA Build {{level}}",
+    "predicate": "Tipo de predicado",
+    "generator": "Generador",
+    "pin": "Fijado del workflow reutilizable",
+    "pinKind": {
+      "semver_tag": "Etiqueta semver",
+      "sha": "SHA"
+    },
+    "verifyCommand": "Comando de verificación",
+    "honesty": "L3 por construcción: la firma se ejecuta en un contexto aislado al que los pasos de build no pueden acceder. El workflow reutilizable se fija por etiqueta semver (no por SHA): slsa-verifier valida el ID del builder frente a la etiqueta, así que un pin por SHA rompería la verificación. No todas las dependencias están fijadas por SHA."
+  },
+  "sbom": {
+    "title": "Inventario de software (SBOM)",
+    "description": "SPDX 2.3 y CycloneDX 1.6 por archivo y para la imagen del contenedor, adjuntos como atestación in-toto firmada.",
+    "attestation": "Predicado de atestación",
+    "linter": "Linter CISA",
+    "cisa": {
+      "title": "Lista de elementos mínimos de CISA",
+      "draftTag": "Borrador",
+      "draft": "Los \"elementos mínimos\" de SBOM de CISA 2025 son un borrador (pre-decisional, en consulta pública), NO una ley ni un requisito federal finalizado. El linter falla cuando falta por completo un tipo de campo (estricto) y avisa de las omisiones por componente que el propio borrador permite (flexible).",
+      "columns": {
+        "element": "Elemento",
+        "enforcement": "Exigencia",
+        "carriedBy": "Aportado por"
+      },
+      "enforcement": {
+        "hard": "Estricto",
+        "soft": "Flexible"
+      }
+    }
+  },
+  "vex": {
+    "title": "Declaraciones OpenVEX",
+    "description": "Declaraciones de explotabilidad basadas en alcanzabilidad (govulncheck), adjuntas como atestación in-toto firmada.",
+    "columns": {
+      "vuln": "Vulnerabilidad",
+      "status": "Estado",
+      "justification": "Justificación",
+      "author": "Autor"
+    },
+    "status": {
+      "not_affected": "No afectado",
+      "affected": "Afectado",
+      "fixed": "Corregido",
+      "under_investigation": "En investigación"
+    }
+  },
+  "scorecard": {
+    "title": "OpenSSF Scorecard",
+    "description": "Las cuatro comprobaciones de cadena de suministro más relevantes para un producto de seguridad autoalojado.",
+    "checksTitle": "Comprobaciones seguidas",
+    "schedule": "Programación",
+    "gauge": {
+      "title": "Comprobaciones de Scorecard declaradas",
+      "summary": "{{declared}} de {{total}} comprobaciones seguidas de OpenSSF Scorecard están declaradas en el contrato. Es un recuento de cobertura de comprobaciones declaradas, no una puntuación numérica de Scorecard.",
+      "caption": "declaradas"
+    },
+    "columns": {
+      "check": "Comprobación",
+      "what": "Qué evalúa",
+      "evidence": "Evidencia"
+    }
+  },
+  "sla": {
+    "title": "SLA de remediación de CVE",
+    "description": "Objetivos de remediación desde el momento en que hay una corrección upstream para una vulnerabilidad alcanzable en nuestros artefactos publicados. Entran en vigor con el primer release etiquetado.",
+    "cadenceTitle": "Cadencia de patch-velocity",
+    "schedule": "Programación",
+    "columns": {
+      "severity": "Severidad (CVSS v3.1)",
+      "cvss": "Rango de puntuación",
+      "target": "Objetivo hasta release firmado y parcheado"
+    },
+    "severity": {
+      "critical": "Crítica",
+      "high": "Alta",
+      "medium": "Media",
+      "low": "Baja"
+    }
+  },
+  "airgap": {
+    "title": "Bundle air-gap y chart Helm OCI",
+    "description": "Un bundle verificable sin conexión y un chart Helm OCI con doble firma. Nada en esta ruta hace llamadas al exterior.",
+    "bundleTitle": "Bundle air-gap",
+    "bundleIntro": "La vía con clave no necesita Rekor ni Fulcio. Los mantenedores construyen un bundle autocontenido en línea una vez; el sitio desconectado lo verifica y lo replica.",
+    "buildCommand": "Construir (en línea una vez)",
+    "mirrorCommand": "Replicar (sin internet)",
+    "chartTitle": "Chart Helm OCI",
+    "ociCoordinate": "Coordenada OCI",
+    "cosignManifest": "cosign (manifiesto)",
+    "gpgProv": "GPG .prov",
+    "verifyCommand": "Comando de verificación"
+  },
+  "empty": {
+    "artifact": {
+      "title": "No se han declarado artefactos del release",
+      "description": "Esta tabla se compila a partir del contrato declarado de verificación de releases; las filas solo aparecen cuando ese contrato enumera artefactos del release."
+    },
+    "checkChart": {
+      "title": "No se han declarado comprobaciones de Scorecard",
+      "description": "La cobertura de comprobaciones declaradas solo aparece cuando el contrato de release compilado enumera comprobaciones de OpenSSF Scorecard que se siguen."
+    },
+    "sbom": {
+      "title": "No se han declarado elementos mínimos del SBOM",
+      "description": "Esta lista se compila a partir del contrato de SBOM declarado; las filas solo aparecen cuando ese contrato enumera los elementos mínimos del borrador de CISA."
+    },
+    "scorecard": {
+      "title": "No se han declarado comprobaciones de Scorecard para seguimiento",
+      "description": "Esta tabla se compila a partir del contrato de release declarado; las filas solo aparecen cuando el contrato enumera comprobaciones de OpenSSF Scorecard que se siguen."
+    },
+    "sla": {
+      "title": "No se han declarado objetivos de remediación",
+      "description": "Esta tabla se compila a partir del contrato declarado de velocidad de parcheado; las filas solo aparecen cuando asigna objetivos de remediación a los niveles de severidad de CVE."
+    },
+    "vex": {
+      "title": "No se han definido declaraciones OpenVEX",
+      "description": "Esta tabla se compila a partir del contrato de release declarado; las filas solo aparecen cuando el contrato incluye declaraciones OpenVEX de ejemplo."
+    }
+  }
+}

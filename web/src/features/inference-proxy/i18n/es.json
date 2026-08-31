@@ -1,0 +1,96 @@
+{
+  "title": "Proxy de inferencia",
+  "description": "El proxy por organización que aplica políticas delante de cada llamada al modelo: compuertas de petición/respuesta, reglas DLP de egreso y aprobaciones de autorización de dispositivos.",
+  "config": {
+    "title": "Compuertas y límites",
+    "intro": "Cada compuerta se aplica en la petición antes de la llamada al modelo. Desactivar una deja de aplicar esa comprobación; el cambio queda registrado en el ledger de auditoría.",
+    "failOpen": "Fallo abierto",
+    "failOpenHint": "Cuando el proxy no puede resolver una decisión de política, permite la llamada en vez de bloquearla. Desactivado = fallo cerrado.",
+    "recordMandatory": "Requerir grabación",
+    "recordMandatoryHint": "Rechaza una llamada que no pueda grabarse en el ledger de sesión.",
+    "gates": {
+      "gate_model_access": "Acceso a modelos",
+      "gate_budget": "Presupuesto",
+      "gate_residency": "Residencia",
+      "gate_context_window": "Ventana de contexto",
+      "gate_dlp_request": "DLP de petición",
+      "gate_dlp_response": "DLP de respuesta"
+    },
+    "gatesHint": {
+      "gate_model_access": "Aplica qué modelos puede llamar cada sujeto.",
+      "gate_budget": "Aplica los límites de presupuesto antes de que la llamada genere coste.",
+      "gate_residency": "Aplica la región de residencia de datos de la organización.",
+      "gate_context_window": "Aplica el límite de ventana de contexto por superficie.",
+      "gate_dlp_request": "Analiza la petición saliente en busca de clasificaciones no permitidas.",
+      "gate_dlp_response": "Analiza la respuesta del modelo según el modo DLP de respuesta."
+    },
+    "responseDlpMode": "Modo DLP de respuesta",
+    "responseDlpModeHint": "Cómo gestiona el DLP de respuesta una coincidencia: off (sin análisis), flag (anota) o buffer (retiene para analizar antes de devolver).",
+    "dlpModes": {
+      "off": "Desactivado",
+      "flag": "Marcar",
+      "buffer": "Retener"
+    },
+    "ceilingsEnforce": "Aplicar límites",
+    "ceilingsEnforceHint": "Limita tokens, usos de herramientas y presupuesto de tarea por llamada. Desactivado = sin límite por llamada.",
+    "ceilingMaxTokens": "Tokens máx.",
+    "ceilingMaxToolUses": "Usos de herramienta máx.",
+    "ceilingTaskBudget": "Presupuesto de tarea (tokens)",
+    "ceilingTaskBudgetHint": "0 = sin definir, si no al menos {{min}}.",
+    "ceilingTaskBudgetError": "Debe ser 0 o al menos {{min}}.",
+    "reset": "Restablecer",
+    "save": "Guardar configuración",
+    "saved": "Configuración del proxy guardada"
+  },
+  "dlp": {
+    "title": "Reglas DLP de egreso",
+    "intro": "Asigna una clasificación de contenido a permitir o denegar en el egreso. La clasificación se ejecuta en el servidor en la llamada al modelo; estas reglas deciden qué hace una coincidencia.",
+    "truncated": "Cargadas {{n}} reglas DLP; hay más",
+    "truncatedHint": "Hay más reglas DLP de las que se ven; esta página toma filas por id. Que una regla no esté aquí no prueba que no exista: el egreso puede estar gobernado por reglas que no ves.",
+    "add": "Añadir regla",
+    "noRead": "No tienes permiso para ver las reglas DLP.",
+    "empty": "Sin reglas DLP",
+    "emptyHint": "Añade una regla para permitir o denegar una clasificación en el egreso.",
+    "colClass": "Clasificación",
+    "colAction": "Acción",
+    "colNote": "Nota",
+    "colActions": "Acciones",
+    "actions": {
+      "allow": "Permitir",
+      "deny": "Denegar"
+    },
+    "editAction": "Editar regla de {{class}}",
+    "deleteAction": "Eliminar regla de {{class}}",
+    "created": "Regla DLP creada",
+    "updated": "Regla DLP actualizada",
+    "deleted": "Regla DLP eliminada",
+    "deleteDialog": {
+      "title": "¿Eliminar regla DLP?",
+      "description": "Esto elimina la regla de egreso para «{{class}}». El contenido coincidente pasará a la gestión por defecto.",
+      "confirm": "Eliminar regla"
+    },
+    "dialog": {
+      "title": "Añadir regla DLP",
+      "editTitle": "Editar regla DLP",
+      "subtitle": "Una clasificación se permite o deniega en el egreso. La regla se identifica por su clasificación.",
+      "class": "Clasificación",
+      "classHint": "La clasificación de contenido a la que se aplica esta regla (p. ej. pii, secret).",
+      "action": "Acción",
+      "note": "Nota",
+      "create": "Añadir regla",
+      "save": "Guardar regla"
+    }
+  },
+  "device": {
+    "title": "Autorización de dispositivo",
+    "intro": "Aprueba o deniega una solicitud de autorización de dispositivo por su código de usuario (el código mostrado en la pantalla de emparejamiento del dispositivo).",
+    "userCode": "Código de usuario",
+    "userCodePlaceholder": "p. ej. WDJB-MJHT",
+    "approve": "Aprobar",
+    "deny": "Denegar",
+    "approved": "Código de dispositivo {{code}} aprobado",
+    "denied": "Código de dispositivo {{code}} denegado",
+    "notFound": "No hay ninguna solicitud pendiente para ese código de usuario.",
+    "expired": "Esa solicitud ha caducado o ya se usó."
+  }
+}

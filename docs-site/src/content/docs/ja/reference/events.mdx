@@ -1,0 +1,488 @@
+---
+title: イベントバスリファレンス（AsyncAPI 3.0）
+description: >-
+  Eventing プラットフォームを AsyncAPI 3.0 契約として —— カタログ化されたイベント型、
+  それらのエンベロープとペイロード、live-bus と durable-intake のセマンティクス、
+  ワイヤーエンコーディング、外部 webhook サブスクリプション。REST リファレンスの非同期対応版。
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components'
+
+コネクタは正規化された観測をエンジンの**内部イベントバス**に**イベント**として持ち上げる。
+モジュールと出力コネクタは**イベント型でサブスクライブ**して反応する —— それらが互いをインポート
+することは一切ない。本ページはその契約を **AsyncAPI 3.0** として表現したものであり、
+[REST API リファレンス](/reference/api/) の非同期対応版である。
+
+<Aside type="note" title="機械可読な仕様">
+完全に検証された AsyncAPI 3.0 ドキュメントはダウンロード可能である:
+**[`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)**。これは **Go SDK と Eventing
+カタログから手作業で導出**されている（コード生成はない）。したがって権威あるソースは SDK の
+エンベロープ／ペイロードと `modules/eventing/catalog.go` であり、本ページと YAML は手作業で
+両方と歩調を合わせて保たれる。
+</Aside>
+
+## バスモデル
+
+- **トランスポート。** v1 のデフォルトは単一の `olivares` バイナリ内にある**プロセス内 Go チャネル
+  バス**である。`Bus` インターフェースはチャネルを公開しないため、サブスクライバを 1 つも変更すること
+  なく、マルチホストデプロイ向けに分散実装（**NATS**）を差し込める。NATS は計画されている分散
+  バインディングであり、デフォルトには**不要**である。
+- **サブスクリプション。** サブスクライバは一連のイベント型でフィルタしたハンドラを登録する。空の集合は
+  *すべての*イベントを意味する。ハンドラを実行する goroutine はバスが所有する。
+- **配信。** 非同期かつ **at-least-once**: 各サブスクライバは専用 goroutine がドレインする独自の
+  バッファ付きキューを持つ。遅いサブスクライバはバックプレッシャーを及ぼす。ハンドラの panic は隔離される。
+  コンシューマはコネクタの再起動後、natural-key のタイムスタンプで**重複排除**する。
+- **Minimal-data。** すべてのイベントは*事実*を運び、生ペイロード、シークレット、PII を**決して**運ばない。
+  エッジは `(origin → resource, R/RW)` である。finding は秘匿化済み詳細の*ハッシュ*を運び、詳細そのものは
+  決して運ばない。
+- **Durable intake。** `audit.recorded` と durable な `work.*` 型は、プロセスローカルのバスを
+  決して通らない。ソース側の outbox が安定した ID を供給し、Eventing がイベントを永続化した後にだけ
+  settle する。完全に同じ replay は no-op となり、同じ ID を異なる型、ソース、時刻、または
+  ペイロードに再利用すると拒否される。
+
+## エンベロープ
+
+すべてのイベントは不変の `Event` エンベロープを共有する。観測は `Payload` に乗る。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `ID` | string | 一意のイベント id。bus traffic ではエンジンが割り当て、durable source では intake 前に必須。 |
+| `Type` | string | ディスクリミネータ —— 下記のチャネルアドレスのいずれか。 |
+| `Tenant` | string | 発信元 tenant の文字列参照。エンジンが内部で解決する。 |
+| `Source` | string | それを出力したコンポーネント（コネクタ/モジュール）の名前。 |
+| `Time` | timestamp | 基礎となる事実が発生した時刻。コネクタのクロックによる。 |
+| `Payload` | object | 事実 —— 下記のペイロードスキーマのいずれか。 |
+
+## チャネル
+
+カタログは、ファーストパーティの封印された観測、モジュール定義の live-bus event、
+および以下の durable-intake-only channel を組み合わせる。各型は、コード内カタログから駆動される独自の**安定性階層**を持つ
+（[API 安定性](/ja/reference/api-stability/) を参照: stable = 24 か月の非推奨→サンセットウィンドウ、
+beta = 12 か月、GA から拘束力を持つ。beta のペイロードはフィールドを獲得することはあるが、静かに失うことは
+決してない）。
+
+| チャネル（`Type`） | ペイロード | 目的 | トランスポート | 安定性 |
+|---|---|---|---|---|
+| `edge.observed` | `EdgeObservation` | origin がリソースに触れた（R/RW）—— access map の背骨 | 型付き gRPC `oneof` | **stable** |
+| `cost.sampled` | `CostSample` | model/provider の使用コスト事実 | 型付き gRPC `oneof` | **stable** |
+| `finding.reported` | `FindingReport` | guardrail/red-team/forensic の finding | 型付き gRPC `oneof` | **stable** |
+| `guardrail.observed` | `ObservedText` | 観測されたエージェントテキストの秘匿化済み抜粋（detective 入力） | JSON フォールバック | **beta** |
+| `approval.requested` | `ApprovalRequest` | 保留中の承認が開かれ、決定を待っている | JSON フォールバック | **beta** |
+| `policy.changed` | `PolicyChange` | ガバナンスポリシーが作成、更新、または削除された | JSON フォールバック | **beta** |
+| `metric.sampled` | `MetricSample` | 利用状況/生産性 metric。subject は developer reference の場合がある | 型付き gRPC `oneof` | **beta** |
+| `approval.resolved` | `ApprovalResolution` | 保留中の approval が終端結果に達した | JSON フォールバック | **beta** |
+| `workflow.signal` | `WorkflowSignal` | DAG workflow の `eventing-emit` step が実行された | JSON フォールバック | **beta** |
+| `work.item.created` | `WorkEventFact` | durable WorkItem 作成事実 | durable intake | **beta** |
+| `work.item.transitioned` | `WorkEventFact` | durable WorkItem の更新、archive、または governed state transition | durable intake | **beta** |
+| `work.owner.changed` | `WorkEventFact` | canonical owner または ownership epoch が変更された | durable intake | **beta** |
+| `work.dependency.changed` | `WorkEventFact` | dependency が追加、再有効化、または tombstone 化された | durable intake | **beta** |
+| `work.acceptance.changed` | `WorkEventFact` | acceptance criterion が作成、更新、評価、または waive された | durable intake | **beta** |
+| `work.message.available` | `DirectNoticeAvailableV1` または `WorkflowMessageCarrierV1` | DirectNotice または workflow task Message carrier が利用可能になった | durable intake | **beta** |
+| `work.message.acknowledged` | `DirectNoticeAcknowledgedV1` | Delivery が時間内または遅延した明示的 Ack を受け取った | durable intake | **beta** |
+| `work.message.retracted` | `MessageLifecycleV1` | Message が撤回された | durable intake | **beta** |
+| `work.message.expired` | `MessageLifecycleV1` | Message が有効期限に達した | durable intake | **beta** |
+| `work.message.overdue` | `MessageLifecycleV1` | Message が acknowledgement deadline を超えた | durable intake | **beta** |
+| `work.message.rerouted` | `MessageDerivedV1` | governed reroute が新しい Message carrier を導出した | durable intake | **beta** |
+| `work.message.escalated` | `MessageDerivedV1` | 期限超過 Message が有界 escalation を生成した | durable intake | **beta** |
+| `work.protocol.reply.available` | `WorkflowMessageCarrierV1` | 認証済み protocol reply が 1 つの有界 local Message carrier になった | durable intake | **beta** |
+| `work.protocol.message.received` | `WorkflowMessageCarrierV1` | 認証済み inbound protocol Message が 1 つの有界 local carrier になった | durable intake | **beta** |
+| `work.handoff.carrier.available` | `WorkflowMessageCarrierV1` | workflow が将来の Handoff 用 Message/Delivery carrier を作成した | durable intake | **beta** |
+| `work.decision.recorded` | `WorkEventFact` | append-only decision と現在の head projection が記録された | durable intake | **beta** |
+| `work.decision.request.responded` | `DecisionRequestEvent` | DecisionRequest が明示的な governed response を受け取った | durable intake | **beta** |
+| `work.decision.request.expired` | `DecisionRequestEvent` | DecisionRequest が deadline を超えた | durable intake | **beta** |
+| `work.handoff.offered` | `HandoffEventV1` | governed Handoff が提示された | durable intake | **beta** |
+| `work.handoff.accepted` | `HandoffEventV1` | Handoff 先が提示を受諾した | durable intake | **beta** |
+| `work.handoff.rejected` | `HandoffEventV1` | Handoff 先が提示を拒否した | durable intake | **beta** |
+| `work.handoff.withdrawn` | `HandoffEventV1` | Handoff owner が提示を撤回した | durable intake | **beta** |
+| `work.handoff.expired` | `HandoffEventV1` | Handoff が acknowledgement deadline を超えた | durable intake | **beta** |
+| `work.lease.acquired` | `WorkEventFact` | lease が取得、引継ぎ、または更新された。renew は fence を維持する | durable intake | **beta** |
+| `work.lease.ended` | `WorkEventFact` | lease が release、expire、または revoke され、旧 generation が無効化された | durable intake | **beta** |
+| `work.binding.reserved` | `ProtocolBindingEvent` | transmission 前に protocol binding と fenced WorkItem authority が reserve された | durable intake | **beta** |
+| `work.binding.observed` | `ProtocolBindingEvent` | protocol observation が CLEAN または BROKEN を生成した | durable intake | **beta** |
+| `work.binding.ambiguous` | `ProtocolBindingEvent` | protocol observation が明示的に UNKNOWN のままだった | durable intake | **beta** |
+| `work.binding.cancel_requested` | `ProtocolBindingEvent` | remote side effect 前に cancel intent が durable に claim された | durable intake | **beta** |
+| `audit.recorded` | `AuditRecord` | SIEM へ転送された sealed audit-ledger record — **bus 上には決して流れない** | durable intake | **stable** |
+
+<Aside type="caution" title="ワイヤーエンコーディングは型によって異なる">
+4 つのファーストパーティ型（`edge.observed`, `cost.sampled`, `finding.reported`,
+`metric.sampled`）はコネクタ契約の**型付き gRPC `oneof`** を通り、JSON は決して使わない。
+モジュール定義型は sealed observation **ではなく**、モジュール所有の JSON payload を使う。
+5 つの live-bus 型は publish/consume モジュールが所有する**version なし JSON fallback**を使う。
+`guardrail.observed` は module/ingest 層の detective input、`approval.requested`,
+`approval.resolved`, `policy.changed` は post-commit governance lifecycle event、
+`workflow.signal` は `eventing-emit` step で orchestration module が publish する。これらは凍結済み
+first-party wire table に意図的に含まれない。durable-only 型はこの fallback ではなく、以下の intake contract を使う。
+</Aside>
+
+<Aside type="note" title="durable channel は bus を通らない">
+`audit.recorded` と `work.*` は他の型と同様に subscribe 可能、RBAC-gated、replay 可能だが、
+**in-process bus 上に publish する component はない**。sealed ledger record は専用 chain cursor から入り、
+WorkItem、lease、Message、DecisionRequest、Handoff、ProtocolBinding の事実は source transaction commit 後に
+source-side outbox と generic durable intake から入る。subscribe は通常どおりだが、bus fan-out には現れない。
+</Aside>
+
+## ペイロード
+
+### `EdgeObservation` — `edge.observed`
+
+Minimal-data: 識別子とアクセス分類のみ。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `OriginKind` | enum | `agent` \| `identity` \| `session` |
+| `OriginRef` | string | origin に対するコネクタの natural reference |
+| `ResourceKind` | string | 例: `postgres.table`、`s3.bucket`、`http.api` |
+| `ResourceRef` | string | 例: `public.customers`、`arn:aws:s3:::bucket` |
+| `Mode` | enum | `unknown` \| `read` \| `write` \| `readwrite` |
+| `Source` | enum | `otel` \| `mcp_annotation` \| `pg_audit` \| `cloudtrail` \| `ebpf` \| `policy` \| `a2a` |
+| `Confidence` | enum | `attributed` \| `approximate` |
+| `ToolRef` | string | アクセスを実行したオプションの tool/operation |
+| `ObservedAt` | timestamp | コンシューマが重複排除する natural-key のタイムスタンプ |
+
+`mcp_annotation` は**信頼できない**ものとして扱われる（裏付けは取るが、それ単独では決して信頼
+されない）。`unknown` モードと `approximate` 確信度は明示的であり、本製品は決して確実性を捏造しない。
+
+### `CostSample` — `cost.sampled`
+
+金額は整数の **micro-USD**（100 万分の 1 ドル）である。最初の 7 つの下のフィールドは、OpenTelemetry
+`gen_ai.*` と FOCUS に整合した加法的でプロバイダ中立な拡張である。**ゼロ/空は「報告なし」を意味し、
+決して「ゼロ」を意味しない**。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `ProviderRef`、`ModelRef` | string | natural な provider/model 参照 |
+| `SessionRef` | string | オプションのセッション紐付け |
+| `InputTokens` | int64 | 合計入力（下記のキャッシュ分割はこれ*の*内訳） |
+| `OutputTokens` | int64 | 出力数 |
+| `CostMicroUSD` | int64 | micro-USD でのコスト |
+| `OccurredAt` | timestamp | 使用が発生した時刻 |
+| `CacheReadTokens` | int64 | キャッシュヒットの入力トークン |
+| `CacheCreation1hTokens`、`CacheCreation5mTokens` | int64 | TTL 別のキャッシュ書き込みトークン |
+| `WorkspaceRef` | string | 請求ワークスペース/プロジェクト |
+| `APIKeyRef` | string | **マスクされた** key/service-account 参照。シークレットは決して含まない |
+| `Actor` | string | コストを発生させたプリンシパル（チャージバックの「誰が」） |
+| `ServiceTier`、`ContextWindow`、`InferenceGeo` | string | provider 語彙（tier / context band / residency） |
+| `Gateway` | enum | `direct` \| `bedrock-mantle` \| `bedrock-legacy` \| `vertex` \| `foundry` \| `claude-platform-aws`（オープン文字列） |
+| `Provenance` | enum | `estimated` \| `billed` —— 空は estimated として扱われる |
+| `CostType` | string | 非トークンのサーバーツール課金クラス（空 = 通常のトークンコスト） |
+
+### `FindingReport` — `finding.reported`
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `Kind` | string | 例: `guardrail`、`redteam`、`forensic` |
+| `Severity` | enum | `info` \| `low` \| `medium` \| `high` \| `critical` |
+| `SubjectKind`、`SubjectRef` | string | finding が対象とするもの |
+| `Title` | string | 表示しても安全な短い非機密の要約 |
+| `DetailHash` | string | 秘匿化済み詳細の hex SHA-256。生の詳細は決して送信も保存もされない |
+| `OccurredAt` | timestamp | finding が生成された時刻 |
+| `OWASPLLM`、`OWASPASI`、`ATLAS` | string[] | フレームワーク参照（OWASP LLM Top 10、OWASP Agentic Top 10、MITRE ATLAS）。1 つの finding が複数に同時にマップされうる |
+
+### `ObservedText` — `guardrail.observed`
+
+観測されたエージェントテキストの、上限付きで**すでに秘匿化済み**の抜粋。生産者は出力前にシークレット/PII を
+秘匿化しなければならない。コンシューマは防御的に再度クランプする。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `Surface` | enum | `input` \| `output` \| `tool_args` |
+| `Text` | string | detector が検査する秘匿化済みで上限付きの抜粋 |
+| `AgentRef`、`SessionRef`、`ResourceRef` | string | 非機密のコンテキスト参照（いずれも空でありうる） |
+
+### `ApprovalRequest` — `approval.requested`
+
+Minimal-data: 識別子と承認の決定パラメータのみ。リクエスタの自由記述の理由**も**サブジェクト参照
+**も**意図的に運ばない。`governance:approval:read` を認可されたコンシューマが `ApprovalID` で完全な
+承認を取得する。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `ApprovalID` | string | 承認の id —— リクエストを取得、決定、または監視するための参照 |
+| `Action` | string | 要求されたアクション（上限付きの短い識別子） |
+| `SubjectKind` | string | アクションが対象とするサブジェクトの種別（サブジェクトの*参照*は意図的に運ばれない） |
+| `RiskTier` | string | リクエストが開かれたリスク分類（例: `critical`）。dual-control の下限を決定する |
+| `RequiredApprovals` | int64 | 必要な個別の承認者の数 |
+| `PolicyRef` | string | マッチした承認ポリシー。リクエストが呼び出し元提供のパラメータを使った場合は空 |
+| `ExpiresAt` | timestamp | 保留中のリクエストが失効する時刻（不在 = 決して失効しない） |
+| `EscalateAt` | timestamp | 未決定のリクエストがエスカレートする時刻（不在 = 決してしない） |
+
+### `MetricSample` — `metric.sampled`
+
+利用状況/生産性の測定値。subject は**開発者 reference**（組織内 email または key name）の
+場合があるため、viewer-tier aggregate ではなく privileged drill-down permission で受信を gate する。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `Name` | string | metric の natural name（例 `claude_code.lines_of_code.count`） |
+| `Value` | int64 | natural integer unit の測定値。integer で測定/金額演算を正確に保つ |
+| `Additive` | bool | `true` = SUM への delta、`false` = latest として保つ level/snapshot |
+| `Unit` | string | `lines` \| `commits` \| `sessions` \| `tokens` \| `ms` \| `1` \| …；空 = 無次元 |
+| `SubjectKind`, `SubjectRef` | string | `developer` \| `team` \| `session` \| `account` \| `org` \| `agent` とその reference |
+| `OccurredAt` | timestamp | datapoint 時刻または bucket day。producer-controlled idempotency key でもある |
+| `Dimensions` | map | 構造 labelの内訳軸。payload/PII ではなく、natural key に参加する |
+| `Labels` | map | operator-supplied attribution tag。natural key には参加しない |
+
+### `ApprovalResolution` — `approval.resolved`
+
+`approval.requested` の終端側。同じ minimal-data posture を持ち、identifier と decision
+parameter のみで、subject reference や free-text reason は決して含まない。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `ApprovalID` | string | resolved approval の ID。full record を取得する reference |
+| `Action` | string | requested action（有界の短い identifier） |
+| `SubjectKind` | string | action の対象となった subject の kind |
+| `RiskTier` | string | resolution 時点で live-derived な risk classification |
+| `Outcome` | string | `approved` \| `rejected` \| `canceled` \| `expired` — **wire 上で open**。未知値を許容する |
+| `RequiredApprovals` | int64 | resolution 時に必要な distinct approver 数 |
+| `ApproveCount`, `RejectCount` | int64 | 各 kind の recorded decision 数 |
+| `PolicyRef` | string | match した approval policy。caller-supplied parameter 時は空 |
+| `DecidedAt` | timestamp | 終端結果に達した時刻 |
+
+### `WorkflowSignal` — `workflow.signal`
+
+governed DAG workflow が `eventing-emit` step に達したとき orchestration module が publish する。
+**type は module が固定し** step config からは決して取らないため、workflow author は別 module の
+ingest へ first-party event を偽造できない。config からは有界 label だけが入る。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `WorkflowRef` | string | signal を emit した run の workflow |
+| `RunRef` | string | run。`StepRef` と対にして timeline 上の時点を特定する |
+| `StepRef` | string | graph 内の emitting step reference |
+| `Label` | string | operator-supplied、有界、非 sensitive の label |
+
+### `WorkEventFact` — K1/K2 `work.*`
+
+8 つの K1/K2 work channel は append-only WorkEvent の同じ有界 `payload_json` projection を公開する。
+event type が semantic class を持ち、payload は command、result、resulting aggregate state を識別する。
+WorkItem brief text、acceptance/decision statement、rationale、owner-authored free text は**決して含まない**。
+holder field は display name ではなく stable identity reference。beta 中は additive field を許容する。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `command` | string | fact を生成した closed durable-work mutation name |
+| `result_kind` | string | mutation が返した entity kind |
+| `result_id` | UUID | returned entity reference |
+| `workspace_id` | UUID | governed workspace reference |
+| `work_item_id` | UUID | WorkItem reference |
+| `status` | string | resulting WorkItem state |
+| `owner_epoch` | int64 | resulting monotonic ownership epoch |
+| `event_seq` | int64 | WorkItem 内の resulting monotonic sequence |
+| `lease_id` | UUID | K2 lease event のみ：stable WorkLease row reference |
+| `lease_state` | string | K2 lease event のみ：resulting lease state |
+| `holder_sid` | string | K2 lease event のみ：canonical holder SID |
+| `holder_run_ref`, `holder_agent_ref` | string | K2 のみ：存在する場合の有界 run/agent reference |
+| `fence` | int64 | K2 のみ：resulting monotonic fencing generation |
+| `expires_at` | timestamp | K2 のみ：active 中の database-clock expiry |
+| `end_reason_code` | string | K2 ended のみ：server-defined reason class。operator text ではない |
+| `end_reason_hash` | string | K2 ended のみ：stored reason の SHA-256 hex |
+| `forced` | boolean | force-takeover のみ：常に `true`。live lease authority の override |
+| `severity` | string | force-takeover のみ：`high` に固定 |
+| `decision_id` | UUID | force-takeover のみ：override を authorize した effective Decision |
+| `takeover_reason_hash` | string | force-takeover のみ：SHA-256 hex。operator reason は publish しない |
+
+4 つの force-takeover field は `work.lease.acquired` 上の optional projection。通常の acquire、renew、
+non-force takeover はこれらを持たない。制限された operator reason が必要な consumer は authorized surface から
+Decision/audit reference を追う必要があり、この event から復元できない。
+
+### `DirectNoticeAvailableV1` — `work.message.available`
+
+DirectNotice source transaction が WorkEvent と WorkOutbox に書く immutable v1 fact。
+**Message が subject** であり、`message_id` と `result_id` は同じ UUID、`result_kind` は
+`sessions.message` に固定。recipient identity と message content は意図的になく、authorized consumer は
+governed read surface で Message reference を追う。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `schema_version` | int64 | `1` に固定。後の writer は retained v1 fact の relabel ではなく new schema を追加 |
+| `command` | string | `message.publish.direct` に固定 |
+| `result_kind` | string | `sessions.message` に固定 |
+| `result_id`, `message_id` | UUID | 同一の Message subject reference |
+| `channel_id` | UUID | governed Channel reference |
+| `message_kind` | string | 最初の K3 write vertical で `notice` に固定 |
+| `state` | string | availability 時に `published` に固定 |
+| `version` | int64 | atomic draft→published transition 後の `2` |
+| `event_sequence` | int64 | Message aggregate の最初の append-only eventで `1` |
+| `delivery_count` | int64 | DirectNotice が 1 initial Delivery を resolve するため `1` |
+| `required_count`, `ack_quorum` | int64 | initial acknowledgement requirement。各 `0` または `1` |
+| `fulfillment` | object | count 付き initial `not_required` または `pending` projection |
+| `audience_hash` | SHA-256 hex | recipient を開示せず audience graph を bind |
+| `payload_digest` | SHA-256 hex | content を運ばず canonical message content を bind |
+| `plan_hash` | SHA-256 hex | authorized publish plan を bind |
+
+WorkOutbox が envelope `ID` を供給する。ambiguous settlement 後の retry は同じ ID と byte-identical
+payload を使い、Eventing intake は 1 event として扱う。同じ ID で type、source、occurrence time、payload、
+Message subject が異なる場合は拒否する。webhook consumer は `X-Olivares-Event` で重複排除し、
+operator replay は新しい `X-Olivares-Delivery` を作るが event ID は保つ。
+
+### K3/K4 communication lifecycle fact
+
+残りの communication WorkEvent は closed minimal-data projection を使う。ID、state、monotonic version/fence、
+plan/protected-value digest のみを運び、Message content、DecisionResponse content、Handoff payload/reason text は
+**決して運ばない**。完全な field constraint は AsyncAPI schema に公開される。
+
+| Schema | Channel | Subject field |
+|---|---|---|
+| `DirectNoticeAcknowledgedV1` | `work.message.acknowledged` | Ack/Delivery/Message ID、Delivery version/state、late flag、fulfillment、plan hash |
+| `WorkflowMessageCarrierV1` | workflow form の `work.message.available`; `work.handoff.carrier.available`; `work.protocol.reply.available`; `work.protocol.message.received` | WorkItem/Message/Delivery ID、kind/state/version、sequence、plan hash、remote content なし |
+| `MessageLifecycleV1` | `work.message.retracted`, `work.message.expired`, `work.message.overdue` | Message/optional WorkItem/aggregate ID、state/version、Delivery count、fulfillment、plan hash |
+| `MessageDerivedV1` | `work.message.rerouted`, `work.message.escalated` | source/new Message ID、有界 recipient reference、automation depth、plan hash |
+| `DecisionRequestEvent` | `work.decision.request.responded`, `work.decision.request.expired` | request/response/WorkItem ID、transition/state、response digest |
+| `HandoffEventV1` | `work.handoff.offered`, `work.handoff.accepted`, `work.handoff.rejected`, `work.handoff.withdrawn`, `work.handoff.expired` | Handoff/Message/Delivery/WorkItem ID、state、owner epoch、lease fence、plan hash |
+
+### `ProtocolBindingEvent` — K5 `work.binding.*`
+
+outbound/inbound binding を reserve、observation を reconcile、または cancellation intent を claim するとき、
+ProtocolBinding は WorkItem event stream に 1 つの有界 projection を書く。4 channel は同じ schema を共有し、
+event type が mutation class を持つ。receive は `sessions:work:read` で gate される。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `binding_id` | UUID | durable ProtocolBinding reference |
+| `binding_spec_id` | UUID | binding が pin する immutable ProtocolBindingSpec |
+| `binding_spec_generation` | int64 | pinned spec generation、少なくとも `1` |
+| `binding_generation` | int64 | binding が表す exact external-resource generation |
+| `protocol` | enum | `a2a` \| `mcp` |
+| `workspace_id`, `work_item_id` | UUID | governed workspace/WorkItem reference |
+| `work_status` | enum | resulting `active` \| `review` \| `blocked` \| `canceled` state |
+| `lease_fence` | int64 | binding の synthetic session に付与した fencing generation |
+| `verdict` | enum | `CLEAN` \| `BROKEN` \| `UNKNOWN`。UNKNOWN を成功として決して扱わない |
+| `code` | string | 最大 128 byte の有界 system reason code。free text ではない |
+| `terminal` | boolean | observation が terminal remote outcome を証明するか |
+| `event_seq` | int64 | WorkItem aggregate 内の monotonic sequence |
+| `external_id_hash` | SHA-256 hex | bound remote ID の optional one-way correlation。ID 自体はない |
+
+payload は remote resource reference/state、request/tool argument、task/message result、message content、observation detail、
+operator-authored cancellation reason を意図的に除外する。これらは governed store の背後に残り、event は
+minimal reconciliation fact だけを公開する。
+
+### `AuditRecord` — `audit.recorded`
+
+SIEM control tower へ転送される改ざん検知可能な audit ledger の sealed record。**bus を通らない**。
+ledger forwarder は tenant cursor から chain を辿り、各 record を durable intake へ渡すため、integrity field は
+変更されず、control tower が chain を自ら verify できる。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `EventID` | string | audit event の ID。consumer が deduplicate する stable idempotency key |
+| `Seq` | int64 | tenant ごとの ledger sequence/natural key。gap を検出できる |
+| `OccurredAt` | timestamp | audited action の時刻 |
+| `Source` | string | emitting component |
+| `Payload` | bytes | sequence、previous hash、hash、signature を含む encoded minimal-data record |
+
+### `PolicyChange` — `policy.changed`
+
+ポリシーミューテーションの監査レコードが保持するもの —— kind と enabled —— に id と operation を加えた
+ものを反映する。オペレーター提供のポリシー名やポリシー spec は**決して**運ばない。
+`governance:policy:read` を認可されたコンシューマが `PolicyID` でポリシーを取得する。
+
+| フィールド | 型 | 備考 |
+|---|---|---|
+| `PolicyID` | string | 変更されたポリシーの id |
+| `Kind` | enum | `abac` \| `approval` |
+| `Op` | enum | `created` \| `updated` \| `deleted` —— ワイヤー上はオープン。知らない値も許容すること |
+| `Enabled` | bool | 変更後の enabled フラグ。削除の場合は `false` |
+
+## 外部サブスクリプション（イベンティングプラットフォーム）
+
+イベンティングモジュールは、カタログ化されたイベント型を署名付き webhook として**外部 HTTPS
+エンドポイント**へ転送する。サブスクリプションは `/v1/m/eventing/subscriptions` で管理される ——
+これはモジュールルートであり、意図的に REST OpenAPI 契約の**外**にある —— 一方、それが配信する
+**イベント型**は上記の型ごとの安定性階層を持つ。
+
+### 配信
+
+各配信は HTTPS の `POST` であり、その本文は JSON **エンベロープ + `Seq`** である —— 上記のエンベロープ
+と同じフィールド名（SDK が契約である）に、1 つの加法的フィールド `Seq`、すなわち replay が開始する
+tenant ごとのカーソルを加える。型付きペイロードは `Payload` の下に乗る。
+
+```json
+{
+  "ID": "0197a2b4-6e1d-7c3a-9f4e-2d8b5c1a0e7f",
+  "Type": "cost.sampled",
+  "Tenant": "…",
+  "Source": "…",
+  "Time": "2026-06-11T12:00:00Z",
+  "Seq": 42,
+  "Payload": { "ProviderRef": "…" }
+}
+```
+
+| ヘッダー | 意味 |
+|---|---|
+| `X-Olivares-Timestamp` | 署名がカバーする Unix 秒のタイムスタンプ |
+| `X-Olivares-Signature` | `t=<ts>,v1=<hexsig>` —— サブスクリプションシークレットで `<ts>.<body>` に対する HMAC-SHA256。`connectors/webhook.VerifyWithin` で検証 |
+| `X-Olivares-Event` | **安定したイベント id** —— あなたの冪等性キー。1 つのイベントのすべての retry と replay で同一 |
+| `X-Olivares-Event-Type` | イベント型（チャネルアドレス） |
+| `X-Olivares-Delivery` | 配信 id —— replay は*同じイベント*の*新しい配信*である |
+
+- **At-least-once。** 同じイベントが複数回到着しうる。**`X-Olivares-Event` で重複排除すること**。
+- **Retry。** `408`、`425`、`429`、任意の `5xx`、またはネットワーク障害は、指数バックオフの梯子 ——
+  30s、2m、10m、30m、1h、2h、4h、8h（±20% ジッター）—— で retry され、その後配信は**デッドレター**
+  になる（DLQ）。それ以外の非 2xx レスポンスは終端的である。
+- **Replay。** サブスクリプションは `Seq` カーソルから replay できる。replay はイベントの
+  `X-Olivares-Event` id を新しい `X-Olivares-Delivery` の下で保持する。
+- **リダイレクトは決して follow されない** —— リダイレクトは署名済み本文を再ルートしてしまう。
+- **シークレットローテーションは即時である。** プラットフォームはサブスクリプションごとに正確に 1 つの
+  署名シークレットを保持する: `POST …/rotate-secret` の後、すべての後続試行 —— すでにキューに入った
+  配信の retry を含む —— は**新しい**シークレットで署名する。先に検証器を更新し、その後ローテートすること。
+- **`event_types` の絞り込みは recall ではない。** サブスクリプションについてすでにキャプチャされた
+  配信はキューに残り配信される（型ごとの permission は依然として適用される）。絞り込まれたフィルタは
+  その時点以降に何がキャプチャされるかを統治する。
+
+### 型ごとの受信 permission
+
+サブスクリプションはロールを名指す。**すべての**配信試行の前に、そのロールはイベント型の permission に
+対して、完全な RBAC+ABAC パイプライン（deny-closed）を通じて評価される。マッピングは製品 API における
+各型の読み取り面を反映する。
+
+| イベント型 | Permission | 安定性 |
+|---|---|---|
+| `edge.observed` | `accessgraph:read`（特権: editor+） | stable |
+| `cost.sampled` | `finops:spend:read` | stable |
+| `finding.reported` | `security:finding:read` | stable |
+| `guardrail.observed` | `security:observed:read`（特権: editor+） | beta |
+| `approval.requested` | `governance:approval:read` | beta |
+| `policy.changed` | `governance:policy:read` | beta |
+| `metric.sampled` | `adoption:developer:read`（特権: editor+） | beta |
+| `approval.resolved` | `governance:approval:read` | beta |
+| `workflow.signal` | `orchestration:workflow:read` | beta |
+| `work.item.created` | `sessions:work:read` | beta |
+| `work.item.transitioned` | `sessions:work:read` | beta |
+| `work.owner.changed` | `sessions:work:read` | beta |
+| `work.dependency.changed` | `sessions:work:read` | beta |
+| `work.acceptance.changed` | `sessions:work:read` | beta |
+| `work.message.available` | `sessions:message:read` | beta |
+| `work.message.acknowledged` | `sessions:message:read` | beta |
+| `work.message.retracted` | `sessions:message:read` | beta |
+| `work.message.expired` | `sessions:message:read` | beta |
+| `work.message.overdue` | `sessions:message:read` | beta |
+| `work.message.rerouted` | `sessions:message:read` | beta |
+| `work.message.escalated` | `sessions:message:read` | beta |
+| `work.protocol.reply.available` | `sessions:message:read` | beta |
+| `work.protocol.message.received` | `sessions:message:read` | beta |
+| `work.handoff.carrier.available` | `sessions:message:read` | beta |
+| `work.decision.recorded` | `sessions:decision:read` | beta |
+| `work.decision.request.responded` | `sessions:decision-request:read` | beta |
+| `work.decision.request.expired` | `sessions:decision-request:read` | beta |
+| `work.handoff.offered` | `sessions:handoff:read` | beta |
+| `work.handoff.accepted` | `sessions:handoff:read` | beta |
+| `work.handoff.rejected` | `sessions:handoff:read` | beta |
+| `work.handoff.withdrawn` | `sessions:handoff:read` | beta |
+| `work.handoff.expired` | `sessions:handoff:read` | beta |
+| `work.lease.acquired` | `sessions:lease:read` | beta |
+| `work.lease.ended` | `sessions:lease:read` | beta |
+| `work.binding.reserved` | `sessions:work:read` | beta |
+| `work.binding.observed` | `sessions:work:read` | beta |
+| `work.binding.ambiguous` | `sessions:work:read` | beta |
+| `work.binding.cancel_requested` | `sessions:work:read` | beta |
+| `audit.recorded` | `audit:read` | stable |
+
+## 関連項目
+
+- [REST API リファレンス](/reference/api/) —— 同期的な契約（OpenAPI 3.1）。
+- [API 安定性](/ja/reference/api-stability/) —— 型ごとの安定性階層の背後にあるウィンドウ。
+- [アーキテクチャ概要](/ja/explanation/architecture/overview/) —— 観測がどのようにエッジになり
+  access map に到達するか。
+- 生の仕様: [`/asyncapi/asyncapi.yaml`](/asyncapi/asyncapi.yaml)。

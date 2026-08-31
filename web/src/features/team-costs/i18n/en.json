@@ -1,0 +1,38 @@
+{
+  "title": "Team Costs",
+  "subtitle": "Cost attribution by team — sessions, tokens, and spend with daily trend and project/model breakdown.",
+  "period": {
+    "label": "Period",
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days"
+  },
+  "cols": {
+    "team": "Team",
+    "sessions": "Sessions",
+    "tokensIn": "Tokens in",
+    "tokensOut": "Tokens out",
+    "cost": "Cost",
+    "trend": "Trend"
+  },
+  "breakdown": {
+    "projects": "Projects",
+    "models": "Models",
+    "project": "Project",
+    "model": "Model",
+    "sessions": "Sessions",
+    "tokensIn": "Tokens in",
+    "tokensOut": "Tokens out",
+    "cost": "Cost",
+    "noProjects": "No project breakdown.",
+    "noModels": "No model breakdown."
+  },
+  "export": "Export CSV",
+  "empty": {
+    "title": "No team cost data",
+    "description": "No cost records with team labels were found for this period. Tag your sessions with a team label to see attribution."
+  },
+  "errors": {
+    "loadFailed": "Failed to load team cost data."
+  }
+}

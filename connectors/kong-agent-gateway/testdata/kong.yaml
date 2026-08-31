@@ -1,0 +1,30 @@
+_format_version: "3.0"
+services:
+  - name: chat-svc
+    routes:
+      - name: chat-route
+        plugins:
+          - name: ai-proxy-advanced
+            config:
+              targets:
+                - model:
+                    name: gpt-4o
+                    provider: openai
+                - model:
+                    name: claude-sonnet-4
+                    provider: anthropic
+              auth:
+                header_value: SECRETVALUE-kong
+  - name: mcp-svc
+    routes:
+      - name: mcp-route
+        plugins:
+          - name: ai-mcp-proxy
+plugins:
+  - name: ai-prompt-guard
+    route:
+      name: chat-route
+  - name: ai-sanitizer
+    enabled: false
+    service:
+      name: mcp-svc

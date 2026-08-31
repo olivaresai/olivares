@@ -1,0 +1,40 @@
+{
+  "title": "日志查看器",
+  "controls": {
+    "pause": "暂停",
+    "resume": "恢复",
+    "pauseAria": "暂停自动滚动",
+    "resumeAria": "恢复自动滚动",
+    "clear": "清除",
+    "clearAria": "清除日志条目",
+    "entryCount": "{{value}} 条目"
+  },
+  "filters": {
+    "levelAria": "筛选 {{level}} 日志",
+    "modulePlaceholder": "模块...",
+    "moduleAria": "按模块筛选",
+    "searchPlaceholder": "搜索...",
+    "searchAria": "在日志消息中搜索",
+    "clearAria": "清除筛选器"
+  },
+  "capture": {
+    "debugUnavailable": "引擎当前日志级别不会捕获 DEBUG 条目——请设置 OLIVARES_LOG_LEVEL=debug。"
+  },
+  "stream": {
+    "empty": "没有可显示的日志条目。",
+    "ariaLabel": "日志流",
+    "attrsAriaLabel": "结构化日志属性"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  }
+}

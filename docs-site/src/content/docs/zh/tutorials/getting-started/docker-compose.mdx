@@ -1,0 +1,153 @@
+---
+title: "用 Docker Compose 上手"
+description: >-
+  用随附的 Compose 栈运行 control plane：默认加固的单节点 SQLite、一个 Postgres 多租户 override，
+  以及一个加密的灾难恢复备份 profile——含首次启动安装 token。
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+仓库在 `deploy/compose/` 下随附一个 Compose 栈：一个加固的单节点部署（嵌入式 SQLite、零外部依赖），
+外加两个 overlay——一个 **Postgres 多租户** override 和一个**灾难恢复备份** profile。本教程带你从
+`up -d` 到一个已配置且带备份的 control plane。
+
+容器包装的是与其他每种安装**相同的单一二进制文件**；仅打包方式不同。下面的命令是该栈自己有文档记录的入口点
+（`deploy/compose/*.yml`），它们驱动的首次运行流程，与[单节点教程](/tutorials/getting-started/single-node/)中
+针对二进制端到端验证过的流程相同。
+
+<Aside type="caution" title="在首个发布版本之前，请在本地构建镜像">
+发布镜像会在**首个公开发布版本上线时**发布到 Docker Hub 上的 `docker.io/olivaresai/olivares`（已签名，按 digest 锁定）——
+在该 tag 被切出之前，该 registry 路径为空（相同内容也会镜像到 `ghcr.io/olivaresai/olivares`，按 digest 完全一致）。
+今天，请从源码构建同一个加固的 distroless 镜像，并让栈指向它：
+
+```bash
+task image                                   # builds olivares:dev
+echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
+```
+
+一旦发布版本存在：设置 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` 并先
+[验证它](/how-to/verify-a-release/)——按 digest，绝不按 tag。
+</Aside>
+
+## 1. 启动单节点栈（SQLite）
+
+<Steps>
+
+1. 启动它：
+
+   ```bash
+   docker compose -f deploy/compose/docker-compose.yml up -d
+   ```
+
+   你按设计会得到：
+
+   | 属性 | 值 |
+   |---|---|
+   | 端口 | `127.0.0.1:8443`（HTTPS：REST + web UI）、`127.0.0.1:8444`（gRPC）——绑定到**宿主机上的 localhost**；按需刻意暴露 |
+   | 数据 | 命名卷 `olivares-data` → `/var/lib/olivares`（SQLite 存储、审计签名密钥、TLS 材料） |
+   | 加固 | 以 `65532:65532` 运行，root 只读，丢弃所有 capability，`no-new-privileges`，tmpfs `/tmp` |
+   | 健康检查 | 容器内无（镜像为 distroless——无 shell）。请从宿主机探测 `/livez` 与 `/readyz` |
+
+2. 从日志中读取一次性安装 token：
+
+   ```bash
+   docker compose -f deploy/compose/docker-compose.yml logs olivares \
+     | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. 创建第一个管理员、登录，并创建你的组织——与
+   [单节点教程](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)中
+   完全一样（API 相同；TLS 证书在首次启动时自签名，因此引导阶段用 `curl -k`）：
+
+   ```bash
+   curl -ksf -X POST https://localhost:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="tip" title="错过了 token？">
+重启不会重新打印它（只存储了它的 hash）。在尚无任何用户存在期间，恢复是安全的：`docker compose down`、
+从 `olivares-data` 卷中移除 `setup.token`（或在全新安装时整个移除该卷），然后再次 `up -d`——
+会铸造一个新 token。
+</Aside>
+
+## 2. 接入数据源
+
+数据源在一个由 `OLIVARES_SOURCES_CONFIG` 命名的运算符文件中声明
+（[接入数据源](/how-to/connect-a-source/)）。对于容器，用一个小的 override 挂载该文件并设置变量：
+
+```yaml
+# deploy/compose/docker-compose.sources.yml (yours — not shipped)
+services:
+  olivares:
+    environment:
+      OLIVARES_SOURCES_CONFIG: /etc/olivares/sources.json
+    volumes:
+      - ./sources.json:/etc/olivares/sources.json:ro
+```
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.sources.yml up -d
+docker compose -f deploy/compose/docker-compose.yml logs olivares | grep "ingest: wired source"
+```
+
+记住 `sources.json` 内部的路径是**容器**路径——例如一个 pgAudit 日志尾部，需要把 Postgres 日志目录也
+以只读方式挂载进容器。
+
+## 3. 加密的 DR 备份（`backup` profile）
+
+该栈随附一个一次性（one-shot）备份服务，它产出一个**加密的、ledger 连续性安全的** bundle
+（`olivares dr backup`），并修剪超过 14 天的 bundle：
+
+```bash
+# Write your KEK passphrase once (keep it OUT of the repo / image):
+printf 'a strong DR passphrase' > deploy/compose/dr-pass
+
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.backup.yml \
+               --profile backup run --rm backup
+```
+
+把该命令包进宿主机 cron 以获得定时 RPO，并**将 `olivares-backups` 卷镜像到异地**——同主机备份不是灾难恢复，
+而且口令必须与 bundle 分开传输（3-2-1）。完整流程，包括恢复演练（`olivares dr verify`），见
+[备份与恢复](/how-to/backup-and-restore/)。
+
+## 4. 可选：Postgres 多租户 override
+
+对于多租户拓扑，叠加 Postgres override。它会启动一个 Postgres 16，配置**最小权限的 `olivares_app` 角色**
+（无 superuser、无 `BYPASSRLS`——引擎*拒绝*针对一个特权角色启动，因为行级安全是租户兜底），并让引擎指向它：
+
+```bash
+cp deploy/compose/.env.example deploy/compose/.env
+# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+
+docker compose -f deploy/compose/docker-compose.yml \
+               -f deploy/compose/docker-compose.postgres.yml up -d
+```
+
+<Aside type="caution" title="compose 的 Postgres 是一个演示拓扑">
+该 override 在 compose 网络内以 `sslmode=disable` 连接——用于评估没问题，**不适合**生产。
+生产级 Postgres 部署使用带 `sslmode=verify-full` 的 TLS 和一个 DSN secret——那就是
+[Kubernetes/Helm 路径](/tutorials/getting-started/kubernetes/)。
+</Aside>
+
+## 健康
+
+```bash
+curl -ks https://localhost:8443/readyz
+# {"leader":true,"setup_required":false,"status":"ok","store":"up"}
+curl -ks https://localhost:8443/metrics | grep olivares_store_up
+```
+
+## 下一步
+
+- **接入真实信号：** [connector 指南](/how-to/connectors/pgaudit/)。
+- **调度并演练备份：** [备份与恢复](/how-to/backup-and-restore/)。
+- **监控它：** [Prometheus 指标、SLO 与告警](/how-to/monitor-with-prometheus/)。
+- **要走向多节点？** [用 Helm 的 Kubernetes](/tutorials/getting-started/kubernetes/)，
+  包括 HA 与 collectors DaemonSet。

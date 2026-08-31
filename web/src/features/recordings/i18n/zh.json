@@ -1,0 +1,119 @@
+{
+  "title": "录制",
+  "subtitle": "特权会话录制——录制范围内的每一项管理操作都会被捕获为哈希链帧，并锚定到证据账本。",
+  "search": {
+    "field": "搜索字段",
+    "subject": "主体包含",
+    "grant": "授权 ID",
+    "input": "搜索录制",
+    "subjectPlaceholder": "主体文本",
+    "grantPlaceholder": "精确授权 ID",
+    "submit": "搜索",
+    "clear": "清除"
+  },
+  "allStatuses": "全部状态",
+  "filterByStatus": "按状态筛选",
+  "filterBySealReason": "按封存原因筛选",
+  "allSealReasons": "全部封存原因",
+  "filterOpenedAfter": "开启时间晚于",
+  "filterOpenedBefore": "开启时间早于",
+  "sealReasonOption": {
+    "idle": "空闲",
+    "closed": "已关闭",
+    "breakglass_review": "应急破窗审查",
+    "sweep": "清理",
+    "consent_change": "同意变更"
+  },
+  "status": {
+    "active": "活跃",
+    "sealed": "已封存"
+  },
+  "kind": {
+    "user": "用户",
+    "token": "令牌"
+  },
+  "cols": {
+    "subject": "主体",
+    "kind": "类型",
+    "status": "状态",
+    "opened": "开启时间",
+    "frames": "已写入帧数",
+    "flags": "标记",
+    "sealReason": "封存原因"
+  },
+  "badge": {
+    "gap": "缺口",
+    "gapHint": "帧已预留但从未写入——该录制存在永久且明显的缺口。",
+    "breakglass": "应急破窗",
+    "breakglassHint": "在应急破窗授权下开启——始终录制。"
+  },
+  "empty": {
+    "title": "暂无录制会话",
+    "description": "当操作人员在录制范围内的特权操作面上执行操作时，其会话将显示在此处。"
+  },
+  "notice": {
+    "strip": "这是一个录制范围内的特权操作面——操作将被捕获到证据账本。"
+  },
+  "consent": {
+    "title": "录制提示（AC-8）",
+    "body": "此控制平面上的特权操作会被录制：每个管理请求都会被捕获为锚定到证据账本的哈希链帧——仅包含路由结构、标识符和单向的请求体摘要，绝不包含载荷或密钥。应急破窗会话始终录制。继续操作前必须确认此通知。",
+    "ack": "确认并继续",
+    "ackDone": "已确认录制提示",
+    "cancel": "取消"
+  },
+  "policy": {
+    "title": "录制策略",
+    "subtitle": "此控制平面上录制什么，以及如何对证据进行分类。编辑需要 recording:config:admin 权限；此处的每次更改本身也是被录制的特权操作。",
+    "loading": "正在加载录制策略…",
+    "saved": "录制策略已保存",
+    "save": "保存策略",
+    "saveFailed": "策略未保存。",
+    "forbidden": {
+      "title": "编辑录制策略需要 recording:config:admin",
+      "description": "你的角色可以管理录制会话，但更改录制策略需要单独的 recording:config:admin 权限。请管理员授予该权限。"
+    },
+    "error": {
+      "title": "无法加载录制策略",
+      "description": "无法读取录制策略。请重试，或检查模块是否已挂载。"
+    },
+    "breakglass": {
+      "label": "破窗（break-glass）会话",
+      "hint": "紧急破窗访问始终被录制——任何策略都无法将其关闭。录制下限基于权限，而非命名空间。",
+      "badge": "始终开启"
+    },
+    "namespaces": {
+      "label": "录制的命名空间",
+      "hint": "其特权操作被捕获的模块面。每个都必须命名一个已挂载的模块；未知名称会被服务器拒绝。",
+      "empty": "未录制任何命名空间——任何模块面上都不会捕获特权操作。",
+      "placeholder": "例如 governance",
+      "addLabel": "添加录制的命名空间",
+      "add": "添加",
+      "remove": "移除 {{name}}",
+      "shape": "命名空间由小写字母、数字、- 或 _ 组成，以字母开头，且不以 - 或 _ 结尾。",
+      "duplicate": "该命名空间已在列表中。",
+      "tooLong": "命名空间最多 {{max}} 个字符。",
+      "tooMany": "最多可录制 {{max}} 个命名空间。"
+    },
+    "consent": {
+      "label": "在特权操作前要求确认",
+      "hint": "默认拒绝（\"required\"）：操作员必须先确认 AC-8 录制通知才能操作。关闭时通知仅作为横幅（\"notice\"）。"
+    },
+    "idle": {
+      "label": "空闲封存超时（秒）",
+      "hint": "打开的录制会话在此时长无活动后被封存。介于 60 到 86400 秒之间。",
+      "error": "请输入 60 到 86400 之间的整数秒。"
+    },
+    "retention": {
+      "label": "保留类别（天）",
+      "hint": "应用于已封存录制的分类标签——它标示应保留多久。介于 1 到 3650 天之间。",
+      "tag": "仅标签",
+      "enforced": "已强制",
+      "notEnforced": "保留只是一个分类标签——录制仅被打标签，绝不清除。目前没有任何策略会删除录制（未接入清除）。",
+      "error": "请输入 1 到 3650 之间的整数天数。"
+    },
+    "ai": {
+      "label": "AI 生成的摘要",
+      "hint": "允许生成模型派生的会话摘要。摘要是派生叙述，绝非证据——哈希链帧才是记录。"
+    }
+  }
+}

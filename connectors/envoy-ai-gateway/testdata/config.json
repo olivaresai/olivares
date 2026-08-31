@@ -1,0 +1,57 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "aigateway.envoyproxy.io/v1alpha1",
+      "kind": "AIServiceBackend",
+      "metadata": {"name": "openai-backend", "namespace": "default"},
+      "spec": {"schema": {"name": "OpenAI"}, "backendRef": {"name": "openai-svc"}}
+    },
+    {
+      "apiVersion": "aigateway.envoyproxy.io/v1alpha1",
+      "kind": "AIServiceBackend",
+      "metadata": {"name": "anthropic-backend", "namespace": "default"},
+      "spec": {"schema": {"name": "Anthropic"}, "backendRef": {"name": "anthropic-svc"}}
+    },
+    {
+      "apiVersion": "aigateway.envoyproxy.io/v1alpha1",
+      "kind": "BackendSecurityPolicy",
+      "metadata": {"name": "openai-key", "namespace": "default"},
+      "spec": {"type": "APIKey", "apiKey": {"secretRef": {"name": "SECRETVALUE-must-not-leak"}}, "targetRefs": [{"name": "openai-backend"}]}
+    },
+    {
+      "apiVersion": "aigateway.envoyproxy.io/v1alpha1",
+      "kind": "AIGatewayRoute",
+      "metadata": {"name": "chat-route", "namespace": "default"},
+      "spec": {"rules": [
+        {"backendRefs": [
+          {"name": "openai-backend", "modelNameOverride": "gpt-4o"},
+          {"name": "anthropic-backend", "modelNameOverride": "claude-sonnet-4"}
+        ], "llmRequestCosts": [{"metadataKey": "input", "type": "InputToken"}]}
+      ]}
+    },
+    {
+      "apiVersion": "aigateway.envoyproxy.io/v1alpha1",
+      "kind": "AIGatewayRoute",
+      "metadata": {"name": "cheap-route", "namespace": "default"},
+      "spec": {"rules": [
+        {"backendRefs": [{"name": "openai-backend", "modelNameOverride": "gpt-4o"}]}
+      ]}
+    },
+    {
+      "apiVersion": "aigateway.envoyproxy.io/v1alpha1",
+      "kind": "MCPRoute",
+      "metadata": {"name": "tools-mcp", "namespace": "default"},
+      "spec": {"path": "/mcp", "backendRefs": [
+        {"name": "github-mcp"}
+      ]}
+    },
+    {
+      "apiVersion": "aigateway.envoyproxy.io/v1alpha1",
+      "kind": "QuotaPolicy",
+      "metadata": {"name": "chat-quota", "namespace": "default"},
+      "spec": {"targetRefs": [{"name": "chat-route"}], "defaultBucket": {"limit": 1000000, "duration": "1h"}}
+    }
+  ]
+}

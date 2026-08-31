@@ -1,0 +1,184 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# GENERATED — DO NOT EDIT. Flat install manifest for the Olivares AI control
+# plane, rendered from deploy/helm/olivares with safe single-node
+# defaults (sqlite, 1 replica, collectors/PDB/NetworkPolicy/ServiceMonitor off).
+# Regenerate with 'task manifests:gen'; CI fails if this drifts from the chart.
+#
+#   kubectl create namespace olivares-system   # once
+#   kubectl apply -n olivares-system -f deploy/manifests/install.yaml
+#
+# Rolling out for real: pin the image to a digest (deploy/gitops/README.md).
+---
+# Source: olivares/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: olivares
+  labels:
+    helm.sh/chart: olivares-0.2.4
+    app.kubernetes.io/name: olivares
+    app.kubernetes.io/instance: olivares
+    app.kubernetes.io/version: "26.8.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: olivares
+automountServiceAccountToken: false
+---
+# Source: olivares/templates/core-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: olivares-core
+  labels:
+    helm.sh/chart: olivares-0.2.4
+    app.kubernetes.io/name: olivares
+    app.kubernetes.io/instance: olivares
+    app.kubernetes.io/version: "26.8.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: olivares
+    app.kubernetes.io/component: core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: olivares
+    app.kubernetes.io/instance: olivares
+    app.kubernetes.io/component: core
+  ports:
+    - name: https
+      port: 8443
+      targetPort: https
+      protocol: TCP
+    - name: grpc
+      port: 8444
+      targetPort: grpc
+      protocol: TCP
+---
+# Source: olivares/templates/core-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: olivares-core
+  labels:
+    helm.sh/chart: olivares-0.2.4
+    app.kubernetes.io/name: olivares
+    app.kubernetes.io/instance: olivares
+    app.kubernetes.io/version: "26.8.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: olivares
+    app.kubernetes.io/component: core
+spec:
+  serviceName: olivares-core
+  replicas: 1
+  # HA standbys are intentionally NOT Ready (/readyz drains the non-leader), so
+  # OrderedReady — which waits for each pod to be Ready before starting the next —
+  # would wedge a scale-up. Parallel brings all replicas up together; the advisory
+  # lock still guarantees a single active writer.
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: olivares
+      app.kubernetes.io/instance: olivares
+      app.kubernetes.io/component: core
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: olivares-0.2.4
+        app.kubernetes.io/name: olivares
+        app.kubernetes.io/instance: olivares
+        app.kubernetes.io/version: "26.8.0"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: olivares
+        app.kubernetes.io/component: core
+    spec:
+      serviceAccountName: olivares
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: olivares
+          image: docker.io/olivaresai/olivares:26.8.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - serve
+            - --listen=:8443
+            - --grpc-listen=:8444
+            - --data-dir=/var/lib/olivares
+            - --checkpoint-interval=1h
+          env:
+            - name: OLIVARES_DATA_DIR
+              value: "/var/lib/olivares"
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: grpc
+              containerPort: 8444
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/olivares
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          helm.sh/chart: olivares-0.2.4
+          app.kubernetes.io/name: olivares
+          app.kubernetes.io/instance: olivares
+          app.kubernetes.io/version: "26.8.0"
+          app.kubernetes.io/managed-by: Helm
+          app.kubernetes.io/part-of: olivares
+          app.kubernetes.io/component: core
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "8Gi"

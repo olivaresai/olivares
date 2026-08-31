@@ -1,0 +1,46 @@
+{
+  "revision": "2026-07-28",
+  "source_url": "https://modelcontextprotocol.io/specification/2026-07-28/server/discover",
+  "request_headers": {
+    "MCP-Protocol-Version": "2026-07-28",
+    "Mcp-Method": "server/discover"
+  },
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "server/discover",
+    "params": {
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {
+          "name": "olivares-mcp-connector",
+          "version": "0.1.0"
+        },
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "resultType": "complete",
+      "supportedVersions": [
+        "2025-11-25",
+        "2026-07-28"
+      ],
+      "capabilities": {
+        "tools": {}
+      },
+      "ttlMs": 300000,
+      "cacheScope": "public",
+      "_meta": {
+        "io.modelcontextprotocol/serverInfo": {
+          "name": "fixture-rc",
+          "title": "Fixture RC",
+          "version": "2.0.0"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/sub-1/resourceGroups/rg-main/providers/Microsoft.CognitiveServices/accounts/speechy",
+      "name": "speechy",
+      "kind": "SpeechServices"
+    }
+  ]
+}

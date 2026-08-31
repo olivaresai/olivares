@@ -1,0 +1,61 @@
+---
+title: Olivares AI documentation
+description: Product documentation for Olivares AI — the open, self-hostable
+  control plane for the AI agents already running on your infrastructure.
+  Discover, operate and govern every agent, model and MCP, with a read/write
+  access map of what each one can reach.
+template: splash
+hero:
+  tagline: Govern the AI agents already running on your infrastructure — the open,
+    self-hosted control plane, honest about its limits.
+  actions:
+    - text: Start here
+      link: /2026-06/start/what-is-olivares-ai/
+      icon: right-arrow
+      variant: primary
+    - text: Zero-to-graph tutorial
+      link: /2026-06/tutorials/zero-to-graph/
+      icon: open-book
+      variant: minimal
+slug: 2026-06
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+These docs are organized with the [Diátaxis](https://diataxis.fr/start-here/)
+framework — four modes, each answering a different need. Pick the one that
+matches what you are trying to do.
+
+<CardGrid>
+  <LinkCard title="Tutorials" href="/tutorials/zero-to-graph/" description="Learning-oriented. Run the single binary and reach a populated read/write access graph, step by step." />
+
+  <LinkCard title="How-to guides" href="/how-to/self-hosting/" description="Task-oriented. Connect a source, self-host, install air-gapped, verify a release, forward audit to Splunk." />
+
+  <LinkCard title="Reference" href="/reference/" description="Information-oriented. The REST API, the event bus (AsyncAPI), the modules, the CLI and configuration." />
+
+  <LinkCard title="Explanation" href="/explanation/" description="Understanding-oriented. Architecture, the access graph, the security & threat model, licensing." />
+</CardGrid>
+
+## What is this?
+
+Olivares AI is the **control plane for the AI agents already running on your
+infrastructure**: it **discovers** every agent, model, MCP server and tool in your
+estate, gives you a **read/write access map** of what each one can reach, lets you
+**operate and govern** the fleet from one cockpit, and diffs the access each is
+*Permitted* against the access it is *Observed* using — all **self-hosted**, so your
+data never leaves your boundary. Audit and compliance are the bridge for when your
+security team comes asking.
+
+<CardGrid>
+  <Card title="Honest by design" icon="approve-check">
+    We document what runs today and what is pre-v1. Tutorial commands are tested;
+    where the contract does not yet cover something, the docs say so. See
+    [Honesty & limits](/2026-06/start/honesty-and-limits/).
+  </Card>
+
+  <Card title="Open core" icon="open-book">
+    The product (engine, modules, web) is AGPL-3.0-only; the SDK and connectors
+    are Apache-2.0; enterprise modules are commercial. See
+    [Open core & licensing](/2026-06/explanation/open-core-and-licensing/).
+  </Card>
+</CardGrid>

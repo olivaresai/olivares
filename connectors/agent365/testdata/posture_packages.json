@@ -1,0 +1,32 @@
+{
+  "value": [
+    {
+      "id": "P_blocked_deployed",
+      "displayName": "Blocked Deployed Agent",
+      "type": "microsoft",
+      "isBlocked": true,
+      "deployedTo": "some"
+    },
+    {
+      "id": "P_external_all",
+      "displayName": "External Everywhere Agent",
+      "type": "external",
+      "isBlocked": false,
+      "deployedTo": "all"
+    },
+    {
+      "id": "P_microsoft_all",
+      "displayName": "Microsoft Everywhere Agent",
+      "type": "microsoft",
+      "isBlocked": false,
+      "deployedTo": "all"
+    },
+    {
+      "id": "P_blocked_none",
+      "displayName": "Blocked Undeployed Agent",
+      "type": "shared",
+      "isBlocked": true,
+      "deployedTo": "none"
+    }
+  ]
+}

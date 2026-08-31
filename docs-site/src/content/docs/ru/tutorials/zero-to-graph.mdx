@@ -1,0 +1,172 @@
+---
+title: От нуля до read/write access graph
+description: >-
+  Соберите единственный бинарник, загрузите его с прилагаемым демонстрационным
+  estate и достигните заполненного access graph Permitted-vs-Observed — основной
+  идеи продукта, от начала до конца, за несколько минут.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+К концу этого руководства у вас будет Olivares AI, работающий
+локально, и вы достигнете его центрального артефакта: **read/write access graph**
+с реальным результатом дрейфа **Permitted-vs-Observed**. Вы *изучите продукт,
+наблюдая, как он работает* — это путь обучения, а не продакшен-установка (для этого см.
+[self-hosting](/ru/how-to/self-hosting/)).
+
+Мы используем прилагаемый **демонстрационный estate** (`--seed-demo`): небольшой
+синтетический набор агентов, идентичностей и ресурсов, который проходит через
+**реальную** шину событий ровно так, как это делал бы живой коллектор pgAudit или
+OpenTelemetry. Всё работает на `localhost`.
+
+<Aside type="caution" title="Демо-режим только для обучения">
+`--seed-demo` подготавливает демонстрационного администратора с **публичным паролем
+из дерева исходного кода** и синтетическими данными, и он **отказывается запускаться
+на адресе, отличном от loopback**. Никогда не используйте его для реальной установки.
+Подлинный путь первого запуска (одноразовый токен настройки, без учётных данных по
+умолчанию, реальные источники) описан в
+[self-hosting](/ru/how-to/self-hosting/).
+</Aside>
+
+## Предварительные требования
+
+- **Go 1.26+** (для сборки бинарника) или Docker (см.
+  [руководство по self-hosting](/ru/how-to/self-hosting/) для пути через контейнер).
+- `curl` и `python3` для обращения к API из оболочки.
+- Чекаут репозитория Olivares AI.
+
+## Сборка и запуск
+
+<Steps>
+
+1. **Соберите единственный бинарник.** Из корня репозитория:
+
+   ```bash
+   task setup    # install git hooks, commit tooling and web deps
+   task build    # compile the static binary with the web embedded (go:embed)
+   ./bin/olivares version
+   ```
+
+   `task build` собирает веб-бандл, first-party плагины коннекторов и
+   бинарник, производя один самодостаточный артефакт по пути `./bin/olivares`.
+
+   <Aside type="note">
+   Если вам нужен только бинарник, а веб-бандл уже собран, сырая сборка такова:
+   `CGO_ENABLED=0 go build -trimpath -o bin/olivares ./cmd/olivares`
+   — хранилище — это SQLite на чистом Go (modernc), так что C-toolchain не требуется.
+   </Aside>
+
+2. **Запустите его с демонстрационным estate** на loopback. Выберите свежий каталог
+   данных, чтобы начать с чистого листа:
+
+   ```bash
+   DATA="$(mktemp -d)"
+   ./bin/olivares serve --insecure --seed-demo \
+     --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 \
+     --data-dir "$DATA"
+   ```
+
+   Флаг `--insecure` отдаёт открытый HTTP на loopback (нормально для локального
+   руководства; в остальных случаях TLS включён по умолчанию). При запуске вы увидите
+   баннер **DEMO MODE** с демонстрационными учётными данными:
+
+   ```
+   demo@olivares.local / olivares-demo-estate
+   ```
+
+</Steps>
+
+## Достигните access graph
+
+Оставьте сервер работающим и откройте второй терминал.
+
+<Steps>
+
+1. **Войдите** с демонстрационными учётными данными, чтобы получить bearer-токен:
+
+   ```bash
+   BASE=http://127.0.0.1:8901
+   TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+     | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+   ```
+
+2. **Разрешите демонстрационного арендатора** (эндпоинты access-map привязаны к
+   арендатору):
+
+   ```bash
+   TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
+     | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+   ```
+
+3. **Получите read/write граф.** Это модуль III — access map:
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   Демонстрационный estate возвращает примерно **20 узлов и 13 рёбер** — агентов,
+   идентичности, MCP-серверы, модели, провайдеров и ресурсы, причём каждое ребро
+   классифицировано как read или read-write.
+
+4. **Получите дрейф Permitted-vs-Observed:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/accessmap/drift" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+   Это выявляет засеянные **неожиданные доступы**, например:
+
+   - агент, читающий `appdb.public.secrets`, который ему **никогда не предоставлялся**
+     (атрибутировано); и
+   - идентичность общего пула, пишущая `appdb.public.logs` (приблизительная атрибуция).
+
+   <Aside type="tip" title="Это /drift, а не /diff">
+   Результат Permitted-vs-Observed отдаётся по `/v1/m/accessmap/drift`. Эндпоинта
+   `/v1/m/accessmap/diff` не существует.
+   </Aside>
+
+5. **(Опционально) Посмотрите весь засеянный инвентарь:**
+
+   ```bash
+   curl -sf "$BASE/v1/m/inventory/summary" \
+     -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+   ```
+
+</Steps>
+
+## Посмотрите это в веб-UI
+
+Веб-UI **встроен в тот же бинарник** и отдаётся из того же origin. С работающим
+демо-сервером откройте:
+
+```
+http://127.0.0.1:8901
+```
+
+Войдите с демонстрационными учётными данными и откройте представление access-map: граф
+рендерит те же узлы и рёбра, причём наложение дрейфа подсвечивает неожиданные доступы,
+а дашборды резюмируют estate.
+
+<Aside type="note" title="То, что вы только что увидели, — это хребет">
+*обнаружение → R/RW граф → diff Permitted-vs-Observed → инвентарь/дашборды* — это
+основной поток продукта. Демо подавало синтетические наблюдения через реальную шину;
+реальная установка вместо этого подаёт их через коннекторы — см.
+[подключение источника](/ru/how-to/connect-a-source/).
+</Aside>
+
+## Что здесь *не* происходит (и что делать дальше)
+
+- Демонстрационные данные синтетические, а демонстрационный пароль публичный — это
+  **не** безопасное развёртывание. Для настоящего следуйте [self-hosting](/ru/how-to/self-hosting/):
+  там нет учётных данных по умолчанию и используется одноразовый токен настройки.
+- Эндпоинты модулей, использованные выше (`/v1/m/accessmap/*`, `/v1/m/inventory/*`),
+  достижимы, но **не** входят в отдаваемый документ OpenAPI по замыслу;
+  [справочник API](/reference/api/) документирует основную поверхность REST.
+- Чтобы понять, *почему* граф строится именно так (кооперативная телеметрия,
+  скрещённая с нативным аудитом хранилища, eBPF как подстраховка, аннотации MCP,
+  трактуемые как ненадёжные), прочитайте
+  [обзор архитектуры](/ru/explanation/architecture/overview/).

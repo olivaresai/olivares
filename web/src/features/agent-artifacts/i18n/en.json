@@ -1,0 +1,147 @@
+{
+  "title": "Agent Artifacts",
+  "subtitle": "Govern the tenant-wide registry, recorded posture and supply-chain BOM for artifacts agents execute.",
+  "intro": "This registry stores identity, provenance and recorded posture only — never skill bodies, manifests or instruction text.",
+  "tabs": {
+    "registry": "Artifact registry",
+    "aibom": "Agent supply-chain AIBOM"
+  },
+  "classes": {
+    "skill": "Skill",
+    "mcpb_extension": "MCPB extension",
+    "mcp_app_template": "MCP App template",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "registry": {
+    "title": "Registered artifacts",
+    "description": "Tenant-estate identities, provenance claims and recorded scanner results.",
+    "new": "Register artifact",
+    "created": "Artifact registered.",
+    "deleted": "Artifact deleted.",
+    "search": "Search registered artifacts…",
+    "empty": "No artifacts registered",
+    "emptyHint": "An artifact never registered is not represented in the agent supply-chain BOM.",
+    "filter": {
+      "label": "Artifact class",
+      "all": "All artifact classes"
+    },
+    "columns": {
+      "class": "Class",
+      "name": "Name",
+      "version": "Version",
+      "provenance": "Provenance",
+      "posture": "Recorded scan result",
+      "issues": "Issues",
+      "attestedAt": "Recorded"
+    },
+    "provenance": {
+      "claim": "Operator claim",
+      "verified": "Provenance reviewed",
+      "claimHint": "The provenance is an operator claim and has not been marked reviewed.",
+      "verifiedHint": "The operator reviewed the provenance claim; this is not an Olivares certification."
+    },
+    "posture": {
+      "notScanned": "Not scanned",
+      "grade": "Grade {{grade}}",
+      "recorded": "Recorded scan result",
+      "hint": "A grade records what a connector scanner graded or what an operator recorded. The console did not run a scan."
+    },
+    "drawer": {
+      "description": "Stored registry metadata and its claim-versus-reviewed state.",
+      "identityNotice": "Only metadata is stored. There is no artifact content behind this record.",
+      "postureNotice": "A posture grade is a recorded scan result, not a scan performed by this console. Not scanned is neutral, not a failure.",
+      "id": "Registry ID",
+      "class": "Artifact class",
+      "name": "Name",
+      "version": "Version",
+      "provenance": "Provenance",
+      "sourceRef": "Source reference",
+      "contentHash": "Content fingerprint",
+      "posture": "Recorded scan result",
+      "issues": "Recorded issues",
+      "verified": "Provenance state",
+      "attestedBy": "Recorded by",
+      "attestedAt": "Recorded at",
+      "note": "Note"
+    },
+    "create": {
+      "title": "Register agent artifact",
+      "description": "Record identity, provenance and posture metadata. The artifact content is never uploaded.",
+      "uniqueHint": "Class and name form a unique, immutable registry identity. There is no update route.",
+      "class": "Artifact class",
+      "name": "Name",
+      "version": "Version",
+      "provenance": "Provenance claim",
+      "sourceRef": "Source reference",
+      "contentHash": "Content hash",
+      "contentAlg": "Hash algorithm",
+      "posture": "Recorded scan result",
+      "issues": "Recorded issues",
+      "issuesHint": "Issue count from the recorded result. Disabled and zero when not scanned.",
+      "verified": "Operator reviewed provenance",
+      "verifiedHint": "This attests that the operator reviewed the provenance claim; it is not an Olivares certification.",
+      "note": "Note",
+      "errorTitle": "Artifact was not registered",
+      "duplicateTitle": "Artifact already registered",
+      "duplicate": "An artifact with this class and name already exists. There is no update route; choose a different identity or delete the existing record first."
+    },
+    "delete": {
+      "title": "Delete registered artifact",
+      "description": "Delete “{{name}}” from the registry? Future live BOMs will no longer include it."
+    },
+    "truncated": "Loaded {{n}} artifacts; there are more",
+    "truncatedHint": "There are more registered artifacts than shown; this page takes rows by id — assigned at creation — so rows beyond it are missing, normally the most recently registered. The class filter is applied by the ENGINE, so it re-queries; table search and sorting apply only to what is loaded. An artifact not listed here does not demonstrate that it is unregistered."
+  },
+  "aibom": {
+    "difference": "This estate-wide BOM covers registered agent artifacts; the per-model AIBOM covers the lineage of one owned model.",
+    "coverage": "Coverage reflects what was registered: an artifact never registered is not represented.",
+    "live": {
+      "title": "Live agent supply-chain BOM",
+      "description": "Generated now — live, unsealed and unaudited.",
+      "notice": "Previewing generates a fresh CycloneDX 1.6 document from the current registry. It is read-only and does not create evidence.",
+      "preview": "Preview live BOM",
+      "loading": "Generating live BOM…",
+      "dialogTitle": "Live agent supply-chain BOM",
+      "dialogDescription": "Generated from the registry now. This document is not sealed or audited.",
+      "jsonLabel": "Live CycloneDX JSON",
+      "download": "Download live BOM"
+    },
+    "seal": {
+      "action": "Seal current BOM",
+      "confirmTitle": "Seal agent supply-chain BOM",
+      "confirmDescription": "This re-generates the BOM and commits its canonical content hash to the audit ledger. The ledger does not archive the document.",
+      "confirmBody": "Keep the returned receipt: its AIBOM is the only copy of the sealed document.",
+      "confirm": "Seal and receive BOM",
+      "success": "Agent supply-chain BOM sealed. Download the receipt's BOM now.",
+      "receiptTitle": "Sealed BOM receipt",
+      "receiptDescription": "The hash commitment is durable; this receipt contains the only copy of the sealed document.",
+      "download": "Download sealed BOM"
+    },
+    "history": {
+      "title": "Seal history",
+      "description": "Append-only models.agent_aibom commitments for the registered agent-artifact estate.",
+      "empty": "No agent supply-chain BOMs sealed",
+      "emptyHint": "Sealing creates a hash commitment and returns the only document copy in its receipt.",
+      "loadError": "Could not load the seal history.",
+      "id": "Seal ID",
+      "subject": "Subject",
+      "serial": "Serial number",
+      "contentHash": "Content hash",
+      "specVersion": "CycloneDX version",
+      "components": "Registered components",
+      "ledgerSeq": "Prior audit sequence",
+      "ledgerHash": "Prior audit head",
+      "scope": "Coverage note",
+      "generatedBy": "Generated by",
+      "generatedAt": "Generated at",
+      "noPriorHead": "{{seq}} (no prior audit head)",
+      "truncated": "Loaded {{n}} seals; there are more",
+      "truncatedHint": "There are more sealed AI-BOMs than shown; this page takes rows by id. Sealing appends a row, so what is missing is normally the most recent evidence."
+    }
+  }
+}

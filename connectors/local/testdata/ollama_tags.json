@@ -1,0 +1,18 @@
+{
+  "models": [
+    {
+      "name": "llama3.1:8b",
+      "model": "llama3.1:8b",
+      "modified_at": "2026-05-20T10:00:00Z",
+      "size": 4920753328,
+      "details": { "family": "llama", "parameter_size": "8.0B", "quantization_level": "Q4_0" }
+    },
+    {
+      "name": "qwen2.5:7b",
+      "model": "qwen2.5:7b",
+      "modified_at": "2026-05-22T11:00:00Z",
+      "size": 4683073312,
+      "details": { "family": "qwen2", "parameter_size": "7.6B", "quantization_level": "Q4_K_M" }
+    }
+  ]
+}

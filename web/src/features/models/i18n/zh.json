@@ -1,0 +1,269 @@
+{
+  "title": "模型与提供商",
+  "description": "受治理的模型资产域——已声明的能力与定价、路由策略以及提供商密钥引用。从不展示密钥，仅展示经掩码处理的引用。",
+  "tabs": {
+    "catalog": "目录",
+    "estate": "资产域",
+    "routing": "路由",
+    "keys": "提供商密钥",
+    "gpai": "GPAI 态势",
+    "access": "Access"
+  },
+  "catalog": {
+    "title": "能力矩阵",
+    "description": "按模型系列声明的 API 能力。",
+    "pricingTitle": "已声明的定价",
+    "pricingDescription": "标价默认值——仅供参考，并非不可变的事实。请对照各提供商进行核实，并按模型进行覆盖。",
+    "family": "系列",
+    "provider": "提供商",
+    "context": "上下文",
+    "maxOutput": "最大输出",
+    "modality": "模态",
+    "inputPrice": "输入 / MTok",
+    "outputPrice": "输出 / MTok",
+    "cacheRead": "缓存读取 / MTok",
+    "cacheWrite1h": "缓存写入 1h / MTok",
+    "residency": "数据驻留",
+    "tiers": "服务层级",
+    "residencyNotApplicable": "不适用",
+    "tiersNotDeclared": "未声明",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "能力待确认",
+    "capsToConfirmHint": "该系列的能力集尚未对照模型卡进行核实。模型已列出，但其能力被标记为未确认，而非凭空臆造。",
+    "tier": {
+      "standard": "标准",
+      "batch": "批处理",
+      "priority": "优先",
+      "priority_on_demand": "优先按需",
+      "flex": "弹性",
+      "flex_discount": "弹性折扣"
+    },
+    "asOf": "截至 {{date}}",
+    "noPricing": "无已声明的定价",
+    "present": "支持",
+    "absent": "不支持"
+  },
+  "estate": {
+    "title": "受治理的模型",
+    "description": "本租户资产域中的模型，已由目录信息加以丰富。",
+    "empty": "资产域中暂无模型",
+    "columns": {
+      "name": "模型",
+      "provider": "提供商",
+      "family": "系列",
+      "context": "上下文",
+      "inputCost": "输入 µ$/tok",
+      "outputCost": "输出 µ$/tok",
+      "modality": "模态",
+      "capabilities": "能力",
+      "status": "状态"
+    },
+    "notEnriched": "尚无已声明的系列——无定价",
+    "costNote": "每 token 的 µUSD 是一个粗略的便捷数值；真实用量的权威成本以 FinOps 账本为准。",
+    "truncated": "已加载 {{n}} 个模型；还有更多",
+    "truncatedHint": "受治理的模型多于此处所示；本页按行 id 取数。 表格的搜索与排序仅作用于已加载的内容。"
+  },
+  "routing": {
+    "title": "路由策略",
+    "description": "策略在此处定义，由网关连接器执行——UI 负责配置并展示它们。",
+    "new": "新建策略",
+    "empty": "暂无路由策略",
+    "emptyHint": "路由策略为某一策略选定主模型及回退链。",
+    "strategy": "策略",
+    "requiredCapabilities": "所需能力",
+    "preferredProviders": "首选提供商",
+    "minContext": "最小上下文窗口",
+    "pinnedModel": "固定模型",
+    "allowDeprecated": "允许已弃用",
+    "gateway": "网关端点",
+    "viaGateway": "经由网关",
+    "resolve": "解析",
+    "resolving": "解析中…",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "strategies": {
+      "cost": "成本",
+      "latency": "延迟",
+      "capability": "能力",
+      "pinned": "固定"
+    },
+    "decision": {
+      "title": "已解析的裁定",
+      "primary": "主模型",
+      "fallbacks": "回退链",
+      "unresolved": "没有受治理的模型满足此策略",
+      "reason": "原因"
+    },
+    "dialog": {
+      "title": "路由策略",
+      "name": "名称",
+      "listHint": "以逗号分隔。",
+      "create": "保存策略",
+      "created": "路由策略已保存"
+    },
+    "execute": "Execute",
+    "executeConfirm": "Execute and spend",
+    "input": "Input",
+    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
+    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "noExecutor": "No executor is provisioned. This is not an outage: the control plane resolves routing decisions but never spends against a provider until an operator wires an executor.",
+    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "fallbackUsed": "fallback used",
+    "refusal": "provider refusal",
+    "tokens": "{{in}} in · {{out}} out",
+    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "truncated": "已加载 {{n}} 条策略；还有更多",
+    "truncatedHint": "路由策略多于此处所示；本页按行 id 取数。策略未列在此处，并不能证明没有任何策略会路由某个请求。"
+  },
+  "keys": {
+    "title": "提供商密钥引用",
+    "description": "对提供商 API 密钥和工作区的受治理引用。仅存储经掩码处理的提示——绝不存储密钥值。",
+    "new": "添加密钥引用",
+    "empty": "暂无密钥引用",
+    "maskedOnly": "仅为引用——密钥值从不存储或展示。",
+    "columns": {
+      "name": "名称",
+      "provider": "提供商",
+      "kind": "类型",
+      "extId": "外部 id",
+      "hint": "掩码提示",
+      "owner": "所有者",
+      "status": "状态",
+      "created": "创建时间"
+    },
+    "kind": {
+      "api_key": "API 密钥",
+      "workspace": "工作区"
+    },
+    "dialog": {
+      "title": "添加密钥引用",
+      "name": "名称",
+      "provider": "提供商",
+      "kind": "引用类型",
+      "extId": "外部 id",
+      "extIdHint": "提供商处的密钥/工作区 id（例如 apikey_01）。并非密钥本身。",
+      "owner": "所有者",
+      "noSecretNote": "此表单从不接受密钥。Olivares 仅存储一个引用和一个掩码提示。",
+      "create": "添加引用",
+      "created": "密钥引用已添加"
+    },
+    "truncated": "已加载 {{n}} 个密钥；还有更多",
+    "truncatedHint": "提供方密钥引用多于此处所示；本页按行 id 取数。密钥未列在此处，并不能证明该提供方没有凭据。 表格的排序仅作用于已加载的内容。"
+  },
+  "gpai": {
+    "title": "GPAI 提供方态势",
+    "description": "由运营方声明记录的供应商态势,每个提供方记录一次。",
+    "notice": "此为运营方以声明形式记录的供应商 GPAI 态势,用于支持 ISO/IEC 42001 A.10.3 及 NIST AI RMF GOVERN-6.1 / MAP-4.1 的供应商证据需求。这不是 Olivares 作出的合规判定。",
+    "empty": "尚未记录任何 GPAI 提供方态势",
+    "emptyHint": "当已审阅提供方公开发布的材料,或需要记录某项主张时,为提供方记录态势声明。",
+    "verifiedMeaning": "由运营方对照提供方公开发布的材料进行了审阅——这是运营方自身的声明,并非 Olivares 执行的核验,也不是合规判定。",
+    "actions": {
+      "attest": "记录态势声明",
+      "edit": "编辑态势",
+      "editProvider": "编辑 {{provider}} 的态势"
+    },
+    "columns": {
+      "provider": "提供方",
+      "review": "审阅状态",
+      "attestedAt": "声明时间",
+      "actions": "操作"
+    },
+    "claims": {
+      "cop_signatory": "行为准则(Code of Practice)签署方",
+      "technical_docs": "已发布技术文档",
+      "training_data_summary": "已发布训练数据摘要",
+      "copyright_policy": "已记录版权政策",
+      "downstream_info": "已提供下游信息",
+      "systemic_risk": "具有系统性风险的 GPAI",
+      "safety_report": "安全与安保模型报告"
+    },
+    "states": {
+      "recorded": "已记录",
+      "notRecorded": "未记录该主张",
+      "reviewed": "运营方已审阅的声明",
+      "unreviewed": "运营方主张——未经审阅"
+    },
+    "detail": {
+      "title": "GPAI 态势:{{provider}}",
+      "description": "运营方为该提供方记录的主张及声明元数据。",
+      "claims": "提供方主张",
+      "reviewState": "审阅状态",
+      "verificationMethod": "核验方法",
+      "attestedBy": "声明人",
+      "attestedAt": "声明时间",
+      "note": "备注",
+      "notProvided": "未提供"
+    },
+    "form": {
+      "createTitle": "记录 GPAI 提供方态势声明",
+      "editTitle": "编辑 GPAI 提供方态势",
+      "description": "记录提供方的主张以及运营方自身的审阅声明。",
+      "providerRef": "提供方标识",
+      "providerLocked": "编辑时提供方标识已锁定,因为更改它会创建第二条态势记录。",
+      "providerRequired": "请输入提供方标识。",
+      "claimsTitle": "提供方主张",
+      "claimsDescription": "仅当运营方已为该提供方记录某项主张时,才启用该主张。",
+      "systemicRiskHint": "分类:该模型被归类为具有系统性风险的 GPAI。",
+      "safetyReportHint": "此报告适用于被归类为具有系统性风险的 GPAI 的模型。",
+      "verified": "已对照提供方公开发布的材料审阅",
+      "verificationMethod": "核验方法",
+      "verificationMethodHint": "当运营方将此态势标记为已审阅时必填。",
+      "verificationMethodRequired": "请描述审阅提供方公开发布材料的方式。",
+      "note": "备注",
+      "requestRejected": "态势未保存。请查看下方的服务器响应。",
+      "created": "GPAI 提供方态势声明已记录",
+      "updated": "GPAI 提供方态势已更新",
+      "save": "保存声明",
+      "saving": "正在保存…"
+    },
+    "truncated": "已加载 {{n}} 条态势；还有更多",
+    "truncatedHint": "GPAI 态势多于此处所示；本页按行 id 取数。提供方未列在此处，并不能证明未就其作出声明。 表格的排序仅作用于已加载的内容。"
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "尚未添加提供商密钥引用",
+      "description": "按提供商标识符添加 API 密钥或工作区引用；控制台绝不接受或存储凭据值。"
+    },
+    "models": {
+      "title": "尚未观测到受治理的模型",
+      "description": "连接器发出标明所用提供商和模型的成本记录后，模型才会进入资产域。"
+    }
+  },
+  "residency": {
+    "title": "工作区数据驻留",
+    "description": "按提供方的报告，各工作区在何处执行推理，以及其数据存放在何处。",
+    "empty": "没有工作区报告驻留设置",
+    "unrestricted": "提供方未报告任何限制",
+    "allowed": "允许：{{geos}}",
+    "unreported": "未报告",
+    "defaultGeo": "默认：{{geo}}",
+    "atRest": "静态存放：{{geo}}",
+    "truncated": "已加载 {{n}} 个工作区；还有更多",
+    "truncatedHint": "驻留记录多于此处所示；本页按行 id（创建时分配）取数，因此更靠后的会缺失。工作区未列在此处，并不能证明其处理不受限制。"
+  },
+  "access": {
+    "title": "Model access rules",
+    "description": "Who may use which model, and where.",
+    "empty": "No access rules — every subject is unrestricted",
+    "groupsTitle": "Model groups",
+    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsEmpty": "No model groups",
+    "members": "{{n}} members",
+    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "effect": {
+      "allow": "allow",
+      "forbid": "forbid"
+    },
+    "tenantWide": "tenant-wide",
+    "inWorkspace": "in {{ws}}",
+    "allSurfaces": "all surfaces",
+    "onSurfaces": "on {{list}}",
+    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
+    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "readOnlyNote": "Read-only: changing who may use a model requires models:model-access:admin, which is a higher tier than editing a routing policy.",
+    "truncated": "已加载 {{n}} 条规则；还有更多",
+    "truncatedHint": "访问规则多于此处所示；本页按行 id 取数。这些行上的标记仅反映已加载的规则：可能缺少引入限定或增加允许目标的 allow，也可能缺少扣减访问的 forbid——因此本页可能看起来比实际更宽，也可能更窄，而没有任何已加载规则的主体根本不会出现。请勿据此推断有效访问：引擎在决策前会读取全部页面，并跨用户、角色与分组解析主体，这是一行无法呈现的。",
+    "groupsTruncated": "已加载 {{n}} 个分组；还有更多",
+    "groupsTruncatedHint": "模型分组多于此处所示；本页按行 id 取数。分组未列在此处，并不能证明它不存在——规则仍可能指向它。"
+  }
+}

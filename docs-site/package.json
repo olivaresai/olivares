@@ -1,0 +1,40 @@
+{
+  "name": "olivares-ai-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Product documentation site for Olivares AI \u2014 integrate, manage and secure AI in your enterprise, multi-provider: Claude Code and Codex today, Grok Build in development. Di\u00e1taxis-organized, searchable (Pagefind), versioned. Part of the AGPL-3.0-only product.",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "spec:openapi": "node scripts/lint-openapi.mjs",
+    "spec:asyncapi": "node scripts/lint-asyncapi.mjs",
+    "test:drift": "node scripts/check-spec-drift.mjs",
+    "test:modules": "node scripts/check-module-coverage.mjs",
+    "test:links": "node scripts/check-links.mjs",
+    "test": "npm run brand:check && npm run spec:openapi && npm run spec:asyncapi && npm run build && npm run test:drift && npm run test:modules && npm run test:links",
+    "brand": "node scripts/gen-brand-css.mjs",
+    "brand:check": "node scripts/gen-brand-css.mjs --selftest && node scripts/gen-brand-css.mjs --check"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.39.3",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "astro": "^6.4.4",
+    "starlight-openapi": "^0.25.3",
+    "starlight-versions": "^0.9.0",
+    "url-template": "^3.1.1"
+  },
+  "devDependencies": {
+    "@asyncapi/parser": "^3.4.0",
+    "@readme/openapi-parser": "^4.1.2"
+  },
+  "overrides": {
+    "nanoid": "^3.3.17"
+  }
+}

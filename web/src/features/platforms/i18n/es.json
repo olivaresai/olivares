@@ -1,0 +1,105 @@
+{
+  "title": "Plataformas y ciclo de vida",
+  "description": "La matriz de despliegue multi-superficie y el ciclo de vida de modelo por plataforma del estate de Claude — postura de compliance por superficie y fechas de retirada divergentes. Referencia servida por el motor, nunca recalculada.",
+  "tabs": {
+    "surfaces": "Superficies y compliance",
+    "lifecycle": "Ciclo de vida de modelo"
+  },
+  "liveReference": "Referencia servida por el motor — a fecha {{date}}, fuente {{source}}.",
+  "unavailable": "La referencia de plataformas no está disponible en este motor",
+  "confirm": {
+    "confirmed": "Confirmado",
+    "toConfirm": "Por confirmar"
+  },
+  "surfaces": {
+    "title": "Superficies de despliegue",
+    "description": "Las seis superficies de Claude modeladas (ANT2-01/17). Cada una difiere en URL base, autenticación, forma del model-id, facturación, residencia y postura de compliance — no son intercambiables.",
+    "matrixTitle": "Matriz de atributos por superficie",
+    "matrixSummary": "Seis superficies de despliegue comparadas por operador, endpoint, autenticación, forma del model-id, soporte de API, facturación, HIPAA, ZDR y residencia.",
+    "unmodeled": "Superficie no modelada — sin matriz de atributos.",
+    "unmodeledHint": "Este gateway no es una de las seis superficies de Claude modeladas; sus atributos de compliance y residencia no están declarados y no se infieren.",
+    "deprecatedBadge": "Deprecada",
+    "noWorkspaceHeader": "ninguno",
+    "noSigv4": "n/d",
+    "apiSupportTitle": "Soporte de API de Anthropic por superficie",
+    "apiSupportDescription": "Qué familias de API de Anthropic aplican por superficie. Una superficie sin las API Admin/Models/Compliance no puede servir la ingesta de gobierno del lado Anthropic — degrada con honestidad, nunca reporta el vacío como \"sin hallazgos\".",
+    "columns": {
+      "surface": "Superficie",
+      "operator": "Operador",
+      "baseUrl": "URL base",
+      "sigv4": "Servicio SigV4",
+      "workspaceHeader": "Cabecera de workspace",
+      "modelIdForm": "Forma del model-id",
+      "billing": "Facturación",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "Residencia / geo de inferencia",
+      "apiSupport": "Soporte de API",
+      "messages": "Messages",
+      "admin": "Admin",
+      "compliance": "Compliance",
+      "models": "Models",
+      "batches": "Batches",
+      "mcp": "Conector MCP"
+    },
+    "api": {
+      "supported": "Soportado",
+      "unsupported": "No soportado"
+    },
+    "fedramp": {
+      "eligible": "Apto para HIPAA / FedRAMP / IL4-5",
+      "na": "No declarado"
+    },
+    "notesTitle": "Notas por superficie",
+    "compliance": {
+      "title": "Postura de compliance",
+      "description": "HIPAA / FedRAMP / IL / ZDR son un eje por superficie (dónde corre la inferencia), distinto de la postura GPAI de un modelo o proveedor. No los confundas.",
+      "hipaaNote": "HIPAA se muestra con su estado de confirmación. Una postura \"por confirmar\" nunca se representa como un sí o un no rotundos."
+    }
+  },
+  "lifecycle": {
+    "title": "Ciclo de vida de modelo por plataforma",
+    "description": "La retirada de modelos es por plataforma, no global (ANT2-03). Las superficies operadas por Anthropic retiran un modelo en una fecha distinta a Bedrock y Vertex — un único estado \"retirado\" daría una fecha de migración falsa en la mitad del estate.",
+    "datePending": "fecha no publicada / por confirmar",
+    "noSuccessor": "Sin sucesor declarado",
+    "noSuccessorHint": "La autoridad no nombró ningún modelo de reemplazo para esta familia. No se infiere ninguno.",
+    "matrixTitle": "Fechas de retirada por superficie",
+    "columns": {
+      "model": "Modelo",
+      "surface": "Superficie",
+      "retiresOn": "Retirada",
+      "status": "Estado",
+      "replacement": "Reemplazo"
+    },
+    "paramDeprecation": {
+      "title": "Pre-aviso de deprecación de parámetros",
+      "badge": "Informativo",
+      "body": "{{affected}} rechazan un {{params}} no por defecto con un HTTP {{status}}. Es una deprecación de Anthropic (ANT2-03), no un fallo del producto ni un error subsanable — el plano de inferencia retiene estos parámetros como pre-aviso.",
+      "paramsJoin": ", "
+    },
+    "notes": {
+      "title": "Notas de id y residencia de Bedrock",
+      "declaredNote": "Referencia declarada en la web: estas notas citan hechos de honestidad de modules/models/bedrock.go que el endpoint de plataformas no sirve. Cada una lleva su propio estado de confirmación.",
+      "crisIdFormat": "El formato del id de perfil de inferencia cross-region es \"<geo>.anthropic.<model>\", geo ∈ {us, eu, apac, global}. La superficie actual Bedrock Mantle usa el id escueto \"anthropic.<model>\".",
+      "crisOpusId": "El id concreto del perfil de inferencia opus Global-CRIS de Bedrock no está verificado contra la página de AWS — el formato está confirmado, ese id específico no se presenta como autoritativo.",
+      "globalRegionalPremium": "La documentación de AWS indica que los perfiles de inferencia regionales llevan un ~10% de prima sobre global (global es la base más barata) — lo opuesto a una suposición de \"global +10%\"; el multiplicador exacto no está verificado, así que no se modela ninguna prima.",
+      "usBurndown": "El burndown de inferencia solo-US es 1,1× (Opus 4.6 / Sonnet 4.6+, inference_geo=\"us\")."
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "No se han declarado calendarios de retirada de modelos",
+      "description": "La referencia del ciclo de vida de Claude compilada en el motor debe proporcionar estos plazos; ni la actividad del tenant ni las entradas de la consola los rellenan."
+    },
+    "surface": {
+      "title": "No se han declarado superficies de despliegue",
+      "description": "La referencia de superficies de Claude compilada en el motor debe proporcionar estas filas; ni la actividad del tenant ni las entradas de la consola las rellenan."
+    }
+  },
+  "effectiveState": {
+    "label": "En este entorno:",
+    "models": "Catálogo de modelos",
+    "modelOps": "Operaciones de modelos"
+  }
+}

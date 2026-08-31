@@ -1,0 +1,53 @@
+{
+  "models": [
+    {
+      "name": "command-r-plus",
+      "endpoints": ["chat"],
+      "context_length": 128000,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": "https://storage.googleapis.com/cohere-public/tokenizers/command-r-plus.json"
+    },
+    {
+      "name": "command-r",
+      "endpoints": ["chat"],
+      "context_length": 128000,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": "https://storage.googleapis.com/cohere-public/tokenizers/command-r.json"
+    },
+    {
+      "name": "command-a",
+      "endpoints": ["chat"],
+      "context_length": 256000,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": ""
+    },
+    {
+      "name": "embed-english-v3.0",
+      "endpoints": ["embed"],
+      "context_length": 512,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": ""
+    },
+    {
+      "name": "rerank-v3.5",
+      "endpoints": ["rerank"],
+      "context_length": 4096,
+      "finetuned": false,
+      "is_deprecated": false,
+      "tokenizer_url": ""
+    },
+    {
+      "name": "command-light",
+      "endpoints": ["generate"],
+      "context_length": 4096,
+      "finetuned": false,
+      "is_deprecated": true,
+      "tokenizer_url": ""
+    }
+  ],
+  "next_page_token": ""
+}

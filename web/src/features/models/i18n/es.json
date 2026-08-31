@@ -1,0 +1,269 @@
+{
+  "title": "Modelos y proveedores",
+  "description": "El estate de modelos gobernado — capacidades y precios declarados, política de routing y referencias a claves de proveedor. Los secretos nunca se muestran; solo referencias enmascaradas.",
+  "tabs": {
+    "catalog": "Catálogo",
+    "estate": "Estate",
+    "routing": "Routing",
+    "keys": "Claves de proveedor",
+    "gpai": "Postura GPAI",
+    "access": "Acceso"
+  },
+  "catalog": {
+    "title": "Matriz de capacidades",
+    "description": "Capacidades de API declaradas por familia de modelo.",
+    "pricingTitle": "Precios declarados",
+    "pricingDescription": "Precios de lista por defecto — referencia, no verdad inmutable. Verifica con cada proveedor y sobreescribe por modelo.",
+    "family": "Familia",
+    "provider": "Proveedor",
+    "context": "Contexto",
+    "maxOutput": "Salida máx.",
+    "modality": "Modalidad",
+    "inputPrice": "Entrada / MTok",
+    "outputPrice": "Salida / MTok",
+    "cacheRead": "Caché lectura / MTok",
+    "cacheWrite1h": "Caché escritura 1h / MTok",
+    "residency": "Residencia de datos",
+    "tiers": "Tiers de servicio",
+    "residencyNotApplicable": "No aplicable",
+    "tiersNotDeclared": "No declarado",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "Caps por confirmar",
+    "capsToConfirmHint": "El conjunto de capacidades de esta familia aún no está verificado contra una ficha de modelo. El modelo se lista, pero sus capacidades se marcan como no confirmadas en vez de inventarse.",
+    "tier": {
+      "standard": "Estándar",
+      "batch": "Batch",
+      "priority": "Priority",
+      "priority_on_demand": "Priority on-demand",
+      "flex": "Flex",
+      "flex_discount": "Flex discount"
+    },
+    "asOf": "A fecha {{date}}",
+    "noPricing": "Sin precio declarado",
+    "present": "Soportado",
+    "absent": "No soportado"
+  },
+  "estate": {
+    "title": "Modelos gobernados",
+    "description": "Modelos en el estate de este tenant, enriquecidos desde el catálogo.",
+    "empty": "Sin modelos en el estate",
+    "columns": {
+      "name": "Modelo",
+      "provider": "Proveedor",
+      "family": "Familia",
+      "context": "Contexto",
+      "inputCost": "Entrada µ$/tok",
+      "outputCost": "Salida µ$/tok",
+      "modality": "Modalidad",
+      "capabilities": "Capacidades",
+      "status": "Estado"
+    },
+    "notEnriched": "Aún sin familia declarada — sin precio",
+    "costNote": "El µUSD por token es una cifra de conveniencia gruesa; el coste autoritativo del uso real es el ledger de FinOps.",
+    "truncated": "Cargados {{n}} modelos; hay más",
+    "truncatedHint": "Hay más modelos gobernados de los que se ven; esta página coge filas por id. El buscador y la ordenación de la tabla actúan sólo sobre lo cargado."
+  },
+  "routing": {
+    "title": "Políticas de routing",
+    "description": "Las políticas se definen aquí y las ejecuta el conector gateway — la UI las configura y muestra.",
+    "new": "Nueva política",
+    "empty": "Sin políticas de routing",
+    "emptyHint": "Una política de routing selecciona el modelo primario y la cadena de fallback para una estrategia.",
+    "strategy": "Estrategia",
+    "requiredCapabilities": "Capacidades requeridas",
+    "preferredProviders": "Proveedores preferidos",
+    "minContext": "Ventana de contexto mín.",
+    "pinnedModel": "Modelo fijado",
+    "allowDeprecated": "Permitir deprecados",
+    "gateway": "Endpoint del gateway",
+    "viaGateway": "vía gateway",
+    "resolve": "Resolver",
+    "resolving": "Resolviendo…",
+    "enabled": "Activada",
+    "disabled": "Desactivada",
+    "strategies": {
+      "cost": "Coste",
+      "latency": "Latencia",
+      "capability": "Capacidad",
+      "pinned": "Fijado"
+    },
+    "decision": {
+      "title": "Decisión resuelta",
+      "primary": "Primario",
+      "fallbacks": "Cadena de fallback",
+      "unresolved": "Ningún modelo gobernado cumple esta política",
+      "reason": "Motivo"
+    },
+    "dialog": {
+      "title": "Política de routing",
+      "name": "Nombre",
+      "listHint": "Separado por comas.",
+      "create": "Guardar política",
+      "created": "Política de routing guardada"
+    },
+    "execute": "Ejecutar",
+    "executeConfirm": "Ejecutar y gastar",
+    "input": "Entrada",
+    "executeHint": "Resolver es gratis. Ejecutar llama al proveedor y gasta de tu presupuesto.",
+    "executeWarning": "Esto lanza la cadena de modelos resuelta contra el proveedor real y registra una muestra de coste. No es una simulación: usa Resolver para ver la decisión sin gastar.",
+    "noExecutor": "No hay ejecutor aprovisionado. No es una caída: el plano de control resuelve decisiones de enrutado pero nunca gasta contra un proveedor hasta que un operador cablea un ejecutor.",
+    "budgetDenied": "Un presupuesto de FinOps denegó el gasto ANTES de llamar al proveedor. La puerta de gobierno funcionó: revisa o amplía el presupuesto en vez de reintentar.",
+    "fallbackUsed": "se usó respaldo",
+    "refusal": "el proveedor rechazó",
+    "tokens": "{{in}} entrada · {{out}} salida",
+    "outputNotStored": "La salida se te devuelve y no se guarda en ningún sitio: al ledger sólo llega una muestra de coste redactada.",
+    "truncated": "Cargadas {{n}} políticas; hay más",
+    "truncatedHint": "Hay más políticas de enrutado de las que se ven; esta página coge filas por id. Que una política no salga aquí no demuestra que ninguna enrute una petición dada."
+  },
+  "keys": {
+    "title": "Referencias a claves de proveedor",
+    "description": "Referencias gobernadas a claves de API y workspaces de proveedor. Solo se guarda una pista enmascarada — nunca el valor secreto.",
+    "new": "Añadir referencia",
+    "empty": "Sin referencias a claves",
+    "maskedOnly": "Solo referencia — el valor secreto nunca se guarda ni se muestra.",
+    "columns": {
+      "name": "Nombre",
+      "provider": "Proveedor",
+      "kind": "Tipo",
+      "extId": "Id externo",
+      "hint": "Pista enmascarada",
+      "owner": "Propietario",
+      "status": "Estado",
+      "created": "Creada"
+    },
+    "kind": {
+      "api_key": "Clave de API",
+      "workspace": "Workspace"
+    },
+    "dialog": {
+      "title": "Añadir referencia a clave",
+      "name": "Nombre",
+      "provider": "Proveedor",
+      "kind": "Tipo de referencia",
+      "extId": "Id externo",
+      "extIdHint": "El id de la clave/workspace en el proveedor (p. ej. apikey_01). No el secreto.",
+      "owner": "Propietario",
+      "noSecretNote": "Este formulario nunca acepta un secreto. Olivares guarda solo una referencia y una pista enmascarada.",
+      "create": "Añadir referencia",
+      "created": "Referencia a clave añadida"
+    },
+    "truncated": "Cargadas {{n}} claves; hay más",
+    "truncatedHint": "Hay más referencias de clave de proveedor de las que se ven; esta página coge filas por id. Que una clave no salga aquí no demuestra que no exista credencial para ese proveedor. La ordenación de la tabla actúa sólo sobre lo cargado."
+  },
+  "gpai": {
+    "title": "Postura del proveedor GPAI",
+    "description": "Postura del proveedor atestada por el operador, registrada una única vez por proveedor.",
+    "notice": "Esta es la postura GPAI del proveedor atestada por el operador y alimenta las necesidades de evidencia sobre proveedores de ISO/IEC 42001 A.10.3 y NIST AI RMF GOVERN-6.1 / MAP-4.1. No es una determinación de cumplimiento por parte de Olivares.",
+    "empty": "No hay ninguna postura de proveedor GPAI registrada",
+    "emptyHint": "Ateste una postura de proveedor cuando se haya revisado el material publicado del proveedor o sea necesario registrar una afirmación.",
+    "verifiedMeaning": "Revisado por el operador contra el material publicado del proveedor; se trata de la atestación propia del operador, no de una verificación realizada por Olivares ni de una determinación de cumplimiento.",
+    "actions": {
+      "attest": "Atestar postura",
+      "edit": "Editar postura",
+      "editProvider": "Editar la postura de {{provider}}"
+    },
+    "columns": {
+      "provider": "Proveedor",
+      "review": "Estado de revisión",
+      "attestedAt": "Atestación",
+      "actions": "Acciones"
+    },
+    "claims": {
+      "cop_signatory": "Signatario del Código de buenas prácticas",
+      "technical_docs": "Documentación técnica publicada",
+      "training_data_summary": "Resumen de los datos de entrenamiento publicado",
+      "copyright_policy": "Política de derechos de autor registrada",
+      "downstream_info": "Información facilitada a los proveedores posteriores",
+      "systemic_risk": "GPAI con riesgo sistémico",
+      "safety_report": "Safety & Security Model Report"
+    },
+    "states": {
+      "recorded": "Registrada",
+      "notRecorded": "Afirmación no registrada",
+      "reviewed": "Atestación revisada por el operador",
+      "unreviewed": "Afirmación del operador — sin revisar"
+    },
+    "detail": {
+      "title": "Postura GPAI: {{provider}}",
+      "description": "Las afirmaciones registradas por el operador y los metadatos de atestación de este proveedor.",
+      "claims": "Afirmaciones del proveedor",
+      "reviewState": "Estado de revisión",
+      "verificationMethod": "Método de verificación",
+      "attestedBy": "Atestado por",
+      "attestedAt": "Fecha de atestación",
+      "note": "Nota",
+      "notProvided": "No indicado"
+    },
+    "form": {
+      "createTitle": "Atestar postura de proveedor GPAI",
+      "editTitle": "Editar postura de proveedor GPAI",
+      "description": "Registre las afirmaciones del proveedor y la atestación de revisión propia del operador.",
+      "providerRef": "Referencia del proveedor",
+      "providerLocked": "La referencia del proveedor está bloqueada durante la edición porque cambiarla crearía una segunda postura.",
+      "providerRequired": "Introduzca una referencia de proveedor.",
+      "claimsTitle": "Afirmaciones del proveedor",
+      "claimsDescription": "Active una afirmación solo cuando el operador la haya registrado para este proveedor.",
+      "systemicRiskHint": "Clasificación: el modelo está clasificado como GPAI con riesgo sistémico.",
+      "safetyReportHint": "Este informe se aplica a los modelos clasificados como GPAI con riesgo sistémico.",
+      "verified": "Revisado contra el material publicado del proveedor",
+      "verificationMethod": "Método de verificación",
+      "verificationMethodHint": "Obligatorio cuando el operador marca esta postura como revisada.",
+      "verificationMethodRequired": "Describa cómo se revisó el material publicado del proveedor.",
+      "note": "Nota",
+      "requestRejected": "La postura no se ha guardado. Revise la respuesta del servidor a continuación.",
+      "created": "Postura de proveedor GPAI atestada",
+      "updated": "Postura de proveedor GPAI actualizada",
+      "save": "Guardar atestación",
+      "saving": "Guardando…"
+    },
+    "truncated": "Cargadas {{n}} posturas; hay más",
+    "truncatedHint": "Hay más posturas GPAI de las que se ven; esta página coge filas por id. Que un proveedor no salga aquí no demuestra que no se declarara nada para él. La ordenación de la tabla actúa sólo sobre lo cargado."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "Aún no se han añadido referencias a claves de proveedor",
+      "description": "Añade una referencia de clave de API o de workspace mediante el identificador del proveedor; la consola nunca acepta ni almacena el valor de la credencial."
+    },
+    "models": {
+      "title": "Aún no se han observado modelos gobernados",
+      "description": "Los modelos entran en el estate cuando un conector emite un registro de coste que identifica al proveedor y al modelo en uso."
+    }
+  },
+  "residency": {
+    "title": "Residencia por workspace",
+    "description": "Dónde procesa cada workspace la inferencia y dónde reposa su dato, según lo reporta el proveedor.",
+    "empty": "Ningún workspace reporta ajustes de residencia",
+    "unrestricted": "El proveedor no reporta ninguna restricción",
+    "allowed": "Permitidas: {{geos}}",
+    "unreported": "no reportado",
+    "defaultGeo": "defecto: {{geo}}",
+    "atRest": "en reposo: {{geo}}",
+    "truncated": "Cargados {{n}} workspaces; hay más",
+    "truncatedHint": "Hay más registros de residencia de los que se ven; esta página coge filas por id —asignado al crear—, así que faltan las posteriores. Que un workspace no salga aquí no demuestra que su procesamiento no esté restringido: puede estar sencillamente más allá de esta página."
+  },
+  "access": {
+    "title": "Reglas de acceso a modelos",
+    "description": "Quién puede usar qué modelo, y dónde.",
+    "empty": "Sin reglas de acceso: todos los sujetos están sin restringir",
+    "groupsTitle": "Grupos de modelos",
+    "groupsDescription": "Conjuntos con nombre a los que una regla puede apuntar en vez de a un modelo suelto.",
+    "groupsEmpty": "No hay grupos de modelos",
+    "members": "{{n}} miembros",
+    "confinementNotice": "⛔ Un allow no sólo suma. Un sujeto NOMBRADO por cualquier allow queda CONFINADO a sus allows: todo lo demás pasa a estar denegado para él. Un sujeto que no aparece en ninguna regla está sin restringir. Así que crear el PRIMER allow para alguien le QUITA el resto del catálogo.",
+    "effect": {
+      "allow": "permitir",
+      "forbid": "prohibir"
+    },
+    "tenantWide": "todo el tenant",
+    "inWorkspace": "en {{ws}}",
+    "allSurfaces": "todas las superficies",
+    "onSurfaces": "en {{list}}",
+    "forbidSubtracts": "Este prohibir RESTA: anula cualquier allow que nombre al mismo sujeto.",
+    "confinedSubject": "{{subject}} está confinado a sus allows: lo que no aparece le está denegado.",
+    "readOnlyNote": "Sólo lectura: cambiar quién puede usar un modelo exige models:model-access:admin, un nivel por encima de editar una política de enrutado.",
+    "truncated": "Cargadas {{n}} reglas; hay más",
+    "truncatedHint": "Hay más reglas de acceso de las que se ven; esta página coge filas por id. Las marcas de estas filas reflejan SÓLO las reglas cargadas: pueden faltar allows que introduzcan confinamiento o añadan destinos permitidos, y pueden faltar forbids que resten acceso — así que esta página puede leerse más ancha O más estrecha que la realidad, y un sujeto sin ninguna regla cargada no aparece siquiera. No deduzcas de aquí el acceso efectivo: el motor recorre todas las páginas antes de decidir, y resuelve un principal por usuario, rol y grupo a la vez, que una fila no puede enseñar.",
+    "groupsTruncated": "Cargados {{n}} grupos; hay más",
+    "groupsTruncatedHint": "Hay más grupos de modelos de los que se ven; esta página coge filas por id. Que un grupo no salga aquí no demuestra que no exista — una regla puede seguir apuntándole."
+  }
+}

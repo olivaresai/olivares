@@ -1,0 +1,172 @@
+{
+  "title": "Red-team",
+  "description": "Adversarial robustness testing — only against your own registered and authorized agents. The API carries defensive taxonomy and scorecards, never an attack payload.",
+  "tabs": {
+    "targets": "Targets",
+    "runs": "Runs",
+    "catalog": "Catalog"
+  },
+  "suites": {
+    "all": "All suites",
+    "injection": "Prompt injection",
+    "jailbreak": "Jailbreak",
+    "exfil": "Data exfiltration",
+    "tool_poisoning": "Tool poisoning"
+  },
+  "targets": {
+    "title": "Targets",
+    "description": "The consent surface. A run only ever touches an agent you have registered and authorized.",
+    "consentNote": "Registering an agent is not consent. A target is born non-authorized — authorize it to grant consent, and revoke at any time.",
+    "register": "Register agent",
+    "authorize": "Authorize",
+    "revoke": "Revoke",
+    "authorizedBy": "by {{who}}",
+    "empty": "No targets registered",
+    "emptyHint": "Register one of your own agents as a candidate, then authorize it to run probes.",
+    "columns": {
+      "name": "Target",
+      "endpoint": "Endpoint",
+      "scope": "Scope",
+      "consent": "Consent",
+      "actions": "Actions"
+    },
+    "dialog": {
+      "registerTitle": "Register a candidate agent",
+      "registerHint": "Register one of your own agents as a red-team candidate.",
+      "registerCta": "Register",
+      "notConsentNote": "Registering is not consent — the candidate is created non-authorized and no run can touch it until you authorize it.",
+      "registered": "Agent registered as a candidate",
+      "agentRef": "Agent reference",
+      "name": "Display name",
+      "endpoint": "Endpoint",
+      "scope": "Scope",
+      "scopeHint": "Comma-separated surfaces (e.g. input, output, tool_args).",
+      "authorizeTitle": "Authorize this target",
+      "authorizeHint": "Granting consent lets red-team runs probe {{name}}. This action is recorded in the audit ledger.",
+      "revokeTitle": "Revoke consent",
+      "revokeHint": "Revoking consent stops any further runs against {{name}}. This action is recorded in the audit ledger.",
+      "granted": "Consent granted",
+      "revoked": "Consent revoked"
+    },
+    "truncated": "Loaded {{n}} targets; there are more",
+    "truncatedHint": "There are more registered targets than shown; this page takes rows by id. A target missing from this list does not demonstrate that it is unregistered or unauthorized — it may simply be beyond this page."
+  },
+  "runs": {
+    "title": "Runs",
+    "description": "Each run probes an authorized target and produces a robustness scorecard. Failed probes become findings.",
+    "detailTitle": "Run detail",
+    "closeDetail": "Close",
+    "launch": "Launch run",
+    "launchGatedHint": "Launch is disabled until this target is authorized — registering an agent is not consent.",
+    "robustness": "robustness",
+    "noScore": "no score",
+    "degradedHint": "All probes were skipped — no sandbox was available. This is pending sandbox, not a pass.",
+    "errorHint": "All probes failed by execution error. This is not a robustness verdict; re-run once the issue is resolved.",
+    "empty": "No runs yet",
+    "emptyHint": "Launch a run against an authorized target to produce a scorecard.",
+    "status": {
+      "completed": "Completed",
+      "degraded": "Pending sandbox",
+      "error": "Execution error"
+    },
+    "columns": {
+      "started": "Started",
+      "target": "Target",
+      "suite": "Suite",
+      "status": "Status",
+      "score": "Score",
+      "passFail": "Pass / fail"
+    },
+    "stats": {
+      "passed": "Passed",
+      "passedCaption": "blocked + refused — defense held",
+      "failed": "Failed",
+      "failedCaption": "complied + leaked — real vulnerability",
+      "errors": "Errors",
+      "skipped": "Skipped",
+      "excludedCaption": "excluded from the score"
+    },
+    "scorecard": {
+      "title": "Scorecard",
+      "description": "Robustness = passed / (passed + failed) × 100. Errors and skipped probes are excluded; higher is better."
+    },
+    "byFamily": {
+      "title": "Failures by family",
+      "description": "Probe families with at least one failed probe.",
+      "empty": "No failures across families.",
+      "summary": "Failures by family, {{count}} families with failures, worst is {{family}} with {{failed}} failed probes.",
+      "summaryEmpty": "No probe family had any failures.",
+      "colFamily": "Family",
+      "colFailed": "Failed"
+    },
+    "owasp": {
+      "title": "OWASP failures",
+      "description": "OWASP rows with a failed probe (count by reference).",
+      "empty": "No OWASP rows failed."
+    },
+    "dialog": {
+      "title": "Launch run",
+      "hint": "Probe {{name}} with the selected suite. This adversarial action is recorded in the audit ledger.",
+      "suite": "Suite",
+      "launched": "Run launched"
+    },
+    "truncated": "Loaded {{n}} runs; there are more",
+    "truncatedHint": "There are more runs than shown; this page takes rows by id, not by date, so the newest are not necessarily here. The absence of a run does not demonstrate that a target was never probed."
+  },
+  "results": {
+    "title": "Per-probe results",
+    "description": "Each probe's outcome. The fingerprint is a one-way hash — never an attack payload.",
+    "empty": "No results for this run.",
+    "columns": {
+      "probe": "Probe",
+      "family": "Family",
+      "frameworks": "Frameworks",
+      "outcome": "Outcome",
+      "severity": "Severity",
+      "fingerprint": "Fingerprint",
+      "occurredAt": "Occurred"
+    }
+  },
+  "catalog": {
+    "title": "Probe catalog",
+    "description": "The battery taxonomy and its framework coverage — defensive metadata only.",
+    "suiteLabel": "Filter by suite",
+    "metadataNote": "This is defensive metadata, not an exploit cabinet. The API carries no attack payload.",
+    "stats": {
+      "probes": "Probes",
+      "families": "Families",
+      "owasp": "OWASP refs",
+      "atlas": "ATLAS refs"
+    },
+    "columns": {
+      "id": "Probe ID",
+      "family": "Family",
+      "title": "Title",
+      "frameworks": "Frameworks",
+      "surface": "Surface",
+      "severity": "Severity"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "No defensive probes cataloged",
+      "description": "This read-only taxonomy is populated only by probe definitions compiled into the control plane."
+    },
+    "familyFailureChart": {
+      "title": "No probe family failures recorded",
+      "description": "A family appears when a scored probe in the selected run fails by complying with an adversarial request or leaking a forbidden marker."
+    },
+    "results": {
+      "title": "No probe outcomes recorded yet",
+      "description": "Launch a suite against an authorized target; each probe outcome is recorded here with a one-way fingerprint, never the attack payload."
+    },
+    "runs": {
+      "title": "No red-team runs launched yet",
+      "description": "Register and authorize an owned agent, then launch a probe suite to record its robustness scorecard."
+    },
+    "targets": {
+      "title": "No red-team targets registered yet",
+      "description": "Register an agent from this tenant's inventory as a candidate; authorization remains a separate consent step."
+    }
+  }
+}

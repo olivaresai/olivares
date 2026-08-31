@@ -1,0 +1,71 @@
+{
+  "title": "Inventory",
+  "subtitle": "Every agent, session, MCP, model and identity discovered across your estate.",
+  "refresh": "Refresh",
+  "summary": {
+    "total": "Entities",
+    "active": "Active",
+    "stale": "Stale",
+    "kinds": "Kinds"
+  },
+  "tabs": {
+    "catalog": "Catalog",
+    "topology": "Topology"
+  },
+  "facets": {
+    "allKinds": "All kinds",
+    "allStatus": "All status"
+  },
+  "status": {
+    "active": "Active",
+    "stale": "Stale"
+  },
+  "cols": {
+    "name": "Name",
+    "kind": "Kind",
+    "status": "Status",
+    "signals": "Signals",
+    "hosts": "Hosts",
+    "lastSeen": "Last seen",
+    "occurrences": "Seen"
+  },
+  "searchPlaceholder": "Search name, ref, signal…",
+  "hostCount": "{{count}} hosts",
+  "kinds": {
+    "agent": "Agent",
+    "session": "Session",
+    "identity": "Identity",
+    "mcp_server": "MCP server",
+    "tool": "Tool",
+    "resource": "Resource",
+    "skill": "Skill",
+    "model": "Model",
+    "provider": "Provider"
+  },
+  "detail": {
+    "ref": "Reference",
+    "id": "ID",
+    "firstSeen": "First seen",
+    "lastSeen": "Last seen",
+    "relations": "Relations",
+    "viewAccess": "Access map",
+    "viewSessions": "Sessions"
+  },
+  "topology": {
+    "note": "Estate composition by kind. Runtime usage (which agent runs which model/MCP) appears in Sessions; resource access (R/RW) in the Access map.",
+    "bands": {
+      "origins": "Who acts",
+      "capabilities": "What they can use",
+      "resources": "What they touch"
+    },
+    "emptyTitle": "Nothing discovered yet",
+    "emptyHint": "As connectors report activity, your estate is cataloged here.",
+    "truncated": "Showing first {{n}} entities"
+  },
+  "empty": {
+    "catalog": {
+      "title": "No estate entities discovered yet",
+      "description": "Entities appear as connector observations report agents, sessions, identities, MCP capabilities, models, providers, or resources."
+    }
+  }
+}

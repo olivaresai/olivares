@@ -1,0 +1,31 @@
+# The single source of truth for the FIRST public release version (CalVer vYY.M.PATCH).
+# Every public surface that promises a first-release version (README ×7, CHANGELOG,
+# docs-site install/verify pages, trust one-pager, launch material) is checked against
+# this value by scripts/check-release-version.sh on every push and in CI.
+#
+# THE VALUE IS DERIVED, NOT CHOSEN. CalVer takes it from the DATE OF THE CUT: YY is the
+# two-digit year, M the month with no leading zero, PATCH the fix number within that
+# month. An August 2026 cut is therefore v26.8.0, its first same-month fix v26.8.1, and a
+# cut that slips to September becomes v26.9.0 — nobody picks that, the calendar does.
+# Signed by Fran Olivares, asked as "v26.6.0 or v26.7.0?" and answered "neither of the
+# two… the correction is mechanical", and restated later as "the version is derived".
+#
+# WHAT CHANGING THE MONTH COSTS, so it is not a surprise later: the gate holds this value
+# against every release-bearing surface in the tree, so re-deriving it is one edit here
+# plus whatever the checker then reports red. That is the mechanical part; it is not
+# free, and it is the intended way round — surfaces follow the derivation, never the
+# reverse.
+#
+# WHAT IS NOT DERIVED, AND IS STILL FRAN'S: WHEN the cut happens. There is no release tag
+# yet — `git ls-remote --tags origin` returns exactly one ref, `rama-d-prerebase`, which
+# is a rebase safety point and not a release — so this value is what the tree PROMISES,
+# not what has shipped. The month here and the month of the eventual tag have to agree.
+#
+# THE UNDECIDED ESCAPE STILL EXISTS IN THE CHECKER and is worth knowing about, because
+# this header used to be written as though it were the current state. Writing UNDECIDED
+# on the value line below puts the gate into census mode: it prints every divergent
+# occurrence grouped by value and exits 0 with a PENDING banner instead of blocking. That
+# is for a tree that has no answer yet. It is not this tree: the census the old header
+# quoted — README on v26.7.0, CHANGELOG on v26.6.0 — is gone, and README and CHANGELOG
+# now carry v26.8.0 and nothing else.
+v26.8.0

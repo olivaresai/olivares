@@ -1,0 +1,147 @@
+---
+title: "Primeros pasos en un sitio air-gapped"
+description: >-
+  Levanta el control plane en una red desconectada: lleva un artefacto verificado
+  a través del air-gap (binario estático, o el bundle firmado para un clúster),
+  verifícalo offline, instala, y alcanza el primer valor sin tráfico saliente.
+sidebar:
+  order: 4
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Olivares AI está **preparado para air-gap por diseño**: un binario estático, un almacén
+SQLite embebido, validación de licencia offline (Ed25519), y **ninguna llamada
+saliente obligatoria al arrancar** — no hay telemetría-a-casa que desactivar. Este
+tutorial alcanza el primer valor en una red con **nada de internet en absoluto**, por
+cualquiera de dos vías honestas:
+
+- **Vía A — el binario estático.** El air-gap más simple que hay: lleva un
+  fichero verificado a través del air-gap y ejecútalo (con systemd, como en el
+  [tutorial de nodo único](/es/tutorials/getting-started/single-node/)).
+- **Vía B — el bundle firmado, para un clúster.** Lleva el bundle de la release,
+  verifica cada imagen y el chart **completamente offline**, espéjalos en tu registro
+  privado **por digest**, e instala con Helm.
+
+La mecánica de los scripts del bundle (`airgap-bundle.sh`, `airgap-mirror.sh`,
+verificación cosign offline) está documentada en
+[instalar en un entorno air-gapped](/es/how-to/air-gap-install/) — esta página
+es el recorrido de extremo a extremo que los usa.
+
+## Vía A — el binario estático
+
+<Steps>
+
+1. **En el lado conectado**, compila (o, una vez que las releases se publiquen, descarga y
+   [verifica](/es/how-to/verify-a-release/)) el binario, y registra su digest:
+
+   ```bash
+   task build
+   sha256sum bin/olivares > olivares.sha256
+   ```
+
+2. **Lleva ambos ficheros a través del air-gap** en tu medio aprobado, y verifica el
+   digest en el lado desconectado:
+
+   ```bash
+   sha256sum --check olivares.sha256
+   ```
+
+3. **Instala y ejecuta** exactamente como en el
+   [tutorial de nodo único](/es/tutorials/getting-started/single-node/) — unidad systemd,
+   token de configuración de un solo uso, primera organización. Nada en ese flujo
+   toca la red: el material TLS se genera localmente, la licencia (si
+   tienes una) valida offline, y el almacén es el SQLite embebido.
+
+4. **Cablea fuentes que observen sistemas locales** — tails de logs pgAudit,
+   ficheros CloudTrail entregados dentro del perímetro, streams eBPF/Tetragon.
+   La [configuración de fuentes](/es/how-to/connect-a-source/) es un fichero local; ningún
+   conector llama hacia fuera salvo que configures uno para alcanzar algo.
+
+</Steps>
+
+Esta es la forma de partida recomendada para un sitio desconectado: nodo único,
+SQLite, fuentes locales. Es el mismo motor — puedes crecer hacia la vía de clúster
+más adelante sin cambiar lo que aprendiste.
+
+## Vía B — el bundle firmado, para un clúster
+
+<Steps>
+
+1. **Online, una vez:** un mantenedor compila el bundle autocontenido — cada
+   imagen fijada por digest, el chart de Helm empaquetado y firmado, SBOM/OpenVEX/
+   provenance recolectados, más la clave pública y un `VERIFY.md` con el recorrido
+   offline exacto:
+
+   ```bash
+   scripts/airgap-bundle.sh --version <v> \
+     --image <olivares-image-ref> \
+     --chart deploy/helm/olivares \
+     --cosign-key cosign.key
+   ```
+
+2. **Dentro del air-gap, verifica todo offline.** Solo necesitas `cosign`,
+   `crane`, `helm` y `tar` — la confianza viene del `cosign.pub` empaquetado, no
+   de ningún transparency log online:
+
+   ```bash
+   for d in images/*/; do
+     cosign verify --local-image "$d" --insecure-ignore-tlog --key cosign.pub
+   done
+   cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
+     --signature chart/*.tgz.sig chart/*.tgz
+   ```
+
+3. **Espeja en tu registro privado por digest** (el script re-fija y
+   confirma que el digest sobrevivió al espejado):
+
+   ```bash
+   scripts/airgap-mirror.sh --bundle olivares-airgap-<v>.tar.gz \
+     --registry registry.internal:5000
+   ```
+
+4. **Instala por digest, nunca por tag**, y luego sigue el
+   [tutorial de Kubernetes](/es/tutorials/getting-started/kubernetes/) desde el
+   token de primer arranque en adelante — es el mismo chart y el mismo flujo:
+
+   ```bash
+   helm install olivares \
+     oci://registry.internal:5000/charts/olivares \
+     --version <chart-version> \
+     --set image.repository=registry.internal:5000/olivares \
+     --set image.digest=<digest-from-digests.txt>
+   ```
+
+</Steps>
+
+<Aside type="note" title="Qué cubre honestamente 'air-gapped'">
+El **control plane** corre completamente dentro de tu perímetro — gobernanza,
+observación, el mapa de acceso, el audit ledger. Lo que no puede hacer es lograr que un
+modelo frontera intermediado corra offline: **la inferencia de Claude siempre alcanza
+la API de Anthropic** (directamente o vía Bedrock/Vertex/Foundry), porque Anthropic
+no publica los pesos. Air-gapped significa *que los datos de tu estate y su
+plano de gobernanza se quedan en casa*; los modelos que genuinamente autoalojas pueden
+estar completamente offline. Consulta [Honestidad y límites](/es/start/honesty-and-limits/).
+</Aside>
+
+## Operar desconectado
+
+- **Las copias de seguridad** funcionan de forma idéntica (`olivares dr backup` — bundle
+  cifrado, KEK local): [copia de seguridad y restauración](/es/how-to/backup-and-restore/).
+  Guarda los bundles en medios separados; la regla 3-2-1 aplica doblemente sin red offsite.
+- **La verificación del ledger** es completamente offline por diseño:
+  `olivares audit verify --strict` con tu clave pública fijada —
+  [resolución de problemas § ledger](/es/how-to/troubleshooting/#el-ledger-falla-la-verificación).
+- **La monitorización** es Prometheus local raspando `/metrics`; las reglas de alerta
+  incluidas no necesitan nada externo — [monitorización](/es/how-to/monitor-with-prometheus/).
+- **Las actualizaciones** repiten el bucle de llevar-verificar-espejar con un nuevo bundle.
+  El manifiesto de digests (`digests.txt`) es tu registro de exactamente qué está corriendo.
+
+## Próximos pasos
+
+- [Instalar en un entorno air-gapped](/es/how-to/air-gap-install/) — la
+  referencia de bundle/espejado, incluyendo el estado de las variantes FIPS/STIG.
+- [Verificar una release](/es/how-to/verify-a-release/) — la cadena de verificación completa
+  que este flujo aplica offline.
+- [Endurecimiento de seguridad](/es/how-to/security-hardening/) — el resto de la
+  postura defensiva.

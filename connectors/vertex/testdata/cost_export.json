@@ -1,0 +1,34 @@
+{
+  "rows": [
+    {
+      "model": "gemini-2.0-flash",
+      "sku_description": "Gemini 2.0 Flash Input",
+      "service_description": "Vertex AI",
+      "cost": "12.50",
+      "currency": "USD",
+      "usage_start_time": "2026-06-19T00:00:00Z",
+      "project_id": "test-proj",
+      "location": "us-central1"
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "sku_description": "Claude Sonnet 4.5 Output",
+      "service_description": "Vertex AI",
+      "cost": "-1.25",
+      "currency": "USD",
+      "usage_start_time": "2026-06-19T00:00:00Z",
+      "project_id": "test-proj",
+      "location": "us-east5"
+    },
+    {
+      "model": "gemini-2.5-pro",
+      "sku_description": "Gemini 2.5 Pro Input",
+      "service_description": "Vertex AI",
+      "cost": "0",
+      "currency": "USD",
+      "usage_start_time": "2026-06-19T00:00:00Z",
+      "project_id": "test-proj",
+      "location": "us-central1"
+    }
+  ]
+}

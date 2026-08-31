@@ -1,0 +1,109 @@
+---
+title: "役割別のパス"
+description: >-
+  同じドキュメントを辿る 3 つの読み方: プラットフォームエンジニアリング（インストールと運用）、
+  セキュリティエンジニアリング（ガバナンスと封じ込め）、コンプライアンス（証跡と監査）—
+  さらにコネクタ作者のためのビルダーのパス。
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+このドキュメントは [Diátaxis モード](/ja/start/how-the-docs-are-organized/)で構成されています
+— チュートリアル、ハウツー、リファレンス、解説 — それがドキュメントを使い続けられる状態に
+保つ方法だからです。しかし人々はモードではなく*役割*を持ってやって来ます。以下は同じページを
+辿る 5 つのパスを、読む順に並べたものです。
+
+## プラットフォームエンジニアリング — インストールし、運用する
+
+あなたはデプロイメントを所有します: 稼働時間、バックアップ、アップグレード、キャパシティ。
+
+1. **動くのを見る:** [クイックスタート](/ja/start/quickstart/)（5 分）、その後、ガイド付きの
+   バージョンが欲しければ [zero-to-graph チュートリアル](/ja/tutorials/zero-to-graph/)。
+2. シナリオ別に**本格的にインストールする**:
+   [シングルノード（systemd）](/ja/tutorials/getting-started/single-node/) ·
+   [Docker Compose](/ja/tutorials/getting-started/docker-compose/) ·
+   [HA 付き Kubernetes/Helm](/ja/tutorials/getting-started/kubernetes/) ·
+   [エアギャップ](/ja/tutorials/getting-started/air-gapped/)。
+3. **シグナルを配線する:** [ソースを接続する](/ja/how-to/connect-a-source/)、その後、
+   コネクタ別ガイド（[pgAudit](/ja/how-to/connectors/pgaudit/)、
+   [CloudTrail](/ja/how-to/connectors/cloudtrail/)、
+   [eBPF/Tetragon](/ja/how-to/connectors/ebpf-tetragon/)）。
+4. **運用する:** [モニタリングと SLO](/ja/how-to/monitor-with-prometheus/) ·
+   [バックアップとリストア](/ja/how-to/backup-and-restore/) ·
+   [トラブルシューティング](/ja/how-to/troubleshooting/)。
+
+常に開いておくリファレンス: [構成](/ja/reference/configuration/)、
+[CLI](/ja/reference/cli/)、[コネクタとティア](/ja/reference/connectors/)。
+
+## セキュリティエンジニアリング — ガバナンスし、封じ込める
+
+あなたはエージェント estate の最小権限、強制、インシデント対応を所有します。
+
+1. **まずモデル:** [アクセスマップとは何か](/ja/start/what-is-olivares-ai/)と
+   [誠実さと限界](/ja/start/honesty-and-limits/) — 製品が主張すること・しないこと。
+2. **ガバナンス:** [ガバナンスと承認](/ja/how-to/govern-and-approve/)（RBAC、restrict-only の
+   PDP、記録された決定）、その後レシピ:
+   [deny-closed ポリシー](/ja/how-to/cookbook/deny-closed-policies/) ·
+   [HITL 承認](/ja/how-to/cookbook/hitl-approvals/) ·
+   [ドリフトトリアージ](/ja/how-to/cookbook/drift-triage/)。
+3. **エージェントサーフェスで強制する:**
+   [Claude Code フックと PEP](/ja/how-to/connectors/claude-code-hooks-pep/) ·
+   [MCP ガバナンス](/ja/how-to/connectors/mcp-governance/) ·
+   [guardrails としての予算](/ja/how-to/cookbook/budgets-and-finops-guardrails/)。
+4. **封じ込める:** [kill-switch ドリル](/ja/how-to/cookbook/kill-switch-drill/)、そして
+   [デプロイメントのハードニング](/ja/how-to/security-hardening/)。
+
+詳しい背景: [セキュリティモデル](/ja/explanation/security/security-model/)と
+[脅威モデル](/ja/explanation/security/threat-model/)。
+
+## コンプライアンス — 証跡、監査、レジデンシー
+
+あなたは監査人と規制当局に答えます。自らを証明する記録が必要です。
+
+1. **証跡とは何か:** [ガバナンスと承認](/ja/how-to/govern-and-approve/#human-in-the-loop-の運用形態)
+   における記録された決定の保証 — あらゆる決定の下にある追記専用の署名済み ledger。
+2. **取り出す:** [SIEM へプッシュする](/ja/how-to/cookbook/push-to-siem/)、または WORM アーカイブの
+   ために[プル／テールする](/ja/how-to/forward-audit-to-splunk/) — そしてオフラインで検証する
+   （[トラブルシューティング § ledger](/ja/how-to/troubleshooting/#ledger-が検証に失敗する)）。
+3. **存続可能に保つ:** [バックアップとリストア](/ja/how-to/backup-and-restore/) —
+   継続性に安全なバンドル、鍵をボックス外に置くルール、リストアドリル。
+4. **レジデンシーと来歴:**
+   [エアギャップ運用](/ja/tutorials/getting-started/air-gapped/) ·
+   [リリースの検証](/ja/how-to/verify-a-release/) ·
+   [オープンコアとライセンス](/ja/explanation/open-core-and-licensing/)。
+
+評価で引用する誠実なベースライン:
+[誠実さと限界](/ja/start/honesty-and-limits/) — 何が動き、何がオンデマンドで、何が設計段階か。
+
+## 自分で運用する — 1 台のマシン、1 人
+
+プラットフォームチームもコンプライアンス部門もありません。ホームラボ、自宅サーバー、
+フリーランスや小規模企業の環境で、インストールする人がそのまま利用者でもある場合です。
+ここに小型版の製品はありません。同じ単一バイナリを、1 台のマシンを最短で役立てられる
+順序で読み進めます。
+
+<CardGrid>
+  <LinkCard title="Docker でデプロイする" href="/ja/how-to/docker-deployment/"
+    description="Compose ファイル 1 つ、コンテナ 1 つ、あなた自身のマシン。何もない状態から稼働中のコントロールプレーンまでの最短経路です。" />
+  <LinkCard title="クイックスタート" href="/ja/start/quickstart/"
+    description="最初の起動、最初のエージェント、最初のガバナンス下のセッション — 起動後の 10 分間です。" />
+  <LinkCard title="コストと予算" href="/ja/reference/modules/xi-finops/"
+    description="モデルにかかる費用をエージェント別・セッション別に把握し、請求書より先に答えを出す予算を設定します。" />
+  <LinkCard title="バックアップとリストア" href="/ja/how-to/backup-and-restore/"
+    description="マシンの所有者が誰であっても、初日から身につける価値がある 1 つの運用習慣です。" />
+</CardGrid>
+
+## ビルダー — 拡張する
+
+あなたはコネクタを書いているか、API を駆動しています。
+
+<CardGrid>
+  <LinkCard title="コネクタの構築と配布" href="/ja/how-to/build-a-connector/"
+    description="スキャフォールド、実装、署名、配布 — deny-closed の署名付き受け入れとともに。" />
+  <LinkCard title="クライアント SDK を使う" href="/ja/how-to/use-the-client-sdks/"
+    description="公開された REST コントラクト上の Go、Java、Python、TypeScript クライアント。" />
+  <LinkCard title="コードとして管理する" href="/ja/how-to/manage-as-code/"
+    description="ガバナンス下の API 上の Terraform/OpenTofu プロバイダー。" />
+  <LinkCard title="API とイベントのリファレンス" href="/reference/api/"
+    description="OpenAPI でレンダリングされた REST サーフェスと AsyncAPI イベントバス。" />
+</CardGrid>

@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# PASOS DE ESTE REPO CUYO SALTO ES ESPERADO — predicado UNICO, compartido por
+# `scripts/check-run-skipped-steps.sh` y `scripts/check-run-table.sh`.
+#
+# ⛔ POR QUE ES UN FICHERO DE DATOS Y NO CODIGO: los dos consumidores estan escritos en lenguajes
+# distintos —uno lee con `python3`, el otro con `jq`— y el fallo que este fichero existe para
+# impedir es que cada uno mantenga su propia lista y deriven. Un fichero de datos lo leen los dos
+# sin compartir implementacion. Si algun dia hay un tercero, tambien.
+#
+# ⛔ POR QUE POR NOMBRE, y no por el `if:` del paso, que seria lo correcto: LA API NO LO DA.
+# Medido el 2026-08-30 sobre `runs/33291332689/jobs` — los campos de un paso son exactamente
+# ['completed_at', 'conclusion', 'name', 'number', 'started_at', 'status']. No hay `if`. Cuando la
+# API lo publique, este fichero sobra y se retira; hasta entonces la separacion es por nombre y se
+# declara, que es distinto de esconderla.
+#
+# ⛔ AQUI NO HAY REGLAS POR PREFIJO, Y ESO SE DECIDIO CON MEDIDA. La primera version del primero traia
+# `prefijo:"Post Run "` para eximir los pasos que fabrica el runner. El otro consumidor lo refuto con una idea
+# mejor: esos pasos **se emparejan**, y el consumidor los exime SOLO si existe un `Run X` en EL
+# MISMO job, sin mirar el sha. Medido por los dos por separado sobre 33291332689: 3 saltos
+# `Post Run`, **3 emparejados, 0 huerfanos**, y **0 saltos sustantivos absueltos por accidente**.
+# El emparejamiento cubre lo mismo, sobrevive al bump de `setup-go` sin tocar nada, y **cierra el
+# agujero que el prefijo dejaba abierto**: un `Post Run` huerfano —o un paso del repo llamado asi—
+# el prefijo lo absolvia y el emparejamiento no. ⇒ una regla que absuelve por parecido no hace
+# falta, y donde no hace falta es donde viven los falsos negativos.
+#
+# ⚠ EL LADO POR EL QUE SE EQUIVOCA, elegido a proposito: si alguien RENOMBRA un paso de esta lista,
+# su salto deja de reconocerse y pasa a contarse como cobertura perdida. Eso es un FALSO POSITIVO
+# —ruido que alguien mira— y no un falso negativo —un verde que nadie mira—. Es el lado correcto.
+#
+# FORMATO, una regla por linea, y `exacto:` es la UNICA forma:
+#   exacto:"<nombre completo del paso>"
+# El valor va ENTRE COMILLAS: hay nombres con espacios significativos al principio o al final, y un
+# espacio suelto lo borra en silencio cualquier lint de formato. Entre comillas se ve.
+# Cada entrada lleva encima QUIEN la puso y POR QUE ese salto es esperado — no basta el nombre:
+# quien lea la lista tiene que poder juzgarla sin ir a buscar el paso en el workflow.
+# Lineas en blanco y las que empiezan por `#` se ignoran. Cualquier otra cosa es un fichero
+# ilegible y el consumidor debe responder «no he podido mirar», nunca 0.
+
+# 2026-08-30. Guardado con `if: failure()`. Que este SALTADO es la prueba de que el job fue
+# bien: si hubiera fallado algo, este paso habria corrido. Es el salto mas frecuente de todos —10
+# de los 15 de la corrida 33291332689— y contarlo como cobertura perdida encendia el aviso en 9 de
+# 11 jobs, que es como una senal se convierte en ruido.
+exacto:"report failure (PR comment, or issue on a main push; PAT-blind)"
+
+# 2026-08-30, anadido en el mismo lote que lo midio. Guardado para encenderse SOLO cuando
+# falta `cloud/control-plane`. Que este saltado prueba que el modulo estaba y que su bateria SI
+# corrio: es la degradacion PARCIAL declarandose a si misma. El otro consumidor lo reportaba como cobertura
+# perdida en `check-run-table.sh` — un falso positivo suyo que esta linea corrige.
+exacto:"NOT APPLICABLE notice — the cloud control-plane suite did not run"

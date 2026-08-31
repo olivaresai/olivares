@@ -1,0 +1,68 @@
+{
+  "title": "API Playground",
+  "description": "Die Control-Plane-API interaktiv erkunden und testen",
+  "filterPlaceholder": "Endpoints filtern…",
+  "selectEndpoint": "Wählen Sie einen Endpoint im linken Panel",
+  "send": "Senden",
+  "sending": "Wird gesendet…",
+  "streaming": "Stream läuft…",
+  "cancel": "Abbrechen",
+  "requiredPermission": "Erforderliche Berechtigung",
+  "copyAsCurl": "Als curl kopieren",
+  "response": "Antwort",
+  "history": "Verlauf",
+  "clearHistory": "Leeren",
+  "noRequests": "Noch keine Anfragen",
+  "noMatch": "Kein Endpoint entspricht Ihrem Filter.",
+  "pathParams": "Pfadparameter",
+  "queryParams": "Query",
+  "headers": "Header",
+  "body": "Body",
+  "networkError": "Netzwerkfehler",
+  "beta": "Beta",
+  "summary": "{{endpoints}} Endpunkte in {{groups}} Gruppen",
+  "summaryWithBeta": "{{endpoints}} Endpunkte in {{groups}} Gruppen · {{beta}} Beta-Modulrouten",
+  "endpointTree": {
+    "ariaLabel": "API-Endpunkte"
+  },
+  "errors": {
+    "loadSpec": "OpenAPI-Spezifikation konnte nicht geladen werden"
+  },
+  "request": {
+    "networkError": "Netzwerkfehler",
+    "failedNetworkHint": "Anfrage fehlgeschlagen — prüfen Sie Ihre Netzwerkverbindung.",
+    "blockedDestination": "Ziel blockiert",
+    "blockedDestinationHint": "API Playground kann Anfragen nur an diese Steuerungsebene senden.",
+    "enterPathParam": "{{name}} eingeben",
+    "headerNamePlaceholder": "Header-Name",
+    "headerValuePlaceholder": "Wert",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Header {{header}} entfernen",
+    "addHeaderAria": "Benutzerdefinierten Header hinzufügen",
+    "bodyAria": "Anfragetext"
+  },
+  "responsePanel": {
+    "empty": "Wählen Sie einen Endpunkt aus und senden Sie eine Anfrage",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "Header ({{count}})",
+    "bodyAria": "Antworttext"
+  },
+  "historyPanel": {
+    "recentCount": "Aktuell ({{count}})",
+    "clearAria": "Anfrageverlauf leeren",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "gerade eben",
+      "minutes": "vor {{count}} Min.",
+      "hours": "vor {{count}} Std.",
+      "days": "vor {{count}} T."
+    }
+  }
+}

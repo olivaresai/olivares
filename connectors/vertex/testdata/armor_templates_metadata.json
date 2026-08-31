@@ -1,0 +1,69 @@
+{
+  "templates": [
+    {
+      "name": "projects/test-proj/locations/us-central1/templates/inspect-only-tmpl",
+      "filterConfig": {
+        "raiSettings": {
+          "raiFilters": [
+            { "filterType": "HATE_SPEECH", "confidenceLevel": "LOW_AND_ABOVE" }
+          ]
+        },
+        "piAndJailbreakFilterSettings": { "filterEnforcement": "ENABLED", "confidenceLevel": "LOW_AND_ABOVE" },
+        "maliciousUriFilterSettings": { "filterEnforcement": "ENABLED" },
+        "sdpSettings": { "basicConfig": { "filterEnforcement": "ENABLED" } }
+      },
+      "templateMetadata": {
+        "enforcementType": "INSPECT_ONLY",
+        "logSanitizeOperations": true,
+        "filterVersionSelector": { "alias": "FILTER_VERSION_ALIAS_STABLE" }
+      }
+    },
+    {
+      "name": "projects/test-proj/locations/us-central1/templates/default-tmpl",
+      "filterConfig": {
+        "raiSettings": {
+          "raiFilters": [
+            { "filterType": "HATE_SPEECH", "confidenceLevel": "LOW_AND_ABOVE" }
+          ]
+        },
+        "piAndJailbreakFilterSettings": { "filterEnforcement": "ENABLED", "confidenceLevel": "LOW_AND_ABOVE" },
+        "maliciousUriFilterSettings": { "filterEnforcement": "ENABLED" },
+        "sdpSettings": { "basicConfig": { "filterEnforcement": "ENABLED" } }
+      }
+    },
+    {
+      "name": "projects/test-proj/locations/us-central1/templates/legacy-tmpl",
+      "filterConfig": {
+        "raiSettings": {
+          "raiFilters": [
+            { "filterType": "HATE_SPEECH", "confidenceLevel": "LOW_AND_ABOVE" }
+          ]
+        },
+        "piAndJailbreakFilterSettings": { "filterEnforcement": "ENABLED", "confidenceLevel": "LOW_AND_ABOVE" },
+        "maliciousUriFilterSettings": { "filterEnforcement": "ENABLED" },
+        "sdpSettings": { "basicConfig": { "filterEnforcement": "ENABLED" } }
+      },
+      "templateMetadata": {
+        "enforcementType": "INSPECT_AND_BLOCK",
+        "filterVersionSelector": { "alias": "FILTER_VERSION_ALIAS_LEGACY" }
+      }
+    },
+    {
+      "name": "projects/test-proj/locations/us-central1/templates/stable-tmpl",
+      "filterConfig": {
+        "raiSettings": {
+          "raiFilters": [
+            { "filterType": "HATE_SPEECH", "confidenceLevel": "LOW_AND_ABOVE" }
+          ]
+        },
+        "piAndJailbreakFilterSettings": { "filterEnforcement": "ENABLED", "confidenceLevel": "LOW_AND_ABOVE" },
+        "maliciousUriFilterSettings": { "filterEnforcement": "ENABLED" },
+        "sdpSettings": { "basicConfig": { "filterEnforcement": "ENABLED" } }
+      },
+      "templateMetadata": {
+        "enforcementType": "INSPECT_AND_BLOCK",
+        "filterVersionSelector": { "alias": "FILTER_VERSION_ALIAS_STABLE" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "title": "インベントリ",
+  "subtitle": "エステート全体で検出された、すべてのエージェント・セッション・MCP・モデル・アイデンティティ。",
+  "refresh": "更新",
+  "summary": {
+    "total": "エンティティ",
+    "active": "アクティブ",
+    "stale": "古い",
+    "kinds": "種別"
+  },
+  "tabs": {
+    "catalog": "カタログ",
+    "topology": "トポロジー"
+  },
+  "facets": {
+    "allKinds": "すべての種別",
+    "allStatus": "すべてのステータス"
+  },
+  "status": {
+    "active": "アクティブ",
+    "stale": "古い"
+  },
+  "cols": {
+    "name": "名前",
+    "kind": "種別",
+    "status": "ステータス",
+    "signals": "シグナル",
+    "hosts": "ホスト",
+    "lastSeen": "最終確認",
+    "occurrences": "確認回数"
+  },
+  "searchPlaceholder": "名前・参照・シグナルを検索…",
+  "hostCount": "{{count}} 台のホスト",
+  "kinds": {
+    "agent": "エージェント",
+    "session": "セッション",
+    "identity": "アイデンティティ",
+    "mcp_server": "MCP サーバー",
+    "tool": "ツール",
+    "resource": "リソース",
+    "skill": "スキル",
+    "model": "モデル",
+    "provider": "プロバイダー"
+  },
+  "detail": {
+    "ref": "参照",
+    "id": "ID",
+    "firstSeen": "初回確認",
+    "lastSeen": "最終確認",
+    "relations": "関係",
+    "viewAccess": "アクセスマップ",
+    "viewSessions": "セッション"
+  },
+  "topology": {
+    "note": "種別ごとのエステート構成です。ランタイムでの利用状況（どのエージェントがどのモデル／MCP を実行するか）はセッションに、リソースアクセス（R/RW）はアクセスマップに表示されます。",
+    "bands": {
+      "origins": "誰が動作するか",
+      "capabilities": "何を利用できるか",
+      "resources": "何に触れるか"
+    },
+    "emptyTitle": "まだ何も検出されていません",
+    "emptyHint": "コネクターがアクティビティを報告すると、エステートがここにカタログ化されます。",
+    "truncated": "最初の {{n}} 件のエンティティを表示しています"
+  },
+  "empty": {
+    "catalog": {
+      "title": "エステートのエンティティはまだ検出されていません",
+      "description": "コネクターの観測によってエージェント、セッション、アイデンティティ、MCP ケーパビリティ、モデル、プロバイダー、またはリソースが報告されると、エンティティが表示されます。"
+    }
+  }
+}

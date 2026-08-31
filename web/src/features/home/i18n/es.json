@@ -1,0 +1,46 @@
+{
+  "title": "Resumen",
+  "description": "Tu patrimonio de IA de un vistazo: inventario, actividad, riesgo, cumplimiento, gasto y salud.",
+  "asOfNote": "Agregados en vivo de los últimos 30 días, sobre los módulos que tu rol puede abrir. Cada tarjeta enlaza con su módulo; abre el informe ejecutivo para el resumen completo y el PDF.",
+  "openReport": "Informe ejecutivo",
+  "range": "últimos 30 días",
+  "tiles": {
+    "inventory": {
+      "label": "Inventario",
+      "caption": "{{agents}} agentes · {{active}} activos"
+    },
+    "sessions": {
+      "label": "Sesiones en vivo",
+      "caption": "{{idle}} inactivas ahora",
+      "silent": "{{count}} en silencio (posible evasión)"
+    },
+    "security": {
+      "label": "Seguridad",
+      "caption": "{{count}} críticos o altos",
+      "clear": "Sin hallazgos abiertos"
+    },
+    "compliance": {
+      "label": "Cumplimiento",
+      "caption": "{{gap}} brechas · {{unmapped}} sin mapear",
+      "noControls": "Aún no hay controles mapeados"
+    },
+    "spend": {
+      "label": "Gasto",
+      "caption": "{{range}}",
+      "projected": "{{amount}} proyectado al ritmo actual"
+    },
+    "health": {
+      "label": "Salud y SLA",
+      "value": "{{healthy}}/{{total}} sanos",
+      "caption": "{{breaches}} incumplimientos de SLA · {{incidents}} incidentes abiertos",
+      "noChecks": "Aún no hay comprobaciones de salud"
+    }
+  },
+  "state": {
+    "unavailable": "No se pudo cargar — abre para reintentar"
+  },
+  "empty": {
+    "title": "Aún no hay nada que mostrar",
+    "description": "Tu rol no concede acceso de lectura a ningún módulo del patrimonio. Pide a un administrador un permiso de lectura para ver el resumen."
+  }
+}

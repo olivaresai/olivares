@@ -1,0 +1,49 @@
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1717200000,
+      "end_time": 1717286400,
+      "results": [
+        {
+          "user_id": "user_alice",
+          "user_email": "alice@example.com",
+          "workspace_id": "ws_eng",
+          "client": "codex-cli",
+          "model": "gpt-5-codex",
+          "threads": 3,
+          "turns": 18,
+          "code_reviews": 12,
+          "suggestions_shown": 300,
+          "suggestions_accepted": 180,
+          "lines_accepted": 950,
+          "active_users": 1,
+          "input_tokens": 120000,
+          "output_tokens": 45000,
+          "cached_input_tokens": 30000,
+          "reasoning_output_tokens": 1200,
+          "credits": 42.5,
+          "estimated_cost": { "value": 1.25, "currency": "usd" }
+        },
+        {
+          "user_id": "user_bob",
+          "user_email": "bob@example.com",
+          "workspace_id": "ws_eng",
+          "model": "gpt-5-codex-mini",
+          "code_reviews": 0,
+          "suggestions_shown": 0,
+          "suggestions_accepted": 0,
+          "lines_accepted": 0,
+          "active_users": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cached_input_tokens": 0,
+          "estimated_cost": null
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

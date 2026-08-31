@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# E2E Claude Code Real Integration Tests — weekly CI run that exercises the
+# FULL governance chain: Claude Code binary → managed hooks → olivares claude-hook
+# bridge → PEP HTTP server → real engine (PDP, kill-switch, firm-identity, audit).
+#
+# The hook-client tests (no API key) always run. The full Claude Code tests
+# (ANTHROPIC_API_KEY) skip cleanly when the secret is not provisioned, so the
+# workflow never fails on a fork or a repo without the secret configured.
+#
+# Cost: ~$0.10-0.25/run (Haiku model, minimal prompts, 3-5 tool-calls per scenario).
+# Schedule: weekly (Sunday 04:00 UTC) to bound API spend while still catching regressions.
+name: e2e-claude
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"  # weekly, Sunday 04:00 UTC
+  workflow_dispatch:       # manual trigger for ad-hoc runs
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-claude-real:
+    # On olivaresai/olivares the scheduled cadence runs by default; on any other
+    # clone or mirror, scheduled runs are gated on the repository variable
+    # CI_NIGHTLIES=true (manual `gh workflow run <file>` always works).
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'olivaresai/olivares' || vars.CI_NIGHTLIES == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          go-version-file: go.work
+
+      # NODE, EXPLICIT (P0 class, 2026-07-30): the npm install below assumed the
+      # runner ships node preinstalled — true of ubuntu-latest, not of the
+      # self-hosted runner CI_RUNNER points at. Same pinned setup as mainline-ci.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      # Install Claude Code CLI. Deliberately unpinned (@latest): the point of this
+      # weekly run is to catch integration breakage against the CURRENT Claude Code
+      # release, not against a frozen snapshot.
+      - name: Install Claude Code CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code@latest
+          claude --version
+
+      # Hook-client tests: always run (no API key needed).
+      - name: Hook-client → PEP integration tests
+        run: |
+          cd cmd/olivares
+          go test -tags e2e -run "TestE2EClaudeReal_HookClient|TestE2EClaudeReal_KillSwitch" \
+            -v -timeout 300s -count=1
+        working-directory: ${{ github.workspace }}
+
+      # Full Claude Code tests: skip when ANTHROPIC_API_KEY is not set.
+      - name: Full Claude Code governance tests
+        # ⚠ SIN MEDIDA y POR DEBAJO del umbral de `lint:ci-step-guard` (techo de job 30, el umbral es
+        # > 30), asi que el gate no la exige. Se pone igual porque the orchestrator lo nombro el
+        # 2026-08-23: un cuelgue aqui moriria MUDO a los 30 min en vez de a las 2 h 50 — mas barato,
+        # no gratis. Las cinco ultimas corridas salen `skipped`, asi que no hay duracion de la que
+        # leerlo: 20 es COTA, no medida.
+        timeout-minutes: 20
+        if: env.ANTHROPIC_API_KEY != ''
+        run: |
+          cd cmd/olivares
+          go test -tags e2e -run "TestE2EClaudeReal_ClaudeCode|TestE2EClaudeReal_ManagedSettings" \
+            -v -timeout 600s -count=1
+        working-directory: ${{ github.workspace }}
+
+      - name: Report skip (no API key)
+        if: env.ANTHROPIC_API_KEY == ''
+        run: |
+          echo "::notice::Full Claude Code tests skipped — ANTHROPIC_API_KEY secret not configured. Hook-client tests ran."

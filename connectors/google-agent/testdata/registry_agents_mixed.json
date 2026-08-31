@@ -1,0 +1,59 @@
+{
+  "agents": [
+    {
+      "name": "projects/test-project-id/locations/global/agents/registered-agent",
+      "agentId": "registered-agent",
+      "displayName": "Registered Agent",
+      "protocols": [
+        {
+          "type": "A2A"
+        }
+      ],
+      "updateTime": "2026-06-20T10:00:00Z",
+      "attributes": {
+        "agentregistry.googleapis.com/system/Framework": {
+          "framework": "google-adk"
+        },
+        "agentregistry.googleapis.com/system/RuntimeIdentity": {
+          "principal": "principal://iam.googleapis.com/projects/9876543210/locations/global/workloadIdentityPools/agents/subject/registered-agent"
+        },
+        "agentregistry.googleapis.com/system/RuntimeReference": {
+          "uri": "//aiplatform.googleapis.com/projects/9876543210/locations/us-central1/reasoningEngines/registered-agent"
+        },
+        "agentregistry.googleapis.com/system/Unknown": {
+          "value": "SENTINEL-UNKNOWN"
+        }
+      }
+    },
+    {
+      "name": "projects/test-project-id/locations/global/agents/no-principal",
+      "agentId": "no-principal",
+      "displayName": "No Principal Agent",
+      "description": "SENTINEL-AGENT-DESC",
+      "card": {
+        "content": {
+          "instructions": "SENTINEL-CARD"
+        }
+      },
+      "skills": [
+        {
+          "description": "SENTINEL-SKILL"
+        }
+      ],
+      "protocols": [
+        {
+          "type": "A2A"
+        }
+      ],
+      "updateTime": "2026-06-21T10:00:00Z",
+      "attributes": {
+        "agentregistry.googleapis.com/system/Framework": {
+          "framework": "langgraph"
+        },
+        "agentregistry.googleapis.com/system/RuntimeReference": {
+          "uri": "//aiplatform.googleapis.com/projects/9876543210/locations/us-central1/reasoningEngines/no-principal"
+        }
+      }
+    }
+  ]
+}

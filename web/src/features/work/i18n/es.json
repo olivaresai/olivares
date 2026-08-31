@@ -1,0 +1,267 @@
+{
+  "acceptance": {
+    "draftNotice": "Esta unidad está en borrador, así que sus criterios todavía se pueden corregir. La clave del criterio es identidad permanente y nunca se reasigna.",
+    "lockedNotice": "Esta unidad ha salido de borrador, así que los criterios ya no se pueden editar: solo evaluar. La clave del criterio es identidad permanente.",
+    "none": "Sin criterios de aceptación.",
+    "required": "Obligatorio",
+    "state": {
+      "pending": "Pendiente",
+      "passed": "Superado",
+      "failed": "Fallado",
+      "waived": "Dispensado"
+    }
+  },
+  "apply": {
+    "planning": "Planificando el cambio. En este paso no se escribe nada.",
+    "planTitle": "Plan",
+    "command": "Comando",
+    "permission": "Permiso",
+    "eventType": "Evento",
+    "rowEffects": "Filas que escribiría",
+    "noRowEffects": "Este comando no escribe ninguna fila.",
+    "externalCalls": "Llamadas externas",
+    "planHash": "Hash del plan",
+    "keyTitle": "Clave de idempotencia de este cambio",
+    "keyHelp": "Se genera una vez por intención y se reutiliza en cada reintento. Guárdala: si la red se corta a mitad de la aplicación, reintentar con esta clave exacta es lo que evita que un cambio se convierta en dos.",
+    "confirm": "Aplicar",
+    "applying": "Aplicando…",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "appliedTitle": "Aplicado",
+    "replayedTitle": "Ya estaba aplicado",
+    "replayedBody": "El motor reconoció esta clave de idempotencia y reprodujo el resultado original. No se escribió nada por segunda vez.",
+    "commandId": "Id del comando",
+    "resultId": "Id del resultado",
+    "status": "Estado nuevo",
+    "etag": "Etiqueta de versión nueva",
+    "auditSeq": "Secuencia de auditoría",
+    "reread": "Releer y comparar",
+    "retrySameKey": "Reintentar con la misma clave",
+    "failure": {
+      "conflict-version": "Otra persona cambió esta unidad",
+      "version-required": "Falta la precondición de versión",
+      "conflict-idempotency": "Esta clave ya se usó para un cambio distinto",
+      "conflict-domain": "El motor rechazó este comando",
+      "unknown": "No he podido mirar",
+      "other": "El cambio falló",
+      "plan-changed": "El plan ya no está vigente"
+    },
+    "conflictVersionBody": "La unidad cambió entre que se leyó y que se aplicó este cambio, así que se rechazó en vez de aplicarse encima. Reléela y compara antes de decidir: reenviarlo pisaría lo que hiciera el otro cambio.",
+    "versionRequiredBody": "Este comando exige la versión actual de la unidad y no se envió ninguna. Vuelve a abrir la unidad para releer su etiqueta de versión.",
+    "conflictIdempotencyBody": "Esta clave de idempotencia ya se usó con otro cuerpo, otra versión u otro plan. El motor la rechazó en vez de adivinar cuál querías. Empieza el cambio de nuevo para obtener una clave nueva.",
+    "conflictDomainBody": "Las reglas propias del kernel rechazaron este comando: por ejemplo una transición ilegal o un ciclo de dependencias. Releer no va a cambiar la respuesta; lo que tiene que cambiar es el comando.",
+    "otherBody": "El cambio no salió adelante.",
+    "continue": "Continuar",
+    "inputIntro": "El motor exige estos datos antes de poder planificar el cambio. Sin ellos rechaza el comando directamente.",
+    "planChangedBody": "El plan cambió entre que se mostró y que se aplicó, así que no se escribió nada. Vuelve a abrir la acción para planificar otra vez y lee el plan nuevo antes de confirmar.",
+    "field": {
+      "code": {
+        "label": "Código",
+        "hint": "Un token corto de máquina: minúsculas, dígitos, punto, guion o guion bajo.",
+        "placeholder": "p. ej. blocked_on_review"
+      },
+      "reason": {
+        "label": "Motivo",
+        "hint": "Texto libre, se registra con el cambio. Es lo que va a leer otra sesión.",
+        "placeholder": "Por qué ocurre esto"
+      },
+      "evidence_ref": {
+        "label": "Referencia de evidencia",
+        "hint": "Dónde vive la evidencia de este veredicto. Obligatoria para registrar superado o fallado.",
+        "placeholder": "p. ej. run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "Hash de la evidencia",
+        "hint": "Digest sha256 de esa evidencia. Obligatorio para registrar superado.",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "Decisión de dispensa",
+        "hint": "La decisión que autoriza dispensar este criterio, si la hay.",
+        "placeholder": "Id de decisión (opcional)"
+      },
+      "holder_sid": {
+        "label": "Sesión titular",
+        "hint": "El id canónico de sesión que sostendrá el lease. El motor rechaza cualquier otro.",
+        "placeholder": "id de la sesión titular"
+      },
+      "fence": {
+        "label": "Fence",
+        "hint": "El fence sobre el que actúas. El motor rechaza cualquier valor inferior a 1, y un fence desactualizado pierde ante el titular actual.",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "Decisión",
+        "hint": "La decisión en la que se apoya el acto. Re-basar el reloj lleva evidencia: el motor no lo acepta sin nombrarla.",
+        "placeholder": "id de la decisión"
+      }
+    }
+  },
+  "checks": {
+    "evidence": "evidencia {{ref}}"
+  },
+  "common": {
+    "refresh": "Actualizar",
+    "loadMore": "Cargar más"
+  },
+  "decisions": {
+    "title": "Decisiones",
+    "subtitle": "El registro de decisiones append-only y su proyección de estado actual.",
+    "view": {
+      "effective": "Vigentes",
+      "revoked": "Revocadas",
+      "history": "Historia completa"
+    },
+    "historyNotice": "Esto es la historia append-only. El motor no atribuye estado actual a estas filas, así que ninguna aparece como vigente ni revocada: cambia a otra vista para hacer esa pregunta.",
+    "state": {
+      "effective": "Vigente",
+      "revoked": "Revocada",
+      "notAttributed": "Esta vista no atribuye estado"
+    },
+    "meta": "{{subject}} · decidida por {{actor}} · {{at}}",
+    "revoke": "Revocar",
+    "revokeTitle": "Revocar decisión",
+    "revokeBody": "La revocación se registra como una entrada nueva; la decisión original nunca se borra.",
+    "empty": {
+      "effective": {
+        "title": "Ninguna decisión vigente",
+        "body": "El motor leyó la proyección de estado actual y no encontró ninguna vigente."
+      },
+      "revoked": {
+        "title": "Ninguna decisión revocada",
+        "body": "El motor leyó la proyección de estado actual y no encontró ninguna revocada."
+      },
+      "history": {
+        "title": "Sin decisiones registradas",
+        "body": "Todavía no se ha decidido nada aquí."
+      }
+    }
+  },
+  "dependencies": {
+    "none": "Sin dependencias."
+  },
+  "detail": {
+    "subtitle": "{{kind}} · versión {{version}}",
+    "applyTitle": "Aplicar cambio",
+    "owner": "Propietario",
+    "provenance": "Procedencia",
+    "priority": "Prioridad",
+    "blocked": "Bloqueo",
+    "terminal": "Desenlace",
+    "etag": "Etiqueta de versión",
+    "tabs": {
+      "overview": "Resumen",
+      "acceptance": "Aceptación",
+      "dependencies": "Dependencias",
+      "events": "Eventos",
+      "lease": "Lease"
+    }
+  },
+  "events": {
+    "none": "No hay eventos registrados para esta unidad."
+  },
+  "filters": {
+    "status": "Estado",
+    "allStatus": "Cualquier estado",
+    "priority": "Prioridad",
+    "allPriority": "Cualquier prioridad",
+    "archived": {
+      "label": "Archivadas",
+      "any": "Archivadas y no archivadas",
+      "false": "Solo no archivadas",
+      "true": "Solo archivadas"
+    }
+  },
+  "items": {
+    "title": "Unidades de trabajo",
+    "subtitle": "Los filtros estrechan el almacén entero, no solo la página que estás viendo.",
+    "empty": {
+      "title": "Ninguna unidad coincide",
+      "body": "Nada en el almacén coincide con estos filtros. Es una respuesta real y completa: el motor leyó el almacén y no encontró ninguna."
+    }
+  },
+  "lease": {
+    "none": "Este ítem no tiene lease.",
+    "holder": "Titular",
+    "state": "Estado",
+    "fence": "Fence",
+    "expires": "Caduca",
+    "renewals": "Renovaciones",
+    "liveness": "Vitalidad",
+    "live": "Vivo",
+    "notLive": "No vivo",
+    "unknown": "No se ha podido mirar",
+    "reason": "Motivo",
+    "ttl": "TTL (segundos)",
+    "noWrite": "Tu rol no puede cambiar este lease.",
+    "noAdmin": "Arrebatar, revocar y re-basar exigen lease admin.",
+    "actions": {
+      "acquire": "Adquirir",
+      "renew": "Renovar",
+      "release": "Soltar",
+      "takeover": "Arrebatar",
+      "revoke": "Revocar",
+      "clockRebase": "Re-basar el reloj"
+    },
+    "noRead": "Tu rol no puede leer este lease."
+  },
+  "status": {
+    "draft": "Borrador",
+    "ready": "Lista",
+    "active": "Activa",
+    "blocked": "Bloqueada",
+    "review": "En revisión",
+    "completed": "Completada",
+    "failed": "Fallida",
+    "canceled": "Cancelada",
+    "dependencyBlocked": "Dependencia abierta",
+    "archived": "Archivada"
+  },
+  "stream": {
+    "open": "En vivo",
+    "connecting": "Reconectando…",
+    "closed": "Sin flujo",
+    "error": "Flujo interrumpido",
+    "unavailableBody": "La lista en pantalla puede estar desactualizada y nada más te lo va a advertir. Actualiza para leer el almacén directamente."
+  },
+  "subtitle": "El backlog durable entre sesiones: unidades de trabajo, propiedad, dependencias, criterios de aceptación y decisiones. Todo cambio se planifica antes de aplicarse.",
+  "tabs": {
+    "items": "Unidades de trabajo",
+    "decisions": "Decisiones"
+  },
+  "title": "Trabajo",
+  "transition": {
+    "item.ready": "Marcar lista",
+    "item.block": "Bloquear",
+    "item.unblock": "Desbloquear",
+    "item.submit": "Enviar a revisión",
+    "item.complete": "Completar",
+    "item.fail": "Marcar fallida",
+    "item.cancel": "Cancelar",
+    "item.archive": "Archivar"
+  },
+  "truncation": {
+    "label": "Cargadas {{n}} filas; hay más",
+    "hint": "Esta lista pagina por keyset y el motor limita la página a 200. Sólo se muestran las filas cargadas; usa los filtros para acotarla."
+  },
+  "unavailable": {
+    "title": "No he podido mirar",
+    "body": "El motor no pudo completar esta observación, así que informa de un desenlace desconocido en vez de un resultado. No des por confirmado nada de este panel.",
+    "retryHint": "No se sabe si el cambio llegó a escribirse. Reintenta con la MISMA clave de idempotencia: eso es lo que hace seguro el reintento, porque el motor lo reconocerá como la misma intención y no como una segunda.",
+    "code": "Código del motor: {{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "Limpio",
+      "help": "El motor miró y no encontró nada mal."
+    },
+    "ROTO": {
+      "label": "Roto",
+      "help": "El motor miró y encontró una violación de regla."
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "No he podido mirar",
+      "help": "El motor NO pudo completar la observación. Esto no es un aprobado ni un resultado vacío: la respuesta se desconoce."
+    }
+  }
+}

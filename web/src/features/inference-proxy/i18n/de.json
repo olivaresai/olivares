@@ -1,0 +1,96 @@
+{
+  "title": "Inferenz-Proxy",
+  "description": "Der richtliniendurchsetzende Proxy pro Mandant vor jedem Modellaufruf: Anfrage-/Antwort-Gates, Egress-DLP-Regeln und Geräteautorisierungs-Freigaben.",
+  "config": {
+    "title": "Gates & Obergrenzen",
+    "intro": "Jedes Gate wird auf dem Anfragepfad vor dem Modellaufruf durchgesetzt. Wird eines ausgeschaltet, entfällt diese Prüfung; die Änderung wird im Audit-Ledger erfasst.",
+    "failOpen": "Fail-Open",
+    "failOpenHint": "Wenn der Proxy keine Richtlinienentscheidung erreichen kann, den Aufruf zulassen statt blockieren. Aus = Fail-Closed.",
+    "recordMandatory": "Aufzeichnung erforderlich",
+    "recordMandatoryHint": "Einen Aufruf ablehnen, der nicht im Sitzungs-Ledger aufgezeichnet werden kann.",
+    "gates": {
+      "gate_model_access": "Modellzugriff",
+      "gate_budget": "Budget",
+      "gate_residency": "Residenz",
+      "gate_context_window": "Kontextfenster",
+      "gate_dlp_request": "Anfrage-DLP",
+      "gate_dlp_response": "Antwort-DLP"
+    },
+    "gatesHint": {
+      "gate_model_access": "Durchsetzen, welche Modelle jedes Subjekt aufrufen darf.",
+      "gate_budget": "Budget-Obergrenzen durchsetzen, bevor der Aufruf Kosten verursacht.",
+      "gate_residency": "Die Datenresidenz-Region des Mandanten durchsetzen.",
+      "gate_context_window": "Die Kontextfenster-Obergrenze pro Oberfläche durchsetzen.",
+      "gate_dlp_request": "Die ausgehende Anfrage auf unzulässige Klassifizierungen prüfen.",
+      "gate_dlp_response": "Die Modellantwort gemäß dem Antwort-DLP-Modus prüfen."
+    },
+    "responseDlpMode": "Antwort-DLP-Modus",
+    "responseDlpModeHint": "Wie das Antwort-DLP einen Treffer behandelt: off (keine Prüfung), flag (markieren) oder buffer (vor der Rückgabe zur Prüfung zurückhalten).",
+    "dlpModes": {
+      "off": "Aus",
+      "flag": "Markieren",
+      "buffer": "Puffern"
+    },
+    "ceilingsEnforce": "Obergrenzen durchsetzen",
+    "ceilingsEnforceHint": "Tokens, Tool-Nutzungen und Task-Budget pro Aufruf begrenzen. Aus = keine Obergrenze pro Aufruf.",
+    "ceilingMaxTokens": "Max. Tokens",
+    "ceilingMaxToolUses": "Max. Tool-Nutzungen",
+    "ceilingTaskBudget": "Task-Budget (Tokens)",
+    "ceilingTaskBudgetHint": "0 = nicht gesetzt, sonst mindestens {{min}}.",
+    "ceilingTaskBudgetError": "Muss 0 oder mindestens {{min}} sein.",
+    "reset": "Zurücksetzen",
+    "save": "Konfiguration speichern",
+    "saved": "Proxy-Konfiguration gespeichert"
+  },
+  "dlp": {
+    "title": "Egress-DLP-Regeln",
+    "intro": "Ordne einer Inhaltsklassifizierung Zulassen oder Verweigern beim Egress zu. Die Klassifizierung läuft serverseitig beim Modellaufruf; diese Regeln bestimmen, was ein Treffer bewirkt.",
+    "truncated": "{{n}} DLP-Regeln geladen; es gibt weitere",
+    "truncatedHint": "Es gibt mehr DLP-Regeln als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier eine Regel, beweist das nicht, dass es sie nicht gibt — der Ausgang kann Regeln unterliegen, die hier nicht sichtbar sind.",
+    "add": "Regel hinzufügen",
+    "noRead": "Sie haben keine Berechtigung, DLP-Regeln anzuzeigen.",
+    "empty": "Keine DLP-Regeln",
+    "emptyHint": "Fügen Sie eine Regel hinzu, um eine Klassifizierung beim Egress zuzulassen oder zu verweigern.",
+    "colClass": "Klassifizierung",
+    "colAction": "Aktion",
+    "colNote": "Notiz",
+    "colActions": "Aktionen",
+    "actions": {
+      "allow": "Zulassen",
+      "deny": "Verweigern"
+    },
+    "editAction": "Regel für {{class}} bearbeiten",
+    "deleteAction": "Regel für {{class}} löschen",
+    "created": "DLP-Regel erstellt",
+    "updated": "DLP-Regel aktualisiert",
+    "deleted": "DLP-Regel gelöscht",
+    "deleteDialog": {
+      "title": "DLP-Regel löschen?",
+      "description": "Dies entfernt die Egress-Regel für „{{class}}“. Passender Inhalt fällt auf die Standardbehandlung zurück.",
+      "confirm": "Regel löschen"
+    },
+    "dialog": {
+      "title": "DLP-Regel hinzufügen",
+      "editTitle": "DLP-Regel bearbeiten",
+      "subtitle": "Eine Klassifizierung wird beim Egress zugelassen oder verweigert. Die Regel wird durch ihre Klassifizierung identifiziert.",
+      "class": "Klassifizierung",
+      "classHint": "Die Inhaltsklassifizierung, für die diese Regel gilt (z. B. pii, secret).",
+      "action": "Aktion",
+      "note": "Notiz",
+      "create": "Regel hinzufügen",
+      "save": "Regel speichern"
+    }
+  },
+  "device": {
+    "title": "Geräteautorisierung",
+    "intro": "Eine Geräteautorisierungs-Anfrage anhand ihres Benutzercodes genehmigen oder ablehnen (der auf dem Kopplungsbildschirm des Geräts angezeigte Code).",
+    "userCode": "Benutzercode",
+    "userCodePlaceholder": "z. B. WDJB-MJHT",
+    "approve": "Genehmigen",
+    "deny": "Ablehnen",
+    "approved": "Gerätecode {{code}} genehmigt",
+    "denied": "Gerätecode {{code}} abgelehnt",
+    "notFound": "Keine ausstehende Anfrage für diesen Benutzercode.",
+    "expired": "Diese Anfrage ist abgelaufen oder wurde bereits verwendet."
+  }
+}

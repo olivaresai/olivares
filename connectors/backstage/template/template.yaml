@@ -1,0 +1,112 @@
+# Olivares AI — scaffolder Template.
+#
+# Registers a new agent's catalog-info.yaml with the Olivares governance estate.
+# It is read-first/declarative from Olivares' point of view: the template only
+# scaffolds a catalog entity in the developer's own repository and registers it
+# with Backstage; it does not mutate the Olivares estate (creating an agent in
+# the control plane is a governed, HITL-gated action — module VII /).
+#
+# apiVersion scaffolder.backstage.io/v1beta3 is BETA; Backstage is unpinned (see
+# README "Version caveat"). Verified against backstage.io scaffolder docs:
+# kind: Template with spec.owner, spec.type, spec.parameters (JSONSchema steps)
+# and spec.steps (each a unique id + action + input).
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: olivares-register-agent
+  title: Register an agent with Olivares governance
+  description: >-
+    Scaffold a catalog-info.yaml for an AI agent and register it in your
+    Backstage catalog as an Olivares-governed Component. Read-first: this does
+    not create or mutate anything in the Olivares control plane.
+  tags:
+    - olivares
+    - ai-agent
+    - governance
+spec:
+  owner: group:default/olivares
+  type: service
+
+  parameters:
+    - title: Agent identity
+      required:
+        - name
+        - owner
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Unique name for the agent component (a-z, 0-9, - . _).
+          pattern: '^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$'
+          maxLength: 63
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: A short, non-sensitive description of what the agent does.
+        owner:
+          title: Owner
+          type: string
+          description: The Backstage group or user that owns this agent.
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind:
+                - Group
+                - User
+        kind:
+          title: Agent kind
+          type: string
+          description: The Olivares agent kind (free-form label, e.g. assistant, worker).
+          default: assistant
+
+    - title: Catalog location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository location
+          type: string
+          description: The repository where catalog-info.yaml will be created.
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+
+  steps:
+    # 1. Render the catalog-info skeleton with the operator's answers.
+    - id: fetch-skeleton
+      name: Fetch skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          kind: ${{ parameters.kind }}
+
+    # 2. Publish the scaffolded files to the chosen repository.
+    - id: publish
+      name: Publish to repository
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: catalog-info for ${{ parameters.name }} (Olivares-governed agent)
+        defaultBranch: main
+
+    # 3. Register the new catalog-info.yaml with the Backstage catalog.
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}

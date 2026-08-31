@@ -1,0 +1,19 @@
+[
+  {
+    "id": "sess-support-1",
+    "app_name": "support-bot",
+    "user_id": "bob",
+    "events": [
+      {"id": "s1", "author": "support-bot", "content": {"role": "model", "parts": [{"function_call": {"name": "lookup_order"}}]}}
+    ]
+  },
+  {
+    "id": "sess-support-2",
+    "app_name": "support-bot",
+    "user_id": "carol",
+    "events": [
+      {"id": "s2", "author": "support-bot", "content": {"role": "model", "parts": [{"function_call": {"name": "lookup_order"}}]}},
+      {"id": "s3", "author": "support-bot", "content": {"role": "model", "parts": [{"function_call": {"name": "issue_refund"}}]}}
+    ]
+  }
+]

@@ -1,0 +1,76 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "mistral-large-latest",
+      "object": "model",
+      "created": 1756746619,
+      "owned_by": "mistralai",
+      "name": "Mistral Large",
+      "description": "Top-tier reasoning model",
+      "max_context_length": 131072,
+      "deprecation": null,
+      "capabilities": {
+        "completion_chat": true,
+        "completion_fim": false,
+        "function_calling": true,
+        "fine_tuning": false,
+        "vision": true,
+        "classification": false
+      }
+    },
+    {
+      "id": "codestral-latest",
+      "object": "model",
+      "created": 1756746000,
+      "owned_by": "mistralai",
+      "name": "Codestral",
+      "max_context_length": 262144,
+      "deprecation": null,
+      "capabilities": {
+        "completion_chat": true,
+        "completion_fim": true,
+        "function_calling": true,
+        "fine_tuning": false,
+        "vision": false,
+        "classification": false
+      }
+    },
+    {
+      "id": "open-mistral-7b",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "mistralai",
+      "name": "Mistral 7B",
+      "max_context_length": 32768,
+      "deprecation": "2026-03-30",
+      "capabilities": {
+        "completion_chat": true,
+        "completion_fim": false,
+        "function_calling": false,
+        "fine_tuning": false,
+        "vision": false,
+        "classification": false
+      }
+    },
+    {
+      "id": "ft:open-mistral-7b:my-org:custom:abc123",
+      "object": "model",
+      "created": 1756746619,
+      "owned_by": "my-org",
+      "max_context_length": 32768,
+      "deprecation": null,
+      "job": "job_abc123",
+      "root": "open-mistral-7b",
+      "archived": false,
+      "capabilities": {
+        "completion_chat": true,
+        "completion_fim": false,
+        "function_calling": false,
+        "fine_tuning": true,
+        "vision": false,
+        "classification": false
+      }
+    }
+  ]
+}

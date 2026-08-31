@@ -1,0 +1,9 @@
+{
+  "data": {
+    "id": "f3a1-entity-backup",
+    "name": "backup-agent",
+    "disabled": true,
+    "policies": ["shared-read"],
+    "group_ids": []
+  }
+}

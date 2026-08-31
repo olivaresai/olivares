@@ -1,0 +1,418 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# E2E operator qualification on a REAL Kubernetes cluster (kind).
+#
+# WHY THIS EXISTS. The HA leader-routing layout is exactly the kind of
+# behaviour a fake client cannot prove: kubelet probe semantics, Service/endpoint
+# selection from a label the ENGINE publishes about itself, and — the regression
+# this whole unit is about — an actual StatefulSet rolling update that must
+# progress past a standby instead of wedging at it. Those assertions need a real
+# apiserver, a real kubelet and a real Postgres, so they live in
+# operator/test/e2e (build tag `e2e`) and run here.
+#
+# The job builds TWO distinguishable engine images from this commit (an "old" and
+# a "new" tag) so the rolling-update scenario rolls between real images, brings up
+# an in-cluster Postgres with the least-privilege application role the engine
+# demands, and runs the manager OUT of cluster authenticated AS its own
+# ServiceAccount token — so the generated ClusterRole (config/rbac/role.yaml) is the
+# privilege actually exercised, including Kubernetes' privilege-escalation
+# prevention when the operator creates the operand's own Role.
+name: e2e-operator-kind
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "operator/**"
+      - "core/api/**"
+      # The engine's store: this job boots a real 3-replica control plane against a
+      # real Postgres, so a store change can wedge it — and one did. The change that
+      # broke the first qualifying run (an unbound backfill against an RLS-guarded
+      # table) landed under this path, where nothing here would have run at all.
+      - "core/internal/store/**"
+      - "cmd/olivares/haleaderlabel.go"
+      - "cmd/olivares/boot.go"
+      - ".github/workflows/e2e-operator-kind.yml"
+  schedule:
+    - cron: "0 3 * * *" # nightly 03:00 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-operator-kind-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind-e2e:
+    # CI_RUNNER_DB first: this job owns the host's Docker daemon and a fixed-name kind
+    # cluster — one db-labelled runner serializes it by construction (see the fixed
+    # `olivares-e2e` name and :8081 probe below; two concurrent runs cross-satisfy).
+    runs-on: ${{ vars.CI_RUNNER_DB || vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    env:
+      KIND_VERSION: v0.31.0
+      KIND_NODE_IMAGE: kindest/node:v1.34.0
+      # Pinned to the cluster's minor: kubectl supports +/-1 minor from the API
+      # server, and pinning it here means the job does not inherit whatever the
+      # runner happens to have.
+      KUBECTL_VERSION: v1.34.0
+      NS: olivares-e2e
+      OPERATOR_NS: olivares-system
+      IMAGE_OLD: localhost/olivares-e2e:old
+      IMAGE_NEW: localhost/olivares-e2e:new
+      # NOTE: the per-RUN scratch dir (WORKDIR) is exported by "Prepare workspace
+      # dir" via GITHUB_ENV — the `runner` context is NOT available in job-level
+      # env (measured: `${{ runner.temp }}` here invalidated the whole workflow,
+      # and every push produced an instant startup failure on 2026-07-30).
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
+        # ⛔ PREVENTIVO, PERO NO ESPECULATIVO. Este job corre en el mismo pool
+        # (`vars.CI_RUNNER_DB || vars.CI_RUNNER`) del que `mainline-ci.yml` dice que SEIS
+        # runners no tienen $HOME, y ahi `setup-go` muere en el `go env` que corre despues
+        # con «GOCACHE is not defined and neither $XDG_CACHE_HOME nor $HOME are defined».
+        # Lo medi hoy en `provider-ci` (job 97367227554, ci-runner-6). Que este workflow
+        # sobreviviera a `setup-go` en su ultima corrida es del runner que le toco
+        # (ci-runner-1), no del workflow: sin este paso es una tirada de dados.
+        #
+        # Va ANTES de `setup-go` — un paso puesto despues no arregla nada. Y es un PASO,
+        # no `env:` a nivel de job: la nota de abajo prohibe lo segundo, no lo primero.
+        #
+        # ⛔ CONDICIONADO, Y ESTA GUARDA ME LA ENSENO UNA REGRESION MIA. La primera version
+        # reubicaba SIEMPRE, y `$RUNNER_TEMP` se borra entre corridas: eso convirtio la cache
+        # de modulos PERSISTENTE del runner en una fria. Medido en las dos corridas:
+        #
+        #   antes  GOMODCACHE=/home/runner/go/pkg/mod        go: downloading =   0   paso VERDE
+        #   despues GOMODCACHE=$RUNNER_TEMP/gomodcache        go: downloading = 184   paso ROJO
+        #
+        # y el paso «Start the operator manager» solo espera 120 s, que no dan para bajar 184
+        # modulos y compilar. O sea que un paso PREVENTIVO rompio lo que funcionaba y ademas
+        # TAPO el defecto real que la corrida anterior si alcanzaba (leader-election sin
+        # --admin-dsn). Reubicar es la cura de un `$HOME` ausente, no algo que hacer siempre.
+        run: |
+          # ⛔ `$HOME` ESCRIBIBLE NO GARANTIZA QUE GO SEA UTILIZABLE, y esta guarda la afino un
+          # contraste externo. Tres caminos en los que `$HOME` pasa y Go no:
+          #   · un `GOPATH` RELATIVO heredado del entorno: Go lo rechaza ANTES de ejecutar el
+          #     subcomando, asi que el `go env` de `setup-go` muere igual. La version que
+          #     reubicaba siempre lo sobrescribia sin querer, y por eso no se veia.
+          #   · `$HOME/go` no escribible aunque `$HOME` si lo sea.
+          #   · `$HOME/.cache` no escribible, que es de donde sale GOCACHE por omision.
+          # No puedo preguntarle a `go`: este paso corre ANTES de `setup-go` y puede que Go no
+          # exista todavia. Asi que se comprueban las TRES condiciones sin el.
+          reubicar=""
+          [ -n "${HOME:-}" ] && [ -w "${HOME:-/nonexistent}" ] || reubicar="sin \$HOME utilizable"
+          case "${GOPATH:-}" in
+            "" ) : ;;
+            /* ) : ;;
+            *  ) reubicar="GOPATH relativo heredado (${GOPATH}): go lo rechaza antes del subcomando" ;;
+          esac
+          if [ -z "$reubicar" ]; then
+            for d in "$HOME/go" "$HOME/.cache"; do
+              [ -e "$d" ] || continue
+              [ -w "$d" ] || reubicar="$d existe y no es escribible"
+            done
+          fi
+          if [ -z "$reubicar" ]; then
+            echo "HOME usable ($HOME), GOPATH sano: dejo GOCACHE/GOMODCACHE por omision — la cache del runner PERSISTE"
+            exit 0
+          fi
+          echo "reubico las cachés de Go bajo RUNNER_TEMP: $reubicar"
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          go-version-file: go.work
+
+      # NOTE: do NOT set TMPDIR at job level. setup-go runs `go env` before any of
+      # our steps, so a TMPDIR pointing at a not-yet-created directory fails the job
+      # before it starts. The runner's own /tmp is writable and executable (the
+      # TMPDIR dance elsewhere in this repo is a dev-container quirk, not a CI one).
+      # Per-RUN scratch dir. The old fixed /tmp path was fatal on a persistent
+      # self-hosted runner: the first green run (30474569101) left state behind
+      # that failed every later run before a single scenario executed. RUNNER_TEMP
+      # is purged by the runner between jobs; the unconditional rm -rf here and in
+      # the teardown make this run own its dir even after a crashed predecessor.
+      - name: Prepare workspace dir
+        run: |
+          echo "WORKDIR=$RUNNER_TEMP/olivares-e2e" >> "$GITHUB_ENV"
+          rm -rf "$RUNNER_TEMP/olivares-e2e" && mkdir -p "$RUNNER_TEMP/olivares-e2e"
+
+      # Two images from the SAME source, distinguishable by their version stamp, so
+      # the rollout is a real image change (different tag AND different layer) while
+      # the behaviour under test is this commit's on both sides.
+      - name: Build two engine images
+        run: |
+          set -euo pipefail
+          for v in old new; do
+            CGO_ENABLED=0 go build -trimpath \
+              -ldflags "-s -w -X main.version=e2e-$v -X main.commit=${GITHUB_SHA::12}" \
+              -o "${WORKDIR}/olivares-$v" ./cmd/olivares
+          done
+          # shellcheck disable=SC2086 # ${BIN} is expanded by Docker, not this quoted heredoc.
+          cat > "${WORKDIR}/Dockerfile" <<'EOF'
+          FROM gcr.io/distroless/static:nonroot
+          ARG BIN
+          COPY ${BIN} /usr/local/bin/olivares
+          USER 65532:65532
+          ENTRYPOINT ["/usr/local/bin/olivares"]
+          EOF
+          docker build -q -f "${WORKDIR}/Dockerfile" \
+            --build-arg BIN=olivares-old -t "$IMAGE_OLD" "${WORKDIR}"
+          docker build -q -f "${WORKDIR}/Dockerfile" \
+            --build-arg BIN=olivares-new -t "$IMAGE_NEW" "${WORKDIR}"
+
+      # Install into a runner-owned bin dir: /usr/local/bin is root-owned on the
+      # hosted images, so writing the binary there needs sudo and fails the job at
+      # chmod. $GITHUB_PATH makes it available to every later step.
+      - name: Install kind and kubectl
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSLo "$HOME/.local/bin/kind" \
+            "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x "$HOME/.local/bin/kind"
+          # kubectl is installed HERE, not assumed. This job ran green once
+          # (2026-07-24, 144f36a2) and then failed 18 times in a row with
+          # `kubectl: command not found` / exit 127, because it inherited kubectl
+          # from the self-hosted runner and the runner stopped providing it. A
+          # qualification job that depends on unmanaged host state is not a
+          # qualification job; it now brings its own pinned client.
+          curl -fsSLo "$HOME/.local/bin/kubectl" \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x "$HOME/.local/bin/kubectl"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/kind" version
+          "$HOME/.local/bin/kubectl" version --client
+
+      - name: Create cluster
+        run: |
+          set -euo pipefail
+          kind create cluster --name olivares-e2e --image "$KIND_NODE_IMAGE" --wait 180s
+          kubectl cluster-info
+          kind load docker-image "$IMAGE_OLD" "$IMAGE_NEW" --name olivares-e2e
+
+      # Postgres with the LEAST-PRIVILEGE application role the engine requires: it
+      # refuses to boot against a superuser/BYPASSRLS role (that would make FORCE RLS
+      # inert), so the e2e store is provisioned the same way production is.
+      - name: Deploy Postgres
+        run: |
+          set -euo pipefail
+          kubectl create namespace "$NS"
+          cat > "${WORKDIR}/init.sql" <<'SQL'
+          CREATE ROLE olivares_app LOGIN PASSWORD 'e2e-password' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+          CREATE DATABASE olivares OWNER olivares_app;
+          SQL
+          kubectl -n "$NS" create configmap pg-init --from-file=init.sql="${WORKDIR}/init.sql"
+          kubectl -n "$NS" apply -f - <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: postgres
+          spec:
+            replicas: 1
+            selector: { matchLabels: { app: postgres } }
+            template:
+              metadata: { labels: { app: postgres } }
+              spec:
+                containers:
+                  - name: postgres
+                    image: postgres:16-alpine
+                    env:
+                      - { name: POSTGRES_PASSWORD, value: postgres }
+                      - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+                    ports: [{ containerPort: 5432 }]
+                    volumeMounts:
+                      - { name: init, mountPath: /docker-entrypoint-initdb.d }
+                      - { name: data, mountPath: /var/lib/postgresql/data }
+                    readinessProbe:
+                      exec: { command: ["pg_isready", "-U", "postgres"] }
+                      initialDelaySeconds: 5
+                      periodSeconds: 5
+                volumes:
+                  - { name: init, configMap: { name: pg-init } }
+                  - { name: data, emptyDir: {} }
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: postgres
+          spec:
+            selector: { app: postgres }
+            ports: [{ port: 5432, targetPort: 5432 }]
+          YAML
+          kubectl -n "$NS" rollout status deploy/postgres --timeout=180s
+
+      # The SHARED audit signing key every HA replica must sign with: without
+      # one shared key the ledger hash-chain forks at failover, which is why the CRD
+      # requires it for replicas>1.
+      - name: Provision engine secrets
+        run: |
+          set -euo pipefail
+          # A real package in the tree (operator/test/e2e/cmd/keygen), NOT a
+          # heredoc + `go mod init` in a scratch dir: that init was the one
+          # non-idempotent step in this workflow and bricked every run after
+          # the first green on the persistent runner.
+          go run ./operator/test/e2e/cmd/keygen > "$WORKDIR/audit-signing.key"
+          kubectl -n "$NS" create secret generic audit-key \
+            --from-file=audit-signing.key="${WORKDIR}/audit-signing.key"
+          kubectl -n "$NS" create secret generic pg-dsn \
+            --from-literal=dsn="postgres://olivares_app:e2e-password@postgres.$NS.svc:5432/olivares?sslmode=disable"
+
+      # Run the manager with EXACTLY the RBAC it ships with: a ServiceAccount bound
+      # to the generated ClusterRole, authenticated with that account's token. If the
+      # ClusterRole is missing a right the operator needs (for example `patch pods`,
+      # without which Kubernetes refuses to let it CREATE the operand's Role), the
+      # e2e fails here rather than in production.
+      - name: Install CRD + operator RBAC
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086 # The CRD glob intentionally resolves the shipped manifest.
+          kubectl apply -f "$(ls operator/config/crd/*.yaml)"
+          kubectl create namespace "$OPERATOR_NS"
+          kubectl -n "$OPERATOR_NS" create serviceaccount olivares-operator
+          kubectl apply -f operator/config/rbac/role.yaml
+          kubectl create clusterrolebinding olivares-operator \
+            --clusterrole=olivares-operator-manager-role \
+            --serviceaccount="$OPERATOR_NS:olivares-operator"
+          # Authenticate the manager AS its ServiceAccount (a real token, not the
+          # admin kubeconfig), so every call it makes is authorized by the shipped
+          # ClusterRole and nothing else.
+          CLUSTER="$(kubectl config view -o jsonpath='{.clusters[0].name}')"
+          TOKEN="$(kubectl -n "$OPERATOR_NS" create token olivares-operator --duration=3h)"
+          # Flatten the ADMIN kubeconfig into the target BEFORE pointing KUBECONFIG at it:
+          # exporting first would make the redirection truncate the very file kubectl is
+          # about to read, and the operator would end up with an empty config.
+          kubectl config view --raw --flatten > "${WORKDIR}/kubeconfig-operator"
+          export KUBECONFIG="${WORKDIR}/kubeconfig-operator"
+          kubectl config set-credentials olivares-operator-sa --token="$TOKEN"
+          kubectl config set-context olivares-operator --cluster="$CLUSTER" --user=olivares-operator-sa
+          kubectl config use-context olivares-operator
+          # Assert the identity took effect — a silent fallback to admin would make the
+          # whole "the shipped ClusterRole is what runs" claim vacuous.
+          kubectl auth whoami -o jsonpath='{.status.userInfo.username}' \
+            | grep -qx "system:serviceaccount:$OPERATOR_NS:olivares-operator"
+          # And assert the exact rights the reconciler needs, including the one Kubernetes
+          # privilege-escalation prevention demands before it may CREATE the operand Role.
+          for verb_res in "create:roles" "create:rolebindings" "create:serviceaccounts" "patch:pods" "list:pods"; do
+            kubectl auth can-i "${verb_res%%:*}" "${verb_res##*:}" --namespace "$NS" > /dev/null
+          done
+
+      # ⛔ CONSTRUIR ES UN PASO APARTE PORQUE UNA ESPERA NO PUEDE MEDIR DOS COSAS.
+      # `go run` descarga, compila y arranca; metido dentro del sondeo de 120 s, «no estuvo
+      # listo» significaba indistintamente «no compila», «la red va lenta» o «el manager
+      # arranco y se nego a promover». Medido el 2026-08-24: el volcado de `manager.log` tras
+      # el fallo eran 184 lineas de `go: downloading` y CERO de error — un rojo que no nombra
+      # su causa. Construido antes, un fallo de compilacion sale como fallo de compilacion,
+      # y los 120 s pasan a medir lo unico que dicen medir: disponibilidad.
+      - name: Build the operator manager
+        # ⛔ CON COTA PROPIA. Al sacar el build del sondeo dejo de estar limitado por sus 120 s,
+        # asi que un `go build` o una descarga colgada se comeria el techo del JOB entero. Una
+        # espera no puede medir dos cosas, pero cada una necesita la suya.
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          cd operator
+          go build -o "${WORKDIR}/manager" ./cmd/manager
+
+      - name: Start the operator manager
+        run: |
+          set -euo pipefail
+          # ⛔ EL `cd operator` SIGUE HACIENDO FALTA AQUI. Antes el manager lo arrancaba un
+          # `go run` que corria DENTRO de `operator/`, asi que su CWD era ese. Cada paso empieza
+          # en `$GITHUB_WORKSPACE`, de modo que separar build y arranque le cambiaba el
+          # directorio de trabajo bajo los pies y cualquier ruta relativa suya se comportaria
+          # distinto. El binario es absoluto; el CWD no lo era.
+          cd operator
+          KUBECONFIG="${WORKDIR}/kubeconfig-operator" \
+            "${WORKDIR}/manager" --metrics-bind-address=0 --health-probe-bind-address=:8081 \
+            > "${WORKDIR}/manager.log" 2>&1 &
+          echo $! > "${WORKDIR}/manager.pid"
+          # shellcheck disable=SC2034 # The counter deliberately supplies repeated readiness probes.
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8081/readyz >/dev/null 2>&1; then
+              echo "manager ready"; exit 0
+            fi
+            # Un binario que ya murio no se va a poner listo: decirlo ahora en vez de
+            # agotar los 120 s ahorra dos minutos y nombra la causa.
+            if ! kill -0 "$(cat "${WORKDIR}/manager.pid")" 2>/dev/null; then
+              echo "el manager termino antes de estar listo"; cat "${WORKDIR}/manager.log"; exit 1
+            fi
+            sleep 2
+          done
+          echo "manager did not become ready"; cat "${WORKDIR}/manager.log"; exit 1
+
+      - name: Run the e2e scenarios
+        # ⛔ 29m, y NO se sube el techo del paso. CONTRA QUE SE COMPARA: contra el `timeout-minutes: 30`
+        # de este paso. Subirlo a 46 arregla este gate y ROMPE otro — la suma de pasos del job pasaria a
+        # 15+46 = 61 sobre un techo de job de 60, y `lint:ci-timeout-arithmetic` lo caza (medido: rc 1).
+        # Y la razon de fondo es de the integrator: los minutos 30-45 NUNCA EXISTIERON — el paso ya
+        # moria a los 30 —, asi que bajar el reloj no retira cobertura que nadie tuviera; solo hace que el
+        # que muerde sea `go test`, que ademas imprime el stack de todas las goroutines.
+        # ⛔ EL «SIN MEDIDA» DE ESTA LINEA ERA CIERTO Y HOY ES FALSO, y por eso se sustituye en vez de
+        # matizarse: decia que «las cinco ultimas corridas son failure, asi que no hay un exito del
+        # que leer la duracion». Medido el 2026-08-30 sobre las 12 ultimas corridas de este workflow:
+        # el paso se ejecuto **10 veces** —7 de ellas `success`— y su duracion fue de **1,53 a 3,33
+        # min**, maximo 3 min 20 s. Habia medida; lo que faltaba era mirarla.
+        #
+        # ⇒ El techo 30 no sale de una duracion observada sino de caber bajo el techo del job (60)
+        # para que un cuelgue falle CON NOMBRE en vez de que el job cancele al reportero. Eso sigue
+        # valiendo, y ahora ademas se sabe que 30 son ~9x el peor caso medido.
+        #
+        # ⚠ Y LO QUE 29m SACRIFICA, dicho aunque sea teorico: un minuto frente al techo de 30. Con
+        # las 10 ejecuciones medidas **ninguna llego a usarlo** (3,33 min de 29), asi que el coste
+        # real observado es cero — pero es un sacrificio, no una mejora gratis, y quien suba el
+        # trabajo de este paso tiene que saber que el margen se recorto a proposito.
+        timeout-minutes: 30
+        env:
+          OLIVARES_E2E_IMAGE_OLD: localhost/olivares-e2e:old
+          OLIVARES_E2E_IMAGE_NEW: localhost/olivares-e2e:new
+          OLIVARES_E2E_NAMESPACE: olivares-e2e
+        run: |
+          set -euo pipefail
+          cd operator
+          go test -tags e2e ./test/e2e/... -v -count=1 -timeout 29m
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          echo "=== ControlPlane ==="; kubectl -n "$NS" get cp -o yaml
+          echo "=== StatefulSet ==="; kubectl -n "$NS" get statefulset -o yaml
+          echo "=== pods ==="; kubectl -n "$NS" get pods -o wide --show-labels
+          echo "=== endpointslices ==="; kubectl -n "$NS" get endpointslices -o wide
+          echo "=== services ==="; kubectl -n "$NS" get svc -o wide
+          echo "=== rbac ==="; kubectl -n "$NS" get sa,role,rolebinding -o yaml
+          echo "=== events ==="; kubectl -n "$NS" get events --sort-by=.lastTimestamp | tail -50
+          # shellcheck disable=SC2086 # kubectl emits whitespace-free resource names for this loop.
+          for p in $(kubectl -n "$NS" get pods -l app.kubernetes.io/name=olivares -o name); do
+            echo "=== describe $p ==="; kubectl -n "$NS" describe "$p"
+            echo "=== logs $p (current attempt) ==="; kubectl -n "$NS" logs "$p" --tail=200
+            # A crash-looping container's CURRENT attempt is usually still in backoff
+            # and has written nothing; the attempt that DIED is the one holding the
+            # error. Without --previous, run 3 reported an empty boot instead of the
+            # store-open failure that actually wedged all three pods.
+            echo "=== logs $p (previous attempt) ==="; kubectl -n "$NS" logs "$p" --previous --tail=200
+          done
+          echo "=== manager log ==="; tail -300 "${WORKDIR}/manager.log"
+          # Diagnostics must never decide the job's outcome: the real failure is above.
+          true
+
+      - name: Tear down
+        if: always()
+        run: |
+          set +e
+          # The pid file lives in THIS run's WORKDIR, so this can no longer kill
+          # a process inherited from an earlier run on the shared host.
+          [ -f "$WORKDIR/manager.pid" ] && kill "$(cat "$WORKDIR/manager.pid")"
+          kind delete cluster --name olivares-e2e
+          rm -rf "$WORKDIR"

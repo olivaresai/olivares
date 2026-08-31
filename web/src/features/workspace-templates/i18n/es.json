@@ -1,0 +1,90 @@
+{
+  "truncation": {
+    "label": "Cargadas {{n}} plantillas; hay más",
+    "hint": "En este catálogo sólo están disponibles las plantillas cargadas. Una plantilla ausente puede estar más allá de esta página."
+  },
+  "title": "Plantillas de espacio de trabajo",
+  "subtitle": "Instantáneas reutilizables de hooks, ajustes, conectores y políticas para sesiones del espacio de trabajo.",
+  "catalog": {
+    "builtin": "Integrada",
+    "version": "v{{version}}",
+    "author": "Por {{author}}",
+    "archived": "Archivada",
+    "noTemplates": "No se encontraron plantillas.",
+    "noTemplatesHint": "Crea tu primera plantilla para reutilizar configuraciones del espacio de trabajo.",
+    "filterAll": "Todas",
+    "filterBuiltin": "Integradas",
+    "filterCustom": "Personalizadas",
+    "showArchived": "Mostrar archivadas"
+  },
+  "editor": {
+    "nameLabel": "Nombre",
+    "namePlaceholder": "p. ej. Sesión de codificación segura",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "¿Qué configura esta plantilla?",
+    "sections": {
+      "hooks": "Hooks",
+      "hooksHint": "Comandos ejecutados antes/después de herramientas y sesiones.",
+      "settings": "Configuración del agente",
+      "settingsHint": "Modo de permiso, nivel de esfuerzo, modelo e instrucciones personalizadas.",
+      "connectors": "Conectores",
+      "connectorsHint": "IDs de conector que se adjuntarán al aplicar esta plantilla.",
+      "policies": "Políticas de gobernanza",
+      "policiesHint": "Modo DLP, límites de duración de sesión, herramientas permitidas y grabación de E/S."
+    },
+    "hooks": {
+      "preTool": "Antes de herramienta",
+      "postTool": "Después de herramienta",
+      "preSession": "Antes de sesión",
+      "postSession": "Después de sesión",
+      "command": "Comando",
+      "timeoutMs": "Tiempo de espera (ms)",
+      "addHook": "Añadir hook",
+      "removeHook": "Eliminar"
+    },
+    "settings": {
+      "permissionMode": "Modo de permiso",
+      "effort": "Nivel de esfuerzo",
+      "model": "Modelo",
+      "customInstructions": "Instrucciones personalizadas"
+    },
+    "policies": {
+      "dlpMode": "Modo DLP",
+      "maxDuration": "Duración máxima de sesión (minutos)",
+      "allowedTools": "Herramientas permitidas",
+      "allowedToolsPlaceholder": "p. ej. Bash,Read,Edit",
+      "recordIo": "Grabar E/S"
+    }
+  },
+  "actions": {
+    "create": "Nueva plantilla",
+    "edit": "Editar",
+    "duplicate": "Duplicar",
+    "archive": "Archivar",
+    "restore": "Restaurar",
+    "apply": "Aplicar a sesión",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirmArchive": "¿Archivar esta plantilla?",
+    "confirmArchiveHint": "Las plantillas archivadas se ocultan del catálogo pero pueden restaurarse.",
+    "confirmApply": "¿Aplicar plantilla?",
+    "confirmApplyHint": "Esto sobrescribirá los ajustes actuales de la sesión con los valores de la plantilla.",
+    "duplicateName": "Copia de {{name}}"
+  },
+  "apply": {
+    "success": "Plantilla aplicada.",
+    "conflicts": "Aplicada con {{count}} conflicto(s).",
+    "conflictField": "Campo",
+    "conflictOld": "Valor anterior",
+    "conflictNew": "Valor nuevo",
+    "unenforceable": "Esta plantilla no se puede aplicar: {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "Error al cargar las plantillas.",
+    "saveFailed": "Error al guardar la plantilla.",
+    "applyFailed": "Error al aplicar la plantilla.",
+    "archiveFailed": "Error al archivar la plantilla.",
+    "duplicateFailed": "Error al duplicar la plantilla."
+  },
+  "notFound": "Plantilla no encontrada."
+}

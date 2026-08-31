@@ -1,0 +1,10 @@
+{
+  "policyEngines": [
+    {
+      "policyEngineArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-export",
+      "policyEngineId": "pe-export",
+      "name": "export-policy-engine",
+      "status": "ACTIVE"
+    }
+  ]
+}

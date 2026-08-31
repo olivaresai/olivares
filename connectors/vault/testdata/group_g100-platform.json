@@ -1,0 +1,9 @@
+{
+  "data": {
+    "id": "g100-platform",
+    "name": "platform",
+    "policies": ["app-secrets"],
+    "member_entity_ids": ["8d4d-entity-deploy"],
+    "member_group_ids": []
+  }
+}

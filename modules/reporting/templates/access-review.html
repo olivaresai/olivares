@@ -1,0 +1,63 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{.Locale}}">
+<head>
+<meta charset="utf-8">
+<title>{{t .Locale "report.access_review.title"}}</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>{{t .Locale "report.access_review.title"}}</h1>
+    <div class="subtitle">{{if .Branding.CompanyName}}{{.Branding.CompanyName}} — {{end}}{{t .Locale "report.generated_at"}}: {{formatDateTime .Report.Generated}}</div>
+  </div>
+  {{if .Branding.LogoPath}}<img class="header-logo" src="{{.Branding.LogoPath}}" alt="Logo">{{end}}
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{len .Report.Users}}</div>
+    <div class="stat-label">{{t .Locale "access.total_users"}}</div>
+  </div>
+</div>
+
+<h2>{{t .Locale "report.access_review.title"}}</h2>
+<table>
+<thead>
+<tr>
+  <th>{{t .Locale "access.display_name"}}</th>
+  <th>{{t .Locale "access.email"}}</th>
+  <th>{{t .Locale "access.roles"}}</th>
+  <th>{{t .Locale "access.permissions"}}</th>
+  <th>{{t .Locale "access.last_access"}}</th>
+  <th>Status</th>
+</tr>
+</thead>
+<tbody>
+{{range .Report.Users}}
+<tr>
+  <td>
+    <strong>{{.DisplayName}}</strong>
+    {{if .Superadmin}}<span class="badge badge-warn">{{t $.Locale "access.superadmin"}}</span>{{end}}
+  </td>
+  <td>{{.Email}}</td>
+  <td>{{join .Roles ", "}}</td>
+  <td style="font-size:9pt">{{join .Permissions ", "}}</td>
+  <td>{{formatDateTime .LastAccess}}</td>
+  <td>
+    {{if .Inactive}}<span class="badge badge-warn">{{t $.Locale "access.inactive"}}</span>
+    {{else}}<span class="badge badge-ok">Active</span>{{end}}
+  </td>
+</tr>
+{{end}}
+</tbody>
+</table>
+
+<div class="disclaimer">{{t .Locale "report.disclaimer"}}</div>
+<div class="footer">{{t .Locale "report.powered_by"}}{{if .Branding.FooterText}} — {{.Branding.FooterText}}{{end}}</div>
+</body>
+</html>

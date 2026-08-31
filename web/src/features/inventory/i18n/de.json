@@ -1,0 +1,71 @@
+{
+  "title": "Inventar",
+  "subtitle": "Jeder Agent, jede Sitzung, jeder MCP, jedes Modell und jede Identität, die in Ihrem Bestand erkannt wurden.",
+  "refresh": "Aktualisieren",
+  "summary": {
+    "total": "Entitäten",
+    "active": "Aktiv",
+    "stale": "Veraltet",
+    "kinds": "Arten"
+  },
+  "tabs": {
+    "catalog": "Katalog",
+    "topology": "Topologie"
+  },
+  "facets": {
+    "allKinds": "Alle Arten",
+    "allStatus": "Alle Status"
+  },
+  "status": {
+    "active": "Aktiv",
+    "stale": "Veraltet"
+  },
+  "cols": {
+    "name": "Name",
+    "kind": "Art",
+    "status": "Status",
+    "signals": "Signale",
+    "hosts": "Hosts",
+    "lastSeen": "Zuletzt gesehen",
+    "occurrences": "Gesehen"
+  },
+  "searchPlaceholder": "Name, Referenz, Signal suchen…",
+  "hostCount": "{{count}} Hosts",
+  "kinds": {
+    "agent": "Agent",
+    "session": "Sitzung",
+    "identity": "Identität",
+    "mcp_server": "MCP-Server",
+    "tool": "Werkzeug",
+    "resource": "Ressource",
+    "skill": "Fähigkeit",
+    "model": "Modell",
+    "provider": "Anbieter"
+  },
+  "detail": {
+    "ref": "Referenz",
+    "id": "ID",
+    "firstSeen": "Zuerst gesehen",
+    "lastSeen": "Zuletzt gesehen",
+    "relations": "Beziehungen",
+    "viewAccess": "Zugriffskarte",
+    "viewSessions": "Sitzungen"
+  },
+  "topology": {
+    "note": "Zusammensetzung des Bestands nach Art. Die Laufzeitnutzung (welcher Agent welches Modell/welchen MCP ausführt) erscheint unter Sitzungen; der Ressourcenzugriff (R/RW) in der Zugriffskarte.",
+    "bands": {
+      "origins": "Wer handelt",
+      "capabilities": "Was sie nutzen können",
+      "resources": "Worauf sie zugreifen"
+    },
+    "emptyTitle": "Noch nichts erkannt",
+    "emptyHint": "Sobald Konnektoren Aktivität melden, wird Ihr Bestand hier katalogisiert.",
+    "truncated": "Erste {{n}} Entitäten werden angezeigt"
+  },
+  "empty": {
+    "catalog": {
+      "title": "Noch keine Bestandsentitäten erkannt",
+      "description": "Entitäten erscheinen, sobald Konnektorbeobachtungen Agenten, Sitzungen, Identitäten, MCP-Fähigkeiten, Modelle, Anbieter oder Ressourcen melden."
+    }
+  }
+}

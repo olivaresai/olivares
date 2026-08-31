@@ -1,0 +1,38 @@
+{
+  "title": "Costes por equipo",
+  "subtitle": "Atribución de costes por equipo: sesiones, tokens y gasto con tendencia diaria y desglose por proyecto/modelo.",
+  "period": {
+    "label": "Período",
+    "7d": "Últimos 7 días",
+    "30d": "Últimos 30 días",
+    "90d": "Últimos 90 días"
+  },
+  "cols": {
+    "team": "Equipo",
+    "sessions": "Sesiones",
+    "tokensIn": "Tokens entrada",
+    "tokensOut": "Tokens salida",
+    "cost": "Coste",
+    "trend": "Tendencia"
+  },
+  "breakdown": {
+    "projects": "Proyectos",
+    "models": "Modelos",
+    "project": "Proyecto",
+    "model": "Modelo",
+    "sessions": "Sesiones",
+    "tokensIn": "Tokens entrada",
+    "tokensOut": "Tokens salida",
+    "cost": "Coste",
+    "noProjects": "Sin desglose por proyecto.",
+    "noModels": "Sin desglose por modelo."
+  },
+  "export": "Exportar CSV",
+  "empty": {
+    "title": "Sin datos de costes por equipo",
+    "description": "No se encontraron registros de coste con etiquetas de equipo para este período. Etiqueta tus sesiones con un equipo para ver la atribución."
+  },
+  "errors": {
+    "loadFailed": "No se pudieron cargar los datos de costes por equipo."
+  }
+}

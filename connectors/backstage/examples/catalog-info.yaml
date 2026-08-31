@@ -1,0 +1,50 @@
+# Example of the entities the OlivaresEntityProvider publishes for an Olivares
+# estate. This is illustrative output — the live provider emits
+# these via connection.applyMutation({ type: 'full', ... }), it does not read this
+# file. It shows the three mapped kinds:
+#   - the estate                 -> System
+#   - an Olivares agent          -> Component (type: service, lifecycle: production)
+#   - a governance identity      -> Resource (type: identity)
+#
+# catalog apiVersion backstage.io/v1alpha1 is ALPHA; Backstage is unpinned (see
+# the connector README "Version caveat").
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: olivares-estate
+  description: Olivares AI control-plane estate.
+  annotations:
+    olivares.ai/managed: 'true'
+    backstage.io/managed-by-origin-location: url:olivares-provider:olivares-entity-provider
+spec:
+  owner: group:default/olivares
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: payments-assistant
+  description: Olivares agent (assistant).
+  annotations:
+    olivares.ai/managed: 'true'
+    olivares.ai/external-id: agt_8f3c2a
+    olivares.ai/status: active
+    backstage.io/managed-by-origin-location: url:olivares-provider:olivares-entity-provider
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/olivares
+  system: olivares-estate
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ci-deployer
+  description: Olivares governance identity (service-account).
+  annotations:
+    olivares.ai/managed: 'true'
+    backstage.io/managed-by-origin-location: url:olivares-provider:olivares-entity-provider
+spec:
+  type: identity
+  owner: group:default/olivares
+  system: olivares-estate

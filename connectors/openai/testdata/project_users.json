@@ -1,0 +1,21 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "user_proj1",
+      "email": "alice@example.com",
+      "role": "owner",
+      "name": "Alice",
+      "added_at": 1717200000
+    },
+    {
+      "id": "user_proj2",
+      "email": "bob@example.com",
+      "role": "member",
+      "name": "Bob",
+      "added_at": 1717300000
+    }
+  ],
+  "has_more": false,
+  "last_id": "user_proj2"
+}

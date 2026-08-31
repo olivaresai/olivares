@@ -1,0 +1,130 @@
+{
+  "title": "Claude Code 采用情况",
+  "description": "Claude Code 的使用程度，以及开发者对其建议内容的保留比例。",
+  "range": {
+    "label": "时间范围",
+    "7d": "最近 7 天",
+    "30d": "最近 30 天",
+    "90d": "最近 90 天",
+    "mtd": "本月至今"
+  },
+  "tabs": {
+    "overview": "概览",
+    "teams": "团队",
+    "developers": "开发者",
+    "trend": "趋势"
+  },
+  "boundary": {
+    "note": "仅涵盖 Claude API 流量——管理员 Analytics 数据源和 OTLP 遥测平面。由 {{providers}} 提供的使用情况不包含在内，因此此处没有采用记录并不能证明确实未使用。",
+    "providers": {
+      "claude-platform-aws": "Claude Platform on AWS",
+      "microsoft-foundry": "Microsoft Foundry",
+      "amazon-bedrock": "Amazon Bedrock",
+      "vertex-ai": "Vertex AI"
+    }
+  },
+  "lenses": {
+    "analytics": {
+      "title": "按开发者（管理员 Analytics）",
+      "description": "来自管理员 Analytics 数据源、涵盖 {{developers}} 名开发者的权威每位开发者/每日总计。"
+    },
+    "telemetry": {
+      "title": "按会话（实时遥测）",
+      "description": "来自 OTLP 平面、涵盖 {{teams}} 个团队的实时每会话活动；包含活跃时间。"
+    }
+  },
+  "comparison": {
+    "title": "官方与观测对比",
+    "description": "在管理员 Analytics API 与本地 OTLP 遥测之间比较共享的 Claude Code 活动指标。",
+    "official": "官方（Analytics API）",
+    "observed": "观测（OTLP）",
+    "withinThreshold": "在阈值内",
+    "empty": "此范围内无共享指标活动。",
+    "boundaryNote": "官方 Analytics API 不覆盖 {{providers}} 等第三方表面；仅出现在遥测中的使用是复核信号，并不等同于误用结论。",
+    "metrics": {
+      "sessions": "会话数",
+      "tokens": "令牌数",
+      "linesAdded": "新增代码行",
+      "commits": "提交数",
+      "pullRequests": "拉取请求"
+    },
+    "directions": {
+      "aligned": "在阈值内",
+      "telemetry_exceeds_official": "观测值高于官方 {{ratio}}",
+      "official_exceeds_telemetry": "官方值高于观测 {{ratio}}",
+      "official_plane_absent": "官方平面缺失",
+      "telemetry_plane_absent": "观测平面缺失"
+    }
+  },
+  "stats": {
+    "sessions": "会话数",
+    "linesNet": "代码净行数",
+    "addedRemoved": "+{{added}} / -{{removed}}",
+    "commits": "提交数",
+    "pullRequests": "拉取请求",
+    "acceptance": "工具采纳率",
+    "acceptedOfTotal": "{{total}} 个中已采纳 {{accepted}} 个",
+    "tokens": "令牌数",
+    "activeTime": "活跃时间"
+  },
+  "models": {
+    "total": "令牌总数",
+    "empty": "此范围内无模型使用记录。"
+  },
+  "acceptance": {
+    "empty": "此范围内无工具决策记录。",
+    "columns": {
+      "tool": "工具",
+      "accepted": "已采纳",
+      "rejected": "已拒绝",
+      "rate": "采纳率"
+    }
+  },
+  "trend": {
+    "title": "每日趋势",
+    "description": "所选视角随时间变化的生产力。",
+    "lensLabel": "视角",
+    "empty": "此范围内无活动记录。"
+  },
+  "teams": {
+    "title": "按团队",
+    "description": "来自实时遥测平面的每个团队活动（运营方团队标签）。",
+    "empty": "此范围内无按团队归属的遥测记录。",
+    "emptyHint": "在 Claude Code 机群上设置 OTEL_RESOURCE_ATTRIBUTES（例如 team=…）以按团队归属。",
+    "unassigned": "（未分配）",
+    "columns": {
+      "team": "团队"
+    }
+  },
+  "developers": {
+    "title": "按开发者",
+    "description": "来自管理员 Analytics 数据源的每位开发者 ROI。",
+    "empty": "此范围内无按开发者的活动记录。",
+    "locked": "按开发者视图受限",
+    "lockedHint": "查看单个开发者的生产力需要 adoption:developer:read 权限（默认拒绝）。",
+    "columns": {
+      "developer": "开发者"
+    }
+  },
+  "columns": {
+    "sessions": "会话数",
+    "commits": "提交数",
+    "pullRequests": "PRs",
+    "linesNet": "净 LoC",
+    "acceptance": "采纳率"
+  },
+  "empty": {
+    "acceptance": {
+      "title": "尚未观测到工具决策",
+      "description": "管理员 Analytics 数据源或 OTLP 遥测上报这些决策后，此处才会显示已接受和已拒绝的工具决策。"
+    },
+    "developer": {
+      "title": "尚未上报开发者活动",
+      "description": "Claude 管理员 Analytics 数据源上报开发者活动后，才会显示按开发者划分的行。"
+    },
+    "team": {
+      "title": "尚无按团队归属的遥测",
+      "description": "归属需同时满足两个条件：连接器的 resource_labels 允许列表必须包含团队键（默认留空），且机群必须发送该键。"
+    }
+  }
+}

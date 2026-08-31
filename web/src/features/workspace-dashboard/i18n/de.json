@@ -1,0 +1,25 @@
+{
+  "truncation": {
+    "label": "{{n}} Zeilen geladen; es gibt weitere",
+    "hint": "Diese Workspace-Vorschau ist begrenzt. Über Alle anzeigen lässt sich das breitere Inventar prüfen."
+  },
+  "title": "Arbeitsbereich-Übersicht",
+  "selectPrompt": "Wählen Sie einen Arbeitsbereich aus dem Umschalter in der oberen Leiste, um dessen Dashboard anzuzeigen.",
+  "agents": "Agenten",
+  "sessions": "Sitzungen",
+  "resources": "Ressourcen",
+  "groups": "Agentengruppen",
+  "recentAgents": "Agenten im Arbeitsbereich",
+  "recentGroups": "Agentengruppen",
+  "status": "Status",
+  "kind": "Art",
+  "slug": "Slug",
+  "name": "Name",
+  "noAgents": "Noch keine Agenten in diesem Arbeitsbereich.",
+  "noGroups": "Noch keine Agentengruppen in diesem Arbeitsbereich.",
+  "viewAll": "Alle anzeigen",
+  "defaultBadge": "Standard",
+  "workspaceInfo": "Arbeitsbereich-Info",
+  "created": "Erstellt",
+  "lastUpdated": "Zuletzt aktualisiert"
+}

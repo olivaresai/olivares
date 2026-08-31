@@ -1,0 +1,32 @@
+# Gateway API Inference Extension fixture, v1 GA group (inference.networking.k8s.io).
+# Exercises the GA field names: InferencePool with targetPorts[] + endpointPickerRef,
+# and InferenceObjective (the v1 successor that replaces InferenceModel) with priority
+# + poolRef and NO modelName (its identity is metadata.name). Verifies the connector
+# parses a post-migration cluster, not only the v1alpha2 shape.
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: qwen3-pool
+  namespace: serving
+spec:
+  targetPorts:
+    - number: 8000
+  selector:
+    matchLabels:
+      app: qwen3
+  endpointPickerRef:
+    group: ""
+    kind: Service
+    name: qwen3-epp
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferenceObjective
+metadata:
+  name: qwen3-objective
+  namespace: serving
+spec:
+  priority: 2
+  poolRef:
+    group: inference.networking.k8s.io
+    kind: InferencePool
+    name: qwen3-pool

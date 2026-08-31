@@ -1,0 +1,7 @@
+{
+  "name": "billing-agent",
+  "workloadIdentityArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:workload-identity-directory/default/workload-identity/billing-agent",
+  "createdTime": 1749081600,
+  "lastUpdatedTime": 1749168000,
+  "allowedResourceOauth2ReturnUrls": []
+}

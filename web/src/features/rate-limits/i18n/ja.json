@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "{{n}} 件の所見を読み込みました。さらに存在します",
+    "hint": "レート制限の概要は読み込み済みの所見だけから検索されました。表示されない概要が次のページに存在する可能性があります。"
+  },
+  "title": "レート制限",
+  "description": "ゲートウェイまたはプロキシが同期を維持しなければならない、組織スコープおよびワークスペーススコープのレート制限の読み取り専用インベントリです。Anthropic Rate Limits API（読み取り専用）から取得しています。このビューでは制限を変更することはありません。",
+  "caveats": {
+    "keepInSync": "ゲートウェイ／プロキシは同期を維持しなければなりません。これらの制限は、上流のゲートウェイまたはプロキシがミラーしなければならないインベントリです。ここでは強制適用されず、変更はこのコンソールではなくプロバイダー側で行います。",
+    "managedAgents": "Managed Agents は Rate Limits API の対象外です。その制限は文書化されたギャップであり、値がゼロという意味ではありません。API が報告しないため、Managed-Agents の行は表示されません。"
+  },
+  "summary": {
+    "title": "同期ステータス",
+    "description": "読み取り専用のガバナンス取り込みが報告した、ゲートウェイまたはプロキシが同期を維持しなければならないレート制限の数です。"
+  },
+  "count": {
+    "label": "同期を維持すべき制限",
+    "observedAt": "{{at}} に観測",
+    "unknown": "件数は取得できません"
+  },
+  "degraded": {
+    "title": "Admin-API ガバナンス取り込みが利用できません",
+    "hint": "このデプロイ面（例：Bedrock、Vertex、Foundry ゲートウェイ）は Anthropic Admin API を公開していないため、ここではレート制限インベントリを読み取れません。これはインベントリが空なのではなく、正直に利用不可であることを示しています。"
+  },
+  "inventory": {
+    "title": "リミッターごとのインベントリ",
+    "description": "プロバイダーが報告する各リミッターを、スコープごとにグループ化しています。まず組織全体のグループ、次にワークスペースごとの上書きグループです。",
+    "unavailable": "インベントリは利用できません",
+    "unavailableHint": "読み取り専用の Admin コネクターが配線されていないため、ここではリミッターごとのインベントリを読み取れません。これはインベントリが空なのではなく、正直に利用不可であることを示しています。",
+    "tableLabel": "レート制限インベントリ",
+    "empty": "レート制限の報告はありません",
+    "emptyHint": "プロバイダーはこの組織について、リミッターごとのエントリを返しませんでした。",
+    "scope": {
+      "org": "組織"
+    },
+    "columns": {
+      "scope": "スコープ",
+      "groupType": "グループ",
+      "models": "モデル",
+      "limiterType": "リミッター",
+      "value": "値",
+      "orgLimit": "組織の制限"
+    }
+  },
+  "groupType": {
+    "model_group": "モデルグループ",
+    "batch": "バッチ",
+    "token_count": "トークン数",
+    "files": "ファイル",
+    "skills": "スキル",
+    "web_search": "Web 検索"
+  },
+  "limitType": {
+    "requests_per_minute": "分あたりのリクエスト数",
+    "input_tokens_per_minute": "分あたりの入力トークン数",
+    "output_tokens_per_minute": "分あたりの出力トークン数",
+    "enqueued_batch_requests": "キュー内のバッチリクエスト数"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "レート制限はまだ報告されていません",
+      "description": "読み取り専用の Anthropic Rate Limits API がこの組織のリミッターごとの制限を返すと、エントリが表示されます。"
+    }
+  },
+  "effectiveState": {
+    "label": "ここで変更できるもの:",
+    "proxy": "推論プロキシ",
+    "finops": "支出"
+  }
+}

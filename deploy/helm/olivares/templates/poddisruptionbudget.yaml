@@ -1,0 +1,23 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+*/ -}}
+{{- if and .Values.core.enabled .Values.core.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "olivares.core.fullname" . }}
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  {{- if .Values.core.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.core.podDisruptionBudget.maxUnavailable }}
+  {{- else }}
+  minAvailable: {{ .Values.core.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "olivares.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+{{- end }}

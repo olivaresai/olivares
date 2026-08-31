@@ -1,0 +1,28 @@
+{
+  "events": [
+    {
+      "eventId": "evt_001",
+      "eventTime": "2026-06-18T10:30:00Z",
+      "description": "API key created",
+      "user": {
+        "userId": "user_alice",
+        "email": "alice@example.com",
+        "givenName": "Alice",
+        "familyName": "Smith"
+      }
+    },
+    {
+      "eventId": "evt_002",
+      "eventTime": "2026-06-19T14:00:00Z",
+      "description": "Team member added",
+      "user": {
+        "userId": "user_bob",
+        "email": "bob@example.com",
+        "givenName": "Bob",
+        "familyName": "Jones"
+      }
+    }
+  ],
+  "has_more": false,
+  "cursor": ""
+}

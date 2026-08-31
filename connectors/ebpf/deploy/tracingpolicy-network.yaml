@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+#
+# Tetragon TracingPolicy: outbound TCP connect (network endpoint backstop).
+#
+# Hooks tcp_connect(struct sock *) and forwards the socket so the Olivares eBPF
+# connector can record the destination 5-tuple as a net.endpoint edge. The
+# connector reads the sock_arg (daddr/dport) from the resulting process_kprobe
+# event (see connectors/ebpf/network.go). It is BLIND TO THE TLS BODY: only the
+# 5-tuple is captured here; no payload is read.
+#
+# SNI: Tetragon has no first-class SNI field. To enrich the endpoint with the
+# cleartext ClientHello hostname, an operator may add a separate policy/uprobe that
+# emits the SNI as a string_arg; the connector picks up the first string_arg on the
+# event if present (see deploy/README.md "SNI"). Without it, the endpoint is
+# the destination IP:port — still correct, just less readable.
+#
+# Validate against your kernel before rolling out. Minimum Tetragon: v1.0.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: olivares-network-connect
+spec:
+  kprobes:
+    - call: "tcp_connect"
+      syscall: false
+      return: false
+      args:
+        - index: 0
+          type: "sock"
+      selectors:
+        - matchActions:
+            - action: Post

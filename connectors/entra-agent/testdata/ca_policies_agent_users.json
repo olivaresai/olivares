@@ -1,0 +1,20 @@
+{
+  "value": [
+    {
+      "id": "ca-agent-users",
+      "displayName": "Block all agent users from accessing resources",
+      "state": "enabled",
+      "conditions": {
+        "users": {
+          "includeUsers": ["AllAgentIdUsers"]
+        },
+        "clientApplications": {
+          "includeAgentIdServicePrincipals": [],
+          "excludeAgentIdServicePrincipals": [],
+          "agentIdServicePrincipalFilter": null
+        },
+        "agentIdRiskLevels": []
+      }
+    }
+  ]
+}

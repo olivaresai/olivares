@@ -1,0 +1,20 @@
+[
+  {
+    "id": "00u1alice",
+    "status": "ACTIVE",
+    "profile": {
+      "login": "alice@corp.example",
+      "email": "alice@corp.example",
+      "displayName": "Alice Smith"
+    }
+  },
+  {
+    "id": "00u2bob",
+    "status": "SUSPENDED",
+    "profile": {
+      "login": "bob@corp.example",
+      "email": "bob@corp.example",
+      "displayName": "Bob Jones"
+    }
+  }
+]

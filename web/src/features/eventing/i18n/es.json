@@ -1,0 +1,263 @@
+{
+  "title": "Webhooks y suscripciones de eventos",
+  "description": "Suscripciones de eventos salientes — configura endpoints webhook, inspecciona eventos entregados y gestiona la cola de mensajes muertos.",
+  "tabs": {
+    "subscriptions": "Suscripciones",
+    "events": "Eventos",
+    "deliveries": "Entregas",
+    "deadLetters": "Mensajes muertos"
+  },
+  "subscriptions": {
+    "title": "Suscripciones webhook",
+    "description": "Endpoints que reciben notificaciones de eventos. Cada suscripción filtra por tipo de evento y se autentica con el método configurado.",
+    "new": "Nueva suscripción",
+    "empty": "Sin suscripciones",
+    "emptyHint": "Crea una suscripción para empezar a recibir eventos webhook.",
+    "columns": {
+      "name": "Nombre",
+      "endpoint": "Endpoint",
+      "enabled": "Estado",
+      "eventTypes": "Tipos de evento",
+      "authType": "Auth",
+      "role": "Rol",
+      "secret": "Secreto",
+      "created": "Creado"
+    },
+    "enabled": "Activa",
+    "disabled": "Inactiva",
+    "bulk": {
+      "enable": "Activar las seleccionadas",
+      "disable": "Desactivar las seleccionadas"
+    },
+    "test": "Probar",
+    "testing": "Probando…",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "rotateSecret": "Rotar secreto",
+    "rotateAuth": "Rotar auth",
+    "testSuccess": "Prueba de entrega exitosa",
+    "testFailed": "Prueba de entrega fallida",
+    "deleted": "Suscripción eliminada",
+    "rotated": "Secreto rotado",
+    "authRotated": "Credencial de auth rotada",
+    "confirmDelete": "¿Eliminar esta suscripción? No se puede deshacer.",
+    "authTypes": {
+      "none": "Ninguno",
+      "bearer": "Bearer",
+      "basic": "Basic",
+      "header": "Header"
+    },
+    "actions": "Acciones para {{name}}",
+    "replay": "Repetir"
+  },
+  "dialog": {
+    "createTitle": "Nueva suscripción",
+    "editTitle": "Editar suscripción",
+    "description": "Descripción",
+    "name": "Nombre",
+    "endpoint": "URL del endpoint",
+    "eventTypes": "Tipos de evento",
+    "eventTypesHint": "Selecciona los tipos de evento que recibe esta suscripción.",
+    "matchSources": "Filtro de fuentes",
+    "matchSourcesHint": "Fuentes separadas por comas (vacío = todas).",
+    "role": "Rol",
+    "authType": "Tipo de auth",
+    "authValue": "Valor de auth",
+    "authValueHint": "Token bearer, credenciales basic o valor de header.",
+    "authHeaderName": "Nombre del header de auth",
+    "authHeaderNameHint": "Nombre de header personalizado (solo para tipo 'header').",
+    "maxAttempts": "Intentos máximos",
+    "maxAttemptsHint": "0 = usar valor por defecto del servidor.",
+    "initialInterval": "Intervalo inicial (s)",
+    "initialIntervalHint": "Semilla de backoff de reintento en segundos. 0 = defecto.",
+    "enabled": "Activa",
+    "create": "Crear suscripción",
+    "update": "Guardar cambios",
+    "created": "Suscripción creada",
+    "updated": "Suscripción actualizada",
+    "sinkKind": "Sink SIEM",
+    "sinkKindHint": "Perfil de sink de proveedor opcional. Ninguno = webhook HMAC genérico.",
+    "sinkNone": "Ninguno (webhook genérico)",
+    "sinkKinds": {
+      "https": "HTTPS (OCSF)",
+      "splunk_hec": "Splunk HEC",
+      "sentinel_dcr": "Microsoft Sentinel",
+      "datadog": "Datadog",
+      "newrelic": "New Relic"
+    },
+    "sinkFormat": "Formato del sink",
+    "sinkFormatHint": "Dialecto de transmisión del sink. Por defecto = OCSF.",
+    "sinkFormatDefault": "Por defecto (OCSF)",
+    "sinkCred": "Credencial del sink",
+    "sinkCredHint": "Token/clave del colector para este sink — sellada en reposo, no vuelve a mostrarse.",
+    "sinkCredKeepHint": "Déjalo vacío para conservar la credencial actual ({{hint}}).",
+    "sinkCredRequired": "Este sink requiere una credencial.",
+    "errors": {
+      "maxAttempts": "Los intentos máximos deben ser 0 o estar entre 1 y 20.",
+      "initialInterval": "El intervalo inicial debe ser 0 o estar entre 5 y 3600 segundos."
+    }
+  },
+  "secret": {
+    "title": "Secreto de suscripción",
+    "description": "Este secreto HMAC de firma se muestra solo una vez. Cópialo ahora — no se puede recuperar después.",
+    "copied": "Secreto copiado al portapapeles",
+    "done": "Hecho"
+  },
+  "events": {
+    "title": "Eventos capturados",
+    "description": "Registro de eventos con cursor de secuencia. Filtra por tipo de evento para acotar resultados.",
+    "empty": "Sin eventos capturados",
+    "typeFilter": "Filtrar por tipo",
+    "allTypes": "Todos los tipos",
+    "columns": {
+      "seq": "Seq",
+      "type": "Tipo",
+      "source": "Fuente",
+      "occurredAt": "Ocurrió",
+      "payload": "Payload"
+    },
+    "loadMore": "Cargar más",
+    "noMore": "Sin más eventos"
+  },
+  "deliveries": {
+    "title": "Entregas",
+    "description": "Estado de entrega de despachos de eventos webhook. Filtra por suscripción, estado o tipo de evento.",
+    "empty": "Sin entregas",
+    "subscriptionFilter": "Suscripción",
+    "statusFilter": "Estado",
+    "typeFilter": "Tipo de evento",
+    "allSubscriptions": "Todas",
+    "allStatuses": "Todos",
+    "allTypes": "Todos",
+    "columns": {
+      "eventType": "Tipo de evento",
+      "eventSeq": "Seq",
+      "subscription": "Suscripción",
+      "status": "Estado",
+      "origin": "Origen",
+      "attempts": "Intentos",
+      "lastAttempt": "Último intento",
+      "nextAttempt": "Próximo intento"
+    },
+    "statuses": {
+      "queued": "En cola",
+      "delivering": "Entregando",
+      "delivered": "Entregado",
+      "dead": "Muerto",
+      "denied": "Denegado"
+    },
+    "origins": {
+      "live": "En vivo",
+      "replay": "Replay"
+    },
+    "loadMore": "Cargar más",
+    "originFilter": "Origen",
+    "allOrigins": "Todos los orígenes",
+    "nextRetry": "Próximo reintento {{time}}"
+  },
+  "deadLetters": {
+    "title": "Cola de mensajes muertos",
+    "description": "Entregas fallidas que agotaron todos los intentos de reintento. Reentrega elementos individuales o investiga la causa.",
+    "empty": "Sin mensajes muertos",
+    "emptyHint": "Los mensajes muertos aparecen aquí cuando las entregas agotan todos los reintentos.",
+    "redeliver": "Reentregar",
+    "redelivered": "Entrega reencolada",
+    "loadMore": "Cargar más"
+  },
+  "rotateAuthDialog": {
+    "title": "Rotar credencial de autenticación — {{name}}",
+    "description": "Introduce la nueva credencial para este endpoint. Se sella en reposo y no vuelve a mostrarse; la tarjeta solo muestra una huella.",
+    "value": "Nueva credencial",
+    "valueHint": "Token bearer, credenciales basic o valor de cabecera — se envía una vez y nunca se devuelve.",
+    "submit": "Rotar credencial"
+  },
+  "replay": {
+    "title": "Repetir eventos — {{name}}",
+    "description": "Elige el intervalo de secuencias de eventos que se volverá a encolar.",
+    "fromSeq": "Desde la secuencia",
+    "toSeq": "Hasta la secuencia (opcional)",
+    "submit": "Repetir",
+    "continue": "Continuar repetición",
+    "total": "Total repetido: {{count}}",
+    "viewDeliveries": "Ver entregas repetidas",
+    "completed": "Se han repetido {{count}} eventos"
+  },
+  "history": {
+    "action": "Ver el historial de revisiones de {{name}}",
+    "title": "Historial de revisiones — {{name}}",
+    "description": "Instantáneas cronológicas de esta suscripción en un registro de solo anexión.",
+    "scopeCaption": "La restauración vuelve a aplicar solo la configuración de entrega; nunca las credenciales ni el perfil de destino.",
+    "empty": "No hay revisiones registradas",
+    "loadMore": "Cargar más",
+    "compareTitle": "Diferencias entre instantáneas",
+    "selectTwo": "Selecciona dos revisiones para comparar sus instantáneas.",
+    "selectRevision": "Seleccionar la revisión {{op}} de {{actor}}",
+    "originalLabel": "Revisión anterior",
+    "modifiedLabel": "Revisión posterior",
+    "restore": "Restaurar esta revisión",
+    "restoreTitle": "¿Restaurar la revisión?",
+    "restoreDescription": "¿Restaurar la configuración de entrega seleccionada de {{name}}?",
+    "restoreConfirm": "Restaurar revisión",
+    "restored": "Revisión de la suscripción restaurada",
+    "operations": {
+      "create": "Creada",
+      "update": "Actualizada",
+      "delete": "Eliminada",
+      "restore": "Restaurada"
+    }
+  },
+  "egress": {
+    "title": "Política de destinos",
+    "description": "Si este despliegue restringe adónde puede enviarse tu flujo de eventos, y qué rompería aplicarla. La palanca es una ceremonia de operador en el host; esto es el estado sobre el que actúa.",
+    "unknown": "Se desconoce",
+    "unreadable": "No se ha podido leer el estado de la política.",
+    "unreadablePolicy": "No legible",
+    "inForce": "Política en vigor",
+    "inForceYes": "Sí",
+    "inForceNo": "Ninguna escrita",
+    "source": "Origen",
+    "mode": "Modo del despliegue",
+    "classifiedMode": "Clasificado como",
+    "committed": "Aplicación comprometida",
+    "committedYes": "Comprometida",
+    "committedNo": "Sin comprometer",
+    "fence": {
+      "title": "Barrera de escritura",
+      "armed": "Armada",
+      "armedYes": "Armada",
+      "armedNo": "Inactiva",
+      "mode": "Modo",
+      "required": "Capacidad exigida",
+      "binary": "Este binario",
+      "generation": "Generación"
+    },
+    "compat": {
+      "title": "Compatibilidad",
+      "seeded": "Registro",
+      "drawn": "Trazado",
+      "notDrawn": "Sin trazar",
+      "recorded": "Destinos registrados",
+      "stillNeeded": "Dejarían de funcionar",
+      "unparsable": "No interpretables",
+      "notIntact": "El registro de compatibilidad ya no está íntegro: parece completo y describe un conjunto que ha perdido miembros. No planifiques una actuación contra él.",
+      "notServed": "No se sirve con tu nivel de permiso.",
+      "notProvided": "No viene en esta respuesta."
+    },
+    "report": {
+      "title": "Qué rompería aplicarla",
+      "description": "Los destinos que este tenant conserva sólo porque el despliegue es anterior al control.",
+      "unreadable": "No se ha podido leer el informe de compatibilidad.",
+      "notSeeded": "El registro de compatibilidad nunca se trazó, así que este informe no describe nada.",
+      "subscriptions": "Suscripciones al trazar",
+      "unparsed": "Destinos no interpretables",
+      "seededAt": "Trazado el",
+      "noAuthorities": "Ningún destino heredado.",
+      "authority": "Destino",
+      "kind": "Tipo",
+      "uses": "Suscripciones",
+      "effect": "Al aplicar",
+      "survives": "Sobrevive",
+      "breaks": "Deja de funcionar"
+    }
+  }
+}

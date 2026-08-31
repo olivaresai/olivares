@@ -1,0 +1,17 @@
+{
+  "name": "projects/test-proj/locations/global/floorSetting",
+  "enableFloorSettingEnforcement": false,
+  "integratedServices": ["AI_PLATFORM"],
+  "aiPlatformFloorSetting": {
+    "enableCloudLogging": true,
+    "inspectAndBlock": true
+  },
+  "filterConfig": {
+    "raiSettings": {
+      "raiFilters": [
+        { "filterType": "HATE_SPEECH", "confidenceLevel": "LOW_AND_ABOVE" }
+      ]
+    },
+    "piAndJailbreakFilterSettings": { "filterEnforcement": "ENABLED" }
+  }
+}

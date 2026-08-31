@@ -1,0 +1,16 @@
+{
+  "results": [
+    {
+      "id": "12345",
+      "type": "page",
+      "title": "Service Restart Runbook",
+      "space": {"key": "ENG", "name": "Engineering"},
+      "body": {"storage": {"value": "<p>Restart the service with systemctl restart api.</p>", "representation": "storage"}},
+      "version": {"when": "2026-04-20T08:30:00Z"},
+      "restrictions": {
+        "read": {"restrictions": {"group": {"results": [{"name": "engineering"}, {"name": "sre"}]}}}
+      },
+      "metadata": {"labels": {"results": [{"name": "internal"}]}}
+    }
+  ]
+}

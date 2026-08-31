@@ -1,0 +1,230 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Olivares control-plane SLO recording + multiwindow/multi-burn-rate alert rules
+# (REL-1, docs/17). Wired to the engine's real /metrics series — verify the
+# names against core/api/metrics.go before editing.
+#
+# Packaged as a prometheus-operator PrometheusRule (the chart already ships a
+# ServiceMonitor, so the operator is the expected scrape path). For a NON-operator
+# Prometheus, lift the `spec.groups:` block verbatim into a file referenced by
+# `rule_files:` in prometheus.yml (the group/record/alert syntax is identical).
+#
+# Burn-rate method: Google SRE Workbook "Alerting on SLOs" (Table 5-8). An alert
+# fires only when BOTH a long and a short window exceed the burn threshold, so it
+# reacts fast and resets fast. Burn rate r = errors consumed / errors the SLO
+# budgets; r sustained over a window consumes r * window/period of the budget.
+#
+# TIER NOTE: thresholds below are written for a 99.9% objective (error budget
+# = 0.001). The control plane's published single-node tier is 99.5% (budget
+# = 0.005, docs/17 §2) — for that tier, multiply every burn-rate RHS that is
+# expressed against the budget (the request-success alerts) by 5. The latency and
+# store-down alerts are absolute and apply to both tiers.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: olivares-control-plane-slo
+  labels:
+    app.kubernetes.io/part-of: olivares
+    role: slo-alerts
+spec:
+  groups:
+    # ---- Recording rules: request-success error ratio at each window ----------
+    - name: olivares.slo.request_success.recording
+      interval: 30s
+      rules:
+        - record: olivares:http_error_ratio:ratio_rate5m
+          expr: |
+            sum(rate(olivares_http_requests_total{code=~"5.."}[5m]))
+              / clamp_min(sum(rate(olivares_http_requests_total[5m])), 1)
+        - record: olivares:http_error_ratio:ratio_rate30m
+          expr: |
+            sum(rate(olivares_http_requests_total{code=~"5.."}[30m]))
+              / clamp_min(sum(rate(olivares_http_requests_total[30m])), 1)
+        - record: olivares:http_error_ratio:ratio_rate1h
+          expr: |
+            sum(rate(olivares_http_requests_total{code=~"5.."}[1h]))
+              / clamp_min(sum(rate(olivares_http_requests_total[1h])), 1)
+        - record: olivares:http_error_ratio:ratio_rate6h
+          expr: |
+            sum(rate(olivares_http_requests_total{code=~"5.."}[6h]))
+              / clamp_min(sum(rate(olivares_http_requests_total[6h])), 1)
+        - record: olivares:http_error_ratio:ratio_rate3d
+          expr: |
+            sum(rate(olivares_http_requests_total{code=~"5.."}[3d]))
+              / clamp_min(sum(rate(olivares_http_requests_total[3d])), 1)
+        # Ingest p99 latency (the ingest SLI; rises under backpressure) and the
+        # ingest success ratio (accepted / (accepted + rejected)).
+        - record: olivares:ingest_latency:p99_5m
+          expr: histogram_quantile(0.99, sum by (le) (rate(olivares_ingest_duration_seconds_bucket[5m])))
+        - record: olivares:ingest_success:ratio_rate5m
+          expr: |
+            sum(rate(olivares_ingest_observations_total[5m]))
+              / clamp_min(sum(rate(olivares_ingest_observations_total[5m])) + sum(rate(olivares_ingest_rejected_total[5m])), 1)
+        #the inbound rate-limit SLI the contract defines — the share
+        # of metered requests actually limited. Deliberately NOT the 429 ratio
+        # of http_requests_total (that conflates login lockout + FinOps +).
+        - record: olivares:ratelimit_limited:ratio_rate5m
+          expr: |
+            sum(rate(olivares_http_ratelimit_decisions_total{decision="limited"}[5m]))
+              / clamp_min(sum(rate(olivares_http_ratelimit_decisions_total[5m])), 1)
+        #gRPC per-RPC error ratio (every non-OK code; ResourceExhausted is
+        # rate limiting and rides the SLI above too).
+        - record: olivares:grpc_error_ratio:ratio_rate5m
+          expr: |
+            sum(rate(olivares_grpc_requests_total{code!="OK"}[5m]))
+              / clamp_min(sum(rate(olivares_grpc_requests_total[5m])), 1)
+
+    # ---- Burn-rate alerts: request-success SLO (budget = 0.001 @ 99.9%) --------
+    - name: olivares.slo.request_success.alerts
+      rules:
+        - alert: OlivaresErrorBudgetBurnFast
+          # 14.4x burn over 1h (and confirmed over 5m) = 2% of budget in an hour.
+          expr: |
+            olivares:http_error_ratio:ratio_rate1h > (14.4 * 0.001)
+              and olivares:http_error_ratio:ratio_rate5m > (14.4 * 0.001)
+          for: 2m
+          labels: { severity: page, slo: request_success }
+          annotations:
+            summary: "Control-plane error budget burning fast (14.4x)"
+            description: "5xx ratio is burning the 99.9% budget 14.4x faster than allowed (1h & 5m windows). See docs/17-PRODUCTION-READINESS-SLO.md §4 and docs/STATUS-AND-INCIDENT-COMMS.md §2."
+        - alert: OlivaresErrorBudgetBurnMedium
+          # 6x burn over 6h (and confirmed over 30m) = 5% of budget in 6h.
+          expr: |
+            olivares:http_error_ratio:ratio_rate6h > (6 * 0.001)
+              and olivares:http_error_ratio:ratio_rate30m > (6 * 0.001)
+          for: 5m
+          labels: { severity: page, slo: request_success }
+          annotations:
+            summary: "Control-plane error budget burning (6x)"
+            description: "5xx ratio is burning the 99.9% budget 6x faster than allowed (6h & 30m windows). See docs/17-PRODUCTION-READINESS-SLO.md §4 and docs/STATUS-AND-INCIDENT-COMMS.md §2."
+        - alert: OlivaresErrorBudgetBurnSlow
+          # 1x burn over 3d (and confirmed over 6h) = 10% of budget in 3 days -> ticket.
+          expr: |
+            olivares:http_error_ratio:ratio_rate3d > (1 * 0.001)
+              and olivares:http_error_ratio:ratio_rate6h > (1 * 0.001)
+          for: 1h
+          labels: { severity: ticket, slo: request_success }
+          annotations:
+            summary: "Control-plane error budget slow burn (1x)"
+            description: "5xx ratio is on track to exhaust 10% of the 99.9% budget over 3 days."
+
+    # ---- Latency, ingest & availability alerts (absolute; both tiers) ---------
+    - name: olivares.slo.latency_and_availability.alerts
+      rules:
+        - alert: OlivaresIngestP99High
+          expr: olivares:ingest_latency:p99_5m > 0.25
+          for: 10m
+          labels: { severity: page, slo: ingest_latency }
+          annotations:
+            summary: "Ingest p99 over the 250ms SLO"
+            description: "ingest p99 = {{ $value | humanizeDuration }} (> 250ms) for 10m. Usually downstream backpressure — see deploy/runbooks/collector-backpressure.md."
+        - alert: OlivaresIngestSuccessLow
+          expr: olivares:ingest_success:ratio_rate5m < 0.999
+          for: 10m
+          labels: { severity: ticket, slo: ingest_success }
+          annotations:
+            summary: "Ingest success ratio below 99.9%"
+            description: "Observations are being rejected after authorization (decode/publish). Check collector payloads and core logs."
+        - alert: OlivaresApiLatencyP99High
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(olivares_http_request_duration_seconds_bucket[5m]))) > 0.3
+          for: 10m
+          labels: { severity: ticket, slo: api_latency }
+          annotations:
+            summary: "API p99 over the 300ms SLO"
+            description: "Per-method p99 = {{ $value | humanizeDuration }} (> 300ms) for 10m. Note: method-level, mixes routes (docs/17 §1.3)."
+        - alert: OlivaresStoreDown
+          expr: olivares_store_up == 0
+          for: 1m
+          labels: { severity: page, slo: availability }
+          annotations:
+            summary: "Control-plane store unreachable"
+            description: "olivares_store_up == 0: the store failed its ping; /readyz is returning 503 and the LB is draining this instance. See deploy/runbooks/failover.md."
+        - alert: OlivaresControlPlaneUnscrapeable
+          # The engine can't report its own total outage; absent() catches it.
+          # Pair with an EXTERNAL blackbox probe of /readyz (status page) for the
+          # authoritative availability SLI (docs/17 §1.1).
+          expr: absent(olivares_store_up)
+          for: 2m
+          labels: { severity: page, slo: availability }
+          annotations:
+            summary: "Control-plane /metrics absent (engine down or unscrapeable)"
+            description: "No olivares_store_up series for 2m — the engine is down or unreachable. Confirm with the external /readyz probe; see deploy/runbooks/failover.md."
+
+    # ---- saturation & ledger-health alerts (the docs/17 §5 SLIs) ---------
+    - name: olivares.slo.saturation_and_ledger.alerts
+      rules:
+        - alert: OlivaresEventBusSaturated
+          # A subscriber queue sustained at >90% of its capacity precedes
+          # publisher backpressure (in-proc) — ticket before ingest latency pages.
+          expr: |
+            max by (subscriber) (olivares_eventbus_queue_depth)
+              / clamp_min(max by (subscriber) (olivares_eventbus_queue_capacity), 1) > 0.9
+          for: 10m
+          labels: { severity: ticket, slo: bus_saturation }
+          annotations:
+            summary: "Event-bus subscriber queue near capacity"
+            description: "Subscriber {{ $labels.subscriber }} is sustained >90% queue depth; its handler is the bottleneck. In-proc this becomes publisher backpressure (rising ingest p99); see deploy/runbooks/collector-backpressure.md."
+        - alert: OlivaresEventBusBridgeDropping
+          # Cross-node delivery is at-most-once; drops are COUNTED, never silent.
+          # Any sustained increase means remote events are being lost.
+          expr: increase(olivares_eventbus_bridge_dropped_total[10m]) > 0
+          for: 0m
+          labels: { severity: ticket, slo: bus_delivery }
+          annotations:
+            summary: "NATS bridge dropping remote events (slow consumer)"
+            description: "The bridge subscription overflowed its pending buffer and dropped remote-origin events (at-most-once loss, counted). A local subscriber is too slow or the node is overloaded. See deploy/runbooks/collector-backpressure.md#nats-bridge-caveat."
+        - alert: OlivaresEventBusBridgeDisconnected
+          # A typo'd-but-well-formed NATS URL passes boot validation (the client
+          # retries forever); this alert is the net that catches a bridge that
+          # never connects — without it the bus runs partitioned silently.
+          expr: olivares_eventbus_bridge_connected == 0
+          for: 5m
+          labels: { severity: page, slo: bus_delivery }
+          annotations:
+            summary: "NATS bridge disconnected — cross-node event delivery suspended"
+            description: "The distributed-bus bridge has no NATS connection for 5m; nodes are operating with node-local buses only (standby-origin observations are not reaching the leader). See deploy/runbooks/collector-backpressure.md#nats-bridge-caveat."
+        - alert: OlivaresDurableBusDisconnected
+          expr: olivares_durablebus_connected == 0
+          for: 5m
+          labels: { severity: page, slo: bus_delivery }
+          annotations:
+            summary: "Durable JetStream bus disconnected"
+            description: "The durable bus plane has no JetStream connection for 5m; durable publish and consume are suspended. See docs/17-PRODUCTION-READINESS-SLO.md §5."
+        - alert: OlivaresDurableBusPublishErrors
+          expr: increase(olivares_durablebus_publish_errors_total[10m]) > 0
+          for: 0m
+          labels: { severity: ticket, slo: bus_delivery }
+          annotations:
+            summary: "Durable JetStream publishes are failing"
+            description: "One or more durable publishes failed during the last 10m and were not durably stored; the failure was surfaced to the caller."
+        - alert: OlivaresAuditCheckpointStale
+          # The leader checkpoints every --checkpoint-interval (default 1h);
+          # 2x the default interval without a fresh anchor is alertable. The
+          # gauge is emitted ONLY by the active leader after its first
+          # checkpoint, so a standby never false-pages (absence on a brand-new
+          # leader for up to one interval is expected and not alerted here).
+          expr: olivares_audit_checkpoint_age_seconds > 7200
+          for: 5m
+          labels: { severity: ticket, slo: ledger_health }
+          annotations:
+            summary: "Audit checkpoint anchor is stale"
+            description: "The leader has not written a signed audit checkpoint for {{ $value | humanizeDuration }} (default cadence 1h). Tamper-evidence is degrading; see deploy/runbooks/ledger-verify-failure.md."
+        - alert: OlivaresAuditCheckpointFailing
+          expr: increase(olivares_audit_checkpoint_failures_total[3h]) > 1
+          for: 0m
+          labels: { severity: page, slo: ledger_health }
+          annotations:
+            summary: "Audit checkpoint runs are failing"
+            description: "CheckpointAll failed repeatedly (signer/KMS or store error) — the previously slog-only signal, now alertable. See deploy/runbooks/ledger-verify-failure.md."
+        - alert: OlivaresRateLimitStoreDegraded
+          # The shared bucket store (HA) is unreachable: enforcement degraded to
+          # per-node (bounded — quotas multiply by replica count, never
+          # unlimited). Emitted only when a shared store is configured.
+          expr: olivares_http_ratelimit_store_up == 0
+          for: 5m
+          labels: { severity: ticket, slo: ratelimit }
+          annotations:
+            summary: "Rate-limit shared store degraded to per-node enforcement"
+            description: "The limiter's circuit breaker is open: takes are served by node-local buckets (quotas are per-node until Postgres recovers). Fallback volume: olivares_http_ratelimit_store_fallback_total."

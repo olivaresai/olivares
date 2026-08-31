@@ -1,0 +1,20 @@
+{
+  "value": [
+    {
+      "@odata.type": "#microsoft.graph.user",
+      "id": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "@odata.type": "#microsoft.graph.servicePrincipal",
+      "id": "33333333-3333-3333-3333-333333333333"
+    },
+    {
+      "@odata.type": "#microsoft.graph.group",
+      "id": "88888888-8888-8888-8888-888888888888"
+    },
+    {
+      "@odata.type": "#microsoft.graph.device",
+      "id": "77777777-7777-7777-7777-777777777777"
+    }
+  ]
+}

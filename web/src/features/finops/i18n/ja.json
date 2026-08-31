@@ -1,0 +1,457 @@
+{
+  "alerts": {
+    "title": "しきい値アラート",
+    "description": "予算しきい値の超過履歴。Slack／SIEMへの配信は出力コネクターが処理します — ここはその記録です。",
+    "empty": "超過したアラートはありません",
+    "columns": {
+      "triggeredAt": "発生日時",
+      "budget": "予算",
+      "threshold": "しきい値",
+      "spend": "支出／上限",
+      "severity": "重大度"
+    },
+    "truncated": "{{n}} 件のアラートを読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くの予算アラートがあります。このページは ID 順に行を取得します。ここにアラートがないことは、しきい値を超えていないことを示しません。"
+  },
+  "allocation": {
+    "title": "マルチエージェント按分",
+    "description": "エージェントがアクセスしたリソースにまたがるコスト按分を、アクセスグラフ上で示します。",
+    "method": "手法",
+    "resolved": "解決済み",
+    "unresolved": "未解決",
+    "resourceCount_other": "{{count}} 件のリソース",
+    "sharedCount_other": "{{count}} 件の共有",
+    "empty": "この期間にエージェントに帰属するコストはありません。",
+    "confidence": {
+      "attributed": "帰属済み",
+      "approximate": "近似"
+    },
+    "columns": {
+      "agent": "エージェント",
+      "cost": "コスト",
+      "resolved": "グラフ",
+      "confidence": "信頼度",
+      "resources": "リソース"
+    }
+  },
+  "breakdown": {
+    "title": "支出の内訳",
+    "description": "コストの行き先をランク付けして表示します。",
+    "byModel": "モデル別",
+    "byProvider": "プロバイダー別",
+    "byAgent": "エージェント別",
+    "share": "支出の割合",
+    "noAgentAttribution": "エージェント単位の按分は、コネクターがコストをセッションに帰属させた時点で表示されます。モデルとプロバイダーは常に表示されます。",
+    "columns": {
+      "key": "名称",
+      "cost": "コスト",
+      "inputTokens": "入力",
+      "outputTokens": "出力",
+      "samples": "記録"
+    }
+  },
+  "budgets": {
+    "title": "予算",
+    "description": "各上限に対する消費を、ランレート予測とともに表示します。予約済みキャパシティは上限にカウントされます。",
+    "new": "新規予算",
+    "empty": "予算はまだありません",
+    "emptyHint": "ディメンションごとに支出上限を設定すると、消費を追跡し、しきい値アラートを受け取れます。",
+    "limit": "上限",
+    "spent": "支出済み",
+    "remaining": "残り",
+    "period": "期間",
+    "over": "上限超過",
+    "onTrackToExceed": "超過する見込み",
+    "disabled": "無効",
+    "global": "グローバル",
+    "reservedHint": "上限にカウントされる予約済みキャパシティ {{amount}} を含みます。",
+    "actions": {
+      "alert": "アラート",
+      "throttle": "スロットル",
+      "block": "ブロック"
+    },
+    "dialog": {
+      "title": "新規予算",
+      "name": "名称",
+      "dimension": "ディメンション",
+      "key": "ディメンションキー",
+      "keyHint": "ディメンションがグローバルでない限り必須です（例：モデル名やチーム名）。",
+      "limitUsd": "上限（USD）",
+      "reservedUsd": "予約済み（USD）",
+      "reservedHint": "上限にカウントされる任意のコミット済みキャパシティ（会計上の項目であり、課金ではありません）。",
+      "action": "アクション",
+      "actionHint": "アラートはショーバックのみです。スロットル／ブロックは、作動シームが強制できるハードキャップのシグナルを発します。",
+      "period": "期間",
+      "create": "予算を作成",
+      "created": "予算を作成しました",
+      "editTitle": "予算を編集",
+      "save": "予算を保存",
+      "saved": "予算を更新しました"
+    },
+    "editAction": "{{name}} を編集",
+    "deleteAction": "{{name}} を削除",
+    "deleteDialog": {
+      "title": "予算を削除しますか？",
+      "description": "予算「{{name}}」としきい値アラートを完全に削除します。この操作は元に戻せません。",
+      "confirm": "予算を削除",
+      "deleted": "予算を削除しました"
+    },
+    "truncated": "{{n}} 件の予算を読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くの予算があります。このページは ID 順に行を取得します。ここに上限が表示されていないことは、支出に上限がないことを示しません。単にこのページの範囲外である可能性があります。"
+  },
+  "cache": {
+    "title": "プロンプトキャッシュ効率",
+    "description": "キャッシュ読み取りと作成のトークン、および実現した節約 — Claudeの主要なコスト要因です。",
+    "hitRate": "キャッシュヒット率",
+    "hitRateCaption": "全入力トークンに占めるキャッシュ読み取りの割合",
+    "savings": "実現した節約",
+    "savingsCaption": "キャッシュ読み取りによる、モデル別の価格に基づく値",
+    "uncached": "未キャッシュ入力",
+    "read": "キャッシュ読み取り",
+    "create1h": "キャッシュ作成（1h）",
+    "create5m": "キャッシュ作成（5m）",
+    "chartTitle": "入力トークンのティア",
+    "chartSummary": "キャッシュ読み取りトークン {{read}} に対し未キャッシュ入力 {{uncached}} — ヒット率 {{rate}}。",
+    "empty": "キャッシュされた入力は観測されていません",
+    "columns": {
+      "tier": "ティア",
+      "tokens": "トークン"
+    },
+    "note": "節約額は、各モデルの基本入力レートのうち節約された割合でキャッシュ読み取りトークンを評価したものです。価格未設定のモデルは寄与しません。節約額がゼロであることは正直な結果であり、エラーではありません。"
+  },
+  "chargeback": {
+    "title": "ディメンション別チャージバック",
+    "description": "read-modelが保持する任意の帰属ディメンションで支出を切り分けます。",
+    "dimensionLabel": "ディメンション",
+    "chartTitle": "{{dimension}}別の支出",
+    "chartSummary": "{{dimension}}別の支出。最上位は {{top}}。期間全体で {{total}}。",
+    "empty": "この期間に {{dimension}} の支出は記録されていません。",
+    "costTypeBilledOnly": "コストタイプは請求済みのみの内訳です（cost_reportサーバーツールの分類）。デフォルトの支出ストリームは推定値であるため、このディメンションはここでは通常空になります — 実際の詳細は突合とFOCUSエクスポートから得られます。",
+    "costTypeEmpty": "推定ストリームにはコストタイプの詳細がありません。コストタイプは請求済み行にのみ設定されます。突合およびFOCUSエクスポートを参照してください。",
+    "serviceTierFreeform": "サービスティアのキーはAPIが返すとおりに正確に表示されます。文書化されたティア（standard、batch、priority、priority_on_demand、flex、flex_discount）は表示上のヒントであり、閉じたリストではありません。"
+  },
+  "costCentres": {
+    "ambiguous": "ambiguous — engine picks one arbitrarily",
+    "archive": "Archive cost centre {{code}}",
+    "archived": "Cost centre updated",
+    "code": "Code",
+    "create": "Create",
+    "created": "Cost centre created",
+    "delete": "Delete cost centre {{code}}",
+    "deleteRule": "Delete rule for {{key}}",
+    "description": "Accounting codes and the rules that bind spend to them.",
+    "descriptionField": "Description",
+    "dimension": "Dimension: {{dim}}",
+    "dimensionLabel": "Dimension",
+    "edit": "Edit cost centre {{code}}",
+    "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
+    "editTitle": "Edit cost centre",
+    "empty": "No cost centres yet",
+    "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
+    "key": "Key",
+    "name": "Name",
+    "new": "New cost centre",
+    "newDescription": "A code is required. It is the accounting identity chargeback statements filter on.",
+    "newRule": "New rule",
+    "newRuleDescription": "Bind one dimension value to this cost centre.",
+    "noRules": "No rules — traffic stays unattributed",
+    "owner": "Owner",
+    "priority": "priority {{n}}",
+    "priorityLabel": "Priority",
+    "priorityNote": "The highest priority wins BETWEEN different dimensions. Within one dimension and key the engine reads a single rule and does not order by priority, so duplicates are resolved arbitrarily.",
+    "restore": "Restore cost centre {{code}}",
+    "ruleCreated": "Rule created",
+    "rulesDescription": "Which traffic binds to this cost centre.",
+    "rulesTitle": "Mapping rules",
+    "save": "Save",
+    "saved": "Cost centre saved",
+    "status": {
+      "archived": "Archived",
+      "unknown": "No status — attributes nothing"
+    },
+    "title": "Cost centres",
+    "truncated": "{{n}} 件のコストセンターを読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くのコストセンターがあります。このページは ID 順に行を取得します。この一覧にないことは、存在しないことを示しません。",
+    "rulesTruncated": "{{n}} 件のルールを読み込みました。さらに存在します",
+    "rulesTruncatedHint": "このコストセンターには表示されているより多くの割当ルールがあります。このページは ID 順に行を取得します。新たに取り込まれるコストについては、エンジンがこのページとは無関係に該当ルールを解決するため、ここで未割当に見えるリソースがページ外のルールで割り当てられている場合があります。また、ルールを追加しても記録済みのコストは再配賦されません。"
+  },
+  "description": "エステート全体のトークンコスト — トレンド、チャージバック、突合、予算、予測。数値はFinOps台帳が報告するとおりに正確に表示されます。",
+  "dimensions": {
+    "global": "グローバル",
+    "model": "モデル",
+    "provider": "プロバイダー",
+    "agent": "エージェント",
+    "session": "セッション",
+    "team": "チーム",
+    "project": "プロジェクト",
+    "workspace": "ワークスペース",
+    "api_key": "APIキー",
+    "actor": "アクター",
+    "service_tier": "サービスティア",
+    "context_window": "コンテキストウィンドウ",
+    "inference_geo": "推論の地理",
+    "gateway": "ゲートウェイ",
+    "cost_type": "コストタイプ"
+  },
+  "empty": {
+    "alerts": {
+      "title": "超過した予算しきい値はまだありません",
+      "description": "アラートしきい値を設定した予算を作成すると、受信したコスト記録によって消費額がいずれかのしきい値を超えた時点で、アラートが記録されます。"
+    },
+    "allocation": {
+      "title": "按分対象のエージェント帰属コストはまだありません",
+      "description": "コストストリームにエージェント参照が含まれると、その支出がここに表示され、アクセスエッジを解決できる場合はリソース別の按分も追加されます。"
+    },
+    "anomalies": {
+      "title": "支出の異常はまだ検出されていません",
+      "description": "記録された支出が直近ウィンドウのベースラインを2標準偏差以上上回ると、その日が表示されます。"
+    },
+    "cacheEfficiencyChart": {
+      "title": "入力トークンの使用量はまだ記録されていません",
+      "description": "コスト記録に入力トークン使用量が含まれると、未キャッシュ、キャッシュ読み取り、キャッシュ作成の各トークン量がここに表示されます。"
+    },
+    "dimensionChart": {
+      "title": "このディメンションの支出は記録されていません",
+      "description": "選択したディメンションが推定コストストリームに含まれると支出バケットが表示され、どのサンプルにもなければここは空のままです。"
+    },
+    "futureBreakdowns": {
+      "title": "将来のコスト内訳はカタログ化されていません",
+      "description": "実行時コスト内訳がコンパイル済み参照に追加された場合にのみエントリが表示され、ライブのプロバイダーデータがこのテーブルに取り込まれることはありません。"
+    },
+    "futureDimensions": {
+      "title": "将来のディメンションはカタログ化されていません",
+      "description": "将来のグループ化ディメンションがコンパイル済み参照に追加された場合にのみエントリが表示され、ライブのプロバイダーデータがこのテーブルに取り込まれることはありません。"
+    },
+    "reconciliationChart": {
+      "title": "突合対象の請求済み支出はまだありません",
+      "description": "Claude API の cost_report ポーリングで正式な請求済み行が取得されると、日別の請求済み支出と推定支出が表示されます。"
+    },
+    "spend": {
+      "title": "この内訳の支出はまだありません",
+      "description": "コスト記録に選択したモデル、プロバイダー、またはエージェント参照が含まれると、支出とトークン合計のランキングがここに表示されます。"
+    }
+  },
+  "export": {
+    "title": "FOCUSエクスポート",
+    "description": "コストのread-modelをFOCUS v1.3のCSV（FinOps Foundationのオープンなコスト・使用量スキーマ）としてエクスポートします。",
+    "provenanceLabel": "来歴",
+    "provenance": {
+      "estimated": "推定（粒度あり）",
+      "billed": "請求済み（cost_report）",
+      "all": "両方（タグ付き）"
+    },
+    "download": "CSVをエクスポート",
+    "done": "FOCUSエクスポートをダウンロードしました",
+    "note": "EffectiveCostは合算しても安全な列です。結合エクスポートでは推定行がこれを省略するため、単純なSUMでも請求済みストリームを二重計上することはありません。CSVから合計を再計算しないでください。"
+  },
+  "forecast": {
+    "title": "期間予測",
+    "subtitle": "現在のランレートでの予測であり、モデルではありません。",
+    "spentSoFar": "現在までの支出",
+    "trendProjected": "期間終了時の予測値",
+    "dailyRunRate": "日次ランレート",
+    "projected": "期間終了時の予測値",
+    "period": "期間",
+    "confidenceBand": "{{window}}日間ウィンドウにおける信頼区間：{{low}} … {{high}}（±1.96σ）。",
+    "runRateNote": "この予測は、直近ウィンドウの日次ランレートを残り期間にわたってスケールしたものです — 現在のペースに基づく値であり、予測モデルではありません。",
+    "anomaliesTitle": "支出の異常",
+    "sigma": "{{value}}σ",
+    "anomalyColumns": {
+      "day": "日",
+      "spend": "支出",
+      "baseline": "ベースライン",
+      "deviation": "偏差"
+    }
+  },
+  "future": {
+    "title": "将来のディメンション",
+    "description": "Anthropicが公開しているがエンジンがまだクエリ可能なスライスとしてモデル化していないディメンションとコスト内訳。",
+    "seam": "バックエンド未対応",
+    "caveat": "宣言済みの参照 — AsOf {{date}}。これらはまだクエリ可能なスライスではありません。Anthropicのドキュメントに照らして検証したカタログであり、ギャップが見えるように表示しているもので、ライブデータではありません。",
+    "dimensionsTitle": "グループ化ディメンション",
+    "breakdownsTitle": "実行時コスト内訳",
+    "columns": {
+      "dimension": "ディメンション",
+      "breakdown": "内訳",
+      "field": "フィールド",
+      "maturity": "成熟度",
+      "ref": "参照"
+    },
+    "maturity": {
+      "beta": "ベータ",
+      "ga": "GA",
+      "development": "開発中"
+    },
+    "dims": {
+      "speed": {
+        "label": "速度",
+        "detail": "ベータのfast-mode（fast-mode-2026-02-01）。コストレポートが公開する別のgroup_by。"
+      },
+      "service_account_id": {
+        "label": "サービスアカウント",
+        "detail": "サービスアカウント（svac_）のプリンシパル — 現在の支出ビューが扱う混同されたAPIキーとは区別されます。"
+      },
+      "account_id": {
+        "label": "アカウント",
+        "detail": "所有アカウント。read-modelがまだモデル化していない別のgroup_by。"
+      }
+    },
+    "breakdowns": {
+      "advisor": {
+        "label": "アドバイザー推論",
+        "detail": "usage.iterations[].advisor_messageで別途請求される、2回目の隠れたサーバーサイド推論。"
+      },
+      "thinking_tokens": {
+        "label": "思考トークン",
+        "detail": "拡張思考のトークン（usage.output_tokens_details.thinking_tokens）。思考が表示から省略されている場合でも請求されます。"
+      },
+      "programmatic_tool_calling": {
+        "label": "プログラム的ツール呼び出し",
+        "detail": "中間結果はコンテキストの外かつusageの外に出るため、コストとフォレンジックではそれらが過小計上されます。"
+      }
+    }
+  },
+  "optimization": {
+    "title": "最適化の推奨事項",
+    "description": "ガバナンス下のエステートからの節約候補。推定値は約束ではありません — ケーパビリティと品質の適合性を検証してください。",
+    "empty": "推奨事項はありません",
+    "estimatedSavings": "推定節約額",
+    "subject": "対象",
+    "kind": {
+      "cheaper_model": "より低コストなモデル",
+      "budget_burn": "予算消化",
+      "cache_savings": "キャッシュによる節約",
+      "cache_opportunity": "キャッシュの機会",
+      "info": "注記"
+    }
+  },
+  "outcomes": {
+    "title": "Graded outcomes",
+    "description": "The numerator of cost-per-outcome: what the spend actually achieved.",
+    "grade": "Grade an outcome",
+    "gradeHint": "The instant is captured now and re-sent unchanged on a retry, so a repeated submit cannot count the value twice.",
+    "subject": "Agent ref",
+    "verdict": "Verdict",
+    "send": "Send",
+    "empty": "No graded outcomes",
+    "emptyHint": "Without these, spend has no measurable value and every agent looks like pure cost.",
+    "noValue": "no value recorded",
+    "accepted": "Accepted — the engine may have deduplicated it; the list below is the record",
+    "truncated": "{{n}} 件の成果を読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くの記録済み成果があります。このページは ID 順に行を取得します。読み込まれた行から成果や価値の合計を集計しないでください。"
+  },
+  "periods": {
+    "daily": "日次",
+    "weekly": "週次",
+    "monthly": "月次",
+    "total": "合計"
+  },
+  "range": {
+    "label": "期間",
+    "7d": "過去7日間",
+    "30d": "過去30日間",
+    "90d": "過去90日間",
+    "mtd": "今月"
+  },
+  "rates": {
+    "title": "Model rate catalogue",
+    "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
+    "unit": "micro-USD per 1M tokens (integer)",
+    "empty": "No rates in the catalogue",
+    "inOut": "in {{in}} · out {{out}}",
+    "until": "until {{at}}",
+    "current": "current",
+    "truncated": "{{n}} 件の料金を読み込みました。さらに存在します",
+    "truncatedHint": "表示されているより多くのモデル料金があります。このページは適用開始日の新しい順に並びます。ここに無いことはカタログに無いことを示しません。原価計算と比較は、このページとは無関係にカタログから有効な料金を解決します。"
+  },
+  "reconciliation": {
+    "title": "請求済みと推定",
+    "description": "導出した推定値が正式な請求にどれだけ近いかを示します。2つのストリームは決して合算されません。",
+    "billedTotal": "請求済み合計",
+    "billedCaption": "プロバイダーのcost_reportより",
+    "noBilled": "請求済みデータなし",
+    "estimatedTotal": "推定合計",
+    "estimatedCaption": "定価から導出",
+    "drift": "ドリフト",
+    "driftUnder": "請求済みが推定を上回る（過小推定）",
+    "driftOver": "請求済みが推定を下回る（過大推定）",
+    "driftNoBaseline": "請求済みのベースラインがまだありません",
+    "estimatedOnlyTiers": "推定のみのティア",
+    "chartTitle": "日別の請求済みと推定",
+    "chartSummary": "期間全体で請求済み {{billed}} に対し推定 {{estimated}}。",
+    "columns": {
+      "day": "日",
+      "billed": "請求済み",
+      "estimated": "推定",
+      "drift": "ドリフト"
+    }
+  },
+  "seats": {
+    "title": "シート利用状況",
+    "description": "割り当て済みシートと実際に活動したアクターの日次比較。シートのスナップショットがない日は何も報告していません。利用がゼロだった日ではありません。",
+    "provider": "プロバイダー",
+    "empty": "報告された日はありません",
+    "assigned": "割当 {{assigned}} · 活動 {{active}}",
+    "noSnapshot": "この日のシートスナップショットは未投稿です"
+  },
+  "statements": {
+    "agent": "Agent",
+    "cost": "Cost",
+    "description": "Per-cost-centre, per-period snapshots with line items grouped by model, provider and agent — the artefact finance consumes for internal billing.",
+    "empty": "No chargeback statements generated",
+    "exportCsv": "Export statement CSV",
+    "generate": "Generate",
+    "generated": "Statements generated",
+    "inputTokens": "Input tokens",
+    "model": "Model",
+    "monthly": "Monthly",
+    "outputTokens": "Output tokens",
+    "period": "Period",
+    "provider": "Provider",
+    "samples": "Samples",
+    "snapshotNotice": "A statement is a frozen snapshot: it is computed when generated and records the cost centre name and code as they were. Regenerating the same period does NOT recalculate it, so spend ingested afterwards will not appear.",
+    "title": "Chargeback statements",
+    "total": "Total",
+    "weekly": "Weekly",
+    "truncated": "{{n}} 件の明細を読み込みました。さらに存在します",
+    "truncatedHint": "表示されているよりも多くのチャージバック明細があります。このページは期間開始日の新しい順に並びます。この一覧に期間がないことは、その期間に請求がなかったことを示しません。"
+  },
+  "stats": {
+    "totalSpend": "総支出",
+    "inThisRange": "この期間",
+    "tokens": "トークン",
+    "inOut": "入力 {{in}} ・ 出力 {{out}}",
+    "samples": "コスト記録",
+    "forecast": "予測",
+    "atRunRate": "予測値（移動ウィンドウのトレンド）"
+  },
+  "tabs": {
+    "spend": "支出",
+    "chargeback": "チャージバック",
+    "reconciliation": "突合",
+    "budgets": "予算",
+    "optimization": "最適化",
+    "value": "成果あたりコスト",
+    "seats": "シート利用状況",
+    "costCentres": "Cost centres"
+  },
+  "title": "コストとFinOps",
+  "trend": {
+    "title": "コストトレンド",
+    "description": "選択した期間における日次のトークンコスト。",
+    "cost": "コスト",
+    "tokens": "トークン"
+  },
+  "value": {
+    "title": "成果あたりコスト",
+    "description": "評価済みの成果に対して測定した支出。未帰属の支出は合計に含めず、別に表示します。",
+    "totalCost": "支出合計",
+    "unattributed": "未帰属",
+    "outcomes": "満たされた成果",
+    "costPerOutcome": "成果あたりコスト",
+    "riskTitle": "解約リスク",
+    "riskDescription": "成果を満たさずに支出を消費している対象。",
+    "riskEmpty": "支出を消費して成果のない対象はありません",
+    "satisfiedOf": "{{outcomes}} 件中 {{satisfied}} 件が満たされました"
+  }
+}

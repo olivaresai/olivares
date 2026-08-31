@@ -1,0 +1,44 @@
+{
+  "truncation": {
+    "label": "Loaded {{n}} orgs; there are more",
+    "hint": "The engine returned a page of the roster, not the whole estate. The total CANNOT be inferred from the loaded rows — an org that is not listed here may still exist."
+  },
+  "title": "Data residency",
+  "description": "Pin each org's control-plane data to a region, or leave it unpinned. Superadmin only; every change is recorded in the audit ledger.",
+  "registry": {
+    "summary": "Residency registry posture",
+    "homeRegion": "Home region",
+    "notConfigured": "Not configured",
+    "enforcement": "Residency enforcement",
+    "enforced": "Enforced",
+    "notEnforced": "Not enforced"
+  },
+  "orgs": {
+    "title": "Organizations",
+    "empty": "No organizations yet",
+    "colOrg": "Organization",
+    "colRegion": "Region pin",
+    "colActions": "Actions",
+    "unpinned": "Unpinned",
+    "setRegion": "Set region"
+  },
+  "dialog": {
+    "knownRegionHint": "Choose a region from this deployment's configured registry.",
+    "fallbackRegionHint": "No region registry is configured. This deployment is in the single-region/default posture; the server may reject a non-empty pin.",
+    "clearPin": "Clear pin (unpinned)",
+    "selectClearHint": "Choose Clear pin (unpinned) to remove the pin. This does not move already-stored data — that is a separate migration.",
+    "title": "Region for {{name}}",
+    "subtitle": "Pin this org's data to a region, or clear the pin.",
+    "regionLabel": "Region code",
+    "regionPlaceholder": "e.g. eu",
+    "clearHint": "Leave empty to clear the pin (unpinned). This does not move already-stored data — that is a separate migration.",
+    "review": "Review change",
+    "back": "Back",
+    "apply": "Apply change",
+    "summaryPin": "Pin {{name}} to region {{region}}.",
+    "summaryClear": "Clear the region pin for {{name}} (unpinned).",
+    "implications": "This sets where this org's data is promised to reside for new writes. It does not migrate data already stored elsewhere.",
+    "pinned": "Pinned {{name}} to {{region}}",
+    "cleared": "Cleared the region pin for {{name}}"
+  }
+}

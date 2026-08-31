@@ -1,0 +1,186 @@
+{
+  "title": "Access map",
+  "subtitle": "What each agent reads and writes across your estate — origins on the left, the resources they touch on the right, R/RW by color.",
+  "auditedNote": "Opening this map is a privileged, audited action. For defensive review only — it shows relationships, never SQL, payloads or secrets.",
+  "refresh": "Refresh",
+  "stats": {
+    "origins": "Origins",
+    "resources": "Resources",
+    "read": "Read",
+    "write": "Write / RW",
+    "approximate": "Approximate",
+    "unexpected": "Unexpected",
+    "truncated": "Showing first {{n}}",
+    "truncatedHint": "The estate has more edges than shown; narrow with filters or expand a node to see its neighbors."
+  },
+  "webgl": {
+    "badge": "High-density view",
+    "hint": "Showing {{n}} nodes — switched to the accelerated WebGL renderer for scale.",
+    "clustered": "Resources are grouped by host at this scale; a group reads as “host (N)”. No finding is hidden — any group with unexpected access is flagged."
+  },
+  "filters": {
+    "search": "Search origin, resource, tool…",
+    "mode": "Access mode",
+    "attributedOnly": "Only attributed",
+    "attributedHint": "Hide approximate (inferred) edges and show only firmly attributed access.",
+    "signal": "Signal",
+    "allSignals": "All signals",
+    "clear": "Clear",
+    "drift": "Permitted vs observed",
+    "driftHint": "Overlay the least-privilege diff: highlight unexpected access (observed, not permitted) and unused grants.",
+    "driftForbidden": "Requires the drift permission (accessmap:drift:read)."
+  },
+  "legend": {
+    "read": "Read",
+    "write": "Write",
+    "writeRw": "Write / RW",
+    "unknown": "Unknown",
+    "approximate": "Approximate",
+    "unexpected": "Unexpected access",
+    "pending": "Pending (undecided)",
+    "unused": "Unused grant"
+  },
+  "drift": {
+    "title": "Least-privilege drift",
+    "cleanTitle": "No drift found",
+    "cleanHint": "Every observed access is permitted, and every grant is in use.",
+    "unexpectedTitle": "Unexpected access",
+    "unexpectedHint": "Observed but NOT permitted — the highest-priority finding.",
+    "pendingTitle": "Pending reconciliation",
+    "pendingHint": "Observed without a matching grant, and the engine cannot yet decide whether it is permitted — an unresolved agent-to-identity link, an unknown grant mode, or an undecidable observed mode. It does not say which, so this is not yet a firm violation.",
+    "unusedTitle": "Unused grants",
+    "unusedHint": "Permitted but never observed — over-provisioning to tighten.",
+    "forbiddenTitle": "Drift not authorized",
+    "forbiddenHint": "Your role can see the graph but not the permitted-vs-observed diff (accessmap:drift:read).",
+    "partial": "Partial result: the engine reconciled this diff over a truncated drift window, so these counts are not the whole estate and an edge missing here may simply be past the bound.",
+    "emptyWindowTitle": "No findings in the scanned window",
+    "emptyWindowHint": "The scan stopped at its page bound, so this is not a statement about the whole estate."
+  },
+  "detail": {
+    "edgeTitle": "Access edge",
+    "nodeSubtitle": "A graph node — expand to see what it connects to.",
+    "ref": "Reference",
+    "id": "ID",
+    "expand": "Expand neighbors",
+    "unexpectedFlag": "Observed without a matching grant",
+    "origin": "Origin",
+    "kind": "Kind",
+    "bridge": "Bridge",
+    "unbridged": "Agent unresolved",
+    "resource": "Resource",
+    "coverage": "Coverage",
+    "tool": "Tool",
+    "attribution": "Per-agent attribution",
+    "signal": "Signal & confidence",
+    "confidence": "Confidence",
+    "sources": "Sources",
+    "reason": "Attribution",
+    "diff": "Permitted vs observed",
+    "observed": "Observed",
+    "permitted": "Permitted",
+    "activity": "Activity",
+    "occurrences": "Occurrences",
+    "firstSeen": "First seen",
+    "lastSeen": "Last seen",
+    "yes": "Yes",
+    "no": "No",
+    "minimalData": "Only metadata is shown. By design the engine never carries SQL, payloads or secrets here (minimal-data)."
+  },
+  "authority": {
+    "title": "Authority & next step",
+    "declaredBy": "Signals on this edge:",
+    "multiple": "More than one independent permit is recorded here. Addressing one leaves the other standing.",
+    "noRetraction": "The map records signals and never retracts them, so this edge can persist after you change the source. Re-check rather than assume.",
+    "explain": {
+      "sourceScope": "A source-to-scope binding recorded the permit for this edge. That binding plane is where it is configured.",
+      "declared": "A declared permit signal was recorded for this edge. The map does not carry which system emitted it — an identity provider, a deployment, or a repository or secret-store ACL — so it cannot point you at one.",
+      "unattributed": "This access is permitted, but no signal naming a permit is present on the edge. There is nothing here to identify the owning system, and guessing one would be worse than saying so.",
+      "unpermitted": "No permit signal is present in this map for this access. That is what makes it a finding — but it is not proof that nothing allows it: a live resolver can permit access this map never sees.",
+      "undetermined": "Neither observed nor permitted. This is a declared capability, not evidence of access, so there is nothing to remediate.",
+      "undecided": "Permitted-ness cannot be decided yet for this edge, so it is not a confirmed violation. The engine does not say which condition is unresolved — an agent-to-identity link, an unknown grant mode, or an undecidable observed mode — so no specific fix is offered.",
+      "unchecked": "This map shows the access with no permit signal, but this edge's drift state has not been established here. Only the least-privilege diff says whether the engine has confirmed a finding or is still reconciling, and this sheet has no answer from it. Until then this is not a finding, and not a clean edge either.",
+      "reconciled": "The engine read the least-privilege diff and did not list this access in it, so it is not a confirmed finding and there is nothing here to remediate. What the map does not say is WHY: a grant covering it may be recorded on another edge, or a permit may have reached this one — the graph and the diff are separate reads, so this sheet cannot tell you which."
+    },
+    "target": {
+      "sourceBindings": "Open source bindings",
+      "nhiRoster": "Open the NHI roster"
+    },
+    "needsPermission": "{{action}} needs the {{permission}} permission, which this role does not hold.",
+    "recheck": "Re-check the drift",
+    "verdict": {
+      "clear": "Re-checked: this edge is no longer in the drift set. The explanation above describes the state before that check.",
+      "present": "Re-checked: this edge is still in the drift set.",
+      "unknown": "Could not confirm — the drift read did not come back, or it covered only part of the estate. Neither is the same as clear."
+    },
+    "checkDrift": "Read the drift for this edge",
+    "closes": "Recording a permit is what clears this finding — though not necessarily on this edge: a grant on the identity the access resolves to clears it from another one. Source-scope projection is best-effort, and group, role and folder bindings enforce while projecting nothing onto the map, so a real permit can exist that this diff never sees. Stopping the access does not clear it either: an observation is never retracted. Re-check rather than assume.",
+    "cannotClose": "Deleting the grant will not clear the permitted flag on this edge — the map never retracts a permit, so this finding does not go away because of that deletion. (It can still leave the diff for an unrelated reason, such as the access finally being observed.) Verify the removal at the owning surface, not here.",
+    "signalsNotFused": "This edge carries only its most recent signal — the corroborating set was not included in this response, so other signals, including other permits, may exist and are not shown here."
+  },
+  "kinds": {
+    "agent": "Agent",
+    "session": "Session",
+    "identity": "Identity",
+    "resource": "Resource"
+  },
+  "coverage": {
+    "clean": "Clean",
+    "lossy": "Lossy",
+    "opaque": "Opaque",
+    "mixed": "Mixed"
+  },
+  "coverageHint": {
+    "clean": "High-fidelity capture (e.g. SQL/object/warehouse audit).",
+    "lossy": "Partial capture — some access is not classifiable.",
+    "opaque": "Cannot be captured passively (e.g. Redis/SQLite).",
+    "mixed": "Mixed fidelity across signals."
+  },
+  "attributionTier": {
+    "firm": "Firm",
+    "approximate": "Approximate",
+    "unknown": "Unknown"
+  },
+  "attributionTierHint": {
+    "firm": "Tied to a concrete agent/NHI via an SVID, WIF or dedicated credential.",
+    "approximate": "A shared account — the identity is known, but not a single agent.",
+    "unknown": "No per-identity audit (e.g. Redis/SQLite/D1) — attribution not possible."
+  },
+  "empty": {
+    "title": "No access observed yet",
+    "description": "Once connectors report agent activity, the R/RW relationships appear here."
+  },
+  "forbidden": {
+    "title": "Access map not authorized",
+    "description": "Your role does not include permission to view the access graph."
+  },
+  "mobile": {
+    "title": "The map needs a wider screen",
+    "hint": "Open this view on a larger display for the interactive R/RW graph."
+  },
+  "attackPaths": {
+    "chooseAgent": "Choose an agent in the graph to see its attack paths.",
+    "auditedNote": "Every one of these reads is sealed in the audit ledger, like the graph itself.",
+    "loading": "Computing…",
+    "error": "This analysis could not be read.",
+    "none": "No paths found.",
+    "weakestLink": "weakest link:",
+    "sensitivity": "max sensitivity",
+    "sensitivityAbsent": "not stated",
+    "sensitivityAbsentHint": "The engine omits this field when it is empty, so an absent value is NOT a claim that nothing sensitive is involved.",
+    "kind": {
+      "reachability": "What it can reach",
+      "escalation": "Where it could escalate",
+      "exfil": "Exfiltration routes"
+    },
+    "attribution": {
+      "firm": "firm",
+      "approximate": "approximate",
+      "unknown": "not attributed"
+    },
+    "confidence": {
+      "attributed": "attributed",
+      "approximate": "approximate"
+    },
+    "analyse": "Analyse attack paths (audited)"
+  }
+}

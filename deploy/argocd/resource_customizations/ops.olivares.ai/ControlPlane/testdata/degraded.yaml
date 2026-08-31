@@ -1,0 +1,16 @@
+apiVersion: ops.olivares.ai/v1alpha1
+kind: ControlPlane
+metadata:
+  name: prod
+status:
+  phase: Ready
+  conditions:
+    - type: Available
+      status: "True"
+      message: control plane reconciled
+    - type: Progressing
+      status: "False"
+      message: rollout complete
+    - type: Degraded
+      status: "True"
+      message: engine=sqlite forces 1 effective replica (requested 2)

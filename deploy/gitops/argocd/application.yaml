@@ -1,0 +1,70 @@
+# An Argo CD Application that pulls the Olivares AI control-plane Helm chart from
+# its OCI registry. This is the consumption side of the chart
+# published by .github/workflows/release-chart.yml — declarative, versioned,
+# pulled-from-source and continuously reconciled (the four OpenGitOps 1.0
+# principles; see deploy/gitops/README.md).
+#
+# OCI is a first-class Argo CD source: a repoURL of `<registry>/<path>` plus a
+# `chart:` field tells Argo CD to `helm pull` the chart as an OCI artifact (no
+# Git repo of rendered manifests needed). Helm has been OCI-default since v3.8.0,
+# and the chart is published exactly this way (deploy/helm/README.md).
+#
+# This manifest is a TEMPLATE: pin `targetRevision` to the chart SemVer you
+# verified and pin `image.digest` to the engine image digest you verified
+# (mirroring the air-gap / supply-chain posture of values.yaml — never a bare
+# tag in production). Apply it into the `argocd` namespace, or let the
+# app-of-apps parent (app-of-apps.yaml) adopt it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: olivares
+  namespace: argocd
+  # The default Argo CD finalizer: on delete, prune the managed resources too
+  # (so removing the Application removes the control plane it owns). Drop this if
+  # you want orphaned resources to survive deletion.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: olivares
+spec:
+  project: default
+  source:
+    # OCI registry that holds the chart (the `oci://` scheme is implied for a
+    # repoURL that carries a `chart:` field). Published by release-chart.yml.
+    repoURL: ghcr.io/olivaresai/charts
+    chart: olivares
+    # CHART SemVer to deploy. 0.2.4 is the chart's current version
+    # (deploy/helm/olivares/Chart.yaml); bump this to the version
+    # you verified and signed before rolling it out. This is the GitOps "pinned,
+    # versioned desired state" — never a floating range in production.
+    targetRevision: 0.2.4
+    helm:
+      # Pin the ENGINE IMAGE BY DIGEST, not by tag — the air-gap / supply-chain
+      # posture of values.yaml (SCP-06). The digest below is a PLACEHOLDER
+      # (all-zero sha256): replace it with the digest you verified for the
+      # appVersion this chart targets. With `image.digest` set, the chart's
+      # helper (templates/_helpers.tpl `olivares.image`) ignores `image.tag`.
+      valuesObject:
+        image:
+          repository: docker.io/olivaresai/olivares
+          digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          tag: "" # leave empty so the deploy is pinned by content, not by tag
+        core:
+          engine: sqlite # single-node default; set "postgres" + postgres.dsnSecret for scale
+  destination:
+    # In-cluster install. Point at a remote cluster (server: https://… or name:)
+    # to manage a control plane on a different cluster from this Argo CD.
+    server: https://kubernetes.default.svc
+    namespace: olivares-system
+  syncPolicy:
+    # MANUAL by default (no `automated:` block) — a security product's deploy is
+    # a deliberate, reviewed action, not a silent auto-apply. To opt in to
+    # continuous reconciliation, uncomment `automated:` below (prune + selfHeal
+    # is the full OpenGitOps "continuously reconciled" posture).
+    #
+    # automated:
+    #   prune: true
+    #   selfHeal: true
+    syncOptions:
+      - CreateNamespace=true # create destination.namespace if absent
+      - ServerSideApply=true # SSA: avoids last-applied-config bloat on large CRDs

@@ -1,0 +1,172 @@
+{
+  "title": "Équipe rouge",
+  "description": "Test de robustesse adversariale — uniquement contre vos propres agents enregistrés et autorisés. L’API transporte une taxonomie défensive et des bilans, jamais une charge utile d’attaque.",
+  "tabs": {
+    "targets": "Cibles",
+    "runs": "Exécutions",
+    "catalog": "Catalogue"
+  },
+  "suites": {
+    "all": "Toutes les batteries",
+    "injection": "Injection d’invite",
+    "jailbreak": "Jailbreak",
+    "exfil": "Exfiltration de données",
+    "tool_poisoning": "Empoisonnement d’outil"
+  },
+  "targets": {
+    "title": "Cibles",
+    "description": "La surface de consentement. Une exécution ne touche jamais qu’un agent que vous avez enregistré et autorisé.",
+    "consentNote": "Enregistrer un agent ne vaut pas consentement. Une cible naît non autorisée — autorisez-la pour accorder le consentement, et révoquez-le à tout moment.",
+    "register": "Enregistrer un agent",
+    "authorize": "Autoriser",
+    "revoke": "Révoquer",
+    "authorizedBy": "par {{who}}",
+    "empty": "Aucune cible enregistrée",
+    "emptyHint": "Enregistrez l’un de vos propres agents comme candidat, puis autorisez-le pour lancer des sondes.",
+    "columns": {
+      "name": "Cible",
+      "endpoint": "Point d’accès",
+      "scope": "Périmètre",
+      "consent": "Consentement",
+      "actions": "Actions"
+    },
+    "dialog": {
+      "registerTitle": "Enregistrer un agent candidat",
+      "registerHint": "Enregistrez l’un de vos propres agents comme candidat à l’équipe rouge.",
+      "registerCta": "Enregistrer",
+      "notConsentNote": "L’enregistrement ne vaut pas consentement — le candidat est créé non autorisé et aucune exécution ne peut le toucher tant que vous ne l’avez pas autorisé.",
+      "registered": "Agent enregistré comme candidat",
+      "agentRef": "Référence de l’agent",
+      "name": "Nom affiché",
+      "endpoint": "Point d’accès",
+      "scope": "Périmètre",
+      "scopeHint": "Surfaces séparées par des virgules (p. ex. input, output, tool_args).",
+      "authorizeTitle": "Autoriser cette cible",
+      "authorizeHint": "Accorder le consentement permet aux exécutions de l’équipe rouge de sonder {{name}}. Cette action est consignée dans le registre d’audit.",
+      "revokeTitle": "Révoquer le consentement",
+      "revokeHint": "Révoquer le consentement arrête toute exécution ultérieure contre {{name}}. Cette action est consignée dans le registre d’audit.",
+      "granted": "Consentement accordé",
+      "revoked": "Consentement révoqué"
+    },
+    "truncated": "{{n}} cibles chargées ; il y en a d’autres",
+    "truncatedHint": "Il existe plus de cibles enregistrées que celles affichées ; cette page prend les lignes par identifiant. L’absence d’une cible ne démontre ni qu’elle n’est pas enregistrée ni qu’elle n’est pas autorisée : elle peut simplement se trouver au-delà de cette page."
+  },
+  "runs": {
+    "title": "Exécutions",
+    "description": "Chaque exécution sonde une cible autorisée et produit un bilan de robustesse. Les sondes en échec deviennent des constats.",
+    "detailTitle": "Détail de l’exécution",
+    "closeDetail": "Fermer",
+    "launch": "Lancer une exécution",
+    "launchGatedHint": "Le lancement est désactivé tant que cette cible n’est pas autorisée — enregistrer un agent ne vaut pas consentement.",
+    "robustness": "robustesse",
+    "noScore": "aucun score",
+    "degradedHint": "Toutes les sondes ont été ignorées — aucun bac à sable n’était disponible. C’est un bac à sable en attente, non une réussite.",
+    "errorHint": "Toutes les sondes ont échoué sur erreur d’exécution. Ce n’est pas un verdict de robustesse ; relancez une fois le problème résolu.",
+    "empty": "Aucune exécution pour l’instant",
+    "emptyHint": "Lancez une exécution contre une cible autorisée pour produire un bilan.",
+    "status": {
+      "completed": "Terminée",
+      "degraded": "Bac à sable en attente",
+      "error": "Erreur d’exécution"
+    },
+    "columns": {
+      "started": "Démarrée",
+      "target": "Cible",
+      "suite": "Batterie",
+      "status": "Statut",
+      "score": "Score",
+      "passFail": "Réussite / échec"
+    },
+    "stats": {
+      "passed": "Réussies",
+      "passedCaption": "bloquées + refusées — la défense a tenu",
+      "failed": "Échouées",
+      "failedCaption": "obtempérées + fuitées — vulnérabilité réelle",
+      "errors": "Erreurs",
+      "skipped": "Ignorées",
+      "excludedCaption": "exclues du score"
+    },
+    "scorecard": {
+      "title": "Bilan",
+      "description": "Robustesse = réussies / (réussies + échouées) × 100. Les erreurs et les sondes ignorées sont exclues ; plus c’est élevé, mieux c’est."
+    },
+    "byFamily": {
+      "title": "Échecs par famille",
+      "description": "Familles de sondes comptant au moins une sonde en échec.",
+      "empty": "Aucun échec parmi les familles.",
+      "summary": "Échecs par famille, {{count}} familles avec des échecs ; la pire est {{family}} avec {{failed}} sondes en échec.",
+      "summaryEmpty": "Aucune famille de sondes n’a connu d’échec.",
+      "colFamily": "Famille",
+      "colFailed": "En échec"
+    },
+    "owasp": {
+      "title": "Échecs OWASP",
+      "description": "Lignes OWASP avec une sonde en échec (décompte par référence).",
+      "empty": "Aucune ligne OWASP en échec."
+    },
+    "dialog": {
+      "title": "Lancer une exécution",
+      "hint": "Sondez {{name}} avec la batterie sélectionnée. Cette action adversariale est consignée dans le registre d’audit.",
+      "suite": "Batterie",
+      "launched": "Exécution lancée"
+    },
+    "truncated": "{{n}} exécutions chargées ; il y en a d’autres",
+    "truncatedHint": "Il existe plus d’exécutions que celles affichées ; cette page prend les lignes par identifiant, pas par date : les plus récentes n’y sont pas nécessairement. L’absence d’une exécution ne démontre pas qu’une cible n’a jamais été sondée."
+  },
+  "results": {
+    "title": "Résultats par sonde",
+    "description": "Le résultat de chaque sonde. L’empreinte est un hachage à sens unique — jamais une charge utile d’attaque.",
+    "empty": "Aucun résultat pour cette exécution.",
+    "columns": {
+      "probe": "Sonde",
+      "family": "Famille",
+      "frameworks": "Référentiels",
+      "outcome": "Résultat",
+      "severity": "Gravité",
+      "fingerprint": "Empreinte",
+      "occurredAt": "Survenue"
+    }
+  },
+  "catalog": {
+    "title": "Catalogue de sondes",
+    "description": "La taxonomie de la batterie et sa couverture par référentiel — métadonnées défensives uniquement.",
+    "suiteLabel": "Filtrer par batterie",
+    "metadataNote": "Il s’agit de métadonnées défensives, non d’un arsenal d’exploits. L’API ne transporte aucune charge utile d’attaque.",
+    "stats": {
+      "probes": "Sondes",
+      "families": "Familles",
+      "owasp": "Réf. OWASP",
+      "atlas": "Réf. ATLAS"
+    },
+    "columns": {
+      "id": "ID de sonde",
+      "family": "Famille",
+      "title": "Titre",
+      "frameworks": "Référentiels",
+      "surface": "Surface",
+      "severity": "Gravité"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "Aucune sonde défensive au catalogue",
+      "description": "Cette taxonomie en lecture seule est alimentée uniquement par les définitions de sondes compilées dans le plan de contrôle."
+    },
+    "familyFailureChart": {
+      "title": "Aucune famille de sondes en échec",
+      "description": "Une famille apparaît lorsqu’une sonde évaluée de l’exécution sélectionnée échoue en satisfaisant une requête adversariale ou en divulguant un marqueur interdit."
+    },
+    "results": {
+      "title": "Aucun résultat de sonde enregistré",
+      "description": "Lancez une batterie contre une cible autorisée ; chaque résultat est consigné ici avec une empreinte à sens unique, jamais avec la charge utile d’attaque."
+    },
+    "runs": {
+      "title": "Aucune exécution d’équipe rouge lancée",
+      "description": "Enregistrez et autorisez un agent que vous possédez, puis lancez une batterie de sondes pour consigner son bilan de robustesse."
+    },
+    "targets": {
+      "title": "Aucune cible d’équipe rouge enregistrée",
+      "description": "Enregistrez comme candidat un agent de l’inventaire de ce locataire ; l’autorisation reste une étape de consentement distincte."
+    }
+  }
+}

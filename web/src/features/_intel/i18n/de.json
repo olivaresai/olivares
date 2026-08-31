@@ -1,0 +1,119 @@
+{
+  "severity": {
+    "label": "Schweregrad",
+    "info": "Info",
+    "low": "Niedrig",
+    "medium": "Mittel",
+    "high": "Hoch",
+    "critical": "Kritisch"
+  },
+  "outcome": {
+    "pass": "Bestanden",
+    "fail": "Fehlgeschlagen",
+    "error": "Fehler",
+    "skipped": "Übersprungen",
+    "blocked": "Blockiert",
+    "refused": "Verweigert",
+    "complied": "Befolgt",
+    "leaked": "Abgeflossen"
+  },
+  "verdict": {
+    "allow": "Zulassen",
+    "flag": "Markieren",
+    "block": "Blockieren",
+    "detective": "Aufdeckend",
+    "enforced": "Durchgesetzt"
+  },
+  "integrity": {
+    "verified": "Integrität verifiziert",
+    "failed": "Integritätsprüfung fehlgeschlagen",
+    "unavailable": "Signierung nicht verfügbar",
+    "pending": "Noch nicht attestiert",
+    "tamperEvident": "Manipulationssicher",
+    "chainOk": "Hash-Kette konsistent",
+    "chainBroken": "Kette unterbrochen bei seq {{seq}}",
+    "reverifyHint": "Jedes Ereignis trägt seq · hash · prev_hash, sodass ein Leser die Verkettung offline erneut verifizieren kann.",
+    "attestedSeq": "Attestiert bis seq {{seq}}",
+    "headSeq": "Hauptbuch-Kopf seq {{seq}}"
+  },
+  "consent": {
+    "registered": "Registriert",
+    "authorized": "Autorisiert",
+    "revoked": "Widerrufen",
+    "notAuthorizedHint": "Registrieren ist keine Einwilligung — ein Lauf wird blockiert, bis ein Ziel autorisiert ist."
+  },
+  "risk": {
+    "unacceptable": "Inakzeptabel",
+    "high": "Hoch",
+    "limited": "Begrenzt",
+    "minimal": "Minimal",
+    "suggested": "Vorgeschlagen",
+    "approved": "Genehmigt",
+    "overridden": "Außer Kraft gesetzt"
+  },
+  "control": {
+    "satisfied": "Erfüllt",
+    "by_design": "Designseitig bereit",
+    "partial": "Teilweise",
+    "gap": "Lücke",
+    "unmapped": "Nicht zugeordnet",
+    "operational": "Operativ",
+    "architectural": "Architektonisch"
+  },
+  "hash": {
+    "fingerprint": "Fingerabdruck",
+    "hint": "Ein Einweg-Fingerabdruck — niemals eine Nutzlast (Datenminimierung).",
+    "copy": "Vollständigen Wert kopieren",
+    "copied": "Kopiert"
+  },
+  "notices": {
+    "truncated": "Teildaten",
+    "truncatedHint": "Dieser Aggregatwert hat die Scan-Obergrenze erreicht — er ist teilweise, kein exakter Gesamtwert.",
+    "selfAudited": "Privilegierter Lesezugriff — im Audit-Hauptbuch aufgezeichnet.",
+    "seam": "Noch nicht verkabelt",
+    "seamBody": "Deklarierter Vertrag — {{what}} ist noch nicht mit dem Backend verkabelt, daher wird hier die deklarierte Form gezeigt, keine Live-Daten.",
+    "minimalData": "Nur Aggregate und Metadaten — keine Prompts, Ausgaben oder Geheimnisse.",
+    "declared": "Deklarierte Referenz",
+    "noConnector": "Kein Konnektor — abwesend, nicht null.",
+    "listTruncated": "{{n}} Zeilen geladen; es gibt mehr",
+    "listTruncatedHint": "Die Engine hat nur eine Seite zurückgegeben, nicht den gesamten Datensatz. Die Gesamtzahl kann NICHT aus den geladenen Zeilen abgeleitet werden, und möglicherweise existieren nicht angezeigte Zeilen."
+  },
+  "badges": {
+    "signed": "Signiert",
+    "linked": "Lückenlose Beweiskette",
+    "governed": "Reguliert",
+    "ungoverned": "Unreguliert",
+    "approximate": "Annähernd",
+    "attributed": "Zugeordnet",
+    "isolated": "Isoliert",
+    "destroyed": "Vernichtet"
+  },
+  "timeline": {
+    "title": "Rekonstruierter Zeitverlauf",
+    "empty": "Keine Ereignisse im Zeitraum.",
+    "seq": "seq"
+  },
+  "consumption": {
+    "projected": "prognostiziert {{pct}}",
+    "label": "Budgetverbrauch",
+    "valueText": "{{consumed}} verbraucht, {{projected}} prognostiziert"
+  },
+  "disclaimers": {
+    "report": "Technische Zuordnung des Kontrollstatus, abgeleitet aus beobachteten Plattformnachweisen. KEINE Zertifizierung und KEINE Rechtsberatung."
+  },
+  "gate": {
+    "approved": "Genehmigt",
+    "pending": "Ausstehend",
+    "rejected": "Abgelehnt",
+    "expired": "Abgelaufen",
+    "no_gate": "Kein Gate",
+    "not_required": "Nicht erforderlich",
+    "approvedHint": "Die Governance hat diesen Plan genehmigt — ausführen, um fortzufahren.",
+    "pendingHint": "Wartet auf eine Governance-Entscheidung (standardmäßig verweigert).",
+    "rejectedHint": "Die Governance hat diesen Plan abgelehnt — mit einem frischen Plan erneut anfordern.",
+    "expiredHint": "Die Genehmigung ist abgelaufen — neu planen und erneut anfordern.",
+    "no_gateHint": "Es ist kein Genehmigungs-Gate konfiguriert — die Aktion kann nicht fortfahren.",
+    "not_requiredHint": "Für diese Aktion ist keine Genehmigung erforderlich.",
+    "displayNotice": "Der Gate-Status ist ein gemeldeter Entscheid, der hier nur angezeigt wird. Die Autorisierung wird serverseitig durchgesetzt; die Konsole gewährt aus diesem Wert niemals Zugriff."
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "truncation": {
+    "label": "已加载 {{n}} 个租户；还有更多",
+    "hint": "引擎返回的是名册的一页，而非全部租户。无法从已加载的行推断总数——此处未列出的租户仍可能存在，并且仍在提供服务。"
+  },
+  "title": "租户",
+  "description": "停用或恢复租户的服务——不会丢失数据。删除租户是另一项操作，且不可撤销。",
+  "roster": "组织",
+  "empty": "暂无组织",
+  "emptyHint": "系统名册为空，或此部署只有一个租户。",
+  "forbidden": "租户生命周期操作仅限超级管理员。",
+  "columns": {
+    "name": "组织",
+    "slug": "标识",
+    "status": "服务",
+    "region": "区域",
+    "created": "创建时间"
+  },
+  "status": {
+    "active": "启用",
+    "suspended": "已停用",
+    "unknown": "未知"
+  },
+  "unknownHint": "引擎返回了本控制台不认识的服务状态。按原样显示，而不是假定为启用。",
+  "unpinned": "未固定",
+  "suspend": "停用服务",
+  "restore": "恢复服务",
+  "suspendTitle": "停用 {{name}} 的服务？",
+  "suspendDescription": "在恢复之前，写操作与交互式服务将以 423 tenant_suspended 拒绝。",
+  "keeps": "有三件事会刻意继续运行：",
+  "keepsAuth": "认证以及运维方的系统路由，以便说明并恢复该租户。",
+  "keepsExport": "租户自身数据的导出——停用服务不得扣押客户的数据。停用期间进行的导出会记录在该租户自己的审计链上。",
+  "keepsCustody": "托管工作：审计链继续生成检查点，保持可验证、可做备份认证。",
+  "notDelete": "此操作不删除任何内容。删除租户是另一项破坏性操作。",
+  "confirmSuspend": "停用服务",
+  "suspended": "已停用 {{name}} 的服务",
+  "restoreTitle": "恢复 {{name}} 的服务？",
+  "restoreDescription": "服务将无损恢复：停用期间没有删除任何内容。",
+  "confirmRestore": "恢复服务",
+  "restored": "已恢复 {{name}} 的服务",
+  "delete": "删除",
+  "deleteTitle": "删除 {{name}} 及其全部内容",
+  "deleteDescription": "立即清除该租户及其数据。无法撤销，本引擎不提供恢复窗口。",
+  "confirmDelete": "永久删除",
+  "deleteGrace": "API 中记录的 30 天宽限期属于云控制平面，而非本引擎。在这里，确认即刻清除。",
+  "deleteInstead": "若要停止为客户提供服务而不销毁任何内容，请改为暂停：暂停不会丢失数据且可逆。",
+  "deleteDone": "已删除 {{name}}",
+  "deleteSystem": "系统租户无法删除"
+}

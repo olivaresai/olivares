@@ -1,0 +1,40 @@
+{
+  "title": "Просмотр логов",
+  "controls": {
+    "pause": "Пауза",
+    "resume": "Возобновить",
+    "pauseAria": "Приостановить автопрокрутку",
+    "resumeAria": "Возобновить автопрокрутку",
+    "clear": "Очистить",
+    "clearAria": "Очистить записи лога",
+    "entryCount": "{{value}} записей"
+  },
+  "filters": {
+    "levelAria": "Фильтровать логи {{level}}",
+    "modulePlaceholder": "Модуль...",
+    "moduleAria": "Фильтровать по модулю",
+    "searchPlaceholder": "Поиск...",
+    "searchAria": "Искать в сообщениях лога",
+    "clearAria": "Очистить фильтры"
+  },
+  "capture": {
+    "debugUnavailable": "Записи DEBUG не фиксируются при текущем уровне логов движка — установите OLIVARES_LOG_LEVEL=debug."
+  },
+  "stream": {
+    "empty": "Нет записей лога для отображения.",
+    "ariaLabel": "Поток логов",
+    "attrsAriaLabel": "Структурированные атрибуты журнала"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  }
+}

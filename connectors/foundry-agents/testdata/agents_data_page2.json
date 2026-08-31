@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "agent-2",
+      "name": "Disabled Hosted Agent",
+      "state": "disabled",
+      "versions": {
+        "latest": {
+          "id": "ver-2",
+          "name": "v2",
+          "version": "2",
+          "created_at": "not-a-unix",
+          "status": "archived",
+          "draft": true,
+          "definition": {
+            "kind": "hosted",
+            "model": "gpt-4o"
+          }
+        }
+      }
+    }
+  ],
+  "has_more": false
+}

@@ -1,0 +1,59 @@
+# CODEOWNERS — review routing and a map of the license frontier.
+#
+# This file does two jobs:
+#   1. It routes pull-request review on the public GitHub repository
+#      (olivaresai/olivares) to the people responsible for each subtree.
+#   2. It documents the license frontier (LICENSING.md, REUSE.toml) at the
+#      directory level, so a reviewer or an auditor can see at a glance which
+#      tree is AGPL, which is Apache-2.0, and which is commercial.
+#
+# Honesty note (see GOVERNANCE.md): the project is beta and maintainer-led
+# by a single maintainer today, so every path below resolves to the same owner.
+# `@olivaresai/maintainers` is the GitHub team that must exist, with WRITE
+# access, on the public repository for these rules to take effect (CODEOWNERS is a
+# GitHub feature; owners without write access are ignored). As the
+# contributor base grows, connector/SDK review can be delegated to additional
+# owners here without touching the license frontier itself.
+#
+# Syntax: a path pattern followed by one or more owners (@user / @org/team).
+# The LAST matching pattern wins, so the specific overrides below come after the
+# catch-all. Reference: docs.github.com "About code owners".
+
+# --- Catch-all -------------------------------------------------------------
+*                               @olivaresai/maintainers
+
+# --- AGPL-3.0-only: the product -------------------------------------------
+/core/                          @olivaresai/maintainers
+/modules/                       @olivaresai/maintainers
+/web/                           @olivaresai/maintainers
+/cmd/                           @olivaresai/maintainers
+/operator/                      @olivaresai/maintainers
+/terraform-provider-olivares/   @olivaresai/maintainers
+/docs-site/                     @olivaresai/maintainers
+
+# --- Apache-2.0: the permissive ecosystem boundary (the breadth moat) ------
+# A connector must never import from /core (scripts/check-boundary.sh).
+/sdk/                           @olivaresai/maintainers
+/connectors/                    @olivaresai/maintainers
+
+# NOTE: the commercial, additive Enterprise Edition (LicenseRef-Olivares-Commercial)
+# is maintained in a separate, private repository — not in this public repo, and not
+# a destination for community contributions (see GOVERNANCE.md).
+
+# --- Licensing, governance & security: change with extra care --------------
+# These define the legal and trust boundary of the project; route them to the
+# maintainers explicitly even though the catch-all already would.
+/LICENSE                        @olivaresai/maintainers
+/LICENSES/                      @olivaresai/maintainers
+/NOTICE                         @olivaresai/maintainers
+/LICENSING.md                   @olivaresai/maintainers
+/CLA.md                         @olivaresai/maintainers
+/DCO                            @olivaresai/maintainers
+/REUSE.toml                     @olivaresai/maintainers
+/GOVERNANCE.md                  @olivaresai/maintainers
+/CODE_OF_CONDUCT.md             @olivaresai/maintainers
+/SECURITY.md                    @olivaresai/maintainers
+/CHANGELOG.md                   @olivaresai/maintainers
+/.github/                       @olivaresai/maintainers
+/scripts/check-spdx.sh          @olivaresai/maintainers
+/scripts/check-boundary.sh      @olivaresai/maintainers

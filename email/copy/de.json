@@ -1,0 +1,55 @@
+{
+  "$locale": "de",
+  "common": {
+    "wordmark": "Olivares AI",
+    "footerNote": "Dies ist eine Transaktionsnachricht von Olivares AI.",
+    "fallbackIntro": "Falls die Schaltfläche nicht funktioniert, kopieren Sie diese Adresse in Ihren Browser:",
+    "signoff": "Olivares AI"
+  },
+  "signin": {
+    "subject": "Bei Ihrem Olivares AI-Portal anmelden",
+    "preheader": "Melden Sie sich über diesen Einmal-Link bei Ihrem Olivares AI-Kundenportal an.",
+    "heading": "Bei Ihrem Kundenportal anmelden",
+    "intro": "Melden Sie sich über die Schaltfläche unten bei Ihrem Olivares AI-Kundenportal an.",
+    "cta": "Beim Portal anmelden",
+    "expiry": "Dieser Link kann nur einmal verwendet werden und läuft in {{MINUTES}} Minuten ab.",
+    "sameBrowser": "Öffnen Sie ihn dort, wo Sie ihn angefordert haben: im selben Browser, mit demselben Profil und im selben Browsermodus. Der Link ist an ein dort gespeichertes Cookie gebunden; wenn Sie eines davon wechseln oder Cookies löschen, funktioniert er nicht.",
+    "ignore": "Dieser Link gewährt Zugriff auf Ihr Portal. Falls Sie ihn nicht angefordert haben, ignorieren Sie diese Nachricht; solange der Link nicht verwendet wird, geschieht nichts.",
+    "textIntro": "Melden Sie sich über diesen Link bei Ihrem Olivares AI-Kundenportal an:"
+  },
+  "license": {
+    "subject": "Ihre kommerzielle Olivares AI-Lizenz",
+    "preheader": "Ihr signierter Lizenzschlüssel und die Download-Details für Enterprise sind bereit.",
+    "preheaderNoDownload": "Ihr signierter Lizenzschlüssel ist bereit. Der Download-Link ist nicht in dieser Nachricht enthalten.",
+    "noDownloadNote": "Ihre Lizenz ist angehängt und aktiv – es steht nichts mehr aus. Der Link zum Enterprise-Download ist nicht in dieser Nachricht enthalten.",
+    "noDownloadPortalNote": "Ihre Lizenz ist angehängt und aktiv – es steht nichts mehr aus. Der Link zum Enterprise-Download ist nicht in dieser Nachricht enthalten; Downloads werden in Ihrem Kundenportal abgewickelt.",
+    "heading": "Ihre kommerzielle Lizenz",
+    "greeting": "Hallo {{LICENSEE}},",
+    "intro": "Ihr signierter Lizenzschlüssel ist als olivares-license.key angehängt und unten abgedruckt.",
+    "installHeading": "Installieren",
+    "installNote": "Eine laufende Engine muss nicht neu gestartet werden.",
+    "installStdinNote": "Um den Schlüssel einzufügen, statt die angehängte Datei zu verwenden, führen Sie den folgenden Befehl aus und drücken Sie nach dem Einfügen Ctrl-D.",
+    "verifyNote": "Prüfen Sie die Lizenz nach der Installation mit dem unten stehenden Befehl.",
+    "statusPerpetual": "Diese Lizenz ist unbefristet.",
+    "statusUntil": "Diese Lizenz ist bis zum {{DATE}} gültig.",
+    "downloadHeading": "Enterprise-Binärdatei herunterladen",
+    "downloadNote": "Dieser Download-Link ist mit Ihrem Kauf verknüpft.",
+    "downloadCta": "Enterprise-Binärdatei laden",
+    "portalHeading": "Ihr Kundenportal",
+    "portalNote": "Melden Sie sich jederzeit mit dieser E-Mail-Adresse an – wir senden einen Einmal-Link, es gibt also kein Passwort zu verwalten. Ihre Lizenzen, Ihre Downloads und Ihre Kontodaten finden Sie dort.",
+    "portalCta": "Kundenportal öffnen",
+    "keyHeading": "Ihr Lizenzschlüssel",
+    "attestation": "Diese reine Attestierungslizenz dokumentiert Ihre kommerzielle Ausnahme und berechtigt Sie zur Nutzung der Enterprise-Add-ons. Sie begrenzt niemals die Benutzerzahl (selbst gehostete Benutzerkonten sind in jeder Edition unbegrenzt), und ihre Prüfung nimmt keinen Kontakt zu uns auf: Sie wird vollständig offline validiert, und einen Remote-Kill-Switch gibt es nicht. Der Bezug dessen, wofür Sie bezahlt haben, nimmt sehr wohl Kontakt auf: Dieses Abonnement ist der Zugangsnachweis für die Enterprise-Add-ons, ihre Updates und ihre Patches. Es gibt keine verpflichtende Telemetrie und standardmäßig keinen Egress zur Control Plane."
+  },
+  "invite": {
+    "subject": "Ihr Olivares AI-Konto einrichten",
+    "preheader": "Nehmen Sie die Einladung an und wählen Sie ein Passwort für Ihr Olivares AI-Konto.",
+    "heading": "Ihr Olivares AI-Konto einrichten",
+    "intro": "Ein Administrator hat Sie eingeladen, Ihr Olivares AI-Konto für die Organisation einzurichten.",
+    "cta": "Konto einrichten",
+    "expiry": "Diese Einladung kann nur einmal verwendet werden und läuft am {{EXPIRES_AT}} ab.",
+    "setPassword": "Sie wählen Ihr eigenes Passwort; der Administrator, der Sie eingeladen hat, wird es niemals sehen.",
+    "ignore": "Wenn Sie diese Nachricht nicht erwartet haben, verwenden Sie den Link nicht und wenden Sie sich an den Administrator, der Sie eingeladen hat. Das Konto existiert bereits; wenn Sie diese Nachricht ignorieren, hat es lediglich weiterhin kein festgelegtes Passwort.",
+    "textIntro": "Richten Sie Ihr Olivares AI-Konto über diesen Einladungslink ein:"
+  }
+}

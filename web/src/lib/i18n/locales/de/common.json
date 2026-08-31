@@ -1,0 +1,204 @@
+{
+  "errors": {
+    "generic": "Etwas ist schiefgelaufen"
+  },
+  "app": {
+    "name": "Olivares AI",
+    "tagline": "Control Plane"
+  },
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "confirm": "Bestätigen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "retry": "Erneut versuchen",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "refresh": "Aktualisieren",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "back": "Zurück",
+    "next": "Weiter",
+    "previous": "Zurück",
+    "viewAll": "Alle anzeigen",
+    "learnMore": "Mehr erfahren",
+    "openMenu": "Menü öffnen",
+    "expandSidebar": "Seitenleiste ausklappen",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "help": "Dokumentation zu dieser Ansicht öffnen"
+  },
+  "states": {
+    "loading": "Wird geladen…",
+    "empty": "Hier ist noch nichts",
+    "noResults": "Keine Ergebnisse",
+    "comingSoon": "Demnächst verfügbar",
+    "loaded": "Geladen",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "theme": {
+    "label": "Design",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System",
+    "toggle": "Design umschalten"
+  },
+  "density": {
+    "label": "Dichte",
+    "comfortable": "Komfortabel",
+    "compact": "Kompakt"
+  },
+  "language": {
+    "label": "Sprache"
+  },
+  "table": {
+    "label": "Datentabelle",
+    "rowsPerPage": "Zeilen pro Seite",
+    "page": "Seite",
+    "of": "von",
+    "noRows": "Keine Zeilen vorhanden",
+    "loadMore": "Mehr laden",
+    "sortAscending": "Aufsteigend sortieren",
+    "sortDescending": "Absteigend sortieren",
+    "search": "Zeilen durchsuchen…",
+    "selectAllVisible": "Alle sichtbaren Zeilen auswählen",
+    "selectRow": "Zeile {{id}} auswählen"
+  },
+  "bulk": {
+    "selected": "{{count}} ausgewählt",
+    "clear": "Auswahl aufheben",
+    "progress": "{{current}} von {{total}} werden verarbeitet",
+    "summary": "{{success}} erfolgreich, {{failed}} fehlgeschlagen",
+    "confirmTitle": "Sammelaktion bestätigen",
+    "confirmDescription": "„{{action}}“ wird für {{count}} ausgewählte Elemente einzeln ausgeführt."
+  },
+  "chart": {
+    "showTable": "Als Tabelle anzeigen",
+    "showChart": "Diagramm anzeigen"
+  },
+  "commandPalette": {
+    "placeholder": "Suchen oder springen zu…",
+    "empty": "Keine Treffer.",
+    "navigation": "Navigation",
+    "actions": "Aktionen",
+    "results": "Ergebnisse",
+    "searchResults": "Treffer in Ihren Daten",
+    "searchTruncated": "Weitere Treffer vorhanden — Suche verfeinern.",
+    "searchDegraded": "Einige Quellen konnten nicht durchsucht werden — diese Liste ist unvollständig."
+  },
+  "status": {
+    "active": "Aktiv",
+    "inactive": "Inaktiv",
+    "healthy": "Fehlerfrei",
+    "degraded": "Beeinträchtigt",
+    "pending": "Ausstehend",
+    "error": "Fehler",
+    "revoked": "Widerrufen",
+    "unknown": "Unbekannt",
+    "running": "Läuft",
+    "ok": "OK",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "approved": "Genehmigt",
+    "rejected": "Abgelehnt",
+    "requested": "Angefordert",
+    "queued": "In Warteschlange",
+    "provisioning": "Wird bereitgestellt",
+    "draft": "Entwurf",
+    "warning": "Warnung",
+    "deprecated": "Veraltet",
+    "unused": "Ungenutzt",
+    "failed": "Fehlgeschlagen",
+    "down": "Ausgefallen",
+    "unexpected": "Unerwartet",
+    "idle": "Inaktiv",
+    "completed": "Abgeschlossen",
+    "archived": "Archiviert",
+    "retired": "Stillgelegt",
+    "drifted": "Abgewichen",
+    "declared": "Deklariert",
+    "applied": "Angewendet"
+  },
+  "accessMode": {
+    "read": "Lesen",
+    "readwrite": "Lesen/Schreiben",
+    "write": "Schreiben",
+    "unknown": "Unbekannt"
+  },
+  "confidence": {
+    "attributed": "Zugeordnet",
+    "attributedHint": "Diesem Agent fest zugeordnet.",
+    "approximate": "Annähernd",
+    "approximateHint": "Durch Inferenz zugeordnet — noch nicht mit dem Agent abgeglichen."
+  },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich.",
+    "email": "Geben Sie eine gültige E-Mail-Adresse ein."
+  },
+  "a11y": {
+    "breadcrumb": "Brotkrümelnavigation",
+    "skipToContent": "Zum Inhalt springen",
+    "primarySidebar": "Primär",
+    "mainNavigation": "Hauptnavigation",
+    "graphControls": "Diagrammsteuerung",
+    "graphMinimap": "Graph-Minimap"
+  },
+  "privileged": {
+    "auditedNotice": "Diese Aktion wird im manipulationssicheren Audit-Hauptbuch aufgezeichnet.",
+    "confirm": "Bestätigen",
+    "typeToConfirm": "Geben Sie {{phrase}} ein, um zu bestätigen",
+    "typeToConfirmAria": "Bestätigungsphrase",
+    "notAuthorized": "Ihre Rolle kann dies einsehen, aber diese Aktion nicht ausführen.",
+    "notAuthorizedToast": "Nicht autorisiert — Ihre Rolle kann diese Aktion nicht ausführen.",
+    "tenantChangedToast": "Während der Verifizierung wurde die Organisation gewechselt — die Aktion wurde nicht fortgesetzt. Wechseln Sie zurück und versuchen Sie es erneut.",
+    "stepUp": {
+      "title": "Diese Aktion erfordert eine erhöhte Sitzung",
+      "description": "Ihre Rolle erlaubt sie; die Sicherungsstufe dieser Sitzung ist abgelaufen. Schließen Sie die Höherstufung ab, dann wird die Aktion fortgesetzt. Beim Schließen bleibt sie verweigert.",
+      "busyToast": "Es ist bereits eine andere Höherstufung offen. Schließen Sie sie ab und wiederholen Sie diese Aktion.",
+      "abandonedToast": "Diese Aktion wurde vor Abschluss der Höherstufung geschlossen und daher nicht fortgesetzt. Starten Sie sie erneut.",
+      "descriptionNoResume": "Ihre Rolle erlaubt es; die Sicherheitsstufe dieser Sitzung ist abgelaufen. Schließen Sie die Höherstufung ab und starten Sie die Aktion erneut. Schließen belässt sie abgelehnt."
+    },
+    "working": "Wird ausgeführt…"
+  },
+  "secretRef": {
+    "label": "Geheimnis-Referenz",
+    "hint": "Eine Referenz auf ein außerhalb der Konsole gespeichertes Geheimnis — sein Wert wird hier niemals angezeigt.",
+    "none": "Kein Geheimnis",
+    "prefix": "ref"
+  },
+  "untrusted": {
+    "label": "Nicht verifiziert",
+    "hint": "Selbst gemeldet von der Fähigkeit — lediglich ein Signal. Die Control Plane verifiziert es nicht und erzwingt es niemals."
+  },
+  "risk": {
+    "low": "Geringes Risiko",
+    "medium": "Mittleres Risiko",
+    "high": "Hohes Risiko"
+  },
+  "notifications": {
+    "title": "Letzte Aktivität",
+    "empty": "Keine aktuelle Aktivität.",
+    "viewAll": "Alles im Audit-Ledger anzeigen"
+  },
+  "passphrase": {
+    "tooShort": "Die Passphrase muss mindestens {{min}} Zeichen lang sein",
+    "strengthLabel": "Stärke der Passphrase",
+    "strength": {
+      "weak": "Schwach",
+      "fair": "Ausreichend",
+      "good": "Gut",
+      "strong": "Stark"
+    }
+  },
+  "shortcuts": {
+    "title": "Tastaturkürzel",
+    "description": "Navigieren Sie die Konsole ohne die Tastatur zu verlassen.",
+    "general": "Allgemein",
+    "navigation": "Gehe zu",
+    "openPalette": "Befehlspalette öffnen",
+    "showHelp": "Diese Hilfe anzeigen"
+  }
+}

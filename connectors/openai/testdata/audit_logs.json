@@ -1,0 +1,12 @@
+{
+  "object": "list",
+  "data": [
+    { "id": "audit_log-1001", "type": "api_key.created", "effective_at": 1717200000, "actor": { "type": "session", "session": { "ip_address": "203.0.113.9", "user": { "id": "user_admin1", "email": "admin@example.com" } }, "api_key": {} }, "project": { "id": "proj_default", "name": "Default" } },
+    { "id": "audit_log-1002", "type": "login.succeeded", "effective_at": 1717203600, "actor": { "type": "session", "session": { "ip_address": "203.0.113.10", "user": { "id": "user_dev1", "email": "dev1@example.com" } }, "api_key": {} }, "project": { "id": "proj_default", "name": "Default" } },
+    { "id": "audit_log-1003", "type": "workload_identity_provider.created", "effective_at": 1717207200, "actor": { "type": "session", "session": { "ip_address": "203.0.113.11", "user": { "id": "user_admin1", "email": "admin@example.com" } }, "api_key": {} }, "project": { "id": "proj_default", "name": "Default" } },
+    { "id": "audit_log-1004", "type": "workload_identity_provider_mapping.created", "effective_at": 1717210800, "actor": { "type": "session", "session": { "ip_address": "203.0.113.12", "user": { "id": "user_admin1", "email": "admin@example.com" } }, "api_key": {} }, "project": { "id": "proj_default", "name": "Default" } },
+    { "id": "audit_log-1005", "type": "tunnel.created", "effective_at": 1717214400, "actor": { "type": "session", "session": { "ip_address": "203.0.113.13", "user": { "id": "user_admin1", "email": "admin@example.com" } }, "api_key": {} }, "project": { "id": "proj_default", "name": "Default" } }
+  ],
+  "has_more": false,
+  "last_id": "audit_log-1005"
+}

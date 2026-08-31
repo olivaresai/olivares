@@ -1,0 +1,38 @@
+{
+  "title": "Coûts par équipe",
+  "subtitle": "Attribution des coûts par équipe — sessions, tokens et dépenses avec tendance journalière et ventilation par projet/modèle.",
+  "period": {
+    "label": "Période",
+    "7d": "7 derniers jours",
+    "30d": "30 derniers jours",
+    "90d": "90 derniers jours"
+  },
+  "cols": {
+    "team": "Équipe",
+    "sessions": "Sessions",
+    "tokensIn": "Tokens entrants",
+    "tokensOut": "Tokens sortants",
+    "cost": "Coût",
+    "trend": "Tendance"
+  },
+  "breakdown": {
+    "projects": "Projets",
+    "models": "Modèles",
+    "project": "Projet",
+    "model": "Modèle",
+    "sessions": "Sessions",
+    "tokensIn": "Tokens entrants",
+    "tokensOut": "Tokens sortants",
+    "cost": "Coût",
+    "noProjects": "Aucune ventilation par projet.",
+    "noModels": "Aucune ventilation par modèle."
+  },
+  "export": "Exporter en CSV",
+  "empty": {
+    "title": "Aucune donnée de coût par équipe",
+    "description": "Aucun enregistrement de coût avec des étiquettes d'équipe n'a été trouvé pour cette période. Étiquetez vos sessions avec une équipe pour voir l'attribution."
+  },
+  "errors": {
+    "loadFailed": "Impossible de charger les données de coût par équipe."
+  }
+}

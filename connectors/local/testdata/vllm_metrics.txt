@@ -1,0 +1,10 @@
+# HELP vllm:prompt_tokens_total Number of prefill tokens processed.
+# TYPE vllm:prompt_tokens_total counter
+vllm:prompt_tokens_total{model_name="meta-llama/Llama-3.1-8B-Instruct",engine="0"} 12000
+vllm:generation_tokens_total{model_name="meta-llama/Llama-3.1-8B-Instruct",engine="0"} 3400
+vllm:prompt_tokens_total{model_name="mistralai/Mistral-7B",engine="0"} 5000
+vllm:generation_tokens_total{model_name="mistralai/Mistral-7B",engine="0"} 1.5e+03
+vllm:num_requests_running{model_name="meta-llama/Llama-3.1-8B-Instruct"} 2
+# a comment line and a blank line follow
+
+go_goroutines 87

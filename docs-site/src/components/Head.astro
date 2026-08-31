@@ -1,0 +1,41 @@
+---
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Starlight's <Head> plus the brand's typefaces.
+//
+// WHY THIS FILE EXISTS, and it is not a preference. Astro's fonts pipeline
+// (astro.config.mjs `fonts:`) resolves and copies the faces, but it emits the @font-face rules
+// and the preload links only where <Font> is rendered. Starlight builds its own <head> and never
+// renders it, so configuring `fonts:` alone produced EXACTLY the defect this work set out to
+// remove: `--olv-font-sans` resolved to nothing, `--sl-font` fell back to `--sl-font-system`, and
+// the built site shipped 16 woff2 files that no page ever referenced. Measured in the browser
+// before this file existed: `--olv-font-sans` UNDEFINED, `document.fonts.size` 0, body computed
+// to `-apple-system, BlinkMacSystemFont, …`, 0 font requests. A declaration nothing fulfils is
+// the same failure whether it is a hand-written CSS variable or a build pipeline.
+//
+// NO `preload`, and that is a measured choice rather than an omission. <Font preload /> preloads
+// every face of a family, and these are subsetted faces: on an English page it pulled 13 woff2 /
+// 301 KB — the Cyrillic, Greek and Vietnamese cuts of all three families — to render latin text.
+// Without it the browser honours each face's unicode-range and fetches only what the page needs.
+//
+// CLS stays at 0 either way, because the thing that fixes it is `optimizedFallbacks` (capsize
+// metric-matched fallback faces), not the preload. All four measured on a COLD cache over
+// /start/quickstart/ at 1440x900 — LCP is a single sample on a loaded machine and is the noisy
+// column; CLS and the byte counts are structural:
+//
+//   origin/main, no fonts at all ............. CLS 0       0 woff2            LCP 448 ms
+//   fontsource CSS imported directly ......... CLS 0.2943  3 woff2 · 106 KB   LCP 248 ms
+//   this pipeline, WITH preload .............. CLS 0      13 woff2 · 301 KB   LCP 376 ms
+//   this pipeline, no preload (shipped) ...... CLS 0       3 woff2 · 106 KB   LCP 232 ms
+//
+// The 0.2943 was a single shift at 383 ms on the quickstart's <ol>, right after the faces landed
+// at ~275 ms. 19 @font-face are declared and 3 are fetched: unicode-range doing its job.
+import Default from '@astrojs/starlight/components/Head.astro'
+import { Font } from 'astro:assets'
+---
+
+<Default><slot /></Default>
+<Font cssVariable="--olv-font-sans" />
+<Font cssVariable="--olv-font-mono" />
+<Font cssVariable="--olv-font-display" />

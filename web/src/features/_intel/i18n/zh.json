@@ -1,0 +1,119 @@
+{
+  "severity": {
+    "label": "严重程度",
+    "info": "信息",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "严重"
+  },
+  "outcome": {
+    "pass": "通过",
+    "fail": "失败",
+    "error": "错误",
+    "skipped": "已跳过",
+    "blocked": "已阻断",
+    "refused": "已拒绝",
+    "complied": "已遵从",
+    "leaked": "已泄露"
+  },
+  "verdict": {
+    "allow": "允许",
+    "flag": "标记",
+    "block": "阻断",
+    "detective": "侦测",
+    "enforced": "已强制执行"
+  },
+  "integrity": {
+    "verified": "完整性已验证",
+    "failed": "完整性验证失败",
+    "unavailable": "签名不可用",
+    "pending": "尚未证明",
+    "tamperEvident": "防篡改",
+    "chainOk": "哈希链一致",
+    "chainBroken": "哈希链在 seq {{seq}} 处断裂",
+    "reverifyHint": "每个事件都携带 seq · hash · prev_hash，因此读取方可离线重新验证链路。",
+    "attestedSeq": "已证明至 seq {{seq}}",
+    "headSeq": "账本头部 seq {{seq}}"
+  },
+  "consent": {
+    "registered": "已注册",
+    "authorized": "已授权",
+    "revoked": "已吊销",
+    "notAuthorizedHint": "注册并不等于同意——在目标获得授权之前，运行将被阻断。"
+  },
+  "risk": {
+    "unacceptable": "不可接受",
+    "high": "高",
+    "limited": "有限",
+    "minimal": "极小",
+    "suggested": "建议",
+    "approved": "已批准",
+    "overridden": "已覆盖"
+  },
+  "control": {
+    "satisfied": "已满足",
+    "by_design": "设计就绪",
+    "partial": "部分",
+    "gap": "缺口",
+    "unmapped": "未映射",
+    "operational": "运营层面",
+    "architectural": "架构层面"
+  },
+  "hash": {
+    "fingerprint": "指纹",
+    "hint": "单向指纹——绝非载荷（最小化数据）。",
+    "copy": "复制完整值",
+    "copied": "已复制"
+  },
+  "notices": {
+    "truncated": "部分数据",
+    "truncatedHint": "此聚合已达到扫描上限——它是部分结果，而非精确总数。",
+    "selfAudited": "特权读取——已记录到审计账本中。",
+    "seam": "尚未接线",
+    "seamBody": "已声明的契约——{{what}} 尚未接线到后端，因此此处显示的是已声明的结构，而非实时数据。",
+    "minimalData": "仅含聚合数据与元数据——不包含提示词、输出或密钥。",
+    "declared": "已声明的引用",
+    "noConnector": "无连接器——是缺失，而非零。",
+    "listTruncated": "已加载 {{n}} 行；还有更多",
+    "listTruncatedHint": "引擎返回的只是一页，而不是完整结果集。无法根据已加载的行推断总数，并且可能存在未显示的行。"
+  },
+  "badges": {
+    "signed": "已签名",
+    "linked": "保管链",
+    "governed": "受治理",
+    "ungoverned": "未受治理",
+    "approximate": "近似",
+    "attributed": "已归因",
+    "isolated": "已隔离",
+    "destroyed": "已销毁"
+  },
+  "timeline": {
+    "title": "重建的时间线",
+    "empty": "范围内没有事件。",
+    "seq": "seq"
+  },
+  "consumption": {
+    "projected": "预计 {{pct}}",
+    "label": "预算消耗",
+    "valueText": "已消耗 {{consumed}}，预计 {{projected}}"
+  },
+  "disclaimers": {
+    "report": "基于平台观测证据得出的控制状态技术映射。这不是认证，也不构成法律意见。"
+  },
+  "gate": {
+    "approved": "已批准",
+    "pending": "待处理",
+    "rejected": "已拒绝",
+    "expired": "已过期",
+    "no_gate": "无门控",
+    "not_required": "无需",
+    "approvedHint": "治理已批准此计划——执行以继续。",
+    "pendingHint": "正在等待治理裁定（默认拒绝）。",
+    "rejectedHint": "治理拒绝了此计划——请用新的计划重新请求。",
+    "expiredHint": "审批已过期——请重新计划并再次请求。",
+    "no_gateHint": "未配置审批门控——此操作无法继续。",
+    "not_requiredHint": "此操作无需审批。",
+    "displayNotice": "门控状态只是此处展示的一个上报裁定。授权在服务端强制执行；控制台绝不会依据此值授予访问权限。"
+  }
+}

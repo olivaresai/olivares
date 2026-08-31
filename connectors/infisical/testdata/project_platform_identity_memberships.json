@@ -1,0 +1,20 @@
+{
+  "identityMemberships": [
+    {
+      "id": "pim-1",
+      "roles": [
+        {
+          "id": "r-1",
+          "role": "custom",
+          "customRoleSlug": "deploy-bot",
+          "isTemporary": false
+        }
+      ],
+      "identity": {
+        "id": "id-ci-deployer",
+        "name": "ci-deployer"
+      }
+    }
+  ],
+  "totalCount": 1
+}

@@ -1,0 +1,155 @@
+{
+  "title": "Copia de seguridad y restauración",
+  "description": "Gestiona instantáneas de recuperación ante desastres del plano de control.",
+  "tabs": {
+    "backups": "Copias de seguridad",
+    "schedule": "Programación"
+  },
+  "actions": {
+    "restore": "Restaurar",
+    "createBackup": "Crear copia",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "upload": "Subir",
+    "delete": "Eliminar"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "Copias de seguridad",
+    "searchPlaceholder": "Buscar copias...",
+    "deleted": "Copia eliminada",
+    "deleteTitle": "Eliminar copia",
+    "deleteDescription": "¿Eliminar permanentemente \"{{filename}}\"? Esta acción no se puede deshacer.",
+    "columns": {
+      "date": "Fecha",
+      "filename": "Nombre de archivo",
+      "size": "Tamaño",
+      "engine": "Motor",
+      "tenants": "Tenants",
+      "notes": "Notas"
+    },
+    "actions": {
+      "download": "Descargar",
+      "inspect": "Inspeccionar",
+      "downloadAria": "Descargar {{filename}}",
+      "inspectAria": "Inspeccionar {{filename}}",
+      "deleteAria": "Eliminar {{filename}}",
+      "downloadFailed": "Error al descargar: {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "Programación de copias actualizada",
+    "loading": "Cargando programación...",
+    "title": "Programación automática de copias",
+    "description": "Configura copias recurrentes. El motor ejecuta la programación; la frase de paso se deriva del secreto de la instancia.",
+    "enableAria": "Activar copias automáticas",
+    "enabled": "Activada",
+    "disabled": "Desactivada",
+    "cronLabel": "Expresión cron",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "Diariamente a medianoche",
+      "daily0200": "Diariamente a las 02:00",
+      "daily0300": "Diariamente a las 03:00",
+      "weeklySundayMidnight": "Semanalmente el domingo a medianoche",
+      "weeklyMondayMidnight": "Semanalmente el lunes a medianoche",
+      "monthlyFirstMidnight": "Mensualmente el día 1 a medianoche",
+      "dailyAt": "Diariamente a las {{time}}"
+    },
+    "retentionLabel": "Retención (días)",
+    "retentionDescription": "Las copias más antiguas se purgan automáticamente.",
+    "dualControlAria": "Requerir control dual para restaurar",
+    "dualControlLabel": "Requerir control dual para restaurar",
+    "dualControlDescription": "Cuando está activado, una restauración iniciada DESDE ESTA CONSOLA debe ser aprobada por un segundo administrador distinto antes de ejecutarse. Desactivarlo queda registrado y no surte efecto hasta una hora después — la puerta no se puede quitar en la misma sesión que la restauración que protege; volver a activarlo cancela una retirada pendiente. No cubre `olivares dr restore` en el host, que reemplaza un estate fuera de esta puerta y en su lugar registra un operador declarado (los estates Postgres solo se restauran así). Déjalo desactivado para un operador en solitario.",
+    "dualControlDisarmPending": "Retirada solicitada — registrada, y surte efecto el {{when}}. Hasta entonces una restauración sigue necesitando un segundo administrador. Vuelve a activarlo para cancelarla.",
+    "dualControlDisarmRequestedBy": "Solicitada por {{who}}.",
+    "save": "Guardar programación"
+  },
+  "trigger": {
+    "started": "Copia iniciada",
+    "title": "Crear copia",
+    "description": "Crea una instantánea cifrada de todo el plano de control.",
+    "notes": "Notas",
+    "notesPlaceholder": "Descripción opcional para esta copia",
+    "passphrase": "Frase de paso",
+    "passphraseDescription": "Se usa para cifrar el paquete de copia.",
+    "start": "Iniciar copia"
+  },
+  "job": {
+    "initializing": "Inicializando",
+    "status": {
+      "running": "En ejecución",
+      "completed": "Completada",
+      "failed": "Fallida"
+    },
+    "progressAria": "{{phase}} {{progress}}%",
+    "complete": "{{progress}}% completado"
+  },
+  "pending": {
+    "title": "Restauraciones pendientes de aprobación (control dual)",
+    "requestedByPrefix": "Solicitada por",
+    "approveRestore": "Aprobar y restaurar",
+    "approved": "Restauración aprobada",
+    "dialogTitle": "Aprobar restauración",
+    "dialogDescription": "Estás aprobando una restauración solicitada por {{initiator}}. Debes ser un administrador distinto del solicitante.",
+    "passphrase": "Frase de paso",
+    "passphraseDescription": "Introduce la frase de paso con la que se creó la copia.",
+    "confirmTitle": "Confirmar restauración",
+    "confirmDescription": "Esto sobrescribirá todos los datos actuales con el contenido de la copia una vez verificada. Esta operación no se puede deshacer.",
+    "confirmLabel": "Aprobar y restaurar ahora"
+  },
+  "restore": {
+    "notAuthorized": "No autorizado",
+    "uploadFailed": "Error al subir",
+    "started": "Restauración iniciada",
+    "title": "Restaurar desde copia",
+    "description": "Sube un archivo .drbundle para restaurar el estado del plano de control.",
+    "apply": "Aplicar restauración",
+    "confirmTitle": "Confirmar restauración",
+    "confirmDescription": "Esto sobrescribirá todos los datos actuales con el contenido de la copia. Esta operación no se puede deshacer.",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "Restaurar ahora",
+    "confirmSummaryPrefix": "Restaurando desde",
+    "confirmSummarySuffix": "con {{count}} tenant(s).",
+    "awaitingTitle": "Esperando a un segundo aprobador",
+    "awaitingDescription": "El control dual está activado. Esta restauración no se ejecutará hasta que un administrador distinto la apruebe y proporcione la frase de paso desde la pestaña Copias.",
+    "requestId": "ID de solicitud",
+    "selectFile": "Selecciona un archivo .drbundle",
+    "chooseFile": "Elegir archivo",
+    "passphrase": "Frase de paso",
+    "passphraseDescription": "Introduce la frase de paso usada al crear esta copia.",
+    "manifestTitle": "Manifiesto del paquete",
+    "manifest": {
+      "file": "Archivo",
+      "engine": "Motor",
+      "created": "Creada",
+      "tenants": "Tenants",
+      "keys": "Claves"
+    }
+  },
+  "inspect": {
+    "title": "Detalle de la copia",
+    "description": "Manifiesto descodificado del paquete sellado: exactamente lo que devolvería una restauración.",
+    "filename": "Nombre de fichero",
+    "size": "Tamaño",
+    "engine": "Motor",
+    "createdAt": "Creada",
+    "tenants": "Tenants",
+    "keys": "Claves selladas",
+    "empty": "Ninguna",
+    "loadFailed": "No se pudo cargar el detalle de la copia."
+  },
+  "empty": {
+    "backup": {
+      "title": "Aún no hay instantáneas de copia de seguridad",
+      "description": "Crea una copia cifrada desde esta consola si usas SQLite; con PostgreSQL, crea el paquete mediante la CLI de DR en el directorio de copias configurado."
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "users": [
+    {
+      "id": "om-1",
+      "role": "admin",
+      "isActive": true,
+      "user": {
+        "id": "user-alice",
+        "username": "alice",
+        "email": "alice@corp.example",
+        "firstName": "Alice",
+        "lastName": "Smith"
+      }
+    },
+    {
+      "id": "om-2",
+      "role": "member",
+      "isActive": false,
+      "user": {
+        "id": "user-bob",
+        "username": "bob",
+        "email": "bob@corp.example",
+        "firstName": "",
+        "lastName": ""
+      }
+    },
+    {
+      "id": "om-3",
+      "role": "member",
+      "user": {
+        "id": "user-carol",
+        "username": "carol",
+        "email": "carol@corp.example",
+        "firstName": "Carol",
+        "lastName": "Reyes"
+      }
+    }
+  ]
+}

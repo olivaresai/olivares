@@ -1,0 +1,6 @@
+{
+  "data": {
+    "name": "shared-read",
+    "policy": "path \"secret/data/shared/*\" { capabilities = [\"read\"] }\n"
+  }
+}

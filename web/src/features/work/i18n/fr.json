@@ -1,0 +1,267 @@
+{
+  "acceptance": {
+    "draftNotice": "Cette unité est en brouillon ; ses critères peuvent donc encore être corrigés. La clé du critère est une identité permanente et n'est jamais réattribuée.",
+    "lockedNotice": "Cette unité a quitté le brouillon ; les critères ne peuvent donc plus être modifiés, seulement évalués. La clé du critère est une identité permanente.",
+    "none": "Aucun critère d'acceptation.",
+    "required": "Obligatoire",
+    "state": {
+      "pending": "En attente",
+      "passed": "Satisfait",
+      "failed": "Non satisfait",
+      "waived": "Dispensé"
+    }
+  },
+  "apply": {
+    "planning": "Planification de la modification. Rien n'est écrit à cette étape.",
+    "planTitle": "Plan",
+    "command": "Commande",
+    "permission": "Permission",
+    "eventType": "Événement",
+    "rowEffects": "Lignes qui seraient écrites",
+    "noRowEffects": "Cette commande n'écrit aucune ligne.",
+    "externalCalls": "Appels externes",
+    "planHash": "Empreinte du plan",
+    "keyTitle": "Clé d'idempotence de cette modification",
+    "keyHelp": "Générée une seule fois par intention et réutilisée à chaque nouvelle tentative. Conservez-la : si le réseau coupe en pleine application, réessayer avec cette clé exacte est ce qui empêche une modification d'en devenir deux.",
+    "confirm": "Appliquer",
+    "applying": "Application…",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "appliedTitle": "Appliquée",
+    "replayedTitle": "Déjà appliquée",
+    "replayedBody": "Le moteur a reconnu cette clé d'idempotence et a rejoué le résultat d'origine. Rien n'a été écrit une seconde fois.",
+    "commandId": "Id de commande",
+    "resultId": "Id de résultat",
+    "status": "Nouveau statut",
+    "etag": "Nouvelle étiquette de version",
+    "auditSeq": "Séquence d'audit",
+    "reread": "Relire et comparer",
+    "retrySameKey": "Réessayer avec la même clé",
+    "failure": {
+      "conflict-version": "Quelqu'un d'autre a modifié cette unité",
+      "version-required": "Précondition de version manquante",
+      "conflict-idempotency": "Cette clé a déjà servi pour une autre modification",
+      "conflict-domain": "Le moteur a refusé cette commande",
+      "unknown": "Vérification impossible",
+      "other": "La modification a échoué",
+      "plan-changed": "Le plan n'est plus à jour"
+    },
+    "conflictVersionBody": "L'unité a changé entre sa lecture et l'application de cette modification ; celle-ci a donc été refusée au lieu d'être appliquée par-dessus. Relisez-la et comparez avant de décider — la renvoyer écraserait ce qu'a fait l'autre modification.",
+    "versionRequiredBody": "Cette commande exige la version actuelle de l'unité et aucune n'a été envoyée. Rouvrez l'unité pour que son étiquette de version soit relue.",
+    "conflictIdempotencyBody": "Cette clé d'idempotence a déjà été utilisée avec un corps, une version ou un plan différents. Le moteur a refusé plutôt que de deviner lequel vous vouliez. Recommencez la modification pour obtenir une nouvelle clé.",
+    "conflictDomainBody": "Les règles propres au noyau ont refusé cette commande — par exemple une transition illégale ou un cycle de dépendances. Relire ne changera pas la réponse ; c'est la commande qui doit changer.",
+    "otherBody": "La modification n'a pas abouti.",
+    "continue": "Continuer",
+    "inputIntro": "Le moteur exige ces informations avant de pouvoir planifier la modification. Sans elles, il refuse la commande d'emblée.",
+    "planChangedBody": "Le plan a changé entre son affichage et son application ; rien n'a donc été écrit. Rouvrez l'action pour planifier à nouveau et lisez le nouveau plan avant de confirmer.",
+    "field": {
+      "code": {
+        "label": "Code",
+        "hint": "Un jeton machine court : minuscules, chiffres, point, tiret ou tiret bas.",
+        "placeholder": "ex. blocked_on_review"
+      },
+      "reason": {
+        "label": "Motif",
+        "hint": "Texte libre, enregistré avec la modification. C'est ce que lira une autre session.",
+        "placeholder": "Pourquoi cela se produit"
+      },
+      "evidence_ref": {
+        "label": "Référence de preuve",
+        "hint": "Où se trouve la preuve de ce verdict. Obligatoire pour enregistrer satisfait ou non satisfait.",
+        "placeholder": "ex. run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "Empreinte de la preuve",
+        "hint": "Un condensé sha256 de cette preuve. Obligatoire pour enregistrer satisfait.",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "Décision de dispense",
+        "hint": "La décision qui autorise à dispenser ce critère, s'il y en a une.",
+        "placeholder": "Id de décision (facultatif)"
+      },
+      "holder_sid": {
+        "label": "Session détentrice",
+        "hint": "L'id canonique de session qui détiendra le bail. Le moteur refuse tout autre.",
+        "placeholder": "id de la session détentrice"
+      },
+      "fence": {
+        "label": "Fence",
+        "hint": "Le fence sur lequel tu agis. En dessous de 1 le moteur refuse ; un fence périmé perd face au détenteur actuel.",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "Décision",
+        "hint": "La décision sur laquelle repose cet acte. Sans elle, le moteur ne l'accepte pas.",
+        "placeholder": "id de la décision"
+      }
+    }
+  },
+  "checks": {
+    "evidence": "preuve {{ref}}"
+  },
+  "common": {
+    "refresh": "Actualiser",
+    "loadMore": "Charger plus"
+  },
+  "decisions": {
+    "title": "Décisions",
+    "subtitle": "Le registre des décisions en ajout seul et sa projection de l'état actuel.",
+    "view": {
+      "effective": "En vigueur",
+      "revoked": "Révoquées",
+      "history": "Historique complet"
+    },
+    "historyNotice": "Ceci est l'historique en ajout seul. Le moteur n'attribue pas d'état actuel à ces lignes ; aucune n'est donc étiquetée en vigueur ou révoquée — passez à une autre vue pour poser cette question.",
+    "state": {
+      "effective": "En vigueur",
+      "revoked": "Révoquée",
+      "notAttributed": "Cette vue n'attribue pas d'état"
+    },
+    "meta": "{{subject}} · décidée par {{actor}} · {{at}}",
+    "revoke": "Révoquer",
+    "revokeTitle": "Révoquer la décision",
+    "revokeBody": "La révocation est enregistrée comme une nouvelle entrée ; la décision d'origine n'est jamais supprimée.",
+    "empty": {
+      "effective": {
+        "title": "Aucune décision en vigueur",
+        "body": "Le moteur a lu la projection de l'état actuel et n'en a trouvé aucune en vigueur."
+      },
+      "revoked": {
+        "title": "Aucune décision révoquée",
+        "body": "Le moteur a lu la projection de l'état actuel et n'en a trouvé aucune révoquée."
+      },
+      "history": {
+        "title": "Aucune décision enregistrée",
+        "body": "Rien n'a encore été décidé ici."
+      }
+    }
+  },
+  "dependencies": {
+    "none": "Aucune dépendance."
+  },
+  "detail": {
+    "subtitle": "{{kind}} · version {{version}}",
+    "applyTitle": "Appliquer la modification",
+    "owner": "Responsable",
+    "provenance": "Provenance",
+    "priority": "Priorité",
+    "blocked": "Blocage",
+    "terminal": "Issue",
+    "etag": "Étiquette de version",
+    "tabs": {
+      "overview": "Aperçu",
+      "acceptance": "Acceptation",
+      "dependencies": "Dépendances",
+      "events": "Événements",
+      "lease": "Bail"
+    }
+  },
+  "events": {
+    "none": "Aucun événement enregistré pour cette unité."
+  },
+  "filters": {
+    "status": "Statut",
+    "allStatus": "Tout statut",
+    "priority": "Priorité",
+    "allPriority": "Toute priorité",
+    "archived": {
+      "label": "Archivées",
+      "any": "Archivées et non archivées",
+      "false": "Non archivées uniquement",
+      "true": "Archivées uniquement"
+    }
+  },
+  "items": {
+    "title": "Unités de travail",
+    "subtitle": "Les filtres restreignent l'ensemble du magasin, pas seulement la page affichée.",
+    "empty": {
+      "title": "Aucune unité ne correspond",
+      "body": "Rien dans le magasin ne correspond à ces filtres. C'est une réponse réelle et complète : le moteur a lu le magasin et n'en a trouvé aucune."
+    }
+  },
+  "lease": {
+    "none": "Aucun bail sur cet élément.",
+    "holder": "Détenteur",
+    "state": "État",
+    "fence": "Fence",
+    "expires": "Expire",
+    "renewals": "Renouvellements",
+    "liveness": "Vivacité",
+    "live": "Actif",
+    "notLive": "Inactif",
+    "unknown": "Impossible de regarder",
+    "reason": "Motif",
+    "ttl": "TTL (secondes)",
+    "noWrite": "Votre rôle ne peut pas modifier ce bail.",
+    "noAdmin": "Reprendre, révoquer et rebaser exigent lease admin.",
+    "actions": {
+      "acquire": "Acquérir",
+      "renew": "Renouveler",
+      "release": "Libérer",
+      "takeover": "Reprendre",
+      "revoke": "Révoquer",
+      "clockRebase": "Rebaser l'horloge"
+    },
+    "noRead": "Votre rôle ne peut pas lire ce bail."
+  },
+  "status": {
+    "draft": "Brouillon",
+    "ready": "Prête",
+    "active": "Active",
+    "blocked": "Bloquée",
+    "review": "En revue",
+    "completed": "Terminée",
+    "failed": "Échouée",
+    "canceled": "Annulée",
+    "dependencyBlocked": "Dépendance ouverte",
+    "archived": "Archivée"
+  },
+  "stream": {
+    "open": "En direct",
+    "connecting": "Reconnexion…",
+    "closed": "Pas de flux",
+    "error": "Flux interrompu",
+    "unavailableBody": "La liste affichée peut être obsolète, et rien d'autre ne vous en avertira. Actualisez pour lire directement le magasin."
+  },
+  "subtitle": "Le backlog durable entre sessions : unités de travail, responsabilité, dépendances, critères d'acceptation et décisions. Toute modification est planifiée avant d'être appliquée.",
+  "tabs": {
+    "items": "Unités de travail",
+    "decisions": "Décisions"
+  },
+  "title": "Travail",
+  "transition": {
+    "item.ready": "Marquer prête",
+    "item.block": "Bloquer",
+    "item.unblock": "Débloquer",
+    "item.submit": "Soumettre à la revue",
+    "item.complete": "Terminer",
+    "item.fail": "Marquer échouée",
+    "item.cancel": "Annuler",
+    "item.archive": "Archiver"
+  },
+  "truncation": {
+    "label": "{{n}} lignes chargées ; il y en a d'autres",
+    "hint": "Cette liste est paginée par keyset et le moteur plafonne une page à 200. Seules les lignes chargées sont affichées ; utilisez les filtres pour la restreindre."
+  },
+  "unavailable": {
+    "title": "Vérification impossible",
+    "body": "Le moteur n'a pas pu mener cette observation à son terme ; il signale donc un résultat inconnu plutôt qu'un résultat. Ne considérez rien de ce panneau comme confirmé.",
+    "retryHint": "Il est indéterminé si la modification a été écrite. Réessayez avec la MÊME clé d'idempotence : c'est précisément ce qui rend la nouvelle tentative sûre, car le moteur la reconnaîtra comme la même intention et non comme une seconde.",
+    "code": "Code du moteur : {{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "Propre",
+      "help": "Le moteur a vérifié et n'a rien trouvé d'anormal."
+    },
+    "ROTO": {
+      "label": "Cassé",
+      "help": "Le moteur a vérifié et a trouvé une violation de règle."
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "Vérification impossible",
+      "help": "Le moteur N'A PAS pu mener l'observation à son terme. Ce n'est ni une réussite ni un résultat vide : la réponse est inconnue."
+    }
+  }
+}

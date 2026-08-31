@@ -1,0 +1,190 @@
+{
+  "title": "会话",
+  "subtitle": "智能体实时运行情况——每个会话当前正在执行的操作、其 token、成本与节奏，通过实时流持续更新。",
+  "refresh": "刷新",
+  "search": "搜索会话、智能体、操作……",
+  "allStates": "所有状态",
+  "summary": {
+    "active": "活跃",
+    "idle": "空闲",
+    "silentEvasion": "可能存在规避",
+    "total": "会话",
+    "launched": "已启动",
+    "discovered": "已发现",
+    "attention": "需要关注"
+  },
+  "cols": {
+    "session": "会话",
+    "agent": "智能体",
+    "state": "状态",
+    "action": "当前操作",
+    "model": "模型",
+    "tokens": "Token（输入 / 输出）",
+    "cost": "成本",
+    "duration": "时长",
+    "lastSeen": "最后活动",
+    "provenance": "来源",
+    "control": "可控程度"
+  },
+  "state": {
+    "active": "活跃",
+    "idle": "空闲",
+    "ended": "已结束",
+    "silent_evasion": "可能存在规避"
+  },
+  "stateHint": {
+    "active": "正在运行——事件处于预期节奏之内。",
+    "idle": "处于静默，但仍在容许范围内。",
+    "ended": "已完成或已关闭。",
+    "silent_evasion": "在其预期节奏内陷入静默——这是一个值得你关注的信号，而非错误。"
+  },
+  "evasionBanner": "此会话在其预期节奏内陷入静默。引擎将其标记为可能存在规避——请查看时间线。",
+  "detail": {
+    "title": "会话",
+    "goal": "目标",
+    "summary": "摘要",
+    "noGoal": "未上报目标",
+    "noSummary": "未上报摘要",
+    "agent": "智能体",
+    "model": "模型",
+    "state": "状态",
+    "action": "当前操作",
+    "resource": "资源",
+    "mode": "模式",
+    "inputTokens": "输入 token",
+    "outputTokens": "输出 token",
+    "cost": "成本",
+    "events": "事件",
+    "toolCalls": "工具调用",
+    "duration": "时长",
+    "firstSeen": "首个事件",
+    "lastSeen": "最后事件",
+    "minimalData": "此处仅显示元数据。按照设计，引擎绝不会在此携带 SQL、负载或密钥（最小化数据）。",
+    "viewAccess": "访问映射",
+    "viewInventory": "清单"
+  },
+  "timeline": {
+    "title": "时间线",
+    "subtitle": "重建的摄取顺序——最新事件随到达即时显示。",
+    "loadMore": "加载更多",
+    "empty": "暂无时间线事件",
+    "emptyHint": "当会话发出工具、MCP、成本与发现项事件时，它们将显示在此处。",
+    "all": "所有类型",
+    "source": "来源"
+  },
+  "kind": {
+    "tool": "工具",
+    "mcp": "MCP",
+    "cost": "成本",
+    "finding": "发现项"
+  },
+  "empty": {
+    "title": "暂无会话",
+    "description": "智能体一开始工作，会话就会出现在这里：既有 Olivares 通过连接器发现的，也有你从本页启动的。"
+  },
+  "forbidden": {
+    "title": "未授权访问会话",
+    "description": "你的角色不包含查看实时会话的权限。"
+  },
+  "operateTitle": "Claude Code",
+  "operateSubtitle": "创建、接入并治理 Claude Code 会话，无需 SSH。Olivares 仅观察到的会话也在同一个列表里，并打开同一张卡片。",
+  "unifiedSubtitle": "本平面上的全部智能体会话——Olivares 发现的与它启动的——同列一处，显示每个会话正在做什么，以及你能对它做什么。",
+  "launch": "新建会话",
+  "allSources": "全部来源",
+  "tabs": {
+    "sessions": "会话",
+    "workspaces": "工作区"
+  },
+  "partial": {
+    "noLiveRead": "未显示被观察的会话：你的角色不包含 sessions:live:read。下面这些已启动的会话只是能读到的部分，不是全貌。",
+    "noRunRead": "未显示已启动的会话：你的角色不包含 sessions:run:read。下面标为“已发现”的会话仍可能由 Olivares 启动——此列表无法核对。",
+    "truncated": "这是最近的一页，不是全部资产。此处的来源只在已加载的数据上比对，因此运行记录已滚出该页的会话可能显示为“已发现”；打开会话，让引擎来回答。",
+    "runLookupFailed": "已启动的那一半读取失败：运行查询出错。下面的行是被观察的那一半返回的内容；来源标记为“未读取”，而不是猜测。",
+    "liveLookupFailed": "被观察的那一半读取失败：实时查询出错。下面的行是已启动的会话；遥测列为空是因为没能读到，而不是因为没有。"
+  },
+  "card": {
+    "tabs": {
+      "overview": "概览",
+      "live": "实时",
+      "governance": "治理",
+      "lifecycle": "生命周期",
+      "details": "详情"
+    },
+    "provenance": {
+      "launched": "已启动",
+      "discovered": "已发现",
+      "launchedExplain": "有一条启动记录把该会话与 Olivares 关联起来：是它启动的。现在能对它做什么见下方——启动过并不等于持有一个存活的进程。",
+      "discoveredExplain": "没有任何启动记录与之关联，因此就本平面能够证实的范围而言，Olivares 并未启动它。可以读取和审计，但无法操控。",
+      "unknownExplain": "无法核对该会话是否由 Olivares 启动：缺少 sessions:run:read 权限，或查询失败。这是“未读取”，不是“未启动”。",
+      "multipleRuns": "有 {{n}} 个运行在驱动该会话",
+      "unknown": "来源未读取"
+    },
+    "control": {
+      "title": "这个会话能被做什么",
+      "full": "完全控制",
+      "lifecycle": "仅生命周期",
+      "observe": "仅观察",
+      "fullExplain": "Olivares 持有该进程并桥接其输入输出：可观察、可操控、可停止。",
+      "lifecycleExplain": "只有启动与停止，中间没有别的：要么 Olivares 持有进程但不持有其输入输出，要么进程已停止且可以恢复。",
+      "observeExplain": "Olivares 没有该会话的任何进程。可以读取和审计；停止它不是本平面能做到的事。",
+      "unknownExplain": "运维那一半未被读取（sessions:run:read），以下仅是从被观察的那一半所能看到的内容。"
+    },
+    "cap": {
+      "watch": "查看实时遥测与时间线",
+      "attach": "实时查看其输入输出",
+      "drive": "向它发送输入",
+      "stop": "停止它",
+      "resume": "恢复它",
+      "cleanup": "清理它的工作区",
+      "delete": "删除它的记录",
+      "reason": {
+        "no-run": "没有进程：该会话不是 Olivares 启动的",
+        "no-observation": "尚未观察到该会话的任何数据",
+        "transport": "其输入输出被转发到 Anthropic 云端，Olivares 无法展示也无法操控",
+        "state": "当前状态不允许",
+        "permission": "你的角色不包含该权限"
+      },
+      "sharedReason": "不可用：{{reason}}。"
+    },
+    "actions": {
+      "stop": "停止",
+      "resume": "恢复",
+      "cleanup": "清理",
+      "delete": "删除",
+      "cleanupHint": "结束该运行并释放其恢复句柄，此后将无法再恢复。生命周期账本予以保留。",
+      "deleteHint": "移除该运行记录。已锚定的生命周期事件仍保留在审计账本中。"
+    },
+    "transport": {
+      "stream-json": "受治理（stream-json）",
+      "remote-control": "远程控制"
+    },
+    "postureValue": {
+      "enforced": "强制执行——其工具调用在发生时即被校验",
+      "observed": "仅观察——其工具调用被记录，但不被校验"
+    },
+    "sessionRef": "会话引用",
+    "engine": "引擎",
+    "posture": "治理姿态",
+    "none": "无",
+    "notDeclared": "未声明",
+    "unclaimed": "观察到一个未持有有效认领的会话在活动。引擎如实上报；这与“可能的规避”不是同一个信号。",
+    "relayedIO": "其输入输出被转发到 Anthropic 云端，因此 Olivares 无法在此展示。生命周期控制依然有效。",
+    "observedNotRead": "被观察的那一半未被读取：你的角色不包含 sessions:live:read。",
+    "noObservationYet": "尚未观察到该会话的任何数据——没有以该引用到达本平面的遥测。",
+    "actionFailed": "操作未能完成。",
+    "activeRun": "当前操作",
+    "pickRun": "有多个运行在驱动该会话。选择其中一个来接入、治理或停止它。"
+  },
+  "facet": {
+    "observed": "观察态：{{state}}",
+    "run": "运行态：{{state}}"
+  },
+  "runState": {
+    "pending": "待启动",
+    "running": "运行中",
+    "idle": "空闲",
+    "stopped": "已停止",
+    "failed": "失败",
+    "cleaned": "已清理"
+  }
+}

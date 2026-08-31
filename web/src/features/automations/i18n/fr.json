@@ -1,0 +1,48 @@
+{
+  "title": "Automatisations",
+  "description": "Les trois rails d'automatisation au même endroit : plannings gouvernés, abonnements aux événements et routes d'alerte, avec le catalogue de déclencheurs auxquels ils peuvent réagir.",
+  "tabs": {
+    "overview": "Vue d’ensemble",
+    "workflows": "Workflows"
+  },
+  "rails": {
+    "openAction": "Ouvrir {{feature}}",
+    "countLabel": "{{count}} au total",
+    "loadFailed": "Impossible de charger ce rail.",
+    "forbidden": "Vous n'êtes pas autorisé à voir ce rail.",
+    "schedules": {
+      "title": "Plannings",
+      "description": "Cadences gouvernées : planning → déclenchement HITL en deux phases, avec détection des cadences manquées.",
+      "active": "{{count}} actifs",
+      "stalled": "{{count}} bloqués",
+      "paused": "{{count}} en pause"
+    },
+    "subscriptions": {
+      "title": "Abonnements aux événements",
+      "description": "Livraison événement → sink/SIEM avec réessais, replay et registre des livraisons.",
+      "enabled": "{{count}} activés",
+      "disabled": "{{count}} désactivés"
+    },
+    "routes": {
+      "title": "Routes d'alerte",
+      "description": "Routage finding/approbation → destination avec seuils de sévérité et dry-run.",
+      "enabled": "{{count}} activées",
+      "disabled": "{{count}} désactivées"
+    },
+    "truncated": "{{n}} lignes chargées ; il y en a d'autres",
+    "truncatedHint": "Il y a plus de lignes que celles affichées ; ce rail les prend par id de ligne (attribué à la création), les suivantes manquent donc. Un planning, un abonnement ou une route qui n'apparaît PAS ici ne prouve pas son inexistence.",
+    "countLoaded": "{{count}} chargés"
+  },
+  "triggers": {
+    "title": "Catalogue de déclencheurs",
+    "description": "Tout ce à quoi une automatisation peut réagir. Les abonnements peuvent capturer tout type catalogué ; les routes d'alerte matchent le sous-ensemble routable.",
+    "typeColumn": "Type",
+    "stabilityColumn": "Stabilité",
+    "permissionColumn": "Permission requise",
+    "descriptionColumn": "Description",
+    "routable": "Routable",
+    "routableHint": "Ce type peut être matché par les routes d'alerte.",
+    "empty": "Aucun catalogue de déclencheurs disponible.",
+    "loadFailed": "Impossible de charger le catalogue de déclencheurs."
+  }
+}

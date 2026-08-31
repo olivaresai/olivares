@@ -1,0 +1,40 @@
+{
+  "title": "Visor de logs",
+  "controls": {
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "pauseAria": "Pausar desplazamiento automático",
+    "resumeAria": "Reanudar desplazamiento automático",
+    "clear": "Limpiar",
+    "clearAria": "Limpiar entradas de log",
+    "entryCount": "{{value}} entradas"
+  },
+  "filters": {
+    "levelAria": "Filtrar logs {{level}}",
+    "modulePlaceholder": "Módulo...",
+    "moduleAria": "Filtrar por módulo",
+    "searchPlaceholder": "Buscar...",
+    "searchAria": "Buscar en mensajes de log",
+    "clearAria": "Limpiar filtros"
+  },
+  "capture": {
+    "debugUnavailable": "Las entradas DEBUG no se capturan con el nivel de log actual del motor — establece OLIVARES_LOG_LEVEL=debug."
+  },
+  "stream": {
+    "empty": "No hay entradas de log para mostrar.",
+    "ariaLabel": "Flujo de logs",
+    "attrsAriaLabel": "Atributos estructurados del registro"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  }
+}

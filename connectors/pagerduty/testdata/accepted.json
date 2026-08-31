@@ -1,0 +1,5 @@
+{
+  "status": "success",
+  "message": "Event processed",
+  "dedup_key": "srv-01-cpu-spike"
+}

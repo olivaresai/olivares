@@ -1,0 +1,204 @@
+{
+  "errors": {
+    "generic": "Algo salió mal"
+  },
+  "app": {
+    "name": "Olivares AI",
+    "tagline": "Control plane"
+  },
+  "actions": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "retry": "Reintentar",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "refresh": "Actualizar",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "viewAll": "Ver todo",
+    "learnMore": "Más información",
+    "openMenu": "Abrir menú",
+    "expandSidebar": "Expandir barra lateral",
+    "collapseSidebar": "Contraer barra lateral",
+    "help": "Abrir la documentación de esta vista"
+  },
+  "states": {
+    "loading": "Cargando…",
+    "empty": "Aún no hay nada aquí",
+    "noResults": "Sin resultados",
+    "comingSoon": "Próximamente",
+    "loaded": "Cargado",
+    "yes": "Sí",
+    "no": "No"
+  },
+  "theme": {
+    "label": "Tema",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Sistema",
+    "toggle": "Cambiar tema"
+  },
+  "density": {
+    "label": "Densidad",
+    "comfortable": "Cómoda",
+    "compact": "Compacta"
+  },
+  "language": {
+    "label": "Idioma"
+  },
+  "table": {
+    "label": "Tabla de datos",
+    "rowsPerPage": "Filas por página",
+    "page": "Página",
+    "of": "de",
+    "noRows": "No hay filas que mostrar",
+    "loadMore": "Cargar más",
+    "sortAscending": "Orden ascendente",
+    "sortDescending": "Orden descendente",
+    "search": "Buscar filas…",
+    "selectAllVisible": "Seleccionar todas las filas visibles",
+    "selectRow": "Seleccionar fila {{id}}"
+  },
+  "bulk": {
+    "selected": "{{count}} seleccionados",
+    "clear": "Limpiar selección",
+    "progress": "Procesando {{current}} de {{total}}",
+    "summary": "{{success}} correctos, {{failed}} fallidos",
+    "confirmTitle": "Confirmar acción masiva",
+    "confirmDescription": "«{{action}}» se ejecutará por separado para {{count}} elementos seleccionados."
+  },
+  "chart": {
+    "showTable": "Ver como tabla",
+    "showChart": "Ver gráfico"
+  },
+  "commandPalette": {
+    "placeholder": "Buscar o ir a…",
+    "empty": "Sin coincidencias.",
+    "navigation": "Navegación",
+    "actions": "Acciones",
+    "results": "Resultados",
+    "searchResults": "Resultados en tus datos",
+    "searchTruncated": "Hay más coincidencias — afina la búsqueda.",
+    "searchDegraded": "Algunas fuentes no se han podido consultar — esta lista está incompleta."
+  },
+  "status": {
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "healthy": "Correcto",
+    "degraded": "Degradado",
+    "pending": "Pendiente",
+    "error": "Error",
+    "revoked": "Revocado",
+    "unknown": "Desconocido",
+    "running": "En curso",
+    "ok": "OK",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "approved": "Aprobado",
+    "rejected": "Rechazado",
+    "requested": "Solicitado",
+    "queued": "En cola",
+    "provisioning": "Aprovisionando",
+    "draft": "Borrador",
+    "warning": "Aviso",
+    "deprecated": "Obsoleto",
+    "unused": "Sin usar",
+    "failed": "Fallido",
+    "down": "Caído",
+    "unexpected": "Inesperado",
+    "idle": "En reposo",
+    "completed": "Completado",
+    "archived": "Archivado",
+    "retired": "Retirado",
+    "drifted": "Desviado",
+    "declared": "Declarado",
+    "applied": "Aplicado"
+  },
+  "accessMode": {
+    "read": "Lectura",
+    "readwrite": "Lectura/Escritura",
+    "write": "Escritura",
+    "unknown": "Desconocido"
+  },
+  "confidence": {
+    "attributed": "Atribuido",
+    "attributedHint": "Atribuido con firmeza a este agente.",
+    "approximate": "Aproximado",
+    "approximateHint": "Atribuido por inferencia — aún sin reconciliar con el agente."
+  },
+  "validation": {
+    "required": "Este campo es obligatorio.",
+    "email": "Introduce una dirección de correo válida."
+  },
+  "a11y": {
+    "breadcrumb": "Ruta de navegación",
+    "skipToContent": "Saltar al contenido",
+    "primarySidebar": "Principal",
+    "mainNavigation": "Navegación principal",
+    "graphControls": "Controles del grafo",
+    "graphMinimap": "Minimapa del grafo"
+  },
+  "privileged": {
+    "auditedNotice": "Esta acción queda registrada en el registro de auditoría a prueba de manipulaciones.",
+    "confirm": "Confirmar",
+    "typeToConfirm": "Escribe {{phrase}} para confirmar",
+    "typeToConfirmAria": "Frase de confirmación",
+    "notAuthorized": "Tu rol puede ver esto, pero no realizar esta acción.",
+    "notAuthorizedToast": "Sin autorización — tu rol no puede realizar esta acción.",
+    "tenantChangedToast": "Cambiaste de organización durante la verificación: la acción no se ha reanudado. Vuelve a ella e inténtalo otra vez.",
+    "stepUp": {
+      "title": "Esta acción necesita una sesión elevada",
+      "description": "Tu rol la permite; la garantía de esta sesión ha caducado. Completa la elevación y la acción se reanuda. Si cierras, queda denegada.",
+      "busyToast": "Ya hay otra elevación abierta. Complétala y vuelve a intentar esta acción.",
+      "abandonedToast": "Esa acción se cerró antes de completar la elevación, así que no se ha reanudado. Vuelve a iniciarla.",
+      "descriptionNoResume": "Tu rol lo permite; el aseguramiento de esta sesión ha caducado. Completa la elevación y vuelve a iniciar la acción. Si cierras esto, queda denegada."
+    },
+    "working": "Procesando…"
+  },
+  "secretRef": {
+    "label": "Referencia a secreto",
+    "hint": "Referencia a un secreto almacenado fuera de la consola — su valor nunca se muestra aquí.",
+    "none": "Sin secreto",
+    "prefix": "ref"
+  },
+  "untrusted": {
+    "label": "Sin verificar",
+    "hint": "Declarado por la propia capacidad — solo una señal. El control plane no lo verifica ni lo aplica nunca."
+  },
+  "risk": {
+    "low": "Riesgo bajo",
+    "medium": "Riesgo medio",
+    "high": "Riesgo alto"
+  },
+  "notifications": {
+    "title": "Actividad reciente",
+    "empty": "Sin actividad reciente.",
+    "viewAll": "Ver todo en el registro de auditoría"
+  },
+  "passphrase": {
+    "tooShort": "La frase de acceso debe tener al menos {{min}} caracteres",
+    "strengthLabel": "Fortaleza de la frase de acceso",
+    "strength": {
+      "weak": "Débil",
+      "fair": "Aceptable",
+      "good": "Buena",
+      "strong": "Fuerte"
+    }
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "description": "Navega por la consola sin soltar el teclado.",
+    "general": "General",
+    "navigation": "Ir a",
+    "openPalette": "Abrir la paleta de comandos",
+    "showHelp": "Mostrar esta ayuda"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "_README": [
+    "TEMPLATE ONLY — this file is committed; the REAL configuration is NOT and must never be.",
+    "OLIVARES_SOURCES_CONFIG points at the real file, which lives OUTSIDE this repository.",
+    "sourceSpec.Config carries the source's secrets BY VALUE (cmd/olivares/sources.go:196-197),",
+    "so a configured claude-source is secret-bearing by contract. Every value below is a",
+    "PLACEHOLDER or a secret REFERENCE, never a secret. The reference form the document",
+    "sources document is 'vault:secret/path#field' (cmd/olivares/sources.go:232-239); a",
+    "first-party source that only accepts an inline value must read it from a file the",
+    "operator keeps at mode 0600 outside the tree.",
+    "Boot with: OLIVARES_SOURCES_CONFIG=/path/outside/repo/sources.json olivares serve ...",
+    "A missing path yields an EMPTY config and the boot warns that nothing real is wired",
+    "(cmd/olivares/sources.go:256-270); a supplied path must be readable and valid JSON or",
+    "startup fails closed."
+  ],
+  "sources": [
+    {
+      "name": "claude-code-dogfood",
+      "kind": "claude",
+      "tenant": "REPLACE_WITH_TENANT_UUID",
+      "config": {
+        "_comment": "The Claude Code observer source. Keys are the connector's own; the values here are placeholders.",
+        "otlp_listen": "127.0.0.1:4317",
+        "admin_api_key": "REPLACE_OR_REFERENCE__vault:secret/olivares/claude#admin_api_key"
+      }
+    }
+  ],
+  "identity": [],
+  "documents": [],
+  "roster_sync_seconds": 900,
+  "connector_trust": null
+}

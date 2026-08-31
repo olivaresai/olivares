@@ -1,0 +1,19 @@
+{
+  "name": "Olivares AI control plane",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": { "version": "1.26.6" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/go/bin"
+  },
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@10.33.2 --activate && go install github.com/go-task/task/v3/cmd/task@v3.51.1 && task tools && task setup",
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go", "task.vscode-task", "editorconfig.editorconfig"]
+    }
+  },
+  "comment": "task provider:docs[:check] also needs OpenTofu/Terraform on PATH (see provider-ci.yml for the pinned install); not installed here by default."
+}

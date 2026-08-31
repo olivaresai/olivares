@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+
+title: ""
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest a feature, a workflow improvement, or a connector you'd like to
+        see. Before opening, search existing Ideas — votes on an existing
+        discussion carry more weight than a duplicate.
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should Olivares AI do that it doesn't today?
+      placeholder: "Describe the problem you're solving and the solution you have in mind."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else could solve the same problem?
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, diagrams, or examples from other tools.
+    validations:
+      required: false

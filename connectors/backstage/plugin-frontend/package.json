@@ -1,0 +1,69 @@
+{
+  "name": "@olivaresai/backstage-plugin-olivares",
+  "version": "0.1.0",
+  "description": "Backstage frontend plugin: a native portal view of the Olivares AI estate — agent/MCP/session inventory, live sessions, and the R/RW access-map + drift — plus entity tab/card, authenticated through the control plane's SSO/RBAC.",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "backstage": {
+    "role": "frontend-plugin",
+    "pluginId": "olivares",
+    "pluginPackages": [
+      "@olivaresai/backstage-plugin-olivares"
+    ]
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "package.json": [
+        "package.json"
+      ]
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "build": "backstage-cli package build",
+    "lint": "backstage-cli package lint",
+    "test": "tsc -p tsconfig.test.json && node --test \".test-out/**/*.test.js\"",
+    "clean": "backstage-cli package clean"
+  },
+  "peerDependencies": {
+    "@backstage/catalog-model": "*",
+    "@backstage/core-components": "*",
+    "@backstage/core-plugin-api": "*",
+    "@backstage/plugin-catalog-react": "*",
+    "@material-ui/core": "^4.9.3",
+    "react": "^16.13.1 || ^17.0.0 || ^18.0.0",
+    "react-dom": "^16.13.1 || ^17.0.0 || ^18.0.0"
+  },
+  "devDependencies": {
+    "@backstage/cli": "0.36.3",
+    "@backstage/cli-defaults": "0.1.3",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.0.0",
+    "typescript": "^5.4.0"
+  },
+  "keywords": [
+    "backstage",
+    "backstage-plugin",
+    "olivares",
+    "ai-governance",
+    "access-map",
+    "inventory",
+    "sessions"
+  ],
+  "pnpm": {
+    "overrides": {
+      "nanoid": "^3.3.17",
+      "vm2": "^3.11.6",
+      "tar": "^7.5.21"
+    }
+  }
+}

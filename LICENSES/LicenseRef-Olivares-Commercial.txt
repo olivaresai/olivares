@@ -1,0 +1,338 @@
+Olivares AI™ Commercial License
+Notice of available commercial terms — this file is not the contract
+
+Copyright (C) 2026 Francisco Olivares, a natural person resident in Spain,
+trading as Olivares AI™. All rights reserved.
+
+================================================================================
+  IMPORTANT — READ FIRST
+================================================================================
+
+The Olivares AI control plane is published as FREE AND OPEN SOURCE SOFTWARE
+under the GNU Affero General Public License, version 3 (AGPL-3.0-only), and its
+SDK, connector and client libraries under the Apache License 2.0. The complete
+community product is available under those licenses at no charge. You do NOT
+need this commercial license to use, run, self-host, modify, or even resell the
+software, as long as you comply with the applicable open-source license (notably
+AGPL section 13: if you modify the software and make it available to users over
+a network, you must offer those users the corresponding source code of your
+modified version).
+
+This file is a NOTICE that commercial terms exist and where they live. It is not
+a grant, not an offer capable of acceptance, and not the operative contract. The
+operative contract is the agreement accepted at purchase (the "Agreement": the
+Subscription License and Service Agreement and its Product Schedules, the Terms
+of Purchase, the money-back guarantee, the Acceptable Use Policy, the Data
+Processing Addendum where personal data is processed on your behalf, the Support
+Terms, and the Order Record). WHERE THIS NOTICE AND THE AGREEMENT DIFFER, THE
+AGREEMENT PREVAILS.
+
+Commercial terms serve two linked purposes. First, they grant a private
+exception to the AGPL obligations to organizations that cannot or do not wish to
+comply with them (for example, internal corporate open-source policies that
+forbid AGPL, redistribution inside a closed-source product, or operating a
+modified version as a network service without publishing the source). Second,
+they entitle the holder to the additive, closed enterprise add-ons, which are
+built only with -tags enterprise and are not present in the open (AGPL) build.
+The open build is the complete community product; nothing is removed or
+feature-capped from it. Because the commercial build adds the enterprise
+add-ons, the two builds are not byte-identical.
+
+================================================================================
+  1. WHO LICENSES, AND WHO SELLS — TWO PLANES, TWO CONTRACTS
+================================================================================
+
+Licensor. Francisco Olivares, a natural person resident in Spain, trading as
+Olivares AI™ ("Olivares AI"). Contact: enterprise@olivares.ai. The party
+identification that binds is the one stated in the Agreement at the time it is
+executed; this notice states the position as at its date and is not a
+representation about any registration, past or future.
+
+Merchant of Record. Payment runs through Dodo Payments as Merchant of Record and
+authorized reseller. There are two planes and two contracts: the
+SALE-AND-PAYMENT plane (checkout, invoicing, taxes, payment processing and
+refund execution) is a contract between you and Dodo Payments under Dodo's own
+buyer terms; the LICENSE-AND-SERVICE plane — the software, the entitlements, the
+service and the voluntary guarantee — is the Agreement, between you and Olivares
+AI. Nothing in this notice or in the Agreement amends Dodo's terms, and nothing
+in Dodo's terms grants a broader license to the software than the Agreement
+grants. Nothing in this file is stated on behalf of Dodo Payments. Read Dodo's
+buyer terms: they carry their own procedures, restrictions and governing law for
+the purchase plane, and this notice does not restate them.
+
+Business customers only. Commercial offerings are sold to verified legal
+entities acting for the purposes of their trade, business, craft or profession,
+through a representative authorized to bind the entity. There is no consumer
+checkout.
+
+================================================================================
+  2. NO GRANT WITHOUT AN EXECUTED, PAID AGREEMENT
+================================================================================
+
+In the ABSENCE of an executed commercial agreement and payment of the applicable
+fee, NO rights are granted by this file. Your rights to the software are then
+governed EXCLUSIVELY by its open-source licenses (see the LICENSE file in the
+repository root, and the full texts in LICENSES/). This file is a notice of the
+availability of commercial terms, not itself a grant.
+
+================================================================================
+  3. WHAT THE COMMERCIAL GRANT IS — AND WHAT IT IS NOT
+================================================================================
+
+Subject to an executed Agreement and payment, for the duration of the paid term
+only, and within the licensed scope stated in the Order Record, Olivares AI
+grants a non-exclusive, non-transferable, non-sublicensable, worldwide right to
+install, run and reproduce (only as necessary to run and back up) the signed
+Official Artifact IN OBJECT FORM, for the customer's internal business purposes,
+with the module payload of the applicable Product Schedule.
+
+The commercial grant does NOT include, except where an Enterprise order form
+expressly says so in writing: (a) modification of, or derivative works from, the
+Commercial Components; (b) their distribution, resale, sublicensing, leasing or
+embedding into a product supplied to third parties; (c) operating them for the
+benefit of third parties (service bureau, managed service, hosting for others,
+OEM, redistribution); (d) removing or defeating the license-credential mechanism
+or misrepresenting its state; or (e) use beyond the licensed scope.
+
+No payment, monthly or annual, earns a perpetual right, a frozen release line, a
+post-lapse fallback right, or any resale right.
+
+================================================================================
+  4. WHAT IS COMMERCIAL — THE FRONTIER IS THE MANIFEST, NOT THE DIRECTORY
+================================================================================
+
+"Commercial Components" are ONLY the components identified as commercial
+(LicenseRef-Olivares-Commercial) in the artifact's SPDX/SBOM manifest: the closed
+add-on overlay modules, and nothing else. Each release's manifest is the
+exhaustive, positive list.
+
+A file or component licensed under AGPL-3.0-only, Apache-2.0 or a third-party
+license is NEVER a Commercial Component, wherever it ships. A component does not
+stop being an open-source component because it is compiled into a signed
+artifact or delivered through a paid channel. Neither the download channel, nor
+the price paid, nor the directory a file sits in changes the license of a single
+file.
+
+================================================================================
+  5. RIGHTS EXPRESSLY PRESERVED
+================================================================================
+
+Nothing in this notice, and nothing in the Agreement, limits, conditions,
+terminates or modifies:
+
+  (i)   any right anyone holds under AGPL-3.0-only in the public core;
+  (ii)  any right under Apache-2.0 in the SDK, connectors and client libraries;
+  (iii) any third-party license covering a component of an artifact; or
+  (iv)  any non-waivable statutory right, including lawful interoperability,
+        permitted decompilation, error correction and security research.
+
+Cancelling, refunding, breaching or terminating a commercial agreement has NO
+effect on open-source rights.
+
+No purchase-plane restriction is adopted against the open grants. The purchase
+runs through a Merchant of Record whose own buyer terms contain general
+restrictions on resale, copying and modification of "the products". As between
+you and Olivares AI: Olivares AI does not adopt, will not invoke and will not
+enforce any purchase-plane term as a restriction on open-source components, and
+no such term expands what section 3 restricts. This statement binds Olivares AI;
+it does not amend the buyer terms of a third party.
+
+Section 7 of this notice governs the COMMERCIAL offerings only. The open-source
+components carry the warranty disclaimers and liability limitations of their own
+licenses — AGPL-3.0-only sections 15 and 16, Apache-2.0 sections 7 and 8 — which
+this notice neither restates, replaces nor supplements.
+
+================================================================================
+  6. TRADEMARKS
+================================================================================
+
+"Olivares AI" and the associated logos are trademarks of Francisco Olivares.
+They are used with the ™ symbol; the ® symbol is never used for them. Neither
+the open-source licenses nor a commercial agreement grants any right to use the
+marks, EXCEPT that Apache-2.0 section 6 preserves "reasonable and customary use
+in describing the origin of the Work and reproducing the content of the NOTICE
+file" — nothing here restricts that exception, nominative fair use, or any right
+applicable law does not allow to be restricted. See LICENSING.md.
+
+================================================================================
+  7. WARRANTY AND LIABILITY (COMMERCIAL OFFERINGS)
+================================================================================
+
+This section states the warranty and liability position of the commercial
+offerings: the signed Official Artifacts, the Commercial Components, the
+commercial release channel, the documentation for the licensed version, and any
+managed service. It applies except where the Agreement states otherwise; where
+they differ, the Agreement prevails. It does NOT apply to, and does not modify,
+the open-source components or their own licenses (section 5).
+
+7.1 NO WARRANTY; AS IS.
+THE COMMERCIAL OFFERINGS ARE PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT
+WARRANTY OR CONDITION OF ANY KIND, WHETHER EXPRESS, IMPLIED, STATUTORY OR
+OTHERWISE, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTY OR CONDITION OF
+MERCHANTABILITY, SATISFACTORY QUALITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE,
+NON-INFRINGEMENT, ACCURACY, QUIET ENJOYMENT, OR THAT OPERATION WILL BE
+UNINTERRUPTED, TIMELY, SECURE OR ERROR-FREE. NO RESULT IS WARRANTED. No advice
+or information, oral or written, obtained from Olivares AI or through the
+products creates any warranty, and payment of a fee creates none.
+
+7.2 NO SECURITY OUTCOME, AND NO COMPLIANCE OUTCOME.
+The products are security and governance CONTROLS, not a guarantee of outcomes.
+No representation is made that any content, prompt, tool call, agent action,
+model, deployment or system is safe, uncompromised, attack-free or free of
+vulnerabilities, or that it is or will be compliant with any legal, regulatory,
+contractual or certification regime. Compliance-oriented modules generate drafts
+and registers from facts the licensee supplies; they are not legal advice, an
+audit or a certification, and the licensee's own counsel and auditors remain
+responsible.
+
+7.3 THIRD-PARTY AND OPEN-SOURCE COMPONENTS; BETA AND PREVIEW.
+Third-party and open-source components keep their own licenses, notices and
+disclaimers. Olivares AI does not relicense them, and accepts no warranty and no
+additional liability in respect of them — neither on its own behalf nor on
+behalf of any other contributor (Apache-2.0, section 9). Features labelled beta,
+preview, evaluation, experimental or early access, evaluation licenses, and any
+non-contractual roadmap item, are provided AS IS, outside any warranty, support
+commitment or guarantee, and may be changed or withdrawn.
+
+7.4 HIGH-RISK USE IS EXCLUDED.
+The products are not designed, tested or licensed for use in hazardous
+environments or high-risk activities where a failure could lead to death,
+personal injury, or severe physical, financial or environmental damage —
+including the operation of nuclear facilities, aircraft navigation or
+communication, air traffic control, life-support or medical devices, weapons
+systems, or the direct control of critical physical infrastructure. Olivares AI
+expressly disclaims any warranty of fitness for such use. A licensee that
+deploys the products in such a setting does so at its own risk, is responsible
+for the independent safeguards that setting requires, and indemnifies Olivares
+AI for the resulting claims under 7.10.
+
+7.5 EXCLUSIVE AND LIMITED REMEDY.
+Where mandatory law imposes on Olivares AI an obligation of conformity, quality
+or performance that cannot lawfully be excluded, that obligation applies to the
+extent the law requires and no further; and, to the extent that law permits the
+remedy to be agreed, the licensee's SOLE AND EXCLUSIVE REMEDY is, at Olivares
+AI's option: (a) correction of the non-conformity; (b) provision of a
+workaround; or (c) termination of the affected product line and refund of the
+prepaid fees for its unused remainder. Any notification period stated in the
+Agreement applies to such a claim.
+
+7.6 AGGREGATE CAP.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL AGGREGATE LIABILITY OF
+OLIVARES AI (AND OF FRANCISCO OLIVARES PERSONALLY, WHOSE LIABILITY IS THE SAME
+SINGLE LIABILITY AND NOT AN ADDITIONAL ONE), ARISING OUT OF OR RELATING TO THE
+COMMERCIAL OFFERINGS AND EVERY DOCUMENT OF THE AGREEMENT, ACROSS ALL CLAIMS AND
+CAUSES OF ACTION, WHETHER IN CONTRACT, TORT, STATUTE OR OTHERWISE, SHALL NOT
+EXCEED THE TOTAL FEES ACTUALLY PAID FOR THE AFFECTED SUBSCRIPTION(S) UNDER THE
+CORRESPONDING ORDER RECORD(S) — WHETHER PAID TO OLIVARES AI DIRECTLY OR TO DODO
+PAYMENTS AS MERCHANT OF RECORD, EXCLUDING TAXES COLLECTED AND NET OF AMOUNTS
+REFUNDED OR FINALLY REVERSED — IN THE TWELVE (12) MONTHS IMMEDIATELY PRECEDING
+THE FIRST EVENT GIVING RISE TO LIABILITY. The cap is aggregate: it is not a cap
+per claim, per document or per product line.
+
+7.7 EXCLUDED DAMAGES.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEITHER PARTY IS LIABLE FOR INDIRECT,
+INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY OR PUNITIVE DAMAGES, NOR FOR: LOSS
+OR CORRUPTION OF DATA; LOSS OF PROFITS; LOSS OF REVENUE; LOSS OF GOODWILL OR
+REPUTATION; LOSS OF ANTICIPATED SAVINGS; BUSINESS INTERRUPTION; LOSS OF USE; OR
+THE COST OF PROCURING SUBSTITUTE GOODS, SERVICES OR TECHNOLOGY — however caused,
+whether or not foreseeable, and even if advised of the possibility. If the data
+processing addendum expressly states a data-restoration obligation, that
+obligation is not excluded by this paragraph; as the addendum is drafted today it
+states none, so this reservation is presently empty and creates nothing.
+
+7.8 THE LIMITS SURVIVE.
+Sections 7.1 to 7.7 are an essential basis of the bargain and are reflected in
+the price. To the extent the law permits, they apply regardless of the form of
+action, they SURVIVE THE FAILURE OF THE ESSENTIAL PURPOSE of any limited or
+exclusive remedy, and they survive expiry or termination.
+
+7.9 WHAT IS NOT CAPPED, IN OLIVARES AI'S FAVOUR.
+Neither the cap in 7.6 nor the exclusions in 7.7 limit the licensee's liability
+for: (a) use of the Commercial Components beyond the licensed scope or in breach
+of the restrictions in section 3; (b) infringement or misappropriation of
+Olivares AI's or its licensors' intellectual property; (c) payment obligations;
+(d) misuse of the products, including use contrary to applicable law, to
+export-control or sanctions law, or to the acceptable use policy on hosted
+surfaces; or (e) the licensee's indemnity under 7.10.
+
+7.10 LICENSEE INDEMNITY.
+The licensee will defend Olivares AI against third-party claims, and indemnify
+the resulting finally-awarded damages, settlements it approves and reasonable
+defense costs, to the extent the claim arises from: the licensee's data, content,
+instructions or configurations; its use of the products in breach of the
+Agreement or of applicable law, including use beyond the licensed scope; a
+modified build, or its combination of the products with items not supplied by
+Olivares AI, where the claim would not exist without it; the acts of its users or
+contractors within its deployment; or the decisions it takes on the basis of any
+output of the products.
+
+7.11 WHAT IS NOT EXCLUDED — MANDATORY RESERVE.
+NOTHING IN THIS NOTICE EXCLUDES OR LIMITS ANY LIABILITY THAT CANNOT LAWFULLY BE
+EXCLUDED OR LIMITED. In particular, nothing excludes or limits liability for
+fraud or fraudulent misrepresentation; for wilful misconduct (dolo), for which
+Spanish mandatory law does not permit an advance waiver of the action; for gross
+negligence where the applicable law does not permit its limitation; or for death
+or personal injury caused by negligence. Statutory rights that cannot be waived
+are unaffected. If, despite the business-only design of section 1, a purchaser is
+classified as a consumer under mandatory law, that law's non-waivable rights
+apply and PREVAIL over this section.
+
+7.12 TIME TO BRING A CLAIM.
+Any contractual limitation period stated in the Agreement applies to claims
+arising out of the commercial offerings. No such period shortens a period that
+mandatory law does not allow to be shortened.
+
+7.13 FORCE MAJEURE.
+Neither party is liable for delay or failure caused by events beyond its
+reasonable control, including the failure, suspension, insolvency or termination
+of an essential third-party provider (among them the Merchant of Record, a cloud
+or hosting provider, or a payment network). Payment obligations are never
+suspended. The affected party must notify the other without undue delay and use
+reasonable efforts to mitigate. The Agreement states the notice, mitigation and
+termination consequences in full.
+
+================================================================================
+  8. VOLUNTARY MONEY-BACK GUARANTEE
+================================================================================
+
+A voluntary, no-reason money-back guarantee on the first settled charge of each
+product line is offered on the terms of the guarantee document that forms part of
+the Agreement. That document — not this notice — states its window, its
+conditions, its exact deadlines and how a request is made. The guarantee is a
+voluntary commercial promise: it neither creates, replaces nor limits any
+statutory right.
+
+Deliberately, this notice states no figure and no deadline. This file ships in
+the public repository, so anything written here is a public representation made
+to everyone who downloads the free software — including people who will never
+buy anything. A refund window is only worth publishing once the refund path has
+been executed end to end through the payment provider and the settlement
+timestamp that starts the clock is known to be recorded; until then, naming a
+number here would be a promise whose performance has not been demonstrated.
+The figures live in the guarantee document, which is published when that is
+proven.
+
+================================================================================
+  9. PRECEDENCE, SEVERABILITY, WAIVER
+================================================================================
+
+Precedence. The executed Agreement prevails over this notice for everything it
+covers. This notice never creates, extends or reduces an obligation of the
+Agreement, and no public web page is a contract document. The Agreement states
+the governing law and the forum.
+
+Severability. If any provision of this notice is held unenforceable, the
+remainder stands and that provision is enforced to the maximum lawful extent.
+
+No waiver. A failure to enforce any provision is not a waiver of it.
+
+================================================================================
+  10. HOW TO OBTAIN COMMERCIAL TERMS
+================================================================================
+
+  For a commercial license, custom terms, or support (best-effort first-response
+  targets, not an SLA — see SUPPORT.md) — dedicated contact:
+      enterprise@olivares.ai
+
+All commercial terms are defined in the agreement you receive at purchase; that
+agreement, not this notice, is the operative contract.

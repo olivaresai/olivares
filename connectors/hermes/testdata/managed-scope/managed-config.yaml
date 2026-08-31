@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+
+model:
+  provider: anthropic
+  default: claude-sonnet-4-20250514
+terminal:
+  backend: docker
+  docker_run_as_host_user: false
+  docker_mount_cwd_to_workspace: false
+  docker_forward_env: []
+  docker_volumes: []
+security:
+  redact_secrets: true
+  allow_private_urls: false
+  allow_lazy_installs: false
+approvals:
+  mode: manual
+  command_allowlist: []
+skills:
+  write_approval: true
+  guard_agent_created: true
+memory:
+  write_approval: true

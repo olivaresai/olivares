@@ -1,0 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: Apache-2.0
+{
+  $include: ['base.inc.json5', 'overlay.inc.json5'],
+  agents: {
+    defaults: {
+      model: {fallbacks: ['anthropic/claude-haiku-3-5-20241022']},
+    },
+  },
+}

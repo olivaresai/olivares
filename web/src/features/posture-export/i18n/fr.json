@@ -1,0 +1,51 @@
+{
+  "title": "Export de posture",
+  "description": "Exportez la posture réelle en lecture seule — inventaire, dérive de moindre privilège et constats — pour qu'une tour de contrôle l'ingère.",
+  "filters": {
+    "title": "Filtres d'export",
+    "severity": "Sévérité minimale",
+    "severityHint": "N'inclure que les constats de cette sévérité ou supérieure.",
+    "severityAny": "Toute sévérité",
+    "category": "Catégorie",
+    "categoryHint": "Correspond à un type de constat ou de sujet.",
+    "categoryPlaceholder": "p. ex. policy_drift",
+    "kind": "Type d'inventaire",
+    "kindHint": "Limitez l'inventaire à un seul type d'entité.",
+    "kindPlaceholder": "p. ex. agent",
+    "none": "aucun filtre"
+  },
+  "severity": {
+    "low": "Faible",
+    "medium": "Moyenne",
+    "high": "Élevée",
+    "critical": "Critique"
+  },
+  "notes": {
+    "pull": "Il s'agit d'une projection en lecture seule à données minimales — références et empreintes uniquement — qu'une tour de contrôle récupère ; rien ne quitte la machine avant que vous n'exportiez."
+  },
+  "export": {
+    "action": "Exporter la posture",
+    "done": "Posture exportée.",
+    "failed": "Échec de l'export de la posture."
+  },
+  "summary": {
+    "title": "Dernier export",
+    "inventory": "Entités d'inventaire",
+    "findings": "Constats",
+    "unexpected": "Accès inattendus",
+    "drift": "Signaux de dérive",
+    "truncated": "Tronqué",
+    "truncatedHint": "Une ou plusieurs sections ont atteint le plafond d'export et sont partielles — les décomptes sont un plancher, pas un total.",
+    "severityFloor": "sévérité ≥ {{severity}}"
+  },
+  "history": {
+    "title": "Exports de cette session",
+    "note": "Cette liste ne couvre que les exports réalisés dans cette session du navigateur. Chaque export est enregistré dans le journal d'audit inviolable (action posture.export) —",
+    "auditLink": "ouvrez l'Explorateur d'audit",
+    "empty": "Aucun export pour l'instant dans cette session.",
+    "colTime": "Heure",
+    "colFilters": "Filtres",
+    "colCounts": "Décomptes",
+    "counts": "{{inventory}} inventaire · {{findings}} constats · {{drift}} dérive"
+  }
+}

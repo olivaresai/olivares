@@ -1,0 +1,9 @@
+{
+  "data": {
+    "id": "g200-everyone",
+    "name": "everyone",
+    "policies": ["shared-read"],
+    "member_entity_ids": ["f3a1-entity-backup"],
+    "member_group_ids": ["g100-platform"]
+  }
+}

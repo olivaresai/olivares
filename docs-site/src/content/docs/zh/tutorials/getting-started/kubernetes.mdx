@@ -1,0 +1,208 @@
+---
+title: "在 Kubernetes 上快速上手（Helm）"
+description: >-
+  使用随附的 Helm chart 在 Kubernetes 上部署 control plane —— 从安全的单节点默认配置，
+  到 Postgres、共享审计签名密钥的 active-passive 高可用、以 CronJob 运行的加密 DR 备份，
+  以及 collectors DaemonSet。
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+位于 `deploy/helm/olivares` 的 Helm chart 部署 control
+plane 时，采用与其他所有路径相同的安全默认配置：一个 **core
+StatefulSet**（非 root、只读根文件系统、丢弃全部 capabilities）、
+开启 TLS、等效于 loopback 的暴露方式（一个 `ClusterIP` Service —— 在你决定之前不会对外暴露任何内容），
+且没有默认凭据。在此基础上，你可以选择性启用
+Postgres、**active-passive 高可用**、定时运行的 **加密 DR 备份**，
+以及用于分布式采集的 **collectors DaemonSet**。
+
+下文的所有内容都已针对本仓库中的 chart 渲染并核对过
+（`helm lint` + `helm template`，包括高可用和备份
+配置以及 chart 自身的防护栏）。该 chart 要求
+**Kubernetes ≥ 1.25**。
+
+<Aside type="caution" title="Chart 发布状态 —— 如实说明">
+发布时，chart 会被推送到 OCI registry 并以 cosign 签名，因此你可以
+在安装时验证，并按 digest 固定镜像。chart 会从 Docker Hub
+拉取容器镜像（`docker.io/olivaresai/olivares`；也位于 `ghcr.io/olivaresai/olivares`，
+按 digest 完全相同）；而 **chart** 工件本身位于
+`oci://ghcr.io/olivaresai/charts/olivares`。首次发布目前仍是
+**草案**：在 `chart-v*` tag 被打出之前，该 registry 路径为 **空**。在此之前，
+请从仓库 checkout 安装（chart 本身已完整并在下文渲染）；
+发布之后，切换为
+`oci://ghcr.io/olivaresai/charts/olivares` 并
+[验证你所下载的内容](/how-to/verify-a-release/)。
+</Aside>
+
+## 1. 默认安装（单节点，SQLite）
+
+<Steps>
+
+1. 从 checkout 安装：
+
+   ```bash
+   helm install olivares deploy/helm/olivares
+   ```
+
+   这会精确渲染出三个工作负载对象 —— 一个 `StatefulSet`（1 个副本，
+   SQLite 位于一个 8 Gi 的持久化 PVC 上）、一个 `ClusterIP` `Service`（8443 HTTPS，
+   8444 gRPC），以及一个 **没有** Kubernetes API 权限的 `ServiceAccount`。
+   探针访问 `/readyz`（readiness —— 在存储不可用或该副本不是 leader 时排空）
+   和 `/livez`（liveness —— 仅检查进程，绝不依赖外部组件，
+   因此存储中断绝不会引发重启循环）。
+
+2. 从 pod 日志读取一次性的 setup token（它仅打印到 stdout
+   —— 在 Kubernetes 中，也就是容器日志）：
+
+   ```bash
+   kubectl logs -l app.kubernetes.io/component=core | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+   ```
+
+3. 进行端口转发并完成首次运行设置
+   （[与各处相同的流程](/tutorials/getting-started/single-node/#3-claim-the-one-time-setup-token)）：
+
+   ```bash
+   # The Service is named <release>-olivares-core:
+   kubectl port-forward svc/olivares-core 8443:8443
+   curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
+   ```
+
+</Steps>
+
+<Aside type="danger" title="切勿在 `persistence.enabled=false` 下运行生产环境">
+关闭持久化后，数据目录是一个 `emptyDir`：**审计签名
+密钥** 和 setup token 会在每次重新调度时丢失，这将永久破坏
+审计账本（audit ledger）的可验证性。默认配置（`persistence.enabled=true`）是唯一的
+生产姿态；此外还应将密钥在主机外备份
+（[备份与恢复](/how-to/backup-and-restore/)）。
+</Aside>
+
+或者，在完全不使用 Helm 的情况下，仓库提供了一个扁平 manifest，
+其单节点安全默认配置相同，由 CI 从 chart 重新生成：
+
+```bash
+kubectl apply -f deploy/manifests/install.yaml
+```
+
+对于 Argo CD / Flux / Kustomize（`kustomize build --enable-helm`），参见
+`deploy/gitops/` —— 它们是对同一 chart 的声明式封装。
+
+## 2. Postgres（多租户）
+
+引擎需要一个 **最小权限** 的数据库角色：`LOGIN`、非
+超级用户、**没有 `BYPASSRLS`** —— row-level security 是租户的最后防线，
+若角色拥有特权，引擎将拒绝启动。请用规范的
+`deploy/postgres/01-app-role.sql` 来配置该角色（chart 可以作为预安装 Job
+代你运行它），把 DSN 放入一个 Secret，并将 chart 指向它：
+
+```bash
+kubectl create secret generic olivares-pg \
+  --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full' \
+  --from-literal=admin-dsn='postgres://olivares_admin:***@db:5432/olivares?sslmode=verify-full'
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set postgres.adminDsnKey=admin-dsn
+```
+
+同一个 Secret 中的 `admin-dsn` 键承载一个专用的 `NOSUPERUSER BYPASSRLS`
+角色。**只有在你永远不启用备份的情况下**，它才是可选的：它正是让跨租户的
+系统读取变得**完整**的东西 —— 组织列表和多租户备份覆盖；若没有它，
+这些读取会受 RLS 限制。而一旦启用备份，它就是**必需的**
+（见[定时加密备份](#4-定时加密备份)）。现在就把它创建出来，
+后续启用备份那一步便只剩一行改动。
+
+## 3. Active-passive 高可用
+
+以 Postgres 作为共享存储时，可运行多个副本。其中一个会被选为
+leader（一把 Postgres advisory lock）；备用节点对 `/readyz` 返回
+`503 {"status":"standby"}`，因此 Service 只路由到 leader，
+当 leader 消失时，备用节点会自动接管。
+
+有两点是结构上必需的，chart **对两者都强制执行**（我们
+已验证这些防护以硬失败而非警告的形式渲染）：
+
+| 要求 | 原因 | 缺失时的 chart 防护 |
+|---|---|---|
+| `core.engine=postgres` | SQLite 文件局限于单个 pod —— 它无法作为共享存储。 | `core.replicaCount > 1 requires core.engine=postgres …` |
+| `core.auditSigningKeySecret` | 每个副本必须用 **同一把** Ed25519 密钥签署审计账本，否则在故障转移时哈希链会分叉。 | `core.replicaCount > 1 requires core.auditSigningKeySecret …` |
+
+```bash
+kubectl create secret generic olivares-audit-key \
+  --from-file=audit-signing.key=<base64-ed25519-private-key-file>
+
+helm install olivares deploy/helm/olivares \
+  --set core.engine=postgres \
+  --set postgres.dsnSecret=olivares-pg \
+  --set core.replicaCount=3 \
+  --set core.auditSigningKeySecret=olivares-audit-key
+```
+
+规范的高可用规模为 3 或 5 个副本，active-passive。这种单写入者
+设计是有意为之（它与产品的一致性模型相匹配）；
+[生产就绪指标](/how-to/monitor-with-prometheus/)记录了它所支持的
+可用性层级。
+
+## 4. 定时加密备份
+
+chart 提供了一个运行 `olivares dr backup` 的 `CronJob` —— 一个加密的、
+**对账本连续性安全** 的备份包（存储快照 + 在你的 KEK 下封装的签名密钥
++ 每租户的链尾 manifest）：
+
+```bash
+kubectl create secret generic dr-kek --from-literal=passphrase='<strong passphrase>'
+
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set backup.enabled=true \
+  --set backup.kekSecret=dr-kek \
+  --set postgres.adminDsnKey=admin-dsn   # 仅限 Postgres，且启用备份时为必填
+```
+
+在 Postgres 上，若缺少 `postgres.adminDsnKey`，chart 会拒绝渲染：备份所用的
+`pg_dump` 会保持 `row_security=off`，以应用角色在 `FORCE ROW LEVEL SECURITY`
+之下会中止，因此一个接到应用 DSN 上的 CronJob 每次运行都会失败，
+最终让你**完全没有备份**。
+
+默认配置：每 6 小时一次（`backup.schedule` 设定你的 RPO）、本地保留
+14 天、一个专用的目标 PVC。**请将目标镜像到异地，
+并将 KEK 与备份包分开保存** —— 同集群内的备份不算
+灾难恢复。用 `olivares dr verify` 演练恢复；完整
+流程见[备份与恢复](/how-to/backup-and-restore/)。
+
+## 5. Collectors DaemonSet（分布式采集）
+
+对于分布式拓扑，一个 collectors `DaemonSet` 在每个节点上运行 source connectors，
+并通过 gRPC 向 core **推送** 观测数据 —— collectors
+没有入站监听器。chart 需要一个 ingest token，并接受
+可选的 mTLS 材料：
+
+```bash
+helm upgrade olivares deploy/helm/olivares --reuse-values \
+  --set collectors.enabled=true \
+  --set collectors.ingestTokenSecret=olivares-ingest-token   # ingest:write bearer token
+```
+
+通过 `collectors.sourcesConfig` 为 collectors 提供其 sources（与各处相同的
+[sources JSON](/how-to/connect-a-source/)），并用
+`tls.grpcClientCaSecret` 为 collector→core 通道开启
+经验证的客户端证书 mTLS —— 参见[加固](/how-to/security-hardening/)。
+
+## 监控
+
+如果你运行 Prometheus operator，请将 `serviceMonitor` 打开；无论哪种方式，
+引擎都会无需认证地暴露 `/metrics`（它不携带任何租户数据），且
+仓库提供了现成的告警规则。参见
+[用 Prometheus 监控](/how-to/monitor-with-prometheus/)。
+
+## 后续步骤
+
+- **接入 sources：**[连接一个 source](/how-to/connect-a-source/) 以及
+  [connector 指南](/how-to/connectors/pgaudit/)。
+- **故障演练：**[故障排查](/how-to/troubleshooting/) —— 故障转移
+  行为、背压、账本验证。
+- **气隙集群？**[在气隙站点中快速上手](/tutorials/getting-started/air-gapped/)。

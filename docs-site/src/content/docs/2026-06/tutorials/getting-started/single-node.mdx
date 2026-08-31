@@ -1,0 +1,271 @@
+---
+title: Get started on a single node (binary + systemd)
+description: "Install the control plane on one Linux host as a hardened systemd
+  service: build the static binary, claim the one-time setup token, create your
+  first tenant, wire a real source and reach the access graph — with TLS on and
+  no default credentials."
+sidebar:
+  order: 1
+slug: 2026-06/tutorials/getting-started/single-node
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+This is the production-shaped first install: **one Linux host, one static
+binary, systemd, the embedded SQLite store** — and the real first-run path (a
+one-time setup token, TLS on by default, no default credentials, no demo data).
+By the end you will have a governed control plane running as a hardened service
+with a real source wired and a populated access graph.
+
+It is the same engine the [quickstart](/2026-06/start/quickstart/) demos in five
+minutes; the difference is posture. If you want the instant look-around first,
+do the quickstart, then come back here for the real install.
+
+Every command on this page was run, as written, against the current binary
+(the first-boot banner, the token-recovery path, the pgAudit wiring and the
+graph below are exercised by `scripts/quickstart-smoke.sh` and were re-verified
+for this guide).
+
+## Prerequisites
+
+* A Linux host with systemd and `curl`.
+* **Go 1.26+** to build the binary (the store is pure-Go SQLite, so no C
+  toolchain). Releases with signed prebuilt artifacts ship at the first public
+  release — until then you build from a checkout, and
+  [verify a release](/2026-06/how-to/verify-a-release/) documents the chain you will
+  use once they exist.
+
+## 1. Build and install the binary
+
+<Steps>
+  1. Build the one static artifact (engine + embedded web UI + first-party
+     connectors):
+
+     ```bash
+     task build                      # produces ./bin/olivares
+     ./bin/olivares version
+     ```
+
+  2. Install it and create the service user:
+
+     ```bash
+     sudo install -m 0755 bin/olivares /usr/local/bin/olivares
+     sudo useradd --system --home /var/lib/olivares --shell /usr/sbin/nologin olivares
+     ```
+</Steps>
+
+## 2. Run it as a hardened systemd service
+
+Create `/etc/systemd/system/olivares.service`:
+
+```ini
+[Unit]
+Description=Olivares AI control plane
+Documentation=https://docs.olivares.ai
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olivares
+Group=olivares
+ExecStart=/usr/local/bin/olivares serve \
+  --listen 127.0.0.1:8443 \
+  --grpc-listen 127.0.0.1:8444 \
+  --data-dir /var/lib/olivares
+Restart=on-failure
+RestartSec=5
+
+# The data directory holds the SQLite store, the audit signing key and the TLS
+# material. StateDirectory creates /var/lib/olivares owned by the service user.
+StateDirectory=olivares
+StateDirectoryMode=0700
+UMask=0077
+
+# Hardening (mirrors the container posture: non-root, read-only, no escalation)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/olivares
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now olivares
+```
+
+The engine binds **loopback** by default — `127.0.0.1:8443` is deliberate.
+Expose it later, behind your own ingress and TLS, as an explicit decision
+(see [hardening](/2026-06/how-to/security-hardening/)).
+
+<Aside type="note" title="TLS is on, with a self-signed certificate">
+  With no `--tls-cert`/`--tls-key`, the engine generates a self-signed
+  certificate in the data directory on first boot and logs
+  `generated a self-signed TLS certificate` with its `fingerprint_sha256`. The
+  `curl -k` below skips verification for the bootstrap only — pin the logged
+  fingerprint, or give the service a real certificate, before exposing it.
+</Aside>
+
+## 3. Claim the one-time setup token
+
+A fresh install has **no default credentials**. On first boot the engine mints
+a single-use setup token (`olst_…`) and prints it to **stdout only** — under
+systemd, that is the journal:
+
+```bash
+journalctl -u olivares -o cat | grep -A4 "FIRST-BOOT SETUP"
+```
+
+```text
+=== FIRST-BOOT SETUP ===
+No users exist yet. Create the first administrator:
+  POST /v1/setup  {"token":"olst_…","email":"you@example.com","password":"..."}
+This token is shown ONCE and is single-use.
+========================
+```
+
+Create the first administrator and log in:
+
+```bash
+SETUP="olst_…"        # from the banner above
+
+curl -ksf -X POST https://127.0.0.1:8443/v1/setup \
+  -H 'Content-Type: application/json' \
+  -d "{\"token\":\"$SETUP\",\"email\":\"you@example.com\",\"password\":\"<strong-password>\"}"
+
+TOKEN="$(curl -ksf -X POST https://127.0.0.1:8443/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"<strong-password>"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+```
+
+<Aside type="tip" title="Missed the token? The recovery path is safe">
+  Only the SHA-256 of the token is stored (in `setup.token` inside the data
+  directory), so a missed token **cannot be recovered** — and a restart does not
+  re-print it. On a fresh install with no users yet, the recovery is: stop the
+  service, delete `setup.token` from the data directory, start it again — a new
+  token is minted and printed. This was verified against the current binary; it
+  works only while no users exist, so it can never be used to take over a
+  configured install.
+</Aside>
+
+## 4. Create your first organization
+
+Everything in the product is tenant-scoped, so create the organization your
+sources will report into:
+
+```bash
+TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Production","slug":"prod"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+echo "tenant: $TENANT"
+```
+
+## 5. Wire your first real source
+
+Sources are declared in one operator-owned JSON file named by
+`OLIVARES_SOURCES_CONFIG`, read before the engine starts. Here is the
+PostgreSQL **pgAudit** source (the clean-tier R/RW signal — see the
+[pgAudit guide](/2026-06/how-to/connectors/pgaudit/) for the Postgres-side setup):
+
+```bash
+sudo tee /etc/olivares/sources.json >/dev/null <<JSON
+{"sources":[{
+  "name": "salesdb-pgaudit",
+  "kind": "pgaudit",
+  "tenant": "$TENANT",
+  "config": { "log_path": "/var/log/postgresql/postgresql.csv", "format": "csvlog" }
+}]}
+JSON
+sudo chmod 0600 /etc/olivares/sources.json && sudo chown olivares: /etc/olivares/sources.json
+```
+
+Point the service at it with a drop-in, and restart:
+
+```bash
+sudo systemctl edit olivares
+```
+
+```ini
+[Service]
+Environment=OLIVARES_SOURCES_CONFIG=/etc/olivares/sources.json
+ReadOnlyPaths=/etc/olivares
+```
+
+```bash
+sudo systemctl restart olivares
+journalctl -u olivares -o cat | grep "ingest: wired source"
+```
+
+```text
+ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
+```
+
+If nothing is wired, the engine says so honestly rather than looking healthy
+on an empty map — see [troubleshooting](/2026-06/how-to/troubleshooting/) for the
+exact warnings and what each means.
+
+## 6. Reach the graph
+
+```bash
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/graph?limit=200" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+
+curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/drift" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool
+```
+
+The same graph renders in the embedded web UI at `https://127.0.0.1:8443`
+(from a workstation, tunnel it: `ssh -L 8443:127.0.0.1:8443 <host>`).
+
+## 7. Before you call it done
+
+Two artifacts in the data directory decide whether your evidence survives an
+incident — deal with them **now**, not after:
+
+| Artifact | Why it matters | Action |
+|---|---|---|
+| `audit-signing.key` | Signs the append-only audit ledger. If it is lost, the ledger can no longer be re-verified. The engine only **warns** on first boot — there is no enforced escrow. | Back it up off-box, with `0600` permissions, today. |
+| The ledger public key | An **off-box** copy of the public key is what makes verification attacker-resistant after a host compromise. | `curl -ksf https://127.0.0.1:8443/v1/audit/pubkey` and store the result off-box. |
+
+Then schedule real backups — `olivares dr backup` produces an encrypted,
+ledger-continuity-safe bundle; the [backup & restore guide](/2026-06/how-to/backup-and-restore/)
+is the full procedure, including the restore drill.
+
+## Health and monitoring
+
+The engine exposes `/livez` (process up), `/readyz` (store reachable — this is
+the availability SLI) and `/metrics` (Prometheus) on the HTTP listener:
+
+```bash
+curl -ks https://127.0.0.1:8443/readyz
+# {"leader":true,"setup_required":false,"status":"ok","store":"up"}
+```
+
+See [monitor with Prometheus](/2026-06/how-to/monitor-with-prometheus/) for the metric
+set, SLO targets and shipped alert rules.
+
+## Next steps
+
+* **Connect more signals:** the [connector guides](/2026-06/how-to/connectors/pgaudit/)
+  — pgAudit, CloudTrail, Claude Code, eBPF, and the rest of the catalog.
+* **Harden the deployment:** [security hardening](/2026-06/how-to/security-hardening/) —
+  exposure, mTLS for collectors, approvals.
+* **Govern:** [govern and approve](/2026-06/how-to/govern-and-approve/) — RBAC,
+  policies, and the recorded-decisions guarantee.

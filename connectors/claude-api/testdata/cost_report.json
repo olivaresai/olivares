@@ -1,0 +1,36 @@
+{
+  "data": [
+    {
+      "starting_at": "2026-06-01T00:00:00Z",
+      "ending_at": "2026-06-02T00:00:00Z",
+      "results": [
+        {
+          "amount": "1234.50",
+          "currency": "USD",
+          "workspace_id": "wrkspc_01",
+          "description": "Claude Sonnet 4.6 — Input Tokens",
+          "model": "claude-sonnet-4-6",
+          "service_tier": "standard",
+          "cost_type": "tokens",
+          "token_type": "uncached_input_tokens",
+          "context_window": "0-200k",
+          "inference_geo": "global"
+        },
+        {
+          "amount": "50.00",
+          "currency": "USD",
+          "workspace_id": "wrkspc_01",
+          "description": "Web Search Usage",
+          "model": "",
+          "service_tier": "standard",
+          "cost_type": "web_search",
+          "token_type": "",
+          "context_window": "",
+          "inference_geo": ""
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

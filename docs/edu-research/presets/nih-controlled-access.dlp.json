@@ -1,0 +1,12 @@
+[
+  {
+    "class": "controlled-access",
+    "action": "deny",
+    "note": "NIH NOT-OD-25-081: controlled-access datasets (e.g. dbGaP) must not be entered into public or generative-AI tools that cannot guarantee the data are not retained or used to train models after the project. Deny this class from egress (retrieval response and the ingest-time embed call)."
+  },
+  {
+    "class": "unscanned",
+    "action": "deny",
+    "note": "Deny-closed: content whose sensitivity has not been proven by a discovery scan must not egress to an external model."
+  }
+]

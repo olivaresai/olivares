@@ -1,0 +1,51 @@
+{
+  "title": "Posture-Export",
+  "description": "Exportieren Sie die schreibgeschützte Ist-Posture — Inventar, Least-Privilege-Drift und Befunde — zur Aufnahme durch einen Control Tower.",
+  "filters": {
+    "title": "Export-Filter",
+    "severity": "Mindestschweregrad",
+    "severityHint": "Nur Befunde ab diesem Schweregrad einschließen.",
+    "severityAny": "Beliebiger Schweregrad",
+    "category": "Kategorie",
+    "categoryHint": "Passt auf einen Befund- oder Subjekttyp.",
+    "categoryPlaceholder": "z. B. policy_drift",
+    "kind": "Inventartyp",
+    "kindHint": "Das Inventar auf einen einzelnen Entitätstyp beschränken.",
+    "kindPlaceholder": "z. B. agent",
+    "none": "keine Filter"
+  },
+  "severity": {
+    "low": "Niedrig",
+    "medium": "Mittel",
+    "high": "Hoch",
+    "critical": "Kritisch"
+  },
+  "notes": {
+    "pull": "Dies ist eine schreibgeschützte Projektion mit minimalen Daten — nur Referenzen und Hashes —, die ein Control Tower abruft; nichts verlässt die Box, bis Sie exportieren."
+  },
+  "export": {
+    "action": "Posture exportieren",
+    "done": "Posture exportiert.",
+    "failed": "Posture-Export fehlgeschlagen."
+  },
+  "summary": {
+    "title": "Letzter Export",
+    "inventory": "Inventarentitäten",
+    "findings": "Befunde",
+    "unexpected": "Unerwartete Zugriffe",
+    "drift": "Drift-Signale",
+    "truncated": "Gekürzt",
+    "truncatedHint": "Ein oder mehrere Abschnitte haben die Exportgrenze erreicht und sind unvollständig — die Zahlen sind eine Untergrenze, kein Gesamtwert.",
+    "severityFloor": "Schweregrad ≥ {{severity}}"
+  },
+  "history": {
+    "title": "Exporte in dieser Sitzung",
+    "note": "Diese Liste umfasst nur Exporte aus dieser Browsersitzung. Jeder Export wird im manipulationssicheren Audit-Ledger festgehalten (Aktion posture.export) —",
+    "auditLink": "den Audit-Explorer öffnen",
+    "empty": "Noch keine Exporte in dieser Sitzung.",
+    "colTime": "Zeit",
+    "colFilters": "Filter",
+    "colCounts": "Anzahl",
+    "counts": "{{inventory}} Inventar · {{findings}} Befunde · {{drift}} Drift"
+  }
+}

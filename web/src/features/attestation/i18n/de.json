@@ -1,0 +1,202 @@
+{
+  "title": "Lieferketten-Attestierung",
+  "description": "Gemessene Wahrheit über das laufende Binärprogramm, ergänzt um den deklarierten Vertrag zur Release-Verifizierung — was mit jedem Release ausgeliefert wird und wie genau es zu verifizieren ist. Im Browser wird nichts erneut verifiziert.",
+  "forbiddenTitle": "Nicht autorisiert",
+  "forbidden": "Das Anzeigen des Attestierungsvertrags erfordert die Berechtigung compliance:read.",
+  "disclaimer": {
+    "tag": "Beta",
+    "body": "Das Projekt befindet sich in der Beta-Phase: Es existieren noch keine Releases, und die Release-Pipeline ist geschrieben, aber nicht aktiviert. Das Panel zum laufenden Binärprogramm wird aus diesem Prozess GEMESSEN; die Vertragsreiter zeigen den deklarierten Vertrag, kein veröffentlichtes Release und keine Live-Kryptoverifizierung — diese Konsole verifiziert Signaturen niemals erneut im Browser.",
+    "declaredRef": "Deklarierte Referenz — Stand {{date}}. Wortwörtlich übernommen aus docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml sowie den Release-, Scorecard- und Patch-Velocity-Workflows. Die Engine kann den Zustand von Repository oder CI nicht beobachten, daher wird diese Hälfte nicht live bereitgestellt."
+  },
+  "live": {
+    "title": "Laufendes Binärprogramm (gemessen)",
+    "description": "Was DIESER Engine-Prozess über sich selbst beweisen kann — live aus dem Binärprogramm gelesen (ldflags, debug.ReadBuildInfo, crypto/fips140, ein Selbst-Hash der ausführbaren Datei) — sowie der ehrliche Release-Zustand: Nichts wird veröffentlicht oder verifiziert, bis ein v*-Tag die Pipeline auslöst.",
+    "status": {
+      "measured": "Gemessen"
+    },
+    "fields": {
+      "commit": "Commit",
+      "buildDate": "Build-Datum",
+      "goVersion": "Go-Version",
+      "platform": "OS / Architektur",
+      "mainModule": "Hauptmodul",
+      "moduleSums": "Modul-Hashes",
+      "vcsStamp": "VCS-Stempel",
+      "selfHash": "Self-SHA256",
+      "capturedAt": "Erfasst am",
+      "releaseReason": "Release-Zustand",
+      "signature": "Signatur",
+      "verifier": "Verifizierer",
+      "transparencyLog": "Transparenzprotokoll",
+      "workflows": "Pipeline-Workflows"
+    },
+    "fipsOn": "FIPS 140-3: ein",
+    "fipsOff": "FIPS 140-3: aus",
+    "sums": "{{n}} externe Abhängigkeiten tragen go.sum-Hashes",
+    "sumsAbsent": "keine Abhängigkeits-Hashes erfasst",
+    "vcsAvailable": "VCS-Einstellungen durch die Go-Toolchain gestempelt",
+    "vcsUnavailable": "Kein VCS-Stempel",
+    "selfHashHint": "Der Self-SHA256 ist ein Stream-Hash der laufenden ausführbaren Datei, der einmalig beim ersten Lesen berechnet wird. Vergleichen Sie ihn OFFLINE mit einer künftigen signierten checksums.txt — der Browser verifiziert niemals Signaturen, und ein Hash allein belegt die Identität, nicht die Herkunft.",
+    "published": "Veröffentlicht",
+    "notPublished": "Nicht veröffentlicht",
+    "verifierAvailable": "Nativer Verifizierer einkompiliert (core/secure/modelsign)",
+    "verifierUnavailable": "Kein Verifizierer verfügbar",
+    "pipelineStatus": {
+      "declared": "Deklariert."
+    }
+  },
+  "status": {
+    "declared": "Deklariert",
+    "skip_when_absent": "Bei Abwesenheit überspringen",
+    "not_run": "Noch nicht ausgeführt"
+  },
+  "trust": {
+    "keyless": "Schlüssellos (Fulcio/Rekor)",
+    "key_based": "Schlüsselbasiert (Air-Gap)",
+    "both": "Schlüssellos + schlüsselbasiert",
+    "transitive": "Transitiv (signierte Prüfsummen)"
+  },
+  "tabs": {
+    "artifacts": "Artefakte",
+    "provenance": "Herkunft & VEX",
+    "sbom": "SBOM",
+    "scorecard": "Scorecard",
+    "remediation": "Behebungs-SLA",
+    "airgap": "Air-Gap & Chart"
+  },
+  "artifacts": {
+    "title": "Release-Artefakte",
+    "description": "Was mit einem Release ausgeliefert wird und wie das Vertrauen in jedes Artefakt hergestellt wird. Schlüsselloses (Fulcio/Rekor) und schlüsselbasiertes (Air-Gap) Signieren sind beide gleichrangig — keines ist kanonisch.",
+    "identityNote": "Schlüssellose Signatur-Identität (deklariert): OIDC-Aussteller {{issuer}} · cosign-Zertifikatsidentität {{regexp}}",
+    "columns": {
+      "artifact": "Artefakt",
+      "producedBy": "Erzeugt von",
+      "signatureTrust": "Signatur / Vertrauen",
+      "mechanism": "Mechanismus",
+      "status": "Status",
+      "control": "Kontrolle"
+    }
+  },
+  "slsa": {
+    "title": "SLSA-Build-Herkunft",
+    "description": "In-toto-/ITE-6-Herkunft, erzeugt durch slsa-github-generator und verifiziert mit slsa-verifier.",
+    "buildLevel": "SLSA Build {{level}}",
+    "predicate": "Prädikattyp",
+    "generator": "Generator",
+    "pin": "Pin des wiederverwendbaren Workflows",
+    "pinKind": {
+      "semver_tag": "Semver-Tag",
+      "sha": "SHA"
+    },
+    "verifyCommand": "Verifizierungsbefehl",
+    "honesty": "L3 konstruktionsbedingt: Das Signieren läuft in einem isolierten Kontext, den die Build-Schritte nicht erreichen können. Der wiederverwendbare Workflow ist per Semver-Tag (nicht per SHA) gepinnt — slsa-verifier validiert die Builder-ID gegen den Tag, sodass ein SHA-Pin die Verifizierung brechen würde. Nicht jede Abhängigkeit ist per SHA gepinnt."
+  },
+  "sbom": {
+    "title": "Software-Stückliste (SBOM)",
+    "description": "SPDX 2.3 und CycloneDX 1.6 pro Archiv und für das Container-Image, angehängt als signierte In-toto-Attestierung.",
+    "attestation": "Attestierungs-Prädikat",
+    "linter": "CISA-Linter",
+    "cisa": {
+      "title": "CISA-Checkliste der Mindestelemente",
+      "draftTag": "Entwurf",
+      "draft": "Die CISA-2025-SBOM-\"Mindestelemente\" sind ein Entwurf (vorläufig, öffentliche Kommentierung) — KEIN Gesetz und keine finalisierte bundesstaatliche Anforderung. Der Linter schlägt fehl, wenn ein Feldtyp vollständig fehlt (hart), und warnt bei den komponentenbezogenen Auslassungen, die der Entwurf selbst zulässt (weich).",
+      "columns": {
+        "element": "Element",
+        "enforcement": "Durchsetzung",
+        "carriedBy": "Getragen von"
+      },
+      "enforcement": {
+        "hard": "Hart",
+        "soft": "Weich"
+      }
+    }
+  },
+  "vex": {
+    "title": "OpenVEX-Aussagen",
+    "description": "Erreichbarkeitsgetriebene Aussagen zur Ausnutzbarkeit (govulncheck), angehängt als signierte In-toto-Attestierung.",
+    "columns": {
+      "vuln": "Schwachstelle",
+      "status": "Status",
+      "justification": "Begründung",
+      "author": "Autor"
+    },
+    "status": {
+      "not_affected": "Nicht betroffen",
+      "affected": "Betroffen",
+      "fixed": "Behoben",
+      "under_investigation": "In Untersuchung"
+    }
+  },
+  "scorecard": {
+    "title": "OpenSSF Scorecard",
+    "description": "Die vier Lieferketten-Prüfungen, die für ein selbst gehostetes Sicherheitsprodukt am wichtigsten sind.",
+    "checksTitle": "Verfolgte Prüfungen",
+    "schedule": "Zeitplan",
+    "gauge": {
+      "title": "Deklarierte Scorecard-Prüfungen",
+      "summary": "{{declared}} von {{total}} verfolgten OpenSSF-Scorecard-Prüfungen sind im Vertrag deklariert. Dies ist eine Abdeckungszählung deklarierter Prüfungen, keine numerische Scorecard-Bewertung.",
+      "caption": "deklariert"
+    },
+    "columns": {
+      "check": "Prüfung",
+      "what": "Was sie bewertet",
+      "evidence": "Nachweis"
+    }
+  },
+  "sla": {
+    "title": "CVE-Behebungs-SLA",
+    "description": "Behebungsziele ab dem Moment, in dem ein Fix für eine in unseren ausgelieferten Artefakten erreichbare Schwachstelle upstream verfügbar ist. Diese treten mit dem ersten getaggten Release in Kraft.",
+    "cadenceTitle": "Patch-Velocity-Kadenz",
+    "schedule": "Zeitplan",
+    "columns": {
+      "severity": "Schweregrad (CVSS v3.1)",
+      "cvss": "Bewertungsbereich",
+      "target": "Ziel bis zum gepatchten, signierten Release"
+    },
+    "severity": {
+      "critical": "Kritisch",
+      "high": "Hoch",
+      "medium": "Mittel",
+      "low": "Niedrig"
+    }
+  },
+  "airgap": {
+    "title": "Air-Gap-Bundle & OCI-Helm-Chart",
+    "description": "Ein offline verifizierbares Bundle und ein doppelt signiertes OCI-Helm-Chart. Auf diesem Weg geht nichts nach außen.",
+    "bundleTitle": "Air-Gap-Bundle",
+    "bundleIntro": "Der schlüsselbasierte Pfad benötigt weder Rekor noch Fulcio. Maintainer erstellen einmalig online ein eigenständiges Bundle; der getrennte Standort verifiziert und spiegelt es.",
+    "buildCommand": "Erstellen (einmalig online)",
+    "mirrorCommand": "Spiegeln (ohne Internet)",
+    "chartTitle": "OCI-Helm-Chart",
+    "ociCoordinate": "OCI-Koordinate",
+    "cosignManifest": "cosign (Manifest)",
+    "gpgProv": "GPG .prov",
+    "verifyCommand": "Verifizierungsbefehl"
+  },
+  "empty": {
+    "artifact": {
+      "title": "Keine Release-Artefakte deklariert",
+      "description": "Diese Tabelle wird aus dem deklarierten Vertrag zur Release-Verifizierung erstellt; Zeilen erscheinen nur, wenn der Vertrag Release-Artefakte aufführt."
+    },
+    "checkChart": {
+      "title": "Keine Scorecard-Prüfungen deklariert",
+      "description": "Die Abdeckung deklarierter Prüfungen erscheint nur, wenn der einkompilierte Release-Vertrag verfolgte OpenSSF-Scorecard-Prüfungen aufführt."
+    },
+    "sbom": {
+      "title": "Keine SBOM-Checklistenpunkte deklariert",
+      "description": "Diese Checkliste wird aus dem deklarierten SBOM-Vertrag erstellt; Zeilen erscheinen nur, wenn der Vertrag die Mindestelemente des CISA-Entwurfs aufführt."
+    },
+    "scorecard": {
+      "title": "Keine verfolgten Scorecard-Prüfungen deklariert",
+      "description": "Diese Tabelle wird aus dem deklarierten Release-Vertrag erstellt; Zeilen erscheinen nur, wenn der Vertrag verfolgte OpenSSF-Scorecard-Prüfungen aufführt."
+    },
+    "sla": {
+      "title": "Keine Behebungsziele deklariert",
+      "description": "Diese Tabelle wird aus dem deklarierten Patch-Velocity-Vertrag erstellt; Zeilen erscheinen nur, wenn er CVE-Schweregraden Behebungsziele zuweist."
+    },
+    "vex": {
+      "title": "Keine OpenVEX-Aussagen deklariert",
+      "description": "Diese Tabelle wird aus dem deklarierten Release-Vertrag erstellt; Zeilen erscheinen nur, wenn der Vertrag beispielhafte OpenVEX-Aussagen enthält."
+    }
+  }
+}

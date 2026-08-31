@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# OpenSSF Scorecard (SCP-07). Runs on the public GitHub repository — Scorecard
+# evaluates GitHub repo posture. It scores the four
+# checks that matter most for a self-hosted security product's supply chain:
+# Pinned-Dependencies (every Action pinned by 40-char SHA — see all workflows +
+# .github/dependabot.yml), Signed-Releases (cosign + SLSA provenance, release.yml),
+# Token-Permissions (top-level read-all + per-job least privilege), and
+# Branch-Protection (repo settings). The badge is published to api.scorecard.dev.
+#
+# NOTE on cron: GitHub Actions uses STANDARD POSIX 5-field cron in UTC, where
+# day-of-week 1 = Monday (0 and 7 both = Sunday). This is NOT Quartz (where 1=Sun);
+# do not copy this schedule string to a Cloudflare/Quartz scheduler unchanged.
+name: scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC (POSIX DOW: 1 = Monday)
+  push:
+    branches: ["main"]
+
+# Declare default token permissions as read-only.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    # Scorecard only works against PUBLIC repos (GraphQL "Resource not accessible
+    # by integration" on private ones). On forks and private mirrors this job
+    # skips cleanly; it runs for real on the public repository.
+    if: github.repository == 'olivaresai/olivares'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      security-events: write # upload SARIF to the code-scanning dashboard
+      id-token: write # OIDC for publish_results (required for the badge)
+      contents: read
+      actions: read
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: "Run analysis"
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true # required for the api.scorecard.dev badge + OIDC
+
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      - name: "Upload to code-scanning"
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: results.sarif

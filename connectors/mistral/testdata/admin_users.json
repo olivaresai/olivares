@@ -1,0 +1,7 @@
+{
+  "data": [
+    { "id": "usr_01", "email": "alice@example.com", "role": "admin" },
+    { "id": "usr_02", "email": "bob@example.com", "role": "member" },
+    { "id": "usr_03", "email": "carol@example.com", "role": "member" }
+  ]
+}

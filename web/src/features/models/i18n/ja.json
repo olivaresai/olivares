@@ -1,0 +1,269 @@
+{
+  "title": "モデルとプロバイダー",
+  "description": "ガバナンス対象のモデルエステート — 宣言されたケーパビリティと料金、ルーティングポリシー、プロバイダーキー参照。シークレットは決して表示されず、マスクされた参照のみが表示されます。",
+  "tabs": {
+    "catalog": "カタログ",
+    "estate": "エステート",
+    "routing": "ルーティング",
+    "keys": "プロバイダーキー",
+    "gpai": "GPAIポスチャ",
+    "access": "Access"
+  },
+  "catalog": {
+    "title": "ケーパビリティマトリクス",
+    "description": "モデルファミリーごとに宣言されたAPIケーパビリティ。",
+    "pricingTitle": "宣言された料金",
+    "pricingDescription": "定価のデフォルト値 — 参照用であり、不変の真実ではありません。各プロバイダーで照合し、モデルごとにオーバーライドしてください。",
+    "family": "ファミリー",
+    "provider": "プロバイダー",
+    "context": "コンテキスト",
+    "maxOutput": "最大出力",
+    "modality": "モダリティ",
+    "inputPrice": "入力 / MTok",
+    "outputPrice": "出力 / MTok",
+    "cacheRead": "キャッシュ読み取り / MTok",
+    "cacheWrite1h": "キャッシュ書き込み 1h / MTok",
+    "residency": "データレジデンシー",
+    "tiers": "サービスティア",
+    "residencyNotApplicable": "該当なし",
+    "tiersNotDeclared": "未宣言",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "要確認のケーパビリティ",
+    "capsToConfirmHint": "このファミリーのケーパビリティセットは、まだモデルカードと照合して検証されていません。モデルは一覧に表示されますが、そのケーパビリティは捏造されるのではなく未確認としてフラグが付けられています。",
+    "tier": {
+      "standard": "スタンダード",
+      "batch": "バッチ",
+      "priority": "プライオリティ",
+      "priority_on_demand": "プライオリティ オンデマンド",
+      "flex": "フレックス",
+      "flex_discount": "フレックス割引"
+    },
+    "asOf": "{{date}}時点",
+    "noPricing": "宣言された料金なし",
+    "present": "対応",
+    "absent": "非対応"
+  },
+  "estate": {
+    "title": "ガバナンス対象モデル",
+    "description": "このテナントのエステートに含まれるモデル。カタログから情報が補完されています。",
+    "empty": "エステートにモデルがありません",
+    "columns": {
+      "name": "モデル",
+      "provider": "プロバイダー",
+      "family": "ファミリー",
+      "context": "コンテキスト",
+      "inputCost": "入力 µ$/tok",
+      "outputCost": "出力 µ$/tok",
+      "modality": "モダリティ",
+      "capabilities": "ケーパビリティ",
+      "status": "ステータス"
+    },
+    "notEnriched": "宣言されたファミリーがまだありません — 料金なし",
+    "costNote": "トークンあたりのµUSDは概算の便宜的な数値です。実際の使用における正式なコストはFinOps台帳が示します。",
+    "truncated": "{{n}} 件のモデルを読み込みました。さらに存在します",
+    "truncatedHint": "統制対象モデルは表示分より多くあります。このページは行 id で取得します。 表の検索と並べ替えは読み込み済みの範囲にのみ働きます。"
+  },
+  "routing": {
+    "title": "ルーティングポリシー",
+    "description": "ポリシーはここで定義され、ゲートウェイコネクターによって実行されます。UIはその設定と表示を行います。",
+    "new": "新規ポリシー",
+    "empty": "ルーティングポリシーがありません",
+    "emptyHint": "ルーティングポリシーは、ストラテジーに対するプライマリモデルとフォールバックチェーンを選択します。",
+    "strategy": "ストラテジー",
+    "requiredCapabilities": "必須ケーパビリティ",
+    "preferredProviders": "優先プロバイダー",
+    "minContext": "最小コンテキストウィンドウ",
+    "pinnedModel": "固定モデル",
+    "allowDeprecated": "非推奨を許可",
+    "gateway": "ゲートウェイエンドポイント",
+    "viaGateway": "ゲートウェイ経由",
+    "resolve": "解決",
+    "resolving": "解決中…",
+    "enabled": "有効",
+    "disabled": "無効",
+    "strategies": {
+      "cost": "コスト",
+      "latency": "レイテンシ",
+      "capability": "ケーパビリティ",
+      "pinned": "固定"
+    },
+    "decision": {
+      "title": "解決された判定",
+      "primary": "プライマリ",
+      "fallbacks": "フォールバックチェーン",
+      "unresolved": "このポリシーを満たすガバナンス対象モデルがありません",
+      "reason": "理由"
+    },
+    "dialog": {
+      "title": "ルーティングポリシー",
+      "name": "名前",
+      "listHint": "カンマ区切り。",
+      "create": "ポリシーを保存",
+      "created": "ルーティングポリシーを保存しました"
+    },
+    "execute": "Execute",
+    "executeConfirm": "Execute and spend",
+    "input": "Input",
+    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
+    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "noExecutor": "No executor is provisioned. This is not an outage: the control plane resolves routing decisions but never spends against a provider until an operator wires an executor.",
+    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "fallbackUsed": "fallback used",
+    "refusal": "provider refusal",
+    "tokens": "{{in}} in · {{out}} out",
+    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "truncated": "{{n}} 件のポリシーを読み込みました。さらに存在します",
+    "truncatedHint": "ルーティングポリシーは表示分より多くあります。このページは行 id で取得します。ここに無いことが、あるリクエストをルーティングするポリシーが存在しないことを示すわけではありません。"
+  },
+  "keys": {
+    "title": "プロバイダーキー参照",
+    "description": "プロバイダーのAPIキーとワークスペースへのガバナンス対象の参照。保存されるのはマスクされたヒントのみで、シークレットの値が保存されることはありません。",
+    "new": "キー参照を追加",
+    "empty": "キー参照がありません",
+    "maskedOnly": "参照のみ — シークレットの値は保存も表示もされません。",
+    "columns": {
+      "name": "名前",
+      "provider": "プロバイダー",
+      "kind": "種類",
+      "extId": "外部ID",
+      "hint": "マスクされたヒント",
+      "owner": "オーナー",
+      "status": "ステータス",
+      "created": "作成日時"
+    },
+    "kind": {
+      "api_key": "APIキー",
+      "workspace": "ワークスペース"
+    },
+    "dialog": {
+      "title": "キー参照を追加",
+      "name": "名前",
+      "provider": "プロバイダー",
+      "kind": "参照の種類",
+      "extId": "外部ID",
+      "extIdHint": "プロバイダー側のキー/ワークスペースID（例: apikey_01）。シークレットではありません。",
+      "owner": "オーナー",
+      "noSecretNote": "このフォームはシークレットを一切受け付けません。Olivaresは参照とマスクされたヒントのみを保存します。",
+      "create": "参照を追加",
+      "created": "キー参照を追加しました"
+    },
+    "truncated": "{{n}} 件の鍵を読み込みました。さらに存在します",
+    "truncatedHint": "プロバイダ鍵の参照は表示分より多くあります。このページは行 id で取得します。ここに無いことが、そのプロバイダの資格情報が存在しないことを示すわけではありません。 表の並べ替えは読み込み済みの範囲にのみ働きます。"
+  },
+  "gpai": {
+    "title": "GPAIプロバイダーポスチャ",
+    "description": "オペレーターが表明したサプライヤーのポスチャで、プロバイダーごとに一度記録されます。",
+    "notice": "これはオペレーターが表明したサプライヤーのGPAIポスチャであり、ISO/IEC 42001 A.10.3 および NIST AI RMF GOVERN-6.1 / MAP-4.1 のサプライヤーエビデンス要件に反映されます。Olivares によるコンプライアンス判定ではありません。",
+    "empty": "GPAIプロバイダーポスチャは記録されていません",
+    "emptyHint": "公開されたサプライヤー資料をレビューした場合、または主張を記録する必要がある場合に、プロバイダーポスチャを表明してください。",
+    "verifiedMeaning": "公開されたプロバイダー資料に照らしてオペレーターがレビューしたものです。これはオペレーター自身の表明であり、Olivares が実施した検証ではなく、コンプライアンス判定でもありません。",
+    "actions": {
+      "attest": "ポスチャを表明",
+      "edit": "ポスチャを編集",
+      "editProvider": "{{provider}} のポスチャを編集"
+    },
+    "columns": {
+      "provider": "プロバイダー",
+      "review": "レビュー状態",
+      "attestedAt": "表明日時",
+      "actions": "操作"
+    },
+    "claims": {
+      "cop_signatory": "Code of Practice 署名者",
+      "technical_docs": "技術文書を公開済み",
+      "training_data_summary": "学習データ概要を公開済み",
+      "copyright_policy": "著作権ポリシーを記録済み",
+      "downstream_info": "下流事業者への情報を提供済み",
+      "systemic_risk": "システミックリスクを伴うGPAI",
+      "safety_report": "Safety & Security Model Report"
+    },
+    "states": {
+      "recorded": "記録済み",
+      "notRecorded": "主張は未記録",
+      "reviewed": "オペレーターによるレビュー済みの表明",
+      "unreviewed": "オペレーターの主張 — 未レビュー"
+    },
+    "detail": {
+      "title": "GPAIポスチャ: {{provider}}",
+      "description": "このプロバイダーについてオペレーターが記録した主張と表明メタデータです。",
+      "claims": "プロバイダーの主張",
+      "reviewState": "レビュー状態",
+      "verificationMethod": "検証方法",
+      "attestedBy": "表明者",
+      "attestedAt": "表明日時",
+      "note": "備考",
+      "notProvided": "未提供"
+    },
+    "form": {
+      "createTitle": "GPAIプロバイダーポスチャを表明",
+      "editTitle": "GPAIプロバイダーポスチャを編集",
+      "description": "プロバイダーの主張と、オペレーター自身のレビュー表明を記録します。",
+      "providerRef": "プロバイダー参照",
+      "providerLocked": "変更すると2つ目のポスチャが作成されるため、編集中はプロバイダー参照をロックしています。",
+      "providerRequired": "プロバイダー参照を入力してください。",
+      "claimsTitle": "プロバイダーの主張",
+      "claimsDescription": "オペレーターがこのプロバイダーについて記録した主張のみをオンにしてください。",
+      "systemicRiskHint": "分類: このモデルはシステミックリスクを伴うGPAIに分類されています。",
+      "safetyReportHint": "この報告書は、システミックリスクを伴うGPAIに分類されたモデルに適用されます。",
+      "verified": "公開されたプロバイダー資料に照らしてレビュー済み",
+      "verificationMethod": "検証方法",
+      "verificationMethodHint": "オペレーターがこのポスチャをレビュー済みとする場合に必須です。",
+      "verificationMethodRequired": "公開されたプロバイダー資料をどのようにレビューしたかを記載してください。",
+      "note": "備考",
+      "requestRejected": "ポスチャは保存されませんでした。以下のサーバー応答を確認してください。",
+      "created": "GPAIプロバイダーポスチャを表明しました",
+      "updated": "GPAIプロバイダーポスチャを更新しました",
+      "save": "表明を保存",
+      "saving": "保存中…"
+    },
+    "truncated": "{{n}} 件のポスチャを読み込みました。さらに存在します",
+    "truncatedHint": "GPAI ポスチャは表示分より多くあります。このページは行 id で取得します。ここに無いプロバイダについて、何も宣言されていないと示すわけではありません。 表の並べ替えは読み込み済みの範囲にのみ働きます。"
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "プロバイダーキー参照はまだ追加されていません",
+      "description": "クレデンシャル値はコンソールで受け付けず、保存もしないため、プロバイダー識別子を指定して API キーまたはワークスペース参照を追加してください。"
+    },
+    "models": {
+      "title": "ガバナンス対象のモデルはまだ観測されていません",
+      "description": "コネクターが使用中のプロバイダーとモデルを示すコスト記録を発行すると、そのモデルがエステートに追加されます。"
+    }
+  },
+  "residency": {
+    "title": "ワークスペースのレジデンシー",
+    "description": "各ワークスペースが推論を処理する場所と、データが保管される場所を、プロバイダーの報告どおりに示します。",
+    "empty": "レジデンシー設定を報告しているワークスペースはありません",
+    "unrestricted": "プロバイダーは制限を報告していません",
+    "allowed": "許可: {{geos}}",
+    "unreported": "未報告",
+    "defaultGeo": "既定: {{geo}}",
+    "atRest": "保管: {{geo}}",
+    "truncated": "{{n}} 件のワークスペースを読み込みました。さらに存在します",
+    "truncatedHint": "レジデンシー記録は表示分より多くあります。このページは行 id（作成時に採番）で取得するため、それ以降が欠けます。ここに無いワークスペースについて、その処理が無制限だと示すわけではありません。"
+  },
+  "access": {
+    "title": "Model access rules",
+    "description": "Who may use which model, and where.",
+    "empty": "No access rules — every subject is unrestricted",
+    "groupsTitle": "Model groups",
+    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsEmpty": "No model groups",
+    "members": "{{n}} members",
+    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "effect": {
+      "allow": "allow",
+      "forbid": "forbid"
+    },
+    "tenantWide": "tenant-wide",
+    "inWorkspace": "in {{ws}}",
+    "allSurfaces": "all surfaces",
+    "onSurfaces": "on {{list}}",
+    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
+    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "readOnlyNote": "Read-only: changing who may use a model requires models:model-access:admin, which is a higher tier than editing a routing policy.",
+    "truncated": "{{n}} 件のルールを読み込みました。さらに存在します",
+    "truncatedHint": "アクセスルールは表示分より多くあります。このページは行 id で取得します。これらの行の表示は読み込み済みのルールのみを反映します。限定を生じさせる allow や許可先を追加する allow が欠けることもあれば、アクセスを差し引く forbid が欠けることもあります。したがって、このページは実際より広くも狭くも見え得ますし、ルールが 1 件も読み込まれていない主体はそもそも現れません。ここから実効アクセスを推論しないでください。エンジンは判断前にすべてのページを読み、ユーザー・ロール・グループを横断して主体を解決します。1 行では示せません。",
+    "groupsTruncated": "{{n}} 件のグループを読み込みました。さらに存在します",
+    "groupsTruncatedHint": "モデルグループは表示分より多くあります。このページは行 id で取得します。ここに無いグループが存在しないことを示すわけではなく、ルールがそれを指している可能性があります。"
+  }
+}

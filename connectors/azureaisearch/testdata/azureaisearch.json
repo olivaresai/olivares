@@ -1,0 +1,12 @@
+{
+  "value": [
+    {
+      "id": "doc-policy-remote-work",
+      "@search.score": 1.0,
+      "title": "Remote Work Policy 2026",
+      "content": "All employees are eligible for hybrid remote work. Equipment provisioning requires manager approval within 5 business days.",
+      "lastModified": "2026-03-01T09:00:00Z",
+      "security_filter": ["hr_team", "all_managers"]
+    }
+  ]
+}

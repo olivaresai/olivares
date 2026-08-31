@@ -1,0 +1,7 @@
+{
+  "apiKeyId": "mgmt_abc",
+  "teamId": "team_default",
+  "scope": "SCOPE_TEAM",
+  "scopeId": "team_default",
+  "name": "ci-management-key"
+}

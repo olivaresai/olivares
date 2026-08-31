@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: Apache-2.0
+
+terminal:
+  backend: local
+security:
+  allow_lazy_installs: true
+approvals:
+  mode: off
+skills:
+  write_approval: false
+  guard_agent_created: false
+memory:
+  write_approval: false
+platforms:
+  slack:
+    enabled: true

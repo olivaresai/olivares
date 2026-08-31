@@ -1,0 +1,117 @@
+---
+title: "Caminos por rol"
+description: >-
+  Tres caminos de lectura a través de la misma documentación: ingeniería de
+  plataforma (instalar y operar), ingeniería de seguridad (gobernar y contener), y
+  cumplimiento (evidencia y auditoría) — más el camino del builder para los autores
+  de conectores.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+La documentación está organizada por [modo Diátaxis](/es/start/how-the-docs-are-organized/)
+— tutoriales, how-to, referencia, explicación — porque así es como los docs se mantienen
+usables. Pero la gente llega con un *rol*, no con un modo. Estos son los cinco
+caminos a través de las mismas páginas, en orden de lectura.
+
+## Ingeniería de plataforma — instalarlo, operarlo
+
+Tú posees el despliegue: uptime, backups, actualizaciones, capacidad.
+
+1. **Verlo funcionar:** el [quickstart](/es/start/quickstart/) (cinco minutos), luego
+   el [tutorial zero-to-graph](/es/tutorials/zero-to-graph/) si quieres la
+   versión guiada.
+2. **Instalar de verdad**, por escenario:
+   [nodo único (systemd)](/es/tutorials/getting-started/single-node/) ·
+   [Docker Compose](/es/tutorials/getting-started/docker-compose/) ·
+   [Kubernetes/Helm con HA](/es/tutorials/getting-started/kubernetes/) ·
+   [air-gapped](/es/tutorials/getting-started/air-gapped/).
+3. **Cablear señales:** [conectar una fuente](/es/how-to/connect-a-source/), luego las
+   guías por conector ([pgAudit](/es/how-to/connectors/pgaudit/),
+   [CloudTrail](/es/how-to/connectors/cloudtrail/),
+   [eBPF/Tetragon](/es/how-to/connectors/ebpf-tetragon/)).
+4. **Operar:** [monitorización y SLOs](/es/how-to/monitor-with-prometheus/) ·
+   [backup y restauración](/es/how-to/backup-and-restore/) ·
+   [troubleshooting](/es/how-to/troubleshooting/).
+
+Referencia en la que vivirás: [configuración](/es/reference/configuration/),
+[CLI](/es/reference/cli/), [conectores y tiers](/es/reference/connectors/).
+
+## Ingeniería de seguridad — gobernarlo, contenerlo
+
+Tú posees el least privilege, la aplicación y la respuesta a incidentes para el estate
+de agentes.
+
+1. **El modelo primero:** [qué es el access map](/es/start/what-is-olivares-ai/)
+   y [honestidad y límites](/es/start/honesty-and-limits/) — qué afirmará el producto
+   y qué no.
+2. **Gobernar:** [gobernar y aprobar](/es/how-to/govern-and-approve/) (RBAC, el
+   PDP restrict-only, decisiones registradas), luego las recetas:
+   [políticas deny-closed](/es/how-to/cookbook/deny-closed-policies/) ·
+   [aprobaciones HITL](/es/how-to/cookbook/hitl-approvals/) ·
+   [triage de drift](/es/how-to/cookbook/drift-triage/).
+3. **Aplicar en la superficie del agente:**
+   [hooks de Claude Code y el PEP](/es/how-to/connectors/claude-code-hooks-pep/) ·
+   [gobierno de MCP](/es/how-to/connectors/mcp-governance/) ·
+   [presupuestos como guardrails](/es/how-to/cookbook/budgets-and-finops-guardrails/).
+4. **Contener:** el [drill del kill-switch](/es/how-to/cookbook/kill-switch-drill/),
+   y [endurecer el despliegue](/es/how-to/security-hardening/).
+
+Trasfondo en profundidad: el [modelo de seguridad](/es/explanation/security/security-model/)
+y el [threat model](/es/explanation/security/threat-model/).
+
+## Cumplimiento — evidencia, auditoría, residencia
+
+Tú respondes ante auditores y reguladores; necesitas registros que se
+prueben a sí mismos.
+
+1. **Qué es la evidencia:** la garantía de decisiones registradas en
+   [gobernar y aprobar](/es/how-to/govern-and-approve/#la-postura-human-in-the-loop)
+   — el ledger append-only y firmado bajo cada decisión.
+2. **Sacarla:** [empújala a tu SIEM](/es/how-to/cookbook/push-to-siem/),
+   o [hazle pull/tail](/es/how-to/forward-audit-to-splunk/) para archivado WORM —
+   y verifícala offline
+   ([troubleshooting § ledger](/es/how-to/troubleshooting/#el-ledger-falla-la-verificación)).
+3. **Mantenerla superviviente:** [backup y restauración](/es/how-to/backup-and-restore/) —
+   bundles seguros para la continuidad, la regla de la clave fuera de la caja, el drill de restauración.
+4. **Residencia y procedencia:**
+   [operación air-gapped](/es/tutorials/getting-started/air-gapped/) ·
+   [verificar una release](/es/how-to/verify-a-release/) ·
+   [open core y licenciamiento](/es/explanation/open-core-and-licensing/).
+
+La línea base honesta que citar en evaluaciones:
+[Honestidad y límites](/es/start/honesty-and-limits/) — qué corre, qué es
+bajo demanda, qué está en fase de diseño.
+
+## Ejecutarlo por tu cuenta — una máquina, una persona
+
+Sin equipo de plataforma ni oficina de cumplimiento: un homelab, un servidor doméstico,
+una instalación para autónomos o pequeñas empresas en la que quien lo instala también es
+quien lo usa. Aquí nada es un producto reducido: es el mismo binario único, leído en el
+orden que permite sacar partido a una máquina lo antes posible.
+
+<CardGrid>
+  <LinkCard title="Desplegar con Docker" href="/es/how-to/docker-deployment/"
+    description="Un archivo Compose, un contenedor, tu propia máquina. El camino más corto desde cero hasta un plano de control en funcionamiento." />
+  <LinkCard title="Inicio rápido" href="/es/start/quickstart/"
+    description="Primera ejecución, primer agente, primera sesión gobernada: los diez minutos posteriores al arranque." />
+  <LinkCard title="Costes y presupuestos" href="/es/reference/modules/xi-finops/"
+    description="Lo que te cuestan tus modelos, por agente y por sesión, con presupuestos que responden antes de que lo haga la factura." />
+  <LinkCard title="Copias de seguridad y restauración" href="/es/how-to/backup-and-restore/"
+    description="El hábito operativo que merece la pena adoptar desde el primer día, sea quien sea el dueño de la máquina." />
+</CardGrid>
+
+## Builders — extenderlo
+
+Estás escribiendo un conector o conduciendo la API.
+
+<CardGrid>
+  <LinkCard title="Construir y distribuir un conector" href="/es/how-to/build-a-connector/"
+    description="Scaffold, implementar, firmar, distribuir — con admisión firmada deny-closed." />
+  <LinkCard title="Usar los SDKs de cliente" href="/es/how-to/use-the-client-sdks/"
+    description="Clientes Go, Java, Python y TypeScript sobre el contrato REST publicado." />
+  <LinkCard title="Gestionar como código" href="/es/how-to/manage-as-code/"
+    description="El provider de Terraform/OpenTofu sobre la API gobernada." />
+  <LinkCard title="Referencia de API y eventos" href="/reference/api/"
+    description="La superficie REST renderizada por OpenAPI y el bus de eventos AsyncAPI." />
+</CardGrid>

@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# systemd unit for a bare-metal install (shipped by the .deb/.rpm/.apk packages and
+# by scripts/install.sh). Secure defaults from docs/SECURITY-HARDENING.md: loopback-only listeners and a
+# self-signed cert generated in the data dir on first boot. Front it with your reverse
+# proxy, or widen the listen address via OLIVARES_EXTRA_ARGS in /etc/olivares/olivares.env.
+[Unit]
+Description=Olivares AI — self-hosted engine for enterprise AI
+Documentation=https://github.com/olivaresai/olivares
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olivares
+Group=olivares
+# Optional operator overrides (extra serve flags). Absent file is fine (leading '-').
+EnvironmentFile=-/etc/olivares/olivares.env
+ExecStart=/usr/bin/olivares serve \
+  --data-dir=/var/lib/olivares \
+  --listen=127.0.0.1:8443 \
+  --grpc-listen=127.0.0.1:8444 \
+  --checkpoint-interval=1h \
+  $OLIVARES_EXTRA_ARGS
+# `systemctl reload olivares` reconciles the observation-source roster WITHOUT a restart
+# (the engine handles SIGHUP). It does NOT cover listeners/TLS, identity/documents/
+# connector-trust, the DSN/bus/KEK or the data dir — those are read once at boot and need a
+# restart (see docs/UPGRADE-AND-ROLLBACK.md §6). The signal goes to the engine's own PID.
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+
+# --- hardening (mirrors the distroless container posture, docs/SECURITY-HARDENING.md) ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# The data dir holds the audit signing key, TLS material and the SQLite store.
+StateDirectory=olivares
+ReadWritePaths=/var/lib/olivares
+# 8443/8444 are unprivileged ports, so no capabilities are needed. If you move the
+# listener to a port < 1024, add: AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

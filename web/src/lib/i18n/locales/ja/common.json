@@ -1,0 +1,204 @@
+{
+  "errors": {
+    "generic": "エラーが発生しました"
+  },
+  "app": {
+    "name": "Olivares AI",
+    "tagline": "コントロールプレーン"
+  },
+  "actions": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "confirm": "確認",
+    "delete": "削除",
+    "edit": "編集",
+    "create": "作成",
+    "retry": "再試行",
+    "search": "検索",
+    "filter": "フィルター",
+    "refresh": "更新",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "back": "戻る",
+    "next": "次へ",
+    "previous": "前へ",
+    "viewAll": "すべて表示",
+    "learnMore": "詳細を見る",
+    "openMenu": "メニューを開く",
+    "expandSidebar": "サイドバーを展開",
+    "collapseSidebar": "サイドバーを折りたたむ",
+    "help": "このビューのドキュメントを開く"
+  },
+  "states": {
+    "loading": "読み込み中…",
+    "empty": "まだ何もありません",
+    "noResults": "結果がありません",
+    "comingSoon": "近日公開",
+    "loaded": "読み込み完了",
+    "yes": "はい",
+    "no": "いいえ"
+  },
+  "theme": {
+    "label": "テーマ",
+    "light": "ライト",
+    "dark": "ダーク",
+    "system": "システム",
+    "toggle": "テーマを切り替え"
+  },
+  "density": {
+    "label": "表示密度",
+    "comfortable": "標準",
+    "compact": "コンパクト"
+  },
+  "language": {
+    "label": "言語"
+  },
+  "table": {
+    "label": "データテーブル",
+    "rowsPerPage": "1ページあたりの行数",
+    "page": "ページ",
+    "of": "/",
+    "noRows": "表示する行がありません",
+    "loadMore": "さらに読み込む",
+    "sortAscending": "昇順に並べ替え",
+    "sortDescending": "降順に並べ替え",
+    "search": "行を検索…",
+    "selectAllVisible": "表示中の行をすべて選択",
+    "selectRow": "行 {{id}} を選択"
+  },
+  "bulk": {
+    "selected": "{{count}} 件を選択中",
+    "clear": "選択を解除",
+    "progress": "{{total}} 件中 {{current}} 件を処理中",
+    "summary": "{{success}} 件成功、{{failed}} 件失敗",
+    "confirmTitle": "一括操作の確認",
+    "confirmDescription": "「{{action}}」を選択した {{count}} 件に個別実行します。"
+  },
+  "chart": {
+    "showTable": "テーブルで表示",
+    "showChart": "チャートを表示"
+  },
+  "commandPalette": {
+    "placeholder": "検索または移動…",
+    "empty": "一致する項目がありません。",
+    "navigation": "ナビゲーション",
+    "actions": "アクション",
+    "results": "結果",
+    "searchResults": "データ内の結果",
+    "searchTruncated": "さらに一致があります — 検索を絞り込んでください。",
+    "searchDegraded": "一部のソースを検索できませんでした — この一覧は不完全です。"
+  },
+  "status": {
+    "active": "アクティブ",
+    "inactive": "非アクティブ",
+    "healthy": "正常",
+    "degraded": "低下",
+    "pending": "保留中",
+    "error": "エラー",
+    "revoked": "失効",
+    "unknown": "不明",
+    "running": "実行中",
+    "ok": "OK",
+    "enabled": "有効",
+    "disabled": "無効",
+    "approved": "承認済み",
+    "rejected": "却下",
+    "requested": "要求済み",
+    "queued": "キュー登録済み",
+    "provisioning": "プロビジョニング中",
+    "draft": "下書き",
+    "warning": "警告",
+    "deprecated": "非推奨",
+    "unused": "未使用",
+    "failed": "失敗",
+    "down": "ダウン",
+    "unexpected": "想定外",
+    "idle": "アイドル",
+    "completed": "完了",
+    "archived": "アーカイブ済み",
+    "retired": "廃止済み",
+    "drifted": "ドリフト",
+    "declared": "宣言済み",
+    "applied": "適用済み"
+  },
+  "accessMode": {
+    "read": "読み取り",
+    "readwrite": "読み書き（R/RW）",
+    "write": "書き込み",
+    "unknown": "不明"
+  },
+  "confidence": {
+    "attributed": "帰属確定",
+    "attributedHint": "このエージェントに確実に帰属しています。",
+    "approximate": "推定",
+    "approximateHint": "推論による帰属です。エージェントとはまだ照合されていません。"
+  },
+  "validation": {
+    "required": "この項目は必須です。",
+    "email": "有効なメールアドレスを入力してください。"
+  },
+  "a11y": {
+    "breadcrumb": "パンくずリスト",
+    "skipToContent": "コンテンツへスキップ",
+    "primarySidebar": "メイン",
+    "mainNavigation": "メインナビゲーション",
+    "graphControls": "グラフ操作",
+    "graphMinimap": "グラフのミニマップ"
+  },
+  "privileged": {
+    "auditedNotice": "この操作は改ざん検知可能な監査台帳に記録されます。",
+    "confirm": "確認",
+    "typeToConfirm": "確認するには {{phrase}} と入力してください",
+    "typeToConfirmAria": "確認フレーズ",
+    "notAuthorized": "お使いのロールではこの内容を閲覧できますが、この操作は実行できません。",
+    "notAuthorizedToast": "権限がありません — お使いのロールではこの操作を実行できません。",
+    "tenantChangedToast": "確認中に組織が切り替わったため、操作は再開されませんでした。元の組織に戻してからやり直してください。",
+    "stepUp": {
+      "title": "この操作にはセッションの昇格が必要です",
+      "description": "ロールの権限は足りています。このセッションの保証レベルが失効しました。以下の昇格を完了すると操作を再開します。閉じた場合、操作は拒否されたままです。",
+      "busyToast": "別の昇格が進行中です。完了してから、この操作をやり直してください。",
+      "abandonedToast": "その操作は昇格の完了前に閉じられたため、再開されませんでした。もう一度実行してください。",
+      "descriptionNoResume": "ロールでは許可されていますが、このセッションの保証レベルが失効しました。昇格を完了してから、操作をもう一度実行してください。閉じると拒否のままになります。"
+    },
+    "working": "処理中…"
+  },
+  "secretRef": {
+    "label": "シークレット参照",
+    "hint": "コンソールの外部に保存されたシークレットへの参照です。その値はここには表示されません。",
+    "none": "シークレットなし",
+    "prefix": "ref"
+  },
+  "untrusted": {
+    "label": "未検証",
+    "hint": "ケーパビリティが自己申告したものであり、シグナルにすぎません。コントロールプレーンはこれを検証せず、これに基づいて強制することは決してありません。"
+  },
+  "risk": {
+    "low": "低リスク",
+    "medium": "中リスク",
+    "high": "高リスク"
+  },
+  "notifications": {
+    "title": "最近のアクティビティ",
+    "empty": "最近のアクティビティはありません。",
+    "viewAll": "監査台帳ですべて表示"
+  },
+  "passphrase": {
+    "tooShort": "パスフレーズは{{min}}文字以上で入力してください",
+    "strengthLabel": "パスフレーズの強度",
+    "strength": {
+      "weak": "弱い",
+      "fair": "普通",
+      "good": "良い",
+      "strong": "強い"
+    }
+  },
+  "shortcuts": {
+    "title": "キーボードショートカット",
+    "description": "キーボードだけでコンソールを操作できます。",
+    "general": "一般",
+    "navigation": "移動",
+    "openPalette": "コマンドパレットを開く",
+    "showHelp": "このヘルプを表示"
+  }
+}

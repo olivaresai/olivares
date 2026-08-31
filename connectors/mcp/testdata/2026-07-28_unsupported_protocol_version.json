@@ -1,0 +1,39 @@
+{
+  "revision": "2026-07-28",
+  "source_url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning",
+  "request_headers": {
+    "MCP-Protocol-Version": "1900-01-01",
+    "Mcp-Method": "server/discover"
+  },
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "server/discover",
+    "params": {
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "1900-01-01",
+        "io.modelcontextprotocol/clientInfo": {
+          "name": "olivares-mcp-connector",
+          "version": "0.1.0"
+        },
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
+    }
+  },
+  "http_status": 400,
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+      "code": -32022,
+      "message": "Unsupported protocol version",
+      "data": {
+        "supported": [
+          "2026-07-28",
+          "2025-11-25"
+        ],
+        "requested": "1900-01-01"
+      }
+    }
+  }
+}

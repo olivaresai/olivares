@@ -1,0 +1,40 @@
+{
+  "notFound": {
+    "title": "未找到页面",
+    "description": "此页面不存在或已移动。",
+    "back": "返回概览"
+  },
+  "forbidden": {
+    "title": "未获授权",
+    "description": "您无权查看此内容。请向管理员申请访问权限。"
+  },
+  "serverError": {
+    "title": "出现问题",
+    "description": "控制平面遇到意外错误。请重试。",
+    "back": "返回概览"
+  },
+  "network": {
+    "title": "无法连接控制平面",
+    "description": "我们无法连接控制平面。请检查您的网络连接以及引擎是否正在运行。"
+  },
+  "boundary": {
+    "title": "此视图已崩溃",
+    "description": "渲染时发生意外错误。重新加载通常可以解决问题。",
+    "reload": "重新加载"
+  },
+  "generic": "出现问题。",
+  "requestId": "请求 ID",
+  "codes": {
+    "unauthenticated": "您的会话已失效。",
+    "forbidden": "您无权执行该操作。",
+    "not_found": "未找到。",
+    "conflict": "这与当前状态存在冲突。",
+    "bad_request": "请求无效。",
+    "weak_password": "请选择更强的密码。",
+    "locked_out": "尝试次数过多。请稍后重试。",
+    "setup_required": "控制平面需要进行首次启动设置。",
+    "setup_complete": "设置已完成。",
+    "cross_tenant_admin_pool_not_configured": "此部署没有跨租户的管理数据库连接池。请使用 `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` 预配 NOSUPERUSER BYPASSRLS 角色（参见 deploy/postgres/README.md），并使用指向该角色的 --admin-dsn 重启服务器。",
+    "internal": "发生内部错误。"
+  }
+}

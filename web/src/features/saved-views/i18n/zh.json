@@ -1,0 +1,31 @@
+{
+  "menu": {
+    "trigger": "已保存视图",
+    "myViews": "我的视图",
+    "shared": "共享",
+    "empty": "暂无已保存视图",
+    "loading": "正在加载已保存视图…",
+    "loadFailed": "无法加载已保存的视图。",
+    "save": "保存当前视图…",
+    "delete": "删除",
+    "deleteAria": "删除已保存视图 {{name}}"
+  },
+  "save": {
+    "title": "保存当前视图",
+    "description": "保存当前的筛选器与范围，以便日后再次应用。",
+    "name": "名称",
+    "viewDescription": "描述",
+    "share": "与此租户共享",
+    "shareHint": "此租户中拥有已保存视图访问权限的任何人都可以应用它。",
+    "cancel": "取消",
+    "submit": "保存视图",
+    "failed": "无法创建已保存的视图。"
+  },
+  "delete": {
+    "title": "删除已保存视图？",
+    "description": "删除「{{name}}」。此操作无法撤销。",
+    "confirm": "删除视图",
+    "cancel": "取消",
+    "failed": "无法删除已保存的视图。"
+  }
+}

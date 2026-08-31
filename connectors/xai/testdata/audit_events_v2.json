@@ -1,0 +1,31 @@
+{
+  "events": [
+    {
+      "eventTime": "2026-07-04T08:00:00Z",
+      "eventId": "evt_live_001",
+      "description": "API key rotated",
+      "user": {
+        "userId": "user_carol",
+        "email": "carol@example.com",
+        "givenName": "Carol",
+        "familyName": "Rivera",
+        "profileImage": "profile_carol",
+        "profileImageUrl": "https://console.x.ai/profiles/carol.png"
+      }
+    },
+    {
+      "eventTime": "2026-07-04T09:15:00Z",
+      "eventId": "evt_live_002",
+      "description": "Team member removed",
+      "user": {
+        "userId": "user_diego",
+        "email": "diego@example.com",
+        "givenName": "Diego",
+        "familyName": "Nguyen",
+        "profileImage": "profile_diego",
+        "profileImageUrl": "https://console.x.ai/profiles/diego.png"
+      }
+    }
+  ],
+  "nextPageToken": "audit_page_2"
+}

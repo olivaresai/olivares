@@ -1,0 +1,44 @@
+{
+  "truncation": {
+    "label": "已加载 {{n}} 个组织；还有更多",
+    "hint": "引擎返回的是名册的一页，而非全部。无法从已加载的行推断总数——此处未列出的组织仍可能存在。"
+  },
+  "title": "数据驻留",
+  "description": "将每个组织的控制平面数据固定到某个区域，或保持未固定。仅超级管理员；每次更改都会记录在审计账本中。",
+  "registry": {
+    "summary": "驻留注册表态势",
+    "homeRegion": "主区域",
+    "notConfigured": "未配置",
+    "enforcement": "驻留强制执行",
+    "enforced": "已强制执行",
+    "notEnforced": "未强制执行"
+  },
+  "orgs": {
+    "title": "组织",
+    "empty": "暂无组织",
+    "colOrg": "组织",
+    "colRegion": "区域固定",
+    "colActions": "操作",
+    "unpinned": "未固定",
+    "setRegion": "设置区域"
+  },
+  "dialog": {
+    "knownRegionHint": "从此部署已配置的注册表中选择一个区域。",
+    "fallbackRegionHint": "未配置区域注册表。此部署处于单区域/默认态势；服务器可能会拒绝非空的固定。",
+    "clearPin": "清除固定（未固定）",
+    "selectClearHint": "选择「清除固定（未固定）」以移除固定。这不会移动已存储的数据——那是单独的迁移。",
+    "title": "{{name}} 的区域",
+    "subtitle": "将此组织的数据固定到某个区域，或清除固定。",
+    "regionLabel": "区域代码",
+    "regionPlaceholder": "例如 eu",
+    "clearHint": "留空以清除固定（未固定）。这不会移动已存储的数据——那是单独的迁移。",
+    "review": "查看更改",
+    "back": "返回",
+    "apply": "应用更改",
+    "summaryPin": "将 {{name}} 固定到区域 {{region}}。",
+    "summaryClear": "清除 {{name}} 的区域固定（未固定）。",
+    "implications": "这设置了此组织的数据对于新写入承诺驻留的位置。它不会迁移已存储在别处的数据。",
+    "pinned": "已将 {{name}} 固定到 {{region}}",
+    "cleared": "已清除 {{name}} 的区域固定"
+  }
+}

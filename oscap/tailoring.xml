@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+OpenSCAP XCCDF 1.2 TAILORING for the Olivares AI control-plane STIG image (SCP-09).
+
+WHAT THIS IS:
+  A tailoring file EXTENDS an upstream profile — it does not redefine the rules.
+  The authoritative content is ComplianceAsCode / scap-security-guide (the public
+  source of DISA STIG profiles), shipped as ssg-rhel9-ds.xml on the scanning host.
+  This tailoring's <Profile extends="..."> points AT the upstream DISA STIG profile
+  id and inherits ALL of its rules and values. We do not author or weaken any rule.
+
+WHAT THIS IS NOT:
+  - NOT a custom benchmark and NOT a certification.
+  - NOT a fabricated "passing" result. It selects which rules apply; the scan
+    (oscap/scan.sh) is what produces evidence, and that evidence is the operator's.
+
+WHY A TAILORING AT ALL:
+  A few STIG rules are not meaningful for a single-purpose, non-interactive
+  CONTAINER (no graphical login, no GDM, no removable media). The container-relevant
+  way to express "not applicable here" is to deselect those rules in a tailoring so
+  the report's pass/fail counts reflect the actual attack surface, rather than
+  silently editing the upstream content. EVERY deselection below is justified inline
+  and is reversible by removing the line. Re-select anything your authorizing
+  official requires.
+
+USAGE (exact commands are in oscap/README.md and oscap/scan.sh — kept out of this
+  XML comment because XML forbids the double-hyphen that CLI flags use):
+    Pass this file as the tailoring to oscap/scan.sh, or to "oscap xccdf eval" via
+    its tailoring-file option, against ssg-rhel9-ds.xml. Confirm the upstream
+    profile id on YOUR datastream first with "oscap info <datastream>" (it moves
+    between scap-security-guide releases) and adjust the extends attribute below.
+-->
+<xccdf:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2"
+                 id="xccdf_ai.olivares_tailoring_stig_container">
+  <xccdf:benchmark href="/usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml"/>
+  <xccdf:version time="2026-06-06T00:00:00Z">1.0.0</xccdf:version>
+
+  <!--
+    Inherit the FULL upstream DISA STIG profile for RHEL9 (the UBI base). On most
+    scap-security-guide releases this id is exactly the string below; verify with
+    `oscap info` and adjust `extends` if your pinned datastream differs.
+  -->
+  <xccdf:Profile id="xccdf_ai.olivares_profile_stig_container"
+                 extends="xccdf_org.ssgproject.content_profile_stig">
+    <xccdf:title>Olivares AI control plane — DISA STIG (container-tailored)</xccdf:title>
+    <xccdf:description>
+      Inherits the upstream ComplianceAsCode DISA STIG profile unchanged, then
+      deselects only rules that are inapplicable to a single-purpose, non-login
+      container runtime. No rule is redefined or weakened. Not a certification.
+    </xccdf:description>
+
+    <!-- Graphical login stack: a headless container has no GDM/X11. -->
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_package_gdm_removed" selected="false"/>
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_screensaver_idle_delay" selected="false"/>
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_screensaver_lock_enabled" selected="false"/>
+
+    <!-- Bootloader / kernel cmdline: managed by the HOST, not inside a container. -->
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_grub2_password" selected="false"/>
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_grub2_uefi_password" selected="false"/>
+
+    <!-- Removable media / USB: no physical devices are exposed to the container. -->
+    <xccdf:select idref="xccdf_org.ssgproject.content_rule_kernel_module_usb-storage_disabled" selected="false"/>
+
+    <!--
+      KEEP-ON (do NOT deselect): FIPS-mode and crypto-policy rules. The image runs
+      the Go FIPS 140-3 native module (GOFIPS140=v1.0.0) and these rules are exactly
+      what we WANT verified, so they stay selected from the inherited profile, e.g.:
+        xccdf_org.ssgproject.content_rule_enable_fips_mode
+        xccdf_org.ssgproject.content_rule_configure_crypto_policy
+      They are intentionally NOT listed here so the inherited selection wins.
+    -->
+  </xccdf:Profile>
+</xccdf:Tailoring>

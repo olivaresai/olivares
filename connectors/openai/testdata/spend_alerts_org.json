@@ -1,0 +1,20 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "alert_org_001",
+      "object": "organization.spend_alert",
+      "threshold_amount": 100000,
+      "currency": "USD",
+      "interval": "month",
+      "notification_channel": {
+        "type": "email",
+        "recipients": ["finance@example.com"],
+        "subject_prefix": "[OpenAI Budget]"
+      }
+    }
+  ],
+  "first_id": "alert_org_001",
+  "last_id": "alert_org_001",
+  "has_more": false
+}

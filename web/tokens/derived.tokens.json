@@ -1,0 +1,35 @@
+{
+  "$description": "Semantic soft fills + lines, DERIVED at runtime from the (theme-switched) hue via color-mix(). They reference var(--success)/var(--surface) literally so a single definition in :root re-resolves in BOTH themes (the browser mixes against whatever the cascade resolves --success/--surface to under .dark). Emitted into :root{} only, exactly as ADM-CORE-04. $value carries a raw CSS color-mix() expression, passed through verbatim.",
+  "derived": {
+    "$type": "color",
+    "success-soft": {
+      "$value": "color-mix(in oklab, var(--success) 12%, var(--surface))"
+    },
+    "success-line": {
+      "$value": "color-mix(in oklab, var(--success) 32%, var(--surface))"
+    },
+    "warning-soft": {
+      "$value": "color-mix(in oklab, var(--warning) 12%, var(--surface))"
+    },
+    "warning-line": {
+      "$value": "color-mix(in oklab, var(--warning) 32%, var(--surface))"
+    },
+    "danger-soft": {
+      "$value": "color-mix(in oklab, var(--danger) 7%, var(--surface))",
+      "$description": "7%, no 12%: el mix toma --danger como ingrediente, asi que subir el texto sube tambien este fondo. El 2026-08-29 se subio --danger de #f38881 a #f7928b y axe paso de 4,42 a 4,38. La palanca que mueve el ratio es la MEZCLA."
+    },
+    "danger-line": {
+      "$value": "color-mix(in oklab, var(--danger) 32%, var(--surface))"
+    },
+    "info-soft": {
+      "$value": "color-mix(in oklab, var(--info) 12%, var(--surface))"
+    },
+    "info-line": {
+      "$value": "color-mix(in oklab, var(--info) 32%, var(--surface))"
+    },
+    "accent-strong": {
+      "$description": "Selection/active INDICATOR line — not a soft container hairline. WCAG 2.2 SC 1.4.11 requires >=3:1. ⛔ La definicion anterior, color-mix(accent 85%, surface), MEZCLABA HACIA EL FONDO: en claro salia ~#f29326, mas DEBIL que el propio --accent, y medía 2.06 sobre accent-soft, 2.24 sobre background y 2.34 sobre surface — las tres por debajo del 3:1 que esta misma descripcion prometia. Valor explicito medido: #c26000 da 3.72 en la peor superficie. NO se toca --accent (#f08000), el naranja de marca: esto es el color de INDICADOR, que es lo que esta linea siempre dijo que era.",
+      "$value": "#c26000"
+    }
+  }
+}

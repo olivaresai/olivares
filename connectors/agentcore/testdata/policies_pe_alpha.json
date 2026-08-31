@@ -1,0 +1,26 @@
+{
+  "policies": [
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-alpha/policy/pol-1",
+      "policyId": "pol-1",
+      "name": "allow-support-read",
+      "status": "ACTIVE",
+      "definition": {
+        "cedar": {
+          "statement": "permit(principal, action == AgentCore::Action::\"toolInvocation\", resource);"
+        }
+      }
+    },
+    {
+      "policyArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:policy-engine/pe-alpha/policy/pol-2",
+      "policyId": "pol-2",
+      "name": "generated-baseline",
+      "status": "ACTIVE",
+      "definition": {
+        "policyGeneration": {
+          "description": "baseline generated policy"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1717200000,
+      "end_time": 1717286400,
+      "results": [
+        { "object": "organization.costs.result", "amount": { "value": 3.50, "currency": "usd" }, "line_item": "Codex", "project_id": "proj_codex" }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

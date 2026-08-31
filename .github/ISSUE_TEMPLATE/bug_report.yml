@@ -1,0 +1,92 @@
+name: Bug report
+description: Report a defect in Olivares AI (NOT a security vulnerability).
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug.
+
+        **Do not report security vulnerabilities here.** A public issue is not a
+        confidential channel. If this is a suspected vulnerability, stop and
+        follow [`SECURITY.md`](https://github.com/olivaresai/olivares/blob/main/SECURITY.md)
+        instead (private report to `security@olivares.ai`).
+
+        The project is **beta**: APIs, schemas and the module surface may
+        still change before v1.
+  - type: checkboxes
+    id: preconditions
+    attributes:
+      label: Preconditions
+      options:
+        - label: This is **not** a security vulnerability (those go to SECURITY.md, privately).
+          required: true
+        - label: I searched existing issues and this has not already been reported.
+          required: true
+        - label: My report contains **no secrets, credentials, tokens or personal data** (redacted).
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Output of `olivares version` (or the commit SHA you built).
+      placeholder: "e.g. dev build at commit abc1234"
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      description: Where does the bug occur? (Maps to the license frontier — see CONTRIBUTING.md.)
+      options:
+        - "core (engine: ingest, bus, API, authz, audit, multi-tenancy)"
+        - "modules (a product module)"
+        - "web (the embedded UI)"
+        - "sdk (connector interfaces)"
+        - "connectors (a specific connector)"
+        - "deploy / packaging (Docker, Helm, K8s, air-gap)"
+        - "docs / docs-site"
+        - "other / not sure"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS, architecture, and runtime (bare Linux, Docker, Kubernetes, cloud).
+      placeholder: "e.g. Linux x86_64, Docker 27, single-node SQLite"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, deterministic steps. A minimal reproduction is the single most useful thing you can provide.
+      placeholder: |
+        1. Start olivares with `...`
+        2. Configure connector `...`
+        3. Observe `...`
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include exact error messages and, if relevant, **redacted** logs (no secrets/PII).
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else — configuration (redacted), screenshots, suspected cause, possible fix.
+    validations:
+      required: false

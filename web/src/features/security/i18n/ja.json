@@ -1,0 +1,249 @@
+{
+  "title": "セキュリティとフォレンジック",
+  "description": "ガードレールの検出結果、エンフォースメント態勢、異常キュー、改ざん検知可能なインシデントフォレンジック。このプレーンはデフォルトで検出型です。記録は行いますが、エンフォースメントが有効化されガバナンス下にない限り、それ自体がブロックすることはありません。",
+  "tabs": {
+    "safety": "セーフティ体制",
+    "findings": "検出結果",
+    "guardrails": "ガードレール",
+    "anomalies": "異常",
+    "forensics": "フォレンジック"
+  },
+  "findings": {
+    "title": "検出結果",
+    "description": "ガードレール、異常、フォレンジックの検出結果。証拠はフィンガープリントであり、展開できるペイロードはありません。",
+    "empty": "検出結果はありません",
+    "emptyHint": "ガードレール、異常検知、フォレンジックが証拠を記録すると検出結果が表示されます。",
+    "export": {
+      "action": "SARIF をエクスポート",
+      "busy": "エクスポート中…",
+      "done": "SARIF エクスポートをダウンロードしました。",
+      "truncated": "SARIF エクスポートをダウンロードしましたが、サーバーの結果上限で打ち切られています。有効な run ですが、全件ではありません。"
+    },
+    "search": "検出結果を検索",
+    "fingerprint": "fp",
+    "columns": {
+      "severity": "重大度",
+      "kind": "種別",
+      "source": "ソース",
+      "title": "検出結果",
+      "evidence": "証拠",
+      "status": "ステータス",
+      "actions": "アクション"
+    },
+    "kind": {
+      "guardrail": "ガードレール",
+      "anomaly": "異常",
+      "forensic": "フォレンジック"
+    },
+    "status": {
+      "open": "オープン",
+      "triaged": "トリアージ済み",
+      "resolved": "解決済み",
+      "dismissed": "却下済み"
+    },
+    "triage": {
+      "action": "トリアージ",
+      "title": "検出結果をトリアージ",
+      "description": "トリアージはフローのステータスのみを変更します。証拠（種別、重大度、詳細フィンガープリント）は不変です。",
+      "statusLabel": "ステータス",
+      "submit": "ステータスを更新",
+      "updated": "検出結果のステータスを更新しました",
+      "immutableNote": "重大度、種別、詳細フィンガープリントは変更できません。変更できるのはフローのステータスのみです。"
+    },
+    "subjectKinds": {
+      "local_residency": "常駐しているローカルモデル"
+    },
+    "truncated": "取り込み順で先頭の{{n}}件を表示",
+    "truncatedHint": "表示されているより多くの検知があります。このページは取り込みIDの順であり、問題の発生時刻の順ではないため、最近の検知が抜けている可能性があります。残りが見えないことは、他に何も見つからなかった証拠にはなりません。"
+  },
+  "safetyPosture": {
+    "title": "プロバイダーのセーフティ体制",
+    "description": "プロバイダー固有のコントロール（OpenAI Moderation、AWS Bedrock Guardrails、Azure Responsible AI）から取り込む、読み取り優先のAIセーフティ体制。プレーンは読み取って記録するだけで、強制はプロバイダー側に残ります。",
+    "empty": "セーフティ体制の検出結果はありません",
+    "emptyHint": "OpenAI、AWS、Azure のコネクタをセーフティ読み取りを有効にして接続すると、このビューに表示されます。",
+    "countsPartial": "部分的な集計です。このテナントには集計スキャンの範囲を超えるセーフティ体制の検出結果があります。",
+    "columns": {
+      "open": "未対応"
+    }
+  },
+  "guardrails": {
+    "title": "ガードレール検査",
+    "description": "ガードレール検査サービスをサーフェスに対して実行します。テキストはハッシュ化・墨消しされ、保存されることはありません。結果は判定と、墨消し済みの最小限の証拠です。",
+    "verdictTitle": "判定",
+    "clean": "検出なし — クリーンです。",
+    "detectiveNote": "この判定は検出型プレーンによるものです。トリップは検出され記録されましたが、ブロックはされていません。ブロックはエンフォースメントが有効化されガバナンス下にある場合にのみ到達可能です。",
+    "wouldBlock": "ブロックされます（エンフォース時）",
+    "detectOnly": "検出のみ",
+    "findingsRecorded": "{{count}} 件の検出結果を記録しました",
+    "findingsRecorded_other": "{{count}} 件の検出結果を記録しました",
+    "enforcement": {
+      "detective": "検出型",
+      "enforced": "エンフォース済み"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "プロンプトインジェクション",
+      "jailbreak": "ジェイルブレイク",
+      "content": "コンテンツ",
+      "output_validation": "出力検証",
+      "owasp_agentic": "OWASP エージェント型"
+    },
+    "form": {
+      "surface": "サーフェス",
+      "text": "検査するテキスト",
+      "textHint": "検査されハッシュ化・墨消しされます。保存も返却もされません。",
+      "enforce": "エンフォースメントを要求",
+      "enforceHint": "エンフォースメントポリシーでこのクラスが有効化されガバナンス下にある場合にのみブロックします。そうでない場合、判定はフラグとなります。",
+      "submit": "検査",
+      "running": "検査中…",
+      "surfaceLabel": "サーフェス"
+    },
+    "surface": {
+      "input": "入力",
+      "output": "出力",
+      "tool_args": "ツール引数"
+    }
+  },
+  "enforcement": {
+    "title": "エンフォースメント態勢",
+    "description": "本番環境に作用する唯一のアクションです。各ガードレールクラスはデフォルトで検出型です。インラインエンフォースメントの有効化は管理者のアクションであり、ゲートが配線されている箇所でガバナンス下に置かれます。",
+    "defaultDetectiveNote": "デフォルトのプレーンは検出型です。クラスはここで明示的に有効化されガバナンス下にある場合にのみブロックします。",
+    "fullyDetective": "エンフォースメントは有効化されていません。プレーンは完全に検出型であり、安全なデフォルトです。それ自体がブロックすることはありません。",
+    "detective": "検出型",
+    "enforced": "エンフォース済み",
+    "governed": "ガバナンス下",
+    "ungoverned": "人間によるガバナンスなしで有効化",
+    "wildcard": "すべてのクラス",
+    "change": "変更",
+    "columns": {
+      "class": "クラス",
+      "posture": "態勢",
+      "minSeverity": "最小重大度",
+      "governance": "ガバナンス",
+      "updated": "更新日時",
+      "actions": "アクション"
+    },
+    "dialog": {
+      "title": "エンフォースメントを変更",
+      "description": "無効化（検出型に戻す）は常に許可されます。インラインエンフォースメントの有効化は、ゲートが配線されている箇所でガバナンス下に置かれます。ガバナンスによる拒否はその理由として表示されます。",
+      "enabledLabel": "インラインエンフォースメントを有効化",
+      "minSeverity": "最小重大度",
+      "reason": "理由",
+      "reasonHint": "監査台帳のために変更とともに記録されます。",
+      "submit": "適用",
+      "applied": "エンフォースメント態勢を更新しました",
+      "ungovernedWarning": "配線されたガバナンスゲートなしでこのクラスを有効化すると、ガバナンス下に置かれません。変更は許可されますがフラグが立てられます。",
+      "deniedTitle": "ガバナンスがこの変更を拒否しました"
+    }
+  },
+  "anomalies": {
+    "title": "異常キュー",
+    "description": "ドリフトと相関した検出結果を優先度順にランク付けします。概算エントリは未調整のドリフトであり、確固たる違反ではありません。",
+    "empty": "キューに異常はありません",
+    "orderNote": "優先度順（高い順）で並んでいます。",
+    "priority": "優先度",
+    "approximate": "概算",
+    "suspectedTitle": "疑い: {{title}}",
+    "unreconciledNote": "未調整のドリフトです。調整済みの権威はアクセスマップです。優先度は割り引かれており、これは確認済みの違反ではありません。",
+    "kind": {
+      "access_drift": "アクセスドリフト",
+      "egress_exfil_suspected": "エグレス情報持ち出し（疑い）",
+      "anti_evasion_correlated": "相関した回避"
+    }
+  },
+  "forensics": {
+    "title": "フォレンジックケース",
+    "description": "インシデント対応 — 各ケースはオープン時に完全性の状態を凍結するため、後の改ざんを検知できます。タイムラインは追記専用の台帳から再構築されます。",
+    "empty": "フォレンジックケースはありません",
+    "openCase": "ケースをオープン",
+    "back": "ケース一覧に戻る",
+    "summary": "サマリー",
+    "openedBy": "オープン者",
+    "opened": "オープン日時",
+    "closed": "クローズ日時",
+    "integrity": "管理連鎖の完全性",
+    "timeline": "再構築されたタイムライン",
+    "timelineNote": "各イベントは seq・hash・prev_hash を保持しているため、読み手はリンクを独立して再検証できます。イベントの背後にペイロードが存在することはありません。",
+    "columns": {
+      "severity": "重大度",
+      "title": "ケース",
+      "status": "ステータス",
+      "opened": "オープン日時"
+    },
+    "status": {
+      "open": "オープン",
+      "investigating": "調査中",
+      "contained": "封じ込め済み",
+      "closed": "クローズ済み"
+    },
+    "truncated": "開始順で先頭の{{n}}件を表示",
+    "truncatedHint": "表示されているより多くの事案があります。このページは開始IDの順なので、最近の事案が抜けている可能性があります。ここに見えない調査は、存在しない調査ではありません。"
+  },
+  "integrity": {
+    "title": "台帳の完全性",
+    "description": "2つの判定: ハッシュチェーンが内部的に整合していること、および署名済みチェックポイント。検証自体が、検証対象のチェーンに記録されます。",
+    "chain": "ハッシュチェーン",
+    "chainChecked": "{{count}} 件のイベントを検査しました",
+    "chainChecked_other": "{{count}} 件のイベントを検査しました",
+    "checkpoints": "署名済みチェックポイント",
+    "checkpointsCount": "{{count}} 件のチェックポイントを検証しました",
+    "checkpointsCount_other": "{{count}} 件のチェックポイントを検証しました",
+    "signingUnavailable": "署名鍵が配線されていません。署名済みの証明は偽装されません。",
+    "checkpointsPendingNote": "チェックポイントはまだ書き込まれていません。この台帳を証明しているのはチェーンの判定です。",
+    "signingSeam": "チェックポイント署名が配線されていません",
+    "attestedSeq": "証明済み seq",
+    "headSeq": "台帳ヘッド seq {{seq}}",
+    "reverifyNote": "各イベントは seq・hash・prev_hash を保持しているため、読み手は外部の WORM ストアに対してリンクをオフラインで再検証できます。",
+    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "エンフォースメントクラスは設定されていません",
+      "description": "ガードレールクラスの態勢が設定された場合にのみ行が表示され、それまではすべてのクラスが検出型のままで、インラインでは何もブロックされません。"
+    },
+    "findings": {
+      "title": "セキュリティの検出結果はまだ記録されていません",
+      "description": "ガードレール検査、観測ドリフトチェック、プロバイダーのセーフティ体制がシグナルを記録した場合、または別のモジュールが重大度「高」のシグナルを発した場合に、検出結果が表示されます。"
+    }
+  },
+  "cases": {
+    "new": "新規ケース",
+    "newHint": "フォレンジックケースを開きます。エンジンが状態を「オープン」に設定します。",
+    "title": "タイトル",
+    "severity": "深刻度",
+    "create": "作成",
+    "cancel": "キャンセル",
+    "created": "ケースを開きました",
+    "status": "状態",
+    "save": "変更を保存",
+    "updated": "ケースを更新しました",
+    "statusName": {
+      "open": "オープン",
+      "investigating": "調査中",
+      "contained": "封じ込め済み",
+      "closed": "クローズ"
+    },
+    "exportFormat": "エクスポート形式",
+    "export": "エクスポート",
+    "exported": "エクスポートを要求しました",
+    "links": "証拠保全の連鎖",
+    "linksHint": "このケースに紐づくもの: 検出事項、台帳シーケンス、異常、メモ。",
+    "noLinks": "まだ何も紐づいていません",
+    "link": "紐づける",
+    "linked": "紐づけました",
+    "linkKindLabel": "種別",
+    "linkRef": "参照",
+    "linkKind": {
+      "finding": "検出事項",
+      "audit_seq": "台帳シーケンス",
+      "anomaly": "異常",
+      "note": "メモ"
+    }
+  },
+  "severity": {
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "critical": "重大"
+  }
+}

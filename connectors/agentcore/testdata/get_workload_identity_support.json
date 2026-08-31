@@ -1,0 +1,7 @@
+{
+  "name": "support-agent",
+  "workloadIdentityArn": "arn:aws:bedrock-agentcore:eu-west-1:123456789012:workload-identity-directory/default/workload-identity/support-agent",
+  "createdTime": 1748995200,
+  "lastUpdatedTime": 1749081600,
+  "allowedResourceOauth2ReturnUrls": []
+}

@@ -1,0 +1,143 @@
+---
+title: Get started in an air-gapped site
+description: "Stand up the control plane on a disconnected network: carry a
+  verified artifact across the gap (static binary, or the signed bundle for a
+  cluster), verify it offline, install, and reach first value with zero egress."
+sidebar:
+  order: 4
+slug: 2026-06/tutorials/getting-started/air-gapped
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+
+Olivares AI is **air-gap-ready by design**: one static binary, an embedded
+SQLite store, offline (Ed25519) license validation, and **no mandatory
+outbound calls at boot** — there is no telemetry-home to disable. This
+tutorial reaches first value on a network with **no internet at all**, by
+either of two honest paths:
+
+* **Path A — the static binary.** The simplest air-gap there is: carry one
+  verified file across the gap and run it (with systemd, as in the
+  [single-node tutorial](/2026-06/tutorials/getting-started/single-node/)).
+* **Path B — the signed bundle, for a cluster.** Carry the release bundle,
+  verify every image and the chart **fully offline**, mirror into your private
+  registry **by digest**, and install with Helm.
+
+The mechanics of the bundle scripts (`airgap-bundle.sh`, `airgap-mirror.sh`,
+offline cosign verification) are documented in
+[install in an air-gapped environment](/2026-06/how-to/air-gap-install/) — this page
+is the end-to-end walkthrough that uses them.
+
+## Path A — the static binary
+
+<Steps>
+  1. **On the connected side**, build (or, once releases ship, download and
+     [verify](/2026-06/how-to/verify-a-release/)) the binary, and record its digest:
+
+     ```bash
+     task build
+     sha256sum bin/olivares > olivares.sha256
+     ```
+
+  2. **Carry both files across the gap** on your approved medium, and verify the
+     digest on the disconnected side:
+
+     ```bash
+     sha256sum --check olivares.sha256
+     ```
+
+  3. **Install and run** exactly as in the
+     [single-node tutorial](/2026-06/tutorials/getting-started/single-node/) — systemd
+     unit, one-time setup token, first organization. Nothing in that flow
+     touches the network: TLS material is generated locally, the license (if
+     you have one) validates offline, and the store is the embedded SQLite.
+
+  4. **Wire sources that observe local systems** — pgAudit log tails,
+     CloudTrail files delivered inside the perimeter, eBPF/Tetragon streams.
+     The [sources config](/2026-06/how-to/connect-a-source/) is a local file; no
+     connector phones out unless you configure one to reach something.
+</Steps>
+
+This is the recommended starting shape for a disconnected site: single node,
+SQLite, local sources. It is the same engine — you can grow into the cluster
+path later without changing what you learned.
+
+## Path B — the signed bundle, for a cluster
+
+<Steps>
+  1. **Online, once:** a maintainer builds the self-contained bundle — every
+     image pinned by digest, the Helm chart packaged and signed, SBOM/OpenVEX/
+     provenance gathered, plus the public key and a `VERIFY.md` with the exact
+     offline walkthrough:
+
+     ```bash
+     scripts/airgap-bundle.sh --version <v> \
+       --image <olivares-image-ref> \
+       --chart deploy/helm/olivares \
+       --cosign-key cosign.key
+     ```
+
+  2. **Inside the gap, verify everything offline.** You need only `cosign`,
+     `crane`, `helm` and `tar` — trust comes from the bundled `cosign.pub`, not
+     from any online transparency log:
+
+     ```bash
+     for d in images/*/; do
+       cosign verify --local-image "$d" --insecure-ignore-tlog --key cosign.pub
+     done
+     cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
+       --signature chart/*.tgz.sig chart/*.tgz
+     ```
+
+  3. **Mirror into your private registry by digest** (the script re-pins and
+     confirms the digest survived the mirror):
+
+     ```bash
+     scripts/airgap-mirror.sh --bundle olivares-airgap-<v>.tar.gz \
+       --registry registry.internal:5000
+     ```
+
+  4. **Install by digest, never by tag**, then follow the
+     [Kubernetes tutorial](/2026-06/tutorials/getting-started/kubernetes/) from the
+     first-boot token onward — it is the same chart and the same flow:
+
+     ```bash
+     helm install olivares \
+       oci://registry.internal:5000/charts/olivares \
+       --version <chart-version> \
+       --set image.repository=registry.internal:5000/olivares \
+       --set image.digest=<digest-from-digests.txt>
+     ```
+</Steps>
+
+<Aside type="note" title="What 'air-gapped' honestly covers">
+  The **control plane** runs fully inside your perimeter — governance,
+  observation, the access map, the audit ledger. What it cannot do is make a
+  brokered frontier model run offline: **Claude inference always reaches
+  Anthropic's API** (directly or via Bedrock/Vertex/Foundry), because Anthropic
+  does not publish weights. Air-gapped means *your estate's data and its
+  governance plane stay home*; models you genuinely self-host can be fully
+  offline. See [Honesty & limits](/2026-06/start/honesty-and-limits/).
+</Aside>
+
+## Operating disconnected
+
+* **Backups** work identically (`olivares dr backup` — encrypted bundle,
+  local KEK): [backup & restore](/2026-06/how-to/backup-and-restore/). Store bundles
+  on separate media; the 3-2-1 rule applies doubly with no offsite network.
+* **Ledger verification** is fully offline by design:
+  `olivares audit verify --strict` with your pinned public key —
+  [troubleshooting § ledger](/2026-06/how-to/troubleshooting/#the-ledger-fails-verification).
+* **Monitoring** is local Prometheus scraping `/metrics`; the shipped alert
+  rules need nothing external — [monitoring](/2026-06/how-to/monitor-with-prometheus/).
+* **Updates** repeat the carry-verify-mirror loop with a new bundle. The
+  digest manifest (`digests.txt`) is your record of exactly what is running.
+
+## Next steps
+
+* [Install in an air-gapped environment](/2026-06/how-to/air-gap-install/) — the
+  bundle/mirror reference, including FIPS/STIG variant status.
+* [Verify a release](/2026-06/how-to/verify-a-release/) — the full verification chain
+  this flow applies offline.
+* [Security hardening](/2026-06/how-to/security-hardening/) — the rest of the
+  defensive posture.

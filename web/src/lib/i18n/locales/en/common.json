@@ -1,0 +1,204 @@
+{
+  "errors": {
+    "generic": "Something went wrong"
+  },
+  "app": {
+    "name": "Olivares AI",
+    "tagline": "Control plane"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "retry": "Retry",
+    "search": "Search",
+    "filter": "Filter",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "viewAll": "View all",
+    "learnMore": "Learn more",
+    "openMenu": "Open menu",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "help": "Open documentation for this view"
+  },
+  "states": {
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "noResults": "No results",
+    "comingSoon": "Coming soon",
+    "loaded": "Loaded",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "toggle": "Toggle theme"
+  },
+  "density": {
+    "label": "Density",
+    "comfortable": "Comfortable",
+    "compact": "Compact"
+  },
+  "language": {
+    "label": "Language"
+  },
+  "table": {
+    "label": "Data table",
+    "rowsPerPage": "Rows per page",
+    "page": "Page",
+    "of": "of",
+    "noRows": "No rows to show",
+    "loadMore": "Load more",
+    "sortAscending": "Sort ascending",
+    "sortDescending": "Sort descending",
+    "search": "Search rows…",
+    "selectAllVisible": "Select all visible rows",
+    "selectRow": "Select row {{id}}"
+  },
+  "bulk": {
+    "selected": "{{count}} selected",
+    "clear": "Clear selection",
+    "progress": "Processing {{current}} of {{total}}",
+    "summary": "{{success}} succeeded, {{failed}} failed",
+    "confirmTitle": "Confirm bulk action",
+    "confirmDescription": "“{{action}}” will run separately for {{count}} selected items."
+  },
+  "chart": {
+    "showTable": "Show as table",
+    "showChart": "Show chart"
+  },
+  "commandPalette": {
+    "placeholder": "Search or jump to…",
+    "empty": "No matches.",
+    "navigation": "Navigation",
+    "actions": "Actions",
+    "results": "Results",
+    "searchResults": "Results in your data",
+    "searchTruncated": "More matches exist — refine your query.",
+    "searchDegraded": "Some sources could not be searched — this list is incomplete."
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive",
+    "healthy": "Healthy",
+    "degraded": "Degraded",
+    "pending": "Pending",
+    "error": "Error",
+    "revoked": "Revoked",
+    "unknown": "Unknown",
+    "running": "Running",
+    "ok": "OK",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "requested": "Requested",
+    "queued": "Queued",
+    "provisioning": "Provisioning",
+    "draft": "Draft",
+    "warning": "Warning",
+    "deprecated": "Deprecated",
+    "unused": "Unused",
+    "failed": "Failed",
+    "down": "Down",
+    "unexpected": "Unexpected",
+    "idle": "Idle",
+    "completed": "Completed",
+    "archived": "Archived",
+    "retired": "Retired",
+    "drifted": "Drifted",
+    "declared": "Declared",
+    "applied": "Applied"
+  },
+  "accessMode": {
+    "read": "Read",
+    "readwrite": "Read/Write",
+    "write": "Write",
+    "unknown": "Unknown"
+  },
+  "confidence": {
+    "attributed": "Attributed",
+    "attributedHint": "Firmly attributed to this agent.",
+    "approximate": "Approximate",
+    "approximateHint": "Attributed by inference — not yet reconciled to the agent."
+  },
+  "validation": {
+    "required": "This field is required.",
+    "email": "Enter a valid email address."
+  },
+  "a11y": {
+    "breadcrumb": "Breadcrumb",
+    "skipToContent": "Skip to content",
+    "primarySidebar": "Primary",
+    "mainNavigation": "Main navigation",
+    "graphControls": "Graph controls",
+    "graphMinimap": "Graph minimap"
+  },
+  "privileged": {
+    "auditedNotice": "This action is recorded in the tamper-evident audit ledger.",
+    "confirm": "Confirm",
+    "typeToConfirm": "Type {{phrase}} to confirm",
+    "typeToConfirmAria": "Confirmation phrase",
+    "notAuthorized": "Your role can view this, but not perform this action.",
+    "notAuthorizedToast": "Not authorized — your role can't perform this action.",
+    "tenantChangedToast": "Organization changed during verification — the action was not resumed. Switch back and try again.",
+    "stepUp": {
+      "title": "This action needs an elevated session",
+      "description": "Your role permits it; this session's assurance has lapsed. Complete the step-up below and the action resumes. Closing this leaves it denied.",
+      "busyToast": "Another step-up is already open. Finish it, then retry this action.",
+      "abandonedToast": "That action was closed before the step-up finished, so it was not resumed. Start it again.",
+      "descriptionNoResume": "Your role permits it; this session's assurance has lapsed. Complete the step-up below, then start the action again. Closing this leaves it denied."
+    },
+    "working": "Working…"
+  },
+  "secretRef": {
+    "label": "Secret reference",
+    "hint": "A reference to a secret stored outside the console — its value is never shown here.",
+    "none": "No secret",
+    "prefix": "ref"
+  },
+  "untrusted": {
+    "label": "Unverified",
+    "hint": "Self-reported by the capability — a signal only. The control plane does not verify it and never enforces on it."
+  },
+  "risk": {
+    "low": "Low risk",
+    "medium": "Medium risk",
+    "high": "High risk"
+  },
+  "notifications": {
+    "title": "Recent activity",
+    "empty": "No recent activity.",
+    "viewAll": "View all in the audit ledger"
+  },
+  "passphrase": {
+    "tooShort": "Passphrase must be at least {{min}} characters",
+    "strengthLabel": "Passphrase strength",
+    "strength": {
+      "weak": "Weak",
+      "fair": "Fair",
+      "good": "Good",
+      "strong": "Strong"
+    }
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "description": "Navigate the console without leaving the keyboard.",
+    "general": "General",
+    "navigation": "Go to",
+    "openPalette": "Open command palette",
+    "showHelp": "Show this help"
+  }
+}

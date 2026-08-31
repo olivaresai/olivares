@@ -1,0 +1,127 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Dated, justified allowlist for the fail-closed npm/JS dependency-vulnerability gate
+# (scripts/npm-vuln-gate.sh). Same rules and same reader as .govulncheck-allow.yaml:
+#   - A blocking-severity advisory NOT listed here fails the gate.
+#   - Every entry MUST carry an `expires` date (YYYY-MM-DD, UTC); past it the gate fails,
+#     so a temporary exception can never become a silent forever-exception.
+#
+# ⛔ THESE ENTRIES ARE NOT A VERDICT, AND NOBODY HAS ASSESSED THEM.
+#
+# They are the advisories that ALREADY EXISTED on the day this gate was introduced
+# (2026-08-07), recorded so the gate can start blocking REGRESSIONS from its first run instead
+# of waiting for a triage that had never happened at all — before today nothing in this
+# repository scanned npm dependencies, so none of these had ever been seen by a gate.
+#
+# They share one expiry ON PURPOSE. That date is when somebody has to look, and the gate turns
+# red until they do. Whoever triages should SPLIT this list: real exceptions keep an entry with
+# their own reason and their own date; everything else gets fixed by bumping the dependency.
+#
+# npm audit has NO reachability analysis, so unlike govulncheck none of these can be dismissed
+# with "the vulnerable symbol is not reachable". Triage means reading each one.
+#
+# Derived from the gate's OWN run, not from a separate sweep by hand: a hand sweep missed one
+# (GHSA-8r6m-32jq-jx6q, in connectors/backstage/plugin-frontend) because it looked at six
+# workspaces where the gate enumerates eight from git.
+allow:
+  - id: GHSA-2p49-hgcm-8545
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-2pvr-wf23-7pc7
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-3jxr-9vmj-r5cp
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-4c8g-83qw-93j6
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-4cwx-7wf7-3272
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-52cp-r559-cp3m
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-5p4m-2wfm-xmqj
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-7p8r-x3mc-p8w7
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-8r6m-32jq-jx6q
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-96hv-2xvq-fx4p
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-f88m-g3jw-g9cj
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-hmw2-7cc7-3qxx
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-mh99-v99m-4gvg
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-r28c-9q8g-f849
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-rgw5-rvv9-x895
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-v2hh-gcrm-f6hx
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-v9p9-hfj2-hcw8
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-vrm6-8vpv-qv8q
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-vxpw-j846-p89q
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"
+  - id: GHSA-xcpc-8h2w-3j85
+    reason: >-
+      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
+      Recorded so the gate blocks new advisories from day one. Triage before it expires.
+    expires: "2026-09-06"

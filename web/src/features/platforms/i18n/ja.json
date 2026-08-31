@@ -1,0 +1,105 @@
+{
+  "title": "プラットフォームとライフサイクル",
+  "description": "Claude エステート向けのマルチサーフェスなデプロイマトリクスとプラットフォーム単位のモデルライフサイクル — サーフェスごとのコンプライアンス態勢と、それぞれ異なる廃止期限を示します。本参照はエンジンが提供するものであり、再計算されることはありません。",
+  "tabs": {
+    "surfaces": "サーフェスとコンプライアンス",
+    "lifecycle": "モデルライフサイクル"
+  },
+  "liveReference": "エンジンが提供する参照 — 基準時点 {{date}}、ソース {{source}}。",
+  "unavailable": "このエンジンではプラットフォーム参照を利用できません",
+  "confirm": {
+    "confirmed": "確認済み",
+    "toConfirm": "要確認"
+  },
+  "surfaces": {
+    "title": "デプロイサーフェス",
+    "description": "モデル化された 6 つの Claude サーフェス（ANT2-01/17）。それぞれベース URL、認証、モデル ID 形式、課金、データ所在地、コンプライアンス態勢が異なり、相互に置き換えることはできません。",
+    "matrixTitle": "サーフェス属性マトリクス",
+    "matrixSummary": "6 つのデプロイサーフェスを、オペレーター、エンドポイント、認証、モデル ID 形式、API サポート、課金、HIPAA、ZDR、データ所在地の観点で比較します。",
+    "unmodeled": "モデル化されていないサーフェス — 属性マトリクスはありません。",
+    "unmodeledHint": "このゲートウェイはモデル化された 6 つの Claude サーフェスのいずれでもありません。そのコンプライアンスおよびデータ所在地の属性は宣言されておらず、推測も行いません。",
+    "deprecatedBadge": "非推奨",
+    "noWorkspaceHeader": "なし",
+    "noSigv4": "該当なし",
+    "apiSupportTitle": "サーフェス別の Anthropic API サポート",
+    "apiSupportDescription": "サーフェスごとにどの Anthropic API ファミリーが適用されるかを示します。Admin／Models／Compliance API を持たないサーフェスは Anthropic 側のガバナンス取り込みを提供できず、正直に機能を低下させます。空の状態を「検出結果なし」として報告することは決してありません。",
+    "columns": {
+      "surface": "サーフェス",
+      "operator": "オペレーター",
+      "baseUrl": "ベース URL",
+      "sigv4": "SigV4 サービス",
+      "workspaceHeader": "ワークスペースヘッダー",
+      "modelIdForm": "モデル ID 形式",
+      "billing": "課金",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "データ所在地／推論地域",
+      "apiSupport": "API サポート",
+      "messages": "Messages",
+      "admin": "Admin",
+      "compliance": "Compliance",
+      "models": "Models",
+      "batches": "Batches",
+      "mcp": "MCP コネクター"
+    },
+    "api": {
+      "supported": "サポート対象",
+      "unsupported": "サポート対象外"
+    },
+    "fedramp": {
+      "eligible": "HIPAA / FedRAMP / IL4-5 対応可",
+      "na": "未宣言"
+    },
+    "notesTitle": "サーフェスに関する注記",
+    "compliance": {
+      "title": "コンプライアンス態勢",
+      "description": "HIPAA / FedRAMP / IL / ZDR は、サーフェスごとの軸（推論がどこで実行されるか）であり、モデルやプロバイダーの GPAI 態勢とは別物です。両者を混同しないでください。",
+      "hipaaNote": "HIPAA はその確認ステータスとともに表示されます。「要確認」の態勢が、明確な「はい」または「いいえ」としてレンダリングされることは決してありません。"
+    }
+  },
+  "lifecycle": {
+    "title": "プラットフォーム単位のモデルライフサイクル",
+    "description": "モデルの廃止はプラットフォーム単位であり、グローバルではありません（ANT2-03）。Anthropic が運用するサーフェスは、Bedrock や Vertex とは異なる日付でモデルを廃止します。単一の「廃止済み」フラグでは、エステートの半分について誤った移行期限を示すことになります。",
+    "datePending": "日付未公開／要確認",
+    "noSuccessor": "後継モデルの宣言なし",
+    "noSuccessorHint": "当局はこのファミリーの代替モデルを指定していません。推測も行いません。",
+    "matrixTitle": "サーフェス別の廃止期限",
+    "columns": {
+      "model": "モデル",
+      "surface": "サーフェス",
+      "retiresOn": "廃止日",
+      "status": "ステータス",
+      "replacement": "代替"
+    },
+    "paramDeprecation": {
+      "title": "パラメーター非推奨に関する事前案内",
+      "badge": "情報",
+      "body": "{{affected}} は、デフォルト以外の {{params}} を HTTP {{status}} で拒否します。これは Anthropic による非推奨化（ANT2-03）であり、製品の不具合でも修正可能なエラーでもありません。推論プレーンはこれらのパラメーターを事前案内として保留します。",
+      "paramsJoin": "、"
+    },
+    "notes": {
+      "title": "Bedrock の ID とデータ所在地に関する注記",
+      "declaredNote": "Web 上で宣言された参照: これらの注記は、platforms エンドポイントが提供しない modules/models/bedrock.go の正確性に関する事実を引用しています。それぞれが独自の確認ステータスを持ちます。",
+      "crisIdFormat": "クロスリージョン推論プロファイルの ID 形式は「<geo>.anthropic.<model>」で、geo ∈ {us, eu, apac, global} です。現在の Bedrock Mantle サーフェスは、地域指定のない「anthropic.<model>」形式の ID を使用します。",
+      "crisOpusId": "具体的な Bedrock Global-CRIS opus 推論プロファイルの ID は AWS のページに対して検証されていません。形式は確認済みですが、その特定の ID は権威あるものとしては提示されていません。",
+      "globalRegionalPremium": "AWS のドキュメントによれば、地域推論プロファイルはグローバルに対して約 10% の割増があります（グローバルがより安価なベースライン）。これは「グローバル +10%」という想定とは逆です。正確な乗数は未検証のため、割増はモデル化していません。",
+      "usBurndown": "米国限定の推論バーンダウンは 1.1×（Opus 4.6 / Sonnet 4.6+、inference_geo=\"us\"）です。"
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "モデルの廃止スケジュールは宣言されていません",
+      "description": "これらの期限はエンジンのコンパイル済み Claude ライフサイクル参照から提供される必要があり、テナントのアクティビティやコンソール入力によって追加されることはありません。"
+    },
+    "surface": {
+      "title": "デプロイサーフェスは宣言されていません",
+      "description": "これらの行はエンジンのコンパイル済み Claude サーフェス参照から提供される必要があり、テナントのアクティビティやコンソール入力によって追加されることはありません。"
+    }
+  },
+  "effectiveState": {
+    "label": "この環境では:",
+    "models": "モデルカタログ",
+    "modelOps": "モデル運用"
+  }
+}

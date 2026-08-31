@@ -1,0 +1,134 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+The distributed ingest plane "C": one collector per node, running
+`olivares collector`. It loads local source connectors and PUSHES
+observations to the core over gRPC + mTLS via IngestService.Push. NO inbound
+listener (push model, ARCHITECTURE.md). Holds no kernel capabilities and no host
+namespaces — the privileged eBPF backstop is a separate manifest
+(connectors/ebpf/deploy/tetragon-daemonset.yaml).
+*/ -}}
+{{- if .Values.collectors.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "olivares.collector.fullname" . }}
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collector
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "olivares.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: collector
+  updateStrategy:
+    {{- toYaml .Values.collectors.updateStrategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        {{- include "olivares.labels" . | nindent 8 }}
+        app.kubernetes.io/component: collector
+      annotations:
+        checksum/sources: {{ .Values.collectors.sourcesConfig | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "olivares.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.collectors.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.collectors.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.collectors.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: collector
+          image: {{ include "olivares.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - collector
+            - --core-addr={{ include "olivares.coreAddr" . }}
+            - --token-file=/etc/olivares/ingest/{{ .Values.collectors.ingestTokenKey }}
+            {{- if .Values.collectors.coreCaSecret }}
+            - --ca=/etc/olivares/core-ca/ca.crt
+            {{- end }}
+            {{- if .Values.collectors.clientTlsSecret }}
+            - --client-cert=/etc/olivares/client-tls/tls.crt
+            - --client-key=/etc/olivares/client-tls/tls.key
+            {{- end }}
+            {{- with .Values.collectors.serverName }}
+            - --server-name={{ . }}
+            {{- end }}
+          env:
+            - name: OLIVARES_SOURCES_CONFIG
+              value: /etc/olivares/sources/sources.json
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports: []   # push model: NO inbound listener (docs/SECURITY-HARDENING.md)
+          resources:
+            {{- toYaml .Values.collectors.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: ingest-token
+              mountPath: /etc/olivares/ingest
+              readOnly: true
+            - name: sources
+              mountPath: /etc/olivares/sources
+              readOnly: true
+            {{- if .Values.collectors.coreCaSecret }}
+            - name: core-ca
+              mountPath: /etc/olivares/core-ca
+              readOnly: true
+            {{- end }}
+            {{- if .Values.collectors.clientTlsSecret }}
+            - name: client-tls
+              mountPath: /etc/olivares/client-tls
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: ingest-token
+          secret:
+            secretName: {{ .Values.collectors.ingestTokenSecret | required "collectors.ingestTokenSecret is required when collectors.enabled=true" }}
+        - name: sources
+          {{- if .Values.collectors.sourcesConfigSecret }}
+          secret:
+            secretName: {{ .Values.collectors.sourcesConfigSecret }}
+            items:
+              - key: sources.json
+                path: sources.json
+          {{- else }}
+          configMap:
+            name: {{ include "olivares.collector.fullname" . }}-sources
+          {{- end }}
+        {{- if .Values.collectors.coreCaSecret }}
+        - name: core-ca
+          secret:
+            secretName: {{ .Values.collectors.coreCaSecret }}
+        {{- end }}
+        {{- if .Values.collectors.clientTlsSecret }}
+        - name: client-tls
+          secret:
+            secretName: {{ .Values.collectors.clientTlsSecret }}
+        {{- end }}
+{{- end }}

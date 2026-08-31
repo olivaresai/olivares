@@ -1,0 +1,155 @@
+{
+  "title": "Sauvegarde et restauration",
+  "description": "Gérez les instantanés de reprise après sinistre du plan de contrôle.",
+  "tabs": {
+    "backups": "Sauvegardes",
+    "schedule": "Planification"
+  },
+  "actions": {
+    "restore": "Restaurer",
+    "createBackup": "Créer une sauvegarde",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "upload": "Téléverser",
+    "delete": "Supprimer"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "Sauvegardes",
+    "searchPlaceholder": "Rechercher des sauvegardes...",
+    "deleted": "Sauvegarde supprimée",
+    "deleteTitle": "Supprimer la sauvegarde",
+    "deleteDescription": "Supprimer définitivement \"{{filename}}\" ? Cette action est irréversible.",
+    "columns": {
+      "date": "Date",
+      "filename": "Nom du fichier",
+      "size": "Taille",
+      "engine": "Moteur",
+      "tenants": "Tenants",
+      "notes": "Notes"
+    },
+    "actions": {
+      "download": "Télécharger",
+      "inspect": "Inspecter",
+      "downloadAria": "Télécharger {{filename}}",
+      "inspectAria": "Inspecter {{filename}}",
+      "deleteAria": "Supprimer {{filename}}",
+      "downloadFailed": "Échec du téléchargement : {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "Planification des sauvegardes mise à jour",
+    "loading": "Chargement de la planification...",
+    "title": "Planification automatique des sauvegardes",
+    "description": "Configurez des sauvegardes récurrentes. Le moteur exécute la planification ; la phrase secrète est dérivée du secret de l'instance.",
+    "enableAria": "Activer les sauvegardes automatiques",
+    "enabled": "Activée",
+    "disabled": "Désactivée",
+    "cronLabel": "Expression cron",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "Chaque jour à minuit",
+      "daily0200": "Chaque jour à 02:00",
+      "daily0300": "Chaque jour à 03:00",
+      "weeklySundayMidnight": "Chaque semaine le dimanche à minuit",
+      "weeklyMondayMidnight": "Chaque semaine le lundi à minuit",
+      "monthlyFirstMidnight": "Chaque mois le 1er à minuit",
+      "dailyAt": "Chaque jour à {{time}}"
+    },
+    "retentionLabel": "Rétention (jours)",
+    "retentionDescription": "Les sauvegardes plus anciennes sont purgées automatiquement.",
+    "dualControlAria": "Exiger le double contrôle pour la restauration",
+    "dualControlLabel": "Exiger le double contrôle pour la restauration",
+    "dualControlDescription": "Quand l'option est activée, une restauration lancée DEPUIS CETTE CONSOLE doit être approuvée par un second administrateur distinct avant de s'exécuter. La désactiver est enregistré et ne prend effet qu'une heure plus tard — le verrou ne peut pas être retiré dans la même session que la restauration qu'il protège ; le réactiver annule un retrait en attente. Cela ne couvre PAS `olivares dr restore` sur l'hôte, qui remplace un estate hors de ce verrou et enregistre à la place un opérateur déclaré (les estates Postgres ne se restaurent que par cette voie). Laissez-la désactivée pour un opérateur seul.",
+    "dualControlDisarmPending": "Retrait demandé — enregistré, il prend effet le {{when}}. D'ici là, une restauration exige toujours un second administrateur. Réactivez pour l'annuler.",
+    "dualControlDisarmRequestedBy": "Demandé par {{who}}.",
+    "save": "Enregistrer la planification"
+  },
+  "trigger": {
+    "started": "Sauvegarde démarrée",
+    "title": "Créer une sauvegarde",
+    "description": "Créez un instantané chiffré de tout le plan de contrôle.",
+    "notes": "Notes",
+    "notesPlaceholder": "Description facultative pour cette sauvegarde",
+    "passphrase": "Phrase secrète",
+    "passphraseDescription": "Utilisée pour chiffrer le paquet de sauvegarde.",
+    "start": "Démarrer la sauvegarde"
+  },
+  "job": {
+    "initializing": "Initialisation",
+    "status": {
+      "running": "En cours",
+      "completed": "Terminée",
+      "failed": "Échouée"
+    },
+    "progressAria": "{{phase}} {{progress}} %",
+    "complete": "{{progress}} % terminé"
+  },
+  "pending": {
+    "title": "Restaurations en attente d'approbation (double contrôle)",
+    "requestedByPrefix": "Demandée par",
+    "approveRestore": "Approuver et restaurer",
+    "approved": "Restauration approuvée",
+    "dialogTitle": "Approuver la restauration",
+    "dialogDescription": "Vous approuvez une restauration demandée par {{initiator}}. Vous devez être un administrateur différent du demandeur.",
+    "passphrase": "Phrase secrète",
+    "passphraseDescription": "Saisissez la phrase secrète utilisée lors de la création de la sauvegarde.",
+    "confirmTitle": "Confirmer la restauration",
+    "confirmDescription": "Cela écrasera toutes les données actuelles avec le contenu de la sauvegarde une fois vérifiée. Cette opération est irréversible.",
+    "confirmLabel": "Approuver et restaurer maintenant"
+  },
+  "restore": {
+    "notAuthorized": "Non autorisé",
+    "uploadFailed": "Échec du téléversement",
+    "started": "Restauration démarrée",
+    "title": "Restaurer depuis une sauvegarde",
+    "description": "Téléversez un fichier .drbundle pour restaurer l'état du plan de contrôle.",
+    "apply": "Appliquer la restauration",
+    "confirmTitle": "Confirmer la restauration",
+    "confirmDescription": "Cela écrasera toutes les données actuelles avec le contenu de la sauvegarde. Cette opération est irréversible.",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "Restaurer maintenant",
+    "confirmSummaryPrefix": "Restauration depuis",
+    "confirmSummarySuffix": "avec {{count}} tenant(s).",
+    "awaitingTitle": "En attente d'un second approbateur",
+    "awaitingDescription": "Le double contrôle est activé. Cette restauration ne s'exécutera pas tant qu'un administrateur différent ne l'aura pas approuvée et n'aura pas fourni la phrase secrète depuis l'onglet Sauvegardes.",
+    "requestId": "ID de demande",
+    "selectFile": "Sélectionnez un fichier .drbundle",
+    "chooseFile": "Choisir un fichier",
+    "passphrase": "Phrase secrète",
+    "passphraseDescription": "Saisissez la phrase secrète utilisée lors de la création de cette sauvegarde.",
+    "manifestTitle": "Manifeste du paquet",
+    "manifest": {
+      "file": "Fichier",
+      "engine": "Moteur",
+      "created": "Créée",
+      "tenants": "Tenants",
+      "keys": "Clés"
+    }
+  },
+  "inspect": {
+    "title": "Détail de la sauvegarde",
+    "description": "Manifeste décodé du paquet scellé — exactement ce qu’une restauration ramènerait.",
+    "filename": "Nom de fichier",
+    "size": "Taille",
+    "engine": "Moteur",
+    "createdAt": "Créée",
+    "tenants": "Tenants",
+    "keys": "Clés scellées",
+    "empty": "Aucune",
+    "loadFailed": "Impossible de charger le détail de la sauvegarde."
+  },
+  "empty": {
+    "backup": {
+      "title": "Aucun instantané de sauvegarde créé",
+      "description": "Créez une sauvegarde chiffrée depuis cette console avec SQLite ; avec PostgreSQL, créez le paquet à l’aide de la CLI de reprise après sinistre dans le répertoire de sauvegarde configuré."
+    }
+  }
+}

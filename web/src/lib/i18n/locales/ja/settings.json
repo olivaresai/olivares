@@ -1,0 +1,34 @@
+{
+  "title": "設定",
+  "subtitle": "アカウントとコンソールの表示を管理します。",
+  "tabs": {
+    "profile": "プロフィール",
+    "appearance": "外観",
+    "about": "情報"
+  },
+  "profile": {
+    "title": "プロフィール",
+    "email": "Email",
+    "displayName": "表示名",
+    "role": "この組織でのロール",
+    "memberships": "組織",
+    "actor": "プリンシパル"
+  },
+  "appearance": {
+    "title": "外観",
+    "theme": "テーマ",
+    "themeHint": "ライト、ダーク、またはシステム設定に従う、から選択します。",
+    "density": "テーブルの行間隔",
+    "densityHint": "コンパクトはより多くの行を表示し、ゆったりは余白が広くなります。",
+    "language": "言語",
+    "languageHint": "コンソールのインターフェース言語です。"
+  },
+  "about": {
+    "title": "情報",
+    "version": "バージョン",
+    "engine": "ストアエンジン",
+    "license": "ライセンスステータス",
+    "licensee": "ライセンス先",
+    "none": "なし"
+  }
+}

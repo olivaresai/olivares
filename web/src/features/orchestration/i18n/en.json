@@ -1,0 +1,263 @@
+{
+  "title": "Orchestration & A2A",
+  "description": "Agent-to-agent topology — who delegates to whom, the live delegation flows, and declared cadences. Reads of the communication graph are privileged and self-audited.",
+  "tabs": {
+    "graph": "Communication graph",
+    "flows": "Flows",
+    "schedules": "Schedules"
+  },
+  "graph": {
+    "title": "Communication graph",
+    "description": "Delegation and MCP topology, derived from observed signals. Supervisors anchor the top tier; workers and MCP peers sit below.",
+    "truncated": "Showing the first {{n}} edges — raise the limit for more.",
+    "empty": {
+      "title": "No communication observed",
+      "description": "No delegation or MCP edges are in the observed window. This is what is seen, not all that exists — read the coverage note above."
+    },
+    "kind": {
+      "session": "Session",
+      "agent": "Agent",
+      "mcp_server": "MCP server",
+      "mcp_tool": "MCP tool"
+    },
+    "role": {
+      "supervisor": "Supervisor",
+      "worker": "Worker",
+      "peer": "Peer"
+    },
+    "legend": {
+      "attributed": "Attributed",
+      "approximate": "Approximate (inferred)",
+      "missed": "Cadence missed"
+    }
+  },
+  "flows": {
+    "title": "Delegation flows",
+    "description": "Supervisor → workers clusters. State is derived at read-time from recency; stalled means the supervisor has an active schedule that is overdue.",
+    "filter": "Filter by state",
+    "allStates": "All states",
+    "empty": "No flows in this state",
+    "columns": {
+      "supervisor": "Supervisor",
+      "workers": "Workers",
+      "delegations": "Delegations",
+      "state": "State",
+      "lastSeen": "Last seen"
+    },
+    "state": {
+      "active": "Active",
+      "idle": "Idle",
+      "stalled": "Stalled",
+      "completed": "Completed"
+    }
+  },
+  "schedules": {
+    "title": "Schedules",
+    "description": "Declared cadences for agents and swarms. Health reflects the observed cadence against the expected interval — a missed fire reads as stalled, never hidden.",
+    "empty": "No schedules declared",
+    "emptyHint": "Declare a cron, event or manual cadence to track whether a subject actually fires on time.",
+    "new": "New schedule",
+    "columns": {
+      "name": "Name",
+      "trigger": "Trigger",
+      "cadence": "Cadence",
+      "desired": "Desired",
+      "health": "Health",
+      "lastFired": "Last fired",
+      "actions": "Actions"
+    },
+    "subjectKind": {
+      "agent": "Agent",
+      "swarm": "Swarm"
+    },
+    "trigger": {
+      "cron": "Cron",
+      "event": "Event",
+      "manual": "Manual"
+    },
+    "desired": {
+      "active": "Active",
+      "paused": "Paused",
+      "retired": "Retired"
+    },
+    "actions": {
+      "menu": "Actions for {{name}}",
+      "edit": "Edit",
+      "history": "History",
+      "pause": "Pause",
+      "resume": "Resume",
+      "retire": "Retire",
+      "fire": "Fire"
+    },
+    "form": {
+      "createTitle": "New schedule",
+      "editTitle": "Edit schedule",
+      "createDescription": "Declare a governed cadence for an agent or swarm. New schedules start active.",
+      "editDescription": "Retarget the subject or cadence. Identity and trigger fields are immutable.",
+      "name": "Name",
+      "subjectKind": "Subject kind",
+      "subjectRef": "Subject reference",
+      "triggerKind": "Trigger kind",
+      "cadenceSpec": "Cadence specification",
+      "cadenceHint": {
+        "cron": "Opaque cron cadence text. Syntax is interpreted only by the configured dispatcher.",
+        "event": "Opaque event reference or cadence text.",
+        "manual": "Optional opaque note for this manual schedule."
+      },
+      "expectedInterval": "Expected interval (seconds)",
+      "expectedIntervalHint": "Used to detect a missed cron cadence.",
+      "graceFactor": "Grace factor",
+      "graceFactorHint": "Multiplier applied before the cadence is marked missed.",
+      "immutableHint": "Immutable after creation.",
+      "create": "Create schedule",
+      "update": "Save changes",
+      "created": "Schedule created",
+      "updated": "Schedule updated",
+      "createFailed": "Schedule could not be created",
+      "updateFailed": "Schedule could not be updated",
+      "errors": {
+        "required": "This field is required.",
+        "intervalRange": "Enter a whole number from {{min}} to {{max}}.",
+        "intervalCronOnly": "Expected interval is available only for cron triggers.",
+        "graceRange": "Enter a whole number from {{min}} to {{max}}."
+      }
+    },
+    "status": {
+      "pauseTitle": "Pause {{name}}?",
+      "pauseDescription": "{{name}} will remain declared but will no longer be expected to fire.",
+      "pauseConfirm": "Pause schedule",
+      "resumeTitle": "Resume {{name}}?",
+      "resumeDescription": "{{name}} will become active and cadence monitoring will resume.",
+      "resumeConfirm": "Resume schedule",
+      "retireTitle": "Retire {{name}}?",
+      "retireDescription": "{{name}} will be permanently retired and can no longer be fired.",
+      "retireConfirm": "Retire schedule",
+      "changed": {
+        "active": "Schedule resumed",
+        "paused": "Schedule paused",
+        "retired": "Schedule retired"
+      }
+    },
+    "fire": {
+      "title": "Fire {{name}}",
+      "description": "A governed fire requires an approval bound to the current plan before dispatch.",
+      "step1Title": "1. Request approval",
+      "step1Description": "Open a governance approval for this exact subject and cadence.",
+      "request": "Request approval",
+      "requested": "Approval requested",
+      "requestFailed": "Approval could not be requested",
+      "requiresApproval": "Approval required",
+      "copy": "Copy",
+      "copied": "Approval reference copied",
+      "copyFailed": "Approval reference could not be copied",
+      "governanceLink": "Open the governance approvals queue",
+      "step2Title": "2. Execute approved fire",
+      "step2Description": "After the approval is allowed, submit its reference to dispatch the plan.",
+      "approvalRef": "Approval reference",
+      "execute": "Execute",
+      "dispatched": "Schedule dispatched",
+      "notDispatched": "Schedule was not dispatched",
+      "executeFailed": "Approved fire could not be executed",
+      "receipt": "Fire receipt",
+      "planHash": "Plan hash",
+      "gateStatus": "Gate status",
+      "dispatchRef": "Dispatch reference",
+      "detail": "Detail",
+      "opStatus": {
+        "requested": "Requested",
+        "blocked": "Declined",
+        "dispatched": "Dispatched",
+        "declared_not_fired": "Approved, not actuated",
+        "failed": "Failed",
+        "budget_blocked": "Blocked by budget",
+        "budget_throttled": "Throttled by budget"
+      }
+    }
+  },
+  "decisions": {
+    "title": "Decision ledger",
+    "description": "Append-only record of fire decisions for the selected schedule. A decision is shown exactly as it resolved — an approval is not an actuation.",
+    "pick": "Select a schedule",
+    "pickHint": "Select a schedule to see its decision ledger.",
+    "empty": "No decisions recorded",
+    "gate": "Gate",
+    "plan": "plan",
+    "op": {
+      "fire": "Fire",
+      "run_request": "Run request",
+      "run": "Run",
+      "run_step": "Step",
+      "run_end": "Run end",
+      "cadence_miss": "Cadence miss"
+    },
+    "opStatus": {
+      "requested": "Requested",
+      "blocked": "Blocked",
+      "dispatched": "Dispatched",
+      "declared_not_fired": "Approved, not actuated (no dispatcher)",
+      "failed": "Failed",
+      "budget_blocked": "Blocked by budget",
+      "budget_throttled": "Throttled by budget",
+      "missed": "Missed",
+      "skipped": "Skipped (an earlier step failed or was denied)",
+      "gate_passed": "Gate approved",
+      "completed": "Completed",
+      "reconciled": "Reconciled (late result recorded)"
+    },
+    "estate": "All decisions (whole estate)",
+    "estateCaveat": "The estate ledger, newest first. It is the only view in the console that shows the full ledger row for a workflow run — audit, findings and the run detail may show related facts, but not this record.",
+    "truncated": "Showing the most recent {{count}} decisions and the engine reports more: this list is TRUNCATED. Read it as a sample, not as the whole ledger.",
+    "noSchedule": "no schedule reference",
+    "subjectKind": {
+      "agent": "Agent",
+      "swarm": "Swarm",
+      "workflow": "Workflow"
+    },
+    "estateDescription": "Append-only record of every decision in the estate, most recent first. Includes decisions that belong to no schedule.",
+    "forbidden": "Your role cannot read schedule decisions."
+  },
+  "timeline": {
+    "title": "Activity timeline",
+    "description": "Recent communication events for the subject.",
+    "kind": {
+      "delegation": "Delegation",
+      "mcp_server": "MCP server",
+      "mcp_tool": "MCP tool",
+      "fire": "Fire",
+      "cadence_miss": "Cadence miss"
+    }
+  },
+  "history": {
+    "title": "Revision history — {{name}}",
+    "description": "Chronological, append-only snapshots of this schedule.",
+    "scopeCaption": "Restore re-applies only mutable fields — never name, subject kind, or trigger kind.",
+    "empty": "No revisions recorded",
+    "loadMore": "Load more",
+    "compareTitle": "Snapshot diff",
+    "selectTwo": "Select two revisions to compare their snapshots.",
+    "selectRevision": "Select {{op}} revision by {{actor}}",
+    "originalLabel": "Earlier revision",
+    "modifiedLabel": "Later revision",
+    "restore": "Restore this revision",
+    "restoreTitle": "Restore revision?",
+    "restoreDescription": "Restore the selected mutable schedule fields for {{name}}?",
+    "restoreConfirm": "Restore revision",
+    "restored": "Schedule revision restored",
+    "operations": {
+      "create": "Created",
+      "update": "Updated",
+      "delete": "Deleted",
+      "restore": "Restored"
+    }
+  },
+  "empty": {
+    "flows": {
+      "title": "No delegation flows observed yet",
+      "description": "A flow appears once observed runtime signals record a delegation edge from a supervisor session to a worker."
+    },
+    "schedules": {
+      "title": "No schedules declared yet",
+      "description": "Declare a cron, event or manual cadence for an agent or swarm to track its desired state and observed health."
+    }
+  }
+}

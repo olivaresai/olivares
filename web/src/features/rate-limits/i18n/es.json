@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "Cargados {{n}} hallazgos; hay más",
+    "hint": "El resumen de límites sólo se buscó entre los hallazgos cargados. Un resumen ausente puede estar más allá de esta página."
+  },
+  "title": "Límites de tasa",
+  "description": "Inventario de solo lectura de los límites de tasa de organización y de espacio de trabajo que una pasarela o proxy debe mantener sincronizados. Procede de la API de límites de tasa de Anthropic (solo lectura); esta vista nunca modifica un límite.",
+  "caveats": {
+    "keepInSync": "Las pasarelas y proxies deben mantenerse sincronizados: estos límites son el inventario que una pasarela o proxy ascendente debe replicar. No se aplican aquí, y su modificación se realiza en el proveedor, no en esta consola.",
+    "managedAgents": "Los agentes gestionados NO están cubiertos por la API de límites de tasa. Sus límites son una laguna documentada, no un valor de cero: no se muestra ninguna fila de agentes gestionados porque la API no informa de ninguna."
+  },
+  "summary": {
+    "title": "Estado de sincronización",
+    "description": "Cuántos límites de tasa debe mantener sincronizados una pasarela o proxy, según informa la ingesta de gobierno de solo lectura."
+  },
+  "count": {
+    "label": "Límites por sincronizar",
+    "observedAt": "Observado el {{at}}",
+    "unknown": "Recuento no disponible"
+  },
+  "degraded": {
+    "title": "Ingesta de gobierno de la API de administración no disponible",
+    "hint": "Esta superficie de despliegue (por ejemplo una pasarela de Bedrock, Vertex o Foundry) no expone la API de administración de Anthropic, por lo que el inventario de límites de tasa no puede leerse aquí. Esto es una falta de disponibilidad honesta, no un inventario vacío."
+  },
+  "inventory": {
+    "title": "Inventario por limitador",
+    "description": "Cada limitador que informa el proveedor, agrupado por ámbito: primero los grupos de toda la organización y después los grupos de anulación por espacio de trabajo.",
+    "unavailable": "Inventario no disponible",
+    "unavailableHint": "El conector de administración de solo lectura no está cableado, por lo que el inventario por limitador no se puede leer aquí. Es una indisponibilidad honesta, no un inventario vacío.",
+    "tableLabel": "Inventario de límites de tasa",
+    "empty": "No se informó de ningún límite de tasa",
+    "emptyHint": "El proveedor no devolvió entradas por limitador para esta organización.",
+    "scope": {
+      "org": "Organización"
+    },
+    "columns": {
+      "scope": "Ámbito",
+      "groupType": "Grupo",
+      "models": "Modelos",
+      "limiterType": "Limitador",
+      "value": "Valor",
+      "orgLimit": "Límite de org."
+    }
+  },
+  "groupType": {
+    "model_group": "Grupo de modelos",
+    "batch": "Lote",
+    "token_count": "Recuento de tokens",
+    "files": "Archivos",
+    "skills": "Habilidades",
+    "web_search": "Búsqueda web"
+  },
+  "limitType": {
+    "requests_per_minute": "Solicitudes por minuto",
+    "input_tokens_per_minute": "Tokens de entrada por minuto",
+    "output_tokens_per_minute": "Tokens de salida por minuto",
+    "enqueued_batch_requests": "Solicitudes de lote en cola"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "Aún no se han reportado límites de tasa",
+      "description": "Las entradas aparecen cuando la API de límites de tasa de Anthropic, de solo lectura, devuelve los límites por limitador de esta organización."
+    }
+  },
+  "effectiveState": {
+    "label": "Lo que sí puedes cambiar aquí:",
+    "proxy": "Proxy de inferencia",
+    "finops": "Gasto"
+  }
+}

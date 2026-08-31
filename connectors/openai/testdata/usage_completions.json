@@ -1,0 +1,54 @@
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1717200000,
+      "end_time": 1717286400,
+      "results": [
+        {
+          "object": "organization.usage.completions.result",
+          "model": "gpt-4o",
+          "project_id": "proj_test1",
+          "api_key_id": null,
+          "service_tier": "default",
+          "input_tokens": 1000,
+          "output_tokens": 500,
+          "input_cached_tokens": 200
+        },
+        {
+          "object": "organization.usage.completions.result",
+          "model": "gpt-4o-mini",
+          "project_id": "proj_test1",
+          "api_key_id": null,
+          "service_tier": "flex",
+          "input_tokens": 4000,
+          "output_tokens": 1000,
+          "input_cached_tokens": 0
+        },
+        {
+          "object": "organization.usage.completions.result",
+          "model": "o3-pro",
+          "project_id": "proj_test1",
+          "api_key_id": null,
+          "service_tier": "default",
+          "input_tokens": 800,
+          "output_tokens": 300,
+          "input_cached_tokens": 0
+        },
+        {
+          "object": "organization.usage.completions.result",
+          "model": "",
+          "project_id": "proj_test1",
+          "api_key_id": null,
+          "service_tier": null,
+          "input_tokens": 5800,
+          "output_tokens": 1800,
+          "input_cached_tokens": 200
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

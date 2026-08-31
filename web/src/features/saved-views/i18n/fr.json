@@ -1,0 +1,31 @@
+{
+  "menu": {
+    "trigger": "Vues enregistrées",
+    "myViews": "Mes vues",
+    "shared": "Partagées",
+    "empty": "Aucune vue enregistrée",
+    "loading": "Chargement des vues enregistrées…",
+    "loadFailed": "Les vues enregistrées n’ont pas pu être chargées.",
+    "save": "Enregistrer la vue actuelle…",
+    "delete": "Supprimer",
+    "deleteAria": "Supprimer la vue enregistrée {{name}}"
+  },
+  "save": {
+    "title": "Enregistrer la vue actuelle",
+    "description": "Conservez les filtres et la portée actuels pour pouvoir les réappliquer.",
+    "name": "Nom",
+    "viewDescription": "Description",
+    "share": "Partager avec ce locataire",
+    "shareHint": "Toute personne disposant de l’accès aux vues enregistrées dans ce locataire peut l’appliquer.",
+    "cancel": "Annuler",
+    "submit": "Enregistrer la vue",
+    "failed": "La vue enregistrée n’a pas pu être créée."
+  },
+  "delete": {
+    "title": "Supprimer la vue enregistrée ?",
+    "description": "Supprimer « {{name}} ». Cette action est irréversible.",
+    "confirm": "Supprimer la vue",
+    "cancel": "Annuler",
+    "failed": "La vue enregistrée n’a pas pu être supprimée."
+  }
+}

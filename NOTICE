@@ -1,0 +1,50 @@
+Olivares AI
+Copyright 2026 Olivares.AI
+
+This product includes software developed at Olivares.AI (https://olivares.ai).
+
+The contents of the /sdk, /connectors and /clients directories are licensed under
+the Apache License, Version 2.0 (the "License"); you may not use these files
+except in compliance with the License. You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+The remainder of this repository (including /core, /modules, /web and /cmd) is
+licensed under the GNU Affero General Public License, version 3 (AGPL-3.0-only).
+The separate, additive Enterprise Edition is distributed privately under the
+Olivares.AI Commercial License and is not included in this repository. See
+LICENSING.md for the full per-directory breakdown and the dual-license exception.
+Which license governs a given file is stated by that file's SPDX header, and for a
+released artifact by the SBOM published with it; the per-directory breakdown
+summarizes those, it does not replace them.
+
+The AGPL-3.0-only material is likewise distributed WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See sections 15, 16 and 17 of the GNU Affero General Public License (in LICENSE,
+and in LICENSES/AGPL-3.0-only.txt at lines 587, 598 and 610) for details; section
+16 expressly covers LOSS OF DATA OR DATA BEING RENDERED INACCURATE.
+
+ADDITIONAL TERMS DISCLAIMING WARRANTY AND LIMITING LIABILITY apply to the material
+of which Francisco Olivares is the copyright holder or for which he is authorized
+by the copyright holder. They are stated as terms supplementing that License under
+its section 7(a) (LICENSES/AGPL-3.0-only.txt, lines 349-354), and as a further
+disclaimer complementing sections 7 and 8 of the Apache License, Version 2.0.
+THIS PARAGRAPH IS THE NOTICE INDICATING WHERE TO FIND THOSE TERMS: they are set
+out in full in the file DISCLAIMER.md distributed with this software. They do not
+restrict, condition or modify any right granted by AGPL-3.0-only or by
+Apache-2.0.
+
+NOTICES FOR THIRD-PARTY COMPONENTS:
+
+  * Official OCSF schema files (sdk/siemwire/testdata/ocsf/), vendored verbatim
+    from the OCSF schema project (https://github.com/ocsf/ocsf-schema).
+    Copyright OCSF contributors. Licensed under the Apache License, Version 2.0.
+
+Notices for any component vendored later must be appended to this list as required
+by that component's license. The components actually present in a given artifact
+are enumerated in the SBOM published with that artifact.

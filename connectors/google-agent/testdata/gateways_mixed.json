@@ -1,0 +1,28 @@
+{
+  "agentGateways": [
+    {
+      "name": "projects/test-project-id/locations/us-central1/agentGateways/linked-gw",
+      "googleManaged": {
+        "governedAccessPath": "CLIENT_TO_AGENT"
+      },
+      "registries": [
+        "//agentregistry.googleapis.com/projects/test-project-id/locations/global/"
+      ],
+      "updateTime": "2026-06-22T10:00:00Z"
+    },
+    {
+      "name": "projects/test-project-id/locations/us-central1/agentGateways/no-registry-gw",
+      "googleManaged": {
+        "governedAccessPath": "AGENT_TO_ANYWHERE"
+      },
+      "selfManaged": {
+        "resourceUri": "//run.googleapis.com/projects/test-project-id/locations/us-central1/services/self-managed"
+      },
+      "registries": [],
+      "updateTime": "2026-06-22T11:00:00Z"
+    }
+  ],
+  "unreachable": [
+    "us-west1"
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "title": "Claude Code の導入状況",
+  "description": "Claude Code がどれだけ使われ、その提案のうちどれだけを開発者が採用しているか。",
+  "range": {
+    "label": "期間",
+    "7d": "過去 7 日間",
+    "30d": "過去 30 日間",
+    "90d": "過去 90 日間",
+    "mtd": "今月（月初から本日まで）"
+  },
+  "tabs": {
+    "overview": "概要",
+    "teams": "チーム",
+    "developers": "開発者",
+    "trend": "トレンド"
+  },
+  "boundary": {
+    "note": "Claude API のトラフィック（管理用 Analytics フィードと OTLP テレメトリプレーン）のみを対象としています。{{providers}} が処理した利用は含まれないため、ここで導入が見られないことは未導入の証拠にはなりません。",
+    "providers": {
+      "claude-platform-aws": "Claude Platform on AWS",
+      "microsoft-foundry": "Microsoft Foundry",
+      "amazon-bedrock": "Amazon Bedrock",
+      "vertex-ai": "Vertex AI"
+    }
+  },
+  "lenses": {
+    "analytics": {
+      "title": "開発者単位（管理用 Analytics）",
+      "description": "管理用 Analytics フィードから取得した、{{developers}} 人の開発者にわたる開発者・日単位の信頼できる合計値。"
+    },
+    "telemetry": {
+      "title": "セッション単位（リアルタイムテレメトリ）",
+      "description": "OTLP プレーンから取得した、{{teams}} チームにわたるセッション単位のリアルタイム活動。アクティブ時間を含みます。"
+    }
+  },
+  "comparison": {
+    "title": "公式値と観測値",
+    "description": "管理用 Analytics API とローカル OTLP テレメトリの間で、共通する Claude Code 活動指標を比較します。",
+    "official": "公式（Analytics API）",
+    "observed": "観測（OTLP）",
+    "withinThreshold": "しきい値内",
+    "empty": "この期間に共通指標の活動はありません。",
+    "boundaryNote": "公式 Analytics API は {{providers}} などのサードパーティ表面を対象にしません。テレメトリのみに現れる利用はレビュー対象の信号であり、不正利用の結論ではありません。",
+    "metrics": {
+      "sessions": "セッション",
+      "tokens": "トークン",
+      "linesAdded": "追加行数",
+      "commits": "コミット",
+      "pullRequests": "プルリクエスト"
+    },
+    "directions": {
+      "aligned": "しきい値内",
+      "telemetry_exceeds_official": "観測値が公式値を {{ratio}} 上回る",
+      "official_exceeds_telemetry": "公式値が観測値を {{ratio}} 上回る",
+      "official_plane_absent": "公式プレーンなし",
+      "telemetry_plane_absent": "観測プレーンなし"
+    }
+  },
+  "stats": {
+    "sessions": "セッション",
+    "linesNet": "正味コード行数",
+    "addedRemoved": "+{{added}} / -{{removed}}",
+    "commits": "コミット",
+    "pullRequests": "プルリクエスト",
+    "acceptance": "ツール採用率",
+    "acceptedOfTotal": "{{total}} 件中 {{accepted}} 件を採用",
+    "tokens": "トークン",
+    "activeTime": "アクティブ時間"
+  },
+  "models": {
+    "total": "合計トークン",
+    "empty": "この期間にモデルの利用はありません。"
+  },
+  "acceptance": {
+    "empty": "この期間にツールの判断はありません。",
+    "columns": {
+      "tool": "ツール",
+      "accepted": "採用",
+      "rejected": "却下",
+      "rate": "採用率"
+    }
+  },
+  "trend": {
+    "title": "日次トレンド",
+    "description": "選択したレンズにおける、時間経過に伴う生産性。",
+    "lensLabel": "レンズ",
+    "empty": "この期間に活動はありません。"
+  },
+  "teams": {
+    "title": "チーム別",
+    "description": "リアルタイムテレメトリプレーンから取得したチーム単位の活動（オペレーターのチームラベル）。",
+    "empty": "この期間にチームに帰属するテレメトリはありません。",
+    "emptyHint": "チーム別に帰属させるには、Claude Code フリートで OTEL_RESOURCE_ATTRIBUTES（例: team=…）を設定してください。",
+    "unassigned": "（未割り当て）",
+    "columns": {
+      "team": "チーム"
+    }
+  },
+  "developers": {
+    "title": "開発者別",
+    "description": "管理用 Analytics フィードから取得した開発者単位の ROI。",
+    "empty": "この期間に開発者単位の活動はありません。",
+    "locked": "開発者単位ビューは制限されています",
+    "lockedHint": "個々の開発者の生産性を表示するには adoption:developer:read 権限が必要です（デフォルト拒否）。",
+    "columns": {
+      "developer": "開発者"
+    }
+  },
+  "columns": {
+    "sessions": "セッション",
+    "commits": "コミット",
+    "pullRequests": "PRs",
+    "linesNet": "正味 LoC",
+    "acceptance": "採用率"
+  },
+  "empty": {
+    "acceptance": {
+      "title": "ツールの判断はまだ観測されていません",
+      "description": "管理用 Analytics フィードまたは OTLP テレメトリから報告されると、ツールの採用・却下の判断が表示されます。"
+    },
+    "developer": {
+      "title": "開発者の活動はまだ報告されていません",
+      "description": "Claude の管理用 Analytics フィードが開発者の活動を報告すると、開発者ごとの行が表示されます。"
+    },
+    "team": {
+      "title": "チームに帰属するテレメトリはまだありません",
+      "description": "帰属には、コネクターの resource_labels 許可リスト（既定では空）にチームキーが含まれることと、フリートがそのキーを送信することの両方が必要です。"
+    }
+  }
+}

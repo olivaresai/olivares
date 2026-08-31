@@ -1,0 +1,585 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: controlplanes.ops.olivares.ai
+spec:
+  group: ops.olivares.ai
+  names:
+    categories:
+    - olivares
+    kind: ControlPlane
+    listKind: ControlPlaneList
+    plural: controlplanes
+    shortNames:
+    - cp
+    - controlplanes
+    singular: olivares
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.readyReplicas
+      name: Ready
+      type: integer
+    - jsonPath: .status.currentImage
+      name: Image
+      type: string
+    - jsonPath: .spec.engine
+      name: Engine
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ControlPlane is the Schema for the controlplanes API. It is the declarative
+          lifecycle object for an Olivares AI control plane instance: install, upgrade
+          (spec.image), reconfigure (spec.configRef), and backup/restore (spec.backup,
+          spec.restoreFrom) — Operator Capability Level 3 ("Full Lifecycle").
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              ControlPlaneSpec is the desired state of a control plane instance.
+
+              The CEL admission rules below reject — at the apiserver, before the object is
+              persisted — the three impossible combinations that would otherwise crashloop or
+              silently disable the workload, mirroring the chart's render-time `fail` guards
+              (_helpers.tpl "olivares.validate"). The sqlite+replicas>1 case is deliberately
+              NOT rejected: it is a safe CLAMP to one effective replica (effectiveReplicas),
+              not an impossible spec. ControlPlaneSpec.Validate re-checks the same invariants
+              in the controller as defense-in-depth for clusters where CEL is disabled.
+            properties:
+              auditSigningKeySecret:
+                description: |-
+                  AuditSigningKeySecret names a Secret with key `audit-signing.key` (base64
+                  Ed25519) mounted read-only into EVERY replica and exported as
+                  OLIVARES_AUDIT_SIGNING_KEY_FILE so all replicas sign the audit ledger with
+                  the SAME key — the hash-chain does not fork when a standby is promoted.
+                  REQUIRED for Replicas>1 (active-passive HA). Empty (single-node) lets the
+                  engine mint a per-node key in the data dir.
+                type: string
+              backup:
+                description: Backup, when set, declares a scheduled backup CronJob
+                  (see BackupSpec).
+                properties:
+                  destination:
+                    description: Destination configures the PersistentVolumeClaim
+                      the bundles are written to.
+                    properties:
+                      existingClaim:
+                        description: |-
+                          ExistingClaim names a pre-provisioned PVC to write bundles to. When empty the
+                          controller creates one named "<name>-backups" that is intentionally NOT
+                          owned by (garbage-collected with) the ControlPlane — DR data must survive a
+                          `kubectl delete controlplane`.
+                        type: string
+                      size:
+                        default: 16Gi
+                        description: |-
+                          Size of the controller-created destination PVC (ignored when ExistingClaim is
+                          set).
+                        type: string
+                      storageClass:
+                        description: |-
+                          StorageClass of the controller-created destination PVC ("" uses the cluster
+                          default; ignored when ExistingClaim is set).
+                        type: string
+                    type: object
+                  kekPassphraseKey:
+                    default: passphrase
+                    description: |-
+                      KEKPassphraseKey is the key in KEKSecret holding a passphrase (the default,
+                      Argon2id-derived KEK → `--passphrase-file`). Used unless KEKRawKey is set.
+                    type: string
+                  kekRawKey:
+                    description: |-
+                      KEKRawKey, when set, names the key in KEKSecret holding a raw/base64 32-byte
+                      KEK (the KMS-unwrapped path) and selects `--kek-key-file` over
+                      `--passphrase-file`.
+                    type: string
+                  kekSecret:
+                    description: |-
+                      KEKSecret names a Secret carrying the key-encryption key the bundle seals the
+                      signing keys under. REQUIRED: without it a restored ledger cannot be verified
+                      (the per-event signing key is sealed with it). Keep it SEPARATE from the
+                      bundles. Mounted read-only at 0400.
+                    minLength: 1
+                    type: string
+                  pgClientImage:
+                    default: postgres:16-alpine
+                    description: |-
+                      PgClientImage is the postgres-client image whose `pg_dump` produces the store
+                      snapshot for engine=postgres (the distroless engine image has no pg_dump); it
+                      runs as an initContainer. Ignored for sqlite.
+                    type: string
+                  resources:
+                    description: |-
+                      Resources sets the backup container's compute requests/limits. Left empty,
+                      the controller applies a conservative default so the Job is never QoS
+                      BestEffort.
+                    properties:
+                      claims:
+                        description: |-
+                          Claims lists the names of resources, defined in spec.resourceClaims,
+                          that are used by this container.
+
+                          This field depends on the
+                          DynamicResourceAllocation feature gate.
+
+                          This field is immutable. It can only be set for containers.
+                        items:
+                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                          properties:
+                            name:
+                              description: |-
+                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                the Pod where this field is used. It makes that resource available
+                                inside a container.
+                              type: string
+                            request:
+                              description: |-
+                                Request is the name chosen for a request in the referenced claim.
+                                If empty, everything from the claim is made available, otherwise
+                                only the result of this request.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Limits describes the maximum amount of compute resources allowed.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Requests describes the minimum amount of compute resources required.
+                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                    type: object
+                  retentionDays:
+                    default: 14
+                    description: |-
+                      RetentionDays prunes local bundles older than N days after each successful
+                      run (`dr backup --retain-days`). The offsite mirror keeps longer.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  schedule:
+                    description: |-
+                      Schedule is a standard Kubernetes CronJob cron expression (UTC), e.g.
+                      "0 3 * * *" for nightly at 03:00.
+                    minLength: 9
+                    type: string
+                  successfulJobsHistoryLimit:
+                    default: 3
+                    description: |-
+                      SuccessfulJobsHistoryLimit caps how many completed backup Job objects are
+                      retained (maps to the CronJob's successfulJobsHistoryLimit).
+                    format: int32
+                    minimum: 1
+                    type: integer
+                required:
+                - kekSecret
+                - schedule
+                type: object
+              catalogSigningKeySecret:
+                description: |-
+                  CatalogSigningKeySecret optionally names a Secret with key
+                  `catalog-signing.key` mounted as OLIVARES_CATALOG_SIGNING_KEY_FILE. The
+                  catalog (artifact) key is NOT ledger integrity, so sharing it is optional;
+                  when empty it defaults to AuditSigningKeySecret (the chart's convention — one
+                  Secret may carry both keys, and the engine mints a per-node catalog key if
+                  the item is absent).
+                type: string
+              configRef:
+                description: |-
+                  ConfigRef is the name of a ConfigMap or Secret carrying additional engine
+                  configuration (extra env). It is loaded via envFrom. Changing this field is
+                  the RECONFIGURE path: a change to the referenced object's name (and, when
+                  resolvable, its content hash) triggers a rollout of the StatefulSet. The
+                  postgres DSN comes from spec.postgres, NOT here (envFrom env is not read by
+                  the engine for the DSN).
+                type: string
+              engine:
+                default: sqlite
+                description: Engine selects the store engine (sqlite|postgres). Mirrors
+                  core.engine.
+                enum:
+                - sqlite
+                - postgres
+                type: string
+              haRouting:
+                default: Legacy
+                description: |-
+                  HARouting selects the active-passive HA layout (ignored outside HA, i.e.
+                  unless engine=postgres with >1 replica). Legacy (the default) keeps the
+                  historical leader-only readiness: safe, but the ControlPlane never reports
+                  Ready and a rolling update wedges. LeaderRouting switches to the
+                  leader-routing layout — pod-health readiness plus a leader-selecting
+                  Service — which is what makes an in-place HA upgrade possible. It is an
+                  explicit opt-in because it REQUIRES an engine image that serves /pod-readyz
+                  and publishes the leader label, and because clients must move to the
+                  `<name>-leader` Service. See HARoutingMode and docs/HA-LEADER-ROUTING.md.
+                enum:
+                - Legacy
+                - LeaderRouting
+                type: string
+              image:
+                description: |-
+                  Image is the fully-qualified olivares image+tag (or @sha256 digest).
+                  Changing this field is the UPGRADE path: the controller rolls the
+                  StatefulSet to the new image and reports Progressing until the new
+                  replicas are Ready.
+                minLength: 1
+                type: string
+              persistence:
+                description: |-
+                  Persistence configures the per-replica data PVC (size/storageClass/
+                  accessModes). Mirrors the chart's core.persistence.*. IMMUTABLE after create
+                  (set it at install time); on a cluster with no default StorageClass it must
+                  be set or the PVC stays Pending.
+                properties:
+                  accessModes:
+                    default:
+                    - ReadWriteOnce
+                    description: |-
+                      AccessModes of the data PVC (default ReadWriteOnce — the single-writer norm;
+                      the backup Job co-locates on the same node to share it).
+                    items:
+                      type: string
+                    type: array
+                  size:
+                    default: 8Gi
+                    description: Size of the data PVC.
+                    type: string
+                  storageClass:
+                    description: |-
+                      StorageClass of the data PVC. "" uses the cluster default; "-" disables
+                      dynamic provisioning (an empty storageClassName, for a pre-bound PV) —
+                      mirroring the chart. On a cluster with NO default StorageClass, set this or
+                      the PVC stays Pending forever.
+                    type: string
+                type: object
+              postgres:
+                description: |-
+                  Postgres configures the external Postgres store. REQUIRED when
+                  Engine=postgres (the DSN is wired as --dsn=$(OLIVARES_DSN) from this Secret).
+                  Ignored for sqlite.
+                properties:
+                  adminDsnKey:
+                    description: |-
+                      AdminDSNKey, when set, names the key in DSNSecret holding a dedicated
+                      BYPASSRLS (NOSUPERUSER) admin DSN. It serves two consumers: genuinely
+                      cross-tenant System reads (the org list, multi-tenant checkpoint coverage),
+                      and the backup CronJob's pg_dump initContainer — under FORCE ROW LEVEL
+                      SECURITY pg_dump keeps row_security=off and ABORTS as a role that cannot
+                      bypass RLS, so an application-role dump produces no backup at all. It is
+                      therefore OPT-IN only while spec.backup is unset (empty leaves System reads
+                      RLS-scoped, the engine's own logged default) and REQUIRED by validation when
+                      backups are enabled on postgres. When set, the key MUST exist in the Secret —
+                      the engine eagerly opens and probes the admin pool at boot and fails closed
+                      on a bad/absent DSN (core/internal/store/sqlstore openAdminPool), so the
+                      controller wires `--admin-dsn=$(OLIVARES_ADMIN_DSN)` only when explicitly
+                      requested. (The Helm chart always emits that flag with an `optional` env,
+                      which crashloops boot when the key is absent — a footgun this opt-in avoids.)
+                    type: string
+                  dsnKey:
+                    default: dsn
+                    description: DSNKey is the key in DSNSecret holding the application
+                      DSN.
+                    type: string
+                  dsnSecret:
+                    description: |-
+                      DSNSecret names a Secret holding the application-role DSN (a NON-superuser,
+                      NOBYPASSRLS libpq/pgx URL — deploy/postgres/01-app-role.sql). Required.
+                    minLength: 1
+                    type: string
+                required:
+                - dsnSecret
+                type: object
+              progressDeadlineSeconds:
+                default: 600
+                description: |-
+                  ProgressDeadlineSeconds bounds how long a rollout may make no observable
+                  progress (no new update revision, no additional updated or Ready replica)
+                  before the operator reports it as stalled: Progressing=False/
+                  ProgressDeadlineExceeded plus Degraded/RolloutStalled. StatefulSets carry no
+                  progress deadline of their own, so without this a wedged rollout is
+                  indistinguishable from a slow one. Default 600s.
+                format: int32
+                minimum: 30
+                type: integer
+              replicas:
+                default: 1
+                description: |-
+                  Replicas is the desired number of core replicas. The control plane is a
+                  single-WRITER system but supports active-passive HA: with
+                  engine=postgres and a shared audit signing key (auditSigningKeySecret), run
+                  >1 replica and a Postgres advisory-lock elects one active writer while the
+                  rest are hot standbys that take over on failover (docs/05-ARCHITECTURE
+                  §7.1). With engine=sqlite the store and audit key are local to one pod, so
+                  >1 replicas would fork the ledger; the operator CLAMPS sqlite to 1 effective
+                  replica and reports it via a Degraded condition. Set Engine=postgres (with
+                  auditSigningKeySecret) to scale past 1.
+                format: int32
+                minimum: 0
+                type: integer
+              resources:
+                description: |-
+                  Resources sets the core container's compute requests/limits. Mirrors the
+                  chart's core.resources. Left empty, the controller applies a conservative
+                  default (Burstable) so the control plane is never QoS BestEffort — the first
+                  thing the kubelet OOM-kills/evicts under pressure.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This field depends on the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+              restoreFrom:
+                description: |-
+                  RestoreFrom, when set, names a backup id / source PVC to restore from on
+                  the next reconcile. This is a DECLARED seam: the controller records the
+                  request and surfaces it on the pod template; a restore is the symmetric
+                  `olivares dr restore` runbook operation (docs/DR-RUNBOOK.md), deliberately
+                  kept manual rather than auto-driven (a restore overwrites a live ledger).
+                type: string
+            required:
+            - image
+            type: object
+            x-kubernetes-validations:
+            - message: 'engine=postgres requires spec.postgres.dsnSecret: the engine
+                reads the DSN only from --dsn (no env fallback) and this operator
+                does not bundle Postgres'
+              rule: self.engine != 'postgres' || (has(self.postgres) && size(self.postgres.dsnSecret)
+                > 0)
+            - message: 'engine=postgres with replicas>1 requires spec.auditSigningKeySecret:
+                in active-passive HA every replica must sign the audit ledger with
+                the SAME shared key or the hash-chain forks when a standby is promoted'
+              rule: '!(self.engine == ''postgres'' && self.replicas > 1) || (has(self.auditSigningKeySecret)
+                && size(self.auditSigningKeySecret) > 0)'
+            - message: 'engine=postgres with spec.backup requires spec.postgres.adminDsnKey:
+                pg_dump keeps row_security=off and aborts as the NOBYPASSRLS application
+                role under FORCE ROW LEVEL SECURITY, so without the admin DSN every
+                scheduled dump fails and there is no backup'
+              rule: '!(self.engine == ''postgres'' && has(self.backup)) || (has(self.postgres)
+                && has(self.postgres.adminDsnKey) && size(self.postgres.adminDsnKey)
+                > 0)'
+          status:
+            description: ControlPlaneStatus is the observed state of a control plane
+              instance.
+            properties:
+              conditions:
+                description: |-
+                  Conditions follow the standard metav1.Condition contract (Available,
+                  Progressing, Degraded). Patched via meta.SetStatusCondition.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              currentImage:
+                description: |-
+                  CurrentImage is the image currently rolled out on the StatefulSet. During
+                  an upgrade it lags Spec.Image until the rollout completes.
+                type: string
+              lastBackup:
+                description: |-
+                  LastBackup is the time the most recent owned backup CronJob last succeeded
+                  (mirrored from the CronJob's status), or nil if none has run.
+                format: date-time
+                type: string
+              lastProgressReadyReplicas:
+                format: int32
+                type: integer
+              lastProgressTime:
+                format: date-time
+                type: string
+              lastProgressUpdatedReplicas:
+                format: int32
+                type: integer
+              leaderPod:
+                description: |-
+                  LeaderPod is the pod currently publishing the HA leader label — the single
+                  endpoint of the `<name>-leader` Service (leader-routing layout only). Empty
+                  when none is published, when more than one is (never pick one arbitrarily:
+                  the Degraded condition says so), or outside the leader-routing layout.
+                type: string
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the .metadata.generation the controller last acted
+                  on. When it lags .metadata.generation a reconcile is pending.
+                format: int64
+                type: integer
+              phase:
+                description: Phase is a coarse, human-facing summary (Pending|Progressing|Ready|Invalid).
+                type: string
+              readyReplicas:
+                description: ReadyReplicas is the number of Ready replicas observed
+                  on the StatefulSet.
+                format: int32
+                type: integer
+              rolloutRevision:
+                description: |-
+                  RolloutRevision, LastProgressTime, LastProgressUpdatedReplicas and
+                  LastProgressReadyReplicas are the rollout-progress bookkeeping behind
+                  ProgressDeadlineExceeded (spec.progressDeadlineSeconds). They record the last
+                  point at which the rollout visibly ADVANCED — a new StatefulSet update
+                  revision, one more updated replica, or one more Ready replica — which is the
+                  only way to tell a wedged rollout from a slow one (StatefulSet status has no
+                  progress deadline of its own).
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

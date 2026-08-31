@@ -1,0 +1,122 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# GoReleaser for the Terraform/OpenTofu provider. This is a SEPARATE
+# Go module (terraform-provider-olivares/go.mod) with its OWN release contract,
+# distinct from the control-plane release (../.goreleaser.yaml). The provider is a
+# Registry artifact, so the Terraform Registry's publishing rules — NOT the
+# control-plane's cosign/SLSA pipeline — dictate this file. It is HashiCorp's
+# terraform-provider-scaffolding-framework .goreleaser template, kept verbatim in
+# the load-bearing parts (binary/archive/checksum NAMING and the GPG signature are
+# what the Registry parses), with our SPDX header and AGPL provenance added.
+#
+# THE REGISTRY CONTRACT (developer.hashicorp.com/terraform/registry/providers/publishing):
+#   - binary  terraform-provider-olivares_v{VERSION}
+#   - archive terraform-provider-olivares_{VERSION}_{OS}_{ARCH}.zip
+#   - terraform-provider-olivares_{VERSION}_SHA256SUMS  over every zip AND the
+#     renamed manifest json
+#   - terraform-provider-olivares_{VERSION}_SHA256SUMS.sig — a GPG **binary**
+#     (not ASCII-armored) DETACHED signature of SHA256SUMS, made with a GPG key
+#     (RSA 4096 recommended; ECC is REJECTED) whose PUBLIC half is registered in
+#     the Registry account. Cosign is NOT accepted by the Registry for providers.
+#   - terraform-registry-manifest.json (protocol 6) attached, renamed by the
+#     Registry's convention to terraform-provider-olivares_{VERSION}_manifest.json
+#     via `release.extra_files` below.
+#
+# Run modes:
+#   goreleaser check                          # validate this config
+#   goreleaser release --snapshot --clean     # local dry run (no publish, no sign)
+#   goreleaser release --clean                # real release (CI on the dedicated
+#                                             # tag; needs GPG_FINGERPRINT + a key)
+# Always invoke from the provider module dir, or with `-f terraform-provider-olivares/.goreleaser.yaml`.
+version: 2
+
+# ProjectName drives every Registry-significant name template below; it MUST equal
+# the published provider name so the artifacts match terraform-provider-{NAME}_…
+project_name: terraform-provider-olivares
+
+before:
+  hooks:
+    # Pre-fetch modules before the build (no web UI here — unlike the control-plane
+    # release, the provider is a plain Go plugin binary). `go mod download` is
+    # NON-mutating: it never rewrites go.mod/go.sum (the scaffolding template's
+    # `go mod tidy` would, which we deliberately avoid — go.mod is committed truth).
+    - go mod download
+
+builds:
+  - id: provider
+    # Build the module root (main.go serves protocol 6 via providerserver.Serve).
+    main: ./
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
+    env:
+      - CGO_ENABLED=0 # pure-Go plugin binary; fully static.
+    flags:
+      - -trimpath
+    ldflags:
+      # -X main.version is the only build-time injection the provider exposes
+      # (main.go: `var version = "dev"`); the Registry reads the version from the tag.
+      - -s -w -X main.version={{ .Version }}
+    # Pin the embedded timestamp to the commit so the same source → same bytes.
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+      - '386'
+    ignore:
+      # HashiCorp's scaffolding template skips these arch/OS pairs (no provider
+      # plugins are shipped for windows/arm64 or freebsd/arm64).
+      - goos: windows
+        goarch: arm64
+      - goos: freebsd
+        goarch: arm64
+
+archives:
+  - id: provider
+    formats: [zip]
+    # EXACT Registry name: terraform-provider-olivares_{VERSION}_{OS}_{ARCH}.zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+
+checksum:
+  # EXACT Registry name: terraform-provider-olivares_{VERSION}_SHA256SUMS
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+
+signs:
+  # A single GPG DETACHED signature over the checksum file. `--detach-sign` without
+  # `--armor` produces the BINARY .sig the Registry requires (an ASCII-armored .asc
+  # would be rejected). GPG_FINGERPRINT selects the registered key; the CI imports
+  # the private key and exports this fingerprint (see release-provider.yml).
+  - cmd: gpg
+    args:
+      - --batch
+      - --local-user
+      - '{{ .Env.GPG_FINGERPRINT }}'
+      - --output
+      - '${signature}'
+      - --detach-sign
+      - '${artifact}'
+    artifacts: checksum
+
+release:
+  # The protocol manifest rides along as a release asset. The Registry renames it to
+  # terraform-provider-olivares_{VERSION}_manifest.json on ingest; the local name is
+  # the module-root terraform-registry-manifest.json.
+  extra_files:
+    - glob: terraform-registry-manifest.json
+  # Never auto-publish. As with the control-plane release, a tagged run builds +
+  # signs into a DRAFT; promoting it is a deliberate human action by a maintainer.
+  draft: true
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'

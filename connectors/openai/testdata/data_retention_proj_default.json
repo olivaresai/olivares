@@ -1,0 +1,5 @@
+{
+  "zero_data_retention": false,
+  "retention_days": 30,
+  "abuse_monitoring": "standard"
+}

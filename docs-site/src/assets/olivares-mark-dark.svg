@@ -1,0 +1,12 @@
+<!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- The Olivares "Ledger O" header mark — DARK-theme variant (light ink #fafaf9 on
+     the charcoal header). Arc + stacked audit-ledger rows, one orange flagged WRITE.
+     Same geometry as the in-app BrandMark (brandv4, 2026-06-10). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="3.5 2 28 28" fill="none" stroke-linecap="round">
+  <path d="M16 5.5A10.5 10.5 0 0 1 16 26.5" stroke="#fafaf9" stroke-width="3"/>
+  <path d="M8.4 10.5H13.2" stroke="#fafaf9" stroke-width="2.6"/>
+  <path d="M8.4 14.5H15.4" stroke="#f08000" stroke-width="3.1"/>
+  <path d="M8.4 18.5H15" stroke="#fafaf9" stroke-width="2.6"/>
+  <path d="M8.4 22.5H13.4" stroke="#fafaf9" stroke-width="2.6"/>
+</svg>

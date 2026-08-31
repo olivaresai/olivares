@@ -1,0 +1,35 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 Olivares.AI
+SPDX-License-Identifier: AGPL-3.0-only
+
+Optional Prometheus Operator ServiceMonitor. /metrics is OpenMetrics on 8443
+over HTTPS and never exposes tenant data, tokens or recon values (ARCHITECTURE.md).
+*/ -}}
+{{- if and .Values.core.enabled .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "olivares.core.fullname" . }}
+  labels:
+    {{- include "olivares.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "olivares.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  endpoints:
+    - port: https
+      scheme: {{ .Values.metrics.serviceMonitor.scheme }}
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      tlsConfig:
+        {{- toYaml .Values.metrics.serviceMonitor.tlsConfig | nindent 8 }}
+      {{- with .Values.metrics.serviceMonitor.bearerTokenSecret }}
+      bearerTokenSecret:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

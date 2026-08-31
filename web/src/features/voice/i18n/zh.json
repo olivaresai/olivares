@@ -1,0 +1,152 @@
+{
+  "title": "语音与实时",
+  "description": "在整个资产域内治理语音和实时会话。控制台仅显示引用和聚合数据，绝不显示音频、转录文本、提示词或 PII。",
+  "tabs": {
+    "sessions": "会话",
+    "policies": "策略",
+    "ledger": "决策"
+  },
+  "refresh": "刷新",
+  "stats": {
+    "live": "活跃会话",
+    "liveCaption": "视图中共 {{total}} 个",
+    "avgLatency": "平均延迟",
+    "avgLatencyCaption": "各会话平均值的均值",
+    "governed": "受治理占比",
+    "governedCaption": "{{total}} 个中有 {{governed}} 个经过策略管控"
+  },
+  "sessions": {
+    "title": "会话",
+    "description": "每个会话均按引擎上报的状态呈现——状态在读取时派生。转录内容仅以指纹形式显示；其背后没有任何音频或文本。",
+    "empty": "暂无语音会话",
+    "emptyHint": "当针对某个语音策略派发受治理的开启操作后，会话即会出现。",
+    "governed": "受治理",
+    "ungoverned": "未治理",
+    "transcriptLabel": "转录",
+    "turnsBreakdown": "{{user}} 用户 / {{agent}} 智能体",
+    "latencyAvg": "平均 {{value}}",
+    "latencyMax": "最大 {{value}}",
+    "columns": {
+      "state": "状态",
+      "agent": "智能体",
+      "model": "模型 / 提供方",
+      "turns": "轮次",
+      "duration": "时长",
+      "latency": "延迟",
+      "governed": "受治理",
+      "transcript": "转录",
+      "lastEvent": "最近事件"
+    }
+  },
+  "latency": {
+    "title": "按会话的延迟",
+    "description": "各会话的平均响应延迟，已排序。表格同时列出最大值——在没有逐轮样本的情况下，不显示 p50/p95。",
+    "summary": "{{count}} 个会话的平均响应延迟，已排序。最慢的是 {{session}}，为 {{latency}}。",
+    "summaryEmpty": "没有可按延迟排序的会话。",
+    "colSession": "会话",
+    "colLatency": "平均延迟"
+  },
+  "honesty": {
+    "noContent": "仅引用和聚合数据——此处不暴露任何音频、转录文本、提示词或 PII。",
+    "findingsNote": "策略违规、延迟劣化和未治理的开启操作通过安全发现项平面呈现，而非这些路由。"
+  },
+  "policies": {
+    "title": "语音策略",
+    "description": "默认拒绝（Default-DENY）：策略是允许开启会话的依据。若没有匹配的策略，开启操作将被拒绝。",
+    "empty": "暂无语音策略",
+    "emptyHint": "定义一条策略以允许为某个智能体开启语音会话——默认拒绝意味着在匹配到策略之前不会开启任何会话。",
+    "all": "全部",
+    "minutes": "{{value}} 分钟",
+    "new": "新建策略",
+    "edit": "编辑",
+    "columns": {
+      "agent": "智能体",
+      "model": "允许的模型",
+      "provider": "允许的提供方",
+      "maxMinutes": "最长会话",
+      "maxLatency": "最大延迟",
+      "setBy": "设置者",
+      "updated": "更新时间"
+    },
+    "dialog": {
+      "title": "语音策略",
+      "description": "此策略允许为匹配的智能体开启会话（默认拒绝）。使用 '*' 可匹配所有智能体、模型或提供方。",
+      "agent": "智能体",
+      "agentHint": "一个智能体引用，或使用 '*' 匹配每个智能体。",
+      "model": "允许的模型",
+      "modelHint": "一个模型引用，或使用 '*' 匹配任意模型。",
+      "provider": "允许的提供方",
+      "providerHint": "一个提供方引用，或使用 '*' 匹配任意提供方。",
+      "maxMinutes": "最长会话分钟数",
+      "maxLatency": "最大延迟（ms）",
+      "save": "保存策略",
+      "saved": "语音策略已保存"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "尚无可排名的会话延迟",
+      "description": "受治理的开启操作或实时遥测创建语音会话记录后，即可对平均响应延迟进行排名。"
+    },
+    "policies": {
+      "title": "尚未定义语音策略",
+      "description": "策略允许匹配的智能体、模型和提供方开启会话；没有策略时，所有语音会话开启都会被拒绝，设置策略需要管理员级权限。"
+    },
+    "sessions": {
+      "title": "尚未观测到语音会话",
+      "description": "受治理的开启操作被记录后，或已配置的实时观测器发布会话遥测后，会话才会显示。"
+    }
+  },
+  "surface": {
+    "chooseSession": "选择一个会话以查看其实时状态。",
+    "loading": "加载中…",
+    "decisionsError": "无法读取决策记录。",
+    "noDecisions": "该会话没有决策记录。",
+    "noReason": "未记录原因",
+    "frames": "{{count}} 条实时更新",
+    "open": "开启会话（受管控）",
+    "stream": {
+      "connecting": "连接中",
+      "open": "实时",
+      "closed": "未连接",
+      "error": "流失败"
+    },
+    "outcome": {
+      "opened": "已开启。",
+      "approval": "已请求审批——请携带此审批引用重新提交：",
+      "denied": "被策略拒绝：没有任何策略允许该（代理、模型、供应商）组合。这是默认拒绝的判定，不是故障。",
+      "noGate": "本部署未接入审批网关，因此开启仍为拒绝。这是部署缺口，不是策略拒绝。",
+      "unavailable": "审批网关没有响应，因此未作出任何判定。"
+    }
+  },
+  "ledger": {
+    "title": "开启决策台账",
+    "description": "环境中每一次开启语音会话的决策，仅追加、按时间倒序排列——包括那些被拒绝、因而从未成为会话的记录。",
+    "caveat": "被拒绝的开启本身不会创建会话行，因此这是第一个仅凭 `voice:session:read` 就能完整展示它的专用视图。其他路径只能部分展示或需要另外的权限：API 演练场（租户管理员）、审计浏览器（只有动作，没有原因）以及 Security 检测（仅覆盖部分路径）。",
+    "empty": "尚无开启决策",
+    "emptyHint": "这里保留引擎成功持久化的决策。证据写入按设计为尽力而为——即使记录行丢失，拒绝依然成立——因此台账为空并不能证明没有发生过拒绝。",
+    "truncated": "仅显示最近 {{count}} 条决策，而引擎报告还有更多：此列表已被截断。请将其视为样本，而非完整台账。",
+    "columns": {
+      "when": "时间",
+      "outcome": "结果",
+      "session": "会话引用",
+      "agent": "代理",
+      "actor": "操作者",
+      "reason": "引擎给出的原因"
+    },
+    "opStatus": {
+      "requested": "已请求审批",
+      "blocked": "已阻止",
+      "dispatched": "已派发",
+      "declared_not_opened": "已声明，未开启",
+      "failed": "失败",
+      "budget_blocked": "已阻止 — 预算",
+      "budget_throttled": "开启被拒绝 — 预算限流"
+    },
+    "op": {
+      "open_request": "开启请求",
+      "open": "开启",
+      "close": "关闭"
+    }
+  }
+}
