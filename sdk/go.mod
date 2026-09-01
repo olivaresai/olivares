@@ -3,4 +3,3 @@
 module github.com/olivaresai/olivares/sdk
 
 go 1.26.5
-
