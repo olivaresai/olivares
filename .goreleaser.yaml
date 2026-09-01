@@ -476,6 +476,11 @@ dockers:
       - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
       - "--label=ai.olivares.fips140.mode=v1.0.0"
       - "--label=ai.olivares.fips140.cmvp-certificate=5247"
+      # Select the prebuilt-binary path of the Dockerfile. Without it the default is
+      # `source`, BuildKit walks the web/ and go.work stages, and they look for a
+      # repository that is NOT in this context -- which is exactly how the first
+      # release to ever reach the docker build died (2026-09-01, v26.8.0).
+      - "--build-arg=BIN_SOURCE=prebuilt"
 
   # ---- STIG image (SCP-09): the FIPS binary on a SCANNABLE, STIG-profiled base ----
   # OSCAP/STIG evaluation needs a real OS with a SCAP datastream (distroless has
@@ -508,6 +513,9 @@ dockers:
       - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
       - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
       - "--label=ai.olivares.fips140.mode=v1.0.0"
+      # Same as the fips entry: pick the prebuilt-binary path. Dockerfile.stig has the
+      # identical source-build stages, so without this it fails the identical way.
+      - "--build-arg=BIN_SOURCE=prebuilt"
       - "--label=ai.olivares.stig.oscap-profile=xccdf_org.ssgproject.content_profile_stig"
 
 # Manifest lists so the BARE tags resolve to a multi-arch image. Without these the

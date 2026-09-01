@@ -43,11 +43,35 @@
 # Verify FIPS is actually on after build:
 #   docker run --rm olivares:fips version   # prints fips140=on, module v1.0.0
 #
-# Under GoReleaser the binary is prebuilt by the `olivares-fips` build (already
-# GOFIPS140=v1.0.0) and only COPYed in; the from-source path below is for plain
-# `docker build` and is what enforces GOFIPS140 in that path.
+# TWO BUILD PATHS, chosen with `--build-arg BIN_SOURCE=`, and BOTH pass the same guard:
+#   BIN_SOURCE=source    (default) compiles from this repo. It is what the plain
+#                        `docker build` above runs, and what enforces GOFIPS140 there.
+#   BIN_SOURCE=prebuilt  takes the binary GoReleaser already built with GOFIPS140=v1.0.0
+#                        (build id `olivares-fips`).
+#
+# Why the ARG is needed at all: GoReleaser's docker context is a temp dir holding that
+# binary plus `extra_files` and NOTHING ELSE -- no go.work, no web/, no repo. The
+# from-source stages therefore must not be in the build graph on that path. BuildKit
+# prunes the stages the selected target does not reach, and that pruning is what makes
+# the synthetic context sufficient. It is also why `extra_files` cannot fix this: the
+# from-source path needs the whole repository, not a list of files.
+#
+# ⛔ UNTIL 2026-09-01 THESE THREE LINES PROMISED THE GORELEASER PATH AND THE FILE NEVER
+# IMPLEMENTED IT. `dockers:` pointed here, BuildKit walked the source stages, and the
+# release died on `COPY core/internal/webui/dist/index.html` -- "not available in the
+# build context", with the context listing only the licences and `olivares-fips`. The
+# defect could not have been caught earlier: no release had ever reached the docker
+# build, so the step had never executed once. A comment describing an intent is not an
+# implementation, and this one read exactly like a description of working code.
+
+# Global ARG: declared before the first FROM so it can be used IN a FROM line below.
+# Declared after one, it would be stage-scoped and `FROM bin-${BIN_SOURCE}` would resolve
+# to `bin-` -- an image that does not exist, with an error that names neither this ARG
+# nor the reason.
+ARG BIN_SOURCE=source
 
 # ---- web stage: build the React/Vite UI into the Go embed dir -----------------
+# Not reached when BIN_SOURCE=prebuilt, which is the point: its COPYs want the repo.
 FROM node:26-bookworm-slim AS web
 WORKDIR /src
 RUN corepack enable
@@ -81,27 +105,62 @@ ARG SOURCE_DATE_EPOCH=0
 RUN BUILD_DATE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)" && \
     go build -trimpath \
       -ldflags "-s -w -buildid= -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
-      -o /out/olivares ./cmd/olivares && \
-    # Fail the build if the FIPS module did not get linked in (defence-in-depth: a stray
-    # GOFIPS140=off would silently produce a non-FIPS binary otherwise).
-    #
-    # THIS GUARD USED TO MAKE THE IMAGE UNBUILDABLE, and it is worth writing down because
-    # the shape recurs. It read `go tool nm /out/olivares | grep -q 'crypto/internal/
-    # fips140/v1.0.0'` — over the binary THE LINE ABOVE had just stripped with `-s -w`.
-    # Measured, no container needed: the same build without those flags gives 2934 symbol
-    # lines, and with them `go tool nm` answers `no symbol section` and prints nothing. So
-    # the grep could never match, the `||` branch fired unconditionally, and every build of
-    # this file died at this step — while docs/SEC-G3-CRYPTO-AGILITY-PQC.md rested a public
-    # FIPS claim on the resulting image. A guard that cannot pass is not defence in depth;
-    # it is an outage with a reassuring comment.
-    #
-    # The replacement RUNS the binary instead, which is strictly stronger: a symbol name
-    # proves a package was linked, whereas this proves the module actually initialises and
-    # that it is the VALIDATED one. Both halves are asserted — `"fips": "on"` (the runtime
-    # toggle really engages) and `"module": "v1.0.0"` (CMVP #5247, not the pending v1.26.0)
-    # — because either alone is satisfiable while the claim is false. Native build stage,
-    # no cross-compilation in this file or in the release config, so the binary runs here.
-    FIPS_JSON="$(GODEBUG=fips140=on /out/olivares version -o json)" && \
+      -o /out/olivares ./cmd/olivares
+
+# ---- binary selection: the two paths converge on ONE stage ---------------------
+# `bin` is whichever of these the ARG names. Everything downstream copies from `bin`,
+# so the runtime stage and the guard below are identical on both paths -- which is the
+# whole point: a second copy of either is a second thing to keep in sync.
+#
+# `FROM scratch` carries no filesystem, so nothing here can run; that is fine, this
+# stage only carries the file. Note the symmetry: on the default source path THIS stage
+# is the pruned one, and its `COPY olivares-fips` never looks for a file that a plain
+# `docker build` context would not have.
+FROM scratch AS bin-prebuilt
+COPY olivares-fips /out/olivares
+
+FROM build AS bin-source
+
+FROM bin-${BIN_SOURCE} AS bin
+
+# ---- verification: ONE guard, and it now covers BOTH paths ---------------------
+# MOVED HERE 2026-09-01, out of the `go build` RUN, and the move is load-bearing rather
+# than tidy: while it lived in the source stage, the GoReleaser path -- the one where
+# GOFIPS140 is set in a DIFFERENT FILE (.goreleaser.yaml) and can drift out of sight of
+# this one -- would have been the path with NO check at all. The guard is worth most
+# exactly where the build flags are furthest away.
+#
+# Base is the same pinned toolchain image the source stage uses, so the prebuilt path
+# introduces no new base to review or pin (SCP-11). It needs only a filesystem that can
+# execute a static binary and a `grep`.
+FROM golang:1.26.6-bookworm AS verify
+COPY --from=bin /out/olivares /out/olivares
+# Fail the build if the FIPS module did not get linked in (defence-in-depth: a stray
+# GOFIPS140=off would silently produce a non-FIPS binary otherwise).
+#
+# THIS GUARD USED TO MAKE THE IMAGE UNBUILDABLE, and it is worth writing down because
+# the shape recurs. It read `go tool nm /out/olivares | grep -q 'crypto/internal/
+# fips140/v1.0.0'` — over the binary THE LINE ABOVE had just stripped with `-s -w`.
+# Measured, no container needed: the same build without those flags gives 2934 symbol
+# lines, and with them `go tool nm` answers `no symbol section` and prints nothing. So
+# the grep could never match, the `||` branch fired unconditionally, and every build of
+# this file died at this step — while docs/SEC-G3-CRYPTO-AGILITY-PQC.md rested a public
+# FIPS claim on the resulting image. A guard that cannot pass is not defence in depth;
+# it is an outage with a reassuring comment.
+#
+# The replacement RUNS the binary instead, which is strictly stronger: a symbol name
+# proves a package was linked, whereas this proves the module actually initialises and
+# that it is the VALIDATED one. Both halves are asserted — `"fips": "on"` (the runtime
+# toggle really engages) and `"module": "v1.0.0"` (CMVP #5247, not the pending v1.26.0)
+# — because either alone is satisfiable while the claim is false.
+#
+# RUNNING it requires the binary to be native to this stage, and it is on both paths:
+# there is no cross-compilation in this file, and the two GoReleaser entries that use
+# this Dockerfile (`olivares-fips-image`, `olivares-stig-image`) are goarch: amd64 with
+# `--platform=linux/amd64`, on an amd64 runner. .goreleaser.yaml says so in as many
+# words: "the fips/stig variants stay amd64-only". If that ever changes, this stage
+# needs qemu (the release workflow already sets it up) or the guard has to move.
+RUN FIPS_JSON="$(GODEBUG=fips140=on /out/olivares version -o json)" && \
     printf '%s' "$FIPS_JSON" | grep -q '"fips"[[:space:]]*:[[:space:]]*"on"' && \
     printf '%s' "$FIPS_JSON" | grep -q '"module"[[:space:]]*:[[:space:]]*"v1.0.0"' \
       || (echo 'FATAL: this binary does not report FIPS 140-3 v1.0.0 at runtime — GOFIPS140' >&2; \
@@ -119,7 +178,7 @@ LABEL org.opencontainers.image.title="olivares-fips" \
       org.opencontainers.image.vendor="Olivares.AI" \
       ai.olivares.fips140.mode="v1.0.0" \
       ai.olivares.fips140.cmvp-certificate="5247"
-COPY --from=build /out/olivares /usr/local/bin/olivares
+COPY --from=verify /out/olivares /usr/local/bin/olivares
 # The licence travels INSIDE the image. Until 2026-08-04 it did not: the OCI images
 # carried an org.opencontainers.image.licenses LABEL and no licence TEXT, so the main
 # distribution path handed an operator an AGPL binary with neither the grant that lets
