@@ -1175,7 +1175,17 @@ jobs:
             bash scripts/cosign-verified.sh attest-blob --type spdxjson --predicate "$sbom" \
               --new-bundle-format --bundle "${a}.sbom.sigstore.json" --yes "$a"
             # CREATE-ONLY: see the stable-manifest upload for why the flag is gone.
-            gh release upload "${RELEASE_TAG}" "${a}.sbom.sigstore.json" "${a}.cdx.sbom.json"
+            # ⛔ AND ONLY WHAT THIS STEP PRODUCES. `${a}.cdx.sbom.json` used to ride along
+            # here and it is wrong twice: this step never writes it (its predicate is the
+            # SPDX sidecar, `${a}.spdx.sbom.json`, and its output is the bundle), and
+            # GoReleaser already uploaded it in the release step — so CREATE-ONLY refused,
+            # deny-closed and correctly, with «asset under the same name already exists».
+            # Measured 2026-09-01, run 33479999354: it killed the first release run that
+            # ever reached this step, 0.9 min in, after everything else had passed.
+            # The fix is NOT --clobber. Each producer publishes its own artefacts: a SBOM
+            # re-uploaded by a second route is not the same object even under the same name,
+            # and in a signed release that distinction is the point.
+            gh release upload "${RELEASE_TAG}" "${a}.sbom.sigstore.json"
           done
         # CISA-fields linter (draft-pending) over the first archive SBOM.
       - name: CISA-2025-draft SBOM fields check
