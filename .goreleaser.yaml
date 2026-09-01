@@ -366,7 +366,7 @@ homebrew_casks:
     repository:
       owner: olivaresai
       name: homebrew-tap
-      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
+      token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
     # Self-gating, now mode-aware (§C.2): PUBLISH_HOMEBREW is a REQUIRED profile value.
     #   auto  — production: publish ONLY when the tap token is set, so a release never
     #           fails just because olivaresai/homebrew-tap isn't wired up yet.
