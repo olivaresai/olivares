@@ -66,7 +66,7 @@ COPY core/internal/webui/dist/index.html ./core/internal/webui/dist/index.html
 RUN cd web && pnpm run build
 
 # ---- go stage: compile the FIPS 140-3 static binary (same as Dockerfile.fips) --
-FROM golang:1.26.6-bookworm AS build
+FROM golang:1.27.0-bookworm AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly GOFIPS140=v1.0.0
 COPY go.work go.work.sum ./
@@ -103,7 +103,7 @@ FROM bin-${BIN_SOURCE} AS bin
 # guard lived in the source stage, the GoReleaser path -- where GOFIPS140 is set in a
 # DIFFERENT FILE (.goreleaser.yaml), out of this file's sight -- would have had NO check.
 # The guard is worth most exactly where the build flags are furthest away.
-FROM golang:1.26.6-bookworm AS verify
+FROM golang:1.27.0-bookworm AS verify
 COPY --from=bin /out/olivares /out/olivares
 # THIS GUARD COULD NOT PASS, and the image was therefore unbuildable. It read
 # `go tool nm /out/olivares | grep -q 'crypto/internal/fips140/v1.0.0'` over the binary

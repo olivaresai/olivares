@@ -85,7 +85,7 @@ RUN cd web && pnpm run build
 # GOFIPS140=v1.0.0 is the load-bearing line: it selects the CMVP-validated module
 # (cert #5247). It ships INSIDE the Go toolchain ($GOROOT/lib/fips140), so this
 # needs no network and does NOT touch go.work/go.work.sum.
-FROM golang:1.26.6-bookworm AS build
+FROM golang:1.27.0-bookworm AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly GOFIPS140=v1.0.0
 COPY go.work go.work.sum ./
@@ -133,7 +133,7 @@ FROM bin-${BIN_SOURCE} AS bin
 # Base is the same pinned toolchain image the source stage uses, so the prebuilt path
 # introduces no new base to review or pin (SCP-11). It needs only a filesystem that can
 # execute a static binary and a `grep`.
-FROM golang:1.26.6-bookworm AS verify
+FROM golang:1.27.0-bookworm AS verify
 COPY --from=bin /out/olivares /out/olivares
 # Fail the build if the FIPS module did not get linked in (defence-in-depth: a stray
 # GOFIPS140=off would silently produce a non-FIPS binary otherwise).
