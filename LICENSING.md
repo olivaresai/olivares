@@ -36,7 +36,7 @@ the module membership of each add-on is derived by the same tool rather than tra
 
 That is the catalogue by NAME. The per-capability split — what the
 AGPL build does and what each add-on adds, side by side — is the edition matrix in
-[`README.md`](README.md#whats-open-whats-enterprise-whats-planned), and the
+[the edition matrix below](#what-is-open-what-is-commercial-what-is-planned-by-area), and the
 reasoning behind each cut is
 [Open core & licensing](docs-site/src/content/docs/explanation/open-core-and-licensing.md)
 (*What is open vs enterprise* and *Why this model*). Read those before quoting this
@@ -54,6 +54,25 @@ never in the open build (the GitLab `ee/` model) — but nothing is taken away
 from what ships open: no published feature is moved behind the wall. The
 AGPL/Apache split itself is the classic dual-licensing frontier (MySQL, Qt,
 MinIO, Grafana).
+
+## What is open, what is commercial, what is planned — by area
+
+This table maps each capability area to where it ships — the open (AGPL) build, or one of the separate, optional commercial add-ons — and what is planned; maturity per capability is stated honestly in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md). The full list of reserved seams is declared in the public tree itself ([`cmd/olivares/wire_noenterprise.go`](cmd/olivares/wire_noenterprise.go)): a capability the open binary reserves answers `501` or no-ops, and its comment says so — nothing is hidden and nothing open is removed.
+
+| Area | Open (AGPL) | Commercial add-ons | Planned |
+|---|---|---|---|
+| Work & orchestration | durable work items (brief, dependencies, acceptance, decisions, events), fenced leases with takeover and revoke, orchestrated launch of sessions against a work item, with work-fenced input and stop in the sessions API, A2A delegation to authorized peers with durable receipts, workflow-scoped messages/acks/handoffs, console Work and Orchestration views | — | shadow dual-report and the authority switch that makes this plane the system of record |
+| Visibility | inventory of agents/sessions/models/MCP servers/tools/identities, read/write access map with Permitted-vs-Observed drift, live sessions, orchestration graph, health/SLA | — | — |
+| Policy & enforcement | Cedar authorization engine (RBAC + deny-overlay + scoped grants), four deny-closed enforcement points (Claude Code hook, inline `/v1/messages` proxy, MCP `tools/call` gate, A2A delegation gate), two-person approvals, break-glass with dual control, estate kill-switch | hook hardening, server-tool egress control, computer-use governance gate, MCP tool-definition pins (deny-closed on a changed definition), automatic circuit breaker with kill-switch escalation | — |
+| Claude & the agent ecosystem | Claude Code governed in the hook, console launch/attach/govern/stop of Claude Code sessions, enterprise managed-settings delivery, per-subject/per-surface model access, MCP (OAuth-gated resource server, posture, registry, `.mcpb`), A2A v1, surfaces for gemini-cli/Cursor/Codex CLI/opencode/goose/cline/OpenHands/OpenClaw/Hermes (enforcement where the surface exposes it, posture observation where it doesn't), Teams notifications with approval deep-links | MCP App render content inspection, elicitation/sampling mediation | — |
+| Context & knowledge | ten live content sources (SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3, Azure AI Search, SAP OData, PostgreSQL) plus a root-confined filesystem source (local/NFS/SMB mounts), governed RAG (lexical retrieval by default, model-backed semantic with a provisioned embedder — fails closed under `embed_policy=model_backed`) with deny-closed clearance at retrieval time, per-source provenance, data-product catalog with versioned contracts and quality gates | — | — |
+| Identity & access | single-IdP SSO (OIDC + SAML 2.0), WebAuthn/FIDO2, PIV/CAC, AAL step-up, non-human identity lifecycle, agent-identity federation (Entra Agent ID, AWS AgentCore, Google, SPIFFE/SPIRE), roster reconciliation (AD/LDAP/Okta/Entra/Vault/Infisical) with SCIM, CAEP event receiver | multi-IdP federation, SSO-enforcement, managed SCIM, CyberArk Conjur NHI rotation, CAEP transmitter (signed SETs to SSF receivers) | — |
+| Data security | inline guardrails (PII, prompt-injection, jailbreak), DLP egress, BYOK/CMEK across three KMS backends (AWS KMS, Google Cloud KMS, Azure Key Vault), privileged-session recording, right-to-erasure with verified key-shred, retention and legal-hold, residency attestation, TLS 1.3 hybrid PQC key establishment (X25519MLKEM768) | content firewall/DLP | — |
+| Evidence & compliance | hash-chained Ed25519-signed audit ledger, sealed append-only evidence, 26 framework catalogs, dir/S3 archive with export/verify (dir is WORM only on an immutable substrate; S3 uses Object Lock), OSCAL export (three open models), open DORA ICT-risk view, SIEM/ITSM push (CEF/LEEF/syslog/OTLP/OCSF) | OSCAL profile/SSP ingestion + POA&M builder, regulatory retention floors + compliance-mode lock (SEC 17a-4/FINRA 4511/CFTC 1.31), DORA Register-of-Information + major-incident reports, long-horizon WORM legal holds + examiner-grade evidence bundles, Azure/GCS WORM sinks, ISO 42001 AIMS pack, compliance-depth + NIS2 classification packs, enterprise reporting | — |
+| Operations | FinOps budgets that deny or throttle spend, calibrated LLM-judge evals with blocking CI gate (on-demand: judge credential required, else `SKIPPED`), OS-isolated red-team sandboxes (gVisor/Firecracker; unprovisioned runs report `DEGRADED`), connector-health dashboard with public status page, console-managed backups and restore, open attack-path queries | compiled threat-intel catalog, incident close-loop | — |
+| Platform & deploy | single static binary with embedded console, SQLite or Postgres with row-level security, Docker/Kubernetes/Helm/air-gapped, Terraform provider, generated client SDKs (Go, Java, Python, TypeScript), open in-proc bus + Core-NATS bridge | durable JetStream bus (at-least-once + dedup) | Windows packages (today: Linux container or build from source), model fine-tuning post-v1, voice telemetry probe (declared deny-closed seam today) |
+
+The AGPL build is the whole platform and is never feature-capped from within. The commercial add-ons are additive new code, never features removed from the open product. A subscription is the credential you download signed module packs with — a distribution-style model of signed module packs — not a key that unlocks code already sitting on your disk. User accounts are unlimited in the self-hosted engine: no edition of it enforces a seat cap, and the binary's seat seam is an unconditional no-op. The hosted Cloud tier is the one exception — its control plane admits seats per tenant, which is a property of that service and not of this binary.
 
 ## License by directory (the frontier)
 
