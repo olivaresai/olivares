@@ -885,6 +885,12 @@ jobs:
             [ -n "${st}" ] || continue
             case "${st}" in
             '?? release-commit.txt') continue ;;
+            # go.work.sum: the Go toolchain APPENDS workspace checksums during the build when the
+            # curated export's module set differs from the hub's (measured 2026-09-17, run
+            # 35234189801: the only modification after goreleaser was ` M go.work.sum`). Toolchain
+            # bookkeeping, not a product file rewritten in silence: its diff is printed here as
+            # evidence; the phase-2 binding reads the run's recorded tree, not this file.
+            ' M go.work.sum') echo "note: the Go toolchain rewrote go.work.sum during the build:" >&2; "${GIT_BIN}" --no-pager diff --stat -- go.work.sum >&2; continue ;;
             # The second evidence file the same `before` hook writes. Allow-listed BY NAME
             # here and pinned BY BYTES below, exactly like the first: a name in this list
             # that nothing pins is a path the build may rewrite in silence.
@@ -1134,6 +1140,12 @@ jobs:
             [ -n "${st}" ] || continue
             case "${st}" in
             '?? release-commit.txt') continue ;;
+            # go.work.sum: the Go toolchain APPENDS workspace checksums during the build when the
+            # curated export's module set differs from the hub's (measured 2026-09-17, run
+            # 35234189801: the only modification after goreleaser was ` M go.work.sum`). Toolchain
+            # bookkeeping, not a product file rewritten in silence: its diff is printed here as
+            # evidence; the phase-2 binding reads the run's recorded tree, not this file.
+            ' M go.work.sum') echo "note: the Go toolchain rewrote go.work.sum during the build:" >&2; "${GIT_BIN}" --no-pager diff --stat -- go.work.sum >&2; continue ;;
             # Written by the same `before` hook, and byte-pinned by the post-build guard
             # above before this step ever runs.
             '?? release-build-context.json') continue ;;
