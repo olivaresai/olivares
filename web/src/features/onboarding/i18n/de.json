@@ -93,6 +93,34 @@
       "verifiedCurrent": "Verifiziert (aktuell)",
       "verifiedStale": "Verifiziert (veraltet)",
       "unverified": "Nicht verifiziert"
+    },
+    "providers": {
+      "title": "Anbieter",
+      "hint": "Die Zugangsdaten, mit denen eine Sitzung startet. Sie zu registrieren belegt nicht, dass sie funktionieren — dieser Schritt wird grün, wenn ein Anbieter auf einen Verbindungstest antwortet.",
+      "none": "Es ist kein Anbieter registriert. Ohne Zugangsdaten kann keine Sitzung starten.",
+      "noPermission": "Einen Anbieter zu registrieren erfordert sessions:provider:write. Bitten Sie eine Administratorin dieses Mandanten darum.",
+      "addCta": "Anbieter hinzufügen",
+      "addAnother": "Weiteren hinzufügen",
+      "manageCta": "Anbieter verwalten",
+      "working": "{{n}} registriert, und mindestens einer hat auf einen Verbindungstest geantwortet.",
+      "untested": "Registriert, aber noch kein erfolgreicher Verbindungstest. Testen Sie einen, um zu wissen, dass er funktioniert."
+    },
+    "agent": {
+      "title": "Agenten und erste Sitzung",
+      "hint": "Ein Anbieterprofil sagt, unter welchem Home-Verzeichnis eine offizielle CLI läuft. An einen Anbieter gebunden, startet es eine Sitzung.",
+      "noProfile": "Es ist kein Anbieterprofil registriert. Zugangsdaten allein starten nichts.",
+      "noProviderFirst": "Es ist kein Anbieterprofil registriert. Registrieren Sie zuerst einen Anbieter und dann ein Profil, an das Sie ihn binden.",
+      "registerCta": "Profil registrieren",
+      "ran": "Eine Sitzung lief unter einem Profil, das an einen Anbieter gebunden ist ({{n}} kürzlich).",
+      "noneBound": "Ein Profil existiert, und keines nennt einen Anbieter. Binden Sie einen, sonst hängt der Start von der Umgebung des Hosts ab.",
+      "neverLaunched": "Ein Profil ist an einen Anbieter gebunden, und es lief noch keine Sitzung.",
+      "bound": "Anbieter gebunden",
+      "unbound": "Kein Anbieter",
+      "runnerRegistered": "Runner registriert",
+      "runnerMissing": "Kein Runner auf diesem Knoten",
+      "unboundHint": "{{n}} Profil(e) nennen keinen Anbieter: ihre Starts fallen auf die Umgebungsvariablen des Hosts zurück, sofern diese gesetzt sind.",
+      "launchCta": "Sitzung starten",
+      "manageCta": "Profile verwalten"
     }
   }
 }

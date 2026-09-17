@@ -145,6 +145,11 @@ export interface ProviderProfileDTO {
    * provider-compatible credential through that driver's governed adapter. They
    * are distinct authorizations with no fallback; absent authorizes neither. */
   auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
+  /** D19: the registered PROVIDER this profile's managed launches resolve their
+   * credential from. Absent means none is named, and the host's own credential
+   * variables decide — exactly the behaviour every profile had before D19. It is a
+   * reference: no key, no hint, no endpoint travels with it. */
+  provider_record_ref?: string
   created_at?: string
   updated_at?: string
   retired_at?: string
@@ -175,6 +180,12 @@ export interface CreateProfileRequest {
   user_home: string
   display_name?: string
   environment_ref?: string
+  /** D19: the authorized authentication source. Absent authorizes neither, which
+   * refuses every launch whose driver requires one. */
+  auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
+  /** D19: bind a registered provider in the same authorized call, so deploying an
+   * agent is one step rather than a checklist. */
+  provider_record_ref?: string
 }
 
 /** PATCH /provider-profiles/{ref} body — the ONLY post-creation mutation: a label
@@ -184,6 +195,10 @@ export interface CreateProfileRequest {
 export interface PatchProfileRequest {
   display_name?: string
   state?: 'active' | 'disabled'
+  auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
+  /** D19: bind (or unbind, with "") the registered provider this profile's managed
+   * launches use. A LIVE child keeps the one its own launch resolved. */
+  provider_record_ref?: string
 }
 
 /** One source→profile binding (GET /provider-source-bindings): ONE configured source,

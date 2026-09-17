@@ -77,15 +77,25 @@ var protocolBindingDescriptorKinds = map[model.Kind]string{
 }
 
 // providerProfileDescriptorKinds is the B1 provider-instance manifest — profiles,
-// source→profile bindings and profile-scoped aliases — the sessions descriptors
-// that are neither K1/K2 legacy, K3 communication nor K5 protocol. Like K5 they
-// are created by their descriptor and absent from the pre-K3 registration the
-// upgrade tables reopen from; their expression/partial indexes on the LIVE table
-// are the module migrations 0093–0095 (SQLite) and 0021–0023 (PostgreSQL).
+// source→profile bindings, profile-scoped aliases and (D19) the provider RECORDS a
+// profile binds to — the sessions descriptors that are neither K1/K2 legacy, K3
+// communication nor K5 protocol. Like K5 they are created by their descriptor and
+// absent from the pre-K3 registration the upgrade tables reopen from; the
+// expression/partial indexes the first three need on the LIVE table are the module
+// migrations 0093–0095 (SQLite) and 0021–0023 (PostgreSQL).
+//
+// ⛔ D19 ADDED THE FOURTH, AND THIS MANIFEST IS WHY THAT IS A DECISION RATHER THAN A
+// SIDE EFFECT. A descriptor the module registers and nobody classifies fails
+// TestCommunicationSchemaInventoryIsExactlyTwenty by name — which is exactly what it
+// did when `sessions.provider_record` first landed. The record declares its two
+// unique indexes ON the descriptor (ref, and the active name slot), so unlike its
+// three neighbours it needs no SQL migration of its own; that difference is the
+// reason its row is here with a note instead of silently matching the pattern above.
 var providerProfileDescriptorKinds = map[model.Kind]string{
 	providerProfileKind: providerProfileTable,
 	providerBindingKind: providerBindingTable,
 	providerAliasKind:   providerAliasTable,
+	providerRecordKind:  providerRecordTable,
 }
 
 type communicationCapturedMigration struct {

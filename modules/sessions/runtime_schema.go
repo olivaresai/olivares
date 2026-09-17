@@ -129,6 +129,12 @@ const (
 	// legacy run and on a profile that names no source.
 	colRunProviderAuthSource = "provider_auth_source"
 	colRunProviderAuthState  = "provider_auth_state"
+	// colRunProviderRecordRef (D19) is the PROVIDER RECORD this run's credential
+	// was resolved from. It is a reference and never a value, it is written with
+	// the rest of the snapshot BEFORE the spawn, and it is what makes "which
+	// credential authorised this session" answerable after a rotation, a rebinding
+	// or a revocation. NULL on a legacy run and on a profile that names none.
+	colRunProviderRecordRef = "provider_record_ref"
 	// colRunLiveRef (B2) is the id of the plane's MANAGED live row for this run,
 	// written by the bridge in the transaction that proved the run owns its
 	// announced provider id (runtime_profile.go). It is the run→row half of the
@@ -246,6 +252,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// row that predates them reads as "no authorized source, readiness unknown".
 			{Name: colRunProviderAuthSource, Kind: model.KindText, Nullable: true},
 			{Name: colRunProviderAuthState, Kind: model.KindText, Nullable: true},
+			{Name: colRunProviderRecordRef, Kind: model.KindText, Nullable: true},
 			{Name: colRunLiveRef, Kind: model.KindText, Nullable: true},
 		},
 		// The run's authorization lineage. Unset is HIDDEN, never the tenant

@@ -94,6 +94,34 @@
       "verifiedCurrent": "Verificado (actual)",
       "verifiedStale": "Verificado (desfasado)",
       "unverified": "Sin verificar"
+    },
+    "providers": {
+      "title": "Proveedores",
+      "hint": "La credencial con la que arranca una sesión. Registrarla no es prueba de que funcione: este paso se pone verde cuando un proveedor contesta a una prueba de conexión.",
+      "none": "No hay ningún proveedor registrado. Sin credencial, una sesión no puede arrancar.",
+      "noPermission": "Registrar un proveedor requiere sessions:provider:write. Pídeselo a una administradora de este inquilino.",
+      "addCta": "Añadir un proveedor",
+      "addAnother": "Añadir otro",
+      "manageCta": "Gestionar proveedores",
+      "working": "{{n}} registrados, y al menos uno contestó a una prueba de conexión.",
+      "untested": "Registrado, pero todavía no ha habido una prueba de conexión correcta. Prueba uno para saber que funciona."
+    },
+    "agent": {
+      "title": "Agentes y primera sesión",
+      "hint": "Un perfil de proveedor dice bajo qué home corre una CLI oficial. Vinculado a un proveedor, es lo que lanza una sesión.",
+      "noProfile": "No hay ningún perfil de proveedor registrado. Una credencial por sí sola no lanza nada.",
+      "noProviderFirst": "No hay ningún perfil de proveedor registrado. Registra primero un proveedor y luego un perfil al que vincularlo.",
+      "registerCta": "Registrar un perfil",
+      "ran": "Ha corrido una sesión bajo un perfil vinculado a un proveedor ({{n}} recientes).",
+      "noneBound": "Hay un perfil y ninguno nombra un proveedor. Vincula uno, o el lanzamiento dependerá del entorno del host.",
+      "neverLaunched": "Hay un perfil vinculado a un proveedor y todavía no ha corrido ninguna sesión.",
+      "bound": "Proveedor vinculado",
+      "unbound": "Sin proveedor",
+      "runnerRegistered": "Runner registrado",
+      "runnerMissing": "Sin runner en este nodo",
+      "unboundHint": "{{n}} perfil(es) no nombran ningún proveedor: sus lanzamientos recaen en las variables de entorno del host, si están puestas.",
+      "launchCta": "Lanzar una sesión",
+      "manageCta": "Gestionar perfiles"
     }
   }
 }

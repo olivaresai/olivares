@@ -173,6 +173,8 @@ func newAgentCmd() *cobra.Command {
 			"  olivares agent tool install --driver claude --version latest --yes",
 	}
 	cmd.AddCommand(newAgentSessionCmd())
+	cmd.AddCommand(newAgentProfileCmd())
+	cmd.AddCommand(newAgentDeployCmd())
 	cmd.AddCommand(newAgentWorkspaceCmd())
 	cmd.AddCommand(newAgentManagedSettingsCmd())
 	cmd.AddCommand(newAgentToolCmd())

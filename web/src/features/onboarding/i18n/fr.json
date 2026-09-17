@@ -94,6 +94,34 @@
       "verifiedCurrent": "Vérifié (à jour)",
       "verifiedStale": "Vérifié (obsolète)",
       "unverified": "Non vérifié"
+    },
+    "providers": {
+      "title": "Fournisseurs",
+      "hint": "L'identifiant avec lequel une session démarre. L'enregistrer ne prouve pas qu'il fonctionne : cette étape passe au vert quand un fournisseur répond à un test de connexion.",
+      "none": "Aucun fournisseur n'est enregistré. Sans identifiant, une session ne peut pas démarrer.",
+      "noPermission": "Enregistrer un fournisseur demande sessions:provider:write. Demandez-le à une personne administratrice de ce locataire.",
+      "addCta": "Ajouter un fournisseur",
+      "addAnother": "En ajouter un autre",
+      "manageCta": "Gérer les fournisseurs",
+      "working": "{{n}} enregistrés, et au moins un a répondu à un test de connexion.",
+      "untested": "Enregistré, mais aucun test de connexion n'a encore réussi. Testez-en un pour savoir qu'il fonctionne."
+    },
+    "agent": {
+      "title": "Agents et première session",
+      "hint": "Un profil de fournisseur indique sous quel répertoire personnel tourne une CLI officielle. Lié à un fournisseur, c'est lui qui lance une session.",
+      "noProfile": "Aucun profil de fournisseur n'est enregistré. Un identifiant seul ne lance rien.",
+      "noProviderFirst": "Aucun profil de fournisseur n'est enregistré. Enregistrez d'abord un fournisseur, puis un profil auquel le lier.",
+      "registerCta": "Enregistrer un profil",
+      "ran": "Une session a tourné sous un profil lié à un fournisseur ({{n}} récentes).",
+      "noneBound": "Un profil existe et aucun ne nomme de fournisseur. Liez-en un, sinon le lancement dépend de l'environnement de l'hôte.",
+      "neverLaunched": "Un profil est lié à un fournisseur et aucune session n'a encore tourné.",
+      "bound": "Fournisseur lié",
+      "unbound": "Aucun fournisseur",
+      "runnerRegistered": "Exécuteur enregistré",
+      "runnerMissing": "Aucun exécuteur sur ce nœud",
+      "unboundHint": "{{n}} profil(s) ne nomment aucun fournisseur : leurs lancements retombent sur les variables d'environnement de l'hôte, si elles sont définies.",
+      "launchCta": "Lancer une session",
+      "manageCta": "Gérer les profils"
     }
   }
 }

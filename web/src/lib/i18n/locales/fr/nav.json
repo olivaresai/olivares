@@ -90,6 +90,7 @@
     "postureExport": "Export de posture",
     "automations": "Automatisations",
     "agentcoreExport": "Export AgentCore",
+    "providers": "Fournisseurs",
     "providerProfiles": "Profils de fournisseur",
     "providerBindings": "Liaisons de sources"
   },
@@ -155,6 +156,7 @@
     "reporting": "Générez et téléchargez des rapports de gouvernance",
     "postureExport": "Exportez la posture réelle pour une tour de contrôle",
     "automations": "Les trois rails d'automatisation et leur catalogue de déclencheurs",
+    "providers": "Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les",
     "providerProfiles": "Enregistrer et administrer les répertoires de fournisseur sous lesquels les sessions se lancent, et lire leur configuration à la demande",
     "providerBindings": "Dédier des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur",
     "routinePolicies": "Planchers de cadence, plafonds de concurrence, exigences d’approbation, listes d’autorisation cron et environnements bloqués pour les routines Claude Code",

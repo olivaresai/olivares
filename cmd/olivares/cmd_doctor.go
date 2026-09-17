@@ -185,7 +185,10 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Diagnose this host installation without printing secrets",
 		Long: "doctor checks the installed binary and verification anchors, local paths and modes,\n" +
 			"service account and init state, TLS live/ready probes, store status, license, and\n" +
-			"optional audit/update checks. Values from the env file are never read into output.\n\n" +
+			"optional audit/update checks. It also reports first-hour readiness: whether an\n" +
+			"official coding agent is on PATH, whether the hook PEP env is set, and the next\n" +
+			"first-hour step. Those first-hour checks are optional and never fail a healthy\n" +
+			"install. Values from the env file and hook PEP URLs are never read into output.\n\n" +
 			"Exit 0 means healthy, 1 a measured defect, and 2 that a required check could not\n" +
 			"be measured. `health` remains the separate remote subject-health namespace.",
 		Example: "  olivares doctor --mode system --data-dir /var/lib/olivares\n" +
@@ -307,6 +310,11 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(doctorLicenseCheck(o.dataDir))
 	add(doctorAuditCheck(ctx, deps, o))
 	add(doctorChannelCheck(ctx, deps, o))
+	agentHour := doctorFirstHourCodingAgent(deps)
+	pepHour := doctorFirstHourHookPEP(deps)
+	add(agentHour)
+	add(pepHour)
+	add(doctorFirstHourNextStep(agentHour, pepHour))
 
 	code := exitcode.OK
 	for _, c := range report.Checks {
@@ -1078,6 +1086,62 @@ func doctorChannelCheck(ctx context.Context, deps doctorDeps, o doctorOptions) d
 		if c.Status == "pass" {
 			c.Detail = fmt.Sprintf("current=%s available=%s status=%s", result.Current, result.Available, result.Status)
 		}
+	}
+	return c
+}
+
+// firstHourCodingAgents is the closed set of official CLIs the first hour
+// accepts as "one coding agent". Order is detection order, not preference.
+var firstHourCodingAgents = []string{"claude", "codex", "grok"}
+
+// doctorFirstHourCodingAgent reports whether an official coding agent is on
+// PATH. Required is false: a fresh install is healthy before the operator
+// connects an agent. Absence is unknown, never fail — fail would mark the
+// whole doctor report unhealthy and hide the next-step hint.
+func doctorFirstHourCodingAgent(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "first-hour-coding-agent", Required: false}
+	for _, name := range firstHourCodingAgents {
+		path, err := deps.lookPath(name)
+		if err == nil && strings.TrimSpace(path) != "" {
+			c.Status, c.Detail = "pass", "official CLI on PATH: "+name
+			return c
+		}
+	}
+	c.Status = "unknown"
+	c.Detail = "no official coding agent (claude, codex, grok) on PATH"
+	c.Remediation = "install one official CLI on this host, then run olivares agent tool detect"
+	return c
+}
+
+// doctorFirstHourHookPEP reports whether the operator's environment names a
+// hook PEP. It never prints the URL or the config path: those can carry a
+// token in a query or a policy path under a home directory.
+func doctorFirstHourHookPEP(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "first-hour-hook-pep", Required: false}
+	switch {
+	case strings.TrimSpace(deps.getenv("OLIVARES_HOOK_PEP_CONFIG")) != "":
+		c.Status, c.Detail = "pass", "OLIVARES_HOOK_PEP_CONFIG is set"
+	case strings.TrimSpace(deps.getenv("OLIVARES_HOOK_PEP_URL")) != "":
+		c.Status, c.Detail = "pass", "OLIVARES_HOOK_PEP_URL is set"
+	default:
+		c.Status = "unknown"
+		c.Detail = "hook PEP is not wired"
+		c.Remediation = "write a deny-closed hook policy and set OLIVARES_HOOK_PEP_CONFIG"
+	}
+	return c
+}
+
+// doctorFirstHourNextStep always passes. It is the sentence the operator
+// reads when doctor does not fail the install but the first hour is not done.
+func doctorFirstHourNextStep(agent, pep doctorCheck) doctorCheck {
+	c := doctorCheck{Name: "first-hour-next-step", Required: false, Status: "pass"}
+	switch {
+	case agent.Status != "pass":
+		c.Detail = "install one official coding agent (claude, codex or grok) on this host, then run olivares agent tool detect"
+	case pep.Status != "pass":
+		c.Detail = "wire OLIVARES_HOOK_PEP_CONFIG with a deny-closed policy, then replay a Read allow and a Bash deny"
+	default:
+		c.Detail = "run a governed session (allow one tool, deny another) and read GET /v1/audit?action=hook.tool"
 	}
 	return c
 }

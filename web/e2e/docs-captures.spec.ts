@@ -983,6 +983,15 @@ const VIEWS: {
     live: true,
     heading: /^Claude Code$/,
   },
+  // D19 provider plane: the credential a session launches with. On a clean install
+  // this capture is the EMPTY state, which is the point — it is the first screen a
+  // new operator sees here, so it is the one that has to name the next action.
+  {
+    id: 'providers',
+    path: '/providers',
+    settle: 1000,
+    heading: /^Providers$/,
+  },
   // B1 provider-profile plane: the two doors of one administration view. Each takes
   // the tab its entrance names, under its own h1.
   {

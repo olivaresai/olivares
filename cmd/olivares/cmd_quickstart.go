@@ -31,8 +31,11 @@ func newQuickstartCmd() *cobra.Command {
 		Short: "Start Olivares AI for the first time — secure by default, one command to the console",
 		Long: "quickstart runs the engine with the secure defaults (TLS on, loopback-only, no\n" +
 			"default credentials) and points you at the embedded console to create your first\n" +
-			"administrator with a one-time token. It is the fastest safe way in; for production\n" +
-			"options (systemd, Compose, Kubernetes, air-gapped) see INSTALL.md.",
+			"administrator with a one-time token. After that token it names the rest of the\n" +
+			"first hour: enroll a passkey, connect one coding agent, and run olivares doctor.\n" +
+			"It is the fastest safe way in; for production options (systemd, Compose,\n" +
+			"Kubernetes, air-gapped) see INSTALL.md. The three first-hour shapes (local, team,\n" +
+			"hybrid) are in the docs-site First hour guide.",
 		Example: `  # Start with defaults (loopback, self-signed TLS, SQLite)
   olivares quickstart
 
@@ -125,7 +128,8 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 	if has {
 		fmt.Fprintf(out, "\nOlivares AI is starting.\n"+
 			"  Open the console and sign in:  %s\n"+
-			"  (HTTPS with a self-signed certificate — your browser will warn once.)\n\n%s", baseURL, adviceBlock(addr.Advice))
+			"  (HTTPS with a self-signed certificate — your browser will warn once.)\n\n%s%s",
+			baseURL, adviceBlock(addr.Advice), firstHourReturningNextSteps)
 		return nil
 	}
 	token, created, err := eng.setupTok.Ensure()
@@ -151,8 +155,9 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 			"boot. Removing it is safe while no administrator exists — the token gates only\n"+
 			"first-boot setup.\n"+
 			"%s"+
+			"%s"+
 			"=========================================\n\n",
-			baseURL, filepath.Join(eng.dataDir, "setup.token"), adviceBlock(addr.Advice))
+			baseURL, filepath.Join(eng.dataDir, "setup.token"), adviceBlock(addr.Advice), firstHourPendingNextSteps)
 		return nil
 	}
 	fmt.Fprintf(out, "\n=== WELCOME TO OLIVARES AI ===\n"+
@@ -164,10 +169,39 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 		"  2. Complete setup with this one-time token (shown once, single-use):\n\n"+
 		"         %s\n\n"+
 		"%s"+
+		"%s"+
 		"Press Ctrl-C to stop. For production install paths, see INSTALL.md.\n"+
-		"==============================\n\n", baseURL, token, adviceBlock(addr.Advice))
+		"==============================\n\n", baseURL, token, adviceBlock(addr.Advice), firstHourWelcomeNextSteps)
 	return nil
 }
+
+// firstHourWelcomeNextSteps is the rest of the first hour, printed after the
+// setup token. Measured 2026-09-17: the welcome panel stopped at step 2 and the
+// operator had no product-owned next action (docs named passkey enrollment,
+// agent connect and evidence; the binary did not). These lines are the product
+// telling the operator what to do next. They must stay in the binary, not only
+// in the First hour guide.
+const firstHourWelcomeNextSteps = "  After setup, the product names the rest of the first hour:\n" +
+	"  3. Sign in. Enroll a passkey on Identity → Privileged login before you add\n" +
+	"     connectors or sources (AAL3). Open the console at the localhost URL, not\n" +
+	"     the IP, so the passkey ceremony can complete.\n" +
+	"  4. Connect one coding agent. Detect it on this host with:\n" +
+	"         olivares agent tool detect\n" +
+	"     Register it in the inventory (POST /v1/agents). Wire the Claude Code hook\n" +
+	"     with `olivares agent managed-settings` and OLIVARES_HOOK_PEP_CONFIG. The\n" +
+	"     First hour guide has local, team and hybrid shapes.\n" +
+	"  5. Confirm this host with `olivares doctor`. It names the next first-hour\n" +
+	"     step when a coding agent or the hook PEP is not yet wired.\n\n"
+
+// firstHourReturningNextSteps is for a data directory that already has an
+// administrator. The welcome token is gone; the operator still needs the next
+// first-hour action.
+const firstHourReturningNextSteps = "  Next: run `olivares doctor`. It names the next first-hour step when a coding\n" +
+	"  agent or the hook PEP is not yet wired. See the First hour guide.\n\n"
+
+// firstHourPendingNextSteps is for a restart before setup completed. The token
+// cannot be shown again; the rest of the first hour still applies after setup.
+const firstHourPendingNextSteps = "  After you complete setup, run `olivares doctor` for the next first-hour step.\n"
 
 // adviceBlock renders the address paragraphs as their own block, or nothing at
 // all. A panel with nothing to say about its address prints exactly what it

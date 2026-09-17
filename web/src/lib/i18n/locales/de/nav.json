@@ -90,6 +90,7 @@
     "postureExport": "Posture-Export",
     "automations": "Automatisierungen",
     "agentcoreExport": "AgentCore-Export",
+    "providers": "Anbieter",
     "providerProfiles": "Anbieterprofile",
     "providerBindings": "Quellenbindungen"
   },
@@ -155,6 +156,7 @@
     "reporting": "Governance-Berichte erstellen und herunterladen",
     "postureExport": "Grundwahrheits-Posture für einen Control Tower exportieren",
     "automations": "Alle drei Automatisierungsschienen und ihr Trigger-Katalog",
+    "providers": "Registrieren Sie die API-Schlüssel und Endpunkte, mit denen Sitzungen starten; testen, wechseln und widerrufen Sie sie",
     "providerProfiles": "Anbieterverzeichnisse registrieren und verwalten, unter denen Sitzungen starten, und ihre Konfiguration auf Anfrage lesen",
     "providerBindings": "Konfigurierte Quellen in der von diesem Knoten angewendeten Revision Anbieterprofilen widmen",
     "routinePolicies": "Kadenzuntergrenzen, Parallelitätsobergrenzen, Genehmigungspflichten, Cron-Freigabelisten und gesperrte Umgebungen für Claude-Code-Routinen",

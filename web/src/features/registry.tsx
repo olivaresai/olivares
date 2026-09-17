@@ -48,6 +48,7 @@ import {
   IdCard,
   Inbox,
   KeyRound,
+  KeySquare,
   Layers,
   LayoutDashboard,
   LayoutTemplate,
@@ -174,6 +175,16 @@ const SessionsWorkspaceView = lazy(() =>
 const ProviderAdminView = lazy(() =>
   import('./agentops/provider-admin-view').then((m) => ({
     default: m.ProviderAdminView,
+  })),
+)
+
+// D19: the CREDENTIAL plane, beside the profile plane above it and deliberately not
+// inside it. A profile says which home an official CLI runs under; a provider says
+// which credential it runs with. They have independent permission tiers, and before
+// this route `sessions:provider:read` was a permission with no screen.
+const ProvidersView = lazy(() =>
+  import('./providers/providers-view').then((m) => ({
+    default: m.ProvidersView,
   })),
 )
 
@@ -526,6 +537,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       'sessions',
       'agentops',
       'workspace-templates',
+      'providers',
       'providerProfiles',
       'providerBindings',
       'voice',
@@ -1423,6 +1435,24 @@ export const FEATURE_VIEWS: FeatureView[] = [
     icon: Terminal,
     permission: 'sessions:run:read',
     element: lazyView(SessionsWorkspaceView, { entrance: 'operate' as const }),
+  },
+  {
+    // D19: the credential a session launches with. It sits FIRST in the environments
+    // section because it is the first thing a new operator needs and the last thing
+    // the product used to offer: a profile with no credential launches nothing, and
+    // the answer to "where does my API key go" used to be a variable in the server's
+    // shell.
+    id: 'providers',
+    path: '/providers',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
+    helpHref: '/how-to/add-a-provider',
+    hub: 'operate',
+    // KeySquare and not KeyRound: the icon guard requires one lucide glyph per view,
+    // and KeyRound is the channel-administration view's. Two screens sharing a glyph
+    // is how a sidebar stops being scannable.
+    icon: KeySquare,
+    permission: 'sessions:provider:read',
+    element: lazyView(ProvidersView),
   },
   {
     // B1: the provider-profile plane's own door, gated on ITS read tier. The plane is

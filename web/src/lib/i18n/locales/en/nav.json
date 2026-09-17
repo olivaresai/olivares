@@ -90,6 +90,7 @@
     "postureExport": "Posture export",
     "automations": "Automations",
     "agentcoreExport": "AgentCore export",
+    "providers": "Providers",
     "providerProfiles": "Provider profiles",
     "providerBindings": "Source bindings"
   },
@@ -155,6 +156,7 @@
     "reporting": "Generate and download governance reports",
     "postureExport": "Export ground-truth posture for a control tower",
     "automations": "All three automation rails and their trigger catalog",
+    "providers": "Register the API keys and endpoints sessions launch with; test, rotate and revoke them",
     "providerProfiles": "Register and administer the provider homes sessions launch under, and read their configuration on demand",
     "providerBindings": "Dedicate configured sources, at the revision this node applied, to provider profiles",
     "routinePolicies": "Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code routines",

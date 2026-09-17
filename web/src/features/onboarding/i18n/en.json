@@ -93,6 +93,34 @@
       "verifiedCurrent": "Verified (current)",
       "verifiedStale": "Verified (stale)",
       "unverified": "Unverified"
+    },
+    "providers": {
+      "title": "Providers",
+      "hint": "The credential a session launches with. Registering one is not evidence that it works — this step turns green when a provider answers a connection test.",
+      "none": "No provider is registered. Without a credential, a session cannot launch.",
+      "noPermission": "Registering a provider needs sessions:provider:write. Ask an administrator of this tenant for it.",
+      "addCta": "Add a provider",
+      "addAnother": "Add another",
+      "manageCta": "Manage providers",
+      "working": "{{n}} registered, and at least one answered a connection test.",
+      "untested": "Registered, but no connection test has succeeded yet. Test one to know it works."
+    },
+    "agent": {
+      "title": "Agents and the first session",
+      "hint": "A provider profile says which home an official CLI runs under. Bound to a provider, it is what launches a session.",
+      "noProfile": "No provider profile is registered. A credential on its own launches nothing.",
+      "noProviderFirst": "No provider profile is registered. Register a provider first, then a profile to bind it to.",
+      "registerCta": "Register a profile",
+      "ran": "A session has run under a profile bound to a provider ({{n}} recent).",
+      "noneBound": "A profile exists, and none of them names a provider. Bind one, or the launch depends on the host environment.",
+      "neverLaunched": "A profile is bound to a provider and no session has run yet.",
+      "bound": "Provider bound",
+      "unbound": "No provider",
+      "runnerRegistered": "Runner registered",
+      "runnerMissing": "No runner on this node",
+      "unboundHint": "{{n}} profile(s) name no provider: their launches fall to the host environment variables, if those are set.",
+      "launchCta": "Launch a session",
+      "manageCta": "Manage profiles"
     }
   }
 }

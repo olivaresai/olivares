@@ -1791,6 +1791,19 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// driver it does not operate. Legacy rows remain readable/stoppable; new
 		// launches and unproven legacy continuations cannot use an ambient home.
 		set.sessions.EnableProfiledLaunches()
+		// D19: the provider-record plane. The VAULT is wired only when the engine has
+		// a sealer — with none, registering a provider is refused with the wiring
+		// named, which is the honest answer: the engine never stores a credential it
+		// cannot protect. The PROBE is always available; it is an outbound model-list
+		// call and it sends no completion.
+		if secretStoreSealerPresent {
+			set.sessions.UseProviderSecretVault(providerSecretVault{store: secretStore})
+		} else {
+			log.Warn("sessions: provider registration is disabled; no secret sealer is available",
+				"effect", "the console and the CLI refuse to register a provider and say so",
+				"unchanged", "launching with the host credential variables")
+		}
+		set.sessions.UseProviderProbe(newProviderProbe())
 	}
 
 	// In-place edition: resolve the commercial license by precedence (explicit

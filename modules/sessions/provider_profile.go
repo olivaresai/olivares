@@ -58,6 +58,12 @@ const (
 	// home slot. Empty means no source was authorized, which is a refusal for
 	// every driver except the historical Claude path it predates.
 	colPPAuthSource = "auth_source"
+	// colPPProviderRecordRef names the PROVIDER RECORD this profile's managed
+	// launches resolve their credential from (D19). Empty keeps the historical
+	// behaviour exactly: the host-wide credential source decides. It is an
+	// authorization like auth_source — mutable, absent from the home slot, and not
+	// applied to a live child, which keeps the record its own launch resolved.
+	colPPProviderRecordRef = "provider_record_ref"
 )
 
 // Profile lifecycle states.
@@ -133,10 +139,13 @@ type ProviderProfile struct {
 	State          string
 	// AuthSource is the authorized authentication source ("" = none authorized).
 	AuthSource string
-	Version    int64
-	CreatedAt  string
-	UpdatedAt  string
-	RetiredAt  string
+	// ProviderRecordRef names the provider record this profile's managed launches
+	// use ("" = none; the host-wide source decides, as it always has).
+	ProviderRecordRef string
+	Version           int64
+	CreatedAt         string
+	UpdatedAt         string
+	RetiredAt         string
 }
 
 // ProviderHomeSnapshot is the non-secret launch snapshot resolved server-side from a
@@ -159,6 +168,14 @@ type ProviderHomeSnapshot struct {
 	// digest, while a launch that does carry a source digests it and a second
 	// dispatch under another source is a conflict rather than a replay.
 	AuthSource string `json:"auth_source,omitempty"`
+	// ProviderRecordRef is the PROVIDER RECORD this launch resolves its credential
+	// from (D19), resolved with the rest of this snapshot before intent, gates and
+	// reservation. `omitempty` is load-bearing for exactly the reason AuthSource
+	// gives above it: a profile that names no record encodes to the same bytes as
+	// before, so every already-dispatched K4 digest is preserved, while a launch
+	// that DOES carry a record digests it — and a second dispatch of the same key
+	// under another record is a conflict rather than a replay.
+	ProviderRecordRef string `json:"provider_record_ref,omitempty"`
 }
 
 // CreateProfileInput is the validated create request.
@@ -173,6 +190,11 @@ type CreateProfileInput struct {
 	// EnvironmentRef may be empty (this node's environment) or equal to it. A
 	// foreign environment cannot have its paths validated here, so it is refused.
 	EnvironmentRef string
+	// ProviderRecordRef optionally binds the profile to a registered provider
+	// credential at creation. It is accepted here so "deploy an agent" is ONE
+	// authorized call instead of two, which is what makes the console step a step
+	// and not a checklist. Empty leaves the profile on the host-wide credential.
+	ProviderRecordRef string
 }
 
 // registerProviderProfileSchema declares the three B1 entities: the profile, the
@@ -197,6 +219,12 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// Nullable: an existing profile gains the column on the next boot and reads
 			// as "no authorized source", which is the deny-closed value.
 			{Name: colPPAuthSource, Kind: model.KindText, Nullable: true},
+			// D19. Nullable for the same reason and with the same reading: an existing
+			// profile gains the column and reads as "no provider record named", which
+			// is exactly today's behaviour (the host environment decides). It is NOT
+			// part of the home slot: binding a record is an authorization, not an
+			// identity, so it does not create another profile id.
+			{Name: colPPProviderRecordRef, Kind: model.KindText, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{
 			{Name: "sessions_provider_profile_ref_uniq", Columns: []string{model.ColTenantID, colPPRef}, Unique: true},
@@ -209,6 +237,13 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 		return err
 	}
 	if err := m.registerProviderBindingSchema(reg); err != nil {
+		return err
+	}
+	// D19: the provider RECORD plane. It is declared beside the profile because the
+	// two are one subject — a profile says which home a child runs under and a
+	// record says which credential it runs with — and because a record is reachable
+	// only through the profile that names it.
+	if err := m.registerProviderRecordSchema(reg); err != nil {
 		return err
 	}
 	return m.registerProviderAliasSchema(reg)
@@ -371,19 +406,20 @@ func (m *Module) localEnvironment() (string, error) {
 
 func profileFromRecord(rec model.Record) ProviderProfile {
 	return ProviderProfile{
-		ID:             model.ID(rec.String(model.ColID)),
-		Ref:            rec.String(colPPRef),
-		Driver:         rec.String(colPPDriver),
-		EnvironmentRef: rec.String(colPPEnvRef),
-		ConfigHome:     rec.String(colPPConfigHome),
-		UserHome:       rec.String(colPPUserHome),
-		DisplayName:    rec.String(colPPDisplayName),
-		State:          rec.String(colPPState),
-		AuthSource:     rec.String(colPPAuthSource),
-		Version:        rec.Int(model.ColVersion),
-		CreatedAt:      rec.String(model.ColCreatedAt),
-		UpdatedAt:      rec.String(model.ColUpdatedAt),
-		RetiredAt:      rec.String(colPPRetiredAt),
+		ID:                model.ID(rec.String(model.ColID)),
+		Ref:               rec.String(colPPRef),
+		Driver:            rec.String(colPPDriver),
+		EnvironmentRef:    rec.String(colPPEnvRef),
+		ConfigHome:        rec.String(colPPConfigHome),
+		UserHome:          rec.String(colPPUserHome),
+		DisplayName:       rec.String(colPPDisplayName),
+		State:             rec.String(colPPState),
+		AuthSource:        rec.String(colPPAuthSource),
+		ProviderRecordRef: rec.String(colPPProviderRecordRef),
+		Version:           rec.Int(model.ColVersion),
+		CreatedAt:         rec.String(model.ColCreatedAt),
+		UpdatedAt:         rec.String(model.ColUpdatedAt),
+		RetiredAt:         rec.String(colPPRetiredAt),
 	}
 }
 
@@ -401,6 +437,43 @@ func findProfileRec(ctx context.Context, sc store.Scope, ref string) (model.Reco
 		return nil, ErrProfileNotFound
 	}
 	return recs[0], nil
+}
+
+// validateRecordBinding resolves the PROVIDER RECORD a profile wants to bind and
+// refuses, deny-closed, an unknown ref, a revoked record and a credential this
+// driver's CLI cannot read.
+//
+// It runs inside the SAME transaction that writes the binding, and that is not
+// tidiness: reading the record first and writing the binding afterwards leaves a
+// window in which the record is revoked between the two, and the profile ends up
+// naming a credential the plane already withdrew.
+//
+// The same check runs AGAIN at launch (mintLaunchAuthority). A check that only runs
+// at write time is a check that expires: a record can be revoked, and a driver's
+// operability can change, between binding a profile and launching it.
+func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref string) error {
+	if ref == "" {
+		return nil
+	}
+	if !validProviderRecordRef(ref) {
+		return ErrProviderRecordNotFound
+	}
+	rec, err := findProviderRecordRec(ctx, sc, ref)
+	if err != nil {
+		return err
+	}
+	if rec.String(colPRState) != ProviderRecordActive {
+		return ErrProviderRecordRevoked
+	}
+	kind := rec.String(colPRKind)
+	if !recordServesDriver(kind, driver) {
+		return &runErr{
+			http.StatusUnprocessableEntity,
+			"a " + kind + " credential is not readable by driver " + driver +
+				"; bind a provider of a kind this driver reads, or register an openai_compatible provider with its endpoint",
+		}
+	}
+	return nil
 }
 
 // CreateProfile registers a new profile for a home on THIS environment. The
@@ -439,11 +512,15 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
+	recordRef := strings.TrimSpace(in.ProviderRecordRef)
 	ref := newProfileRef()
 	var out ProviderProfile
 	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerProfileKind)
 		if err != nil {
+			return err
+		}
+		if err := validateRecordBinding(ctx, sc, driver, recordRef); err != nil {
 			return err
 		}
 		rec := model.Record{
@@ -456,6 +533,8 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 			colPPState:       ProfileActive,
 			colPPHomeSlot:    activeHomeSlot(env, driver, configHome),
 			colPPAuthSource:  authSource,
+
+			colPPProviderRecordRef: recordRef,
 		}
 		created, err := repo.Create(ctx, rec)
 		if err != nil {
@@ -534,6 +613,11 @@ type ProfilePatch struct {
 	// source its own launch was authorized under, and the next launch resolves the
 	// current one.
 	AuthSource *string
+	// ProviderRecordRef binds (or unbinds, with "") the provider record this
+	// profile's managed launches use. Like AuthSource it is an authorization and
+	// not identity, and like AuthSource it does not reach a LIVE process: a running
+	// child keeps the record its own launch resolved.
+	ProviderRecordRef *string
 }
 
 // PatchProfile renames and/or transitions a profile in ONE validated transaction.
@@ -570,6 +654,10 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		}
 		authSource = a
 	}
+	var recordRef string
+	if p.ProviderRecordRef != nil {
+		recordRef = strings.TrimSpace(*p.ProviderRecordRef)
+	}
 	var out ProviderProfile
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerProfileKind)
@@ -590,6 +678,15 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		}
 		if p.AuthSource != nil {
 			rec[colPPAuthSource] = authSource
+		}
+		if p.ProviderRecordRef != nil {
+			// Validated against the profile's OWN driver, read from the row rather than
+			// from the request: the driver is immutable, so the row is the authority,
+			// and a caller cannot widen the compatibility check by naming another one.
+			if err := validateRecordBinding(ctx, sc, rec.String(colPPDriver), recordRef); err != nil {
+				return err
+			}
+			rec[colPPProviderRecordRef] = recordRef
 		}
 		if p.State != nil {
 			switch *p.State {
@@ -662,6 +759,7 @@ func (m *Module) snapshotForLaunch(prof ProviderProfile, env string) (ProviderHo
 	return ProviderHomeSnapshot{
 		ProfileID: prof.Ref, Driver: prof.Driver, EnvironmentRef: prof.EnvironmentRef,
 		ConfigHome: prof.ConfigHome, UserHome: prof.UserHome, AuthSource: prof.AuthSource,
+		ProviderRecordRef: prof.ProviderRecordRef,
 	}, nil
 }
 
@@ -701,7 +799,8 @@ func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.Tenan
 		ProfileID: rec.String(colRunProfileID), Driver: rec.String(colRunProfileDriver),
 		EnvironmentRef: rec.String(colRunProfileEnvRef),
 		ConfigHome:     rec.String(colRunProfileConfigHome), UserHome: rec.String(colRunProfileUserHome),
-		AuthSource: rec.String(colRunProviderAuthSource),
+		AuthSource:        rec.String(colRunProviderAuthSource),
+		ProviderRecordRef: rec.String(colRunProviderRecordRef),
 	}
 	if stored.ProfileID == "" {
 		if m.rt.profiledLaunchesEnabled {
@@ -730,6 +829,21 @@ func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.Tenan
 		return ProviderHomeSnapshot{}, &runErr{
 			http.StatusConflict,
 			"the profile's authorized authentication source changed since this session was launched; launch a new session under the current authorization",
+		}
+	}
+	if stored.ProviderRecordRef != "" && prof.ProviderRecordRef != stored.ProviderRecordRef {
+		// The registered credential this run was launched under is an AUTHORIZATION,
+		// exactly like the source above, and it moves for exactly the same reasons: an
+		// operator rebound the profile. Continuing would resume the conversation on a
+		// credential nobody approved for it, which is the silent account change this
+		// plane refuses everywhere else.
+		//
+		// A run whose stored record is EMPTY predates the binding entirely, so there is
+		// nothing to retain and it adopts the profile's current decision — the same
+		// reading the empty auth source gets.
+		return ProviderHomeSnapshot{}, &runErr{
+			http.StatusConflict,
+			"the provider bound to this profile changed since this session was launched; launch a new session under the current binding",
 		}
 	}
 	if prof.EnvironmentRef != stored.EnvironmentRef || prof.ConfigHome != stored.ConfigHome ||

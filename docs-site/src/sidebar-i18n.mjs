@@ -665,6 +665,14 @@ export const SIDEBAR_LABELS = {
     "de": "Claude Code mit Olivares ausführen",
     "fr": "Exécuter Claude Code avec Olivares"
   },
+  "Add a provider and launch an agent": {
+    "es": "Añadir un proveedor y lanzar un agente",
+    "zh-CN": "添加提供方并启动代理",
+    "ru": "Добавить провайдера и запустить агента",
+    "ja": "プロバイダーを追加してエージェントを起動する",
+    "de": "Anbieter hinzufügen und Agenten starten",
+    "fr": "Ajouter un fournisseur et lancer un agent"
+  },
   "Operate a provider session": {
     "es": "Operar una sesión de proveedor",
     "zh-CN": "运行提供商会话",
@@ -808,6 +816,14 @@ export const SIDEBAR_LABELS = {
     "ja": "Olivares AI とは?",
     "de": "Was ist Olivares AI?",
     "fr": "Qu'est-ce qu'Olivares AI ?"
+  },
+  "Your first hour (local, team, hybrid)": {
+    "es": "Tu primera hora (local, equipo, híbrido)",
+    "zh-CN": "第一个小时（本地、团队、混合）",
+    "ru": "Первый час (локально, команда, гибрид)",
+    "ja": "最初の 1 時間（ローカル、チーム、ハイブリッド）",
+    "de": "Ihre erste Stunde (lokal, Team, hybrid)",
+    "fr": "Votre première heure (local, équipe, hybride)"
   }
 }
 

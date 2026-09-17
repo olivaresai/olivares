@@ -39,6 +39,7 @@
       "identity": "管理身份",
       "nhiLifecycleRotate": "轮换非人类身份凭据",
       "nhiLifecycleFinalize": "最终完成非人类身份下线",
+      "providers": "注册或吊销提供方凭据",
       "generic": "此操作",
       "console": "管理连接器"
     },

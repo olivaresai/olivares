@@ -1,0 +1,122 @@
+{
+  "title": "Fournisseurs",
+  "subtitle": "L'identifiant avec lequel une session démarre. Enregistrez-le une fois ; le moteur le scelle et le remet à l'agent au lancement.",
+  "nav": "Fournisseurs",
+  "add": "Ajouter un fournisseur",
+  "empty": {
+    "title": "Aucun fournisseur enregistré pour l'instant",
+    "description": "Une session ne peut pas démarrer sans identifiant. Ajoutez la clé d'API d'Anthropic, d'OpenAI ou de xAI — ou de tout point de terminaison compatible OpenAI — et le moteur la scelle et l'utilise au lancement. La clé n'est plus jamais affichée.",
+    "action": "Ajoutez votre premier fournisseur"
+  },
+  "emptyFiltered": {
+    "title": "Aucun fournisseur ne correspond à ce filtre",
+    "description": "Retirez le filtre pour voir tous les fournisseurs enregistrés.",
+    "action": "Tout afficher"
+  },
+  "forbidden": {
+    "title": "Vous ne pouvez pas lire les fournisseurs de ce locataire",
+    "description": "Lire les fournisseurs enregistrés demande sessions:provider:read. Demandez-le à une personne administratrice de ce locataire."
+  },
+  "columns": {
+    "name": "Nom",
+    "kind": "Type",
+    "key": "Clé",
+    "state": "État",
+    "connection": "Connexion"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "openai_compatible": "Compatible OpenAI"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code. Injecte ANTHROPIC_API_KEY.",
+    "openai": "Codex. Injecte OPENAI_API_KEY.",
+    "xai": "Grok. Injecte XAI_API_KEY.",
+    "openai_compatible": "Tout point de terminaison de forme OpenAI. Injecte OPENAI_API_KEY et OPENAI_BASE_URL ; le point de terminaison est obligatoire."
+  },
+  "states": {
+    "active": "Actif",
+    "revoked": "Révoqué"
+  },
+  "probe": {
+    "never": "Non testé",
+    "ok": "Acceptée",
+    "refused": "Refusée",
+    "unreachable": "Injoignable",
+    "neverHint": "Personne n'a testé cet identifiant. L'enregistrer ne prouve pas qu'il fonctionne.",
+    "okHint": "Le fournisseur a répondu et a accepté cet identifiant.",
+    "refusedHint": "Le fournisseur a répondu et a rejeté cet identifiant. Faites-le tourner.",
+    "unreachableHint": "Le point de terminaison n'a pas répondu. Cela ne dit rien sur l'identifiant.",
+    "models": "{{n}} modèles",
+    "latency": "{{ms}} ms",
+    "at": "Testé {{when}}"
+  },
+  "actions": {
+    "test": "Tester la connexion",
+    "testing": "Test en cours…",
+    "rotate": "Changer la clé",
+    "revoke": "Révoquer",
+    "details": "Détails"
+  },
+  "create": {
+    "title": "Ajouter un fournisseur",
+    "description": "Le moteur scelle la clé et ne la renvoie jamais. Vous verrez un indice de quatre caractères, rien de plus.",
+    "kind": "Fournisseur",
+    "kindPlaceholder": "Choisissez un fournisseur",
+    "name": "Nom",
+    "nameHint": "Votre propre nom pour cet identifiant. C'est ce qu'affiche un sélecteur.",
+    "namePlaceholder": "Anthropic (production)",
+    "baseURL": "Point de terminaison",
+    "baseURLHint": "Laissez vide pour le point de terminaison officiel du fournisseur. Doit être en https.",
+    "baseURLPlaceholder": "https://llm.exemple.com",
+    "apiKey": "Clé d'API",
+    "apiKeyHint": "Envoyée une fois, scellée par le moteur, jamais renvoyée à ce navigateur.",
+    "apiKeyPlaceholder": "Collez la clé",
+    "submit": "Ajouter le fournisseur",
+    "submitting": "Scellement…",
+    "cancel": "Annuler",
+    "success": "Fournisseur enregistré. Testez la connexion pour confirmer qu'il fonctionne.",
+    "testNext": "Tester la connexion maintenant"
+  },
+  "rotate": {
+    "title": "Changer la clé de ce fournisseur",
+    "description": "La nouvelle clé remplace l'ancienne sous la même référence, donc tous les profils qui y sont liés continuent de fonctionner. Une session déjà en cours garde l'identifiant avec lequel elle a démarré.",
+    "verdictCleared": "Le test de connexion précédent est effacé : un verdict mesuré sur un identifiant qui n'existe plus ne prouve rien sur celui qui le remplace.",
+    "submit": "Changer la clé",
+    "submitting": "Scellement…",
+    "success": "Clé changée. Testez la connexion pour confirmer que la nouvelle fonctionne."
+  },
+  "revoke": {
+    "title": "Révoquer ce fournisseur",
+    "description": "Cela détruit l'identifiant scellé. C'est irréversible pour cette référence.",
+    "consequence": "Tous les profils de fournisseur liés refuseront de lancer, en nommant ce fournisseur. L'identifiant n'est pas révoqué chez le fournisseur : faites-le dans sa propre console.",
+    "confirm": "Révoquer",
+    "success": "Fournisseur révoqué et son identifiant scellé détruit."
+  },
+  "detail": {
+    "title": "Fournisseur",
+    "reference": "Référence",
+    "endpoint": "Point de terminaison",
+    "officialEndpoint": "Le point de terminaison officiel du fournisseur",
+    "created": "Enregistré",
+    "revoked": "Révoqué",
+    "models": "Modèles listés par le dernier test",
+    "noModels": "Pas encore de liste de modèles. Testez la connexion.",
+    "close": "Fermer"
+  },
+  "vaultUnavailable": {
+    "title": "Ce déploiement ne peut pas stocker un identifiant de fournisseur",
+    "description": "Aucun coffre scellé n'est câblé, donc le moteur refuse de stocker une clé plutôt que d'en stocker une qu'il ne peut pas protéger. Une personne administratrice doit configurer le scelleur de secrets."
+  },
+  "next": {
+    "title": "Ensuite : déployez un agent",
+    "description": "Un identifiant seul ne lance rien. Liez-le à un profil de fournisseur, et une session lancée sous ce profil l'utilisera.",
+    "action": "Aller aux profils de fournisseur"
+  },
+  "truncation": {
+    "label": "{{n}} fournisseurs affichés ; il y en a d’autres",
+    "hint": "Cette liste est une page. Affinez-la, ou utilisez `olivares provider ls` pour l’ensemble complet."
+  }
+}

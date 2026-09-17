@@ -89546,6 +89546,17 @@
                       }
                     ]
                   },
+                  "provider_record_ref": {
+                    "anyOf": [
+                      {
+                        "description": "D19. Optional: the registered provider whose credential this profile's managed launches use. Empty leaves the host's own credential variables in charge, which is every profile's behaviour before D19. The engine refuses a credential whose kind this driver cannot read.",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "user_home": {
                     "description": "Absolute path used as HOME for the launched process; validated like config_home.",
                     "minLength": 1,
@@ -89800,6 +89811,17 @@
                     "anyOf": [
                       {
                         "description": "An explicit string replaces the stored label; null/omission preserves it.",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "provider_record_ref": {
+                    "anyOf": [
+                      {
+                        "description": "D19. Binds (or, with the empty string, unbinds) the registered provider this profile's managed launches use. Like auth_source it is an authorization and not identity, and it does not reach a live child: a running session keeps the provider its own launch resolved.",
                         "type": "string"
                       },
                       {
@@ -91277,6 +91299,720 @@
         "summary": "Revokes a source-to-profile binding; events already attributed under it keep their provenance and later observations through that source are no longer attributed to the profile.",
         "x-olivares-request-body-disposition": "bodyless",
         "x-required-permission": "sessions:profile-binding:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/providers": {
+      "get": {
+        "description": "Lists the tenant's registered providers as kinds, names and hints, never a credential.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Lists the tenant's registered providers as kinds, names and hints, never a credential.",
+        "x-required-permission": "sessions:provider:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Registers one provider credential; the engine seals the value and returns only a four-character hint.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "api_key": {
+                    "description": "The credential. Sealed at rest by the engine and never returned by any read, including immediately after this write. Lose it and rotate; there is no read that recovers it.",
+                    "minLength": 8,
+                    "type": "string"
+                  },
+                  "base_url": {
+                    "anyOf": [
+                      {
+                        "description": "Absolute https endpoint override. Empty uses the provider's official endpoint; REQUIRED for openai_compatible. A URL carrying userinfo is refused: a credential must not travel in a field that is published in every read.",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "display_name": {
+                    "description": "Your own name for this credential; it is what a picker shows. Unique among active providers of the same kind, case-folded.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "kind": {
+                    "description": "What the credential IS, independent of which CLI reads it. The set is closed because a kind decides which environment variables a launched child receives.",
+                    "enum": [
+                      "anthropic",
+                      "openai",
+                      "xai",
+                      "openai_compatible"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "display_name",
+                  "api_key"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Registers one provider credential; the engine seals the value and returns only a four-character hint.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:provider:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/providers/{ref}": {
+      "get": {
+        "description": "Returns one registered provider by its reference, without its credential.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns one registered provider by its reference, without its credential.",
+        "x-required-permission": "sessions:provider:read",
+        "x-stability": "beta"
+      },
+      "patch": {
+        "description": "Renames a provider, changes its endpoint and/or rotates its credential in place.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "api_key": {
+                    "anyOf": [
+                      {
+                        "description": "Rotates the credential in place: it reseals under the SAME reference, so every profile bound to this provider keeps working and the NEXT launch uses the new value — a session already running keeps the one it started with. The previous connection test is cleared, because a verdict measured on a credential that no longer exists is not evidence about the one replacing it.",
+                        "minLength": 8,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "base_url": {
+                    "anyOf": [
+                      {
+                        "description": "An explicit string replaces the stored endpoint; null/omission preserves it.",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "display_name": {
+                    "anyOf": [
+                      {
+                        "description": "An explicit string replaces the stored name; null/omission preserves it.",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Renames a provider, changes its endpoint and/or rotates its credential in place.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:provider:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/providers/{ref}/revoke": {
+      "post": {
+        "description": "Withdraws a provider credential for good; the record keeps its id so the sessions it authorized still read truthfully.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Withdraws a provider credential for good; the record keeps its id so the sessions it authorized still read truthfully.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:provider:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/providers/{ref}/test": {
+      "post": {
+        "description": "Asks the provider which models it serves with the registered credential; it sends no completion and spends nothing.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Asks the provider which models it serves with the registered credential; it sends no completion and spends nothing.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:provider:write",
         "x-stability": "beta"
       }
     },

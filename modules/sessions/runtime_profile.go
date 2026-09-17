@@ -237,6 +237,7 @@ func setProfileSnapshot(rec model.Record, snap *ProviderHomeSnapshot) {
 		rec[colRunProfileConfigHome] = nil
 		rec[colRunProfileUserHome] = nil
 		setOrNull(rec, colRunProviderAuthSource, "")
+		setOrNull(rec, colRunProviderRecordRef, "")
 		return
 	}
 	rec[colRunProfileID] = snap.ProfileID
@@ -248,6 +249,10 @@ func setProfileSnapshot(rec model.Record, snap *ProviderHomeSnapshot) {
 	// spawn, so what a run was launched under is durable rather than re-derived
 	// from a profile row that may have been re-authorized since.
 	setOrNull(rec, colRunProviderAuthSource, snap.AuthSource)
+	// D19, persisted for the same reason and at the same moment: which registered
+	// credential this run was launched under is a fact about the launch, not a
+	// property of the profile row as it reads today.
+	setOrNull(rec, colRunProviderRecordRef, snap.ProviderRecordRef)
 }
 
 // captureProfiledSessionID binds the provider's session id under the run's

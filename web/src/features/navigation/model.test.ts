@@ -45,6 +45,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   inventory: ['infrastructure', 'estate'],
   sessions: ['ai', 'sessions'],
   agentops: ['ai', 'sessions'],
+  providers: ['ai', 'environments'],
   providerProfiles: ['ai', 'environments'],
   providerBindings: ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],

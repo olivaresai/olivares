@@ -511,3 +511,49 @@ func (m *Module) EnableProfiledLaunches() { m.rt.profiledLaunchesEnabled = true 
 
 // ProfiledLaunchesEnabled reports the switch above.
 func (m *Module) ProfiledLaunchesEnabled() bool { return m.rt.profiledLaunchesEnabled }
+
+// WithProviderSecretVault wires the port that seals provider-record credentials
+// outside this module's partition (D19). Unwired, registering a provider is
+// refused with the wiring named: the engine never stores a credential in the
+// clear, and "I have nowhere safe to put this" is an answer, not a failure.
+func WithProviderSecretVault(v ProviderSecretVault) Option {
+	return func(m *Module) {
+		if v != nil {
+			m.rt.providerVault = v
+		}
+	}
+}
+
+// WithProviderProbe wires the non-spending connection test (D19). Unwired, the
+// test is refused and says that launching is unaffected.
+func WithProviderProbe(p ProviderProbe) Option {
+	return func(m *Module) {
+		if p != nil {
+			m.rt.providerProbe = p
+		}
+	}
+}
+
+// UseProviderSecretVault late-binds the sealing port, for the same reason the
+// governance gates are late-bound: the composition root builds this module BEFORE
+// it builds the store the vault is implemented over.
+func (m *Module) UseProviderSecretVault(v ProviderSecretVault) {
+	if v != nil {
+		m.rt.providerVault = v
+	}
+}
+
+// UseProviderProbe late-binds the connection test.
+func (m *Module) UseProviderProbe(p ProviderProbe) {
+	if p != nil {
+		m.rt.providerProbe = p
+	}
+}
+
+// ProviderVaultWired reports whether a sealing port is available, so a console or
+// a CLI can present an honest "provider registration is disabled on this
+// deployment" posture instead of discovering it one refused request at a time.
+func (m *Module) ProviderVaultWired() bool { return m.rt.providerVault != nil }
+
+// ProviderProbeWired reports whether the connection test is available.
+func (m *Module) ProviderProbeWired() bool { return m.rt.providerProbe != nil }

@@ -60,6 +60,15 @@ type runtimeState struct {
 	providerCreds map[string]ProviderCredentialSource
 	// approvalGate authorizes provider approval requests. DENY-CLOSED default.
 	approvalGate ProviderApprovalGate
+	// providerVault seals and opens the values of the tenant's PROVIDER RECORDS
+	// (D19). nil is the deny-closed state and the only honest one: a module holds
+	// no key, so with no vault the engine refuses to STORE a credential rather
+	// than storing one it cannot protect.
+	providerVault ProviderSecretVault
+	// providerProbe answers the connection test. nil refuses the test by name and
+	// says that launching is unaffected — the two are separate capabilities, and
+	// conflating them would report a deployment as broken for lacking a diagnostic.
+	providerProbe ProviderProbe
 	// productVersion is what Olivares calls itself in a provider handshake. The
 	// composition root supplies the build's value; the module invents none.
 	productVersion string
