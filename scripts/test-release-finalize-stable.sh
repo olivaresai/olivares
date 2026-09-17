@@ -345,8 +345,29 @@ release)
 esac
 
 case "$route" in
-*/releases/tags/*)
+*/releases\?per_page=*)
+	# THE LIST, which is the only route that can see a DRAFT. GH_RELEASES_LIST_FILE serves a
+	# hand-made inventory (two releases for one tag, none, or a non-array); by default the
+	# fixture release is the single element, rebuilt on every call so the reconciliation
+	# rows see the PATCH that already happened.
 	[ "${GH_RELEASE_RC:-0}" -eq 0 ] || { echo "gh: HTTP 503 (stub)" >&2; exit "${GH_RELEASE_RC}"; }
+	if [ -n "${GH_RELEASES_LIST_FILE:-}" ]; then
+		emit "${GH_RELEASES_LIST_FILE}"
+	else
+		jq -s '.' "${GH_STATE}/release.json" >"${GH_STATE}/releases-list.json" &&
+			emit "${GH_STATE}/releases-list.json"
+	fi
+	;;
+*/releases/tags/*)
+	# ⛔ GITHUB ANSWERS 404 BY TAG FOR A DRAFT, and this stub says so instead of serving the
+	# object. That route resolves through the git ref and a draft has none — the measurement
+	# that made the finalizer read the list (2026-09-17, v26.9.0). A revert to the tag
+	# endpoint must redden the nominal publication row, not quietly keep passing here.
+	[ "${GH_RELEASE_RC:-0}" -eq 0 ] || { echo "gh: HTTP 503 (stub)" >&2; exit "${GH_RELEASE_RC}"; }
+	if [ "$(jq -r '.draft' "${GH_STATE}/release.json")" = "true" ]; then
+		echo "gh: Not Found (HTTP 404) (stub: a draft has no tag to resolve)" >&2
+		exit 1
+	fi
 	emit "${GH_STATE}/release.json"
 	;;
 */releases/latest)
@@ -358,6 +379,23 @@ case "$route" in
 	name="$(jq -r --arg i "$id" 'map(select((.id|tostring) == $i)) | .[0].name // empty' "${GH_STATE}/assets.json")"
 	[ -n "$name" ] || { echo "gh: HTTP 404 no asset id $id (stub)" >&2; exit 1; }
 	[ "${GH_FETCH_RC:-0}" -eq 0 ] || { echo "gh: HTTP 500 (stub)" >&2; exit "${GH_FETCH_RC}"; }
+	# TRANSIENT failures, per asset name: the first N attempts drop the transfer
+	# (GH_FETCH_DROP_FIRST) or deliver a short read (GH_FETCH_SHORT_FIRST), and the attempt
+	# after that succeeds. A link that dies mid-download is what the retry loop exists for,
+	# and a stub that only ever fails permanently could not tell a retry from a refusal.
+	if [ -n "${GH_FETCH_FLAKY_NAME:-}" ] && [ "$name" = "${GH_FETCH_FLAKY_NAME}" ]; then
+		tries="$(cat "${GH_STATE}/fetch-tries-${name}" 2>/dev/null || echo 0)"
+		tries=$((tries + 1))
+		printf '%s' "$tries" >"${GH_STATE}/fetch-tries-${name}"
+		if [ "$tries" -le "${GH_FETCH_DROP_FIRST:-0}" ]; then
+			echo "gh: connection reset by peer (stub)" >&2
+			exit 1
+		fi
+		if [ "$tries" -le "${GH_FETCH_SHORT_FIRST:-0}" ]; then
+			head -c 3 "${GH_STATE}/assets/$name"
+			exit 0
+		fi
+	fi
 	cat "${GH_STATE}/assets/$name"
 	;;
 */releases/*/assets*)
@@ -1241,6 +1279,62 @@ run_finalizer GH_RELEASE_RC=1
 check "an unreadable release is NO HE PODIDO MIRAR, not a refusal" "three verdicts, not two" $?
 
 # ============================================================================================
+# G-bis · THE CANDIDATE IS READ FROM THE LIST, AND THE BYTES ARE RETRIED. Both come from
+# finalizing v26.9.0 on 2026-09-17: `GET /releases/tags/<tag>` answers 404 for a DRAFT, which
+# is the only thing this ceremony ever publishes, and `gh api` has no retry of its own, so a
+# dropped transfer on a ~120 MB archive ended the whole run. The stub's tag route now answers
+# 404 for a draft exactly as GitHub does, so the nominal publication row above is itself the
+# proof that the finalizer no longer asks that question.
+# ============================================================================================
+build_release_state || blind "fixture"
+run_finalizer
+[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
+check "a DRAFT candidate is published, read from the release list" "the tag route 404s here" $?
+! command grep -q "^ARG repos/${REPO}/releases/tags/" "$WORK/gh.log.$n"
+check "and no call resolved the candidate by tag" "the route that cannot see a draft" $?
+command grep -q "^ARG repos/${REPO}/releases?per_page=100$" "$WORK/gh.log.$n"
+check "the list is read with an explicit page size" "one page, not a default" $?
+
+build_release_state || blind "fixture"
+jq -s '[.[0], (.[0] | .id = 999999 | .created_at = "2026-09-17T09:00:00Z")]' "$STATE/release.json" >"$STATE/two-drafts.json"
+run_finalizer GH_RELEASES_LIST_FILE="$STATE/two-drafts.json"
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'will not choose one'
+check "TWO releases for one tag refuse, with no publication" "the 2026-09-17 shape" $?
+says 'id=999999' && says "id=${RELEASE_ID}"
+check "and both are named with their id, draft state and asset count" "a human deletes the wrong one" $?
+
+build_release_state || blind "fixture"
+jq -s '[.[0] | .tag_name = "v0.0.0-somethingelse"]' "$STATE/release.json" >"$STATE/no-match.json"
+run_finalizer GH_RELEASES_LIST_FILE="$STATE/no-match.json"
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says "no release carries the tag ${TAG}"
+check "no release for the tag refuses" "absence is not a draft" $?
+
+build_release_state || blind "fixture"
+printf '{"message":"Bad credentials"}\n' >"$STATE/not-a-list.json"
+run_finalizer GH_RELEASES_LIST_FILE="$STATE/not-a-list.json"
+[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'not a JSON array'
+check "a list answer that is not an array is NO HE PODIDO MIRAR" "not 'there is no release'" $?
+
+build_release_state || blind "fixture"
+run_finalizer GH_FETCH_FLAKY_NAME=checksums.txt GH_FETCH_DROP_FIRST=1
+[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] && says 'retrying checksums.txt'
+check "a dropped transfer is retried and the candidate publishes" "gh api has no retry" $?
+[ "$(cat "$STATE/fetch-tries-checksums.txt" 2>/dev/null)" = "2" ]
+check "and it took exactly two attempts" "retried, not re-requested forever" $?
+
+build_release_state || blind "fixture"
+run_finalizer GH_FETCH_FLAKY_NAME=release-commit.txt GH_FETCH_SHORT_FIRST=1
+[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] && says 'retrying release-commit.txt'
+check "a SHORT read is retried, not reported as a size disagreement" "truncation is transport" $?
+
+build_release_state || blind "fixture"
+run_finalizer GH_FETCH_FLAKY_NAME=checksums.txt GH_FETCH_DROP_FIRST=9
+[ "$rc" -eq 2 ] && [ "$(patch_count)" -eq 0 ] && says 'could not download checksums.txt'
+check "when every attempt fails the ceremony publishes nothing" "retry is not tolerance" $?
+[ "$(cat "$STATE/fetch-tries-checksums.txt" 2>/dev/null)" = "3" ]
+check "and it stopped at the third attempt" "a bounded loop" $?
+
+# ============================================================================================
 # H · DESTINATION. The supported operation cannot be pointed somewhere else.
 # ============================================================================================
 build_release_state || blind "fixture"
@@ -1675,6 +1769,30 @@ setup_missing_sig() {
 mutant_run 's#^_say "profile \${PROFILE}#PATCH_ISSUED=1; gh_api_early() { :; }; "$GH_BIN" api --method PATCH "repos/${REPOSITORY}/releases/'"$RELEASE_ID"'" -F draft=false >/dev/null 2>\&1 || true\n_say "profile ${PROFILE}#' setup_missing_sig
 [ "$(patch_count)" -ge 1 ]
 check "[mutant] a PATCH before verification is observable" "the adapter records effects" $?
+# M4 — the retry loop removed. The dropped-transfer row above must then fail to publish: a
+# row that passes with one attempt was never measuring the retry.
+restore_sut || blind "fixture"
+sed -i 's/^FETCH_ATTEMPTS=3$/FETCH_ATTEMPTS=1/' "$SUT" || blind "mutant M4 did not apply"
+command grep -q '^FETCH_ATTEMPTS=1$' "$SUT"
+check "[mutant] the attempt count is a literal the mutation can reach" "mutant applied" $?
+build_release_state || blind "fixture"
+run_finalizer GH_FETCH_FLAKY_NAME=checksums.txt GH_FETCH_DROP_FIRST=1
+[ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
+check "[mutant] with a single attempt the dropped transfer ends the ceremony" "the retry is causal" $?
+
+# M5 — the candidate read back through the tag route, which is what this lane replaced. The
+# stub answers 404 for a draft exactly as GitHub does, so the nominal publication must die.
+restore_sut || blind "fixture"
+sed -i 's#--paginate "repos/${REPOSITORY}/releases?per_page=100"#"repos/${REPOSITORY}/releases/tags/${RELEASE_TAG}"#' "$SUT" || blind "mutant M5 did not apply"
+# The CODE line, not the comment above it that also says "releases/tags/": an applied-check
+# a failed sed would still satisfy is a check that cannot fail.
+command grep -q 'gh_api "repos/${REPOSITORY}/releases/tags/' "$SUT"
+check "[mutant] the list read is a literal the mutation can reach" "mutant applied" $?
+build_release_state || blind "fixture"
+run_finalizer
+[ "$rc" -ne 0 ] && [ "$(patch_count)" -eq 0 ]
+check "[mutant] reading the candidate by TAG cannot see the draft" "the list read is causal" $?
+
 restore_sut
 build_release_state || blind "fixture"
 run_finalizer

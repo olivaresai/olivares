@@ -313,6 +313,15 @@ else
 		"There is no third profile: an unrecognised destination is refused, never promoted."
 fi
 
+# How many times a single asset download may be attempted, and the pause between attempts.
+# CONSTANTS, NOT ENVIRONMENT KNOBS, and deliberately so: this script reads NO OLIVARES_FINALIZE*
+# variable, and its battery asserts that (test-release-finalize-stable.sh, "production has no
+# trust-bypass or executable override"). Retry counts look harmless, but they are still the
+# ceremony's behaviour set by whoever launches it, and the same argument that keeps TRUSTED_BIN
+# absolute keeps these literal. Worst case is 10 seconds of waiting per asset.
+FETCH_ATTEMPTS=3
+FETCH_RETRY_DELAY=5
+
 OTA_PUBKEY="${OLIVARES_OTA_PUBKEY:-}"
 [ -n "$OTA_PUBKEY" ] ||
 	blind "OLIVARES_OTA_PUBKEY is not configured" \
@@ -365,15 +374,51 @@ fi
 gh_api() { "$GH_BIN" api -H "Accept: application/vnd.github+json" "$@"; }
 
 release_json="$WORK/release.json"
+releases_json="$WORK/releases.json"
+# ⛔ THE CANDIDATE IS READ FROM THE LIST, NOT BY TAG, AND THE REASON IS THAT A DRAFT HAS NO
+# TAG TO READ. `GET /releases/tags/<tag>` answers 404 for a DRAFT: GitHub resolves that route
+# through the git ref, and a draft release is not attached to one. This ceremony exists to
+# publish a draft, so the route it used could never see its own subject — measured on
+# 2026-09-17 finalizing v26.9.0, where every attempt died at "could not read the release"
+# before looking at anything. `GET /releases` returns drafts (the token carries
+# contents:write) with the same object shape, so nothing below changes.
+#
+# EXACTLY ONE, NEVER A FIRST MATCH. The tag route could only ever answer with one object; a
+# list can hold several for one tag, and on 2026-09-17 it did: every phase-1 run created a
+# NEW draft for v26.9.0 while the SBOM and VEX producers uploaded to the OLDEST, so the tag
+# named two drafts and the complete candidate was neither of them. Publishing the first match
+# would publish a half-filled release and leave the other behind. .goreleaser.yaml now sets
+# replace_existing_draft so phase 1 stops making the second one; this refuses to guess if one
+# exists anyway.
 set +e
-gh_api "repos/${REPOSITORY}/releases/tags/${RELEASE_TAG}" >"$release_json" 2>"$WORK/release.err"
+gh_api --paginate "repos/${REPOSITORY}/releases?per_page=100" >"$releases_json" 2>"$WORK/release.err"
 api_rc=$?
 set -e
 if [ "$api_rc" -ne 0 ]; then
-	blind "could not read the release for ${RELEASE_TAG} (gh exit ${api_rc})" \
+	blind "could not list the releases of ${REPOSITORY} (gh exit ${api_rc})" \
 		"$(head -3 "$WORK/release.err" 2>/dev/null | tr '\n' ' ')" \
 		"A ceremony that cannot see the candidate must not publish it."
 fi
+# Each page is a JSON array. An answer that is not a stream of arrays is not an inventory of
+# releases, and reading it as an empty one would turn "the API answered something else" into
+# "there is no such release" — a refusal for the wrong reason.
+"$JQ_BIN" -s -e 'length > 0 and all(type == "array")' "$releases_json" >/dev/null 2>&1 ||
+	blind "the release list is not a JSON array" \
+		"$(head -3 "$WORK/release.err" 2>/dev/null | tr '\n' ' ')"
+matches_json="$WORK/tag-matches.json"
+"$JQ_BIN" -s --arg t "$RELEASE_TAG" '[.[][] | select(.tag_name == $t)]' "$releases_json" >"$matches_json" ||
+	blind "could not select ${RELEASE_TAG} out of the release list"
+n_match="$("$JQ_BIN" 'length' "$matches_json")"
+case "$n_match" in
+1) "$JQ_BIN" '.[0]' "$matches_json" >"$release_json" || blind "could not read the release object" ;;
+0) refuse "no release carries the tag ${RELEASE_TAG} in ${REPOSITORY}" \
+	"Phase 1 creates the draft this ceremony publishes; without it there is no candidate." ;;
+*) mapfile -t rel_dupes < <("$JQ_BIN" -r '.[] | "id=\(.id) draft=\(.draft) created=\(.created_at) assets=\(.assets | length)"' "$matches_json")
+	refuse "${n_match} releases carry the tag ${RELEASE_TAG}; this ceremony will not choose one:" \
+		"${rel_dupes[@]}" \
+		"Two releases for one tag split the assets of one candidate, and the complete one is" \
+		"not always the newest. A human deletes the drafts that are not the candidate." ;;
+esac
 "$JQ_BIN" -e 'type == "object"' "$release_json" >/dev/null 2>&1 ||
 	blind "the release response is not a JSON object"
 
@@ -481,22 +526,51 @@ asset_id_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | .[0].id //
 asset_size_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | if (.[0] | type) == "object" and (.[0].size != null) then (.[0].size | tostring) else "" end' "$assets_json"; }
 asset_url_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | .[0].browser_download_url // empty' "$assets_json"; }
 asset_digest_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | .[0].digest // ""' "$assets_json"; }
+# Did this attempt deliver the number of bytes the release declares? UNKNOWN SIZE IS NOT A
+# FAILURE — the release metadata may carry no size, and the digest check below is the real
+# subject — so this answers yes when there is nothing to compare, and the retry loop stops.
+size_matches() { # size_matches <name> <file>
+	local want have
+	want="$(asset_size_of "$1")"
+	[[ "$want" =~ ^[0-9]+$ ]] || return 0
+	have="$(wc -c <"$2" | tr -d ' ')"
+	[ "$want" = "$have" ]
+}
 
 # FETCH BY EXACT ASSET ID. `gh release download` selects by pattern against whatever the
 # release carries now, and `/releases/latest` or a browser URL is a MUTABLE selector: the
 # inventory above is the set this script ruled on, so the bytes must come from those exact
 # ids and nothing else.
 fetch_asset() {
-	local name="$1" id dest rc
+	local name="$1" id dest rc attempt
 	id="$(asset_id_of "$name")"
 	[[ "$id" =~ ^[1-9][0-9]*$ ]] || refuse "no usable asset id for ${name}"
 	dest="$DL/$name"
-	set +e
-	"$GH_BIN" api -H "Accept: application/octet-stream" \
-		"repos/${REPOSITORY}/releases/assets/${id}" >"$dest" 2>"$WORK/fetch.err"
-	rc=$?
-	set -e
-	[ "$rc" -eq 0 ] || blind "could not download ${name} by asset id ${id} (gh exit ${rc})" \
+	# RETRIED, BECAUSE A DROPPED TRANSFER IS NOT A VERDICT. `gh api` performs one attempt and
+	# has no retry of its own, so a link that drops mid-transfer — measured 2026-09-17 while
+	# finalizing v26.9.0, on the ~120 MB archives — ends the whole ceremony with "could not
+	# download". The retry loop changes no verdict: an attempt counts as good only if gh
+	# succeeded AND the bytes are the size the release metadata declares, and every check
+	# below still runs on the bytes that survived. A short read is retried instead of being
+	# reported as a size disagreement, which is the failure it actually was.
+	attempt=0
+	while :; do
+		attempt=$((attempt + 1))
+		set +e
+		"$GH_BIN" api -H "Accept: application/octet-stream" \
+			"repos/${REPOSITORY}/releases/assets/${id}" >"$dest" 2>"$WORK/fetch.err"
+		rc=$?
+		set -e
+		if [ "$rc" -eq 0 ] && [ -s "$dest" ] && size_matches "$name" "$dest"; then break; fi
+		[ "$attempt" -lt "$FETCH_ATTEMPTS" ] || break
+		# ⛔ TO STDERR, AND THE BATTERY IS WHY. fetch_asset RETURNS the digest on stdout
+		# (`digest="$(fetch_asset "$name")"`), so a progress line written with _say lands
+		# INSIDE the value every later comparison uses. Measured: two retry rows went red
+		# with a digest that began "release-finalize-stable: retrying …".
+		_err "retrying ${name} (attempt ${attempt} of ${FETCH_ATTEMPTS} did not deliver the declared bytes)"
+		[ "$FETCH_RETRY_DELAY" -eq 0 ] || sleep "$FETCH_RETRY_DELAY"
+	done
+	[ "$rc" -eq 0 ] || blind "could not download ${name} by asset id ${id} in ${attempt} attempt(s) (gh exit ${rc})" \
 		"$(head -2 "$WORK/fetch.err" 2>/dev/null | tr '\n' ' ')"
 	[ -s "$dest" ] || refuse "the downloaded ${name} is empty"
 	# The metadata size and digest are CORROBORATION; the bytes on disk are the subject.

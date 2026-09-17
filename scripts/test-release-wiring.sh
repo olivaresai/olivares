@@ -163,6 +163,13 @@ check "the authorization contract names publication" "written, not implied" $?
 # config that auto-published would route around the protected environment entirely.
 grep -qE '^  draft: true' "$ROOT/.goreleaser.yaml"
 check "the build config still creates a DRAFT" "publication stays in the protected job" $?
+# ONE DRAFT PER TAG. Without this line a re-run of phase 1 creates a SECOND draft for the same
+# tag while the producers upload to another, which is what happened to v26.9.0 on 2026-09-17:
+# the build's signed assets on one draft, the producers' output on the other, and no complete
+# candidate anywhere. `replace_existing_draft` is a no-op on a tag's first run and only ever
+# removes a draft, never a published release (GoReleaser v2.17.0, gated on `draft: true`).
+grep -qE '^  replace_existing_draft: true' "$ROOT/.goreleaser.yaml"
+check "a re-run replaces the previous draft instead of adding one" "one draft per tag" $?
 # SAME-TAG SERIALIZATION SURVIVES THE NEW STEP. Phase 1 creates the draft and phase 2 now
 # publishes it; without one concurrency group over BOTH, a tag run and a publication of the
 # same release can interleave, and the QA contrast already measured what that buys — a
