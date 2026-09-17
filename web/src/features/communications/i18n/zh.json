@@ -1,0 +1,957 @@
+{
+  "doors": {
+    "catalog": {
+      "title": "通信",
+      "description": "所选工作区中此主体当前可读的频道、经由这些频道发送的直接通知，以及个人收件箱。每次读取和每个操作都由引擎在各自的权限下决定。"
+    },
+    "inbox": {
+      "title": "通信收件箱",
+      "description": "此主体在所选工作区中的精确个人邮箱：发给它的投递，每次重新打开，只有通过显式操作才会确认。"
+    },
+    "new": {
+      "title": "新建频道",
+      "description": "以显式初始授权创建频道。不会有任何隐含授权，操作回执也不是日后谁可以读取的持久名单。"
+    },
+    "administration": {
+      "title": "频道管理",
+      "description": "此主体在所选工作区中可管理的频道：配置与授权历史，每次操作都在频道当前 ETag 下确认。管理需要 channel:admin 权限和有效的本地 admin 位；它既不要求也不授予读取频道内容的权利。"
+    },
+    "handoffs": {
+      "title": "交接",
+      "description": "在所选工作区中发给该主体的工作责任交接提议。列表不携带提议内容；打开某一条会重新读取其受保护上下文，接受或拒绝都是由引擎裁决的显式操作。"
+    }
+  },
+  "tabs": {
+    "channels": "频道",
+    "inbox": "收件箱",
+    "create": "新建频道",
+    "administration": "管理",
+    "handoffs": "交接"
+  },
+  "workspace": {
+    "requiredTitle": "请选择工作区",
+    "requiredBody": "通信需要显式的工作区。请在工作区切换器中选择一个：控制台绝不会替您选择，且在选择之前不会发出任何请求。",
+    "scope": "工作区范围"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "loadMore": "加载更多",
+    "newChannel": "新建频道",
+    "open": "打开",
+    "openMessage": "打开消息",
+    "sendNotice": "发送通知",
+    "compose": "撰写",
+    "confirm": "确认并发送",
+    "ack": "确认收到",
+    "confirmAck": "确认此回执",
+    "reread": "重新读取",
+    "retrySameKey": "使用相同密钥重试",
+    "discardAndEdit": "放弃此意图并编辑",
+    "checkCatalog": "检查目录",
+    "addGrant": "添加授权",
+    "addMe": "将我的账户添加为主体",
+    "removeGrant": "移除授权",
+    "addBlock": "添加块",
+    "removeBlock": "移除块",
+    "useMe": "使用我的账户",
+    "create": "创建频道",
+    "creating": "正在创建…",
+    "sending": "正在发送…",
+    "acking": "正在确认…",
+    "cancel": "取消",
+    "close": "关闭",
+    "back": "返回编辑",
+    "pageSize": "每页数量",
+    "administer": "管理",
+    "advancing": "推进中…",
+    "applyFilter": "应用筛选",
+    "applying": "应用中…",
+    "confirmArchive": "确认并归档",
+    "confirmChanges": "确认更改",
+    "confirmGrant": "确认授权",
+    "confirmRevoke": "确认撤销",
+    "confirmSeen": "确认：标记已读到此处",
+    "discardIntent": "放弃此意图",
+    "grantSuccessor": "授予后继（单独操作）",
+    "leaveUndetermined": "保持未定",
+    "markSeen": "标记已读到此处",
+    "openBarrierDelivery": "打开屏障投递",
+    "refreshInbox": "刷新收件箱",
+    "rereadAndEdit": "重新读取并再次编辑",
+    "rereadHistory": "重新读取历史",
+    "rereadToVerify": "重新读取以核实",
+    "revert": "撤销编辑",
+    "reviewChanges": "审阅更改",
+    "reviewGrant": "审阅授权",
+    "revokeGeneration": "撤销此代",
+    "revokeThenGrant": "撤销，然后授予后继",
+    "dismiss": "关闭"
+  },
+  "catalog": {
+    "title": "可见频道",
+    "description": "仅显示此主体当前可读的活动频道及其自身的当前本地位。一页不是对整个目录的搜索：请加载更多以从服务器的续页令牌继续。",
+    "emptyTitle": "没有可见频道",
+    "emptyBody": "此主体在该工作区中没有可读的频道，或尚不存在任何频道。读取授权加上 channel:read 权限会使频道显示在此处。",
+    "truncated": "本页之外还有更多频道",
+    "truncatedHint": "服务器报告了更多可见频道。请加载更多以从其续页令牌继续。",
+    "columns": {
+      "name": "名称",
+      "slug": "Slug",
+      "kind": "类型",
+      "state": "状态",
+      "protection": "保护",
+      "access": "您的本地访问",
+      "updated": "更新时间"
+    },
+    "openById": "按 ID 打开频道",
+    "openByIdHint": "按 ID 打开的频道会连同其 ETag 重新读取；该读取不会报告您的本地位。"
+  },
+  "access": {
+    "label": "您的本地访问",
+    "read": "读",
+    "write": "写",
+    "admin": "管理",
+    "none": "无本地位",
+    "unknown": "此读取未报告",
+    "hint": "本地位是频道自身对此主体的授权。此外还需要核心权限，引擎会在被请求的那一刻决定每个操作。"
+  },
+  "kind": {
+    "coordination": "协调",
+    "work": "工作",
+    "incident": "事件",
+    "announcement": "公告",
+    "private": "私有"
+  },
+  "sensitivity": {
+    "internal": "内部",
+    "restricted": "受限"
+  },
+  "protection": {
+    "storage": "存储",
+    "application_sealed": "应用封存"
+  },
+  "ackPolicy": {
+    "none": "无",
+    "each_required": "每个必需",
+    "quorum": "法定数"
+  },
+  "wake": {
+    "none": "无",
+    "primary": "主要",
+    "all": "全部",
+    "inherit": "继承"
+  },
+  "channel": {
+    "title": "频道",
+    "description": "从引擎连同其 ETag 重新读取。此读取不包含授权，也不包含本地位。",
+    "fields": {
+      "id": "频道 ID",
+      "slug": "Slug",
+      "name": "名称",
+      "descriptionField": "描述",
+      "kind": "类型",
+      "state": "状态",
+      "sensitivity": "敏感度",
+      "protection": "内容保护",
+      "protectionGeneration": "保护代次",
+      "ackPolicy": "默认确认策略",
+      "ackTimeout": "默认确认超时 (ms)",
+      "wake": "默认唤醒",
+      "retention": "保留策略引用",
+      "maxFanout": "最大扇出",
+      "maxAutomationDepth": "最大自动化深度",
+      "aclRevision": "ACL 修订",
+      "routeRevision": "路由修订",
+      "subscriptionRevision": "订阅修订",
+      "version": "版本",
+      "etag": "ETag",
+      "created": "创建时间",
+      "updated": "更新时间",
+      "workspace": "工作区",
+      "tenant": "租户"
+    },
+    "sendHint": {
+      "canWrite": "本目录页显示您的本地写位当前有效，且您持有发送权限。引擎会在发送时再次决定。",
+      "noWrite": "本目录页未报告您的本地写位。引擎会拒绝发送；不提供撰写。",
+      "unknown": "此读取未报告您的本地位。您持有发送权限；本地权限由引擎在发送时决定。",
+      "noPermission": "您不持有消息发送权限，因此不提供撰写。"
+    }
+  },
+  "create": {
+    "title": "创建频道",
+    "description": "合约的每个字段均可用。初始授权是显式的：添加每个主体并勾选您想要的每个位。不会以您的名义添加任何内容。",
+    "fields": {
+      "slug": "Slug",
+      "slugHint": "小写字母、数字和连字符；在工作区内唯一。",
+      "name": "名称",
+      "descriptionField": "描述",
+      "kind": "类型",
+      "sensitivity": "敏感度",
+      "protection": "内容保护",
+      "protectionHint": "应用封存的内容一经写入即不可逆。",
+      "ackPolicy": "默认确认策略",
+      "ackTimeout": "默认确认超时 (ms)",
+      "wake": "默认唤醒",
+      "retention": "保留策略引用",
+      "maxFanout": "最大扇出",
+      "maxAutomationDepth": "最大自动化深度",
+      "grants": "初始授权",
+      "grantsHint": "至少一条授权且至少包含一个位。一条授权是一个主体及其三个各自独立的位。您自己的账户与其他主体无异。"
+    },
+    "grant": {
+      "subject": "主体",
+      "read": "读",
+      "write": "写",
+      "admin": "管理",
+      "expiresAt": "到期时间",
+      "expiresHint": "可选。留空表示授权不过期。"
+    },
+    "validation": {
+      "slug": "Slug 必须由小写字母、数字和连字符组成，并以字母或数字开头。",
+      "name": "名称为必填项。",
+      "grants": "至少需要一条初始授权。",
+      "grantRef": "每条授权都需要主体引用。",
+      "grantBits": "每条授权至少需要一个位。",
+      "number": "必须是大于或等于零的整数。",
+      "fanout": "必须是大于或等于一的整数。"
+    },
+    "noReadHint": "您持有 channel:write 但没有 channel:read。您可以用显式授权创建；目录不会向您显示结果，此回执也不会改变这一点。",
+    "result": {
+      "title": "频道已创建",
+      "body": "这是操作的回执。下方的授权是此刻记录的内容；它不是日后谁可以读取频道的持久名单。可见性由目录在每次读取时决定。",
+      "grants": "已记录的授权",
+      "noGrants": "未返回授权行。",
+      "auditSeq": "审计序号",
+      "etag": "ETag"
+    },
+    "unknown": {
+      "title": "结果未知",
+      "body": "请求可能已应用也可能未应用：传输在收到应答前失败。此路由没有幂等密钥，因此控制台不会自行重试。再次创建前请在目录中检查 slug “{{slug}}”。若您没有读取权限，在目录中看不到它并不能证明它未被创建。"
+    }
+  },
+  "subject": {
+    "kind": "类型",
+    "ref": "引用",
+    "kinds": {
+      "user": "用户",
+      "user_group": "用户组",
+      "agent": "代理",
+      "agent_group": "代理组",
+      "session": "会话"
+    },
+    "pickUser": "选择用户",
+    "pickAgent": "选择代理",
+    "manualRef": "引用 (ID)",
+    "userRefHint": "规范用户 ID。目录中的用户并不因此成为此频道的合格收件人：引擎在发送时决定。",
+    "agentRefHint": "代理的身份 ID，而非其行 ID 或外部 ID。",
+    "sessionRefHint": "规范会话 ID。此控制台尚无会话目录；请从其权威来源输入 ID。",
+    "groupRefHint": "组 ID。",
+    "noDirectory": "未向您提供目录（缺少读取权限）。请直接输入引用。",
+    "noIdentity": "不可寻址 — 无身份",
+    "truncated": "目录页不完整：存在的行多于已加载的行。",
+    "loading": "正在加载目录…",
+    "me": "我"
+  },
+  "compose": {
+    "title": "发送直接通知",
+    "description": "在频道“{{channel}}”上向一个用户、代理或会话发送一条通知。内容为类型化块；引擎在发送时检查收件人当前的资格与授权。",
+    "recipient": "收件人",
+    "subjectField": "主题",
+    "blocks": "内容块",
+    "block": {
+      "type": "类型",
+      "format": "格式",
+      "text": "文本",
+      "code": "代码",
+      "referenceKind": "引用类型",
+      "referenceRef": "引用",
+      "referenceHash": "引用哈希",
+      "referenceHint": "引用是供读者参考的信息。不会据此获取或执行任何内容。",
+      "codeHint": "单个令牌，最多 128 个字符。状态块不携带其他内容。",
+      "markdownHint": "Markdown 按原样保存并以文本形式显示；引擎会拒绝原始 HTML 标签。"
+    },
+    "urgency": "紧急程度",
+    "availableAt": "可用时间",
+    "availableAtHint": "可选的延迟可用时间，采用您的本地时间。留空则立即发布。",
+    "validation": {
+      "recipient": "需要收件人引用。",
+      "subject": "主题为必填项。",
+      "blocks": "至少需要一个块。",
+      "text": "文本块需要文本。",
+      "reference": "引用块需要类型和引用。",
+      "code": "状态块需要一个代码：单个令牌，最多 128 个字符，不含空格。",
+      "availableAt": "无法将可用时间解析为日期。",
+      "markdownHtml": "Markdown 块不得包含原始 HTML 标签。",
+      "subjectLength": "主题最多 256 字节。"
+    },
+    "confirm": {
+      "title": "确认意图",
+      "body": "此意图现已不可变。其密钥绑定了正文和目标；在结果不明确后重试会原样重发，编辑则开始一个新的意图。",
+      "key": "幂等密钥",
+      "channel": "频道",
+      "recipient": "收件人",
+      "subject": "主题",
+      "blocksCount": "块数",
+      "urgency": "紧急程度",
+      "availableAt": "可用时间"
+    },
+    "result": {
+      "appliedTitle": "通知已发布",
+      "appliedBody": "引擎此刻已创建消息及其投递。",
+      "replayedTitle": "已发布过",
+      "replayedBody": "引擎从其幂等台账应答：此精确意图之前已被应用。没有任何内容被发送第二次。",
+      "ambiguousTitle": "结果未知",
+      "ambiguousBody": "传输在收到应答前失败，因此通知可能已发布也可能未发布。重试会重发相同的密钥和正文：引擎要么只应用一次，要么重放先前的结果。",
+      "refusedTitle": "发送被拒绝",
+      "refusedBody": "引擎未发布此通知。原因来自服务器；目录并未承诺资格。"
+    }
+  },
+  "urgency": {
+    "normal": "普通",
+    "high": "高",
+    "critical": "严重",
+    "": "默认"
+  },
+  "blockType": {
+    "text": "文本",
+    "reference": "引用",
+    "status": "状态",
+    "action_ref": "操作引用"
+  },
+  "format": {
+    "plain": "纯文本",
+    "markdown": "Markdown",
+    "": "默认"
+  },
+  "inbox": {
+    "title": "个人收件箱",
+    "description": "此工作区中发给此主体的投递，按引擎当前的授权显示。读取一页不会确认任何内容，也不会推进任何游标。",
+    "emptyTitle": "没有投递",
+    "emptyBody": "此工作区中当前没有发给此主体的可见内容。",
+    "truncated": "本页之外还有更多投递",
+    "truncatedHint": "服务器报告了更多可见投递。请加载更多以从其续页令牌继续。",
+    "columns": {
+      "subject": "主题",
+      "sender": "发送者",
+      "urgency": "紧急程度",
+      "state": "投递状态",
+      "available": "可用",
+      "ackDue": "确认截止",
+      "acknowledged": "已确认",
+      "delivery": "投递"
+    }
+  },
+  "delivery": {
+    "title": "投递",
+    "description": "为此主体重新读取。确认收到是使用刚读取版本的显式操作。",
+    "fields": {
+      "id": "投递 ID",
+      "messageId": "消息 ID",
+      "recipient": "收件人",
+      "state": "状态",
+      "required": "必需",
+      "seq": "投递序号",
+      "version": "版本",
+      "available": "可用时间",
+      "firstSeen": "首次查看时间",
+      "ackDue": "确认截止时间",
+      "expires": "到期时间",
+      "acknowledged": "确认时间"
+    },
+    "ack": {
+      "title": "确认收到此投递",
+      "body": "此操作发送 If-Match {{etag}}（您读取的版本）以及其自身的密钥。若投递在此期间发生变化，引擎会应答 412，您需在再次确认前重新读取；控制台绝不会替换版本。",
+      "key": "幂等密钥",
+      "ifMatch": "If-Match",
+      "appliedTitle": "已确认",
+      "appliedBody": "引擎已记录该确认。",
+      "replayedTitle": "已确认过",
+      "replayedBody": "引擎重放了先前一次相同确认的回执。",
+      "late": "迟到的确认：在截止时间之后记录。不计为有效履行。",
+      "conflictTitle": "自您读取以来投递已变化",
+      "conflictBody": "引擎拒绝了确认：您读取的版本已不是最新，或该投递已被确认。请重新读取投递，仅在仍然适用时再次确认。没有任何内容被重新发送。",
+      "ambiguousTitle": "结果未知",
+      "ambiguousBody": "传输在收到应答前失败。重试会重发相同的密钥和相同的 If-Match；引擎要么只应用一次，要么重放，要么以当前版本拒绝。",
+      "refusedTitle": "确认被拒绝",
+      "noPermission": "您不持有投递写权限，因此不提供确认。"
+    },
+    "openMessageHint": "在消息读取权限下以单独的读取打开消息。",
+    "noMessageRead": "您不持有消息读取权限；消息仅按此投递所携带的形式显示于此。"
+  },
+  "message": {
+    "title": "消息",
+    "description": "在引擎完成精确的载体检查后，于消息读取权限下重新读取。",
+    "fields": {
+      "id": "消息 ID",
+      "channel": "频道",
+      "thread": "线程",
+      "state": "状态",
+      "sender": "发送者",
+      "urgency": "紧急程度",
+      "ackPolicy": "确认策略",
+      "ackQuorum": "确认法定数",
+      "available": "可用时间",
+      "published": "发布时间",
+      "ackDue": "确认截止时间",
+      "expires": "到期时间",
+      "terminal": "终止时间",
+      "terminalCode": "终止代码",
+      "version": "版本"
+    }
+  },
+  "content": {
+    "title": "内容",
+    "inert": "以文本形式显示。引用和操作引用仅为信息：控制台绝不会获取、跟随或执行它们。",
+    "markdownAsText": "markdown，以文本形式显示",
+    "reference": "引用",
+    "action": "操作引用",
+    "status": "状态",
+    "hash": "哈希",
+    "empty": "（空）"
+  },
+  "fulfillment": {
+    "title": "履行",
+    "state": "状态",
+    "required": "必需",
+    "acknowledged": "已确认",
+    "viable": "可行",
+    "unmet": "未满足",
+    "quorum": "法定数"
+  },
+  "receipt": {
+    "title": "回执",
+    "commandId": "命令 ID",
+    "messageId": "消息 ID",
+    "deliveryId": "投递 ID",
+    "ackId": "确认 ID",
+    "eventId": "事件 ID",
+    "auditSeq": "审计序号",
+    "version": "版本",
+    "etag": "ETag",
+    "state": "状态",
+    "verdict": "裁定",
+    "code": "代码",
+    "deliveryCount": "投递数",
+    "requiredCount": "必需数",
+    "payloadDigest": "载荷摘要",
+    "planHash": "计划哈希",
+    "audienceHash": "受众哈希",
+    "late": "迟到"
+  },
+  "failure": {
+    "forbidden": "引擎为当前主体拒绝了此操作。",
+    "step_up": "您的角色允许此操作，但必须先提升会话。",
+    "not_found": "未找到，或对此主体不可见。",
+    "unavailable": "引擎无法查看：当前的权限、保管或存储证据不可用。这既不是空结果，也不是拒绝。",
+    "version_mismatch": "您读取的版本已不是最新。",
+    "version_required": "引擎要求了控制台未发送的版本前置条件。",
+    "plan_changed": "发布将无法重现绑定的计划。",
+    "terminal": "目标处于终止状态；操作无法应用。",
+    "invalid": "引擎以请求格式错误为由拒绝。",
+    "rate_limited": "已限速。请稍候再请求。",
+    "ambiguous": "传输在收到应答前失败。",
+    "aborted": "因权限变化，已由控制台取消。",
+    "other": "请求失败。",
+    "code": "代码",
+    "status": "状态码",
+    "requestId": "请求 ID",
+    "message": "服务器消息",
+    "conflict": "该行在您读取后已更改，或此操作已不再适用。再次决定前请重新读取。",
+    "snapshot_changed": "频道在此列表的两页之间发生了变化。"
+  },
+  "authority": {
+    "lost": "此操作的权限已不再持有；没有发送任何内容。",
+    "confirmationClosed": "由于所依据的权限已丢失，待处理的确认已关闭。",
+    "notAddressable": "此主体没有该类型的目录引用，无法寻址。"
+  },
+  "states": {
+    "loading": "正在加载…",
+    "reading": "正在读取…"
+  },
+  "administration": {
+    "title": "可管理的频道",
+    "description": "此主体现在可管理的频道：核心 channel:admin 与有效的本地 admin 位，由引擎在每次读取时判定。已归档的频道仍会列出并可查看。这不是读取目录：既不要求也不假定本地读取位。",
+    "stateFilter": "持久状态",
+    "states": {
+      "all": "所有状态",
+      "active": "仅活动",
+      "archived": "仅已归档"
+    },
+    "columns": {
+      "name": "名称",
+      "slug": "Slug",
+      "kind": "类型",
+      "state": "状态",
+      "sensitivity": "敏感度",
+      "protection": "保护",
+      "etag": "ETag",
+      "updated": "更新时间"
+    },
+    "openById": "按 ID 管理频道",
+    "openByIdHint": "该面板通过 channel:admin 下的授权历史读取，绝不使用读取层级的频道读取。",
+    "emptyTitle": "没有可管理的频道",
+    "emptyBody": "此工作区中没有频道向此主体授予有效的 admin 位，或没有频道匹配所选的持久状态。本地 admin 授权加上 channel:admin 权限会使频道出现在此处。",
+    "truncated": "本页之后还有更多可管理的频道",
+    "truncatedHint": "服务器报告了更多可管理的频道。加载更多以从其续页标记继续。"
+  },
+  "channelState": {
+    "active": "活动",
+    "archived": "已归档"
+  },
+  "grantState": {
+    "active": "活动",
+    "revoked": "已撤销",
+    "expired": "已过期"
+  },
+  "admin": {
+    "title": "频道管理",
+    "description": "通过授权历史结合频道的前提条件 ETag 全新读取；不打开任何内容。",
+    "observedAt": "观测时间",
+    "tabs": {
+      "config": "配置",
+      "grants": "授权"
+    },
+    "readFailedTitle": "管理读取未成功",
+    "readFailedBody": "此频道之前显示的任何内容都不会保留：屏幕上的内容必须是引擎现在授权的内容。原因解决后请重新读取。"
+  },
+  "config": {
+    "immutable": "Slug、类型、租户、工作区和代计数器在此仅供参考且不可变；引擎会拒绝跨越它们的更改。",
+    "advanced": "高级选项",
+    "archivedNote": "此频道已归档。其状态无法恢复为活动；其配置仍可编辑。",
+    "stateHint": "归档是单向的：已归档的频道永远不会恢复为活动。",
+    "stateLocked": "已归档。引擎拒绝对已归档频道的任何状态更改。",
+    "sensitivityHint": "“受限”要求应用封存的内容，且不能降回“内部”。",
+    "protectionHint": "应用封存的保护不能降回存储。",
+    "ackHint": "确认策略“无”要求超时为零；任何其他策略要求正超时。",
+    "wakeHint": "频道默认值不能为“继承”；该值属于消息。",
+    "validation": {
+      "name": "名称必须为 1 到 256 字节。",
+      "description": "描述最多 4096 字节。",
+      "fanout": "最大扇出必须是不小于一的整数。",
+      "depth": "最大自动化深度必须是不小于零的整数。",
+      "timeout": "确认超时必须是毫秒整数。",
+      "ackTimeout": "确认策略“无”需要超时为 0；其他策略需要正超时。",
+      "restrictedSealed": "受限频道必须应用封存。",
+      "sensitivityLowered": "敏感度不能从“受限”降为“内部”。",
+      "protectionLowered": "内容保护不能从“应用封存”降为“存储”。",
+      "archivedState": "已归档的频道无法恢复为活动。",
+      "nothingChanged": "没有更改：没有要发送的字段。"
+    },
+    "fieldNames": {
+      "name": "名称",
+      "description": "描述",
+      "state": "状态",
+      "sensitivity": "敏感度",
+      "content_protection": "内容保护",
+      "default_ack_policy": "默认确认策略",
+      "default_ack_timeout_ms": "默认确认超时（毫秒）",
+      "default_wake": "默认唤醒",
+      "retention_policy_ref": "保留策略引用",
+      "max_fanout": "最大扇出",
+      "max_automation_depth": "最大自动化深度"
+    },
+    "confirm": {
+      "title": "确认配置更改",
+      "body": "仅发送下列字段，附带 If-Match {{etag}}，即屏幕上读取的 ETag。若频道在此期间已更改，引擎会拒绝，您需要在再次确认前重新读取；控制台绝不会替换 ETag。",
+      "archiving": "这将归档该频道。归档是单向的：它不会恢复为活动。",
+      "ifMatch": "If-Match"
+    },
+    "appliedTitle": "配置已应用",
+    "appliedBody": "引擎已提交更改。面板重新读取频道；下一个操作使用该次读取的 ETag。",
+    "conflictTitle": "频道在您读取后已更改",
+    "conflictBody": "引擎拒绝了更改：其前提条件不再与当前频道匹配。未重新发送任何内容。请重新读取，对照当前值审阅您的编辑，仅在仍适用时再次确认。",
+    "unknownTitle": "结果待核实",
+    "unknownBody": "传输在收到响应前失败，因此更改可能已应用也可能未应用。此路由没有幂等键，控制台不会重新发送。请重新读取频道：当前值会说明是否已应用；单凭匹配并不能证明是哪次尝试应用的。",
+    "refusedTitle": "配置被拒绝",
+    "noPermission": "您没有 channel:admin 权限，因此不提供配置更改。",
+    "rebased": "您编辑期间频道发生了变化。您未触碰的字段已按该次读取刷新（{{fields}}）；您自己的编辑得以保留，并且只会发送这些编辑。请再次审阅更改，以针对新版本进行确认。",
+    "versionMoved": "频道已更改。您的编辑已保留；确认之前请再次审阅这些更改。"
+  },
+  "grants": {
+    "filters": {
+      "title": "授权历史筛选",
+      "state": "持久状态",
+      "stateHint": "选择存储的状态。过期的活动行在此仍为“活动”，在观测时刻读作“已过期”。",
+      "subjectKind": "主体类型",
+      "subjectRef": "主体引用",
+      "subjectHint": "类型和引用一起使用：两者都有，或都没有。不展开组。",
+      "anySubject": "任意主体",
+      "applied": "已按主体 {{kind}} {{ref}} 筛选。"
+    },
+    "columns": {
+      "subject": "主体",
+      "bits": "位",
+      "generation": "代",
+      "stored": "存储状态",
+      "temporal": "观测时",
+      "expires": "过期",
+      "grantedBy": "授权者",
+      "created": "创建时间"
+    },
+    "truncated": "本页之后还有更多代",
+    "truncatedHint": "服务器报告了更多代。加载更多以从其续页标记继续；页面之间频道发生变化会重新开始列表。",
+    "emptyTitle": "没有代",
+    "emptyBody": "没有存储的授权代匹配所选的状态和主体。新的授权会添加一代。",
+    "temporalHint": "“存储状态”是引擎持久化的内容；“观测时”表示该行在观测时刻是否有效。已过的过期时间只是报告，不会实体化：它不撤销该行，该主体的后继仍需先显式撤销。",
+    "snapshotChanged": "频道在此历史的两页之间发生了变化，因此已读取的所有页面都被丢弃，列表从头重新开始（已重新开始 {{count}} 次）。",
+    "detail": {
+      "title": "代详情",
+      "id": "授权 ID",
+      "supersedes": "取代",
+      "revokedBy": "撤销者",
+      "version": "行版本",
+      "updated": "更新时间",
+      "expiredActive": "此行存储为活动，但在观测时刻其过期时间已过。引擎未撤销它：该主体的后继需要显式撤销此代。",
+      "notActive": "此代未存储为活动；此处没有可撤销的内容。为其主体新建授权需要不存在活动代。"
+    },
+    "form": {
+      "title": "新授权代",
+      "hint": "一个主体、三个独立的位、一个可选的过期时间。目录中的行是候选者，不是合格主体：引擎在操作时判定，记录的代并不承诺有效访问。"
+    },
+    "validation": {
+      "expiry": "过期时间无法读取为日期。",
+      "expiryPast": "过期时间必须在未来。"
+    },
+    "confirm": {
+      "title": "确认授权",
+      "body": "这将精确发送下面的代，附带屏幕上读取的 If-Match。若主体已持有活动代，或频道在此期间已更改，引擎会拒绝；然后您重新读取并再次确认。不会自动重试。",
+      "successorOf": "已撤销的代 {{id}} 的后继。这是单独的操作：上面的撤销已经提交。"
+    },
+    "appliedTitle": "授权已记录",
+    "appliedBody": "引擎现已记录此代。这不是主体可以操作的承诺：引擎在每次请求时判定每个操作。",
+    "conflictTitle": "频道在您读取后已更改",
+    "conflictBody": "引擎拒绝了操作：其前提条件不再与当前频道匹配，或目标代已不是您看到的那一代。未重新发送任何内容。请重新读取历史，仅在操作仍适用时再次确认。",
+    "unknownTitle": "结果待核实",
+    "unknownBody": "传输在收到响应前失败。操作可能已应用也可能未应用，且此路由没有幂等键：控制台不会重新发送。请重新读取历史并决定；匹配的行显示当前状态，而不是哪次尝试产生了它。",
+    "unknownAct": "操作",
+    "unknownGrant": "授权（POST …/grants）",
+    "unknownRevoke": "撤销（POST …/revoke）",
+    "refusedTitle": "授权被拒绝",
+    "revoke": {
+      "title": "精确撤销此代",
+      "body": "这将按 ID 撤销所显示的代，附带屏幕上读取的 If-Match。其历史将保留。该主体的后继是重新读取后的单独操作。",
+      "bodyThenGrant": "两个操作中的第一个：撤销所显示的代。读取引擎的应答后，将为后继代提供单独的确认；不会自动链接任何操作。",
+      "ownAdminWarning": "此代是对您自己账户的 admin 授权。它可能正是支撑您对此频道管理访问的授权；控制台不会计算您的全部权限，引擎将判定您的下一个请求。",
+      "appliedTitle": "代已撤销",
+      "appliedBody": "引擎现已记录撤销。其历史在“已撤销”状态下仍可读取。",
+      "refusedTitle": "撤销被拒绝"
+    },
+    "stateFilters": {
+      "active": "活动（存储状态）",
+      "revoked": "已撤销（存储状态）",
+      "expired": "已过期（存储状态）",
+      "all": "全部（存储状态）"
+    }
+  },
+  "cursor": {
+    "title": "标记已读到此处",
+    "description": "将您的个人已读游标推进到收件箱某一页的最后一条投递。不确认任何内容，也不更改任何投递。",
+    "section": {
+      "title": "已读游标",
+      "hint": "每个已加载的页面都可以标记为已读到其最后一条投递。目标是该页面自身的，由引擎为该确切投递铸造；表格的本地筛选必须为空，以使范围明确无误。",
+      "page": "第 {{page}} 页 · {{count}} 条投递",
+      "upTo": "直到"
+    },
+    "reasons": {
+      "noPermission": "需要 delivery:write 权限。",
+      "noRecipient": "此会话不是用户身份；个人游标属于用户邮箱。",
+      "filtered": "请先清除表格筛选：游标目标是服务器页面，而不是筛选后的行。",
+      "emptyPage": "此页面没有可标记的投递。",
+      "otherRecipient": "此页面的最后一条投递不是发给您的用户身份的。"
+    },
+    "fields": {
+      "scope": "范围",
+      "scopeValue": "已加载链的第 {{page}} 页（{{count}} 条投递）",
+      "workspace": "工作区",
+      "recipient": "接收者",
+      "lastSubject": "最后主题",
+      "lastDelivery": "最后投递",
+      "lastSeq": "投递序列",
+      "cursorVersion": "游标版本",
+      "cursorId": "游标 ID",
+      "replayed": "已重放",
+      "lastSeenSeq": "最后已读序列",
+      "barrierDelivery": "屏障投递",
+      "barrierReason": "屏障原因",
+      "barrierSince": "屏障始于"
+    },
+    "preparing": "准备中：正在向引擎请求此页面的游标目标…",
+    "prepareFailedTitle": "无法准备游标目标",
+    "prepareFailedBody": "未推进任何内容。请刷新收件箱并从当前页面重新准备。",
+    "confirm": {
+      "title": "确认推进",
+      "body": "这将发送准备好的目标和上面的投递，附带已读取游标版本的 If-Match 和自身的键。只有确认才会推进。模糊结果后的重试将精确重新发送相同内容。"
+    },
+    "conflictTitle": "游标自准备后已更改",
+    "conflictBody": "引擎拒绝了推进：游标版本或目标已不是当前的。未重新发送任何内容。请刷新收件箱并从当前页面重新准备。",
+    "ambiguousTitle": "结果未知",
+    "ambiguousBody": "传输在收到响应前失败。重试会重新发送相同的目标、相同的 If-Match 和相同的键；引擎要么应用一次，要么重放，要么以当前版本拒绝。保持未定则之前的结果仍未知。",
+    "refusedTitle": "推进被拒绝",
+    "refusedBody": "引擎未推进游标。请在重新准备前刷新收件箱。",
+    "result": {
+      "appliedTitle": "游标已推进",
+      "appliedBody": "引擎已提交推进并返回下面的位置。收件箱将从持久游标重新读取。",
+      "replayedTitle": "已推进过",
+      "replayedBody": "引擎重放了之前相同命令的结果。没有任何内容被应用两次。",
+      "barrierTitle": "推进受屏障限制",
+      "barrierBody": "引擎因其指出的原因在下面的投递处停止；游标未到达目标。这不是完整的推进。",
+      "barrierHint": "通过全新读取打开屏障投递。解决它本身不会推进任何内容：刷新收件箱，准备新目标并再次确认。",
+      "notAck": "已读游标不是确认，也不会更改任何投递的状态或首次查看标记。"
+    }
+  },
+  "capability": {
+    "actInterrupted": "确认在其操作已经发送的过程中被关闭：本控制台对该操作没有当前答复。既未做出判定，也未予以拒绝；该操作是否到达引擎，在此无法确定。",
+    "checking": "正在检查访问权限…",
+    "confirmationClosed": "待处理的确认已关闭：本控制台对该操作没有当前答复。既未做出判定，也未予以拒绝，且未发送任何内容。",
+    "globalAccountBody": "请使用该组织的成员账户打开此视图。全局账户无法检查对此视图的访问权限。",
+    "globalAccountTitle": "使用成员账户登录",
+    "notConfirmed": "未发送任何内容：此刻无法确认该操作的授权。",
+    "retrying": "每隔几秒重新检查一次。",
+    "unavailableBody": "本控制台对该操作没有当前答复。既未做出判定，也未予以拒绝。",
+    "unavailableTitle": "无法确定访问权限",
+    "undisclosedBody": "引擎未针对此处的该操作发布答复。这既不说明你的角色，也不说明目标是否存在，更不说明服务是否可用。",
+    "undisclosedTitle": "此判定不予披露"
+  },
+  "continuity": {
+    "interrupted": "访问在一瞬间无法确认，因此待确认操作已关闭。您的编辑已保留，且未发送任何内容；确认之前请再次审阅。",
+    "interruptedSend": "在发送更改期间无法确认访问，因此确认已关闭。您的编辑已保留，且未重新发送任何内容；该更改是否到达引擎在此无法确定——请重新读取以核实。"
+  },
+  "handoff": {
+    "state": {
+      "offered": "已提议",
+      "accepted": "已接受",
+      "rejected": "已拒绝",
+      "withdrawn": "已撤回",
+      "expired": "已过期"
+    },
+    "context": {
+      "current": "现在可以答复",
+      "stale": "已不是当前状态",
+      "terminal": "已经了结"
+    },
+    "actions": {
+      "accept": "接受责任",
+      "reject": "拒绝交接"
+    },
+    "retained": {
+      "submitting": "一个交接操作正在发送。",
+      "uncertain": "一个交接操作没有已确认的结果。",
+      "confirmed": "提议回执仍可查看。",
+      "responseConfirmed": "答复回执仍可查看。",
+      "reopen": "查看该操作"
+    },
+    "lost": {
+      "title": "凭据已变更",
+      "body": "提交已停止；结果尚未确认。再次操作前请先读取当前状态。",
+      "notSent": "提交没有开始，因此这条命令未被发送。再次操作前请先读取当前状态。",
+      "latestNotSent": "最后一次尝试没有开始，也没有发送。此前的那次尝试是另一回事。再次操作前请先读取当前状态。"
+    },
+    "uncertain": {
+      "title": "结果未知",
+      "body": "该请求可能已生效，也可能没有。超时不是回滚。重试会用同一把键发送完全相同的操作，这样引擎可以回答“已经生效”，而不是再执行一次。",
+      "discard": "停止本地跟踪",
+      "priorTransmission": "先前的一次尝试已经发出，其结果始终没有确认。后续答复描述的是返回它们的那个请求，而不是那一次。"
+    },
+    "references": {
+      "hint": "类型和引用是必填的，哈希可选。引用只是收件人阅读的标签——这里不会抓取、跳转或打开任何内容。",
+      "kind": "类型",
+      "ref": "引用",
+      "hash": "哈希",
+      "add": "添加引用",
+      "remove": "移除引用"
+    },
+    "offer": {
+      "title": "提议交接",
+      "description": "通过某个频道，把这个工作项的责任提议给一位收件人。创建提议并不会转移归属：只有被接受的答复才会。",
+      "readRefusedTitle": "无法读取该工作项",
+      "itemTitle": "工作项",
+      "item": "工作项",
+      "itemId": "工作项 ID",
+      "itemStatus": "状态",
+      "currentOwner": "当前归属人",
+      "ownerEpoch": "归属纪元",
+      "itemWorkspace": "工作项所属工作区",
+      "precondition": "前置条件 (If-Match)",
+      "itemMismatch": "这次读取返回的工作项与所请求的不同。基于这次读取无法提议任何内容。",
+      "workspaceMismatchTitle": "请选择该工作项所属的工作区",
+      "workspaceMismatchBody": "该工作项属于工作区 {{itemWorkspace}}，而当前选中的是 {{selected}}。请在切换器中选择该工作项的工作区后再提议；控制台绝不会替你选择。",
+      "workspaceNone": "尚未显式选择工作区。提议是按工作区限定的，请在切换器中选择该工作项的工作区；控制台绝不会替你选择。",
+      "noPrecondition": "这次工作项读取没有携带 ETag，因此没有可发送的前置条件。请重新读取该工作项；这里不会把版本号当成校验器。",
+      "noPermission": "提议交接需要 sessions:message-send:write。引擎还会检查工作项归属和频道权限。",
+      "channel": "频道",
+      "channelHint": "承载消息发布所用频道的规范 ID。随时都可以直接输入。",
+      "channelPick": "选择频道",
+      "channelNoDirectory": "当前权限无法读取频道目录，因此需要直接输入频道 ID。即便列出来，频道也只是候选，而不是资格裁定。",
+      "recipient": "收件人",
+      "summary": "摘要",
+      "nextAction": "下一步行动",
+      "risk": "风险",
+      "riskHint": "可选。",
+      "artifacts": "工件引用",
+      "deadline": "答复期限",
+      "deadlineHint": "一个绝对时刻，按你自己的时区输入。它有意留空：控制台不会替你选择承诺，也绝不会延长它。",
+      "deadlineReview": "本地 {{zone}}，发送值为 {{utc}}。以服务器时钟为准，它仍可能拒绝。",
+      "review": "检查提议",
+      "confirm": "确认并提议",
+      "confirmTitle": "提议前请检查",
+      "confirmBody": "从这里开始，键、请求体、目标和前置条件都已冻结。结果未知后的重试会原样发送这个对象。",
+      "key": "幂等键",
+      "submitting": "正在提议…",
+      "conflictTitle": "提议未生效",
+      "conflictBody": "自读取以来工作项发生了变化，或该命令已不再适用。这个响应不会说明是哪一种。请重新读取工作项并检查一份新的提议；前置条件绝不会被替换后重发。",
+      "refusedTitle": "提议被拒绝",
+      "createdTitle": "提议已创建",
+      "replayedTitle": "提议此前已生效（重放）",
+      "pendingBody": "归属尚未转移，正在等待收件人答复。",
+      "startOver": "开始新的提议",
+      "serverFinal": "引擎是最终校验方：它仍可能以资格、权限或限额为由拒绝这份提议，其答复会原样显示。",
+      "validation": {
+        "channel": "需要一个频道。",
+        "channelFormat": "频道 ID 必须是规范 UUID。",
+        "recipient": "需要一个收件人引用。",
+        "recipientLength": "收件人引用超过 1024 字节。",
+        "summary": "需要填写摘要。",
+        "summaryLength": "摘要超过 32 KiB。",
+        "nextAction": "需要填写下一步行动。",
+        "nextActionLength": "下一步行动超过 32 KiB。",
+        "riskLength": "风险说明超过 32 KiB。",
+        "references": "每条引用都需要类型和引用，长度为 1 到 512 字节，已去除首尾空白且不含换行。",
+        "referencesMax": "工件引用最多 64 条。",
+        "deadline": {
+          "empty": "需要填写答复期限。",
+          "unreadable": "答复期限无法解析为时刻。",
+          "past": "答复期限必须晚于当前时间。"
+        }
+      },
+      "targetRefusedTitle": "请先结束当前的提议",
+      "targetRefusedBody": "先前的提议已发送且尚未解决。请先解决它或停止本地跟踪，然后再开始新的提议。",
+      "conflictTitleLatest": "这次尝试未生效",
+      "conflictBodyLatest": "自读取以来工作项发生了变化，或该命令已不再适用。这个答复针对的是刚刚返回的那个请求。请重新读取工作项，并基于其当前状态检查一份新的提议。",
+      "refusedTitleLatest": "这次尝试被拒绝"
+    },
+    "inbox": {
+      "title": "发给你的交接",
+      "description": "按服务器的续读游标逐页显示。这个集合不携带内容：提议的摘要、下一步行动和风险只有打开后才能读到。",
+      "filter": "状态",
+      "truncated": "本页之外还有更多提议",
+      "truncatedHint": "引擎报告在同一事务中还授权了一条提议。这不是总数，也不是隐藏行的计数。",
+      "emptyTitle": "该工作区没有「{{state}}」状态的交接",
+      "emptyBody": "这是一个已授权的空结果，既不是拒绝，也不是查看失败。",
+      "unavailableTitle": "无法核实移交信息",
+      "unavailableBody": "目前无法加载移交信息。请重试；若问题持续，请联系管理员。",
+      "accountGuidanceTitle": "请使用成员账户查看个人交接",
+      "accountGuidanceBody": "您当前以全局管理员身份登录。请使用此组织的成员账户登录，查看发给您的交接邀请。",
+      "accountGuidanceHint": "请使用收到邀请的账户。",
+      "contentFree": "行内只显示标识、状态和时间。打开某一行，可在其自身的授权读取下阅读受保护上下文。",
+      "elapsed": "窗口已过",
+      "elapsedHint": "按引擎的观测时刻，答复窗口已过。该行仍可能以“已提议”持久化：这次读取绝不会运行回收器，所以这并不能证明已经记录了过期。",
+      "columns": {
+        "workItem": "工作项",
+        "from": "发送方",
+        "to": "收件人",
+        "state": "状态",
+        "deadline": "期限",
+        "observed": "观测时刻",
+        "delivery": "承载投递"
+      }
+    },
+    "detail": {
+      "title": "交接提议",
+      "description": "一条提议的受保护上下文，通过其承载投递重新读取。关闭本面板后不会保留。",
+      "contextTitle": "提议上下文",
+      "summary": "摘要",
+      "nextAction": "下一步行动",
+      "risk": "风险",
+      "artifacts": "工件引用",
+      "artifactsInert": "引用以纯文本显示。这里不会抓取、跳转或打开任何内容。",
+      "adminTitle": "回执字段",
+      "workItem": "工作项",
+      "handoffId": "交接 ID",
+      "from": "发送方",
+      "to": "收件人",
+      "deadline": "答复期限",
+      "created": "创建时间",
+      "observed": "观测时刻",
+      "precondition": "交接 ETag (If-Match)",
+      "preconditionHint": "答复绑定的是上面的交接 ETag，而不是旁边那个承载投递的版本号。",
+      "carrierDelivery": "承载投递",
+      "carrierVersion": "承载投递版本",
+      "channel": "频道",
+      "terminalTitle": "引擎记录的原因",
+      "deadlineElapsed": "窗口已过",
+      "notCurrent": {
+        "stale": "这条提议已不是当前状态",
+        "terminal": "这条提议已经了结"
+      },
+      "notCurrentBody": "引擎报告现在无法答复，因此不提供答复操作。重新读取即可看到其当前状态。",
+      "noRespondPermission": "答复需要 sessions:handoff-response:write。"
+    },
+    "respond": {
+      "acceptTitle": "接受责任",
+      "rejectTitle": "拒绝交接",
+      "acceptDescription": "接受会把该工作项的归属转移给下方的收件人，并创建一条确认。它不会启动会话，也不会获取执行租约。",
+      "rejectDescription": "拒绝需要一个原因代码。归属不会变动。",
+      "reasonCode": "原因代码",
+      "reasonCodeHint": "这四项是控制台预设，不是引擎的清单。引擎保持开放词表，因此也可以自定义代码。",
+      "reasonCodeEmpty": "选择一个原因",
+      "customCode": "自定义原因代码",
+      "customCodeHint": "最长 128 字节的小写标记：字母、数字、点、连字符和下划线，且以字母或数字开头。",
+      "reasonText": "说明",
+      "reasonTextHint": "可选，最多 32 KiB。",
+      "reasonReferences": "原因引用",
+      "reasons": {
+        "not_available": "无法承接",
+        "outside_scope": "不在我的职责范围",
+        "needs_information": "需要更多信息",
+        "other": "其他",
+        "custom": "自定义代码…"
+      },
+      "review": "检查答复",
+      "confirmTitle": "答复前请检查",
+      "confirmAcceptBody": "确认后，该工作项的归属会转移给上方的收件人。从这里开始，键、请求体和前置条件都已冻结。",
+      "confirmRejectBody": "确认后会记录这次拒绝。归属不会变动。从这里开始，键、请求体和前置条件都已冻结。",
+      "confirmAccept": "确认接受",
+      "confirmReject": "确认拒绝",
+      "transition": "答复",
+      "submitting": "正在答复…",
+      "conflictTitle": "答复未生效",
+      "conflictBody": "自读取以来提议发生了变化，或该命令已不再适用。这个响应不会说明是哪一种。请重新读取提议并检查一份新的答复；前置条件绝不会被替换后重发。",
+      "refusedTitle": "答复被拒绝",
+      "acceptedTitle": "已接受责任",
+      "rejectedTitle": "已拒绝交接",
+      "replayedTitle": "答复此前已生效（重放）",
+      "acceptedBody": "该工作项的归属已转移，归属纪元已递增。",
+      "rejectedBody": "拒绝已记录。归属没有变动。",
+      "validation": {
+        "code": "需要一个原因代码。",
+        "codeLength": "原因代码超过 128 字节。",
+        "codeShape": "原因代码必须是小写标记：字母、数字、点、连字符和下划线，且以字母或数字开头。",
+        "textLength": "说明超过 32 KiB。",
+        "references": "每条引用都需要类型和引用，长度为 1 到 512 字节，已去除首尾空白且不含换行。",
+        "referencesMax": "原因引用最多 64 条。"
+      },
+      "targetRefusedTitle": "请先结束当前的答复",
+      "targetRefusedBody": "先前的答复已发送且尚未解决。请先解决它或停止本地跟踪，然后再开始新的答复。",
+      "startNew": "开始新的答复",
+      "conflictTitleLatest": "这次尝试未生效",
+      "conflictBodyLatest": "自读取以来提议发生了变化，或该命令已不再适用。这个答复针对的是刚刚返回的那个请求。请重新读取提议，并基于其当前状态检查一份新的答复。",
+      "refusedTitleLatest": "这次尝试被拒绝"
+    },
+    "receipt": {
+      "handoffId": "交接 ID",
+      "deliveryId": "承载投递",
+      "ownerEpoch": "归属纪元",
+      "leaseFence": "产生的租约栅栏",
+      "status": "HTTP {{status}}",
+      "noLease": "该答复没有携带租约栅栏。责任已转移；没有获取执行租约，也没有会话在运行。",
+      "notCurrentOwnership": "这些是本回执报告的数值。当前归属请在工作项中查看。"
+    },
+    "tracking": {
+      "limits": "隐藏此面板会保留本地跟踪。停止跟踪或离开此上下文都无法取消或回滚已经发送的命令；整页重新加载会结束这个本地观察者，这里也没有命令状态查询。",
+      "pendingHide": "命令进行期间可以隐藏此面板；跟踪会在这里继续，结果不会改变。停止跟踪或离开此上下文都无法取消或回滚已经发送的命令。",
+      "ended": "由于对此上下文的访问发生变化，本地跟踪已结束。引擎的结果在这里无法确定。",
+      "endedAfterSend": "此前已经发送过一条命令。结束本地跟踪并没有取消或回滚它。",
+      "stoppedAfterSend": "你停止了跟踪一条可能已经发送的命令。这既不会取消它，也不会回滚它，其结果在这里无法确定。再次操作前请先读取当前状态。"
+    }
+  }
+}

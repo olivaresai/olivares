@@ -55,6 +55,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The spec and its harness are TypeScript that Playwright transpiles WITHOUT type-checking, so
+# a type error in e2e/management-views.spec.ts surfaced only after the build and the preview
+# server had been paid for — or never, if the branch was not run. The harness project
+# (web/tsconfig.e2e.json, `pnpm run typecheck:e2e`) checks every e2e*/ suite and Playwright
+# config with noEmit. It runs FIRST: after the tool checks above, before anything is built or
+# started. A red compiler stops the run here (set -e), with the error already on stderr.
+echo "==> Type-checking the browser harness (tsc --noEmit over web/tsconfig.e2e.json)"
+pnpm --dir "$WEB" run typecheck:e2e
+
 echo "==> Building the SPA to a private dir ($DIST)"
 pnpm --dir "$WEB" exec vite build --outDir "$DIST" --emptyOutDir
 

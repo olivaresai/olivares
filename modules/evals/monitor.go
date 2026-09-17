@@ -21,6 +21,7 @@ import (
 // core EvalResult plus an aggregate. Write-tier + self-audited.
 
 type monitorRequest struct {
+	LiveRef     string `json:"live_ref,omitempty"`
 	SubjectKind string `json:"subject_kind,omitempty"`
 	SubjectRef  string `json:"subject_ref,omitempty"`
 	Suite       string `json:"suite,omitempty"`
@@ -28,13 +29,17 @@ type monitorRequest struct {
 }
 
 type monitorSampleDTO struct {
-	SessionRef  string  `json:"session_ref"`
-	AgentRef    string  `json:"agent_ref,omitempty"`
-	State       string  `json:"state"`
-	MaxSeverity string  `json:"max_severity,omitempty"`
-	Findings    int     `json:"findings"`
-	Score       float64 `json:"score"`
-	Passed      bool    `json:"passed"`
+	LiveRef             string  `json:"live_ref,omitempty"`
+	Attribution         string  `json:"attribution,omitempty"`
+	ProfileRef          string  `json:"provider_profile_ref,omitempty"`
+	FindingsUnavailable bool    `json:"findings_unavailable,omitempty"`
+	SessionRef          string  `json:"session_ref"`
+	AgentRef            string  `json:"agent_ref,omitempty"`
+	State               string  `json:"state"`
+	MaxSeverity         string  `json:"max_severity,omitempty"`
+	Findings            int     `json:"findings"`
+	Score               float64 `json:"score"`
+	Passed              bool    `json:"passed"`
 }
 
 type monitorResponse struct {
@@ -61,7 +66,19 @@ func (m *Module) handleMonitor(w http.ResponseWriter, r *http.Request, mc api.Mo
 	}
 
 	out := monitorResponse{Suite: suite, Samples: []monitorSampleDTO{}}
-	q := SampleQuery{SubjectKind: req.SubjectKind, SubjectRef: req.SubjectRef, Limit: limit}
+	q := SampleQuery{SubjectKind: req.SubjectKind, SubjectRef: req.SubjectRef, LiveRef: strings.TrimSpace(req.LiveRef), Limit: limit}
+	if q.LiveRef != "" {
+		id, err := model.ParseID(q.LiveRef)
+		if err != nil || id.IsZero() || q.SubjectRef != "" || (q.SubjectKind != "" && q.SubjectKind != "session") {
+			writeJSON(w, http.StatusBadRequest, errorBody("live_ref must be one valid session selector"))
+			return
+		}
+		q.LiveRef = id.String()
+		if m.isDefaultSource() {
+			writeJSON(w, http.StatusServiceUnavailable, errorBody("scoped session source is unavailable"))
+			return
+		}
+	}
 	// A WIRED source samples BEFORE the write transaction below: it reads through
 	// its own data handle (e.g. the module-II adapter), and holding our write
 	// tx open across a foreign read invites lock inversion. The default core
@@ -93,8 +110,12 @@ func (m *Module) handleMonitor(w http.ResponseWriter, r *http.Request, mc api.Mo
 			} else {
 				out.Failed++
 			}
+			subjectKind, subjectID := "session", parseIDOrZero(s.SessionRef)
+			if s.LiveRef != "" && s.Attribution != "legacy" {
+				subjectKind, subjectID = "session_live", parseIDOrZero(s.LiveRef)
+			}
 			if _, err := sc.Evals().Create(r.Context(), model.EvalResult{
-				Suite: suite, SubjectKind: "session", SubjectID: parseIDOrZero(s.SessionRef),
+				Suite: suite, SubjectKind: subjectKind, SubjectID: subjectID,
 				Score: score, Passed: passed, OccurredAt: now,
 				Metrics: map[string]any{
 					"state": s.State, "findings": s.Findings, "max_severity": s.MaxSeverity,
@@ -102,13 +123,13 @@ func (m *Module) handleMonitor(w http.ResponseWriter, r *http.Request, mc api.Mo
 				},
 				Metadata: map[string]any{
 					"session_ref": clamp(s.SessionRef, maxRefLen), "agent_ref": clamp(s.AgentRef, maxRefLen),
-					"reason": reason,
+					"reason": reason, "live_ref": s.LiveRef, "attribution": s.Attribution, "provider_profile_ref": s.ProfileRef, "findings_unavailable": s.FindingsUnavailable,
 				},
 			}); err != nil {
 				return err
 			}
 			out.Samples = append(out.Samples, monitorSampleDTO{
-				SessionRef: s.SessionRef, AgentRef: s.AgentRef, State: s.State, MaxSeverity: s.MaxSeverity,
+				SessionRef: s.SessionRef, LiveRef: s.LiveRef, Attribution: s.Attribution, ProfileRef: s.ProfileRef, FindingsUnavailable: s.FindingsUnavailable, AgentRef: s.AgentRef, State: s.State, MaxSeverity: s.MaxSeverity,
 				Findings: s.Findings, Score: score, Passed: passed,
 			})
 		}
@@ -191,6 +212,9 @@ func maxSeverity(findings []model.Finding) string {
 // uses for connector wire strings: a module never imports a sibling. "ended" and
 // "completed" both fall through to the finding-severity signals.
 func scoreSignal(s SessionSample) (float64, bool, string) {
+	if s.FindingsUnavailable {
+		return 0, false, "findings cannot be attributed to this session instance"
+	}
 	switch s.State {
 	case string(model.SessionFailed):
 		return 0.0, false, "session failed"

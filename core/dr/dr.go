@@ -114,6 +114,27 @@ type Manifest struct {
 	TipMatch string `json:"tip_match"`
 	// Notes is free-form operator context (no secrets).
 	Notes string `json:"notes,omitempty"`
+	// Files binds every non-manifest payload in the bundle by path, size and
+	// digest. Authentication below covers this complete list.
+	Files []FileDigest `json:"files,omitempty"`
+	// Authentication is an HMAC-SHA-256 authentication tag over the canonical manifest
+	// under the operator-held KEK. It detects edits to metadata or file digests
+	// before any restore write.
+	Authentication ManifestAuthentication `json:"authentication,omitempty"`
+}
+
+// FileDigest binds one regular payload inside a DR bundle.
+type FileDigest struct {
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"size_bytes"`
+	SHA256    string `json:"sha256"`
+}
+
+// ManifestAuthentication is the keyed authentication tag over a canonical Manifest
+// with Value blank. The KEK never travels in the bundle.
+type ManifestAuthentication struct {
+	Algorithm string `json:"algorithm"`
+	Value     string `json:"value"`
 }
 
 // StoreSnapshot describes the store snapshot a bundle carries.

@@ -10,7 +10,7 @@
 # `id-token: write`, `contents: write` or `packages: write`, and it decides one
 # question: is this run allowed to mutate the target it claims? The caller
 # DECLARES the full profile in env; this script validates every declared value
-# against the two reviewed tuples embedded below and re-emits the validated
+# against the reviewed profile tuples below and re-emits the validated
 # values as job outputs. Mutating jobs consume THOSE OUTPUTS, never the raw
 # dispatch inputs (§C.4.10) — if this script did not run, the outputs are empty
 # and every dependent job refuses to start.
@@ -40,6 +40,8 @@
 #   RELEASE_GITHUB_REPO         declared release destination owner/name
 #   OCI_IMAGE_REPO              declared OCI destination
 #   SOURCE_REPOSITORY_URL       declared OCI source label
+#   MIRROR_IMAGE_REPO           declared image-mirror destination
+#   HOMEBREW_TAP_REPO           declared Homebrew owner/name destination
 #   RELEASE_TAG                 the tag under release (push ref or dispatch input)
 #   COSIGN_MODE                 keyless | key
 #   COSIGN_TLOG_UPLOAD          true | false
@@ -55,7 +57,9 @@
 #                               required (sandbox pair, form only — design/ is not
 #                               exported); rehearsal: optional (per-run pairs)
 #   DOCKERHUB_USERNAME / DOCKERHUB_TOKEN / HOMEBREW_TAP_GITHUB_TOKEN
-#                               presence-checked; must ALL be absent in rehearsal
+#                               production credentials; forbidden outside production
+#   HOMEBREW_PREPROD_TAP_GITHUB_TOKEN
+#                               preprod-scoped tap credential; required only in preprod
 #   GITHUB_REPOSITORY GITHUB_REF GITHUB_REF_NAME GITHUB_REF_TYPE GITHUB_SHA
 #                               provided by the runner
 #   GITHUB_OUTPUT               required — outputs ARE the contract (§C.4.10)
@@ -75,7 +79,7 @@ req() {
 	[ -n "$v" ] || fail "$1 is required and unset/empty — the caller must declare the full profile; a missing value never falls back to production (§C.2)"
 }
 
-# --- the two reviewed tuples (§C.4.1). These constants ARE the profiles. -----------------
+# --- reviewed tuples (§C.4.1). These constants/derivations ARE the profiles. -------------
 PROD_REPO="olivaresai/olivares"
 PROD_OCI="ghcr.io/olivaresai/olivares"
 PROD_SOURCE="https://github.com/olivaresai/olivares"
@@ -100,6 +104,8 @@ req RELEASE_MODE
 req RELEASE_GITHUB_REPO
 req OCI_IMAGE_REPO
 req SOURCE_REPOSITORY_URL
+req MIRROR_IMAGE_REPO
+req HOMEBREW_TAP_REPO
 req RELEASE_TAG
 req COSIGN_MODE
 req COSIGN_TLOG_UPLOAD
@@ -118,6 +124,7 @@ req GITHUB_SHA
 case "$RELEASE_MODE" in
 production)
 	want_repo="$PROD_REPO" want_oci="$PROD_OCI" want_source="$PROD_SOURCE" tag_re="$PROD_TAG_RE"
+	want_mirror="docker.io/olivaresai/olivares" want_tap="olivaresai/homebrew-tap"
 	want_cosign_mode="keyless" want_tlog="true"
 	want_latest="true" want_dockerhub="auto" want_homebrew="auto" want_ota="true"
 	;;
@@ -131,6 +138,8 @@ rehearsal)
 	if [ -z "$want_repo" ] || [ -z "$want_oci" ] || [ -z "$want_source" ]; then
 		fail "rehearsal mode requires the internal rehearsal workflow to inject its expected destination tuple (OLIVARES_REHEARSAL_EXPECTED_REPO/_OCI/_SOURCE). This public script embeds no rehearsal destination and refuses an unclassified rehearsal (deny-closed)"
 	fi
+	want_mirror="${want_oci}/mirror"
+	want_tap="${want_repo%%/*}/homebrew-rehearsal"
 	tag_re="$REH_TAG_RE"
 	want_cosign_mode="key" want_tlog="false"
 	want_latest="false" want_dockerhub="false" want_homebrew="false" want_ota="false"
@@ -155,6 +164,12 @@ preprod)
 	if [ -z "$want_repo" ] || [ -z "$want_oci" ] || [ -z "$want_source" ]; then
 		fail "preprod mode requires the preprod repository to inject its expected destination tuple (OLIVARES_PREPROD_EXPECTED_REPO/_OCI/_SOURCE) — this public script embeds no preprod name, by design (§C.4.1)"
 	fi
+	# The two side destinations are derived from the validated tuple instead of accepting
+	# arbitrary settings: the image mirror is a child package, and the tap is a dedicated
+	# repository under the same owner. A mutable variable can therefore only make the run
+	# refuse; it cannot redirect either publisher.
+	want_mirror="${want_oci}/mirror"
+	want_tap="${want_repo%%/*}/homebrew-preprod"
 	# The REAL tag grammar, not the rehearsal one: a preprod act exists to rehearse v26.8.0
 	# itself (order 36 — nothing is first tried in public), so the tag must be the real shape.
 	tag_re="$PROD_TAG_RE"
@@ -180,10 +195,9 @@ preprod)
 	# nombre del repositorio de preprod en registros públicos y permanentes. No es evitable
 	# mientras SLSA sea obligatorio; es una consecuencia de ensayar el acto de verdad.
 	want_cosign_mode="keyless" want_tlog="true"
-	# The act is otherwise COMPLETE: the latest alias and the OTA channel are exactly what
-	# order 36 wants rehearsed. Docker Hub and the Homebrew tap stay off: they are official
-	# production surfaces with no preprod counterpart, and §C.4.6 refuses to name them anyway.
-	want_latest="true" want_dockerhub="false" want_homebrew="false" want_ota="true"
+	# The act is COMPLETE: the Docker-Hub-shaped copy goes to the child GHCR package and the
+	# cask goes to the preprod-only tap. Neither path carries a production credential.
+	want_latest="true" want_dockerhub="true" want_homebrew="true" want_ota="true"
 	;;
 *)
 	fail "RELEASE_MODE '$RELEASE_MODE' is not a reviewed profile — only 'production', 'preprod' and 'rehearsal' tuples are accepted (§C.4.1)"
@@ -194,6 +208,8 @@ esac
 [ "$RELEASE_GITHUB_REPO" = "$want_repo" ] || fail "declared RELEASE_GITHUB_REPO '$RELEASE_GITHUB_REPO' is not the reviewed $RELEASE_MODE destination '$want_repo' — arbitrary targets are rejected (§C.4.1)"
 [ "$OCI_IMAGE_REPO" = "$want_oci" ] || fail "declared OCI_IMAGE_REPO '$OCI_IMAGE_REPO' is not the reviewed $RELEASE_MODE registry '$want_oci' — arbitrary targets are rejected (§C.4.1)"
 [ "$SOURCE_REPOSITORY_URL" = "$want_source" ] || fail "declared SOURCE_REPOSITORY_URL '$SOURCE_REPOSITORY_URL' is not the reviewed $RELEASE_MODE source '$want_source' (§C.4.1)"
+[ "$MIRROR_IMAGE_REPO" = "$want_mirror" ] || fail "declared MIRROR_IMAGE_REPO '$MIRROR_IMAGE_REPO' is not the reviewed $RELEASE_MODE mirror '$want_mirror' (§C.4.1)"
+[ "$HOMEBREW_TAP_REPO" = "$want_tap" ] || fail "declared HOMEBREW_TAP_REPO '$HOMEBREW_TAP_REPO' is not the reviewed $RELEASE_MODE tap '$want_tap' (§C.4.1)"
 
 # --- §C.4.2: the run repository must BE the declared destination ------------------------
 [ "$GITHUB_REPOSITORY" = "$RELEASE_GITHUB_REPO" ] || fail "this run executes in '$GITHUB_REPOSITORY' but the $RELEASE_MODE profile targets '$RELEASE_GITHUB_REPO' — a run may only mutate the repository it runs in (§C.4.2)"
@@ -237,7 +253,7 @@ fi
 
 # --- §C.4.6: no resolved non-production destination may name a production surface -------
 if [ "$RELEASE_MODE" = "rehearsal" ] || [ "$RELEASE_MODE" = "preprod" ]; then
-	for v in "$RELEASE_GITHUB_REPO" "$OCI_IMAGE_REPO" "$SOURCE_REPOSITORY_URL"; do
+	for v in "$RELEASE_GITHUB_REPO" "$OCI_IMAGE_REPO" "$SOURCE_REPOSITORY_URL" "$MIRROR_IMAGE_REPO" "$HOMEBREW_TAP_REPO"; do
 		case "$v" in
 		*olivaresai* | *docker.io* | *homebrew-tap*)
 			fail "resolved $RELEASE_MODE destination '$v' names a production surface (olivaresai / docker.io / homebrew-tap) — refusing (§C.4.6)"
@@ -253,14 +269,21 @@ fi
 if [ -z "${DOCKERHUB_USERNAME:-}" ] && [ -n "${DOCKERHUB_TOKEN:-}" ]; then
 	fail "DOCKERHUB_TOKEN is set without DOCKERHUB_USERNAME — credentials are both-or-neither (§C.4.7)"
 fi
-# A preprod repository is held to the SAME rule as a rehearsal one, and for a sharper
-# reason: preprod publishes a REAL-shaped tag and a REAL update channel, so a publication
-# secret sitting in it is the one ingredient needed to turn a dress rehearsal into an
-# accidental production publication.
+# A non-production repository never receives a PRODUCTION publication credential. Preprod
+# does carry one separate credential, scoped only to its dedicated tap; a different secret
+# name makes accidental reuse visible in both the workflow and the repository inventory.
 if [ "$RELEASE_MODE" = "rehearsal" ] || [ "$RELEASE_MODE" = "preprod" ]; then
-	[ -z "${DOCKERHUB_USERNAME:-}" ] && [ -z "${DOCKERHUB_TOKEN:-}" ] || fail "the $RELEASE_MODE repository holds Docker Hub credentials — it must hold NO publication secret at all (§C.4.7)"
-	[ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ] || fail "the $RELEASE_MODE repository holds a Homebrew tap token — it must hold NO publication secret at all (§C.4.7)"
+	[ -z "${DOCKERHUB_USERNAME:-}" ] && [ -z "${DOCKERHUB_TOKEN:-}" ] || fail "the $RELEASE_MODE repository holds PRODUCTION Docker Hub credentials — refusing (§C.4.7)"
+	[ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ] || fail "the $RELEASE_MODE repository holds the PRODUCTION Homebrew tap token — refusing (§C.4.7)"
 fi
+case "$RELEASE_MODE" in
+preprod)
+	[ -n "${HOMEBREW_PREPROD_TAP_GITHUB_TOKEN:-}" ] || fail "preprod requires HOMEBREW_PREPROD_TAP_GITHUB_TOKEN, scoped only to '$HOMEBREW_TAP_REPO'; without it the real Homebrew publisher is not rehearsed (§C.4.7)"
+	;;
+production | rehearsal)
+	[ -z "${HOMEBREW_PREPROD_TAP_GITHUB_TOKEN:-}" ] || fail "$RELEASE_MODE must not receive the preprod Homebrew tap credential (§C.4.7)"
+	;;
+esac
 
 # --- §C.4.8: the two public release anchors --------------------------------------------
 license_fp="per-run"
@@ -343,6 +366,8 @@ summary() {
 		| run repository | \`$GITHUB_REPOSITORY\` |
 		| release destination | \`$RELEASE_GITHUB_REPO\` |
 		| OCI destination | \`$OCI_IMAGE_REPO\` |
+		| image-mirror destination | \`$MIRROR_IMAGE_REPO\` |
+		| Homebrew tap destination | \`$HOMEBREW_TAP_REPO\` |
 		| source label | \`$SOURCE_REPOSITORY_URL\` |
 		| tag | \`$RELEASE_TAG\` (version \`$release_version\`) |
 		| source SHA | \`$GITHUB_SHA\` |
@@ -365,6 +390,9 @@ summary
 	echo "release_github_owner=${RELEASE_GITHUB_REPO%%/*}"
 	echo "release_github_name=${RELEASE_GITHUB_REPO#*/}"
 	echo "oci_image_repo=$OCI_IMAGE_REPO"
+	echo "mirror_image_repo=$MIRROR_IMAGE_REPO"
+	echo "homebrew_tap_owner=${HOMEBREW_TAP_REPO%%/*}"
+	echo "homebrew_tap_name=${HOMEBREW_TAP_REPO#*/}"
 	echo "source_repository_url=$SOURCE_REPOSITORY_URL"
 	echo "release_tag=$RELEASE_TAG"
 	echo "release_version=$release_version"

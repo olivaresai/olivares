@@ -493,11 +493,33 @@ func moreRestrictive(current *storedSpendLimitSpec, candidate storedSpendLimitSp
 	return current.Unlimited || candidate.AmountMicroUSD < current.AmountMicroUSD
 }
 
+// governs reports whether a stored row may take part in enforcement at all.
+//
+// Policy.Enabled is the authoritative current selection fact (SES1). A disabled
+// spend_limit row stays administratively discoverable and stays eligible for
+// create-or-replace matching — which is why the filter lives HERE, at the three
+// consumption points, and NOT in listSpendLimitPolicies: that listing is shared
+// with findSpendLimitPolicies, and filtering it would make upsert stop finding
+// the disabled row it must reactivate in place, silently forking the logical
+// (scope, period) key into a second id.
+//
+// It is applied before parseStoredSpendLimit on purpose. An inert row must not
+// be able to influence anything it would only reach by being parsed first: not
+// precedence, not the numeric/unlimited tie-break, and not a group-authority
+// lookup keyed on its scope_key.
+func governs(p model.Policy) bool { return p.Enabled }
+
 func resolveSpendLimitForPeriod(policies []model.Policy, actor, period string, groups []string) resolvedSpendLimit {
 	var user, group, org *model.Policy
 	var userSpec, groupSpec, orgSpec storedSpendLimitSpec
 	for i := range policies {
 		p := &policies[i]
+		// Disabled rows fall through to the remaining enabled candidates, so a
+		// disabled user cap yields the enabled group/organization cap rather than
+		// an absent one. Precedence and ties below are unchanged for enabled rows.
+		if !governs(*p) {
+			continue
+		}
 		s := parseStoredSpendLimit(*p)
 		if s.Period != period {
 			continue
@@ -533,6 +555,13 @@ func groupsByActor(ctx context.Context, reader groupAuthReader, tenant model.Ten
 	out := map[string][]string{}
 	seen := map[string]bool{}
 	for _, p := range policies {
+		// Before parsing AND before seen-group tracking: a disabled cap must not
+		// reach userGroupClosureMemberRefs, so a malformed or inaccessible
+		// scope_key on an inert row can neither fail the whole effective view nor
+		// claim the key and mask a later enabled row for the same group.
+		if !governs(p) {
+			continue
+		}
 		s := parseStoredSpendLimit(p)
 		if s.ScopeType != "rbac_group" || seen[s.ScopeKey] {
 			continue
@@ -690,6 +719,13 @@ func (m *Module) SpendLimitEffective(ctx context.Context, tenant model.TenantID,
 			}
 		} else {
 			for _, p := range policies {
+				// A disabled user cap governs nothing, so it must not be the sole
+				// reason a principal appears in the effective view. Explicitly
+				// requested user_ids and the sampled-spend discovery below are
+				// unchanged: a principal with real spend still shows up.
+				if !governs(p) {
+					continue
+				}
 				s := parseStoredSpendLimit(p)
 				if s.ScopeType == "user" {
 					principals[s.ScopeKey] = true

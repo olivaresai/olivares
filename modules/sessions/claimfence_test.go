@@ -24,17 +24,17 @@ import (
 
 // A synchronization point INSIDE the transaction.
 //
-// The window F3 is about opens between the moment a governed write reads the
-// claim and the moment it commits, and it cannot be reproduced from outside: a
-// mutex race between two goroutines proves only that goroutines interleave, not
-// that a transaction does. What is needed is a barrier the test can hold OPEN
-// while a takeover commits, sitting between the module's own read of the claim
-// row and its own write.
-//
 // It is built by wrapping, not by putting a hook in production code. api.ModuleData
 // is an interface (core/api/modules.go:99) and store.Scope is an interface too, so
 // EMBEDDING both lets this file override exactly one method — the Ext repository
 // lookup — and leave the other thirty alone.
+//
+// This wrapper used to run a second tenant writer synchronously after a claim read.
+// That interleaving became impossible when every Postgres tenant Mutate began taking
+// the lineage L1 advisory lock before its callback: the nested writer waits for the
+// outer transaction, while the outer callback waits for the nested writer. Tests that
+// coordinate two writers must now start the contender asynchronously and assert one
+// of the two orders the database can actually commit.
 
 // barrierData wraps a ModuleData so a chosen entity's reads can be intercepted
 // inside a live transaction.
@@ -52,6 +52,54 @@ type barrierData struct {
 	// process holds an observation that the database does not, and in which a clock
 	// can move backwards under it.
 	afterMutate func()
+}
+
+// sequencedData exposes the two boundaries needed to order independent Mutate
+// calls without reaching into the SQL store: immediately before asking the store
+// to begin, and after the store has admitted the callback. On Postgres, admission
+// occurs only after the per-tenant lineage lock has been acquired.
+type sequencedData struct {
+	inner          api.ModuleData
+	beforeMutate   func()
+	beforeCallback func(store.Scope) error
+}
+
+func (d *sequencedData) View(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	return d.inner.View(ctx, tenant, fn)
+}
+
+func (d *sequencedData) Mutate(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	if d.beforeMutate != nil {
+		d.beforeMutate()
+	}
+	return d.inner.Mutate(ctx, tenant, func(sc store.Scope) error {
+		if d.beforeCallback != nil {
+			if err := d.beforeCallback(sc); err != nil {
+				return err
+			}
+		}
+		return fn(sc)
+	})
+}
+
+func awaitSignal(t *testing.T, ctx context.Context, ch <-chan struct{}, event string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for %s: %v", event, ctx.Err())
+	}
+}
+
+func awaitError(t *testing.T, ctx context.Context, ch <-chan error, event string) error {
+	t.Helper()
+	select {
+	case err := <-ch:
+		return err
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for %s: %v", event, ctx.Err())
+		return ctx.Err()
+	}
 }
 
 func (b *barrierData) View(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
@@ -262,16 +310,13 @@ func (r *barrierRepo) List(ctx context.Context, q model.Query) ([]model.Record, 
 
 // pgSess opens a module on an ISOLATED Postgres database, or skips.
 //
-// Postgres is not a nicety here, it is the only engine on which the defect is
-// reachable: the SQLite store runs every transaction on ONE connection
-// (sqlstore/store.go:760-761), so the takeover this test needs to commit MID-
-// transaction cannot even open its own. A green SQLite run would prove nothing,
-// which is exactly the class of false comfort the cross-backend suite already
-// documents (identity_crossbackend_test.go:17-29).
+// Postgres is required because these tests exercise ordering between independent
+// transactions and the per-tenant advisory lock. SQLite runs every transaction on
+// one connection, so it cannot demonstrate a second writer waiting at that lock.
 func pgSess(t *testing.T) (*Module, model.TenantID, *testClock) {
 	t.Helper()
 	if !enginetest.PostgresAvailable(t) {
-		t.Skipf("%s unset: the F3 interleaving is NOT exercised (it is unreachable on SQLite)", enginetest.EnvSuperuserDSN)
+		t.Skipf("%s unset: the PostgreSQL transaction ordering is NOT exercised", enginetest.EnvSuperuserDSN)
 	}
 	pg := enginetest.IsolatedPostgres(t)
 	m := New()
@@ -298,25 +343,15 @@ func pgSess(t *testing.T) (*Module, model.TenantID, *testClock) {
 	return m, tenant, clk
 }
 
-// THE F3 TEST. The fence advances BETWEEN the check and the write, and the late
-// write must not land.
-//
-// Authority answers "this holder could act", which is a statement about the past
-// by the time the effect happens. What makes the token mean something is that the
-// WRITE is conditioned on it: the claim row is re-read and updated inside the
-// governed transaction, so the store's version predicate turns a takeover into a
-// conflict and rolls the effect back with it.
-//
-// The barrier is what makes the window reproducible. It sits INSIDE the governed
-// transaction, between the module's own read of the claim and its own write, so
-// the takeover commits in precisely the gap the defect lives in. A mutex race
-// between two goroutines would not do it — it would prove that goroutines
-// interleave, not that transactions do.
-func TestF3_LateWriteAfterTakeoverIsRejected(t *testing.T) {
+// If a takeover owns the tenant serialization point first, it commits before the
+// governed transaction can read authority. The old holder and fence are then stale
+// and the conditioned write must be refused without leaving its effect behind.
+func TestF3_TakeoverCommittedBeforeGovernedReadRejectsStaleWrite(t *testing.T) {
 	t.Parallel()
 
 	m, tenant, clk := pgSess(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	sid, err := m.ResolveSession(ctx, tenant, SessionBinding{
 		Provider: ProviderOperated, ExternalID: "run-late", Origin: OriginOperated, At: baseTime,
@@ -329,33 +364,58 @@ func TestF3_LateWriteAfterTakeoverIsRejected(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 
-	// The barrier: when the governed transaction reads the claim row, let a takeover
-	// commit before letting it continue to its write.
 	real := m.data
-	took := make(chan struct{})
-	bar := &barrierData{inner: real, kind: claimKind}
-	bar.afterRead = func() {
-		// The first holder's lease lapses and somebody else takes the session. This
-		// runs on ANOTHER connection, inside its own transaction, and commits before
-		// the governed write below reaches its CAS.
-		clk.advance(2 * time.Minute)
-		if _, terr := (&Module{data: real, clock: clk}).Claim(ctx, tenant, sid, "user:second", time.Minute); terr != nil {
-			t.Errorf("the takeover could not commit: %v", terr)
-		}
-		close(took)
+	clk.advance(2 * time.Minute)
+
+	takeoverAdmitted := make(chan struct{})
+	releaseTakeover := make(chan struct{})
+	takeoverDone := make(chan error, 1)
+	takeoverData := &sequencedData{
+		inner: real,
+		beforeCallback: func(store.Scope) error {
+			close(takeoverAdmitted)
+			select {
+			case <-releaseTakeover:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
 	}
-	m.data = bar
+	go func() {
+		_, terr := (&Module{data: takeoverData, clock: clk}).Claim(
+			ctx, tenant, sid, "user:second", time.Minute,
+		)
+		takeoverDone <- terr
+	}()
+	awaitSignal(t, ctx, takeoverAdmitted, "takeover transaction admission")
 
-	// The governed write, still carrying the authority it was admitted with. This is
-	// the real production consumer, not a stand-in.
-	_, err = m.persistCreate(ctx, tenant, "run-late", CreateRunParams{
-		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
-		Actor: "user:first", ActorKind: "user",
-	}, "", "", runGovFacts{}, lease)
+	writerRequested := make(chan struct{})
+	writerDone := make(chan error, 1)
+	m.data = &sequencedData{
+		inner:        real,
+		beforeMutate: func() { close(writerRequested) },
+	}
+	go func() {
+		_, werr := m.persistCreate(ctx, tenant, "run-late", CreateRunParams{
+			Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "default",
+			Actor: "user:first", ActorKind: "user",
+		}, "", "", runGovFacts{}, lease)
+		writerDone <- werr
+	}()
+	awaitSignal(t, ctx, writerRequested, "governed write request")
+	close(releaseTakeover)
 
-	<-took
+	if terr := awaitError(t, ctx, takeoverDone, "takeover commit"); terr != nil {
+		t.Fatalf("takeover: %v", terr)
+	}
+	err = awaitError(t, ctx, writerDone, "stale governed write refusal")
 	m.data = real
-
+	successor, live, aerr := m.ActiveClaim(ctx, tenant, sid)
+	if aerr != nil || !live || successor.Holder != "user:second" || successor.Fence != lease.Fence+1 {
+		t.Fatalf("successor claim = %#v live:%v err:%v, want user:second at fence %d",
+			successor, live, aerr, lease.Fence+1)
+	}
 	if err == nil {
 		t.Fatal("the late write LANDED: a writer whose authority had already moved on was allowed to commit")
 	}
@@ -371,22 +431,17 @@ func TestF3_LateWriteAfterTakeoverIsRejected(t *testing.T) {
 	}
 }
 
-// A CONCURRENT takeover, started from inside the governed transaction and racing
-// it rather than being sequenced before it.
-//
-// Read the name carefully, because the first one overclaimed and a contrast said
-// so: this does NOT prove the "takeover still in flight when the CAS runs"
-// interleaving. It has no barrier holding the takeover open between its update and
-// its commit, so it can and often does collapse into the already-committed case the
-// test above covers. What it does prove is that the refusal survives when the
-// takeover runs concurrently instead of being neatly ordered first. Pinning the
-// in-flight branch needs a second barrier inside the takeover's own transaction —
-// pack SG-02-f.
-func TestF3_ConcurrentTakeoverStillRefusesTheLateWrite(t *testing.T) {
+// If the governed transaction owns the tenant serialization point first, its
+// already-authorized effect commits before a concurrently requested takeover. The
+// successor then advances the fence. This is the other real Postgres ordering; a
+// takeover cannot commit between the claim read and write while the tenant lock is
+// held.
+func TestF3_AlreadyAuthorizedWriteCommitsBeforeSerializedTakeover(t *testing.T) {
 	t.Parallel()
 
 	m, tenant, clk := pgSess(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	sid, err := m.ResolveSession(ctx, tenant, SessionBinding{
 		Provider: ProviderOperated, ExternalID: "run-inflight", Origin: OriginOperated, At: baseTime,
@@ -400,19 +455,42 @@ func TestF3_ConcurrentTakeoverStillRefusesTheLateWrite(t *testing.T) {
 	}
 
 	real := m.data
+	takeoverRequested := make(chan struct{})
+	takeoverAdmitted := make(chan struct{})
 	takeoverDone := make(chan error, 1)
 	bar := &barrierData{inner: real, kind: claimKind}
 	bar.afterRead = func() {
-		// Start the takeover and let it run to completion on its own connection. The
-		// governed CAS below then contends with a row this transaction has already
-		// touched; whether it blocks first or reads the new version first, the answer
-		// must be the same.
-		clk.advance(2 * time.Minute)
+		takeoverData := &sequencedData{
+			inner:        real,
+			beforeMutate: func() { close(takeoverRequested) },
+			beforeCallback: func(sc store.Scope) error {
+				// The takeover callback is admitted only after the governed transaction
+				// commits. Its fresh transaction must therefore see the committed effect.
+				repo, rerr := sc.Ext(runKind)
+				if rerr != nil {
+					return rerr
+				}
+				recs, _, rerr := repo.List(ctx, model.Query{
+					Filters: []model.Filter{eq(colRunRef, "run-inflight")}, Limit: 1,
+				})
+				if rerr != nil {
+					return rerr
+				}
+				if len(recs) != 1 {
+					return errors.New("takeover was admitted before the governed effect committed")
+				}
+				clk.advance(2 * time.Minute)
+				close(takeoverAdmitted)
+				return nil
+			},
+		}
 		go func() {
-			_, terr := (&Module{data: real, clock: clk}).Claim(ctx, tenant, sid, "user:second", time.Minute)
+			_, terr := (&Module{data: takeoverData, clock: clk}).Claim(
+				ctx, tenant, sid, "user:second", time.Minute,
+			)
 			takeoverDone <- terr
 		}()
-		time.Sleep(150 * time.Millisecond) // let the takeover reach its own write
+		awaitSignal(t, ctx, takeoverRequested, "concurrent takeover request")
 	}
 	m.data = bar
 
@@ -422,15 +500,23 @@ func TestF3_ConcurrentTakeoverStillRefusesTheLateWrite(t *testing.T) {
 	}, "", "", runGovFacts{}, lease)
 	m.data = real
 
-	if terr := <-takeoverDone; terr != nil {
-		t.Fatalf("the takeover failed, so this test proved nothing: %v", terr)
+	if err != nil {
+		t.Fatalf("already-authorized governed write: %v", err)
 	}
-	if err == nil {
-		t.Fatal("the late write LANDED with a takeover running concurrently (which may have " +
-			"committed first — see this test's contract above)")
+	awaitSignal(t, ctx, takeoverAdmitted, "serialized takeover admission")
+	if terr := awaitError(t, ctx, takeoverDone, "serialized takeover commit"); terr != nil {
+		t.Fatalf("serialized takeover: %v", terr)
 	}
-	if _, lerr := m.loadRun(ctx, tenant, "run-inflight"); lerr == nil {
-		t.Error("the governed effect survived the refusal")
+	if _, lerr := m.loadRun(ctx, tenant, "run-inflight"); lerr != nil {
+		t.Fatalf("governed effect did not survive its valid serialized commit: %v", lerr)
+	}
+	successor, live, aerr := m.ActiveClaim(ctx, tenant, sid)
+	if aerr != nil || !live || successor.Holder != "user:second" || successor.Fence != lease.Fence+1 {
+		t.Fatalf("successor claim = %#v live:%v err:%v, want user:second at fence %d",
+			successor, live, aerr, lease.Fence+1)
+	}
+	if aerr := m.Authority(ctx, tenant, sid, lease.Holder, lease.Fence); !errors.Is(aerr, ErrLeaseLost) {
+		t.Errorf("old authority after takeover = %v, want ErrLeaseLost", aerr)
 	}
 }
 

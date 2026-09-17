@@ -6,9 +6,10 @@
 # stateful core (the deployment topology described in ARCHITECTURE.md) plus an optional
 # DaemonSet of edge collectors that push observations to the core over gRPC+mTLS
 # (the distributed plane "C" of). Helm is OCI-default since v3.8.0, so this
-# chart is published and consumed as an OCI artifact (ghcr.io) and is signed with
-# cosign over the OCI manifest (keyless OIDC; the pipeline emits no GPG .prov —
-# cosign-only policy) — see deploy/helm/README.md.
+# chart is intended to be published and consumed as an OCI artifact (ghcr.io),
+# signed with cosign over the OCI manifest (keyless OIDC; the pipeline emits no
+# GPG .prov — cosign-only policy). REL-87 has not published it yet; see
+# deploy/helm/README.md for the current source-tree installation path.
 apiVersion: v2
 name: olivares
 description: Self-hosted engine for enterprise AI — integrate, manage and secure your AI across your infrastructure, with a hardened, signed, air-gap-ready deployment.
@@ -24,7 +25,7 @@ type: application
 #        tracks the engine CalVer.
 # 0.2.3: appVersion restamped to the current engine CalVer release (forward-facing).
 # 0.2.4: image.repository default -> docker.io/olivaresai/olivares. Docker Hub is the
-#        OFFICIAL primary registry from v26.8.0; ghcr.io stays the always-published
+#        OFFICIAL primary registry; ghcr.io stays the always-published
 #        fallback (same digest, same signatures) and is the coordinate to prefer under
 #        Docker Hub anonymous-pull rate limits. The CHART itself is still published
 #        only to oci://ghcr.io/olivaresai/charts (release-chart.yml) — unchanged.
@@ -32,7 +33,7 @@ version: 0.2.4
 
 # The default engine image tag this chart targets (engine CalVer). Overridden
 # per-release by `--set image.tag=` / `image.digest=` (air-gap pins by digest).
-appVersion: "26.8.0"
+appVersion: "26.9.0"
 
 kubeVersion: ">=1.25.0-0"
 

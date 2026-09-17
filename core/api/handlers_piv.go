@@ -34,6 +34,12 @@ func peerCertificates(r *http.Request) []*x509.Certificate {
 	return r.TLS.PeerCertificates
 }
 
+// pivVerifierRootsConfigured reports whether this deployment has PIV verifier
+// roots. It is not certificate presence, OCSP, AAL, or authorization.
+func (s *Server) pivVerifierRootsConfigured() bool {
+	return s.piv != nil && s.piv.Roots != nil
+}
+
 // handlePIVStatus reports the verifier's view of the presented certificate.
 // It never elevates, and the read is self-audited (docs/SECURITY-HARDENING.md) when a
 // certificate was actually presented — a coarse ledger event recording that
@@ -45,7 +51,7 @@ func (s *Server) handlePIVStatus(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, auth.ErrUnauthenticated)
 		return
 	}
-	if s.piv == nil || s.piv.Roots == nil {
+	if !s.pivVerifierRootsConfigured() {
 		s.writeError(w, r, auth.ErrPIVNotConfigured)
 		return
 	}

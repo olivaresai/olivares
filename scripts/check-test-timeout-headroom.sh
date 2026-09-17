@@ -56,10 +56,33 @@
 # 2026-07-25 habría nombrado governance al 93%.
 
 set -euo pipefail
+# ⛔ LOCALE FIJO. El awk que mide corre ya con LC_ALL=C y emite «10.0»; pero el `printf %.1f` de
+#    bash del veredicto y el awk del listado heredaban el locale del usuario, y bajo es_ES.UTF-8
+#    bash rechaza «10.0» —«printf: 10.0: invalid number», espera coma— y el instrumento sale 1 con
+#    el veredicto LIMPIO ya escrito. Medido el 2026-09-05 en el preflight con LC_ALL=es_ES.UTF-8
+#    heredado: 31/7 en el banco; con C, 38/0. Un instrumento numerico fija su locale y no hereda
+#    el idioma de quien lo lanza: ni los topes ni el umbral cambian, solo deja de depender de la
+#    caja. El banco lo ejerce bajo un locale con coma decimal (test-check-test-timeout-headroom.sh).
+export LC_ALL=C
 
 UMBRAL="${OLIVARES_HEADROOM_PCT:-75}"
 
 case "${1:-}" in
+  --raw)
+    # ⛔ MODO SIN PREFIJO, y existe porque el de arriba NO SIRVE para un log crudo. El parser separa
+    # el prefijo `<job>\t<paso>\t` BUSCANDO tabuladores, y en el log que un job deja con `tee` el
+    # PRIMER tabulador es de Go (`FAIL\tpaquete\t7284.106s`). Se come el marcador y el guion
+    # contesta «NO HE PODIDO MIRAR: el log no trae NINGUNA duracion» sobre un log lleno de ellas.
+    # Medido el 2026-08-26 contra un log real de `race-rest`: rc=2 con tres duraciones dentro.
+    #
+    # Con `--raw` el job se NOMBRA en la orden en vez de deducirse, y no se toca el prefijo. Asi el
+    # censo puede correr DENTRO del propio job, que es donde sirve: `--fetch` necesita
+    # `gh run view --log`, y eso exige la corrida ENTERA terminada — no puede medir la suya.
+    [ $# -ge 3 ] || { echo "uso: $0 --raw <nombre-del-job> <fichero-log>" >&2; exit 2; }
+    JOB_FIJO="$2"
+    LOG="$3"
+    [ -r "$LOG" ] || { echo "NO_HE_PODIDO_MIRAR — no puedo leer $LOG" >&2; exit 2; }
+    ;;
   --fetch)
     run="${2:-}"
     if [ -z "$run" ]; then
@@ -94,7 +117,7 @@ esac
 # El log de `gh run view --log` viene como  <job>\t<paso>\t<timestamp> <contenido>, y el CONTENIDO
 # lleva sus propios tabuladores (`ok\tpaquete\t1.2s`), así que se separa el prefijo por posición y
 # el resto se trata como texto — partir todo por \t mezclaría las dos capas.
-salida=$(LC_ALL=C awk -v umbral="$UMBRAL" '
+salida=$(LC_ALL=C awk -v umbral="$UMBRAL" -v jobfijo="${JOB_FIJO:-}" '
   function segundos(txt,   n, u) {
     # 45m | 2700s | 1h30m0s → segundos. Devuelve -1 si no lo entiende.
     if (txt ~ /^[0-9]+h[0-9]+m[0-9.]+s$/) { split(txt, p, /[hms]/); return p[1]*3600 + p[2]*60 + p[3] }
@@ -106,6 +129,12 @@ salida=$(LC_ALL=C awk -v umbral="$UMBRAL" '
   {
     linea = $0
     job = ""
+    # ⛔ CON `--raw` NO HAY PREFIJO QUE QUITAR: el job viene nombrado y los tabuladores de la linea
+    # son de Go. Quitarlos aqui es exactamente el defecto que `--raw` existe para evitar.
+    if (jobfijo != "") {
+      job = jobfijo
+      resto = linea
+    } else
     # prefijo: dos campos separados por tabulador antes del contenido
     if (match(linea, /\t/)) {
       job = substr(linea, 1, RSTART - 1)

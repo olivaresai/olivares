@@ -14,7 +14,8 @@ Für den Pfad des *kooperativen Beobachtens* (OTLP-Telemetrie → Access Map) si
 [Claude Code verbinden](/how-to/connect-claude-code/); für den *Govern*-Pfad (PreToolUse-Hooks
 als PEP) siehe das [govern-claude-code-Beispiel](https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code).
 Diese Seite behandelt das **Co-Deployment**: die beiden Laufzeiten gemeinsam zum Laufen
-bringen.
+bringen. Claude, Codex oder Grok nach vorhandener Laufzeit unter einem
+Anbieterprofil zu starten: [Eine Anbieter-Session betreiben](/how-to/operate-provider-sessions/).
 
 :::note[Wie Governance die Session tatsächlich erreicht]
 Eine Session ist governt, weil **die Engine `claude`s stdin/stdout besitzt** — der
@@ -74,14 +75,14 @@ zuerst:
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.8.0 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 Bringen Sie stattdessen Ihr eigenes `claude` mit `--build-arg CLAUDE_INSTALL=byo` mit (das
@@ -91,7 +92,7 @@ Image wird ohne `claude` ausgeliefert; mounten Sie Ihres zur Laufzeit und setzen
 ### Hochfahren
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.8.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -264,7 +265,7 @@ Bis dahin ist der sichere Standard die Co-Lokation.
 - **Verifizierte Supply Chain.** Die Engine ist cosign-signiert (verifizieren Sie sie /
   pinnen Sie per Digest); `claude` installiert aus Anthropics signierten Repos mit
   gepinntem Key-Fingerprint. Der Installer **verweigert es, eine unverifizierte Engine zu
-  betreiben**, sofern Sie sich nicht ausdrücklich abmelden.
+  betreiben**, ohne Umgehung der Verifikation.
 - **Verankertes Audit.** Jeder Lifecycle-Übergang und jede Workspace-Mutation wird im
   hash-verketteten, signierten Ledger per `PayloadHash` versiegelt — die Bytes von Dateien
   und der Inhalt von Frames werden nie persistiert.

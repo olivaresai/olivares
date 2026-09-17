@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -222,6 +223,8 @@ type moduleSet struct {
 	// already wires an env-ref for — this is the listener it points at).
 	models         *models.Module
 	inferenceProxy *inferenceproxy.Module
+	// contentFirewall is the recorder injected into inferenceProxy (contentfirewallstatus.go).
+	contentFirewall *messagesInspectorBinding
 	// the FinOps→Anthropic-org upstream-cap backstop (nil unless opt-in + provisioned
 	// via OLIVARES_CLAUDE_ADMIN_ACTUATOR_CONFIG). boot() subscribes it to the bus after the
 	// approval bridge's handler is bound (its governed actuator gates through that bridge).
@@ -245,6 +248,15 @@ type moduleSet struct {
 	pinVerifier mcpc.ToolPinVerifier
 	// the reporting module, held so boot() registers the schedule pump.
 	reporting *reporting.Module
+	// D01-C2B: the governed Chat execution adapter (nil unless the explicit development
+	// activation selected it). boot() late-binds its store/policy/context/residency/
+	// secret/approval/bus dependencies before HTTP serving, exactly like knowledgeGuard.
+	chatExecutor *modelsChatExecutor
+	// D08-C2a: module VIII (inventory), kept so boot() can bind its durable sweep
+	// scope — the privileged tenant enumeration that stays in the composition root
+	// — before rt.Start. It is the SAME instance that is already in `all`; this is
+	// the typed reference, never a second inventory.New().
+	inventory *inventory.Module
 }
 
 // buildModules constructs all Fase C modules and wires the inter-module adapters that
@@ -255,7 +267,18 @@ type moduleSet struct {
 // inferenceDoer is the trace-instrumented HTTP transport for the engine→Claude hop
 // (OBS-03; nil = untraced default); log backs the connector-dispatcher provisioning
 // warnings.
-func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.PrivateKey, auditPriors []ed25519.PublicKey, inferenceDoer modelprovider.Doer, srcCfg sourcesConfig, log *slog.Logger) (moduleSet, error) {
+func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.PrivateKey, auditPriors []ed25519.PublicKey, inferenceDoer modelprovider.Doer, srcCfg sourcesConfig, edition EditionConfig, log *slog.Logger) (moduleSet, error) {
+	modelGatewayProfiles, err := loadModelGatewayProfiles(osGetenv, log)
+	if err != nil {
+		return moduleSet{}, err
+	}
+	// D01-C2B: the governed Chat dispatch path is activated by ONE explicit key and
+	// nothing else. An unknown value fails startup rather than falling back, so a
+	// deployment that asked for a mode this build does not have finds out at boot.
+	modelGatewayChatMode, err := loadModelGatewayChatMode(osGetenv)
+	if err != nil {
+		return moduleSet{}, err
+	}
 	sandboxCfg, err := loadSandboxRuntimeConfig(log)
 	if err != nil {
 		return moduleSet{}, err
@@ -344,7 +367,15 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// native streaming runner is always wired; the inference credential source is
 	// wired only when configured (else stream-json launches are deny-closed). The
 	// governance gates are late-bound.
-	sm := sessions.New(buildSessionRuntimeOptions(osGetenv, wifBroker, log)...)
+	// P2/W3: the managed Stop admission timeout is operator configuration the boot
+	// validates. An unusable value fails startup here, not at the first managed Stop.
+	managedStopAdmission, err := managedStopAdmissionTimeout(osGetenv)
+	if err != nil {
+		return moduleSet{}, err
+	}
+	sm := sessions.New(append(buildSessionRuntimeOptions(osGetenv, wifBroker, log),
+		sessions.WithManagedStopAdmissionTimeout(managedStopAdmission))...)
+	logSessionLaunchInspection(sm, log)
 	// II→XII: the monitor samples REAL sessions from the module-II live read-model
 	// within a short configurable recency window (OLIVARES_EVALS_MONITOR_WINDOW).
 	evOpts := append([]evals.Option{}, ci.evalsJudgeOptions()...)
@@ -705,8 +736,20 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		// only cross-module dependency of the decision (deny-closed on error).
 		models.WithActorScopeResolver(modelsActorScopeResolver{resolver: ssResolver, log: log}),
 	}
+	if modelGatewayProfiles != nil {
+		modelsOpts = append(modelsOpts, models.WithExecutionProfileResolver(modelGatewayProfiles))
+	}
 	if ex := newModelsExecutor(osGetenv, inferenceDoer, live, log); ex != nil {
 		modelsOpts = append(modelsOpts, models.WithExecutor(ex))
+	}
+	// D01-C2B: the SEPARATE synchronous Chat seam, deny-closed unless the explicit
+	// development activation selected it AND an immutable profile registry exists. Its
+	// store/policy/context/residency/secret/approval/bus dependencies are late-bound by
+	// boot() before HTTP serving; until they are, the port refuses rather than serving
+	// half-governed. Its availability is independent of the legacy executor above.
+	chatExecutor := newModelsChatExecutor(modelGatewayChatMode, modelGatewayProfiles, osGetenv, log)
+	if chatExecutor != nil {
+		modelsOpts = append(modelsOpts, models.WithChatExecutor(chatExecutor))
 	}
 	if rlp := newModelsRateLimitProvider(osGetenv, log); rlp != nil {
 		modelsOpts = append(modelsOpts, models.WithRateLimitProvider(rlp))
@@ -836,8 +879,11 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// the inline inference PEP's per-tenant governance config + DLP policy. The
 	// proxy LISTENER is built post-boot in cmd_serve.go (its own socket, opt-in via
 	// OLIVARES_INFERENCE_PROXY_CONFIG); this module is the durable, console-authorable
-	// policy the decider reads. It composes nothing (cmd composes).
-	ipx := inferenceproxy.New()
+	// policy the decider reads. It composes nothing (cmd composes). contentFirewall is
+	// the Messages proxy attachment recorder its status route reads; boot hands the same
+	// pointer to the engine, where buildClaudeMessagesProxyServer writes it.
+	contentFirewall := &messagesInspectorBinding{}
+	ipx := inferenceproxy.New(inferenceproxy.WithContentFirewallStatus(contentFirewall))
 
 	// the knowledge module is held so the deferred document sources can be
 	// registered on it (AddSource) after the store resolves their credentials.
@@ -924,6 +970,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// constructed outside the slice so the composition root can hand the
 	// cadence pump its tenant-scoped scan seam (the eventing-module pattern).
 	orch := orchestration.New(orchOpts...)
+	inv := inventory.New()
 	all := []api.Module{
 		accessmap.New(),
 		// the pin verifier's operator surface (enterprise implements
@@ -957,7 +1004,10 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		agentsConsole,
 		identityConsole,
 		health.New(),
-		inventory.New(),
+		// D08-C2a: constructed outside the slice so the composition root can hand it
+		// the durable sweep scope (the eventing/orchestration-module pattern). There
+		// is exactly one inventory instance and `all` and moduleSet share it.
+		inv,
 		km,
 		// liveingest: the in-process producer of the detective bus events the
 		// out-of-process Claude connector cannot Host.Publish (guardrail.observed,
@@ -997,6 +1047,12 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		sm,
 		voiceMod,
 	}
+	// V269 / COCKPIT-07 §4: the modules THIS EDITION carries under the
+	// /v1/m/session-cockpit namespace. Exactly one module ever owns it: a build without
+	// `addon_ids` gets the AGPL availability placeholder (501 session_cockpit_unavailable)
+	// and a build with it gets the commercial engine, chosen by the seam and never by a
+	// runtime `if edition ==` — the frontier is in the bytes.
+	all = append(all, editionModuleRegistrars(edition)...)
 	// hand the recorder the namespaces actually mounted so a tenant's
 	// recorded-namespace config is validated against reality (a typo would
 	// silently un-record a surface).
@@ -1005,7 +1061,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		known = append(known, m.APINamespace())
 	}
 	recmod.UseKnownNamespaces(known)
-	return moduleSet{all: all, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyDist: policyDistributor, policyObserved: policyObserved, sessions: sm, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx,
+	return moduleSet{all: all, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyDist: policyDistributor, policyObserved: policyObserved, sessions: sm, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx, contentFirewall: contentFirewall,
 		knowledge:           km,
 		knowledgeStatus:     ci.knowledgeStatus,
 		knowledgeEmbedder:   governedEmbedder,
@@ -1014,22 +1070,35 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		pinVerifier:         pinVerifier,
 		identityConsole:     identityConsole,
 		reporting:           rep,
+		chatExecutor:        chatExecutor,
+		inventory:           inv,
 		deferredSecrets:     &deferredSecretWiring{content: pendingContent, knowledge: km, notify: notifyDispatcher, claude: claudeThreads}}, nil
 }
 
-// loadGovernancePDP builds the IDN-09 external policy engine from the environment.
-// OLIVARES_PDP_ENGINE selects cedar|opa (empty/none = native ABAC only). Cedar reads
-// its policy from OLIVARES_PDP_CEDAR_FILE; OPA reads OLIVARES_PDP_OPA_URL /
-// _OPA_PATH / _OPA_TOKEN. A misconfiguration disables the external PDP (the native
-// ABAC engine and RBAC still govern) and logs loudly — it never silently un-governs
-// and never crashes the control plane over a policy file.
+// External-PDP configuration errors (CP1). Each is FIXED: it names the operator
+// setting and the error CLASS and never carries the supplied path, policy source,
+// URL, bearer token or engine string, nor the wrapped constructor/OS error — a
+// composition-root error travels to an operator console, a log and a support bundle.
+// The caller reports the returned error, so the loader does not log a second copy.
+var (
+	errPDPCedarFileUnreadable = errors.New("OLIVARES_PDP_CEDAR_FILE cannot be read: check the configured path and the engine user's read permission; refusing to build the module set instead of silently dropping the configured external PDP")
+	errPDPCedarPolicyInvalid  = errors.New("OLIVARES_PDP_CEDAR_FILE is not a valid Cedar policy: fix the policy source; refusing to build the module set instead of silently dropping the configured external PDP")
+	errPDPOPASettingsInvalid  = errors.New("OLIVARES_PDP_OPA_URL and OLIVARES_PDP_OPA_PATH must both be non-empty after normalization (the decision path has no default): refusing to build the module set instead of silently dropping the configured external PDP")
+	errPDPEngineUnsupported   = errors.New("OLIVARES_PDP_ENGINE is not a supported external policy engine (want cedar, opa, none, or unset): refusing to build the module set instead of silently dropping the configured external PDP")
+)
+
 // loadGovernanceOptions assembles every governance.Option from the environment: the
 // optional external PDP (Cedar/OPA deny-overlay) AND the offline-staleness bound
 // (ADR-0024 Q1), which are independent — the staleness bound governs the ALWAYS-present
 // scoped-grant engine, not the external PDP, so it must not be gated behind
-// OLIVARES_PDP_ENGINE.
+// OLIVARES_PDP_ENGINE. The PDP is validated FIRST, so a deployment that gets both
+// wrong is told about the policy engine first — a fixed precedence, not an accident of
+// evaluation order.
 func loadGovernanceOptions(getenv func(string) string, log *slog.Logger) ([]governance.Option, error) {
-	opts := loadGovernancePDP(getenv, log)
+	opts, err := loadGovernancePDP(getenv, log)
+	if err != nil {
+		return nil, err
+	}
 	if raw := strings.TrimSpace(getenv("OLIVARES_POLICY_MAX_STALENESS")); raw != "" {
 		d, err := time.ParseDuration(raw)
 		if err != nil || d <= 0 {
@@ -1041,37 +1110,68 @@ func loadGovernanceOptions(getenv func(string) string, log *slog.Logger) ([]gove
 	return opts, nil
 }
 
-func loadGovernancePDP(getenv func(string) string, log *slog.Logger) []governance.Option {
+// loadGovernancePDP builds the IDN-09 external policy engine from the environment.
+// OLIVARES_PDP_ENGINE selects cedar|opa; unset, blank or a case-insensitive "none"
+// leaves the native ABAC engine alone. Cedar reads its policy from
+// OLIVARES_PDP_CEDAR_FILE (unset, or a readable empty file, is the valid empty overlay
+// — the evaluator's implicit base permit restricts nothing); OPA reads
+// OLIVARES_PDP_OPA_URL / _OPA_PATH / _OPA_TOKEN, where the decision path has no
+// default and the token is optional.
+//
+// CP1: an EXPLICIT engine whose configuration is invalid is a construction ERROR.
+// Until R38 it was logged and converted to nil options, and a nil option disappears
+// into composition: the native ABAC engine and RBAC still governed, but the authority
+// the operator had configured was gone with no error left for any caller to
+// propagate. The error now stops buildModules, so EVERY command that constructs the
+// module set fails — serve/boot, `openapi --beta`, `migrate manifest`, `migrate
+// apply`, support-bundle schema collection and directory-writer activation. The
+// operator corrects the setting or selects "none" explicitly; see
+// docs/design/configured-pdp-startup.md. Valid none/empty-Cedar/Cedar/OPA
+// configurations keep their prior construction and evaluation behavior, and
+// construction still issues no OPA request and no reachability probe.
+func loadGovernancePDP(getenv func(string) string, log *slog.Logger) ([]governance.Option, error) {
 	engine := strings.TrimSpace(getenv("OLIVARES_PDP_ENGINE"))
 	if engine == "" || strings.EqualFold(engine, "none") {
-		return nil
+		return nil, nil
 	}
+	// Normalized once: cfg.Engine is what the factory switches on, and past the switch
+	// below it can only be a SUPPORTED selector — so it is also the only engine value
+	// safe to log, never the operator's raw string.
 	cfg := governance.PDPConfig{Engine: governance.PDPEngine(strings.ToLower(engine)), Logger: log}
+	// invalid is the error class for THIS engine's construction failure, chosen before
+	// the constructor runs so the mapping never depends on parsing its message.
+	var invalid error
 	switch cfg.Engine {
 	case governance.PDPCedar:
+		invalid = errPDPCedarPolicyInvalid
 		if file := strings.TrimSpace(getenv("OLIVARES_PDP_CEDAR_FILE")); file != "" {
 			b, err := os.ReadFile(file) //nolint:gosec // operator-provided policy path
 			if err != nil {
-				log.Error("pdp: cannot read cedar policy file; external PDP disabled (native ABAC still enforced)", "file", file, "err", err)
-				return nil
+				return nil, errPDPCedarFileUnreadable
 			}
 			cfg.CedarPolicy = string(b)
 		}
 	case governance.PDPOPA:
+		invalid = errPDPOPASettingsInvalid
 		cfg.OPABaseURL = getenv("OLIVARES_PDP_OPA_URL")
 		cfg.OPADecisionPath = getenv("OLIVARES_PDP_OPA_PATH")
 		cfg.OPAToken = getenv("OLIVARES_PDP_OPA_TOKEN")
+	default:
+		// Rejected here rather than by the factory: the class is then unambiguous and
+		// the returned error cannot echo the selector the operator supplied.
+		return nil, errPDPEngineUnsupported
 	}
+	// The constructors' own errors quote the policy source, path or URL they were
+	// given, so they are the INPUT to the classification above and never the value
+	// returned. A nil evaluator with a nil error cannot happen for a supported engine,
+	// but it is treated as invalid configuration too: the one thing an explicit engine
+	// must never produce is a silent native-only module set.
 	pdp, err := governance.NewExternalPDP(cfg)
-	if err != nil {
-		log.Error("pdp: invalid external PDP config; external PDP disabled (native ABAC still enforced)", "engine", engine, "err", err)
-		return nil
+	if err != nil || pdp == nil {
+		return nil, invalid
 	}
-	if pdp == nil {
-		return nil
-	}
-	log.Info("pdp: external policy engine enabled", "engine", engine)
-	return []governance.Option{governance.WithExternalPDP(pdp)}
+	log.Info("pdp: external policy engine enabled", "engine", string(cfg.Engine))
+	return []governance.Option{governance.WithExternalPDP(pdp)}, nil
 }
 
 // complianceHoldGate bridges the knowledge.HoldGate seam to the compliance

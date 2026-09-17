@@ -31,14 +31,15 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta and not yet released**. There are no supported release versions. Security fixes are applied to the `main` branch only.
+The project is **beta**; the latest tagged release is `v26.9.0`. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| Any tagged release | None exist yet |
+| `v26.9.0` (latest release) | Yes — fixes ship as the next release |
+| Older tagged releases | No — upgrade to the latest release |
 
-This table will be replaced with a real support matrix at the first release.
+This table grows into a real support matrix as releases accumulate.
 
 ## Scope
 
@@ -50,7 +51,8 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 
 For a security product, build integrity is part of the trust model, not an afterthought:
 
-- **Signed releases** with cosign / Sigstore, a published **SBOM** (syft), and checksums — the release pipeline is built and exercised in CI, but **no tagged release exists yet** (see *Supported versions*), so this describes what a release will carry, not an artifact you can download and verify today.
+- **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
+  v26.9.0 is available now, and `scripts/verify-release.sh` verifies its chain before use.
 - **Distroless** container images and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.
 - **CI gates:** dependency scanning with `govulncheck` and secret scanning on every change.
@@ -59,7 +61,7 @@ When a vulnerability is fixed, we publish honestly: an advisory, affected versio
 
 ## Vulnerability remediation targets
 
-Hardening is a programme, not a one-time build: a shipped image's CVE posture decays the day after release, so we run a **patch-velocity** cadence and publish remediation targets. These take effect at the first tagged release (the project is beta today; see *Supported versions*).
+Hardening is a programme, not a one-time build: a shipped image's CVE posture decays the day after release, so we run a **patch-velocity** cadence and publish remediation targets. These have been in effect since the first tagged release (the project is beta; see *Supported versions*).
 
 > **What these targets are, and are not.** They are the objectives of this project's engineering practice — **not an SLA, not a warranty, and not a contractual commitment**. No edition carries a contractual remediation SLA and nothing on this page creates one; they confer no right or remedy, and they are always subject to what an upstream fix, a reproducible test and a verified signed build actually allow. Where a commercial agreement exists, its own terms govern and prevail over this page.
 

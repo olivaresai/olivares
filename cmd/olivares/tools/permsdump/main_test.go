@@ -125,7 +125,18 @@ func moduleTypesUnder(t *testing.T, root string) map[string]string {
 // wired into the product whose package the inventory never imports at all.
 func TestModuleListMatchesCompositionRoot(t *testing.T) {
 	const prefix = "github.com/olivaresai/olivares/modules/"
+	// ⛔ LA RAIZ DE COMPOSICION SON DOS FICHEROS, NO UNO, y esto era `wire.go` a secas hasta
+	// que las costuras de edicion existieron. `editionModuleRegistrars()` vive en
+	// wire_noenterprise.go y monta modulos en la build POR DEFECTO —hoy el placeholder de
+	// disponibilidad del session cockpit—, asi que un modulo puede entrar en el producto sin
+	// tocar wire.go. Leyendo solo wire.go, este cruce acusaba a allModules() de inventarse un
+	// modulo que el binario SI monta: un falso positivo, que es como una guarda se gana que la
+	// apaguen. El proposito declarado del test no cambia —leer los imports, que es lo que de
+	// verdad cambia cuando un modulo entra— sino DONDE se leen.
 	wire := moduleImportsOf(t, filepath.Join("..", "..", "wire.go"), prefix)
+	for path := range moduleImportsOf(t, filepath.Join("..", "..", "wire_noenterprise.go"), prefix) {
+		wire[path] = struct{}{}
+	}
 	mine := moduleImportsOf(t, "modules.go", prefix)
 
 	if len(wire) == 0 {
@@ -216,6 +227,19 @@ var nonRoutePermissions = map[auth.Permission]string{
 	// modules/security declares it because that module owns the "security" namespace —
 	// eventing declaring it would let one module widen another's.
 	"security:observed:read": "eventing per-event RBAC filter (modules/eventing/catalog.go)",
+	// ⛔ ESTA ENTRADA NO ES «ENFORCEMENT EN OTRO SITIO» EN EL SENTIDO HTTP, y por eso lleva su
+	// razon entera: el placeholder del session cockpit monta CERO rutas a proposito (su ruta 501
+	// se retiro el 2026-09-02 porque lint:public-counts exige que las rutas de modulo igualen las
+	// operaciones del openapi y ese carril no podia tocar web/). La declaracion se queda porque
+	// el literal es PORTANTE para un gate: scripts/check-community-cockpit-strings.sh lo usa como
+	// CONTROL POSITIVO — sin el en el binario de community, ese gate no distingue «no hay traza
+	// inesperada» de «este binario nunca llevo el placeholder», y su verde seria cierto por vacio.
+	// Ademas lo nombran el contrato de la edicion (docs/contracts/COCKPIT-07-edition-cut.md), la
+	// allowlist scripts/community-session-cockpit-strings.allow y el test del propio modulo.
+	//
+	// Se intento retirarla en la declaracion siguiendo el precedente de arriba y NO valia: aquel
+	// caso se quito porque NADA lo usaba; aqui lo usan ocho sitios, uno de ellos un control.
+	"session-cockpit:availability:read": "control positivo de check-community-cockpit-strings.sh y literal del contrato COCKPIT-07",
 }
 
 // pendingK3CommunicationRoutePermissions is deliberately NOT part of
@@ -231,15 +255,8 @@ var nonRoutePermissions = map[auth.Permission]string{
 const pendingK3CommunicationRouteReason = "K3 communication REST remains deny-closed pending PostgreSQL 0018 and readiness/composition gates"
 
 var pendingK3CommunicationRoutePermissions = map[auth.Permission]string{
-	"sessions:channel:read":           pendingK3CommunicationRouteReason,
-	"sessions:channel:write":          pendingK3CommunicationRouteReason,
-	"sessions:channel:admin":          pendingK3CommunicationRouteReason,
-	"sessions:message:read":           pendingK3CommunicationRouteReason,
 	"sessions:message:write":          pendingK3CommunicationRouteReason,
 	"sessions:message:admin":          pendingK3CommunicationRouteReason,
-	"sessions:message-send:write":     pendingK3CommunicationRouteReason,
-	"sessions:delivery:read":          pendingK3CommunicationRouteReason,
-	"sessions:delivery:write":         pendingK3CommunicationRouteReason,
 	"sessions:delivery:admin":         pendingK3CommunicationRouteReason,
 	"sessions:decision-request:read":  pendingK3CommunicationRouteReason,
 	"sessions:decision-request:write": pendingK3CommunicationRouteReason,
@@ -247,7 +264,6 @@ var pendingK3CommunicationRoutePermissions = map[auth.Permission]string{
 	"sessions:handoff:read":           pendingK3CommunicationRouteReason,
 	"sessions:handoff:write":          pendingK3CommunicationRouteReason,
 	"sessions:handoff:admin":          pendingK3CommunicationRouteReason,
-	"sessions:handoff-response:write": pendingK3CommunicationRouteReason,
 	"sessions:route:read":             pendingK3CommunicationRouteReason,
 	"sessions:route:write":            pendingK3CommunicationRouteReason,
 	"sessions:route:admin":            pendingK3CommunicationRouteReason,

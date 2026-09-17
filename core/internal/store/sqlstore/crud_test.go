@@ -26,7 +26,7 @@ func TestViewTransactionOptionsAreEngineExact(t *testing.T) {
 
 func TestCRUDRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 
 	var created model.Agent
@@ -104,7 +104,7 @@ func TestCRUDRoundTrip(t *testing.T) {
 
 func TestOptimisticConcurrency(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	agent := mustCreateAgent(t, st, tenant, "bot")
 
@@ -129,7 +129,7 @@ func TestOptimisticConcurrency(t *testing.T) {
 
 func TestSoftDeleteVisibility(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	agent := mustCreateAgent(t, st, tenant, "bot")
 
@@ -162,7 +162,7 @@ func TestSoftDeleteVisibility(t *testing.T) {
 
 func TestViewIsReadOnly(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 
 	err := st.View(ctx, tenant, func(sc store.Scope) error {
@@ -176,7 +176,7 @@ func TestViewIsReadOnly(t *testing.T) {
 
 func TestMutateRollbackOnError(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 
 	sentinel := errors.New("boom")
@@ -204,7 +204,7 @@ func TestMutateRollbackOnError(t *testing.T) {
 
 func TestCursorWithSortRejected(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	err := st.View(ctx, tenant, func(sc store.Scope) error {
 		_, _, e := sc.Agents().List(ctx, model.Query{
@@ -220,7 +220,7 @@ func TestCursorWithSortRejected(t *testing.T) {
 
 func TestNoTenantFailsClosed(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	err := st.Mutate(ctx, model.TenantID(""), func(store.Scope) error { return nil })
 	if !errors.Is(err, store.ErrNoTenant) {
 		t.Fatalf("zero tenant: err = %v, want ErrNoTenant", err)

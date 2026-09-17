@@ -1,0 +1,8 @@
+{
+  "apk_public_key_name": "olivares-packages-apk.rsa.pub",
+  "apk_public_key_sha256": "467c99df4b7f038a29669fedf24990dbafb879188a159653285b9781b086baa0",
+  "environment": "production",
+  "openpgp_fingerprint": "AE27B5B818C9BCFE485B4D8B155E5EC6550A6EF8",
+  "purpose": "apt-rpm-apk-repository-metadata",
+  "schema": "olivares.ai/package-repository-key/v1"
+}

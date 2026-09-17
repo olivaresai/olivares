@@ -377,6 +377,10 @@ type FederationService struct {
 	// from a sibling that happened to share a row version. Writes clear it wholesale
 	// (invalidateAll) — the set of IdPs is tiny and writes are rare.
 	cache map[model.ID]cachedFederation
+
+	// loginComponent is the declared login enforcement component state (R5,
+	// login_capability.go). The zero value is LoginComponentUnset.
+	loginComponent loginComponentCell
 }
 
 type cachedFederation struct {
@@ -419,17 +423,24 @@ func (s *FederationService) configsForScope(ctx context.Context, scope model.Ten
 // found under the reserved "default" alias even before the boot-time backfill rewrites
 // it. This is what keeps an upgraded deployment's global/default IdP reachable.
 func (s *FederationService) loadConfigByAlias(ctx context.Context, scope model.TenantID, alias string) (model.FederationConfig, bool, error) {
-	want := model.NormalizeFederationAlias(alias)
 	rows, err := s.configsForScope(ctx, scope)
 	if err != nil {
 		return model.FederationConfig{}, false, err
 	}
+	c, ok := configByAlias(rows, alias)
+	return c, ok, nil
+}
+
+// configByAlias selects the row whose alias equals the normalized alias. The service
+// read and the R5 in-transaction posture read share it.
+func configByAlias(rows []model.FederationConfig, alias string) (model.FederationConfig, bool) {
+	want := model.NormalizeFederationAlias(alias)
 	for _, c := range rows {
 		if c.Alias == want {
-			return c, true, nil
+			return c, true
 		}
 	}
-	return model.FederationConfig{}, false, nil
+	return model.FederationConfig{}, false
 }
 
 // loadConfig returns a scope's PRIMARY ("default") IdP config — the single-IdP path
@@ -652,6 +663,11 @@ func (s *FederationService) PutConfigIdP(ctx context.Context, actor Principal, s
 	}
 
 	err = s.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// R5: the capability lock comes first for every writer. An absent component
+		// refuses to configure the global/default posture over a recorded observation.
+		if err := s.guardConfigWrite(ctx, as, &next); err != nil {
+			return err
+		}
 		// One drain of every config (tiny set) backs both invariants below. Atomicity note:
 		// on SQLite the single writer serializes AuthMutate, so drain-then-write is atomic;
 		// on Postgres (READ COMMITTED) it is best-effort. For the activation CAP that is
@@ -776,6 +792,11 @@ func (s *FederationService) DeleteConfigIdP(ctx context.Context, actor Principal
 	}
 	isDefault := alias == model.DefaultFederationAlias
 	err = s.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// R5: the capability lock comes first. Deletion only reduces demand, so it is
+		// never refused here, and it never touches the capability observation.
+		if err := s.guardConfigWrite(ctx, as, nil); err != nil {
+			return err
+		}
 		if isDefault {
 			// Keep id/version (OCC) + the alias but reset every other field: a cleared,
 			// disabled tombstone with no protocol and no secrets.
@@ -1437,9 +1458,15 @@ func (s *FederationService) Posture(ctx context.Context) (LoginEnforcementPostur
 	if !ok {
 		return LoginEnforcementPosture{}, nil
 	}
+	return postureFromConfig(cfg), nil
+}
+
+// postureFromConfig is the one mapping from a stored FederationConfig to its
+// LoginEnforcementPosture, shared by Posture and the R5 transaction guards.
+func postureFromConfig(cfg model.FederationConfig) LoginEnforcementPosture {
 	return LoginEnforcementPosture{
 		RequireSSO:        cfg.RequireSSO,
 		HasActiveIdP:      cfg.Status == model.StatusActive && cfg.Protocol != "",
 		NetworkAllowCIDRs: cfg.NetworkAllowCIDRs,
-	}, nil
+	}
 }

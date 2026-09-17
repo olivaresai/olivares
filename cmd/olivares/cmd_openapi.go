@@ -79,7 +79,7 @@ func moduleOpenAPIDocument() (map[string]any, error) {
 		return nil, fmt.Errorf("ephemeral signer: %w", err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, log)
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		return nil, fmt.Errorf("load module operator config: %w", err)
 	}

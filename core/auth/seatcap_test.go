@@ -150,11 +150,11 @@ func TestSeatCap_ZeroWithOKIsReportedAsUnlimited(t *testing.T) {
 	// seat_limited=true / seat_limit=0 — a client would read that as "no account may
 	// exist", the exact opposite of the truth. SeatLimit normalizes every
 	// non-positive figure to the single unlimited spelling (0,false).
-	a := auth.NewAuthenticator(testStore(t), nil).WithSeatPolicy(stubSeatPolicy{limit: 0, ok: true})
+	a := auth.NewAuthenticator(nil, nil).WithSeatPolicy(stubSeatPolicy{limit: 0, ok: true})
 	if limit, ok := a.SeatLimit(); ok || limit != 0 {
 		t.Fatalf("SeatLimit for (0,true) = (%d,%v), want the normalized unlimited (0,false)", limit, ok)
 	}
-	a = auth.NewAuthenticator(testStore(t), nil).WithSeatPolicy(stubSeatPolicy{limit: -5, ok: true})
+	a = auth.NewAuthenticator(nil, nil).WithSeatPolicy(stubSeatPolicy{limit: -5, ok: true})
 	if limit, ok := a.SeatLimit(); ok || limit != 0 {
 		t.Fatalf("SeatLimit for (-5,true) = (%d,%v), want (0,false)", limit, ok)
 	}

@@ -163,8 +163,19 @@ func (h *harness) ensureControlPlane(t *testing.T) {
 			Engine:                opsv1alpha1.EnginePostgres,
 			HARouting:             opsv1alpha1.HARoutingLeader,
 			AuditSigningKeySecret: envOr("OLIVARES_E2E_AUDIT_SECRET", "audit-key"),
-			Postgres:              &opsv1alpha1.PostgresSpec{DSNSecret: envOr("OLIVARES_E2E_DSN_SECRET", "pg-dsn")},
-			Persistence:           &opsv1alpha1.PersistenceSpec{Size: "1Gi"},
+			// TWO pools, one Secret. AdminDSNKey names the cross-tenant BYPASSRLS read
+			// pool inside the SAME Secret as the application DSN, which is the only
+			// input that makes the controller wire --admin-dsn (adminDSNWired). Without
+			// it SystemScope.ListOrgs is RLS-limited on PostgreSQL and refuses, so
+			// POST /v1/setup answers 501 cross_tenant_admin_pool_not_configured and the
+			// LEADER's /readyz answers 503 setup_blocked — a first boot that can never
+			// complete, and the state the leader assertion below would report as
+			// "0 leaders".
+			Postgres: &opsv1alpha1.PostgresSpec{
+				DSNSecret:   envOr("OLIVARES_E2E_DSN_SECRET", "pg-dsn"),
+				AdminDSNKey: envOr("OLIVARES_E2E_ADMIN_DSN_KEY", "admin-dsn"),
+			},
+			Persistence: &opsv1alpha1.PersistenceSpec{Size: "1Gi"},
 			// Fail fast in CI rather than after the default 10 minutes.
 			ProgressDeadlineSeconds: 240,
 		},
@@ -224,22 +235,45 @@ func doProxy(ctx context.Context, req *restclient.Request) (int, string, error) 
 
 var errPodProxyTargetNotAddressable = errors.New("kubernetes pod proxy target is not addressable")
 
-// transientPodProxyError recognizes the one apiserver response that means a
-// replacement Pod exists but does not have an address yet. It deliberately does
-// not classify every non-2xx as transport: Olivares' expected 503 not_leader and
-// anomalous handler responses must remain observable to the fencing assertions.
+// kubernetesPodProxyUnreachablePrefix is the apiserver proxy transport wrapper
+// from k8s.io/apimachinery@v0.36.2 pkg/util/proxy/transport.go: RoundTrip
+// returns errors.NewServiceUnavailable(fmt.Sprintf("error trying to reach
+// service: %v", err)) when dialing the pod port fails.
+const kubernetesPodProxyUnreachablePrefix = "error trying to reach service:"
+
+// transientPodProxyError recognizes the apiserver responses that mean a
+// replacement Pod exists but cannot be reached yet: no address yet (HTTP 400,
+// reason BadRequest, message exactly "address not allowed") or an address whose
+// container port is not listening (HTTP 503, reason ServiceUnavailable, message
+// prefix "error trying to reach service:"). Both require a non-nil request
+// error and matching wrapper kind/apiVersion/status plus HTTP/status.Code.
+// It deliberately does not classify every 503 as transport: Olivares' expected
+// 503 not_leader and anomalous handler responses must remain observable to the
+// fencing assertions.
 func transientPodProxyError(code int, raw []byte, requestErr error) error {
-	if requestErr == nil || code != http.StatusBadRequest {
+	if requestErr == nil {
 		return nil
 	}
 	var status metav1.Status
 	if err := json.Unmarshal(raw, &status); err != nil ||
 		status.Kind != "Status" || status.APIVersion != "v1" ||
-		status.Status != metav1.StatusFailure || status.Reason != metav1.StatusReasonBadRequest ||
-		status.Message != "address not allowed" || status.Code != http.StatusBadRequest {
+		status.Status != metav1.StatusFailure {
 		return nil
 	}
-	return fmt.Errorf("%w: %v", errPodProxyTargetNotAddressable, requestErr)
+	switch {
+	case code == http.StatusBadRequest &&
+		status.Reason == metav1.StatusReasonBadRequest &&
+		status.Code == http.StatusBadRequest &&
+		status.Message == "address not allowed":
+		return fmt.Errorf("%w: %v", errPodProxyTargetNotAddressable, requestErr)
+	case code == http.StatusServiceUnavailable &&
+		status.Reason == metav1.StatusReasonServiceUnavailable &&
+		status.Code == http.StatusServiceUnavailable &&
+		strings.HasPrefix(status.Message, kubernetesPodProxyUnreachablePrefix):
+		return fmt.Errorf("%w: %v", errPodProxyTargetNotAddressable, requestErr)
+	default:
+		return nil
+	}
 }
 
 // isNotLeaderResponse distinguishes the engine's fencing response from an
@@ -255,6 +289,143 @@ func isNotLeaderResponse(code int, raw string) bool {
 	}
 	return json.Unmarshal([]byte(raw), &response) == nil &&
 		response.Error != nil && response.Error.Code == "not_leader"
+}
+
+// --- the /readyz probe record (D3) -------------------------------------------
+
+// readyzHealth is the ONLY shape read out of a /readyz body: the two scalar strings
+// the engine's bounded health-response schema defines (core/api handleReadyz —
+// "status" on every answer, "code" on the refusals that carry one). Everything else
+// the body may hold, including the operator-facing remedy sentence, is deliberately
+// NOT read and never reaches a log.
+type readyzHealth struct {
+	Status string `json:"status"`
+	Code   string `json:"code"`
+}
+
+// payloadClass says what could be read out of a /readyz body, so an unexpected answer
+// is reported as unexpected instead of being quoted.
+type payloadClass int
+
+const (
+	payloadParsed    payloadClass = iota // the two scalars were read
+	payloadEmpty                         // no body at all
+	payloadNotJSON                       // not JSON
+	payloadOffSchema                     // JSON, but not this schema (wrong types/shape)
+	payloadNoStatus                      // JSON of the right shape, but no required status
+)
+
+// readyzKnownStatus and readyzKnownCode are the CLOSED sets core/api/metrics.go emits,
+// verified against handleReadyz and handlePodReadyz. status is on every answer; code is
+// optional and only accompanies a refusal that has one.
+//
+// They are ALLOWLISTS, and that is the point: bounding length and refusing control
+// characters still copied any short printable string, so a payload this schema does not
+// describe could put arbitrary server-controlled text into a CI log. A value the engine
+// cannot emit is not a value this diagnostic reports.
+var (
+	readyzKnownStatus = map[string]bool{
+		"ok": true, "unavailable": true, "standby": true,
+		"setup_unavailable": true, "setup_blocked": true,
+	}
+	readyzKnownCode = map[string]bool{
+		"cross_tenant_admin_pool_not_configured": true,
+		"setup_probe_unavailable":                true,
+		"setup_state_unavailable":                true,
+	}
+)
+
+// readyzScalar renders a schema scalar only when the engine can actually emit it.
+// Anything else is reported by length, never copied.
+func readyzScalar(v string, known map[string]bool) string {
+	if v == "" {
+		return "<absent>"
+	}
+	if known[v] {
+		return v
+	}
+	return fmt.Sprintf("<unrecognized %d-byte value>", len(v))
+}
+
+// readyzProbe is the BOUNDED record of one /readyz observation.
+//
+// It exists because the first-create assertion used to report "0 leaders" and nothing
+// else: the body that says WHY — a standby drain, a store that is down, or a leader
+// whose first-boot setup read is refused — was discarded at the probe site, so a
+// deterministic configuration refusal was indistinguishable from an election flake.
+//
+// It is DIAGNOSTIC OUTPUT ONLY. Nothing here feeds the leader count or any other
+// assertion: the count still rises on HTTP 200 alone.
+type readyzProbe struct {
+	pod       string
+	transport bool // the probe never reached the engine (apiserver proxy/transport)
+	code      int  // the HTTP status the engine returned; 0 when transport is true
+	status    string
+	reason    string
+	payload   payloadClass
+	bodyBytes int
+}
+
+// observeReadyz records one probe. A transport failure — the apiserver proxy could not
+// reach the pod — is a DIFFERENT observation from an HTTP refusal the engine chose to
+// send, and the two must never be collapsed: the first says nothing about readiness.
+func observeReadyz(pod string, code int, body string, err error) readyzProbe {
+	if err != nil {
+		return readyzProbe{pod: pod, transport: true}
+	}
+	probe := readyzProbe{pod: pod, code: code, bodyBytes: len(body)}
+	if strings.TrimSpace(body) == "" {
+		probe.payload = payloadEmpty
+		return probe
+	}
+	var health readyzHealth
+	switch decodeErr := json.Unmarshal([]byte(body), &health); {
+	case decodeErr != nil && errors.As(decodeErr, new(*json.UnmarshalTypeError)):
+		probe.payload = payloadOffSchema
+	case decodeErr != nil:
+		probe.payload = payloadNotJSON
+	case health.Status == "":
+		// `null`, `{}` and {"status":null} all decode into a zero value WITHOUT an
+		// error, so the REQUIRED field is checked explicitly. Without it the body is
+		// not a health response, and reporting it as one with an absent status would
+		// read like the engine's ordinary answer that merely lacks the optional code.
+		probe.payload = payloadNoStatus
+	default:
+		probe.payload, probe.status, probe.reason = payloadParsed, health.Status, health.Code
+	}
+	return probe
+}
+
+// String renders one probe for a CI log: the pod, the HTTP status, and the two schema
+// scalars. An unexpected payload is identified by class and length, never quoted.
+func (p readyzProbe) String() string {
+	switch {
+	case p.transport:
+		return fmt.Sprintf("%s: transport failure — the probe never reached the engine, so it reports nothing about readiness", p.pod)
+	case p.payload == payloadEmpty:
+		return fmt.Sprintf("%s: HTTP %d, empty body", p.pod, p.code)
+	case p.payload == payloadNotJSON:
+		return fmt.Sprintf("%s: HTTP %d, %d-byte body is not JSON (not quoted)", p.pod, p.code, p.bodyBytes)
+	case p.payload == payloadOffSchema:
+		return fmt.Sprintf("%s: HTTP %d, %d-byte JSON body is not the health-response schema (not quoted)", p.pod, p.code, p.bodyBytes)
+	case p.payload == payloadNoStatus:
+		return fmt.Sprintf("%s: HTTP %d, %d-byte JSON body carries no health status (not quoted)", p.pod, p.code, p.bodyBytes)
+	default:
+		return fmt.Sprintf("%s: HTTP %d status=%s code=%s", p.pod, p.code,
+			readyzScalar(p.status, readyzKnownStatus), readyzScalar(p.reason, readyzKnownCode))
+	}
+}
+
+// formatReadyzProbes renders every retained probe, one per line.
+func formatReadyzProbes(probes []readyzProbe) string {
+	if len(probes) == 0 {
+		return "each /readyz result: none was recorded"
+	}
+	lines := make([]string, 0, len(probes))
+	for _, probe := range probes {
+		lines = append(lines, "  "+probe.String())
+	}
+	return "each /readyz result:\n" + strings.Join(lines, "\n")
 }
 
 // pods returns the ControlPlane's pods sorted by name.
@@ -482,6 +653,10 @@ func TestE2E_CreateHealthyHA(t *testing.T) {
 		t.Fatalf("pods = %d, want 3", len(pods))
 	}
 	leaders := 0
+	// Every /readyz result is RETAINED (D3), so a refusal explains itself here instead of
+	// being reported as a bare leader count. Diagnostic only: `leaders` still rises on
+	// HTTP 200 alone, and no field below is read by any assertion.
+	probes := make([]readyzProbe, 0, len(pods))
 	for _, p := range pods {
 		if !podIsReady(&p) {
 			t.Errorf("pod %s is not Ready; the split exists so healthy standbys ARE Ready", p.Name)
@@ -490,7 +665,8 @@ func TestE2E_CreateHealthyHA(t *testing.T) {
 		if err != nil || code != 200 {
 			t.Errorf("/pod-readyz on %s = %d %q (err %v), want 200", p.Name, code, body, err)
 		}
-		code, _, err = h.podProxy(ctx, "GET", p.Name, "readyz", nil)
+		code, body, err = h.podProxy(ctx, "GET", p.Name, "readyz", nil)
+		probes = append(probes, observeReadyz(p.Name, code, body, err))
 		if err != nil {
 			t.Errorf("/readyz on %s: %v", p.Name, err)
 			continue
@@ -503,8 +679,10 @@ func TestE2E_CreateHealthyHA(t *testing.T) {
 			t.Errorf("/readyz on %s = %d, want 200 (leader) or 503 (standby)", p.Name, code)
 		}
 	}
+	t.Logf("%s", formatReadyzProbes(probes))
 	if leaders != 1 {
-		t.Fatalf("/readyz reports %d leaders, want exactly 1 (the leader-only drain must survive the split)", leaders)
+		t.Fatalf("/readyz reports %d leaders, want exactly 1 (the leader-only drain must survive the split)\n%s",
+			leaders, formatReadyzProbes(probes))
 	}
 
 	// --- routing: the leader Service resolves to exactly the labeled leader ---

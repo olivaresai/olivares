@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olivares.ai/schemas/release-index-v1.json",
+  "title": "Olivares AI release distribution index",
+  "description": "Deterministic inventory derived from an authenticated release checksum set. Publication status remains explicit per distribution surface.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "state",
+    "version",
+    "tag",
+    "commit",
+    "channel",
+    "repository",
+    "generated_from",
+    "install_layout",
+    "artifacts",
+    "images",
+    "surfaces"
+  ],
+  "properties": {
+    "schema": {
+      "const": "olivares.ai/release-index/v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "state": {
+      "enum": ["candidate", "published"]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "channel": {
+      "enum": ["stable", "security", "lts"]
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "generated_from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checksums", "checksums_sha256"],
+      "properties": {
+        "checksums": {
+          "const": "checksums.txt"
+        },
+        "checksums_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "install_layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "system", "user"],
+      "properties": {
+        "schema": {
+          "const": "olivares.ai/install-layout/v1"
+        },
+        "system": {
+          "$ref": "#/$defs/systemInstallLayout"
+        },
+        "user": {
+          "$ref": "#/$defs/userInstallLayout"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "name", "sha256", "size", "url"],
+        "properties": {
+          "kind": {
+            "enum": ["archive", "package", "sbom", "evidence", "other"]
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/[A-Za-z0-9][A-Za-z0-9._+-]*$"
+          }
+        }
+      }
+    },
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reference", "digest"],
+        "properties": {
+          "reference": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9.-]+(/[A-Za-z0-9._-]+)+@sha256:[0-9a-f]{64}$"
+          },
+          "digest": {
+            "$ref": "#/$defs/ociDigest"
+          }
+        }
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status"],
+        "properties": {
+          "name": {
+            "enum": ["docker-hub", "ghcr", "github-release", "helm", "homebrew", "ota-stable"]
+          },
+          "status": {
+            "enum": ["staged", "published", "not-published", "not-applicable"]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "pathList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/absolutePath"
+      }
+    },
+    "systemInstallLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary", "config", "data", "unit"],
+      "properties": {
+        "binary": {"$ref": "#/$defs/pathList"},
+        "config": {"$ref": "#/$defs/pathList"},
+        "data": {"$ref": "#/$defs/pathList"},
+        "unit": {"$ref": "#/$defs/pathList"}
+      }
+    },
+    "userInstallLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary_suffix", "config_suffix", "data_suffix", "unit_suffix"],
+      "properties": {
+        "binary_suffix": {"$ref": "#/$defs/pathList"},
+        "config_suffix": {"$ref": "#/$defs/pathList"},
+        "data_suffix": {"$ref": "#/$defs/pathList"},
+        "unit_suffix": {"$ref": "#/$defs/pathList"}
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ociDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

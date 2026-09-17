@@ -12,11 +12,15 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/core/api"
 )
 
 func TestUnknownConfigEnvKeys(t *testing.T) {
@@ -193,6 +197,191 @@ func TestConfigValidateRejectsUnknownKey(t *testing.T) {
 	t.Setenv("OLIVARES_NONSENSE_XYZ", "1")
 	if _, err := executeConfigCommand("validate"); err == nil {
 		t.Fatal("config validate succeeded with an unknown key")
+	}
+}
+
+// addonAIRSConstructorInputs are the five file-reference names the enterprise addon_airs
+// constructors read (cmd-overlay/olivares/wire_enterprise_addon_airs.go, private). T9
+// measured it on 2026-09-11: both built SKUs enforced OLIVARES_CONTENT_FIREWALL_CONFIG while
+// `config validate` and `config effective --strict` refused a deployment that set it, and
+// the same boot logged the key as ignored. OLIVARES_HOOK_FIREWALL_CONFIG, read by the same
+// file and already registered, is the discriminator. Recognized is a statement about the
+// name only: whether a build links the control, and what the file says, stays with the
+// constructors, and these verbs never open the file.
+var addonAIRSConstructorInputs = []string{
+	"OLIVARES_COMPUTER_USE_CONFIG",
+	"OLIVARES_CONTENT_FIREWALL_CONFIG",
+	"OLIVARES_ELICITATION_MEDIATOR_CONFIG",
+	"OLIVARES_RENDER_INSPECTOR_CONFIG",
+	"OLIVARES_SERVERTOOL_EGRESS_CONFIG",
+}
+
+const addonAIRSHookFirewallKey = "OLIVARES_HOOK_FIREWALL_CONFIG"
+
+// addonAIRSPolicyBody is what the referenced files contain. It must never reach the output:
+// the configured value is the path, not the policy.
+const addonAIRSPolicyBody = `{"sentinel":"airs-policy-body-not-for-display"}`
+
+func TestConfigVerbsAcceptAddonAIRSConstructorInputs(t *testing.T) {
+	keys := append([]string{addonAIRSHookFirewallKey}, addonAIRSConstructorInputs...)
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			clearOlivaresEnv(t)
+			assertConfigVerbsAccept(t, map[string]string{key: setAddonAIRSPolicyFile(t, key)})
+		})
+	}
+	t.Run("all six together", func(t *testing.T) {
+		clearOlivaresEnv(t)
+		want := make(map[string]string, len(keys))
+		for _, key := range keys {
+			want[key] = setAddonAIRSPolicyFile(t, key)
+		}
+		assertConfigVerbsAccept(t, want)
+	})
+	t.Run("unreadable reference is displayed, not opened", func(t *testing.T) {
+		clearOlivaresEnv(t)
+		missing := filepath.Join(t.TempDir(), "absent", "content-firewall.json")
+		t.Setenv("OLIVARES_CONTENT_FIREWALL_CONFIG", missing)
+		assertConfigVerbsAccept(t, map[string]string{"OLIVARES_CONTENT_FIREWALL_CONFIG": missing})
+	})
+}
+
+// The recognized names must not widen into a family: a near miss of each is still an
+// unknown key, named on its own, through both gates.
+func TestConfigVerbsStillRejectNearMissAddonAIRSNames(t *testing.T) {
+	nearMisses := []string{ // sorted, the order the error lists them in
+		"OLIVARES_COMPUTERUSE_CONFIG",
+		"OLIVARES_CONTENT_FIREWAL_CONFIG",
+		"OLIVARES_ELICITATION_MEDIATOR_CONF",
+		"OLIVARES_RENDER_INSPECTORS_CONFIG",
+		"OLIVARES_SERVER_TOOL_EGRESS_CONFIG",
+	}
+	wantErr := "unrecognized OLIVARES_* environment keys: [" + strings.Join(nearMisses, " ") + "]"
+	setNearMisses := func(t *testing.T) {
+		for _, key := range nearMisses {
+			t.Setenv(key, "/etc/olivares/airs/near-miss.json")
+		}
+	}
+	assertRejected := func(t *testing.T) string {
+		t.Helper()
+		if _, err := executeConfigCommand("validate"); err == nil || err.Error() != wantErr {
+			t.Fatalf("config validate error = %v, want %q", err, wantErr)
+		}
+		if _, err := executeConfigCommand("effective", "--strict"); err == nil || err.Error() != wantErr {
+			t.Fatalf("config effective --strict error = %v, want %q", err, wantErr)
+		}
+		out, err := executeConfigCommand("effective")
+		if err != nil {
+			t.Fatalf("advisory config effective failed: %v", err)
+		}
+		for _, key := range nearMisses {
+			// Whole-name match: OLIVARES_ELICITATION_MEDIATOR_CONF is a prefix of a real key.
+			if strings.Contains("\n"+out, "\n"+key+"=") {
+				t.Fatalf("config effective displayed unknown key %s:\n%s", key, out)
+			}
+		}
+		return out
+	}
+
+	t.Run("alone", func(t *testing.T) {
+		clearOlivaresEnv(t)
+		setNearMisses(t)
+		assertRejected(t)
+	})
+	t.Run("beside the recognized names", func(t *testing.T) {
+		clearOlivaresEnv(t)
+		want := map[string]string{}
+		for _, key := range append([]string{addonAIRSHookFirewallKey}, addonAIRSConstructorInputs...) {
+			want[key] = setAddonAIRSPolicyFile(t, key)
+		}
+		setNearMisses(t)
+		out := assertRejected(t)
+		assertEffectiveLines(t, out, want)
+	})
+	t.Run("test-only names stay outside", func(t *testing.T) {
+		clearOlivaresEnv(t)
+		want := map[string]string{}
+		for _, key := range addonAIRSConstructorInputs {
+			want[key] = setAddonAIRSPolicyFile(t, key)
+		}
+		t.Setenv("OLIVARES_TEST_CONTENT_FIREWALL_CONFIG", "/fixture/content-firewall.json")
+		t.Setenv("OLIVARES_E2E_RENDER_INSPECTOR_CONFIG", "/fixture/render-inspector.json")
+		out := assertConfigVerbsAccept(t, want)
+		if strings.Contains(out, "OLIVARES_TEST_") || strings.Contains(out, "OLIVARES_E2E_") {
+			t.Fatalf("config effective displayed a test-only key:\n%s", out)
+		}
+	})
+}
+
+// The API projection (/config/effective) shares the registry: the five names enter it
+// with the same source rule and redaction as every other key, and a near miss does not.
+func TestEffectiveConfigEntriesProjectAddonAIRSConstructorInputs(t *testing.T) {
+	const dir = "/etc/olivares/airs/"
+	environ := []string{
+		"OLIVARES_CLAUDE_INFERENCE_KEY=supersecret",
+		"OLIVARES_COMPUTER_USE_CONFIG=", // present but empty: the activation overlay supplies it
+		"OLIVARES_CONTENT_FIREWALL_CONFIG=" + dir + "content-firewall.json",
+		"OLIVARES_CONTENT_FIREWAL_CONFIG=" + dir + "near-miss.json",
+	}
+	values := map[string]string{
+		"OLIVARES_CLAUDE_INFERENCE_KEY":        "supersecret",
+		"OLIVARES_COMPUTER_USE_CONFIG":         dir + "computer-use.json",
+		"OLIVARES_CONTENT_FIREWALL_CONFIG":     dir + "content-firewall.json",
+		"OLIVARES_CONTENT_FIREWAL_CONFIG":      dir + "near-miss.json",
+		"OLIVARES_ELICITATION_MEDIATOR_CONFIG": dir + "elicitation-mediator.json",
+		"OLIVARES_HOOK_FIREWALL_CONFIG":        dir + "hook-firewall.json",
+		"OLIVARES_RENDER_INSPECTOR_CONFIG":     dir + "render-inspector.json",
+		"OLIVARES_SERVERTOOL_EGRESS_CONFIG":    dir + "servertool-egress.json",
+	}
+	got := effectiveConfigEntries(environ, func(key string) string { return values[key] })
+	want := []api.EffectiveConfigEntry{
+		{Key: "OLIVARES_CLAUDE_INFERENCE_KEY", Value: redactedConfigValue, Redacted: true, Source: "env"},
+		{Key: "OLIVARES_COMPUTER_USE_CONFIG", Value: dir + "computer-use.json", Source: "activation"},
+		{Key: "OLIVARES_CONTENT_FIREWALL_CONFIG", Value: dir + "content-firewall.json", Source: "env"},
+		{Key: "OLIVARES_ELICITATION_MEDIATOR_CONFIG", Value: dir + "elicitation-mediator.json", Source: "activation"},
+		{Key: "OLIVARES_HOOK_FIREWALL_CONFIG", Value: dir + "hook-firewall.json", Source: "activation"},
+		{Key: "OLIVARES_RENDER_INSPECTOR_CONFIG", Value: dir + "render-inspector.json", Source: "activation"},
+		{Key: "OLIVARES_SERVERTOOL_EGRESS_CONFIG", Value: dir + "servertool-egress.json", Source: "activation"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("effective entries:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// setAddonAIRSPolicyFile writes a policy file carrying the sentinel body and points key at it.
+func setAddonAIRSPolicyFile(t *testing.T, key string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), strings.ToLower(key)+".json")
+	if err := os.WriteFile(path, []byte(addonAIRSPolicyBody), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	t.Setenv(key, path)
+	return path
+}
+
+// assertConfigVerbsAccept runs the two documented gates and returns the effective dump.
+func assertConfigVerbsAccept(t *testing.T, want map[string]string) string {
+	t.Helper()
+	if out, err := executeConfigCommand("validate"); err != nil || out != configValidateOKLine+"\n" {
+		t.Fatalf("config validate = %q, %v; want %q", out, err, configValidateOKLine)
+	}
+	out, err := executeConfigCommand("effective", "--strict")
+	if err != nil {
+		t.Fatalf("config effective --strict: %v\n%s", err, out)
+	}
+	assertEffectiveLines(t, out, want)
+	return out
+}
+
+func assertEffectiveLines(t *testing.T, out string, want map[string]string) {
+	t.Helper()
+	for key, value := range want {
+		if !strings.Contains("\n"+out, "\n"+key+"="+value+"\n") {
+			t.Errorf("config effective lacks %s=%s:\n%s", key, value, out)
+		}
+	}
+	if strings.Contains(out, "airs-policy-body-not-for-display") {
+		t.Fatalf("config effective displayed referenced file content:\n%s", out)
 	}
 }
 

@@ -24,7 +24,8 @@
     "duration": "Durée",
     "lastSeen": "Vu pour la dernière fois",
     "provenance": "Origine",
-    "control": "Contrôle"
+    "control": "Contrôle",
+    "instance": "Instance"
   },
   "state": {
     "active": "Actif",
@@ -93,7 +94,8 @@
   "allSources": "Toutes les origines",
   "tabs": {
     "sessions": "Sessions",
-    "workspaces": "Espaces de travail"
+    "workspaces": "Espaces de travail",
+    "profiles": "Profils de fournisseur"
   },
   "partial": {
     "noLiveRead": "Les sessions observées ne sont pas affichées : votre rôle n’inclut pas sessions:live:read. Les sessions lancées ci-dessous sont la part qui a pu être lue, pas le tableau complet.",
@@ -173,7 +175,31 @@
     "noObservationYet": "Rien n’a encore été observé pour cette session : aucune télémétrie n’est parvenue au plan sous cette référence.",
     "actionFailed": "L’action n’a pas pu être menée à bien.",
     "activeRun": "en cours d’usage",
-    "pickRun": "Plusieurs exécutions pilotent cette session. Choisissez-en une pour la rejoindre, la gouverner ou l’arrêter."
+    "pickRun": "Plusieurs exécutions pilotent cette session. Choisissez-en une pour la rejoindre, la gouverner ou l’arrêter.",
+    "attributionTitle": "Attribution",
+    "attribution": {
+      "legacy": "Hérité",
+      "observed": "Observée via une source",
+      "source": "Source connue",
+      "managed": "Gérée par Olivares"
+    },
+    "attributionExplain": {
+      "legacy": "Repliée depuis un canal sans source enregistrée : un ancien connecteur, une observation poussée par un collecteur ou un ancien événement. Aucune instance de fournisseur ne lui est attribuée après coup.",
+      "observed": "Arrivée par une source dédiée à ce profil de fournisseur. Cela dit quelle source configurée l’a livrée — pas que l’identifiant qu’elle contient appartient à un processus lancé par Olivares.",
+      "source": "Arrivée par une source enregistrée qui n’est dédiée à aucun profil : le canal est connu, l’instance de fournisseur ne l’est pas.",
+      "managed": "Écrite par la passerelle d’Olivares pour une session qu’il a lancée : la seule ligne qui porte une session canonique et une exécution prouvées."
+    },
+    "liveRef": "Référence de ligne",
+    "profile": "Profil de fournisseur",
+    "provider": "Fournisseur",
+    "environment": "Environnement d’exécution",
+    "binding": "Liaison de source",
+    "canonicalSid": "Session canonique",
+    "related": {
+      "title": "Également observée via des sources liées",
+      "explain": "Ces lignes partagent le profil et l’identifiant de session du fournisseur de cette exécution, mais sont arrivées par une source, pas par le processus qu’Olivares tient. Elles sont affichées à côté de l’exécution, jamais fusionnées avec elle.",
+      "open": "Ouvrir"
+    }
   },
   "facet": {
     "observed": "Observée : {{state}}",

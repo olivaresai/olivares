@@ -3,12 +3,12 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
-  "description": "Product documentation site for Olivares AI \u2014 integrate, manage and secure AI in your enterprise, multi-provider: Claude Code and Codex today, Grok Build in development. Di\u00e1taxis-organized, searchable (Pagefind), versioned. Part of the AGPL-3.0-only product.",
+  "description": "Product documentation site for Olivares AI \u2014 integrate, manage and secure AI in your enterprise, multi-provider: Claude Code, Codex and Grok. Di\u00e1taxis-organized, searchable (Pagefind), versioned. Part of the AGPL-3.0-only product.",
   "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/apply-font-display.mjs && node scripts/seal-csp.mjs && node scripts/check-response-policy.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "spec:openapi": "node scripts/lint-openapi.mjs",
@@ -16,25 +16,44 @@
     "test:drift": "node scripts/check-spec-drift.mjs",
     "test:modules": "node scripts/check-module-coverage.mjs",
     "test:links": "node scripts/check-links.mjs",
-    "test": "npm run brand:check && npm run spec:openapi && npm run spec:asyncapi && npm run build && npm run test:drift && npm run test:modules && npm run test:links",
+    "test:robots": "node scripts/check-robots.mjs",
+    "test:font-display": "node scripts/apply-font-display.mjs",
+    "test:structured-data": "node scripts/check-structured-data.mjs",
+    "test:astro7-compat": "node scripts/check-astro7-compat.mjs",
+    "test:policy": "node scripts/check-response-policy.mjs",
+    "test:policy:selftest": "node scripts/check-response-policy.mjs --self-test",
+    "test:robots:selftest": "node scripts/check-robots.mjs --self-test",
+    "test": "npm run brand:check && npm run spec:openapi && npm run spec:asyncapi && npm run build && npm run test:drift && npm run test:modules && npm run test:links && npm run test:robots:selftest && npm run test:robots && npm run test:font-display && npm run test:structured-data && npm run test:astro7-compat && npm run test:policy:selftest && npm run test:policy",
     "brand": "node scripts/gen-brand-css.mjs",
-    "brand:check": "node scripts/gen-brand-css.mjs --selftest && node scripts/gen-brand-css.mjs --check"
+    "brand:check": "node scripts/gen-brand-css.mjs --selftest && node scripts/gen-brand-css.mjs --check",
+    "check:wrangler": "node ../scripts/check-wrangler-pin.mjs"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.39.3",
+    "@astrojs/markdown-satteri": "^0.4.1",
+    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/starlight": "^0.42.0",
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource-variable/space-grotesk": "^5.3.0",
-    "astro": "^6.4.4",
-    "starlight-openapi": "^0.25.3",
-    "starlight-versions": "^0.9.0",
+    "astro": "^7.3.2",
+    "starlight-openapi": "^0.26.2",
+    "starlight-versions": "^0.10.1",
     "url-template": "^3.1.1"
   },
   "devDependencies": {
     "@asyncapi/parser": "^3.4.0",
-    "@readme/openapi-parser": "^4.1.2"
+    "@readme/openapi-parser": "^4.1.2",
+    "wrangler": "4.128.0"
   },
   "overrides": {
-    "nanoid": "^3.3.17"
+    "nanoid": "^3.3.17",
+    "fast-uri": "^3.1.7",
+    "js-yaml": "^4.3.2",
+    "postcss": "^8.5.27",
+    "svgo": "^4.1.0",
+    "brace-expansion": "^1.1.18",
+    "form-data": "^4.0.6",
+    "postcss-selector-parser": "^6.1.4",
+    "sharp": "^0.35.4"
   }
 }

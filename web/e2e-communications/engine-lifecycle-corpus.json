@@ -1,0 +1,429 @@
+{
+  "_copyright": "SPDX-FileCopyrightText: 2026 Olivares.AI",
+  "_license": "SPDX-License-Identifier: AGPL-3.0-only",
+  "bases": {
+    "lease": {
+      "schema": "olivares.k3.engine-lease.v1",
+      "lease_id": "11111111-1111-4111-8111-111111111111",
+      "work_dir": "/fixture/work",
+      "data_dir": "/fixture/work/data",
+      "data_directory": {
+        "canonical_path": "/fixture/work/data",
+        "device": "9007199254740993",
+        "inode": "18446744073709551615"
+      },
+      "phase": "seed",
+      "pid": 4242,
+      "start_ticks": "18446744073709551615",
+      "boot_id": "22222222-2222-4222-8222-222222222222",
+      "pid_namespace": "pid:[4026531836]",
+      "executable": {
+        "canonical_path": "/fixture/engine",
+        "device": "9007199254740993",
+        "inode": "18446744073709551615"
+      },
+      "cwd": "/fixture/work",
+      "listen": "127.0.0.1:8490",
+      "grpc_listen": "127.0.0.1:8491",
+      "observation": {
+        "name": "process-observations/engine.seed.43.123.0.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "published_at": "2026-09-10T12:00:00.000Z",
+      "predecessor": null
+    },
+    "stop": {
+      "schema": "olivares.k3.engine-stop.v1",
+      "lease": {
+        "name": "lease.11111111-1111-4111-8111-111111111111.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "purpose": "restart",
+      "helper": {
+        "pid": 43,
+        "start_ticks": "1000",
+        "boot_id": "22222222-2222-4222-8222-222222222222",
+        "pid_namespace": "pid:[4026531836]",
+        "executable": {
+          "canonical_path": "/fixture/python3.11",
+          "device": "9007199254740993",
+          "inode": "18446744073709551615",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "script": {
+          "canonical_path": "/fixture/helper.py",
+          "device": "9007199254740993",
+          "inode": "18446744073709551615",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "validation": "matched",
+      "signals": [
+        {
+          "signal": "SIGTERM",
+          "outcome": "sent",
+          "elapsed_ms": 1
+        }
+      ],
+      "terminal": {
+        "observation": "pidfd",
+        "events": 1,
+        "elapsed_ms": 2
+      },
+      "elapsed_ms": 3
+    },
+    "pointer": {
+      "schema": "olivares.k3.engine-current.v1",
+      "state": "stopped",
+      "lease": {
+        "name": "lease.11111111-1111-4111-8111-111111111111.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "stop": {
+        "name": "stop.11111111-1111-4111-8111-111111111111.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  "cases": [
+    {
+      "kind": "lease",
+      "name": "valid-lease",
+      "valid": true,
+      "changes": [],
+      "remove": []
+    },
+    {
+      "kind": "pointer",
+      "name": "valid-pointer",
+      "valid": true,
+      "changes": [],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "valid-stop",
+      "valid": true,
+      "changes": [],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "numeric-start-ticks",
+      "valid": false,
+      "changes": [[["start_ticks"], 9007199254740993]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "exponent-start-ticks",
+      "valid": false,
+      "changes": [[["start_ticks"], "1e5"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "leading-zero-start-ticks",
+      "valid": false,
+      "changes": [[["start_ticks"], "01"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "bool-pid",
+      "valid": false,
+      "changes": [[["pid"], true]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "fractional-pid",
+      "valid": false,
+      "changes": [[["pid"], 1.5]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "unsafe-pid",
+      "valid": false,
+      "changes": [[["pid"], 9007199254740992]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "unknown-schema",
+      "valid": false,
+      "changes": [[["schema"], "future"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "negative-inode",
+      "valid": false,
+      "changes": [[["data_directory", "inode"], "-1"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "data-path-escape",
+      "valid": false,
+      "changes": [[["data_dir"], "/elsewhere/data"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "data-path-normalization",
+      "valid": false,
+      "changes": [[["data_dir"], "/fixture/work/../data"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "replaced-data-name",
+      "valid": false,
+      "changes": [
+        [["data_directory", "canonical_path"], "/fixture/work/other"]
+      ],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "observation-traversal",
+      "valid": false,
+      "changes": [[["observation", "name"], "../other.json"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "bad-hash",
+      "valid": false,
+      "changes": [
+        [
+          ["observation", "sha256"],
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      ],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "non-loopback",
+      "valid": false,
+      "changes": [[["listen"], "0.0.0.0:8490"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "bad-port",
+      "valid": false,
+      "changes": [[["listen"], "127.0.0.1:08490"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "boot-id",
+      "valid": false,
+      "changes": [[["boot_id"], "not-a-boot"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "pid-namespace",
+      "valid": false,
+      "changes": [[["pid_namespace"], "pid:[0]"]],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "missing-data-inode",
+      "valid": false,
+      "changes": [],
+      "remove": [["data_directory", "inode"]]
+    },
+    {
+      "kind": "lease",
+      "name": "accepted-predecessor-reference",
+      "valid": true,
+      "changes": [
+        [
+          ["predecessor"],
+          {
+            "lease": {
+              "name": "lease.11111111-1111-4111-8111-111111111111.json",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "stop": {
+              "name": "stop.11111111-1111-4111-8111-111111111111.json",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        ]
+      ],
+      "remove": []
+    },
+    {
+      "kind": "lease",
+      "name": "predecessor-missing-stop",
+      "valid": false,
+      "changes": [
+        [
+          ["predecessor"],
+          {
+            "lease": {
+              "name": "lease.11111111-1111-4111-8111-111111111111.json",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        ]
+      ],
+      "remove": []
+    },
+    {
+      "kind": "pointer",
+      "name": "stopped-missing-receipt",
+      "valid": false,
+      "changes": [],
+      "remove": [["stop"]]
+    },
+    {
+      "kind": "pointer",
+      "name": "bare-status",
+      "valid": false,
+      "changes": [],
+      "remove": [["lease"], ["stop"]]
+    },
+    {
+      "kind": "pointer",
+      "name": "orphan-stop-filename",
+      "valid": false,
+      "changes": [[["stop", "name"], "result.json"]],
+      "remove": []
+    },
+    {
+      "kind": "pointer",
+      "name": "external-stop-path",
+      "valid": false,
+      "changes": [
+        [
+          ["stop", "name"],
+          "/tmp/stop.11111111-1111-4111-8111-111111111111.json"
+        ]
+      ],
+      "remove": []
+    },
+    {
+      "kind": "pointer",
+      "name": "unknown-state",
+      "valid": false,
+      "changes": [[["state"], "failed"]],
+      "remove": []
+    },
+    {
+      "kind": "pointer",
+      "name": "valid-live",
+      "valid": true,
+      "changes": [[["state"], "live"]],
+      "remove": [["stop"]]
+    },
+    {
+      "kind": "pointer",
+      "name": "live-with-receipt",
+      "valid": false,
+      "changes": [[["state"], "live"]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "timeout-cannot-be-success",
+      "valid": false,
+      "changes": [[["validation"], "timeout"]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "late-acceptance-field",
+      "valid": false,
+      "changes": [[["accepted_after_timeout"], true]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "empty-signals",
+      "valid": false,
+      "changes": [[["signals"], []]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "kill-first",
+      "valid": false,
+      "changes": [[["signals", 0, "signal"], "SIGKILL"]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "invalid-descriptor-poll",
+      "valid": false,
+      "changes": [[["terminal", "events"], 32]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "poll-error",
+      "valid": false,
+      "changes": [[["terminal", "events"], 8]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "negative-elapsed",
+      "valid": false,
+      "changes": [[["elapsed_ms"], -1]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "terminal-before-signal",
+      "valid": false,
+      "changes": [[["terminal", "elapsed_ms"], 0]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "esrch-with-terminal",
+      "valid": true,
+      "changes": [[["signals", 0, "outcome"], "esrch"]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "reaped-terminal",
+      "valid": true,
+      "changes": [[["terminal", "events"], 16]],
+      "remove": []
+    },
+    {
+      "kind": "stop",
+      "name": "same-descriptor-escalation-shape",
+      "valid": true,
+      "changes": [
+        [
+          ["signals"],
+          [
+            {
+              "signal": "SIGTERM",
+              "outcome": "sent",
+              "elapsed_ms": 1
+            },
+            {
+              "signal": "SIGKILL",
+              "outcome": "sent",
+              "elapsed_ms": 2
+            }
+          ]
+        ]
+      ],
+      "remove": []
+    }
+  ]
+}

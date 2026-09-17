@@ -12,6 +12,16 @@ import { cn } from '@/lib/utils'
  * A semantic <nav>/<ol> structure: muted links collapse the path, the final
  * BreadcrumbPage marks the current location with aria-current="page". Minimal,
  * monospace-friendly, accessible — compose product labels at the call site.
+ *
+ * ONE LINE, ALWAYS. Measured on the rendered console (console-ui-current-baseline,
+ * 2026-09-06): the list was `flex-wrap` inside the fixed 48 px topbar, so at 1024 px the
+ * trail "Overview › Control console" broke onto two lines and at 390 px it painted over
+ * the page header below the bar. A trail that wraps in a fixed-height bar is not a
+ * layout choice, it is an overlap. The list is therefore `flex-nowrap` with `min-w-0`
+ * items, and the page crumb truncates with an ellipsis; the FULL text stays the
+ * accessible name (CSS truncation never changes the accessibility tree) and travels in
+ * `title` for pointer users. Callers decide which crumb gives way first with the usual
+ * flex-shrink weights on the items.
  */
 export function Breadcrumb({ ...props }: ComponentProps<'nav'>) {
   const { t } = useTranslation('common')
@@ -23,7 +33,7 @@ export function BreadcrumbList({ className, ...props }: ComponentProps<'ol'>) {
   return (
     <ol
       className={cn(
-        'flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground',
+        'flex min-w-0 flex-nowrap items-center gap-1.5 text-sm text-muted-foreground',
         className,
       )}
       {...props}
@@ -34,7 +44,7 @@ export function BreadcrumbList({ className, ...props }: ComponentProps<'ol'>) {
 export function BreadcrumbItem({ className, ...props }: ComponentProps<'li'>) {
   return (
     <li
-      className={cn('inline-flex items-center gap-1.5', className)}
+      className={cn('inline-flex min-w-0 items-center gap-1.5', className)}
       {...props}
     />
   )
@@ -54,7 +64,7 @@ export function BreadcrumbLink({
   return (
     <Comp
       className={cn(
-        'rounded-sm outline-none transition-colors duration-100 ease-out hover:text-foreground',
+        'min-w-0 truncate rounded-sm outline-none transition-colors duration-100 ease-out hover:text-foreground',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className,
       )}
@@ -72,7 +82,7 @@ export function BreadcrumbSeparator({
     <li
       role="presentation"
       aria-hidden="true"
-      className={cn('inline-flex', className)}
+      className={cn('inline-flex shrink-0', className)}
       {...props}
     >
       {children ?? <ChevronRight className="size-3.5 text-muted-foreground" />}
@@ -82,15 +92,25 @@ export function BreadcrumbSeparator({
 
 export function BreadcrumbPage({
   className,
+  children,
+  title,
   ...props
 }: ComponentProps<'span'>) {
+  // The visible text may be cut with an ellipsis; the full label is still the
+  // accessible name (it is the text content) and is offered as a tooltip. A caller
+  // that passes its own `title` wins.
+  const fullTitle =
+    title ?? (typeof children === 'string' ? children : undefined)
   return (
     <span
       role="link"
       aria-disabled="true"
       aria-current="page"
-      className={cn('font-medium text-foreground', className)}
+      title={fullTitle}
+      className={cn('min-w-0 truncate font-medium text-foreground', className)}
       {...props}
-    />
+    >
+      {children}
+    </span>
   )
 }

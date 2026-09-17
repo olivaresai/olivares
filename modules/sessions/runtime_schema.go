@@ -69,6 +69,21 @@ const (
 	colClaimFence  = "claim_fence"
 	colRunClaimSID = "claim_sid"
 
+	// P2/W2: the CORE workspace whose authority governs this run, resolved from
+	// the run's own session identity at creation. It is the run's authorization
+	// lineage, and it is deliberately NOT the free-text workspace_ref above —
+	// that one is a launch input, this one is a resolved authority fact.
+	//
+	// ⛔ ITS UNSET MEANING IS THE OPPOSITE OF sessions.identity's, ON PURPOSE.
+	// The identity descriptor declares WorkspaceUnsetMeansDefault, so an identity
+	// minted before that column existed reads as the tenant default. A run does
+	// not get that reading: the producer always writes an EXPLICIT id, including
+	// the default workspace's own id, so NULL here means "no lawful lineage was
+	// established" and a confined reader must see nothing at all. Copying the
+	// neighboring table's spelling would silently turn every unresolved legacy
+	// run into a run the default workspace owns.
+	colRunAuthzWorkspaceID = "authz_workspace_id"
+
 	// G/K3 dual runtime credentials. The bearer values never enter this table:
 	// only the two revocation handles, their expiries, and the exact server-owned
 	// binding needed to revoke them after a restart are durable.
@@ -93,6 +108,34 @@ const (
 	// the WorkItem generation, not every runtime choice; this digest is what
 	// makes reusing the same key with a different profile a conflict.
 	colRunWorkLaunchSpecHash = "work_launch_spec_hash"
+
+	// B1 provider-profile snapshot. The profile a run was launched under and the
+	// NON-SECRET home snapshot resolved server-side BEFORE the spawn. All five are
+	// one nullable stamp: a legacy run has them all NULL and is never assigned the
+	// current HOME after the fact. The paths are persisted so a resume can prove
+	// it continues on the SAME location (rename of the profile is fine, a moved
+	// home is not); they are exposed only on the authorized configuration read,
+	// never in the run list/detail DTOs. A snapshot, never a credential value.
+	colRunProfileID         = "provider_profile_id"
+	colRunProfileDriver     = "provider_driver"
+	colRunProfileEnvRef     = "provider_environment_ref"
+	colRunProfileConfigHome = "provider_config_home"
+	colRunProfileUserHome   = "provider_user_home"
+	// The AUTHORIZED authentication source this run was launched under, and the
+	// readiness the provider itself reported. Two different things: the first is a
+	// decision somebody made before the launch (and it travels in the K4 dispatch
+	// digest), the second is an observation the child answered afterwards. Neither
+	// is a credential, and neither is derived from a home path. Both NULL on a
+	// legacy run and on a profile that names no source.
+	colRunProviderAuthSource = "provider_auth_source"
+	colRunProviderAuthState  = "provider_auth_state"
+	// colRunLiveRef (B2) is the id of the plane's MANAGED live row for this run,
+	// written by the bridge in the transaction that proved the run owns its
+	// announced provider id (runtime_profile.go). It is the run→row half of the
+	// join whose row→run half is sessions_live.run_ref; both are persisted facts,
+	// never a lookup by bare external id. NULL for a legacy run and for a profiled
+	// run whose id was never captured.
+	colRunLiveRef = "live_ref"
 )
 
 // sessions.run_event columns (append-only ledger; per-session hash anchor).
@@ -111,6 +154,11 @@ const (
 	colEvWorkItemID  = "work_item_id"
 	colEvWorkSID     = "work_holder_sid"
 	colEvWorkFence   = "work_lease_fence"
+	// P1: the runtime generation a terminal transition retired, and what was
+	// actually observed about the process. Nullable, so every historical and
+	// non-terminal event stays exactly as it was written.
+	colEvRetiredLaunchID     = "retired_runtime_launch_id"
+	colEvTerminalObservation = "terminal_observation"
 )
 
 // registerRuntimeSchema declares the two operate entities. The engine creates
@@ -170,6 +218,10 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colClaimHolder, Kind: model.KindText, Nullable: true},
 			{Name: colClaimFence, Kind: model.KindInt, Nullable: true},
 			{Name: colRunClaimSID, Kind: model.KindText, Nullable: true},
+			// Nullable for the same expand-contract reason as the stamp above: an
+			// existing sessions_run gains it on the next boot (reconcileColumns),
+			// and a row that predates it carries no lawful lineage.
+			{Name: colRunAuthzWorkspaceID, Kind: model.KindUUID, Nullable: true},
 			{Name: colCommunicationWorkspaceID, Kind: model.KindUUID, Nullable: true},
 			{Name: colWorkCredentialID, Kind: model.KindUUID, Nullable: true},
 			{Name: colWorkCredentialExpiresAt, Kind: model.KindTimestamp, Nullable: true},
@@ -182,6 +234,27 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunWorkDispatchKey, Kind: model.KindBytes, Nullable: true},
 			{Name: colRunWorkOwnerEpoch, Kind: model.KindInt, Nullable: true},
 			{Name: colRunWorkLaunchSpecHash, Kind: model.KindBytes, Nullable: true},
+			// B1: nullable so an existing sessions_run gains them on the next boot
+			// (reconcileColumns) and a pre-profile row reads as "no profile".
+			{Name: colRunProfileID, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colRunProfileDriver, Kind: model.KindText, Nullable: true},
+			{Name: colRunProfileEnvRef, Kind: model.KindText, Nullable: true},
+			{Name: colRunProfileConfigHome, Kind: model.KindText, Nullable: true},
+			{Name: colRunProfileUserHome, Kind: model.KindText, Nullable: true},
+			// Nullable for the same expand-contract reason as the B1 stamp above: an
+			// existing sessions_run gains them on the next boot (reconcileColumns) and a
+			// row that predates them reads as "no authorized source, readiness unknown".
+			{Name: colRunProviderAuthSource, Kind: model.KindText, Nullable: true},
+			{Name: colRunProviderAuthState, Kind: model.KindText, Nullable: true},
+			{Name: colRunLiveRef, Kind: model.KindText, Nullable: true},
+		},
+		// The run's authorization lineage. Unset is HIDDEN, never the tenant
+		// default: see colRunAuthzWorkspaceID. Declaring it is also what turns a
+		// confined Ext(runKind) from a refusal into a filter.
+		WorkspaceLineage: model.WorkspaceLineageSpec{
+			Column:   colRunAuthzWorkspaceID,
+			Encoding: model.WorkspaceLineageID,
+			Unset:    model.WorkspaceUnsetHidden,
 		},
 		Indexes: []model.IndexSpec{
 			{
@@ -219,6 +292,12 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colEvWorkItemID, Kind: model.KindUUID, Nullable: true},
 			{Name: colEvWorkSID, Kind: model.KindText, Nullable: true},
 			{Name: colEvWorkFence, Kind: model.KindInt, Nullable: true},
+			// P1: which launch generation this terminal event retired, and what the
+			// owner actually observed about that process. The engine's descriptor
+			// reconciler adds both to an existing database before module SQL runs, so
+			// no migration file declares them and no append-only row is rewritten.
+			{Name: colEvRetiredLaunchID, Kind: model.KindUUID, Nullable: true},
+			{Name: colEvTerminalObservation, Kind: model.KindText, Nullable: true},
 		},
 	})
 }

@@ -38,6 +38,16 @@ func buildCoreMigrations(
 ) []migrate.Migration {
 	entity := make([]string, 0, len(descs)*4)
 	for _, d := range descs {
+		// v8 owns lineage and v10 owns H; keep historical v1–v7 statements unchanged.
+		if model.IsLineageEpochKind(d.Kind) || d.Kind == model.UserAuthorityKind {
+			continue
+		}
+		// v11 owns 'refused'. v2 keeps rendering the journal with its historical
+		// six-word CHECK, so this migration's statements never change; a fresh
+		// database therefore reaches the seven-word journal through v11 as well.
+		if d.Kind == evidenceOpDescriptor.Kind {
+			d = evidenceDescriptorWith(evidenceOpStateWords6, "")
+		}
 		entity = append(entity, dia.CreateTableStmts(d)...)
 	}
 	migrations := []migrate.Migration{
@@ -90,7 +100,35 @@ func buildCoreMigrations(
 	// needs all three relations created atomically. The composable continuation
 	// seam in coreDirectoryMigration is where the guard 1 -> 2 transition and
 	// writer-control half attach before this migration is published.
-	return append(migrations, coreDirectoryMigration(dia, descs, directoryAfter))
+	return append(migrations, coreDirectoryMigration(dia, descs, directoryAfter), coreLineageMigration(dia))
+}
+
+// buildCoreMigrationPlan is the COMPLETE core plan, v1 through v9.
+//
+// It exists beside buildCoreMigrations because amendment R2-G1 needs the two halves
+// separately: everything through v8 applies first, the access-evidence edge's predecessor
+// is converged, and only then does v9 open its transaction. Keeping the whole plan in one
+// constructor is what lets the supported-version ceiling be checked against it instead of
+// against a prefix that would silently stop naming the newest migration.
+func buildCoreMigrationPlan(
+	dia dialect.Dialect,
+	descs []model.EntityDescriptor,
+	guardBootstrap func(context.Context, *sql.Tx) error,
+	directoryAfter directoryMigrationAfter,
+	graph guardEditionGraph,
+	boot accessEvidenceBootPlan,
+	evidenceStates evidenceStateCalibration,
+	userAuthorityRoles ...guardRoles,
+) []migrate.Migration {
+	return append(
+		buildCoreMigrations(dia, descs, guardBootstrap, directoryAfter),
+		coreAccessEvidenceMigration(dia, descs, graph, boot),
+		coreUserAuthorityMigration(dia, userAuthorityRoles...),
+		coreEvidenceRefusedMigration(dia, evidenceStates),
+		// v12 is reserved for FinOps custody and deliberately unregistered; the compiled
+		// plan is 1..11 then 13 (ROOT-CONSTRUCTION-R5-1 §2).
+		coreLoginCapabilityMigration(dia, userAuthorityRoles...),
+	)
 }
 
 // reconcileCoreData runs idempotent, one-time DATA normalizations for core tables
@@ -386,11 +424,11 @@ func reconcileAuditBlindGuards(ctx context.Context, db dialect.Execer, dia diale
 // evidenceOpStateVocabWords is the CURRENT settlement vocabulary, from the model
 // constants so no probe can drift from the Go vocabulary.
 func evidenceOpStateVocabWords() []string {
-	return []string{
-		string(model.EvidenceOpClaimed), string(model.EvidenceOpCompleted),
-		string(model.EvidenceOpNotSent), string(model.EvidenceOpUnknown),
-		string(model.EvidenceOpBlocked), string(model.EvidenceOpWithheld),
+	words := make([]string, len(evidenceOpStateWords7))
+	for i, w := range evidenceOpStateWords7 {
+		words[i] = string(w)
 	}
+	return words
 }
 
 // evidenceVocabCheckCurrent reports whether one CHECK definition carries the

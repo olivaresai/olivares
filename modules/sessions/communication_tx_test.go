@@ -1213,8 +1213,6 @@ func TestCommunicationBoundAuthorityTransactionPoisonsRecoveredCapabilityPanics(
 func TestCommunicationRequestAuthorityRejectsReenteredModuleMutationCallback(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 	fixture := communicationOpenFixtureWithClock(
 		t,
 		communicationSchemaBackend{
@@ -1224,6 +1222,8 @@ func TestCommunicationRequestAuthorityRejectsReenteredModuleMutationCallback(t *
 		},
 		model.SystemClock{},
 	)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 	now := time.Now().UTC()
 	request := communicationObservedRequestAuthoritySnapshot(
 		t, fixture, now.Add(-time.Minute), now.Add(time.Minute),
@@ -2227,9 +2227,9 @@ func TestCommunicationRequestAuthorityRepositoryEffectsRequireRefreshedPhase(t *
 
 	for _, backend := range communicationSchemaBackends(t) {
 		t.Run(backend.name, func(t *testing.T) {
+			fixture := communicationOpenFixtureWithClock(t, backend, model.SystemClock{})
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
-			fixture := communicationOpenFixtureWithClock(t, backend, model.SystemClock{})
 			base := time.Now().UTC()
 			snapshot := communicationObservedRequestAuthoritySnapshot(
 				t, fixture, base.Add(-time.Minute), base.Add(5*time.Minute),

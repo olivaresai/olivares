@@ -161,7 +161,12 @@ func tenantTip(ctx context.Context, st store.Store, t model.TenantID, eventPub e
 			}
 		}
 		tip.Checkpoints = cp.Checkpoints
-		tip.VerifiedAtBackup = chain.OK && events.OK && (cpVerifier == nil || cpVerifier.Empty() || cp.OK)
+		// A chain with no checkpoint yet is PENDING, not failed (audit.CheckpointStatusPending):
+		// the chain and per-event signature checks still gate the verdict, and restore already
+		// treats the same state as advisory. A checkpoint that exists and does not
+		// verify remains a refusal.
+		cpAccepted := cpVerifier == nil || cpVerifier.Empty() || cp.Status() != audit.CheckpointStatusFailed
+		tip.VerifiedAtBackup = chain.OK && events.OK && cpAccepted
 		tip.VerifyReason = firstVerifyReason(chain, events, cp, cpVerifier)
 		return nil
 	})
@@ -179,7 +184,7 @@ func firstVerifyReason(chain store.VerifyReport, events audit.EventSigReport, cp
 	if !events.OK {
 		return "events:" + events.Reason
 	}
-	if v != nil && !v.Empty() && !cp.OK {
+	if v != nil && !v.Empty() && cp.Status() == audit.CheckpointStatusFailed {
 		return "checkpoints:" + cp.Reason
 	}
 	return ""

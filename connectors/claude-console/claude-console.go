@@ -9,7 +9,7 @@
 // member was SCIM-deprovisioned are not externally observable through the Admin
 // API, so the connector flags that blind spot rather than fabricating a posture.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the
 // shared GET-only modelprovider client, it carries identity METADATA only (ids,
 // emails, roles, workspace names) and never a credential value (the Admin API
 // returns no key secrets), and the admin key is held in memory, never logged or

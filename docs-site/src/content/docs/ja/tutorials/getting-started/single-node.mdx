@@ -29,10 +29,14 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 
 - systemd と `curl` を備えた Linux ホスト。
 - バイナリをビルドするための **Go 1.26+**（ストアは純粋 Go の SQLite なので、
-  C ツールチェーンは不要）。署名済みのビルド済みアーティファクトを伴うリリースは
-  最初の一般公開リリースで提供されます — それまではチェックアウトからビルドし、
-  [リリースの検証](/ja/how-to/verify-a-release/)が、それらが存在するようになったら
-  使うチェーンを記載しています。
+  C ツールチェーンは不要）。以前のタグ付きリリースは既に署名済みアーカイブとパッケージを出荷しています。
+  このツリーの canon は **v26.9.0** です。インストール面の証人は、そのタグの
+  リリースジョブが走るまで GitHub アーカイブとネイティブパッケージを
+  **not-published** と記録しています
+  （`docs/releases/v26.9.0-install-surfaces.json`）。それらの成果物が存在するまで
+  チェックアウトからビルドしてください。`main` 上の検証済みインストーラ
+  （`scripts/install.sh`）はタグに依存しない公開面です。
+  [リリースの検証](/ja/how-to/verify-a-release/)は、成果物が存在してからのチェーンです。
 
 ## 1. バイナリをビルドしてインストールする
 
@@ -145,7 +149,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.

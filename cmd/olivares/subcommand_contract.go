@@ -68,6 +68,16 @@ func enforceSubcommandContract(root *cobra.Command) {
 	// returns takes the command as a parameter, so it works for every node.
 	defaultHelp := root.HelpFunc()
 	root.SetHelpFunc(func(c *cobra.Command, args []string) {
+		// cobra reaches this renderer for a group whose arguments it never
+		// validated (unknownSubcommandAfterHelp explains why). When that
+		// group's own validator refuses what the caller typed, the invocation
+		// is a usage error, so render NOTHING: stdout stays empty and the
+		// `Error:` line classifyOutcome prints is the whole answer — byte for
+		// byte what `olivares <group> <typo>` produces without `--help`.
+		// Same predicate, same verdict, in the two places that must agree.
+		if unknownSubcommandAfterHelp(c) != nil {
+			return
+		}
 		// cobra prints the `<path> [flags]` usage line only for a runnable
 		// command (command.go:2058). A group stub is runnable only as an
 		// implementation detail of argument validation, so hide that line —
@@ -106,6 +116,69 @@ func walkCommands(cmd *cobra.Command, fn func(*cobra.Command)) {
 // isGroupStub reports whether cmd's RunE was installed by makeGroupStub.
 func isGroupStub(cmd *cobra.Command) bool {
 	return cmd != nil && cmd.Annotations[groupStubAnnotation] == "true"
+}
+
+// unknownSubcommandAfterHelp reports what a GROUP's own argument validator says
+// about the positional arguments cobra already parsed, in the two cases where
+// cobra answers the caller BEFORE it ever consults that validator:
+//
+//  1. cobra command.go:934-936 — `if helpVal { return flag.ErrHelp }`, which
+//     ExecuteC (:1152-1154) turns into "render the help text, return a NIL
+//     error". So `olivares <group> <typo> --help` printed the group's help on
+//     STDOUT and exited 0, while the same typo without `--help` exits 2. The
+//     same mistake, two answers, and the 0 is the one `set -e` believes.
+//  2. cobra command.go:939-953 — `if versionVal { print the version template;
+//     return nil }`. `--version` exists only where Version is set
+//     (InitDefaultVersionFlag, command.go:1238-1241), i.e. the root alone, so
+//     this arm is `olivares <typo> --version`.
+//
+// Both precede `ValidateArgs` at :963-970, which is the whole defect; it is not
+// specific to `--help`. The third short-circuit cobra has at :955-957
+// (`!c.Runnable()`) cannot be reached here, because makeGroupStub is what made
+// every group runnable in the first place.
+//
+// SCOPE IS THE GROUPS, DELIBERATELY — the ones makeGroupStub marked, the root
+// included. Re-asking an arbitrary LEAF's validator after help would break the
+// reason help exists: `olivares connector init --help` is how an operator finds
+// out that `connector init` takes a name, and that leaf's `Args` is
+// `cobra.ExactArgs(1)`, which refuses the empty list. Help for a command whose
+// operands you have not supplied yet is correct, not a usage error. A leaf-help
+// contract is separate work and is not decided here.
+//
+// It reimplements no grammar. The positional list is `cmd.Flags().Args()` —
+// literally the value execute() passes to ValidateArgs at :963-968, produced by
+// pflag's own parse, so there is no argv split to drift and `--` keeps working
+// (pflag stops there, the help flag is never set, and that line is already a
+// plain usage error today). The verdict is cobra's own exported ValidateArgs,
+// so the refusal is the identical sentence — suggestion block included — that
+// the form without `--help` produces.
+func unknownSubcommandAfterHelp(cmd *cobra.Command) error {
+	// DisableFlagParsing means cobra never parsed, so Flags().Args() is empty
+	// while the real arguments are the ones it substitutes at :963-966. No
+	// group sets it today; the guard says which list this predicate may read,
+	// rather than leaving the answer to a value that was never populated.
+	if !isGroupStub(cmd) || cmd.DisableFlagParsing {
+		return nil
+	}
+	if !askedForHelpOrVersion(cmd) {
+		return nil
+	}
+	return cmd.ValidateArgs(cmd.Flags().Args())
+}
+
+// askedForHelpOrVersion reports whether the PARSED flags are the ones cobra
+// answers before validating. Reading the parsed flag rather than argv is what
+// makes `-h`, `--help`, `--help=true` and any position on the command line the
+// same question.
+func askedForHelpOrVersion(cmd *cobra.Command) bool {
+	if help, err := cmd.Flags().GetBool("help"); err == nil && help {
+		return true
+	}
+	if cmd.Version == "" {
+		return false
+	}
+	version, err := cmd.Flags().GetBool("version")
+	return err == nil && version
 }
 
 // makeGroupStub turns a command group into something cobra will validate.

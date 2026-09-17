@@ -4,13 +4,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 # Olivares AI — Helm chart
 
-The Kubernetes distribution channel for the engine (SCP-05). Helm is OCI-default
-since v3.8.0, so the chart is published and consumed as an **OCI artifact** on
-`ghcr.io` and is **cosign-signed** over the OCI manifest (keyless OIDC). For a
-self-hosted security product the deployment artifact is part of the trust model:
-verify before you install — with cosign; the release pipeline emits no GPG `.prov`.
+The Kubernetes distribution channel for the engine (SCP-05). The chart source ships
+in this repository, but it is **not published to the public OCI registry** as of the
+v26.9.0 engine release: no independent `chart-v*` tag has exercised the chart workflow.
+REL-87 is the publication act and has not completed. Install from the source tree
+today. Do not present the future OCI coordinate as a working download.
 
-> The OCI publish is automated by `../../.github/workflows/release-chart.yml`
+> A future OCI publish is automated by `../../.github/workflows/release-chart.yml`
 > (lint → package → push → cosign-sign), gated on a `chart-v*` tag. The chart is
 > versioned independently of the engine, so it has its own tag namespace. Cutting
 > the tag is a deliberate human action (releases are cut manually by a maintainer; never automated).
@@ -34,13 +34,13 @@ false` — matching `connectors/ebpf/deploy` and `docs/SECURITY-HARDENING.md`.
 
 ```sh
 # default: single-node, embedded SQLite (zero external deps, air-gap-ready)
-helm install olivares oci://ghcr.io/olivaresai/charts/olivares --version <chart-version>
+helm install olivares deploy/helm/olivares
 
 # multi-tenant: external Postgres (the engine REFUSES a superuser/BYPASSRLS role)
 kubectl create secret generic olivares-pg \
   --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full' \
   --from-literal=admin-dsn='postgres://olivares_admin:***@db:5432/olivares?sslmode=verify-full'
-helm install olivares oci://ghcr.io/olivaresai/charts/olivares --version <chart-version> \
+helm install olivares deploy/helm/olivares \
   --set core.engine=postgres --set postgres.dsnSecret=olivares-pg \
   --set postgres.adminDsnKey=admin-dsn \
   --set postgres.roleInit.enabled=true \
@@ -83,7 +83,7 @@ kubectl logs sts/olivares-core | sed -n '/FIRST-BOOT SETUP/,/===================
 Enable the distributed collector plane (requires core mTLS + an `ingest:write` token):
 
 ```sh
-helm upgrade olivares oci://ghcr.io/olivaresai/charts/olivares --version <chart-version> \
+helm upgrade olivares deploy/helm/olivares \
   --set tls.grpcClientCaSecret=collector-ca \
   --set collectors.enabled=true \
   --set collectors.ingestTokenSecret=olivares-ingest \
@@ -97,18 +97,20 @@ Pin by **digest** in production / air-gap (`--set image.digest=sha256:…`, leav
 
 ## GitOps consumption
 
-Consume this OCI chart declaratively via Argo CD (app-of-apps), Flux
-(`HelmRepository` + `HelmRelease`), or Kustomize (`helmCharts` inflation) —
-ready-to-adapt manifests, the OpenGitOps 1.0 alignment, and digest-pinning
-guidance live in [`../gitops/`](../gitops/README.md).
+Consume the checked-out chart declaratively via Argo CD (app-of-apps), Flux, or
+Kustomize (`helmCharts` inflation). After a `chart-v*` publication, those same tools
+can consume the OCI artifact by immutable digest. Ready-to-adapt manifests, the
+OpenGitOps 1.0 alignment, and digest-pinning guidance live in
+[`../gitops/`](../gitops/README.md).
 
-## Verify the chart before installing
+## Verify a published chart before installing
 
-**Signing policy = cosign-only.** The published OCI chart is signed with cosign
+There is no public OCI chart to verify yet. Once a `chart-v*` tag successfully runs
+`release-chart.yml`, **signing policy = cosign-only**: the OCI chart is signed with cosign
 (keyless OIDC, over the OCI manifest, by digest) and carries **no** Helm-native GPG
 `.prov` layer — the tag-triggered `release-chart.yml` runs `helm package` without
-`--sign`. So `helm install/pull --verify` does NOT work against the published chart;
-cosign is the verification path:
+`--sign`. So `helm install/pull --verify` does not verify that future chart; cosign is
+the verification path:
 
 ```sh
 # Keyless (public release). NOTE the identity is release-CHART.yml @ a chart-v* tag —
@@ -146,9 +148,10 @@ helm push olivares-<v>.tgz oci://ghcr.io/olivaresai/charts   # .prov auto-upload
 cosign sign --key cosign.key ghcr.io/olivaresai/charts/olivares@sha256:<digest>   # sign the manifest by digest
 ```
 
-Air-gap consumers get a self-contained, offline-verifiable bundle (digest-pinned
-images + signed chart + SBOM/VEX/provenance) via `scripts/airgap-bundle.sh` →
-`scripts/airgap-mirror.sh`.
+Air-gap consumers can package the chart source beside digest-pinned images and the
+release verification material via `scripts/airgap-bundle.sh` →
+`scripts/airgap-mirror.sh`. A future published chart must be verified before mirroring;
+this paragraph does not treat the current source tree as a signed OCI artifact.
 
 ## Disaster recovery (backup CronJob)
 

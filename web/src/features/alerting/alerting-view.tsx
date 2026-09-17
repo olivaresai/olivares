@@ -18,7 +18,7 @@
 // object: the delivery LEDGER (GET /deliveries) is append-only and has no retry; the
 // outbox is the state machine, and that is what is requeued.
 import './i18n'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   useInfiniteQuery,
   useMutation,
@@ -71,7 +71,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
-import { useCommandStore } from '@/stores/command'
+import { usePendingCommandAction } from '@/features/navigation/command-actions'
 import { ApiError } from '@/lib/api/errors'
 import {
   useFailedActionReporter,
@@ -122,6 +122,26 @@ const fromList = (a?: string[]) => (a ?? []).join(', ')
 export function AlertingView() {
   const { t } = useTranslation(['alerting', 'common'])
   const { can } = useAuth()
+  const canWrite = can('notify:route:write')
+  // TAB AND CREATE STATE LIVE HERE, in the component that is mounted for the whole visit.
+  // `TabsContent` mounts nothing it has not shown, so a consumer inside the Routes tab
+  // could not act on a verb selected while Deliveries or Outbox was on screen. The tab
+  // still defaults to Routes for ordinary navigation; only an explicit palette selection
+  // moves it.
+  const [tab, setTab] = useState('routes')
+  const [creating, setCreating] = useState(false)
+  usePendingCommandAction('alerting', 'createRoute', () => {
+    setTab('routes')
+    setCreating(true)
+  })
+  // ⛔ A REVOCATION CLOSES THE CREATE DIALOG, IT DOES NOT HIDE IT. Adjusted during render
+  //    rather than in an effect: the form must not mount for the commit in between, and
+  //    state left set behind the render gate would reopen it when the grant came back.
+  const [writeSeen, setWriteSeen] = useState(canWrite)
+  if (writeSeen !== canWrite) {
+    setWriteSeen(canWrite)
+    if (!canWrite) setCreating(false)
+  }
   if (!can('notify:route:read')) return <ForbiddenState />
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -135,14 +155,14 @@ export function AlertingView() {
           answers 403 `recording_consent_required` and the console had no way for the
           operator to answer it — it told them to obtain a permission they already held. */}
       <RecordingNotice namespace="notify" />
-      <Tabs defaultValue="routes">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="routes">{t('tabs.routes')}</TabsTrigger>
           <TabsTrigger value="deliveries">{t('tabs.deliveries')}</TabsTrigger>
           <TabsTrigger value="outbox">{t('tabs.outbox')}</TabsTrigger>
         </TabsList>
         <TabsContent value="routes" className="pt-4">
-          <RoutesTab />
+          <RoutesTab creating={creating} setCreating={setCreating} />
         </TabsContent>
         <TabsContent value="deliveries" className="pt-4">
           <DeliveriesTab />
@@ -157,7 +177,14 @@ export function AlertingView() {
 
 // --- routes ------------------------------------------------------------------
 
-function RoutesTab() {
+function RoutesTab({
+  creating,
+  setCreating,
+}: {
+  /** Create-dialog state, owned by the view root so a palette verb can reach it. */
+  creating: boolean
+  setCreating: (open: boolean) => void
+}) {
   const report = useFailedActionReporter()
   const { t } = useTranslation(['alerting', 'common'])
   const { can, activeTenant } = useAuth()
@@ -166,15 +193,16 @@ function RoutesTab() {
   const qc = useQueryClient()
 
   const [editing, setEditing] = useState<NotifyRoute | null>(null)
-  const [creating, setCreating] = useState(false)
-  // ⌘K palette action: "new alert route" navigated here — consume once.
-  useEffect(() => {
-    if (
-      useCommandStore.getState().consumeAction('alerting') === 'createRoute'
-    ) {
-      setCreating(true)
-    }
-  }, [])
+  // ⛔ A REVOCATION CLOSES THE EDIT DIALOG TOO, and for the same reason as the create one
+  //    at the root: hiding it behind the render gate would leave `editing` set and reopen
+  //    the form when the grant returned. Scoped to what `canWrite` governs — the delete
+  //    and test confirmations are `notify:route:admin`'s, the history sheet is a read and
+  //    the row selection is the operator's own.
+  const [writeSeen, setWriteSeen] = useState(canWrite)
+  if (writeSeen !== canWrite) {
+    setWriteSeen(canWrite)
+    if (!canWrite) setEditing(null)
+  }
   const [deleting, setDeleting] = useState<NotifyRoute | null>(null)
   const [historyRoute, setHistoryRoute] = useState<NotifyRoute | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -375,8 +403,15 @@ function RoutesTab() {
 
       <TestSignalPanel />
 
-      {creating ? <RouteDialog onClose={() => setCreating(false)} /> : null}
-      {editing ? (
+      {/* THE SAME GATE THE BUTTONS ABOVE ALREADY HAD. Both dialogs drive RouteDialog's
+          privileged save, and both used to render on state alone — so the ⌘K verb, and any
+          other stale or forced path into that state, produced the exact form `canWrite`
+          hides two calls up: the operator typed a route and lost it at submit. eventing
+          and orchestration gated theirs; alerting was the one that did not. */}
+      {canWrite && creating ? (
+        <RouteDialog onClose={() => setCreating(false)} />
+      ) : null}
+      {canWrite && editing ? (
         <RouteDialog
           key={editing.id ?? editing.name}
           route={editing}

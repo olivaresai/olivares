@@ -109,6 +109,26 @@ describe('useUrlState', () => {
     const call = navigateMock.mock.calls[0][0]
     expect(applyNavigate(call, {})).toEqual({ q: 'x' })
   })
+
+  it('omits resetScroll when the caller does not pass the option', () => {
+    const { result } = renderHook(() => useUrlState(['q']))
+    act(() => result.current[1]({ q: 'deny' }))
+    const call = navigateMock.mock.calls[0][0]
+    expect(call.replace).toBe(true)
+    expect('resetScroll' in call).toBe(false)
+    expect(call.hash).toBe(true)
+  })
+
+  it('forwards resetScroll:false when the caller asks, without changing replace or merge', () => {
+    const { result } = renderHook(() =>
+      useUrlState(['q'], { resetScroll: false }),
+    )
+    act(() => result.current[1]({ q: 'deny' }))
+    const call = navigateMock.mock.calls[0][0]
+    expect(call.replace).toBe(true)
+    expect(call.resetScroll).toBe(false)
+    expect(applyNavigate(call, { tab: 'x' })).toEqual({ tab: 'x', q: 'deny' })
+  })
 })
 
 describe('useUrlState external URL changes', () => {
@@ -250,6 +270,22 @@ describe('useValidatedUrlState cleans the address bar', () => {
     seedLocation('/audit?scope=system')
     renderHook(() => useValidatedUrlState(['scope'], decode))
     expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('cleanup of a refused value forwards resetScroll when asked, and does not rewrite foreign keys', () => {
+    seedLocation('/audit?scope=nonsense&tab=x')
+    renderHook(() =>
+      useValidatedUrlState(['scope'], decode, { resetScroll: false }),
+    )
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+    const call = navigateMock.mock.calls[0][0]
+    expect(call.replace).toBe(true)
+    expect(call.resetScroll).toBe(false)
+    expect(call.hash).toBe(true)
+    expect(call.search({ scope: 'nonsense', tab: 'x' })).toEqual({
+      scope: undefined,
+      tab: 'x',
+    })
   })
 })
 

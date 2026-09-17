@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,8 +49,15 @@ const (
 // ComponentStatus is a snapshot of one component's state, surfaced for health
 // views and tests.
 type ComponentStatus struct {
-	// Name is the component's Descriptor name.
+	// Name is the component's REGISTRATION name — the identity it was registered
+	// under. For an output or a module that is still its Descriptor name; for a
+	// SOURCE it is the name the composition root supplied (the roster row's name),
+	// which is what makes two sources of one connector kind two distinct sources.
 	Name string
+	// Component is the connector's Descriptor name, retained SEPARATELY for
+	// inspection and diagnosis. It is the component's type identity, never its
+	// instance identity: two sources of one kind share it.
+	Component string
 	// Type is the component kind.
 	Type sdk.ComponentType
 	// Status is the lifecycle state.
@@ -58,8 +66,13 @@ type ComponentStatus struct {
 	Err string
 }
 
+// SourceRegistrationAdmission is a host-only decision before one observation
+// enters the bus. It must return an immutable decision, not defer it to replay.
+type SourceRegistrationAdmission func(context.Context, string, event.SourceRegistration) (event.SourceRegistration, error)
+
 // Options configures a Runtime.
 type Options struct {
+	SourceRegistrationAdmission SourceRegistrationAdmission
 	// Logger is the base logger; nil uses slog.Default(). Each component gets a
 	// child logger with its name attached.
 	Logger *slog.Logger
@@ -68,6 +81,9 @@ type Options struct {
 	Bus eventbus.Bus
 	// SinkFactory, when set, overrides where a source's observations go: it builds
 	// the sdk.Sink handed to each source's Gather, keyed by (tenant, source name).
+	// `source` is the source's REGISTRATION name — the operator's roster name for a
+	// named registration, the connector's Descriptor name for a legacy one — so a
+	// collector transports the same provenance the local bus would stamp.
 	// nil (the default) lifts observations onto the local event bus. A COLLECTOR
 	// process sets this to a factory that PUSHES observations to a remote core over
 	// gRPC (CB-1 option C, sdk/plugin.IngestSink), so the very same gatherLoop,
@@ -92,12 +108,16 @@ type Runtime struct {
 	bus    eventbus.Bus
 	ownBus bool
 
-	sinkFactory func(tenant, source string) sdk.Sink
+	sinkFactory     func(tenant, source string) sdk.Sink
+	sourceAdmission SourceRegistrationAdmission
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// names is the ONE registration-name namespace shared by sources, outputs and
+	// modules. It is deliberately shared: a source registered under a name a module
+	// or an output already owns is REFUSED, never allowed to replace that owner.
 	names    map[string]struct{}
 	sources  []*sourceReg
-	srcIndex map[string]*sourceReg // name → source reg, for O(1) live lookup
+	srcIndex map[string]*sourceReg // REGISTRATION name → source reg, for O(1) live lookup
 	outputs  []*outputReg
 	modules  []*moduleReg
 	jobs     []*jobReg          // engine-owned periodic jobs (e.g. roster SyncRoster)
@@ -136,7 +156,20 @@ type sourceReg struct {
 	conn   sdk.SourceConnector
 	cfg    sdk.Config
 	tenant string
-	name   string
+	// name is the REGISTRATION name: the identity this source is keyed, reserved,
+	// removed, rotated, reported and (for a named registration) ATTRIBUTED by. The
+	// composition root supplies it; a legacy caller gets the Descriptor name.
+	name string
+	// component is the connector's Descriptor name — its TYPE identity, kept apart
+	// from name so two registrations of one connector kind are two sources. It is
+	// carried for inspection, diagnosis and plugin admission, never for keying.
+	component string
+	// registration is the durable roster snapshot (row id, applied revision,
+	// environment) a REGISTERED source was wired with (B1). The host stamps it on
+	// every event this source emits; nil for a legacy or merely named registration,
+	// whose events stay unattributed. Immutable for the life of the registration:
+	// a rotation is a new sourceReg with its own snapshot.
+	registration *event.SourceRegistration
 	// poll is the re-run interval for a BATCH/polling source. 0 means run Gather
 	// once (a one-shot or streaming source that blocks in Gather is never
 	// re-polled — the scheduler owns the cadence, not the connector, S02 §5).
@@ -200,9 +233,9 @@ func New(opts Options) *Runtime {
 		log:         log,
 		bus:         bus,
 		ownBus:      ownBus,
-		sinkFactory: opts.SinkFactory,
-		names:       make(map[string]struct{}),
-		srcIndex:    make(map[string]*sourceReg),
+		sinkFactory: opts.SinkFactory, sourceAdmission: opts.SourceRegistrationAdmission,
+		names:    make(map[string]struct{}),
+		srcIndex: make(map[string]*sourceReg),
 
 		pluginCleanupByClient: make(map[*goplugin.Client]func()),
 	}
@@ -228,16 +261,92 @@ var ErrSourceNotFound = errors.New("runtime: no such source")
 // way). Match with errors.Is.
 var ErrSourceOpenFailed = errors.New("runtime: source open failed")
 
-// reserveName validates and reserves a component's unique Descriptor name.
-func (r *Runtime) reserveName(d sdk.Descriptor) error {
+// ErrEmptyRegistrationName is returned by the explicitly-NAMED registration
+// variants when the composition root supplies no name. It is deliberately an
+// error and not a fallback: a CONFIGURED source registered under its connector's
+// descriptor because its own name went missing would silently become "the one
+// instance of that kind" and collide with — or be collided with by — its sibling.
+// The legacy, name-less entry points are the only ones that may use the
+// descriptor as the registration identity, and they say so at the call site.
+var ErrEmptyRegistrationName = errors.New("runtime: source registration name is empty (a configured source is never registered under its connector's descriptor by fallback)")
+
+// validComponentDescriptor rejects a connector that does not name ITSELF.
+//
+// ⛔ THIS IS THE CHECK THE REGISTRATION-NAME SEPARATION LOST, AND LOSING IT WAS A
+// REGRESSION, NOT A SIMPLIFICATION. Before the separation, every source path
+// reserved the connector's Descriptor name, so `Name == ""` was refused there —
+// before Open, before any reservation, before anything was wired. Afterwards the
+// paths reserved the REGISTRATION name instead, and "" was simply a name nobody had
+// taken yet: a connector with no descriptor name was Opened and registered with an
+// empty Name and an empty Component. Astra's independent overlay reproduced exactly
+// that (it passes on the baseline and failed on the first commit of this lot).
+//
+// The two identities stay separate — the registration name is the operator's and is
+// never derived from the descriptor — but the CONNECTOR must still identify itself.
+// That is the SDK's own requirement (sdk.Descriptor.Name is the component's unique
+// id), and nothing stronger is imposed here: no charset, length or shape rule that
+// the SDK does not already ask for.
+//
+// The wording is the historical one, verbatim, because callers and tests read it.
+func validComponentDescriptor(d sdk.Descriptor) error {
 	if d.Name == "" {
 		return errors.New("runtime: component descriptor has empty Name")
 	}
-	if _, dup := r.names[d.Name]; dup {
-		return fmt.Errorf("runtime: duplicate component name %q", d.Name)
-	}
-	r.names[d.Name] = struct{}{}
 	return nil
+}
+
+// reserveDescriptorName reserves a component under its own Descriptor name — the
+// identity the LEGACY (name-less) registration paths use. Its errors are the
+// historical ones, verbatim, because callers and tests read them.
+func (r *Runtime) reserveDescriptorName(d sdk.Descriptor) error {
+	if err := validComponentDescriptor(d); err != nil {
+		return err
+	}
+	return r.reserveNameLocked(d.Name)
+}
+
+// reserveNameLocked reserves one registration name in the runtime's single shared
+// namespace. r.mu MUST be held. The namespace is shared across sources, outputs
+// and modules ON PURPOSE: a source whose registration name is already owned by a
+// module or an output is REFUSED here, so it can never replace that other
+// component — the refusal leaves the owner completely untouched.
+func (r *Runtime) reserveNameLocked(name string) error {
+	if _, dup := r.names[name]; dup {
+		return fmt.Errorf("runtime: duplicate component name %q", name)
+	}
+	r.names[name] = struct{}{}
+	return nil
+}
+
+// validRegistrationName rejects an absent registration name WITHOUT rewriting a
+// present one. The composition root passes the operator's validated, trimmed
+// SourceDef.Name and the runtime uses it byte for byte: it is never truncated,
+// lower-cased, or derived from the kind, the config or a secret.
+// ErrInvalidSourceRegistration refuses a registration snapshot with a missing
+// component: a partial snapshot would attribute events to a source nobody can
+// resolve, so it is not accepted and the caller's prepared source is discarded.
+var ErrInvalidSourceRegistration = errors.New("runtime: source registration snapshot requires source id, applied revision and environment")
+
+func validRegistrationName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return ErrEmptyRegistrationName
+	}
+	return nil
+}
+
+// cloneConfig copies a config's settings so each registration owns its OWN map.
+// Two sources of one kind must not share a mutable map: mutating one's settings
+// can then never reach the other, and a caller that reuses a map for a second
+// registration cannot retroactively change the first.
+func cloneConfig(cfg sdk.Config) sdk.Config {
+	if cfg.Settings == nil {
+		return sdk.Config{}
+	}
+	out := make(map[string]string, len(cfg.Settings))
+	for k, v := range cfg.Settings {
+		out[k] = v
+	}
+	return sdk.Config{Settings: out}
 }
 
 // AddSource registers an in-process source connector that the engine runs once:
@@ -245,6 +354,11 @@ func (r *Runtime) reserveName(d sdk.Descriptor) error {
 // completion and is not re-run. cfg is the connector's configuration; tenant is
 // the string tenant reference stamped onto the events its observations produce.
 // It is equivalent to AddPollSource with a zero interval.
+//
+// It is the LEGACY, name-less registration: the connector's Descriptor name IS
+// the registration identity, so only one source per connector kind can exist.
+// A composition root that registers CONFIGURED sources uses AddSourceNamed /
+// AddPollSourceNamed instead and supplies the operator's name.
 func (r *Runtime) AddSource(conn sdk.SourceConnector, cfg sdk.Config, tenant string) error {
 	return r.AddPollSource(conn, cfg, tenant, 0)
 }
@@ -266,13 +380,65 @@ func (r *Runtime) AddPollSource(conn sdk.SourceConnector, cfg sdk.Config, tenant
 		return ErrAlreadyStarted
 	}
 	d := conn.Descriptor()
-	if err := r.reserveName(d); err != nil {
+	if err := r.reserveDescriptorName(d); err != nil {
 		return err
 	}
-	reg := &sourceReg{conn: conn, cfg: cfg, tenant: tenant, name: d.Name, poll: interval, status: StatusPending}
-	r.sources = append(r.sources, reg)
-	r.srcIndex[d.Name] = reg
+	r.wireSourceLocked(d.Name, conn, cfg, tenant, interval)
 	return nil
+}
+
+// AddSourceNamed is AddSource with an EXPLICIT registration name supplied by the
+// composition root — the identity this source is keyed, reported, removed and
+// attributed by, independent of which connector kind serves it. It is
+// AddPollSourceNamed with a zero interval.
+func (r *Runtime) AddSourceNamed(name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string) error {
+	return r.AddPollSourceNamed(name, conn, cfg, tenant, 0)
+}
+
+// AddPollSourceNamed registers a source under the registration name the caller
+// supplies instead of under its connector's Descriptor name. That separation is
+// the whole point: two roster rows of ONE kind ("grok-home-a" and "grok-home-b")
+// are two distinct sources with their own connector instance, their own config,
+// their own lifecycle and their own event provenance, because the runtime keys
+// them by the operator's name and keeps the descriptor beside it as type
+// information. A duplicate registration name is still refused, and a name already
+// owned by a module or an output is refused too — without disturbing that owner.
+//
+// The name is used verbatim (see validRegistrationName); an empty one is an error,
+// never a silent fall back to the descriptor. The CONNECTOR must still name itself
+// (validComponentDescriptor): an explicit registration identity does not admit a
+// component that has none.
+func (r *Runtime) AddPollSourceNamed(name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) error {
+	if err := validRegistrationName(name); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.started {
+		return ErrAlreadyStarted
+	}
+	// The connector still has to identify itself: naming the SOURCE never excuses a
+	// component with no descriptor name. Checked before the reservation, so a refused
+	// connector leaves the namespace exactly as it found it.
+	if err := validComponentDescriptor(conn.Descriptor()); err != nil {
+		return err
+	}
+	if err := r.reserveNameLocked(name); err != nil {
+		return err
+	}
+	r.wireSourceLocked(name, conn, cfg, tenant, interval)
+	return nil
+}
+
+// wireSourceLocked appends a reserved pre-Start source registration. r.mu MUST be
+// held and the name MUST already be reserved.
+func (r *Runtime) wireSourceLocked(name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) {
+	reg := &sourceReg{
+		conn: conn, cfg: cloneConfig(cfg), tenant: tenant,
+		name: name, component: conn.Descriptor().Name, poll: interval, status: StatusPending,
+	}
+	r.sources = append(r.sources, reg)
+	r.srcIndex[name] = reg
 }
 
 // SchedulePeriodic registers a named job the engine runs every interval after
@@ -326,7 +492,7 @@ func (r *Runtime) AddOutput(conn sdk.OutputConnector, cfg sdk.Config, types []ev
 		return ErrAlreadyStarted
 	}
 	d := conn.Descriptor()
-	if err := r.reserveName(d); err != nil {
+	if err := r.reserveDescriptorName(d); err != nil {
 		return err
 	}
 	r.outputs = append(r.outputs, &outputReg{conn: conn, cfg: cfg, types: types, name: d.Name, status: StatusPending})
@@ -341,7 +507,7 @@ func (r *Runtime) AddModule(mod sdk.Module, cfg sdk.Config) error {
 		return ErrAlreadyStarted
 	}
 	d := mod.Descriptor()
-	if err := r.reserveName(d); err != nil {
+	if err := r.reserveDescriptorName(d); err != nil {
 		return err
 	}
 	r.modules = append(r.modules, &moduleReg{mod: mod, cfg: cfg, name: d.Name, status: StatusPending})
@@ -354,7 +520,12 @@ func (r *Runtime) Status() []ComponentStatus {
 	defer r.mu.Unlock()
 	out := make([]ComponentStatus, 0, len(r.sources)+len(r.outputs)+len(r.modules))
 	for _, s := range r.sources {
-		out = append(out, statusOf(s.name, sdk.TypeSource, s.status, s.err))
+		// A source reports BOTH identities: the registration name it answers to and
+		// the connector descriptor that serves it. Two rows of one kind therefore
+		// appear as two entries that share a Component and differ in Name.
+		cs := statusOf(s.name, sdk.TypeSource, s.status, s.err)
+		cs.Component = s.component
+		out = append(out, cs)
 	}
 	for _, o := range r.outputs {
 		out = append(out, statusOf(o.name, sdk.TypeOutput, o.status, o.err))
@@ -366,7 +537,7 @@ func (r *Runtime) Status() []ComponentStatus {
 }
 
 func statusOf(name string, t sdk.ComponentType, st Status, err error) ComponentStatus {
-	cs := ComponentStatus{Name: name, Type: t, Status: st}
+	cs := ComponentStatus{Name: name, Component: name, Type: t, Status: st}
 	if err != nil {
 		cs.Err = err.Error()
 	}

@@ -485,3 +485,111 @@ func (ca *pivCA) issueUPN(t *testing.T, cn, upn, ocspURL string, serial int64) *
 	}
 	return cert
 }
+
+func whoamiAuthConfig(t *testing.T, h *harness, token string) (map[string]any, map[string]any) {
+	t.Helper()
+	r := h.do("GET", "/v1/auth/whoami", token, nil, nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("whoami = %d %s", r.code, r.raw)
+	}
+	raw, ok := r.body["authentication_configuration"].(map[string]any)
+	if !ok {
+		t.Fatalf("authentication_configuration missing: %s", r.raw)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("authentication_configuration keys = %v, want only piv_configured", raw)
+	}
+	if _, ok := raw["piv_configured"].(bool); !ok {
+		t.Fatalf("piv_configured type %T in %s", raw["piv_configured"], r.raw)
+	}
+	return r.body, raw
+}
+
+// TestPIVWhoamiConfiguration emits piv_configured from the same verifier-roots
+// predicate as PIV status. Unauthenticated whoami stays 401. Status 501 and
+// presented/not-presented behavior are unchanged.
+func TestPIVWhoamiConfiguration(t *testing.T) {
+	t.Run("unauthenticated whoami is 401", func(t *testing.T) {
+		h := newHarness(t)
+		_ = h.adminLogin()
+		r := h.do("GET", "/v1/auth/whoami", "", nil, nil)
+		if r.code != http.StatusUnauthorized {
+			t.Fatalf("anonymous whoami = %d %s, want 401", r.code, r.raw)
+		}
+	})
+
+	t.Run("absent piv reports false and status 501", func(t *testing.T) {
+		h := newHarness(t)
+		token := h.adminLogin()
+		body, cfg := whoamiAuthConfig(t, h, token)
+		if cfg["piv_configured"] != false {
+			t.Fatalf("absent piv_configured = %v, want false", cfg["piv_configured"])
+		}
+		if _, ok := body["grants"]; !ok {
+			t.Fatalf("grants missing: %s", body)
+		}
+		if body["aal"] != float64(1) {
+			t.Fatalf("aal = %v, want 1", body["aal"])
+		}
+		st := h.do("GET", "/v1/auth/piv/status", token, nil, nil)
+		if st.code != http.StatusNotImplemented || st.body["error"].(map[string]any)["code"] != "piv_not_configured" {
+			t.Fatalf("absent piv status = %d %s, want 501 piv_not_configured", st.code, st.raw)
+		}
+	})
+
+	t.Run("nil roots report false and status 501", func(t *testing.T) {
+		h := newPIVHarness(t, &auth.PIVConfig{})
+		token := h.adminLogin()
+		_, cfg := whoamiAuthConfig(t, h, token)
+		if cfg["piv_configured"] != false {
+			t.Fatalf("nil-roots piv_configured = %v, want false", cfg["piv_configured"])
+		}
+		st := h.do("GET", "/v1/auth/piv/status", token, nil, nil)
+		if st.code != http.StatusNotImplemented || st.body["error"].(map[string]any)["code"] != "piv_not_configured" {
+			t.Fatalf("nil-roots piv status = %d %s, want 501 piv_not_configured", st.code, st.raw)
+		}
+	})
+
+	t.Run("valid roots report true without CA material", func(t *testing.T) {
+		ca := newPIVCA(t)
+		h := newPIVHarness(t, &auth.PIVConfig{Roots: ca.pool})
+		token := h.adminLogin()
+		body, cfg := whoamiAuthConfig(t, h, token)
+		if cfg["piv_configured"] != true {
+			t.Fatalf("valid-roots piv_configured = %v, want true", cfg["piv_configured"])
+		}
+		if _, ok := body["grants"]; !ok {
+			t.Fatalf("grants missing: %v", body)
+		}
+		if body["aal"] != float64(1) {
+			t.Fatalf("aal = %v, want 1", body["aal"])
+		}
+		st := h.do("GET", "/v1/auth/piv/status", token, nil, nil)
+		if st.code != http.StatusOK || st.body["presented"] != false {
+			t.Fatalf("configured without cert = %d %s, want 200 presented false", st.code, st.raw)
+		}
+		if st := h.do("GET", "/v1/auth/piv/status", "", nil, nil); st.code != http.StatusUnauthorized {
+			t.Fatalf("anonymous piv status = %d %s, want 401", st.code, st.raw)
+		}
+	})
+
+	t.Run("configured presented status does not elevate", func(t *testing.T) {
+		ca := newPIVCA(t)
+		responder := ca.ocspResponder(t, ocsp.Good)
+		defer responder.Close()
+		leaf := ca.issue(t, "Root Operator", "root@x.io", responder.URL, 100)
+		h := newPIVHarness(t, &auth.PIVConfig{Roots: ca.pool})
+		token := h.adminLogin()
+		_, cfg := whoamiAuthConfig(t, h, token)
+		if cfg["piv_configured"] != true {
+			t.Fatalf("piv_configured = %v, want true", cfg["piv_configured"])
+		}
+		st := h.doTLS("GET", "/v1/auth/piv/status", token, []*x509.Certificate{leaf})
+		if st.code != http.StatusOK || st.body["presented"] != true {
+			t.Fatalf("presented status = %d %s", st.code, st.raw)
+		}
+		if aal, _ := whoamiAAL(t, h, token); aal != 1 {
+			t.Fatalf("aal after presented status = %d, want 1", aal)
+		}
+	})
+}

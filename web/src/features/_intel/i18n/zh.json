@@ -69,6 +69,7 @@
   "notices": {
     "truncated": "部分数据",
     "truncatedHint": "此聚合已达到扫描上限——它是部分结果，而非精确总数。",
+    "truncatedBrief": "已达到扫描上限",
     "selfAudited": "特权读取——已记录到审计账本中。",
     "seam": "尚未接线",
     "seamBody": "已声明的契约——{{what}} 尚未接线到后端，因此此处显示的是已声明的结构，而非实时数据。",
@@ -76,7 +77,8 @@
     "declared": "已声明的引用",
     "noConnector": "无连接器——是缺失，而非零。",
     "listTruncated": "已加载 {{n}} 行；还有更多",
-    "listTruncatedHint": "引擎返回的只是一页，而不是完整结果集。无法根据已加载的行推断总数，并且可能存在未显示的行。"
+    "listTruncatedHint": "引擎返回的只是一页，而不是完整结果集。无法根据已加载的行推断总数，并且可能存在未显示的行。",
+    "listTruncatedBrief": "仅加载一页；还有更多"
   },
   "badges": {
     "signed": "已签名",

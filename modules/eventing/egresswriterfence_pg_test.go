@@ -6,6 +6,7 @@ package eventing
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -197,20 +198,125 @@ func openFenced(t *testing.T, f pgFence) store.Store {
 	return st
 }
 
+// provisionFenceTenant creates a business tenant the way the active writer provisions one at
+// promotion (cmd/olivares/boot.go): EnsureSystemTenant, then CreateOrg, inside the same System
+// transaction — the order the accepted engine fixture already uses
+// (core/internal/store/sqlstore/helpers_test.go).
+//
+// Since core v10 the boot inventory decoder treats a business organization without the SYSTEM
+// witness as corruption and refuses to reopen (sqlstore/directoryepoch.go: "nonempty directory
+// inventory lacks SYSTEM witness"). That is not a detail this unit can ignore, because the UPGRADE
+// fixtures here are the only ones in the package that provision a tenant AND THEN close the store
+// and open it again: era 1 provisions through a pre-fence binary, and era 2 opens the same database
+// with the module's real schema. A fixture that skipped genesis was therefore not a smaller fixture
+// — it was a database no real deployment can produce, and the second Open died before a single
+// fence assertion ran.
+//
+// The two era fixtures in egresswriterfence_test.go reopen as well and were never affected, which
+// is the boundary worth naming rather than rounding off: they provision nothing, so the inventory
+// they reopen is EMPTY and the decoder's nonempty branch never runs.
+//
+// A test that needs that corrupt state ON PURPOSE calls provisionFenceTenantWithoutSystemWitness
+// and says so; TestAnUpgradeReopenWithoutTheSystemWitnessIsRefused (this file, and its SQLite twin)
+// is the one that does.
 func provisionFenceTenant(t *testing.T, st store.Store, slug string) model.TenantID {
 	t.Helper()
+	return provisionFenceTenantWith(t, st, slug, true)
+}
+
+// provisionFenceTenantWithoutSystemWitness creates a business tenant on a store whose SYSTEM
+// organization has deliberately NOT been provisioned. It exists for the negative that proves a
+// nonempty inventory lacking the SYSTEM witness is still refused on reopen; it is never a shortcut
+// for an ordinary fixture, because the store it leaves behind cannot be reopened.
+func provisionFenceTenantWithoutSystemWitness(t *testing.T, st store.Store, slug string) model.TenantID {
+	t.Helper()
+	return provisionFenceTenantWith(t, st, slug, false)
+}
+
+func provisionFenceTenantWith(t *testing.T, st store.Store, slug string, systemFirst bool) model.TenantID {
+	t.Helper()
+	ctx := context.Background()
 	var tenant model.TenantID
-	if err := st.System(context.Background(), func(sys store.SystemScope) error {
-		org, err := sys.CreateOrg(context.Background(), model.Org{Slug: slug, Name: slug})
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		if systemFirst {
+			if _, err := sys.EnsureSystemTenant(ctx); err != nil {
+				return fmt.Errorf("ensure SYSTEM tenant: %w", err)
+			}
+		}
+		org, err := sys.CreateOrg(ctx, model.Org{Slug: slug, Name: slug})
 		if err != nil {
 			return err
 		}
 		tenant = org.TenantID
 		return nil
 	}); err != nil {
-		t.Fatalf("provision tenant: %v", err)
+		t.Fatalf("provision tenant %q: %v", slug, err)
 	}
 	return tenant
+}
+
+// TestAnUpgradeReopenWithoutTheSystemWitnessIsRefused is the discriminating control for the helper
+// above, on the exact shape the UPGRADE fixtures use: provision through a pre-fence binary, close,
+// and open the same split-role database with the module's real schema.
+//
+// The positive half proves the ordinary helper leaves a database the upgraded binary can open and
+// still resolve its tenant in. The negative half proves the SAME shape, minus the SYSTEM row, still
+// receives the PRODUCTION refusal — store.ErrDirectoryUnavailable carrying "nonempty directory
+// inventory lacks SYSTEM witness" from the decoder at sqlstore/directoryepoch.go. Together they say
+// that aligning the fixture repaired a database that could not exist and did not move the guard: if
+// someone ever weakens the decoder, this test goes red where the four upgrade tests would go green.
+func TestAnUpgradeReopenWithoutTheSystemWitnessIsRefused(t *testing.T) {
+	ctx := context.Background()
+	// The upgraded binary's open, WITHOUT the t.Fatalf that openFenced applies: the negative half
+	// needs the error rather than a dead test.
+	upgradedOpen := func(f pgFence) (store.Store, error) {
+		return engine.Open(ctx, store.Config{
+			Engine: store.EnginePostgres, DSN: f.App, OwnerDSN: f.Owner, AdminDSN: f.Admin, MaxConns: 6,
+		}, New().RegisterSchema)
+	}
+
+	t.Run("with SYSTEM the upgraded binary reopens", func(t *testing.T) {
+		f := newPGFence(t)
+		st1 := openPreFence(t, f)
+		tenant := provisionFenceTenant(t, st1, "acme")
+		_ = st1.Close()
+
+		st, err := upgradedOpen(f)
+		if err != nil {
+			t.Fatalf("reopen after SYSTEM-first provisioning: %v", err)
+		}
+		t.Cleanup(func() { _ = st.Close() })
+		var got model.Org
+		if err := st.System(ctx, func(sys store.SystemScope) error {
+			o, gerr := sys.GetOrg(ctx, tenant)
+			got = o
+			return gerr
+		}); err != nil {
+			t.Fatalf("the reopened store no longer resolves the provisioned tenant: %v", err)
+		}
+		if got.TenantID != tenant || got.Slug != "acme" {
+			t.Fatalf("reopened store resolved org %+v, want the provisioned tenant %s/acme", got, tenant)
+		}
+	})
+
+	t.Run("without SYSTEM the upgraded binary is refused", func(t *testing.T) {
+		f := newPGFence(t)
+		st1 := openPreFence(t, f)
+		provisionFenceTenantWithoutSystemWitness(t, st1, "acme")
+		_ = st1.Close()
+
+		st, err := upgradedOpen(f)
+		if err == nil {
+			_ = st.Close()
+			t.Fatal("a nonempty inventory without the SYSTEM witness was opened: the decoder no longer refuses it, and this file's fixture alignment would be hiding that")
+		}
+		if !errors.Is(err, store.ErrDirectoryUnavailable) {
+			t.Fatalf("reopen err = %v, want store.ErrDirectoryUnavailable", err)
+		}
+		if want := "nonempty directory inventory lacks SYSTEM witness"; !strings.Contains(err.Error(), want) {
+			t.Fatalf("reopen err = %q, want it to carry %q", err, want)
+		}
+	})
 }
 
 // armFence makes the deployment demand a capability, the way the operator's ceremony will.

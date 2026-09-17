@@ -30,10 +30,15 @@ pour ce guide).
 
 - Un hôte Linux avec systemd et `curl`.
 - **Go 1.26+** pour compiler le binaire (le store est du SQLite pur-Go, donc pas de
-  chaîne d'outils C). Les versions avec des artefacts précompilés signés arrivent à la première version
-  publique — d'ici là, vous compilez depuis un checkout, et
-  [vérifier une version](/fr/how-to/verify-a-release/) documente la chaîne que vous utiliserez
-  une fois qu'ils existeront.
+  chaîne d'outils C). Une version étiquetée antérieure a déjà livré des archives et des paquets signés.
+  Le canon de cet arbre est **v26.9.0** ; le témoin des surfaces d’installation
+  enregistre encore les archives GitHub et les paquets natifs comme
+  **not-published** jusqu’au job de release de ce tag
+  (`docs/releases/v26.9.0-install-surfaces.json`). Tant que ces artefacts
+  n’existent pas, compilez depuis un checkout. L’installateur vérifié sur `main`
+  (`scripts/install.sh`) est une surface publiée indépendante du tag.
+  [Vérifier une version](/fr/how-to/verify-a-release/) est la chaîne pour les
+  artefacts une fois qu’ils existent.
 
 ## 1. Compiler et installer le binaire
 
@@ -147,7 +152,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.

@@ -14,9 +14,9 @@ dependencias externas, y un override de Postgres te da la topología multi-tenan
 cuando la necesitas. Cada vía mantiene los mismos valores por defecto seguros: sin credenciales por defecto,
 un token de configuración de un solo uso, TLS activado por defecto y el puerto del host enlazado a loopback.
 
-:::note[Beta — todavía no se ha cortado ninguna release]
-Olivares AI está en **beta**. Las coordenadas de imagen de abajo resuelven solo **después de que se publique la primera
-release (CalVer `26.8.0`)**; hasta entonces los registries no tienen nada que descargar.
+:::note[Beta — 26.9.0 todavía no está publicada]
+Olivares AI está en **beta**. Las coordenadas de imagen de abajo resuelven solo **después de que se publique la
+release `26.9.0`**; hasta entonces los registries no tienen nada que descargar.
 Trátalo como la forma de despliegue que vas a usar, no como una garantía lista para producción.
 :::
 
@@ -30,7 +30,7 @@ la vía Kubernetes/Helm más abajo.
 La descarga principal del contenedor es **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.8.0
+docker pull docker.io/olivaresai/olivares:26.9.0
 ```
 
 El mismo contenido también se publica en `ghcr.io/olivaresai/olivares` — idéntico por
@@ -38,7 +38,7 @@ digest, usado como copia de respaldo y como registry de build. Docker Hub limita
 descargas **anónimas**; ghcr.io no limita las descargas anónimas de imágenes públicas, así que
 `docker login` o la coordenada de ghcr.io es la salida si un nodo de CI o una flota grande topa
 con el límite. Las tags no llevan **ningún `v` inicial**:
-`:26.8.0` fija una release, `:latest` flota, y `:26.8.0-fips` / `:26.8.0-stig` son
+`:26.9.0` fija una release, `:latest` flota, y `:26.9.0-fips` / `:26.9.0-stig` son
 las variantes endurecidas. Las tags base y `:latest` son multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` son solo `amd64`.
 
@@ -49,7 +49,7 @@ Docker Hub mediante `cosign copy`, de modo que el digest es el mismo:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.8.0")"
+DIGEST="$(crane digest "$IMAGE:26.9.0")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -84,7 +84,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 127.0.0.1:8443:8443 \
   -p 127.0.0.1:8444:8444 \
-  docker.io/olivaresai/olivares:26.8.0 \
+  docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -271,7 +271,7 @@ descarga la nueva tag fijada, recrea el contenedor.
 ```bash
 # 1. Back up first (see §4).
 # 2. Pull the new release and re-verify it (see §1):
-docker pull docker.io/olivaresai/olivares:26.8.1
+docker pull docker.io/olivaresai/olivares:26.9.1
 
 # docker run:
 docker stop olivares && docker rm olivares
@@ -287,7 +287,7 @@ imagen antes de recrear.
 
 ## 8. Fija por digest para producción
 
-Las tags mutables (`:26.8.0`, `:latest`) son para evaluación. En producción, fija el
+Las tags mutables (`:26.9.0`, `:latest`) son para evaluación. En producción, fija el
 **digest** que verificaste — un digest es inmutable y es exactamente lo que aprobaste:
 
 ```bash
@@ -300,8 +300,8 @@ Para Compose, fija la referencia de digest en `deploy/compose/.env`:
 OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
-Para scale-out y multi-nodo, usa el chart de Helm — publicado como artefacto OCI en
-`oci://ghcr.io/olivaresai/charts/olivares`, firmado con cosign, y fijado por digest de imagen.
-Véase [Autoaloja el control plane](/es/how-to/self-hosting/) para el comando del chart e
+Para scale-out y multi-nodo, usa el chart de `deploy/helm/olivares` y fija la imagen
+publicada por digest. El chart aún no es un artefacto OCI público.
+Véase [Autoaloja el control plane](/es/how-to/self-hosting/) para el comando desde fuente e
 [Instala en un entorno air-gapped](/es/how-to/air-gap-install/) para sitios totalmente
 desconectados.

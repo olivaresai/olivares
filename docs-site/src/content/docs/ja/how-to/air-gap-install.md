@@ -30,8 +30,8 @@ Olivares AI は **セルフホストファーストかつエアギャップ対�
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.8.0 \
-  --image docker.io/olivaresai/olivares:26.8.0-amd64 \
+  --version v26.9.0 \
+  --image docker.io/olivaresai/olivares:26.9.0-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
@@ -98,7 +98,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.8.0.tar.gz \
+  --bundle olivares-airgap-v26.9.0.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

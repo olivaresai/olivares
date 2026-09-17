@@ -109,6 +109,14 @@ func (r *k2WorkIdentity) LockAgentWorkAuthority(
 	return nil
 }
 
+func (r *k2WorkIdentity) ValidateAgentWorkAuthorityInScope(
+	ctx context.Context,
+	sc store.Scope,
+	snapshot WorkAgentAuthoritySnapshot,
+) error {
+	return r.LockAgentWorkAuthority(ctx, sc, snapshot)
+}
+
 func (r *k2WorkIdentity) AuthenticatedAgentMatches(
 	_ context.Context,
 	_ model.TenantID,

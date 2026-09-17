@@ -44,6 +44,30 @@ const (
 	// the engine's request gate refuses application traffic on a non-leader, so this
 	// is a visible, self-healing anomaly, not a routing decision to make here.
 	reasonMultipleLeadersPublished = "MultipleLeadersPublished"
+	// The route-readiness reasons answer the OTHER half of the PhaseReady contract
+	// in the leader-routing layout — "client traffic can reach the writer" — which
+	// the leader LABEL alone cannot: the engine publishes that label as soon as it
+	// wins the election, while GET /readyz additionally answers whether this writer
+	// can serve. Each is a FIXED name, never a scalar copied out of a response.
+	//
+	// reasonSetupBlocked: the leader answered, and its answer is that first setup
+	// cannot complete until a human configures the cross-tenant administrative
+	// pool. Verified and static — the only route verdict excluded from the
+	// progress-deadline clock, for the same reason the legacy readiness layout is.
+	reasonSetupBlocked = "SetupBlocked"
+	// reasonRouteNotReady: the leader answered with another readiness refusal this
+	// operator recognizes (a standby still carrying the label, a store that went
+	// down under a Ready pod, a failed setup-capability observation). Real, and
+	// normally transient: the label lags the election by a tick.
+	reasonRouteNotReady = "RouteNotReady"
+	// reasonRouteProbeForbidden: the API server refused the observation itself. That
+	// is the MANAGER's RBAC (get pods/proxy), not the engine's health.
+	reasonRouteProbeForbidden = "RouteProbeForbidden"
+	// reasonRouteProbeUnknown: traffic readiness could not be verified at all — no
+	// prober wired, an unreadable or replaced pod, a transport failure, a schema
+	// this operator does not recognize. It is explicitly UNVERIFIED: it neither
+	// permits Ready nor claims the engine is failing (SDD06 Q15).
+	reasonRouteProbeUnknown = "RouteProbeUnknown"
 	// reasonProgressDeadlineExceeded / reasonRolloutStalled: the rollout has not
 	// advanced within spec.progressDeadlineSeconds (StatefulSet status carries no
 	// progress deadline of its own, so the operator keeps the bookkeeping).
@@ -65,6 +89,18 @@ const (
 	// health-Ready standbys through the legacy client Service (design §B.1).
 	reasonHALeaderServiceMigrationRequired = "HALeaderServiceMigrationRequired"
 )
+
+// isRouteReason reports whether a classification reason came from the
+// traffic-readiness observation. They share one consequence — the rollout is
+// converged and is NOT advancing, so Progressing must say False rather than spin.
+func isRouteReason(reason string) bool {
+	switch reason {
+	case reasonSetupBlocked, reasonRouteNotReady, reasonRouteProbeForbidden, reasonRouteProbeUnknown:
+		return true
+	default:
+		return false
+	}
+}
 
 // HA leader-routing labels. haRoleLabelKey/haRoleLeader are a CONTRACT shared with
 // the engine, which self-publishes the label (cmd/olivares/haleaderlabel.go): the
@@ -105,6 +141,13 @@ type podObservation struct {
 	// observed is false when the pod list could not be read; the classifier then
 	// falls back to StatefulSet counters alone rather than inventing a verdict.
 	observed bool
+	// route is the traffic-readiness observation of leaderPod: what the engine
+	// answered on GET /readyz through the API server's pod proxy, classified into a
+	// closed enum. It is filled in by the reconciler AFTER the pod list (the caller
+	// owns which pod may be asked and re-verifies its identity around the call); a
+	// bare podObservation therefore reads RouteUnknown, which is the honest value
+	// for "nobody looked".
+	route RouteReadiness
 }
 
 // progressPoint is the rollout-progress bookkeeping persisted in status. A rollout
@@ -143,6 +186,12 @@ type rolloutClass struct {
 	// haReadinessBlocked marks LEGACY HA that is fully rolled with a serving leader
 	// but fewer Ready replicas than desired — the honest interim state.
 	haReadinessBlocked bool
+	// routeStaticallyBlocked marks the one route verdict that a cluster cannot
+	// resolve on its own: a converged leader-routing rollout whose single leader
+	// VERIFIABLY answered "first setup is blocked". Like the legacy readiness
+	// layout it has its own actionable reason, so it neither runs the progress
+	// deadline nor polls at the rollout cadence.
+	routeStaticallyBlocked bool
 	// reason is the Progressing reason (or RolloutComplete when ready).
 	reason string
 	// degraded is the Degraded reason this classification implies ("" = none). The
@@ -202,9 +251,23 @@ func classifyRollout(cp *opsv1alpha1.ControlPlane, sts *appsv1.StatefulSet, pods
 	}
 	c.available = routable
 
+	// Traffic readiness (leader-routing only). PhaseReady claims BOTH halves of its
+	// documented contract: the rollout is fully realized AND client traffic can
+	// reach the writer. The leader label is evidence for the first half of the
+	// second — an endpoint exists — and none at all for the rest: the engine
+	// publishes it on winning the election, while GET /readyz additionally answers
+	// store access, established writer identity and, on a first boot, whether the
+	// setup ceremony can run. A leader that answers 503 there has an endpoint and
+	// refuses traffic, which is exactly the state this term exists to stop reporting
+	// as Ready.
+	//
+	// Outside this layout the predicate is untouched: the kubelet probes /readyz
+	// itself there, so a pod that refuses traffic is not Ready in the first place.
+	routeReady := pods.route == RouteReady
+
 	switch {
 	case split:
-		c.ready = c.converged && routable
+		c.ready = c.converged && routable && routeReady
 	case ha:
 		// Legacy HA can never be Ready: standbys drain /readyz by design, and even if
 		// every replica somehow reported Ready, the leader-only routing that keeps
@@ -223,7 +286,14 @@ func classifyRollout(cp *opsv1alpha1.ControlPlane, sts *appsv1.StatefulSet, pods
 	// actionable reason — the legacy readiness layout, or a layout migration waiting
 	// on a human. Reporting those as RolloutStalled would bury the real instruction
 	// under a generic one.
-	runClock := !c.ready && desired > 0 && !c.haReadinessBlocked
+	//
+	// A VERIFIED setup block is the third such state: the engine answered, and its
+	// answer names a human action. Unknown and transient refusals are deliberately
+	// NOT excluded — an observation that failed must never be able to switch off
+	// stall detection, or a permanently unobservable control plane would sit
+	// unconverged forever with nothing measuring it.
+	c.routeStaticallyBlocked = split && c.converged && routable && pods.route == RouteSetupBlocked
+	runClock := !c.ready && desired > 0 && !c.haReadinessBlocked && !c.routeStaticallyBlocked
 	c.progress, c.stalled = classifyProgress(cp, sts, now, runClock)
 
 	switch {
@@ -240,6 +310,17 @@ func classifyRollout(cp *opsv1alpha1.ControlPlane, sts *appsv1.StatefulSet, pods
 	case split && c.converged && pods.observed && pods.readyLeaders == 0:
 		c.reason = reasonLeaderNotPublished
 		c.degraded = reasonLeaderNotPublished
+	case split && c.converged && routable && !routeReady:
+		// Converged, exactly one endpoint, and the writer behind it will not take
+		// client traffic (or could not be asked). Both are reported with their own
+		// fixed reason — including the unverified one, which says so rather than
+		// borrowing a rollout reason that would read as progress.
+		//
+		// This case is guarded by c.converged on purpose: during an unfinished
+		// rollout the installing/scaling/upgrading reason is the one an operator
+		// needs, and a route result must not conceal it.
+		c.reason = pods.route.reason()
+		c.degraded = c.reason
 	case !stsObserved || st.CurrentRevision == "":
 		c.reason = reasonInstalling
 	case st.Replicas != desired:

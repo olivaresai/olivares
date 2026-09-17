@@ -169,7 +169,13 @@ var legs = []leg{
 	{job: "race-modules", task: "test:race-hot:modules", what: "./modules"},
 	{job: "race-rest", task: "test:race-hot:workspace", what: "the workspace minus cmd/olivares and ./modules"},
 	{job: "race-rest", task: "test:race-hot:root", what: "the root module's hot packages"},
-	{job: "race-rest", task: "test:race-hot:hot", what: "the manifest's hot packages"},
+	// R112/HR1, 2026-09-13: the hot manifest left race-rest for its own four-way matrix job, so
+	// its INVENTORIED owner moves with it. The entry is not bookkeeping — this table is what
+	// notices a leg that VANISHES, which discovery alone cannot see, and it did exactly that
+	// when the step moved: `inventoried leg race-rest <- test:race-hot:hot is no longer invoked
+	// anywhere`. The matrix legs all invoke the same target from the same job id, so one row
+	// still names it. race-rest keeps its workspace and root legs above, untouched.
+	{job: "race-hot-manifest", task: "test:race-hot:hot", what: "the manifest's hot packages, one cost-balanced partition per matrix leg"},
 }
 
 // racePrefix is what makes a step a -race leg for discovery. Matching on the TARGET NAME and
@@ -2025,6 +2031,12 @@ func (s recipeScan) argvChain(rest []shellWord, where, body string, depth int, l
 				if name := filepath.ToSlash(rel); argvRunnerScripts[name] != "" {
 					findings = append(findings, s.argvRunnerKeepsItsPremise(name, where, body, depth)...)
 					rest = rest[at+1:] // it RUNS what follows it: keep walking that
+					// This exact helper's preflight validates, but does not execute, the
+					// same command the next call will run. Still read its body above and
+					// follow the actual command below. No other mode is an exemption.
+					if name == "scripts/sqlstore-race-entry-partition.sh" && len(rest) > 0 && rest[0].value == "--validate-argv" {
+						rest = rest[1:]
+					}
 					if len(rest) == 0 {
 						return findings
 					}
@@ -2077,6 +2089,17 @@ var argvTerminals = map[string]string{
 // carries on down the argv the script will run.
 var argvRunnerScripts = map[string]string{
 	"scripts/go-work-each.sh": "runs the argv it is given once per go.work module (`( cd \"${m}\" && \"$@\" )`) and touches no OLIVARES_* variable of its own",
+	// Added 2026-09-11 with the four-way race-modules partition. Same shape as the entry
+	// above and reviewed the same way: it ends at `cd \"${ROOT}/modules\" && \"$@\" \"${args[@]}\"`,
+	// where the argv is the walk's own words and `args` is a package list it derived from
+	// `go list`. It READS OLIVARES_MODULES_RACE_PARTITION/…_PARTITIONS and assigns neither
+	// those nor any other OLIVARES_* name, so the posture the wrapper decided reaches the
+	// tests untouched — and that sentence is not taken on trust: argvRunnerKeepsItsPremise
+	// walks this file's body with the same reader that judged the recipe.
+	"scripts/modules-race-partition.sh":        "runs the argv it is given from ./modules over `./...` or over one partition of the `go list` inventory (`cd \"${ROOT}/modules\" && \"$@\" \"${args[@]}\"`) and assigns no OLIVARES_* variable of its own",
+	"scripts/core-race-partition.sh":           "runs the argv it is given from ./core over `./...` unpartitioned, or over one package partition plus the sqlstore entry shard (`bash scripts/sqlstore-race-entry-partition.sh \"$@\"` then `cd \"${ROOT}/core\" && \"$@\" \"${args[@]}\"`) and assigns no OLIVARES_* variable of its own",
+	"scripts/sqlstore-race-entry-partition.sh": "runs the argv it is given from ./core over ./internal/store/sqlstore, whole or over one anchored entry-point partition (`cd \"${ROOT}/${WORKDIR}\" && \"$@\" \"${args[@]}\"`) and assigns no OLIVARES_* variable of its own",
+	"scripts/sessions-race-partition.sh":       "runs the argv it is given from ./modules over ./sessions, whole or over one anchored entry-point partition (`cd \"${ROOT}/modules\" && \"$@\" \"${args[@]}\"`) and assigns no OLIVARES_* variable of its own",
 }
 
 // argvRunnerKeepsItsPremise enforces what an argvRunnerScripts entry claims, rather than trusting

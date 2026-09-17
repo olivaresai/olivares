@@ -51,89 +51,15 @@ if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|legacyMonolithKey
   fail "prepare doc claims an application this lote does not have"
 fi
 
-node --input-type=module - "$ART" "$SETS" <<'NODE' \
-  || fail "artifactKey executable contract failed"
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-
-const moduleURL = pathToFileURL(resolve(process.argv[2])).href;
-const setsURL = pathToFileURL(resolve(process.argv[3])).href;
-const { artifactKey } = await import(`${moduleURL}?c02-r2-check=${Date.now()}`);
-const { ALLOWED_SET_SLUGS, isAllowedSetSlug } = await import(
-  `${setsURL}?c02-r2-check=${Date.now()}`
-);
-if (typeof artifactKey !== "function") {
-  throw new Error("artifactKey is not exported as a function");
-}
-if (artifactKey.length !== 4) {
-  throw new Error(`artifactKey arity is ${artifactKey.length}, want 4`);
-}
-// This is an independent contract oracle on purpose. Deriving the expected
-// universe from ALLOWED_SET_SLUGS would let removal of one paid set make both
-// the implementation and this check agree on the same regression.
-const expected = [
-  "biz",
-  "biz+airs",
-  "biz+cp",
-  "biz+ids",
-  "biz+reg",
-  "biz+airs+cp",
-  "biz+airs+ids",
-  "biz+airs+reg",
-  "biz+cp+ids",
-  "biz+cp+reg",
-  "biz+ids+reg",
-  "biz+airs+cp+ids",
-  "biz+airs+cp+reg",
-  "biz+airs+ids+reg",
-  "biz+cp+ids+reg",
-  "biz+airs+cp+ids+reg",
-  "ent",
-];
-const allowed = [...ALLOWED_SET_SLUGS];
-if (
-  allowed.length !== expected.length ||
-  expected.some((set) => !ALLOWED_SET_SLUGS.has(set)) ||
-  allowed.some((set) => !expected.includes(set))
-) {
-  throw new Error(
-    `ALLOWED_SET_SLUGS=${JSON.stringify(allowed)}, want ${JSON.stringify(expected)}`,
-  );
-}
-for (const set of expected) {
-  if (!isAllowedSetSlug(set)) {
-    throw new Error(`isAllowedSetSlug rejected paid set ${JSON.stringify(set)}`);
-  }
-  const got = artifactKey("v26.8.0", "linux", "amd64", set);
-  const want = `enterprise/v26.8.0/${set}/olivares_v26.8.0_linux_amd64.tar.gz`;
-  if (got !== want) {
-    throw new Error(`artifactKey(${set})=${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
-  }
-}
-for (const invalid of [
-  "",
-  "not-a-set",
-  "attacker",
-  "all",
-  "biz+unknown",
-  "reg+biz",
-  "biz+reg+reg",
-  "ent+biz",
-]) {
-  if (isAllowedSetSlug(invalid)) {
-    throw new Error(`isAllowedSetSlug accepted ${JSON.stringify(invalid)}`);
-  }
-  let rejected = false;
-  try {
-    artifactKey("v26.8.0", "linux", "amd64", invalid);
-  } catch {
-    rejected = true;
-  }
-  if (!rejected) {
-    throw new Error(`artifactKey accepted non-allowlisted set ${JSON.stringify(invalid)}`);
-  }
-}
-NODE
+PROBE="$ROOT/scripts/lib/c02-download-contract.mjs"
+[ -r "$PROBE" ] || cannot "missing $PROBE"
+contract_rc=0
+node "$PROBE" "$ART" "$SETS" "$GATE" || contract_rc=$?
+case "$contract_rc" in
+  0) ;;
+  2) cannot "download executable contract has missing runtime inputs" ;;
+  *) fail "artifact/download executable contract failed" ;;
+esac
 if grep -q 'function legacyMonolithKey' "$ART"; then
   fail "legacyMonolithKey landed — this HOLD lote does not apply #944"
 fi
@@ -143,17 +69,34 @@ fi
 if grep -q 'isFullCommercialSet' "$GATE"; then
   fail "isFullCommercialSet landed — this HOLD lote does not apply #944"
 fi
-grep -q 'const purchased = setSlug(live);' "$GATE" \
-  || fail "gate no longer derives purchased from setSlug(live)"
-grep -q 'artifactKey(version, os, arch, purchased)' "$GATE" \
-  || fail "gate no longer passes purchased into artifactKey"
-grep -Fq 'downloadAuditLabel(version, purchased, os, arch)' "$GATE" \
-  || fail "binary download audit no longer records the purchased set"
-grep -Fq 'enterprise/${VERSION}/${SET}/$(basename' "$PUB" \
-  || fail "publisher tarball key lost /<set>/"
-if grep -Fq 'enterprise/${VERSION}/$(basename' "$PUB"; then
-  fail "publisher still plans an unscoped enterprise/\${VERSION}/ tarball"
+# ⛔ LA PROPIEDAD ES «LA CLAVE LLEVA EL CONJUNTO», Y HOY SE PUEDE ESCRIBIR DE DOS FORMAS.
+# Este check exigia el literal `enterprise/${VERSION}/${SET}/$(basename` DENTRO del publicador.
+# `f42b3442b` movio la clave a una PLANTILLA del contrato generado (`keys.artifact`), leida con
+# `leer_contrato`: el literal desaparecio y el check habria pasado CLEAN por AUSENCIA de la cadena
+# que buscaba. Se aceptan las DOS expresiones y se sigue rechazando que no este ninguna.
+_set_ok=0
+_unscoped=0
+if grep -Fq 'enterprise/${VERSION}/${SET}/$(basename' "$PUB"; then
+  _set_ok=1
 fi
+if grep -Fq 'enterprise/${VERSION}/$(basename' "$PUB"; then
+  _unscoped=1
+fi
+CONTRATO="${OLIVARES_C02R2P_CONTRATO:-commercial/license-worker/contracts/publisher.gen.json}"
+if [ "$_set_ok" -eq 0 ] && grep -Fq 'leer_contrato keys.artifact' "$PUB"; then
+  # El publicador toma la clave del contrato: sin el contrato NO SE PUEDE MIRAR, y eso no es
+  # lo mismo que estar roto. Un senuelo que copia el publicador y olvida el contrato caia
+  # aqui como FAIL y acusaba al arbol de un defecto del banco.
+  [ -r "$CONTRATO" ] || cannot "el publicador lee keys.artifact y no encuentro $CONTRATO"
+  _art="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["keys"]["artifact"])' "$CONTRATO" 2>/dev/null)" \
+    || cannot "el publicador lee keys.artifact del contrato y el contrato no lo declara"
+  case "$_art" in
+    */'{set}'/*) _set_ok=1 ;;
+    'enterprise/{version}/olivares'*) _unscoped=1 ;;
+  esac
+fi
+[ "$_set_ok" -eq 1 ] || fail "publisher tarball key lost /<set>/"
+[ "$_unscoped" -eq 0 ] || fail "publisher still plans an unscoped enterprise/\${VERSION}/ tarball"
 
 python3 - "$JSON" <<'PY' || exit $?
 import json, sys

@@ -14,6 +14,9 @@ Para la vía de *observación cooperativa* (telemetría OTLP → access map) con
 [Conectar Claude Code](/how-to/connect-claude-code/); para la vía de *gobierno* (hooks PreToolUse
 como PEP) consulta el [ejemplo govern-claude-code](https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code).
 Esta página trata el **co-despliegue**: poner ambos runtimes en marcha juntos.
+Para lanzar Claude, Codex o Grok bajo un perfil de proveedor cuando los
+runtimes ya existen, consulta
+[Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
 
 :::note[Cómo llega realmente el gobierno a la sesión]
 Una sesión está gobernada porque **el motor es dueño del stdin/stdout de `claude`** —el
@@ -70,14 +73,14 @@ el auto-update desactivado. Fija la base del motor por digest y verifícala prim
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.8.0 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 Trae tu propio `claude` en su lugar con `--build-arg CLAUDE_INSTALL=byo` (la imagen se distribuye
@@ -86,7 +89,7 @@ sin `claude`; monta el tuyo en runtime y configura `OLIVARES_SESSION_RUNTIME_CLA
 ### Levantarlo
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.8.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -250,7 +253,7 @@ existente. Hasta entonces, el valor por defecto seguro es la co-localización.
   credencial emitida.
 - **Cadena de suministro verificada.** El motor está firmado con cosign (verifícalo / fíjalo por digest);
   `claude` se instala desde los repos firmados de Anthropic con la huella de la clave fijada. El
-  instalador **se niega a ejecutar un motor no verificado** salvo que renuncies explícitamente.
+  instalador **se niega a ejecutar un motor no verificado**, sin bypass de verificación.
 - **Auditoría anclada.** Cada transición de ciclo de vida y cada mutación del workspace queda sellada en
   el ledger hash-chained y firmado mediante `PayloadHash` —los bytes de los archivos y el contenido
   de los frames nunca se persisten.

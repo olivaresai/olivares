@@ -46,10 +46,24 @@ type BundleInput struct {
 	SealedKeys map[string][]byte
 }
 
-// WriteBundle streams a DR bundle to w. It does not buffer the snapshot in memory.
+// WriteAuthenticatedBundle authenticates the complete manifest and payload
+// inventory, then streams the bundle. Every current producer must use this API.
+func WriteAuthenticatedBundle(w io.Writer, in BundleInput, cipher *KeyCipher) error {
+	if err := AuthenticateBundle(in, cipher); err != nil {
+		return err
+	}
+	return WriteBundle(w, in)
+}
+
+// WriteBundle is the low-level serializer used after AuthenticateBundle. It
+// refuses an unsigned input so a new producer cannot silently emit the legacy
+// format. It does not buffer the snapshot in memory.
 func WriteBundle(w io.Writer, in BundleInput) error {
 	if in.Manifest == nil {
 		return fmt.Errorf("dr: WriteBundle nil manifest")
+	}
+	if in.Manifest.Authentication.Algorithm == "" || in.Manifest.Authentication.Value == "" || len(in.Manifest.Files) == 0 {
+		return fmt.Errorf("dr: WriteBundle requires an authenticated manifest and per-file inventory")
 	}
 	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
@@ -102,6 +116,7 @@ func ExtractBundle(r io.Reader, destDir string) (*Manifest, KDFParams, error) {
 		m      *Manifest
 		kek    KDFParams
 		hasKEK bool
+		seen   = map[string]bool{}
 	)
 	for {
 		hdr, err := tr.Next()
@@ -112,12 +127,16 @@ func ExtractBundle(r io.Reader, destDir string) (*Manifest, KDFParams, error) {
 			return nil, KDFParams{}, err
 		}
 		if hdr.Typeflag != tar.TypeReg {
-			continue
+			return nil, KDFParams{}, fmt.Errorf("dr: bundle entry %q is not a regular file", hdr.Name)
 		}
 		clean, err := safeJoin(destDir, hdr.Name)
 		if err != nil {
 			return nil, KDFParams{}, err
 		}
+		if seen[hdr.Name] {
+			return nil, KDFParams{}, fmt.Errorf("dr: duplicate bundle entry %q", hdr.Name)
+		}
+		seen[hdr.Name] = true
 		switch path.Clean(hdr.Name) {
 		case bundleManifestName:
 			b, err := io.ReadAll(tr)
@@ -139,6 +158,12 @@ func ExtractBundle(r io.Reader, destDir string) (*Manifest, KDFParams, error) {
 			}
 			if err := json.Unmarshal(b, &kek); err != nil {
 				return nil, KDFParams{}, fmt.Errorf("dr: parse kek params: %w", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(clean), 0o700); err != nil {
+				return nil, KDFParams{}, err
+			}
+			if err := os.WriteFile(clean, b, 0o600); err != nil {
+				return nil, KDFParams{}, err
 			}
 			hasKEK = true
 		default:
@@ -203,12 +228,22 @@ func extractTo(dst string, r io.Reader) error {
 // safeJoin joins a tar entry name onto root, refusing absolute paths and any
 // component that would escape root (path traversal hardening).
 func safeJoin(root, name string) (string, error) {
-	clean := path.Clean("/" + strings.ReplaceAll(name, `\`, "/"))[1:] // strip leading slash, normalize
-	if clean == "" || strings.HasPrefix(clean, "../") || clean == ".." {
+	// TAR paths use '/'. Reject a backslash rather than normalizing it: accepting
+	// both spellings would let two distinct headers target one extracted path.
+	if name == "" || strings.Contains(name, `\`) || path.IsAbs(name) {
+		return "", fmt.Errorf("dr: unsafe bundle entry %q", name)
+	}
+	clean := path.Clean(name)
+	// Refuse rather than rewrite non-canonical names. Rewriting ../escape to
+	// escape would keep bytes inside root but would accept precisely the archive
+	// shape this boundary promises to reject, and duplicate spellings could then
+	// target the same extracted file.
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || clean != name {
 		return "", fmt.Errorf("dr: unsafe bundle entry %q", name)
 	}
 	joined := filepath.Join(root, filepath.FromSlash(clean))
-	if joined != root && !strings.HasPrefix(joined, root+string(os.PathSeparator)) {
+	rel, err := filepath.Rel(root, joined)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		return "", fmt.Errorf("dr: bundle entry %q escapes destination", name)
 	}
 	return joined, nil

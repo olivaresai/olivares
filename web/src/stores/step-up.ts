@@ -2,56 +2,244 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { create } from 'zustand'
+import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/api/query'
+import type { Whoami } from '@/lib/api/types'
+import { useSessionStore } from './session'
+import { useTenantStore } from './tenant'
 
-/**
- * The pending step-up demand, shared so the ONE global ceremony host can be
- * opened from anywhere a 403 `step_up_required` lands — a mutation's onError, a
- * hand-rolled catch — without every one of those call sites having to render a
- * panel of its own.
- *
- * WHY a store and not a returned render prop: `usePrivilegedMutation` has 76
- * callers. Handing each of them a panel to place means the fix ships only where
- * someone remembered it, and the failure mode of forgetting is the exact defect
- * this replaces — a toast that blames the operator's role for an assurance
- * problem. One host, mounted once in Providers, cannot be forgotten.
- *
- * The store carries no assurance of its own and grants nothing: it is a request
- * to show a ceremony the BACKEND will adjudicate (assurance.tsx — the panel
- * never fabricates an AAL the engine did not set).
+/** Non-secret identity only. AAL changes are expected during this ceremony. */
+export function stepUpPrincipal(
+  principal: Whoami | null | undefined,
+): string | null {
+  return principal?.user_id
+    ? JSON.stringify([
+        principal.kind,
+        principal.user_id,
+        principal.actor,
+        principal.superadmin,
+      ])
+    : null
+}
+
+export interface StepUpAttempt {
+  readonly signal: AbortSignal
+  readonly sessionEffects: 'none'
+  /** Also passed to HTTP: the check runs at actual dispatch, not just at the caller. */
+  dispatchGuard: () => void
+  current: () => boolean
+  retire: () => void
+}
+
+export interface StepUpOwner {
+  readonly principal: string | null
+  readonly tenant: string | null
+  readonly credentialGeneration: number
+  current: () => boolean
+  retire: () => void
+  onRetire: (listener: () => void) => () => void
+  begin: (expectedRequest?: () => boolean) => StepUpAttempt
+}
+
+/** One owner episode, never revived by A→B→A. Subscriptions catch movements even
+ * before React commits a render. No bearer, session ID, or credential is copied.
+ * Registration/elevation already sent can persist; retirement stops continuation.
  */
-export interface StepUpRequest {
-  /** i18n key fragment naming the gated action, e.g. "console", "wif" — the same
-   *  vocabulary `RequireAssurance` uses (identity:assurance.actions.*). */
+export function createStepUpOwner(queryClient: QueryClient): StepUpOwner {
+  const principal = stepUpPrincipal(
+    queryClient.getQueryData<Whoami>(queryKeys.whoami),
+  )
+  const tenant = useTenantStore.getState().activeTenant
+  const credentialGeneration = useSessionStore.getState().credentialGeneration
+  let retired = false
+  let revision = 0
+  let attempt: StepUpAttempt | undefined
+  const listeners = new Set<() => void>()
+  const unsubscribe: Array<() => void> = []
+  const retire = () => {
+    if (retired) return
+    retired = true
+    attempt?.retire()
+    unsubscribe.forEach((fn) => fn())
+    listeners.forEach((fn) => fn())
+    listeners.clear()
+  }
+  const current = () => {
+    if (
+      !retired &&
+      (tenant !== useTenantStore.getState().activeTenant ||
+        credentialGeneration !==
+          useSessionStore.getState().credentialGeneration ||
+        principal !==
+          stepUpPrincipal(queryClient.getQueryData<Whoami>(queryKeys.whoami)))
+    )
+      retire()
+    return !retired
+  }
+  unsubscribe.push(
+    useTenantStore.subscribe(current),
+    useSessionStore.subscribe(current),
+    queryClient.getQueryCache().subscribe(current),
+  )
+  const owner: StepUpOwner = {
+    principal,
+    tenant,
+    credentialGeneration,
+    current,
+    retire,
+    onRetire: (listener) => {
+      if (retired) listener()
+      else listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    begin: (expectedRequest = () => true) => {
+      attempt?.retire()
+      const version = ++revision
+      const controller = new AbortController()
+      const isCurrent = () => {
+        if (!current() || version !== revision || !expectedRequest())
+          controller.abort()
+        return !controller.signal.aborted
+      }
+      attempt = {
+        signal: controller.signal,
+        sessionEffects: 'none',
+        current: isCurrent,
+        dispatchGuard: () => {
+          isCurrent()
+          controller.signal.throwIfAborted()
+        },
+        retire: () => controller.abort(),
+      }
+      return attempt
+    },
+  }
+  // Consumption removes the request before a resumed mutation may leave its
+  // queue. A later demand must still retire that old owner permanently, even
+  // if the replacement is itself cleared before the old transport resumes.
+  unsubscribe.push(
+    useStepUpStore.subscribe((state, previous) => {
+      if (
+        state.request &&
+        state.request.instance !== previous.request?.instance &&
+        state.request.owner !== owner
+      )
+        retire()
+    }),
+  )
+  return owner
+}
+
+/** Capture at the start of an action. A new action and unmount retire its predecessor.
+ * The hook owns cleanup; callers only keep the small owner/attempt interface.
+ */
+export function useStepUpOwner() {
+  const queryClient = useQueryClient()
+  const owner = useRef<StepUpOwner | null>(null)
+  const mounted = useRef(false)
+  useLayoutEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      owner.current?.retire()
+    }
+  }, [])
+  return useCallback(() => {
+    owner.current?.retire()
+    const next = createStepUpOwner(queryClient)
+    if (!mounted.current) next.retire()
+    owner.current = next
+    return next
+  }, [queryClient])
+}
+
+export interface StepUpDemand {
   action: string
-  /** Re-run the call the engine refused, once the session is elevated. Optional:
-   *  a caller that cannot safely repeat itself simply omits it and the operator
-   *  retries by hand. */
   retry?: () => void
+  owner: StepUpOwner
+  /** Explicit operation opt-in, never inferred from shared action copy. */
+  enrollment?: 'connector-add'
 }
-
+export interface StepUpRequest extends StepUpDemand {
+  readonly instance: number
+}
 interface StepUpState {
+  contextRevision: number
   request: StepUpRequest | null
-  /**
-   * Demand a step-up. A demand already on screen is NOT replaced: the operator is
-   * mid-ceremony, and swapping the panel under them would strand the retry of the
-   * first call.
-   *
-   * Returns FALSE when it was refused for that reason, and the caller must say so.
-   * It used to return nothing: two mutations refused before the operator finished
-   * the first ceremony left the second with no panel, no toast and no retry — the
-   * action simply vanished, which is a quieter version of the defect this whole
-   * change exists to remove.
-   */
-  require: (request: StepUpRequest) => boolean
-  clear: () => void
+  require: (request: StepUpDemand) => boolean
+  current: (instance: number) => boolean
+  dropRetry: (instance: number) => void
+  consume: (instance: number) => void
+  clear: (instance?: number) => void
 }
 
-export const useStepUpStore = create<StepUpState>((set, get) => ({
-  request: null,
-  require: (request) => {
-    if (get().request) return false
-    set({ request })
-    return true
-  },
-  clear: () => set({ request: null }),
-}))
+let instances = 0
+export const useStepUpStore = create<StepUpState>((set, get) => {
+  let resume: (() => void) | undefined
+  let detach: (() => void) | undefined
+  return {
+    contextRevision: 0,
+    request: null,
+    require: (demand) => {
+      if (get().request || !demand.owner.current()) return false
+      const instance = ++instances
+      resume = demand.retry
+      // A captured public retry is a consume request, never the mutation itself.
+      const retry = resume ? () => get().consume(instance) : undefined
+      set({ request: { ...demand, instance, retry } })
+      detach = demand.owner.onRetire(() => get().clear(instance))
+      return true
+    },
+    current: (instance) => {
+      const request = get().request
+      return request?.instance === instance && request.owner.current()
+    },
+    dropRetry: (instance) => {
+      if (!get().current(instance)) return
+      resume = undefined
+      set({ request: { ...get().request!, retry: undefined } })
+    },
+    consume: (instance) => {
+      if (!get().current(instance)) return
+      const retry = resume
+      get().clear(instance)
+      retry?.()
+    },
+    clear: (instance) => {
+      if (instance !== undefined && get().request?.instance !== instance) return
+      resume = undefined
+      detach?.()
+      detach = undefined
+      set({ request: null })
+    },
+  }
+})
+
+/** The AuthProvider hookup makes even a batched A→B→A observable to dialog owners.
+ * Owners still guard live stores at dispatch; this revision also retires rendered intent.
+ */
+export function observeStepUpContext(queryClient: QueryClient): () => void {
+  const snapshot = () =>
+    JSON.stringify([
+      stepUpPrincipal(queryClient.getQueryData<Whoami>(queryKeys.whoami)),
+      useTenantStore.getState().activeTenant,
+      useSessionStore.getState().credentialGeneration,
+    ])
+  let previous = snapshot()
+  const changed = () => {
+    const next = snapshot()
+    if (next === previous) return
+    previous = next
+    useStepUpStore.getState().clear()
+    useStepUpStore.setState((s) => ({ contextRevision: s.contextRevision + 1 }))
+  }
+  const unsubscribe = [
+    useTenantStore.subscribe(changed),
+    useSessionStore.subscribe(changed),
+    queryClient.getQueryCache().subscribe(changed),
+  ]
+  return () => unsubscribe.forEach((fn) => fn())
+}

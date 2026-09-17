@@ -211,7 +211,7 @@ func (coreHistorySource) Timeline(context.Context, model.TenantID, string) ([]Re
 // ----------------------------------------------------------------------------
 
 // GenSpec describes a synthetic-data generation request. It is part of the POST-v1
-// extension surface (README.mdbis · §6); v1 ships no generator.
+// extension surface (README.md §2bis · §6); v1 ships no generator.
 type GenSpec struct {
 	SubjectKind string
 	Count       int
@@ -224,7 +224,7 @@ type GenSample struct {
 	Input string
 }
 
-// SyntheticDataGenerator is a POST-v1 EXTENSION POINT (README.mdbis · §6): synthetic
+// SyntheticDataGenerator is a POST-v1 EXTENSION POINT (README.md §2bis · §6): synthetic
 // / test-data generation is deliberately NOT implemented in v1. The interface is
 // declared so a future backend can be wired, but the module ships NO real generator,
 // there is NO WithSyntheticData option, and NO route generates data. The default

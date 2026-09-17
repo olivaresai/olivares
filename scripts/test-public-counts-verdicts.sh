@@ -173,12 +173,37 @@ base_rc=$?
 if [ "$base_rc" -ne 0 ]; then
 	echo "test-public-counts-verdicts: ⛔ NO HE PODIDO CORRER: el señuelo SIN mutar ya sale ${base_rc}, no 0." >&2
 	echo "  La línea base está rota, así que ninguna celda posterior mediría el gate: medirían el señuelo." >&2
-	echo "  Causa medida el 2026-08-20: falta la cadena de herramientas WEB de ESTE worktree." >&2
-	echo "  Remedio, y es el camino documentado: \`task setup\` (Taskfile.yml:16 — «git hooks + cosign" >&2
-	echo "  containment + commit tooling + web deps»). El arranque de sesión instala SOLO la herramienta" >&2
-	echo "  de commits y remite a \`task setup\` cuando la sesión toca /web, así que un worktree recién" >&2
-	echo "  creado NO tiene la cadena y este gate no puede correr en él." >&2
-	head -12 "$BANCO/6.log" 2>/dev/null | sed 's/^/    /' >&2
+
+	# ⛔ EL DIAGNÓSTICO SE MIDE AQUÍ, NO SE RECITA.
+	#
+	# Hasta el 2026-08-31 este bloque afirmaba SIEMPRE «falta la cadena de herramientas WEB de ESTE
+	# worktree», que fue la causa medida el 2026-08-20 — y la imprimía fuese cual fuese el motivo
+	# real. Y enseñaba `head -12` del log, cuando check-public-counts.sh pone sus hallazgos AL
+	# FINAL: las doce primeras líneas son OK/EXCLUDED/NOTE. O sea, un diagnóstico seguro que no
+	# había comprobado, con evidencia que no contenía el fallo.
+	#
+	# Coste medido ese día: el hallazgo real era `video: manifest[render] ... reel.html changed`
+	# —de otro carril, ya en curso— y se leyó como «27 variables documentadas fuera de
+	# config_registry.go», que es una NOTE informativa que cae dentro de esas doce líneas. Mandó a
+	# curar una cifra que no estaba rota. Es el mismo defecto que este fichero denuncia doce líneas
+	# más arriba: **un recuento PARECE un diagnóstico**.
+	if [ ! -d "$ARBOL/web/node_modules" ]; then
+		echo "  Comprobado: falta \`web/node_modules\` en el árbol de pruebas. Es UNA causa conocida de" >&2
+		echo "  base rota — no necesariamente LA de hoy: el veredicto lo dan los hallazgos de abajo." >&2
+		echo "  Remedio, y es el camino documentado: \`task setup\` (Taskfile.yml:16 — «git hooks + cosign" >&2
+		echo "  containment + commit tooling + web deps»). El arranque de sesión instala SOLO la herramienta" >&2
+		echo "  de commits y remite a \`task setup\` cuando la sesión toca /web, así que un worktree recién" >&2
+		echo "  creado NO tiene la cadena y este gate no puede correr en él." >&2
+	else
+		echo "  \`web/node_modules\` SÍ está, así que descartada la falta de cadena web. La causa está en" >&2
+		echo "  los hallazgos de abajo, y se curan donde vivan." >&2
+	fi
+
+	echo "  Lo que el gate encontró de verdad (sus hallazgos, no su preámbulo):" >&2
+	if ! grep -aE '^\s*(FAIL|.*:[[:space:]]*(⛔|BROKEN))|^\s{2,}[a-z-]+:' "$BANCO/6.log" 2>/dev/null \
+		| grep -avE 'NOTE|EXCLUDED|^\s*OK ' | head -12 | sed 's/^/    /' >&2; then
+		echo "    (no he sabido aislarlos; log íntegro en $BANCO/6.log)" >&2
+	fi
 	exit 2
 fi
 comprobar "el señuelo SIN mutar sale limpio (si no, mide el señuelo)" 0 "$base_rc"

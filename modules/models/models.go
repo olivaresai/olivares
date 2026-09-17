@@ -42,6 +42,15 @@ type Module struct {
 	// (unwiredExecutor → /execute 503). The real adapter (holding the inference
 	// credential + the bus publisher) is wired in the composition root.
 	executor Executor
+	// executionProfiles resolves exact, content-addressed Chat execution profiles.
+	// The default refuses every lookup. C2A only binds policy and target metadata;
+	// it never resolves credentials or dispatches provider traffic.
+	executionProfiles ExecutionProfileResolver
+	// chatExecutor is D01-C2B's SEPARATE synchronous Chat seam (guardedtext.go), used
+	// only for a routing policy that pins an execution profile. It is deny-closed by
+	// default and its availability is INDEPENDENT of executor above: a build with a
+	// routed legacy executor still refuses Chat until an operator activates it.
+	chatExecutor ChatExecutor
 	// rateLimits surfaces the read-only Anthropic Rate Limits inventory (ANT2-05); nil
 	// (the default) degrades GET /rate-limits to an empty inventory with a reason.
 	rateLimits RateLimitProvider
@@ -81,6 +90,16 @@ func WithStopGate(g StopGate) Option { return func(m *Module) { m.stopGate = g }
 // against a provider until an operator provisions an executor in the composition root.
 func WithExecutor(e Executor) Option { return func(m *Module) { m.executor = e } }
 
+// WithExecutionProfileResolver wires the immutable, tenant-scoped registry used by
+// content-addressed routing-policy pins. The resolver must perform no I/O.
+func WithExecutionProfileResolver(r ExecutionProfileResolver) Option {
+	return func(m *Module) {
+		if r != nil {
+			m.executionProfiles = r
+		}
+	}
+}
+
 // WithRateLimitProvider wires the read-only Anthropic Rate Limits inventory source
 // (ANT2-05). Without it GET /rate-limits degrades to an empty inventory with a reason
 // (honest, never a 500). The provider is read-only — the module never mutates a limit.
@@ -99,7 +118,12 @@ func WithPlatformsProvider(p PlatformsProvider) Option {
 // New returns a models module with the opt-in (allow) budget gate and the deny-closed
 // routing executor; the composition root replaces them via the With* options.
 func New(opts ...Option) *Module {
-	m := &Module{budgetGate: allowBudgetGate{}, stopGate: allowStopGate{}, scopeGate: allowScopeGate{}, actorScope: unresolvedActorScope{}, executor: unwiredExecutor{}}
+	m := &Module{
+		budgetGate: allowBudgetGate{}, stopGate: allowStopGate{}, scopeGate: allowScopeGate{},
+		actorScope: unresolvedActorScope{}, executor: unwiredExecutor{},
+		executionProfiles: unavailableExecutionProfileResolver{},
+		chatExecutor:      unavailableChatExecutor{},
+	}
 	for _, o := range opts {
 		o(m)
 	}

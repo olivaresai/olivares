@@ -14,12 +14,14 @@ import {
   Activity,
   ArrowRight,
   Boxes,
+  ChevronRight,
   Coins,
   Minus,
   ScrollText,
   ShieldAlert,
   TrendingDown,
   TrendingUp,
+  TriangleAlert,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -37,6 +39,7 @@ import {
 import {
   CaveatNotice,
   DisclaimerNote,
+  IntelNotice,
   MetricStat,
   RiskTierBadge,
   SectionCard,
@@ -105,7 +108,7 @@ export function LinkTile({
   return (
     <Link
       to={to as never}
-      className="group block rounded-lg outline-none transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-ring print:transform-none print:hover:translate-y-0 [&_*]:cursor-pointer"
+      className="group block min-w-0 rounded-lg outline-none transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-ring print:transform-none print:hover:translate-y-0 [&_*]:cursor-pointer"
     >
       {children}
     </Link>
@@ -143,14 +146,290 @@ export function DeltaCaption({ pct }: { pct: number | null }) {
 
 // --- headline pillars (cost / usage / risk / compliance) ---------------------
 
+/**
+ * WHICH SOURCE IS PARTIAL — the floor marker for ONE NAMED source, rendered beside the
+ * figures it qualifies.
+ *
+ * `TruncatedNotice` is the shared strip for this state and stays the right thing where
+ * one source feeds one card (the spend section below, the Inventory view). It takes no
+ * source, and on a KPI that JOINS sources that silence is the defect: the executive
+ * usage tile reads the inventory summary AND the live sessions page, and the front door
+ * shows both on neighbouring tiles. One marker describes ONE source — the one it names —
+ * and establishes nothing about any other. It composes shared `intel` strings with the
+ * source's own name, and stays a caption line rather than a strip because a MetricStat
+ * caption is a <span> and the strip is a <div>.
+ *
+ * THE LINE IS COMPACT ON PURPOSE, AND THE FULL SENTENCE IS NOT LOST. The first accepted
+ * version put the whole mechanism sentence in this caption — right in principle (a
+ * native `title` is not how keyboard, touch or assistive-technology users read a
+ * caption), and wrong as a finish: on the executive usage tile two such sentences made
+ * the card far taller than its neighbours, and on a 390px front door the two narrow
+ * columns turned dense. So the caption keeps what a reader scans — the source, the
+ * "partial" fact, and a few translated words naming the mechanism — and the complete
+ * sentence moves to `PartialCoverageDisclosure`, a native disclosure that sits OUTSIDE
+ * the tile link (a button or <details> inside a tile-wide <a> is invalid markup, and
+ * this file does not do it). Nothing is title-only, nothing is hover-only, and the tile
+ * link is unchanged: no extra control and no extra focus stop inside it.
+ *
+ * TWO MECHANISMS, TWO SENTENCES, and the caller names which one it has (`kind`):
+ *  · `aggregate` — an aggregate hit its scan ceiling (`truncated: true`; Inventory).
+ *    Brief `notices.truncatedBrief`; full sentence `notices.truncatedHint`, the one
+ *    `TruncatedNotice` shows.
+ *  · `page`      — a list endpoint returned ONE page and there were rows beyond it
+ *    (`has_more: true`; the live Sessions page). Brief `notices.listTruncatedBrief`;
+ *    full sentence `notices.listTruncatedHint`, the one `ListTruncationBadge` shows:
+ *    one page, not the whole set, and the total cannot be inferred from the rows
+ *    loaded. The scan-ceiling sentence would describe a mechanism that source does not
+ *    have.
+ * The visible label is the same for both — partial data, named — because that is the
+ * fact a reader acts on; the mechanism is the brief, and it is on screen.
+ *
+ * It NEVER hides the count: a floor is a real answer. It qualifies a figure that
+ * exists, so the caller mounts it only while that figure is the current, permitted,
+ * successful one — a retired figure takes its marker with it.
+ */
+export function PartialSourceNote({
+  source,
+  kind = 'aggregate',
+  testId,
+}: {
+  /** The source's own name, from the caller's vocabulary (e.g. `nav:items.inventory`). */
+  source: string
+  /** Which honesty seam the source carries — see above. Defaults to the aggregate's
+   *  scan ceiling, the case this marker was introduced for. */
+  kind?: PartialSourceKind
+  testId: string
+}) {
+  const { t } = useTranslation('intel')
+  const brief =
+    kind === 'page'
+      ? t('notices.listTruncatedBrief')
+      : t('notices.truncatedBrief')
+  return (
+    <span
+      className="block min-w-0 text-pretty break-words"
+      data-testid={testId}
+    >
+      {source} —{' '}
+      <span className="font-medium text-warning">{t('notices.truncated')}</span>
+      {' · '}
+      {brief}
+    </span>
+  )
+}
+
+export type PartialSourceKind = 'aggregate' | 'page'
+
+/** ONE SOURCE THAT ANSWERED INCOMPLETELY, as the container states it: the name it
+ *  goes by on this page, the honesty seam it carries, and the test id of its caption
+ *  line. The same value feeds the compact caption inside the tile link AND the full
+ *  explanation in the disclosure outside it, so the two can never name different
+ *  sources or different mechanisms. */
+export interface PartialSource {
+  source: string
+  kind: PartialSourceKind
+  /** Marks the compact caption line. The full explanation row in the screen
+   *  disclosure is `${testId}-explanation`; its print-only twin is
+   *  `${testId}-print-explanation`. */
+  testId: string
+}
+
+/** THE PARTIAL COVERAGE OF ONE TILE: every source behind it that answered incompletely,
+ *  in caption order, plus the test id of the disclosure that explains them. The
+ *  print-only copy of the same rows is `${testId}-print`. */
+export interface PartialCoverage {
+  sources: readonly PartialSource[]
+  testId: string
+}
+
+/**
+ * THE ROWS OF THE COMPLETE EXPLANATION — ONE RENDERER, TWO PLACES. The same warning
+ * strip `TruncatedNotice` renders, one row per source, each row naming its source and
+ * carrying the SAME full sentence the caption used to hold (`notices.truncatedHint`
+ * for an aggregate at its scan ceiling, `notices.listTruncatedHint` for a one-page
+ * list) — a definition list, so the source→sentence pairing is explicit rather than
+ * positional. The sentences are the existing seven-language strings, unchanged.
+ *
+ * `PartialCoverageDisclosure` puts these rows behind a native <details> for the
+ * screen; `PartialCoveragePrint` lays the same rows out for the printed report. Both
+ * are fed the same `sources` array by `CoverageLinkTile`, so the two copies can never
+ * name different sources, different mechanisms or a source the other has retired —
+ * and the print copy only ever says what the screen disclosure would say when open.
+ * The row test ids differ (`-explanation` on screen, `-print-explanation` in the print
+ * copy) so the two copies are distinguishable and never duplicate an id.
+ */
+function PartialCoverageRows({
+  sources,
+  print = false,
+  className,
+}: {
+  sources: readonly PartialSource[]
+  /** Marks the rows as the print copy (`${testId}-print-explanation`). */
+  print?: boolean
+  className?: string
+}) {
+  const { t } = useTranslation('intel')
+  return (
+    <IntelNotice tone="warning" icon={<TriangleAlert />} className={className}>
+      <dl className="flex flex-col gap-1.5">
+        {sources.map((s) => (
+          <div
+            key={s.testId}
+            className="text-pretty break-words"
+            data-testid={`${s.testId}-${print ? 'print-' : ''}explanation`}
+          >
+            <dt className="inline font-medium text-warning">
+              {s.source} — {t('notices.truncated')}
+            </dt>{' '}
+            <dd className="inline text-muted-foreground">
+              {s.kind === 'page'
+                ? t('notices.listTruncatedHint')
+                : t('notices.truncatedHint')}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </IntelNotice>
+  )
+}
+
+/**
+ * THE COMPLETE EXPLANATION, ONE DISCLOSURE PER TILE, OUTSIDE THE TILE LINK.
+ *
+ * A native <details>/<summary> (the control the license panel already uses for its
+ * help text): the summary is a real tab stop that Enter and Space toggle, a tap toggles
+ * it, and it needs no script or tooltip layer — a screen reader reads the summary as an
+ * expandable control and the body as ordinary text once open. It is rendered as a
+ * SIBLING of the tile link, never inside it: interactive content inside an <a> is
+ * invalid, and the tile keeps its full-card hit target and single focus stop.
+ *
+ * The body is `PartialCoverageRows` — the one renderer of the complete explanation,
+ * shared with the print copy below.
+ *
+ * THE PRINTED REPORT DOES NOT RELY ON THIS ELEMENT. A closed <details> hides its body
+ * in print as on screen, and the only CSS that can reveal it from outside
+ * (`::details-content`) is newer than the toolchain's own browser floor — so this
+ * whole disclosure is simply hidden in print (`print:hidden`, like every other control
+ * the report drops), and `PartialCoveragePrint` prints the same rows from outside it.
+ * Nothing here depends on the details' open state or on any pseudo-element support.
+ */
+export function PartialCoverageDisclosure({
+  sources,
+  testId,
+}: {
+  sources: readonly PartialSource[]
+  testId: string
+}) {
+  const { t } = useTranslation('executive')
+  return (
+    <details
+      className="group min-w-0 text-xs print:hidden"
+      data-testid={testId}
+    >
+      <summary className="inline-flex max-w-full cursor-pointer list-none items-center gap-1 rounded-sm px-1 py-0.5 text-muted-foreground outline-none transition-colors select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="size-3.5 shrink-0 transition-transform group-open:rotate-90"
+          aria-hidden
+        />
+        <span className="min-w-0 text-pretty">{t('pillars.partialWhy')}</span>
+      </summary>
+      <PartialCoverageRows sources={sources} className="mt-1.5" />
+    </details>
+  )
+}
+
+/**
+ * THE SAME EXPLANATION, LAID OUT FOR THE PRINTED REPORT ONLY. Export PDF prints what
+ * is on screen (`window.print()`, see report.tsx), and a closed disclosure would print
+ * nothing but its summary — so this block, a sibling OUTSIDE the <details>, carries the
+ * identical rows through the same `PartialCoverageRows` renderer. On screen it is
+ * `display: none` (not rendered, not focusable, not in the accessibility tree — the
+ * same `hidden print:block` pattern as the report cover header); in print it is a
+ * plain block with no control. It takes the very `sources` array the disclosure takes,
+ * from the same container that lists a source only while its answer is current and
+ * permitted, so a retired source leaves the print copy the moment it leaves the
+ * caption and the disclosure: no stale row, no source the reader may not see.
+ */
+export function PartialCoveragePrint({
+  sources,
+  testId,
+}: {
+  sources: readonly PartialSource[]
+  testId: string
+}) {
+  return (
+    <div className="hidden min-w-0 text-xs print:block" data-testid={testId}>
+      <PartialCoverageRows sources={sources} print />
+    </div>
+  )
+}
+
+/**
+ * A `LinkTile` plus, when the tile's figures are a floor, its coverage disclosure
+ * (screen) and the print-only copy of the same rows, both composed OUTSIDE the link:
+ * the three are siblings in one grid cell, and the two explanations are fed the one
+ * `partial.sources` array. With nothing partial it is exactly `LinkTile`, so a
+ * complete tile keeps the previous rendering. Exported so the home overview composes
+ * the SAME cell, never a second copy.
+ */
+export function CoverageLinkTile({
+  to,
+  partial,
+  children,
+}: {
+  to: string
+  partial?: PartialCoverage
+  children: ReactNode
+}) {
+  if (!partial || partial.sources.length === 0) {
+    return <LinkTile to={to}>{children}</LinkTile>
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <LinkTile to={to}>{children}</LinkTile>
+      <PartialCoverageDisclosure
+        sources={partial.sources}
+        testId={partial.testId}
+      />
+      <PartialCoveragePrint
+        sources={partial.sources}
+        testId={`${partial.testId}-print`}
+      />
+    </div>
+  )
+}
+
 export function KpiTiles({
   cost,
   usage,
+  usageHints,
+  usagePartial,
+  usageScope,
   risk,
   compliance,
 }: {
   cost?: CostKpi | null
   usage?: UsageKpi | null
+  /** WHY A USAGE HALF IS UNKNOWN — one line per half the container could not
+   *  establish (restricted to the role, or could not load), rendered under the
+   *  caption beside the "—" it explains. The container derives it from the real
+   *  query state; this tile only prints it. Absent when both halves are current. */
+  usageHints?: ReactNode
+  /** WHICH USAGE SOURCE IS ONLY A FLOOR — one entry per half the engine returned
+   *  incomplete: the live sessions page that had rows beyond it (`has_more`), and/or
+   *  the inventory summary that hit its scan ceiling (`truncated`). Each entry becomes
+   *  a compact caption line under the counts it qualifies AND a row of the full
+   *  explanation in the disclosure beneath the tile, outside its link. Each names its
+   *  own source, so neither describes the other or establishes its completeness. The
+   *  container lists a half only while its answer is current: nothing to qualify,
+   *  nothing rendered. */
+  usagePartial?: PartialCoverage
+  /** WHAT THE USAGE TILE'S FIGURES COVER — a scope disclosure the container supplies
+   *  (both reads behind this tile, the live sessions page and the inventory summary,
+   *  are tenant-wide: neither endpoint takes a workspace selector). Rendered as a line
+   *  under the caption, attached to the figures it qualifies; it describes coverage,
+   *  never a grant and never completeness. */
+  usageScope?: ReactNode
   risk?: RiskKpi | null
   compliance?: ComplianceKpi | null
 }) {
@@ -185,17 +464,36 @@ export function KpiTiles({
       ) : null}
 
       {usage ? (
-        <LinkTile to="/inventory">
+        <CoverageLinkTile to="/inventory" partial={usagePartial}>
           <MetricStat
             icon={<Boxes />}
             label={t('pillars.usage')}
             value={formatInt(usage.activeAgents)}
-            caption={t('pillars.usageCaption', {
-              live: formatInt(usage.liveActive),
-              entities: formatInt(usage.totalEntities),
-            })}
+            caption={
+              <>
+                {/* `formatInt` prints the em-dash for a half the rollup did not
+                    establish (`null`) — the same mark every intel surface uses for
+                    "not known" — and a real 0 for a successful empty answer. */}
+                {t('pillars.usageCaption', {
+                  live: formatInt(usage.liveActive),
+                  entities: formatInt(usage.totalEntities),
+                })}
+                {usageHints}
+                {usagePartial?.sources.map((s) => (
+                  <PartialSourceNote
+                    key={s.testId}
+                    source={s.source}
+                    kind={s.kind}
+                    testId={s.testId}
+                  />
+                ))}
+                {usageScope ? (
+                  <span className="block">{usageScope}</span>
+                ) : null}
+              </>
+            }
             trend={
-              usage.silentEvasion > 0 ? (
+              usage.silentEvasion !== null && usage.silentEvasion > 0 ? (
                 <span className="inline-flex items-center gap-1 text-xs text-warning">
                   <Activity className="size-3.5" />
                   {t('pillars.silentEvasion', { count: usage.silentEvasion })}
@@ -203,7 +501,7 @@ export function KpiTiles({
               ) : undefined
             }
           />
-        </LinkTile>
+        </CoverageLinkTile>
       ) : null}
 
       {risk ? (
@@ -259,6 +557,18 @@ export function KpiTiles({
 
 export function SpendSection({ cost }: { cost: CostKpi }) {
   const { t, i18n } = useTranslation('executive')
+  // Ticks may abbreviate large sums; keyboard/pointer details keep micro-USD
+  // precision and the locale's complete currency label.
+  const spendCurrency = useMemo(
+    () =>
+      new Intl.NumberFormat(i18n.language, {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+      }),
+    [i18n.language],
+  )
   return (
     <SectionCard
       title={t('cost.trendTitle')}
@@ -301,7 +611,11 @@ export function SpendSection({ cost }: { cost: CostKpi }) {
         data={cost.trend}
         xKey="key"
         series={[{ key: 'cost', label: t('cost.seriesCost') }]}
-        valueFormatter={(v) => formatMicroUsd(v, { compact: true })}
+        valueFormatter={(v) =>
+          formatMicroUsd(v, { compact: true, locale: i18n.language })
+        }
+        tooltipValueFormatter={(v) => spendCurrency.format(v / 1_000_000)}
+        yAxis={{ width: 'auto', allowDecimals: false }}
         xTickFormatter={(k) => formatDayKey(k, i18n.language)}
         height={240}
       />

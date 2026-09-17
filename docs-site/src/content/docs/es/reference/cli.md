@@ -21,13 +21,19 @@ Las secciones siguientes explican los comandos que encontrarás primero — qué
 instalación y qué es seguro exponer —, algo que una tabla no puede transmitir. Para la lista
 exhaustiva, la [Referencia completa de comandos](#complete-command-reference) al final de esta
 página se **genera a partir del binario** y cubre cada comando de la build con sus flags,
-códigos de salida y contrato de salida. Se escribió enumerando el árbol de comandos del
-binario compilado, por lo que debes tratarla como una instantánea de esa build y no como
-salida en vivo: el gate de push y CI ejecutan `lint:cli-coverage`, que comprueba que los
-comandos declarados en la fuente sigan documentados en algún lugar de esta referencia y
-nombra los que no lo están, pero no vuelve a derivar esta sección ni compara flags, códigos
-de salida o contratos de salida. Cuando esta página y tu binario discrepen,
-`olivares <subcommand> --help` es autoritativo.
+códigos de salida y contrato de salida. El generador recorre el árbol de comandos del
+binario comunitario (`TestCLIRefDump`) y escribe ese recorrido en la región marcada. El
+gate de push y CI ejecutan esta comprobación a través de `lint:public-counts`, que invoca
+`scripts/check-cli-ref-docs.sh`: rederiva flags, valores por defecto, códigos de salida y
+contratos de salida desde el binario y falla cuando esta página o cualquiera de las seis
+copias localizadas discrepa. Una comprobación aparte, `lint:cli-coverage`, solo verifica
+que los nombres de comando declarados en la fuente se mencionen en algún lugar de esta
+referencia; no rederiva flags. Los nombres de comando, los nombres de flags, el texto de
+ayuda, los valores por defecto y el significado de los códigos de salida en la región
+generada son las cadenas originales en inglés del binario — también en las copias
+localizadas de esta página, donde ese bloque no es una traducción humana. Cuando un
+binario desplegado y esta página discrepen, `olivares <subcommand> --help` en ese
+binario es autoritativo.
 
 :::note[Un único binario, múltiples roles]
 No hay una descarga separada de "servidor" y "agente". `olivares serve` es el motor; `olivares collector` es el colector del data plane para la topología distribuida. Ambos cargan los mismos conectores de fuente de la misma forma — solo difiere a dónde van las observaciones. Consulta [Arquitectura](/es/explanation/architecture/overview/).
@@ -139,10 +145,11 @@ registran los módulos, cuyas formas a nivel de campo siguen expresadas como int
 tipadas (consulta también la [Visión general de módulos](/es/reference/modules/overview/)).
 
 :::note[La referencia generada permanece en inglés]
-El bloque técnico siguiente, incluidos los marcadores, se reproduce byte por byte desde la
-salida en inglés del binario. Los nombres de comandos, las descripciones de ayuda, los flags,
-los códigos de salida y los contratos de salida permanecen en inglés por diseño, porque son
-las cadenas exactas que emite el binario; la guía editorial que los rodea está localizada.
+El bloque técnico siguiente, incluidos los marcadores, se regenera desde el mismo volcado
+del binario que la página inglesa, y el gate lo compara en cada push. Los nombres de
+comandos, las descripciones de ayuda, los flags, los códigos de salida y los contratos de
+salida permanecen en inglés por diseño: son las cadenas exactas que emite el binario, no
+una traducción humana. La guía editorial que los rodea está localizada.
 :::
 
 <!-- BEGIN GENERATED olivares-cli-reference -->
@@ -151,7 +158,7 @@ las cadenas exactas que emite el binario; la guía editorial que los rodea está
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 786 command nodes — the root command and 785 subcommands, of which 174 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2569 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate. **This localized copy is a SNAPSHOT: it is not regenerated with every release, and it can lag the English page.** At the time of writing it lists the same command roster but two fewer flags, and it does not yet document `--expect-pubkey`, which is required on `release sign-manifest`, `security advisories` and `security rulepack sign`. **For the current surface, read the English page.**
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 817 command nodes — the root command and 816 subcommands, of which 179 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2725 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -167,7 +174,7 @@ Every command in the tree exits with one of these codes. Scripts and CI pipeline
 | `3` | `Auth` | the control plane rejected the caller (401/403). |
 | `4` | `NotFound` | the addressed entity does not exist (404). |
 | `5` | `Conflict` | the request contradicts current state (409). |
-| `6` | `Server` | the control plane failed or was unreachable (5xx, transport). |
+| `6` | `Server` | a required control plane, service, or store failed or could not be accessed. `db check --strict` also uses this code when connection or authentication failure prevents a role verdict. Resolve the reported dependency failure before retrying; a proven role refusal uses code 1. |
 | `7` | `Degraded` | the command succeeded but reports a degraded condition (`status` when the engine is not fully ok; `security check` on an affected version). |
 | `8` | `Indeterminate` | the command could not reach a verdict because an input it needs is UNKNOWN, as distinct from a verdict of "fine" (0) or "bad" (7) and from a failure to run (1). `security check` returns it when the build declares no usable version, so no advisory range can be evaluated against it: a clean answer there would be an artifact, not a measurement. A fleet sweep must treat this as "not yet answered", never as "clean". |
 
@@ -183,7 +190,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 786 commands, in alphabetical order.
+All 817 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -204,19 +211,25 @@ All 786 commands, in alphabetical order.
 | [`olivares adoption summary`](#command-olivares-adoption-summary) | Show both adoption lenses over one window |
 | [`olivares adoption teams`](#command-olivares-adoption-teams) | Break adoption down by team |
 | [`olivares adoption trend`](#command-olivares-adoption-trend) | Show a per-day series for ONE lens |
-| [`olivares agent`](#command-olivares-agent) | Operate governed Claude Code sessions (launch, attach, stop, resume, clean up) |
+| [`olivares agent`](#command-olivares-agent) | Operate governed provider sessions (launch, attach, interrupt, stop, resume, clean up) |
 | [`olivares agent managed-settings`](#command-olivares-agent-managed-settings) | Render the Claude Code managed-settings.json that governs operated sessions (PEP hook) |
-| [`olivares agent session`](#command-olivares-agent-session) | Manage the lifecycle of governed Claude Code sessions |
+| [`olivares agent session`](#command-olivares-agent-session) | Manage the lifecycle of governed provider sessions |
 | [`olivares agent session attach`](#command-olivares-agent-session-attach) | Stream a live session's I/O (server-sent events) to stdout |
 | [`olivares agent session cleanup`](#command-olivares-agent-session-cleanup) | Release a stopped session (mark cleaned) |
 | [`olivares agent session create`](#command-olivares-agent-session-create) | Launch a governed Claude Code session |
 | [`olivares agent session events`](#command-olivares-agent-session-events) | Show a session's lifecycle ledger |
 | [`olivares agent session get`](#command-olivares-agent-session-get) | Show one session |
-| [`olivares agent session input`](#command-olivares-agent-session-input) | Send one NDJSON line to a live session's stdin ('-' or empty reads stdin) |
+| [`olivares agent session input`](#command-olivares-agent-session-input) | Send one line or driver text to a live session |
+| [`olivares agent session interrupt`](#command-olivares-agent-session-interrupt) | Cancel the active provider turn without stopping the session |
 | [`olivares agent session ls`](#command-olivares-agent-session-ls) | List operated sessions |
 | [`olivares agent session resume`](#command-olivares-agent-session-resume) | Resume a stopped session |
 | [`olivares agent session rm`](#command-olivares-agent-session-rm) | Delete a cleaned session's record |
 | [`olivares agent session stop`](#command-olivares-agent-session-stop) | Stop a running session |
+| [`olivares agent tool`](#command-olivares-agent-tool) | Install and inventory official provider CLIs (Claude Code) from signed releases, locally |
+| [`olivares agent tool detect`](#command-olivares-agent-tool-detect) | Report provider CLI executables on this host: managed releases, vendor default paths and PATH |
+| [`olivares agent tool install`](#command-olivares-agent-tool-install) | Verify, download, probe and place one signed release of a provider CLI |
+| [`olivares agent tool list`](#command-olivares-agent-tool-list) | List installed provider CLI releases under the tools root and re-check their bytes |
+| [`olivares agent tool plan`](#command-olivares-agent-tool-plan) | Resolve and verify what install would fetch and where it would place it, without changing anything |
 | [`olivares agent workspace`](#command-olivares-agent-workspace) | Manage governed workspaces and their files (browse/read/write/move/delete) |
 | [`olivares agent workspace add`](#command-olivares-agent-workspace-add) | Register a host directory as a governed workspace |
 | [`olivares agent workspace files`](#command-olivares-agent-workspace-files) | List one directory level in a workspace |
@@ -305,13 +318,17 @@ All 786 commands, in alphabetical order.
 | [`olivares completion powershell`](#command-olivares-completion-powershell) | Generate PowerShell autocompletion script |
 | [`olivares completion zsh`](#command-olivares-completion-zsh) | Generate zsh autocompletion script |
 | [`olivares compliance`](#command-olivares-compliance) | Operate legal holds, GDPR erasure and regulatory artifacts |
+| [`olivares compliance aims`](#command-olivares-compliance-aims) | Inspect ISO/IEC 42001 AIMS certification-readiness packs |
+| [`olivares compliance aims ls`](#command-olivares-compliance-aims-ls) | List ISO/IEC 42001 AIMS packs |
 | [`olivares compliance calendar`](#command-olivares-compliance-calendar) | Show the regulatory calendar and watchlist |
 | [`olivares compliance depth`](#command-olivares-compliance-depth) | Inspect compliance-depth packs and control monitoring |
 | [`olivares compliance depth drift`](#command-olivares-compliance-depth-drift) | List detected control drift |
+| [`olivares compliance depth fedramp`](#command-olivares-compliance-depth-fedramp) | List FedRAMP 20x KSI packs |
 | [`olivares compliance depth sector`](#command-olivares-compliance-depth-sector) | List sector overlay packs |
 | [`olivares compliance depth snapshots`](#command-olivares-compliance-depth-snapshots) | List CCM control snapshots |
 | [`olivares compliance depth us-law`](#command-olivares-compliance-depth-us-law) | List US state-law packs |
 | [`olivares compliance dora`](#command-olivares-compliance-dora) | Inspect DORA registers and classified incidents |
+| [`olivares compliance dora export`](#command-olivares-compliance-dora-export) | Export one DORA Register of Information |
 | [`olivares compliance dora incidents`](#command-olivares-compliance-dora-incidents) | List classified DORA incidents |
 | [`olivares compliance dora registers`](#command-olivares-compliance-dora-registers) | List DORA registers of information |
 | [`olivares compliance erasure`](#command-olivares-compliance-erasure) | Register, execute and evidence GDPR erasure requests |
@@ -329,6 +346,7 @@ All 786 commands, in alphabetical order.
 | [`olivares compliance holds place`](#command-olivares-compliance-holds-place) | Place a legal hold (takes effect immediately) |
 | [`olivares compliance holds release`](#command-olivares-compliance-holds-release) | Release a legal hold (dual-control, no break-glass) |
 | [`olivares compliance oscal`](#command-olivares-compliance-oscal) | Inspect ingested OSCAL profiles and SSPs |
+| [`olivares compliance oscal get`](#command-olivares-compliance-oscal-get) | Show one ingested OSCAL profile or SSP |
 | [`olivares compliance oscal ls`](#command-olivares-compliance-oscal-ls) | List registered OSCAL documents |
 | [`olivares compliance subject`](#command-olivares-compliance-subject) | Answer a data subject's erasure request by subject id |
 | [`olivares compliance subject erase`](#command-olivares-compliance-subject-erase) | Register and execute an erasure for one subject (IRREVERSIBLE) |
@@ -346,6 +364,7 @@ All 786 commands, in alphabetical order.
 | [`olivares consoleviews rm`](#command-olivares-consoleviews-rm) | Delete your own saved view |
 | [`olivares consoleviews update`](#command-olivares-consoleviews-update) | Replace the writable fields of your own view |
 | [`olivares db`](#command-olivares-db) | Prepare and verify the database before serving (Postgres roles, RLS posture) |
+| [`olivares db activate-directory-writer`](#command-olivares-db-activate-directory-writer) | Activate the User authority writer protocol on a stopped store (reopen required) |
 | [`olivares db check`](#command-olivares-db-check) | Probe a DSN's role posture and report whether the engine will accept it (read-only) |
 | [`olivares db init`](#command-olivares-db-init) | Provision the least-privilege Postgres roles + database idempotently (no psql by hand) |
 | [`olivares ddil`](#command-olivares-ddil) | Air-gap DDIL bundles: export, verify and import governance state across a disconnected gap |
@@ -368,6 +387,7 @@ All 786 commands, in alphabetical order.
 | [`olivares deploy rollback`](#command-olivares-deploy-rollback) | Revert a definition to an earlier version (destructive POST; needs --yes when unattended) |
 | [`olivares deploy verify`](#command-olivares-deploy-verify) | Check the real deployment against its declared spec |
 | [`olivares deploy wirings`](#command-olivares-deploy-wirings) | List what each deployment is wired to, and how that was attributed |
+| [`olivares doctor`](#command-olivares-doctor) | Diagnose this host installation without printing secrets |
 | [`olivares dr`](#command-olivares-dr) | Disaster recovery: ledger-continuity-safe backup and restore |
 | [`olivares dr backup`](#command-olivares-dr-backup) | Write a ledger-continuity-safe DR bundle |
 | [`olivares dr drill`](#command-olivares-dr-drill) | Full DR round-trip drill (backup→destroy→restore→verify) with a measured RTO |
@@ -541,6 +561,8 @@ All 786 commands, in alphabetical order.
 | [`olivares inference-proxy dlp ls`](#command-olivares-inference-proxy-dlp-ls) | List the effective DLP rules |
 | [`olivares inference-proxy dlp rm`](#command-olivares-inference-proxy-dlp-rm) | Remove a DLP override and restore its secure default |
 | [`olivares inference-proxy dlp set`](#command-olivares-inference-proxy-dlp-set) | Set the action for one DLP class |
+| [`olivares inference-proxy firewall`](#command-olivares-inference-proxy-firewall) | Read the Messages proxy's startup content-inspector attachment |
+| [`olivares inference-proxy firewall status`](#command-olivares-inference-proxy-firewall-status) | Show the Messages proxy's startup content-inspector attachment state |
 | [`olivares inventory`](#command-olivares-inventory) | List the observed entity catalog and its coverage summary |
 | [`olivares inventory entities`](#command-olivares-inventory-entities) | List and open catalog entities |
 | [`olivares inventory entities get`](#command-olivares-inventory-entities-get) | Show one catalog entity and the core entity it overlays |
@@ -621,10 +643,23 @@ All 786 commands, in alphabetical order.
 | [`olivares knowledge sources`](#command-olivares-knowledge-sources) | Run discovery over a registered content source |
 | [`olivares knowledge sources scan`](#command-olivares-knowledge-sources-scan) | Scan a content source for personal data without ingesting |
 | [`olivares license`](#command-olivares-license) | Manage commercial licenses (install/uninstall/status + keygen/sign/verify; offline Ed25519, never a feature gate) |
+| [`olivares license connect`](#command-olivares-license-connect) | Bind this deployment to its purchase with an owner-approved key, and refresh, rotate, recover or deactivate it |
+| [`olivares license connect abandon`](#command-olivares-license-connect-abandon) | Discard the pending connect operation of this data directory |
+| [`olivares license connect deactivate`](#command-olivares-license-connect-deactivate) | Deactivate a deployment by proof of possession, or with the owner's approval |
+| [`olivares license connect reactivate`](#command-olivares-license-connect-reactivate) | Reactivate an explicitly deactivated deployment with a new key and the owner's approval |
+| [`olivares license connect recover`](#command-olivares-license-connect-recover) | Bind a new key to an existing deployment whose key is lost, with the owner's approval |
+| [`olivares license connect refresh`](#command-olivares-license-connect-refresh) | Refresh the installed credential and download token by proof of possession |
+| [`olivares license connect rotate-key`](#command-olivares-license-connect-rotate-key) | Replace this deployment's key, proving possession of both the bound and the new key |
+| [`olivares license connect start`](#command-olivares-license-connect-start) | Request owner approval for this deployment's key and complete the binding once approved |
+| [`olivares license connect status`](#command-olivares-license-connect-status) | Show this data directory's connected identity, binding, pending operation and last credential |
 | [`olivares license install`](#command-olivares-license-install) | Install a license into the data dir (verify + persist; apply live with SIGHUP / runtime reload) |
 | [`olivares license keygen`](#command-olivares-license-keygen) | Generate one Ed25519 keypair for a license or OTA trust domain |
 | [`olivares license sign`](#command-olivares-license-sign) | Sign a license (requires --key in a release build; uses the dev key only in dev/test builds) |
 | [`olivares license status`](#command-olivares-license-status) | Show the installed license and its status (offline; resolves --license &gt; env &gt; data-dir) |
+| [`olivares license trust`](#command-olivares-license-trust) | Show or change which license signing keys this deployment trusts (current, verify-only, revoked, epoch fence) |
+| [`olivares license trust fence`](#command-olivares-license-trust-fence) | Set the minimum key_epoch this deployment accepts in license credentials |
+| [`olivares license trust set`](#command-olivares-license-trust-set) | Add a license public key or change a trusted key's state, epoch or retirement window |
+| [`olivares license trust status`](#command-olivares-license-trust-status) | Show the effective license trust keyring of a data directory |
 | [`olivares license uninstall`](#command-olivares-license-uninstall) | Remove the installed license from the data dir (the offline half of DELETE /v1/console/license) |
 | [`olivares license verify`](#command-olivares-license-verify) | Verify a license against a public key (default: embedded key), with profile/grace and optional CRL status |
 | [`olivares mcp`](#command-olivares-mcp) | Govern Model Context Protocol resources |
@@ -638,7 +673,8 @@ All 786 commands, in alphabetical order.
 | [`olivares members invites ls`](#command-olivares-members-invites-ls) | List the tenant's pending, unexpired invitations |
 | [`olivares members invites revoke`](#command-olivares-members-invites-revoke) | Revoke a pending invitation |
 | [`olivares members ls`](#command-olivares-members-ls) | List the resolved tenant's member roster |
-| [`olivares migrate`](#command-olivares-migrate) | Inspect the engine's schema-migration state (read-only) |
+| [`olivares migrate`](#command-olivares-migrate) | Inspect migration state or explicitly apply the PostgreSQL schema |
+| [`olivares migrate apply`](#command-olivares-migrate-apply) | Apply the PostgreSQL schema and stop WITHOUT serving (migrate → grant → serve) |
 | [`olivares migrate manifest`](#command-olivares-migrate-manifest) | Print this binary's registered schema manifest (deterministic; the open≡enterprise parity oracle) |
 | [`olivares migrate status`](#command-olivares-migrate-status) | List applied schema migrations and their expand/contract phase (read-only) |
 | [`olivares models`](#command-olivares-models) | Govern the model estate, routing, registry and model access |
@@ -782,6 +818,7 @@ All 786 commands, in alphabetical order.
 | [`olivares posture export`](#command-olivares-posture-export) | Export inventory, drift and findings as one posture document |
 | [`olivares quickstart`](#command-olivares-quickstart) | Start Olivares AI for the first time — secure by default, one command to the console |
 | [`olivares quickstart governed-rag`](#command-olivares-quickstart-governed-rag) | Prepare live governed data for Claude Code (S3/Drive -&gt; semantic KB -&gt; MCP retrieval) |
+| [`olivares readyz`](#command-olivares-readyz) | Probe this host's local engine readiness without curl |
 | [`olivares recording`](#command-olivares-recording) | Read the session-recording trail, verify its chain and set the recording policy |
 | [`olivares recording ack`](#command-olivares-recording-ack) | Acknowledge the recording notice for this caller |
 | [`olivares recording config`](#command-olivares-recording-config) | Read and replace the tenant's recording policy |
@@ -933,6 +970,7 @@ All 786 commands, in alphabetical order.
 | [`olivares tokens ls`](#command-olivares-tokens-ls) | List the API tokens the caller may see |
 | [`olivares tokens revoke`](#command-olivares-tokens-revoke) | Revoke an API token |
 | [`olivares tokens rotate`](#command-olivares-tokens-rotate) | Rotate an API token: issue a replacement with the same spec and revoke the old one |
+| [`olivares uninstall`](#command-olivares-uninstall) | Plan or remove a local installation without crossing its signed-release layout |
 | [`olivares upgrade`](#command-olivares-upgrade) | Upgrade this binary in place to a newer signed release (verified, atomic, reversible) |
 | [`olivares users`](#command-olivares-users) | List, create, disable and re-enable the global user accounts (superadmin) |
 | [`olivares users create`](#command-olivares-users-create) | Create a global user account (superadmin) |
@@ -1226,7 +1264,7 @@ olivares adoption trend
 
 #### Command: olivares agent
 
-Operate governed Claude Code sessions (launch, attach, stop, resume, clean up)
+Operate governed provider sessions (launch, attach, interrupt, stop, resume, clean up)
 
 ```
 olivares agent
@@ -1255,7 +1293,7 @@ olivares agent managed-settings
 
 #### Command: olivares agent session
 
-Manage the lifecycle of governed Claude Code sessions
+Manage the lifecycle of governed provider sessions
 
 ```
 olivares agent session
@@ -1320,6 +1358,7 @@ olivares agent session create
 | `--name` | `string` | — | display name for the session |
 | `--permission-mode` | `string` | `default` | default\|acceptEdits\|plan\|auto\|dontAsk\|bypassPermissions |
 | `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--provider-profile` | `string` | — | provider profile reference to launch under (current servers require it; omit to keep the older request body, which this API still refuses) |
 | `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
 | `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--timeout` | `duration` | `30s` | request timeout |
@@ -1365,7 +1404,7 @@ olivares agent session get <run-ref>
 
 #### Command: olivares agent session input
 
-Send one NDJSON line to a live session's stdin ('-' or empty reads stdin)
+Send one line or driver text to a live session
 
 ```
 olivares agent session input <run-ref>
@@ -1375,12 +1414,33 @@ olivares agent session input <run-ref>
 |---|---|---|---|
 | `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
 | `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
-| `--line` | `string` | — | the NDJSON message to write (default: read from stdin) |
+| `--line` | `string` | — | raw NDJSON line (empty or '-' reads stdin; mutually exclusive with --text) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--text` | `string` | — | driver text (use '-' to read stdin; mutually exclusive with --line) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--work-lease-fence` | `int64` | `0` | positive work-lease fence; omitted from the request when unset |
+
+#### Command: olivares agent session interrupt
+
+Cancel the active provider turn without stopping the session
+
+```
+olivares agent session interrupt <run-ref>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
 | `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
 | `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--timeout` | `duration` | `30s` | request timeout |
 | `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--work-lease-fence` | `int64` | `0` | positive work-lease fence; omitted from the request when unset |
 
 #### Command: olivares agent session ls
 
@@ -1459,6 +1519,82 @@ olivares agent session stop <run-ref>
 | `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--timeout` | `duration` | `30s` | request timeout |
 | `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
+
+#### Command: olivares agent tool
+
+Install and inventory official provider CLIs (Claude Code) from signed releases, locally
+
+```
+olivares agent tool
+```
+
+Declares no flags of its own; it takes those of [`olivares agent`](#command-olivares-agent) and the root command.
+
+#### Command: olivares agent tool detect
+
+Report provider CLI executables on this host: managed releases, vendor default paths and PATH
+
+```
+olivares agent tool detect
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--driver` | `string` | `claude` | provider tool to look for |
+| `--manifest` | `string` | — | a vendor release manifest to corroborate candidates against (verified with --manifest-sig under the pinned key) |
+| `--manifest-sig` | `string` | — | the detached OpenPGP signature of --manifest |
+| `--probe` | `bool` | `false` | run `--version` for registered and manifest-corroborated candidates only, from an empty temporary home (an observed path is not permission to run it) |
+| `--probe-path` | `stringArray` | `[]` | exact absolute path of one candidate to run `--version` on (repeatable); required for unregistered-observed paths; damaged releases are never run |
+| `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
+
+#### Command: olivares agent tool install
+
+Verify, download, probe and place one signed release of a provider CLI
+
+```
+olivares agent tool install
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--driver` | `string` | `claude` | provider tool to install (this release: claude) |
+| `--plan` | `string` | — | execute this plan file written by `plan --out`; it is the approval, so no prompt is shown |
+| `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
+| `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
+| `--source` | `string` | — | http(s) base URL of a mirror carrying the vendor's release layout (default: the official origin); the pinned signing key is required either way |
+| `--version` | `string` | `latest` | exact version (X.Y.Z) or the vendor pointer latest or stable |
+| `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
+
+#### Command: olivares agent tool list
+
+List installed provider CLI releases under the tools root and re-check their bytes
+
+```
+olivares agent tool list
+```
+
+Aliases: `ls`
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
+
+#### Command: olivares agent tool plan
+
+Resolve and verify what install would fetch and where it would place it, without changing anything
+
+```
+olivares agent tool plan
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--driver` | `string` | `claude` | provider tool to install (this release: claude) |
+| `--out` | `string` | — | write the plan JSON (with its digest) to this new file for a later `install --plan` |
+| `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
+| `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
+| `--source` | `string` | — | http(s) base URL of a mirror carrying the vendor's release layout (default: the official origin); the pinned signing key is required either way |
+| `--version` | `string` | `latest` | exact version (X.Y.Z) or the vendor pointer latest or stable |
 
 #### Command: olivares agent workspace
 
@@ -2752,6 +2888,28 @@ olivares compliance
 | `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
 | `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
 
+#### Command: olivares compliance aims
+
+Inspect ISO/IEC 42001 AIMS certification-readiness packs
+
+```
+olivares compliance aims
+```
+
+Declares no flags of its own; it takes those of [`olivares compliance`](#command-olivares-compliance) and the root command.
+
+#### Command: olivares compliance aims ls
+
+List ISO/IEC 42001 AIMS packs
+
+```
+olivares compliance aims ls
+```
+
+Aliases: `list`
+
+Declares no flags of its own; it takes those of [`olivares compliance aims`](#command-olivares-compliance-aims) and the root command.
+
 #### Command: olivares compliance calendar
 
 Show the regulatory calendar and watchlist
@@ -2780,6 +2938,18 @@ List detected control drift
 
 ```
 olivares compliance depth drift
+```
+
+Aliases: `list`
+
+Declares no flags of its own; it takes those of [`olivares compliance depth`](#command-olivares-compliance-depth) and the root command.
+
+#### Command: olivares compliance depth fedramp
+
+List FedRAMP 20x KSI packs
+
+```
+olivares compliance depth fedramp
 ```
 
 Aliases: `list`
@@ -2831,6 +3001,16 @@ olivares compliance dora
 ```
 
 Declares no flags of its own; it takes those of [`olivares compliance`](#command-olivares-compliance) and the root command.
+
+#### Command: olivares compliance dora export
+
+Export one DORA Register of Information
+
+```
+olivares compliance dora export <register-id>
+```
+
+Declares no flags of its own; it takes those of [`olivares compliance dora`](#command-olivares-compliance-dora) and the root command.
 
 #### Command: olivares compliance dora incidents
 
@@ -3041,6 +3221,16 @@ olivares compliance oscal
 ```
 
 Declares no flags of its own; it takes those of [`olivares compliance`](#command-olivares-compliance) and the root command.
+
+#### Command: olivares compliance oscal get
+
+Show one ingested OSCAL profile or SSP
+
+```
+olivares compliance oscal get <profile-id>
+```
+
+Declares no flags of its own; it takes those of [`olivares compliance oscal`](#command-olivares-compliance-oscal) and the root command.
 
 #### Command: olivares compliance oscal ls
 
@@ -3290,6 +3480,27 @@ olivares db
 |---|---|---|---|
 | `--format` | `string` | `text` | **inherited**. deprecated alias for -o/--output on this command (text or json) — NOT the export-format flag of 'audit export' / 'findings export' |
 
+#### Command: olivares db activate-directory-writer
+
+Activate the User authority writer protocol on a stopped store (reopen required)
+
+```
+olivares db activate-directory-writer
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--actor` | `string` | — | who performs the ceremony (recorded in the engine log); explicit, never taken from the environment |
+| `--admin-dsn` | `string` | — | Postgres only: separate BYPASSRLS read-only admin DSN; without it, the attested closed directory inventory routine must be installed (accepts a file:/env: reference) |
+| `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--dsn` | `string` | — | store DSN (default a SQLite file in the data dir) |
+| `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
+| `--expected-generation` | `int64` | `0` | the predecessor generation (1 on a fresh estate); activates staged or enforced legacy to target generation+1, or verifies that exact completed retry |
+| `--owner-dsn` | `string` | — | Postgres only: owner-role DSN used at boot (accepts a file:/env: reference); leave empty for the single-role setup |
+| `--reason` | `string` | — | why the rollout is complete (recorded in the engine log) |
+| `--writers-drained` | `bool` | `false` | assert that NO old writer transaction is in flight (every engine on this store is stopped) |
+| `--writers-upgraded` | `bool` | `false` | assert that EVERY writer process runs a binary carrying the directory writer wrapper |
+
 #### Command: olivares db check
 
 Probe a DSN's role posture and report whether the engine will accept it (read-only)
@@ -3304,7 +3515,7 @@ olivares db check
 | `--dsn` | `string` | — | application-role DSN to probe (must be NOSUPERUSER NOBYPASSRLS). Accepts a file:/env: reference |
 | `--engine` | `string` | `postgres` | store engine the DSNs target: postgres or sqlite |
 | `--owner-dsn` | `string` | — | owner-role DSN to probe (must be NOSUPERUSER NOBYPASSRLS). Accepts a file:/env: reference |
-| `--strict` | `bool` | `false` | exit non-zero if any DSN would be refused at boot (pre-flight gate) |
+| `--strict` | `bool` | `false` | exit 1 for a proven boot refusal, or 6 when store access prevents a verdict |
 
 #### Command: olivares db init
 
@@ -3323,6 +3534,7 @@ olivares db init
 | `--app-password-file` | `string` | — | read the application role password from a file, or - for stdin |
 | `--app-role` | `string` | `olivares_app` | application role (runtime traffic; NOSUPERUSER NOBYPASSRLS) |
 | `--database` | `string` | `olivares` | application database name to create/own |
+| `--install-directory-inventory` | `bool` | `false` | install and attest the closed noAdmin inventory after core migrations; existing app/owner roles and product tables are required, no passwords or role memberships are changed |
 | `--owner-password` | `string` | — | owner role password (prefer --owner-password-file) |
 | `--owner-password-file` | `string` | — | read the owner role password from a file, or - for stdin |
 | `--owner-role` | `string` | — | SEPARATE owner role that owns the schema and runs DDL (enables the least-privilege split). Empty = the app role owns the schema. Use on a FRESH database; adopting the split on an existing single-role db needs a manual REASSIGN OWNED first (see deploy/postgres/README.md) |
@@ -3611,6 +3823,28 @@ olivares deploy wirings
 | `--limit` | `int` | `0` | page size (0 uses the engine's default) |
 | `--status` | `string` | — | only wirings in this status |
 
+#### Command: olivares doctor
+
+Diagnose this host installation without printing secrets
+
+```
+olivares doctor
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--audit-tenant` | `string` | — | also run strict local audit verification for this tenant |
+| `--binary` | `string` | — | installed olivares binary (default: this executable) |
+| `--ca-cert` | `string` | — | PEM trust anchor (default &lt;data-dir&gt;/tls.crt) |
+| `--check-updates` | `bool` | `false` | also run the signed channel check (network; may record fresh CRL observations) |
+| `--config` | `string` | — | service env file (default follows --mode) |
+| `--data-dir` | `string` | — | service data directory (default follows --mode) |
+| `--init` | `string` | `auto` | init adapter: auto \| systemd \| openrc \| launchd |
+| `--mode` | `string` | `auto` | service scope: auto \| user \| system |
+| `--server` | `string` | `https://127.0.0.1:8443` | local HTTPS engine origin |
+| `--timeout` | `duration` | `10s` | deadline for each init/network subprocess |
+| `--unit` | `string` | — | service unit/plist path (default follows --mode and --init) |
+
 #### Command: olivares dr
 
 Disaster recovery: ledger-continuity-safe backup and restore
@@ -3652,6 +3886,7 @@ olivares dr backup
 | `--offsite-secret-access-key-file` | `string` | — | file holding the offsite secret access key (credential by reference; falls back to $AWS_SECRET_ACCESS_KEY) |
 | `--offsite-session-token-file` | `string` | — | optional file holding an STS session token (falls back to $AWS_SESSION_TOKEN) |
 | `--out` | `string` | — | **required**. path to write the DR bundle to (required) |
+| `--owner-dsn` | `string` | — | Postgres: the owner role, required in a split-role deployment (the app role has no schema CREATE). It runs the migrations AND is the pg_restore target, so the restored objects are owned by the owner exactly as the source's are. Accepts a file:/env: reference |
 | `--passphrase-file` | `string` | — | file holding the backup passphrase (Argon2id-derived KEK); or $OLIVARES_DR_PASSPHRASE_FILE |
 | `--pg-dump` | `string` | `pg_dump` | pg_dump executable (Postgres engine only) |
 | `--pitr-ref` | `string` | — | Postgres only: build a keys+manifest companion bundle for a point-in-time-recovery archive (no store bytes); the value is a human pointer to the WAL archive |
@@ -3758,6 +3993,7 @@ olivares dr restore
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--admin-dsn` | `string` | — | Postgres only: NOSUPERUSER BYPASSRLS role DSN. REQUIRED to run pg_dump directly (it keeps row_security=off and ABORTS as the application role under FORCE RLS); also used for the cross-tenant org list, without which a backup may MISS tenants — see deploy/postgres/01-app-role.sql |
+| `--allow-legacy-unsigned` | `bool` | `false` | accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception) |
 | `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--dsn` | `string` | — | store DSN (default a SQLite file in the data dir) |
 | `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
@@ -3766,6 +4002,7 @@ olivares dr restore
 | `--in-place` | `bool` | `false` | replace a LIVE data dir safely: stage + verify BEFORE promoting, auto-preserving the current store/keys as *.pre-restore-&lt;ts&gt; (sqlite only) |
 | `--kek-key-file` | `string` | — | file holding a raw/base64 32-byte key-encryption key (the KMS-unwrapped path); or $OLIVARES_DR_KEK_FILE |
 | `--operator` | `string` | — | who is performing this restore (required when the restore REPLACES an existing estate; recorded in the restored ledger). A declaration, not an authentication: the console's dual-control gate does not reach this path |
+| `--owner-dsn` | `string` | — | Postgres: the owner role, required in a split-role deployment (the app role has no schema CREATE). It runs the migrations AND is the pg_restore target, so the restored objects are owned by the owner exactly as the source's are. Accepts a file:/env: reference |
 | `--passphrase-file` | `string` | — | file holding the backup passphrase (Argon2id-derived KEK); or $OLIVARES_DR_PASSPHRASE_FILE |
 | `--pg-restore` | `string` | `pg_restore` | pg_restore executable (Postgres engine only) |
 | `--reason` | `string` | — | why this restore is being performed — an incident id or change reference (required when the restore REPLACES an existing estate; recorded in the restored ledger) |
@@ -3780,6 +4017,7 @@ olivares dr verify
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--allow-legacy-unsigned` | `bool` | `false` | accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception) |
 | `--in` | `string` | — | **required**. DR bundle to verify (required) |
 | `--kek-key-file` | `string` | — | file holding a raw/base64 32-byte key-encryption key (the KMS-unwrapped path); or $OLIVARES_DR_KEK_FILE |
 | `--passphrase-file` | `string` | — | file holding the backup passphrase (Argon2id-derived KEK); or $OLIVARES_DR_PASSPHRASE_FILE |
@@ -5992,6 +6230,26 @@ olivares inference-proxy dlp set
 |---|---|---|---|
 | `--data` | `string` | — | request document: inline JSON, @FILE, or - for stdin |
 
+#### Command: olivares inference-proxy firewall
+
+Read the Messages proxy's startup content-inspector attachment
+
+```
+olivares inference-proxy firewall
+```
+
+Declares no flags of its own; it takes those of [`olivares inference-proxy`](#command-olivares-inference-proxy) and the root command.
+
+#### Command: olivares inference-proxy firewall status
+
+Show the Messages proxy's startup content-inspector attachment state
+
+```
+olivares inference-proxy firewall status
+```
+
+Declares no flags of its own; it takes those of [`olivares inference-proxy firewall`](#command-olivares-inference-proxy-firewall) and the root command.
+
 #### Command: olivares inventory
 
 List the observed entity catalog and its coverage summary
@@ -7066,6 +7324,173 @@ olivares license
 
 Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
 
+#### Command: olivares license connect
+
+Bind this deployment to its purchase with an owner-approved key, and refresh, rotate, recover or deactivate it
+
+```
+olivares license connect
+```
+
+Declares no flags of its own; it takes those of [`olivares license`](#command-olivares-license) and the root command.
+
+#### Command: olivares license connect abandon
+
+Discard the pending connect operation of this data directory
+
+```
+olivares license connect abandon
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+| `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
+
+#### Command: olivares license connect deactivate
+
+Deactivate a deployment by proof of possession, or with the owner's approval
+
+```
+olivares license connect deactivate
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--deployment` | `string` | — | deployment id (default the one bound to this data directory) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--evidence` | `string` | — | with --owner-approval: current purchase credential for a NEW request (file, or - for stdin); required, the installed license is not used |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--owner-approval` | `bool` | `false` | request the owner's approval instead of proving possession of the bound key |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+| `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
+
+#### Command: olivares license connect reactivate
+
+Reactivate an explicitly deactivated deployment with a new key and the owner's approval
+
+```
+olivares license connect reactivate
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--binding-epoch` | `int64` | `0` | binding epoch of that deployment when the data directory no longer records it |
+| `--business-id` | `string` | — | provider business id shown in the customer portal |
+| `--channel` | `string` | `stable` | release channel the credential and download token are resolved for: stable \| security |
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--deployment` | `string` | — | deployment id (default the one recorded in the data directory) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--evidence` | `string` | — | current purchase credential for a NEW request (file, or - for stdin); required, the installed license is not used |
+| `--holder-id` | `string` | — | holder (subscription) id shown in the customer portal |
+| `--label` | `string` | — | optional display label (not an identity) |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--license-id` | `string` | — | license id shown in the customer portal |
+| `--parent` | `string` | — | staging only: the production deployment id it belongs to |
+| `--provider` | `string` | `dodo` | commerce provider of the purchase |
+| `--purpose` | `string` | `production` | production \| staging |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+
+#### Command: olivares license connect recover
+
+Bind a new key to an existing deployment whose key is lost, with the owner's approval
+
+```
+olivares license connect recover
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--binding-epoch` | `int64` | `0` | binding epoch of that deployment when the data directory no longer records it |
+| `--business-id` | `string` | — | provider business id shown in the customer portal |
+| `--channel` | `string` | `stable` | release channel the credential and download token are resolved for: stable \| security |
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--deployment` | `string` | — | deployment id (default the one recorded in the data directory) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--evidence` | `string` | — | current purchase credential for a NEW request (file, or - for stdin); required, the installed license is not used |
+| `--holder-id` | `string` | — | holder (subscription) id shown in the customer portal |
+| `--label` | `string` | — | optional display label (not an identity) |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--license-id` | `string` | — | license id shown in the customer portal |
+| `--parent` | `string` | — | staging only: the production deployment id it belongs to |
+| `--provider` | `string` | `dodo` | commerce provider of the purchase |
+| `--purpose` | `string` | `production` | production \| staging |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+
+#### Command: olivares license connect refresh
+
+Refresh the installed credential and download token by proof of possession
+
+```
+olivares license connect refresh
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--channel` | `string` | `stable` | release channel: stable \| security (default the recorded channel) |
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+
+#### Command: olivares license connect rotate-key
+
+Replace this deployment's key, proving possession of both the bound and the new key
+
+```
+olivares license connect rotate-key
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+
+#### Command: olivares license connect start
+
+Request owner approval for this deployment's key and complete the binding once approved
+
+```
+olivares license connect start
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--business-id` | `string` | — | provider business id shown in the customer portal |
+| `--channel` | `string` | `stable` | release channel the credential and download token are resolved for: stable \| security |
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--evidence` | `string` | — | purchase credential to present (file, or - for stdin; default the installed license, which may be expired) |
+| `--holder-id` | `string` | — | holder (subscription) id shown in the customer portal |
+| `--label` | `string` | — | optional display label (not an identity) |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--license-id` | `string` | — | license id shown in the customer portal |
+| `--parent` | `string` | — | staging only: the production deployment id it belongs to |
+| `--provider` | `string` | `dodo` | commerce provider of the purchase |
+| `--purpose` | `string` | `production` | production \| staging |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+
+#### Command: olivares license connect status
+
+Show this data directory's connected identity, binding, pending operation and last credential
+
+```
+olivares license connect status
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--endpoint` | `string` | — | licensing service origin (default https://licenses.olivares.ai on first use; afterwards the one recorded in the data directory) |
+| `--license` | `string` | — | explicit license path the engine is started with; a connected credential is refused while it outranks the data directory |
+| `--timeout` | `duration` | `1m0s` | overall network timeout |
+
 #### Command: olivares license install
 
 Install a license into the data dir (verify + persist; apply live with SIGHUP / runtime reload)
@@ -7078,7 +7503,7 @@ olivares license install <file|->
 |---|---|---|---|
 | `--data-dir` | `string` | — | data directory to install into (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--force` | `bool` | `false` | install even though a --license/OLIVARES_LICENSE* override OUTRANKS the data-dir file. Without it the install is REFUSED, because it would change nothing the engine reads; with it the file is staged and the warning says so |
-| `--pubkey` | `string` | — | base64 Ed25519 public key to verify against (default: embedded key) |
+| `--pubkey` | `string` | — | base64 Ed25519 public key to verify against instead of the data directory's license trust |
 
 #### Command: olivares license keygen
 
@@ -7128,7 +7553,60 @@ olivares license status
 | `--manifest` | `string` | — | OTA channel manifest to read the license CRL from (its signature must verify) |
 | `--manifest-sig` | `string` | — | detached manifest signature (default &lt;manifest&gt;.sig) |
 | `--ota-pubkey` | `string` | — | base64 or @file Ed25519 OTA key for the manifest (default: the key embedded in this build) |
-| `--pubkey` | `string` | — | base64 Ed25519 public key to verify against (default: embedded key) |
+| `--pubkey` | `string` | — | base64 Ed25519 public key to verify against instead of the data directory's license trust |
+
+#### Command: olivares license trust
+
+Show or change which license signing keys this deployment trusts (current, verify-only, revoked, epoch fence)
+
+```
+olivares license trust
+```
+
+Declares no flags of its own; it takes those of [`olivares license`](#command-olivares-license) and the root command.
+
+#### Command: olivares license trust fence
+
+Set the minimum key_epoch this deployment accepts in license credentials
+
+```
+olivares license trust fence
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | data directory whose license trust to change (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--min-key-epoch` | `int` | `0` | **required**. minimum accepted key_epoch (0 = no fence) |
+
+#### Command: olivares license trust set
+
+Add a license public key or change a trusted key's state, epoch or retirement window
+
+```
+olivares license trust set
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | data directory whose license trust to change (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--epoch` | `int` | `0` | key_epoch the key's credentials must carry (0 = not pinned) |
+| `--kid` | `string` | — | key id (sha256:&lt;hex&gt;) of a key that is already trusted |
+| `--public-key` | `string` | — | base64 Ed25519 license public key, or @file (public material only) |
+| `--retired-at` | `string` | — | verify_only: RFC3339 UTC instant from which this key's new licenses are refused |
+| `--state` | `string` | — | **required**. current \| verify_only \| revoked |
+| `--verify-until` | `string` | — | verify_only: RFC3339 UTC instant that ends this key's verification window |
+
+#### Command: olivares license trust status
+
+Show the effective license trust keyring of a data directory
+
+```
+olivares license trust status
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | data directory whose license trust to show (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 
 #### Command: olivares license uninstall
 
@@ -7153,6 +7631,7 @@ olivares license verify <license-blob>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--data-dir` | `string` | — | also trust this data directory's administrative license trust (see `license trust`) |
 | `--manifest` | `string` | — | OTA channel manifest to read the license CRL from (its signature must verify) |
 | `--manifest-sig` | `string` | — | detached manifest signature (default &lt;manifest&gt;.sig) |
 | `--ota-pubkey` | `string` | — | base64 or @file Ed25519 OTA key for the manifest (default: the key embedded in this build) |
@@ -7309,7 +7788,7 @@ Declares no flags of its own; it takes those of [`olivares members`](#command-ol
 
 #### Command: olivares migrate
 
-Inspect the engine's schema-migration state (read-only)
+Inspect migration state or explicitly apply the PostgreSQL schema
 
 ```
 olivares migrate
@@ -7318,6 +7797,19 @@ olivares migrate
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--format` | `string` | `text` | **inherited**. deprecated alias for -o/--output on this command (text or json) — NOT the export-format flag of 'audit export' / 'findings export' |
+
+#### Command: olivares migrate apply
+
+Apply the PostgreSQL schema and stop WITHOUT serving (migrate → grant → serve)
+
+```
+olivares migrate apply
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--dsn` | `string` | — | PostgreSQL application-role DSN (accepts a file:/env: reference) |
+| `--owner-dsn` | `string` | — | PostgreSQL owner-role DSN that runs the DDL (accepts a file:/env: reference); leave empty for the single-role setup |
 
 #### Command: olivares migrate manifest
 
@@ -9173,6 +9665,7 @@ olivares quickstart
 | `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--grpc-listen` | `string` | `127.0.0.1:8444` | gRPC listen address |
 | `--listen` | `string` | `127.0.0.1:8443` | HTTP (REST + web console) listen address |
+| `--public-url` | `string` | — | the address a browser reaches this console at, as scheme://host[:port] (e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of --listen: declare it when the engine sits behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY clears it. Start-time only: a change takes a restart |
 | `--quiet` | `bool` | `false` | print only the guided panel, holding the engine's startup checks back to errors (they are still evaluated, and `olivares status` reports the same posture) |
 
 #### Command: olivares quickstart governed-rag
@@ -9208,11 +9701,26 @@ olivares quickstart governed-rag
 | `--out-dir` | `string` | — | directory for generated governed-RAG config (default &lt;data-dir&gt;/quickstart/governed-rag) |
 | `--path-style` | `bool` | `false` | force S3 path-style bucket addressing |
 | `--prefix` | `string` | — | S3 key prefix for --source s3 |
+| `--public-url` | `string` | — | the address a browser reaches this console at, as scheme://host[:port] (e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of --listen: declare it when the engine sits behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY clears it. Start-time only: a change takes a restart |
 | `--region` | `string` | `us-east-1` | S3 signing region |
 | `--source` | `string` | `s3` | content source kind: s3 or gdrive |
 | `--source-name` | `string` | `governed-rag-live` | registered knowledge content-source name |
 | `--start` | `bool` | `false` | start the engine after writing config |
 | `--tenant-id` | `string` | — | tenant id for the MCP retrieval surface and bootstrap script |
+
+#### Command: olivares readyz
+
+Probe this host's local engine readiness without curl
+
+```
+olivares readyz
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM trust anchor for HTTPS (Compose: &lt;data-dir&gt;/tls.crt) |
+| `--server` | `string` | `https://127.0.0.1:8443` | local numeric-loopback HTTP(S) origin |
+| `--timeout` | `duration` | `3s` | whole-probe deadline |
 
 #### Command: olivares recording
 
@@ -9629,7 +10137,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.8.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
 
 #### Command: olivares release sign-manifest
 
@@ -10274,6 +10782,7 @@ olivares security advisories
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--author` | `string` | — | override the feed author |
+| `--expect-pubkey` | `string` | — | **required**. base64 (or @file) Ed25519 PUBLIC key the signature must verify against — the anchor the fleet pins (required) |
 | `--in` | `string` | — | draft advisory JSON ({"author":"…","advisories":[…OSV…]}) (required) |
 | `--out` | `string` | `advisories.json` | output feed path (a .sig is written beside it) |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 private key (required) |
@@ -10329,6 +10838,7 @@ olivares security rulepack sign
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--expect-pubkey` | `string` | — | **required**. base64 (or @file) Ed25519 PUBLIC key the signature must verify against — the anchor the fleet pins (required) |
 | `--in` | `string` | — | draft rule-pack JSON (required) |
 | `--out` | `string` | `rulepack.json` | output rule-pack path |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 private key (required) |
@@ -10357,7 +10867,7 @@ olivares serve
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--admin-dsn` | `string` | — | Postgres only: DSN of a dedicated NOSUPERUSER BYPASSRLS role used ONLY for cross-tenant System reads (org list, multi-tenant checkpoint coverage). Without it those reads are RLS-limited (see deploy/postgres/01-app-role.sql) |
+| `--admin-dsn` | `string` | — | Postgres: DSN of a dedicated NOSUPERUSER BYPASSRLS read role for first setup and cross-tenant operations (org listing, checkpoints, DR backup). Provision with olivares db init --admin-role; see deploy/postgres/README.md. Keep the app role NOSUPERUSER NOBYPASSRLS; never use a superuser here |
 | `--allow-privileged-db-role` | `bool` | `false` | allow connecting Postgres as a superuser/BYPASSRLS role (DANGEROUS: disables the row-level-security tenant backstop; single-tenant/dev only) |
 | `--checkpoint-interval` | `duration` | `1h0m0s` | how often to write a signed audit checkpoint over every tenant chain (0 disables; tamper-evidence anchor, docs/SECURITY-HARDENING.md §5) |
 | `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
@@ -10371,6 +10881,7 @@ olivares serve
 | `--license` | `string` | — | path to a commercial license file (informational only) |
 | `--listen` | `string` | `127.0.0.1:8443` | HTTP (REST + web) listen address |
 | `--owner-dsn` | `string` | — | Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with `olivares db init`). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn |
+| `--public-url` | `string` | — | the address a browser reaches this console at, as scheme://host[:port] (e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of --listen: declare it when the engine sits behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY clears it. Start-time only: a change takes a restart |
 | `--region` | `string` | — | data-residency HOME region of THIS instance (e.g. eu, us). When set, the instance is region-scoped: it serves only tenants pinned to this region and denies cross-region access fail-closed. Empty = single-region mode, no residency enforcement |
 | `--reuse-port` | `bool` | `false` | bind listeners with SO_REUSEPORT so a NEW instance can hold the same ports while this one drains — enables a zero-downtime restart/upgrade handover on a single node (Linux/BSD; docs/UPGRADE-AND-ROLLBACK.md) |
 | `--seed-demo` | `bool` | `false` | load a SYNTHETIC sample estate for demos/E2E (fabricated data; use a throwaway data-dir) |
@@ -11366,6 +11877,24 @@ olivares tokens rotate <token-id>
 
 Declares no flags of its own; it takes those of [`olivares tokens`](#command-olivares-tokens) and the root command.
 
+#### Command: olivares uninstall
+
+Plan or remove a local installation without crossing its signed-release layout
+
+```
+olivares uninstall (--plan|--preserve|--purge)
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--data-dir` | `string` | — | logical data directory containing install-manifest.json |
+| `--manifest` | `string` | — | read the ownership manifest from this path (must name the requested data dir) |
+| `--plan` | `bool` | `false` | print every remove/keep action without mutation |
+| `--preserve` | `bool` | `false` | remove managed software and service files; retain data, config, logs and keys |
+| `--purge` | `bool` | `false` | also remove allowlisted data, config, logs and keys (requires confirmation) |
+| `--root` | `string` | — | _hidden_. prefix logical paths with an offline staging root (no host init/account mutation) |
+| `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
+
 #### Command: olivares upgrade
 
 Upgrade this binary in place to a newer signed release (verified, atomic, reversible)
@@ -11380,8 +11909,10 @@ olivares upgrade
 | `--bundle` | `string` | — | install from a local air-gap bundle directory or .tar.gz (no network at all; installing needs a live installed license, verified offline; --check does not) |
 | `--channel` | `string` | `stable` | release channel: stable \| security (lts is accepted by the validator, but no lts line is published) |
 | `--check` | `bool` | `false` | show the upgrade plan (current -&gt; available, channel, CVEs) without swapping |
+| `--connect` | `bool` | `false` | with --enterprise: refresh this data directory's connected credential and download token by proof of possession (`license connect`) instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary |
 | `--current-version` | `string` | — | declare the version installed at --target when it cannot be probed (cross-arch staging, a noexec mount, or a build from source); keeps anti-rollback and min_version armed instead of guessing |
 | `--data-dir` | `string` | — | data directory (license + install-id) (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
+| `--download-protocol` | `string` | `release-v1` | gated download protocol for --enterprise: release-v1 (default; resolves one consistent {version,set,manifest,signature} tuple) or legacy (the existing per-request /download route, for a custom or older gateway). A 404 from the new route is a compatibility diagnostic, not an automatic downgrade |
 | `--endpoint` | `string` | — | update channel source: a GitHub repository (https://github.com/&lt;owner&gt;/&lt;repo&gt;), one of its releases (…/releases/tag/&lt;tag&gt;), or a static mirror base (&lt;base&gt;/&lt;channel&gt;/manifest.json). Default: the public repository's releases; the license worker with --enterprise |
 | `--enterprise` | `bool` | `false` | upgrade the licensed enterprise edition (gated download; needs a live license) |
 | `--force-rollback` | `bool` | `false` | allow installing an OLDER version than the running one (records an audit entry) |
@@ -11393,7 +11924,7 @@ olivares upgrade
 | `--target` | `string` | — | binary path to replace (default: the running executable) |
 | `--timeout` | `duration` | `5m0s` | overall network timeout |
 | `--timer-dir` | `string` | — | write the systemd units to this directory instead of printing them |
-| `--timer-schedule` | `string` | `Sun *-*-* 03:00:00` | systemd OnCalendar expression for the auto-check timer |
+| `--timer-schedule` | `string` | `Sun *-*-* 03:00:00` | systemd OnCalendar expression for the auto-check timer; when omitted, an --enterprise --connect timer runs daily (*-*-* 03:00:00) |
 | `--token` | `string` | — | enterprise download token from your license/fulfillment email |
 | `-y`, `--yes` | `bool` | `false` | do not prompt for confirmation before swapping |
 

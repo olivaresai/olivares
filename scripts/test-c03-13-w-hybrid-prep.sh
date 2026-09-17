@@ -14,14 +14,15 @@ pass=0; fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 
+LW="commercial/license-worker/src"
 stage() {
   rm -rf "$TMP/tree"
   mkdir -p "$TMP/tree/design" "$TMP/tree/scripts" \
-    "$TMP/tree/commercial/license-worker/src/license"
+    "$TMP/tree/$LW/license" "$TMP/tree/$LW/dodo"
   cp "$ROOT/design/c03-13-w-hybrid-prep-2026-08-20.json" "$TMP/tree/design/"
   cp "$ROOT/design/C03-13-W-HYBRID-PREP-2026-08-20.md" "$TMP/tree/design/"
-  cp "$ROOT/commercial/license-worker/src/license/issue-context.ts" \
-    "$TMP/tree/commercial/license-worker/src/license/"
+  cp "$ROOT/$LW/license/issue-context.ts" "$ROOT/$LW/license/credential-v3.ts" "$TMP/tree/$LW/license/"
+  cp "$ROOT/$LW/dodo/cohort.ts" "$ROOT/$LW/dodo/webhook.ts" "$TMP/tree/$LW/dodo/"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-c03-13-w-hybrid-prep.sh"
 }
@@ -32,60 +33,113 @@ run() {
     >/dev/null 2>"$TMP/err" || rc=$?
   echo "$rc" >"$TMP/rc"
 }
-
-stage
-run
-if [ "$(cat "$TMP/rc")" = 0 ]; then ok "hub-safe W-hybrid pin is CLEAN"
-else bad "live pin should be CLEAN ($(cat "$TMP/err"))"; fi
-
-stage
-python3 - "$TMP/tree/design/c03-13-w-hybrid-prep-2026-08-20.json" <<'PY'
+expect() {
+  run
+  if [ "$(cat "$TMP/rc")" = "$2" ]; then ok "$1"
+  else bad "$1: rc=$(cat "$TMP/rc") want $2 ($(cat "$TMP/err"))"; fi
+}
+# Replace exactly one occurrence, or stop the battery: a mutant that silently does not apply
+# would be reported as "killed" by a check that never saw it.
+mutate() {
+  python3 - "$TMP/tree/$1" "$2" "$3" <<'PY'
+import sys
+path, needle, replacement = sys.argv[1:4]
+text = open(path, encoding="utf-8").read()
+if text.count(needle) != 1:
+    print(f"mutant did not apply: {needle!r} occurs {text.count(needle)} times in {path}", file=sys.stderr)
+    sys.exit(3)
+open(path, "w", encoding="utf-8").write(text.replace(needle, replacement))
+PY
+}
+json_flag() {
+  python3 - "$TMP/tree/design/c03-13-w-hybrid-prep-2026-08-20.json" "$1" <<'PY'
 import json, sys
-p = sys.argv[1]
+p, key = sys.argv[1:3]
 d = json.load(open(p, encoding="utf-8"))
-d["remainder_applied"] = True
+d[key] = True
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (remainder-applied) is killed"
-else bad "remainder-applied stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+}
 
 stage
-printf '\nexport function phaseForPaidIssue() { return "term" }\n' >> \
-  "$TMP/tree/commercial/license-worker/src/license/issue-context.ts"
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (phaseForPaidIssue landed) is killed"
-else bad "phaseForPaidIssue stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+expect "live per-line construction and prep record are CLEAN" 0
 
 stage
-sed -i 's/paidIssue ? "refund_window" : "term"/paidIssue ? "term" : "term"/' \
-  "$TMP/tree/commercial/license-worker/src/license/issue-context.ts"
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (hardcoded line dropped) is killed"
-else bad "hardcoded line stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+json_flag remainder_applied
+expect "mutant (remainder-applied) is killed" 1
 
 stage
-python3 - "$TMP/tree/design/c03-13-w-hybrid-prep-2026-08-20.json" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-d["overlay_remeasured_in_this_gate"] = True
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (overlay remasure leaked) is killed"
-else bad "overlay remasure stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+printf '\nexport function phaseForPaidIssue() { return "term" }\n' >> "$TMP/tree/$LW/license/issue-context.ts"
+expect "mutant (phaseForPaidIssue landed) is killed" 1
+
+stage
+mutate "$LW/license/issue-context.ts" \
+  'const lines = linePlanFor(purchase, settledAt, paidThrough);' \
+  'const paidIssue = purchase.action === "issue";
+  const lines = purchase.lines.map((line) => ({ lineKey: line.lineKey, phase: paidIssue ? "refund_window" : "term", guaranteeDeadline: null, promotionHoldDeadline: null }));'
+expect "mutant (one aggregate phase for every line restored) is killed" 1
+
+stage
+mutate "$LW/dodo/cohort.ts" \
+  'treatment: prior.has(line.lineKey) ? "renewed" : "initial_eligible",' \
+  'treatment: prior.size > 0 ? "renewed" : "initial_eligible",'
+expect "mutant (per-line classification removed: treatment from the aggregate) is killed" 1
+
+stage
+mutate "$LW/dodo/cohort.ts" \
+  'action: prior.size > 0 ? "renew" : "issue"' \
+  'action: "issue"'
+expect "mutant (hardcoded issue action restored) is killed" 1
+
+stage
+mutate "$LW/dodo/webhook.ts" \
+  '  const classified = classifyPaidPurchase(decision.purchase, prior);
+  if (classified.kind === "history_unclassifiable") {
+    return await settle(deps.store, {' \
+  '  const classified = classifyPaidPurchase(decision.purchase, { maxIssueSeq: 0, priorLineKeys: [], legacyUnprojected: false });
+  if (classified.kind === "history_unclassifiable") {
+    return await settle(deps.store, {'
+expect "mutant (operator replay classifies without committed history) is killed" 1
+
+stage
+mutate "$LW/dodo/webhook.ts" \
+  'classifyPaidPurchase(refreshed.purchase, prior)' \
+  'classifyPaidPurchase(refreshed.purchase, { maxIssueSeq: 0, priorLineKeys: [], legacyUnprojected: false })'
+expect "mutant (sequence rebuild ignores the re-read history) is killed" 1
+
+stage
+mutate "$LW/dodo/webhook.ts" \
+  'credentialFromLinePlan(purchase, issuance.lines, issuance.ctx)' \
+  'credentialFromPurchase(purchase, "refund_window", { ...issuance.ctx, guaranteeDeadline: null, promotionHoldDeadline: null })'
+expect "mutant (route signs one uniform phase) is killed" 1
+
+stage
+mutate "$LW/license/credential-v3.ts" \
+  'const entry = byLine.get(line.lineKey)!;' \
+  'const entry = plan[purchase.lines.indexOf(line)];'
+expect "mutant (plan applied by position) is killed" 1
+
+stage
+json_flag overlay_remeasured_in_this_gate
+expect "mutant (overlay remasure leaked) is killed" 1
+
+stage
+printf '\n// history: paidIssue ? "refund_window" : "term" was one phase for every line\n' >> \
+  "$TMP/tree/$LW/license/issue-context.ts"
+printf '\n// history: credentialFromPurchase(purchase, issuance.phase, issuance.ctx) signed it\n' >> \
+  "$TMP/tree/$LW/dodo/webhook.ts"
+expect "no-fire: prose quoting the removed expressions stays CLEAN" 0
 
 stage
 rm -f "$TMP/tree/design/c03-13-w-hybrid-prep-2026-08-20.json"
-run
-if [ "$(cat "$TMP/rc")" = 2 ]; then ok "missing JSON is COULD NOT LOOK"
-else bad "missing JSON rc=$(cat "$TMP/rc") want 2 ($(cat "$TMP/err"))"; fi
+expect "missing JSON is COULD NOT LOOK" 2
 
 stage
-run
-if [ "$(cat "$TMP/rc")" = 0 ]; then ok "no-fire: live pin stays CLEAN"
-else bad "no-fire should stay CLEAN ($(cat "$TMP/err"))"; fi
+rm -f "$TMP/tree/$LW/dodo/webhook.ts"
+expect "missing producer source is COULD NOT LOOK" 2
+
+stage
+expect "no-fire: live construction stays CLEAN" 0
 
 echo "check-c03-13-w-hybrid-prep selftest: $pass passed, $fail failed"
 if [ "$fail" -ne 0 ]; then exit 1; fi

@@ -51,5 +51,16 @@
     "setPassword": "Vous choisirez votre propre mot de passe ; l'administrateur qui vous a invité ne le verra jamais.",
     "ignore": "Si vous ne vous attendiez pas à recevoir ce message, n'utilisez pas le lien et contactez l'administrateur qui vous a invité. Le compte existe déjà ; si vous ignorez ce message, seul son mot de passe restera non défini.",
     "textIntro": "Utilisez ce lien d'invitation pour configurer votre compte Olivares AI :"
+  },
+  "portalInvite": {
+    "subject": "Vous avez été invité à rejoindre une organisation sur Olivares AI",
+    "preheader": "Acceptez cette invitation pour rejoindre {{ORG_NAME}} dans le portail client Olivares AI.",
+    "heading": "Rejoindre {{ORG_NAME}}",
+    "intro": "{{INVITER}} vous a invité à rejoindre {{ORG_NAME}} dans le portail client Olivares AI en tant que {{ROLE}}.",
+    "cta": "Accepter l'invitation",
+    "expiry": "Cette invitation ne peut être utilisée qu'une seule fois et expire le {{EXPIRES_AT}}.",
+    "howYouSignIn": "La connexion se fait par un lien à usage unique envoyé à cette adresse, et l'invitation doit être acceptée depuis l'adresse à laquelle elle a été envoyée.",
+    "ignore": "Si vous n'attendiez pas ce message, n'utilisez pas le lien et adressez-vous à la personne qui vous a invité. L'ignorer ne laisse aucune trace et n'accorde rien à personne.",
+    "textIntro": "{{INVITER}} vous a invité à rejoindre {{ORG_NAME}} dans le portail client Olivares AI en tant que {{ROLE}}. Utilisez ce lien :"
   }
 }

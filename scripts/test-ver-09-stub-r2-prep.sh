@@ -40,13 +40,39 @@ stage() {
   if [ -f "$ROOT/scripts/check-commerce-preflight.sh" ]; then
     cp "$ROOT/scripts/check-commerce-preflight.sh" "$TMP/tree/scripts/"
   fi
-  cp "$ROOT/scripts/lib/git-env.sh" "$TMP/tree/scripts/lib/"
+  # ⛔ LOS LIBS SE DERIVAN DE LO QUE LOS SUJETOS SOURCEAN, no se escriben a mano. Aqui habia UNA
+  #    linea, `lib/git-env.sh`, y el 2026-09-02 `check-commerce-preflight.sh` gano
+  #    `lib/exec-workdir.sh`: el banco cayo a 2 passed / 10 failed y CADA fallo decia «COULD NOT
+  #    LOOK ... no puedo cargar .../lib/exec-workdir.sh», que se lee como problema del sujeto y no
+  #    del banco. Es la MISMA clase que tumbo a test-int-12-no-land.sh el mismo dia. Una lista de
+  #    dependencias escrita a mano no sigue al sujeto; una derivada, si — y si falta una, se dice
+  #    en voz alta en vez de reventar dentro de un caso.
+  for _sujeto in "$ROOT/scripts/check-commerce-preflight.sh" "$CHECK"; do
+    [ -r "$_sujeto" ] || continue
+    while IFS= read -r _dep; do
+      [ -n "$_dep" ] || continue
+      if [ ! -r "$ROOT/scripts/lib/$_dep" ]; then
+        echo "test-ver-09-stub-r2-prep: NO HE PODIDO MIRAR: $(basename "$_sujeto") sourcea scripts/lib/$_dep y no existe" >&2
+        exit 2
+      fi
+      cp "$ROOT/scripts/lib/$_dep" "$TMP/tree/scripts/lib/"
+    done <<DEPS
+$(grep -oE 'lib/[a-z0-9._-]+\.sh' "$_sujeto" | sed 's#.*/##' | sort -u)
+DEPS
+  done
+  unset _sujeto
   cp "$ROOT/commercial/license-worker/src/download/artifacts.ts" \
     "$ROOT/commercial/license-worker/src/download/sets.ts" \
     "$ROOT/commercial/license-worker/src/download/manifests.ts" \
     "$TMP/tree/commercial/license-worker/src/download/"
   cp "$ROOT/commercial/license-worker/src/dodo/catalog.ts" \
     "$TMP/tree/commercial/license-worker/src/dodo/"
+  # src/env.ts joined the preflight's dependency list on 2026-09-16, when the CFG-12 refusal
+  # started importing cloudForwardMode from the Worker instead of restating its three states.
+  # This copy list IS the preflight's dependency manifest for the hermetic tree; without the
+  # file the whole battery degrades to COULD NOT LOOK, which is how this gate found the gap.
+  cp "$ROOT/commercial/license-worker/src/env.ts" \
+    "$TMP/tree/commercial/license-worker/src/"
   cp "$ROOT/commercial/license-worker/src/polar/products.ts" \
     "$TMP/tree/commercial/license-worker/src/polar/"
   cp "$CHECK" "$TMP/tree/scripts/"

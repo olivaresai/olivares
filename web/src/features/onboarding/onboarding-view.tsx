@@ -421,7 +421,23 @@ function StepCard({
 }
 
 /** A privileged inline form: the AAL3 step-up gates the body until the session
- * elevates, exactly like the residency dialog. */
+ * elevates, exactly like the residency dialog.
+ *
+ * `allowEnrollment` is the FIRST HOUR, and it is only an OFFER. An operator who
+ * reaches this wizard before any passkey exists for their account could not
+ * complete a single privileged step here: the gate asked for AAL3, the engine
+ * answered `no_webauthn_credential`, and the panel had no way to say what to do
+ * about it — while the very same ceremony owner already registers a first
+ * credential for the privileged-login and Add Connector surfaces. This turns
+ * that existing offer on for this route; it introduces no mechanism.
+ *
+ * What it does NOT change, and what the tests hold: the server stays the
+ * enrollment authority and only opens the offer by answering "no credential";
+ * registration establishes a credential and nothing else — never authentication,
+ * never elevation; the AAL3 demand, the backend permission and the
+ * no-access-before-proof rule are untouched, so the form below opens only after
+ * an explicit authenticate and a fresh authoritative whoami for the SAME
+ * principal at the required AAL. */
 function Privileged({
   action,
   children,
@@ -430,7 +446,7 @@ function Privileged({
   children: ReactNode
 }) {
   return (
-    <RequireAssurance minAal={AAL.HARDWARE} action={action}>
+    <RequireAssurance minAal={AAL.HARDWARE} action={action} allowEnrollment>
       {children}
     </RequireAssurance>
   )

@@ -372,6 +372,130 @@ check "(26) 'vet' resuelve a lint:vet Y a vet -> 2" 2 "$(corre "$d")"
 grep -q 'DOS tareas' "$TMP/ultima.out" && { PASS=$((PASS+1)); printf 'ok   %-58s\n' "(26b) y dice que la etiqueta resuelve a dos"; } \
 	|| { FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(26b) no nombra la ambigüedad"; }
 
+# --- R18 · EL `task` REAL BAJO `CI=true`, Y UN PRODUCTOR QUE MUERE A MEDIA LISTA ----------------
+# ⛔ MEDIDO el 2026-09-07 en `mainline-ci` (run 34167328609) sobre la costura hermana de
+#    `pre-verify-tanda.sh`, y reproducido aqui sobre ESTE sujeto: Task 3.51.1 con `CI=true` en el
+#    entorno escribe secuencias ANSI en `--list-all` AUNQUE la salida vaya por un tubo, el `sed` del
+#    centinela no casaba ni una fila y rehusaba por «devolvio 0 tarea(s)» — un 2 honesto, pero un
+#    centinela que no puede correr donde tiene que correr. Ningun senuelo lo reproduce: hace falta
+#    el `task` REAL del PATH con la variable puesta, y por eso estos casos lo usan. `--color=false`
+#    gana a `CI=true` y a `FORCE_COLOR=1` juntas (sondeado sobre el binario 3.51.1).
+#
+# ⛔ `NO_COLOR` SE RETIRA A PROPOSITO en cada invocacion de este bloque: un `NO_COLOR=1` heredado
+#    hace que Task calle el color aunque `CI=true` este puesta, y entonces el mutante sin bandera
+#    SOBREVIVIRIA y el bloque pasaria por la razon equivocada. El runner no lleva `NO_COLOR`.
+corre_con() { # <dir> [-u VAR ...] [VAR=val ...] -- [args del sujeto...] -> rc ; SUT_ALT sustituye al sujeto
+	# ⛔ `-u` ANTES de cualquier VAR=val: `env` deja de leer opciones en la primera asignacion y un
+	# `-u` posterior se convierte en el NOMBRE DEL COMANDO (rc 127). Medido al escribir este bloque.
+	local d="$1"; shift
+	local envs=()
+	while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do envs+=("$1"); shift; done
+	shift || true
+	( cd "$d" && env ${envs[@]+"${envs[@]}"} OLIVARES_ROOT="$d" OLIVARES_PARITY_CMD="$TMP/$(basename "$d")-paridad.sh" \
+		OLIVARES_WATCHDOG_MIN_LEGS=3 OLIVARES_WATCHDOG_MIN_TASKS=3 bash "${SUT_ALT:-$SUT}" "$@" >"$TMP/out.$$" 2>&1 ); local rc=$?
+	cp "$TMP/out.$$" "$TMP/ultima.out" 2>/dev/null; rm -f "$TMP/out.$$"; echo "$rc"
+}
+d="$(fixture cicolor 4 0)"
+rc="$(corre_con "$d" -u NO_COLOR CI=true FORCE_COLOR=1 --)"
+check "(R18-COLOR) fixture sano bajo CI=true FORCE_COLOR=1 con el task real -> 0" 0 "$rc"
+if grep -q 'lista derivada 4 pata(s) · a medir 4' "$TMP/ultima.out" && [ "$(grep -c ' rc=0 ' "$TMP/ultima.out" || true)" = 4 ]; then
+	PASS=$((PASS+1)); printf 'ok   %-58s\n' "(R18-COLOR) y midio las 4 con su rc, nombres intactos"
+else
+	FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(R18-COLOR) no midio las 4 bajo CI=true"; sed 's/^/       /' "$TMP/ultima.out" | head -4
+fi
+
+# MUTANTE R18-COLOR: sin `--color=false` en el listado, bajo CI=true el centinela vuelve a rehusar
+# por «0 tarea(s)»; sin CI el mismo mutante sigue en 0 — la dimension es el entorno, no el mutante.
+MUTC="$TMP/mut-color.sh"
+python3 - "$SUT" "$MUTC" <<'MC'
+import sys
+s = open(sys.argv[1], encoding="utf-8").read()
+v = 'SALIDA_LISTA="$(task --list-all --color=false 2>&1)"; RC_LISTA=$?'
+if v not in s:
+    sys.exit(3)
+open(sys.argv[2], "w", encoding="utf-8").write(s.replace(v, 'SALIDA_LISTA="$(task --list-all 2>&1)"; RC_LISTA=$?', 1))
+MC
+if [ -s "$MUTC" ] && ! cmp -s "$SUT" "$MUTC"; then PASS=$((PASS+1)); printf 'ok   %-58s\n' "(M-R18-COLOR) el mutante sin --color=false difiere"
+else FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(M-R18-COLOR) mutante no escrito o identico"; fi
+rc="$(SUT_ALT="$MUTC" corre_con "$d" -u NO_COLOR CI=true FORCE_COLOR=1 --)"
+check "(M-R18-COLOR) sin la bandera, bajo CI=true rehusa -> 2" 2 "$rc"
+grep -q 'devolvio 0 tarea(s)' "$TMP/ultima.out" && { PASS=$((PASS+1)); printf 'ok   %-58s\n' "(M-R18-COLOR) por «devolvio 0 tarea(s)»: el ANSI se comio las filas"; } \
+	|| { FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(M-R18-COLOR) no rehusa por la lista vacia"; }
+rc="$(SUT_ALT="$MUTC" corre_con "$d" -u NO_COLOR -u CI -u FORCE_COLOR --)"
+check "(M-R18-COLOR) control: el mismo mutante SIN CI ni FORCE_COLOR sigue -> 0" 0 "$rc"
+
+# (R18-PRODUCTOR) un `task --list-all` que imprime media lista y muere: 2 nombrando el rc del
+# productor, y NINGUNA pata corre sobre lo que llego a imprimir. La media lista trae todas las
+# etiquetas del fixture a proposito: una version que se creyera la salida sin mirar el rc
+# resolveria las cuatro y las mediria.
+d="$(fixture productor 4 0)"
+SHIMP="$TMP/shim-productor"; mkdir -p "$SHIMP"
+MARCA="$TMP/productor.llamadas"; : >"$MARCA"
+cat >"$SHIMP/task" <<SHIM
+#!/bin/sh
+case "\${1:-}" in
+--list-all) printf 'task: Available tasks for this project:\n'; for i in 01 02 03 04; do printf '* lint:pata%s:   \n' "\$i"; done; echo "SENUELO_PARCIAL: me muero a media lista" >&2; exit 5 ;;
+*)          echo "\$*" >>"$MARCA"; exit 0 ;;
+esac
+SHIM
+chmod +x "$SHIMP/task"
+rc="$(corre_con "$d" PATH="$SHIMP:$PATH" --)"
+check "(R18-PRODUCTOR) media lista y rc 5 -> 2, no un veredicto sobre la mitad" 2 "$rc"
+grep -q 'salio 5; no acepto la parte de lista' "$TMP/ultima.out" && { PASS=$((PASS+1)); printf 'ok   %-58s\n' "(R18-PRODUCTOR) y nombra el rc del productor"; } \
+	|| { FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(R18-PRODUCTOR) no nombra el rc del productor"; sed 's/^/       /' "$TMP/ultima.out" | head -3; }
+grep -q 'SENUELO_PARCIAL' "$TMP/ultima.out" && { PASS=$((PASS+1)); printf 'ok   %-58s\n' "(R18-PRODUCTOR) y conserva lo que el productor dijo al morir"; } \
+	|| { FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(R18-PRODUCTOR) pierde el stderr del productor"; }
+if [ ! -s "$MARCA" ]; then PASS=$((PASS+1)); printf 'ok   %-58s\n' "(R18-PRODUCTOR) y NO corrio ninguna pata con la media lista"
+else FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(R18-PRODUCTOR) corrio patas sobre una lista a medias"; fi
+
+# (R18-RELISTA) la RE-LISTA del brazo 200 tiene las mismas guardas: si `task --list-all` falla al
+# re-listar, la pata es CIEGA con esa causa — ni ROJA (la media lista traia su nombre) ni «ya no
+# existe» (no se leyo ninguna lista). El senuelo DELEGA en el task real y solo rompe la SEGUNDA
+# llamada a `--list-all`, imprimiendo media lista con `lint:pata01` dentro antes de salir 9.
+TASK_REAL="$(command -v task)"
+d="$(fixture relista 3 200)"
+SHIMR="$TMP/shim-relista"; mkdir -p "$SHIMR"
+CONTADOR="$TMP/relista.contador"; : >"$CONTADOR"
+cat >"$SHIMR/task" <<SHIM
+#!/bin/sh
+case "\${1:-}" in
+--list-all)
+	n=\$(cat "$CONTADOR" 2>/dev/null); n=\$(( \${n:-0} + 1 )); echo "\$n" >"$CONTADOR"
+	if [ "\$n" -ge 2 ]; then printf '* lint:pata01:   \n'; echo "SENUELO_RELISTA: me muero al re-listar" >&2; exit 9; fi
+	exec "$TASK_REAL" "\$@" ;;
+*) exec "$TASK_REAL" "\$@" ;;
+esac
+SHIM
+chmod +x "$SHIMR/task"
+rc="$(corre_con "$d" -u NO_COLOR PATH="$SHIMR:$PATH" --)"
+check "(R18-RELISTA) pata 200 y re-lista rota -> 2 (ciega con causa), no 1" 2 "$rc"
+linea01="$(grep -m1 'lint:pata01 ' "$TMP/ultima.out" || true)"
+case "$linea01" in *"no pude re-listar"*"salio 9"*) PASS=$((PASS+1)); printf 'ok   %-58s\n' "(R18-RELISTA) y la fila dice que no pudo re-listar, con el rc" ;;
+*) FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(R18-RELISTA) la fila no nombra la re-lista rota"; printf '       %s\n' "$linea01" ;; esac
+case "$linea01" in *ROJA*|*"no existe ya"*) FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(R18-RELISTA) afirma sobre una lista que no leyo" ;;
+*) PASS=$((PASS+1)); printf 'ok   %-58s\n' "(R18-RELISTA) y no la llama ROJA ni «ya no existe»" ;; esac
+grep -q ' 2 limpia(s) · 0 roja(s) · 1 sin poder mirar (de 3)' "$TMP/ultima.out" && { PASS=$((PASS+1)); printf 'ok   %-58s\n' "(R18-RELISTA) y las otras dos se midieron igual"; } \
+	|| { FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(R18-RELISTA) el resumen no cuadra"; tail -1 "$TMP/ultima.out" | sed 's/^/       /'; }
+
+# MUTANTE R18-RELISTA: se deja de leer el rc de la re-lista. La media lista trae `lint:pata01`, el
+# mutante la cree y publica ROJA sobre una lista que su productor no termino: rc 1.
+MUTR="$TMP/mut-relista.sh"
+python3 - "$SUT" "$MUTR" <<'MR'
+import sys
+s = open(sys.argv[1], encoding="utf-8").read()
+v = 'if [ "$_rc_ahora" -ne 0 ]; then'
+if v not in s:
+    sys.exit(3)
+open(sys.argv[2], "w", encoding="utf-8").write(s.replace(v, 'if [ "$_rc_ahora" -lt 0 ]; then', 1))
+MR
+if [ -s "$MUTR" ] && ! cmp -s "$SUT" "$MUTR"; then PASS=$((PASS+1)); printf 'ok   %-58s\n' "(M-R18-RELISTA) el mutante que no lee el rc de la re-lista difiere"
+else FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(M-R18-RELISTA) mutante no escrito o identico"; fi
+: >"$CONTADOR"
+rc="$(SUT_ALT="$MUTR" corre_con "$d" -u NO_COLOR PATH="$SHIMR:$PATH" --)"
+check "(M-R18-RELISTA) sin leer el rc, la media lista pasa y publica ROJA -> 1" 1 "$rc"
+grep -q 'lint:pata01 .*ROJA' "$TMP/ultima.out" && { PASS=$((PASS+1)); printf 'ok   %-58s\n' "(M-R18-RELISTA) sobre una lista que su productor no termino"; } \
+	|| { FAIL=$((FAIL+1)); printf 'FAIL %-58s\n' "(M-R18-RELISTA) el mutante no publica ROJA"; }
+
 echo
 echo "watchdog-hook-only-legs selftest: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

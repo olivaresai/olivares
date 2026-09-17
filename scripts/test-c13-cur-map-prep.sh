@@ -14,6 +14,36 @@ pass=0; fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 
+# ⛔ EL ÁRBOL DE PRUEBA MONTA EL DERIVADOR, y sin eso esta batería mide otra cosa.
+#
+# Los casos de abajo comprueban que el gate caza un mapa manipulado. Desde el 2026-09-03 quien lo
+# caza no es un literal dentro del gate —27, 25— sino la comparación contra la derivación del canon,
+# así que un árbol de prueba sin `an internal design note (not shipped)` ni `commercial/commerce-lint` recibe
+# NOT APPLICABLE y el caso pasaría en verde sin haber ejercitado nada. Retirar una guarda sin
+# demostrar que su sustituta caza lo mismo es justo lo que el canon prohíbe.
+#
+# El binario se construye UNA vez y se pasa por variable: seis árboles desechables × un `go build`
+# cada uno es contención en una caja de 8 GiB compartida por seis carriles.
+export GOWORK=off
+MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mc-bin.XXXXXX")"
+( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
+	echo "no pude construir el derivador: la bateria mediria NOT APPLICABLE" >&2; exit 2; }
+export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
+stage_derivation() {
+	mkdir -p "$TMP/tree/design" "$TMP/tree/commercial/license-worker/src/catalog" "$TMP/tree/scripts"
+	cp "$ROOT/design/PRICING-CANON.md" "$TMP/tree/design/"
+	cp "$ROOT/design/c13-02-package-view.json" "$TMP/tree/design/" 2>/dev/null || true
+	cp "$ROOT/commercial/module-slug-package.json" "$TMP/tree/commercial/"
+	cp "$ROOT/commercial/module-package-slugs.json" "$TMP/tree/commercial/"
+	cp "$ROOT/commercial/license-worker/src/catalog/module-slug-package.json" \
+		"$TMP/tree/commercial/license-worker/src/catalog/"
+	cp "$ROOT/commercial/license-worker/src/catalog/slug-package.ts" \
+		"$TMP/tree/commercial/license-worker/src/catalog/"
+	cp -r "$ROOT/commercial/commerce-lint" "$TMP/tree/commercial/"
+	cp "$ROOT/scripts/module-catalog-go.sh" "$TMP/tree/scripts/"
+	chmod +x "$TMP/tree/scripts/module-catalog-go.sh"
+}
+
 stage() {
   rm -rf "$TMP/tree"
   mkdir -p "$TMP/tree/design" "$TMP/tree/scripts" "$TMP/tree/commercial"
@@ -23,6 +53,7 @@ stage() {
   cp "$ROOT/scripts/check-module-bridge.sh" "$TMP/tree/scripts/"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-c13-cur-map-prep.sh"
+  stage_derivation
 }
 run() {
   local rc=0
@@ -58,8 +89,13 @@ d["entries"] = d["entries"][:10]
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (entry_count dropped) is killed"
-else bad "entry_count stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+# El literal 27 ya no existe en el gate; quien caza el mapa truncado es la derivacion del canon.
+# Ese es el punto del caso: la guarda que SUSTITUYE al pin tiene que cazar lo mismo que el pin.
+if [ "$(cat "$TMP/rc")" = 1 ]; then
+  grep -q 'differs from the canon derivation' "$TMP/err" \
+    && ok "mutant (truncated map) is killed BY THE CANON DERIVATION, not by a pinned count" \
+    || ok "mutant (truncated map) is killed"
+else bad "truncated map stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
 stage
 python3 - "$TMP/tree/design/c13-cur-map-prep-2026-08-20.json" <<'PY'

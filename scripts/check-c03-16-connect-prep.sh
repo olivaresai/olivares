@@ -5,6 +5,20 @@
 #
 # C03-16 unique leftover unique vs #969 (original OPEN product PR;
 # no original check on origin/main). 0 CLEAN · 1 finding · 2 could not look.
+#
+# 2026-09-14 (R116 current-source guard): the 2026-08-20 JSON and doc remain a
+# dated HOLD record of hub a06ee242a, including connect_landed=false and
+# UNKNOWN overlay fields, and are still checked as that record. They do not
+# describe the accepted current Worker. The source half used to require the
+# handler, import and /connect/ route to be absent; that absence is why
+# publication26 refused the live tree. The source half now pins the accepted
+# construction instead: index.ts imports handleConnect from ./connect/handler.ts
+# and dispatches pathname /connect/ to it; handler.ts exports async
+# handleConnect and dispatches the accepted connect routes. Comments are
+# stripped before matching, so a comment or an empty named export neither
+# satisfies the positive nor rewrites the dated record. This is a structural
+# source pin, not a release-readiness claim; runtime tests keep behavioral
+# authority.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }
@@ -19,7 +33,7 @@ DOC="${OLIVARES_C0316P_DOC:-design/C03-16-CONNECT-PREP-2026-08-20.md}"
 IDX="${OLIVARES_C0316P_IDX:-commercial/license-worker/src/index.ts}"
 HANDLER="${OLIVARES_C0316P_HANDLER:-commercial/license-worker/src/connect/handler.ts}"
 
-for f in "$JSON" "$DOC" "$IDX"; do
+for f in "$JSON" "$DOC" "$IDX" "$HANDLER"; do
   [ -r "$f" ] || cannot "missing $f"
 done
 command -v python3 >/dev/null || cannot "no python3"
@@ -36,15 +50,77 @@ if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|/connect landed' 
   fail "prepare doc claims an application this lote does not have"
 fi
 
-if [ -e "$HANDLER" ]; then
-  fail "connect/handler.ts landed — this HOLD lote does not apply C03-16"
-fi
-if grep -q 'handleConnect' "$IDX"; then
-  fail "handleConnect imported — this HOLD lote does not apply C03-16"
-fi
-if grep -q 'pathname.startsWith("/connect/")' "$IDX"; then
-  fail "/connect/ route landed — this HOLD lote does not apply C03-16"
-fi
+python3 - "$IDX" "$HANDLER" <<'PY' || exit $?
+import re, sys
+
+def fail(msg):
+    print(f"check-c03-16-connect-prep: FAIL — {msg}", file=sys.stderr)
+    sys.exit(1)
+
+def cannot(msg):
+    print(f"check-c03-16-connect-prep: COULD NOT LOOK — {msg}", file=sys.stderr)
+    sys.exit(2)
+
+def code(path):
+    try:
+        text = open(path, encoding="utf-8").read()
+    except Exception as e:
+        cannot(f"source not readable: {e}")
+    # Consume quoted literals and escapes before recognizing comments. This
+    # preserves URLs and escaped slashes in the current source, while calls
+    # quoted in either whole-line or inline comments cannot satisfy a pin.
+    # This lexical source guard does not establish TypeScript reachability.
+    tokens = re.compile(
+        r'''\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`|(?P<comment>//[^\r\n]*|/\*[\s\S]*?\*/)'''
+    )
+    return tokens.sub(lambda match: " " if match.group("comment") is not None else match.group(), text)
+
+idx, handler = (code(p) for p in sys.argv[1:3])
+
+def need(src, name, needle, why):
+    n = src.count(needle)
+    if n != 1:
+        fail(f"{why} ({name}: expected 1 of {needle!r}, found {n})")
+
+need(
+    idx,
+    "index.ts",
+    'import { handleConnect } from "./connect/handler.ts";',
+    "current index.ts does not import handleConnect from ./connect/handler.ts",
+)
+need(
+    idx,
+    "index.ts",
+    'url.pathname.startsWith("/connect/")',
+    "current index.ts does not dispatch pathname /connect/",
+)
+need(
+    idx,
+    "index.ts",
+    "return await handleConnect(env, request, store, nowSec());",
+    "current index.ts /connect/ route does not call handleConnect",
+)
+need(
+    handler,
+    "connect/handler.ts",
+    "export async function handleConnect(env: Env, request: Request, store: Store, nowSec: number): Promise<Response>",
+    "current connect/handler.ts does not export the accepted async handleConnect signature",
+)
+for needle, route in (
+    ("return await handleChallenge(env, request, store, nowSec);", "/connect/challenges"),
+    ("return await handleDeployments(env, request, store, nowSec);", "/connect/deployments"),
+    ("return await handleRefresh(env, request, store, nowSec);", "/connect/refresh"),
+    ("return await handleRotate(env, request, store, nowSec, rotate[1]);", "rotate-key"),
+    ("return await handleDelete(env, request, store, nowSec, del[1]);", "DELETE /connect/deployments/:id"),
+):
+    need(
+        handler,
+        "connect/handler.ts",
+        needle,
+        "current connect/handler.ts is a stub: handleConnect does not dispatch " + route,
+    )
+print("source-ok")
+PY
 
 python3 - "$JSON" <<'PY' || exit $?
 import json, sys
@@ -79,5 +155,5 @@ for k in ("u_f", "u_d"):
 print("json-ok")
 PY
 
-say "check-c03-16-connect-prep: CLEAN — /connect HOLD; overlay remasure not in this gate."
+say "check-c03-16-connect-prep: CLEAN — the 2026-08-20 /connect HOLD record is intact; current source imports handleConnect, dispatches /connect/ to the non-stub handler; overlay remasure not in this gate."
 exit 0

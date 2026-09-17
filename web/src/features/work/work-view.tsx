@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ClipboardList, Inbox } from 'lucide-react'
@@ -15,15 +15,21 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  IntelPage,
-  ListTruncationBadge,
-  SectionCard,
-} from '@/features/_intel'
+import { IntelPage, ListTruncationBadge, SectionCard } from '@/features/_intel'
 import { LiveDot } from '@/features/shared'
+import {
+  HandoffOfferHost,
+  type HandoffOfferTarget,
+  type HandoffWorkItemView,
+} from '@/features/communications'
 import { useOwnerLabel } from './owner-label'
 import { useAuth } from '@/lib/auth/context'
-import { listWorkItems, workKeys, type ListWorkParams } from './api'
+import {
+  getWorkItem,
+  listWorkItems,
+  workKeys,
+  type ListWorkParams,
+} from './api'
 import { DecisionsPanel } from './decisions-panel'
 import { ItemDetailSheet } from './item-detail'
 import { StatusBadge } from './status-badge'
@@ -74,6 +80,21 @@ export function WorkView() {
   const [streamUnavailable, setStreamUnavailable] = useState<string | null>(
     null,
   )
+  /**
+   * K3 I3 — the offer TARGET, and why it carries an invocation counter rather than
+   * just an id. Reopening the same item has to be a NEW explicit editor action: with
+   * an id alone, closing the offer dialog and pressing the button again would look
+   * identical to the state that is already set, so nothing would reopen. The counter
+   * makes "again" expressible.
+   */
+  const [offerTarget, setOfferTarget] = useState<HandoffOfferTarget | null>(
+    null,
+  )
+  const offerInvocation = useRef(0)
+  /** The item-sheet control that opened the offer dialog, captured at the click. */
+  const offerOpener = useRef<HTMLElement | null>(null)
+  /** A visible control of this view, used when the opener is gone on close. */
+  const refreshRef = useRef<HTMLButtonElement | null>(null)
 
   const params: ListWorkParams = useMemo(
     () => ({
@@ -115,6 +136,38 @@ export function WorkView() {
     onUnavailable: setStreamUnavailable,
   })
 
+  /**
+   * The work-side adapter: one fresh, uncached `GET /work-items/{id}` under the
+   * explicitly captured tenant, projected down to what communications may see.
+   *
+   * The tenant is a closure value, not a lookup at call time, so an operation begun
+   * in one tenant cannot read an item in the next. A missing ETag is returned as
+   * missing rather than rebuilt from `item.version`: without a validator there is
+   * no precondition to offer under, and the host refuses to confirm.
+   */
+  const readItemForHandoff = useCallback(
+    async (id: string, signal: AbortSignal): Promise<HandoffWorkItemView> => {
+      const { snapshot, etag } = await getWorkItem(
+        id,
+        { tenant: activeTenant },
+        signal,
+      )
+      return {
+        item: {
+          id: snapshot.item.id,
+          workspace_id: snapshot.item.workspace_id,
+          title: snapshot.item.title,
+          status: snapshot.item.status,
+          owner_kind: snapshot.item.owner_kind,
+          owner_ref: snapshot.item.owner_ref,
+          owner_epoch: snapshot.item.owner_epoch,
+        },
+        etag,
+      }
+    },
+    [activeTenant],
+  )
+
   return (
     <IntelPage
       icon={ClipboardList}
@@ -124,6 +177,7 @@ export function WorkView() {
         <div className="flex items-center gap-3">
           <LiveDot status={streamStatus} />
           <Button
+            ref={refreshRef}
             variant="outline"
             size="sm"
             onClick={() => void query.refetch()}
@@ -243,28 +297,31 @@ export function WorkView() {
                   />
                 ) : (
                   <>
-                  <ul className="flex flex-col divide-y divide-border">
-                    {page.items.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => setOpenItem(item.id)}
-                          className="flex w-full items-start justify-between gap-4 py-3 text-left hover:bg-muted/40"
-                        >
-                          <div className="min-w-0 space-y-1">
-                            <p className="truncate text-sm font-medium">
-                              {item.title}
-                            </p>
-                            <p className="font-mono text-xs text-muted-foreground">
-                              {item.work_kind} ·{' '}
-                              {etiquetaDuenno(item.owner_kind, item.owner_ref)}
-                            </p>
-                          </div>
-                          <StatusBadge item={item} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                    <ul className="flex flex-col divide-y divide-border">
+                      {page.items.map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => setOpenItem(item.id)}
+                            className="flex w-full items-start justify-between gap-4 py-3 text-left hover:bg-muted/40"
+                          >
+                            <div className="min-w-0 space-y-1">
+                              <p className="truncate text-sm font-medium">
+                                {item.title}
+                              </p>
+                              <p className="font-mono text-xs text-muted-foreground">
+                                {item.work_kind} ·{' '}
+                                {etiquetaDuenno(
+                                  item.owner_kind,
+                                  item.owner_ref,
+                                )}
+                              </p>
+                            </div>
+                            <StatusBadge item={item} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                     {/* ⛔ EL AVISO VA CON LA LISTA, no en otra parte de la pantalla. `/v1/m/sessions`
                         pagina por KEYSET: `queryLimit` (modules/sessions/work_api.go:798-807) sirve
                         CIEN por omision y rechaza con 400 por encima de 200, asi que aqui NO existe
@@ -297,6 +354,25 @@ export function WorkView() {
         onOpenChange={(open) => {
           if (!open) setOpenItem(null)
         }}
+        onOffer={(itemId) => {
+          offerInvocation.current += 1
+          // Captured at the gesture: this control lives inside the item sheet,
+          // where a focusin observer cannot see it.
+          offerOpener.current =
+            document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null
+          setOfferTarget({ itemId, invocation: offerInvocation.current })
+        }}
+      />
+      {/* Mounted beside the item sheet and keyed by the communications scope, so
+          an unresolved offer survives closing the sheet and dies with the context. */}
+      <HandoffOfferHost
+        target={offerTarget}
+        readItem={readItemForHandoff}
+        getOpener={() => offerOpener.current}
+        getFallbackFocus={() => refreshRef.current}
+        onTargetConsumed={() => setOfferTarget(null)}
       />
     </IntelPage>
   )

@@ -29,10 +29,12 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 
 - 一台带有 systemd 和 `curl` 的 Linux 主机。
 - **Go 1.26+** 用于构建二进制（存储是纯 Go 的 SQLite，因此无需 C
-  工具链）。带签名预构建工件的发布会在首次公开
-  发布时提供 —— 在此之前你需从 checkout 构建，而
-  [验证一次发布](/zh/how-to/verify-a-release/)记录了你在它们存在后将
-  使用的信任链。
+  工具链）。先前的带标签发布已经交付过签名归档和软件包。本树的 canon 是
+  **v26.9.0**；安装面证人仍将 GitHub 归档和本机软件包记为
+  **not-published**，直到该 tag 的发布作业运行
+  （`docs/releases/v26.9.0-install-surfaces.json`）。在那些工件存在之前，从
+  checkout 构建。`main` 上的已验证安装器（`scripts/install.sh`）是独立于 tag
+  的已发布面。[验证一次发布](/zh/how-to/verify-a-release/)是工件存在后的信任链。
 
 ## 1. 构建并安装二进制
 
@@ -143,7 +145,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.

@@ -15,27 +15,53 @@
     "body": "{{what}} est un contrat déclaré — le point d’accès backend n’est pas encore actif, il n’y a donc rien à afficher. Ce panneau se remplira dès qu’il sera disponible ; il ne fabrique jamais de données."
   },
   "assurance": {
+    "address": {
+      "addressTitle": "Les clés d’accès ne sont pas disponibles à cette adresse.",
+      "ipBody": "Une partie utilisatrice de clé d’accès doit être un nom de domaine que le vérificateur de ce déploiement accepte, et une adresse IP n’en est pas un. Accédez à cette console par un nom d’hôte pour enregistrer ou utiliser une clé d’accès.",
+      "nameBody": "Une partie utilisatrice de clé d’accès doit être un nom de domaine que le vérificateur de ce déploiement accepte, et ce nom d’hôte n’en est pas un : il lui faut un point, et uniquement des lettres ASCII, des chiffres et des traits d’union.",
+      "insecureTitle": "Cette page n’est pas un contexte sécurisé.",
+      "insecureBody": "Les navigateurs n’exécutent l’API des clés d’accès que dans un contexte sécurisé ; aucune clé d’accès ne peut donc être enregistrée ni utilisée ici. Accédez à cette console en HTTPS, ou sur l’hôte local.",
+      "unsupportedTitle": "Ce navigateur ne prend pas en charge les clés d’accès.",
+      "unsupportedBody": "Ce navigateur n’expose aucune API WebAuthn ; aucune clé d’accès ne peut donc être enregistrée ni utilisée ici. Utilisez un navigateur compatible, ou une carte PIV/CAC présentée.",
+      "sameDevice": "Sur cet appareil, la même console répond aussi à :"
+    },
     "stepUpTitle": "Authentification renforcée requise",
-    "stepUpBody": "{{action}} requiert {{required}}. Votre session est {{current}}. Authentifiez-vous avec une clé de sécurité matérielle pour continuer.",
-    "authenticate": "S’authentifier avec une clé de sécurité",
+    "stepUpBody": "{{action}} requiert {{required}}. Votre session est {{current}}. Utilisez une clé d’accès sur votre appareil ou une clé de sécurité pour continuer.",
+    "authenticate": "S’authentifier avec une clé d’accès",
     "authenticatePiv": "S’authentifier avec une carte PIV/CAC",
     "authenticating": "En attente de votre authentificateur…",
     "seamWhat": "La cérémonie de connexion privilégiée (authentification renforcée WebAuthn)",
     "unsupported": "Ce navigateur ne prend pas en charge WebAuthn. Une plateforme prenant en charge les authentificateurs résistants à l’hameçonnage est requise pour les actions privilégiées.",
     "failed": "L’authentification renforcée n’a pas abouti. L’action reste refusée.",
+    "relyingPartyUnusable": "Les clés d’accès ne sont pas disponibles sur ce déploiement : le moteur n’a aucune partie utilisatrice exploitable pour l’adresse à laquelle la console est servie. Un opérateur doit configurer un domaine de partie utilisatrice valide — un nom d’hôte comportant un point, ou localhost lorsque cela convient —, accéder à la console à cette origine sécurisée déclarée, puis redémarrer le moteur après la modification. Réessayer à une autre adresse ne suffit pas à le corriger.",
     "actions": {
       "wif": "Consultation du graphe Workload Identity Federation",
       "identity": "Gestion de l’identité",
       "nhiLifecycleRotate": "Rotation d’un identifiant d’identité non humaine",
       "nhiLifecycleFinalize": "Finalisation du retrait d’une identité non humaine",
-      "generic": "Cette action"
+      "generic": "Cette action",
+      "console": "Gestion des connecteurs"
     },
     "aal": {
       "aal1": "AAL1 (mot de passe)",
       "aal2": "AAL2 (multifacteur)",
-      "aal3": "AAL3 (matériel, résistant à l’hameçonnage)"
+      "aal3": "AAL3 (résistant à l’hameçonnage)"
     },
-    "unenrolled": "Aucune clé d’accès n’est encore enregistrée pour votre compte. Enregistrez d’abord une clé de sécurité matérielle dans l’onglet Connexion privilégiée, puis réessayez l’authentification renforcée."
+    "unenrolled": "Aucune clé d’accès n’est encore enregistrée pour votre compte. Enregistrez une clé d’accès sur votre appareil ou une clé de sécurité dans l’onglet Connexion privilégiée, puis authentifiez-vous.",
+    "unenrolledInline": "Aucune clé d’accès n’est encore enregistrée pour votre compte. Enregistrez-en une ci-dessous ou utilisez une carte PIV/CAC présentée.",
+    "enrollHint": "Enregistrez votre première clé d’accès sur cet appareil ou sur une clé de sécurité. L’enregistrement seul n’authentifie pas la session et ne termine pas l’action en attente.",
+    "passkeyName": "Nom de la clé d’accès",
+    "enrollUnsupported": "Ce navigateur ne peut pas enregistrer de clé d’accès. Utilisez un navigateur compatible ou une carte PIV/CAC présentée.",
+    "registered": "Clé d’accès enregistrée. Authentifiez-vous pour vérifier cette session, puis vérifiez et terminez l’action en attente.",
+    "registrationUnknown": "L’enregistrement n’a pas pu être confirmé. La clé d’accès a peut-être été enregistrée. Sélectionnez l’authentification pour vérifier ; l’enregistrement ne sera pas renvoyé automatiquement.",
+    "authenticationUnknown": "L’authentification n’a pas pu être confirmée. La session est peut-être déjà élevée. Vérifiez la session avant de réessayer.",
+    "needsAuthentication": "Une clé d’accès existante doit authentifier cette session avant d’en enregistrer une autre. Sélectionnez l’authentification.",
+    "checkSession": "Vérifier la session",
+    "sessionExpired": "Cette session a été refusée. Fermez cette action et reconnectez-vous avant de réessayer.",
+    "verificationFailed": "La session n’a pas pu être vérifiée pour cette action. L’authentification a peut-être abouti ; l’action n’a pas été poursuivie.",
+    "cancelled": "L’opération avec la clé d’accès a été annulée ou a expiré. Vous pouvez réessayer. L’action n’a pas été poursuivie.",
+    "cancelHint": "Fermer annule cette action. Un enregistrement ou une authentification déjà envoyés peuvent encore aboutir.",
+    "registrationUnknownElsewhere": "L’inscription n’a pas pu être confirmée. La clé d’accès a peut-être été enregistrée. Fermez cette boîte de dialogue et vérifiez vos clés d’accès avant de commencer une nouvelle inscription."
   },
   "references": {
     "note": "Normes reflétées par ce panneau. Le panneau observe et vérifie ; il ne revendique aucune certification.",
@@ -532,7 +558,8 @@
     "pivRole": "Rôle mappé",
     "pivOcsp": "OCSP",
     "pivNote": "La vérification de la chaîne et de l’OCSP est effectuée par le backend ; le panneau en reflète le résultat.",
-    "pivNotConfigured": "PIV/CAC n’est pas configuré sur ce déploiement. Un opérateur l’active en définissant OLIVARES_PIV_CONFIG (CA d’agence, mappage certificat-vers-rôle) sur le moteur.",
+    "pivNotConfigured": "La connexion par carte PIV/CAC n’est pas configurée sur ce déploiement ; aucune carte ne peut donc être utilisée ici. Un administrateur doit la configurer sur le moteur pour qu’elle devienne disponible.",
+    "pivSetupGuide": "Guide de l’opérateur : configurer la connexion PIV/CAC",
     "ocsp": {
       "good": "Bon",
       "revoked": "Révoqué",

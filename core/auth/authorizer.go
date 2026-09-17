@@ -7,6 +7,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -87,6 +88,12 @@ type Request struct {
 	Permission Permission
 	Tenant     model.TenantID
 	Resource   ResourceAttrs
+	// Route carries the SEALED per-route metadata the engine declares where the route
+	// is registered (V269 / COCKPIT-02 §5). The zero value is every route that has not
+	// opted in, and for it the decision is bit-for-bit what it was before this field
+	// existed. See routemetadata.go — in particular why RequireScopedGrant removes the
+	// RBAC term rather than narrowing a permit.
+	Route RouteMetadata
 }
 
 // ResourceFor builds the request-path ResourceAttrs for a permission, seeding the
@@ -173,6 +180,7 @@ type ScopedAuthorizer interface {
 type Authorizer struct {
 	eval   PolicyEvaluator  // deny-overlay: may only further-restrict (nil ⇒ none)
 	scoped ScopedAuthorizer // positive scoped grants; nil ⇒ flat RBAC only
+	now    func() time.Time // the present, for consuming a witness's window (nil ⇒ time.Now)
 }
 
 // Option configures an Authorizer at construction.
@@ -183,6 +191,28 @@ type Option func(*Authorizer)
 // every existing call site keeps compiling and deciding identically.
 func WithScopedGrants(s ScopedAuthorizer) Option {
 	return func(a *Authorizer) { a.scoped = s }
+}
+
+// WithClock replaces the clock the authorizer reads when it consumes a witness's freshness
+// window. Without it the authorizer reads time.Now, so every existing call site keeps working.
+//
+// ⛔ IT EXISTS BECAUSE A WINDOW THAT NOBODY CONSUMES IS NOT A WINDOW. AuthorizeRoute used to
+// return success looking only at the evidence's outcome, so a decision whose window had already
+// closed - or never contained the present at all, since a contribution is only required to end
+// after it starts - was minted as an authorization. Consuming the window needs a clock, and a
+// clock that cannot be replaced cannot be tested: the witness for this is a decision whose
+// window sits entirely in the past, which is unwriteable against time.Now.
+func WithClock(now func() time.Time) Option {
+	return func(a *Authorizer) { a.now = now }
+}
+
+// clock is the authorizer's present. A nil clock means time.Now, which is what every call site
+// that predates the window check gets without changing a line.
+func (az *Authorizer) clock() time.Time {
+	if az == nil || az.now == nil {
+		return time.Now()
+	}
+	return az.now()
 }
 
 // NewAuthorizer returns an Authorizer using eval as the deny-overlay (ABAC) layer.
@@ -237,7 +267,11 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
 	}
 	baseAllowed := restrictionAllows
 	if !restricted {
-		baseAllowed = az.rbacAllows(req) || granted
+		// Route metadata may only REMOVE the RBAC term (routemetadata.go): a route can
+		// say "breadth of role is not enough here", never "this role now suffices". The
+		// scoped grant is untouched by it, so a principal authorized by policy keeps its
+		// path — which is what makes a governed terminal delegable at all.
+		baseAllowed = req.Route.rbacPermitted(req, az.rbacAllows(req)) || granted
 	}
 	if !baseAllowed {
 		return Decision{Allow: false, Reason: "rbac: not permitted"}

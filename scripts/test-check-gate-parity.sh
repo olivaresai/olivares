@@ -101,7 +101,16 @@ rm -f "$WORK/t/design/GATE-PARITY-2026-08-29.md"
 # --- citan `task at:gate`, asi que un censo del YAML entero la veia igualmente y el
 # --- veredicto salia bien por accidente. Borrar la invocacion REAL tiene que ponerlo rojo.
 restore
-sed -i '/run: pnpm --dir web run at:gate/d' "$WORK/t/.github/workflows/mainline-ci.yml"
+# ⛔ Y SE COMPRUEBA QUE EL MUTANTE SE APLICO. Este caso llevaba tiempo ROJO en `origin/main` por
+# una razon que no era la que anunciaba: su patron era `/run: pnpm --dir web run at:gate/`, y la
+# invocacion paso a vivir dentro de un bloque `run: |`, asi que hoy la linea real es
+# `          pnpm --dir web run at:gate 2>&1 | tee …`. El `sed` no borraba NADA, el gate contestaba
+# 0 con razon, y el caso leia ese 0 como «el gate no se entera». Un mutante que no se aplica
+# reporta al gate como ciego: es el fallo exactamente al reves, y envenena el metodo entero.
+sed -i '/pnpm --dir web run at:gate/d' "$WORK/t/.github/workflows/mainline-ci.yml"
+if command grep -q 'pnpm --dir web run at:gate' "$WORK/t/.github/workflows/mainline-ci.yml"; then
+	bad "MUTANTE NO APLICADO: la invocacion de at:gate sigue en el YAML"
+fi
 rc="$(corre)"
 if [ "$rc" = 1 ] && command grep -q 'at:gate' "$WORK/out"; then
 	ok "invocacion real borrada (queda solo el comentario): rc=1" "rc=$rc"
@@ -175,6 +184,172 @@ else
 	bad "clase del nombre: esperaba 1 con 0099-digito y sin list-all" "rc=$rc"
 	sed 's/^/       /' "$WORK/out" | head -4
 fi
+
+# --- PREFIJO DE ENTORNO (a repository gate, 2026-09-02). El gancho de `origin/main` invoca DOS patas con
+# --- una asignacion delante: `OLIVARES_NETWORK_ADVISORY=1 task lint:session-numbers` y la misma
+# --- forma para `lint:hub-web-fidelity`. Esa forma es INVISIBLE a la sonda canonica
+# --- `^[[:space:]]*task `, que es la que este fichero documenta como su punto ciego — y el dia
+# --- que alguien la escriba, el contador cuenta de menos y NADIE avisa. Ya la escribieron.
+restore
+salida="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print 2>/dev/null)"
+falta=""
+for pata in session-numbers hub-web-fidelity; do
+	command grep -qx "  $pata" <<<"$salida" || falta="$falta $pata"
+done
+[ -z "$falta" ] && ok "prefijo de entorno: las patas con VAR=1 delante SI se cuentan" \
+                || bad "prefijo de entorno: el censo no ve$falta"
+
+# --- NEGATIVO: un COMENTARIO que contenga `task lint:` no es una invocacion. Sin este caso, un
+# --- predicado que se limitara a buscar la cadena pasaria el positivo de arriba sin discriminar.
+restore
+printf '# task lint:pata-de-mentira\n' >>"$WORK/t/.githooks/pre-push"
+salida="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print 2>/dev/null)"
+command grep -q 'pata-de-mentira' <<<"$salida" \
+	&& bad "negativo: un comentario con 'task lint:' se conto como pata" \
+	|| ok "negativo: un comentario con 'task lint:' NO cuenta"
+
+# --- MUTANTE 6: se le quita al censo el grupo del prefijo, que es la conducta anterior a la cura.
+# ---
+# --- ⛔ Y HAY QUE AISLARLO, porque la primera version de este caso PASO CON EL MUTANTE PUESTO y
+# --- me hizo creer que el grupo no servia para nada. El sujeto del gate es la UNION de dos
+# --- derivaciones —el rotulo que el gancho imprime y las invocaciones que corre— y estas dos
+# --- patas estan en LAS DOS (`pre-push:467` las rotula, `:737` y `:1483` las invocan). Con la
+# --- union, quitarle el grupo al censo no cambia nada: el rotulo las sostiene.
+# ---
+# --- Eso NO es una defensa, es un tapon: una pata invocada con prefijo y NO rotulada seria
+# --- invisible, y el gancho tiene 186 patas solo-gancho donde eso puede pasar. Asi que el caso
+# --- borra primero los nombres del ROTULO y deja que solo la invocacion pueda encontrarlas.
+restore
+# El nombre se quita de las lineas de ROTULO en cualquier posicion: un `sed` de `nombre + ` solo
+# acierta si va seguido de otro, y con eso una de las dos sobrevivia y el caso mentia a medias.
+python3 - "$WORK/t/.githooks/pre-push" <<'ROT'
+import re, sys
+p = sys.argv[1]
+out = []
+for l in open(p, encoding="utf-8"):
+    if l.startswith('echo "pre-push:'):
+        for n in ("session-numbers", "hub-web-fidelity"):
+            l = re.sub(r"(\s\+\s)?\b" + n + r"\b(\s\+\s)?", " ", l)
+    out.append(l)
+open(p, "w", encoding="utf-8").write("".join(out))
+ROT
+salida="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print 2>/dev/null)"
+visto=0
+for pata in session-numbers hub-web-fidelity; do
+	command grep -qx "  $pata" <<<"$salida" && visto=$((visto + 1))
+done
+[ "$visto" -eq 2 ] && ok "sin rotulo, la INVOCACION con prefijo las encuentra igual" \
+                   || bad "sin rotulo deberian verse por la invocacion" "vistas=$visto"
+
+# Y ahora, sobre ese mismo arbol sin rotulo, se le quita el grupo al censo: tienen que perderse.
+python3 - "$WORK/t/scripts/check-gate-parity.sh" <<'MUT6'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+grupo = "([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*"
+if grupo not in s:
+    sys.exit(3)
+open(p, "w", encoding="utf-8").write(s.replace(grupo, ""))
+MUT6
+if command cmp -s "$SUT" "$WORK/t/scripts/check-gate-parity.sh"; then
+	bad "MUTANTE 6 NO APLICADO: el censo sigue igual"
+else
+	salida="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print 2>/dev/null)"
+	visto=0
+	for pata in session-numbers hub-web-fidelity; do
+		command grep -qx "  $pata" <<<"$salida" && visto=$((visto + 1))
+	done
+	[ "$visto" -eq 0 ] && ok "MUTANTE 6: sin el grupo del prefijo, las dos se pierden" \
+	                   || bad "MUTANTE 6: el grupo no es lo que las hace visibles" "aun visibles=$visto"
+fi
+
+# --- LOS DOS MODOS NUEVOS (`--print-heavy`, `--print-ci-only`) NOMBRAN LO QUE `--print` CUENTA.
+# --- `--print` daba el numero —«invocadas y NO en el rotulo: 13», «SOLO-CI (28)»— y sin nombres esa
+# --- cifra no sirve para actuar; `scripts/pre-verify-tanda.sh` los consume. Se atan a las MISMAS
+# --- cifras del mismo modo: si un dia derivan, aqui se ve, y no en la herramienta que los usa.
+restore
+salida="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print 2>/dev/null)"
+esperado_h="$(printf '%s\n' "$salida" | sed -n 's/.*invocadas y NO en el rotulo: \([0-9]*\).*/\1/p' | head -1)"
+esperado_c="$(printf '%s\n' "$salida" | sed -n 's/.*--- SOLO-CI (\([0-9]*\)).*/\1/p' | head -1)"
+real_h="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print-heavy 2>/dev/null | grep -c . || true)"
+real_c="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print-ci-only 2>/dev/null | grep -c . || true)"
+[ -n "$esperado_h" ] && [ -n "$esperado_c" ] \
+	&& ok "las cifras de --print se pudieron leer" "heavy=$esperado_h ci=$esperado_c" \
+	|| bad "no pude leer las cifras de --print: el caso no mediria nada"
+[ "$real_h" = "$esperado_h" ] && ok "--print-heavy nombra tantas como --print cuenta" "$real_h" \
+                             || bad "--print-heavy no cuadra con --print" "print=$esperado_h heavy=$real_h"
+[ "$real_c" = "$esperado_c" ] && ok "--print-ci-only nombra tantas como --print cuenta" "$real_c" \
+                             || bad "--print-ci-only no cuadra con --print" "print=$esperado_c ci=$real_c"
+# Y que no imprimen NADA mas que nombres: una cabecera colada convierte la lista en una pata falsa.
+primera="$(cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --print-heavy 2>/dev/null | head -1)"
+case "$primera" in
+*' '*|*:*=*) bad "--print-heavy cuela algo que no es un nombre de pata" "$primera" ;;
+*)           ok "--print-heavy imprime SOLO nombres" "$primera" ;;
+esac
+
+# --- UN FLAG DESCONOCIDO NO CAE AL MODO NORMAL. Hasta el 2026-09-03 cualquier argumento distinto
+# --- de `--print` se ignoraba en silencio, y eso convierte «esta version no sabe hacer eso» en
+# --- «aqui tienes otra cosa»: `pre-verify-tanda.sh` pidio `--print-heavy` a un arbol anterior y se
+# --- llevo el resumen como si fueran nombres de pata.
+restore
+rc="$( (cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh --inventado >"$WORK/out" 2>&1); echo $? )"
+[ "$rc" = 2 ] && ok "flag desconocido -> 2, no el modo normal" "rc=$rc" \
+              || bad "flag desconocido: esperaba 2" "rc=$rc"
+command grep -q 'opcion desconocida' "$WORK/out" \
+	&& ok "y lo dice por su nombre" \
+	|| { bad "no nombra la opcion desconocida"; sed 's/^/       /' "$WORK/out" | head -2; }
+
+# --- PFX-GRAMMAR (contraste sol max, 2026-09-03). El censo reconoce TEXTO, no ordenes de shell, y
+# --- el informe enumero tres formas que se le escapan. Dejaba abierta una DECISION DE FORMA: o el
+# --- censo consume una representacion shell consciente de comillas y heredocs, o se declara una
+# --- sintaxis canonica estrecha y se RECHAZA lo que no quepa. Elegida la segunda, y se dice por
+# --- que: el gancho es nuestro fichero, un parser de shell de verdad es otro proyecto, y «ensanchar
+# --- otra expresion regular no cierra la clase» — lo dice el propio informe.
+# ---
+# --- Asi que estos casos NO exigen que las formas raras se cuenten: exigen que se RECHACEN con su
+# --- nombre. Una forma que el censo no sabe representar es una pata que no cuenta, y una pata que
+# --- no cuenta no sale en ninguna lista ni en ningun rojo.
+restore
+printf '%s\n' "A='dos palabras' task lint:quoted-prefix" >>"$WORK/t/.githooks/pre-push"
+rc="$( (cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh >"$WORK/out" 2>&1); echo $? )"
+[ "$rc" = 1 ] && ok "PFX-GRAMMAR: valor con espacios -> rechazado" "rc=$rc" \
+              || bad "PFX-GRAMMAR: valor con espacios deberia rechazarse" "rc=$rc"
+command grep -q 'quoted-prefix' "$WORK/out" && ok "y la nombra" || bad "no nombra la linea"
+
+restore
+printf '%s\n' "env C=3 task lint:env-prefix" >>"$WORK/t/.githooks/pre-push"
+rc="$( (cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh >"$WORK/out" 2>&1); echo $? )"
+[ "$rc" = 1 ] && ok "PFX-GRAMMAR: prefijo con env -> rechazado" "rc=$rc" \
+              || bad "PFX-GRAMMAR: prefijo con env deberia rechazarse" "rc=$rc"
+
+# --- Y el heredoc: TEXTO, no una orden. Ni se cuenta ni se rechaza — se ignora, que es lo correcto.
+restore
+{ printf '%s\n' "cat <<'EJEMPLO'"; printf '%s\n' "D=4 task lint:heredoc-falso"; printf '%s\n' "EJEMPLO"; } \
+	>>"$WORK/t/.githooks/pre-push"
+rc="$( (cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh >"$WORK/out" 2>&1); echo $? )"
+[ "$rc" = 0 ] && ok "PFX-GRAMMAR: dentro de un heredoc no es una invocacion" "rc=$rc" \
+              || { bad "PFX-GRAMMAR: el heredoc no deberia alterar el veredicto" "rc=$rc"; sed 's/^/       /' "$WORK/out" | head -3; }
+command grep -q 'heredoc-falso' "$WORK/out" \
+	&& bad "el texto del heredoc se colo en el censo" \
+	|| ok "y su texto no aparece en ninguna lista"
+
+# --- Mutante: se le quita al filtro la conciencia de heredoc. El texto vuelve a contarse.
+restore
+python3 - "$WORK/t/scripts/check-gate-parity.sh" <<'PFXM'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+v = 'sin_comentarios() { sin_heredocs "$1" | sed'
+if v not in s:
+    sys.exit(3)
+open(p, "w", encoding="utf-8").write(s.replace(v, 'sin_comentarios() { cat "$1" | sed', 1))
+PFXM
+{ printf '%s\n' "cat <<'EJEMPLO'"; printf '%s\n' "D=4 task lint:heredoc-falso"; printf '%s\n' "EJEMPLO"; } \
+	>>"$WORK/t/.githooks/pre-push"
+rc="$( (cd "$WORK/t" && OLIVARES_ROOT="$WORK/t" bash scripts/check-gate-parity.sh >"$WORK/out" 2>&1); echo $? )"
+command grep -q 'heredoc-falso' "$WORK/out" \
+	&& ok "(M) sin conciencia de heredoc, el texto SI se cuela" \
+	|| bad "(M) el mutante no cambia nada: el caso de arriba no mide el filtro" "rc=$rc"
 
 printf '\ntest-check-gate-parity: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

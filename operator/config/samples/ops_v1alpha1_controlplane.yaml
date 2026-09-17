@@ -19,7 +19,7 @@ metadata:
   name: sample
   namespace: default
 spec:
-  image: docker.io/olivaresai/olivares:26.8.0   # official registry; ghcr.io/olivaresai/olivares is the fallback (same digest)
+  image: docker.io/olivaresai/olivares:26.9.0   # official registry; ghcr.io/olivaresai/olivares is the fallback (same digest)
   replicas: 1
   engine: sqlite
   resources:
@@ -48,7 +48,7 @@ spec:
 #   name: ha
 #   namespace: default
 # spec:
-#   image: docker.io/olivaresai/olivares:26.8.0
+#   image: docker.io/olivaresai/olivares:26.9.0
 #   replicas: 3
 #   engine: postgres
 #   haRouting: LeaderRouting                    # pod-health readiness + a leader-selecting

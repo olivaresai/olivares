@@ -24,6 +24,8 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 OVERVIEW="$ROOT/docs-site/src/content/docs/reference/modules/overview.md"
 GITOPS="$ROOT/deploy/gitops/README.md"
+HELM_README="$ROOT/deploy/helm/README.md"
+HELM_CHART="$ROOT/deploy/helm/olivares/Chart.yaml"
 
 fail() { echo "docs-honesty: FAIL — $1" >&2; exit 1; }
 
@@ -95,6 +97,20 @@ has -q 'registry path is \*\*empty\*\*' "$GITOPS" \
 # Body intact: the engine entry-points must survive the rewrite.
 has -q 'kustomize build --enable-helm' "$GITOPS" \
   || fail "gitops/README.md lost the Kustomize entry point — the C6 rewrite must keep Argo/Flux/Kustomize guidance (C6)"
+
+# ---- DIST-24-07: source chart is not a published OCI channel ----------------
+for path in "$HELM_README" "$HELM_CHART"; do
+  [ -f "$path" ] || fail "missing $path"
+done
+has -q 'not published to the public OCI registry' "$HELM_README" \
+  || fail "deploy/helm/README.md must label the OCI chart not published until REL-87"
+has -q 'REL-87' "$HELM_README" \
+  || fail "deploy/helm/README.md lost the named publication act REL-87"
+if has -Eq 'chart (is|has been) published( and consumed)? as an OCI artifact' "$HELM_CHART"; then
+  fail "Chart.yaml claims present-tense OCI publication before REL-87"
+fi
+has -q 'REL-87 has not published it yet' "$HELM_CHART" \
+  || fail "Chart.yaml must distinguish the planned OCI producer from live publication"
 
 # ---- supply-chain wording honesty ------------------------------------
 LIVE_FILES="$(mktemp)"

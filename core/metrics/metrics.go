@@ -6,10 +6,9 @@
 // the engine's own /metrics endpoint (OBS-06). It deliberately does NOT import
 // prometheus/client_golang: the product ships a single static pure-Go binary
 // (ARCHITECTURE.md), and a metrics endpoint must not be the dependency that breaks that
-// posture. The exposition target is the Prometheus text format version 0.0.4 — the
-// stable de-facto standard every Prometheus server and OpenMetrics-1.0 consumer
-// scrapes — NOT the experimental OpenMetrics 2.0 RC (OBS-06; pinned/verified
-// against https://prometheus.io/docs/instrumenting/exposition_formats/).
+// posture. The endpoint emits Prometheus text format version 0.0.4. It does not
+// emit OpenMetrics format or negotiate a different representation (OBS-06).
+// Format reference: https://prometheus.io/docs/instrumenting/exposition_formats/.
 //
 // What it guarantees:
 //   - Correct format. # HELP / # TYPE lines, one family at a time; label values
@@ -42,8 +41,6 @@ import (
 
 // ContentType is the HTTP Content-Type for the Prometheus text exposition format
 // version 0.0.4 (verified verbatim against the Prometheus exposition_formats spec).
-// It is also accepted by every OpenMetrics-1.0 scraper, which negotiates down to
-// the Prometheus text format.
 const ContentType = "text/plain; version=0.0.4; charset=utf-8"
 
 // collector is a metric family that can render itself in the exposition format.

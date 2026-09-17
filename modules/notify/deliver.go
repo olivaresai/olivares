@@ -52,15 +52,16 @@ const (
 // signal is the normalized, minimal-data view of an inbound finding the router
 // matches and delivers. No payload field by construction.
 type signal struct {
-	eventType   string
-	kind        string
-	severity    sdkmodel.Severity
-	source      string
-	subjectKind string
-	subjectRef  string
-	title       string
-	detailHash  string
-	at          time.Time
+	eventType    string
+	kind         string
+	severity     sdkmodel.Severity
+	source       string
+	subjectKind  string
+	subjectRef   string
+	title        string
+	detailHash   string
+	budgetFields map[string]string
+	at           time.Time
 	// The finding's multi-taxonomy axes, carried verbatim from the
 	// FindingReport so buildNotification can project them onto the SIEM Fields. A
 	// finding with no framework reference leaves them nil (no taxonomy keys emitted).
@@ -185,6 +186,15 @@ func approvalResolutionTitle(outcome string) string {
 
 // buildSignal normalizes a finding event into the router's signal.
 func buildSignal(e event.Event, report sdkmodel.FindingReport) signal {
+	if report.BudgetEvidence != nil {
+		if e.Source != sdkmodel.BudgetEvidenceProducer || e.SourceRegistration != nil {
+			// Preserve invalid presence without publishing untrusted field contents.
+			report.BudgetEvidence = &sdkmodel.BudgetAlertEvidenceSummary{}
+		}
+		if report.BudgetEvidenceValidity() != "structurally_valid" {
+			report.DetailHash = ""
+		}
+	}
 	title := report.Title
 	if title == "" {
 		title = report.Kind
@@ -194,18 +204,19 @@ func buildSignal(e event.Event, report sdkmodel.FindingReport) signal {
 		at = e.Time
 	}
 	return signal{
-		eventType:   string(e.Type),
-		kind:        report.Kind,
-		severity:    report.Severity,
-		source:      e.Source,
-		subjectKind: report.SubjectKind,
-		subjectRef:  report.SubjectRef,
-		title:       title,
-		detailHash:  report.DetailHash,
-		at:          at,
-		owaspLLM:    report.OWASPLLM,
-		owaspASI:    report.OWASPASI,
-		atlas:       report.ATLAS,
+		eventType:    string(e.Type),
+		kind:         report.Kind,
+		severity:     report.Severity,
+		source:       e.Source,
+		subjectKind:  report.SubjectKind,
+		subjectRef:   report.SubjectRef,
+		title:        title,
+		detailHash:   report.DetailHash,
+		budgetFields: report.BudgetEvidenceFields(),
+		at:           at,
+		owaspLLM:     report.OWASPLLM,
+		owaspASI:     report.OWASPASI,
+		atlas:        report.ATLAS,
 	}
 }
 
@@ -522,6 +533,9 @@ func (m *Module) buildNotification(tenant model.TenantID, s signal, p pending) s
 	}
 	if s.detailHash != "" {
 		fields["detail_hash"] = s.detailHash
+	}
+	for key, value := range s.budgetFields {
+		fields[key] = value
 	}
 	// Project the finding's three taxonomy axes onto SIEM fields. Each axis
 	// is comma-joined in its already-sorted order so siemfmt's deterministic output is

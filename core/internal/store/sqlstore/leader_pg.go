@@ -767,10 +767,14 @@ func (b *pgLockBackend) ensure(ctx context.Context) error {
 		return fmt.Errorf("open DDL connection: %w", err)
 	}
 	defer ddl.Close() //nolint:errcheck
-	_, err = ddl.ExecContext(ctx, fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %s (id INTEGER PRIMARY KEY, epoch BIGINT NOT NULL, holder TEXT NOT NULL, acquired_at TEXT NOT NULL)`,
-		leaderEpochTable))
-	return err
+	// The SAME statement the schema phase runs (ensureLeaderEpochRelation), not a copy
+	// of it. Boot now materializes this relation under the migration lock so a manual
+	// grant between `migrate apply` and `serve` can cover it; this call stays because
+	// the elector must remain idempotent for every path that reaches it without that
+	// phase — an embedded store, a test, a node whose schema was applied by an older
+	// binary. Two literals that must agree, with nothing checking that they do, is how
+	// the two shapes would drift.
+	return ensureLeaderEpochRelation(ctx, ddl)
 }
 
 func (b *pgLockBackend) tryLock(ctx context.Context) (bool, error) {

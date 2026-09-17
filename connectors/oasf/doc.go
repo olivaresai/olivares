@@ -24,7 +24,7 @@
 // require_badge=true only "verified" records are rostered; everything else is
 // denied and surfaced as a finding.
 //
-// # Read-only and minimal data (docs/SECURITY-HARDENING.md-3)
+// # Read-only and minimal data (docs/SECURITY-HARDENING.md §2-3)
 //
 // The connector reads descriptor METADATA only. Its single optional network
 // call is a GET of the operator-configured issuer JWKS (public key material,

@@ -2,6 +2,9 @@
   "title": "Inventory",
   "subtitle": "Every agent, session, MCP, model and identity discovered across your estate.",
   "refresh": "Refresh",
+  "scope": {
+    "note": "Tenant-wide inventory. The workspace selector does not filter this view."
+  },
   "summary": {
     "total": "Entities",
     "active": "Active",
@@ -49,18 +52,68 @@
     "lastSeen": "Last seen",
     "relations": "Relations",
     "viewAccess": "Access map",
-    "viewSessions": "Sessions"
+    "viewSessions": "Sessions",
+    "gone": "This entry is no longer in the catalog.",
+    "noProjection": "No additional details are available to display for this entry. This does not establish whether it has relations."
+  },
+  "freshness": {
+    "title": "Catalog freshness",
+    "independent": "Catalog freshness and observation history are independent reads, not one atomic snapshot.",
+    "storedState": "Stored catalog state",
+    "storedHint": "Active and stale are stored catalog states. They are not health, availability, or source coverage.",
+    "localReception": "Last local reception",
+    "firstLocalReception": "First local reception",
+    "sourceOccurred": "Source-declared occurrence",
+    "sourceOccurredUnknown": "The source did not declare an occurrence instant.",
+    "timeUnknown": "No reception instant is available.",
+    "occurrenceCount": "Catalog occurrence count",
+    "occurrenceHint": "This counts catalog materializations for the entity. It is not a receipt count, matching-fact deliveries, or a coverage total."
+  },
+  "history": {
+    "title": "Observation history",
+    "coverageUnknown": "This history does not establish source coverage, completeness of discovery, or current health.",
+    "loaded": "{{count}} loaded",
+    "empty": "No stored receipts are available. That does not prove this entity was never observed.",
+    "refresh": "Refresh history",
+    "loadMore": "Load more",
+    "loading": "Loading observation history",
+    "loadingMore": "Loading additional receipts",
+    "receipt": "Receipt",
+    "eventType": "Event type",
+    "eventTypeEdge": "Edge observed",
+    "eventTypeCost": "Cost sampled",
+    "registration": "Registration at reception",
+    "registeredSnapshot": "Historical registration snapshot",
+    "unattributed": "Unattributed",
+    "invalid": "Incomplete historical snapshot",
+    "sourceId": "Source id at reception",
+    "sourceRevision": "Applied registration revision",
+    "environmentRef": "Execution environment",
+    "sourceOccurred": "Source-declared occurrence",
+    "sourceOccurredUnknown": "The source did not declare an occurrence instant.",
+    "timeUnknown": "No reception instant is available.",
+    "firstReceived": "First reception of the retained facts",
+    "lastReceived": "Last delivery with the retained facts",
+    "deliveries": "Matching-fact deliveries",
+    "conflict": "Conflicting redelivery",
+    "conflictYes": "A redelivery with different facts is retained. This does not count or date those variants.",
+    "conflictNo": "No conflicting redelivery is retained.",
+    "malformed": "This observation page cannot be shown. A missing item list, a continuation without a usable cursor, or a cursor that did not advance is an error, not an empty history."
   },
   "topology": {
     "note": "Estate composition by kind. Runtime usage (which agent runs which model/MCP) appears in Sessions; resource access (R/RW) in the Access map.",
     "bands": {
       "origins": "Who acts",
       "capabilities": "What they can use",
-      "resources": "What they touch"
+      "resources": "What they touch",
+      "other": "Other kinds"
     },
     "emptyTitle": "Nothing discovered yet",
     "emptyHint": "As connectors report activity, your estate is cataloged here.",
-    "truncated": "Showing first {{n}} entities"
+    "truncated": "Showing first {{n}} entities",
+    "countsAreLoaded": "Counts are of loaded items on this page, not of the whole estate.",
+    "loadedOnPage": "{{count}} loaded on this page",
+    "loadedCount": "{{count}} loaded"
   },
   "empty": {
     "catalog": {

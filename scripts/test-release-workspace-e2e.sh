@@ -213,7 +213,16 @@ _idvar="$(command grep -vE '^[[:space:]]*#' "$WF_REAL" | command grep -c 'vars.O
 check "the signing identity does not come from a repo variable" "no admin-mutable identity" $?
 
 extract "generate unsigned security OTA channel manifest (deny-closed)" >"$WORK/producer.sh"
-extract "attach verified OTA signature to the draft release" >"$WORK/guard.sh"
+extract "attach the verified OTA pair, then verify and PUBLISH the complete candidate" >"$WORK/guard.sh"
+# ⛔ THE PUBLICATION TAIL IS ASSERTED AND THEN CUT, exactly as
+# scripts/test-release-security-sig-guard.sh does and for the same reason: since QA07 this
+# scalar ends by invoking scripts/release-finalize-stable.sh, which drives the GitHub API
+# and publishes. This battery measures the WORKSPACE-INTEGRITY guards; executing a
+# publication in each of its cases would make them depend on machinery that has its own
+# battery. Asserted here so a removal reddens, then removed from the executable copy.
+command grep -q 'bash scripts/release-finalize-stable.sh' "$WORK/guard.sh"
+check "the ceremony block invokes the publication finalizer" "the tail exists before it is cut" $?
+command sed -i '/bash scripts\/release-finalize-stable.sh/d' "$WORK/guard.sh"
 extract "assert the checkout is untouched before anything consumes it (phase 1)" >"$WORK/early1.sh"
 extract "assert the checkout is untouched before phase 1 runs any script" >"$WORK/prescript1.sh"
 extract "phase 1 guard 1 — straight after checkout" >"$WORK/g1.sh"
@@ -248,7 +257,7 @@ b1="$(_ln 'uses: goreleaser/goreleaser-action')"
 p1="$(_ln '      - name: generate unsigned security OTA channel manifest')"
 e2="$(_ln '      - name: assert the checkout is untouched before anything consumes it (phase 2)')"
 d2="$(_ln '      - name: download draft manifest')"
-g2="$(_ln '      - name: attach verified OTA signature')"
+g2="$(_ln '      - name: attach the verified OTA pair')"
 [ -n "$e1" ] && [ -n "$b1" ] && [ "$e1" -lt "$b1" ] && [ "$b1" -lt "$p1" ]
 check "phase 1: early guard precedes the build, which precedes the producer" "two windows" $?
 [ -n "$e2" ] && [ -n "$d2" ] && [ "$e2" -lt "$d2" ] && [ "$d2" -lt "$g2" ]
@@ -479,6 +488,9 @@ run_step() { # run_step <script> [VAR=VAL …]
 	(cd "$TREE" && env -i PATH="${PATH_OVERRIDE:-$WORK/trusted:$WORK/bin:/usr/bin:/bin}" HOME="$WORK" \
 		GITHUB_WORKSPACE="$TREE" GITHUB_REPOSITORY="olivaresai/olivares" \
 		RUNNER_TOOL_CACHE="$WORK/toolcache" \
+		GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_EVENT_NAME="push" \
+		GITHUB_REF="refs/tags/v26.8.0" GITHUB_RUN_ID="$CTX_RUN_ID" \
+		GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" \
 		RELEASE_TAG="v26.8.0" RELEASE_VERSION="26.8.0" RELEASE_COMMIT="$OID" \
 		MANIFEST_EXPIRES_IN="2160h" GH_TOKEN="stub" STUB_LOG="$WORK/log.$n" \
 		COSIGN_EXPECTED_VERSION="v2.6.4" \
@@ -496,7 +508,21 @@ run_step() { # run_step <script> [VAR=VAL …]
 # step any more, which is what P0-A was: written before the action, the file made the tree dirty
 # and GoReleaser refused to release at all. Section I below runs the real hook and the real
 # ordering; here the file is simply seeded, because these cases are about the guards.
-write_phase1_evidence() { printf '%s\n' "$OID" >"$TREE/release-commit.txt"; }
+# Both files the `before` hook writes. The post-build guard allow-lists each by NAME and
+# then pins its BYTES, so a fixture that writes only the first would make every case below
+# fail for the wrong reason — and a fixture that wrote a context the guard does not expect
+# would look like the tampering case rather than the nominal one.
+CTX_REPO_ID="123456789"
+CTX_RUN_ID="4242424242"
+CTX_RUN_ATTEMPT="1"
+build_context_bytes() { # build_context_bytes <commit> [event]
+	printf '{"schema":"olivares.ai/release-build-context/v1","schema_version":1,"repository_id":"%s","repository":"%s","event":"%s","ref":"%s","commit":"%s","run_id":"%s","run_attempt":"%s"}\n' \
+		"$CTX_REPO_ID" "olivaresai/olivares" "${2:-push}" "refs/tags/v26.8.0" "$1" "$CTX_RUN_ID" "$CTX_RUN_ATTEMPT"
+}
+write_phase1_evidence() {
+	printf '%s\n' "$OID" >"$TREE/release-commit.txt"
+	build_context_bytes "$OID" >"$TREE/release-build-context.json"
+}
 # what phase 2 really does before the guard step
 seed_phase2_download() {
 	mkdir -p "$TREE/ota-dist"
@@ -510,7 +536,10 @@ seed_phase2_download() {
 	# condition under test, in the wrong place.
 }
 reset_tree() {
-	rm -rf "$TREE/ota-dist" "$TREE/ota-staging" "$TREE/release-commit.txt"
+	# BOTH evidence files the `before` hook writes. The early and pre-script guards refuse ANY
+	# untracked path — correctly, because in a real run neither file exists yet — so a reset
+	# that forgets one turns every permit-direction case into a refusal for the wrong reason.
+	rm -rf "$TREE/ota-dist" "$TREE/ota-staging" "$TREE/release-commit.txt" "$TREE/release-build-context.json"
 	(cd "$TREE" && /usr/bin/git checkout -q -- . 2>/dev/null; /usr/bin/git reset -q 2>/dev/null)
 	rm -f "$TREE/scripts/injected-helper.sh"
 }
@@ -754,6 +783,46 @@ check "and nothing was generated or uploaded" "zero side effects" $?
 run_step "$WORK/postbuild1.sh"
 [ "$rc" -eq 0 ]
 check "the legitimate build artefacts pass the post-build guard" "non-firing direction" $?
+
+# --- F-quater · THE BUILD CONTEXT IS PINNED BY BYTES, NOT BY NAME (QA07) -------------------
+# release-build-context.json is the evidence the finalizer uses to refuse an artifact set
+# that some OTHER successful run produced. The guard allow-lists it so the legitimate build
+# is not refused — and an allow-listed name that nothing pins is a file the build may rewrite
+# while `git status --porcelain` never changes, which is exactly the defect the commit
+# evidence's own byte pin exists for. These cases prove the pin is real in both directions.
+rm -f "$TREE/release-build-context.json"
+run_step "$WORK/postbuild1.sh"
+[ "$rc" -ne 0 ] && contains_literal "$out" 'release-build-context.json is missing after the build'
+check "a build that produced no run context refuses" "no unattributable artifact set" $?
+
+# The NAME is allow-listed, so a rewritten context leaves `git status` unchanged: only the
+# digest comparison can see it. A different run id is the substitution that matters — it is
+# how an artifact set gets attributed to a run that did not build it.
+build_context_bytes "$OID" | sed 's/"run_id":"[0-9]*"/"run_id":"999"/' >"$TREE/release-build-context.json"
+run_step "$WORK/postbuild1.sh"
+[ "$rc" -ne 0 ] && contains_literal "$out" 'not exactly this run'"'"'s context'
+check "a context naming ANOTHER run refuses" "the name is not the bytes" $?
+[ "$(cd "$TREE" && /usr/bin/git status --porcelain -uall | command grep -c 'release-build-context')" -eq 1 ]
+check "and git status could not have seen it" "only the digest can" $?
+
+# Appended bytes after a correct first line: `read` and `wc -l` both accept it, a digest does
+# not. Same shape as the commit evidence's own appended-bytes case.
+{ build_context_bytes "$OID"; printf 'trailing\n'; } >"$TREE/release-build-context.json"
+run_step "$WORK/postbuild1.sh"
+[ "$rc" -ne 0 ]
+check "a context with appended bytes refuses" "byte-exact, not line-exact" $?
+
+write_phase1_evidence
+run_step "$WORK/postbuild1.sh"
+[ "$rc" -eq 0 ]
+check "the exact run context passes" "non-firing direction" $?
+
+# AND THE PRODUCER WINDOW ALLOW-LISTS IT TOO. Without that line the legitimate release dies
+# one step later with `?? release-build-context.json` — the same self-denial the commit
+# evidence caused the first time it was introduced.
+run_step "$WORK/producer.sh"
+[ "$rc" -eq 0 ] || ! contains_literal "$out" 'release-build-context.json'
+check "the producer window does not deny its own build context" "no self-inflicted refusal" $?
 reset_tree
 
 # --- F-bis · THE TAG CONTRACT IS DENY-CLOSED (INT-22, M61-M66) ----------------------------
@@ -1073,13 +1142,22 @@ check "the tree GoReleaser is handed is CLEAN" "the release can start at all" $?
 
 # 2 — the hook runs INSIDE GoReleaser, after that gate, and writes the evidence.
 (cd "$TREE" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
+	GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_REPOSITORY="olivaresai/olivares" \
+	GITHUB_EVENT_NAME="push" GITHUB_REF="refs/tags/v26.8.0" \
+	GITHUB_RUN_ID="$CTX_RUN_ID" GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" \
 	bash scripts/release-commit-evidence.sh false) >"$WORK/hook.out" 2>&1
 [ "$?" -eq 0 ]
 check "the before-hook writes the evidence for a real release" "the write still happens" $?
 printf '%s\n' "$OID" | cmp -s - "$TREE/release-commit.txt"
 check "and it is exactly the run's commit and one newline" "byte-exact evidence" $?
-[ "$(/usr/bin/git -C "$TREE" status --porcelain -uall)" = "?? release-commit.txt" ]
-check "the only thing it adds is the allow-listed untracked file" "nothing else moved" $?
+# THE SECOND FILE IS THE REAL HOOK'S OUTPUT, NOT THE FIXTURE'S IDEA OF IT. This compares the
+# bytes the hook actually wrote against the bytes the WORKFLOW GUARD rebuilds, so a drift
+# between the two producers — which is how a byte pin quietly stops pinning — reddens here
+# instead of at a release.
+build_context_bytes "$OID" | cmp -s - "$TREE/release-build-context.json"
+check "and the hook's build context is exactly what the guard rebuilds" "one canonical form" $?
+[ "$(/usr/bin/git -C "$TREE" status --porcelain -uall | LC_ALL=C sort | tr '\n' '|')" = "?? release-build-context.json|?? release-commit.txt|" ]
+check "the only things it adds are the two allow-listed untracked files" "nothing else moved" $?
 # 3 — and the post-build guard, which is the next thing to look, accepts that tree.
 run_step "$WORK/postbuild1.sh"
 [ "$rc" -eq 0 ]
@@ -1096,14 +1174,113 @@ check "and the post-build guard still refuses it" "no hole opened" $?
 (cd "$TREE" && /usr/bin/git checkout -q -- scripts/release-ota-channel.sh)
 reset_tree
 
+# 4-bis — THE SAME HOOK, THE REHEARSAL'S OWN EVENT (root return 02, F2). An earlier revision
+# refused any event but `push`, and the release rehearsal dispatches manually — so the only
+# end-to-end exercise of the release mechanics this project has died in the first `before`
+# hook, before the first build, while the refusal bought nothing: the consumer already refuses
+# a non-push context twice, on the recorded field and against the Actions API. The producer
+# records what happened; the finalizer decides what may be published.
+run_hook() { # run_hook <event> [VAR=VAL …]
+	local ev="$1"
+	shift
+	rm -f "$TREE/release-commit.txt" "$TREE/release-build-context.json"
+	(cd "$TREE" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
+		GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_REPOSITORY="olivaresai/olivares" \
+		GITHUB_EVENT_NAME="$ev" GITHUB_REF="refs/tags/v26.8.0" \
+		GITHUB_RUN_ID="$CTX_RUN_ID" GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" "$@" \
+		bash scripts/release-commit-evidence.sh false) >"$WORK/hook-event.out" 2>&1
+}
+run_hook workflow_dispatch
+_hrc=$?
+[ "$_hrc" -eq 0 ] && [ -f "$TREE/release-commit.txt" ]
+check "the before-hook also writes for a workflow_dispatch build" "the rehearsal can build at all" $?
+build_context_bytes "$OID" workflow_dispatch | cmp -s - "$TREE/release-build-context.json"
+check "and the context is exactly what the guard rebuilds for THAT event" "one canonical form" $?
+command grep -q '"event":"workflow_dispatch"' "$TREE/release-build-context.json"
+check "and it records the TRUE event by name" "no rehearsal claims a push context" $?
+# THE POST-BUILD GUARD ACCEPTS IT, because it rebuilds the expected bytes from the same Actions
+# context. A producer that hardcoded `push` would redden here instead of at a release.
+run_step "$WORK/postbuild1.sh" GITHUB_EVENT_NAME="workflow_dispatch"
+[ "$rc" -eq 0 ]
+check "the post-build guard accepts the rehearsal's own context" "both events, one producer" $?
+# AND THE BYTE PIN STILL PINS: the same tree under a push context is refused.
+run_step "$WORK/postbuild1.sh"
+[ "$rc" -ne 0 ]
+check "a push guard refuses that same context" "the event is inside the pinned bytes" $?
+
+# NEITHER FILE SURVIVES A REFUSAL. release-commit.txt used to be written BEFORE the context was
+# validated, so a refused run left half the evidence in the tree — and the tree is the thing
+# GoReleaser's dirty check and the workflow allow-list both read.
+run_hook push GITHUB_RUN_ID="not-a-number"
+_hrc=$?
+[ "$_hrc" -ne 0 ] && [ ! -e "$TREE/release-commit.txt" ] && [ ! -e "$TREE/release-build-context.json" ]
+check "a malformed run id leaves NEITHER file" "the half file the old order left" $?
+run_hook 'Push Request'
+_hrc=$?
+[ "$_hrc" -ne 0 ] && [ ! -e "$TREE/release-commit.txt" ] && [ ! -e "$TREE/release-build-context.json" ]
+check "a malformed event name refuses and leaves neither" "validated by shape, not escaped" $?
+run_hook push GITHUB_EVENT_NAME=""
+_hrc=$?
+[ "$_hrc" -ne 0 ] && [ ! -e "$TREE/release-commit.txt" ]
+check "an empty event refuses" "a blank is not a fact" $?
+
+# A REAL WRITE FAILURE, NOT A SIMULATED ONE (root return 03, closure 2). Validation refusals
+# above never open a file; this is the other class. A redirection TRUNCATES before it writes,
+# so a failure at the SECOND write leaves a real, partial release-build-context.json, and
+# removing only release-commit.txt left exactly the half state phase 2 can neither admit nor
+# diagnose. The target is pointed at /dev/full, whose writes fail with ENOSPC while the open
+# succeeds — the "opened, truncated, then failed" shape, produced rather than described.
+[ -c /dev/full ]
+check "the write-failure instrument exists" "/dev/full, or these rows measure nothing" $?
+hook_write_fail() { # hook_write_fail <generated-name-to-point-at-/dev/full>
+	rm -f "$TREE/release-commit.txt" "$TREE/release-build-context.json"
+	ln -s /dev/full "$TREE/$1" || return 99
+	(cd "$TREE" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
+		GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_REPOSITORY="olivaresai/olivares" \
+		GITHUB_EVENT_NAME="push" GITHUB_REF="refs/tags/v26.8.0" \
+		GITHUB_RUN_ID="$CTX_RUN_ID" GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" \
+		bash scripts/release-commit-evidence.sh false) >"$WORK/hook-writefail.out" 2>&1
+}
+_gone() { [ ! -e "$TREE/$1" ] && [ ! -L "$TREE/$1" ]; }
+
+hook_write_fail release-build-context.json
+_hrc=$?
+[ "$_hrc" -eq 1 ] && _gone release-commit.txt && _gone release-build-context.json
+check "a failed CONTEXT write leaves NEITHER generated file" "not just the other one" $?
+command grep -q 'could not write release-build-context.json' "$WORK/hook-writefail.out"
+check "and it names the write that failed" "the reason, not a guess" $?
+command grep -q 'Both generated evidence files were removed' "$WORK/hook-writefail.out"
+check "and it reports what it removed" "cleanup, stated as cleanup" $?
+
+hook_write_fail release-commit.txt
+_hrc=$?
+[ "$_hrc" -eq 1 ] && _gone release-commit.txt && _gone release-build-context.json
+check "a failed COMMIT write leaves NEITHER generated file" "the first write truncates too" $?
+
+# AND NOTHING ELSE IS REMOVED. The cleanup names two paths; a tree is not a scratch directory.
+printf 'unrelated\n' >"$TREE/unrelated-fixture.txt"
+hook_write_fail release-build-context.json
+_hrc=$?
+[ "$_hrc" -eq 1 ] && [ -f "$TREE/unrelated-fixture.txt" ] &&
+	[ "$(cat "$TREE/unrelated-fixture.txt")" = "unrelated" ]
+check "an unrelated pre-existing file is untouched" "only the two generated names" $?
+rm -f "$TREE/unrelated-fixture.txt"
+
+# THE NON-FIRING DIRECTION: with a writable target the hook still writes both.
+run_hook push
+_hrc=$?
+[ "$_hrc" -eq 0 ] && [ -f "$TREE/release-commit.txt" ] && [ -f "$TREE/release-build-context.json" ]
+check "with a writable tree the hook still writes both" "the cleanup is not always-firing" $?
+reset_tree
+
 # 5 — the hook's own refusals. A snapshot writes NOTHING (a local `task release:snapshot` must
 # not drop an untracked file in a developer's tree), and a real release with no honest commit
 # refuses instead of inventing one.
-rm -f "$TREE/release-commit.txt"
+rm -f "$TREE/release-commit.txt" "$TREE/release-build-context.json"
 (cd "$TREE" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
 	bash scripts/release-commit-evidence.sh true) >/dev/null 2>&1
 _hrc=$?
-[ "$_hrc" -eq 0 ] && [ ! -e "$TREE/release-commit.txt" ]
+[ "$_hrc" -eq 0 ] && [ ! -e "$TREE/release-commit.txt" ] && [ ! -e "$TREE/release-build-context.json" ]
 check "a snapshot build writes no evidence at all" "no stray file locally" $?
 # EACH REFUSAL IS A DIFFERENT SHAPE, and the SHA in each case is spelled out rather than
 # derived, because the first version of this loop discarded its own third field and handed the

@@ -138,6 +138,20 @@ message FindingReport {
   repeated string owasp_llm = 8;
   repeated string owasp_asi = 9;
   repeated string atlas = 10;
+  // Optional FinOps summary. Presence, including invalid/future content, must
+  // survive a bridge; absence is legacy/unverified, never a proven crossing.
+  BudgetAlertEvidenceSummary budget_evidence = 11;
+}
+
+// Bounded financial classification only: no amounts or raw ledger/config data.
+// Producer authority and durable record verification are not wire assertions.
+message BudgetAlertEvidenceSummary {
+  uint32 schema_version = 1;
+  string alert_id = 2;
+  string amount_class = 3;
+  string crossing = 4;
+  repeated string causes = 5;
+  uint32 digest_version = 6;
 }
 
 // MetricSample mirrors model.MetricSample: a non-cost MEASURE a source emits — one
@@ -195,6 +209,25 @@ message Event {
     bytes json_payload = 9;
     MetricSample metric = 10;
   }
+  // Host-stamped registration snapshot of the configured source the event
+  // arrived through (mirrors event.SourceRegistration). Added field,
+  // backward-compatible: an old peer omits it and the consumer reads
+  // "unattributed"; a decoder never invents one. It is only ever set by an
+  // engine node that registered the source — the collector push envelope
+  // (IngestEnvelope) deliberately has no such field.
+  SourceRegistration source_registration = 11;
+}
+
+// SourceRegistration mirrors event.SourceRegistration: the durable roster row's
+// persistent id, the revision the runtime successfully opened, and the execution
+// environment that applied it.
+message SourceRegistration {
+  string source_id = 1;
+  int64 source_revision = 2;
+  string environment_ref = 3;
+  // Host-approved decision for this observation, before queue/replay. Empty
+  // stays unattributed; never filled by a receiving decoder or connector.
+  string binding_ref = 4;
 }
 
 // Notification mirrors sdk.Notification.

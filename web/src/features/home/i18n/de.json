@@ -37,7 +37,17 @@
     }
   },
   "state": {
-    "unavailable": "Konnte nicht geladen werden — öffnen, um es erneut zu versuchen"
+    "unavailable": "Konnte nicht geladen werden — öffnen, um es erneut zu versuchen",
+    "pendingIdle": "Abfrage nicht gestartet — öffnen, um zu laden",
+    "pendingPaused": "Abfrage pausiert — wartet auf Fortsetzung"
+  },
+  "availability": {
+    "loading": "{{source}}: wird geladen.",
+    "pendingIdle": "{{source}}: Abfrage nicht gestartet.",
+    "pendingPaused": "{{source}}: Abfrage pausiert, wartet auf Fortsetzung.",
+    "unavailable": "{{source}}: konnte nicht geladen werden.",
+    "partial": "{{source}}: Zahlen verfügbar, Teildaten.",
+    "current": "{{source}}: Zahlen verfügbar."
   },
   "empty": {
     "title": "Noch nichts anzuzeigen",

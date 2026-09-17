@@ -240,6 +240,10 @@ type FindingReport struct {
 	// DetailHash is a hex SHA-256 of the redacted detail; the raw detail is not
 	// transmitted or stored (minimal-data).
 	DetailHash string
+	// BudgetEvidence is the optional, bounded FinOps alert summary. Absence is
+	// legacy/unverified, never a proven amount. See BudgetEvidenceValidity: a
+	// valid shape is not producer authentication or verification of a stored row.
+	BudgetEvidence *BudgetAlertEvidenceSummary `json:",omitempty"`
 	// OccurredAt is when the finding was produced.
 	OccurredAt time.Time
 	// OWASPLLM, OWASPASI and ATLAS are the finding's multi-taxonomy references

@@ -69,6 +69,7 @@
   "notices": {
     "truncated": "Teildaten",
     "truncatedHint": "Dieser Aggregatwert hat die Scan-Obergrenze erreicht — er ist teilweise, kein exakter Gesamtwert.",
+    "truncatedBrief": "Scan-Obergrenze erreicht",
     "selfAudited": "Privilegierter Lesezugriff — im Audit-Hauptbuch aufgezeichnet.",
     "seam": "Noch nicht verkabelt",
     "seamBody": "Deklarierter Vertrag — {{what}} ist noch nicht mit dem Backend verkabelt, daher wird hier die deklarierte Form gezeigt, keine Live-Daten.",
@@ -76,7 +77,8 @@
     "declared": "Deklarierte Referenz",
     "noConnector": "Kein Konnektor — abwesend, nicht null.",
     "listTruncated": "{{n}} Zeilen geladen; es gibt mehr",
-    "listTruncatedHint": "Die Engine hat nur eine Seite zurückgegeben, nicht den gesamten Datensatz. Die Gesamtzahl kann NICHT aus den geladenen Zeilen abgeleitet werden, und möglicherweise existieren nicht angezeigte Zeilen."
+    "listTruncatedHint": "Die Engine hat nur eine Seite zurückgegeben, nicht den gesamten Datensatz. Die Gesamtzahl kann NICHT aus den geladenen Zeilen abgeleitet werden, und möglicherweise existieren nicht angezeigte Zeilen.",
+    "listTruncatedBrief": "eine Seite geladen; es gibt mehr"
   },
   "badges": {
     "signed": "Signiert",

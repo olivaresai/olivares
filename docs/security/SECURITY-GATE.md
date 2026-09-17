@@ -3,40 +3,43 @@
 
 # Security gate runbook
 
-This is the automated, repeatable security gate: the checks that turn "manual audit
-when someone remembers" into "runs on every push / every release". It exists because
+This runbook describes the repeatable security checks and where they are wired.
+Execution and acceptance must be established for the candidate being reviewed. It exists because
 of decision **D22** — no external pen-test yet, but everything automatable is
 automated and audited in the pre-release sessions. The re-executable adversarial
 campaign runs on top of this scaffolding, starting from `task security:report`.
 
 ## What runs where
 
-The hub keeps GitHub Actions **disabled** until reactivation. "CI-REL"
-therefore means the step is wired into `.github/workflows/mainline-ci.yml` and runs
-**per-release / on reactivation**; today it is verified by running it locally.
+The [mainline workflow](../../.github/workflows/mainline-ci.yml) has manual dispatch
+and push to `main`, with journal-path exclusions on the push trigger. The integrator
+dispatches the merge candidate before integration; post-merge CI applies to the
+resulting commit. The table describes wiring, not a successful execution: record
+the exact SHA, run/job/step, result and omissions. A skipped or absent substantive
+check is not a pass.
 
-| Check | Task | pre-push | CI-REL | Needs |
+| Check | Task | pre-push | mainline-ci | Needs |
 |-------|------|:--------:|:------:|-------|
 | SAST (gosec, high-signal blocking set) | `task lint:sast` | — | ✅ | `gosec` (`task tools`) |
 | Fuzz smoke (bounded, every target) | `task fuzz:smoke` | — | ✅ | go toolchain |
 | Dependency vulns (fail-closed) | `task vuln:gate` | — | ✅ | `govulncheck` + network |
 | Secret scan (full history) | `task lint:secrets` | — | ✅ | `gitleaks` |
-| Security invariants (policy tests) | `task test` | ✅ | ✅ | go toolchain |
+| Security invariants (policy tests) | Go test suites | main/tags full gate | ✅ | go toolchain |
 | Consolidated evidence report | `task security:report` | — | on demand | all of the above |
 
-**Why SAST / fuzz / vuln / secrets are CI-REL, not pre-push.** They need installed
+**Why SAST / fuzz / vuln / secrets run in mainline-ci, not pre-push.** They need installed
 tools (`gosec`, `govulncheck`, `gitleaks`) and — for `vuln`/`secrets` — network and a
 full-history checkout, which the rest of the Go-toolchain pre-push gate does not. This
 matches the pre-existing placement of `vuln` and `lint:secrets` (already CI-only). The
 constrained local pre-push gate already runs ~10 min (up to ~69 min in degraded
 serial mode); loading it with tool-dependent, network-bound scans would make every
 push brittle. The **security invariants** (below) DO run in `pre-push` because they are
-plain Go tests with no extra dependency, so a policy regression is caught on push.
+plain Go tests; they run in the full local gate for main/tags and the applicable
+mainline test legs. A feature-branch push alone does not establish their result.
 
-Measured cost (this branch, warm cache): `task lint:sast` ≈ **28 s** wall across the
-11 workspace modules (plus the privately-maintained hosted-service module where that
-tree is present). It is fast enough to add to `pre-push`
-later if `gosec` becomes a standard dev dependency; for now it is CI-REL + on-demand.
+Measure `task lint:sast` on the candidate and record the tool version, module set,
+cache state and elapsed time with the result. Historical timings do not establish
+the cost or outcome of the current candidate.
 
 ## SAST — gosec (E1)
 
@@ -111,7 +114,8 @@ a pass.
 ## Security invariants (E3)
 
 Policy tests that fail if a *ratified* invariant regresses, so a future change cannot
-merge one silently. They run in `task test` (hence `pre-push` and CI):
+merge one silently. They run in `task test` in the full local main/tag gate;
+mainline-ci uses the functional/race split defined in the Taskfile:
 
 - **D6 — fail-closed enterprise default** — `cmd/olivares/security_invariants_test.go`:
   the enterprise edition defaults a per-control availability dependency to fail-closed.

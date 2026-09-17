@@ -210,8 +210,20 @@ function discoverLangs() {
 // hardcoded English. Add an entry ONLY with a reason, and remove it when the
 // bundle lands.
 const NO_I18N_ALLOWLIST = new Map([
-  // (Empty on purpose — Closed the last gaps, backups/ and logs/. Add an
-  // entry ONLY with a reason, and remove it when the bundle lands.)
+  // (closed the last gaps, backups/ and logs/. Add an entry ONLY with a reason,
+  // and remove it when the bundle lands.)
+  //
+  // navigation/ (N1, 2026-09-06) renders the SHELL's structure — the nine area
+  // directory pages and the model the sidebar, breadcrumb and palette share — and
+  // every string it paints is a key of the foundation `nav` namespace
+  // (web/src/lib/i18n/locales/*/nav.json: nav.areas, nav.directory, nav.items,
+  // nav.descriptions, nav.aliases), which this scan already compares across the
+  // seven languages. A second bundle would split the sidebar's vocabulary in two
+  // files; the foundation catalog is where the shell's words live.
+  [
+    'navigation',
+    'shell navigation: every string is a key of the foundation nav namespace (locales/*/nav.json), already under parity',
+  ],
 ])
 
 /** Does this feature dir contain any .tsx (i.e. does it render UI)? */

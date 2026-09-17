@@ -1,0 +1,24 @@
+{
+  "schema": "olivares.connect.v1.canonical-vectors",
+  "domain": "olivares.connect.v1",
+  "vectors": [
+    {
+      "name": "bind-pending",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "canonical": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"scope:dodo/bus_example/sub_example\"}"
+    }
+  ]
+}

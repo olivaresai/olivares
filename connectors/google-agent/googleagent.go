@@ -9,7 +9,7 @@
 // an identitysource.Graph to module VI (governance), converging with the
 // connectors/spiffe roster.
 //
-// Read-only and minimal-data (docs/SECURITY-HARDENING.md-3). Every roster call is a GET through
+// Read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3). Every roster call is a GET through
 // the shared httpx client (GET-only by construction). The single POST is the
 // standard Google service-account jwt-bearer token exchange against token_url: it
 // sends a short-lived RS256-signed assertion, never the private key itself. The

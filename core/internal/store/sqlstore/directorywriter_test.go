@@ -28,7 +28,7 @@ func TestDirectoryWritersBumpAtomically(t *testing.T) {
 	ss := st.(*sqlStore)
 	tenantA := provisionTenant(t, st, "directory-writer-a")
 	tenantB := provisionTenant(t, st, "directory-writer-b")
-	directoryWriterTestEnforceSQLite(t, ss, 17)
+	directoryWriterTestStageLegacySQLite(t, ss, 17)
 
 	// Even a User.Create with no business-tenant associations must take the
 	// writer lock and arm the generation: users is itself a guarded source.
@@ -295,7 +295,7 @@ func TestDirectoryWritersBumpAtomicallyPoisonPreservesUnavailable(t *testing.T) 
 	st := openSQLiteTest(t, nil)
 	ss := st.(*sqlStore)
 	tenant := provisionTenant(t, st, "directory-poison-unavailable")
-	directoryWriterTestEnforceSQLite(t, ss, 19)
+	directoryWriterTestStageLegacySQLite(t, ss, 19)
 
 	backendErr := &pgconn.PgError{Code: "08006", Message: "connection failure"}
 	directoryWriterBeforeSourceTestHook = func(
@@ -346,7 +346,10 @@ func TestDirectoryWritersBumpAtomicallyRejectsLegacyWhenEnforced(t *testing.T) {
 	st := openSQLiteTest(t, nil)
 	ss := st.(*sqlStore)
 	tenant := provisionTenant(t, st, "directory-enforced-legacy")
-	directoryWriterTestEnforceSQLite(t, ss, 21)
+	directoryWriterTestStageLegacySQLite(t, ss, 21)
+	if _, err := ss.db.ExecContext(ctx, "UPDATE main.directory_writer_control SET mode='enforced'"); err != nil {
+		t.Fatal(err)
+	}
 
 	err := st.Mutate(ctx, tenant, func(scope store.Scope) error {
 		raw := scope.(*tenantScope)
@@ -384,7 +387,7 @@ func TestDirectoryWriterCRUDMatrixBumps(t *testing.T) {
 	ss := st.(*sqlStore)
 	tenantA := provisionTenant(t, st, "directory-crud-a")
 	tenantB := provisionTenant(t, st, "directory-crud-b")
-	directoryWriterTestEnforceSQLite(t, ss, 23)
+	directoryWriterTestStageLegacySQLite(t, ss, 23)
 
 	var user model.User
 	directoryWriterTestAuthDeltas(t, st, nil, func(auth store.AuthScope) error {
@@ -567,7 +570,7 @@ func TestDirectoryWriterRejectsMalformedOrMissingTargetBeforeSourceDML(t *testin
 	ctx := context.Background()
 	st := openSQLiteTest(t, nil)
 	ss := st.(*sqlStore)
-	directoryWriterTestEnforceSQLite(t, ss, 19)
+	directoryWriterTestStageLegacySQLite(t, ss, 19)
 
 	tests := []struct {
 		name   string
@@ -609,7 +612,7 @@ func TestDirectoryWriterSourcesIgnoreSQLiteTempShadows(t *testing.T) {
 	st := openSQLiteTest(t, nil)
 	ss := st.(*sqlStore)
 	tenant := provisionTenant(t, st, "directory-temp-source")
-	directoryWriterTestEnforceSQLite(t, ss, 29)
+	directoryWriterTestStageLegacySQLite(t, ss, 29)
 
 	for _, table := range []string{"memberships", "identities", "orgs"} {
 		if _, err := ss.db.ExecContext(ctx, "CREATE TEMP TABLE "+table+
@@ -651,13 +654,16 @@ func TestDirectoryWriterSourcesIgnoreSQLiteTempShadows(t *testing.T) {
 		t.Fatalf("set org status past TEMP shadow: %v", err)
 	}
 
+	// main.orgs holds the reserved SYSTEM organization as well as the tenant: the
+	// fixture provisions SYSTEM before the tenant exactly as boot does, and that
+	// genesis row is real main-schema state, not a shadow.
 	for _, check := range []struct {
 		table string
 		main  int
 	}{
 		{table: "memberships", main: 1},
 		{table: "identities", main: 1},
-		{table: "orgs", main: 1},
+		{table: "orgs", main: 2},
 	} {
 		var mainRows, tempRows int
 		if err := ss.db.QueryRowContext(ctx,
@@ -694,7 +700,7 @@ func TestDirectoryWriterCreateRequiresExactSourceRow(t *testing.T) {
 	st := openSQLiteTest(t, nil)
 	ss := st.(*sqlStore)
 	tenant := provisionTenant(t, st, "directory-create-cardinality")
-	directoryWriterTestEnforceSQLite(t, ss, 31)
+	directoryWriterTestStageLegacySQLite(t, ss, 31)
 
 	if _, err := ss.db.ExecContext(ctx, `
 CREATE TRIGGER main.identities_test_ignore
@@ -792,18 +798,21 @@ func directoryWriterTestTenantDelta(
 	directoryWriterTestWantEpoch(t, st, tenant, before+1)
 }
 
-func directoryWriterTestEnforceSQLite(t *testing.T, st *sqlStore, generation int64) {
+// The membership-union writer discriminator runs in the supported staged legacy
+// protocol. Enforced legacy admits only maintenance; target H/structural-G behavior
+// is exercised by userauthority_writer_test.go against the real ceremony.
+func directoryWriterTestStageLegacySQLite(t *testing.T, st *sqlStore, generation int64) {
 	t.Helper()
 	result, err := st.db.ExecContext(context.Background(), `
 UPDATE main.directory_writer_control
-SET mode = 'enforced', expected_generation = ?
+SET mode = 'staged', expected_generation = ?
 WHERE control_key = ?`, generation, directoryWriterLockKey)
 	if err != nil {
-		t.Fatalf("enforce SQLite directory writer control: %v", err)
+		t.Fatalf("stage legacy SQLite directory writer control: %v", err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil || rows != 1 {
-		t.Fatalf("enforce SQLite control affected %d rows, err=%v", rows, err)
+		t.Fatalf("stage legacy SQLite control affected %d rows, err=%v", rows, err)
 	}
 }
 

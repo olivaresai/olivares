@@ -155,7 +155,7 @@ export function RunsTable({
         header: t('runs.columns.subject'),
         cell: ({ row }) => (
           <span className="font-mono text-xs text-foreground">
-            {row.original.subject_ref}
+            {row.original.live_ref ?? row.original.subject_ref}
           </span>
         ),
       },
@@ -333,7 +333,7 @@ export function ComparisonCard({ comparison }: { comparison: Comparison }) {
             <div className="flex items-center gap-2">
               <ComparisonVerdictBadge verdict={comparison.verdict} />
               <span className="truncate font-mono text-xs text-muted-foreground">
-                {comparison.subject_ref}
+                {comparison.live_ref ?? comparison.subject_ref}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">

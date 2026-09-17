@@ -33,12 +33,17 @@
     "home": "概要",
     "onboarding": "セットアップウィザード",
     "inventory": "インベントリ",
-    "sessions": "セッション",
+    "sessions": "セッションを観測",
     "accessMap": "アクセスマップ",
     "health": "正常性とSLA",
     "capabilities": "MCPとスキル",
     "protocolBindings": "プロトコルバインディング",
-    "console": "統制コンソール",
+    "communications": "コミュニケーション",
+    "communicationsInbox": "コミュニケーション受信箱",
+    "communicationsNew": "新しいチャネル",
+    "communicationsAdministration": "チャネル管理",
+    "communicationsHandoffs": "ハンドオフ",
+    "console": "管理",
     "permissions": "権限",
     "identity": "アイデンティティとNHI",
     "claudePolicy": "Claude Codeガバナンス",
@@ -48,7 +53,7 @@
     "catalog": "カタログ",
     "killswitch": "キルスイッチ",
     "work": "作業",
-    "agentops": "Claude Code",
+    "agentops": "セッションを運用",
     "agentArtifacts": "エージェントアーティファクト",
     "models": "モデル",
     "modelOps": "モデル運用",
@@ -84,7 +89,9 @@
     "reporting": "レポート",
     "postureExport": "ポスチャエクスポート",
     "automations": "オートメーション",
-    "agentcoreExport": "AgentCore エクスポート"
+    "agentcoreExport": "AgentCore エクスポート",
+    "providerProfiles": "プロバイダープロファイル",
+    "providerBindings": "ソースバインディング"
   },
   "workspace": {
     "switch": "ワークスペースを切り替え",
@@ -99,12 +106,17 @@
     "home": "エステートの概要と正常性を一目で把握",
     "onboarding": "ステップバイステップのデプロイメント設定",
     "inventory": "すべてのエージェント、MCP、モデルを検出してカタログ化",
-    "sessions": "エージェントのライブ運用とタイムライン",
+    "sessions": "ライブおよび検出されたセッションとそのタイムラインを観測します。「セッションを運用」と画面を共有します",
     "accessMap": "各エージェントが読み書きする対象（R/RW）",
     "health": "エージェントとMCPの稼働状況とSLA",
     "capabilities": "MCPサーバー、スキル、ツールを統制",
     "protocolBindings": "管理された A2A/MCP バインディングを構成・調整",
-    "console": "ユーザーをオンボーディングし、SSO/IdPを接続し、ワークスペースとエージェントグループを構成します。",
+    "communications": "選択中ワークスペースのチャネル、ダイレクト通知、個人受信箱",
+    "communicationsInbox": "自分宛ての配信だけを新規に読み取り、明示的に確認する正確な受信箱",
+    "communicationsNew": "明示的な初期付与でチャネルを作成します",
+    "communicationsAdministration": "チャネルを管理：設定と付与履歴、各操作はチャネルの現在の ETag のもとで",
+    "communicationsHandoffs": "あなた宛ての作業責任のオファー: コンテキストを読んで承諾または拒否します",
+    "console": "ユーザー、SSO/IdP、ワークスペース、エージェントグループ、ロール、シークレット、コネクター、API キー、このインストールのライセンス",
     "permissions": "アイデンティティ、ロール、承認",
     "identity": "SSO、SCIM、NHIロスター、WIFグラフ",
     "claudePolicy": "管理対象ポリシー、フック、MCP、サンドボックス、ポリシーアズコード",
@@ -113,7 +125,7 @@
     "catalog": "キュレーションされ承認されたエージェントとケーパビリティ",
     "killswitch": "緊急停止、二重統制による復旧、ガーディアンによる封じ込め",
     "work": "セッションをまたぐ永続バックログ：作業項目、依存関係、受入基準、決定",
-    "agentops": "Claude Codeセッションの作成、アタッチ、統制 — SSH不要",
+    "agentops": "Claude Code セッションを作成・接続・統制します（SSH 不要）。「セッションを観測」と画面を共有します",
     "agentArtifacts": "Skill、MCP拡張機能、指示ファイル — レジストリ、ポスチャ、サプライチェーンBOM",
     "models": "モデル、ルーティング、プロバイダーキー",
     "modelOps": "自社モデル、承認とデプロイ",
@@ -129,8 +141,8 @@
     "redteam": "エージェントに対する敵対的テスト",
     "dashboards": "エグゼクティブ向けKPIとレポート",
     "observability": "標準別の取り込み正常性とトレースのドリルダウン",
-    "platforms": "デプロイ先のサーフェス、コンプライアンスマトリクス、プラットフォーム別モデルライフサイクル",
-    "rateLimits": "Anthropicレート制限インベントリ（読み取り専用）",
+    "platforms": "プロバイダープラットフォームの提供面、コンプライアンスマトリクス、プラットフォーム別モデルライフサイクル — 参照情報であり、お客様のサーバーではありません",
+    "rateLimits": "Anthropic のレート制限インベントリとその可用性（読み取り専用の参照情報）",
     "attestation": "リリース証明 — SLSA、SBOM、VEX、Scorecard",
     "apiPlayground": "API Playground",
     "audit": "改ざん検知可能な証拠台帳",
@@ -142,7 +154,16 @@
     "alerting": "検出結果を宛先にルーティングし配信を確認",
     "reporting": "ガバナンスレポートを生成・ダウンロード",
     "postureExport": "コントロールタワー向けにグラウンドトゥルースのポスチャをエクスポート",
-    "automations": "3つのオートメーションレールとトリガーカタログ"
+    "automations": "3つのオートメーションレールとトリガーカタログ",
+    "providerProfiles": "セッションの起動元となるプロバイダーのホームを登録・管理し、必要に応じてその設定を読み取る",
+    "providerBindings": "構成済みソースを、このノードが適用したリビジョンでプロバイダープロファイルに専用化する",
+    "routinePolicies": "Claude Code ルーチンのための実行間隔の下限、同時実行の上限、承認要件、cron 許可リスト、ブロックされた環境",
+    "agentcoreExport": "このテナントのガバナンスルールを Cedar ポリシーとして AWS AgentCore へ投影する計画・確認・適用。計画では何も書き込みません",
+    "workspace-templates": "ワークスペースセッション向けの、フック・設定・コネクター・ポリシーの再利用可能なスナップショット",
+    "eventing": "送信 Webhook サブスクリプション、取得したイベントログ、配信、デッドレターキュー",
+    "team-costs": "チーム別のコスト帰属: セッション、トークン、支出を日次推移とプロジェクト別・モデル別の内訳で表示",
+    "backups": "コントロールプレーンの暗号化された災害復旧スナップショット: 作成、スケジュール、ダウンロード、復元",
+    "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止"
   },
   "commandActions": {
     "eventing": {
@@ -154,5 +175,122 @@
     "orchestration": {
       "createSchedule": "新しいスケジュール"
     }
+  },
+  "aliases": {
+    "sessions": "セッション",
+    "agentops": "Claude Code · agentops",
+    "console": "統制コンソール · テナント管理"
+  },
+  "areas": {
+    "infrastructure": {
+      "label": "インフラ",
+      "question": "どのようなリソースとワークスペースがありますか？",
+      "sections": {
+        "estate": "インベントリとワークスペース"
+      }
+    },
+    "ai": {
+      "label": "AI",
+      "question": "どのセッション、プロファイル、モデルを観測または管理しますか？",
+      "sections": {
+        "sessions": "セッション",
+        "environments": "プロファイルと環境",
+        "models": "モデル",
+        "execution": "特化した実行",
+        "provider-reference": "プロバイダー参照"
+      }
+    },
+    "data-context": {
+      "label": "データとコンテキスト",
+      "question": "どのナレッジ、ケイパビリティ、アーティファクトを接続または再利用しますか？",
+      "sections": {
+        "capabilities": "ケイパビリティ",
+        "knowledge": "ナレッジ",
+        "artifacts": "アーティファクト"
+      }
+    },
+    "work-communications": {
+      "label": "作業とコミュニケーション",
+      "question": "どの作業を調整し、それはどのように連絡しますか？",
+      "sections": {
+        "work": "作業",
+        "communications": "コミュニケーション"
+      }
+    },
+    "automation": {
+      "label": "自動化",
+      "question": "どのフロー、イベント、通知を自動化しますか？",
+      "sections": {
+        "workflows": "フローとオーケストレーション",
+        "events": "イベントと通知"
+      }
+    },
+    "security-identity": {
+      "label": "セキュリティとアイデンティティ",
+      "question": "誰が、どのルールでアクセスし、環境をどう保護しますか？",
+      "sections": {
+        "access": "アイデンティティとアクセス",
+        "policy": "ポリシー",
+        "defense": "保護と対応",
+        "boundaries": "ガバナンスの境界"
+      }
+    },
+    "deployment": {
+      "label": "デプロイ",
+      "question": "デプロイをどのように準備し、管理しますか？",
+      "sections": {
+        "deployments": "デプロイ"
+      }
+    },
+    "observation": {
+      "label": "可観測性とエビデンス",
+      "question": "何が起きていて、いくらかかり、何を証明できますか？",
+      "sections": {
+        "operations": "状態とアクティビティ",
+        "cost-adoption": "コストと導入",
+        "audit-recordings": "監査と記録",
+        "evaluation-evidence": "評価とエビデンス"
+      }
+    },
+    "system": {
+      "label": "システムと設定",
+      "question": "組織、インストール、自分の設定をどのように管理しますか？",
+      "sections": {
+        "administration": "管理",
+        "maintenance": "インストールとメンテナンス",
+        "development": "開発者ツール",
+        "preferences": "個人設定"
+      }
+    }
+  },
+  "directory": {
+    "areas": "エリア",
+    "expand": "{{area}}のモジュールを表示",
+    "collapse": "{{area}}のモジュールを隠す",
+    "expandAll": "すべてのエリアを展開",
+    "collapseAll": "すべてのエリアを折りたたむ",
+    "modulesOf": "{{area}}のモジュール",
+    "empty": "このエリアで利用できる項目はありません",
+    "emptyHint": "現在の組織でのロールがこのエリアのモジュールへのアクセスを許可すると、ここに項目が表示されます。",
+    "backHome": "概要へ",
+    "area": "エリア"
+  },
+  "personal": {
+    "favorites": "お気に入り",
+    "add": "{{name}}をお気に入りに追加",
+    "remove": "{{name}}をお気に入りから削除",
+    "viewAll": "すべて表示（{{count}}）",
+    "manage": "お気に入りを管理",
+    "empty": "モジュールの星を押すと、ここに保存できます。",
+    "scope": "このブラウザーに、アカウントと組織ごとに保存されます。",
+    "temporary": "お気に入りは現在メモリー内にのみ保持されます。",
+    "clear": "お気に入りを消去",
+    "recents": "最近使ったモジュール",
+    "recentManage": "履歴を管理",
+    "recentViewAll": "履歴をすべて表示（{{count}}）",
+    "recentEmpty": "開いたモジュールがここに表示されます。",
+    "recentScope": "このタブで開いたモジュールです。再読み込み、ログアウト、アカウントや組織の変更で消去されます。",
+    "recentRemove": "履歴から{{name}}を削除",
+    "recentClear": "履歴を消去"
   }
 }

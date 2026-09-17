@@ -33,6 +33,7 @@
 //        Both are registered in scripts/console-route-seams.json with their reason,
 //        which is what keeps the class check green without hiding them.
 import { http } from '@/lib/api'
+import type { RequestOptions } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/errors'
 import type { ListResponse } from '@/lib/api/types'
 import type {
@@ -109,6 +110,21 @@ export interface ScimUsersParams {
   startIndex?: number
   count?: number
   filter?: string
+}
+
+/** Closed transport options for an owned ceremony; other callers keep defaults. */
+export type CeremonyOptions = Pick<
+  RequestOptions,
+  'signal' | 'dispatchGuard' | 'sessionEffects'
+>
+function ceremonyOptions(opts?: CeremonyOptions): CeremonyOptions | undefined {
+  return (
+    opts && {
+      signal: opts.signal,
+      dispatchGuard: opts.dispatchGuard,
+      sessionEffects: opts.sessionEffects,
+    }
+  )
 }
 
 export const identityApi = {
@@ -196,14 +212,26 @@ export const identityApi = {
       `${AUTH}/webauthn/credentials`,
     ),
   /** Server-issued WebAuthn registration options (the browser consumes them). */
-  webauthnRegisterOptions: () =>
-    http.post<WebAuthnChallenge>(`${AUTH}/webauthn/register/options`),
+  webauthnRegisterOptions: (opts?: CeremonyOptions) =>
+    http.post<WebAuthnChallenge>(
+      `${AUTH}/webauthn/register/options`,
+      undefined,
+      ceremonyOptions(opts),
+    ),
   /** Submit the browser's attestation for verification (backend verifies). */
-  webauthnRegister: (credential: unknown, name: string) =>
-    http.post<{ ok: boolean }>(`${AUTH}/webauthn/register`, {
-      credential,
-      name,
-    }),
+  webauthnRegister: (
+    credential: unknown,
+    name: string,
+    opts?: CeremonyOptions,
+  ) =>
+    http.post<{ ok: boolean }>(
+      `${AUTH}/webauthn/register`,
+      {
+        credential,
+        name,
+      },
+      ceremonyOptions(opts),
+    ),
   /** Rename a registered WebAuthn credential. */
   webauthnRename: (id: string, name: string) =>
     http.patch<{ ok: boolean }>(
@@ -214,22 +242,35 @@ export const identityApi = {
   webauthnDelete: (id: string) =>
     http.delete<void>(`${AUTH}/webauthn/credentials/${encodeURIComponent(id)}`),
   /** Server-issued assertion options for a step-up. */
-  webauthnAuthOptions: () =>
-    http.post<WebAuthnChallenge>(`${AUTH}/webauthn/authenticate/options`),
+  webauthnAuthOptions: (opts?: CeremonyOptions) =>
+    http.post<WebAuthnChallenge>(
+      `${AUTH}/webauthn/authenticate/options`,
+      undefined,
+      ceremonyOptions(opts),
+    ),
   /** Submit the browser's assertion to elevate the session AAL (backend verifies). */
-  webauthnAuthenticate: (credential: unknown) =>
-    http.post<{ ok: boolean; aal?: number }>(`${AUTH}/webauthn/authenticate`, {
-      credential,
-    }),
+  webauthnAuthenticate: (credential: unknown, opts?: CeremonyOptions) =>
+    http.post<{ ok: boolean; aal?: number }>(
+      `${AUTH}/webauthn/authenticate`,
+      {
+        credential,
+      },
+      ceremonyOptions(opts),
+    ),
   /** PIV/CAC client-certificate status (read from the mTLS peer cert server-side). */
-  pivStatus: () => http.get<PivStatus>(`${AUTH}/piv/status`),
+  pivStatus: (opts?: CeremonyOptions) =>
+    http.get<PivStatus>(`${AUTH}/piv/status`, ceremonyOptions(opts)),
   /** Elevate the CURRENT session with the client certificate already presented on this
    *  connection. No body: the engine reads the TLS peer certificate
    *  (core/api/handlers_piv.go:71 → ElevatePIVSession), so the browser must have attached
    *  one during the handshake — which is why the caller gates on `PivStatus.presented`
    *  rather than on "PIV is configured". A certificate cannot be attached after the fact. */
-  pivElevate: () =>
-    http.post<{ ok: boolean; aal: number }>(`${AUTH}/piv/elevate`, {}),
+  pivElevate: (opts?: CeremonyOptions) =>
+    http.post<{ ok: boolean; aal: number }>(
+      `${AUTH}/piv/elevate`,
+      {},
+      ceremonyOptions(opts),
+    ),
 }
 
 /**
@@ -258,10 +299,25 @@ export function isPivNotConfigured(error: unknown): boolean {
 }
 
 /** True when a step-up cannot start because the user has no registered passkey
- *  yet (400 no_webauthn_credential) — the operator must register one in
- *  the Privileged-login tab first; rendered as guidance, never a red failure. */
+ *  yet (400 no_webauthn_credential). Add Connector explicitly opts into
+ *  inline enrollment; other callers retain Privileged-login guidance. */
 export function isNoWebAuthnCredential(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'no_webauthn_credential'
+}
+
+/** True when the engine could not build a relying party for this deployment at
+ *  all (503 webauthn_relying_party_unusable): the address the console was reached
+ *  on cannot be one, or the configured one was refused.
+ *
+ *  It is a CONFIGURATION state and not a ceremony outcome, and the panel must say
+ *  so. Rendered as the generic failure it became "Step-up did not complete",
+ *  which tells an operator that something went wrong with their click when what
+ *  actually happened is that no click at this address can ever succeed. */
+export function isRelyingPartyUnusable(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.code === 'webauthn_relying_party_unusable'
+  )
 }
 
 /** Tenant-scoped query keys (same convention as queryKeys / claudePolicyKeys). */

@@ -320,6 +320,17 @@ func (p installPlan) renderEnvFile() string {
 		w("# Postgres application-pool cap per node:\n")
 		w("OLIVARES_DB_MAX_CONNS=%d\n#\n", p.MaxConns)
 	}
+	// The browser address is NOT a serve flag here on purpose: it is an
+	// environment key the unit already passes through (EnvironmentFile), so an
+	// operator can set it without touching the args string this file tells them
+	// not to hand-edit. Commented out because declaring nothing keeps today's
+	// behavior, and a wrong value here would print an address that does not
+	// answer.
+	w("# The address a browser reaches this console at, when it is not the bind\n")
+	w("# above (a reverse proxy, a wildcard bind, or a name that is not the host).\n")
+	w("# It is what the startup panel prints and what the passkey relying party is\n")
+	w("# derived from. Start-time only: a change takes a restart.\n")
+	w("#OLIVARES_PUBLIC_URL=https://olivares.example.com\n#\n")
 	w("# Validated serve flags (engine knobs, listeners, TLS, residency):\n")
 	w("OLIVARES_EXTRA_ARGS=%s\n", strings.Join(p.serveFlags(), " "))
 	return b.String()

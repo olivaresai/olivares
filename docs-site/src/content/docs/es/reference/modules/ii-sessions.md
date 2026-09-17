@@ -14,6 +14,11 @@ I (inventario) materializa el estate durable, el módulo II mantiene una **capa
 operativa en vivo** por sesión sobre el mismo flujo de observaciones — y muestra
 solo lo que ese flujo lleva honestamente.
 
+v26.9.0 también **lanza** CLI oficiales de proveedor como hijos propios bajo un
+[perfil de proveedor](/how-to/operate-provider-sessions/). Esa vía gestionada
+es el mismo módulo. No sustituye la capa ni fusiona dos homes que anuncian el
+mismo id de sesión del proveedor (`CHANGELOG.md` `[26.9.0]` B1/B2).
+
 ## Qué es
 
 El módulo II es un módulo de la capa Core dirigido por el bus, hermano del
@@ -48,6 +53,41 @@ sesión, y **abrir el flujo se audita automáticamente**. El canal SSE está
 estrictamente **aislado por tenant** (un cliente recibe solo instantáneas de su
 tenant autorizado) y es de **mejor esfuerzo** (un cliente lento descarta el frame
 intermedio y recibe el siguiente — la ingesta nunca se bloquea).
+
+## Provider profiles and `live_ref`
+
+Un **perfil de proveedor** es la identidad durable de una instancia de
+proveedor configurada en un entorno de ejecución: controlador, entorno y el
+`config_home` / `user_home` canónicos. No es una cuenta autenticada del
+proveedor. Registrar, renombrar, desactivar/activar y retirar viven bajo
+`/v1/m/sessions/provider-profiles`. Las rutas aparecen solo en la lectura
+admin `configuration`. Un lanzamiento nombra `provider_profile_ref`; el
+servidor resuelve los homes y persiste una instantánea no secreta en el run
+antes del spawn (`CHANGELOG.md` `[26.9.0]` B1;
+`web/src/features/agentops/types.ts`).
+
+Una observación se pliega en la fila en vivo de su **canal**, calculado por el
+servidor a partir del registro de fuente sellado por el host (`CHANGELOG.md`
+`[26.9.0]` B2):
+
+| Channel | Meaning |
+|---|---|
+| `legacy` | no registration |
+| `observed` | a source dedicated to a profile by a binding approved at host admission for the exact applied revision |
+| `source` | a known registration with no verifiable profile |
+| `managed` | a run the plane launched; the only row carrying `canonical_sid` and `run_ref` |
+
+Cada fila en vivo expone `live_ref` y `attribution`. Dos homes que anuncian el
+mismo id de sesión del proveedor son dos filas con dos cronologías. Lee una
+fila con `GET /v1/m/sessions/live/by-id/{live_ref}` (y su consulta de
+cronología / stream / runs). Las rutas de id externo desnudo permanecen y son
+**legacy**: responden solo para la fila legacy.
+
+Los controladores se registran **por nodo** fijando un binario oficial
+(`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` — véase
+[Configuración](/reference/configuration/)). Sin fijar, los perfiles de ese
+controlador siguen observables y no se pueden lanzar. Pasos del operador:
+[Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
 
 ## Qué consume (y qué deriva)
 

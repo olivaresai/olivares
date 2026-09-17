@@ -3,147 +3,256 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# One-command installer for the Olivares AI single static binary.
-#
-#   curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh | sh
-#
-# It downloads the right release archive for your OS/arch, VERIFIES it (cosign signature
-# over checksums.txt + SHA-256 of the archive — the same trust chain as
-# scripts/verify-release.sh), and installs `olivares` into a bin dir. For a security
-# product the supply chain is part of the trust model: this never runs an unverified
-# binary unless you explicitly opt out.
-#
-# Knobs (environment variables):
-#   OLIVARES_VERSION   release tag to install (default: latest, e.g. v26.7.0)
-#   OLIVARES_BINDIR    install dir (default: /usr/local/bin; falls back to ~/.local/bin)
-#   OLIVARES_OS        override OS detection (linux | darwin)
-#   OLIVARES_ARCH      override arch detection (amd64 | arm64)
-#   OLIVARES_SKIP_COSIGN=1   install with SHA-256 only when cosign is absent (NOT advised)
-#
-# Windows is not supported by this script (no goos:windows build yet — see INSTALL.md).
+# Verified second-stage installer. Release builds replace the marker below and publish
+# olivares-install-<version>.sh as an asset covered by the cosign-signed checksums.txt.
+# The tracked source can also install an explicitly pinned release. It never bypasses
+# cosign and never invokes sudo; privilege changes remain an operator decision.
 set -eu
 
 REPO="olivaresai/olivares"
-GITHUB="https://github.com"
-API="https://api.github.com"
-# The keyless Sigstore identity the release workflow signs as. FULLY ANCHORED: cosign
-# matches --certificate-identity-regexp UNANCHORED, so the previous
-# '^https://github.com/olivaresai/olivares' also accepted `.../olivares-anything/...`
-# and any workflow file on any branch -- i.e. far more identities than the one that
-# actually signs a release.
+GITHUB="${OLIVARES_GITHUB_URL:-https://github.com}"
+API="${OLIVARES_GITHUB_API_URL:-https://api.github.com}"
+EMBEDDED_VERSION='@OLIVARES_INSTALLER_VERSION@'
 DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 CERT_IDENTITY_REGEXP="${OLIVARES_CERT_IDENTITY:-$DEFAULT_CERT_IDENTITY}"
 CERT_OIDC_ISSUER="${OLIVARES_CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 
-say()  { printf '%s\n' "$*"; }
-err()  { printf 'error: %s\n' "$*" >&2; exit 1; }
+say() { printf '%s\n' "$*"; }
+err() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# --- a downloader that works with curl or wget ------------------------------------
-dl() { # dl <url> <dest>
-  if have curl; then curl -fsSL "$1" -o "$2"
-  elif have wget; then wget -qO "$2" "$1"
-  else err "need curl or wget"; fi
-}
-dl_stdout() { # dl_stdout <url>
-  if have curl; then curl -fsSL "$1"
-  elif have wget; then wget -qO- "$1"
-  else err "need curl or wget"; fi
+usage() {
+  cat <<'EOF'
+Usage: olivares-install-<version>.sh [--version vYY.M.PATCH] [--bindir DIR]
+       [--user|--system] [--init auto|systemd|openrc|launchd]
+       [--data-dir PATH] [--config PATH] [--start] [--dry-run]
+       olivares-install-<version>.sh --uninstall (--plan|--preserve|--purge)
+       [--data-dir PATH] [--bindir DIR] [--yes]
+
+The release asset is pinned to its embedded version. The tracked source requires
+--version/OLIVARES_VERSION or resolves the latest release. Installation refuses
+without cosign and never invokes sudo. Service installation is opt-in; --start
+requires --user or --system and runs only after configuration validation.
+EOF
 }
 
-# --- detect OS / arch -------------------------------------------------------------
+requested="${OLIVARES_VERSION:-}"
+bindir="${OLIVARES_BINDIR:-}"
+dry_run=0
+service_mode=""
+service_init=auto
+service_data_dir=""
+service_config=""
+service_start=0
+uninstall=0
+uninstall_action=""
+uninstall_yes=0
+uninstall_version_arg=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --version) [ "$#" -ge 2 ] || err "--version needs a value"; requested="$2"; uninstall_version_arg=1; shift 2 ;;
+    --bindir) [ "$#" -ge 2 ] || err "--bindir needs a value"; bindir="$2"; shift 2 ;;
+    --user) [ -z "$service_mode" ] || err "choose exactly one of --user or --system"; service_mode=user; shift ;;
+    --system) [ -z "$service_mode" ] || err "choose exactly one of --user or --system"; service_mode=system; shift ;;
+    --init) [ "$#" -ge 2 ] || err "--init needs a value"; service_init="$2"; shift 2 ;;
+    --data-dir) [ "$#" -ge 2 ] || err "--data-dir needs a value"; service_data_dir="$2"; shift 2 ;;
+    --config) [ "$#" -ge 2 ] || err "--config needs a value"; service_config="$2"; shift 2 ;;
+    --start) service_start=1; shift ;;
+    --dry-run) dry_run=1; shift ;;
+    --uninstall) uninstall=1; shift ;;
+    --plan) [ -z "$uninstall_action" ] || err "choose exactly one uninstall action"; uninstall_action=plan; shift ;;
+    --preserve) [ -z "$uninstall_action" ] || err "choose exactly one uninstall action"; uninstall_action=preserve; shift ;;
+    --purge) [ -z "$uninstall_action" ] || err "choose exactly one uninstall action"; uninstall_action=purge; shift ;;
+    --yes|-y) uninstall_yes=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) err "unknown argument: $1" ;;
+  esac
+done
+if [ "$uninstall" -eq 1 ]; then
+  [ -n "$uninstall_action" ] || err "--uninstall requires exactly one of --plan, --preserve or --purge"
+  [ -z "$service_mode$service_config" ] && [ "$service_init" = auto ] && [ "$service_start" -eq 0 ] &&
+    [ "$dry_run" -eq 0 ] && [ "$uninstall_version_arg" -eq 0 ] ||
+    err "--uninstall accepts only its action, --data-dir, --bindir and --yes"
+  [ "$uninstall_yes" -eq 0 ] || [ "$uninstall_action" = purge ] || err "--yes is valid only with --uninstall --purge"
+  if [ -n "$bindir" ]; then
+    case "$bindir" in /*) ;; *) err "--bindir must be an absolute path: $bindir" ;; esac
+    installed="$bindir/olivares"
+  elif installed="$(command -v olivares 2>/dev/null)" && [ -n "$installed" ]; then
+    :
+  elif [ -x /usr/local/bin/olivares ]; then installed=/usr/local/bin/olivares
+  elif [ -n "${HOME:-}" ] && [ -x "$HOME/.local/bin/olivares" ]; then installed="$HOME/.local/bin/olivares"
+  elif [ -x /usr/bin/olivares ]; then installed=/usr/bin/olivares
+  else err "cannot find an installed olivares binary; pass --bindir"
+  fi
+  case "$installed" in /*) ;; *) err "installed binary path is not absolute: $installed" ;; esac
+  [ -x "$installed" ] || err "installed binary is not executable: $installed"
+  set -- "$installed" uninstall "--$uninstall_action"
+  [ -z "$service_data_dir" ] || set -- "$@" --data-dir "$service_data_dir"
+  [ "$uninstall_yes" -eq 0 ] || set -- "$@" --yes
+  exec "$@"
+fi
+[ -z "$uninstall_action" ] && [ "$uninstall_yes" -eq 0 ] || err "--plan/--preserve/--purge/--yes require --uninstall"
+[ "$service_start" -eq 0 ] || [ -n "$service_mode" ] || err "--start requires --user or --system"
+if [ -z "$service_mode" ] &&
+  { [ "$service_init" != auto ] || [ -n "$service_data_dir" ] || [ -n "$service_config" ]; }; then
+  err "--init, --data-dir and --config require --user or --system"
+fi
+if [ "$dry_run" -eq 0 ] && [ "$service_mode" = system ] && [ "$(id -u)" -ne 0 ]; then
+  err "--system requires an explicitly privileged process; this installer never invokes sudo"
+fi
+
+case "$EMBEDDED_VERSION" in
+  SNAPSHOT) err "snapshot installers are not installable; use a tagged release asset" ;;
+  @*) pinned="" ;;
+  *) pinned="v$EMBEDDED_VERSION" ;;
+esac
+if [ -n "$pinned" ]; then
+  if [ -n "$requested" ] && [ "${requested#v}" != "${pinned#v}" ]; then
+    err "this installer is pinned to $pinned, not $requested"
+  fi
+  tag="$pinned"
+else
+  tag="$requested"
+fi
+
+dl() { # dl <url> <destination>
+  if have curl; then curl -fsSL "$1" -o "$2"
+  elif have wget; then wget -qO "$2" "$1"
+  else err "curl or wget is required"; fi
+}
+dl_stdout() {
+  if have curl; then curl -fsSL "$1"
+  elif have wget; then wget -qO- "$1"
+  else err "curl or wget is required"; fi
+}
+
+if [ -z "$tag" ]; then
+  say "==> resolving the latest release of $REPO"
+  tag="$(dl_stdout "$API/repos/$REPO/releases/latest" |
+    sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
+  [ -n "$tag" ] || err "could not resolve a release; pass --version vYY.M.PATCH"
+fi
+case "$tag" in v*) ;; *) tag="v$tag" ;; esac
+printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' ||
+  err "invalid release version: $tag"
+
 os="${OLIVARES_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}"
 case "$os" in
-  linux)  os=linux ;;
+  linux) os=linux ;;
   darwin) os=darwin ;;
-  mingw*|msys*|cygwin*|windows*) err "Windows is not supported by this installer yet (see INSTALL.md)";;
-  *) err "unsupported OS: $os" ;;
+  *) err "unsupported OS: $os (linux and darwin only)" ;;
 esac
 arch="${OLIVARES_ARCH:-$(uname -m)}"
 case "$arch" in
-  x86_64|amd64)        arch=amd64 ;;
-  aarch64|arm64)       arch=arm64 ;;
+  x86_64|amd64) arch=amd64 ;;
+  aarch64|arm64) arch=arm64 ;;
   *) err "unsupported architecture: $arch (amd64 and arm64 only)" ;;
 esac
 
-# --- resolve the release tag ------------------------------------------------------
-tag="${OLIVARES_VERSION:-}"
-if [ -z "$tag" ]; then
-  say "==> resolving the latest release of $REPO"
-  tag="$(dl_stdout "$API/repos/$REPO/releases/latest" \
-        | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name"[^"]*"([^"]+)".*/\1/')"
-  [ -n "$tag" ] || err "could not resolve the latest release (set OLIVARES_VERSION=vYY.M.PATCH). No public release yet?"
+if [ -z "$bindir" ]; then
+  if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
+    bindir=/usr/local/bin
+  else
+    [ -n "${HOME:-}" ] || err "HOME is unset; pass --bindir DIR"
+    bindir="$HOME/.local/bin"
+  fi
 fi
+case "$bindir" in /*) ;; *) err "--bindir must be an absolute path: $bindir" ;; esac
+
 version="${tag#v}"
 archive="olivares_${version}_${os}_${arch}.tar.gz"
 base="$GITHUB/$REPO/releases/download/$tag"
-say "==> installing olivares $tag ($os/$arch)"
+say "Olivares AI verified installer plan"
+say "  version: $tag"
+say "  platform: $os/$arch"
+say "  archive: $base/$archive"
+say "  install: $bindir/olivares"
+say "  trust: cosign identity + signed checksums.txt + archive SHA-256"
+say "  privilege: none (sudo is never invoked)"
+if [ -n "$service_mode" ]; then
+  say "  service: $service_mode mode; init=$service_init; start=$([ "$service_start" -eq 1 ] && printf explicit || printf no)"
+  [ -z "$service_data_dir" ] || say "  data: $service_data_dir"
+  [ -z "$service_config" ] || say "  config: $service_config"
+else
+  say "  service: binary only (pass --user or --system to install an adapter)"
+fi
+if [ "$dry_run" -eq 1 ]; then
+  say "  action: dry-run; no downloads or filesystem changes"
+  exit 0
+fi
 
-# --- download into a scratch dir --------------------------------------------------
+have cosign || err "cosign is required; install it and retry (verification cannot be bypassed)"
+have install || err "the POSIX install utility is required"
+
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/olivares-install.XXXXXX")"
 cleanup() { rm -rf "$tmp"; }
-trap cleanup EXIT INT TERM
-cd "$tmp"
+trap cleanup EXIT HUP INT TERM
 
-say "==> downloading $archive + checksums"
-dl "$base/$archive" "$archive"
-dl "$base/checksums.txt" checksums.txt
-dl "$base/checksums.txt.sig" checksums.txt.sig || true
-dl "$base/checksums.txt.pem" checksums.txt.pem || true
+dl "$base/$archive" "$tmp/$archive"
+dl "$base/checksums.txt" "$tmp/checksums.txt"
+dl "$base/checksums.txt.sig" "$tmp/checksums.txt.sig"
+dl "$base/checksums.txt.pem" "$tmp/checksums.txt.pem"
 
-# --- verify: cosign signature over checksums.txt, then SHA-256 of the archive -----
-if have cosign && [ -f checksums.txt.sig ] && [ -f checksums.txt.pem ]; then
-  say "==> verifying cosign signature over checksums.txt (keyless / Sigstore)"
+say "==> verifying the release identity and signed checksum manifest"
   cosign verify-blob \
-    --certificate checksums.txt.pem \
-    --signature checksums.txt.sig \
-    --certificate-identity-regexp "$CERT_IDENTITY_REGEXP" \
-    --certificate-oidc-issuer "$CERT_OIDC_ISSUER" \
-    checksums.txt >/dev/null
-  say "    signature OK"
-elif [ "${OLIVARES_SKIP_COSIGN:-0}" = "1" ]; then
-  say "!!  cosign not available — proceeding with SHA-256 only (OLIVARES_SKIP_COSIGN=1)."
-  say "!!  the checksums file itself is UNVERIFIED. Install cosign for the real trust chain."
+  --certificate "$tmp/checksums.txt.pem" \
+  --signature "$tmp/checksums.txt.sig" \
+  --certificate-identity-regexp "$CERT_IDENTITY_REGEXP" \
+  --certificate-oidc-issuer "$CERT_OIDC_ISSUER" \
+  "$tmp/checksums.txt" >/dev/null
+
+if ! want="$(awk -v name="$archive" '
+  $2 == name && length($1) == 64 && $1 !~ /[^0-9a-fA-F]/ {
+    count++; value=tolower($1)
+  }
+  END { if (count == 1) print value; else exit 1 }
+' "$tmp/checksums.txt")"; then
+  err "signed checksums.txt must contain exactly one SHA-256 row for $archive"
+fi
+if have sha256sum; then got="$(sha256sum "$tmp/$archive" | awk '{print tolower($1)}')"
+elif have shasum; then got="$(shasum -a 256 "$tmp/$archive" | awk '{print tolower($1)}')"
+else err "sha256sum or shasum is required"; fi
+[ "$want" = "$got" ] || err "checksum mismatch for $archive (signed $want, obtained $got)"
+
+tar -xOf "$tmp/$archive" olivares >"$tmp/olivares" ||
+  err "the verified archive does not contain a top-level olivares binary"
+[ -s "$tmp/olivares" ] || err "the verified olivares binary is empty"
+
+if [ -n "$service_mode" ]; then
+  mkdir -p "$tmp/service-assets"
+  tar -xzf "$tmp/$archive" -C "$tmp/service-assets" \
+    scripts/install-service.sh packaging/service ||
+    err "the verified archive does not contain its service adapter and templates"
+  /bin/sh -n "$tmp/service-assets/scripts/install-service.sh" ||
+    err "the verified service adapter does not parse as POSIX shell"
+  # Resolve and disclose the service plan before replacing a binary. The real
+  # call below repeats every check against the installed path.
+  set -- /bin/sh "$tmp/service-assets/scripts/install-service.sh" "--$service_mode" \
+    --binary "$bindir/olivares" --init "$service_init" --managed-binary --dry-run
+  [ -z "$service_data_dir" ] || set -- "$@" --data-dir "$service_data_dir"
+  [ -z "$service_config" ] || set -- "$@" --config "$service_config"
+  OLIVARES_ASSET_ROOT="$tmp/service-assets" "$@"
+fi
+mkdir -p "$bindir" || err "cannot create $bindir; create it with the intended owner and retry"
+stage="$bindir/.olivares-install.$$"
+install -m 0755 "$tmp/olivares" "$stage" ||
+  err "cannot write $bindir; choose a writable --bindir or perform the privilege step explicitly"
+mv "$stage" "$bindir/olivares"
+
+say "==> installed verified binary: $bindir/olivares"
+"$bindir/olivares" version || err "the installed binary did not report its version"
+if [ -n "$service_mode" ]; then
+  set -- /bin/sh "$tmp/service-assets/scripts/install-service.sh" "--$service_mode" \
+    --binary "$bindir/olivares" --init "$service_init" --managed-binary
+  [ -z "$service_data_dir" ] || set -- "$@" --data-dir "$service_data_dir"
+  [ -z "$service_config" ] || set -- "$@" --config "$service_config"
+  [ "$service_start" -eq 0 ] || set -- "$@" --start
+  OLIVARES_ASSET_ROOT="$tmp/service-assets" "$@" ||
+    err "verified binary remains installed, but service configuration failed; correct the named precondition and rerun this pinned installer"
+fi
+case ":$PATH:" in *":$bindir:"*) ;; *) say "note: $bindir is not on PATH" ;; esac
+if [ -n "$service_mode" ]; then
+  say "Next: $bindir/olivares doctor --data-dir ${service_data_dir:-<resolved-by-service-mode>}"
 else
-  err "cosign not found, so the signature can't be verified. Install cosign
-     (https://docs.sigstore.dev/cosign/installation) and re-run, or download the
-     archive and run scripts/verify-release.sh. To override (NOT advised): set
-     OLIVARES_SKIP_COSIGN=1."
+  say "Next: olivares quickstart"
 fi
-
-say "==> verifying SHA-256 of $archive"
-want="$(grep " $archive\$" checksums.txt | awk '{print $1}')"
-[ -n "$want" ] || err "no checksum line for $archive in checksums.txt"
-if have sha256sum; then got="$(sha256sum "$archive" | awk '{print $1}')"
-elif have shasum;  then got="$(shasum -a 256 "$archive" | awk '{print $1}')"
-else err "need sha256sum or shasum"; fi
-[ "$want" = "$got" ] || err "checksum MISMATCH for $archive (want $want, got $got)"
-say "    checksum OK"
-
-# --- extract + install ------------------------------------------------------------
-tar -xzf "$archive"
-[ -f olivares ] || err "archive did not contain the 'olivares' binary"
-chmod +x olivares
-
-bindir="${OLIVARES_BINDIR:-/usr/local/bin}"
-install_to() { # install_to <dir>
-  mkdir -p "$1" 2>/dev/null || return 1
-  if [ -w "$1" ]; then mv olivares "$1/olivares"
-  elif have sudo;  then say "==> installing to $1 (sudo)"; sudo mv olivares "$1/olivares"
-  else return 1; fi
-}
-if ! install_to "$bindir"; then
-  bindir="${HOME:-}/.local/bin"
-  [ -n "${HOME:-}" ] || err "HOME is not set and OLIVARES_BINDIR was not given: nowhere to install to."
-  say "==> $bindir (no write access / no sudo for the default dir)"
-  install_to "$bindir" || err "could not install to a bin dir; set OLIVARES_BINDIR to a writable path"
-fi
-
-say ""
-say "✅ installed: $bindir/olivares"
-"$bindir/olivares" version || true
-say ""
-say "Next:"
-say "  olivares serve --insecure --seed-demo --data-dir \"\$(mktemp -d)\"   # bundled demo estate"
-say "  $bindir is on your PATH? if not, add it. Production setup: INSTALL.md / the docs site."
-case ":$PATH:" in *":$bindir:"*) ;; *) say "  (note: $bindir is not on your PATH)";; esac

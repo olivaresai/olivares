@@ -63,7 +63,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.
@@ -84,6 +94,50 @@ curl -fsS -X POST https://localhost:8443/v1/auth/login \
 
 Das Datenverzeichnis enthält die SQLite-Datenbank, den Signierschlüssel des Audit-Ledgers
 und das TLS-Material — sichern und schützen Sie es.
+
+### Benutzerdefiniertes Datenverzeichnis (`layout: custom`)
+
+Das Standard-Native-Layout ist `/var/lib/olivares`. Der signierte Service-Adapter
+(`install.sh --data-dir`, `scripts/install-service.sh`) lässt ein
+**benutzerdefiniertes** Datenverzeichnis nach **Form** zu, nicht nach Allowlist.
+Das Ownership-Manifest zeichnet `"layout": "custom"` auf (`CHANGELOG.md`
+`[26.9.0]` Added; `INSTALL.md`).
+
+SDD 04 §6: jedes konfigurierbare Feld erklärt Owner, Schema, akzeptierte Quellen
+und Validator. Hier besitzt der Adapter das dedizierte Verzeichnis; der Operator
+besitzt das Elternverzeichnis. Das sind die eigenen Ablehnungstexte des Adapters
+(`scripts/install-service.sh`):
+
+| Condition | What the adapter prints and exits 1 |
+|---|---|
+| Path is not `/*/*` (a top-level directory) | `custom data directory must be a dedicated directory at least two levels deep (for example /srv/olivares), not a top-level directory: $data_dir` |
+| The data directory would contain the binary, config or unit | `custom data directory $data_dir must not contain the installed path $path` |
+| Any path component is a symbolic link | `path component is a symbolic link ($prefix -> …); pass the resolved path instead of provisioning through a link: $1` |
+| Parent of a new custom directory does not exist | `parent of the custom data directory does not exist; create it with the intended owner first: $(dirname -- "$data_target")` |
+| Existing system directory mode is not 0700 or 0750 | `existing system data directory mode is $data_mode; require 0700 or 0750` |
+| Path is under `/dev`, `/proc` or `/sys` | `data directory $data_dir is under an API file system (/dev, /proc, /sys): those hold kernel and device interfaces rather than durable state…; choose a real directory` |
+| Path under `/tmp` or `/var/tmp` on systemd older than 235 | `data directory $data_dir is under /tmp or /var/tmp and this host runs systemd $running: creating a BindPaths= destination inside the private /tmp needs systemd 235 or later…` |
+| A BindPaths= path contains `:` | `$2 $1 contains ':' and this location can only be reached with BindPaths=, whose value uses ':' to separate source from destination; choose a path without it` |
+
+`install-agentops.sh` verwendet dieselbe Zwei-Ebenen-Regel für `OLIVARES_DATA_DIR`:
+`OLIVARES_DATA_DIR must name a dedicated directory at least two levels deep
+(for example /srv/olivares), not a top-level directory`. Es beachtet `OLIVARES_DATA_DIR` und ein ausdrücklich gewähltes
+`OLIVARES_WORKSPACE_DIR`.
+
+Ein Pfad unter `/home`, `/root` oder `/run/user` wird mit `ProtectHome=tmpfs` und
+`BindPaths=` genau für dieses Verzeichnis gerendert. Einer unter `/tmp` oder
+`/var/tmp` behält `PrivateTmp=true` und erhält `BindPaths=` nur für dieses
+Verzeichnis (`sandbox_access` in `scripts/install-service.sh`).
+
+`olivares uninstall` lässt dieses benutzerdefinierte Verzeichnis nur zu, wenn die
+Unit an ihrem indexierten Pfad die Engine damit ausführt, oder wenn ein Preserve
+bereits einen Uninstall-Zeugen neben der Service-Konfiguration hinterlassen hat.
+Diagnostizieren Sie das aufgezeichnete AgentOps-Layout mit `olivares doctor` —
+siehe [Fehlerbehebung](/how-to/troubleshooting/#agentops-layout-check).
+
+Für Paketinstallationen bleibt der Standard `/var/lib/olivares`. Siehe
+[Aus einem Paket installieren](/how-to/install-from-packages/). Unter macOS siehe
+[Mit Homebrew installieren](/how-to/install-from-homebrew/).
 
 ## Option 2 — Docker Compose (Single Node, SQLite)
 
@@ -116,33 +170,30 @@ Helm-Chart), damit Datenvolume, Ports und Erste-Start-Ablauf korrekt verdrahtet 
 
 ## Option 3 — Kubernetes (Helm)
 
-Das signierte Helm-Chart stellt die control plane als **Core-StatefulSet** bereit
+Das Helm-Chart in `deploy/helm/olivares` stellt die control plane als **Core-StatefulSet** bereit
 (Single-Writer; sein Datenverzeichnis enthält den Signierschlüssel des Audit-Ledgers und
 das TLS-Material) und, für die verteilte Topologie, ein **Collectors-DaemonSet**, das
-Beobachtungen über **gRPC + mTLS** an den Core schickt. Beim Release wird das Chart in
-eine OCI-Registry veröffentlicht und cosign-signiert, sodass Sie bei der Installation
-verifizieren und per Digest pinnen. (Das erste Release ist noch ein **Entwurf**: bis ein
-`chart-v*`-Tag geschnitten ist, ist der Registry-Pfad leer, daher ist der untenstehende
-Befehl der Weg, den Sie nutzen werden, sobald ein Release veröffentlicht ist.)
+Beobachtungen über **gRPC + mTLS** an den Core schickt. Das Engine-Release v26.9.0
+veröffentlicht das Chart nicht in einer OCI-Registry; noch kein unabhängiger
+`chart-v*`-Tag hat den Workflow ausgeführt. Installieren Sie aus dem Checkout und
+pinnen Sie das veröffentlichte Container-Image per Digest.
 
 ```bash
 helm install olivares \
-  oci://ghcr.io/olivaresai/charts/olivares \
-  --version <chart-version> \
+  deploy/helm/olivares \
   --set image.repository=docker.io/olivaresai/olivares \
   --set image.digest=<sha256-digest>
 ```
 
-> Das veröffentlichte Chart ist **cosign-signiert über das OCI-Manifest**, nicht GPG-signiert: die
-> Release-Pipeline erzeugt keine `.prov`-Ebene, daher kann `helm --verify` es nicht prüfen. Mit
-> `cosign verify` gegen die Identität `release-chart.yml@refs/tags/chart-v*` verifizieren — siehe
-> `deploy/helm/README.md`.
+> Wenn ein Chart veröffentlicht wird, signiert `release-chart.yml` dessen OCI-Manifest mit
+> cosign und erzeugt keine GPG-`.prov`-Ebene. Dieses spätere Artefakt muss per Digest geprüft
+> werden; die Quellinstallation ist kein signierter OCI-Download. Siehe `deploy/helm/README.md`.
 
 Das Chart zieht das Container-Image von Docker Hub (`docker.io/olivaresai/olivares`); dasselbe
 Image liegt auch unter `ghcr.io/olivaresai/olivares`, per Digest identisch; zeigen Sie
 `image.repository` dorthin, wenn die Rate-Begrenzung **anonymer** Pulls von Docker Hub
-stört (ghcr.io wendet sie auf öffentliche Images nicht an). Das
-**Chart**-Artefakt selbst bleibt unter `oci://ghcr.io/olivaresai/charts/olivares`.
+stört (ghcr.io wendet sie auf öffentliche Images nicht an). Das Chart kommt aus
+`deploy/helm/olivares`, bis eine eigene Chart-Version veröffentlicht wird.
 
 Stellen Sie immer **per Digest** bereit, niemals über einen veränderlichen Tag. Für ein
 vollständig getrenntes Cluster spiegeln Sie zuerst das Bundle — siehe

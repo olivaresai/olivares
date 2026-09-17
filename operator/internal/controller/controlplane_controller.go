@@ -134,6 +134,13 @@ type ControlPlaneReconciler struct {
 	// through this. nil falls back to the cached client, which is what the
 	// fake-client tests use.
 	APIReader client.Reader
+	// RouteProbe observes traffic readiness (GET /readyz) on the pod the leader
+	// Service resolves to, in the leader-routing layout only. It is injected so the
+	// unit tests state an observation instead of simulating an API server, and so a
+	// manager that could not build the real client fails at startup: a nil prober
+	// REFUSES PhaseReady, it never falls back to the leader label. See
+	// routereadiness.go for what the production implementation may and may not do.
+	RouteProbe RouteReadinessProber
 }
 
 // reader returns the uncached reader when one is wired, else the cached client.
@@ -162,6 +169,18 @@ func (r *ControlPlaneReconciler) reader() client.Reader {
 // strictly safer than the alternative (`escalate`/`bind`, which would let the
 // manager mint ANY permission).
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;patch
+//
+// Traffic readiness is OBSERVED, not inferred from the leader label, so the
+// manager needs GET on the pod-proxy subresource — and nothing else on it. No
+// create/update/patch: this is a read of one health endpoint, not a channel for
+// acting on a pod, and the operand's own Role is unchanged by it.
+//
+// Kubernetes authorizes the SUBRESOURCE, not a path within it: `get pods/proxy`
+// permits a GET of ANY path on any pod in scope. What constrains this manager to
+// /readyz on one verified pod is the code in routereadiness.go, and the existing
+// manager RBAC remains the trust boundary. Do not read this marker as per-path
+// authorization by the API server.
+// +kubebuilder:rbac:groups=core,resources=pods/proxy,verbs=get
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 
@@ -238,6 +257,11 @@ func (r *ControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, fmt.Errorf("reconcile backup: %w", err)
 	}
 
+	// --- Traffic readiness (leader-routing only) ---
+	// After the workload exists and before status is written: it observes the pod
+	// the leader Service already resolves to, and it changes nothing in the cluster.
+	pods.route = r.observeRouteReadiness(ctx, &cp, sts, pods)
+
 	// --- Status ---
 	cls, err := r.updateStatus(ctx, &cp, sts, pods)
 	if err != nil {
@@ -254,10 +278,18 @@ func (r *ControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// migration waiting on a human) has no deadline to evaluate and will not change
 	// on its own, so it polls slowly instead: the status writes are idempotent, but
 	// re-examining a permanent condition twice a minute forever is pure noise.
+	//
+	// The leader-routing layout keeps ticking even once Ready, and that is not
+	// belt-and-braces: its readiness now includes an HTTP fact that changes with NO
+	// Kubernetes event at all. A leader whose store dies, or whose administrative
+	// pool is fixed, moves 200<->503 without touching any object this controller
+	// watches, so the periodic tick IS the refresh. It costs one GET per interval.
 	switch {
+	case cls.ready && haLeaderRouting(&cp):
+		return ctrl.Result{RequeueAfter: progressRequeueInterval}, nil
 	case cls.ready:
 		return ctrl.Result{}, nil
-	case cls.haReadinessBlocked || migratingToLeaderRouting(&cp, sts):
+	case cls.routeStaticallyBlocked || cls.haReadinessBlocked || migratingToLeaderRouting(&cp, sts):
 		return ctrl.Result{RequeueAfter: staticStateRequeueInterval}, nil
 	default:
 		return ctrl.Result{RequeueAfter: progressRequeueInterval}, nil
@@ -339,6 +371,126 @@ func podIsReady(p *corev1.Pod) bool {
 		}
 	}
 	return false
+}
+
+// observeRouteReadiness answers the traffic half of PhaseReady for the
+// leader-routing layout: it asks the pod the leader Service already resolves to
+// whether it will take client traffic, through the API server's authenticated pod
+// proxy. It changes nothing in the cluster and never chooses a pod — it observes
+// the one the label already elected.
+//
+// Every refusal to verify returns RouteUnknown, which cannot produce PhaseReady.
+// That is the whole design: the alternative — "could not observe, so believe the
+// label" — is the defect this exists to close, and it would come back the first
+// time an RBAC rule or a network policy silently removed the observation.
+func (r *ControlPlaneReconciler) observeRouteReadiness(ctx context.Context, cp *opsv1alpha1.ControlPlane, sts *appsv1.StatefulSet, pods podObservation) RouteReadiness {
+	if !haLeaderRouting(cp) {
+		// Every other layout wires /readyz as the kubelet's own readiness probe, so
+		// a pod that refuses traffic is not Ready and the existing predicate already
+		// tells the truth. Probing here would duplicate the kubelet and add a way to
+		// be wrong.
+		return RouteUnknown
+	}
+	if desired, _ := effectiveReplicas(cp); desired <= 0 {
+		return RouteUnknown
+	}
+	// Exactly one candidate, or no request at all. Zero leaders have no endpoint to
+	// ask; several are an anomaly the operator reports and never adjudicates — and
+	// asking one of them would be exactly the arbitration it refuses to perform.
+	if !pods.observed || pods.readyLeaders != 1 || pods.leaderPod == "" {
+		return RouteUnknown
+	}
+	if r.RouteProbe == nil {
+		return RouteUnknown
+	}
+
+	// ONE budget for the WHOLE observation, taken here because this is where the
+	// observation is owned. It covers the ownership read before the call, the call
+	// itself and its body, and the ownership read after it — three requests to the
+	// same API server, any of which can hang. Bounding only the middle one bounded
+	// nothing: the two uncached reads ran under the reconcile's own context, which
+	// has no deadline at all.
+	//
+	// context.WithTimeout keeps the EARLIER of the two deadlines, so a caller that
+	// already imposed a tighter one still wins, and a canceled parent cancels this
+	// immediately. Nothing here outlives the reconcile: there is no goroutine, and
+	// cancel() runs before this function returns.
+	obsCtx, cancel := context.WithTimeout(ctx, routeObservationBudget)
+	defer cancel()
+
+	// Bracket the call with an UNCACHED identity check. StatefulSet ordinal names
+	// are reused, the pod list is a cache read and the proxy addresses a live NAME:
+	// between the two, `<name>-0` can be a different pod. The UID is what makes
+	// "the same pod" checkable, and the ownership chain is what makes it OURS — the
+	// label is a claim any pod in the namespace can make about itself.
+	before, ok := r.readOwnedLeaderPod(obsCtx, cp, sts, pods.leaderPod)
+	if !ok {
+		return RouteUnknown
+	}
+	result := r.RouteProbe.ProbeRouteReadiness(obsCtx, cp.Namespace, pods.leaderPod)
+	after, ok := r.readOwnedLeaderPod(obsCtx, cp, sts, pods.leaderPod)
+	if !ok || after.UID != before.UID {
+		// Replaced, terminating, demoted or unreadable while we asked. The answer we
+		// hold may describe a pod that no longer exists; it is not evidence.
+		//
+		// This bounds the observation. It does not make pod-proxy atomic: a
+		// replacement entirely inside the HTTP call is still possible, which is one
+		// more reason a 200 authorizes nothing and is never remembered.
+		return RouteUnknown
+	}
+	// The window closed. Whatever came back was observed inside a budget that has
+	// since expired, or under a reconcile that has been canceled — so it is not
+	// evidence, and this refuses ALL of it rather than only the comfortable half.
+	// Ready is the obvious one to refuse; the verified setup block matters just as
+	// much, because that verdict is what takes a converged rollout OFF the progress
+	// deadline. Accepting a stale one would silence stall detection on the strength
+	// of an observation nobody can stand behind.
+	if obsCtx.Err() != nil {
+		return RouteUnknown
+	}
+	log.FromContext(ctx).V(1).Info("observed route readiness",
+		"pod", pods.leaderPod, "result", result.String())
+	return result
+}
+
+// readOwnedLeaderPod re-reads the named pod through the UNCACHED reader and
+// verifies it is still a pod this ControlPlane may speak for: it exists with a
+// stable identity, it is not terminating, the kubelet still calls it Ready, it
+// still publishes the leader label, and the ownership chain runs
+// pod -> StatefulSet -> this ControlPlane by UID. Labels are not ownership
+// (backupLabelsFor says the same thing about Jobs); a UID is.
+func (r *ControlPlaneReconciler) readOwnedLeaderPod(ctx context.Context, cp *opsv1alpha1.ControlPlane, sts *appsv1.StatefulSet, name string) (*corev1.Pod, bool) {
+	if sts == nil || sts.UID == "" || cp.UID == "" || !isControlledByUID(sts, cp.UID) {
+		return nil, false
+	}
+	var pod corev1.Pod
+	if err := r.reader().Get(ctx, types.NamespacedName{Namespace: cp.Namespace, Name: name}, &pod); err != nil {
+		return nil, false
+	}
+	switch {
+	case pod.UID == "":
+		return nil, false
+	case pod.DeletionTimestamp != nil:
+		return nil, false
+	case !podIsReady(&pod):
+		return nil, false
+	case pod.Labels[haRoleLabelKey] != haRoleLeader:
+		return nil, false
+	case !isControlledByUID(&pod, sts.UID):
+		return nil, false
+	}
+	return &pod, true
+}
+
+// isControlledByUID reports whether obj's CONTROLLER owner reference names uid. It
+// compares the UID rather than the name+kind pair because a name can be reused and
+// a UID cannot.
+func isControlledByUID(obj metav1.Object, uid types.UID) bool {
+	if uid == "" {
+		return false
+	}
+	ref := metav1.GetControllerOf(obj)
+	return ref != nil && ref.UID == uid
 }
 
 // configHash computes a rollout-driving hash for spec.ConfigRef. If the
@@ -1643,6 +1795,10 @@ func (r *ControlPlaneReconciler) updateStatus(ctx context.Context, cp *opsv1alph
 			progressingReason = reasonProgressDeadlineExceeded
 		case cls.reason == reasonLeaderNotPublished || cls.reason == reasonMultipleLeadersPublished:
 			progressingStatus = metav1.ConditionFalse
+		case isRouteReason(cls.reason):
+			// Converged, with an endpoint that will not take traffic (or could not be
+			// asked): nothing is advancing toward Ready on its own.
+			progressingStatus = metav1.ConditionFalse
 		}
 		meta.SetStatusCondition(&cp.Status.Conditions, metav1.Condition{
 			Type: opsv1alpha1.ConditionProgressing, Status: progressingStatus,
@@ -1703,6 +1859,29 @@ func (r *ControlPlaneReconciler) updateStatus(ctx context.Context, cp *opsv1alph
 		degraded = metav1.ConditionTrue
 		degradedReason = reasonMultipleLeadersPublished
 		degradedMsg = fmt.Sprintf("%d Ready pods claim %s=%s; Service/%s would fan out across them. The operator never picks one: the Postgres advisory lock still permits a single writer and the engine answers 503 not_leader on the stale pod, which self-heals when its publisher resyncs.", pods.readyLeaders, haRoleLabelKey, haRoleLeader, leaderServiceName(cp))
+	case cls.degraded == reasonSetupBlocked:
+		// The engine ANSWERED, and its answer names a human action. Note what is not
+		// said here: nothing about the response body, and nothing claiming the
+		// install is complete or that writes are authorized.
+		degraded = metav1.ConditionTrue
+		degradedReason = reasonSetupBlocked
+		degradedMsg = fmt.Sprintf("the rollout converged and Service/%s resolves to pod %s, but that leader refuses client traffic on %s: its first-setup capability check fails, so the setup ceremony cannot complete. On postgres that capability is the cross-tenant administrative pool: set spec.postgres.adminDsnKey to the key of the BYPASSRLS DSN inside the Secret named by spec.postgres.dsnSecret, then let the rollout apply it. The leader Service keeps its endpoint on purpose — that endpoint is how an administrator completes the install.",
+			leaderServiceName(cp), leaderPodLabel(pods), readyzPath)
+	case cls.degraded == reasonRouteNotReady:
+		degraded = metav1.ConditionTrue
+		degradedReason = reasonRouteNotReady
+		degradedMsg = fmt.Sprintf("the rollout converged but pod %s, the only endpoint of Service/%s, does not report traffic readiness on %s. This is most often the brief lag between losing the Postgres election and withdrawing the %s=%s label, or a store that became unreachable under an already-Ready pod; it clears on its own. If it persists, inspect that pod's engine log and the store's reachability from it.",
+			leaderPodLabel(pods), leaderServiceName(cp), readyzPath, haRoleLabelKey, haRoleLeader)
+	case cls.degraded == reasonRouteProbeForbidden:
+		degraded = metav1.ConditionTrue
+		degradedReason = reasonRouteProbeForbidden
+		degradedMsg = fmt.Sprintf("the Kubernetes API server refused this manager's read of the pod proxy in namespace %s, so traffic readiness cannot be observed and Ready is withheld. This is the OPERATOR's own authorization, not the engine's health: bind the generated ClusterRole (operator/config/rbac/role.yaml), which grants get on pods/proxy, to the manager's ServiceAccount.",
+			cp.Namespace)
+	case cls.degraded == reasonRouteProbeUnknown:
+		degraded = metav1.ConditionTrue
+		degradedReason = reasonRouteProbeUnknown
+		degradedMsg = fmt.Sprintf("traffic readiness for pod %s could not be verified, so Ready is withheld. This is UNVERIFIED, not a failing engine: nothing observed here says the control plane refuses traffic. Either no route observation is wired into this manager, or the pod changed identity, stopped being the published leader, or answered in a shape this operator does not recognize. It is retried every %s; if it never resolves, check that the manager can reach the API server's pod proxy and that spec.image serves %s.",
+			leaderPodLabel(pods), progressRequeueInterval, readyzPath)
 	case cls.stalled:
 		degraded = metav1.ConditionTrue
 		degradedReason = reasonRolloutStalled
@@ -1730,9 +1909,27 @@ func rolloutMessage(cp *opsv1alpha1.ControlPlane, cls rolloutClass, pods podObse
 		return fmt.Sprintf("no Ready pod publishes %s=%s; Service/%s has no endpoint", haRoleLabelKey, haRoleLeader, leaderServiceName(cp))
 	case reasonMultipleLeadersPublished:
 		return fmt.Sprintf("%d Ready pods claim the leader label; refusing to choose between them", pods.readyLeaders)
+	case reasonSetupBlocked:
+		return fmt.Sprintf("rollout complete; the leader %s refuses traffic readiness because first setup cannot complete", leaderPodLabel(pods))
+	case reasonRouteNotReady:
+		return fmt.Sprintf("rollout complete; the leader %s does not report traffic readiness on %s", leaderPodLabel(pods), readyzPath)
+	case reasonRouteProbeForbidden:
+		return fmt.Sprintf("rollout complete; traffic readiness cannot be observed: the API server refused this manager's pod-proxy read in %s", cp.Namespace)
+	case reasonRouteProbeUnknown:
+		return fmt.Sprintf("rollout complete; traffic readiness for %s is unverified", leaderPodLabel(pods))
 	default:
 		return fmt.Sprintf("%d/%d replicas ready", ready, desired)
 	}
+}
+
+// leaderPodLabel names the observed leader pod for a human-facing message, with a
+// neutral stand-in for the case the pod list itself was never observed (status
+// must not print an empty name as if it were one).
+func leaderPodLabel(pods podObservation) string {
+	if pods.leaderPod == "" {
+		return "the leader pod"
+	}
+	return pods.leaderPod
 }
 
 // SetupWithManager wires the reconciler: it owns the StatefulSet, Service and

@@ -115,13 +115,12 @@ describe('OnboardingView first-boot i18n', () => {
     const titles = await screen.findAllByText('Step-up authentication required')
     expect(titles.length).toBeGreaterThanOrEqual(3)
     expect(
-      screen.getAllByRole('button', { name: 'Authenticate with security key' }),
+      screen.getAllByRole('button', { name: 'Authenticate with passkey' }),
     ).toHaveLength(titles.length)
     // The interpolated fragments resolve too (the body is the "why", the AAL labels
     // are the "what is missing") — a lost namespace prints the key for each.
     expect(
-      screen.getAllByText(/requires AAL3 \(hardware, phishing-resistant\)/)
-        .length,
+      screen.getAllByText(/requires AAL3 \(phishing-resistant\)/).length,
     ).toBe(titles.length)
     expect(screen.queryByText(/^assurance\./)).not.toBeInTheDocument()
   })

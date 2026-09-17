@@ -4,16 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) — `vYY.M.PATCH` (two-digit year,
-month, release-of-month; the first release is `v26.8.0`).
+month, release-of-month; the current release is `v26.9.0`).
 
-> **Status: beta — no public release cut yet.** The control plane runs end-to-end, but
-> APIs, schemas and the module surface MAY still change before a stability commitment.
-> Because CalVer does not encode breaking changes in the version number, every breaking
-> change is called out explicitly under **Changed**/**Removed** here. Until the first
-> tagged release there are no dated version sections: everything currently in the
-> repository is part of the **Unreleased** beta below. No versions, tags, or dates are
-> invented here; the first version section is added when the first release is cut
-> (see [`SECURITY.md`](SECURITY.md) *Supported versions*).
+> **Status: beta.** The current release is **v26.9.0** — its dated section below lists what it
+> ships and where, and the [GitHub release](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
+> carries the artifacts. Every earlier release keeps its own dated section, unchanged.
+> The section heading carries the cut date; this masthead does not restate it.
+> APIs, schemas and the module surface MAY still change before a
+> stability commitment. Because CalVer does not encode breaking changes in the version number,
+> every breaking change is called out explicitly under **Changed**/**Removed** here. No
+> versions, tags, or dates are invented here (see [`SECURITY.md`](SECURITY.md) *Supported
+> versions*).
 
 ## How this changelog is maintained
 
@@ -32,8 +33,360 @@ month, release-of-month; the first release is `v26.8.0`).
 
 ## [Unreleased]
 
-The beta build, pending the first public release (`v26.8.0`). APIs, schemas, and the
-module surface may still change.
+## [26.9.0] - 2026-09-16
+
+### Added
+
+- Live session consoles can interrupt an active typed-provider turn while keeping
+  the process and draft available for the next turn. Work-bound runs send their
+  exact lease fence; stale or uncertain results remain explicit. Fenced HTTP
+  interruption events record the authenticated operator.
+- Configurable native layouts. The signed service adapter (`install.sh --data-dir`)
+  admits a custom data directory under a shape policy (absolute, canonical, at least
+  two levels deep, no symlink components, parent never created under privilege) and
+  records `"layout": "custom"` in the ownership manifest; systemd units quote a path
+  with a space. `install-agentops.sh` honours `OLIVARES_DATA_DIR` and an explicitly
+  selected `OLIVARES_WORKSPACE_DIR`: the drop-in is rendered from
+  `packaging/service/agentops.conf` (claude `HOME`, token dir, `ReadWritePaths` for
+  an external workspace), `agentops.env` points its token path at the selected data
+  directory, and the drop-in, runtime env and workspace are recorded in the manifest.
+  `olivares uninstall` admits a custom data directory only when the unit at its
+  indexed path executes the engine with it (`ExecStart=`, `command_args=` or the
+  launchd program; comments and other directives never count, ambiguity is refused)
+  or when its own preserve recorded an uninstall witness beside the service config
+  after removing that unit, so preserve then plan then purge works on one host and an
+  interrupted purge is retryable; it lists the workspace as kept and removes the
+  managed drop-in. `olivares doctor` gains an `agentops-layout` check over the same
+  record and reads the unit's data directory with the same parser. Manifests written
+  before these fields keep validating as default layouts.
+- A data directory or workspace under `/home`, `/root` or `/run/user` is rendered with
+  `ProtectHome=tmpfs` and `BindPaths=` for exactly that directory; one under `/tmp` or
+  `/var/tmp` keeps `PrivateTmp=true` and gets `BindPaths=` for that directory alone, so
+  the rest of the host's temporary tree stays hidden (systemd 235 and later — the
+  installers read `systemctl --version` and refuse an older host, naming the version).
+  One under `/dev`, `/proc` or `/sys` is refused: kernel and device interfaces, not
+  durable state. A path re-exposed with `BindPaths=` may not contain `:`.
+- **Provider-profile administration in the console.** The sessions workspace
+  (`/agentops`, `/sessions`) gains a *Provider profiles* tab, offered on
+  `sessions:profile:read`: list (paged, filtered by state on the server), register a
+  profile for homes that already exist on this node (the server validates the paths;
+  nothing is installed or logged in), rename, disable/enable, retire (irreversible,
+  confirmed by typing), and an admin-only *Reveal configuration* that fetches the stored
+  homes on demand and drops them when hidden — the ordinary list and detail never carry
+  a path. Each profile's source bindings sit beside it: list, bind (the roster row's
+  persistent id and the revision this node applied, never a name) and revoke, on the
+  independent `sessions:profile-binding:*` tiers, with the deployment-wide source
+  administration a binding also needs stated up front. Server facts
+  (`local_environment`, `operable`, `state`) are rendered as reported. To make an
+  honest bind possible, `GET /v1/console/sources` now reports each row's persistent
+  `id` and the `applied_revision` this node's reconciler wired (absent when not
+  applied here). The plane also has two doors of its own — `/provider-profiles` on
+  `sessions:profile:read` and `/provider-bindings` on
+  `sessions:profile-binding:read` — so a principal holding only one of those tiers
+  reaches it without any run or live-session permission. Whether a source may be
+  bound is the engine's answer on the protected roster read made when Bind is
+  pressed, never a client-side flag; confirmations, drafts and the on-demand
+  configuration read end when the permission, tenant, principal or credential that
+  allowed them changes.
+
+- **Provider profiles and session identity (B1).** A provider profile is the durable
+  identity of ONE configured provider instance on ONE execution environment: driver,
+  owning environment and the canonical `config_home` / `user_home` the launched child
+  runs under — configuration and storage identity, never an authenticated provider
+  account. Profiles are administered under `/v1/m/sessions/provider-profiles` (rename
+  keeps the id and the home; disable/enable are reversible; retire is final and frees
+  the home for a NEW id; the paths appear only on the admin `configuration` read), and
+  a source can be dedicated to a profile at the exact roster revision this node applied
+  (`/provider-source-bindings`, keyed by the roster row's persistent id, never its
+  name). A launch names `provider_profile_ref`: the server resolves and validates
+  the homes, persists the non-secret snapshot on the run BEFORE the spawn, starts the
+  child with `HOME` and the DRIVER's own configuration-home variable set to them, refuses
+  a caller or gate that names any provider-home variable (`HOME`, `CLAUDE_CONFIG_DIR`,
+  `CODEX_HOME`, `GROK_HOME`), and binds the provider's session id under the profile scope
+  inside one transaction with the run row — so two homes may announce the same id
+  and stay two sessions. Resume continues only on the same proven home. The event
+  envelope carries the host-stamped registration snapshot of the configured source
+  (`SourceRegistration`; a pushed collector envelope cannot supply one). Live rows
+  are now unique per `(observation scope, external id)` with a partial unique on the
+  managed canonical sid, via new module migrations for SQLite and PostgreSQL.
+  Legacy runs are never assigned a profile after the fact. This entry introduced no
+  provider runner of its own; the official Codex driver arrives with the entry below,
+  and no Grok runner exists yet.
+- **Profile-scoped sessions on every read surface (B2).** An observation now folds into
+  the live row of its CHANNEL, computed by the server from the host-stamped source
+  registration — `legacy` (no registration), `observed` (a source dedicated to a profile
+  by a binding approved at host admission for the exact applied revision), `source`
+  (a known registration with no verifiable profile) or `managed` (the plane's own bridge, for a run it
+  launched; the only row carrying `canonical_sid` and `run_ref`) — so two homes that
+  announce the same provider session id are two rows with two timelines. Every live
+  row exposes `live_ref` and `attribution`, and new routes read exactly one row:
+  `GET /v1/m/sessions/live/by-id/{live_ref}` and `…/timeline`, `GET /stream?live_ref=`
+  (tenant-checked before the subscription opens) and `GET /runs?live_ref=` (the run the
+  plane PROVED owns the row; nothing for an observed row). The bare external-id routes
+  and `GET /runs?claude_session_id=` stay and become explicitly LEGACY: they answer for
+  the legacy row and legacy runs only, never "the first" of several homes. A profiled
+  run records the `live_ref` of its managed row once its id is proven; the
+  credential→run→timeline export joins a profiled run through that row and a legacy
+  run through its legacy events; `ReplayTimelineByLiveRef` replays one row. The console
+  keys sessions by `live_ref`, opens a scoped row by it, shows attribution and profile
+  per row, lists the observation rows that share a managed run's profile and id beside
+  the run (never merged into it), and the launch dialog offers the active profiles —
+  only the reference is posted, no profile is pre-selected. Composition now requires
+  `provider_profile_ref` on the productive create endpoint; a node without an execution
+  environment identity, an unknown/disabled/retired/foreign profile and a driver with
+  no operated runner are still refused deny-closed.
+- **The official Grok CLI is operated as a session driver, over ACP.** Naming the pinned
+  official binary in `OLIVARES_SESSION_RUNTIME_GROK_BIN` REGISTERS the driver on that node,
+  separately from Codex and from the Claude path: readiness stays per driver, with no shared
+  switch and no binary resolved off the `PATH`. The run is an owned native child spawned as
+  `agent --no-leader … stdio` — never a leader, a WebSocket server or a relay, because those
+  share or expose a backend this run did not create — with `GROK_HOME` and `HOME` from the
+  selected profile and the provider's own `GROK_DISABLE_AUTOUPDATER=1` pinning the child's
+  version. Model and effort stay provider-owned open strings on the official agent flags.
+  It runs through the SAME controls a Codex run does: the durable Claim holder and fence, the
+  launch generation, per-run serialization, the immutable profile/environment/home identity,
+  the deny-closed approval gate and the current-profile re-read inside every holder effect's
+  authority transaction. Authentication is selected from the profile's AUTHORIZED source and
+  never from the advertisement — `provider_account_home` uses the agent's cached-login method,
+  `managed_injection` uses the injected-key method, there is no fallback between them, and the
+  interactive browser sign-in is never started; a profile with no compatible advertised method
+  is reported `auth_required` rather than inferred ready from a home that exists.
+  **Two protocol facts are handled differently from Codex on purpose.** ACP's `session/prompt`
+  response is the TURN'S COMPLETION, not its receipt, so the prompt is dispatched and `input`
+  answers 202 as soon as the frame is written: a normal long turn no longer looks like a
+  gateway timeout and never holds the per-run lock, so `input`, `interrupt` and `stop` keep
+  answering while the model works; a second turn is refused 409 before any byte. And
+  `session/cancel` is a notification with no acknowledgement, so an interrupt resolves pending
+  approvals, cancels, and leaves the turn open until the prompt's own correlated result
+  returns — the owned process stays usable for the next turn. Resume continues the EXACT
+  stored conversation through the advertised resume capability (or `session/load` when resume
+  is not advertised, chosen once), accepts the null/absent session id the protocol permits,
+  refuses a response that names a different conversation, and never falls back to starting a
+  new one; replayed history is not reported as live output. Permission requests are answered
+  by selecting an option the agent OFFERED and the authority NAMED, with a persistent
+  `allow_always` requiring an explicitly session-scoped decision; a malformed, duplicated or
+  unknown-kind catalogue, an expired deadline, a moved authority and an unadvertised
+  filesystem/terminal request all produce a valid protocol refusal that grants nothing.
+  *Not claimed:* these behaviours are proven against an owned fake ACP child through the real
+  HTTP, runtime, store and process group. Compatibility with an authenticated official Grok
+  account is separate, later work and is not asserted here.
+- **The official Codex CLI is operated as a session driver.** Naming the pinned official
+  binary in `OLIVARES_SESSION_RUNTIME_CODEX_BIN` REGISTERS the driver on that node, and
+  registration is what makes a `codex` provider profile launchable — readiness is per
+  driver, with no shared switch and no binary resolved off the `PATH`. The run is an
+  owned native child spoken to over the official JSON-RPC app-server protocol: launch,
+  observation, pending approval answered in that method's own codec against the turn the
+  pump observed, continuation, a typed fenced turn interrupt that ends the turn without
+  ending the process or the conversation, stop, and runtime cleanup that still reaps the
+  child after holder authority is gone. It runs through the SAME controls a Claude run
+  does — the durable Claim holder and fence, the launch generation, the K2 work stamp,
+  per-run serialization of every control, the immutable profile/environment/home identity
+  and the legacy raw-input plane — and every holder effect first re-reads the run's
+  current provider profile inside its authority transaction, so a retired or deleted
+  profile refuses before any provider effect while `disabled`, a rename and a re-authorized
+  `auth_source` deliberately do not revoke a live child. A profile now also carries its
+  AUTHORIZED authentication source (`provider_account_home` or `managed_injection`, with no
+  fallback between them and no default), the run persists the source it launched under
+  before the spawn, and resume refuses when that authorization has moved since. The three
+  run controls publish what they actually answer: `input` returns 202 with a closed
+  `{accepted}` body and no longer advertises a 200 it never returns, `interrupt` and `stop`
+  return the run resource, and all three publish the 503 UNKNOWN work-error envelope. The
+  distinction between a refusal before any provider effect and an UNKNOWN after a possible
+  one is preserved; an UNKNOWN is not downgraded to a refusal. The generated SDK wrappers
+  remain generic maps — this changes the published contract they are built from, not their
+  signatures.
+
+### Fixed
+
+- The packaged OpenRC unit now brings up loopback, re-owns `/var/lib/olivares`
+  before start, and logs to `/var/log/olivares.log`. The `.apk` no longer ships
+  a `root:root` data-directory node (apk was resetting ownership after
+  post-install so `olivares serve` died with permission denied). `.deb`/`.rpm`
+  still ship that directory node.
+- Native `.apk` packages built from this source now ship an executable OpenRC
+  unit at `/etc/init.d/olivares` with the `olivares` service account, a usable
+  `/etc/olivares/olivares.env`, and hooks that record `init=openrc`. They do not
+  enable or start the service. `.deb`/`.rpm` keep the systemd unit. Published
+  v26.8.0 `.apk` assets still shipped the systemd unit and skipped service stop
+  on Alpine; that historical payload is unchanged.
+- OpenRC uninstall corroboration reads `command_args_base=` as well as
+  `command_args=`, so a custom data directory rendered into the packaged or
+  signed-archive unit still witnesses the estate after extra flags moved into
+  `start_pre`. The base counts only where a `command_args=` assignment copies
+  it in as the whole word `$command_args_base`, and every `command_args=`
+  assignment must prove the same directory: an unreferenced or later-replaced
+  base, or a single-quoted `'$command_args_base'`, refuses instead of
+  corroborating an estate the unit does not start.
+- Installing a second native estate over a preserved first one no longer leaves the first
+  estate's generated inference-token path in force. `/etc/olivares/agentops.env` is one
+  fixed path shared by every estate, so `install-agentops.sh` now decides that single
+  `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` assignment by ownership: it re-points a value that
+  is still exactly the default it generated for another estate (proved by the generated
+  marker plus that estate's own ownership record carrying this file as a managed runtime
+  env), preserves a value inside no estate as the deliberate external path the operator's
+  refresher writes, preserves a file it did not generate, and refuses — before recording the
+  layout and before the success banner — when the state contradicts the selected estate and
+  no explicit selection was made, including a generated file whose value has the estate-default
+  form for a directory that no longer answers with a record. Every other line of the file, comments included, is
+  preserved in all cases. `OLIVARES_RUNTIME_TOKEN_FILE=estate|keep|<absolute path>` makes the
+  choice explicit. The comparison follows the installed systemd version's
+  `EnvironmentFile=` rules (quotes, escapes, continuations and last-wins), without sourcing
+  the operator file; syntax whose version-dependent meaning cannot be established is refused
+  before it can be called external. The byte rules follow each supported manager's own
+  source: a double-quoted `\<CR>` is a continuation only before systemd 247 (from 247 the
+  process receives backslash and CR, which no path contains, so the value is refused as no
+  path), and 241–246 keep the backslash of any other escaped byte while 235–240 drop it. A
+  NUL byte anywhere, or a key or value that is not valid UTF-8 in any assignment, makes
+  systemd refuse the whole `EnvironmentFile=` (measured on 257: the strict form fails the
+  unit and the `EnvironmentFile=-` the drop-in uses skips the file), so such a file is
+  refused before any classification or re-point instead of being announced as wired;
+  `keep` still preserves it byte-for-byte and says that no token path is wired, and
+  `estate`/an absolute path repair it only when the token assignment itself carried the
+  invalid bytes. Previously the installer warned, returned 0 and announced a wired
+  co-deployment; purging the first estate then removed the token file the live service was
+  configured to read.
+- Optional workspace and template selections in the session launch dialog can be
+  cleared after choosing them. Provider profile selection remains required.
+- **Provider profile authority and replay.** Delayed process frames must still own
+  the registered generation, current Claim and durable run before they can bind an
+  alias or update managed liveness. Binding admission is fixed on each source
+  observation before queueing: revocation stops new profile attribution, while an
+  earlier envelope retains its exact historical binding during replay. Sandbox and
+  evals accept an explicit `live_ref`, preserve it in their durable results, and keep
+  legacy external-id selectors separate. Scoped findings are explicitly unavailable
+  until their source can prove the same scope; an external-id match cannot award a
+  passing score to another instance.
+- Native AgentOps installation now provisions a missing systemd base unit through
+  the verifying installer before applying the AgentOps configuration. An installed
+  binary alone no longer counts as a complete service installation, and failed
+  provisioning or requested startup is reported as a failure.
+- Uninstalling a preserved custom estate no longer claims authority over whatever is
+  installed now. Owning the recorded DATA and controlling the LIVE SERVICE are
+  established by different evidence: the manifest (with its unit or the witness this
+  product wrote) says which data directory this estate owns, and only a service
+  definition at the closed unit path that executes this estate's engine says the
+  installation is still the live one. When another installation holds that path its
+  service is never stopped or disabled, its software is never removed and the system
+  user and group it still uses are never deleted; when no definition is there at all,
+  nothing is stopped because there is nothing to stop.
+- An uninstall interrupted before it finished removing software now finishes on the
+  retry instead of reporting success with the binary still installed. The witness
+  record gained `pending_software` (schema `v2`) so it can say what an operation had
+  not removed yet; a `v1` record still corroborates the data directory and no longer
+  authorises any conclusion about software, which the plan discloses in that line.
+- A service definition only witnesses a data directory when it is the directive the
+  init system actually runs AND it runs this estate's engine: `ExecStart=` inside
+  `[Service]` starting the recorded binary, `command_args=` beside a `command=` naming
+  it, or a launchd `ProgramArguments` whose program is exactly the recorded wrapper.
+  An `ExecStart=` in `[Unit]`, one carrying a systemd prefix character, and one running
+  another program are refused by the engine (uninstall and doctor) and by
+  `install-agentops.sh`, which tests the engine's name because it is reading the unit
+  to discover the estate and has no ownership record to compare against yet.
+- An engine upgrade no longer discards the recorded workspace and AgentOps entries when
+  the previous ownership manifest is written in a different, equally valid JSON
+  presentation. The adapter reads that record with a real JSON parser (POSIX awk, no new
+  runtime dependency, and it never executes a staged binary to read a file), so compact,
+  multi-line and reordered documents carry the same meaning; anything it cannot carry is
+  refused with the record and the reason named instead of being dropped in silence.
+- The same rewrite no longer overwrites the installer's own `$mode` with a file mode read
+  from that record, which had made an upgraded estate record `"mode": ""` and the engine
+  then refuse its own manifest with `unexpected install mode ""`.
+- A data directory or workspace under `/tmp` or `/var/tmp` is no longer refused with the
+  claim that no directive could reach it. That claim was false: systemd creates the
+  destination of a bind mount since v235 (upstream `a227a4be`, which says so in its own
+  message), so `BindPaths=` exposes exactly that directory inside the private `/tmp`
+  while `PrivateTmp=true` keeps the rest hidden.
+- Several sources of the SAME connector kind can now be registered and run at once.
+  The runtime keyed every source by its connector's Descriptor name, so a second
+  roster row of a kind was persisted, listed in the console — and refused by the
+  engine. Sources are now registered under the operator's own name (the roster row's
+  `name`), with the connector descriptor kept beside it, so `grok-home-a` and
+  `grok-home-b` open with their own configuration and credential references, run
+  their own connector instance and process, rotate, fail and stop independently.
+  `sources plan` / `validate` no longer announce the one-instance-per-connector
+  restriction the engine has stopped applying, and `as_source: true` on two identity
+  entries served by one connector (`okta` and `entra` share `idp`) now wires both.
+  This fixes several independent SOURCES; it does not by itself separate two
+  provider sessions or config homes end to end.
+
+### Changed
+
+- The AgentOps drop-in carries a managed marker and is regenerated on reinstall from
+  the recorded layout; a drop-in without the marker (operator-owned, or shipped by an
+  earlier installer) is left untouched and named. A rerun without knobs recovers the
+  layout from the installed unit and manifest, and a knob that contradicts the
+  installed unit's data directory is refused instead of re-rendering around it.
+  Privileged directory provisioning no longer follows links: every component is
+  checked in the same privileged shell that creates the directory, owned directories
+  under the data dir are asserted, and an existing external workspace is never
+  chowned or re-moded. The signed adapter carries the recorded workspace, drop-in and
+  runtime env across its manifest rewrite after validating them, so an engine upgrade
+  no longer resets an explicitly selected external workspace or drops the ownership
+  entries doctor and purge rely on.
+- **Session launches require a provider profile.** The create dialog and productive
+  API require explicit selection of an operable profile. Historical unprofiled runs
+  remain readable and stoppable; resume refuses a run without a proven home instead
+  of inheriting the service account's home.
+- **Event provenance for configured sources.** `Event.Source` now carries the
+  source's configured NAME instead of its connector's Descriptor name. Two sources
+  of one kind were previously indistinguishable in the event stream; now they are.
+  An exporter, filter or downstream consumer that matched a descriptor
+  (e.g. `olivares.grok`) to select a configured source's events must match that
+  source's name, or read the connector identity from the roster/runtime inspection
+  surface, where it is still reported — the read API now returns it as a separate
+  `component` field on each roster entry. Sources registered without an explicit
+  name (and modules publishing their own events) are unchanged, and historical
+  events are never rewritten or relabelled. `Event.Source` identifies an ingestion
+  instance only: it is not authority for a provider, process, config home or user,
+  and `EdgeObservation.Source` — the class of signal — is untouched.
+
+## [26.8.0] - 2026-09-01
+
+The first public release of Olivares AI — a beta, pre-1.0. Tag `v26.8.0` points at commit
+`f443e084` of the public repository (tagged 2026-09-01T08:06:57Z, published 11:15:52Z);
+release run `33485407512` finished with all eleven executed jobs green and
+`publish-ota-manifest` skipped by its own gate. The hub's changelog at the cut and the public
+one at the tag are byte-identical, so every entry under **Added / Changed / Fixed / Security**
+below is what this tag contains. APIs, schemas and the module surface may still change before
+a stability commitment.
+
+**What ships (64 release assets; the cosign-signed `checksums.txt` lists the 31 archives, packages and per-archive SBOMs, and the rest carry their own signatures, attestations and provenance):**
+
+- Binary archives `olivares_26.8.0_<os>_<arch>.tar.gz` for linux and darwin × amd64 and arm64,
+  plus `olivares_26.8.0_fips_<os>_<arch>.tar.gz` FIPS builds for the same four targets; each
+  archive with SPDX and CycloneDX SBOMs, an SBOM in-toto attestation, an OpenVEX statement and
+  its signed attestation.
+- Native packages for linux amd64 and arm64: `.deb`, `.rpm`, `.apk` — binary, hardened systemd
+  unit, example env file, no-login service user; the service is not auto-started.
+- `checksums.txt` with its cosign signature and certificate, SLSA build provenance
+  (`multiple.intoto.jsonl`), the image SBOM, an OpenVEX document for the set,
+  `release-commit.txt` pinning the source commit, and the signed `stable-manifest.json` for the
+  update channel.
+- Container images `docker.io/olivaresai/olivares:26.8.0` (official coordinate) mirrored by
+  digest to `ghcr.io/olivaresai/olivares:26.8.0`, with `-fips` and `-stig` variants and
+  `latest`; registry tags carry no `v` prefix.
+- Homebrew cask `olivaresai/tap/olivares` (macOS and Linux), and the one-command verified
+  installer `scripts/install.sh` (cosign signature and SHA-256 checked before install).
+
+**What the community binary contains, named for the roadmap:** the MCP catalog and admission
+(`modules/catalog`, module XIV — approved agents, MCP servers, skills and templates, with MCP admission
+policies), the MCP introspection source wired in the stock `serve` and the MCP `tools/call` gate; FinOps
+budgets that deny or throttle spend, live in the default binary with no provisioning (`modules/finops`,
+module XI); and compliance evidence mapping over 26 framework catalogs with sealed, exportable evidence
+(`modules/compliance`, module XIII). All three run in the open binary with no license check
+(`docs-site/src/content/docs/start/honesty-and-limits.md`, "The rest of the platform is open"); the
+dir archive is WORM only on an immutable substrate, as the README states.
+
+**What does not ship in this release, stated as absent:** Windows binaries (Linux container or
+build from source); Apple notarization of the darwin binaries (the cask clears the Gatekeeper
+quarantine); the Helm chart as an OCI artifact — its source ships in `deploy/helm/olivares` and
+`release-chart.yml` runs only on a `chart-v*` tag that has not been cut; the hosted Cloud tier;
+shadow mode and final work authority (design only); a general message bus for arbitrary agents
+(messages stay scoped to an orchestration workflow, enforced by a boot test).
+
+**Verify it:** `scripts/verify-release.sh` (keyless / Sigstore) or
+`scripts/verify-release.sh --key cosign.pub --offline`; the chain per artifact type is in
+[`docs/RELEASE-VERIFICATION.md`](docs/RELEASE-VERIFICATION.md).
 
 ### Added
 
@@ -423,3 +776,5 @@ module surface may still change.
   [`SECURITY.md`](SECURITY.md).
 
 [Unreleased]: #unreleased
+[26.9.0]: https://github.com/olivaresai/olivares/releases/tag/v26.9.0
+[26.8.0]: https://github.com/olivaresai/olivares/releases/tag/v26.8.0

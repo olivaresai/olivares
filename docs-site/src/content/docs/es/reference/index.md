@@ -23,7 +23,7 @@ contrato general.
 
 | Área | Qué documenta | Fuente de verdad |
 |---|---|---|
-| **[API REST](/reference/api/)** | La API HTTP del control plane: auth, setup, tenancy, agentes, el access map R/RW, tokens y el audit ledger. | El contrato **OpenAPI 3.1** del producto (53 paths core), renderizado en tiempo de build desde el fichero real — no una copia. |
+| **[API REST](/reference/api/)** | La API HTTP del control plane: auth, setup, tenancy, agentes, el access map R/RW, tokens y el audit ledger. | El contrato **OpenAPI 3.1** del producto (54 paths core), renderizado en tiempo de build desde el fichero real — no una copia. |
 | **[Rutas de módulos (beta)](/reference/api-beta/)** | Las rutas de módulos del producto (`/v1/m/<ns>/…`) — FinOps, compliance, gobernanza, sesiones, modelos, knowledge, … — como documento OpenAPI **beta** separado. | El mismo contrato OpenAPI 3.1, reflejado en tiempo de build a partir de las rutas que registran los módulos. |
 | **[Política de estabilidad](/es/reference/api-stability/)** | Versionado, niveles de estabilidad, señalización de deprecación/sunset y las ventanas de soporte mínimas para la API, el proveedor y los SDKs cliente. | La tabla de deprecación en código y sus tests de ventana que hacen fallar el build. |
 | **[gRPC](/es/reference/grpc/)** | El espejo gRPC del motor y el contrato de wire versionado para plugins que usa todo conector y módulo fuera de proceso. | Las tablas de registro `grpc.ServiceDesc` que los servidores entregan a gRPC. |
@@ -45,7 +45,7 @@ identidad y tenancy, agentes, el access map de lectura/escritura
 módulo de access-map en lugar de la superficie core), gestión de tokens y el audit
 ledger.
 
-El contrato describe **53 paths core**. Eso es deliberado: es la superficie estable,
+El contrato describe **54 paths core**. Eso es deliberado: es la superficie estable,
 versionada, del control plane, no toda ruta que el motor pueda responder.
 A qué se compromete "estable" — versionado, señalización de deprecación y ventanas de
 soporte mínimas — es la [política de estabilidad de la API](/es/reference/api-stability/).
@@ -53,7 +53,7 @@ soporte mínimas — es la [política de estabilidad de la API](/es/reference/ap
 :::note[Las rutas de módulos son un contrato beta separado]
 Las rutas de módulos — por ejemplo las `/v1/m/accessmap/graph`,
 `/v1/m/accessmap/neighbors` y `/v1/m/accessmap/drift` del módulo de access-map —
-**no** forman parte del documento estable de 53 paths del núcleo. Se publican como un
+**no** forman parte del documento estable de 54 paths del núcleo. Se publican como un
 documento OpenAPI **beta** separado en [`/reference/api-beta/`](/reference/api-beta/)
 (servido en `/openapi.beta.json` y reflejado a partir de las rutas que registran realmente
 los módulos), de modo que la superficie estable siga siendo identificable mientras la

@@ -32,22 +32,20 @@ func (r *Runtime) LoadSourcePlugin(path string, cfg sdk.Config, tenant string) e
 	// go:embed set (cmd/olivares/firstparty) — their provenance IS the release
 	// build the engine itself shipped in, so there is no separate artifact to pin.
 	// External (third-party) binaries go through LoadSourcePluginVerified instead.
-	raw, client, err := r.dispense(path, sdkplugin.SourcePluginMap(), sdkplugin.SourcePluginName, nil)
-	if err != nil {
+	return r.loadSourcePlugin("", path, cfg, tenant, nil)
+}
+
+// LoadSourcePluginNamed is LoadSourcePlugin with the registration name supplied by
+// the composition root, so the SAME first-party plugin binary can back two roster
+// rows: each launch is its own subprocess with its own config, its own name and
+// its own lifecycle. The plugin's Descriptor is left completely alone — it is the
+// component identity that validation, diagnosis and admission need, and it is
+// recorded beside the registration name rather than wrapped or faked.
+func (r *Runtime) LoadSourcePluginNamed(name, path string, cfg sdk.Config, tenant string) error {
+	if err := validRegistrationName(name); err != nil {
 		return err
 	}
-	conn, ok := raw.(sdk.SourceConnector)
-	if !ok {
-		client.Kill()
-		return fmt.Errorf("runtime: plugin %q did not dispense a SourceConnector (%T)", path, raw)
-	}
-	if err := r.AddSource(conn, cfg, tenant); err != nil {
-		client.Kill()
-		return err
-	}
-	r.trackClient(client)
-	r.linkSourceClient(conn.Descriptor().Name, client)
-	return nil
+	return r.loadSourcePlugin(name, path, cfg, tenant, nil) // secure=nil: first-party, as above
 }
 
 // LoadSourcePluginVerified launches an EXTERNAL (third-party) source-connector
@@ -66,11 +64,35 @@ func (r *Runtime) LoadSourcePlugin(path string, cfg sdk.Config, tenant string) e
 // enforces the integrity pin, not the trust decision. After the pin, the flow is
 // identical to LoadSourcePlugin: dispense over gRPC (AutoMTLS), register, track.
 func (r *Runtime) LoadSourcePluginVerified(path string, cfg sdk.Config, tenant string, sha256Hex string) error {
-	sum, err := hex.DecodeString(sha256Hex)
-	if err != nil || len(sum) != sha256.Size {
-		return fmt.Errorf("runtime: external plugin %q: pinned digest is not a sha256 hex digest (a supplied-but-unusable pin refuses, never degrades to an unpinned launch)", path)
+	secure, err := secureConfigFor(path, sha256Hex)
+	if err != nil {
+		return err
 	}
-	secure := &goplugin.SecureConfig{Checksum: sum, Hash: sha256.New()}
+	return r.loadSourcePlugin("", path, cfg, tenant, secure)
+}
+
+// LoadSourcePluginVerifiedNamed is LoadSourcePluginVerified with an explicit
+// registration name. The admission posture is untouched: the digest is decoded
+// first and a malformed pin refuses without touching the file, then go-plugin
+// re-hashes the binary at exec. Naming the SOURCE changes nothing about verifying
+// the COMPONENT.
+func (r *Runtime) LoadSourcePluginVerifiedNamed(name, path string, cfg sdk.Config, tenant string, sha256Hex string) error {
+	if err := validRegistrationName(name); err != nil {
+		return err
+	}
+	secure, err := secureConfigFor(path, sha256Hex)
+	if err != nil {
+		return err
+	}
+	return r.loadSourcePlugin(name, path, cfg, tenant, secure)
+}
+
+// loadSourcePlugin is the shared launch+register path. An empty regName is the
+// LEGACY, name-less mode used only by the deprecated entry points above: there the
+// connector's Descriptor name is the registration identity, exactly as before. The
+// exported Named variants reject an empty name before reaching here, so a
+// configured source can never fall back to its descriptor by accident.
+func (r *Runtime) loadSourcePlugin(regName, path string, cfg sdk.Config, tenant string, secure *goplugin.SecureConfig) error {
 	raw, client, err := r.dispense(path, sdkplugin.SourcePluginMap(), sdkplugin.SourcePluginName, secure)
 	if err != nil {
 		return err
@@ -78,14 +100,25 @@ func (r *Runtime) LoadSourcePluginVerified(path string, cfg sdk.Config, tenant s
 	conn, ok := raw.(sdk.SourceConnector)
 	if !ok {
 		client.Kill()
+		r.RunPluginCleanup(client)
 		return fmt.Errorf("runtime: plugin %q did not dispense a SourceConnector (%T)", path, raw)
 	}
-	if err := r.AddSource(conn, cfg, tenant); err != nil {
+	name := regName
+	if name == "" {
+		name = conn.Descriptor().Name
+		err = r.AddSource(conn, cfg, tenant)
+	} else {
+		err = r.AddSourceNamed(name, conn, cfg, tenant)
+	}
+	if err != nil {
+		// A refused registration reaps the subprocess AND releases its
+		// confinement: a rejected load must leave no forked child and no cgroup dir.
 		client.Kill()
+		r.RunPluginCleanup(client)
 		return err
 	}
 	r.trackClient(client)
-	r.linkSourceClient(conn.Descriptor().Name, client)
+	r.linkSourceClient(name, client)
 	return nil
 }
 
@@ -317,8 +350,10 @@ func (r *Runtime) trackClient(c *goplugin.Client) {
 	r.mu.Unlock()
 }
 
-// linkSourceClient records that a source is backed by the out-of-process plugin
-// client c, so a live remove Kills exactly that subprocess. The client is
+// linkSourceClient records that the source REGISTERED UNDER name is backed by the
+// out-of-process plugin client c, so a live remove Kills exactly that
+// subprocess — and, when two rows run the same binary, exactly the right one of the
+// two. The client is
 // ALSO tracked in r.clients for Stop's blanket teardown (trackClient); a live
 // remove untracks it there first so it is never Killed twice. Pre-Start plugin
 // sources are linked here too, so a source added at boot can still be removed

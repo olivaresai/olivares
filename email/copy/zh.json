@@ -51,5 +51,16 @@
     "setPassword": "您将自行选择密码；邀请您的管理员绝不会看到该密码。",
     "ignore": "如果您并未预期收到此消息，请勿使用该链接，并联系邀请您的管理员。该账户已经存在；忽略此消息只会使该账户的密码保持未设置状态。",
     "textIntro": "使用此邀请链接设置您的 Olivares AI 账户："
+  },
+  "portalInvite": {
+    "subject": "您受邀加入 Olivares AI 的一个组织",
+    "preheader": "接受此邀请，加入 Olivares AI 客户门户中的 {{ORG_NAME}}。",
+    "heading": "加入 {{ORG_NAME}}",
+    "intro": "{{INVITER}} 邀请您以 {{ROLE}} 的身份加入 Olivares AI 客户门户中的 {{ORG_NAME}}。",
+    "cta": "接受邀请",
+    "expiry": "此邀请只能使用一次，并将于 {{EXPIRES_AT}} 过期。",
+    "howYouSignIn": "登录通过发送至此地址的一次性链接完成，且必须从收到邀请的地址接受邀请。",
+    "ignore": "如果您并未预期收到此消息，请勿使用该链接，并联系邀请您的人。忽略此消息不会留下任何痕迹，也不会授予任何人任何权限。",
+    "textIntro": "{{INVITER}} 邀请您以 {{ROLE}} 的身份加入 Olivares AI 客户门户中的 {{ORG_NAME}}。请使用此链接："
   }
 }

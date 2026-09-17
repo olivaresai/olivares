@@ -5,8 +5,10 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +21,11 @@ import (
 // path leaves the module's deny-closed unwiredExecutor in place (apply/retire stay
 // honest 503), while a supplied unreadable/invalid file fails startup. Secrets
 // (service tokens, credential paths) live ONLY here, never in the module store.
+//
+// "Invalid" includes a declarative passthrough list that names this control plane's own
+// trust domain: the engine refuses those names silently at every deploy, and a config load
+// that accepted them would leave the operator believing the variable travels. See
+// refusedPassthrough — the rule itself lives in the engine and is called, not copied.
 
 // deployExecutorConfig is the operator's deploy-actuation provisioning. Each backend
 // block is OPTIONAL; only the configured runtimes are wired (selection by runtime,
@@ -137,9 +144,70 @@ type blastRadiusCfgJSON struct {
 	MaxDestroyItems     int   `json:"max_destroy_items"`
 }
 
+// refusedPassthroughEntry is one refused passthrough name together with the config location
+// it came from: the engine's rejection says WHAT is wrong, the field says WHERE to fix it.
+type refusedPassthroughEntry struct {
+	field     string
+	rejection executor.PassthroughRejection
+}
+
+// String renders the entry for an operator: the config location and the NAME, quoted so a
+// name carrying a newline or a control byte cannot forge a second line of the diagnostic.
+// Never a value — there is none to render here, because validation reads the declared list
+// and never looks a name up in this process's environment.
+func (e refusedPassthroughEntry) String() string {
+	return fmt.Sprintf("%s.passthrough_env %s [%s]", e.field, strconv.Quote(e.rejection.Name), e.rejection.Code)
+}
+
+// refusedPassthrough reports every declared passthrough name the engine would refuse to copy
+// into a child process, tagged with the backend block it came from.
+//
+// It CALLS executor.ValidatePassthrough instead of deriving the rule. The engine's childEnv
+// applies the same predicate as a silent backstop, and two derivations of one invariant drift
+// apart without a sound: this door would accept what the engine drops, and the operator would
+// be told a variable travels when it does not — the exact failure the pair exists to prevent.
+//
+// BOTH declarative blocks are walked in one pass. tofu and terraform are the same backend
+// behind a binary flag (decision 1) and each carries its OWN list, so a loader
+// that validated the first would leave the second open; reporting only one would make the
+// operator learn the same rule twice, on two boots.
+//
+// The other backends have no passthrough list — they speak to an API or a socket and carry
+// their credential in a header or a mounted file — so there is nothing here to check for
+// them. This is deliberately NOT a general credential deny-list over operator config: the
+// invariant is about one family of names, the control plane's own.
+func (cfg deployExecutorConfig) refusedPassthrough() []refusedPassthroughEntry {
+	var out []refusedPassthroughEntry
+	for _, block := range []struct {
+		field string
+		blk   *tofuCfgJSON
+	}{
+		{field: "tofu", blk: cfg.Tofu},
+		{field: "terraform", blk: cfg.Terraform},
+	} {
+		if block.blk == nil {
+			continue
+		}
+		for _, r := range executor.ValidatePassthrough(block.blk.PassthroughEnv) {
+			out = append(out, refusedPassthroughEntry{field: block.field, rejection: r})
+		}
+	}
+	return out
+}
+
 // loadDeployExecutorConfig reads OLIVARES_DEPLOY_EXECUTOR_CONFIG. A missing path is an
-// empty config (executor not wired; honest 503). A supplied path must be readable and
-// contain valid JSON or startup fails closed.
+// empty config (executor not wired; honest 503). A supplied path must be readable, contain
+// valid JSON, and declare nothing the engine would silently refuse, or startup fails closed.
+//
+// The passthrough check runs after decoding and BEFORE anything is constructed from the
+// config, because that is the difference between a refusal and a repair: at boot the operator
+// can still fix the list, while childEnv runs once per deploy with no logger and would have to
+// drop the entry in flight. A file that survives this load is a file whose declared effect
+// and real effect are the same.
+//
+// On refusal the caller gets the ZERO config as well as the error, so a caller that ignored
+// the error could still not wire a backend out of input that was refused — invalid
+// configuration is never presented as effective.
 func loadDeployExecutorConfig(_ *slog.Logger) (deployExecutorConfig, error) {
 	path := os.Getenv("OLIVARES_DEPLOY_EXECUTOR_CONFIG")
 	if path == "" {
@@ -148,6 +216,14 @@ func loadDeployExecutorConfig(_ *slog.Logger) (deployExecutorConfig, error) {
 	var cfg deployExecutorConfig
 	if err := loadOperatorJSONConfig("OLIVARES_DEPLOY_EXECUTOR_CONFIG", path, &cfg); err != nil {
 		return deployExecutorConfig{}, err
+	}
+	if refused := cfg.refusedPassthrough(); len(refused) > 0 {
+		entries := make([]string, 0, len(refused))
+		for _, e := range refused {
+			entries = append(entries, e.String())
+		}
+		return deployExecutorConfig{}, fmt.Errorf("OLIVARES_DEPLOY_EXECUTOR_CONFIG is set to %q but it declares passthrough entries the engine will not copy into a child process — each %s: %s; refusing to start instead of presenting a configuration whose effect would differ from what it declares",
+			path, refused[0].rejection.Reason, strings.Join(entries, "; "))
 	}
 	return cfg, nil
 }

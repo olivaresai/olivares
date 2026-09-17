@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -59,7 +66,11 @@ vi.mock('@/features/recordings/api', async (importOriginal) => ({
 }))
 
 import { ApiError } from '@/lib/api/errors'
+import { queryKeys } from '@/lib/api/query'
+import { liveCapabilityContext } from '@/lib/auth/capabilities'
+import { useCommandStore } from '@/stores/command'
 import { useStepUpStore } from '@/stores/step-up'
+import { useTenantStore } from '@/stores/tenant'
 import { AlertingView } from './alerting-view'
 
 const route = {
@@ -86,15 +97,48 @@ const deadRow = {
 
 function wrap(ui: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // The principal the capability context is read from. Present for every case so the
+  // palette-command cells below measure AUTHORITY rather than "no identity established";
+  // no other cell reads it.
+  qc.setQueryData(queryKeys.whoami, PRINCIPAL)
   return {
     ...render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>),
     qc,
   }
 }
 
+const PRINCIPAL = {
+  kind: 'user',
+  user_id: 'u-1',
+  actor: 'u-1',
+  display_name: 'Ada',
+  superadmin: false,
+  grants: [],
+}
+
+/**
+ * Select "New alert route" in the ⌘K palette, exactly as the palette does: one command,
+ * bound to the identity that is live in this client.
+ */
+function selectInPalette(qc: QueryClient) {
+  useCommandStore
+    .getState()
+    .setPendingAction('alerting', 'createRoute', liveCapabilityContext(qc))
+  expect(useCommandStore.getState().pendingAction).not.toBeNull()
+}
+
+/** A principal holding exactly `permissions` — never a blanket `() => true`. */
+function holding(...permissions: string[]) {
+  const held = new Set(permissions)
+  authState.can = (permission: string) => held.has(permission)
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   authState.can = () => true
+  authState.activeTenant = 't1'
+  useTenantStore.setState({ activeTenant: 't1' })
+  useCommandStore.setState({ pendingAction: null, open: false, opener: null })
   api.listRoutes.mockResolvedValue({ items: [route], has_more: false })
   api.listDestinations.mockResolvedValue({
     destinations: ['slack-sec', 'pagerduty'],
@@ -743,4 +787,248 @@ describe('AlertingView · dead letters', () => {
       screen.queryByRole('button', { name: /acknowledge and continue/i }),
     ).not.toBeInTheDocument()
   })
+
+  /* ── the ⌘K verb and the dialog it opens (A1, spec04 §1) ───────────────────── */
+
+  // ⛔ THE MEASURED DEFECT. `notify:route:write` gates the "New route" button and every
+  //    row's pencil, but the two RouteDialog renders were on state alone. So the palette
+  //    verb — offered until now to anyone with `notify:route:read` — produced the exact
+  //    form this page hides, and the operator lost their typing at submit. Both halves are
+  //    covered: the verb is no longer offered or consumed without the write permission,
+  //    and the dialog no longer renders without it whatever set the state.
+  it('opens the create form from the palette verb for a principal who may write', async () => {
+    holding('notify:route:read', 'notify:route:write')
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    qc.setQueryData(queryKeys.whoami, PRINCIPAL)
+    selectInPalette(qc)
+    render(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    expect(
+      await screen.findByRole('dialog', { name: /new route/i }),
+    ).toBeInTheDocument()
+    // Consumed exactly once: the store no longer holds it.
+    expect(useCommandStore.getState().pendingAction).toBeNull()
+  })
+
+  it('opens nothing from the palette verb for a reader, and clears the command', async () => {
+    holding('notify:route:read')
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    qc.setQueryData(queryKeys.whoami, PRINCIPAL)
+    selectInPalette(qc)
+    render(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    // The page itself still works — this is a refusal of the VERB, not of the route.
+    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // FIRES IF: a refused command survives — the reader could then be handed the form on a
+    // later visit, or the next principal at this console could be.
+    expect(useCommandStore.getState().pendingAction).toBeNull()
+  })
+
+  it('does not consume a command addressed to another feature', async () => {
+    holding('notify:route:read', 'notify:route:write')
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    qc.setQueryData(queryKeys.whoami, PRINCIPAL)
+    useCommandStore
+      .getState()
+      .setPendingAction(
+        'eventing',
+        'createSubscription',
+        liveCapabilityContext(qc),
+      )
+    render(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(useCommandStore.getState().pendingAction).toEqual(
+      expect.objectContaining({ featureId: 'eventing' }),
+    )
+  })
+
+  it('closes an open create form when the write grant is revoked, and does not reopen it', async () => {
+    const user = userEvent.setup()
+    holding('notify:route:read', 'notify:route:write')
+    const { rerender, qc } = wrap(<AlertingView />)
+    await user.click(await screen.findByRole('button', { name: /new route/i }))
+    expect(
+      await screen.findByRole('dialog', { name: /new route/i }),
+    ).toBeInTheDocument()
+
+    holding('notify:route:read')
+    rerender(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+
+    // ⛔ AND IT IS CLOSED, NOT HIDDEN. Gating only the render would leave `creating` set
+    //    behind the gate, so the form would come back by itself the moment the grant did —
+    //    with no operator intent anywhere near it.
+    holding('notify:route:read', 'notify:route:write')
+    rerender(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    expect(
+      await screen.findByRole('button', { name: /new route/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('closes an open EDIT form when the write grant is revoked, and does not reopen it', async () => {
+    const user = userEvent.setup()
+    holding('notify:route:read', 'notify:route:write')
+    const { rerender, qc } = wrap(<AlertingView />)
+    await user.click(
+      await screen.findByRole('button', { name: /edit route sec-alerts/i }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: /edit route/i }),
+    ).toBeInTheDocument()
+
+    holding('notify:route:read')
+    rerender(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+
+    holding('notify:route:read', 'notify:route:write')
+    rerender(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    expect(
+      await screen.findByRole('button', { name: /edit route sec-alerts/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('leaves the admin and read surfaces alone when only the write grant goes', async () => {
+    const user = userEvent.setup()
+    holding('notify:route:read', 'notify:route:write', 'notify:route:admin')
+    const { rerender, qc } = wrap(<AlertingView />)
+    await user.click(
+      await screen.findByRole('button', {
+        name: /view revision history for sec-alerts/i,
+      }),
+    )
+    const history = await screen.findByRole('dialog', {
+      name: /revision history/i,
+    })
+    expect(history).toBeInTheDocument()
+
+    // CONTROL for the two cells above: the clearing is scoped to what `canWrite` governs.
+    // The history sheet is a READ and the delete confirmation is `:admin`'s — a blanket
+    // "close everything on any permission change" would take the operator's open work with
+    // it, which is exactly what this change must not do.
+    holding('notify:route:read', 'notify:route:admin')
+    rerender(
+      <QueryClientProvider client={qc}>
+        <AlertingView />
+      </QueryClientProvider>,
+    )
+    expect(
+      screen.getByRole('dialog', { name: /revision history/i }),
+    ).toBeInTheDocument()
+  })
+
+  // ⛔ NO UNAUTHORIZED DIALOG MOUNTS, MEASURED AT THE DIALOG'S DATA SEAM. `RouteDialog` is
+  //    the only caller of `listDestinations`, so that mock witnesses the dialog MOUNTING
+  //    even for a single commit. The state is set the way a real stale path would set it:
+  //    a control retained from an authorized render, fired after the grant went and before
+  //    React has rebuilt the list.
+  //
+  //    ⚠ WHAT THIS DOES AND DOES NOT SEPARATE, since the clearing moved into render
+  //      (correction 1): `creating`/`editing` are now dropped in the SAME render that sees
+  //      `canWrite` go false, so the form cannot mount even with the render gate removed.
+  //      These cells therefore pin the BEHAVIOUR — an unauthorized principal never reaches
+  //      the form or its rosters — and no longer distinguish the gate from the adjustment.
+  //      The gate stays because the construction requires an explicit permission gate on
+  //      the render; mutants that only remove it are behaviourally equivalent and are
+  //      recorded as equivalent rather than killed.
+  //
+  //    ⚠ THE CLICK IS `fireEvent`, NOT `userEvent`. userEvent awaits a macrotask between
+  //      pointerdown, mouseup and click; a query settling in that gap re-renders the page
+  //      with the grant already gone, the control is removed mid-interaction, and the final
+  //      click lands on a detached node. Measured: the cell passed for that reason alone,
+  //      with `add.isConnected` false and zero calls. `fireEvent` dispatches ONE event
+  //      synchronously, so the stale control is fired exactly as a stale control is fired.
+  async function settled() {
+    await screen.findByText('sec-alerts')
+    await waitFor(() => expect(recordingApiMock.notice).toHaveBeenCalled())
+    await act(async () => {})
+  }
+
+  it('never mounts the create dialog for a stale control fired after the grant went', async () => {
+    holding('notify:route:read', 'notify:route:write')
+    wrap(<AlertingView />)
+    await settled()
+    const add = screen.getByRole('button', { name: /new route/i })
+    holding('notify:route:read')
+    expect(api.listDestinations).not.toHaveBeenCalled()
+
+    fireEvent.click(add)
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(api.listDestinations).not.toHaveBeenCalled()
+  })
+
+  it('never mounts the edit dialog for a stale control fired after the grant went', async () => {
+    holding('notify:route:read', 'notify:route:write')
+    wrap(<AlertingView />)
+    await settled()
+    const pencil = screen.getByRole('button', {
+      name: /edit route sec-alerts/i,
+    })
+    holding('notify:route:read')
+    expect(api.listDestinations).not.toHaveBeenCalled()
+
+    fireEvent.click(pencil)
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(api.listDestinations).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['create', /new route/i],
+    ['edit', /edit route sec-alerts/i],
+  ])(
+    'CONTROL: the same %s click with the grant intact does mount the dialog',
+    async (_label, control) => {
+      // Without this pair, the two cells above would pass on a page whose controls never
+      // worked — which is exactly how they passed the first time they were written.
+      holding('notify:route:read', 'notify:route:write')
+      wrap(<AlertingView />)
+      await settled()
+
+      fireEvent.click(screen.getByRole('button', { name: control }))
+
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+      expect(api.listDestinations).toHaveBeenCalled()
+    },
+  )
 })

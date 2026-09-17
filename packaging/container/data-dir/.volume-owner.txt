@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# OCI images copy this directory to /var/lib/olivares and /backups as uid/gid 65532
+# with mode 0700. Docker then preserves that ownership when it initializes a fresh
+# named volume at either path.

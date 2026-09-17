@@ -59,7 +59,7 @@ channel installs an attacker's binary on the fleet with no human in the loop.
 ```sh
 # 1. Generate the manifest. --expires-in is carried by default (2160h); state it
 #    explicitly here so the value is on the record for the incident.
-olivares release manifest --channel security --version 26.8.1 --dir ./dist \
+olivares release manifest --channel security --version 26.9.1 --dir ./dist \
   --security --advisory GHSA-xxxx-yyyy-zzzz --min-version 26.5.0 \
   --expires-in 2160h --out ./dist/security-manifest.json
 #    (no --sign-key: the OTA private key stays off-box; the ceremony below signs it)
@@ -74,7 +74,7 @@ cosign verify-blob \
 # 3. Cross-check the manifest against it AND read the policy block it prints.
 olivares release verify-manifest \
   --manifest ./dist/security-manifest.json --checksums ./dist/checksums.txt --dir ./dist \
-  --expect-channel security --expect-version 26.8.1
+  --expect-channel security --expect-version 26.9.1
 
 # 4. ONLY once step 3 prints `OK:` and the policy block is what you intended:
 # --checksums is REQUIRED here too: sign-manifest re-runs the cross-check and
@@ -121,7 +121,7 @@ safe — `core/secadvisory`):
   "id": "GHSA-xxxx-yyyy-zzzz",
   "summary": "…", "severity": "HIGH",
   "affected": [ { "package": "olivares",
-                  "ranges": [ { "introduced": "26.5.0", "fixed": "26.8.1" } ] } ],
+                  "ranges": [ { "introduced": "26.5.0", "fixed": "26.9.1" } ] } ],
   "references": [ { "type": "ADVISORY", "url": "https://github.com/…/security/advisories/GHSA-…" } ]
 } ] }
 ```
@@ -163,7 +163,7 @@ detached signature **from disk**, so it is fully offline — in an air-gap, poin
 olivares security check --feed advisories.json          # --sig defaults to advisories.json.sig
 olivares security check --feed /media/olivares-update/advisories.json   # air-gap: file from a bundle
 olivares security check --feed advisories.json --quiet  # print nothing when unaffected (probes)
-olivares security check --feed advisories.json --product-version 26.8.0  # what-if / fleet check
+olivares security check --feed advisories.json --product-version 26.9.0  # what-if / fleet check
 ```
 
 - Verifies the feed against the **embedded OTA key** (`--pubkey` to override) BEFORE

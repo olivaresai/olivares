@@ -37,7 +37,17 @@
     }
   },
   "state": {
-    "unavailable": "読み込めませんでした — 開いて再試行してください"
+    "unavailable": "読み込めませんでした — 開いて再試行してください",
+    "pendingIdle": "クエリ未開始 — 開いて読み込んでください",
+    "pendingPaused": "クエリ一時停止中 — 再開を待っています"
+  },
+  "availability": {
+    "loading": "{{source}}：読み込み中。",
+    "pendingIdle": "{{source}}：クエリ未開始。",
+    "pendingPaused": "{{source}}：クエリ一時停止中、再開を待っています。",
+    "unavailable": "{{source}}：読み込めませんでした。",
+    "partial": "{{source}}：数値を表示できます。部分的なデータです。",
+    "current": "{{source}}：数値を表示できます。"
   },
   "empty": {
     "title": "まだ表示できるものがありません",

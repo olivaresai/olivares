@@ -11,6 +11,13 @@ file を読み取ります。OTLP trace も受信できます。これは xAI AP
 remote model を照会せず、provider secret も不要です。予防的な tool control には
 `olivares grok-hook` と個別のローカル PEP を使用します。
 
+このページは **コネクターと PEP hook** の経路です。公式 Grok CLI をガバナンス対象の
+子として起動しません。その運用経路は
+[プロバイダーセッションを運用する](/how-to/operate-provider-sessions/)
+です（`OLIVARES_SESSION_RUNTIME_GROK_BIN` とプロバイダープロファイル、
+`CHANGELOG.md` `[26.9.0]`）。認証済み公式 Grok アカウントとの互換性はそこで
+主張しません。
+
 ## Grok Build を追加する
 
 ### 前提条件

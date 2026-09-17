@@ -825,6 +825,10 @@ func TestAuthorizationEpochSQLiteCreateOrgAndUpgradeBackfillAreAtomic(t *testing
 			}
 			return nil
 		}
+		// The hook is package state. A t.Fatalf between here and the explicit reset
+		// below would otherwise leak the injected failure into whichever test
+		// provisions the next tenant, which is how one red test became two.
+		t.Cleanup(func() { authorizationEpochBeforeInsertTestHook = nil })
 		_, err = Open(ctx, cfg, nil)
 		if !errors.Is(err, injected) || calls != 2 {
 			t.Fatalf("failed upgrade = %v, calls=%d", err, calls)

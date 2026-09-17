@@ -80,6 +80,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Traffic readiness is observed through the API server's pod proxy, with this
+	// manager's own credentials. Build it BEFORE the controller and exit on failure:
+	// a manager that cannot make this observation must not start, because the only
+	// alternative predicate — trust the leader label — is the defect this closes.
+	routeProbe, err := controller.NewPodProxyRouteProber(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to build the route-readiness client")
+		os.Exit(1)
+	}
+
 	if err := (&controller.ControlPlaneReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -87,6 +97,9 @@ func main() {
 		// cacheOptions), so the config-hash — which must fold the referenced Secret's
 		// CONTENT into the rollout annotation — reads through this instead.
 		APIReader: mgr.GetAPIReader(),
+		// Leader-routing readiness asks the published leader whether it will take
+		// client traffic; nil would refuse PhaseReady outright.
+		RouteProbe: routeProbe,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ControlPlane")
 		os.Exit(1)

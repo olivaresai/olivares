@@ -5,7 +5,7 @@
 // assistants, files, and vector stores, plus operator-declared policy enforcement
 // (allowed models/tools per assistant, blocked file purposes).
 //
-// READ-ONLY AND MINIMAL-DATA (docs/SECURITY-HARDENING.md-3): every call is a GET via the
+// READ-ONLY AND MINIMAL-DATA (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the
 // shared GET-only modelprovider client. The connector never reads assistant
 // instructions, thread messages, file content, or secrets — only inventory
 // metadata (ids, model, tool types, file purpose/size/status, vector-store

@@ -9,6 +9,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -23,7 +24,6 @@ import (
 	"github.com/olivaresai/olivares/core/api/ratelimit/pgstore"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
-	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/eventbus"
 	"github.com/olivaresai/olivares/core/eventbus/natsbus"
 	"github.com/olivaresai/olivares/core/license"
@@ -38,6 +38,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/core/suspension"
 	"github.com/olivaresai/olivares/core/updatecheck"
+	"github.com/olivaresai/olivares/core/webaddr"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	securitymodule "github.com/olivaresai/olivares/modules/security"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -335,6 +336,15 @@ type bootConfig struct {
 	// The serve command supplies the live reload-aware accessor; non-listener
 	// commands leave it nil.
 	TLSCertNotAfter func() (time.Time, bool)
+	// PublicAddr is the operator-declared browser address of this console, already
+	// parsed and canonicalized by the caller. The zero value means none was
+	// declared. Commands that never serve a console leave it zero, and the WebAuthn
+	// relying party then falls back exactly as it always has.
+	PublicAddr webaddr.Address
+	// PublicAddrSource is WHICH input supplied PublicAddr, so the boot log names
+	// the flag when it was a flag. Naming the environment key unconditionally sent
+	// an operator to the wrong file.
+	PublicAddrSource publicAddrSource
 }
 
 // keyLoadOptions translates the boot's read-only stance into the signing-key
@@ -476,16 +486,23 @@ func makePrivateConnectorScratch(root, pattern string) (string, error) {
 
 // engine bundles the wired subsystems and tears them down in order on Close.
 type engine struct {
-	store    store.Store
-	rt       *runtime.Runtime
-	signer   *audit.Signer
-	authr    *auth.Authenticator
-	authz    *auth.Authorizer
-	setupTok *secure.SetupToken
-	api      *api.Server
-	tracer   *obstrace.Provider
-	dataDir  string
-	log      *slog.Logger
+	editionResources []io.Closer
+	store            store.Store
+	rt               *runtime.Runtime
+	signer           *audit.Signer
+	authr            *auth.Authenticator
+	authz            *auth.Authorizer
+	setupTok         *secure.SetupToken
+	api              *api.Server
+	tracer           *obstrace.Provider
+	dataDir          string
+	log              *slog.Logger
+	// webAuthn is the relying party this boot RESOLVED, kept so the startup panel
+	// can describe what will actually happen at a passkey prompt instead of
+	// guessing from the address. The panel used to promise a localhost ceremony
+	// whatever the plan was, including for a deployment whose every leg answers
+	// 503 and for a pin whose origins exclude localhost.
+	webAuthn webAuthnPlan
 	// secretStore is the runtime secret store, exposed so the `secrets` CLI
 	// can do sealed CRUD over the same store (and sealer) the engine resolves
 	// `store:<name>` references through.
@@ -538,6 +555,18 @@ type engine struct {
 	// Codex session id to the canonical sid through this module's identity plane — the one
 	// step that cannot live in the Apache connector, because modules/sessions imports /core.
 	sessionsMod *sessions.Module
+	// communicationPump is the registered local outbox pump (K1/K2 lanes plus the
+	// gated K3 lane). Close stops its readiness witness before the runtime stops.
+	communicationPump *workOutboxPump
+	// communicationComposition retains the exact adapters bound into sessions.
+	// It is not an alternate authority path; lifecycle diagnostics and defensive
+	// composition tests use it to replace one port and restore that same instance.
+	communicationComposition *communicationComposition
+	// workSink is the durable Eventing intake the sessions outbox publishes
+	// through, retained like sessionsMod so the composition's recovery tests can
+	// reproduce the crash window between a capture and its settlement with the
+	// real sink instead of a double.
+	workSink workEventSink
 	// protocolBindingReconciler is the late-bound REST multiplexer. A2A is
 	// installed during module composition; the MCP adapter is added only after
 	// the configured durable store and real upstream have both been constructed.
@@ -590,6 +619,9 @@ type engine struct {
 	finops         budgetChecker
 	inferenceProxy proxyPolicySource
 	residencyReg   *residency.Registry
+	// contentFirewall is the moduleSet's Messages proxy attachment recorder, written once by
+	// buildClaudeMessagesProxyServer (contentfirewallstatus.go).
+	contentFirewall *messagesInspectorBinding
 	// pivConfig is the PIV/CAC route config (nil = unconfigured). The serve
 	// command arms the HTTP listener with it (optional client-cert request) so
 	// the handlers can read the verified peer certificate.
@@ -657,6 +689,24 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		api.WithLogRedactor(securitymodule.RedactCredentials),
 	)
 	log = slog.New(logBroker)
+
+	// AN EXPLICIT AUTHENTICATION CONFIGURATION IS SETTLED BEFORE ANYTHING MUTABLE
+	// HAPPENS. This runs before the data directory is created, before the store
+	// opens and before a key is minted, because the remedy for a refusal here is
+	// editing a file — not cleaning up a half-built installation first.
+	//
+	// It replaces a loader that built the relying party out of two environment
+	// variables with no predicate applied to either, so a pinned IP or a
+	// single-label name produced a deployment where every ceremony failed and
+	// nothing named the cause. A half-set pair used to be dropped with a warning;
+	// it is now a refusal, because silently deriving a different authentication
+	// authority than the operator wrote is the behavior this closes.
+	webAuthn, err := resolveWebAuthnRP(cfg.PublicAddr, cfg.PublicAddrSource, osGetenv)
+	if err != nil {
+		return nil, err
+	}
+	webAuthn.log(log)
+
 	dataDirWasImplicit := cfg.DataDir == "" && os.Getenv("OLIVARES_DATA_DIR") == ""
 	if cfg.DataDir == "" {
 		resolved, err := defaultDataDir()
@@ -776,16 +826,122 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		return nil, err
 	}
 
+	// K3 activation is REQUESTED configuration, parsed first so a malformed
+	// request refuses boot before the store opens. Custody that is not declared
+	// is recorded as a blocker on the request, never as a boot error: K3 custody
+	// belongs to K3 alone. Effective readiness is decided later, per witness.
+	communicationActivation, err := loadCommunicationActivationConfig(osGetenv)
+	if err != nil {
+		return nil, err
+	}
 	// K3 content custody is explicit and boot-only. An absent path leaves the
 	// sealer unbound; a declared path must load, unwrap and self-test before the
-	// store opens so malformed custody can never create a partially booted node.
+	// store opens. When activation is NOT requested a declared keyring that does
+	// not load is the historical configuration error (nothing to degrade). When
+	// it IS requested, the failure is a K3 custody blocker: the sealer stays
+	// unbound, the K3 lane is not composed, and core/K1/K2 boot and serve. No
+	// key is minted, no other key is tried, no ciphertext is touched.
 	communicationSealer, err := loadCommunicationContentSealer(
 		ctx,
 		osGetenv(envCommunicationContentKeyringFile),
 		openCommunicationContentKeyringOperatorConfig,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", envCommunicationContentKeyringFile, err)
+		if !communicationActivation.Requested {
+			return nil, fmt.Errorf("load %s: %w", envCommunicationContentKeyringFile, err)
+		}
+		communicationActivation.blockCustody(envCommunicationContentKeyringFile, err.Error())
+		communicationSealer = nil
+		log.Error("sessions: K3 content keyring custody is unusable; the requested activation stays OFF with this cause while core, K1 and K2 boot",
+			"env", envCommunicationContentKeyringFile, "err", err)
+	}
+	communicationCursorKeyring, communicationCursorStatus, err := loadCommunicationCursorKeyring(
+		ctx, communicationActivation.CursorKeyringPath, openCommunicationContentKeyringOperatorConfig, time.Now(),
+	)
+	if err != nil {
+		if !communicationActivation.Requested {
+			return nil, fmt.Errorf("load %s: %w", envCommunicationCursorKeyringFile, err)
+		}
+		communicationActivation.blockCustody(envCommunicationCursorKeyringFile, err.Error())
+		communicationCursorKeyring, communicationCursorStatus = nil, communicationCursorKeyringStatus{}
+		log.Error("sessions: K3 cursor keyring custody is unusable; the requested activation stays OFF with this cause while core, K1 and K2 boot",
+			"env", envCommunicationCursorKeyringFile, "err", err)
+	}
+
+	// THE LOCAL RESTORE GUARD, TAKEN HERE — BEFORE ANY KEY IS LOADED OR MINTED.
+	//
+	// Position is the guarantee, and the version that checked and released would have
+	// been worth nothing. The three loaders below MINT on a data directory that has
+	// none, so a boot that read the control, let go and then loaded keys could create
+	// a fresh audit key inside the window a restore was replacing that very custody —
+	// and the ledger the restore then verified would be signed by a key nobody chose.
+	//
+	// It is held from here THROUGH the store's own publication decision and released
+	// immediately after it, because that is the span in which this process can create
+	// custody or publish a store for the destination. It is deliberately NOT held for
+	// the life of the engine: these locks coordinate construction, and a lock held by
+	// a serving process would advertise a revocation protocol the product does not
+	// have.
+	//
+	// The guard is SHARED: several ordinary boots of one installation are normal, and
+	// what must not coexist with them is an operation that changes the destination.
+	//
+	// ⛔ AND IT IS NO LONGER ONLY LOCAL. The destination's OWN control is read inside
+	// the admission too, on a session it retains through the store's decision. Reading
+	// it after the loaders is F3-IR-5: a remote database can carry a completed or
+	// pending control on a node with nothing on disk, so the three loaders below would
+	// have minted custody for a restored estate before the fact was learned.
+	//
+	// THE WHOLE DESTINATION CONFIGURATION IS ASSEMBLED FIRST, and the admission binds
+	// to it. Everything it needs is operator configuration parsed from the environment,
+	// so there is nothing here that has to wait for a key: assembling it now means the
+	// boot never holds a SECOND, independently mutable connection config that could
+	// name a different destination than the one it fenced. The only field bound later
+	// is SignEvent, from the audit signer built out of the key loaded below.
+	auditSpoolMaxBytes, auditSpoolOnFull, err := loadAuditSpoolConfig(osGetenv, log)
+	if err != nil {
+		return nil, fmt.Errorf("load audit spool operator config: %w", err)
+	}
+	auditMetaBlinding, err := loadAuditMetaBlinding(osGetenv, log)
+	if err != nil {
+		return nil, fmt.Errorf("load audit metadata blinding operator config: %w", err)
+	}
+	storeCfg := store.Config{
+		Engine:              eng,
+		DSN:                 dsn,
+		AdminDSN:            cfg.AdminDSN,
+		OwnerDSN:            cfg.OwnerDSN,
+		MaxConns:            maxConns,
+		AllowPrivilegedRole: cfg.AllowPrivilegedDBRole,
+		AuditSpoolMaxBytes:  auditSpoolMaxBytes,
+		AuditSpoolOnFull:    auditSpoolOnFull,
+		AuditMetaBlinding:   auditMetaBlinding,
+	}
+	restorePublication, err := acquireBootPublication(ctx, storeCfg, cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	// Deferred against every early failure between here and the explicit release
+	// below; Close is idempotent, so both paths are safe.
+	defer restorePublication.Close()
+
+	// WHAT THE DESTINATION DEMANDS OF THE THREE LOADERS, asked BEFORE any of them runs.
+	//
+	// This is the point of the whole sublot. On a destination that carries a COMPLETED
+	// restore control the custody was already chosen by that operation, so the loaders
+	// must LOAD exactly it — no minting, no falling back from a configured source to a
+	// local key, no CMEK plaintext written anywhere. On an unenrolled destination the
+	// requirement is empty and the ordinary first boot mints its keys exactly as before.
+	//
+	// The admission has already refused every other verdict: pending, indeterminate,
+	// quarantined, malformed, unreadable, and absent-with-a-bound-witness never reach
+	// this line.
+	custody := restorePublication.CustodyRequirement()
+	keyOpts := cfg.keyLoadOptions()
+	if custody.CustodyRequired() {
+		keyOpts = append(keyOpts, withEnrolledCustody())
+		log.Info("this destination carries a completed restore control, so its signing keys are LOADED under the custody that operation published and none is minted",
+			"destination", custody.Destination(), "operation", custody.OperationID(), "keyset", custody.KeysetSHA256())
 	}
 
 	// Load the audit signing key UP FRONT (it only touches a file/env/KEK, not the
@@ -795,7 +951,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// same key (the ledger does not fork at failover); under CMEK custody it
 	// is unwrapped IN MEMORY through the customer's KMS KEK and never exists in
 	// clear at rest; single-node/dev mints it on first boot.
-	auditKey, err := loadAuditSigningKey(cfg.DataDir, log, cfg.keyLoadOptions()...)
+	auditKey, err := loadAuditSigningKey(cfg.DataDir, log, keyOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +964,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// §5). Same shared-or-local resolution as the audit key (shareable in HA so every
 	// replica verifies pinned entries identically); a node without one keeps the
 	// honest unpinned posture.
-	catalogKey, err := loadCatalogSigningKey(cfg.DataDir, log, cfg.keyLoadOptions()...)
+	catalogKey, err := loadCatalogSigningKey(cfg.DataDir, log, keyOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -819,12 +975,25 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// catalog keys — backing the claude-policy distribution truth loop: publish
 	// signs the exact distributed bytes, pull agents verify against its pinned
 	// fingerprint. Same shared-or-local resolution as the catalog key.
-	policyKey, err := loadPolicySigningKey(cfg.DataDir, log, cfg.keyLoadOptions()...)
+	policyKey, err := loadPolicySigningKey(cfg.DataDir, log, keyOpts...)
 	if err != nil {
 		return nil, err
 	}
 	if policyKey.created {
 		log.Warn("generated a new policy signing key; back it up and pin its fingerprint in the pull agents", "path", filepath.Join(cfg.DataDir, "policy-signing.key"))
+	}
+	// THE ONE OBSERVATION, BUILT FROM THE KEY OBJECTS THEMSELVES.
+	//
+	// The three values passed here are the SAME loadedSigningKey objects the signers
+	// below are constructed from — auditKey.priv becomes the audit signer, and
+	// catalogKey.priv/policyKey.priv are handed to buildModules. The observation
+	// derives each public half from the private key it will actually sign with and
+	// fingerprints that, so there is no path by which a durable record could be read
+	// back into a value called "observed": the measurement is of this process's keys or
+	// it does not exist.
+	custodyObserved, err := observeSelectedCustody(auditKey, catalogKey, policyKey)
+	if err != nil {
+		return nil, fmt.Errorf("observe the selected signing custody: %w", err)
 	}
 	// Optional off-box (KMS/HSM) checkpoint signer (R5). With none
 	// configured, the default on-box Ed25519 signer is used unchanged. Per-event
@@ -962,8 +1131,6 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	registerBusMetrics(reg, bus)
 	busStats, _ := bus.(eventbus.StatsProvider)
 
-	rt := runtime.New(runtime.Options{Logger: log, Bus: bus})
-
 	// if the operator REQUIRED a semantic embedder (OLIVARES_EMBEDDINGS_REQUIRE)
 	// but none is configured, refuse to boot rather than silently serve the lexical
 	// local-hash fallback as if it were semantic (docs/SECURITY-HARDENING.md — never a silent gap).
@@ -984,7 +1151,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// Construct and register every Fase C module (wire.go is the only file that
 	// imports both /core and /modules). They must be added to the runtime BEFORE the
 	// store opens so rt.RegisterSchema fans their schema out at construction.
-	set, err := buildModules(signer, catalogKey.priv, policyKey.priv, auditKey.priors, tracer.AnthropicHTTPClient(nil), srcCfg, log)
+	set, err := buildModules(signer, catalogKey.priv, policyKey.priv, auditKey.priors, tracer.AnthropicHTTPClient(nil), srcCfg, editionConfigFrom(cfg), log)
 	if err != nil {
 		return nil, fmt.Errorf("load module operator config: %w", err)
 	}
@@ -995,6 +1162,11 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		}
 		set.sessions.UseCommunicationContentSealer(communicationSealer)
 	}
+	var sourceAdmission runtime.SourceRegistrationAdmission
+	if set.sessions != nil {
+		sourceAdmission = set.sessions.AdmitSourceRegistration
+	}
+	rt := runtime.New(runtime.Options{Logger: log, Bus: bus, SourceRegistrationAdmission: sourceAdmission})
 	for _, m := range set.all {
 		sm, ok := m.(sdk.Module)
 		if !ok {
@@ -1005,30 +1177,41 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		}
 	}
 
-	auditSpoolMaxBytes, auditSpoolOnFull, err := loadAuditSpoolConfig(osGetenv, log)
-	if err != nil {
-		return nil, fmt.Errorf("load audit spool operator config: %w", err)
+	// THE ADMISSION OPENS THE STORE, rather than the boot calling a constructor that
+	// would have to take the destination all over again.
+	//
+	// That is the difference this correction makes. The admission already holds this
+	// installation's local anchors and already read its LOCAL evidence — which the
+	// store constructor cannot see, since it gets only a DSN, and without which a
+	// PostgreSQL destination whose control was installed and then dropped is
+	// indistinguishable from one that never carried a control. Opening THROUGH it
+	// hands the store a child of that live ownership; the previous form left the store
+	// to acquire a second, unrelated lease and be granted it by process membership.
+	//
+	// The destination is bound: this configuration must name the engine and DSN the
+	// admission fenced, or the Open is refused rather than re-pointed.
+	// THE LAST LOOK AT THE SOURCES, before the store is published.
+	//
+	// A completed control names a custody generation; the sources that generation
+	// lives in are outside this machine's lease. A mounted Secret can be replaced and
+	// a KEK grant revoked while this boot prepares, so the selection is measured once
+	// more through the same strict load-only path and any difference refuses. It
+	// detects; it does not immobilize an external KMS, and it never substitutes a key.
+	if custody.CustodyRequired() {
+		if rerr := recheckSelectedCustody(cfg.DataDir, cfg.keyLoadOptions(), custodyObserved); rerr != nil {
+			return nil, rerr
+		}
 	}
-	auditMetaBlinding, err := loadAuditMetaBlinding(osGetenv, log)
-	if err != nil {
-		return nil, fmt.Errorf("load audit metadata blinding operator config: %w", err)
-	}
-	st, err := coreengine.Open(ctx, store.Config{
-		Engine:              eng,
-		DSN:                 dsn,
-		AdminDSN:            cfg.AdminDSN,
-		OwnerDSN:            cfg.OwnerDSN,
-		MaxConns:            maxConns,
-		AllowPrivilegedRole: cfg.AllowPrivilegedDBRole,
-		AuditSpoolMaxBytes:  auditSpoolMaxBytes,
-		AuditSpoolOnFull:    auditSpoolOnFull,
-		AuditMetaBlinding:   auditMetaBlinding,
-		// Sign every audit event at write time so the ledger is tamper-evident per
-		// event, not only at the periodic checkpoints (closes the between-checkpoints
-		// tail-rewrite window). The same key signs the checkpoints; verify off-box
-		// with `audit verify --pubkey` (docs/SECURITY-HARDENING.md).
-		SignEvent: signer.SignEvent,
-	}, func(reg store.ExtensionRegistry) error {
+	// THE ADMISSION OPENS THE STORE with the audit signer bound to it and the
+	// measurement of the custody this boot actually loaded.
+	//
+	// Only SignEvent is supplied here: the destination configuration was frozen when
+	// the admission was taken, so there is no second Config for this call to name a
+	// different destination with. Signing every audit event at write time is what makes
+	// the ledger tamper-evident per event rather than only at the periodic checkpoints
+	// (it closes the between-checkpoints tail-rewrite window); the same key signs the
+	// checkpoints, and `audit verify --pubkey` checks them off-box (docs/SECURITY-HARDENING.md).
+	st, err := restorePublication.Open(ctx, signer.SignEvent, custodyObserved, func(reg store.ExtensionRegistry) error {
 		if err := rt.RegisterSchema(reg); err != nil {
 			return err
 		}
@@ -1043,6 +1226,15 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// compares community against enterprise, and an enterprise-only table fails it.
 		return registerCircuitBreakerSchema(reg)
 	})
+	// THE ADMISSION IS RELEASED HERE, and not earlier or later.
+	//
+	// Not earlier, because everything above — key loading, minting, and the store's own
+	// fenced publication decision — is what it protects. Not later, because the engine
+	// this function returns keeps running, and a construction lock held by a serving
+	// process would claim an exclusion over already-published stores that the ratified
+	// contract explicitly does not promise. Client drain stays the operator's
+	// prerequisite.
+	restorePublication.Close()
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
@@ -1088,8 +1280,23 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			dc.UseData(data)
 		}
 	}
+	// D08-C2a: bind the inventory's durable sweep scope alongside UseData, and
+	// well before rt.Start — the module reads it only inside a sweep, and Start is
+	// what begins the ticker that calls one.
+	//
+	// It is given the COMPOSED store (residency- and suspension-wrapped, above),
+	// so the adapter's own enumeration and every tenant turn it leads to pass
+	// through the same guards as the rest of the engine. Without this binding the
+	// sweep refuses explicitly and says so; it does NOT fall back to the tenants
+	// this process happened to observe, and it does not make Start fail — failing
+	// Start would unsubscribe C1 ingestion too (core/runtime/lifecycle.go:124-126),
+	// which would turn "freshness cannot advance" into "nothing is discovered".
+	if set.inventory != nil {
+		set.inventory.UseSweepScopeSource(inventorySweepScopeSource{st: st, reg: residencyReg})
+	}
 	authr := auth.NewAuthenticator(st, nil)
 	var communicationStoreWitness *communicationGuardStoreWitness
+	var communicationComposition *communicationComposition
 	if set.sessions != nil {
 		set.sessions.UseRuntimeCredentialRecoveryData(sessionRuntimeRecoveryData)
 		recoveryAuthr := auth.NewAuthenticator(sessionRuntimeRecoveryStore, nil)
@@ -1126,6 +1333,19 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			st.Leader().IsLeader,
 		)
 		set.sessions.UseCommunicationStoreReadinessWitness(communicationStoreWitness)
+		// K3 lot A composition: real directory resolver, publication attestor,
+		// grant closure and the composite store proof are bound on every boot;
+		// the pump witness and the dual credential posture only when activation
+		// was requested. It runs BEFORE Leader.Run so the promotion recovery
+		// below observes the enabled posture on the very first election.
+		communicationComposition, err = bindCommunicationComposition(
+			ctx, communicationActivation, st, set.sessions, set.gov, communicationStoreWitness,
+			communicationCursorKeyring, communicationCursorStatus, set.eventing != nil, log,
+		)
+		if err != nil {
+			_ = st.Close()
+			return nil, fmt.Errorf("bind communication composition: %w", err)
+		}
 	}
 	recoverSessionRuntimeCredentials := func(ctx context.Context) error {
 		return recoverSessionRuntimeCredentialsForPromotion(
@@ -1185,6 +1405,20 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		set.sessions.UseWorkContentGuard(workContentGuard{})
 		set.sessions.UseWorkEventSink(workEventSink{eventing: set.eventing})
 	}
+	// Login-enforcement capability (R5). Classified from the host selection and this
+	// artifact's compiled capability before the election, so promotion and the later
+	// policy assertion share one decision. An absent artifact reconciles against the
+	// stored observation and the configured demand in a single read-only snapshot.
+	loginCap := newLoginCapabilityBoot(osGetenv, cfg.Version)
+	if err := loginCap.observeFollower(ctx, st); err != nil {
+		_ = st.Close()
+		return nil, fmt.Errorf("login enforcement: capability snapshot: %w", err)
+	}
+	if loginCap.refusesStartup() {
+		_ = st.Close()
+		return nil, fmt.Errorf("login enforcement: this deployment recorded the component and a global/default posture is configured, but this artifact does not link it; install an artifact that carries it or clear the posture")
+	}
+
 	// Active-passive HA leadership. EnsureSystemTenant is the write-side
 	// bootstrap only the ACTIVE writer performs, so register it as the elector's
 	// OnPromote and let Run drive it: on the leader Run fires it synchronously before
@@ -1237,11 +1471,28 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		}); err != nil {
 			return err
 		}
-		if communicationStoreWitness != nil {
+		// The capability record belongs to its own AuthMutate, after the system
+		// bootstrap has committed: it takes the store's capability lock first, which
+		// must precede every directory, user-authority and audit lock. A refusal here
+		// refuses the promotion; it never closes the store, because a later promotion
+		// of a running follower must leave the node serving as a follower.
+		if err := loginCap.recordAtPromotion(ctx, st); err != nil {
+			return err
+		}
+		if communicationComposition != nil {
+			// The composite proof runs the guard estate ceremony and then proves
+			// the directory status, schema and epochs. A failed or incomplete
+			// proof keeps K3 store readiness OFF with its blockers logged, but must
+			// not take unrelated product surfaces down.
+			if err := communicationComposition.reconcileAndVerify(ctx); err != nil {
+				log.Error("sessions: communication store proof incomplete; K3 store readiness remains off",
+					"err", err, "proof", communicationComposition.store.Proof())
+			} else {
+				log.Info("sessions: communication store proof established",
+					"proof", communicationComposition.store.Proof())
+			}
+		} else if communicationStoreWitness != nil {
 			if err := communicationStoreWitness.ReconcileAndVerify(ctx); err != nil {
-				// WP-2 is an inert private cut until WP-3 binds the pump witness. A
-				// failed or non-authoritative estate proof keeps store readiness
-				// UNKNOWN/OFF, but must not take unrelated product surfaces down.
 				log.Error("sessions: communication guard bootstrap incomplete; K3 store readiness remains off",
 					"err", err)
 			} else {
@@ -1364,6 +1615,19 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// scoped seam evaluates that policy once — grants and forbids together). A tenant with
 	// no authored grants makes the scoped engine abstain before any store read.
 	authz := auth.NewAuthorizer(set.gov.RequestEvaluator(), auth.WithScopedGrants(set.gov.ScopedGrants()))
+	// Live edition ports are bound only after the real Store, sessions data and
+	// request authorizer exist, before api.New installs any of their routes.
+	editionResources, err := editionBindModuleDependencies(ctx, editionConfigFrom(cfg), set.all,
+		EditionDependencies{Store: st, Sessions: set.sessions, Rows: api.NewReadRowAuthorizationPort(authz, authr)}, log)
+	if err != nil {
+		_ = st.Close()
+		return nil, fmt.Errorf("bind edition module dependencies: %w", err)
+	}
+	defer func() {
+		if !bootOK {
+			closeEditionResources(editionResources, log)
+		}
+	}()
 	setupTok := secure.NewSetupToken(filepath.Join(cfg.DataDir, "setup.token"))
 
 	// late-bind the eventing platform's two seams. The SAME composed
@@ -1379,6 +1643,12 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	if set.sessions != nil {
 		set.sessions.UseCommunicationRequestAuthority(authr, authz)
 		set.sessions.UseWorkAuthorizer(authz)
+		// P2/W3: the managed Stop's composition ports. The resolver reconstructs a
+		// caller's evidence from its credential reference, the authorizer is the same
+		// composed request authorizer that gates live routes, and the elector is the
+		// store's own durable leader fence. No private route calls StopManagedRun yet
+		// (W4); binding the ports makes the module's own admission answerable.
+		set.sessions.UseManagedStopAuthority(authr, authz, st.Leader())
 	}
 	// Unit G: late-bind the deployment's DURABLE disposition for the egress
 	// destination control. Without it an absent policy permits on every deployment,
@@ -1492,6 +1762,36 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		}
 	}()
 	sourceReconcilerSvc := newSourceReconciler(rt, sourceStore, secretResolver, secretStore, connectorDir, srcCfg.ConnectorTrust, log)
+	// B1: this node's persistent execution-environment identity, resolved from
+	// node-local state (or the explicit override) — never from the license, a
+	// region, a tenant or a shared database row. Reconciled sources are registered
+	// with it so their events carry the applied roster snapshot; the sessions
+	// module launches only profiles that name it and validates bindings through the
+	// narrow port below. Unavailable ⇒ new launches are deny-closed. Historical
+	// legacy reads and stops remain available without inventing a profile.
+	executionEnvRef, envErr := resolveExecutionEnvironmentRef(cfg.DataDir, !cfg.ReadOnly || !storeIsRemote, osGetenv, log)
+	if envErr != nil {
+		_ = st.Close()
+		return nil, envErr
+	}
+	if executionEnvRef != "" {
+		sourceReconcilerSvc.useEnvironmentRef(executionEnvRef)
+	}
+	if set.sessions != nil {
+		set.sessions.UseExecutionEnvironmentRef(executionEnvRef)
+		set.sessions.UseProviderSourceResolver(&providerSourceResolver{
+			store: sourceStore, sr: sourceReconcilerSvc, authz: authz, env: executionEnvRef,
+		})
+		// B2: every session reader — list, detail, timeline, SSE, the runs lookup by
+		// live_ref, the credential→run→timeline export and the replay — understands
+		// profile-scoped rows (modules/sessions/live_scope.go), so the productive
+		// create endpoint now requires provider_profile_ref. This opens the option
+		// only: the module still refuses, deny-closed, a node without an execution
+		// environment identity, an unknown/disabled/retired/foreign profile and a
+		// driver it does not operate. Legacy rows remain readable/stoppable; new
+		// launches and unproven legacy continuations cannot use an ambient home.
+		set.sessions.EnableProfiledLaunches()
+	}
 
 	// In-place edition: resolve the commercial license by precedence (explicit
 	// --license > OLIVARES_LICENSE_PATH > OLIVARES_LICENSE > the data-dir default
@@ -1507,7 +1807,9 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		_ = st.Close()
 		return nil, fmt.Errorf("resolve license: %w", lerr)
 	}
-	licHolder := newLicenseHolder(licPub, licSrc, time.Now, log)
+	// The holder verifies with the data directory's license trust keyring (the embedded key plus
+	// <data-dir>/license-trust.json), the same keyring install, upgrade and reload use.
+	licHolder := newDataDirLicenseHolder(cfg.DataDir, licSrc, time.Now, log)
 	// Boot posture: WARN if the engine starts already expired/invalid (honest
 	// degradation — the enterprise add-ons are off, but the engine never crashes,
 	// never loses data and never caps user accounts).
@@ -1543,6 +1845,13 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// decides — the open binary never links the enforcement code. Set once here,
 	// before the server is built — race-free, like WithSeatPolicy.
 	authr.WithLoginPolicy(newLoginPolicy(osGetenv, fedSvc, log))
+	// The declared state and the policy actually wired must agree before any surface is
+	// exposed: Wired without a policy, or a non-Wired state with one, is a node whose
+	// own record contradicts what it serves.
+	if err := loginCap.installAndAssert(authr, fedSvc); err != nil {
+		_ = st.Close()
+		return nil, fmt.Errorf("login enforcement: %w", err)
+	}
 
 	// Login-time group mapping: the default (AGPL) build wires nil
 	// (newGroupMapper → asserted IdP groups are extracted but never mapped to
@@ -1677,7 +1986,16 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 
 	apiSrv, err := api.New(api.Options{
 		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer,
-		SetupToken: setupTok, Logger: log, LogBroker: logBroker, Version: cfg.Version,
+		// ⛔ EL PRODUCTOR DE EVIDENCIA ES EL AUTENTICADOR, Y SIN ESTA LÍNEA UNA RUTA GOBERNADA
+		// IMPIDE ARRANCAR. checkGovernedRoutes se niega a montar un módulo que registre rutas
+		// gobernadas sin productor, así que mientras esto faltara, el día que un módulo real
+		// registrase una gobernada el servidor no levantaba. Hoy ninguno lo hace: por eso el
+		// hueco era invisible, y por eso se cierra ANTES de que el cockpit monte las suyas.
+		//
+		// Es `authr` y NO `recoveryAuthr`: el de recuperación se construye sobre otro runtime
+		// de sesión y no es el que resuelve el alcance del principal de una petición normal.
+		PrincipalEvidenceProducer: authr,
+		SetupToken:                setupTok, Logger: log, LogBroker: logBroker, Version: cfg.Version,
 		// the boot-owned registry, shared with the bus collectors and the
 		// audit checkpointer so /metrics is one exposition.
 		Metrics:          reg,
@@ -1723,7 +2041,14 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// safety policy. Both config callbacks are evaluated per request so
 		// activation overlay changes and unknown env keys stay current.
 		EffectiveConfig: func() []api.EffectiveConfigEntry {
-			return effectiveConfigEntries(os.Environ(), osGetenv)
+			// The declared console address is reported from the resolution THIS
+			// process performed at startup, not re-read from the environment: an
+			// explicit empty flag clears a variable that is still set, and a flag
+			// overrides one, so the environment is not what this engine is running
+			// on. Every other row keeps its live activation behaviour.
+			return effectiveConfigEntriesFor(os.Environ(), osGetenv, resolvedPublicAddr{
+				addr: cfg.PublicAddr, source: cfg.PublicAddrSource, known: true,
+			})
 		},
 		EffectiveConfigViolations: func() []string {
 			return unknownConfigEnvKeys(os.Environ())
@@ -1759,11 +2084,16 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// privileged-session recording — every module route is gated and
 		// captured through the recording module (deny-closed on recorded surfaces).
 		Recorder: set.recorder,
+		// V269 / COCKPIT-02 §3: the typed, sealed reader a module route uses when it
+		// declares EntityRef.CoreKind. It never leaves the composition root as anything
+		// wider than five facts.
+		CoreEntityResolver: coreEntityResolver{st: st},
 		// Privileged login: pinned WebAuthn relying party
 		// (zero value = per-request derivation) and the PIV/CAC client-cert
 		// route (nil = honest 501 seam, no elevation).
-		WebAuthn: loadWebAuthnRP(osGetenv, log),
-		PIV:      pivCfg,
+		WebAuthn:         webAuthn.RP,
+		WebAuthnUnusable: webAuthn.Unusable,
+		PIV:              pivCfg,
 		// /metrics access-control (env-configurable):
 		// OLIVARES_METRICS_TOKEN = static bearer token for scrape auth;
 		// OLIVARES_METRICS_ALLOWED_CIDRS = comma-separated CIDRs. Unset ⇒
@@ -1810,6 +2140,27 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// community build, so both consumers stay inert and behavior is unchanged.
 	circuitBreaker := newCircuitBreakerEngine(osGetenv, circuitBreakerDeps{Data: data, Gov: set.gov}, log)
 	subscribeCircuitBreaker(circuitBreaker, bus, log)
+
+	// D01-C2B: late-bind the governed Chat execution adapter, here because this is the
+	// first point at which every dependency it must not run without exists — the store,
+	// the proxy governance policy, the context policy, the residency registry, the secret
+	// resolver, the approval bridge, the bus and the SAME circuit-breaker instance the
+	// finding rail drives. It is bound BEFORE HTTP serving and in ONE call, so there is no
+	// window in which the port is reachable with half its gates wired. Nil unless the
+	// explicit development activation selected it; a false result keeps Chat refused with
+	// chat_execution_not_ready rather than failing the whole boot, which is the right
+	// trade for a storeless or collector process that legitimately cannot serve it.
+	if set.chatExecutor != nil {
+		if set.chatExecutor.bind(chatExecutorDeps{
+			Store: st, Policy: set.inferenceProxy, ContextPolicy: set.knowledge,
+			Residency: residencyReg, Secrets: secretResolver, Approvals: set.approvalBridge,
+			Bus: bus, CircuitBreaker: circuitBreaker,
+		}) {
+			log.Info("models: governed Chat execution adapter bound (development_precheck)")
+		} else {
+			log.Error("models: governed Chat execution adapter could not be bound; POST /routing-policies/{id}/execute stays deny-closed for pinned Chat profiles")
+		}
+	}
 	subscribeIncidentCloseLoop(ctx, osGetenv, bus, log)
 
 	// subscribe the enterprise AI threat-intel feed engine (build-tag gated;
@@ -1904,9 +2255,20 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// K1/K2: recover committed WorkOutbox rows and expired WorkLease owners after
 	// a process restart. Only this leader-gated cadence makes recovery independent
 	// of receiving another command.
+	var communicationPump *workOutboxPump
 	if pump := newWorkOutboxPump(osGetenv, st, set.sessions, log); pump != nil {
+		pump.useCommunication(communicationComposition.pumpWitness(), communicationComposition.outboxAuthority())
 		if err := pump.register(rt); err != nil {
-			log.Warn("sessions-work-outbox: could not register the pump; durable work events remain pending", "err", err)
+			log.Warn("sessions-work-outbox: could not register the pump; durable work events remain pending (K3 lane stays OFF)", "err", err)
+		}
+		communicationPump = pump
+	}
+	// P2/W3: the bounded run-lineage repair, on the runtime's OWN periodic scheduler,
+	// registered before Start and leader-gated per tick and per page. nil only when
+	// the sessions module is not composed.
+	if loop := newRunLineageRepairLoop(st, set.sessions, log); loop != nil {
+		if err := loop.register(rt); err != nil {
+			log.Warn("run-lineage-repair: could not register the repair loop on the scheduler; runs without authorization lineage stay hidden from confined readers", "err", err)
 		}
 	}
 
@@ -2075,14 +2437,18 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 
 	return &engine{
 		store: st, rt: rt, signer: signer, authr: authr, authz: authz,
-		setupTok: setupTok, api: apiSrv, tracer: tracer, dataDir: cfg.DataDir, log: log,
+		editionResources: editionResources,
+		setupTok:         setupTok, api: apiSrv, tracer: tracer, dataDir: cfg.DataDir, log: log,
+		webAuthn:   webAuthn,
 		logBroker:  logBroker,
-		demoTenant: demoTenant, connectorDir: connectorDir, vectorIndex: set.vectorIndex, knowledgeMod: set.knowledge, sessionsMod: set.sessions,
+		demoTenant: demoTenant, connectorDir: connectorDir, vectorIndex: set.vectorIndex, knowledgeMod: set.knowledge, sessionsMod: set.sessions, communicationPump: communicationPump,
+		communicationComposition:  communicationComposition,
+		workSink:                  workEventSink{eventing: set.eventing},
 		protocolBindingReconciler: set.protocolBindingReconciler,
 		approvalBridge:            set.approvalBridge, policyEval: policyEval, scopedGrants: set.gov.ScopedGrants(), nhiEnforcer: set.gov,
 		killSwitch: set.gov, stopDeny: stopDeny, pinVerifier: set.pinVerifier,
 		circuitBreaker: circuitBreaker,
-		models:         set.models, finops: set.finops, inferenceProxy: set.inferenceProxy, residencyReg: residencyReg,
+		models:         set.models, finops: set.finops, inferenceProxy: set.inferenceProxy, residencyReg: residencyReg, contentFirewall: set.contentFirewall,
 		auditPriors: auditKey.priors, pivConfig: pivCfg, fedSvc: fedSvc, secretStore: secretStore,
 		sourceStore: sourceStore, sourceReconciler: sourceReconcilerSvc, licenseService: licSvc,
 		notifyDispatcher: set.deferredSecrets.notify, secretResolver: secretResolver,
@@ -2173,7 +2539,13 @@ func (e *engine) Close() error {
 	if e.haPublisher != nil {
 		e.haPublisher.haShutdownLabel()
 	}
+	// K3: withdraw pump readiness before the scheduler stops, so a readiness
+	// sample racing shutdown never reports a pump that will not tick again.
+	if e.communicationPump != nil {
+		e.communicationPump.stop()
+	}
 	_ = e.rt.Stop(stopCtx)
+	closeEditionResources(e.editionResources, slog.Default())
 	// Close the boot-owned bus AFTER the runtime stopped every subscriber (the
 	// runtime never closes an injected bus). On the NATS bridge this also
 	// flushes the node's last outbound publishes.

@@ -151,8 +151,8 @@ func TestPostgresTheSharedFunctionFenceStopsAConcurrentReplace(t *testing.T) {
 	if err == nil {
 		t.Fatal("a concurrent CREATE OR REPLACE FUNCTION committed while the fence was held: a unit's receipt can attest a definition that is no longer there")
 	}
-	if !strings.Contains(err.Error(), "lock timeout") {
-		t.Errorf("the replace failed with %v, which is not the lock timeout — so it may have failed for a reason unrelated to the fence", err)
+	if !postgresLockNotAvailable(err) {
+		t.Errorf("the replace failed with %v (SQLSTATE %q), which is not the lock timeout's 55P03 — so it may have failed for a reason unrelated to the fence", err, serverSQLState(err))
 	}
 	if waited < 500*time.Millisecond {
 		t.Errorf("the replace failed after only %s, which is shorter than the lock timeout it should have spent WAITING", waited)
@@ -329,8 +329,8 @@ func TestPostgresTheCloseFenceStabilisesTheTargets(t *testing.T) {
 	if err == nil {
 		t.Fatal("a guard was disabled while the close fence held ROW EXCLUSIVE on its relation: `ready` could be written over a snapshot that no longer describes the database")
 	}
-	if !strings.Contains(err.Error(), "lock timeout") {
-		t.Errorf("the ALTER failed with %v, which is not the lock timeout", err)
+	if !postgresLockNotAvailable(err) {
+		t.Errorf("the ALTER failed with %v (SQLSTATE %q), which is not the lock timeout's 55P03", err, serverSQLState(err))
 	}
 	if waited < 500*time.Millisecond {
 		t.Errorf("the ALTER failed after only %s, shorter than the timeout it should have spent waiting", waited)

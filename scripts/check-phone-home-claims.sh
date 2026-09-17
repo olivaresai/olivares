@@ -56,7 +56,7 @@ BASE="${OLIVARES_PHONEHOME_BASELINE:-docs/phone-home-claims-baseline.txt}"
 # Se derivan por BÚSQUEDA dentro de cada superficie, no por lista de ficheros: una lista de rutas
 # caduca en cuanto alguien añade una página.
 # ⛔ Y `docs/trust` A SECAS TAMPOCO BASTABA — hallazgo del contraste `sol max` del 2026-08-28 (F7):
-# este mismo lote reescribió `ARCHITECTURE.md-ARCHITECTURE.md:104` y `docs/RELEASE-VERIFICATION.md:103`, y
+# este mismo lote reescribió `docs/05-ARCHITECTURE.md:104` y `docs/RELEASE-VERIFICATION.md:103`, y
 # NINGUNO estaba vigilado. Vigilar `docs` entero cuesta **cuatro** filas de línea base (medido:
 # `POLAR-COMMERCIAL-SETUP.md`, `07-LICENSE-AND-OPEN-CORE.md`, `contracts-site.md`,
 # `ai-context/PROJECT-CONTEXT.md`, una mención acotada cada uno). `docs/trust` se quita de la lista
@@ -169,11 +169,11 @@ EXCLUIR="$EXCLUIR"'|\.(test|spec)\.(ts|tsx|js|mjs):|_test\.go:|(^|/)tests?/'
 #   · `docs/contracts/`                      el export lo bloquea **al por mayor**
 #     (the export curation script, línea 212, con sólo TRES contratos exceptuados en `:234-238`), y sus
 #     ficheros llevan el número de sesión en el NOMBRE por convención (`docs/contracts/SNNN-*`).
-#     Vigilarlo metía `docs/contracts-site.md` en la línea base, que SÍ se publica ⇒
+#     Vigilarlo metía el contrato del sitio de documentacion en la línea base, que SÍ se publica ⇒
 #     `lint:export` cortó el push con `LEAK[raw] …-site.md` en dos líneas. Medido el
 #     2026-08-28: 26 minutos de carril rápido tirados. No es una superficie viva —no se publica—,
 #     así que dejarlo fuera no pierde cobertura de nada que un cliente lea.
-#     ⚠ `LICENSING.md-LICENSE-AND-OPEN-CORE.md` y `docs/POLAR-COMMERCIAL-SETUP.md` TAMBIÉN son privados
+#     ⚠ `docs/07-LICENSE-AND-OPEN-CORE.md` y `docs/POLAR-COMMERCIAL-SETUP.md` TAMBIÉN son privados
 #     y SÍ se quedan vigilados a propósito: son donde miran las sesiones, sus nombres no llevan
 #     token, y el encargo de C09-09 los nombra explícitamente.
 #   · la propia LÍNEA BASE                   vive bajo `docs/`, que pasó a vigilarse hoy, y su

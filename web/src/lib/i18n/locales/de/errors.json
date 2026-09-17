@@ -13,6 +13,10 @@
     "description": "In der Control Plane ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es erneut.",
     "back": "Zurück zur Übersicht"
   },
+  "evidenceUnavailable": {
+    "title": "Diese Informationen können nicht überprüft werden",
+    "description": "Diese Informationen können derzeit nicht geladen werden. Wiederholen Sie den Vorgang, oder wenden Sie sich an einen Administrator, wenn das Problem bestehen bleibt."
+  },
   "network": {
     "title": "Control Plane nicht erreichbar",
     "description": "Die Control Plane konnte nicht erreicht werden. Prüfen Sie Ihre Verbindung und ob die Engine läuft."

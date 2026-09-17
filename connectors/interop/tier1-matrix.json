@@ -28,9 +28,9 @@
     },
     {
       "connector": "mcp",
-      "surface": "Model Context Protocol server introspection",
+      "surface": "Model Context Protocol server introspection (CLIENT role over HTTP; not the ResourceServer PEP, whose composed gateway resolves legacy by default)",
       "vendor": "open protocol (MCP)",
-      "api_version": "MCP (2026-07-28 RC-tracked, streamable HTTP)",
+      "api_version": "MCP 2026-07-28 (published revision; bytes pinned at design/specs/mcp-final-2026-07-28/), streamable HTTP",
       "auth_modes": ["none", "oauth (IDN-03)"],
       "cloud_limits": "none (self-hosted / registry)",
       "tier": "tier1",

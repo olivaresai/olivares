@@ -52,7 +52,7 @@ const BASE = '/v1/m/models'
  *  entero en las listas de `features/models`, `features/model-ops` y `features/agent-artifacts`
  *  —NO en «todas las de este módulo»: el KPI del panel ejecutivo y la sección de roles de la
  *  consola llaman a `models` y a `model-access`/`model-groups` por su cuenta y siguen sin techo;
- *  van declarados en `sessions-sin-recorte.md`— porque el
+ *  van declarados en — porque el
  *  defecto que arregla no es de rendimiento: sin `limit` el motor pagina a 100 y la consola tiraba
  *  el `has_more` que sí publica, así que una lista recortada se leía como completa. Pedir mil no
  *  elimina el recorte: lo vuelve DECLARABLE.

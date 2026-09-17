@@ -195,6 +195,8 @@ export const inventorySummaryFixture: InventorySummary = {
 export const sessionsLiveFixture: ListResponse<LiveDTO> = list([
   {
     session_ref: 'sess-9f2a',
+    live_ref: 'lr-sess-9f2a',
+    attribution: 'legacy',
     agent_ref: 'orchestrator',
     cc_state: 'active',
     current_action: 'create_pr',
@@ -214,6 +216,8 @@ export const sessionsLiveFixture: ListResponse<LiveDTO> = list([
   },
   {
     session_ref: 'sess-7c10',
+    live_ref: 'lr-sess-7c10',
+    attribution: 'legacy',
     agent_ref: 'ingest-worker',
     cc_state: 'idle',
     current_action: 'INSERT',
@@ -233,6 +237,8 @@ export const sessionsLiveFixture: ListResponse<LiveDTO> = list([
   },
   {
     session_ref: 'sess-3b88',
+    live_ref: 'lr-sess-3b88',
+    attribution: 'legacy',
     agent_ref: 'nightly-reporter',
     cc_state: 'silent_evasion',
     current_action: 'web.search',

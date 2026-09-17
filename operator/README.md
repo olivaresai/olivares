@@ -93,10 +93,12 @@ would expose health-Ready standbys through the legacy client Service. A fresh
 install has no clients to move and is created in the split shape directly.
 
 Note that installing this operator version widens the **manager's** ClusterRole
-(serviceaccounts, roles/rolebindings, `pods get,list,watch,patch`) and starts
+(serviceaccounts, roles/rolebindings, `pods get,list,watch,patch`, and
+`pods/proxy` **`get`** — the read that observes traffic readiness) and starts
 Pod/ConfigMap/Secret informers whether or not any ControlPlane opts in — see
 `docs/HA-LEADER-ROUTING.md` §2, which also explains what those caches deliberately
-do *not* hold. Migration, rollback, the failure modes and the residual failover
+do *not* hold and why that last grant authorizes a subresource rather than a
+path. Migration, rollback, the failure modes and the residual failover
 window are documented there too; the real-cluster qualification is
 `.github/workflows/e2e-operator-kind.yml` (kind + Postgres + two engine images),
 which owns the assertions a fake client cannot make.

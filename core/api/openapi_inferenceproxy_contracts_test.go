@@ -40,6 +40,54 @@ func TestInferenceProxyRequestBodyCensus(t *testing.T) {
 	}
 }
 
+func TestInferenceProxyContentFirewallResponseContract(t *testing.T) {
+	t.Parallel()
+	route := moduleRoute{ns: "inferenceproxy", method: http.MethodGet, pattern: "/content-firewall", perm: "inferenceproxy:config:read"}
+	if !inferenceProxyContentFirewallRoute(route) {
+		t.Fatal("GET /content-firewall is not recognized")
+	}
+	for _, other := range []moduleRoute{
+		{ns: "models", method: http.MethodGet, pattern: "/content-firewall"},
+		{ns: "inferenceproxy", method: http.MethodPut, pattern: "/content-firewall"},
+		{ns: "inferenceproxy", method: http.MethodGet, pattern: "/config"},
+	} {
+		if inferenceProxyContentFirewallRoute(other) {
+			t.Fatalf("%s %s %s matched the content-firewall contract", other.ns, other.method, other.pattern)
+		}
+	}
+
+	published := moduleOperation(route)["responses"].(map[string]any)["200"].(map[string]any)
+	if !reflect.DeepEqual(published, inferenceProxyContentFirewallResponse()) {
+		t.Fatalf("published 200 = %#v, want the content-firewall contract", published)
+	}
+	schema := published["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	if schema["type"] != "object" || schema["additionalProperties"] != false {
+		t.Fatalf("schema must be a closed object: %#v", schema)
+	}
+	if got := capabilitiesSortedStrings(schema["required"]); !reflect.DeepEqual(got, []string{"note", "pep", "state"}) {
+		t.Fatalf("required = %v, want [note pep state]", got)
+	}
+	properties := schema["properties"].(map[string]any)
+	if len(properties) != 3 {
+		t.Fatalf("property count = %d, want 3", len(properties))
+	}
+	if got := properties["pep"].(map[string]any)["enum"]; !reflect.DeepEqual(got, []any{"messages_proxy"}) {
+		t.Fatalf("pep enum = %#v", got)
+	}
+	wantStates := []any{"unobserved", "pep_not_composed", "inspector_absent", "inspector_attached"}
+	if got := properties["state"].(map[string]any)["enum"]; !reflect.DeepEqual(got, wantStates) {
+		t.Fatalf("state enum = %#v, want %#v", got, wantStates)
+	}
+	if properties["note"].(map[string]any)["type"] != "string" {
+		t.Fatalf("note = %#v", properties["note"])
+	}
+
+	config := moduleResponses(moduleRoute{ns: "inferenceproxy", method: http.MethodGet, pattern: "/config"})["200"]
+	if !reflect.DeepEqual(config, oaJSONResp("OK")) {
+		t.Fatalf("GET /config 200 changed: %#v", config)
+	}
+}
+
 func TestInferenceProxySchemasMatchHandlerDTOs(t *testing.T) {
 	t.Parallel()
 	config := inferenceProxyConfigSchema()

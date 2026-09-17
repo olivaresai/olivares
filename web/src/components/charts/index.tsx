@@ -163,6 +163,10 @@ export interface TrendChartProps {
   height?: number
   stacked?: boolean
   valueFormatter?: Formatter
+  /** Full values in the tooltip when axis ticks use compact notation. */
+  tooltipValueFormatter?: Formatter
+  /** Opt in to measured labels or integer ticks without changing other charts. */
+  yAxis?: Pick<ComponentProps<typeof YAxis>, 'width' | 'allowDecimals'>
   xTickFormatter?: (value: string) => string
   /** Optional horizontal reference line (e.g. a budget limit, a pass threshold). */
   reference?: { y: number; label?: string; color?: string }
@@ -179,6 +183,8 @@ export function TrendChart({
   height = 240,
   stacked = false,
   valueFormatter = identity,
+  tooltipValueFormatter = valueFormatter,
+  yAxis,
   xTickFormatter,
   reference,
   className,
@@ -235,13 +241,14 @@ export function TrendChart({
           tickFormatter={(v: number) => valueFormatter(v)}
           tickLine={false}
           axisLine={false}
-          width={56}
+          width={yAxis?.width ?? 56}
+          allowDecimals={yAxis?.allowDecimals}
         />
         <Tooltip
           content={
             makeTooltip(
               theme,
-              valueFormatter,
+              tooltipValueFormatter,
               xTickFormatter,
             ) as unknown as TooltipContent
           }

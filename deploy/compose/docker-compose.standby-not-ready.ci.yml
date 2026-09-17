@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# CI-only negative fixture for DIST-24-12. Layer after the base and Postgres
+# files. The first engine takes the advisory lock; this second process stays up
+# as a healthy-store standby and therefore answers 503 from /readyz.
+services:
+  olivares-standby:
+    image: ${OLIVARES_IMAGE:?set OLIVARES_IMAGE to the locally built candidate}
+    command:
+      - serve
+      - --listen=:8443
+      - --grpc-listen=:8444
+      - --data-dir=/var/lib/olivares
+      - --checkpoint-interval=0
+      - --engine=postgres
+      - --dsn=postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD}@postgres:5432/olivares?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+      olivares:
+        condition: service_healthy
+    volumes:
+      - olivares-standby-data:/var/lib/olivares
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.1"
+          memory: 256M
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/olivares
+        - readyz
+        - --server=https://127.0.0.1:8443
+        - --ca-cert=/var/lib/olivares/tls.crt
+        - --timeout=3s
+      interval: 2s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  olivares-standby-data:

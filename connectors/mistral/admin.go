@@ -33,7 +33,7 @@
 // API [surface] unavailable" and returns nil. The existing /v1/models catalog continues
 // working regardless.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared GET-only
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared GET-only
 // modelprovider client. Mistral docs disagree on admin auth (narrative: x-api-key with
 // https://console.mistral.ai/api/admin; generated samples: Authorization: Bearer),
 // verified 2026-07-04, so admin requests send both headers. Actor metadata and emails are

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/connectors/claude"
 )
 
@@ -102,10 +103,22 @@ func firstNonEmptyEnv(flagVal string, envs ...string) string {
 	return ""
 }
 
+// resolveTenant reads the tenant from the flag or the environment, and refuses
+// when neither names one.
+//
+// The refusal is a USAGE error, and classifying it HERE rather than at each
+// caller is the whole point: this one free function is the tenant gate for 19
+// CLI call sites across 7 files, and every one of them returns its error
+// unchanged. Before this, all 19 exited 1 — "generic failure with no more
+// specific classification" — while a missing required flag on a sibling command
+// exited 2 through cobra's own machinery, so a script could not tell "you forgot
+// --tenant" from "the ledger is broken". The sentence is unchanged: exitcode
+// carries the code and delegates Error() to the wrapped error, so the two tests
+// that compare this string still compare the same string.
 func resolveTenant(flagVal string) (string, error) {
 	tenant := firstNonEmptyEnv(flagVal, "OLIVARES_TENANT", "OLIVARES_HOOK_PEP_TENANT")
 	if tenant == "" {
-		return "", errors.New("tenant required: pass --tenant or set $OLIVARES_TENANT")
+		return "", exitcode.New(exitcode.Usage, errors.New("tenant required: pass --tenant or set $OLIVARES_TENANT"))
 	}
 	return tenant, nil
 }

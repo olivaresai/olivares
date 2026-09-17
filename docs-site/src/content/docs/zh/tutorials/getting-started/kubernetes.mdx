@@ -24,16 +24,9 @@ Postgres、**active-passive 高可用**、定时运行的 **加密 DR 备份**�
 **Kubernetes ≥ 1.25**。
 
 <Aside type="caution" title="Chart 发布状态 —— 如实说明">
-发布时，chart 会被推送到 OCI registry 并以 cosign 签名，因此你可以
-在安装时验证，并按 digest 固定镜像。chart 会从 Docker Hub
-拉取容器镜像（`docker.io/olivaresai/olivares`；也位于 `ghcr.io/olivaresai/olivares`，
-按 digest 完全相同）；而 **chart** 工件本身位于
-`oci://ghcr.io/olivaresai/charts/olivares`。首次发布目前仍是
-**草案**：在 `chart-v*` tag 被打出之前，该 registry 路径为 **空**。在此之前，
-请从仓库 checkout 安装（chart 本身已完整并在下文渲染）；
-发布之后，切换为
-`oci://ghcr.io/olivaresai/charts/olivares` 并
-[验证你所下载的内容](/how-to/verify-a-release/)。
+引擎 v26.9.0 已公开，但 chart 有独立 release cycle，尚无 `chart-v*` 发布。
+请按下文从 `deploy/helm/olivares` 安装经过审查的源 chart，并按 digest 固定镜像。
+若今后发布 chart，请在使用前单独验证该 artifact。
 </Aside>
 
 ## 1. 默认安装（单节点，SQLite）
@@ -111,11 +104,34 @@ helm install olivares deploy/helm/olivares \
 ```
 
 同一个 Secret 中的 `admin-dsn` 键承载一个专用的 `NOSUPERUSER BYPASSRLS`
-角色。**只有在你永远不启用备份的情况下**，它才是可选的：它正是让跨租户的
-系统读取变得**完整**的东西 —— 组织列表和多租户备份覆盖；若没有它，
-这些读取会受 RLS 限制。而一旦启用备份，它就是**必需的**
-（见[定时加密备份](#4-定时加密备份)）。现在就把它创建出来，
-后续启用备份那一步便只剩一行改动。
+角色。在 Postgres 上，**从首次启动起**你就需要它，而不仅仅是为了备份。
+上面的应用角色仍是 `NOSUPERUSER NOBYPASSRLS`，因此通过它进行的跨租户
+读取会被行级安全限制在已授权的租户，永远不能被读成整个资产域；引擎会拒绝
+这种读取，而不是返回一份短列表。[§1](#1-默认安装单节点sqlite) 中的首次
+运行设置就是这类读取之一 —— `POST /v1/setup` 创建第一个组织 —— 因此没有
+该键时它返回 `501 cross_tenant_admin_pool_not_configured`。`GET /readyz`
+随后返回 `503`，带 `status=setup_blocked`、相同的错误码以及正文中的固定补救。
+该 503 不是成功：它是“设置尚不能运行”的观察，并且 `POST /v1/setup` 仍会
+重复其自身的权限检查。
+
+随附的扁平清单和默认 Helm 路径把 `/readyz` 接成容器的 `readinessProbe`。
+因此，没有该权威枚举的未引导 PostgreSQL 安装会保持 Not Ready，直到前提
+被纠正，这**可能卡住 rollout**（从未 Ready 的 pod 永远不能满足
+StatefulSet 的更新屏障）。`/livez` 保持 200 —— 只检查进程，因此 pod 不会
+被重启。`/pod-readyz` 也保持 200：它是单独配置的 HA pod 健康探针（存储
+可达，不检查领导权，也不做首次启动能力探测），与单独的写者路由搭配，
+以便健康的 standby 可以处于 Ready，而 `/readyz` 仍排空非写者。来自
+`/livez` 或 `/pod-readyz` 的 200 **并不**表示默认 rollout 已解除阻塞。
+不要改接默认 readiness 探针来掩盖失败的设置。
+
+当无法观察设置状态时，`/readyz` 返回 `503`，带 `status=setup_unavailable`
+和 `code=setup_state_unavailable`，并**省略** `setup_required`，因为该
+布尔值未知。这与已知的空安装（`setup_required=true`）不同。
+
+**已经**完成设置的安装在没有该键时仍继续提供服务：它不能做的是权威跨租户
+工作 —— 组织列表、多租户覆盖，以及**要求**该键的 `backup`（见
+[§4](#4-定时加密备份)）。用 `olivares db init --admin-role olivares_admin …`
+配置该角色（见 `deploy/postgres/README.md`），并将 `--admin-dsn` 指向它。
 
 ## 3. Active-passive 高可用
 

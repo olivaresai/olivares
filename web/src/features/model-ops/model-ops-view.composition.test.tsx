@@ -20,7 +20,12 @@ vi.mock('@/features/models/api', async (importOriginal) => {
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
+}))
 vi.mock('./owned-models', () => ({ OwnedModelsTab: () => <p>Owned models</p> }))
 vi.mock('./datasets', () => ({ DatasetsTab: () => <p>Datasets</p> }))
 vi.mock('./finetune', () => ({ FinetuneTab: () => <p>Fine-tune</p> }))

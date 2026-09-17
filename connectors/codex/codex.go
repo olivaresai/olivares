@@ -36,7 +36,7 @@
 // violates OpenAI's terms exactly as a consumer Claude subscription does for
 // Anthropic. There is no subscription config field by design.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared
 // GET-only modelprovider client, so the connector CANNOT mutate Codex; it carries
 // token counts, money, adoption metrics and inventory METADATA — never prompt/diff
 // content or key values (the admin-keys API returns only a masked value). It imports

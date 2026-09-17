@@ -262,6 +262,11 @@ const (
 	colAlertLimit   = "limit_micro_usd"
 	colSeverity     = "severity"
 	colTriggeredAt  = "triggered_at"
+	// A4.2 durable financial evidence of the crossing. Both are NULLABLE and have no
+	// default: a historical row keeps NULL and is read as legacy_unversioned, never
+	// back-filled into a certainty it never had.
+	colAlertEvidence     = "amount_evidence"
+	colAlertEvidenceHash = "evidence_hash"
 )
 
 // finops.budget_reservation columns — the dynamic per-request reserve
@@ -431,6 +436,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colAlertLimit, Kind: model.KindInt},
 			{Name: colSeverity, Kind: model.KindText},
 			{Name: colTriggeredAt, Kind: model.KindTimestamp, Indexed: true},
+			{Name: colAlertEvidence, Kind: model.KindJSON, Nullable: true},
+			{Name: colAlertEvidenceHash, Kind: model.KindText, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "finops_budget_alert_uniq",
@@ -565,6 +572,14 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		return err
 	}
 
+	// D02: the attempt-lifecycle parent and the per-tenant activation frontier.
+	// Registered BEFORE the reservation ledger below because the reservation's new
+	// nullable linkage columns only mean something once the parent they point at
+	// exists as a declared entity.
+	if err := registerAttemptSchema(reg); err != nil {
+		return err
+	}
+
 	// the dynamic reserve ledger (TOCTOU fix). A fresh table, added additively
 	// — applyModuleTables creates it on both a fresh DB and an in-place upgrade (it is
 	// a missing module table), so this is the "new migration" in descriptor form; no
@@ -586,6 +601,17 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colResvHandle, Kind: model.KindUUID, Indexed: true},
 			{Name: colResvExpiresAt, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colResvSettledAt, Kind: model.KindTimestamp, Nullable: true},
+			// D02 lifecycle linkage. BOTH are nullable and BOTH stay NULL on every
+			// row this module writes today: the engine's additive reconciliation adds
+			// them to an existing populated table on an in-place upgrade, and a NULL
+			// pair is exactly what the legacy read branch selects on.
+			//
+			// "Legacy" is the pair being NULL, not either column being empty: an empty
+			// attempt_ref, an unknown lifecycle version or one column set without the
+			// other is a MALFORMED row, and reading it as legacy would hand a v1
+			// obligation to a branch that can expire it on a TTL.
+			{Name: colResvAttemptRef, Kind: model.KindText, Nullable: true},
+			{Name: colResvLifecycleVersion, Kind: model.KindInt, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{{
 			// The serialization constraint: a monotonic seq per
@@ -599,6 +625,19 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			Name:    "finops_budget_reservation_seq_uniq",
 			Columns: []string{model.ColTenantID, colResvPolicyRef, colResvPeriodStart, colResvScopeKey, colResvSeq},
 			Unique:  true,
+		}, {
+			// D02: one v1 child per (attempt, policy, scope, period). NULL attempt_ref
+			// rows do not collide on either engine — SQLite and PostgreSQL both treat
+			// NULLs as distinct in a unique index — so every legacy row stays outside
+			// this constraint while a v1 group cannot acquire two children for one
+			// target.
+			Name:    "finops_reservation_attempt_target_uniq",
+			Columns: []string{model.ColTenantID, colResvAttemptRef, colResvPolicyRef, colResvScopeKey, colResvPeriodStart},
+			Unique:  true,
+		}, {
+			// The lookup a v1 hold read issues: a parent's complete child set.
+			Name:    "finops_reservation_attempt_idx",
+			Columns: []string{model.ColTenantID, colResvAttemptRef},
 		}},
 	})
 }

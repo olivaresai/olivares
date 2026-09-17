@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -52,6 +53,7 @@ func (sessionsRuntimeWorkControlModule) APINamespace() string           { return
 func (sessionsRuntimeWorkControlModule) Permissions() []auth.Permission { return nil }
 func (sessionsRuntimeWorkControlModule) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/runs/{ref}/input", "sessions:run:write", nil)
+	reg.Handle("POST", "/runs/{ref}/interrupt", "sessions:run:write", nil)
 	reg.Handle("POST", "/runs/{ref}/stop", "sessions:run:write", nil)
 }
 
@@ -107,6 +109,7 @@ var stableContractPaths = []string{
 	"/v1/auth/logout",
 	"/v1/auth/refresh",
 	"/v1/auth/whoami",
+	"/v1/auth/capabilities",
 	"/v1/connectors/health",
 	"/v1/console/bus",
 	"/v1/console/config/effective",
@@ -383,6 +386,29 @@ func TestSessionsRuntimeWorkControlOpenAPI(t *testing.T) {
 		t.Errorf("run input fence = %#v", fence)
 	}
 
+	// The third run control. Its body is OPTIONAL, like stop's and unlike input's:
+	// an absent body is the legacy non-work interrupt, which must keep working.
+	interrupt := mustOp(t, paths, "/v1/m/sessions/runs/{ref}/interrupt", "post")
+	interruptBody, ok := interrupt["requestBody"].(map[string]any)
+	if !ok || interruptBody["required"] != false || !hasPathParam(interrupt, "ref") {
+		t.Fatalf("run interrupt request contract = %#v", interrupt)
+	}
+	interruptSchema := requestBodySchema(t, interrupt)
+	if interruptSchema["additionalProperties"] != false {
+		t.Errorf("run interrupt accepts undeclared fields: %#v", interruptSchema)
+	}
+	interruptFields := requestBodyProperties(t, interrupt)
+	interruptFence, _ := interruptFields["work_lease_fence"].(map[string]any)
+	if interruptFence["type"] != "integer" || interruptFence["format"] != "int64" ||
+		interruptFence["minimum"] != 1 {
+		t.Errorf("run interrupt fence = %#v", interruptFence)
+	}
+	// And it carries NOTHING else: a reason belongs to a terminal stop, and a text
+	// or line would make the turn-cancelling control a second input door.
+	if len(interruptFields) != 1 {
+		t.Errorf("run interrupt body fields = %#v, want only work_lease_fence", interruptFields)
+	}
+
 	stop := mustOp(t, paths, "/v1/m/sessions/runs/{ref}/stop", "post")
 	stopBody := stop["requestBody"].(map[string]any)
 	if stopBody["required"] != false || !hasPathParam(stop, "ref") {
@@ -400,6 +426,57 @@ func TestSessionsRuntimeWorkControlOpenAPI(t *testing.T) {
 	reason, _ := stopFields["reason"].(map[string]any)
 	if reason["type"] != "string" || reason["maxLength"] != 512 {
 		t.Errorf("run stop reason = %#v", reason)
+	}
+
+	// ⛔ THE RESPONSE HALF. Until an independent review read the published document
+	// against the handlers, all three controls advertised success as 200 with an
+	// unspecified object and none of them published 503 — while input actually
+	// answers 202 and all three can answer 503/UNKNOWN. Both artifacts were
+	// drift-clean the whole time, because the generator and the snapshot agreed on
+	// the same wrong answer.
+	if got := responseStatuses(t, input); !reflect.DeepEqual(got,
+		[]string{"202", "400", "401", "403", "404", "409", "429", "503"}) {
+		t.Errorf("run input statuses = %v", got)
+	}
+	accepted := responseSchema(t, input, "202")
+	if accepted["additionalProperties"] != false ||
+		!reflect.DeepEqual(sortedSchemaStrings(accepted["required"]), []string{"accepted"}) {
+		t.Errorf("run input 202 schema = %#v", accepted)
+	}
+	if props, _ := accepted["properties"].(map[string]any); props["accepted"].(map[string]any)["type"] != "boolean" {
+		t.Errorf("run input 202 accepted field = %#v", props)
+	}
+
+	for _, op := range []struct {
+		name string
+		doc  map[string]any
+	}{{"interrupt", interrupt}, {"stop", stop}} {
+		if got := responseStatuses(t, op.doc); !reflect.DeepEqual(got,
+			[]string{"200", "400", "401", "403", "404", "409", "429", "503"}) {
+			t.Errorf("run %s statuses = %v", op.name, got)
+		}
+		resource := responseSchema(t, op.doc, "200")
+		// OPEN on purpose: the run resource grows, and a frozen field list here
+		// would be a published contract that is wrong the next time it does.
+		if resource["additionalProperties"] != true ||
+			!reflect.DeepEqual(sortedSchemaStrings(resource["required"]), []string{"run_ref", "state"}) {
+			t.Errorf("run %s 200 schema = %#v", op.name, resource)
+		}
+	}
+
+	for name, op := range map[string]map[string]any{
+		"input": input, "interrupt": interrupt, "stop": stop,
+	} {
+		unknown := responseSchema(t, op, "503")
+		if !reflect.DeepEqual(sortedSchemaStrings(unknown["required"]),
+			[]string{"code", "error", "verdict"}) {
+			t.Errorf("run %s 503 schema = %#v", name, unknown)
+		}
+		props, _ := unknown["properties"].(map[string]any)
+		verdict, _ := props["verdict"].(map[string]any)
+		if !reflect.DeepEqual(sortedSchemaStrings(verdict["enum"]), []string{"NO_HE_PODIDO_MIRAR"}) {
+			t.Errorf("run %s 503 verdict = %#v", name, verdict)
+		}
 	}
 }
 
@@ -631,8 +708,8 @@ func TestServedBetaOpenAPIEndpoint(t *testing.T) {
 	}
 
 	stable := decodeDoc(t, rawGet(h, "/openapi.json", "", nil))
-	if n := len(stable["paths"].(map[string]any)); n != 53 {
-		t.Errorf("/openapi.json = %d paths, want 53 (stable contract incl. the wave-2 routes and /pod-readyz)", n)
+	if n := len(stable["paths"].(map[string]any)); n != 54 {
+		t.Errorf("/openapi.json = %d paths, want 54 (stable contract incl. the wave-2 routes, /pod-readyz and the self capability projection)", n)
 	}
 }
 
@@ -810,6 +887,62 @@ func schemaRequires(schema map[string]any, name string) bool {
 		}
 	}
 	return false
+}
+
+// sortedSchemaStrings reads a schema's `required` / `enum` list. It lives here
+// because the identical helper next door is in package `api` and this file is
+// `api_test`; duplicating six lines beats widening a package boundary for them.
+func sortedSchemaStrings(value any) []string {
+	values, _ := value.([]any)
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		s, _ := v.(string)
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// responseSchema returns the application/json schema an operation publishes for
+// one status, or fails naming the status — an absent response and an unspecified
+// one are different defects and must not read the same.
+func responseSchema(t *testing.T, op map[string]any, status string) map[string]any {
+	t.Helper()
+	responses, ok := op["responses"].(map[string]any)
+	if !ok {
+		t.Fatal("operation has no responses")
+	}
+	resp, ok := responses[status].(map[string]any)
+	if !ok {
+		t.Fatalf("operation publishes no %s response", status)
+	}
+	content, ok := resp["content"].(map[string]any)
+	if !ok {
+		t.Fatalf("the %s response has no content", status)
+	}
+	media, ok := content["application/json"].(map[string]any)
+	if !ok {
+		t.Fatalf("the %s response has no application/json content", status)
+	}
+	schema, ok := media["schema"].(map[string]any)
+	if !ok {
+		t.Fatalf("the %s response has no schema", status)
+	}
+	return schema
+}
+
+func responseStatuses(t *testing.T, op map[string]any) []string {
+	t.Helper()
+	responses, ok := op["responses"].(map[string]any)
+	if !ok {
+		t.Fatal("operation has no responses")
+	}
+	out := make([]string, 0, len(responses))
+	for status := range responses {
+		out = append(out, status)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func requestBodyProperties(t *testing.T, op map[string]any) map[string]any {

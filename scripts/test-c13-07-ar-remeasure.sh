@@ -7,6 +7,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2; pwd)"
 CHECK="$ROOT/scripts/check-c13-07-ar-remeasure.sh"
+HOST_GIT="$(command -v git)"
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/c1307ar.XXXXXX")"
@@ -17,7 +18,7 @@ ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 
 stage() {
-	rm -rf "$TMP/tree"
+	rm -rf "$TMP/tree" "$TMP/gitbin"
 	mkdir -p "$TMP/tree/scripts" "$TMP/tree/design"
 	cp "$CHECK" "$TMP/tree/scripts/"
 	chmod +x "$TMP/tree/scripts/check-c13-07-ar-remeasure.sh"
@@ -442,6 +443,36 @@ if [ "$(cat "$TMP/rc")" = 2 ]; then
 else
 	bad "missing HOLD should LOOK 2 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
+
+# Nonzero git-log is LOOK 2. Name the observed status; do not infer a cause.
+write_log_shim() {
+	local st="$1"
+	mkdir -p "$TMP/gitbin"
+	{
+		printf '%s\n' '#!/usr/bin/env bash'
+		printf '%s\n' 'for _a in "$@"; do'
+		printf '%s\n' "	[ \"\$_a\" = \"log\" ] && exit ${st}"
+		printf '%s\n' 'done'
+		printf 'exec %q "$@"\n' "$HOST_GIT"
+	} >"$TMP/gitbin/git"
+	chmod +x "$TMP/gitbin/git"
+}
+for _st in 1 137 143; do
+	stage
+	write_log_shim "$_st"
+	PATH="$TMP/gitbin:$PATH" run
+	_err="$(cat "$TMP/err")"
+	_want="git"
+	_want="${_want} exited ${_st}"
+	if [ "$(cat "$TMP/rc")" = 2 ] \
+		&& grep -q "COULD NOT LOOK" <<<"$_err" \
+		&& grep -E "${_want}([^0-9]|$)" <<<"$_err" >/dev/null \
+		&& ! grep -Ei 'OOM|SIGKILL|SIGTERM|killed by signal|not the tree|malformed tree' <<<"$_err" >/dev/null; then
+		ok "log-shim status ${_st} LOOK 2 names exited ${_st}"
+	else
+		bad "log-shim status ${_st} should LOOK 2 naming exited ${_st} ($(cat "$TMP/rc") ${_err})"
+	fi
+done
 
 stage
 run

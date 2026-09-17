@@ -62,42 +62,74 @@ type runDTO struct {
 	WorkLeaseFence  *int64   `json:"work_lease_fence,omitempty"`
 	WorkDispatchKey string   `json:"work_dispatch_key,omitempty"`
 	WorkOwnerEpoch  *int64   `json:"work_owner_epoch,omitempty"`
+
+	// Provider-profile facts (B1), persisted at launch: the profile, its driver and
+	// its execution environment. References and labels only — the homes live on the
+	// profile's authorized configuration read, never here. All empty for a legacy
+	// run, which is never assigned a profile after the fact.
+	ProviderProfileRef     string `json:"provider_profile_ref,omitempty"`
+	ProviderDriver         string `json:"provider_driver,omitempty"`
+	ProviderEnvironmentRef string `json:"provider_environment_ref,omitempty"`
+	// ProviderConversationID is the DRIVER-NEUTRAL name of the provider
+	// conversation this run owns (Codex `thread.id`, Grok ACP `sessionId`, Claude's
+	// init `session_id`). It is the same persisted value `claude_session_id`
+	// carries; that older field stays for the clients already shipped against it,
+	// and this one is what a non-Claude consumer should read.
+	ProviderConversationID string `json:"provider_conversation_id,omitempty"`
+	// ProviderAuthSource is the AUTHORIZED authentication source this run was
+	// launched under; ProviderAuthState is the readiness the provider itself
+	// reported. Neither is a credential, and the second is never derived from the
+	// first: a home path and an injected value are not proof of an account.
+	ProviderAuthSource string `json:"provider_auth_source,omitempty"`
+	ProviderAuthState  string `json:"provider_auth_state,omitempty"`
+	// LiveRef (B2) is the opaque id of the plane's managed live row for this run,
+	// present only once the bridge proved the run owns its provider id. A console
+	// navigates from a profiled run to its session by THIS, never by the bare
+	// claude_session_id, which two homes may share.
+	LiveRef string `json:"live_ref,omitempty"`
 }
 
 // toRunDTO projects a run record, deriving the displayed state at read time.
 func (m *Module) toRunDTO(rec model.Record) runDTO {
 	return runDTO{
-		RunRef:          rec.String(colRunRef),
-		Name:            rec.String(colRunName),
-		Transport:       rec.String(colTransport),
-		PermissionMode:  rec.String(colPermissionMode),
-		Effort:          rec.String(colEffort),
-		ModelRef:        rec.String(colRunModelRef),
-		WorkspaceRef:    rec.String(colWorkspaceRef),
-		TemplateID:      rec.String(colTemplateID),
-		TemplateVersion: rec.Int(colTemplateVersion),
-		MaxDurationSecs: rec.Int(colTemplateCeiling),
-		Isolation:       rec.String(colIsolation),
-		State:           m.deriveRunState(rec),
-		ClaudeSessionID: rec.String(colClaudeSessionID),
-		PID:             intPtr(rec, colPID),
-		CredentialID:    rec.String(colCredentialID),
-		ExitCode:        intPtr(rec, colExitCode),
-		Reason:          rec.String(colReason),
-		LastEventSeq:    rec.Int(colLastEventSeq),
-		CreatedAt:       rec.String(model.ColCreatedAt),
-		StartedAt:       rec.String(colStartedAt),
-		LastActivityAt:  rec.String(colLastActivityAt),
-		StoppedAt:       rec.String(colStoppedAt),
-		AgentRef:        rec.String(colRunAgentRef),
-		PEPProvisioned:  rec.Bool(colPEPProvisioned),
-		RecordIO:        rec.Bool(colRecordIO),
-		ApprovalRef:     rec.String(colApprovalRef),
-		Critical:        rec.Bool(colCritical),
-		WorkItemID:      model.ID(rec.String(colRunWorkItemID)),
-		WorkLeaseFence:  intPtr(rec, colRunWorkLeaseFence),
-		WorkDispatchKey: hex.EncodeToString(rec.Bytes(colRunWorkDispatchKey)),
-		WorkOwnerEpoch:  intPtr(rec, colRunWorkOwnerEpoch),
+		RunRef:                 rec.String(colRunRef),
+		Name:                   rec.String(colRunName),
+		Transport:              rec.String(colTransport),
+		PermissionMode:         rec.String(colPermissionMode),
+		Effort:                 rec.String(colEffort),
+		ModelRef:               rec.String(colRunModelRef),
+		WorkspaceRef:           rec.String(colWorkspaceRef),
+		TemplateID:             rec.String(colTemplateID),
+		TemplateVersion:        rec.Int(colTemplateVersion),
+		MaxDurationSecs:        rec.Int(colTemplateCeiling),
+		Isolation:              rec.String(colIsolation),
+		State:                  m.deriveRunState(rec),
+		ClaudeSessionID:        rec.String(colClaudeSessionID),
+		PID:                    intPtr(rec, colPID),
+		CredentialID:           rec.String(colCredentialID),
+		ExitCode:               intPtr(rec, colExitCode),
+		Reason:                 rec.String(colReason),
+		LastEventSeq:           rec.Int(colLastEventSeq),
+		CreatedAt:              rec.String(model.ColCreatedAt),
+		StartedAt:              rec.String(colStartedAt),
+		LastActivityAt:         rec.String(colLastActivityAt),
+		StoppedAt:              rec.String(colStoppedAt),
+		AgentRef:               rec.String(colRunAgentRef),
+		PEPProvisioned:         rec.Bool(colPEPProvisioned),
+		RecordIO:               rec.Bool(colRecordIO),
+		ApprovalRef:            rec.String(colApprovalRef),
+		Critical:               rec.Bool(colCritical),
+		WorkItemID:             model.ID(rec.String(colRunWorkItemID)),
+		WorkLeaseFence:         intPtr(rec, colRunWorkLeaseFence),
+		WorkDispatchKey:        hex.EncodeToString(rec.Bytes(colRunWorkDispatchKey)),
+		WorkOwnerEpoch:         intPtr(rec, colRunWorkOwnerEpoch),
+		ProviderProfileRef:     rec.String(colRunProfileID),
+		ProviderDriver:         rec.String(colRunProfileDriver),
+		ProviderEnvironmentRef: rec.String(colRunProfileEnvRef),
+		ProviderConversationID: rec.String(colClaudeSessionID),
+		ProviderAuthSource:     rec.String(colRunProviderAuthSource),
+		ProviderAuthState:      rec.String(colRunProviderAuthState),
+		LiveRef:                rec.String(colRunLiveRef),
 	}
 }
 
@@ -133,6 +165,11 @@ type runEventDTO struct {
 	WorkItemID     string `json:"work_item_id,omitempty"`
 	WorkHolderSID  string `json:"work_holder_sid,omitempty"`
 	WorkLeaseFence *int64 `json:"work_lease_fence,omitempty"`
+	// P1: present only on a terminal event written after this change. The ID is the
+	// generation that was retired; the observation says what was actually seen. An
+	// unbound legacy recovery carries the observation and omits the ID.
+	RetiredRuntimeLaunchID string `json:"retired_runtime_launch_id,omitempty"`
+	TerminalObservation    string `json:"terminal_observation,omitempty"`
 }
 
 func toRunEventDTO(rec model.Record) runEventDTO {
@@ -149,6 +186,9 @@ func toRunEventDTO(rec model.Record) runEventDTO {
 		AuditSeq:      rec.Int(colEvAuditSeq),
 		WorkItemID:    rec.String(colEvWorkItemID),
 		WorkHolderSID: rec.String(colEvWorkSID),
+
+		RetiredRuntimeLaunchID: rec.String(colEvRetiredLaunchID),
+		TerminalObservation:    rec.String(colEvTerminalObservation),
 	}
 	if !rec.IsNull(colEvWorkFence) {
 		fence := rec.Int(colEvWorkFence)
@@ -174,15 +214,27 @@ type createRunRequest struct {
 	TemplateID     string   `json:"template_id"`
 	Isolation      string   `json:"isolation"`
 	EnvAllow       []string `json:"env_allow"`
+	// ProviderProfileRef (B1) names the provider profile to launch under. Only the
+	// reference: no home, environment, driver, binding, canonical sid, process
+	// handle or authentication source is accepted from a client — the source is an
+	// authorization held by the profile, and a request body cannot grant one.
+	ProviderProfileRef string `json:"provider_profile_ref"`
 }
 
 // inputRequest is the POST /runs/{ref}/input body (one NDJSON message to stdin).
 type inputRequest struct {
 	// Line is the raw NDJSON message to write to the process's stdin. Exactly one
 	// of Line / Message is used; Message is JSON-encoded to a line for convenience.
-	Line           string          `json:"line"`
-	Message        json.RawMessage `json:"message"`
-	WorkLeaseFence *int64          `json:"work_lease_fence,omitempty"`
+	Line    string          `json:"line"`
+	Message json.RawMessage `json:"message"`
+	// Text is the input of a session driven by an OWNED provider protocol: the
+	// driver turns it into that provider's own turn method. It is a separate field
+	// because a raw frame and a turn are different things — writing a raw line onto
+	// an RPC peer's stdin would be a method call, not an input. It may be sent WITH
+	// work_lease_fence: a work-bound driver run is spoken to through the same fence
+	// as its other controls, not through a second, unfenced door.
+	Text           string `json:"text"`
+	WorkLeaseFence *int64 `json:"work_lease_fence,omitempty"`
 }
 
 // stopRunRequest is optional for backward compatibility: the original stop
@@ -191,6 +243,15 @@ type inputRequest struct {
 type stopRunRequest struct {
 	WorkLeaseFence *int64 `json:"work_lease_fence,omitempty"`
 	Reason         string `json:"reason,omitempty"`
+}
+
+// interruptRunRequest is optional for backward compatibility: the interrupt
+// endpoint has always accepted an empty body, and for a non-work run that stays
+// the whole contract. A positive fence selects the fenced control plane — the
+// same plane the run's input and stop already use — so a work-bound run can have
+// its TURN cancelled without ending its process.
+type interruptRunRequest struct {
+	WorkLeaseFence *int64 `json:"work_lease_fence,omitempty"`
 }
 
 // intPtr returns the column as *int64, or nil when the column is NULL (so the DTO

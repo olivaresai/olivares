@@ -52,6 +52,18 @@ var (
 	// lockout: without any registered credential the user cannot step up to
 	// AAL3, and recovery requires an operator intervention.
 	ErrLastWebAuthnCredential = errors.New("auth: cannot delete the last registered webauthn credential")
+	// ErrWebAuthnRelyingParty means no usable relying party could be built for
+	// this ceremony: the address the console was reached on cannot be one, or the
+	// verifier refused the configured value. It is a CONFIGURATION state, not a
+	// ceremony outcome, and the two must never be confused — a failed assertion, a
+	// bad signature, a replayed challenge or a user who declined are
+	// ErrWebAuthnVerification and stay a 403.
+	//
+	// Before this sentinel existed the four newWebAuthn call sites wrapped the
+	// library failure in a plain fmt.Errorf, core/api had no arm for it, and an
+	// operator reaching the console at a single-label name got 500 "internal
+	// error" with nothing to act on.
+	ErrWebAuthnRelyingParty = errors.New("auth: webauthn relying party")
 )
 
 // webauthnCeremonyTTL bounds a pending challenge: begin-to-finish longer than
@@ -226,7 +238,7 @@ func (a *Authenticator) BeginWebAuthnRegistration(ctx context.Context, actor Pri
 	}
 	wa, err := newWebAuthn(rp)
 	if err != nil {
-		return nil, fmt.Errorf("auth: webauthn relying party: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrWebAuthnRelyingParty, err)
 	}
 	var wu waUser
 	var rows []model.WebAuthnCredential
@@ -270,7 +282,7 @@ func (a *Authenticator) FinishWebAuthnRegistration(ctx context.Context, actor Pr
 	}
 	wa, err := newWebAuthn(rp)
 	if err != nil {
-		return fmt.Errorf("auth: webauthn relying party: %w", err)
+		return fmt.Errorf("%w: %w", ErrWebAuthnRelyingParty, err)
 	}
 	session, ok := a.ceremonies().take(ceremonyRegister, actor.CredID)
 	if !ok {
@@ -358,7 +370,7 @@ func (a *Authenticator) BeginWebAuthnStepUp(ctx context.Context, actor Principal
 	}
 	wa, err := newWebAuthn(rp)
 	if err != nil {
-		return nil, fmt.Errorf("auth: webauthn relying party: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrWebAuthnRelyingParty, err)
 	}
 	var wu waUser
 	if err := a.st.AuthView(ctx, func(as store.AuthScope) error {
@@ -390,7 +402,7 @@ func (a *Authenticator) FinishWebAuthnStepUp(ctx context.Context, actor Principa
 	}
 	wa, err := newWebAuthn(rp)
 	if err != nil {
-		return model.AuthSession{}, fmt.Errorf("auth: webauthn relying party: %w", err)
+		return model.AuthSession{}, fmt.Errorf("%w: %w", ErrWebAuthnRelyingParty, err)
 	}
 	session, ok := a.ceremonies().take(ceremonyLogin, actor.CredID)
 	if !ok {

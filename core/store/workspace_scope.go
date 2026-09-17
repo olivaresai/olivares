@@ -43,6 +43,18 @@ import (
 // The returned Scope is valid only for the lifetime of raw (i.e. inside the
 // View/Mutate callback it came from), exactly like the Scope it wraps.
 func ConfineWorkspace(ctx context.Context, raw Scope, workspaceID model.ID) (Scope, error) {
+	confined, err := confineWorkspace(ctx, raw, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	// ONE final port-attachment step. It selects the optional authority ports
+	// from the RAW capabilities and attaches exactly that set to the named
+	// decorator above; nothing is chained after it. See
+	// workspace_directory_authority.go for why a second step cannot exist.
+	return forwardWorkspaceAuthorityPorts(confined, raw)
+}
+
+func confineWorkspace(ctx context.Context, raw Scope, workspaceID model.ID) (Scope, error) {
 	if raw == nil {
 		return nil, errors.New("store: confine workspace on a nil scope")
 	}
@@ -383,9 +395,10 @@ func (b workspaceBoundary) owns(spec model.WorkspaceLineageSpec, raw string) (in
 		//
 		// The two live cases deliberately do not share a lineage declaration:
 		//   modules/sessions/work_schema.go  work items -> WorkspaceUnsetHidden
-		//   sessions.identity (K2)           no WorkspaceLineage on the entity descriptor
+		//   modules/sessions/identity.go     sessions.identity -> WorkspaceUnsetMeansDefault,
+		//                                    and WorkspaceConfinedReadOnly
 		// The K2 participant resolver reads identity.workspace_id explicitly and maps an
-		// unset value to the tenant's default workspace. A work item with no workspace is
+		// unset value to the tenant's default workspace; the declaration says the same. A work item with no workspace is
 		// instead invisible. Declaring a new lineage by copying the neighboring table's
 		// constant is how those meanings get crossed.
 		//
@@ -461,6 +474,11 @@ type workspaceConfinement interface {
 }
 
 func (s *workspaceConfinedScope) confinedWorkspaceID() model.ID { return s.b.id }
+
+// confinedBoundary gives the single final port attachment the resolved
+// boundary it must install on a bounded reader. It is private and promoted
+// through every named decorator, like confinedWorkspaceID.
+func (s *workspaceConfinedScope) confinedBoundary() workspaceBoundary { return s.b }
 
 // workspaceConfinedClockScope preserves TransactionClock across workspace
 // confinement without broadening Scope itself. Time has no row payload or
@@ -730,7 +748,14 @@ func (s *workspaceConfinedAuthorizationEpochPorts) BumpAuthorizationEpoch(
 	}
 	next, err := s.store.BumpAuthorizationEpoch(ctx, expected)
 	if err != nil {
-		if errors.Is(err, ErrReadOnly) {
+		// A scope that refuses the WRITE has not made the epoch capability
+		// unavailable, and flattening the two would leave the caller unable to
+		// tell "this store cannot answer" from "this transaction may not write".
+		// ErrReadOnly was already passed through for that reason; the custodial
+		// write gate refuses in the same class, so its two sentinels pass through
+		// with it rather than being rewritten as an availability fault.
+		if errors.Is(err, ErrReadOnly) ||
+			errors.Is(err, ErrCustodyWriteSet) || errors.Is(err, ErrCustodySealed) {
 			return AuthorizationFactRef{}, err
 		}
 		return AuthorizationFactRef{}, authorizationEpochUnavailable("confined bump", err)
@@ -864,6 +889,7 @@ func (s *workspaceConfinedScope) Agents() Repository[model.Agent] {
 	return confinedRepo[model.Agent]{
 		raw: s.raw.Agents(), b: s.b, spec: agentLineage,
 		workspaceOf: func(a model.Agent) model.ID { return a.WorkspaceID },
+		idOf:        func(a model.Agent) model.ID { return a.ID },
 	}
 }
 
@@ -871,6 +897,7 @@ func (s *workspaceConfinedScope) Sessions() Repository[model.Session] {
 	return confinedRepo[model.Session]{
 		raw: s.raw.Sessions(), b: s.b, spec: agentLineage,
 		workspaceOf: func(v model.Session) model.ID { return v.WorkspaceID },
+		idOf:        func(v model.Session) model.ID { return v.ID },
 	}
 }
 
@@ -878,6 +905,7 @@ func (s *workspaceConfinedScope) AgentGroups() Repository[model.AgentGroup] {
 	return confinedRepo[model.AgentGroup]{
 		raw: s.raw.AgentGroups(), b: s.b, spec: agentLineage,
 		workspaceOf: func(v model.AgentGroup) model.ID { return v.WorkspaceID },
+		idOf:        func(v model.AgentGroup) model.ID { return v.ID },
 	}
 }
 
@@ -887,6 +915,7 @@ func (s *workspaceConfinedScope) Resources() ResourceRepo {
 		flat: confinedRepo[model.Resource]{
 			raw: s.raw.Resources(), b: s.b, spec: agentLineage,
 			workspaceOf: func(v model.Resource) model.ID { return v.WorkspaceID },
+			idOf:        func(v model.Resource) model.ID { return v.ID },
 		},
 		b: s.b,
 	}
@@ -959,7 +988,7 @@ func (s *workspaceConfinedScope) Tools() Repository[model.Tool] {
 	return deniedRepo[model.Tool]{what: "tools"}
 }
 func (s *workspaceConfinedScope) Policies() Repository[model.Policy] {
-	return deniedRepo[model.Policy]{what: "policies"}
+	return deniedPolicyRepo{deniedRepo[model.Policy]{what: "policies"}}
 }
 func (s *workspaceConfinedScope) Costs() Repository[model.CostRecord] {
 	return deniedRepo[model.CostRecord]{what: "cost records"}
@@ -998,6 +1027,13 @@ func (s *workspaceConfinedScope) EvidenceOperations() EvidenceOperationRepo {
 	return deniedEvidenceOps{}
 }
 
+// AccessEvidence is tenant-wide evidence about authority, activity and
+// decisions; none of its records carries a workspace lineage that could confine
+// a read without deforming it (see deniedAccessEvidence).
+func (s *workspaceConfinedScope) AccessEvidence() AccessEvidenceRepo {
+	return deniedAccessEvidence{}
+}
+
 // Ext is where the module half of the guarantee lands: the descriptor's declared
 // lineage drives the filter, and an entity that declares none is refused BEFORE
 // a repo exists — so a module handler cannot receive a handle it would read as
@@ -1007,32 +1043,72 @@ func (s *workspaceConfinedScope) Ext(kind model.Kind) (GenericRepo, error) {
 	if err != nil {
 		return nil, err
 	}
-	spec := raw.Descriptor().WorkspaceLineage
+	desc := raw.Descriptor()
+	spec := desc.WorkspaceLineage
 	if !spec.Declared() {
 		return nil, denied(string(kind))
+	}
+	if desc.WorkspaceConfinedReadOnly {
+		// Selected before any writable wrapper exists, so no write, stamped write
+		// or row lock can be promoted (workspace_readonly_repo.go).
+		return newConfinedReadOnlyGenericRepo(raw, s.b, desc), nil
 	}
 	confined := confinedGenericRepo{raw: raw, b: s.b, spec: spec}
 	stamped, hasStamped := raw.(TransactionStampedGenericRepo)
 	locker, hasLocker := raw.(RowLocker[model.Record])
+	// DistinctProjector is preserved exactly like the two capabilities above: a
+	// raw repository that exposes it yields a confined wrapper that exposes it
+	// (with the lineage predicate forced), and one that does not yields a wrapper
+	// on which the assertion fails.
+	projector, hasProjector := raw.(DistinctProjector)
 	switch {
 	case hasStamped && hasLocker:
-		return confinedTransactionStampedRowLockingGenericRepo{
+		full := confinedTransactionStampedRowLockingGenericRepo{
 			confinedTransactionStampedGenericRepo: confinedTransactionStampedGenericRepo{
 				confinedGenericRepo: confined,
 				stamped:             stamped,
 			},
 			locker: locker,
-		}, nil
+		}
+		if hasProjector {
+			return confinedDistinctProjectingTransactionStampedRowLockingGenericRepo{
+				confinedTransactionStampedRowLockingGenericRepo: full,
+				projector: projector,
+			}, nil
+		}
+		return full, nil
 	case hasStamped:
-		return confinedTransactionStampedGenericRepo{
+		stampedOnly := confinedTransactionStampedGenericRepo{
 			confinedGenericRepo: confined,
 			stamped:             stamped,
-		}, nil
+		}
+		if hasProjector {
+			return confinedDistinctProjectingTransactionStampedGenericRepo{
+				confinedTransactionStampedGenericRepo: stampedOnly,
+				projector:                             projector,
+			}, nil
+		}
+		return stampedOnly, nil
 	case hasLocker:
-		return confinedRowLockingGenericRepo{
+		rowOnly := confinedRowLockingGenericRepo{
 			confinedGenericRepo: confined,
 			locker:              locker,
+		}
+		if hasProjector {
+			return confinedDistinctProjectingRowLockingGenericRepo{
+				confinedRowLockingGenericRepo: rowOnly,
+				projector:                     projector,
+			}, nil
+		}
+		return rowOnly, nil
+	}
+	if hasProjector {
+		return confinedDistinctProjectingGenericRepo{
+			confinedGenericRepo: confined,
+			projector:           projector,
 		}, nil
 	}
 	return confined, nil
 }
+
+func (s *workspaceConfinedScope) authorityReadScope() Scope { return s.raw }

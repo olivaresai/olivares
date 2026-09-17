@@ -23,7 +23,7 @@ gesamten Contract.
 
 | Bereich | Was er dokumentiert | Source of Truth |
 |---|---|---|
-| **[REST-API](/reference/api/)** | Die Control-Plane-HTTP-API: Auth, Setup, Tenancy, Agents, die R/RW-Access-Map, Tokens und das Audit-Ledger. | Der **OpenAPI 3.1**-Contract des Produkts (53 Core-Paths), zur Build-Zeit aus der realen Datei gerendert — keine Kopie. |
+| **[REST-API](/reference/api/)** | Die Control-Plane-HTTP-API: Auth, Setup, Tenancy, Agents, die R/RW-Access-Map, Tokens und das Audit-Ledger. | Der **OpenAPI 3.1**-Contract des Produkts (54 Core-Paths), zur Build-Zeit aus der realen Datei gerendert — keine Kopie. |
 | **[Modulrouten (Beta)](/reference/api-beta/)** | Die Modulrouten des Produkts (`/v1/m/<ns>/…`) — FinOps, Compliance, Governance, Sessions, Models, Knowledge, … — als separates **Beta**-OpenAPI-Dokument. | Derselbe OpenAPI-3.1-Vertrag, zur Build-Zeit aus den von den Modulen registrierten Routen reflektiert. |
 | **[Stabilitätspolicy](/de/reference/api-stability/)** | Versionierung, Stabilitätsstufen, Deprecation-/Sunset-Signalisierung und die Mindest-Support-Fenster für die API, den Provider und die Client-SDKs. | Die In-Code-Deprecation-Tabelle und ihre build-failing-Fenster-Tests. |
 | **[gRPC](/de/reference/grpc/)** | Der gRPC-Mirror der Engine und der versionierte Plugin-Wire-Vertrag, den jeder Out-of-process-Connector und jedes Out-of-process-Modul spricht. | Die `grpc.ServiceDesc`-Registrierungstabellen, die die Server an gRPC übergeben. |
@@ -45,7 +45,7 @@ Identity und Tenancy, Agents, die Read/Write-Access-Map
 Access-Map-Modul statt von der Core-Oberfläche ausgeliefert), Token-Management und das Audit-
 Ledger.
 
-Der Contract beschreibt **53 Core-Paths**. Das ist bewusst: es ist die stabile,
+Der Contract beschreibt **54 Core-Paths**. Das ist bewusst: es ist die stabile,
 versionierte Oberfläche der Control Plane, nicht jede Route, die die Engine beantworten kann.
 Worauf sich „stabil“ verpflichtet — Versionierung, Deprecation-Signalisierung und Mindest-
 Support-Fenster — ist die [API-Stabilitätspolicy](/de/reference/api-stability/).
@@ -53,7 +53,7 @@ Support-Fenster — ist die [API-Stabilitätspolicy](/de/reference/api-stability
 :::note[Modulrouten sind ein separater Beta-Vertrag]
 Die Modulrouten — zum Beispiel die `/v1/m/accessmap/graph`,
 `/v1/m/accessmap/neighbors` und `/v1/m/accessmap/drift` des Access-Map-Moduls
-— sind **nicht** Teil des stabilen Core-Dokuments mit 53 Pfaden. Sie werden als
+— sind **nicht** Teil des stabilen Core-Dokuments mit 54 Pfaden. Sie werden als
 separates **Beta**-OpenAPI-Dokument unter [`/reference/api-beta/`](/reference/api-beta/)
 veröffentlicht (ausgeliefert unter `/openapi.beta.json`, reflektiert aus den Routen,
 die die Module tatsächlich registrieren), sodass die stabile Oberfläche identifizierbar

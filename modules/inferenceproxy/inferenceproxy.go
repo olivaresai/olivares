@@ -29,6 +29,9 @@ type Module struct {
 	log   *slog.Logger
 	clock model.Clock
 
+	// firewallStatus is set by New and never replaced (firewall.go).
+	firewallStatus ContentFirewallStatusSource
+
 	mu   sync.RWMutex
 	data api.ModuleData // tenant-parameterized handle (late-bound via UseData)
 }
@@ -134,6 +137,7 @@ func (m *Module) Permissions() []auth.Permission {
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/config", permConfigRead, m.handleGetConfig)
 	reg.Handle("PUT", "/config", permConfigAdmin, m.handlePutConfig)
+	reg.Handle("GET", "/content-firewall", permConfigRead, m.handleGetContentFirewall)
 	reg.Handle("POST", "/device/approve", permConfigAdmin, m.handleApproveDeviceGrant)
 	reg.Handle("GET", "/dlp/rules", permDLPRead, m.handleListDLPRules)
 	reg.Handle("PUT", "/dlp/rules", permDLPAdmin, m.handlePutDLPRule)

@@ -44,8 +44,14 @@ type broker struct {
 // session filter, and a buffered delivery channel.
 type subscriber struct {
 	tenant model.TenantID
-	ref    string // "" = every session in the tenant
-	ch     chan liveDTO
+	// ref is the LEGACY single-session filter (bare external id): it matches only
+	// legacy rows, so a profile-scoped row that shares the id never leaks into a
+	// legacy subscription. "" = no legacy filter.
+	ref string
+	// liveRef is the B2 exact-row filter (the row's opaque id). "" = none. With
+	// both empty the subscriber receives every session in the tenant.
+	liveRef string
+	ch      chan liveDTO
 }
 
 func newBroker() *broker { return &broker{subs: make(map[int]subscriber)} }
@@ -53,6 +59,11 @@ func newBroker() *broker { return &broker{subs: make(map[int]subscriber)} }
 // subscribe registers a client for a tenant (and optional session ref) and
 // returns its delivery channel plus an idempotent unsubscribe.
 func (b *broker) subscribe(tenant model.TenantID, ref string) (<-chan liveDTO, func()) {
+	return b.subscribeTo(tenant, ref, "")
+}
+
+// subscribeTo is subscribe with the B2 exact-row filter.
+func (b *broker) subscribeTo(tenant model.TenantID, ref, liveRef string) (<-chan liveDTO, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
@@ -63,7 +74,7 @@ func (b *broker) subscribe(tenant model.TenantID, ref string) (<-chan liveDTO, f
 	id := b.next
 	b.next++
 	ch := make(chan liveDTO, 16)
-	b.subs[id] = subscriber{tenant: tenant, ref: ref, ch: ch}
+	b.subs[id] = subscriber{tenant: tenant, ref: ref, liveRef: liveRef, ch: ch}
 	return ch, func() { b.unsubscribe(id) }
 }
 
@@ -88,7 +99,10 @@ func (b *broker) publish(s liveSnapshot) {
 		if sub.tenant != s.tenant {
 			continue // tenant isolation: never deliver another tenant's operation
 		}
-		if sub.ref != "" && sub.ref != s.dto.SessionRef {
+		if sub.liveRef != "" && sub.liveRef != s.dto.LiveRef {
+			continue
+		}
+		if sub.ref != "" && (sub.ref != s.dto.SessionRef || s.dto.Attribution != attributionLegacy) {
 			continue
 		}
 		select {
@@ -118,16 +132,42 @@ func (b *broker) close() {
 // heartbeats. The subscription is pinned to the request's single authorized
 // tenant, so a client only ever sees its own tenant's sessions.
 func (m *Module) handleStream(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	// The broker fans out tenant-wide DTOs without workspace admission. Use the
+	// resolved membership, matching the API wrapper's superadmin exception, before
+	// any selector, SSE headers or subscription. A future live descriptor with
+	// lineage must not reopen this broker to workspace-confined readers.
+	if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined && !mc.Principal.Superadmin {
+		writeStoreError(w, store.ErrWorkspaceConfinement)
+		return
+	}
+
 	rc := http.NewResponseController(w)
+	ref := r.URL.Query().Get("ref")
+	// B2: an exact-row subscription. The row must exist in THIS tenant before the
+	// stream opens, so a live_ref is never a way to listen on another tenant's row.
+	liveRef := ""
+	if raw := r.URL.Query().Get("live_ref"); raw != "" {
+		id, ok := parseLiveRef(raw)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, errorBody("not found"))
+			return
+		}
+		if err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+			_, err := findLiveByID(r.Context(), sc, id)
+			return err
+		}); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		liveRef = id.String()
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no") // ask intermediaries not to buffer
+	m.auditStreamOpen(r, mc, ref, liveRef)
 
-	ref := r.URL.Query().Get("ref")
-	m.auditStreamOpen(r, mc, ref)
-
-	ch, cancel := m.broker.subscribe(mc.Tenant, ref)
+	ch, cancel := m.broker.subscribeTo(mc.Tenant, ref, liveRef)
 	defer cancel()
 
 	if writeFrame(rc, w, ": connected\n\n") != nil {
@@ -175,13 +215,13 @@ func writeFrame(rc *http.ResponseController, w io.Writer, frame string) error {
 // auditStreamOpen records that a principal opened a live stream — a privileged
 // read of live operation (docs/SECURITY-HARDENING.md). It is best-effort: a failed audit logs
 // but does not deny the stream (the per-request RBAC check already gated access).
-func (m *Module) auditStreamOpen(r *http.Request, mc api.ModuleContext, ref string) {
+func (m *Module) auditStreamOpen(r *http.Request, mc api.ModuleContext, ref, liveRef string) {
 	target := model.ID("")
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		_, e := sc.Audit().Append(r.Context(), model.AuditDraft{
 			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
 			Action: "sessions.stream.open", TargetKind: liveKind, TargetID: target,
-			Meta: streamMeta(ref),
+			Meta: streamMeta(ref, liveRef),
 		})
 		return e
 	})
@@ -191,11 +231,18 @@ func (m *Module) auditStreamOpen(r *http.Request, mc api.ModuleContext, ref stri
 }
 
 // streamMeta builds the non-sensitive audit meta for a stream open.
-func streamMeta(ref string) map[string]any {
-	if ref == "" {
+func streamMeta(ref, liveRef string) map[string]any {
+	if ref == "" && liveRef == "" {
 		return map[string]any{"scope": "all"}
 	}
-	return map[string]any{"session_ref": ref}
+	meta := map[string]any{}
+	if ref != "" {
+		meta["session_ref"] = ref
+	}
+	if liveRef != "" {
+		meta["live_ref"] = liveRef
+	}
+	return meta
 }
 
 // debugf logs at debug level if a logger is set.

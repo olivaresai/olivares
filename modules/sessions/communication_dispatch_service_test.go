@@ -270,8 +270,18 @@ type deliveryDispatchServiceFixture struct {
 
 func newDeliveryDispatchServiceFixture(t *testing.T) deliveryDispatchServiceFixture {
 	t.Helper()
+	return newDeliveryDispatchServiceFixtureFor(t, newDirectNoticeFixture(t))
+}
+
+// newDeliveryDispatchServiceFixtureFor builds the dispatch service fixture on
+// an already-opened direct-notice fixture, so the same product fixture can be
+// driven on a split-owner PostgreSQL estate as well as on SQLite.
+func newDeliveryDispatchServiceFixtureFor(
+	t *testing.T,
+	fixture directNoticeFixture,
+) deliveryDispatchServiceFixture {
+	t.Helper()
 	ctx := context.Background()
-	fixture := newDirectNoticeFixture(t)
 
 	channel := fixture.channel
 	channel.DefaultWake = WakePrimary

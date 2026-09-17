@@ -52,3 +52,21 @@ export const VERSIONS = [{ slug: '2026-06', label: '2026-06 (pre-1.0 preview)' }
 
 /** Just the slugs — the directory names the parity gate must skip. */
 export const ARCHIVED_SLUGS = VERSIONS.map((v) => v.slug)
+
+/**
+ * Las clases de Diátaxis que TIENEN tarjeta social propia en `public/og/<clase>.png`.
+ *
+ * ⛔ VIVE AQUÍ, y no en el componente, por la misma razón que `LOCALES`: la puerta
+ * (`scripts/check-structured-data.mjs`) y el `<Head>` tienen que leer LA MISMA declaración, no cada
+ * uno la suya. Un segundo parser sobre el componente es exactamente lo que la cabecera de este
+ * fichero documenta como el fallo que produce un verde en silencio.
+ *
+ * Añadir una clase son DOS cosas en el mismo commit: el PNG en `public/og/` y su nombre aquí. La
+ * puerta comprueba que las dos coinciden en las dos direcciones, así que ni una tarjeta sin
+ * declarar ni una declaración sin tarjeta pueden colarse.
+ *
+ * VACÍA A PROPÓSITO: hoy las 2.156 páginas comparten una sola tarjeta. Las imágenes por clase las
+ * produce el carril de marca, que es quien tiene la plantilla paramétrica y decide cómo se ven; el
+ * cableado ya está probado en las dos direcciones y se enciende solo cuando lleguen.
+ */
+export const OG_CLASS_CARDS = []

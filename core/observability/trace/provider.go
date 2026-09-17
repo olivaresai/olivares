@@ -7,6 +7,7 @@ package trace
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -26,6 +27,12 @@ import (
 // instrumentationName is the OTel instrumentation scope for this package's spans
 // and metrics.
 const instrumentationName = "github.com/olivaresai/olivares/core/observability/trace"
+
+// OTLP/HTTP signal paths defined by the OTLP exporter specification.
+const (
+	otlpHTTPTracesPath  = "/v1/traces"
+	otlpHTTPMetricsPath = "/v1/metrics"
+)
 
 // Provider holds the composite W3C propagator and (when enabled) the recording
 // TracerProvider + MeterProvider + OTLP exporters. The propagator ALWAYS works
@@ -140,7 +147,7 @@ func buildTraceExporter(ctx context.Context, cfg Config) (*otlptrace.Exporter, e
 	case ProtocolHTTP:
 		opts := []otlptracehttp.Option{}
 		if strings.Contains(cfg.Endpoint, "://") {
-			opts = append(opts, otlptracehttp.WithEndpointURL(cfg.Endpoint))
+			opts = append(opts, otlptracehttp.WithEndpointURL(httpSignalEndpointURL(cfg.Endpoint, otlpHTTPTracesPath)))
 		} else {
 			opts = append(opts, otlptracehttp.WithEndpoint(cfg.Endpoint))
 			if cfg.Insecure {
@@ -168,7 +175,7 @@ func buildMetricExporter(ctx context.Context, cfg Config) (sdkmetric.Exporter, e
 	case ProtocolHTTP:
 		opts := []otlpmetrichttp.Option{}
 		if strings.Contains(cfg.Endpoint, "://") {
-			opts = append(opts, otlpmetrichttp.WithEndpointURL(cfg.Endpoint))
+			opts = append(opts, otlpmetrichttp.WithEndpointURL(httpSignalEndpointURL(cfg.Endpoint, otlpHTTPMetricsPath)))
 		} else {
 			opts = append(opts, otlpmetrichttp.WithEndpoint(cfg.Endpoint))
 			if cfg.Insecure {
@@ -188,4 +195,21 @@ func buildMetricExporter(ctx context.Context, cfg Config) (sdkmetric.Exporter, e
 		}
 		return otlpmetricgrpc.New(ctx, opts...)
 	}
+}
+
+// httpSignalEndpointURL returns the OTLP/HTTP URL one signal exports to when Endpoint is a URL.
+// A URL whose path is empty or "/" is a base URL, so the signal path is set here: since
+// go.opentelemetry.io/otel v1.45.0, WithEndpointURL no longer appends it. Scheme (and so TLS
+// selection), user info, host, query and fragment are kept. A URL with any other path is the
+// existing explicit endpoint for both signals and is returned unchanged, as is a value that does
+// not parse or has no host; the exporter keeps its own handling and nothing here logs the value.
+func httpSignalEndpointURL(endpoint, signalPath string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" || (u.Path != "" && u.Path != "/") {
+		return endpoint
+	}
+	signal := *u
+	signal.Path = signalPath
+	signal.RawPath = ""
+	return signal.String()
 }

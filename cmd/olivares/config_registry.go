@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/webaddr"
 )
 
 const (
@@ -48,6 +49,15 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_AUDIT_ARCHIVE_SEGMENT_EVENTS",
 	"OLIVARES_AUDIT_ARCHIVE_SINK",
 	"OLIVARES_AUDIT_LEGALHOLD_INTERVAL",
+	// Private operator census (2026-09-11): private enterprise code reads this key and the
+	// eight marked below through osGetenv. This key and OLIVARES_CIRCUIT_BREAKER_CONFIG are
+	// strconv.ParseBool switches, OLIVARES_LOGIN_ENFORCEMENT is the login break-glass switch,
+	// and the other six are file paths. Unregistered, `config validate` and `config effective
+	// --strict` refused a deployment that set any of them. Registering the NAME claims nothing
+	// more: build linkage, value parsing and file validity stay with those readers, and these
+	// verbs display the value without opening a referenced file. OLIVARES_DURABLE and
+	// OLIVARES_DURABLE_DEDUP stay unregistered: they are JetStream resource names, not keys.
+	"OLIVARES_AUDIT_LEGALHOLD_RECONCILE",
 	// read at boot (auditspool.go:97) to select the metadata-commitment write
 	// rule. The registry's OLIVARES_AUDIT_ARCHIVE_ prefix does not reach it.
 	"OLIVARES_AUDIT_META_BLINDING",
@@ -66,6 +76,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_CATALOG_SIGNING_KEY",
 	"OLIVARES_CATALOG_SIGNING_KEY_FILE",
 	"OLIVARES_CATALOG_SIGNING_KEY_WRAPPED_FILE",
+	"OLIVARES_CIRCUIT_BREAKER_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
 	"OLIVARES_CLAUDE_ADMIN_ACTUATOR_CONFIG",
 	"OLIVARES_CLAUDE_ADMIN_KEY",
 	"OLIVARES_CLAUDE_ERASER_CONFIG",
@@ -76,10 +87,25 @@ var exactConfigEnvKeys = []string{
 	// automation. A product key, so a run that sets it must not fail --strict.
 	"OLIVARES_CLI_CONFIG",
 	"OLIVARES_CLI_TRAMPOLINE",
+	// K3 lot A (2026-09-05): the REQUESTED activation flag (on|off) parsed by
+	// loadCommunicationActivationConfig, and the cursor keyring custody file
+	// loaded next to the content keyring (communicationcursorkeyring.go).
+	"OLIVARES_COMMUNICATION_ACTIVATION",
 	"OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE",
+	"OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE",
+	// T9 (2026-09-11): the enterprise addon_airs constructors read this key and the four
+	// marked below (cmd-overlay/olivares/wire_enterprise_addon_airs.go), just as they read
+	// OLIVARES_HOOK_FIREWALL_CONFIG. Unregistered, a boot that enforced the content firewall
+	// also logged its key as ignored, and `config validate` / `config effective --strict`
+	// refused the deployment. Registering the NAME claims nothing more: whether the build
+	// links the control and whether the referenced file is valid stay with those
+	// constructors, and these verbs display the path without opening it.
+	"OLIVARES_COMPUTER_USE_CONFIG",
 	"OLIVARES_CONFIG_STRICT",
+	"OLIVARES_CONTENT_FIREWALL_CONFIG", // T9 addon_airs input, see OLIVARES_COMPUTER_USE_CONFIG
 	"OLIVARES_CONTEXT_MAX_TOKENS",
 	"OLIVARES_CONTEXT_STRATEGY",
+	"OLIVARES_CREDENTIAL_MINTER_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
 	"OLIVARES_DATA_DIR",
 	"OLIVARES_DB_MAX_CONNS",
 	"OLIVARES_DEPLOY_EXECUTOR_CONFIG",
@@ -94,6 +120,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_DR_PASSPHRASE_FILE",
 	"OLIVARES_DR_SCHEDULE_INTERVAL",
 	"OLIVARES_DURABLE_BUS_CONFIG",
+	"OLIVARES_ELICITATION_MEDIATOR_CONFIG", // T9 addon_airs input, see OLIVARES_COMPUTER_USE_CONFIG
 	"OLIVARES_EMBEDDINGS_BASE_URL",
 	"OLIVARES_EMBEDDINGS_DIM",
 	"OLIVARES_EMBEDDINGS_GEO",
@@ -135,6 +162,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_EVENTING_EGRESS_POLICY",
 	"OLIVARES_EVENTING_RETENTION",
 	"OLIVARES_EVENTING_SECRET_KEY",
+	"OLIVARES_EXECUTION_ENVIRONMENT_ID",
 	"OLIVARES_EXTRA_ARGS",
 	"OLIVARES_GUARDIAN_SWEEP_INTERVAL",
 	"OLIVARES_HA_LEADER_GATE",
@@ -179,10 +207,16 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_LICENSE_PATH",
 	"OLIVARES_LICENSE_PUBKEY",
 	"OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS",
+	"OLIVARES_LOGIN_ENFORCEMENT", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
 	"OLIVARES_LOG_LEVEL",
 	"OLIVARES_MCP_TASK_KILLSWITCH_SWEEP",
 	"OLIVARES_METRICS_ALLOWED_CIDRS",
 	"OLIVARES_METRICS_TOKEN",
+	// D01-C2B: the ONE explicit activation for the governed synchronous Chat dispatch
+	// path (modelsguardedtext.go). Absent and "disabled" both keep it deny-closed;
+	// only "development_precheck" wires it, and any other value fails startup.
+	"OLIVARES_MODEL_GATEWAY_CHAT_MODE",
+	"OLIVARES_MODEL_GATEWAY_PROFILES_CONFIG",
 	"OLIVARES_NHI_ACTUATORS_CONFIG",
 	"OLIVARES_NIS2INCIDENT_CONFIG",
 	"OLIVARES_NOTIFY_CONFIG",
@@ -191,6 +225,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_OIDC_CLIENT_SECRET",
 	"OLIVARES_OIDC_GROUPS_CLAIM",
 	"OLIVARES_OIDC_ISSUER",
+	"OLIVARES_ONBOARDING_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
 	"OLIVARES_ORCH_CADENCE_INTERVAL",
 	"OLIVARES_ORCH_DISPATCH_CONFIG",
 	"OLIVARES_ORCH_WORKFLOW_INTERVAL",
@@ -214,12 +249,22 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_POLICY_SIGNING_KEY",
 	"OLIVARES_POLICY_SIGNING_KEY_FILE",
 	"OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE",
+	"OLIVARES_PQC_POSTURE_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
+	// The environment spelling of --public-url: the address a browser reaches this
+	// console at. It has to be listed here or the engine logs "unrecognized
+	// OLIVARES_* env keys ignored" about a key it is honoring in the same boot,
+	// and `config effective --strict` — the documented pre-production gate —
+	// REFUSES a deployment for setting it.
+	"OLIVARES_PUBLIC_URL",
 	"OLIVARES_RATELIMIT_CONFIG",
 	"OLIVARES_RATELIMIT_STORE",
+	"OLIVARES_RENDER_INSPECTOR_CONFIG", // T9 addon_airs input, see OLIVARES_COMPUTER_USE_CONFIG
 	"OLIVARES_REPORTING_CONFIG",
 	"OLIVARES_REPORTING_SCHEDULE_INTERVAL",
 	"OLIVARES_REPORT_CACHE_DIR",
+	"OLIVARES_RETENTION_GOVERNOR_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
 	"OLIVARES_RETENTION_SWEEP_INTERVAL",
+	"OLIVARES_RTBF_DEPTH_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
 	"OLIVARES_SAML_ACS_URL",
 	"OLIVARES_SAML_EMAIL_ATTRIBUTE",
 	"OLIVARES_SAML_GROUPS_ATTRIBUTE",
@@ -232,7 +277,9 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_SAML_SP_SIGN_KEY_PEM",
 	"OLIVARES_SANDBOX_RUNTIME_CONFIG",
 	"OLIVARES_SECRET_STORE_KEY",
+	"OLIVARES_SERVERTOOL_EGRESS_CONFIG", // T9 addon_airs input, see OLIVARES_COMPUTER_USE_CONFIG
 	"OLIVARES_SERVER_URL",
+	"OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT",
 	"OLIVARES_SESSION_BUDGET_AVAILABILITY",
 	"OLIVARES_SESSION_CONTEXT_AVAILABILITY",
 	"OLIVARES_SESSION_KILLSWITCH_SWEEP",
@@ -254,6 +301,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_THREATINTEL_CONFIG",
 	"OLIVARES_THREATINTEL_SIGNING_KEY",
 	"OLIVARES_TOKEN",
+	"OLIVARES_TOOL_PIN_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
 	"OLIVARES_UPDATE_CHANNEL",
 	"OLIVARES_UPDATE_ENDPOINT",
 	"OLIVARES_UPGRADE_TOKEN",
@@ -398,7 +446,38 @@ func effectiveConfigEnv(environ []string, getenv func(string) string) map[string
 // into the API value contract. The caller supplies a fresh environ/getenv pair
 // on every request so activation-overlay changes stay visible without an API
 // dependency on package main.
+// resolvedPublicAddr is what the RUNNING invocation actually resolved, handed to
+// effectiveConfigEntries by the engine's callback. The standalone `config
+// effective` command has no such thing — it is a different process and cannot
+// observe a running one — so it passes the zero value and the entry keeps its
+// redacted requested-environment meaning.
+type resolvedPublicAddr struct {
+	addr   webaddr.Address
+	source publicAddrSource
+	// known distinguishes "this caller resolved an address" from "this caller has
+	// no idea", which is not the same as "no address was declared".
+	known bool
+}
+
 func effectiveConfigEntries(environ []string, getenv func(string) string) []api.EffectiveConfigEntry {
+	return effectiveConfigEntriesFor(environ, getenv, resolvedPublicAddr{})
+}
+
+// effectiveConfigEntriesFor is effectiveConfigEntries with the running
+// invocation's declared address, when the caller has one.
+//
+// THE ENGINE'S CALLBACK KNOWS WHAT THE COMMAND CANNOT. cfg.PublicAddr and
+// cfg.PublicAddrSource are the values THIS process resolved at startup, so the
+// row can state the address actually in force and where it came from — including
+// the case where an explicit empty flag cleared an environment value that is
+// still set in the environment this projection is reading. Showing that
+// overridden environment value would describe a configuration the running engine
+// is not using.
+//
+// The address is never re-read after startup: it comes from the resolution that
+// already happened, so a later mutation of the environment cannot change what
+// this row reports. That is the point — the row is about the running invocation.
+func effectiveConfigEntriesFor(environ []string, getenv func(string) string, running resolvedPublicAddr) []api.EffectiveConfigEntry {
 	envValues := make(map[string]string)
 	for _, entry := range environ {
 		key, value, ok := strings.Cut(entry, "=")
@@ -431,16 +510,61 @@ func effectiveConfigEntries(environ []string, getenv func(string) string) []api.
 			source = "activation"
 		}
 		value := effective[key]
+		if key == publicURLEnv && running.known {
+			value, source = running.addr.Origin, running.source.String()
+		}
 		entries = append(entries, api.EffectiveConfigEntry{
 			Key: key, Value: value, Redacted: value == redactedConfigValue, Source: source,
 		})
 	}
+	// An explicit empty flag CLEARS the address, and the environment key may still
+	// be set — so the key can be absent from the projection above while the
+	// running invocation has a truthful thing to say about it. Say it.
+	if running.known && !containsKey(keys, publicURLEnv) {
+		entries = append(entries, api.EffectiveConfigEntry{
+			Key: publicURLEnv, Value: running.addr.Origin, Source: running.source.String(),
+		})
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Key < entries[j].Key })
+	}
 	return entries
+}
+
+func containsKey(keys []string, want string) bool {
+	for _, k := range keys {
+		if k == want {
+			return true
+		}
+	}
+	return false
 }
 
 func redactEffectiveConfigValue(key, value string) string {
 	if secretNameKey(key) {
 		return redactedConfigValue
+	}
+	// THE DECLARED CONSOLE ADDRESS IS SHOWN ONLY IF THE ENGINE WOULD ACCEPT IT.
+	//
+	// This surface reports the REQUESTED environment configuration of this host.
+	// It is a separate invocation from any running engine, so it cannot know which
+	// flags that engine was given, and --public-url overrides this variable — the
+	// value here may therefore never have been used. What it must not do is print
+	// a value the engine REFUSES, because a refused one is exactly the class that
+	// can carry a credential or a token in its userinfo or query, and this output
+	// is read and pasted far from the person who typed it.
+	//
+	// Accepted values are shown canonicalized, which is both what the engine would
+	// use and a form that cannot carry userinfo, a query or a fragment — Parse
+	// refuses all three. A refused value is reported as redacted, not echoed and
+	// not guessed at.
+	if key == publicURLEnv {
+		if strings.TrimSpace(value) == "" {
+			return value
+		}
+		addr, err := webaddr.Parse(publicURLEnv, value)
+		if err != nil {
+			return redactedConfigValue
+		}
+		return addr.Origin
 	}
 	for _, part := range strings.Split(key, "_") {
 		switch part {

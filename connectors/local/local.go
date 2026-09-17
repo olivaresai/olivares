@@ -9,7 +9,7 @@
 // derived monetary amount is zero unless the operator declares a $/MTok compute
 // rate (cost_per_mtok_usd); the value here is the token usage and latency.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): it performs only GETs against
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §0-3): it performs only GETs against
 // the operator's own inference servers, reads token counts and model metadata, and
 // carries no prompts or outputs. It imports only the SDK and the Apache
 // modelprovider contract, never the engine.

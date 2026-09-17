@@ -20,9 +20,16 @@ import (
 var baseTime = time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
 
 // newInv opens a real SQLite store with the inventory schema, provisions a
-// tenant, wires the module's data handle, and returns all three. The store is a
-// real dual-engine store (via the public engine seam), so the tests exercise the
-// real generic repository, extension tables and unique indexes — not a fake.
+// tenant, wires the module's data handle AND its durable sweep scope, and
+// returns all three. The store is a real dual-engine store (via the public
+// engine seam), so the tests exercise the real generic repository, extension
+// tables and unique indexes — not a fake.
+//
+// The scope source is wired here because it is now part of what a working
+// inventory IS: since C2a the sweep takes its tenants from the durable
+// directory, so a fixture that omitted the seam would be a module that cannot
+// sweep at all, and every staleness test would be asserting against a refusal.
+// It hands back exactly the tenant this fixture provisioned.
 func newInv(t *testing.T, opts ...Option) (*Module, store.Store, model.TenantID) {
 	t.Helper()
 	m := New(opts...)
@@ -48,6 +55,7 @@ func newInv(t *testing.T, opts ...Option) (*Module, store.Store, model.TenantID)
 		t.Fatalf("provision tenant: %v", err)
 	}
 	m.UseData(api.NewModuleData(st))
+	m.UseSweepScopeSource(scopeOf(tenant))
 	return m, st, tenant
 }
 
@@ -201,7 +209,14 @@ func TestIdempotentDiscovery(t *testing.T) {
 }
 
 func TestSweepStaleness(t *testing.T) {
-	m, st, tenant := newInv(t)
+	// ⛔ EL RELOJ SE INYECTA, y no es una comodidad de test: desde la decisión A (the planner
+	// #122) `last_seen` es la OBSERVACIÓN — el instante en que ESTA plataforma vio la
+	// entidad — así que sale del reloj del módulo y no del que declare la fuente. Con el
+	// reloj del sistema, este banco alimentaba en `baseTime` y barría en `baseTime+31min`
+	// mientras `last_seen` valía "ahora": nada resultaba rancio y el test medía el reloj de
+	// la caja en vez del barrido. Fijándolo, el corte y la observación viven en la misma
+	// escala y la aserción vuelve a ser sobre el SUJETO.
+	m, st, tenant := newInv(t, WithClock(pinnedClock{at: baseTime}))
 	m.feed(t, tenant, mkEdge("session", "sess-stale", "file", "/x", sdkmodel.ModeRead, sdkmodel.SignalOTEL, "Read", baseTime))
 
 	// Nothing is stale right after observation.

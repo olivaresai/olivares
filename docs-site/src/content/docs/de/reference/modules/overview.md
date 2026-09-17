@@ -140,6 +140,20 @@ Composition-Root abgeleitet (`cmd/olivares/wire.go`): alle 30 Module werden dort
 konstruiert und via `rt.AddModule` registriert (verifiziert am 2026-08-01,
 main @ f632f03f).
 
+## Editions-Verfügbarkeitsnaht (nicht zu den 30 Modulen gezählt)
+
+Der Katalog oben sind die **30 Module**, die der Composition-Root als
+Produktmodule konstruiert. Zusätzlich registriert Community einen
+Verfügbarkeitsdeskriptor unter dem API-Namensraum `session-cockpit`. Er ist
+keines dieser 30.
+
+- [Session-Cockpit (Verfügbarkeit)](/de/reference/modules/session-cockpit/) —
+  keine Handler in Community; `/v1/m/session-cockpit` liefert **404 durch
+  Abwesenheit**. Kein interaktives Cockpit in diesem Artefakt. Live-Sessions,
+  AgentOps und der offizielle CLI-Lebenszyklus bleiben im offenen Produkt —
+  [Live-Betrieb und Sessions](/de/reference/modules/ii-sessions/) und
+  [Claude Code mit Olivares ausführen](/de/how-to/run-claude-code-with-olivares/).
+
 ## Plattform- & Core-Capabilities (nicht zu den 30 Modulen gezählt)
 
 Dies sind reale, ausgelieferte Capabilities, aber es sind

@@ -10,6 +10,8 @@
 // Contract:
 //   - Owned keys only: updates merge into the existing search, so params owned
 //     by other components on the route (e.g. a shell's ?tab=) are preserved.
+//     The hash is likewise not owned: navigate() is called with `hash: true` so
+//     a filter or tab patch cannot wipe an unrelated fragment.
 //   - Empty string and undefined both REMOVE a key — defaults live in code, not
 //     in the URL, so a pristine view keeps a clean, shareable URL.
 //   - Values are opaque strings; the view owns (de)serialization. Anything read
@@ -31,6 +33,17 @@ import { useNavigate, useRouterState } from '@tanstack/react-router'
 
 /** The state shape: owned key → string value (absent = unset/default). */
 export type UrlState = Record<string, string | undefined>
+
+/** Optional extras forwarded on every reflect-into-URL navigation. */
+export type UrlStateOptions = {
+  /**
+   * When set, passed through to `navigate()`. A tab (or filter) change is not a
+   * page change: `/console` passes `false` so the router does not restore a
+   * stale tab-strip `scrollLeft` after render (measured 2026-09-06). Omit to
+   * keep the historical default (unset) for every other consumer.
+   */
+  resetScroll?: boolean
+}
 
 /** Read the current values of `keys` from a canonical search string. On first
  * render the browser URL is the source; after that the router subscription is. */
@@ -59,10 +72,15 @@ function sameState(a: UrlState, b: UrlState, keys: readonly string[]): boolean {
  */
 export function useUrlState(
   keys: readonly string[],
+  options?: UrlStateOptions,
 ): [UrlState, (patch: UrlState) => void] {
   const navigate = useNavigate()
   // The owned-keys list is a stable contract per call site; keep the first one.
   const keysRef = useRef(keys)
+  // Options are a per-call-site contract too, but callers pass a fresh object
+  // literal. Read through a ref so patch's identity stays [navigate].
+  const optionsRef = useRef(options)
+  optionsRef.current = options
   const [state, setState] = useState<UrlState>(() =>
     readSearch(keysRef.current),
   )
@@ -106,9 +124,14 @@ export function useUrlState(
       setState(next)
       // Reflect into the URL: merge over the existing search so non-owned
       // params survive; explicit undefined deletes (TanStack drops them).
+      const resetScroll = optionsRef.current?.resetScroll
       void navigate({
         search: (cur: Record<string, unknown>) => ({ ...cur, ...searchPatch }),
         replace: true,
+        // `true` keeps the current hash. Omitting hash would clear it, which
+        // rewrites state the hook does not own.
+        hash: true,
+        ...(resetScroll !== undefined ? { resetScroll } : {}),
       } as never)
     },
     [navigate],
@@ -144,8 +167,9 @@ export interface UrlStateDecoded<T> {
 export function useValidatedUrlState<T>(
   keys: readonly string[],
   decode: (raw: UrlState) => UrlStateDecoded<T>,
+  options?: UrlStateOptions,
 ): [T, (patch: UrlState) => void, string[]] {
-  const [raw, patch] = useUrlState(keys)
+  const [raw, patch] = useUrlState(keys, options)
   const decoded = useMemo(() => decode(raw), [raw, decode])
 
   // A refused value is not in effect, so it must not stay in the address bar:

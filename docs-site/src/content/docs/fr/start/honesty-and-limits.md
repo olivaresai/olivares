@@ -27,6 +27,13 @@ dit plutôt que de laisser entendre le contraire.
 - **La configuration au premier lancement est sans identifiants.** Une
   installation neuve n'a **aucun identifiant par défaut** ; le moteur affiche un
   jeton de configuration à usage unique au premier démarrage.
+- **Les CLI officielles Codex et Grok sont des pilotes de session lorsqu’elles sont épinglées.**
+  Définir `OLIVARES_SESSION_RUNTIME_CODEX_BIN` ou `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  enregistre ce pilote sur le nœud. Absentes, les profils de ce pilote restent
+  observables et ne sont pas lançables. Les lancements passent par un
+  [profil fournisseur](/how-to/operate-provider-sessions/).
+  `CHANGELOG.md` `[26.9.0]` n’affirme **pas** la compatibilité avec un compte
+  Grok officiel authentifié.
 - **L'API REST et l'audit ledger sont réels.** La
   [référence de l'API](/reference/api/) est rendue à partir du contrat OpenAPI
   3.1 du produit lui-même. L'audit ledger est en append-only (ajout seul) et
@@ -35,10 +42,7 @@ dit plutôt que de laisser entendre le contraire.
 - **Les versions sont signées et vérifiables hors ligne.** La signature, la
   provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés sans accès réseau](/fr/how-to/verify-a-release/), et le produit livre
-  un [bundle air-gap](/fr/how-to/air-gap-install/). **Aucune version taguée n'existe
-  encore**, ceci décrit donc ce qu'une version contiendra, et non un artefact que vous
-  pouvez télécharger et vérifier aujourd'hui — la même réserve que celle de
-  `SECURITY.md`.
+  un [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **v26.9.0**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
 
 ## Open core — ce qui est ouvert vs entreprise
 
@@ -164,7 +168,7 @@ sur une page.
   frontier brokés ne le peuvent pas.
 - **Les routes de module sont un contrat séparé, en bêta.** Les endpoints de
   module (par exemple le graphe d'access map et la dérive) ne font pas partie du
-  contrat de cœur stable (53 chemins de cœur) ; ils sont publiés comme un document
+  contrat de cœur stable (54 chemins de cœur) ; ils sont publiés comme un document
   **bêta** séparé — la
   [référence des routes de module](/reference/api-beta/) (servie sur
   `/openapi.beta.json`). Bêta signifie que les formes peuvent changer avec

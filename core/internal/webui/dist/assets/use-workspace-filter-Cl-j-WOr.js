@@ -1,1 +1,0 @@
-import{Lt as e}from"./index-Ck2CFqtD.js";function t(){let t=e(e=>e.activeWorkspace);return{workspaceId:t??void 0,queryKey:t??`__all__`}}export{t};

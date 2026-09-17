@@ -5,12 +5,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -33,7 +36,7 @@ func newDBCmd() *cobra.Command {
 			"the database idempotently from a superuser DSN.",
 	}
 	addTextJSONFormatFlag(root)
-	root.AddCommand(dbCheckCmd(), dbInitCmd())
+	root.AddCommand(dbCheckCmd(), dbInitCmd(), dbActivateDirectoryWriterCmd())
 	return root
 }
 
@@ -47,8 +50,9 @@ func dbCheckCmd() *cobra.Command {
 			"migration or schema change. It predicts the boot guard exactly: the --dsn and --owner-dsn\n" +
 			"roles must be NOSUPERUSER NOBYPASSRLS (else FORCE row-level security is inert and the\n" +
 			"engine refuses to start); the --admin-dsn role must be BYPASSRLS but NOT a superuser.\n" +
-			"SQLite has no roles, so it is always reported RLS-safe. With --strict the command exits\n" +
-			"non-zero when any DSN would be refused — for a pre-flight CI/cron gate.",
+			"SQLite has no role guard, but database access is still checked. With --strict, exit\n" +
+			"code 1 means a probed role fails a boot requirement. Code 6 means a connection\n" +
+			"or access failure prevents a verdict. A proven refusal takes precedence in a mixed run.",
 		Example: `  # Check the application role before boot
   olivares db check --dsn env:DATABASE_URL --strict
 
@@ -61,12 +65,13 @@ func dbCheckCmd() *cobra.Command {
 			if engine == string(store.EnginePostgres) {
 				eng = store.EnginePostgres
 			} else if engine != string(store.EngineSQLite) {
-				return fmt.Errorf("--engine %q must be sqlite or postgres", engine)
+				return exitcode.New(exitcode.Usage, fmt.Errorf("--engine %q must be sqlite or postgres", engine))
 			}
 			if dsn == "" && ownerDSN == "" && adminDSN == "" {
-				return fmt.Errorf("nothing to check: pass --dsn (and optionally --owner-dsn / --admin-dsn)")
+				return exitcode.New(exitcode.Usage, fmt.Errorf("nothing to check: pass --dsn (and optionally --owner-dsn / --admin-dsn)"))
 			}
-			ok := true
+			// Use flag labels in the aggregate because DSN values can contain credentials.
+			var refused, unresolved []string
 			results := make([]dbCheckResult, 0, 3)
 			for _, c := range []struct {
 				label string
@@ -80,16 +85,22 @@ func dbCheckCmd() *cobra.Command {
 				if c.value == "" {
 					continue
 				}
+				// Preserve a classified reference error; otherwise report invalid usage.
 				resolved, err := resolveDSNRef(cmd.Context(), c.label, c.value, osGetenv)
 				if err != nil {
-					return err
+					return exitcode.Or(exitcode.Usage, err)
 				}
 				posture, err := coreengine.ProbeRole(cmd.Context(), store.Config{Engine: eng, DSN: resolved})
 				if err != nil {
 					return err
 				}
-				verdict, good := checkVerdict(posture, c.admin)
-				ok = ok && good
+				verdict, class := checkVerdictClass(posture, c.admin)
+				switch class {
+				case dbVerdictRefused:
+					refused = append(refused, c.label)
+				case dbVerdictUnresolved:
+					unresolved = append(unresolved, c.label)
+				}
 				results = append(results, dbCheckResult{
 					DSN:             c.label,
 					Engine:          string(posture.Engine),
@@ -99,7 +110,7 @@ func dbCheckCmd() *cobra.Command {
 					BypassRLS:       posture.BypassRLS,
 					ReplicationRole: posture.ReplicationRole,
 					Verdict:         verdict,
-					Accepted:        good,
+					Accepted:        class == dbVerdictOK,
 				})
 			}
 			if err := renderOut(cmd, func(out io.Writer) error {
@@ -114,8 +125,8 @@ func dbCheckCmd() *cobra.Command {
 			}, results); err != nil {
 				return err
 			}
-			if strict && !ok {
-				return fmt.Errorf("db check: at least one DSN would be refused at boot")
+			if strict {
+				return strictVerdictError(refused, unresolved)
 			}
 			return nil
 		},
@@ -127,7 +138,7 @@ func dbCheckCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dsn, "dsn", "", "application-role DSN to probe (must be NOSUPERUSER NOBYPASSRLS). Accepts a file:/env: reference")
 	cmd.Flags().StringVar(&ownerDSN, "owner-dsn", "", "owner-role DSN to probe (must be NOSUPERUSER NOBYPASSRLS). Accepts a file:/env: reference")
 	cmd.Flags().StringVar(&adminDSN, "admin-dsn", "", "cross-tenant admin-role DSN to probe (must be BYPASSRLS, NOT a superuser). Accepts a file:/env: reference")
-	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero if any DSN would be refused at boot (pre-flight gate)")
+	cmd.Flags().BoolVar(&strict, "strict", false, "exit 1 for a proven boot refusal, or 6 when store access prevents a verdict")
 	return cmd
 }
 
@@ -145,18 +156,32 @@ type dbCheckResult struct {
 	Accepted        bool   `json:"accepted"`
 }
 
-// checkVerdict renders the human verdict for a probed posture and whether it passes.
-// An application/owner DSN must be RLS-safe; an admin DSN must be BYPASSRLS but not a
-// superuser — mirroring the store's two boot guards exactly.
+// dbVerdictClass distinguishes an accepted role, a refused role, and an unresolved probe.
+type dbVerdictClass int
+
+const (
+	// dbVerdictOK means that the probed role meets the boot requirements.
+	dbVerdictOK dbVerdictClass = iota
+	// dbVerdictRefused means that the probed role fails a boot requirement.
+	dbVerdictRefused
+	// dbVerdictUnresolved means that connection or access failure prevented a verdict.
+	dbVerdictUnresolved
+)
+
+// checkVerdict preserves the boolean interface used by provisioning and preflight callers.
 func checkVerdict(p store.RolePosture, admin bool) (string, bool) {
-	// Reachability first, for every engine: a SQLite DSN that could not be opened is
-	// not "RLS-safe by construction", it is unknown, and answering OK for it made
-	// --strict pass on a database nobody could connect to.
+	verdict, class := checkVerdictClass(p, admin)
+	return verdict, class == dbVerdictOK
+}
+
+// checkVerdictClass applies the boot role requirements and classifies probe failures.
+func checkVerdictClass(p store.RolePosture, admin bool) (string, dbVerdictClass) {
+	// A failed connection or authentication attempt provides no role verdict.
 	if !p.Reachable {
-		return "UNREACHABLE — " + p.Err, false
+		return "UNREACHABLE — " + p.Err, dbVerdictUnresolved
 	}
 	if p.Engine == store.EngineSQLite {
-		return "OK — sqlite has no roles; RLS-safe by construction", true
+		return "OK — sqlite has no roles; RLS-safe by construction", dbVerdictOK
 	}
 	// Mirror the boot guards EXACTLY — being stricter than boot is as wrong as being
 	// laxer, because this command is believed. Under session_replication_role='replica'
@@ -167,22 +192,42 @@ func checkVerdict(p store.RolePosture, admin bool) (string, bool) {
 	if !admin && p.TriggersDisabled() {
 		return "REFUSED — session_replication_role=" + p.ReplicationRole +
 			"; ordinary triggers would not fire, so the append-only and cutover guards are inert" +
-			" (ALTER ROLE " + p.Role + " RESET session_replication_role, and check the database default)", false
+			" (ALTER ROLE " + p.Role + " RESET session_replication_role, and check the database default)", dbVerdictRefused
 	}
 	if admin {
 		switch {
 		case p.Superuser:
-			return "REFUSED — a SUPERUSER (more privilege than the admin pool needs; use NOSUPERUSER BYPASSRLS)", false
+			return "REFUSED — a SUPERUSER (more privilege than the admin pool needs; use NOSUPERUSER BYPASSRLS)", dbVerdictRefused
 		case !p.BypassRLS:
-			return "REFUSED — NOT BYPASSRLS; cross-tenant reads would return empty (grant BYPASSRLS)", false
+			return "REFUSED — NOT BYPASSRLS; cross-tenant reads would return empty (grant BYPASSRLS)", dbVerdictRefused
 		default:
-			return "OK — BYPASSRLS, NOSUPERUSER (cross-tenant admin pool)", true
+			return "OK — BYPASSRLS, NOSUPERUSER (cross-tenant admin pool)", dbVerdictOK
 		}
 	}
 	if p.RLSUnsafe() {
-		return "REFUSED — " + p.Why() + "; FORCE RLS would be inert (provision NOSUPERUSER NOBYPASSRLS, or pass --allow-privileged-db-role)", false
+		return "REFUSED — " + p.Why() + "; FORCE RLS would be inert (provision NOSUPERUSER NOBYPASSRLS, or pass --allow-privileged-db-role)", dbVerdictRefused
 	}
-	return "OK — NOSUPERUSER NOBYPASSRLS (RLS-safe)", true
+	return "OK — NOSUPERUSER NOBYPASSRLS (RLS-safe)", dbVerdictOK
+}
+
+// strictVerdictError gives a proven refusal precedence over an unresolved probe.
+// Both classes remain visible in a mixed result. Messages contain flag labels only.
+func strictVerdictError(refused, unresolved []string) error {
+	switch {
+	case len(refused) > 0:
+		msg := "db check: " + strings.Join(refused, ", ") + " would be refused at boot"
+		if len(unresolved) > 0 {
+			// A separate clause, so a mixed run reads as a mixed run: this half is
+			// not a second refusal, it is an absence of evidence.
+			msg += "; " + strings.Join(unresolved, ", ") + " could not be reached, so no boot verdict was established for it"
+		}
+		return exitcode.New(exitcode.Err, errors.New(msg))
+	case len(unresolved) > 0:
+		// Store access failures use the published Server outcome (6).
+		return exitcode.New(exitcode.Server, errors.New("db check: "+
+			strings.Join(unresolved, ", ")+" could not be reached, so no boot verdict was established for it; this is not a refusal"))
+	}
+	return nil
 }
 
 // dbInitStep is one provisioning statement as `db init -o json` reports it.
@@ -228,9 +273,10 @@ type dbInitVerification struct {
 // to sniff which document it got before reading it, and the failure mode of that
 // is a script that silently treats a dry run as a completed provisioning.
 type dbInitResult struct {
-	Preview  bool         `json:"preview"`
-	Database string       `json:"database"`
-	Steps    []dbInitStep `json:"steps"`
+	DirectoryInventoryInstalled bool         `json:"directory_inventory_installed,omitempty"`
+	Preview                     bool         `json:"preview"`
+	Database                    string       `json:"database"`
+	Steps                       []dbInitStep `json:"steps"`
 	// Executed is what core reported about the steps, not what the CLI intended:
 	// on the --print-sql path it is false because no statement ran.
 	Executed     bool                 `json:"executed"`
@@ -262,14 +308,15 @@ func dbInitSteps(steps []store.PgProvisionStep) []dbInitStep {
 // this command did more than it did.
 func newDBInitResult(spec store.PgProvisionSpec, res store.PgProvisionResult) dbInitResult {
 	out := dbInitResult{
-		Preview:      false,
-		Database:     spec.Database,
-		Steps:        dbInitSteps(res.Steps),
-		Executed:     res.Executed,
-		Verification: []dbInitVerification{dbInitPosture("app", "--dsn", res.AppPosture, false)},
-		AppDSNHint:   res.AppDSNHint,
-		OwnerDSNHint: res.OwnerDSNHint,
-		AdminDSNHint: res.AdminDSNHint,
+		DirectoryInventoryInstalled: res.DirectoryInventoryInstalled,
+		Preview:                     false,
+		Database:                    spec.Database,
+		Steps:                       dbInitSteps(res.Steps),
+		Executed:                    res.Executed,
+		Verification:                []dbInitVerification{dbInitPosture("app", "--dsn", res.AppPosture, false)},
+		AppDSNHint:                  res.AppDSNHint,
+		OwnerDSNHint:                res.OwnerDSNHint,
+		AdminDSNHint:                res.AdminDSNHint,
 	}
 	if res.OwnerPosture != nil {
 		out.Verification = append(out.Verification, dbInitPosture("owner", "--owner-dsn", res.OwnerPosture, false))
@@ -309,6 +356,7 @@ func dbInitCmd() *cobra.Command {
 		ownerRole, ownerPassword, ownerPwFile string
 		adminRole, adminPassword, adminPwFile string
 		printSQL                              bool
+		installDirectoryInventory             bool
 	)
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -345,9 +393,10 @@ func dbInitCmd() *cobra.Command {
 				return fmt.Errorf("--admin-password: %w", err)
 			}
 			spec := store.PgProvisionSpec{
-				Database: database,
-				SSLMode:  sslmode,
-				App:      store.PgRole{Name: appRole, Password: appPw},
+				InstallDirectoryInventory: installDirectoryInventory,
+				Database:                  database,
+				SSLMode:                   sslmode,
+				App:                       store.PgRole{Name: appRole, Password: appPw},
 			}
 			if ownerRole != "" && ownerRole != appRole {
 				spec.Owner = store.PgRole{Name: ownerRole, Password: ownerPw}
@@ -394,6 +443,7 @@ func dbInitCmd() *cobra.Command {
 	cmd.Flags().StringVar(&adminPassword, "admin-password", "", "admin role password (prefer --admin-password-file)")
 	cmd.Flags().StringVar(&adminPwFile, "admin-password-file", "", "read the admin role password from a file, or - for stdin")
 	cmd.Flags().BoolVar(&printSQL, "print-sql", false, "print the provisioning SQL (passwords redacted) and exit, without connecting")
+	cmd.Flags().BoolVar(&installDirectoryInventory, "install-directory-inventory", false, "install and attest the closed noAdmin inventory after core migrations; existing app/owner roles and product tables are required, no passwords or role memberships are changed")
 	return cmd
 }
 
@@ -438,6 +488,10 @@ func printSteps(out io.Writer, steps []store.PgProvisionStep) {
 }
 
 func printInitResult(out io.Writer, spec store.PgProvisionSpec, res store.PgProvisionResult) {
+	if spec.InstallDirectoryInventory {
+		fmt.Fprintf(out, "directory inventory installed and attested on %q: %t; activate and reopen separately\n", spec.Database, res.DirectoryInventoryInstalled)
+		return
+	}
 	fmt.Fprintf(out, "provisioned database %q with %d step(s):\n", spec.Database, len(res.Steps))
 	for _, s := range res.Steps {
 		fmt.Fprintf(out, "  • %s\n", s.Label)

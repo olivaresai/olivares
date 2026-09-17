@@ -137,6 +137,7 @@ type RequestOption func(*requestOptions)
 
 type requestOptions struct {
 	query  url.Values
+	header http.Header
 	tenant string
 }
 
@@ -147,6 +148,24 @@ func Query(key, value string) RequestOption {
 			o.query = url.Values{}
 		}
 		o.query.Add(key, value)
+	}
+}
+
+func requestQuery(key, value string) RequestOption {
+	return func(o *requestOptions) {
+		if o.query == nil {
+			o.query = url.Values{}
+		}
+		o.query.Set(key, value)
+	}
+}
+
+func requestHeader(key, value string) RequestOption {
+	return func(o *requestOptions) {
+		if o.header == nil {
+			o.header = http.Header{}
+		}
+		o.header.Set(key, value)
 	}
 }
 
@@ -173,6 +192,26 @@ func (c *Client) doJSONRequired(ctx context.Context, method, route, path string,
 		body = json.RawMessage("null")
 	}
 	return c.decodeJSON(ctx, method, route, path, body, "", opts...)
+}
+
+func (c *Client) doTyped(
+	ctx context.Context,
+	method, route, path string,
+	body any,
+	out any,
+	opts ...RequestOption,
+) error {
+	raw, err := c.execute(ctx, method, route, path, body, true, "", opts...)
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		return fmt.Errorf("olivares: response does not match the typed contract (%s %s): %w", method, path, err)
+	}
+	return nil
 }
 
 // doReqRaw is the compatibility seam for operation layers generated before
@@ -299,6 +338,11 @@ func (c *Client) once(ctx context.Context, method, route, path string, body any,
 	}
 	if t := cmpOr(ro.tenant, c.tenant); t != "" {
 		req.Header.Set("X-Olivares-Tenant", t)
+	}
+	for key, values := range ro.header {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
 	}
 
 	resp, err := c.hc.Do(req)

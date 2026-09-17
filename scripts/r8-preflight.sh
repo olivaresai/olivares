@@ -222,15 +222,14 @@ else
 	malo "chromium de Playwright" "\`pnpm --dir $DIR/web exec playwright install chromium\`"
 fi
 
-# ── 7 · ⛔ LOS RESIDUOS DE `task build`, QUE MATAN EL SIGUIENTE PUSH DESDE ESTE ÁRBOL ──────────
+# ── 7 · LOS RESIDUOS GRANDES DE `task build` EN ESTE ÁRBOL ────────────────────────────────────
 #
-# Esta comprobación existe por una cadena que sólo se ve entera desde aquí:
+# Esta comprobación nació por una cadena que sólo se veía entera desde aquí:
 #   · `docs-captures.sh` NO construye `bin/olivares` (comprobación 5) ⇒ hay que correr `task build`.
 #   · `task build` compila los TRECE conectores de primera parte en `cmd/olivares/firstparty/bins/`.
-#   · `check-c03-41-plugin-census.sh:75` exige `os.listdir(bins) == ["PLACEHOLDER"]` — mide el
-#     DISCO, no el commit, así que ficheros SIN TRACKEAR lo rompen igual.
-#   · ⇒ quien prepare el árbol de capturas se queda con trece residuos, y el siguiente push desde
-#     ese worktree muere en `lint:addon-sets` **sin relación aparente con lo que estaba haciendo**.
+#   · Antes de a repository gate, el censo medía el DISCO y esos ficheros ignorados rompían el siguiente push.
+#   · a repository gate movió el censo al índice y añadió limpieza al test de dominios; aquí queda la guarda de
+#     higiene para no conservar ~249 MB de payloads ignorados en un árbol de capturas ya construido.
 #
 # Lo reportó otro carril el 2026-08-29 tras perder un push por esto, y me alcanzó con el mío ya
 # en vuelo: el mismo árbol donde construí el binario para verificar su documento los tenía.
@@ -245,8 +244,8 @@ fi
 #   El hecho —que lo encontró otro y no yo— vale igual; el identificador no viaja al árbol
 #   público. Quién fue está en el registro de sesión, que no se exporta.
 #
-# ⚠ `git status` A SECAS PUEDE NO ENSEÑARLOS. El censo mira el disco; si el ignore los cubre, sólo
-#   los ves con `--ignored`. Por eso aquí se cuenta el DIRECTORIO, que es lo que el censo cuenta.
+# ⚠ `git status` A SECAS PUEDE NO ENSEÑARLOS. Como el ignore los cubre, sólo los ves con
+#   `--ignored`; por eso esta guarda de higiene cuenta el directorio directamente.
 _bins="$DIR/cmd/olivares/firstparty/bins"
 if [ ! -d "$_bins" ]; then
 	ok "residuos de build" "no hay bins/ todavía"

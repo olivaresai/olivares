@@ -29,6 +29,22 @@ Une observation d'arête ne transporte que des identifiants et une classificatio
 
 Un connecteur importe le SDK de connecteur et rien d'autre du produit. Il n'importe jamais `/core` (le moteur AGPL). Cette frontière est appliquée en CI, et c'est ce qui permet aux connecteurs d'être livrés sous Apache-2.0 et aux tiers de construire les leurs sans friction de copyleft. Le même binaire de connecteur s'exécute in-process ou out-of-process via gRPC de manière identique. Voir [Open core et licences](/fr/explanation/open-core-and-licensing/) pour la frontière complète.
 
+Plusieurs sources du **même** type de connecteur peuvent être enregistrées et
+exécutées à la fois (`CHANGELOG.md` `[26.9.0]` Fixed). Le runtime indexait
+chaque source par le nom Descriptor du connecteur, donc une deuxième ligne de
+roster d’un type était persistée et listée — et le moteur la refusait. Les
+sources sont maintenant enregistrées sous le nom de l’opérateur (le `name` de
+la ligne de roster), avec le descripteur du connecteur à côté. `grok-home-a`
+et `grok-home-b` s’ouvrent avec leur propre configuration et références de
+credentiel, exécutent leur propre instance et processus, et rotent, échouent
+et s’arrêtent indépendamment. `sources plan` / `validate` n’annoncent plus la
+restriction d’une instance par connecteur que le moteur a cessé d’appliquer.
+Deux entrées d’identité servies par un connecteur (`okta` et `entra`
+partagent `idp`) avec `as_source: true` câblent maintenant les deux. Cela ne
+sépare pas à soi seul deux sessions fournisseur ni homes de configuration de
+bout en bout — c’est
+[Exploiter une session fournisseur](/how-to/operate-provider-sessions/).
+
 ## Provenance et confiance : pourquoi la source compte
 
 Chaque arête enregistre **quelle source l'a produite** et un niveau de **confiance**, et le produit montre les deux plutôt que de les fusionner. Un READ `pg_audit` et un indice `mcp_annotation` ne sont pas la même preuve et ne sont jamais traités comme la même chose.

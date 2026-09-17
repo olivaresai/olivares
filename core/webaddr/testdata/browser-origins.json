@@ -1,0 +1,628 @@
+[
+  {
+    "input": "https://panel.example.com:8443",
+    "accepted": true,
+    "origin": "https://panel.example.com:8443",
+    "host": "panel.example.com",
+    "port": "8443",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel.example.com:443",
+    "accepted": true,
+    "origin": "https://panel.example.com",
+    "host": "panel.example.com",
+    "kind": "domain"
+  },
+  {
+    "input": "http://localhost:80",
+    "accepted": true,
+    "origin": "http://localhost",
+    "host": "localhost",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel.example.com:0443",
+    "accepted": true,
+    "origin": "https://panel.example.com",
+    "host": "panel.example.com",
+    "kind": "domain"
+  },
+  {
+    "input": "HTTPS://Panel.Example.COM",
+    "accepted": true,
+    "origin": "https://panel.example.com",
+    "host": "panel.example.com",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel.example.com.",
+    "accepted": true,
+    "origin": "https://panel.example.com.",
+    "host": "panel.example.com.",
+    "kind": "domain"
+  },
+  {
+    "input": "https://bücher.example",
+    "accepted": true,
+    "origin": "https://xn--bcher-kva.example",
+    "host": "xn--bcher-kva.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://xn--bcher-kva.example",
+    "accepted": true,
+    "origin": "https://xn--bcher-kva.example",
+    "host": "xn--bcher-kva.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://my_host.example.com",
+    "accepted": true,
+    "origin": "https://my_host.example.com",
+    "host": "my_host.example.com",
+    "kind": "domain"
+  },
+  {
+    "input": "https://olivares",
+    "accepted": true,
+    "origin": "https://olivares",
+    "host": "olivares",
+    "kind": "domain"
+  },
+  {
+    "input": "https://LOCALHOST:8443",
+    "accepted": true,
+    "origin": "https://localhost:8443",
+    "host": "localhost",
+    "port": "8443",
+    "kind": "domain"
+  },
+  {
+    "input": "https://localhost.",
+    "accepted": true,
+    "origin": "https://localhost.",
+    "host": "localhost.",
+    "kind": "domain"
+  },
+  {
+    "input": "https://foo.localhost",
+    "accepted": true,
+    "origin": "https://foo.localhost",
+    "host": "foo.localhost",
+    "kind": "domain"
+  },
+  {
+    "input": "https://127.0.0.1:8443",
+    "accepted": true,
+    "origin": "https://127.0.0.1:8443",
+    "host": "127.0.0.1",
+    "port": "8443",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://192.168.1.10:8443",
+    "accepted": true,
+    "origin": "https://192.168.1.10:8443",
+    "host": "192.168.1.10",
+    "port": "8443",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://127.1:8443",
+    "accepted": true,
+    "origin": "https://127.0.0.1:8443",
+    "host": "127.0.0.1",
+    "port": "8443",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://0x7f000001",
+    "accepted": true,
+    "origin": "https://127.0.0.1",
+    "host": "127.0.0.1",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://2130706433",
+    "accepted": true,
+    "origin": "https://127.0.0.1",
+    "host": "127.0.0.1",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://0177.0.0.1",
+    "accepted": true,
+    "origin": "https://127.0.0.1",
+    "host": "127.0.0.1",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://[2001:0DB8:0:0:0:0:0:1]:8443",
+    "accepted": true,
+    "origin": "https://[2001:db8::1]:8443",
+    "host": "2001:db8::1",
+    "port": "8443",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://[::1]",
+    "accepted": true,
+    "origin": "https://[::1]",
+    "host": "::1",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://0.0.0.0:8443",
+    "accepted": true,
+    "origin": "https://0.0.0.0:8443",
+    "host": "0.0.0.0",
+    "port": "8443",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://[::]:8443",
+    "accepted": true,
+    "origin": "https://[::]:8443",
+    "host": "::",
+    "port": "8443",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://0",
+    "accepted": true,
+    "origin": "https://0.0.0.0",
+    "host": "0.0.0.0",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://[::ffff:127.0.0.1]",
+    "accepted": true,
+    "origin": "https://[::ffff:7f00:1]",
+    "host": "::ffff:7f00:1",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://[::ffff:1.2.3.4]",
+    "accepted": true,
+    "origin": "https://[::ffff:102:304]",
+    "host": "::ffff:102:304",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://[0:0:0:0:0:0:0:1]",
+    "accepted": true,
+    "origin": "https://[::1]",
+    "host": "::1",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://[1:2:3:4:5:6:7:8]",
+    "accepted": true,
+    "origin": "https://[1:2:3:4:5:6:7:8]",
+    "host": "1:2:3:4:5:6:7:8",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://[2001:db8::1:0:0:1]",
+    "accepted": true,
+    "origin": "https://[2001:db8::1:0:0:1]",
+    "host": "2001:db8::1:0:0:1",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://[::1.2.3.4]",
+    "accepted": true,
+    "origin": "https://[::102:304]",
+    "host": "::102:304",
+    "kind": "ipv6"
+  },
+  {
+    "input": "https://256.1.1.1",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://99999999999999999999.1",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://1.2.3.4.5",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://4294967296",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://0x100000000",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://0xffffffff",
+    "accepted": true,
+    "origin": "https://255.255.255.255",
+    "host": "255.255.255.255",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://255.255.255.255",
+    "accepted": true,
+    "origin": "https://255.255.255.255",
+    "host": "255.255.255.255",
+    "kind": "ipv4"
+  },
+  {
+    "input": "https://0xffffffffffffffffffff",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://panel.0x10000000000000000",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://panel.example.0x1ffffffffffffffff",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://a.18446744073709551616",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://panel.99999999999999999999",
+    "accepted": false,
+    "code": "host_not_an_address"
+  },
+  {
+    "input": "https://panel.0xfffffffffffffffffffzz",
+    "accepted": true,
+    "origin": "https://panel.0xfffffffffffffffffffzz",
+    "host": "panel.0xfffffffffffffffffffzz",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel.0xzz",
+    "accepted": true,
+    "origin": "https://panel.0xzz",
+    "host": "panel.0xzz",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel.0x1g",
+    "accepted": true,
+    "origin": "https://panel.0x1g",
+    "host": "panel.0x1g",
+    "kind": "domain"
+  },
+  {
+    "input": "https://99999999999999999999z.example",
+    "accepted": true,
+    "origin": "https://99999999999999999999z.example",
+    "host": "99999999999999999999z.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel.1a",
+    "accepted": true,
+    "origin": "https://panel.1a",
+    "host": "panel.1a",
+    "kind": "domain"
+  },
+  {
+    "input": "https://.panel.example.com",
+    "accepted": true,
+    "origin": "https://.panel.example.com",
+    "host": ".panel.example.com",
+    "kind": "domain"
+  },
+  {
+    "input": "https://.a.example",
+    "accepted": true,
+    "origin": "https://.a.example",
+    "host": ".a.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://a..example",
+    "accepted": true,
+    "origin": "https://a..example",
+    "host": "a..example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://a.example.",
+    "accepted": true,
+    "origin": "https://a.example.",
+    "host": "a.example.",
+    "kind": "domain"
+  },
+  {
+    "input": "https://..",
+    "accepted": true,
+    "origin": "https://..",
+    "host": "..",
+    "kind": "domain"
+  },
+  {
+    "input": "https://example..",
+    "accepted": true,
+    "origin": "https://example..",
+    "host": "example..",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel.example.com..",
+    "accepted": true,
+    "origin": "https://panel.example.com..",
+    "host": "panel.example.com..",
+    "kind": "domain"
+  },
+  {
+    "input": "https://xn--.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://xn--a.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://XN--.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://xn--。example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://ｘｎ－－.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://xn－－.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://xn-­-.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://­xn--.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://panel.ｘｎ－－",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://­.example",
+    "accepted": true,
+    "origin": "https://.example",
+    "host": ".example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://a.​.example",
+    "accepted": true,
+    "origin": "https://a..example",
+    "host": "a..example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://a。example",
+    "accepted": true,
+    "origin": "https://a.example",
+    "host": "a.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://a｡example",
+    "accepted": true,
+    "origin": "https://a.example",
+    "host": "a.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://panel．example．com",
+    "accepted": true,
+    "origin": "https://panel.example.com",
+    "host": "panel.example.com",
+    "kind": "domain"
+  },
+  {
+    "input": "https://a.­.example",
+    "accepted": true,
+    "origin": "https://a..example",
+    "host": "a..example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://-lead.example",
+    "accepted": true,
+    "origin": "https://-lead.example",
+    "host": "-lead.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://trail-.example",
+    "accepted": true,
+    "origin": "https://trail-.example",
+    "host": "trail-.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://ab--cd.example",
+    "accepted": true,
+    "origin": "https://ab--cd.example",
+    "host": "ab--cd.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://aa--bb.example",
+    "accepted": true,
+    "origin": "https://aa--bb.example",
+    "host": "aa--bb.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://א.example",
+    "accepted": true,
+    "origin": "https://xn--4db.example",
+    "host": "xn--4db.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://א1.example",
+    "accepted": true,
+    "origin": "https://xn--1-zhc.example",
+    "host": "xn--1-zhc.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://xn--4dbrk0ce.example",
+    "accepted": true,
+    "origin": "https://xn--4dbrk0ce.example",
+    "host": "xn--4dbrk0ce.example",
+    "kind": "domain"
+  },
+  {
+    "input": "https://a‍b.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://a‌b.example",
+    "accepted": false,
+    "code": "host_not_a_name"
+  },
+  {
+    "input": "https://例え.テスト",
+    "accepted": true,
+    "origin": "https://xn--r8jz45g.xn--zckzah",
+    "host": "xn--r8jz45g.xn--zckzah",
+    "kind": "domain"
+  },
+  {
+    "input": "https://exÄmple.com",
+    "accepted": true,
+    "origin": "https://xn--exmple-cua.com",
+    "host": "xn--exmple-cua.com",
+    "kind": "domain"
+  },
+  {
+    "input": "https://1א.example",
+    "accepted": false,
+    "code": "host_not_a_name",
+    "divergence": "library-difference",
+    "why": "golang.org/x/net/idna's BidiRule refuses a bidi domain whose first character is a European number (RFC 5893 rule 1); the ICU implementation behind the installed Node URL accepts it. We refuse MORE than a browser here. Recorded rather than worked around: the alternative is dropping the Bidi rule, which the URL Standard requires, for an IDN class no deployment uses."
+  },
+  {
+    "input": "https://a%2Fb.example",
+    "accepted": false,
+    "code": "not_a_url"
+  },
+  {
+    "input": "https://a%00b.example",
+    "accepted": false,
+    "code": "not_a_url"
+  },
+  {
+    "input": "https://ex%61mple.com",
+    "accepted": false,
+    "code": "not_a_url",
+    "divergence": "console-origin-restriction",
+    "why": "net/url refuses any percent escape in a host, so a percent-escaped spelling of a legal host is refused instead of decoded. Declare the host literally. Refusing is the safe direction: this parser never accepts an address a browser would reject."
+  },
+  {
+    "input": "https://%41.example",
+    "accepted": false,
+    "code": "not_a_url",
+    "divergence": "console-origin-restriction",
+    "why": "as above: a percent-escaped host is refused rather than decoded."
+  },
+  {
+    "input": "https://panel.example.com:70000",
+    "accepted": false,
+    "code": "port_out_of_range"
+  },
+  {
+    "input": "https://",
+    "accepted": false,
+    "code": "no_host"
+  },
+  {
+    "input": "https://my host.example",
+    "accepted": false,
+    "code": "control_character"
+  },
+  {
+    "input": "https://[fe80::1%25eth0]:8443",
+    "accepted": false,
+    "code": "host_zone_identifier"
+  },
+  {
+    "input": "https://panel.example.com:0",
+    "accepted": false,
+    "code": "port_out_of_range",
+    "divergence": "console-origin-restriction",
+    "why": "port 0 means \"let the kernel choose\" to a listener and nothing at all to a browser; nobody can open it."
+  },
+  {
+    "input": "https://panel.example.com/olivares",
+    "accepted": false,
+    "code": "path_present",
+    "divergence": "console-origin-restriction",
+    "why": "the console is served at the root of its origin, so a path would print an address that does not answer."
+  },
+  {
+    "input": "https://panel.example.com?a=1",
+    "accepted": false,
+    "code": "query_present",
+    "divergence": "console-origin-restriction",
+    "why": "a query is not part of an origin, and its values can carry secrets."
+  },
+  {
+    "input": "https://panel.example.com#x",
+    "accepted": false,
+    "code": "fragment_present",
+    "divergence": "console-origin-restriction",
+    "why": "a fragment is not part of an origin and never reaches the server."
+  },
+  {
+    "input": "https://ops:pw@panel.example.com",
+    "accepted": false,
+    "code": "userinfo_present",
+    "divergence": "console-origin-restriction",
+    "why": "userinfo is not part of an origin, and this is the value class that made the old work print a password into the process log."
+  },
+  {
+    "input": "ftp://panel.example.com",
+    "accepted": false,
+    "code": "unsupported_scheme",
+    "divergence": "console-origin-restriction",
+    "why": "the console is served over https, or over http behind a TLS-terminating proxy. No other scheme reaches it."
+  },
+  {
+    "input": "panel.example.com:8443",
+    "accepted": false,
+    "code": "no_scheme",
+    "divergence": "console-origin-restriction",
+    "why": "a browser parses this as an opaque URL with a null origin, which is not an address anybody can be sent to."
+  }
+]

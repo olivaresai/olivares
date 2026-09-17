@@ -210,17 +210,10 @@ func TestMissingRequiredFlagIsAUsageError(t *testing.T) {
 	root.SetOut(&out)
 	root.SetErr(&errb)
 	root.SetArgs([]string{"connector", "init", "example"})
-	cmd, err := root.ExecuteC()
-	if err == nil {
-		t.Fatal("`connector init` without its required flags must fail")
-	}
-	// runMain classifies through cobra's own validators; mirror that here.
-	code := exitcode.From(err)
-	if code == exitcode.Err && cmd != nil &&
-		(cmd.ValidateRequiredFlags() != nil || cmd.ValidateFlagGroups() != nil) {
-		code = exitcode.Usage
-	}
+	// Through classifyOutcome, which is what runMain itself calls: a mirror of
+	// that classification here would be free to drift away from the real one.
+	code, printable := classifyOutcome(root.ExecuteC())
 	if code != exitcode.Usage {
-		t.Fatalf("exit = %d, want %d (usage): %v", code, exitcode.Usage, err)
+		t.Fatalf("exit = %d, want %d (usage): %v", code, exitcode.Usage, printable)
 	}
 }

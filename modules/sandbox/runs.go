@@ -28,6 +28,7 @@ const (
 // the derived aggregates and the (optional) score verdict. It is what executeSpec
 // returns and what persistRun writes.
 type runResult struct {
+	liveRef     string
 	runner      string
 	isolated    bool
 	destroyed   bool
@@ -123,6 +124,9 @@ func (m *Module) persistRun(ctx context.Context, sc store.Scope, mc api.ModuleCo
 		colStepsTotal: int64(res.stepsTotal), colStepsOK: int64(res.stepsOK), colStepsError: int64(res.stepsError),
 		colOutputsHash: res.outputsHash, colDestroyed: res.destroyed,
 		colStartedAt: started.String(), colFinishedAt: finished.String(), colLaunchedBy: mc.Principal.Actor(),
+	}
+	if res.liveRef != "" {
+		rec[colLiveRef] = res.liveRef
 	}
 	if s := strings.TrimSpace(scenarioRef); s != "" {
 		rec[colScenarioRef] = s
@@ -236,6 +240,7 @@ func (m *Module) handleRunScenario(w http.ResponseWriter, r *http.Request, mc ap
 // ---- replay ----------------------------------------------------------------------
 
 type replayRequest struct {
+	LiveRef    string    `json:"live_ref,omitempty"`
 	SessionRef string    `json:"session_ref"`
 	Mocks      []mockDTO `json:"mocks,omitempty"`
 	SuiteRef   string    `json:"suite_ref,omitempty"`
@@ -251,15 +256,15 @@ func (m *Module) handleReplay(w http.ResponseWriter, r *http.Request, mc api.Mod
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	sessionRef := clamp(strings.TrimSpace(req.SessionRef), maxRefLen)
-	if sessionRef == "" {
-		writeJSON(w, http.StatusBadRequest, errorBody("session_ref is required"))
+	sessionRef, liveRef, targetErr := historyTarget(req.SessionRef, req.LiveRef)
+	if targetErr != nil {
+		writeJSON(w, http.StatusBadRequest, errorBody(targetErr.Error()))
 		return
 	}
 
 	// 1) Reconstruct the timeline (read-only). The default core source yields zero
 	// steps (no per-message timeline) ⇒ degraded replay.
-	timeline, err := m.history.Timeline(r.Context(), mc.Tenant, sessionRef)
+	timeline, err := m.historyTimeline(r.Context(), mc.Tenant, sessionRef, liveRef)
 	if err != nil {
 		m.debugf("sandbox: history source error", "err", err)
 	}
@@ -278,7 +283,12 @@ func (m *Module) handleReplay(w http.ResponseWriter, r *http.Request, mc api.Mod
 		// No reconstructable timeline ⇒ honestly degraded, never fabricated.
 		res.status = "degraded"
 	}
-	m.score(r.Context(), mc.Tenant, &res, strings.TrimSpace(req.SuiteRef), "session", sessionRef, "")
+	res.liveRef = liveRef
+	subjectKind, subjectRef := "session", sessionRef
+	if liveRef != "" {
+		subjectKind, subjectRef = "session_live", liveRef
+	}
+	m.score(r.Context(), mc.Tenant, &res, strings.TrimSpace(req.SuiteRef), subjectKind, subjectRef, "")
 	finished := m.clock.Now()
 
 	// 3) Persist (no scenario ref; subject is the session).
@@ -297,6 +307,7 @@ func (m *Module) handleReplay(w http.ResponseWriter, r *http.Request, mc api.Mod
 // ---- run + output reads ----------------------------------------------------------
 
 type runDTO struct {
+	LiveRef     string   `json:"live_ref,omitempty"`
 	ID          string   `json:"id"`
 	ScenarioRef string   `json:"scenario_ref,omitempty"`
 	Kind        string   `json:"kind"`
@@ -320,7 +331,7 @@ type runDTO struct {
 
 func toRunDTO(rec model.Record) runDTO {
 	dto := runDTO{
-		ID: rec.String(model.ColID), ScenarioRef: rec.String(colScenarioRef), Kind: rec.String(colKind),
+		LiveRef: rec.String(colLiveRef), ID: rec.String(model.ColID), ScenarioRef: rec.String(colScenarioRef), Kind: rec.String(colKind),
 		SubjectRef: rec.String(colSubjectRef), Variant: rec.String(colVariant), Runner: rec.String(colRunner),
 		Isolated: rec.Bool(colIsolated), Status: rec.String(colRunStatus),
 		StepsTotal: rec.Int(colStepsTotal), StepsOK: rec.Int(colStepsOK), StepsError: rec.Int(colStepsError),

@@ -212,6 +212,22 @@ var privilegedReadPerms = map[Permission]struct{}{
 	// aggregates ride the ordinary viewer-read tier); editor and above by default, and an
 	// org tightens it via custom roles.: per-team default, per-developer opt-in.
 	"adoption:developer:read": {},
+	// The session-cockpit TRANSCRIPT (V269 / docs/contracts/COCKPIT-02-authz.md §4). A
+	// transcript is the literal keystrokes and output of a governed terminal — the most
+	// content-like read in the product, and one that captures secrets by design, since
+	// the cockpit records everything typed and offers no masking toggle.
+	//
+	// ⛔ IT IS HERE BECAUSE THE CONTRACT SAID SO AND THE CODE DID NOT. An adversarial
+	// contrast checked the claim and found this map without the entry: the module verb
+	// tier would have handed `session-cockpit:transcript:read` to every VIEWER, exactly
+	// the fall-through this list exists to stop. The contract was true about the
+	// intention and false about the tree.
+	//
+	// The guarantee is the one stated at the top of this map and no more: it binds the
+	// ROLE TIER, so no viewer HOLDS it. A tenant admin may still delegate it to a
+	// viewer-tier user through an explicit, audited scoped grant clamped by canDelegate
+	// — which is what COCKPIT-02's "viewer con grant scoped explícito" row depends on.
+	"session-cockpit:transcript:read": {},
 }
 
 // coreRolePerms is the explicit permission set granted by each built-in role for

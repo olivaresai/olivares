@@ -321,24 +321,52 @@ INSERT INTO orgs VALUES ('org-live-9','LIVE');`)
 // TestDRRestoreIntoAnEmptyPostgresNeedsNoDeclaration keeps the guard from
 // becoming "always require": a restore into an EMPTY database destroys nothing,
 // and the documented Postgres path must stay usable without the flags. The
-// command still fails on the invalid bundle — that is the point: it got PAST the
-// declaration guard.
+// command still fails — that is the point: it got PAST the declaration guard.
+//
+// WHAT IT FAILS ON NOW DEPENDS ON THE FIXTURE, and that is worth stating because
+// this cell's DSN is the suite's superuser one. Since the authority pre-flight
+// exists (dr_preflight.go), a superuser --dsn is refused there — before the
+// bundle is even opened — which is the whole point of that control. So the arms
+// are split: the superuser arm proves the declaration guard let it through and
+// the AUTHORITY refused it, and the least-privilege arm (a real provisioned app
+// role) proves the documented path really does reach the bundle with no
+// declaration demanded. Asserting only "an error happened" would have let this
+// cell go quietly vacuous.
 func TestDRRestoreIntoAnEmptyPostgresNeedsNoDeclaration(t *testing.T) {
-	fresh := newPGFixture(t, "clean")
-
 	bundle := filepath.Join(t.TempDir(), "not-a-bundle.drbundle")
 	if err := os.WriteFile(bundle, []byte("not a bundle"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := runDR("restore", "--engine", "postgres", "--dsn", fresh.dsn,
-		"--data-dir", t.TempDir(), "--in", bundle)
-	if err == nil {
-		t.Fatal("an invalid bundle was accepted")
-	}
-	if strings.Contains(err.Error(), "--operator") {
-		t.Fatalf("an EMPTY Postgres target demanded a declaration it does not need: %v", err)
-	}
+	t.Run("superuser fixture DSN: past the declaration, refused on authority", func(t *testing.T) {
+		fresh := newPGFixture(t, "clean")
+		_, err := runDR("restore", "--engine", "postgres", "--dsn", fresh.dsn,
+			"--data-dir", t.TempDir(), "--in", bundle)
+		if err == nil {
+			t.Fatal("an invalid bundle was accepted")
+		}
+		if strings.Contains(err.Error(), "--operator") {
+			t.Fatalf("an EMPTY Postgres target demanded a declaration it does not need: %v", err)
+		}
+		if !strings.Contains(err.Error(), "SUPERUSER") {
+			t.Fatalf("a superuser --dsn must be refused on authority before the bundle is opened, got: %v", err)
+		}
+	})
+
+	t.Run("least-privilege app role: reaches the bundle with no declaration", func(t *testing.T) {
+		fresh := newPGSplitFixture(t, "cleanlp", false)
+		_, err := runDR("restore", "--engine", "postgres", "--dsn", fresh.appDSN,
+			"--data-dir", t.TempDir(), "--in", bundle)
+		if err == nil {
+			t.Fatal("an invalid bundle was accepted")
+		}
+		if strings.Contains(err.Error(), "--operator") {
+			t.Fatalf("an EMPTY Postgres target demanded a declaration it does not need: %v", err)
+		}
+		if strings.Contains(err.Error(), "pre-flight refused") {
+			t.Fatalf("a correctly provisioned single-role target was refused by the pre-flight: %v", err)
+		}
+	})
 }
 
 // TestDRRestoreOverAPostgresHoldingSTATEThatIsNotATableStillRefuses is the

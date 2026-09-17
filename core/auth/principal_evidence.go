@@ -34,10 +34,19 @@ type principalEvidenceProvenance struct {
 	tenant         model.TenantID
 	ref            PrincipalRef
 	directoryEpoch store.AuthorizationFactRef
+	authorityMode  principalReadAuthorityMode
+	userAuthority  store.UserAuthorityFactRef
 	observedAt     time.Time
 	freshUntil     time.Time
 	seal           [sha256.Size]byte
 }
+
+type principalReadAuthorityMode byte
+
+const (
+	principalHumanAuthority principalReadAuthorityMode = iota + 1
+	principalTokenDirectoryOnly
+)
 
 // ResolvePrincipalScope reconstructs the current authority for one exact
 // authenticated credential inside exactly one AuthView. It never trusts grants,
@@ -92,6 +101,24 @@ func (a *Authenticator) ResolvePrincipalScope(
 			return err
 		}
 
+		mode := principalTokenDirectoryOnly
+		var userAuthority store.UserAuthorityFactRef
+		if ref.kind == KindUser {
+			mode = principalHumanAuthority
+			reader, ok := as.(store.AuthUserAuthorityEvidenceScope)
+			if !ok {
+				return principalEvidenceUnavailable("auth scope lacks User authority evidence", nil)
+			}
+			userAuthority, err = reader.ReadUserAuthorityFact(ctx, material.principal.UserID)
+			if err != nil {
+				return fmt.Errorf("%w: read User authority: %w", ErrPrincipalEvidenceUnavailable, err)
+			}
+			if userAuthority.UserID != material.principal.UserID ||
+				!validPrincipalEvidenceID(userAuthority.UserID) || userAuthority.Version < 1 {
+				return principalEvidenceUnavailable("User authority does not match reconstructed User", nil)
+			}
+		}
+
 		after, err := evidence.ReadDirectoryEpochFact(ctx, tenant)
 		if err != nil || !validPrincipalDirectoryEpochFact(tenant, after) || after != before {
 			return principalEvidenceUnavailable("directory generation changed during reconstruction", err)
@@ -117,6 +144,8 @@ func (a *Authenticator) ResolvePrincipalScope(
 			tenant:         tenant,
 			ref:            ref,
 			directoryEpoch: before,
+			authorityMode:  mode,
+			userAuthority:  userAuthority,
 			observedAt:     now.Time(),
 			freshUntil:     freshUntil,
 		}
@@ -294,7 +323,8 @@ func resolveTokenEvidenceMaterial(
 	switch token.Purpose {
 	case "":
 		if token.SessionRef != "" || !token.WorkspaceID.IsZero() || token.SessionRunRef != "" ||
-			token.SessionFence != 0 || tokenCarriesDelegationBinding(token) ||
+			token.SessionFence != 0 ||
+			(tokenCarriesDelegationBinding(token) && !principalEvidenceAgentOBOToken(token)) ||
 			!validPrincipalEvidenceTenant(token.BoundTenantID) ||
 			token.BoundTenantID != tenant || !IsRole(token.Role) {
 			return principalEvidenceMaterial{}, principalEvidenceUnavailable("ordinary token binding is malformed or out of scope", nil)
@@ -308,6 +338,9 @@ func resolveTokenEvidenceMaterial(
 			map[model.TenantID]string{token.BoundTenantID: token.Role},
 			nil,
 		)
+		if principalEvidenceAgentOBOToken(token) {
+			principal = principal.WithAgentIdentity(token.AgentRef)
+		}
 	case WorkSessionCredentialPurpose:
 		if token.BoundTenantID != tenant {
 			return principalEvidenceMaterial{}, principalEvidenceUnavailable("work-session token is out of scope", nil)

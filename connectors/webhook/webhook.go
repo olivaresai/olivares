@@ -9,7 +9,7 @@
 // compares it in constant time, which both authenticates the sender and bounds
 // replay (the timestamp is signed, so a captured request cannot be re-dated).
 //
-// It is minimal-data (docs/SECURITY-HARDENING.md-3): the body carries only the non-sensitive
+// It is minimal-data (docs/SECURITY-HARDENING.md §2-3): the body carries only the non-sensitive
 // Notification fields (type, title, body, severity, tenant, structured fields,
 // time). The signing secret is an operator credential declared Secret in the
 // config; it is held in memory only, used solely as the HMAC key, and NEVER

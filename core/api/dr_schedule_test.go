@@ -111,14 +111,19 @@ func TestScheduleRetentionUsesManifestCreatedAtBeforeFileMTime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = dr.WriteBundle(f, dr.BundleInput{
+	cipher, err := dr.NewRawKeyCipher(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = dr.WriteAuthenticatedBundle(f, dr.BundleInput{
 		Manifest: &dr.Manifest{
 			Format:     dr.ManifestFormat,
 			CreatedAt:  now.Add(-time.Hour).Format(time.RFC3339),
 			EngineKind: "sqlite",
 			Store:      dr.StoreSnapshot{Method: dr.MethodPITR, File: "external"},
 		},
-	})
+		KEK: cipher.Params(),
+	}, cipher)
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}

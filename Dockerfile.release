@@ -21,6 +21,13 @@ LABEL org.opencontainers.image.title="olivares" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.vendor="Olivares.AI"
 COPY olivares /usr/local/bin/olivares
+# Seed the named-volume mountpoint with the runtime uid and a private mode. The
+# tracked marker is supplied through GoReleaser's extra_files build context.
+COPY --chown=65532:65532 --chmod=0700 packaging/container/data-dir/ /var/lib/olivares/
+# The shipped backup service (deploy/compose/docker-compose.backup.yml) runs as this
+# image's user and writes bundles to the `olivares-backups` named volume at /backups.
+# Seed that mountpoint the same way, or a fresh volume is root-owned and unwritable.
+COPY --chown=65532:65532 --chmod=0700 packaging/container/data-dir/ /backups/
 # The licence travels INSIDE the image. Until 2026-08-04 it did not: the OCI images
 # carried an org.opencontainers.image.licenses LABEL and no licence TEXT, so the main
 # distribution path handed an operator an AGPL binary with neither the grant that lets

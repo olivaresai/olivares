@@ -95,7 +95,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # ⛔ `go.work` Y NO EL `go.mod` DEL MODULO, aunque lo segundo parezca lo correcto.
           #

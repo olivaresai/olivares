@@ -9,9 +9,9 @@ import (
 	"net/http"
 )
 
-// writeCommunicationError is a pre-activation handler seam; it does not mount a
-// route or make the communication kernel ready. It names only communication
-// decisions whose wire meaning differs from the shared store mapper. In
+// writeCommunicationError maps communication decisions whose wire meaning
+// differs from the shared store mapper. Route admission never makes the
+// communication kernel ready. In
 // particular, a semantic plan precondition is 412 while an ordinary
 // store.ErrConflict (including idempotency rebind) continues through
 // writeStoreError as 409.
@@ -36,6 +36,31 @@ func communicationHTTPDisposition(
 	switch {
 	case errors.Is(err, ErrCommunicationPlanChanged):
 		return http.StatusPreconditionFailed, "plan_changed", VerdictBroken, true
+	case errors.Is(err, errDirectNoticeCursorVersionMismatch):
+		return http.StatusPreconditionFailed, "version_mismatch", VerdictBroken, true
+	case errors.Is(err, errDirectNoticeCursorVersionRequired),
+		errors.Is(err, errDirectNoticeAckVersionRequired),
+		errors.Is(err, errHandoffVersionRequired),
+		errors.Is(err, errCommunicationChannelVersionRequired):
+		return http.StatusPreconditionRequired, "version_required", VerdictBroken, true
+	case errors.Is(err, ErrCommunicationNotFound):
+		return http.StatusNotFound, "not_found", VerdictBroken, true
+	case errors.Is(err, ErrCommunicationForbidden):
+		return http.StatusForbidden, "forbidden", VerdictBroken, true
+	case errors.Is(err, ErrCommunicationTerminal):
+		return http.StatusConflict, "terminal", VerdictBroken, true
+	// The administrative sheet's OWN conflict: the Channel's version or ACL
+	// revision moved between two pages of one paginated history. It is named
+	// separately from `terminal` and from the store conflict the mutations
+	// return, because its remedy is specific — discard the pages collected so
+	// far and restart — and because reinterpreting every store conflict as this
+	// would tell a caller to restart a listing when a write actually lost a CAS.
+	case errors.Is(err, ErrCommunicationChannelSnapshotChanged):
+		return http.StatusConflict, "channel_snapshot_changed", VerdictBroken, true
+	case errors.Is(err, ErrInvalidCommunicationModel),
+		errors.Is(err, ErrInvalidCommunicationTransition),
+		errors.Is(err, errCommunicationCursorTokenInvalid):
+		return http.StatusBadRequest, "invalid_request", VerdictBroken, true
 	case errors.Is(err, ErrCommunicationEvidenceUnknown):
 		return http.StatusServiceUnavailable, "evidence_unavailable", VerdictUnknown, true
 	default:

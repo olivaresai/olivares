@@ -175,6 +175,30 @@ func (r *k2LifecycleIdentity) LockAgentWorkAuthority(
 	return nil
 }
 
+// ValidateAgentWorkAuthorityInScope is the read-only mirror of Lock for
+// Plan/Validate. It deliberately does not count as a lock.
+func (r *k2LifecycleIdentity) ValidateAgentWorkAuthorityInScope(
+	_ context.Context,
+	_ store.Scope,
+	snapshot WorkAgentAuthoritySnapshot,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	canonicalRef, ok := snapshot.Token.(string)
+	if !ok {
+		return store.ErrRowLockUnavailable
+	}
+	r.seenRefs = append(r.seenRefs, canonicalRef)
+	if r.inScopeObserver != nil {
+		return r.inScopeObserver
+	}
+	if canonicalRef != r.ownerRef || r.condition != "eligible" ||
+		snapshot.Digest != fmt.Sprintf("lifecycle:%s:%d", canonicalRef, r.authorityRevision) {
+		return store.ErrConflict
+	}
+	return nil
+}
+
 func (r *k2LifecycleIdentity) AuthenticatedAgentMatches(
 	ctx context.Context,
 	tenant model.TenantID,

@@ -2,8 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# fetch-overlay-seal.sh — a repository gate. EL UNICO fetch del clon hermano del overlay en un acto, y el
-# sello de frescura que los checkers leen despues.
+# fetch-overlay-seal.sh — a repository gate. Fetch del clon hermano del overlay y sello de frescura.
 # 0 sello escrito (o no hay overlay que sellar) · 2 no he podido mirar.
 #
 # ⛔ EL DISPARADOR, medido: el 2026-08-29 la caja entera comparo contra un `origin/main` del overlay
@@ -11,9 +10,9 @@
 # EMPUJA por HTTPS, asi que `git fetch origin` no traia nada y no lo decia. Ningun gate fallo:
 # todos midieron bien contra un ref viejo. **Un ref congelado no es un veredicto.**
 #
-# ⛔ POR QUE UN SOLO FETCH Y NO UNO POR CHECKER: medido, un fetch cuesta 2 307 ms. Los SIETE
-# gobernados haciendo el suyo son ~16 s por corrida y siete llamadas de red por push, desde cada
-# carril a la vez. r4 lo decidio el 2026-08-30: uno por ACTO. Esta pata es ese acto.
+# Los lectores comparten un fetch por lote. El gancho vuelve a ejecutar esta pata antes de
+# addon-sets: los lints previos pueden superar los 900s de validez. La renovación conserva
+# el nonce del acto y requiere otro fetch real; no cambia la edad máxima del lector.
 #
 # Va JUNTO A LOS REGISTROS, al principio del gancho (a repository gate): es barata y lo que sella lo consumen
 # patas posteriores. Si se pusiera al final, sellaria despues de que los checkers ya hubieran leido.

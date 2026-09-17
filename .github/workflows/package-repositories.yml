@@ -1,0 +1,158 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# DIST-24-06 phase 1 qualification only. This workflow renders TEST-ONLY apt,
+# rpm-md and APK repository trees, verifies them with clean native clients and
+# uploads an ephemeral evidence artifact. It has no bucket/DNS/deploy/publish step.
+name: package-repositories
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Published community release to qualify (without v)
+        required: true
+        default: '26.8.0'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-repositories-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  qualify-package-repositories:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: 'v2.6.4'
+
+      - name: assert reviewed cosign bytes
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh --isolate
+
+      - name: hermetic producer/verifier mutation battery
+        timeout-minutes: 3
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: bash scripts/test-package-repositories.sh
+
+      - name: fetch and authenticate the six published native assets
+        id: release
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::release_version must be MAJOR.MINOR.PATCH"
+            exit 2
+          }
+          release_repo=olivaresai/olivares
+          tag="v${RELEASE_VERSION}"
+          dist="${RUNNER_TEMP}/package-release"
+          mkdir -p "$dist"
+          meta="$(gh release view "$tag" --repo "$release_repo" --json publishedAt,tagName,url)"
+          jq -e --arg tag "$tag" --arg url "https://github.com/${release_repo}/releases/tag/${tag}" \
+            '.tagName == $tag and .url == $url and (.publishedAt | type == "string")' \
+            <<<"$meta" >/dev/null
+          gh release download "$tag" --repo "$release_repo" --dir "$dist" \
+            --pattern checksums.txt --pattern checksums.txt.sig --pattern checksums.txt.pem \
+            --pattern "olivares_${RELEASE_VERSION}_linux_*.deb" \
+            --pattern "olivares_${RELEASE_VERSION}_linux_*.rpm" \
+            --pattern "olivares_${RELEASE_VERSION}_linux_*.apk"
+          identity="^https://github\\.com/olivaresai/olivares/\\.github/workflows/release\\.yml@refs/tags/v${RELEASE_VERSION}$"
+          bash scripts/cosign-verified.sh verify-blob \
+            --certificate "$dist/checksums.txt.pem" \
+            --signature "$dist/checksums.txt.sig" \
+            --certificate-identity-regexp "$identity" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$dist/checksums.txt"
+          published="$(jq -r '.publishedAt' <<<"$meta")"
+          source_epoch="$(date -u -d "$published" +%s)"
+          [[ "$source_epoch" =~ ^[0-9]+$ ]] || exit 2
+          printf 'dist=%s\nsource_epoch=%s\nvalid_until=%s\n' \
+            "$dist" "$source_epoch" "$((source_epoch + 31536000))" >>"$GITHUB_OUTPUT"
+
+      - name: render and hermetically verify stable and security trees
+        timeout-minutes: 12
+        env:
+          DIST: ${{ steps.release.outputs.dist }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          SOURCE_EPOCH: ${{ steps.release.outputs.source_epoch }}
+          VALID_UNTIL: ${{ steps.release.outputs.valid_until }}
+          OLIVARES_PACKAGE_REPO_TEST_ONLY: '1'
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          key_dir="${RUNNER_TEMP}/package-repository-test-key"
+          bash scripts/generate-package-repository-test-key.sh "$key_dir"
+          export OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE="$key_dir/descriptor.json"
+          export OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE="$key_dir/openpgp-secret.asc"
+          export OLIVARES_PACKAGE_REPO_APK_PRIVATE_KEY_FILE="$key_dir/apk-private.pem"
+          for channel in stable security; do
+            output="${RUNNER_TEMP}/package-repository-${channel}"
+            python3 scripts/render-package-repositories.py \
+              --checksums "$DIST/checksums.txt" --artifact-dir "$DIST" \
+              --version "$RELEASE_VERSION" --channel "$channel" \
+              --source-date-epoch "$SOURCE_EPOCH" --valid-until-epoch "$VALID_UNTIL" \
+              --out "$output"
+            python3 scripts/verify-package-repositories.py \
+              --repo-root "$output" --checksums "$DIST/checksums.txt" --artifact-dir "$DIST" \
+              --version "$RELEASE_VERSION" --channel "$channel" \
+              --openpgp-key "$key_dir/openpgp-public.asc" --apk-key "$key_dir/apk-public.pem"
+          done
+
+      - name: clean apt client verifies published key, metadata and package bytes
+        timeout-minutes: 15
+        run: >-
+          bash scripts/package-repository-client-ci.sh
+          --family apt --image debian:stable-slim
+          --repository "${RUNNER_TEMP}/package-repository-stable"
+          --assets "${{ steps.release.outputs.dist }}"
+          --version "${{ inputs.release_version }}"
+
+      - name: clean rpm client verifies published key, metadata and package bytes
+        timeout-minutes: 15
+        run: >-
+          bash scripts/package-repository-client-ci.sh
+          --family rpm --image fedora:latest
+          --repository "${RUNNER_TEMP}/package-repository-stable"
+          --assets "${{ steps.release.outputs.dist }}"
+          --version "${{ inputs.release_version }}"
+
+      - name: clean APK client verifies published key, metadata and package bytes
+        timeout-minutes: 15
+        run: >-
+          bash scripts/package-repository-client-ci.sh
+          --family apk --image alpine:latest
+          --repository "${RUNNER_TEMP}/package-repository-stable"
+          --assets "${{ steps.release.outputs.dist }}"
+          --version "${{ inputs.release_version }}"
+
+      - name: upload TEST-ONLY repository evidence (never publish)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        timeout-minutes: 10
+        with:
+          name: TEST-ONLY-package-repositories-${{ inputs.release_version }}
+          path: |
+            ${{ runner.temp }}/package-repository-stable
+            ${{ runner.temp }}/package-repository-security
+          if-no-files-found: error
+          retention-days: 1

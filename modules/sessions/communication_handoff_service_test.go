@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +37,55 @@ func newHandoffServiceFixtureWithDurableAckDelay(
 	durableAckDelay time.Duration,
 ) handoffServiceFixture {
 	t.Helper()
-	fixture := newDirectNoticeExactAuthorityFixture(t)
+	return newHandoffServiceFixtureFor(t, handoffServiceFixtureSpec{
+		durableAckDelay: durableAckDelay,
+	})
+}
+
+// handoffServiceFixtureSpec selects the parts of the Handoff fixture that the
+// vacant-generation lot has to vary. The zero value is exactly the fixture every
+// existing test already used: the SQLite exact-authority estate, an ACTIVE lease
+// at fence 7 and a workspace lease-clock guard.
+type handoffServiceFixtureSpec struct {
+	// backend, when set, opens the estate on that engine instead of the SQLite
+	// exact-authority default. It is what puts the durable controls on both.
+	backend *communicationSchemaBackend
+	// durableAckDelay moves the Ack deadline off the fixture clock and onto the
+	// engine's own transaction time.
+	durableAckDelay time.Duration
+	// vacantLease creates the item's ONE vacant generation (fence 0, every
+	// authority column null) instead of an active holder.
+	vacantLease bool
+	// noClockGuard omits the workspace lease-clock guard, which is the state a
+	// workspace is in until its first clock-bearing work command.
+	noClockGuard bool
+	// extraSetupAnchorAge ages the bootstrap/setup clock before engine open.
+	// Zero keeps the ordinary one-minute historical offset.
+	extraSetupAnchorAge time.Duration
+	// skipOperationClockReanchor leaves that aged bootstrap clock in place so a
+	// constructor-local control can witness the pre-reanchor stale_offer.
+	skipOperationClockReanchor bool
+}
+
+const handoffStaleSetupAnchorAge = 3*time.Minute + 5*time.Second
+
+func newHandoffServiceFixtureFor(
+	t *testing.T,
+	spec handoffServiceFixtureSpec,
+) handoffServiceFixture {
+	t.Helper()
+	durableAckDelay := spec.durableAckDelay
+	setup := directNoticeSetupClock{
+		extraAnchorAge: spec.extraSetupAnchorAge,
+		skipReanchor:   spec.skipOperationClockReanchor,
+	}
+	var fixture directNoticeFixture
+	if spec.backend != nil {
+		fixture = newDirectNoticeFixtureForBackendWithClock(
+			t, *spec.backend, AckPolicyNone, 0, true, true, true, setup)
+	} else {
+		fixture = newDirectNoticeExactAuthorityFixtureWithClock(t, setup)
+	}
 	ctx := context.Background()
 	target, err := fixture.authr.OnboardMember(
 		ctx, fixture.authUser, fixture.tenant, auth.OnboardInput{
@@ -61,6 +110,8 @@ func newHandoffServiceFixtureWithDurableAckDelay(
 	if !ok {
 		t.Fatal("Handoff target has no opaque principal reference")
 	}
+
+	fixture.reanchorOperationClock(t)
 
 	var directoryEpoch int64
 	var authorizationFact store.AuthorizationFactRef
@@ -154,19 +205,32 @@ func newHandoffServiceFixtureWithDurableAckDelay(
 		colLeaseExpiresAt:    model.NewTimestamp(fixture.now.Add(10 * time.Minute)).String(),
 		colLeaseRenewalCount: int64(0),
 	}
+	if spec.vacantLease {
+		// The exact row createVacantWorkLease writes with every item, and the only
+		// shape the durable trigger accepts for state 'vacant'.
+		leaseRecord = model.Record{
+			colWorkWorkspaceID: fixture.workspace.String(), colWorkItemID: workID.String(),
+			colLeaseHolderSID: nil, colLeaseHolderRunRef: nil, colLeaseHolderAgentRef: nil,
+			colLeaseFence: int64(0), colLeaseState: workLeaseVacant,
+			colLeaseAcquiredAt: nil, colLeaseRenewedAt: nil, colLeaseExpiresAt: nil,
+			colLeaseEndedAt: nil, colLeaseEndReason: nil, colLeaseRenewalCount: int64(0),
+		}
+	}
 	if _, err := communicationCreateWithID(
 		ctx, fixture.m, fixture.tenant, workLeaseKind, leaseID, leaseRecord,
 	); err != nil {
 		t.Fatalf("create Handoff WorkLease: %v", err)
 	}
-	if _, err := communicationCreateWithID(
-		ctx, fixture.m, fixture.tenant, workGuardKind, model.NewID(), model.Record{
-			colWorkWorkspaceID: fixture.workspace.String(), colGuardKind: "lease_clock",
-			colGuardEpoch: int64(1), colGuardLastDBTime: model.NewTimestamp(fixture.now).String(),
-			colGuardRebaseDecision: nil, colGuardRebaseEvidence: nil,
-		},
-	); err != nil {
-		t.Fatalf("create Handoff lease clock guard: %v", err)
+	if !spec.noClockGuard {
+		if _, err := communicationCreateWithID(
+			ctx, fixture.m, fixture.tenant, workGuardKind, model.NewID(), model.Record{
+				colWorkWorkspaceID: fixture.workspace.String(), colGuardKind: "lease_clock",
+				colGuardEpoch: int64(1), colGuardLastDBTime: model.NewTimestamp(fixture.now).String(),
+				colGuardRebaseDecision: nil, colGuardRebaseEvidence: nil,
+			},
+		); err != nil {
+			t.Fatalf("create Handoff lease clock guard: %v", err)
+		}
 	}
 
 	messageID, audienceID := model.NewID(), model.NewID()
@@ -437,6 +501,290 @@ func TestHandoffOfferAndAcceptPersistAtomicTransfer(t *testing.T) {
 	}
 }
 
+func assertHandoffOriginalOperationWindows(t *testing.T, fixture handoffServiceFixture) {
+	t.Helper()
+	if fixture.delivery.AckDueAt == nil || fixture.delivery.ExpiresAt == nil {
+		t.Fatal("Handoff fixture lacks AckDueAt/ExpiresAt")
+	}
+	if fixture.delivery.AckDueAt.Sub(fixture.now) != 4*time.Minute {
+		t.Fatalf("AckDueAt offset = %s, want 4m from operation now", fixture.delivery.AckDueAt.Sub(fixture.now))
+	}
+	if fixture.delivery.ExpiresAt.Sub(fixture.now) != 5*time.Minute {
+		t.Fatalf("ExpiresAt offset = %s, want 5m from operation now", fixture.delivery.ExpiresAt.Sub(fixture.now))
+	}
+	if fixture.source == nil || !fixture.source.evidence.ObservedAt.Equal(fixture.now) ||
+		fixture.source.evidence.FreshUntil.Sub(fixture.source.evidence.ObservedAt) != 5*time.Minute {
+		t.Fatalf("request evidence window = [%s, %s), now=%s, want 5m from operation now",
+			fixture.source.evidence.ObservedAt, fixture.source.evidence.FreshUntil, fixture.now)
+	}
+	lease := handoffStoredRecord(t, fixture, workLeaseKind, fixture.leaseID)
+	wantAcquired := model.NewTimestamp(fixture.now.Add(-time.Minute)).String()
+	wantExpires := model.NewTimestamp(fixture.now.Add(10 * time.Minute)).String()
+	if lease.String(colLeaseAcquiredAt) != wantAcquired ||
+		lease.String(colLeaseExpiresAt) != wantExpires {
+		t.Fatalf("lease acquired/expires = %s/%s, want %s/%s",
+			lease.String(colLeaseAcquiredAt), lease.String(colLeaseExpiresAt),
+			wantAcquired, wantExpires)
+	}
+	engineNow := observeCommunicationOperationClock(t, fixture.m, fixture.scope)
+	if engineNow.Sub(fixture.now) < time.Minute {
+		t.Fatalf("operation now %s is only %s behind engine %s; want the 1m historical offset",
+			fixture.now, engineNow.Sub(fixture.now), engineNow)
+	}
+	if !engineNow.Before(*fixture.delivery.AckDueAt) {
+		t.Fatalf("AckDueAt %s is not after engine %s", fixture.delivery.AckDueAt, engineNow)
+	}
+}
+
+func handoffOfferCommandForFixture(fixture handoffServiceFixture, summary, next string) HandoffOfferCommand {
+	return HandoffOfferCommand{
+		ChannelID: fixture.channel.ID, WorkItemID: fixture.workID,
+		MessageID: fixture.message.ID, DeliveryID: fixture.delivery.ID,
+		Content: HandoffContent{Summary: summary, NextAction: next},
+		IfMatch: "\"v1\"", IdempotencyKey: model.NewID().String(),
+	}
+}
+
+func TestHandoffFreshOperationAnchorKeepsOriginalWindowsAndStaleOfferBoundary(t *testing.T) {
+	t.Parallel()
+
+	t.Run("stale_setup_without_reanchor", func(t *testing.T) {
+		fixture := newHandoffServiceFixtureFor(t, handoffServiceFixtureSpec{
+			extraSetupAnchorAge:        handoffStaleSetupAnchorAge,
+			skipOperationClockReanchor: true,
+		})
+		engineNow := observeCommunicationOperationClock(t, fixture.m, fixture.scope)
+		if fixture.delivery.AckDueAt == nil || engineNow.Before(*fixture.delivery.AckDueAt) {
+			t.Fatalf("aged setup AckDueAt %v is still after engine %s", fixture.delivery.AckDueAt, engineNow)
+		}
+		ackDue := *fixture.delivery.AckDueAt
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		t.Cleanup(cancel)
+		// Pin after AckDueAt and inside FreshUntil. Skip-reanchor otherwise
+		// leaves a ~55s wall-clock budget on Mutate TransactionNow.
+		_, restore := installFinalTransactionTimeOnExistingClockSeam(
+			t, fixture.m, ackDue.Add(time.Second),
+		)
+		_, err := fixture.m.offerHandoffWithAuthority(
+			ctx, fixture.scope, fixture.ref,
+			handoffOfferCommandForFixture(fixture, "Aged setup offer", "Must refuse stale_offer"),
+		)
+		restore()
+		if !errors.Is(err, errHandoffStaleOffer) {
+			t.Fatalf("aged setup without reanchor = %v, want stale_offer", err)
+		}
+		if len(communicationRowsForTest(t, fixture.directNoticeFixture, handoffKind)) != 0 {
+			t.Fatal("aged setup without reanchor persisted a Handoff row")
+		}
+	})
+
+	t.Run("stale_setup_reanchored_offer_accept_replay_audit", func(t *testing.T) {
+		fixture := newHandoffServiceFixtureFor(t, handoffServiceFixtureSpec{
+			extraSetupAnchorAge: handoffStaleSetupAnchorAge,
+		})
+		assertHandoffOriginalOperationWindows(t, fixture)
+		assertHandoffOfferAcceptReplayAndAudit(t, fixture,
+			"Transfer after stale setup reanchor", "Continue implementation")
+	})
+
+	t.Run("past_unchanged_ack_deadline", func(t *testing.T) {
+		fixture := newHandoffServiceFixtureFor(t, handoffServiceFixtureSpec{
+			extraSetupAnchorAge: handoffStaleSetupAnchorAge,
+		})
+		assertHandoffOriginalOperationWindows(t, fixture)
+		ackDue := *fixture.delivery.AckDueAt
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		t.Cleanup(cancel)
+		_, restore := installFinalTransactionTimeOnExistingClockSeam(t, fixture.m, ackDue)
+		_, err := fixture.m.offerHandoffWithAuthority(
+			ctx, fixture.scope, fixture.ref,
+			handoffOfferCommandForFixture(fixture, "Expired operation offer", "Must refuse stale_offer"),
+		)
+		restore()
+		if !errors.Is(err, errHandoffStaleOffer) {
+			t.Fatalf("offer at published AckDueAt = %v, want stale_offer", err)
+		}
+		stored, decodeErr := messageDeliveryFromRecord(
+			handoffStoredRecord(t, fixture, messageDeliveryKind, fixture.delivery.ID),
+		)
+		if decodeErr != nil || stored.AckDueAt == nil || !stored.AckDueAt.Equal(ackDue) {
+			t.Fatalf("published AckDueAt changed: %s -> %v (%v)", ackDue, stored.AckDueAt, decodeErr)
+		}
+		if len(communicationRowsForTest(t, fixture.directNoticeFixture, handoffKind)) != 0 {
+			t.Fatal("stale offer persisted a Handoff row")
+		}
+	})
+}
+
+func assertHandoffOfferAcceptReplayAndAudit(t *testing.T, fixture handoffServiceFixture, summary, next string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+	offerCommand := handoffOfferCommandForFixture(fixture, summary, next)
+	if _, err := fixture.m.OfferHandoff(
+		ctx, fixture.scope, fixture.ref, offerCommand,
+	); !errors.Is(err, ErrCommunicationEvidenceUnknown) ||
+		len(communicationRowsForTest(t, fixture.directNoticeFixture, handoffKind)) != 0 {
+		t.Fatalf("public Handoff boundary opened before K3 readiness: %v", err)
+	}
+	offer, err := fixture.m.offerHandoffWithAuthority(ctx, fixture.scope, fixture.ref, offerCommand)
+	if err != nil {
+		t.Fatalf("offer Handoff: %v", err)
+	}
+	if offer.State != HandoffOffered || offer.Version != 1 || offer.ETag != "\"v1\"" {
+		t.Fatalf("offer result = %+v", offer)
+	}
+	workAfterOffer := handoffStoredRecord(t, fixture, workItemKind, fixture.workID)
+	leaseAfterOffer := handoffStoredRecord(t, fixture, workLeaseKind, fixture.leaseID)
+	if workAfterOffer.String(colWorkOwnerRef) != fixture.sender.String() ||
+		workAfterOffer.Int(colWorkOwnerEpoch) != 1 ||
+		leaseAfterOffer.Int(colLeaseFence) != 7 ||
+		leaseAfterOffer.String(colLeaseState) != workLeaseActive ||
+		leaseAfterOffer.Int(model.ColVersion) != 1 {
+		t.Fatalf("offer changed owner/lease: work=%v lease=%v", workAfterOffer, leaseAfterOffer)
+	}
+	replay, err := fixture.m.offerHandoffWithAuthority(ctx, fixture.scope, fixture.ref, offerCommand)
+	if err != nil || !replay.Replayed || replay.CommandID != offer.CommandID || replay.HandoffID != offer.HandoffID {
+		t.Fatalf("offer replay = %+v, err %v", replay, err)
+	}
+	response, err := fixture.m.respondHandoffWithAuthority(
+		ctx, fixture.scope, fixture.targetRef, offer.HandoffID,
+		HandoffResponseCommand{
+			Transition: HandoffAccept, IfMatch: offer.ETag,
+			IdempotencyKey: model.NewID().String(),
+		},
+	)
+	if err != nil {
+		t.Fatalf("accept Handoff: %v", err)
+	}
+	if response.State != HandoffAccepted || response.Version != 2 || response.AckID == "" ||
+		response.OwnerEpoch != 2 || response.ResultingLeaseFence != 8 {
+		t.Fatalf("accept result = %+v", response)
+	}
+	storedHandoff, err := handoffFromRecord(
+		handoffStoredRecord(t, fixture, handoffKind, offer.HandoffID),
+	)
+	if err != nil {
+		t.Fatalf("decode accepted Handoff: %v", err)
+	}
+	workAfterAccept := handoffStoredRecord(t, fixture, workItemKind, fixture.workID)
+	leaseAfterAccept := handoffStoredRecord(t, fixture, workLeaseKind, fixture.leaseID)
+	deliveryAfterAccept, err := messageDeliveryFromRecord(
+		handoffStoredRecord(t, fixture, messageDeliveryKind, fixture.delivery.ID),
+	)
+	if err != nil {
+		t.Fatalf("decode acknowledged Delivery: %v", err)
+	}
+	if storedHandoff.State != HandoffAccepted || storedHandoff.AckID != response.AckID ||
+		storedHandoff.ResultingLeaseFence != 8 ||
+		workAfterAccept.String(colWorkOwnerRef) != fixture.delivery.Recipient.Ref ||
+		workAfterAccept.Int(colWorkOwnerEpoch) != 2 ||
+		leaseAfterAccept.String(colLeaseState) != workLeaseRevoked ||
+		leaseAfterAccept.Int(colLeaseFence) != 8 ||
+		deliveryAfterAccept.State != DeliveryAcknowledged ||
+		deliveryAfterAccept.AckID != response.AckID {
+		t.Fatalf(
+			"atomic transfer mismatch: handoff=%+v work=%v lease=%v delivery=%+v",
+			storedHandoff, workAfterAccept, leaseAfterAccept, deliveryAfterAccept,
+		)
+	}
+	ack, err := messageAckFromRecord(
+		handoffStoredRecord(t, fixture, messageAckKind, response.AckID),
+	)
+	if err != nil || ack.Late || ack.DeliveryID != fixture.delivery.ID {
+		t.Fatalf("stored Handoff Ack = %+v, err %v", ack, err)
+	}
+	event := handoffStoredRecord(t, fixture, workEventKind, response.EventID)
+	if event.String(colEventCommandID) != response.CommandID.String() ||
+		event.Int(colEventAuditSeq) != response.AuditSeq ||
+		!bytes.Equal(event.Bytes(colEventAuditHash), storedReceiptAuditHash(t, fixture, response.CommandID)) {
+		t.Fatalf("accepted Handoff Event anchor is incomplete: %v", event)
+	}
+}
+
+func TestHandoffAcceptRollsBackAfterConcurrentOwnerChange(t *testing.T) {
+	t.Parallel()
+
+	fixture := newHandoffServiceFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+	offer, err := fixture.m.offerHandoffWithAuthority(
+		ctx, fixture.scope, fixture.ref,
+		HandoffOfferCommand{
+			ChannelID: fixture.channel.ID, WorkItemID: fixture.workID,
+			MessageID: fixture.message.ID, DeliveryID: fixture.delivery.ID,
+			Content: HandoffContent{
+				Summary: "Concurrent owner mutation", NextAction: "Must not accept stale ownership",
+			},
+			IfMatch: "\"v1\"", IdempotencyKey: model.NewID().String(),
+		},
+	)
+	if err != nil {
+		t.Fatalf("offer Handoff before concurrent owner change: %v", err)
+	}
+	if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(workItemKind)
+		if err != nil {
+			return err
+		}
+		work, err := repo.Get(ctx, fixture.workID)
+		if err != nil {
+			return err
+		}
+		work[colWorkOwnerKind] = string(RecipientUser)
+		work[colWorkOwnerRef] = fixture.delivery.Recipient.Ref
+		work[colWorkOwnerEpoch] = int64(2)
+		_, err = repo.Update(ctx, work)
+		return err
+	}); err != nil {
+		t.Fatalf("commit concurrent WorkItem owner change: %v", err)
+	}
+	beforeEvents := len(communicationRowsForTest(t, fixture.directNoticeFixture, workEventKind))
+	beforeReceipts := len(communicationRowsForTest(
+		t, fixture.directNoticeFixture, communicationCommandKind,
+	))
+	beforeAcks := len(communicationRowsForTest(t, fixture.directNoticeFixture, messageAckKind))
+	if _, err := fixture.m.respondHandoffWithAuthority(
+		ctx, fixture.scope, fixture.targetRef, offer.HandoffID,
+		HandoffResponseCommand{
+			Transition: HandoffAccept, IfMatch: offer.ETag,
+			IdempotencyKey: model.NewID().String(),
+		},
+	); err == nil {
+		t.Fatal("Handoff accept ignored concurrent WorkItem owner change")
+	}
+	storedHandoff, err := handoffFromRecord(
+		handoffStoredRecord(t, fixture, handoffKind, offer.HandoffID),
+	)
+	if err != nil {
+		t.Fatalf("decode Handoff after concurrent owner refusal: %v", err)
+	}
+	work := handoffStoredRecord(t, fixture, workItemKind, fixture.workID)
+	lease := handoffStoredRecord(t, fixture, workLeaseKind, fixture.leaseID)
+	delivery, err := messageDeliveryFromRecord(
+		handoffStoredRecord(t, fixture, messageDeliveryKind, fixture.delivery.ID),
+	)
+	if err != nil {
+		t.Fatalf("decode Delivery after concurrent owner refusal: %v", err)
+	}
+	if storedHandoff.State != HandoffOffered || storedHandoff.AckID != "" ||
+		work.String(colWorkOwnerKind) != string(RecipientUser) ||
+		work.String(colWorkOwnerRef) != fixture.delivery.Recipient.Ref ||
+		work.Int(colWorkOwnerEpoch) != 2 ||
+		lease.String(colLeaseState) != workLeaseActive || lease.Int(colLeaseFence) != 7 ||
+		delivery.State != DeliveryAvailable || delivery.AckID != "" ||
+		len(communicationRowsForTest(t, fixture.directNoticeFixture, workEventKind)) != beforeEvents ||
+		len(communicationRowsForTest(
+			t, fixture.directNoticeFixture, communicationCommandKind,
+		)) != beforeReceipts ||
+		len(communicationRowsForTest(t, fixture.directNoticeFixture, messageAckKind)) != beforeAcks {
+		t.Fatalf(
+			"concurrent owner refusal changed Handoff/Ack/lease effects: Handoff=%+v work=%v lease=%v delivery=%+v",
+			storedHandoff, work, lease, delivery,
+		)
+	}
+}
+
 func TestHandoffRejectRollsBackMismatchAndLeavesLeaseUntouched(t *testing.T) {
 	t.Parallel()
 
@@ -676,8 +1024,20 @@ func TestHandoffDeadlineReaperExpiresAtDeadlineWithRollbackAndReplay(t *testing.
 	beforeReceipts := len(communicationRowsForTest(
 		t, fixture.directNoticeFixture, communicationCommandKind,
 	))
-	if _, err := service.Expire(ctx, fixture.scope, command); err == nil {
-		t.Fatal("Handoff expired before its acknowledgement deadline")
+	if fixture.delivery.AckDueAt == nil {
+		t.Fatal("Handoff deadline fixture lacks AckDueAt")
+	}
+	negativeClock, restore := installFinalTransactionTimeOnExistingClockSeam(
+		t, fixture.m, fixture.delivery.AckDueAt.Add(-time.Nanosecond),
+	)
+	negativeResult, negativeErr := service.Expire(ctx, fixture.scope, command)
+	restore()
+	if !errors.Is(negativeErr, ErrInvalidCommunicationTransition) ||
+		!strings.Contains(negativeErr.Error(), "Handoff deadline has not elapsed") ||
+		negativeResult != (HandoffLifecycleResult{}) ||
+		negativeClock.calls.Load()-2 != 2 {
+		t.Fatalf("before-deadline Handoff = (%+v, %v); raw-clock calls=%d, want invalid transition",
+			negativeResult, negativeErr, negativeClock.calls.Load()-2)
 	}
 	rolledBack, err := handoffFromRecord(
 		handoffStoredRecord(t, fixture, handoffKind, offer.HandoffID),

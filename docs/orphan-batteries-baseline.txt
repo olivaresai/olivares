@@ -5,8 +5,9 @@ scripts/test-check-gate-parity.sh
 scripts/test-check-lot-releases.sh
 scripts/test-check-migration-contiguity.sh
 scripts/test-check-publish-target.sh
+# CI-only: lint:secrets-gate in mainline-ci owns both secrets batteries.
+scripts/test-check-secrets-setup.sh
 scripts/test-check-secrets.sh
-scripts/test-check-session-record.sh
 scripts/test-check-step-env-closure.sh
 scripts/test-cli-ref-wrapper.sh
 scripts/test-cli-session-claims.sh
@@ -21,7 +22,6 @@ scripts/test-cosign-guard.sh
 scripts/test-cpu-quota.sh
 scripts/test-demo-agent.sh
 scripts/test-eco-20-tar16-owner.sh
-scripts/test-export-identity-class.sh
 scripts/test-export-sponsor-exemption.sh
 scripts/test-fuzz-smoke.sh
 scripts/test-hub-hygiene.sh
@@ -29,15 +29,16 @@ scripts/test-hub-web-fidelity.sh
 scripts/test-hygiene-freshness.sh
 scripts/test-inbox-read.sh
 scripts/test-int-12-no-land.sh
+scripts/test-key-domain-cleanup.sh
 scripts/test-key-domain-separation.sh
-scripts/test-launch-placeholders.sh
+scripts/test-lot-heads.sh
 scripts/test-openapi-check-provisioning.sh
-scripts/test-overlay-seal.sh
 scripts/test-pg-majors-evaluate.sh
 scripts/test-prep-gate-impact.sh
-scripts/test-probe-no-construye.sh
 scripts/test-r8-curar-superficies.sh
 scripts/test-r8-preflight.sh
+scripts/test-report-prep-gate-pins.sh
+scripts/test-rescue-backlog.sh
 scripts/test-resolve-taskfile-additive.sh
 scripts/test-run-table.sh
 scripts/test-runner-variance.sh

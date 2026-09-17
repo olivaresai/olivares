@@ -92,5 +92,25 @@
     "denied": "Code d'appareil {{code}} refusé",
     "notFound": "Aucune demande en attente pour ce code utilisateur.",
     "expired": "Cette demande a expiré ou a déjà été utilisée."
+  },
+  "firewall": {
+    "title": "Inspecteur Messages",
+    "intro": "Si ce processus du plan de contrôle a démarré avec l'inspecteur de contenu rattaché au proxy Messages.",
+    "refresh": "Vérifier à nouveau",
+    "limit": "Voici ce que le processus répondant a enregistré à son démarrage. Cela n'indique pas si le proxy est joignable maintenant, quelle politique est chargée, ni si une requête particulière a été inspectée.",
+    "states": {
+      "unobserved": "Non renseigné",
+      "pep_not_composed": "Proxy non démarré",
+      "inspector_absent": "Inspecteur non rattaché",
+      "inspector_attached": "Inspecteur rattaché",
+      "unreadable": "Lecture impossible"
+    },
+    "statesHint": {
+      "unobserved": "Ce processus n'a enregistré aucun état de rattachement. Rien n'est affirmé dans un sens ou dans l'autre.",
+      "pep_not_composed": "Le proxy Messages n'a pas démarré dans ce processus, aucun inspecteur ne pouvait donc s'y rattacher.",
+      "inspector_absent": "Le proxy a démarré sans inspecteur de contenu rattaché.",
+      "inspector_attached": "Un inspecteur a été rattaché au démarrage. Il peut s'agir du repli restrictif installé lorsque la configuration est illisible ; cela ne signifie donc pas que le contenu est inspecté comme configuré.",
+      "unreadable": "La réponse ne correspond à aucun état reconnu par cette console. Rien n'est affirmé sur l'inspecteur."
+    }
   }
 }

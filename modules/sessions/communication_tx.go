@@ -554,6 +554,29 @@ type communicationTx struct {
 	audit                     communicationAuditAppender
 	directory                 store.DirectorySnapshotReader
 	resolveRepository         func(model.Kind) (communicationRepository, error)
+
+	// lockedRows is the transaction's own witness of which rows it holds a
+	// real row lock on. It is written only by lockRecord after the repository
+	// Lock succeeded, so an append-only set observation can prove its parent
+	// fence structurally instead of trusting a caller's word that a Get was
+	// really a Lock.
+	lockedRowsMu sync.Mutex
+	lockedRows   map[communicationLockedRowKey]model.Record
+
+	// lockedKeys is the same witness for transaction-scoped lock keys: it is
+	// written only by lockTransaction after the store's LockTransaction
+	// returned nil. A command receipt observation proves its fence against
+	// this set, so a key that was merely named by a caller, or one that a
+	// different transaction holds, is never mistaken for one this transaction
+	// acquired.
+	lockedKeysMu sync.Mutex
+	lockedKeys   map[string]struct{}
+}
+
+// communicationLockedRowKey identifies one row this transaction has locked.
+type communicationLockedRowKey struct {
+	kind model.Kind
+	id   model.ID
 }
 
 // communicationAuditAppender is the complete audit surface retained by a K3
@@ -980,7 +1003,40 @@ func communicationTransactionUnavailable(capability string, cause error) error {
 }
 
 func (tx *communicationTx) lockTransaction(ctx context.Context, key string) error {
-	return tx.lockTransactionFn(ctx, key)
+	if err := tx.lockTransactionFn(ctx, key); err != nil {
+		return err
+	}
+	tx.rememberLockedTransactionKey(key)
+	return nil
+}
+
+// rememberLockedTransactionKey records a transaction lock key the store
+// granted to this transaction. The lock belongs to the surrounding Mutate and
+// is released by its commit or rollback, so for the rest of this transaction
+// every other transaction using the same key is serialized behind it.
+func (tx *communicationTx) rememberLockedTransactionKey(key string) {
+	if tx == nil || key == "" {
+		return
+	}
+	tx.lockedKeysMu.Lock()
+	defer tx.lockedKeysMu.Unlock()
+	if tx.lockedKeys == nil {
+		tx.lockedKeys = make(map[string]struct{})
+	}
+	tx.lockedKeys[key] = struct{}{}
+}
+
+// lockedTransactionKey reports whether this transaction acquired key through
+// lockTransaction. A key that was computed, compared or passed around without
+// a granted lock is never reported here.
+func (tx *communicationTx) lockedTransactionKey(key string) bool {
+	if tx == nil || key == "" {
+		return false
+	}
+	tx.lockedKeysMu.Lock()
+	defer tx.lockedKeysMu.Unlock()
+	_, ok := tx.lockedKeys[key]
+	return ok
 }
 
 func (tx *communicationTx) lockAuthoritySnapshot(
@@ -1203,6 +1259,14 @@ func (tx *communicationTx) repo(kind model.Kind) (communicationRepository, error
 	return tx.resolveRepository(kind)
 }
 
+// lockRecord takes the repository's real row-update lock on one MUTABLE row
+// and witnesses it. An append-only descriptor is refused before any statement
+// is issued: the application role deliberately lacks the UPDATE privilege that
+// SELECT ... FOR UPDATE requires on PostgreSQL, and an immutable row has no
+// update to fence, so such a row is observed behind its proven fence instead
+// (observeAppendOnlyRecordSet, observeCommandReceipt,
+// observeMessageOverdueOrigin). Generic Lock keeps its meaning — a
+// wait-capable row fence — for every mutable kind.
 func (tx *communicationTx) lockRecord(
 	ctx context.Context,
 	kind model.Kind,
@@ -1212,7 +1276,55 @@ func (tx *communicationTx) lockRecord(
 	if err != nil {
 		return nil, err
 	}
-	return repo.Lock(ctx, id)
+	if err := refuseAppendOnlyRowLock(kind, repo); err != nil {
+		return nil, err
+	}
+	record, err := repo.Lock(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	tx.rememberLockedRow(kind, id, record)
+	return record, nil
+}
+
+// rememberLockedRow records a successful row lock. The stored copy is the row
+// as it was when the lock was granted; while this transaction holds the lock
+// no other transaction can change it, so the copy is the row's current state
+// for the rest of the transaction.
+func (tx *communicationTx) rememberLockedRow(kind model.Kind, id model.ID, record model.Record) {
+	if tx == nil || record == nil {
+		return
+	}
+	snapshot := make(model.Record, len(record))
+	for column, value := range record {
+		snapshot[column] = value
+	}
+	tx.lockedRowsMu.Lock()
+	defer tx.lockedRowsMu.Unlock()
+	if tx.lockedRows == nil {
+		tx.lockedRows = make(map[communicationLockedRowKey]model.Record)
+	}
+	tx.lockedRows[communicationLockedRowKey{kind: kind, id: id}] = snapshot
+}
+
+// lockedRow returns the row this transaction locked through lockRecord, or
+// false when no such lock was taken. A row read through Get or List is never
+// reported here: only a granted row lock is a fence.
+func (tx *communicationTx) lockedRow(kind model.Kind, id model.ID) (model.Record, bool) {
+	if tx == nil {
+		return nil, false
+	}
+	tx.lockedRowsMu.Lock()
+	defer tx.lockedRowsMu.Unlock()
+	record, ok := tx.lockedRows[communicationLockedRowKey{kind: kind, id: id}]
+	if !ok {
+		return nil, false
+	}
+	snapshot := make(model.Record, len(record))
+	for column, value := range record {
+		snapshot[column] = value
+	}
+	return snapshot, true
 }
 
 func (tx *communicationTx) create(

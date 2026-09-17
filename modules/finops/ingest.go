@@ -93,143 +93,288 @@ type attribution struct {
 // principal action and already deny-closed to the bus).
 type auditHook func(context.Context, store.Scope) error
 
-// onCost ingests one cost sample. Dedup is by NATURAL key (provider/model/session/
-// instant + every attribution dimension + provenance) — NOT a content hash that
-// includes the value — so a re-pulled time bucket whose value grew (an open/current
-// bucket) or re-settled (cost_report late settlement) is an UPSERT that REPLACES the
-// row's tokens/cost, never a second row that double-counts. The read-model row and
-// its linked CostRecord ledger entry are updated together. BILLED samples are
-// reconciliation data and are NOT written to the canonical CostRecord ledger, so the
-// ledger stays single-provenance (estimated) and its consumers never mix streams. The
-// whole thing is one Mutate so it commits atomically; FindingReports are published
-// only AFTER commit so a rolled-back evaluation never emits a phantom alert.
-func (m *Module) onCost(ctx context.Context, tenant model.TenantID, cost sdkmodel.CostSample, audit auditHook) error {
+// costIngestEffects is what a completed in-transaction ingestion leaves for the
+// OWNER of the transaction to publish once it has committed. It holds no durable
+// state and is captured locally, which is what keeps publication post-commit only:
+// a transaction that rolls back drops these values with everything else, so a
+// phantom alert cannot be emitted for an evaluation that never landed.
+type costIngestEffects struct {
+	alerts      []pendingAlert
+	diagnostics []pendingDiagnostic
+}
+
+// ingestCostInTx ingests one cost sample INSIDE A TRANSACTION THE CALLER OWNS, and
+// is the whole of what onCost used to do inline. Splitting it out is the point of
+// this cut: a caller that must change other rows in the SAME unit of work (the
+// lifecycle settlement that has to move a reservation and record its cost together)
+// can run the ingestion in its own store.Scope instead of nesting a second Mutate
+// inside its own — nesting is what would deadlock the store and what would let half
+// the effect commit.
+//
+// It does NOT commit, does NOT publish and does NOT resolve or mint any authority:
+// the audit hook it runs is the caller's, appended to the caller's transaction. The
+// signals it produces come back to the caller to emit AFTER the commit.
+//
+// THE CALLER OWNS THE ACCOUNTING INSTANT. A sample that reaches here with a zero
+// OccurredAt is stamped with the clock read inside the caller's already-admitted
+// transaction, which is later than the caller's own submission instant by however
+// long it waited. onCost therefore fixes the instant before it opens its transaction,
+// and any direct caller that can receive an omitted instant must do the same. See the
+// comment on the fallback itself.
+//
+// ORDER, and every step of it is load-bearing:
+//
+//  1. Take this tenant's FinOps writer lock, BEFORE anything else — before the audit
+//     hook, before the natural-key lookup, before any write. Later is not enough: the
+//     lookup that decides replay-vs-new is only authoritative if nothing can commit
+//     between it and the INSERT that follows, and an audit append taken before the
+//     lock would fix the two locks in the opposite order for anyone holding both.
+//     (What this key is worth on the store the module runs on today, which already
+//     serializes a tenant's write transactions, is written out in lockFinOpsWriter.)
+//  2. The caller's audit hook, so a privileged principal's action is recorded
+//     atomically with its effect (a rolled-back ingest leaves no phantom audit, and a
+//     committed ingest can never be unaudited). It runs regardless of the dedup
+//     outcome below — the audited fact is "principal X pushed this cost sample". The
+//     bus path passes nil: system ingestion from a connector is not a principal
+//     action.
+//  3. Attribution resolution, the natural-key lookup and the upsert/insert.
+//  4. Budget evaluation under the lock already held (evaluateBudgetsLocked).
+//
+// Dedup is by NATURAL key (provider/model/session/instant + every attribution
+// dimension + provenance) — NOT a content hash that includes the value — so a
+// re-pulled time bucket whose value grew (an open/current bucket) or re-settled
+// (cost_report late settlement) is an UPSERT that REPLACES the row's tokens/cost,
+// never a second row that double-counts. The read-model row and its linked
+// CostRecord ledger entry are updated together. BILLED samples are reconciliation
+// data and are NOT written to the canonical CostRecord ledger, so the ledger stays
+// single-provenance (estimated) and its consumers never mix streams.
+func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmodel.CostSample, audit auditHook) (costIngestEffects, error) {
 	if cost.ProviderRef == "" && cost.ModelRef == "" {
-		return nil
+		return costIngestEffects{}, nil
 	}
+	// THE ACCOUNTING INSTANT, and its contract is explicit because this helper is
+	// reachable from two kinds of caller (R2 of the independent review).
+	//
+	// onCost fixes a missing OccurredAt BEFORE it opens its transaction, so on the
+	// bus and HTTP paths the sample that arrives here already carries the instant it
+	// was submitted at and this fallback does not fire.
+	//
+	// For a DIRECT caller that hands us a zero instant, the fallback stamps the clock
+	// as read HERE — inside a transaction that has already been admitted, i.e. after
+	// that caller waited for the store's per-tenant write admission and after anything
+	// else it did first. That is deliberately NOT a preserved submission instant: it
+	// is only a refusal to write a zero timestamp. A direct caller whose samples can
+	// omit the instant must normalize it before it opens its transaction, exactly as
+	// onCost does — otherwise the natural key, the CostRecord timestamp and therefore
+	// the accounting PERIOD of that sample depend on how long the caller waited.
 	at := cost.OccurredAt
 	if at.IsZero() {
 		at = m.clock.Now().Time()
 	}
-	var pending []pendingAlert
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		// A privileged HTTP ingest carries an audit hook appended in THIS
-		// transaction, so the principal's action is recorded atomically with its
-		// ledger effect (a rolled-back ingest leaves no phantom audit, and a
-		// committed ingest can never be unaudited). It runs regardless of the dedup
-		// outcome below — the audited fact is "principal X pushed this cost sample".
-		// The bus path passes nil: system ingestion from a connector is not a
-		// principal action.
-		if audit != nil {
-			if err := audit(ctx, sc); err != nil {
-				return err
-			}
-		}
-		attr := attribution{
-			ProviderRef: cost.ProviderRef, ModelRef: cost.ModelRef, SessionRef: cost.SessionRef,
-			InputTokens: cost.InputTokens, OutputTokens: cost.OutputTokens,
-			CostMicroUSD: cost.CostMicroUSD, OccurredAt: at,
-			Provenance:            provenanceOf(cost.Provenance),
-			WorkspaceRef:          cost.WorkspaceRef,
-			APIKeyRef:             cost.APIKeyRef,
-			Actor:                 cost.Actor,
-			ServiceTier:           cost.ServiceTier,
-			ContextWindow:         cost.ContextWindow,
-			InferenceGeo:          cost.InferenceGeo,
-			Gateway:               gatewayOf(cost.Gateway),
-			CostType:              cost.CostType,
-			CacheReadTokens:       cost.CacheReadTokens,
-			CacheCreation1hTokens: cost.CacheCreation1hTokens,
-			CacheCreation5mTokens: cost.CacheCreation5mTokens,
-			// Operator-supplied labels: team/project seed the queryable
-			// dimensions; resolveSession lets the agent's CURATED labels outrank
-			// them. The remaining labels ride the ledger metadata (writeCostRecord).
-			Team:    cost.Labels["team"],
-			Project: cost.Labels["project"],
-			Labels:  cost.Labels,
-		}
-		if err := resolveSession(ctx, sc, &attr); err != nil {
-			return err
-		}
-		// Resolve the FIRM roster identity the spend is attributed to, so a
-		// per-identity dollar budget can scope on it. Derived from the same dimensions
-		// already in the dedup natural key (session→agent, api_key, actor), so it is
-		// deterministic per row — stamped, not part of the key.
-		if err := resolveIdentity(ctx, sc, &attr); err != nil {
-			return err
-		}
-		// Resolve the cost center from the mapping rules. Derived from the
-		// same attribution dimensions already in the natural key, so it is
-		// deterministic and stamped, not part of the key.
-		if err := resolveCostCenter(ctx, sc, &attr); err != nil {
-			return err
-		}
-		repo, err := sc.Ext(costSampleKind)
-		if err != nil {
-			return err
-		}
-
-		nk := naturalKey(attr)
-		existing, found, err := findSample(ctx, repo, nk)
-		if err != nil {
-			return err
-		}
-		if found {
-			if !sampleChanged(existing, attr) {
-				return nil // exact re-delivery: unchanged bucket, do not re-count
-			}
-			// Re-pull of a grown/re-settled bucket: replace the value in place.
-			applySampleValues(existing, attr)
-			if _, err := repo.Update(ctx, existing); err != nil {
-				return err
-			}
-			if attr.Provenance != provenanceBilled {
-				if crID := existing.String(colCostRecordID); crID != "" {
-					if err := updateCostRecord(ctx, sc, model.ID(crID), attr); err != nil {
-						return err
-					}
-				}
-			}
-		} else {
-			// A new bucket. Resolve ids, write the canonical ledger (estimated only),
-			// and link the read-model row to its ledger entry.
-			if attr.ProviderRef != "" {
-				if attr.ProviderID, err = foProvider(ctx, sc, attr.ProviderRef); err != nil {
-					return err
-				}
-			}
-			if attr.ModelRef != "" {
-				if attr.ModelID, err = foModel(ctx, sc, attr.ModelRef, attr.ProviderID); err != nil {
-					return err
-				}
-			}
-			var crID model.ID
-			if attr.Provenance != provenanceBilled {
-				if crID, err = writeCostRecord(ctx, sc, attr); err != nil {
-					return err
-				}
-			}
-			if _, err := repo.Create(ctx, sampleRecord(nk, crID, attr)); err != nil {
-				if errors.Is(err, store.ErrConflict) {
-					return nil // raced with a concurrent insert of the same bucket
-				}
-				return err
-			}
-		}
-
-		alerts, err := m.evaluateBudgets(ctx, sc, attr)
-		if err != nil {
-			return err
-		}
-		pending = alerts
-		return nil
-	})
-	if err != nil {
-		return err
+	// Step 1: serialize this tenant's FinOps writers for the rest of the transaction.
+	if err := lockFinOpsWriter(ctx, sc); err != nil {
+		return costIngestEffects{}, err
 	}
-	for _, a := range pending {
+	// Step 2: the caller's audit hook, inside the lock and inside the transaction.
+	if audit != nil {
+		if err := audit(ctx, sc); err != nil {
+			return costIngestEffects{}, err
+		}
+	}
+	attr := attribution{
+		ProviderRef: cost.ProviderRef, ModelRef: cost.ModelRef, SessionRef: cost.SessionRef,
+		InputTokens: cost.InputTokens, OutputTokens: cost.OutputTokens,
+		CostMicroUSD: cost.CostMicroUSD, OccurredAt: at,
+		Provenance:            provenanceOf(cost.Provenance),
+		WorkspaceRef:          cost.WorkspaceRef,
+		APIKeyRef:             cost.APIKeyRef,
+		Actor:                 cost.Actor,
+		ServiceTier:           cost.ServiceTier,
+		ContextWindow:         cost.ContextWindow,
+		InferenceGeo:          cost.InferenceGeo,
+		Gateway:               gatewayOf(cost.Gateway),
+		CostType:              cost.CostType,
+		CacheReadTokens:       cost.CacheReadTokens,
+		CacheCreation1hTokens: cost.CacheCreation1hTokens,
+		CacheCreation5mTokens: cost.CacheCreation5mTokens,
+		// Operator-supplied labels: team/project seed the queryable
+		// dimensions; resolveSession lets the agent's CURATED labels outrank
+		// them. The remaining labels ride the ledger metadata (writeCostRecord).
+		Team:    cost.Labels["team"],
+		Project: cost.Labels["project"],
+		Labels:  cost.Labels,
+	}
+	if err := resolveSession(ctx, sc, &attr); err != nil {
+		return costIngestEffects{}, err
+	}
+	// Resolve the FIRM roster identity the spend is attributed to, so a
+	// per-identity dollar budget can scope on it. Derived from the same dimensions
+	// already in the dedup natural key (session→agent, api_key, actor), so it is
+	// deterministic per row — stamped, not part of the key.
+	if err := resolveIdentity(ctx, sc, &attr); err != nil {
+		return costIngestEffects{}, err
+	}
+	// Resolve the cost center from the mapping rules. Derived from the
+	// same attribution dimensions already in the natural key, so it is
+	// deterministic and stamped, not part of the key.
+	if err := resolveCostCenter(ctx, sc, &attr); err != nil {
+		return costIngestEffects{}, err
+	}
+	repo, err := sc.Ext(costSampleKind)
+	if err != nil {
+		return costIngestEffects{}, err
+	}
+
+	nk := naturalKey(attr)
+	existing, found, err := findSample(ctx, repo, nk)
+	if err != nil {
+		return costIngestEffects{}, err
+	}
+	if found {
+		if !sampleChanged(existing, attr) {
+			// Exact re-delivery: unchanged bucket, do not re-count — and do not
+			// evaluate either. Returning here is what the ingestion has always done
+			// with an unchanged bucket (the evaluation was BELOW this return), so a
+			// re-delivery still ends the transaction without writing or publishing
+			// anything. The lock taken above is not wasted on it: the lookup that
+			// decided "unchanged" is exactly the read that had to be serialized.
+			return costIngestEffects{}, nil
+		}
+		// Re-pull of a grown/re-settled bucket: replace the value in place.
+		applySampleValues(existing, attr)
+		if _, err := repo.Update(ctx, existing); err != nil {
+			return costIngestEffects{}, err
+		}
+		if attr.Provenance != provenanceBilled {
+			if crID := existing.String(colCostRecordID); crID != "" {
+				if err := updateCostRecord(ctx, sc, model.ID(crID), attr); err != nil {
+					return costIngestEffects{}, err
+				}
+			}
+		}
+	} else {
+		// A new bucket. Resolve ids, write the canonical ledger (estimated only),
+		// and link the read-model row to its ledger entry.
+		if attr.ProviderRef != "" {
+			if attr.ProviderID, err = foProvider(ctx, sc, attr.ProviderRef); err != nil {
+				return costIngestEffects{}, err
+			}
+		}
+		if attr.ModelRef != "" {
+			if attr.ModelID, err = foModel(ctx, sc, attr.ModelRef, attr.ProviderID); err != nil {
+				return costIngestEffects{}, err
+			}
+		}
+		var crID model.ID
+		if attr.Provenance != provenanceBilled {
+			if crID, err = writeCostRecord(ctx, sc, attr); err != nil {
+				return costIngestEffects{}, err
+			}
+		}
+		if _, err := repo.Create(ctx, sampleRecord(nk, crID, attr)); err != nil {
+			// A CONFLICT IS PROPAGATED, and this is the defect this cut closes. It used
+			// to return nil here — "raced with a concurrent insert of the same bucket" —
+			// and the diagnosis is not what makes that wrong: the RETURN is. The
+			// CostRecord above was ALREADY WRITTEN in this transaction, so reporting
+			// success is not a de-duplication of anything.
+			//
+			// WHAT IS ESTABLISHED, and it is one branch, not two (R4 of the independent
+			// review): when the failing Create leaves the transaction USABLE, the old
+			// return committed a canonical ledger entry that no read-model row points
+			// at — a prefix of the ingestion that the next re-pull will not find and
+			// will therefore write again. That is the branch the control exercises, and
+			// it exercises it honestly: the fixture returns store.ErrConflict BEFORE the
+			// real INSERT is issued, so on PostgreSQL the transaction really is still
+			// usable and the mutant that restores the old return really does commit the
+			// orphan prefix. It is a synthetic repository failure inside a real
+			// transaction, and it is not a native unique violation.
+			//
+			// WHAT IS NOT CLAIMED: a NATIVE unique violation (SQLSTATE 23505) is a
+			// different thing — it ABORTS the PostgreSQL transaction, and on this core
+			// the caller is not told "accepted" even if a callback swallows the error:
+			// lineageWriteTracker.finish issues SQL on the aborted transaction and its
+			// error propagates, and sqlstore.Mutate also returns finalization/commit
+			// errors (core/internal/store/sqlstore/store.go, lineage_writer.go). The
+			// HTTP path answers 202 only on a nil error. No control here produces a
+			// native 23505, so "accepted while it rolled back" is NOT asserted for that
+			// path; what a native violation would still cost is the perfectly good
+			// ingestion whose transaction dies with it.
+			//
+			// Either way the reason to propagate is the same: under the writer lock
+			// taken at the top, the lookup above already answered the dedup question for
+			// the rest of this transaction, so a conflict here is a fact this writer
+			// cannot explain — and a fact it cannot explain is not a successful replay.
+			// It is returned; the caller rolls back and may retry. (This mirrors,
+			// deliberately, what recordAlertWithEvidence does with the same class of
+			// conflict for the same reason.)
+			return costIngestEffects{}, err
+		}
+	}
+	// Step 4: evaluate under the lock this transaction has held since step 1, and
+	// carry the signals out to the caller instead of publishing them here.
+	alerts, diagnostics, err := m.evaluateBudgetsLocked(ctx, sc, attr)
+	if err != nil {
+		return costIngestEffects{}, err
+	}
+	return costIngestEffects{alerts: alerts, diagnostics: diagnostics}, nil
+}
+
+// publishCostIngestEffects emits an ingestion's captured signals. It is called ONLY
+// after the owning transaction committed, and it is best effort: a failure here does
+// not touch the rows that are already durable, and it is not a delivery guarantee.
+// A4.2 adds the incomplete-evaluation signal beside the alerts — carried across the
+// same boundary, never persisted as a threshold row.
+func (m *Module) publishCostIngestEffects(ctx context.Context, tenant model.TenantID, e costIngestEffects) {
+	for _, a := range e.alerts {
 		m.emitAlert(ctx, tenant, a)
 	}
+	for _, d := range e.diagnostics {
+		m.emitEvaluationIncomplete(ctx, tenant, d)
+	}
+}
+
+// onCost ingests one cost sample in a transaction of its own: the whole ingestion is
+// one Mutate so it commits atomically, and the FindingReports are published only
+// AFTER that commit. The ingestion itself is ingestCostInTx, which any caller
+// holding its own transaction can run instead; this function is that helper plus the
+// transaction and the post-commit publication.
+//
+// It also fixes the accounting instant of a sample that omitted one BEFORE opening
+// that transaction, so an ingestion's period never depends on how long it waited for
+// the store to admit it. That boundary is part of this function's contract with the
+// bus and HTTP callers, not an implementation detail of the helper.
+func (m *Module) onCost(ctx context.Context, tenant model.TenantID, cost sdkmodel.CostSample, audit auditHook) error {
+	if cost.ProviderRef == "" && cost.ModelRef == "" {
+		return nil // nothing to ingest: do not open a transaction for it
+	}
+	// THE ACCOUNTING INSTANT IS FIXED HERE, BEFORE THE TRANSACTION IS OPENED, which is
+	// where it has always been fixed and where it must stay (R2 of the independent
+	// review). cost is this function's own copy, so the helper below reads the value
+	// this line stamped and never re-reads the clock.
+	//
+	// Why the position is the contract and not a detail: entering Mutate is a WAIT.
+	// The store admits one write transaction per tenant at a time, so a sample that
+	// omits occurred_at and is submitted just before a period boundary can be admitted
+	// just after it. Sampling the clock inside the callback would then give that
+	// sample a different natural key, a different CostRecord timestamp and a different
+	// accounting PERIOD than the caller was answered for — an accounting period
+	// decided by lock waiting. The HTTP ingest accepts an omitted occurred_at and
+	// passes the zero value through (api.go, dto.go), so this is the only place the
+	// submission instant still exists.
+	if cost.OccurredAt.IsZero() {
+		cost.OccurredAt = m.clock.Now().Time()
+	}
+	var effects costIngestEffects
+	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		var err error
+		// Assigned, never appended: if the store ever re-ran this callback, the
+		// signals of the attempt that did not commit must not be published.
+		effects, err = m.ingestCostInTx(ctx, sc, cost, audit)
+		return err
+	}); err != nil {
+		return err
+	}
+	m.publishCostIngestEffects(ctx, tenant, effects)
 	return nil
 }
 

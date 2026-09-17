@@ -1,0 +1,195 @@
+{
+  "purpose": "public connect-v1 B credentials for the C refresh planning test; public signer only, no private key or secret",
+  "source": {
+    "path": "assessments/integration/r115-connect-paid-mixed-joint/workerd/c-consumer-fixtures.json",
+    "sha256": "19d7e3b493b740e62b362e1bd2d44e89518ba5d6ef82002365f7776b9ec88624",
+    "b_commit": "174ceb1fbffd48c80941fa2f6900ab0a604a7dec",
+    "receipt": "09-workerd-joint-journey-resignin",
+    "protocol_sha256": "fb5cc1e86910c5a2efd20220b93bcf756b753fe73e246827ce4eb96d510264d6"
+  },
+  "signer": {
+    "algorithm": "Ed25519",
+    "public_key_b64": "OCHefnnyCwtKqe77wbEoIz+KIiOjlkbz5licGMKxjxg=",
+    "key_id": "sha256:ba555540c007a6244f9747605c9e60311ba1e65c30d02e58a2651eb03217ee1e"
+  },
+  "timeline": {
+    "S1": "2026-08-01T12:00:00.000Z",
+    "P1": "2026-08-31T12:00:00.000Z",
+    "R": "2026-08-31T10:00:00.000Z",
+    "P2": "2026-09-30T10:00:00.000Z"
+  },
+  "effects": [
+    {
+      "label": "bind",
+      "now": "2026-08-01T13:00:00.000Z",
+      "deployment_id": "dep_f0bf47f98d73d5742ef1fd",
+      "binding_epoch": 1,
+      "credential": "eyJzY2hlbWEiOiJvbGl2YXJlcy5jb21tZXJjaWFsLmNyZWRlbnRpYWwudjMiLCJzZXJpYWwiOiJjb25uX3Byb2R1Y3Rpb25fZGVwX2YwYmY0N2Y5OGQ3M2Q1NzQyZWYxZmRfMSIsImlzc3VlX3NlcSI6MSwia2V5X2lkIjoic2hhMjU2OmJhNTU1NTQwYzAwN2E2MjQ0Zjk3NDc2MDVjOWU2MDMxMWJhMWU2NWMzMGQwMmU1OGEyNjUxZWIwMzIxN2VlMWUiLCJrZXlfZXBvY2giOjEsImlzc3VlZF9hdCI6IjIwMjYtMDgtMDFUMTM6MDA6MDAuMDAwWiIsIm5vdF9iZWZvcmUiOiIyMDI2LTA4LTAxVDEzOjAwOjAwLjAwMFoiLCJlbnRpdHlfaWQiOiJjdXNfME5rT3hITUFLZ3pBS0g5QUFZR3ZZIiwiZGVwbG95bWVudF9pZCI6ImRlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkIiwicHVycG9zZSI6InByb2R1Y3Rpb24iLCJsaWNlbnNlZSI6eyJkaXNwbGF5X25hbWUiOiJET0RPLTEwIFN1YiBBIn0sImdyYW50cyI6W3siZ3JhbnRfaWQiOiJncl8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE0OnBheV9qb2ludGZpcnN0XzMzOnByb2R1Y3Q6cGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE0OnBheV9qb2ludGZpcnN0XzMzOnByb2R1Y3Q6cGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiIsInByb2R1Y3RfaWQiOiJzZWxmX2hvc3RlZC5idXNpbmVzcyIsImtpbmQiOiJiYXNlIiwiY2FkZW5jZSI6Im1vbnRoIiwicGFpZF90aHJvdWdoIjoiMjAyNi0wOC0zMVQxMjowMDowMC4wMDBaIiwiZXhwaXJlc19hdCI6IjIwMjYtMDgtMDRUMTM6MDA6MDAuMDAwWiIsImlzc3VhbmNlX3BoYXNlIjoicmVmdW5kX3dpbmRvdyIsImd1YXJhbnRlZV9kZWFkbGluZSI6IjIwMjYtMDgtMTVUMTI6MDA6MDAuMDAwWiIsInByb21vdGlvbl9ob2xkX2RlYWRsaW5lIjoiMjAyNi0wOC0zMVQxMjowMDowMC4wMDBaIiwibGVhc2VfdW50aWwiOiIyMDI2LTA4LTA0VDEzOjAwOjAwLjAwMFoiLCJwcmljZV92aW50YWdlIjoiY2F0YWxvZy12ODpwcm9kdWN0LnBkdF8wTmtMNmZQbXMxRHdsRHNVVWNhd2YifSx7ImdyYW50X2lkIjoiZ3JfMjU6YnVzXzBOanNCeUxIWjRLeEwyTXhtenRRTV8xNDpwYXlfam9pbnRmaXJzdF8zMTphZGRvbjphZG5fME5rTDZlYllwdDJrNks1Yzk3M3U4Iiwib3JkZXJfbGluZV9pZCI6Im9sXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTQ6cGF5X2pvaW50Zmlyc3RfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsInByb2R1Y3RfaWQiOiJzZWxmX2hvc3RlZC5idXNpbmVzcy5hZGRvbnMucmVndWxhdGVkIiwia2luZCI6ImFkZG9uIiwiY2FkZW5jZSI6Im1vbnRoIiwicGFpZF90aHJvdWdoIjoiMjAyNi0wOC0zMVQxMjowMDowMC4wMDBaIiwiZXhwaXJlc19hdCI6IjIwMjYtMDgtMDRUMTM6MDA6MDAuMDAwWiIsImlzc3VhbmNlX3BoYXNlIjoicmVmdW5kX3dpbmRvdyIsImd1YXJhbnRlZV9kZWFkbGluZSI6IjIwMjYtMDgtMTVUMTI6MDA6MDAuMDAwWiIsInByb21vdGlvbl9ob2xkX2RlYWRsaW5lIjoiMjAyNi0wOC0zMVQxMjowMDowMC4wMDBaIiwibGVhc2VfdW50aWwiOiIyMDI2LTA4LTA0VDEzOjAwOjAwLjAwMFoiLCJwcmljZV92aW50YWdlIjoiY2F0YWxvZy12ODphZGRvbi5hZG5fME5rTDZlYllwdDJrNks1Yzk3M3U4In1dfQ.hQiPEba1BKUlFKGnd2UUawZeCCpjmcDuo4JMo4EQ18g3Argn51iiQCC8zwAnaA4nLb9avZ2OEhqJR6TyZLKWDg",
+      "credential_sha256": "37cb75c955f173e148b4147f873d31adfffa4e3251f68a8f02ed2b3120c7e926",
+      "base_phase": "refund_window",
+      "credential_effective_until": "2026-08-04T13:00:00.000Z",
+      "lines": {
+        "addon:adn_0NkL6ebYpt2k6K5c973u8": {
+          "phase": "refund_window",
+          "guarantee_deadline": "2026-08-15T12:00:00.000Z",
+          "promotion_hold_deadline": "2026-08-31T12:00:00.000Z",
+          "lease_until": "2026-08-04T13:00:00.000Z",
+          "expires_at": "2026-08-04T13:00:00.000Z",
+          "paid_through": "2026-08-31T12:00:00.000Z"
+        },
+        "product:pdt_0NkL6fPms1DwlDsUUcawf": {
+          "phase": "refund_window",
+          "guarantee_deadline": "2026-08-15T12:00:00.000Z",
+          "promotion_hold_deadline": "2026-08-31T12:00:00.000Z",
+          "lease_until": "2026-08-04T13:00:00.000Z",
+          "expires_at": "2026-08-04T13:00:00.000Z",
+          "paid_through": "2026-08-31T12:00:00.000Z"
+        }
+      }
+    },
+    {
+      "label": "mixed refresh",
+      "now": "2026-08-31T10:00:00.000Z",
+      "deployment_id": "dep_f0bf47f98d73d5742ef1fd",
+      "binding_epoch": 1,
+      "credential": "eyJzY2hlbWEiOiJvbGl2YXJlcy5jb21tZXJjaWFsLmNyZWRlbnRpYWwudjMiLCJzZXJpYWwiOiJjb25uX3Byb2R1Y3Rpb25fZGVwX2YwYmY0N2Y5OGQ3M2Q1NzQyZWYxZmRfMiIsImlzc3VlX3NlcSI6Miwia2V5X2lkIjoic2hhMjU2OmJhNTU1NTQwYzAwN2E2MjQ0Zjk3NDc2MDVjOWU2MDMxMWJhMWU2NWMzMGQwMmU1OGEyNjUxZWIwMzIxN2VlMWUiLCJrZXlfZXBvY2giOjEsImlzc3VlZF9hdCI6IjIwMjYtMDgtMzFUMTA6MDA6MDAuMDAwWiIsIm5vdF9iZWZvcmUiOiIyMDI2LTA4LTMxVDEwOjAwOjAwLjAwMFoiLCJlbnRpdHlfaWQiOiJjdXNfME5rT3hITUFLZ3pBS0g5QUFZR3ZZIiwiZGVwbG95bWVudF9pZCI6ImRlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkIiwicHVycG9zZSI6InByb2R1Y3Rpb24iLCJsaWNlbnNlZSI6eyJkaXNwbGF5X25hbWUiOiJET0RPLTEwIFN1YiBBIn0sInN1cGVyc2VkZXNfc2VyaWFsIjoiY29ubl9wcm9kdWN0aW9uX2RlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkXzEiLCJncmFudHMiOlt7ImdyYW50X2lkIjoiZ3JfMjU6YnVzXzBOanNCeUxIWjRLeEwyTXhtenRRTV8xNjpwYXlfam9pbnRyZW5ld2FsXzMzOnByb2R1Y3Q6cGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzM6cHJvZHVjdDpwZHRfME5rTDZmUG1zMUR3bERzVVVjYXdmIiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzIiwia2luZCI6ImJhc2UiLCJjYWRlbmNlIjoibW9udGgiLCJwYWlkX3Rocm91Z2giOiIyMDI2LTA5LTMwVDEwOjAwOjAwLjAwMFoiLCJleHBpcmVzX2F0IjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiaXNzdWFuY2VfcGhhc2UiOiJ0ZXJtIiwiZ3VhcmFudGVlX2RlYWRsaW5lIjpudWxsLCJwcm9tb3Rpb25faG9sZF9kZWFkbGluZSI6bnVsbCwibGVhc2VfdW50aWwiOm51bGwsInByaWNlX3ZpbnRhZ2UiOiJjYXRhbG9nLXY4OnByb2R1Y3QucGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiJ9LHsiZ3JhbnRfaWQiOiJncl8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsInByb2R1Y3RfaWQiOiJzZWxmX2hvc3RlZC5idXNpbmVzcy5hZGRvbnMucmVndWxhdGVkIiwia2luZCI6ImFkZG9uIiwiY2FkZW5jZSI6Im1vbnRoIiwicGFpZF90aHJvdWdoIjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiZXhwaXJlc19hdCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImlzc3VhbmNlX3BoYXNlIjoidGVybSIsImd1YXJhbnRlZV9kZWFkbGluZSI6bnVsbCwicHJvbW90aW9uX2hvbGRfZGVhZGxpbmUiOm51bGwsImxlYXNlX3VudGlsIjpudWxsLCJwcmljZV92aW50YWdlIjoiY2F0YWxvZy12ODphZGRvbi5hZG5fME5rTDZlYllwdDJrNks1Yzk3M3U4In0seyJncmFudF9pZCI6ImdyXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5Iiwib3JkZXJfbGluZV9pZCI6Im9sXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5IiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzLmFkZG9ucy5pZGVudGl0eS1zY2FsZSIsImtpbmQiOiJhZGRvbiIsImNhZGVuY2UiOiJtb250aCIsInBhaWRfdGhyb3VnaCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTA5LTAzVDEwOjAwOjAwLjAwMFoiLCJpc3N1YW5jZV9waGFzZSI6InJlZnVuZF93aW5kb3ciLCJndWFyYW50ZWVfZGVhZGxpbmUiOiIyMDI2LTA5LTE0VDEwOjAwOjAwLjAwMFoiLCJwcm9tb3Rpb25faG9sZF9kZWFkbGluZSI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImxlYXNlX3VudGlsIjoiMjAyNi0wOS0wM1QxMDowMDowMC4wMDBaIiwicHJpY2VfdmludGFnZSI6ImNhdGFsb2ctdjg6YWRkb24uYWRuXzBOa0w2ZkRBREdYbDFtdXNMZ1pSeSJ9XX0.sMDFbdO-BCqwlwkl62ggKBDZqfD8rQDq4ZsxV7xluBA4E0CmyI-EA9P1kEHziENDexvppQVtN7gdBkhV2-05Dw",
+      "credential_sha256": "d1da55cfdd1e06ee686e6c44c4ca758bd887de05a7eaa44a670df2d02186403e",
+      "base_phase": "term",
+      "credential_effective_until": "2026-09-30T10:00:00.000Z",
+      "lines": {
+        "addon:adn_0NkL6ebYpt2k6K5c973u8": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "addon:adn_0NkL6fDADGXl1musLgZRy": {
+          "phase": "refund_window",
+          "guarantee_deadline": "2026-09-14T10:00:00.000Z",
+          "promotion_hold_deadline": "2026-09-30T10:00:00.000Z",
+          "lease_until": "2026-09-03T10:00:00.000Z",
+          "expires_at": "2026-09-03T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "product:pdt_0NkL6fPms1DwlDsUUcawf": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        }
+      }
+    },
+    {
+      "label": "after the first lease",
+      "now": "2026-09-03T11:00:00.000Z",
+      "deployment_id": "dep_f0bf47f98d73d5742ef1fd",
+      "binding_epoch": 1,
+      "credential": "eyJzY2hlbWEiOiJvbGl2YXJlcy5jb21tZXJjaWFsLmNyZWRlbnRpYWwudjMiLCJzZXJpYWwiOiJjb25uX3Byb2R1Y3Rpb25fZGVwX2YwYmY0N2Y5OGQ3M2Q1NzQyZWYxZmRfMyIsImlzc3VlX3NlcSI6Mywia2V5X2lkIjoic2hhMjU2OmJhNTU1NTQwYzAwN2E2MjQ0Zjk3NDc2MDVjOWU2MDMxMWJhMWU2NWMzMGQwMmU1OGEyNjUxZWIwMzIxN2VlMWUiLCJrZXlfZXBvY2giOjEsImlzc3VlZF9hdCI6IjIwMjYtMDktMDNUMTE6MDA6MDAuMDAwWiIsIm5vdF9iZWZvcmUiOiIyMDI2LTA5LTAzVDExOjAwOjAwLjAwMFoiLCJlbnRpdHlfaWQiOiJjdXNfME5rT3hITUFLZ3pBS0g5QUFZR3ZZIiwiZGVwbG95bWVudF9pZCI6ImRlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkIiwicHVycG9zZSI6InByb2R1Y3Rpb24iLCJsaWNlbnNlZSI6eyJkaXNwbGF5X25hbWUiOiJET0RPLTEwIFN1YiBBIn0sInN1cGVyc2VkZXNfc2VyaWFsIjoiY29ubl9wcm9kdWN0aW9uX2RlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkXzIiLCJncmFudHMiOlt7ImdyYW50X2lkIjoiZ3JfMjU6YnVzXzBOanNCeUxIWjRLeEwyTXhtenRRTV8xNjpwYXlfam9pbnRyZW5ld2FsXzMzOnByb2R1Y3Q6cGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzM6cHJvZHVjdDpwZHRfME5rTDZmUG1zMUR3bERzVVVjYXdmIiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzIiwia2luZCI6ImJhc2UiLCJjYWRlbmNlIjoibW9udGgiLCJwYWlkX3Rocm91Z2giOiIyMDI2LTA5LTMwVDEwOjAwOjAwLjAwMFoiLCJleHBpcmVzX2F0IjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiaXNzdWFuY2VfcGhhc2UiOiJ0ZXJtIiwiZ3VhcmFudGVlX2RlYWRsaW5lIjpudWxsLCJwcm9tb3Rpb25faG9sZF9kZWFkbGluZSI6bnVsbCwibGVhc2VfdW50aWwiOm51bGwsInByaWNlX3ZpbnRhZ2UiOiJjYXRhbG9nLXY4OnByb2R1Y3QucGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiJ9LHsiZ3JhbnRfaWQiOiJncl8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsInByb2R1Y3RfaWQiOiJzZWxmX2hvc3RlZC5idXNpbmVzcy5hZGRvbnMucmVndWxhdGVkIiwia2luZCI6ImFkZG9uIiwiY2FkZW5jZSI6Im1vbnRoIiwicGFpZF90aHJvdWdoIjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiZXhwaXJlc19hdCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImlzc3VhbmNlX3BoYXNlIjoidGVybSIsImd1YXJhbnRlZV9kZWFkbGluZSI6bnVsbCwicHJvbW90aW9uX2hvbGRfZGVhZGxpbmUiOm51bGwsImxlYXNlX3VudGlsIjpudWxsLCJwcmljZV92aW50YWdlIjoiY2F0YWxvZy12ODphZGRvbi5hZG5fME5rTDZlYllwdDJrNks1Yzk3M3U4In0seyJncmFudF9pZCI6ImdyXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5Iiwib3JkZXJfbGluZV9pZCI6Im9sXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5IiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzLmFkZG9ucy5pZGVudGl0eS1zY2FsZSIsImtpbmQiOiJhZGRvbiIsImNhZGVuY2UiOiJtb250aCIsInBhaWRfdGhyb3VnaCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTA5LTA2VDExOjAwOjAwLjAwMFoiLCJpc3N1YW5jZV9waGFzZSI6InJlZnVuZF93aW5kb3ciLCJndWFyYW50ZWVfZGVhZGxpbmUiOiIyMDI2LTA5LTE0VDEwOjAwOjAwLjAwMFoiLCJwcm9tb3Rpb25faG9sZF9kZWFkbGluZSI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImxlYXNlX3VudGlsIjoiMjAyNi0wOS0wNlQxMTowMDowMC4wMDBaIiwicHJpY2VfdmludGFnZSI6ImNhdGFsb2ctdjg6YWRkb24uYWRuXzBOa0w2ZkRBREdYbDFtdXNMZ1pSeSJ9XX0.6rQpxGh2yoUtK_wS3umecv778XCtnazNJKQnD7TwKoLT36QCS2vXkpgtLA2ViBcnII_7Ipl5idpZ2YaSSTBEBw",
+      "credential_sha256": "550d8909c6100abcb0e72438a28be682aecc95b1cce520504d11062f8e3a80dc",
+      "base_phase": "term",
+      "credential_effective_until": "2026-09-30T10:00:00.000Z",
+      "lines": {
+        "addon:adn_0NkL6ebYpt2k6K5c973u8": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "addon:adn_0NkL6fDADGXl1musLgZRy": {
+          "phase": "refund_window",
+          "guarantee_deadline": "2026-09-14T10:00:00.000Z",
+          "promotion_hold_deadline": "2026-09-30T10:00:00.000Z",
+          "lease_until": "2026-09-06T11:00:00.000Z",
+          "expires_at": "2026-09-06T11:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "product:pdt_0NkL6fPms1DwlDsUUcawf": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        }
+      }
+    },
+    {
+      "label": "in the promotion hold",
+      "now": "2026-09-14T11:00:00.000Z",
+      "deployment_id": "dep_f0bf47f98d73d5742ef1fd",
+      "binding_epoch": 1,
+      "credential": "eyJzY2hlbWEiOiJvbGl2YXJlcy5jb21tZXJjaWFsLmNyZWRlbnRpYWwudjMiLCJzZXJpYWwiOiJjb25uX3Byb2R1Y3Rpb25fZGVwX2YwYmY0N2Y5OGQ3M2Q1NzQyZWYxZmRfNCIsImlzc3VlX3NlcSI6NCwia2V5X2lkIjoic2hhMjU2OmJhNTU1NTQwYzAwN2E2MjQ0Zjk3NDc2MDVjOWU2MDMxMWJhMWU2NWMzMGQwMmU1OGEyNjUxZWIwMzIxN2VlMWUiLCJrZXlfZXBvY2giOjEsImlzc3VlZF9hdCI6IjIwMjYtMDktMTRUMTE6MDA6MDAuMDAwWiIsIm5vdF9iZWZvcmUiOiIyMDI2LTA5LTE0VDExOjAwOjAwLjAwMFoiLCJlbnRpdHlfaWQiOiJjdXNfME5rT3hITUFLZ3pBS0g5QUFZR3ZZIiwiZGVwbG95bWVudF9pZCI6ImRlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkIiwicHVycG9zZSI6InByb2R1Y3Rpb24iLCJsaWNlbnNlZSI6eyJkaXNwbGF5X25hbWUiOiJET0RPLTEwIFN1YiBBIn0sInN1cGVyc2VkZXNfc2VyaWFsIjoiY29ubl9wcm9kdWN0aW9uX2RlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkXzMiLCJncmFudHMiOlt7ImdyYW50X2lkIjoiZ3JfMjU6YnVzXzBOanNCeUxIWjRLeEwyTXhtenRRTV8xNjpwYXlfam9pbnRyZW5ld2FsXzMzOnByb2R1Y3Q6cGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzM6cHJvZHVjdDpwZHRfME5rTDZmUG1zMUR3bERzVVVjYXdmIiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzIiwia2luZCI6ImJhc2UiLCJjYWRlbmNlIjoibW9udGgiLCJwYWlkX3Rocm91Z2giOiIyMDI2LTA5LTMwVDEwOjAwOjAwLjAwMFoiLCJleHBpcmVzX2F0IjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiaXNzdWFuY2VfcGhhc2UiOiJ0ZXJtIiwiZ3VhcmFudGVlX2RlYWRsaW5lIjpudWxsLCJwcm9tb3Rpb25faG9sZF9kZWFkbGluZSI6bnVsbCwibGVhc2VfdW50aWwiOm51bGwsInByaWNlX3ZpbnRhZ2UiOiJjYXRhbG9nLXY4OnByb2R1Y3QucGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiJ9LHsiZ3JhbnRfaWQiOiJncl8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsInByb2R1Y3RfaWQiOiJzZWxmX2hvc3RlZC5idXNpbmVzcy5hZGRvbnMucmVndWxhdGVkIiwia2luZCI6ImFkZG9uIiwiY2FkZW5jZSI6Im1vbnRoIiwicGFpZF90aHJvdWdoIjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiZXhwaXJlc19hdCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImlzc3VhbmNlX3BoYXNlIjoidGVybSIsImd1YXJhbnRlZV9kZWFkbGluZSI6bnVsbCwicHJvbW90aW9uX2hvbGRfZGVhZGxpbmUiOm51bGwsImxlYXNlX3VudGlsIjpudWxsLCJwcmljZV92aW50YWdlIjoiY2F0YWxvZy12ODphZGRvbi5hZG5fME5rTDZlYllwdDJrNks1Yzk3M3U4In0seyJncmFudF9pZCI6ImdyXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5Iiwib3JkZXJfbGluZV9pZCI6Im9sXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5IiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzLmFkZG9ucy5pZGVudGl0eS1zY2FsZSIsImtpbmQiOiJhZGRvbiIsImNhZGVuY2UiOiJtb250aCIsInBhaWRfdGhyb3VnaCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTA5LTE3VDExOjAwOjAwLjAwMFoiLCJpc3N1YW5jZV9waGFzZSI6InByb21vdGlvbl9ob2xkIiwiZ3VhcmFudGVlX2RlYWRsaW5lIjoiMjAyNi0wOS0xNFQxMDowMDowMC4wMDBaIiwicHJvbW90aW9uX2hvbGRfZGVhZGxpbmUiOiIyMDI2LTA5LTMwVDEwOjAwOjAwLjAwMFoiLCJsZWFzZV91bnRpbCI6IjIwMjYtMDktMTdUMTE6MDA6MDAuMDAwWiIsInByaWNlX3ZpbnRhZ2UiOiJjYXRhbG9nLXY4OmFkZG9uLmFkbl8wTmtMNmZEQURHWGwxbXVzTGdaUnkifV19.sY0NQ2tgN3hyM9mYb1QbmLiApL0FRnS2Z6bRvA660pJW1AOsKfrRzJs-lWw93ri9zyhuOtUlBRDiYkA3CK_6Bw",
+      "credential_sha256": "b4ba4c30ea1d8f9ad37c35b3be7501a5e5c5c12976fcf4b9c6e548fd517c2ea4",
+      "base_phase": "term",
+      "credential_effective_until": "2026-09-30T10:00:00.000Z",
+      "lines": {
+        "addon:adn_0NkL6ebYpt2k6K5c973u8": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "addon:adn_0NkL6fDADGXl1musLgZRy": {
+          "phase": "promotion_hold",
+          "guarantee_deadline": "2026-09-14T10:00:00.000Z",
+          "promotion_hold_deadline": "2026-09-30T10:00:00.000Z",
+          "lease_until": "2026-09-17T11:00:00.000Z",
+          "expires_at": "2026-09-17T11:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "product:pdt_0NkL6fPms1DwlDsUUcawf": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        }
+      }
+    },
+    {
+      "label": "after the minimum hold",
+      "now": "2026-09-17T11:00:00.000Z",
+      "deployment_id": "dep_f0bf47f98d73d5742ef1fd",
+      "binding_epoch": 1,
+      "credential": "eyJzY2hlbWEiOiJvbGl2YXJlcy5jb21tZXJjaWFsLmNyZWRlbnRpYWwudjMiLCJzZXJpYWwiOiJjb25uX3Byb2R1Y3Rpb25fZGVwX2YwYmY0N2Y5OGQ3M2Q1NzQyZWYxZmRfNSIsImlzc3VlX3NlcSI6NSwia2V5X2lkIjoic2hhMjU2OmJhNTU1NTQwYzAwN2E2MjQ0Zjk3NDc2MDVjOWU2MDMxMWJhMWU2NWMzMGQwMmU1OGEyNjUxZWIwMzIxN2VlMWUiLCJrZXlfZXBvY2giOjEsImlzc3VlZF9hdCI6IjIwMjYtMDktMTdUMTE6MDA6MDAuMDAwWiIsIm5vdF9iZWZvcmUiOiIyMDI2LTA5LTE3VDExOjAwOjAwLjAwMFoiLCJlbnRpdHlfaWQiOiJjdXNfME5rT3hITUFLZ3pBS0g5QUFZR3ZZIiwiZGVwbG95bWVudF9pZCI6ImRlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkIiwicHVycG9zZSI6InByb2R1Y3Rpb24iLCJsaWNlbnNlZSI6eyJkaXNwbGF5X25hbWUiOiJET0RPLTEwIFN1YiBBIn0sInN1cGVyc2VkZXNfc2VyaWFsIjoiY29ubl9wcm9kdWN0aW9uX2RlcF9mMGJmNDdmOThkNzNkNTc0MmVmMWZkXzQiLCJncmFudHMiOlt7ImdyYW50X2lkIjoiZ3JfMjU6YnVzXzBOanNCeUxIWjRLeEwyTXhtenRRTV8xNjpwYXlfam9pbnRyZW5ld2FsXzMzOnByb2R1Y3Q6cGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzM6cHJvZHVjdDpwZHRfME5rTDZmUG1zMUR3bERzVVVjYXdmIiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzIiwia2luZCI6ImJhc2UiLCJjYWRlbmNlIjoibW9udGgiLCJwYWlkX3Rocm91Z2giOiIyMDI2LTA5LTMwVDEwOjAwOjAwLjAwMFoiLCJleHBpcmVzX2F0IjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiaXNzdWFuY2VfcGhhc2UiOiJ0ZXJtIiwiZ3VhcmFudGVlX2RlYWRsaW5lIjpudWxsLCJwcm9tb3Rpb25faG9sZF9kZWFkbGluZSI6bnVsbCwibGVhc2VfdW50aWwiOm51bGwsInByaWNlX3ZpbnRhZ2UiOiJjYXRhbG9nLXY4OnByb2R1Y3QucGR0XzBOa0w2ZlBtczFEd2xEc1VVY2F3ZiJ9LHsiZ3JhbnRfaWQiOiJncl8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsIm9yZGVyX2xpbmVfaWQiOiJvbF8yNTpidXNfME5qc0J5TEhaNEt4TDJNeG16dFFNXzE2OnBheV9qb2ludHJlbmV3YWxfMzE6YWRkb246YWRuXzBOa0w2ZWJZcHQyazZLNWM5NzN1OCIsInByb2R1Y3RfaWQiOiJzZWxmX2hvc3RlZC5idXNpbmVzcy5hZGRvbnMucmVndWxhdGVkIiwia2luZCI6ImFkZG9uIiwiY2FkZW5jZSI6Im1vbnRoIiwicGFpZF90aHJvdWdoIjoiMjAyNi0wOS0zMFQxMDowMDowMC4wMDBaIiwiZXhwaXJlc19hdCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImlzc3VhbmNlX3BoYXNlIjoidGVybSIsImd1YXJhbnRlZV9kZWFkbGluZSI6bnVsbCwicHJvbW90aW9uX2hvbGRfZGVhZGxpbmUiOm51bGwsImxlYXNlX3VudGlsIjpudWxsLCJwcmljZV92aW50YWdlIjoiY2F0YWxvZy12ODphZGRvbi5hZG5fME5rTDZlYllwdDJrNks1Yzk3M3U4In0seyJncmFudF9pZCI6ImdyXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5Iiwib3JkZXJfbGluZV9pZCI6Im9sXzI1OmJ1c18wTmpzQnlMSFo0S3hMMk14bXp0UU1fMTY6cGF5X2pvaW50cmVuZXdhbF8zMTphZGRvbjphZG5fME5rTDZmREFER1hsMW11c0xnWlJ5IiwicHJvZHVjdF9pZCI6InNlbGZfaG9zdGVkLmJ1c2luZXNzLmFkZG9ucy5pZGVudGl0eS1zY2FsZSIsImtpbmQiOiJhZGRvbiIsImNhZGVuY2UiOiJtb250aCIsInBhaWRfdGhyb3VnaCI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTA5LTMwVDEwOjAwOjAwLjAwMFoiLCJpc3N1YW5jZV9waGFzZSI6InRlcm0iLCJndWFyYW50ZWVfZGVhZGxpbmUiOiIyMDI2LTA5LTE0VDEwOjAwOjAwLjAwMFoiLCJwcm9tb3Rpb25faG9sZF9kZWFkbGluZSI6IjIwMjYtMDktMzBUMTA6MDA6MDAuMDAwWiIsImxlYXNlX3VudGlsIjpudWxsLCJwcmljZV92aW50YWdlIjoiY2F0YWxvZy12ODphZGRvbi5hZG5fME5rTDZmREFER1hsMW11c0xnWlJ5In1dfQ.lAriV070QeuTNGzLVt7LJ2Xf95eNxbx-ExRt8BGVVMN2oegAX1euigBo4XJ-8gFoa0rsQ48qnLJa6xlgjCyjDg",
+      "credential_sha256": "0bc0640d649473812c4d97c86e85883061aac17b1f1a9076bb697553f7caaa96",
+      "base_phase": "term",
+      "credential_effective_until": "2026-09-30T10:00:00.000Z",
+      "lines": {
+        "addon:adn_0NkL6ebYpt2k6K5c973u8": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "addon:adn_0NkL6fDADGXl1musLgZRy": {
+          "phase": "term",
+          "guarantee_deadline": "2026-09-14T10:00:00.000Z",
+          "promotion_hold_deadline": "2026-09-30T10:00:00.000Z",
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        },
+        "product:pdt_0NkL6fPms1DwlDsUUcawf": {
+          "phase": "term",
+          "guarantee_deadline": null,
+          "promotion_hold_deadline": null,
+          "lease_until": null,
+          "expires_at": "2026-09-30T10:00:00.000Z",
+          "paid_through": "2026-09-30T10:00:00.000Z"
+        }
+      }
+    }
+  ]
+}

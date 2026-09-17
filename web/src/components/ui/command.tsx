@@ -156,6 +156,15 @@ export interface CommandDialogProps extends ComponentProps<typeof Dialog.Root> {
   description?: string
   /** Extra classes for the dialog panel. */
   className?: string
+  /**
+   * Let cmdk filter and re-order items by its own fuzzy score (the default), or hand it a
+   * list the CALLER already filtered and ranked (`false`). The ⌘K palette passes `false`
+   * so its order is the shared navigation ranking (features/navigation/model.ts) — the
+   * same one the sidebar filter uses — and never a per-keystroke reshuffle.
+   */
+  shouldFilter?: boolean
+  /** Radix's close-time focus event, so a caller can decide where focus goes back to. */
+  onCloseAutoFocus?: (event: Event) => void
   children: ReactNode
 }
 
@@ -163,6 +172,8 @@ export function CommandDialog({
   title = 'Command palette',
   description = 'Search for a command to run.',
   className,
+  shouldFilter,
+  onCloseAutoFocus,
   children,
   ...props
 }: CommandDialogProps) {
@@ -177,6 +188,7 @@ export function CommandDialog({
           )}
         />
         <Dialog.Content
+          onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
             'fixed left-1/2 top-[15%] z-50 w-full max-w-xl -translate-x-1/2',
             'overflow-hidden rounded-xl border border-border-strong bg-elevated p-0 shadow-xl',
@@ -195,6 +207,7 @@ export function CommandDialog({
               has no accessible name. */}
           <Command
             label={title}
+            shouldFilter={shouldFilter}
             className="[&_[cmdk-group-heading]]:text-muted-foreground"
           >
             {children}

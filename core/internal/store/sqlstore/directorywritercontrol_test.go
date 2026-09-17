@@ -143,7 +143,7 @@ SET mode = 'enforced', expected_generation = 7`)
 	}
 	defer tx.Rollback() //nolint:errcheck
 	directoryWriterTestMustExec(t, tx,
-		"INSERT INTO main.directory_writer_marker(control_key, generation) VALUES (?, ?)",
+		"INSERT INTO main.directory_writer_marker(control_key, generation, coverage_protocol) VALUES (?, ?, 'membership-union-v1')",
 		dialect.DirectoryWriterControlKey, 6)
 	_, err = tx.ExecContext(ctx, "INSERT INTO users(id) VALUES ('wrong-generation')")
 	directoryWriterTestWantError(t, err, "directory writer generation required")
@@ -348,7 +348,7 @@ func TestDirectoryWriterSQLiteTrackedRawCorruptionRefusesOpen(t *testing.T) {
 		{
 			name: "durable marker row",
 			mutate: []string{
-				"INSERT INTO main.directory_writer_marker(control_key, generation) VALUES ('core.directory.writer', 1)",
+				"INSERT INTO main.directory_writer_marker(control_key, generation, coverage_protocol) VALUES ('core.directory.writer', 1, 'membership-union-v1')",
 			},
 			probe: func(t *testing.T, db *sql.DB) {
 				directoryWriterTestWantSQLiteScalar(t, db,
@@ -545,6 +545,8 @@ SET mode = 'enforced', expected_generation = 1`)
 					"SELECT pg_catalog.set_config('app.directory_writer_generation', $1, true)",
 					tc.generation)
 			}
+			directoryWriterTestMustExec(t, tx, "SELECT pg_catalog.set_config($1, $2, true)", directoryCoverageProtocolGUC, coverageProtocolLegacy)
+			directoryWriterTestMustExec(t, tx, "SELECT pg_catalog.set_config($1, $2, true)", directoryCoverageProtocolGUC, coverageProtocolLegacy)
 			_, err = tx.ExecContext(ctx, `UPDATE public.orgs SET status = 'suspended'
 WHERE tenant_id OPERATOR(pg_catalog.=) $1`, tenant.String())
 			directoryWriterTestWantError(t, err, "directory writer generation required")
@@ -565,6 +567,7 @@ WHERE tenant_id OPERATOR(pg_catalog.=) $1`, tenant.String())
 	}
 	directoryWriterTestMustExec(t, tx,
 		"SELECT pg_catalog.set_config('app.directory_writer_generation', '1', true)")
+	directoryWriterTestMustExec(t, tx, "SELECT pg_catalog.set_config($1, $2, true)", directoryCoverageProtocolGUC, coverageProtocolLegacy)
 	result, err := tx.ExecContext(ctx, `UPDATE public.orgs SET status = 'suspended'
 WHERE tenant_id OPERATOR(pg_catalog.=) $1`, tenant.String())
 	if err != nil {
@@ -828,6 +831,7 @@ func TestDirectoryWriterPostgresSplitOwnerACL(t *testing.T) {
 	if err := dia.BindTenant(ctx, tx, tenant); err != nil {
 		t.Fatal(err)
 	}
+	directoryWriterTestMustExec(t, tx, "SELECT pg_catalog.set_config($1, $2, true)", directoryCoverageProtocolGUC, coverageProtocolLegacy)
 	_, err = tx.ExecContext(ctx, `UPDATE public.orgs SET status='suspended'
 WHERE tenant_id OPERATOR(pg_catalog.=) $1`, tenant.String())
 	directoryWriterTestWantError(t, err, "directory writer generation required")
@@ -843,6 +847,7 @@ WHERE tenant_id OPERATOR(pg_catalog.=) $1`, tenant.String())
 	}
 	directoryWriterTestMustExec(t, tx,
 		"SELECT pg_catalog.set_config('app.directory_writer_generation', '1', true)")
+	directoryWriterTestMustExec(t, tx, "SELECT pg_catalog.set_config($1, $2, true)", directoryCoverageProtocolGUC, coverageProtocolLegacy)
 	if _, err := tx.ExecContext(ctx, `UPDATE public.orgs SET status='suspended'
 WHERE tenant_id OPERATOR(pg_catalog.=) $1`, tenant.String()); err != nil {
 		t.Fatalf("installed trigger did not fire successfully after app EXECUTE was revoked: %v", err)
@@ -1047,13 +1052,19 @@ func newDirectoryWriterSQLiteHarness(t *testing.T) directoryWriterSQLiteHarness 
 		}
 		directoryWriterTestMustExec(t, db, ddl)
 	}
-	for _, stmt := range dia.DirectoryWriterControlStmts() {
+	// This intentionally minimal raw harness exercises current guard syntax,
+	// not entity shape or migrations. Full v9 fixtures are independently built.
+	current := userAuthorityControlDialect{dia}
+	for i, stmt := range current.DirectoryWriterControlStmts() {
+		if i == 1 {
+			stmt = "INSERT INTO main.directory_writer_control(control_key,mode,expected_generation,coverage_protocol) VALUES ('core.directory.writer','staged',1,'membership-union-v1')"
+		}
 		directoryWriterTestMustExec(t, db, stmt)
 	}
-	if err := reconcileDirectoryWriterGuards(ctx, db, db, dia, false, guardRoles{}); err != nil {
+	if err := reconcileDirectoryWriterGuards(ctx, db, db, current, false, guardRoles{}); err != nil {
 		t.Fatalf("install raw SQLite writer guards: %v", err)
 	}
-	return directoryWriterSQLiteHarness{db: db, dia: dia}
+	return directoryWriterSQLiteHarness{db: db, dia: current}
 }
 
 func directoryWriterTestExerciseSQLiteSource(

@@ -8,7 +8,7 @@
 // # Integration level: OBSERVE + CONFIG-WRITE (advisory)
 //
 // This connector reads the LOCAL config.toml + environment variable overrides (read-only,
-// no network, minimal-data — docs/SECURITY-HARDENING.md-3) and emits governance observations. It also
+// no network, minimal-data — docs/SECURITY-HARDENING.md §0-3) and emits governance observations. It also
 // provides a policy AUTHORING surface (authoring.go) that generates a config.toml
 // fragment from governance rules for the operator to distribute.
 //

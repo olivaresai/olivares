@@ -20,6 +20,9 @@ vi.mock('@tanstack/react-router', () => ({
   ),
   useNavigate: () => () => {},
   useRouterState: () => '/',
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 let permisos: (p: string) => boolean = () => true
 let activeTenant: string | null = 't1'

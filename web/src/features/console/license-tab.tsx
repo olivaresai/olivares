@@ -35,7 +35,11 @@ import { queryKeys } from '@/lib/api/query'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useResumeGuard } from '@/lib/hooks/use-resume-guard'
 import { useAuth } from '@/lib/auth/context'
-import { EntitlementMatrixCard } from './entitlement-matrix'
+import {
+  EntitlementMatrixCard,
+  LicenseReadStatus,
+  classifyLicenseRead,
+} from './entitlement-matrix'
 import {
   type ActivationAddonDTO,
   type ActivationStatusDTO,
@@ -66,9 +70,114 @@ function statusVariant(
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
+    <div className="flex min-w-0 items-start justify-between gap-4 py-2.5">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right text-sm text-foreground">{children}</dd>
+      <dd className="min-w-0 text-right text-sm break-words text-foreground">
+        {children}
+      </dd>
+    </div>
+  )
+}
+
+/** Historic facts are last success, never current green entitlement. */
+function historicStatusVariant(
+  status: string,
+): 'warning' | 'danger' | 'neutral' {
+  switch (status) {
+    case 'invalid':
+      return 'danger'
+    case 'valid':
+    case 'perpetual':
+    case 'expired':
+      return 'warning'
+    default:
+      return 'neutral'
+  }
+}
+
+function LicenseFacts({
+  license,
+  historic = false,
+}: {
+  license: LicenseStatusDTO
+  historic?: boolean
+}) {
+  const { t } = useTranslation(['console'])
+  const editionVariant = historic
+    ? 'neutral'
+    : license.edition === 'enterprise'
+      ? 'accent'
+      : 'neutral'
+  const statusTone = historic
+    ? historicStatusVariant(license.status)
+    : statusVariant(license.status)
+  const showCheck =
+    !historic && (license.status === 'valid' || license.status === 'perpetual')
+
+  return (
+    <div
+      className="rounded-lg border border-border p-5"
+      data-slot="license-facts"
+      data-kind={historic ? 'historic' : 'current'}
+    >
+      <dl className="divide-y divide-border">
+        <Row label={t('console:license.edition')}>
+          <Badge variant={editionVariant}>
+            {t(`console:license.editions.${license.edition}`, {
+              defaultValue: license.edition,
+            })}
+          </Badge>
+        </Row>
+        <Row label={t('console:license.status')}>
+          <Badge variant={statusTone}>
+            {showCheck ? (
+              <BadgeCheck className="size-3 shrink-0" aria-hidden />
+            ) : null}
+            {t(`console:license.statuses.${license.status}`, {
+              defaultValue: license.status,
+            })}
+          </Badge>
+        </Row>
+        {license.licensee && (
+          <Row label={t('console:license.licensee')}>{license.licensee}</Row>
+        )}
+        {license.plan && (
+          <Row label={t('console:license.plan')}>{license.plan}</Row>
+        )}
+        {license.support_tier && (
+          <Row label={t('console:license.supportTier')}>
+            {license.support_tier}
+          </Row>
+        )}
+        {/* B10: honest USAGE, never a quota — the count stands alone, labelled "no limit". */}
+        <Row label={t('console:license.activeUsers')}>
+          <span className="font-mono tabular-nums">
+            {license.active_users}
+            {license.active_users_capped ? '+' : ''}
+          </span>
+          <span className="ml-2 text-xs text-muted-foreground">
+            {t('console:license.noUserLimit')}
+          </span>
+        </Row>
+        {license.expires_at && (
+          <Row label={t('console:license.expires')}>
+            {new Date(license.expires_at).toLocaleDateString(currentLanguage())}
+          </Row>
+        )}
+        {license.issued_at && (
+          <Row label={t('console:license.issued')}>
+            {new Date(license.issued_at).toLocaleDateString(currentLanguage())}
+          </Row>
+        )}
+        <Row label={t('console:license.sourceLabel')}>
+          <span className="font-mono text-xs break-all">
+            {t(`console:license.sources.${license.source}`, {
+              defaultValue: license.source,
+            })}
+            {license.source_path ? ` (${license.source_path})` : ''}
+          </span>
+        </Row>
+      </dl>
     </div>
   )
 }
@@ -93,6 +202,8 @@ export function LicenseTab() {
   const { isSuperadmin } = useAuth()
   const [installOpen, setInstallOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const installBtnRef = useRef<HTMLButtonElement>(null)
+  const removeBtnRef = useRef<HTMLButtonElement>(null)
 
   const query = useQuery({
     queryKey: consoleKeys.license(),
@@ -113,11 +224,29 @@ export function LicenseTab() {
   }
 
   const lic = query.data
+  const licenseRead = classifyLicenseRead({
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
+    data: query.data,
+  })
+  const retryLicense = () => {
+    void query.refetch()
+  }
+  const knownLicense =
+    licenseRead.kind === 'success'
+      ? licenseRead.license
+      : licenseRead.kind === 'failed'
+        ? licenseRead.lastSuccess
+        : undefined
 
   return (
     <div className="flex flex-col gap-4 pt-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div
+        data-slot="license-intro-header"
+        className="flex flex-wrap items-start justify-between gap-3"
+      >
+        <div className="min-w-[min(100%,20rem)] flex-1 basis-[20rem]">
           <h2 className="text-base font-semibold text-foreground">
             {t('console:license.title')}
           </h2>
@@ -125,8 +254,12 @@ export function LicenseTab() {
             {t('console:license.caption')}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div
+          data-slot="license-actions"
+          className="flex min-w-0 flex-wrap items-center gap-2"
+        >
           <Button
+            ref={installBtnRef}
             onClick={() => setInstallOpen(true)}
             disabled={lic?.managed_externally}
           >
@@ -134,7 +267,11 @@ export function LicenseTab() {
             {t('console:license.install')}
           </Button>
           {lic && lic.status !== 'none' && !lic.managed_externally && (
-            <Button variant="ghost" onClick={() => setRemoveOpen(true)}>
+            <Button
+              ref={removeBtnRef}
+              variant="ghost"
+              onClick={() => setRemoveOpen(true)}
+            >
               <Trash2 />
               {t('console:license.remove')}
             </Button>
@@ -142,111 +279,68 @@ export function LicenseTab() {
         </div>
       </div>
 
-      {query.isLoading ? (
+      {licenseRead.kind === 'loading' ? (
         <div className="flex justify-center py-8">
           <Spinner />
         </div>
-      ) : query.isError || !lic ? (
-        <ErrorState retry={() => void query.refetch()} />
+      ) : licenseRead.kind === 'failed' ? (
+        <div
+          className="flex flex-col gap-4"
+          data-slot="license-facts-panel"
+          data-kind="failed"
+          data-had-prior={licenseRead.hadPriorData ? 'true' : 'false'}
+        >
+          <LicenseReadStatus read={licenseRead} onRetry={retryLicense} />
+          {licenseRead.lastSuccess ? (
+            <LicenseFacts license={licenseRead.lastSuccess} historic />
+          ) : null}
+        </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div
+          className="flex flex-col gap-4"
+          data-slot="license-facts-panel"
+          data-kind="current"
+        >
           {/* Renewal banner — the honest degradation prompt when expired. */}
-          {lic.status === 'expired' && (
+          {licenseRead.license.status === 'expired' && (
             <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
               {t('console:license.expiredBanner')}
             </p>
           )}
           {/* Managed-externally note: the data-dir install is shadowed by an override. */}
-          {lic.managed_externally && (
+          {licenseRead.license.managed_externally && (
             <p className="flex items-start gap-2 rounded-lg border border-accent-line bg-accent-soft px-4 py-3 text-sm text-accent-soft-foreground">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-              {t('console:license.managedExternally', { source: lic.source })}
+              {t('console:license.managedExternally', {
+                source: licenseRead.license.source,
+              })}
             </p>
           )}
-
-          <div className="rounded-lg border border-border p-5">
-            <dl className="divide-y divide-border">
-              <Row label={t('console:license.edition')}>
-                <Badge
-                  variant={lic.edition === 'enterprise' ? 'accent' : 'neutral'}
-                >
-                  {t(`console:license.editions.${lic.edition}`, {
-                    defaultValue: lic.edition,
-                  })}
-                </Badge>
-              </Row>
-              <Row label={t('console:license.status')}>
-                <Badge variant={statusVariant(lic.status)}>
-                  {lic.status === 'valid' || lic.status === 'perpetual' ? (
-                    <BadgeCheck className="size-3 shrink-0" aria-hidden />
-                  ) : null}
-                  {t(`console:license.statuses.${lic.status}`, {
-                    defaultValue: lic.status,
-                  })}
-                </Badge>
-              </Row>
-              {lic.licensee && (
-                <Row label={t('console:license.licensee')}>{lic.licensee}</Row>
-              )}
-              {lic.plan && (
-                <Row label={t('console:license.plan')}>{lic.plan}</Row>
-              )}
-              {lic.support_tier && (
-                <Row label={t('console:license.supportTier')}>
-                  {lic.support_tier}
-                </Row>
-              )}
-              {/* B10: honest USAGE, never a quota. Self-hosted user accounts are
-                  unlimited in every tier, so there is no denominator to divide by
-                  and no licensed-seat figure to advertise — showing one would imply
-                  a cap that no build enforces. */}
-              <Row label={t('console:license.activeUsers')}>
-                <span className="font-mono tabular-nums">
-                  {lic.active_users}
-                  {lic.active_users_capped ? '+' : ''}
-                </span>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {t('console:license.noUserLimit')}
-                </span>
-              </Row>
-              {lic.expires_at && (
-                <Row label={t('console:license.expires')}>
-                  {new Date(lic.expires_at).toLocaleDateString(
-                    currentLanguage(),
-                  )}
-                </Row>
-              )}
-              {lic.issued_at && (
-                <Row label={t('console:license.issued')}>
-                  {new Date(lic.issued_at).toLocaleDateString(
-                    currentLanguage(),
-                  )}
-                </Row>
-              )}
-              <Row label={t('console:license.sourceLabel')}>
-                <span className="font-mono text-xs">
-                  {t(`console:license.sources.${lic.source}`, {
-                    defaultValue: lic.source,
-                  })}
-                  {lic.source_path ? ` (${lic.source_path})` : ''}
-                </span>
-              </Row>
-            </dl>
-          </div>
-
-          {/* Attestation-only honesty: a community build never gates on the license. */}
-          {lic.edition !== 'enterprise' && (
+          <LicenseFacts license={licenseRead.license} />
+          {licenseRead.license.edition !== 'enterprise' && (
             <p className="text-sm text-muted-foreground">
               {t('console:license.communityNote')}
             </p>
           )}
-
-          {/*enterprise activation — per-add-on state + enable a preset. Shown
-              only for the enterprise build (the community build 501s the endpoint). */}
-          {lic.edition === 'enterprise' && <ActivationSection />}
         </div>
       )}
+
+      {licenseRead.kind !== 'loading' ? (
+        <details
+          className="text-sm text-muted-foreground"
+          data-slot="license-apply-help"
+        >
+          <summary className="cursor-pointer rounded-sm text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+            {t('console:license.helpSummary')}
+          </summary>
+          <p className="mt-2">{t('console:license.helpBody')}</p>
+        </details>
+      ) : null}
+
+      {/*enterprise activation — per-add-on state + enable a preset. Shown
+          only for the enterprise build (the community build 501s the endpoint). */}
+      {knownLicense?.edition === 'enterprise' && <ActivationSection />}
 
       {/* Every dialog on this panel keeps its DialogTitle OUTSIDE RequireAssurance.
           The gate REPLACES its children with the step-up panel, so a title inside
@@ -254,7 +348,13 @@ export function LicenseTab() {
           left with no accessible name — an invariant dialog.test.tsx pins. The
  contrast found it in the promote dialog; these three had it too. */}
       <Dialog open={installOpen} onOpenChange={setInstallOpen}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+        <DialogContent
+          className="max-h-[85vh] max-w-lg overflow-y-auto"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            installBtnRef.current?.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{t('console:license.installTitle')}</DialogTitle>
             <DialogDescription>
@@ -270,7 +370,13 @@ export function LicenseTab() {
       </Dialog>
 
       <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-w-lg"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            removeBtnRef.current?.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{t('console:license.removeTitle')}</DialogTitle>
             <DialogDescription>
@@ -286,10 +392,8 @@ export function LicenseTab() {
           )}
         </DialogContent>
       </Dialog>
-      {/* ⛔ C07-07: la matriz va DEBAJO de la activación a propósito. La tabla de arriba
-          contesta «qué está encendido»; ésta contesta las TRES preguntas y dice cuáles no se
-          pueden contestar. Ponerla encima invitaría a leerla como el estado, que es sólo una de
-          las tres columnas. */}
+      {/* Matrix stays below activation: activation is the operational state; the
+          matrix composes independent edition / entitlement / activation facts. */}
       <EntitlementMatrixCard />
     </div>
   )

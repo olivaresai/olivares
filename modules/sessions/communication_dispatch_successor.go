@@ -507,9 +507,22 @@ func (s *deliveryDispatchSuccessorService) apply(
 func deliveryDispatchSuccessorLockKey(
 	normalized deliveryDispatchSuccessorNormalized,
 ) string {
-	return "sessions.communication.dispatch.successor:" + normalized.scope.WorkspaceID.String() +
-		":" + fmt.Sprintf("%x", normalized.actorFingerprint) +
-		":" + fmt.Sprintf("%x", normalized.idempotencyKeyHash)
+	return deliveryDispatchSuccessorReceiptLockKey(
+		normalized.scope, normalized.actorFingerprint, normalized.idempotencyKeyHash,
+	)
+}
+
+// deliveryDispatchSuccessorReceiptLockKey is the transaction key the
+// successor apply acquires before it looks up or appends its receipt; the
+// receipt fence derives the same key from the same identity.
+func deliveryDispatchSuccessorReceiptLockKey(
+	scope DirectoryScopeRef,
+	actorFingerprint []byte,
+	idempotencyKeyHash []byte,
+) string {
+	return "sessions.communication.dispatch.successor:" + scope.WorkspaceID.String() +
+		":" + fmt.Sprintf("%x", actorFingerprint) +
+		":" + fmt.Sprintf("%x", idempotencyKeyHash)
 }
 
 func lockDeliveryDispatchRootHistory(
@@ -644,49 +657,24 @@ func validateDeliveryDispatchSuccessorRoute(
 	return nil
 }
 
+// lookupDeliveryDispatchSuccessorReceipt observes the successor command's
+// receipt behind the transaction key apply acquired for this identity. The
+// receipt is append-only evidence and is never row-locked.
 func lookupDeliveryDispatchSuccessorReceipt(
 	ctx context.Context,
 	tx *communicationTx,
 	normalized deliveryDispatchSuccessorNormalized,
 ) (CommunicationCommandReceipt, bool, error) {
-	repo, err := tx.repo(communicationCommandKind)
+	fence, err := newCommandReceiptFence(
+		normalized.scope, deliveryDispatchSuccessorScope,
+		normalized.actorFingerprint, normalized.idempotencyKeyHash,
+	)
 	if err != nil {
 		return CommunicationCommandReceipt{}, false, err
 	}
-	rows, page, err := repo.List(ctx, model.Query{
-		Filters: []model.Filter{
-			{Column: colCommCommandScope, Op: model.OpEq, Value: deliveryDispatchSuccessorScope},
-			{Column: colCommActorFingerprint, Op: model.OpEq, Value: normalized.actorFingerprint},
-			{Column: colCommIdempotencyKeyHash, Op: model.OpEq, Value: normalized.idempotencyKeyHash},
-		},
-		Limit: 2,
-	})
-	if err != nil {
+	receipt, found, err := observeCommandReceipt(ctx, tx, fence)
+	if err != nil || !found {
 		return CommunicationCommandReceipt{}, false, err
-	}
-	if page.HasMore || len(rows) > 1 {
-		return CommunicationCommandReceipt{}, false, communicationError(
-			ErrCommunicationEvidenceUnknown, "delivery dispatch successor receipt is ambiguous",
-		)
-	}
-	if len(rows) == 0 {
-		return CommunicationCommandReceipt{}, false, nil
-	}
-	id, err := model.ParseID(rows[0].String(model.ColID))
-	if err != nil {
-		return CommunicationCommandReceipt{}, false, communicationError(
-			ErrCommunicationEvidenceUnknown, "delivery dispatch successor receipt ID is malformed",
-		)
-	}
-	locked, err := tx.lockRecord(ctx, communicationCommandKind, id)
-	if err != nil {
-		return CommunicationCommandReceipt{}, false, err
-	}
-	receipt, err := communicationCommandReceiptFromRecord(locked)
-	if err != nil {
-		return CommunicationCommandReceipt{}, false, communicationError(
-			ErrCommunicationEvidenceUnknown, "delivery dispatch successor receipt is malformed",
-		)
 	}
 	if !bytes.Equal(receipt.RequestDigest, normalized.requestDigest) {
 		return CommunicationCommandReceipt{}, false, fmt.Errorf(

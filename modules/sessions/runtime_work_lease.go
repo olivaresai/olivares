@@ -107,23 +107,30 @@ func (m *Module) settleRunWorkAction(
 	}
 	presentedFence := generation.fence
 	var expectedSID string
-	if event == workInputAccepted {
+	switch event {
+	case workInputAccepted, workInterruptAccepted:
+		// A confirmed input and a confirmed interrupt share this postcondition
+		// exactly: the run is still supervised under a LIVE generation, because both
+		// of them deliberately leave the process alive. They are settled through the
+		// admission-checked claim for that reason, and recorded under their own names.
 		claim, err := m.authorizedLiveRunClaim(ctx, tenant, runRef)
 		if err != nil {
 			return err
 		}
 		expectedSID = claim.SID
-	} else if event == workStopConfirmed {
+	case workStopConfirmed:
 		claim, err := m.liveRunClaim(tenant, runRef)
 		if err != nil {
 			return err
 		}
 		expectedSID = claim.SID
-	} else if event != workInputAmbiguous && event != workStopAmbiguous {
+	case workInputAmbiguous, workInterruptAmbiguous, workStopAmbiguous:
+	default:
 		return broken(http.StatusBadRequest, "invalid_command")
 	}
 
-	ambiguous := event == workInputAmbiguous || event == workStopAmbiguous
+	ambiguous := event == workInputAmbiguous || event == workInterruptAmbiguous ||
+		event == workStopAmbiguous
 	attempt := func() error {
 		return m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
 			evidence, err := loadLockedRunWork(ctx, sc, tenant, runRef, presentedFence, ambiguous)
@@ -135,11 +142,11 @@ func (m *Module) settleRunWorkAction(
 				return broken(http.StatusConflict, "dispatch_conflict")
 			}
 			switch event {
-			case workInputAccepted:
+			case workInputAccepted, workInterruptAccepted:
 				err = assertActiveRunWork(evidence, runRef, expectedSID, presentedFence)
 			case workStopConfirmed:
 				err = assertStoppedRunWork(ctx, sc, evidence, runRef, expectedSID, presentedFence)
-			case workInputAmbiguous, workStopAmbiguous:
+			case workInputAmbiguous, workInterruptAmbiguous, workStopAmbiguous:
 				// loadLockedRunWork has proved a complete, self-consistent stamp for
 				// THIS item; it may name a later generation than the one being
 				// settled, and that is the point.

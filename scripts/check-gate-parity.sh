@@ -84,10 +84,27 @@ hook_rotulo() {
 #    web)»—, que es el gate completo y no el rotulo rapido. Medido: acotado 170, sin acotar 171.
 hook_invoca() {
 	sin_comentarios "$HOOK" |
-		command grep -oE '^[[:space:]]*task [a-z0-9][a-z0-9:_-]+' |
-		sed 's/^[[:space:]]*task //; s/^lint://' | sort -u
+		# ⛔ LAS DOS FORMAS, Y LA SEGUNDA ES UN PUNTO CIEGO MEDIDO. Hasta hoy este predicado exigia
+		#    que la linea EMPEZARA por `task`, asi que una pata invocada como `VAR=1 task lint:x` le
+		#    era INVISIBLE — y a las tres sondas de recuento del CLAUDE.md, tambien. El propio arbol
+		#    lo anticipaba («el dia que alguien escriba `VAR=1 task lint:algo`, las tres contaran de
+		#    menos y ninguna avisara») y el 2026-09-02 ocurrio: al integrar las patas advisory de
+		#    observacion de red el recuento cayo de 223 a 222 en un hunk SIN conflicto, sin aviso y
+		#    sin que ninguna cifra lo delatara — lo cazo un `comm` entre los dos conjuntos.
+		#    La cura NO es prohibir el prefijo: es una forma legitima, la diseno el carril de red y
+		#    su propio verificador la EXIGE. La cura es que el contador la vea.
+		command grep -oE '^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*task [a-z0-9][a-z0-9:_-]+' |
+		sed 's/^[[:space:]]*//; s/^\([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]*\)*//; s/^task //; s/^lint://' | sort -u
 }
 
+# ⛔ EL PREFIJO DE ENTORNO TAMBIEN AQUI. `hook_invoca` ya lo aceptaba; esta derivacion no, y era
+# la ultima ciega del fichero. Una pata escrita `VAR=1 task lint:x || true` se le escapaba, o sea
+# que el informe la habria dado por BLOQUEANTE cuando no lo es — un dato falso sobre la unica
+# propiedad que esta funcion existe para medir. Hoy no hay ninguna asi, y por eso se arregla hoy:
+# cuando la haya, el fallo sera silencioso y en el lado comodo. El gancho de `origin/main` ya trae
+# dos patas con prefijo (`OLIVARES_NETWORK_ADVISORY=1 task lint:session-numbers` y
+# `… lint:hub-web-fidelity`), asi que la forma dejo de ser hipotetica el 2026-09-02.
+#
 # Las patas invocadas con `|| true` CORREN pero no pueden rechazar el push. No es dejadez
 # y no se marca como hallazgo: `pre-push:1419-1431` razona la unica que hay hoy
 # (lint:test-hook-parallelism) con su contraste, su precedente y su salvedad. Se marca en
@@ -95,11 +112,46 @@ hook_invoca() {
 # de paridad con un contexto REQUERIDO de CI.
 hook_no_bloqueante() {
 	sin_comentarios "$HOOK" |
-		command grep -oE '^[[:space:]]*task [a-z0-9][a-z0-9:_-]+[[:space:]]*\|\|[[:space:]]*true' |
-		sed 's/^[[:space:]]*task //; s/[[:space:]]*||[[:space:]]*true//; s/^lint://' | sort -u
+		command grep -oE '^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*task [a-z0-9][a-z0-9:_-]+[[:space:]]*\|\|[[:space:]]*true' |
+		sed 's/^[[:space:]]*//; s/^\([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]*\)*//; s/^task //; s/[[:space:]]*||[[:space:]]*true//; s/^lint://' | sort -u
 }
 
 # El sujeto de la comparacion: TODO lo que el gancho corre, rotulado o no.
+# ⛔ LA SINTAXIS DEL GANCHO SE DECLARA Y SE IMPONE, en vez de ensanchar otra expresion regular.
+#
+# Los extractores de arriba reconocen TEXTO, no ordenes de shell, y el contraste `sol max` enumero
+# lo que eso deja fuera: `A='dos palabras' task lint:x` (el valor con espacios corta el grupo),
+# `env A=1 task lint:x` (la linea ya no empieza por la asignacion), y un `A=1 task lint:x` dentro
+# de un heredoc (que se contaba). El heredoc lo cierra `sin_heredocs`; los otros dos no los cierra
+# ningun regex mas ancho — los cierra **no permitirlos**.
+#
+# Y se puede: el gancho es NUESTRO fichero y sus invocaciones son nuestras. La forma canonica es
+#
+#     [VAR=valor-sin-espacios ...] task <nombre> [|| true]
+#
+# Cualquier linea que INVOQUE `task` en posicion de orden y no case con eso se rechaza NOMBRANDOLA,
+# porque una forma que el censo no sabe representar es una pata que el censo no cuenta — y una pata
+# no contada no aparece en ninguna lista ni en ningun rojo. Medido el 2026-09-03 sobre el gancho de
+# hoy: cero rechazos, asi que esto no pide reescribir nada; existe para que la clase no reviva.
+forma_canonica() {
+	local malas
+	# ⛔ EL DETECTOR DE CANDIDATAS ES MAS ANCHO QUE LA FORMA CANONICA, y tiene que serlo: si usara el
+	# mismo predicado, las formas que el censo no ve tampoco serian candidatas y no se rechazaria
+	# NINGUNA — el control seria un adorno. Se busca cualquier linea con `task <nombre>` que no sea
+	# una linea de impresion (`echo`/`printf`/`say`, donde el nombre viaja como TEXTO, p.ej. el
+	# rotulo del gancho) ni un comentario. Lo que no case con la forma canonica, se rechaza.
+	malas="$(sin_comentarios "$HOOK" | command grep -nE '(^|[;&|]|[[:space:]])task[[:space:]]+[a-z0-9][a-z0-9:_.-]*' |
+		command grep -vE '^[0-9]+:[[:space:]]*(echo|printf|say|#)' |
+		command grep -vE '^[0-9]+:[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*task[[:space:]]+[a-z0-9][a-z0-9:_.-]*([[:space:]]*\|\|[[:space:]]*true)?[[:space:]]*$' || true)"
+	[ -n "$malas" ] || return 0
+	say "check-gate-parity: HALLAZGO — invocacion(es) de \`task\` que el censo NO sabe representar:" >&2
+	printf '%s\n' "$malas" | sed 's/^/    /' >&2
+	say "  La forma canonica es: [VAR=valor-sin-espacios ...] task <nombre> [|| true]" >&2
+	say "  Una forma que el censo no representa es una pata que no cuenta — y una pata que no" >&2
+	say "  cuenta no sale en ninguna lista ni en ningun rojo. Reescribela, no ensanches el censo." >&2
+	return 1
+}
+
 hook_list() { { hook_rotulo; hook_invoca; } | sort -u; }
 
 # --- derivacion 2: lo que mainline-ci corre -----------------------------------------
@@ -128,7 +180,34 @@ es_tarea() { command grep -qE "^  (lint:)?$1:" "$TASKFILE"; }
 # aqui»), asi que invoca `pnpm --dir web run at:gate` y `bash scripts/test-console-walk.sh`.
 # Un censo que solo casa `task ` los pierde en las dos direcciones: si ademas se quitan los
 # comentarios, desaparecen de las dos listas EN SILENCIO, que es peor que contarlos mal.
-sin_comentarios() { sed 's/[[:space:]]#.*$//; s/^[[:space:]]*#.*$//' "$1"; }
+# ⛔ FUERA LOS HEREDOCS ANTES DE NADA, y despues los comentarios. Este filtro era TEXTUAL y por
+# lineas: una linea `A=1 task lint:x` escrita DENTRO de un heredoc —datos, no una orden— se contaba
+# como invocacion, y la cuenta de patas salia inflada sin que nada chirriase. Hoy no hay ninguna
+# (medido: cero), asi que esto no cambia ningun numero; entra porque la clase es latente y el dia
+# que alguien escriba un heredoc con un ejemplo dentro, el gate mentiria hacia arriba.
+#
+# No es un parser de shell y no pretende serlo: sigue los `<<TERM` / `<<-'TERM'` y descarta hasta su
+# terminador. Es exactamente el contexto que un `grep` por linea no puede ver.
+sin_heredocs() {
+	awk '
+		function abridor(l,   m) {
+			if (l ~ /^[[:space:]]*#/) return ""
+			if (match(l, /<<-?[[:space:]]*'"'"'?[A-Za-z_][A-Za-z0-9_]*'"'"'?/)) {
+				t = substr(l, RSTART, RLENGTH)
+				gsub(/^<<-?[[:space:]]*'"'"'?/, "", t); gsub(/'"'"'$/, "", t)
+				return t
+			}
+			return ""
+		}
+		{
+			if (dentro) { if ($0 ~ "^[[:space:]]*" term "[[:space:]]*$") dentro = 0; print ""; next }
+			t = abridor($0)
+			if (t != "") { dentro = 1; term = t }
+			print
+		}
+	' "$1"
+}
+sin_comentarios() { sin_heredocs "$1" | sed 's/[[:space:]]#.*$//; s/^[[:space:]]*#.*$//'; }
 
 ci_list() {
 	{
@@ -248,6 +327,10 @@ TMP_CI_CMDS="$(mktemp)" && TMP_DRY="$(mktemp)" && TMP_CMDS="$(mktemp)" \
 trap 'rm -f "$TMP_CI_CMDS" "$TMP_DRY" "$TMP_CMDS"' EXIT
 trap 'rm -f "$TMP_CI_CMDS"' EXIT
 
+# La forma se comprueba ANTES de censar: si hay una invocacion que el censo no sabe representar,
+# todo lo que venga despues estaria contado sobre una lista incompleta.
+forma_canonica || exit 1
+
 H="$(hook_list)"; C="$(ci_list)"
 [ -n "$H" ] || blind "0 patas derivadas del gancho: ni el rotulo ni las invocaciones"
 
@@ -300,6 +383,44 @@ fi
 
 # `gancho` es la UNION de lo rotulado y lo invocado — no el rotulo solo, que es lo que
 # producia el «solo-ci=34» con ocho patas del carril pesado dentro.
+# ⛔ `--print-heavy`: LOS NOMBRES DE LAS PATAS QUE UN PUSH A RAMA NO CORRE, una por linea y nada
+# mas. `--print` ya daba su NUMERO —«invocadas y NO en el rotulo: 13»— pero no sus nombres, y sin
+# nombres esa cifra no sirve para actuar: `scripts/pre-verify-tanda.sh` existe para correrlas antes
+# de un push a `main` y ahorrar la muerte a los 25-75 minutos.
+#
+# Sale de las MISMAS dos derivaciones que el resto del fichero (`hook_rotulo` y `hook_invoca`), no
+# de una lista aparte: una segunda lista seria la copia que este gate existe para cazar. El carril
+# pesado no esta en el rotulo POR DISENO, asi que «invocadas y no rotuladas» es exactamente el
+# conjunto que un push a rama se salta.
+# ⛔ UN FLAG QUE NO SE CONOCE NO SE IGNORA. Hasta hoy cualquier argumento distinto de `--print`
+# caia al modo normal en SILENCIO, y eso convierte «esta version no sabe hacer eso» en «aqui tienes
+# otra cosa»: medido el 2026-09-03, `scripts/pre-verify-tanda.sh` pidio `--print-heavy` a un arbol
+# anterior a estos modos y se llevo el resumen y el «CLEAN» como si fueran nombres de pata. Quien
+# pregunta por una capacidad que no existe tiene que enterarse, no recibir el modo por defecto.
+case "${1:-}" in
+'' | --print | --print-heavy | --print-ci-only | --print-root) ;;
+*) blind "opcion desconocida: '$1' (modos: --print, --print-heavy, --print-ci-only, --print-root)" ;;
+esac
+# ⛔ `--print-root`: LA RAIZ QUE ESTE GATE HA LEIDO DE VERDAD. Existe para que quien lo PRESTA
+# pueda comprobarlo en vez de suponerlo: `pre-verify-tanda.sh --gate <ruta>` fija `OLIVARES_ROOT`
+# al arbol medido, pero eso es un contrato AMBIENTAL — un gate que lo ignorara devolveria la lista
+# de su propia casa y el prestatario no tendria forma de notarlo. Lo levanto el contraste sol max
+# (PV-ROOT-PROOF). Con esto la comprobacion es positiva: se le pregunta y se compara.
+if [ "${1:-}" = "--print-root" ]; then
+	printf '%s\n' "$ROOT"
+	exit 0
+fi
+if [ "${1:-}" = "--print-heavy" ]; then
+	comm -13 <(hook_rotulo) <(hook_invoca)
+	exit 0
+fi
+# Y su hermano: las que SOLO corre CI. Un push no las ve —ni en rama ni en `main`— asi que un
+# rojo ahi se descubre DESPUES de aterrizar, que es el caso mas caro de los dos. Misma derivacion
+# que la seccion SOLO-CI de `--print`, no una lista aparte.
+if [ "${1:-}" = "--print-ci-only" ]; then
+	comm -13 <(hook_list) <(ci_list)
+	exit 0
+fi
 printf 'check-gate-parity: gancho=%d ci=%d ambas=%d solo-ci=%d solo-gancho=%d\n' \
 	"$n_h" "$n_c" "$n_a" "$n_sc" "$n_sh"
 

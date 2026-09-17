@@ -3,11 +3,11 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
 // Package health is module XXII — Health, SLA & uptime of agents and MCP servers
-// (README.mdbis XXII). It answers three questions about the estate's AI
+// (README.md §2bis XXII). It answers three questions about the estate's AI
 // components: what is healthy, what is degraded/down, and what depends on what.
 //
 // Bounded context. It measures the RELIABILITY of agents and MCP servers — not
-// host/infra health in general (README.mdbis: "fiabilidad de agentes/MCPs").
+// host/infra health in general (README.md §2bis: "fiabilidad de agentes/MCPs").
 // It owns four entities (schema.go): a health_check (an operator-declared
 // monitored subject with an expected cadence and an SLA target), an append-only
 // health_event transition ledger, a health_incident lifecycle, and an
@@ -33,7 +33,7 @@
 // Produces, does not deliver. XXII emits down/degraded/recovered/SLA-breach
 // signals as minimal-data FindingReports on the bus (findings.go); module XV
 // (notifications) routes them to Slack/PagerDuty/SIEM. XXII never delivers — the
-// "Conecta: XV" split (README.mdbis XXII).
+// "Conecta: XV" split (README.md §2bis XXII).
 //
 // Minimal data (docs/SECURITY-HARDENING.md). Health stores status, reliability metrics and
 // dependency relations — never payloads, prompts, secrets or PII. The one

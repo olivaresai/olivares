@@ -33,12 +33,17 @@
     "home": "概览",
     "onboarding": "配置向导",
     "inventory": "清单",
-    "sessions": "会话",
+    "sessions": "观测会话",
     "accessMap": "访问映射",
     "health": "健康与 SLA",
     "capabilities": "MCP 与技能",
     "protocolBindings": "协议绑定",
-    "console": "控制台",
+    "communications": "通信",
+    "communicationsInbox": "通信收件箱",
+    "communicationsNew": "新建频道",
+    "communicationsAdministration": "频道管理",
+    "communicationsHandoffs": "交接",
+    "console": "管理",
     "permissions": "权限",
     "identity": "身份与 NHI",
     "claudePolicy": "Claude Code 治理",
@@ -48,7 +53,7 @@
     "catalog": "目录",
     "killswitch": "紧急关停开关",
     "work": "工作",
-    "agentops": "Claude Code",
+    "agentops": "运营会话",
     "agentArtifacts": "Agent 工件",
     "models": "模型",
     "modelOps": "模型运营",
@@ -84,7 +89,9 @@
     "reporting": "报告",
     "postureExport": "态势导出",
     "automations": "自动化",
-    "agentcoreExport": "AgentCore 导出"
+    "agentcoreExport": "AgentCore 导出",
+    "providerProfiles": "提供商配置文件",
+    "providerBindings": "来源绑定"
   },
   "workspace": {
     "switch": "切换工作区",
@@ -99,12 +106,17 @@
     "home": "一览资产域概况与健康状况",
     "onboarding": "逐步部署配置",
     "inventory": "发现并编目每一个智能体、MCP 与模型",
-    "sessions": "实时智能体运行与时间线",
+    "sessions": "观测实时和已发现的会话及其时间线；与“运营会话”共用同一界面",
     "accessMap": "每个智能体的读取与写入内容（R/RW）",
     "health": "智能体与 MCP 的可用性与 SLA",
     "capabilities": "治理 MCP 服务器、技能与工具",
     "protocolBindings": "编排并协调受治理的 A2A 和 MCP 绑定",
-    "console": "为用户办理入驻、接入 SSO/IdP，并组织工作区与智能体组。",
+    "communications": "所选工作区的频道、直接通知与个人收件箱",
+    "communicationsInbox": "您的精确收件箱：仅发给您的投递，每次重新读取并显式确认",
+    "communicationsNew": "以显式初始授权创建频道",
+    "communicationsAdministration": "管理频道：配置与授权历史，每次操作都在频道当前 ETag 下",
+    "communicationsHandoffs": "发给你的工作责任交接提议：阅读上下文后接受或拒绝",
+    "console": "用户、SSO/IdP、工作区、代理组、角色、密钥、连接器、API 密钥以及此安装的许可证",
     "permissions": "身份、角色与审批",
     "identity": "SSO、SCIM、NHI 名册与 WIF 关系图",
     "claudePolicy": "托管策略、钩子、MCP、沙箱与策略即代码",
@@ -113,7 +125,7 @@
     "catalog": "经审核批准的智能体与能力",
     "killswitch": "紧急停止、双人控制恢复与守护遏制",
     "work": "跨会话的持久待办：工作项、依赖、验收与决定",
-    "agentops": "创建、接入并治理 Claude Code 会话——无需 SSH",
+    "agentops": "创建、附加并治理 Claude Code 会话 — 无需 SSH；与“观测会话”共用同一界面",
     "agentArtifacts": "Skills、MCP 扩展与指令文件——注册表、态势与供应链 BOM",
     "models": "模型、路由与提供商密钥",
     "modelOps": "自有模型、准入与部署",
@@ -129,8 +141,8 @@
     "redteam": "对你的智能体进行对抗性测试",
     "dashboards": "高管 KPI 与报表",
     "observability": "按标准划分的接入健康状况与追踪下钻",
-    "platforms": "部署面、合规矩阵与各平台模型生命周期",
-    "rateLimits": "Anthropic 速率限制清单（只读）",
+    "platforms": "提供商平台面、合规矩阵与按平台的模型生命周期 — 仅为参考，并非您的服务器",
+    "rateLimits": "Anthropic 速率限制清单及其可用性（只读参考）",
     "attestation": "发布证明——SLSA、SBOM、VEX 与 Scorecard",
     "apiPlayground": "API Playground",
     "audit": "防篡改证据账本",
@@ -142,7 +154,16 @@
     "alerting": "将发现路由到目标并查看投递",
     "reporting": "生成并下载治理报告",
     "postureExport": "导出真实态势供控制塔使用",
-    "automations": "三条自动化轨道及其触发器目录"
+    "automations": "三条自动化轨道及其触发器目录",
+    "providerProfiles": "登记并管理会话启动所依据的提供商主目录，并按需读取其配置",
+    "providerBindings": "将已配置的来源以本节点应用的修订版专用于提供商配置文件",
+    "routinePolicies": "Claude Code 例程的执行间隔下限、并发上限、审批要求、cron 允许列表和被阻止的环境",
+    "agentcoreExport": "规划、审阅并应用将本租户治理规则投射为 AWS AgentCore Cedar 策略；规划不写入任何内容",
+    "workspace-templates": "工作区会话可复用的快照：钩子、设置、连接器和策略",
+    "eventing": "出站 Webhook 订阅、已捕获的事件日志、投递记录和死信队列",
+    "team-costs": "按团队的成本归属：会话、令牌和支出，含每日趋势以及按项目和模型的明细",
+    "backups": "控制平面的加密灾难恢复快照：创建、计划、下载和恢复",
+    "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停"
   },
   "commandActions": {
     "eventing": {
@@ -154,5 +175,122 @@
     "orchestration": {
       "createSchedule": "新建计划任务"
     }
+  },
+  "aliases": {
+    "sessions": "会话",
+    "agentops": "Claude Code · agentops",
+    "console": "控制台 · 租户管理"
+  },
+  "areas": {
+    "infrastructure": {
+      "label": "基础设施",
+      "question": "我有哪些资源和工作区？",
+      "sections": {
+        "estate": "清单与工作区"
+      }
+    },
+    "ai": {
+      "label": "AI",
+      "question": "我观测或管理哪些会话、配置文件和模型？",
+      "sections": {
+        "sessions": "会话",
+        "environments": "配置文件与环境",
+        "models": "模型",
+        "execution": "专项执行",
+        "provider-reference": "提供商参考"
+      }
+    },
+    "data-context": {
+      "label": "数据与上下文",
+      "question": "我连接或复用哪些知识、能力和工件？",
+      "sections": {
+        "capabilities": "能力",
+        "knowledge": "知识",
+        "artifacts": "工件"
+      }
+    },
+    "work-communications": {
+      "label": "工作与通信",
+      "question": "我协调哪些工作，它如何通信？",
+      "sections": {
+        "work": "工作",
+        "communications": "通信"
+      }
+    },
+    "automation": {
+      "label": "自动化",
+      "question": "我自动化哪些流程、事件和通知？",
+      "sections": {
+        "workflows": "流程与编排",
+        "events": "事件与通知"
+      }
+    },
+    "security-identity": {
+      "label": "安全与身份",
+      "question": "谁在什么规则下可以访问，我如何保护环境？",
+      "sections": {
+        "access": "身份与访问",
+        "policy": "策略",
+        "defense": "防护与响应",
+        "boundaries": "治理边界"
+      }
+    },
+    "deployment": {
+      "label": "部署",
+      "question": "我如何准备和控制部署？",
+      "sections": {
+        "deployments": "部署"
+      }
+    },
+    "observation": {
+      "label": "可观测性与证据",
+      "question": "正在发生什么、花费多少、我能证明什么？",
+      "sections": {
+        "operations": "状态与活动",
+        "cost-adoption": "成本与采用",
+        "audit-recordings": "审计与录制",
+        "evaluation-evidence": "评估与证据"
+      }
+    },
+    "system": {
+      "label": "系统与设置",
+      "question": "我如何管理组织、安装和个人偏好？",
+      "sections": {
+        "administration": "管理",
+        "maintenance": "安装与维护",
+        "development": "开发者工具",
+        "preferences": "个人偏好"
+      }
+    }
+  },
+  "directory": {
+    "areas": "区域",
+    "expand": "显示{{area}}的模块",
+    "collapse": "隐藏{{area}}的模块",
+    "expandAll": "展开所有区域",
+    "collapseAll": "折叠所有区域",
+    "modulesOf": "{{area}}的模块",
+    "empty": "此区域没有您可用的条目",
+    "emptyHint": "当您在当前组织中的角色获得此区域某个模块的访问权限时，条目会显示在这里。",
+    "backHome": "前往概览",
+    "area": "区域"
+  },
+  "personal": {
+    "favorites": "收藏",
+    "add": "将{{name}}加入收藏",
+    "remove": "从收藏中移除{{name}}",
+    "viewAll": "查看全部（{{count}}）",
+    "manage": "管理收藏",
+    "empty": "点击模块的星标，将其保存在这里。",
+    "scope": "按账户和组织保存在此浏览器中。",
+    "temporary": "收藏目前仅保留在内存中。",
+    "clear": "清空收藏",
+    "recents": "最近访问",
+    "recentManage": "管理最近访问",
+    "recentViewAll": "查看最近访问（{{count}}）",
+    "recentEmpty": "打开的模块会显示在这里。",
+    "recentScope": "在此标签页中打开的模块。重新加载、退出登录或切换账户及组织时清除。",
+    "recentRemove": "从最近访问中移除{{name}}",
+    "recentClear": "清除最近访问"
   }
 }

@@ -21,8 +21,10 @@ export type EntityKind =
   | 'provider'
   | (string & {})
 
-/** Discovery liveness: `active` seen recently, `stale` gone quiet past the sweep
- * threshold (a silence that is itself a signal — surfaced, never hidden). */
+/** Discovery liveness stored on the catalog row. `active` means the row still
+ * holds that stored state; it does not prove a recent sweep or current health.
+ * `stale` means the staleness mechanism classified silence against a cutoff
+ * that ran — not offline, removed, or unhealthy. */
 export type EntityStatus = 'active' | 'stale' | (string & {})
 
 /** One catalog entry: a discovered entity with its provenance and liveness. */
@@ -36,6 +38,9 @@ export interface CatalogEntry {
   hosts?: string[]
   first_seen: string
   last_seen: string
+  /** Instant the source declared, omitted when it declared none. Distinct from
+   *  `last_seen`, which is this platform's local reception clock. */
+  occurred_at?: string
   occurrence_count: number
 }
 

@@ -304,33 +304,83 @@ func TestSourcesPlanAndSetAgree(t *testing.T) {
 // unit exists for: a definition the STORE accepts and the ENGINE then declines.
 // Before this, the only way to discover it was to perform the write and read
 // "persisted, but the live apply was rejected" afterwards.
+//
+// The case used to be "a second source of the same kind", and that is no longer a
+// refusal anywhere: the engine registers each source under its own name, so two
+// rows of one kind are two sources (TestSourcesPlanAcceptsASecondRowOfOneKind
+// pins the new answer). The class itself is unchanged and is exercised here with
+// a kind this build cannot run — the store has no opinion about kind names, and
+// the reconciler refuses it at apply.
 func TestSourcesPlanNamesTheReconcilersRefusalBeforeTheWrite(t *testing.T) {
 	dir := initialisedDataDir(t)
 	seedRoster(t, dir, model.SourceDef{Name: "vault-one", Kind: "vault", Tenant: planTenantA, Enabled: true})
 
-	rep, err := planJSON(t, "--data-dir", dir, "--name", "vault-two", "--kind", "vault", "--tenant", planTenantA)
+	rep, err := planJSON(t, "--data-dir", dir, "--name", "mystery", "--kind", "not-a-real-connector", "--tenant", planTenantA)
 	if exitcode.From(err) != exitcode.Conflict {
 		t.Fatalf("a plan that cannot be applied must exit %d (conflict), got %v (%d)", exitcode.Conflict, err, exitcode.From(err))
 	}
 	if rep.Check.Valid {
-		t.Fatal("a second in-process source of the same kind collides on the connector identity; the check called it valid")
+		t.Fatal("a kind this build cannot run is refused at apply; the check called it valid")
 	}
 	if !rep.Check.refusedAt(problemAtApply) {
-		t.Fatalf("the collision bites at APPLY (the store would accept the row), got %#v", rep.Check.Problems)
+		t.Fatalf("an unknown kind bites at APPLY (the store would accept the row), got %#v", rep.Check.Problems)
 	}
 	if rep.Check.refusedAt(problemAtWrite) {
 		t.Fatalf("the store accepts this row, so nothing here may be reported as a write refusal: %#v", rep.Check.Problems)
 	}
 
-	// The direction of non-fire: the SAME roster with a kind that does not collide
-	// must come back valid. Without this, a check that refused everything would
-	// pass the assertions above.
+	// The direction of non-fire: a kind this build DOES run must come back valid.
+	// Without this, a check that refused everything would pass the assertions above.
 	ok, oerr := planJSON(t, "--data-dir", dir, "--name", "cfg-scan", "--kind", "claude-config", "--tenant", planTenantA)
 	if oerr != nil {
-		t.Fatalf("a non-colliding kind must plan cleanly: %v", oerr)
+		t.Fatalf("a supported kind must plan cleanly: %v", oerr)
 	}
 	if !ok.Check.Valid {
-		t.Fatalf("claude-config does not collide with vault, yet the check refused it: %#v", ok.Check.Problems)
+		t.Fatalf("claude-config is supported, yet the check refused it: %#v", ok.Check.Problems)
+	}
+}
+
+// TestSourcesPlanAcceptsASecondRowOfOneKind is the preview half of the agreement
+// the apply now keeps: `plan` and `validate` must not announce a restriction the
+// engine does not enforce. A preview that refuses what the apply accepts is the
+// same defect as one that accepts what the apply refuses — it just costs the
+// operator a source instead of a surprise.
+func TestSourcesPlanAcceptsASecondRowOfOneKind(t *testing.T) {
+	dir := initialisedDataDir(t)
+	seedRoster(t, dir, model.SourceDef{
+		Name: "grok-home-a", Kind: "grok", Tenant: planTenantA, Enabled: true,
+		Config: map[string]string{"config_path": "/fixtures/a/config.toml"},
+	})
+
+	rep, err := planJSON(t, "--data-dir", dir, "--name", "grok-home-b", "--kind", "grok",
+		"--tenant", planTenantA, "--config", "config_path=/fixtures/b/config.toml")
+	if err != nil {
+		t.Fatalf("a second row of one kind must plan cleanly: %v", err)
+	}
+	if !rep.Check.Valid {
+		t.Fatalf("plan refused a second source of one kind: %#v", rep.Check.Problems)
+	}
+	if rep.Action != "create" {
+		t.Errorf("plan action = %q, want create", rep.Action)
+	}
+	for _, nc := range rep.Check.NotChecked {
+		if strings.Contains(nc, "collision") {
+			t.Errorf("plan still speaks of connector-identity collisions: %q", nc)
+		}
+	}
+
+	// And `validate` over the whole roster, once both rows exist, agrees.
+	if out, serr := runCLI(t, "sources", "set", "--data-dir", dir, "--name", "grok-home-b",
+		"--kind", "grok", "--tenant", planTenantA, "--config", "config_path=/fixtures/b/config.toml",
+		"--actor", "ana@corp.example", "--reason", "second home"); serr != nil {
+		t.Fatalf("set the second row: %v\n%s", serr, out)
+	}
+	out, verr := runCLI(t, "sources", "validate", "--data-dir", dir)
+	if verr != nil {
+		t.Fatalf("validate refused a roster with two rows of one kind: %v\n%s", verr, out)
+	}
+	if strings.Contains(out, "already used by source") {
+		t.Fatalf("validate still reports a connector-identity collision:\n%s", out)
 	}
 }
 

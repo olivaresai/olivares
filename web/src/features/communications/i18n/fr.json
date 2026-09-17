@@ -1,0 +1,957 @@
+{
+  "doors": {
+    "catalog": {
+      "title": "Communications",
+      "description": "Canaux de l’espace de travail sélectionné que ce principal peut lire maintenant, les avis directs envoyés par leur intermédiaire et la boîte de réception personnelle. Chaque lecture et chaque acte sont décidés par le moteur sous sa propre permission."
+    },
+    "inbox": {
+      "title": "Boîte de réception des communications",
+      "description": "La boîte personnelle exacte de ce principal dans l’espace de travail sélectionné : les remises qui lui sont adressées, ouvertes à neuf et accusées uniquement par un acte explicite."
+    },
+    "new": {
+      "title": "Nouveau canal",
+      "description": "Crée un canal avec des droits initiaux explicites. Rien n’est accordé par implication, et le reçu de l’acte n’est pas une liste durable de qui pourra le lire ensuite."
+    },
+    "administration": {
+      "title": "Administration des canaux",
+      "description": "Les canaux que ce principal peut administrer dans le workspace sélectionné : configuration et historique des droits, chaque acte confirmé sous l'ETag actuel du canal. L'administration exige la permission channel:admin et un bit local admin en vigueur ; elle n'exige ni n'accorde le droit de lire le contenu du canal."
+    },
+    "handoffs": {
+      "title": "Transferts",
+      "description": "Offres de responsabilité de travail adressées à ce principal dans l'espace de travail sélectionné. La liste ne contient pas le contenu de l'offre ; l'ouvrir lit son contexte protégé à neuf, et accepter ou refuser est un acte explicite que le moteur décide."
+    }
+  },
+  "tabs": {
+    "channels": "Canaux",
+    "inbox": "Boîte de réception",
+    "create": "Nouveau canal",
+    "administration": "Administration",
+    "handoffs": "Transferts"
+  },
+  "workspace": {
+    "requiredTitle": "Sélectionnez un espace de travail",
+    "requiredBody": "Les communications exigent un espace de travail explicite. Choisissez-en un dans le sélecteur d’espaces de travail : la console n’en choisit jamais un à votre place et n’émet aucune requête tant qu’aucun n’est sélectionné.",
+    "scope": "Portée de l’espace de travail"
+  },
+  "actions": {
+    "refresh": "Actualiser",
+    "loadMore": "Charger plus",
+    "newChannel": "Nouveau canal",
+    "open": "Ouvrir",
+    "openMessage": "Ouvrir le message",
+    "sendNotice": "Envoyer un avis",
+    "compose": "Composer",
+    "confirm": "Confirmer et envoyer",
+    "ack": "Accuser réception",
+    "confirmAck": "Confirmer l’accusé de réception",
+    "reread": "Relire",
+    "retrySameKey": "Réessayer avec la même clé",
+    "discardAndEdit": "Abandonner cette intention et modifier",
+    "checkCatalog": "Vérifier le catalogue",
+    "addGrant": "Ajouter un droit",
+    "addMe": "Ajouter mon compte comme sujet",
+    "removeGrant": "Retirer le droit",
+    "addBlock": "Ajouter un bloc",
+    "removeBlock": "Retirer le bloc",
+    "useMe": "Utiliser mon compte",
+    "create": "Créer le canal",
+    "creating": "Création…",
+    "sending": "Envoi…",
+    "acking": "Accusé en cours…",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "back": "Revenir à la modification",
+    "pageSize": "Taille de page",
+    "administer": "Administrer",
+    "advancing": "Avancement…",
+    "applyFilter": "Appliquer le filtre",
+    "applying": "Application…",
+    "confirmArchive": "Confirmer et archiver",
+    "confirmChanges": "Confirmer les modifications",
+    "confirmGrant": "Confirmer le droit",
+    "confirmRevoke": "Confirmer la révocation",
+    "confirmSeen": "Confirmer : marquer vu jusqu'ici",
+    "discardIntent": "Abandonner cette intention",
+    "grantSuccessor": "Accorder un successeur (acte distinct)",
+    "leaveUndetermined": "Laisser indéterminé",
+    "markSeen": "Marquer vu jusqu'ici",
+    "openBarrierDelivery": "Ouvrir la remise barrière",
+    "refreshInbox": "Actualiser la boîte",
+    "rereadAndEdit": "Relire et modifier à nouveau",
+    "rereadHistory": "Relire l'historique",
+    "rereadToVerify": "Relire pour vérifier",
+    "revert": "Annuler les modifications",
+    "reviewChanges": "Vérifier les modifications",
+    "reviewGrant": "Vérifier le droit",
+    "revokeGeneration": "Révoquer cette génération",
+    "revokeThenGrant": "Révoquer, puis accorder un successeur",
+    "dismiss": "Fermer"
+  },
+  "catalog": {
+    "title": "Canaux visibles",
+    "description": "Seuls les canaux actifs que ce principal peut lire maintenant, avec ses propres bits locaux actuels. Une page n’est pas une recherche sur tout le catalogue : chargez plus pour continuer depuis la continuation du serveur.",
+    "emptyTitle": "Aucun canal visible",
+    "emptyBody": "Ce principal n’a aucun canal qu’il puisse lire dans cet espace de travail, ou aucun n’existe encore. Un droit de lecture et la permission channel:read en font apparaître un ici.",
+    "truncated": "D’autres canaux existent au-delà de cette page",
+    "truncatedHint": "Le serveur a signalé d’autres canaux visibles. Chargez plus pour continuer depuis sa continuation.",
+    "columns": {
+      "name": "Nom",
+      "slug": "Slug",
+      "kind": "Type",
+      "state": "État",
+      "protection": "Protection",
+      "access": "Votre accès local",
+      "updated": "Mis à jour"
+    },
+    "openById": "Ouvrir un canal par ID",
+    "openByIdHint": "Un canal ouvert par ID est lu à neuf avec son ETag ; cette lecture ne rapporte pas vos bits locaux."
+  },
+  "access": {
+    "label": "Votre accès local",
+    "read": "lecture",
+    "write": "écriture",
+    "admin": "admin",
+    "none": "aucun bit local",
+    "unknown": "non rapporté par cette lecture",
+    "hint": "Les bits locaux sont les droits propres du canal pour ce principal. Une permission cœur est également requise, et le moteur décide chaque acte au moment où il est demandé."
+  },
+  "kind": {
+    "coordination": "Coordination",
+    "work": "Travail",
+    "incident": "Incident",
+    "announcement": "Annonce",
+    "private": "Privé"
+  },
+  "sensitivity": {
+    "internal": "Interne",
+    "restricted": "Restreint"
+  },
+  "protection": {
+    "storage": "Stockage",
+    "application_sealed": "Scellé par l’application"
+  },
+  "ackPolicy": {
+    "none": "Aucune",
+    "each_required": "Chacun requis",
+    "quorum": "Quorum"
+  },
+  "wake": {
+    "none": "Aucun",
+    "primary": "Principal",
+    "all": "Tous",
+    "inherit": "Hériter"
+  },
+  "channel": {
+    "title": "Canal",
+    "description": "Lu à neuf depuis le moteur avec son ETag. Cette lecture ne porte ni droits ni bits locaux.",
+    "fields": {
+      "id": "ID du canal",
+      "slug": "Slug",
+      "name": "Nom",
+      "descriptionField": "Description",
+      "kind": "Type",
+      "state": "État",
+      "sensitivity": "Sensibilité",
+      "protection": "Protection du contenu",
+      "protectionGeneration": "Génération de protection",
+      "ackPolicy": "Politique d’accusé par défaut",
+      "ackTimeout": "Délai d’accusé par défaut (ms)",
+      "wake": "Réveil par défaut",
+      "retention": "Référence de politique de rétention",
+      "maxFanout": "Fanout maximal",
+      "maxAutomationDepth": "Profondeur d’automatisation maximale",
+      "aclRevision": "Révision ACL",
+      "routeRevision": "Révision des routes",
+      "subscriptionRevision": "Révision des abonnements",
+      "version": "Version",
+      "etag": "ETag",
+      "created": "Créé",
+      "updated": "Mis à jour",
+      "workspace": "Espace de travail",
+      "tenant": "Locataire"
+    },
+    "sendHint": {
+      "canWrite": "Votre bit local d’écriture est à jour sur cette page du catalogue et vous détenez la permission d’envoi. Le moteur décide à nouveau lors de l’envoi.",
+      "noWrite": "Cette page du catalogue ne rapporte aucun bit local d’écriture pour vous. Le moteur refuserait un envoi ; la composition n’est pas proposée.",
+      "unknown": "Cette lecture ne rapporte pas vos bits locaux. Vous détenez la permission d’envoi ; le moteur décide l’autorité locale lors de l’envoi.",
+      "noPermission": "Vous ne détenez pas la permission d’envoi de messages, la composition n’est donc pas proposée."
+    }
+  },
+  "create": {
+    "title": "Créer un canal",
+    "description": "Chaque champ du contrat est disponible. Les droits initiaux sont explicites : ajoutez chaque sujet et cochez chaque bit voulu. Rien n’est ajouté en votre nom.",
+    "fields": {
+      "slug": "Slug",
+      "slugHint": "Minuscules, chiffres et tirets ; unique dans l’espace de travail.",
+      "name": "Nom",
+      "descriptionField": "Description",
+      "kind": "Type",
+      "sensitivity": "Sensibilité",
+      "protection": "Protection du contenu",
+      "protectionHint": "Le contenu scellé par l’application est irréversible une fois écrit.",
+      "ackPolicy": "Politique d’accusé par défaut",
+      "ackTimeout": "Délai d’accusé par défaut (ms)",
+      "wake": "Réveil par défaut",
+      "retention": "Référence de politique de rétention",
+      "maxFanout": "Fanout maximal",
+      "maxAutomationDepth": "Profondeur d’automatisation maximale",
+      "grants": "Droits initiaux",
+      "grantsHint": "Au moins un droit avec au moins un bit. Un droit est un sujet et ses trois bits, chacun indépendant. Votre propre compte est un sujet comme un autre."
+    },
+    "grant": {
+      "subject": "Sujet",
+      "read": "Lecture",
+      "write": "Écriture",
+      "admin": "Admin",
+      "expiresAt": "Expire le",
+      "expiresHint": "Facultatif. Laissez vide pour un droit sans expiration."
+    },
+    "validation": {
+      "slug": "Le slug doit être composé de minuscules, chiffres et tirets, et commencer par une lettre ou un chiffre.",
+      "name": "Un nom est requis.",
+      "grants": "Au moins un droit initial est requis.",
+      "grantRef": "Chaque droit a besoin d’une référence de sujet.",
+      "grantBits": "Chaque droit a besoin d’au moins un bit.",
+      "number": "Doit être un nombre entier supérieur ou égal à zéro.",
+      "fanout": "Doit être un nombre entier supérieur ou égal à un."
+    },
+    "noReadHint": "Vous détenez channel:write sans channel:read. Vous pouvez créer avec des droits explicites ; le catalogue ne vous montrera pas le résultat, et ce reçu n’y change rien.",
+    "result": {
+      "title": "Canal créé",
+      "body": "Ceci est le reçu de l’acte. Les droits ci-dessous sont ce qui a été enregistré maintenant ; ce n’est pas une liste durable de qui pourra lire le canal ensuite. La visibilité est décidée par le catalogue à chaque lecture.",
+      "grants": "Droits enregistrés",
+      "noGrants": "Aucune ligne de droit n’a été renvoyée.",
+      "auditSeq": "Séquence d’audit",
+      "etag": "ETag"
+    },
+    "unknown": {
+      "title": "Résultat inconnu",
+      "body": "La requête a peut-être été appliquée ou non : le transport a échoué avant l’arrivée d’une réponse. Cette route n’a pas de clé d’idempotence, la console ne réessaie donc pas d’elle-même. Vérifiez le slug « {{slug}} » dans le catalogue avant de créer à nouveau. Ne pas l’y voir ne prouve pas qu’il n’a pas été créé si vous n’avez pas l’accès en lecture."
+    }
+  },
+  "subject": {
+    "kind": "Type",
+    "ref": "Référence",
+    "kinds": {
+      "user": "Utilisateur",
+      "user_group": "Groupe d’utilisateurs",
+      "agent": "Agent",
+      "agent_group": "Groupe d’agents",
+      "session": "Session"
+    },
+    "pickUser": "Choisir un utilisateur",
+    "pickAgent": "Choisir un agent",
+    "manualRef": "Référence (ID)",
+    "userRefHint": "L’ID canonique de l’utilisateur. Un utilisateur présent dans l’annuaire n’est pas pour autant un destinataire éligible de ce canal : le moteur décide lors de l’envoi.",
+    "agentRefHint": "L’ID d’identité de l’agent, pas son ID de ligne ni son ID externe.",
+    "sessionRefHint": "Un ID canonique de session. Cette console n’a pas encore d’annuaire de sessions ; saisissez l’ID depuis sa source d’autorité.",
+    "groupRefHint": "L’ID du groupe.",
+    "noDirectory": "L’annuaire ne vous est pas proposé (permission de lecture manquante). Saisissez une référence directement.",
+    "noIdentity": "non adressable — aucune identité",
+    "truncated": "La page de l’annuaire est incomplète : il existe plus de lignes que celles chargées.",
+    "loading": "Chargement de l’annuaire…",
+    "me": "moi"
+  },
+  "compose": {
+    "title": "Envoyer un avis direct",
+    "description": "Un avis à un utilisateur, un agent ou une session sur le canal « {{channel}} ». Le contenu est fait de blocs typés ; le moteur vérifie l’éligibilité et le droit actuels du destinataire lors de l’envoi.",
+    "recipient": "Destinataire",
+    "subjectField": "Objet",
+    "blocks": "Blocs de contenu",
+    "block": {
+      "type": "Type",
+      "format": "Format",
+      "text": "Texte",
+      "code": "Code",
+      "referenceKind": "Type de référence",
+      "referenceRef": "Référence",
+      "referenceHash": "Empreinte de la référence",
+      "referenceHint": "Une référence est une information pour le lecteur. Rien n’est récupéré ni exécuté à partir d’elle.",
+      "codeHint": "Un seul jeton, au plus 128 caractères. Un bloc d’état ne porte rien d’autre.",
+      "markdownHint": "Le markdown est conservé tel quel et affiché comme texte ; le moteur refuse les balises HTML brutes."
+    },
+    "urgency": "Urgence",
+    "availableAt": "Disponible à partir de",
+    "availableAtHint": "Disponibilité différée facultative, dans votre heure locale. Laissez vide pour publier maintenant.",
+    "validation": {
+      "recipient": "Une référence de destinataire est requise.",
+      "subject": "Un objet est requis.",
+      "blocks": "Au moins un bloc est requis.",
+      "text": "Un bloc de texte a besoin de texte.",
+      "reference": "Un bloc de référence a besoin d’un type et d’une référence.",
+      "code": "Un bloc d’état a besoin d’un code : un seul jeton d’au plus 128 caractères, sans espaces.",
+      "availableAt": "L’heure de disponibilité n’a pas pu être lue comme une date.",
+      "markdownHtml": "Un bloc markdown ne doit pas contenir de balise HTML brute.",
+      "subjectLength": "L’objet doit faire au plus 256 octets."
+    },
+    "confirm": {
+      "title": "Confirmer l’intention",
+      "body": "Cette intention est désormais immuable. Sa clé lie le corps et la cible ; une nouvelle tentative après un résultat ambigu renvoie exactement ceci, et modifier démarre une nouvelle intention.",
+      "key": "Clé d’idempotence",
+      "channel": "Canal",
+      "recipient": "Destinataire",
+      "subject": "Objet",
+      "blocksCount": "Blocs",
+      "urgency": "Urgence",
+      "availableAt": "Disponible à partir de"
+    },
+    "result": {
+      "appliedTitle": "Avis publié",
+      "appliedBody": "Le moteur a créé le message et sa remise maintenant.",
+      "replayedTitle": "Déjà publié",
+      "replayedBody": "Le moteur a répondu depuis son registre d’idempotence : cette intention exacte était déjà appliquée. Rien n’a été envoyé une seconde fois.",
+      "ambiguousTitle": "Résultat inconnu",
+      "ambiguousBody": "Le transport a échoué avant l’arrivée d’une réponse ; l’avis a donc peut-être été publié ou non. Réessayer renvoie la même clé et le même corps : le moteur l’applique une seule fois ou rejoue le résultat antérieur.",
+      "refusedTitle": "Envoi refusé",
+      "refusedBody": "Le moteur n’a pas publié cet avis. La raison est celle du serveur ; l’annuaire ne promettait aucune éligibilité."
+    }
+  },
+  "urgency": {
+    "normal": "Normale",
+    "high": "Haute",
+    "critical": "Critique",
+    "": "Par défaut"
+  },
+  "blockType": {
+    "text": "Texte",
+    "reference": "Référence",
+    "status": "État",
+    "action_ref": "Référence d’action"
+  },
+  "format": {
+    "plain": "Brut",
+    "markdown": "Markdown",
+    "": "Par défaut"
+  },
+  "inbox": {
+    "title": "Boîte de réception personnelle",
+    "description": "Remises adressées à ce principal dans cet espace de travail, telles que le moteur les autorise maintenant. Lire une page n’accuse rien et n’avance aucun curseur.",
+    "emptyTitle": "Aucune remise",
+    "emptyBody": "Rien d’adressé à ce principal n’est visible dans cet espace de travail pour le moment.",
+    "truncated": "D’autres remises existent au-delà de cette page",
+    "truncatedHint": "Le serveur a signalé d’autres remises visibles. Chargez plus pour continuer depuis sa continuation.",
+    "columns": {
+      "subject": "Objet",
+      "sender": "Expéditeur",
+      "urgency": "Urgence",
+      "state": "État de la remise",
+      "available": "Disponible",
+      "ackDue": "Accusé attendu",
+      "acknowledged": "Accusée",
+      "delivery": "Remise"
+    }
+  },
+  "delivery": {
+    "title": "Remise",
+    "description": "Lue à neuf pour ce principal. Accuser réception est un acte explicite avec la version que vous venez de lire.",
+    "fields": {
+      "id": "ID de la remise",
+      "messageId": "ID du message",
+      "recipient": "Destinataire",
+      "state": "État",
+      "required": "Requise",
+      "seq": "Séquence de remise",
+      "version": "Version",
+      "available": "Disponible à partir de",
+      "firstSeen": "Vue pour la première fois le",
+      "ackDue": "Accusé attendu avant le",
+      "expires": "Expire le",
+      "acknowledged": "Accusée le"
+    },
+    "ack": {
+      "title": "Accuser réception de cette remise",
+      "body": "L’acte envoie If-Match {{etag}} — la version que vous avez lue — et une clé qui lui est propre. Si la remise a changé entre-temps, le moteur répond 412 et vous relisez avant de confirmer à nouveau ; la console ne substitue jamais la version.",
+      "key": "Clé d’idempotence",
+      "ifMatch": "If-Match",
+      "appliedTitle": "Accusée",
+      "appliedBody": "Le moteur a enregistré l’accusé de réception.",
+      "replayedTitle": "Déjà accusée",
+      "replayedBody": "Le moteur a rejoué le reçu d’un accusé de réception antérieur identique.",
+      "late": "Accusé tardif : enregistré après l’échéance. Il n’est pas compté comme un accomplissement effectif.",
+      "conflictTitle": "La remise a changé depuis votre lecture",
+      "conflictBody": "Le moteur a refusé l’accusé : la version lue n’est plus à jour, ou la remise est déjà accusée. Relisez la remise et confirmez de nouveau seulement si cela s’applique encore. Rien n’a été renvoyé.",
+      "ambiguousTitle": "Résultat inconnu",
+      "ambiguousBody": "Le transport a échoué avant l’arrivée d’une réponse. Réessayer renvoie la même clé et le même If-Match ; le moteur l’applique une seule fois, le rejoue ou le refuse avec la version actuelle.",
+      "refusedTitle": "Accusé refusé",
+      "noPermission": "Vous ne détenez pas la permission d’écriture des remises, accuser réception n’est donc pas proposé."
+    },
+    "openMessageHint": "Ouvre le message avec une lecture qui lui est propre, sous la permission de lecture des messages.",
+    "noMessageRead": "Vous ne détenez pas la permission de lecture des messages ; le message n’est montré ici que tel que cette remise le porte."
+  },
+  "message": {
+    "title": "Message",
+    "description": "Lu à neuf sous la permission de lecture des messages, après les vérifications exactes de porteur du moteur.",
+    "fields": {
+      "id": "ID du message",
+      "channel": "Canal",
+      "thread": "Fil",
+      "state": "État",
+      "sender": "Expéditeur",
+      "urgency": "Urgence",
+      "ackPolicy": "Politique d’accusé",
+      "ackQuorum": "Quorum d’accusé",
+      "available": "Disponible à partir de",
+      "published": "Publié le",
+      "ackDue": "Accusé attendu avant le",
+      "expires": "Expire le",
+      "terminal": "Terminal le",
+      "terminalCode": "Code terminal",
+      "version": "Version"
+    }
+  },
+  "content": {
+    "title": "Contenu",
+    "inert": "Affiché comme texte. Les références et les références d’action ne sont que de l’information : la console ne les récupère, ne les suit ni ne les exécute jamais.",
+    "markdownAsText": "markdown, affiché comme texte",
+    "reference": "référence",
+    "action": "référence d’action",
+    "status": "état",
+    "hash": "empreinte",
+    "empty": "(vide)"
+  },
+  "fulfillment": {
+    "title": "Accomplissement",
+    "state": "État",
+    "required": "Requis",
+    "acknowledged": "Accusés",
+    "viable": "Viables",
+    "unmet": "Non satisfaits",
+    "quorum": "Quorum"
+  },
+  "receipt": {
+    "title": "Reçu",
+    "commandId": "ID de commande",
+    "messageId": "ID du message",
+    "deliveryId": "ID de la remise",
+    "ackId": "ID de l’accusé",
+    "eventId": "ID d’événement",
+    "auditSeq": "Séquence d’audit",
+    "version": "Version",
+    "etag": "ETag",
+    "state": "État",
+    "verdict": "Verdict",
+    "code": "Code",
+    "deliveryCount": "Remises",
+    "requiredCount": "Requises",
+    "payloadDigest": "Condensé de la charge",
+    "planHash": "Empreinte du plan",
+    "audienceHash": "Empreinte de l’audience",
+    "late": "Tardif"
+  },
+  "failure": {
+    "forbidden": "Le moteur l’a refusé pour le principal actuel.",
+    "step_up": "Votre rôle le permet, mais la session doit d’abord être élevée.",
+    "not_found": "Introuvable, ou non visible pour ce principal.",
+    "unavailable": "Le moteur n’a pas pu regarder : les preuves actuelles d’autorité, de garde ou de stockage sont indisponibles. Ce n’est ni un résultat vide ni un refus.",
+    "version_mismatch": "La version que vous avez lue n’est plus actuelle.",
+    "version_required": "Le moteur a exigé une précondition de version que la console n’a pas envoyée.",
+    "plan_changed": "La publication ne reproduirait pas le plan lié.",
+    "terminal": "La cible est dans un état terminal ; l’acte ne peut pas s’appliquer.",
+    "invalid": "Le moteur a refusé la requête comme mal formée.",
+    "rate_limited": "Limité par le débit. Attendez avant de redemander.",
+    "ambiguous": "Le transport a échoué avant l’arrivée d’une réponse.",
+    "aborted": "Annulé par la console parce que l’autorité a changé.",
+    "other": "La requête a échoué.",
+    "code": "Code",
+    "status": "Statut",
+    "requestId": "ID de requête",
+    "message": "Message du serveur",
+    "conflict": "La ligne a changé depuis votre lecture, ou l’acte ne s’y applique plus. Relisez avant de décider à nouveau.",
+    "snapshot_changed": "Le canal a changé entre deux pages de cette liste."
+  },
+  "authority": {
+    "lost": "La permission pour cet acte n’est plus détenue ; rien n’a été envoyé.",
+    "confirmationClosed": "Une confirmation en attente a été fermée parce que la permission qui la soutenait a été perdue.",
+    "notAddressable": "Ce principal n’a pas de référence d’annuaire pour ce type et ne peut pas être adressé."
+  },
+  "states": {
+    "loading": "Chargement…",
+    "reading": "Lecture…"
+  },
+  "administration": {
+    "title": "Canaux administrables",
+    "description": "Canaux que ce principal peut administrer maintenant : channel:admin core et un bit local admin en vigueur, décidés par le moteur à chaque lecture. Les canaux archivés restent listés et inspectables. Ce n'est pas le catalogue de lecture : un bit local de lecture n'est ni exigé ni supposé.",
+    "stateFilter": "État persisté",
+    "states": {
+      "all": "Tous les états",
+      "active": "Actifs seulement",
+      "archived": "Archivés seulement"
+    },
+    "columns": {
+      "name": "Nom",
+      "slug": "Slug",
+      "kind": "Type",
+      "state": "État",
+      "sensitivity": "Sensibilité",
+      "protection": "Protection",
+      "etag": "ETag",
+      "updated": "Mis à jour"
+    },
+    "openById": "Administrer un canal par ID",
+    "openByIdHint": "La fiche est lue via l'historique des droits sous channel:admin ; elle n'utilise jamais la lecture de canal du niveau lecture.",
+    "emptyTitle": "Aucun canal administrable",
+    "emptyBody": "Aucun canal de ce workspace n'accorde à ce principal un bit admin en vigueur, ou aucun ne correspond à l'état persisté sélectionné. Un droit local admin et la permission channel:admin en font apparaître un ici.",
+    "truncated": "D'autres canaux administrables existent au-delà de cette page",
+    "truncatedHint": "Le serveur a signalé d'autres canaux administrables. Chargez-en plus pour continuer depuis sa continuation."
+  },
+  "channelState": {
+    "active": "Actif",
+    "archived": "Archivé"
+  },
+  "grantState": {
+    "active": "Actif",
+    "revoked": "Révoqué",
+    "expired": "Expiré"
+  },
+  "admin": {
+    "title": "Administration du canal",
+    "description": "Lu à neuf via l'historique des droits avec l'ETag de précondition du canal ; aucun contenu n'est ouvert.",
+    "observedAt": "Observé à",
+    "tabs": {
+      "config": "Configuration",
+      "grants": "Droits"
+    },
+    "readFailedTitle": "La lecture administrative n'a pas abouti",
+    "readFailedBody": "Rien de ce qui était affiché pour ce canal n'est conservé : l'écran doit montrer ce que le moteur autorise maintenant. Relisez une fois la cause résolue."
+  },
+  "config": {
+    "immutable": "Slug, type, tenant, workspace et les compteurs de génération sont informatifs et immuables ici ; le moteur refuse une modification qui les franchit.",
+    "advanced": "Options avancées",
+    "archivedNote": "Ce canal est archivé. Son état ne peut pas redevenir actif ; sa configuration peut encore être modifiée.",
+    "stateHint": "L'archivage est irréversible : un canal archivé ne redevient jamais actif.",
+    "stateLocked": "Archivé. Le moteur refuse tout changement d'état sur un canal archivé.",
+    "sensitivityHint": "Restreint exige un contenu scellé par l'application et ne peut pas être ramené à interne.",
+    "protectionHint": "La protection scellée par l'application ne peut pas être ramenée au stockage.",
+    "ackHint": "La politique d'accusé « aucune » exige un délai nul ; toute autre politique exige un délai positif.",
+    "wakeHint": "La valeur par défaut d'un canal ne peut pas être « hériter » ; cette valeur appartient aux messages.",
+    "validation": {
+      "name": "Le nom doit faire de 1 à 256 octets.",
+      "description": "La description doit faire au plus 4096 octets.",
+      "fanout": "Le fanout maximal doit être un entier d'au moins un.",
+      "depth": "La profondeur maximale d'automatisation doit être un entier d'au moins zéro.",
+      "timeout": "Le délai d'accusé doit être un entier de millisecondes.",
+      "ackTimeout": "La politique d'accusé « aucune » exige un délai de 0 ; toute autre exige un délai positif.",
+      "restrictedSealed": "Un canal restreint doit être scellé par l'application.",
+      "sensitivityLowered": "La sensibilité ne peut pas passer de restreint à interne.",
+      "protectionLowered": "La protection du contenu ne peut pas passer de scellé par l'application à stockage.",
+      "archivedState": "Un canal archivé ne peut pas redevenir actif.",
+      "nothingChanged": "Rien n'a changé : aucun champ à envoyer."
+    },
+    "fieldNames": {
+      "name": "Nom",
+      "description": "Description",
+      "state": "État",
+      "sensitivity": "Sensibilité",
+      "content_protection": "Protection du contenu",
+      "default_ack_policy": "Politique d'accusé par défaut",
+      "default_ack_timeout_ms": "Délai d'accusé par défaut (ms)",
+      "default_wake": "Réveil par défaut",
+      "retention_policy_ref": "Référence de politique de rétention",
+      "max_fanout": "Fanout maximal",
+      "max_automation_depth": "Profondeur maximale d'automatisation"
+    },
+    "confirm": {
+      "title": "Confirmer la modification de configuration",
+      "body": "Seuls les champs ci-dessous sont envoyés, avec If-Match {{etag}} — l'ETag de la lecture à l'écran. Si le canal a changé entre-temps, le moteur refuse et vous relisez avant de confirmer à nouveau ; la console ne substitue jamais l'ETag.",
+      "archiving": "Ceci archive le canal. L'archivage est irréversible : il ne redeviendra pas actif.",
+      "ifMatch": "If-Match"
+    },
+    "appliedTitle": "Configuration appliquée",
+    "appliedBody": "Le moteur a validé la modification. La fiche relit le canal ; l'acte suivant utilise l'ETag de cette lecture.",
+    "conflictTitle": "Le canal a changé depuis votre lecture",
+    "conflictBody": "Le moteur a refusé la modification : sa précondition ne correspond plus au canal actuel. Rien n'a été renvoyé. Relisez, comparez vos modifications aux valeurs actuelles et ne confirmez à nouveau que si elles s'appliquent encore.",
+    "unknownTitle": "Résultat à vérifier",
+    "unknownBody": "Le transport a échoué avant l'arrivée d'une réponse ; la modification peut avoir été appliquée ou non. Cette route n'a pas de clé d'idempotence et la console ne renverra pas. Relisez le canal : les valeurs actuelles disent si elle s'est appliquée ; une correspondance ne prouve pas à elle seule quelle tentative l'a appliquée.",
+    "refusedTitle": "Configuration refusée",
+    "noPermission": "Vous ne détenez pas la permission channel:admin ; les modifications de configuration ne sont pas proposées.",
+    "rebased": "Le canal a changé pendant votre modification. Les champs que vous n'aviez pas touchés ont été rafraîchis depuis cette lecture ({{fields}}) ; vos propres modifications sont conservées et seules elles seront envoyées. Vérifiez à nouveau les modifications pour confirmer sur la nouvelle version.",
+    "versionMoved": "Le canal a changé. Vos modifications sont conservées ; vérifiez-les à nouveau avant de confirmer."
+  },
+  "grants": {
+    "filters": {
+      "title": "Filtres de l'historique des droits",
+      "state": "État persisté",
+      "stateHint": "Sélectionne l'état stocké. Une ligne active dont l'expiration est passée reste « active » ici et se lit « expirée » à l'instant d'observation.",
+      "subjectKind": "Type de sujet",
+      "subjectRef": "Référence du sujet",
+      "subjectHint": "Type et référence vont ensemble : les deux, ou aucun. Les groupes ne sont pas développés.",
+      "anySubject": "Tout sujet",
+      "applied": "Filtré sur le sujet {{kind}} {{ref}}."
+    },
+    "columns": {
+      "subject": "Sujet",
+      "bits": "Bits",
+      "generation": "Génération",
+      "stored": "État stocké",
+      "temporal": "À l'observation",
+      "expires": "Expire",
+      "grantedBy": "Accordé par",
+      "created": "Créé"
+    },
+    "truncated": "D'autres générations existent au-delà de cette page",
+    "truncatedHint": "Le serveur a signalé d'autres générations. Chargez-en plus pour continuer depuis sa continuation ; un changement du canal entre deux pages redémarre la liste.",
+    "emptyTitle": "Aucune génération",
+    "emptyBody": "Aucune génération de droit stockée ne correspond à l'état et au sujet sélectionnés. Un nouveau droit en ajoute une.",
+    "temporalHint": "« État stocké » est ce que le moteur a persisté ; « à l'observation » indique si la ligne était en vigueur à l'instant observé. Une expiration passée est signalée, pas matérialisée : elle ne révoque pas la ligne, et un successeur pour ce sujet exige d'abord une révocation explicite.",
+    "snapshotChanged": "Le canal a changé entre deux pages de cet historique ; toutes les pages lues ont été écartées et la liste a redémarré depuis le début (redémarrée {{count}} fois).",
+    "detail": {
+      "title": "Détail de la génération",
+      "id": "ID du droit",
+      "supersedes": "Succède à",
+      "revokedBy": "Révoqué par",
+      "version": "Version de la ligne",
+      "updated": "Mis à jour",
+      "expiredActive": "Cette ligne est stockée active mais son expiration est passée à l'instant d'observation. Le moteur ne l'a pas révoquée : un successeur pour ce sujet exige la révocation explicite de cette génération.",
+      "notActive": "Cette génération n'est pas stockée active ; rien à révoquer ici. Un nouveau droit pour son sujet exige qu'aucune génération active n'existe."
+    },
+    "form": {
+      "title": "Nouvelle génération de droit",
+      "hint": "Un sujet, trois bits indépendants, une expiration facultative. Une ligne de l'annuaire est un candidat, pas un sujet éligible : le moteur décide lors de l'acte, et une génération enregistrée ne promet pas un accès effectif."
+    },
+    "validation": {
+      "expiry": "L'expiration n'a pas pu être lue comme une date.",
+      "expiryPast": "L'expiration doit être dans le futur."
+    },
+    "confirm": {
+      "title": "Confirmer le droit",
+      "body": "Ceci envoie exactement la génération ci-dessous avec l'If-Match de la lecture à l'écran. Le moteur la refuse si le sujet détient déjà une génération active ou si le canal a changé entre-temps ; vous relisez alors et confirmez à nouveau. Rien n'est retenté de lui-même.",
+      "successorOf": "Successeur de la génération révoquée {{id}}. C'est un acte distinct : la révocation ci-dessus est déjà validée."
+    },
+    "appliedTitle": "Droit enregistré",
+    "appliedBody": "Le moteur a enregistré cette génération maintenant. Ce n'est pas une promesse que le sujet puisse agir : le moteur décide chaque acte au moment où il est demandé.",
+    "conflictTitle": "Le canal a changé depuis votre lecture",
+    "conflictBody": "Le moteur a refusé l'acte : sa précondition ne correspond plus au canal actuel, ou la génération cible n'est plus celle que vous avez vue. Rien n'a été renvoyé. Relisez l'historique et ne confirmez à nouveau que si l'acte s'applique encore.",
+    "unknownTitle": "Résultat à vérifier",
+    "unknownBody": "Le transport a échoué avant l'arrivée d'une réponse. L'acte peut avoir été appliqué ou non, et cette route n'a pas de clé d'idempotence : la console ne renverra pas. Relisez l'historique et décidez ; une ligne correspondante montre l'état actuel, pas la tentative qui l'a produit.",
+    "unknownAct": "Acte",
+    "unknownGrant": "Accorder (POST …/grants)",
+    "unknownRevoke": "Révoquer (POST …/revoke)",
+    "refusedTitle": "Droit refusé",
+    "revoke": {
+      "title": "Révoquer exactement cette génération",
+      "body": "Ceci révoque la génération affichée, par son ID, avec l'If-Match de la lecture à l'écran. Son historique est conservé. Un successeur pour le sujet est un acte distinct après relecture.",
+      "bodyThenGrant": "Premier acte sur deux : révoquer la génération affichée. Une fois la réponse du moteur lue, une confirmation distincte vous sera proposée pour une génération successeur ; rien n'est enchaîné automatiquement.",
+      "ownAdminWarning": "Cette génération est un droit admin pour votre propre compte. Elle peut être ce qui soutient votre accès administratif à ce canal ; la console ne calcule pas toute votre autorité, et le moteur décide votre prochaine requête.",
+      "appliedTitle": "Génération révoquée",
+      "appliedBody": "Le moteur a enregistré la révocation maintenant. Son historique reste lisible sous l'état révoqué.",
+      "refusedTitle": "Révocation refusée"
+    },
+    "stateFilters": {
+      "active": "Actifs (stocké)",
+      "revoked": "Révoqués (stocké)",
+      "expired": "Expirés (stocké)",
+      "all": "Tous (stocké)"
+    }
+  },
+  "cursor": {
+    "title": "Marquer vu jusqu'ici",
+    "description": "Avance votre curseur personnel de lecture jusqu'à la dernière remise d'une page de la boîte. N'accuse rien et ne modifie aucune remise.",
+    "section": {
+      "title": "Curseur de lecture",
+      "hint": "Chaque page chargée peut être marquée vue jusqu'à sa dernière remise. La cible est celle de la page, frappée par le moteur pour cette remise exacte ; le filtre local de la table doit être vide pour que la portée soit sans ambiguïté.",
+      "page": "Page {{page}} · {{count}} remises",
+      "upTo": "jusqu'à"
+    },
+    "reasons": {
+      "noPermission": "Exige la permission delivery:write.",
+      "noRecipient": "Cette session n'est pas une identité utilisateur ; le curseur personnel appartient à une boîte utilisateur.",
+      "filtered": "Videz d'abord le filtre de la table : la cible du curseur est la page du serveur, pas les lignes filtrées.",
+      "emptyPage": "Cette page n'a aucune remise à marquer.",
+      "otherRecipient": "La dernière remise de cette page n'est pas adressée à votre identité utilisateur."
+    },
+    "fields": {
+      "scope": "Portée",
+      "scopeValue": "page {{page}} de la chaîne chargée ({{count}} remises)",
+      "workspace": "Workspace",
+      "recipient": "Destinataire",
+      "lastSubject": "Dernier objet",
+      "lastDelivery": "Dernière remise",
+      "lastSeq": "Séquence de remise",
+      "cursorVersion": "Version du curseur",
+      "cursorId": "ID du curseur",
+      "replayed": "Rejoué",
+      "lastSeenSeq": "Dernière séquence vue",
+      "barrierDelivery": "Remise barrière",
+      "barrierReason": "Motif de la barrière",
+      "barrierSince": "Barrière depuis"
+    },
+    "preparing": "Préparation : demande au moteur de la cible de curseur de cette page…",
+    "prepareFailedTitle": "La cible du curseur n'a pas pu être préparée",
+    "prepareFailedBody": "Rien n'a été avancé. Actualisez la boîte et préparez à nouveau depuis une page actuelle.",
+    "confirm": {
+      "title": "Confirmer l'avancement",
+      "body": "Ceci envoie la cible préparée et la remise ci-dessus avec l'If-Match de la version de curseur lue, et une clé propre. Seule la confirmation avance quelque chose. Une nouvelle tentative après un résultat ambigu renvoie exactement ceci."
+    },
+    "conflictTitle": "Le curseur a changé depuis sa préparation",
+    "conflictBody": "Le moteur a refusé l'avancement : la version du curseur ou la cible ne sont plus actuelles. Rien n'a été renvoyé. Actualisez la boîte et préparez à nouveau depuis une page actuelle.",
+    "ambiguousTitle": "Résultat inconnu",
+    "ambiguousBody": "Le transport a échoué avant l'arrivée d'une réponse. Réessayer renvoie la même cible, le même If-Match et la même clé ; le moteur l'applique une fois, le rejoue ou le refuse avec sa version actuelle. Le laisser indéterminé garde le résultat précédent inconnu.",
+    "refusedTitle": "Avancement refusé",
+    "refusedBody": "Le moteur n'a pas avancé le curseur. Actualisez la boîte avant de préparer à nouveau.",
+    "result": {
+      "appliedTitle": "Curseur avancé",
+      "appliedBody": "Le moteur a validé l'avancement et renvoyé la position ci-dessous. La boîte est relue depuis le curseur durable.",
+      "replayedTitle": "Déjà avancé",
+      "replayedBody": "Le moteur a rejoué le résultat d'une commande identique antérieure. Rien n'a été appliqué deux fois.",
+      "barrierTitle": "Avancement limité par une barrière",
+      "barrierBody": "Le moteur s'est arrêté à la remise ci-dessous pour le motif qu'il nomme ; le curseur n'a pas atteint la cible. Ce n'est pas un avancement complet.",
+      "barrierHint": "Ouvrez la remise barrière avec une lecture à neuf. La résoudre n'avance rien par elle-même : actualisez la boîte, préparez une nouvelle cible et confirmez à nouveau.",
+      "notAck": "Un curseur de lecture n'est pas un accusé et ne modifie ni l'état ni la marque de première lecture d'aucune remise."
+    }
+  },
+  "capability": {
+    "actInterrupted": "Une confirmation a été fermée alors que son acte était déjà en cours d’envoi : cette console n’a pas de réponse courante pour cet acte. Rien n’a été décidé et rien n’a été refusé ; si l’acte a atteint le moteur n’est pas établi ici.",
+    "checking": "Vérification de l’accès…",
+    "confirmationClosed": "Une confirmation en attente a été fermée : cette console n’a pas de réponse courante pour cet acte. Rien n’a été décidé, rien n’a été refusé et rien n’a été envoyé.",
+    "globalAccountBody": "Utilisez un compte membre de cette organisation pour ouvrir cette vue. Les comptes globaux ne peuvent pas vérifier l'accès à cette vue.",
+    "globalAccountTitle": "Connectez-vous avec un compte membre",
+    "notConfirmed": "Rien n’a été envoyé : l’autorisation de cet acte n’a pas pu être confirmée à l’instant.",
+    "retrying": "Nouvelle vérification toutes les quelques secondes.",
+    "unavailableBody": "Cette console n’a pas de réponse courante pour cette action. Rien n’a été décidé et rien n’a été refusé.",
+    "unavailableTitle": "L’accès n’a pas pu être établi",
+    "undisclosedBody": "Le moteur n’a publié aucune réponse pour cette action ici. Cela ne dit rien de votre rôle, ni de l’existence de la cible, ni de la disponibilité du service.",
+    "undisclosedTitle": "Cette décision n’est pas divulguée"
+  },
+  "continuity": {
+    "interrupted": "L'accès n'a pas pu être confirmé un instant, la confirmation en attente a donc été fermée. Vos modifications sont conservées et rien n'a été envoyé ; vérifiez-les à nouveau avant de confirmer.",
+    "interruptedSend": "L'accès n'a pas pu être confirmé pendant l'envoi de la modification, la confirmation a donc été fermée. Vos modifications sont conservées et rien n'a été renvoyé ; si la modification a atteint le moteur n'est pas établi ici — relisez pour le vérifier."
+  },
+  "handoff": {
+    "state": {
+      "offered": "Proposé",
+      "accepted": "Accepté",
+      "rejected": "Refusé",
+      "withdrawn": "Retiré",
+      "expired": "Expiré"
+    },
+    "context": {
+      "current": "Peut être traité maintenant",
+      "stale": "N'est plus à jour",
+      "terminal": "Déjà résolu"
+    },
+    "actions": {
+      "accept": "Accepter la responsabilité",
+      "reject": "Refuser le transfert"
+    },
+    "retained": {
+      "submitting": "Une opération de transfert est en cours d'envoi.",
+      "uncertain": "Une opération de transfert n'a pas de résultat confirmé.",
+      "confirmed": "Le reçu de l'offre est toujours disponible.",
+      "responseConfirmed": "Le reçu de la réponse est toujours disponible.",
+      "reopen": "Afficher l'opération"
+    },
+    "lost": {
+      "title": "Les identifiants ont changé",
+      "body": "L'envoi a été arrêté ; le résultat n'est pas confirmé. Lisez l'état actuel avant d'agir de nouveau.",
+      "notSent": "L'envoi n'a pas commencé, cette commande n'a donc pas été envoyée. Lisez l'état actuel avant d'agir de nouveau.",
+      "latestNotSent": "La dernière tentative n'a pas commencé et n'a pas été envoyée. La tentative précédente est un fait distinct. Lisez l'état actuel avant d'agir de nouveau."
+    },
+    "uncertain": {
+      "title": "Le résultat est inconnu",
+      "body": "La requête a pu être appliquée ou non. Un délai dépassé n'est pas une annulation. Réessayer envoie l'opération identique sous la même clé, afin que le moteur puisse répondre qu'elle était déjà appliquée au lieu de l'appliquer deux fois.",
+      "discard": "Arrêter le suivi local",
+      "priorTransmission": "Une tentative antérieure a été transmise et son résultat n'a jamais été confirmé. Les réponses ultérieures décrivent la requête qui les a renvoyées, pas celle-là."
+    },
+    "references": {
+      "hint": "Un type et une référence sont requis ; le hachage est facultatif. Les références sont des étiquettes que lit le destinataire — rien n'est ici récupéré, suivi ni ouvert.",
+      "kind": "Type",
+      "ref": "Référence",
+      "hash": "Hachage",
+      "add": "Ajouter une référence",
+      "remove": "Retirer la référence"
+    },
+    "offer": {
+      "title": "Proposer un transfert",
+      "description": "Proposez la responsabilité de cet élément de travail à un destinataire via un canal. Créer l'offre NE transfère PAS la propriété : seule une réponse acceptée le fait.",
+      "readRefusedTitle": "L'élément de travail n'a pas pu être lu",
+      "itemTitle": "Élément de travail",
+      "item": "Élément de travail",
+      "itemId": "ID de l'élément",
+      "itemStatus": "Statut",
+      "currentOwner": "Propriétaire actuel",
+      "ownerEpoch": "Époque du propriétaire",
+      "itemWorkspace": "Espace de travail de l'élément",
+      "precondition": "Précondition (If-Match)",
+      "itemMismatch": "La lecture a renvoyé un élément de travail différent de celui demandé. Rien ne peut être proposé sous cette lecture.",
+      "workspaceMismatchTitle": "Sélectionnez l'espace de travail de l'élément",
+      "workspaceMismatchBody": "Cet élément appartient à l'espace de travail {{itemWorkspace}} et celui sélectionné est {{selected}}. Sélectionnez celui de l'élément dans le sélecteur pour le proposer ; la console n'en choisit jamais un à votre place.",
+      "workspaceNone": "Aucun espace de travail explicite n'est sélectionné. Une offre est limitée à un espace de travail : sélectionnez celui de l'élément dans le sélecteur ; la console n'en choisit jamais un à votre place.",
+      "noPrecondition": "La lecture de l'élément ne portait pas d'ETag, il n'y a donc pas de précondition à envoyer. Relisez l'élément ; ici une version n'est pas transformée en validateur.",
+      "noPermission": "Proposer un transfert exige sessions:message-send:write. Le moteur vérifie en plus la propriété de l'élément et l'autorité sur le canal.",
+      "channel": "Canal",
+      "channelHint": "L'ID canonique du canal sur lequel le porteur est publié. Il peut toujours être saisi.",
+      "channelPick": "Choisir un canal",
+      "channelNoDirectory": "Avec cette permission le catalogue des canaux n'est pas lisible, l'ID du canal se saisit donc directement. Un canal listé serait de toute façon un candidat, jamais une décision d'éligibilité.",
+      "recipient": "Destinataire",
+      "summary": "Résumé",
+      "nextAction": "Action suivante",
+      "risk": "Risque",
+      "riskHint": "Facultatif.",
+      "artifacts": "Références d'artefacts",
+      "deadline": "Délai de réponse",
+      "deadlineHint": "Un instant absolu, saisi dans votre propre fuseau horaire. Il commence vide à dessein : la console ne choisit pas d'engagement à votre place et ne le prolonge jamais.",
+      "deadlineReview": "{{zone}} local, envoyé comme {{utc}}. L'horloge du serveur fait foi et peut encore le refuser.",
+      "review": "Vérifier l'offre",
+      "confirm": "Confirmer et proposer",
+      "confirmTitle": "Vérifiez avant de proposer",
+      "confirmBody": "À partir d'ici la clé, le corps, la cible et la précondition sont figés. Un nouvel essai après un résultat inconnu envoie exactement cet objet.",
+      "key": "Clé d'idempotence",
+      "submitting": "Proposition en cours…",
+      "conflictTitle": "L'offre ne s'est pas appliquée",
+      "conflictBody": "L'élément a bougé depuis sa lecture, ou la commande ne s'applique plus. Cette réponse ne dit pas laquelle des deux. Relisez l'élément et vérifiez une nouvelle offre ; la précondition n'est jamais remplacée puis renvoyée.",
+      "refusedTitle": "L'offre a été refusée",
+      "createdTitle": "Offre créée",
+      "replayedTitle": "Offre déjà appliquée (rejeu)",
+      "pendingBody": "La propriété N'A PAS été transférée. La réponse du destinataire est attendue.",
+      "startOver": "Commencer une nouvelle offre",
+      "serverFinal": "Le moteur est le validateur final : il peut encore refuser cette offre pour éligibilité, autorité ou limites, et sa réponse est affichée telle quelle.",
+      "validation": {
+        "channel": "Un canal est requis.",
+        "channelFormat": "L'ID du canal doit être un UUID canonique.",
+        "recipient": "Une référence de destinataire est requise.",
+        "recipientLength": "La référence du destinataire dépasse 1024 octets.",
+        "summary": "Un résumé est requis.",
+        "summaryLength": "Le résumé dépasse 32 Kio.",
+        "nextAction": "Une action suivante est requise.",
+        "nextActionLength": "L'action suivante dépasse 32 Kio.",
+        "riskLength": "La note de risque dépasse 32 Kio.",
+        "references": "Chaque référence a besoin d'un type et d'une référence de 1 à 512 octets, déjà élagués et sans saut de ligne.",
+        "referencesMax": "Au plus 64 références d'artefacts.",
+        "deadline": {
+          "empty": "Un délai de réponse est requis.",
+          "unreadable": "Le délai de réponse ne peut pas être lu comme un instant.",
+          "past": "Le délai de réponse doit être postérieur à l'heure actuelle."
+        }
+      },
+      "targetRefusedTitle": "Terminez d'abord l'offre en cours",
+      "targetRefusedBody": "Une offre précédente a été envoyée et n'est pas résolue. Résolvez-la ou arrêtez le suivi local, puis commencez la nouvelle.",
+      "conflictTitleLatest": "Cette tentative ne s'est pas appliquée",
+      "conflictBodyLatest": "L'élément a bougé depuis sa lecture, ou la commande ne s'applique plus. Cette réponse concerne la requête qui vient de revenir. Relisez l'élément et vérifiez une nouvelle offre à partir de son état actuel.",
+      "refusedTitleLatest": "Cette tentative a été refusée"
+    },
+    "inbox": {
+      "title": "Transferts qui vous sont adressés",
+      "description": "Une page à la fois, sur la continuation du serveur. Cette collection ne porte pas de contenu : le résumé, l'action suivante et le risque d'une offre ne se lisent qu'en l'ouvrant.",
+      "filter": "État",
+      "truncated": "D'autres offres existent au-delà de cette page",
+      "truncatedHint": "Le moteur signale qu'il a autorisé une offre de plus dans la même transaction. Ce n'est pas un total, ni un décompte de lignes cachées.",
+      "emptyTitle": "Aucun transfert « {{state}} » dans cet espace de travail",
+      "emptyBody": "C'est un résultat autorisé vide, ni un refus ni un échec à regarder.",
+      "unavailableTitle": "Les informations de transfert ne peuvent pas être vérifiées",
+      "unavailableBody": "Les informations de transfert ne peuvent pas être chargées pour le moment. Réessayez, ou contactez un administrateur si cela persiste.",
+      "accountGuidanceTitle": "Utilisez un compte membre pour les transferts personnels",
+      "accountGuidanceBody": "Vous êtes connecté en tant qu’administrateur global. Connectez-vous avec un compte membre de cette organisation pour consulter les offres qui vous sont adressées.",
+      "accountGuidanceHint": "Utilisez le compte qui a reçu l’offre.",
+      "contentFree": "Les lignes ne montrent que l'identité, l'état et les dates. Ouvrez une ligne pour lire son contexte protégé sous sa propre lecture autorisée.",
+      "elapsed": "Fenêtre écoulée",
+      "elapsedHint": "La fenêtre de réponse est passée à l'observation du moteur. La ligne peut rester persistée comme proposée : cette lecture n'exécute jamais le moissonneur, ce n'est donc pas la preuve qu'une expiration a été enregistrée.",
+      "columns": {
+        "workItem": "Élément de travail",
+        "from": "Expéditeur",
+        "to": "Destinataire",
+        "state": "État",
+        "deadline": "Délai",
+        "observed": "Observé",
+        "delivery": "Livraison porteuse"
+      }
+    },
+    "detail": {
+      "title": "Offre de transfert",
+      "description": "Le contexte protégé d'une offre, lu à neuf via sa livraison porteuse. Il n'est pas conservé après la fermeture de ce panneau.",
+      "contextTitle": "Contexte de l'offre",
+      "summary": "Résumé",
+      "nextAction": "Action suivante",
+      "risk": "Risque",
+      "artifacts": "Références d'artefacts",
+      "artifactsInert": "Les références sont affichées comme du texte. Rien n'est ici récupéré, suivi ni ouvert.",
+      "adminTitle": "Champs du reçu",
+      "workItem": "Élément de travail",
+      "handoffId": "ID du transfert",
+      "from": "Expéditeur",
+      "to": "Destinataire",
+      "deadline": "Délai de réponse",
+      "created": "Créé",
+      "observed": "Observé",
+      "precondition": "ETag du transfert (If-Match)",
+      "preconditionHint": "Une réponse est liée à l'ETag du transfert ci-dessus, jamais à la version de la livraison porteuse à côté.",
+      "carrierDelivery": "Livraison porteuse",
+      "carrierVersion": "Version de la livraison porteuse",
+      "channel": "Canal",
+      "terminalTitle": "Motif enregistré par le moteur",
+      "deadlineElapsed": "Fenêtre écoulée",
+      "notCurrent": {
+        "stale": "Cette offre n'est plus à jour",
+        "terminal": "Cette offre est déjà résolue"
+      },
+      "notCurrentBody": "Le moteur signale qu'on ne peut pas y répondre maintenant, aucun contrôle de réponse n'est donc proposé. Relisez pour voir son état actuel.",
+      "noRespondPermission": "Répondre exige sessions:handoff-response:write."
+    },
+    "respond": {
+      "acceptTitle": "Accepter la responsabilité",
+      "rejectTitle": "Refuser le transfert",
+      "acceptDescription": "Accepter transfère la propriété de l'élément de travail au destinataire ci-dessous et crée un accusé. Cela NE démarre PAS de session et N'acquiert PAS de bail d'exécution.",
+      "rejectDescription": "Refuser exige un code de motif. La propriété ne bouge pas.",
+      "reasonCode": "Code de motif",
+      "reasonCodeHint": "Ces quatre-là sont des préréglages de la console, pas la liste du moteur. Le moteur garde un vocabulaire ouvert, un code personnalisé est donc disponible.",
+      "reasonCodeEmpty": "Choisir un motif",
+      "customCode": "Code de motif personnalisé",
+      "customCodeHint": "Un jeton en minuscules d'au plus 128 octets : lettres, chiffres, point, tiret et tiret bas, commençant par une lettre ou un chiffre.",
+      "reasonText": "Explication",
+      "reasonTextHint": "Facultatif, jusqu'à 32 Kio.",
+      "reasonReferences": "Références du motif",
+      "reasons": {
+        "not_available": "Pas disponible",
+        "outside_scope": "Hors de mon périmètre",
+        "needs_information": "Informations manquantes",
+        "other": "Autre",
+        "custom": "Code personnalisé…"
+      },
+      "review": "Vérifier la réponse",
+      "confirmTitle": "Vérifiez avant de répondre",
+      "confirmAcceptBody": "Confirmer transfère la propriété de cet élément de travail au destinataire ci-dessus. La clé, le corps et la précondition sont figés à partir d'ici.",
+      "confirmRejectBody": "Confirmer enregistre ce refus. La propriété ne bouge pas. La clé, le corps et la précondition sont figés à partir d'ici.",
+      "confirmAccept": "Confirmer l'acceptation",
+      "confirmReject": "Confirmer le refus",
+      "transition": "Réponse",
+      "submitting": "Envoi de la réponse…",
+      "conflictTitle": "La réponse ne s'est pas appliquée",
+      "conflictBody": "L'offre a bougé depuis sa lecture, ou la commande ne s'applique plus. Cette réponse ne dit pas laquelle des deux. Relisez l'offre et vérifiez une nouvelle réponse ; la précondition n'est jamais remplacée puis renvoyée.",
+      "refusedTitle": "La réponse a été refusée",
+      "acceptedTitle": "Responsabilité acceptée",
+      "rejectedTitle": "Transfert refusé",
+      "replayedTitle": "Réponse déjà appliquée (rejeu)",
+      "acceptedBody": "La propriété de l'élément de travail a changé et l'époque du propriétaire a avancé.",
+      "rejectedBody": "Le refus a été enregistré. La propriété n'a pas changé.",
+      "validation": {
+        "code": "Un code de motif est requis.",
+        "codeLength": "Le code de motif dépasse 128 octets.",
+        "codeShape": "Le code de motif doit être un jeton en minuscules : lettres, chiffres, point, tiret et tiret bas, commençant par une lettre ou un chiffre.",
+        "textLength": "L'explication dépasse 32 Kio.",
+        "references": "Chaque référence a besoin d'un type et d'une référence de 1 à 512 octets, déjà élagués et sans saut de ligne.",
+        "referencesMax": "Au plus 64 références de motif."
+      },
+      "targetRefusedTitle": "Terminez d'abord la réponse en cours",
+      "targetRefusedBody": "Une réponse précédente a été envoyée et n'est pas résolue. Résolvez-la ou arrêtez le suivi local, puis commencez la nouvelle.",
+      "startNew": "Commencer une nouvelle réponse",
+      "conflictTitleLatest": "Cette tentative ne s'est pas appliquée",
+      "conflictBodyLatest": "L'offre a bougé depuis sa lecture, ou la commande ne s'applique plus. Cette réponse concerne la requête qui vient de revenir. Relisez l'offre et vérifiez une nouvelle réponse à partir de son état actuel.",
+      "refusedTitleLatest": "Cette tentative a été refusée"
+    },
+    "receipt": {
+      "handoffId": "ID du transfert",
+      "deliveryId": "Livraison porteuse",
+      "ownerEpoch": "Époque du propriétaire",
+      "leaseFence": "Barrière du bail résultant",
+      "status": "HTTP {{status}}",
+      "noLease": "La réponse ne portait aucune barrière de bail. La responsabilité a changé de main ; aucun bail d'exécution n'a été acquis et aucune session ne tourne.",
+      "notCurrentOwnership": "Ce sont les valeurs rapportées par ce reçu. Consultez l'élément de travail pour la propriété actuelle."
+    },
+    "tracking": {
+      "limits": "Masquer ce panneau conserve le suivi local. Arrêter le suivi ou quitter ce contexte ne peut ni annuler ni annuler l'effet d'une commande déjà envoyée, un rechargement complet met fin à cet observateur local, et il n'existe pas ici de consultation de l'état des commandes.",
+      "pendingHide": "Vous pouvez masquer ce panneau pendant que la commande est en cours ; le suivi continue ici et le résultat ne change pas. Arrêter le suivi ou quitter ce contexte ne peut ni annuler ni annuler l'effet d'une commande déjà envoyée.",
+      "ended": "Le suivi local a pris fin car l'accès à ce contexte a changé. Le résultat du moteur n'est pas établi ici.",
+      "endedAfterSend": "Une commande avait déjà été envoyée. Mettre fin au suivi local ne l'a ni annulée ni annulée dans ses effets.",
+      "stoppedAfterSend": "Vous avez arrêté de suivre une commande qui a peut-être déjà été envoyée. Cela ne l'annule pas et n'en annule pas les effets, et son résultat n'est pas établi ici. Lisez l'état actuel avant d'agir de nouveau."
+    }
+  }
+}

@@ -18,7 +18,7 @@
 // reason (no first-party read-only API exists). It is a conscious, documented
 // choice, not a limitation hidden from the operator.
 //
-// Read-only and minimal-data (docs/SECURITY-HARDENING.md-3). A SPIRE registration entry carries
+// Read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3). A SPIRE registration entry carries
 // NO secret: it is the workload's SPIFFE ID, its parent agent's SPIFFE ID, its
 // selectors and a few flags (admin, ttl). The connector never sees an SVID
 // (the issued X.509/JWT credential), a private key, or a CA — only identity

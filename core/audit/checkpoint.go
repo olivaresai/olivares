@@ -5,11 +5,13 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -90,8 +92,10 @@ func (s *Signer) CheckpointVerifier(ctx context.Context) (*CheckpointVerifier, e
 
 // Checkpoint appends a signed checkpoint to a tenant's ledger, notarizing the
 // current chain tip. It is a no-op (returns ok=false) for an empty chain. The
-// checkpoint event's PrevHash is exactly the attested head hash, and its
-// signature covers the canonical (tenant, attestedSeq, headHash) preimage.
+// signature covers the canonical (tenant, attestedSeq, headHash) preimage of the
+// head it read, and the checkpoint commits only when the event Append produced is
+// that head's immediate successor on the same tenant's chain with PrevHash equal
+// to the signed hash — the binding a verifier checks from (Seq-1, PrevHash).
 //
 // It runs through store.Custody, not Mutate, because anchoring a chain is a
 // CUSTODIAL act and not service: it must keep working for a tenant whose service
@@ -102,7 +106,22 @@ func (s *Signer) Checkpoint(ctx context.Context, st store.Store, tenant model.Te
 	var ev model.AuditEvent
 	var ok bool
 	err := st.Custody(ctx, tenant, func(sc store.CustodyScope) error {
-		head, has, err := sc.Audit().Head(ctx)
+		// One ledger value for the whole ceremony: the lock, the head, the recorded
+		// head and the append all go through it.
+		log := sc.Audit()
+		// Custody alone does not guarantee that no other writer advances the chain
+		// between the head read and the append. When the ledger offers the optional
+		// append lock, take it BEFORE reading the head, so a writer that needs the
+		// same lock waits instead of interleaving while the signer runs. A lock
+		// failure stops here: no head read, no signature, no append. The lock is a
+		// liveness aid; the binding check after Append is what refuses a mismatch,
+		// with or without it.
+		if locker, canLock := log.(store.AuditAppendLocker); canLock {
+			if err := locker.LockAppends(ctx); err != nil {
+				return fmt.Errorf("audit: checkpoint: take the append lock before reading the head: %w", err)
+			}
+		}
+		head, has, err := log.Head(ctx)
 		if err != nil {
 			return err
 		}
@@ -118,7 +137,7 @@ func (s *Signer) Checkpoint(ctx context.Context, st store.Store, tenant model.Te
 			// used to return a silent no-op and the hourly checkpointer notarized
 			// nothing without moving its failure metric. Ask the store the other
 			// question when it can answer it.
-			rh, canAsk := sc.Audit().(store.RecordedHeadReader)
+			rh, canAsk := log.(store.RecordedHeadReader)
 			if !canAsk {
 				return nil
 			}
@@ -131,16 +150,23 @@ func (s *Signer) Checkpoint(ctx context.Context, st store.Store, tenant model.Te
 			}
 			return fmt.Errorf("evidence ledger is EMPTY while audit_heads still records seq %d: the events were removed under a live head (TRUNCATE, wholesale DELETE or a bad restore) — no checkpoint was written. Run `olivares audit verify --tenant %s --strict` for the full report; out of this check's reach: an actor who rewrites BOTH tables consistently, detected only by comparing against an EXTERNALLY RETAINED tip (an off-box copy of the anchor, or the DR manifest's recorded seq+hash) — signatures prove nothing was forged, never that nothing was removed", rec.Seq, tenant)
 		}
+		// Capture exactly what the signature will cover. The hash is copied so the
+		// binding check compares against the bytes that were signed.
+		signedSeq := head.Seq
+		signedHash := bytes.Clone(head.Hash)
 		// Sign the canonical (tenant, attestedSeq, headHash) preimage with the
 		// off-box key when configured, else the on-box Ed25519 key. The off-box call
-		// is network I/O held inside this Mutate so the attested head cannot advance
-		// between read and append (checkpoints are infrequent and off the hot path;
-		// the checkpointer bounds it with a 30s context).
-		sig, meta, serr := s.signCheckpoint(ctx, checkpointPreimage(tenant.String(), head.Seq, head.Hash))
+		// is network I/O inside this Custody transaction, bounded by the caller's
+		// context (the scheduler's 30 s context covers the whole sweep; CLI callers
+		// pass the command context). Holding the transaction open does NOT by itself
+		// stop the head from advancing: that is the append lock's job when the ledger
+		// offers one, and while signing runs that lock delays every writer that needs
+		// it.
+		sig, meta, serr := s.signCheckpoint(ctx, checkpointPreimage(tenant.String(), signedSeq, signedHash))
 		if serr != nil {
 			return serr
 		}
-		ev, err = sc.Audit().Append(ctx, model.AuditDraft{
+		appended, err := log.Append(ctx, model.AuditDraft{
 			Actor: model.ActorSystem, ActorKind: model.ActorSystem,
 			Action: ActionCheckpoint, TargetKind: "core.audit_checkpoint",
 			Meta: meta, Sig: sig,
@@ -148,6 +174,14 @@ func (s *Signer) Checkpoint(ctx context.Context, st store.Store, tenant model.Te
 		if err != nil {
 			return err
 		}
+		// Mandatory even when the append lock was taken: a checkpoint whose
+		// signature names a predecessor other than the one it follows must not
+		// commit. The error rolls this transaction back; there is no retry and no
+		// second signature.
+		if err := checkCheckpointBinding(tenant, signedSeq, signedHash, appended); err != nil {
+			return err
+		}
+		ev = appended
 		ok = true
 		return nil
 	})
@@ -155,6 +189,31 @@ func (s *Signer) Checkpoint(ctx context.Context, st store.Store, tenant model.Te
 		return model.AuditEvent{}, false, err
 	}
 	return ev, ok, nil
+}
+
+// checkCheckpointBinding reports whether an appended checkpoint follows the head
+// its signature covers: a recorded event (store.AuditLog.Append reports a dropped
+// append as a zero event with a nil error), the same tenant's chain, the immediate
+// successor sequence (refused, never wrapped, when the signed sequence has none) and
+// a PrevHash equal to the signed hash. The error names the failed binding and never
+// carries the signature.
+func checkCheckpointBinding(tenant model.TenantID, signedSeq int64, signedHash []byte, appended model.AuditEvent) error {
+	if appended.Seq == 0 {
+		return fmt.Errorf("audit: checkpoint binding for tenant %s: the ledger did not record the checkpoint (the append was dropped); refusing to commit", tenant)
+	}
+	if appended.TenantID != tenant {
+		return fmt.Errorf("audit: checkpoint binding for tenant %s: the appended event belongs to chain %q, not the signed tenant; refusing to commit", tenant, appended.TenantID)
+	}
+	if signedSeq == math.MaxInt64 {
+		return fmt.Errorf("audit: checkpoint binding for tenant %s: signed head seq %d has no representable successor; refusing to commit", tenant, signedSeq)
+	}
+	if want := signedSeq + 1; appended.Seq != want {
+		return fmt.Errorf("audit: checkpoint binding for tenant %s: the signature covers head seq %d, so the checkpoint belongs at seq %d, but it was appended at seq %d (the chain advanced after the head was read); refusing to commit", tenant, signedSeq, want, appended.Seq)
+	}
+	if !bytes.Equal(appended.PrevHash, signedHash) {
+		return fmt.Errorf("audit: checkpoint binding for tenant %s: the checkpoint at seq %d links to a predecessor hash other than the signed head's; refusing to commit", tenant, appended.Seq)
+	}
+	return nil
 }
 
 // CheckpointAll checkpoints every tenant's chain plus the system chain. It is the

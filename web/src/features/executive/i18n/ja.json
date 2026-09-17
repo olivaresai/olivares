@@ -35,11 +35,25 @@
     "costCaption": "選択した範囲内",
     "usage": "アクティブなエージェント",
     "usageCaption": "稼働中 {{live}} · 追跡中 {{entities}}",
+    "sourceRestricted": "{{source}} — お使いのロールでは閲覧できません",
+    "sourceUnavailable": "{{source}} — 読み込めませんでした",
+    "sourcePendingPaused": "{{source}} — クエリ一時停止中、再開を待っています",
+    "sourcePendingIdle": "{{source}} — クエリ未開始",
+    "partialWhy": "部分的なデータの理由",
     "risk": "未対応のリスク",
     "riskCaption": "重大／高 {{count}} 件",
     "silentEvasion": "サイレント回避 {{count}} 件",
     "compliance": "統制カバレッジ",
     "complianceCaption": "ギャップ {{gap}} 件 · 未マッピング {{unmapped}} 件"
+  },
+  "availability": {
+    "restricted": "{{source}}：お使いのロールでは閲覧できません。",
+    "unavailable": "{{source}}：読み込めませんでした。",
+    "pendingPaused": "{{source}}：クエリ一時停止中、再開を待っています。",
+    "pendingIdle": "{{source}}：クエリ未開始。",
+    "loading": "{{source}}：読み込み中。",
+    "partial": "{{source}}：数値を表示できます。部分的なデータです。",
+    "current": "{{source}}：数値を表示できます。"
   },
   "cost": {
     "title": "コスト",

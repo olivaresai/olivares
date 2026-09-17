@@ -6,6 +6,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -35,9 +36,19 @@ import (
 // external URL — the RP ID is the bare hostname and the origin the exact
 // scheme://host the browser sees. The library independently verifies the
 // client-data origin against it, so a spoofed Host can only fail the ceremony.
-func (s *Server) webauthnRP(r *http.Request) auth.WebAuthnRP {
+//
+// THE THIRD STATE, and it is the one that did not exist before: this deployment
+// declared a console address AND that address cannot be a relying party. That is
+// not permission to fall back to the request's Host — the operator named an
+// address, and deriving an authentication authority from a header instead would
+// be choosing one they did not. It refuses with the sentinel, which core/api
+// answers as a typed 503 carrying a remedy.
+func (s *Server) webauthnRP(r *http.Request) (auth.WebAuthnRP, error) {
+	if s.webauthnUnusable {
+		return auth.WebAuthnRP{}, fmt.Errorf("%w: the declared console address cannot be a relying party", auth.ErrWebAuthnRelyingParty)
+	}
 	if s.webauthn.ID != "" {
-		return s.webauthn
+		return s.webauthn, nil
 	}
 	origin := schemeHost(r)
 	host := r.Host
@@ -47,7 +58,7 @@ func (s *Server) webauthnRP(r *http.Request) auth.WebAuthnRP {
 	if u, err := url.Parse(origin); err == nil && u.Hostname() != "" {
 		host = u.Hostname()
 	}
-	return auth.WebAuthnRP{ID: host, DisplayName: "Olivares AI", Origins: []string{origin}}
+	return auth.WebAuthnRP{ID: host, DisplayName: "Olivares AI", Origins: []string{origin}}, nil
 }
 
 // sessionPrincipal returns the calling SESSION principal or writes the error:
@@ -80,7 +91,12 @@ func (s *Server) handleWebAuthnRegisterOptions(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	creation, err := s.authr.BeginWebAuthnRegistration(r.Context(), p, s.webauthnRP(r))
+	rp, err := s.webauthnRP(r)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	creation, err := s.authr.BeginWebAuthnRegistration(r.Context(), p, rp)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -101,7 +117,11 @@ func (s *Server) handleWebAuthnRegister(w http.ResponseWriter, r *http.Request) 
 		s.badRequest(w, r, "invalid JSON body: expected {credential: ...}")
 		return
 	}
-	rp := s.webauthnRP(r)
+	rp, rperr := s.webauthnRP(r)
+	if rperr != nil {
+		s.writeError(w, r, rperr)
+		return
+	}
 	if err := s.authr.FinishWebAuthnRegistration(r.Context(), p, rp, in.Credential, in.Name); err != nil {
 		s.logCeremonyFailure("registration", rp, err)
 		s.writeError(w, r, err)
@@ -117,7 +137,12 @@ func (s *Server) handleWebAuthnAuthOptions(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	assertion, err := s.authr.BeginWebAuthnStepUp(r.Context(), p, s.webauthnRP(r))
+	rp, err := s.webauthnRP(r)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	assertion, err := s.authr.BeginWebAuthnStepUp(r.Context(), p, rp)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -137,7 +162,11 @@ func (s *Server) handleWebAuthnAuthenticate(w http.ResponseWriter, r *http.Reque
 		s.badRequest(w, r, "invalid JSON body: expected {credential: ...}")
 		return
 	}
-	rp := s.webauthnRP(r)
+	rp, rperr := s.webauthnRP(r)
+	if rperr != nil {
+		s.writeError(w, r, rperr)
+		return
+	}
 	sess, err := s.authr.FinishWebAuthnStepUp(r.Context(), p, rp, in.Credential)
 	if err != nil {
 		s.logCeremonyFailure("step-up", rp, err)

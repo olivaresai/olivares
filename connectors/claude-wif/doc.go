@@ -35,7 +35,7 @@
 //     host writes to the ledger (docs/SECURITY-HARDENING.md). The composition root wires it; an
 //     attested assertion comes from connectors/spiffe's live JWT-SVID verifier (IDN-07).
 //
-// Read-first and minimal-data (docs/SECURITY-HARDENING.md-3). Every API call this connector makes is a
+// Read-first and minimal-data (docs/SECURITY-HARDENING.md §0-3). Every API call this connector makes is a
 // GET; it never creates or mutates an Anthropic object. It carries identity METADATA only
 // — ids, names, emails, roles, key hints — never a key secret, never a private key, never
 // the minted token at rest. Anthropic's WIF Admin API lists the federation

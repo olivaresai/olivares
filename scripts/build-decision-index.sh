@@ -305,6 +305,28 @@ PYEOF
 	case_rc "unknown_key_rejected" 1 "$f" build --no-db
 	case_grep "unknown_key_is_named" "superceded-by" "$f" build --no-db
 
+	# --- 9-bis: PROSA que abre con `---` no es una decision -------------------------------
+	# ⛔ Puso `main` en ROJO el 2026-09-04. Un documento historico que usa `---` como SEPARADOR
+	# 69 veces abre con uno en la linea 1; este parser lo tomaba por delimitador de front-matter
+	# y moria en el `### encabezado` de la linea 3. La distincion que lo separa sin debilitar el
+	# caso 9: un bloque SIN NI UNA clave del esquema no es front-matter de decision — es prosa.
+	# El caso 9 sigue rojo porque SU documento trae claves validas junto a la errata.
+	# Residuo, dicho y no escondido: un documento de decision con las CINCO claves mal escritas
+	# se saltaria en silencio. Medido como improbable, no como imposible.
+	local pr; pr="$(mkfixture)"
+	doc "$pr" P prosa-vecina vigente 2026-08-16 fran
+	printf -- '---\n\n### Premisa inicial\ntexto suelto\n\n---\n\n### otra seccion\n' > "$pr/design/PROSA.md"
+	# `build`, NO `check`, por la misma razon que el caso 9: sin indice escrito, `check` se niega
+	# por el NDJSON ausente y sale 1 ANTES de llegar al parser. Verde por el motivo equivocado.
+	case_rc "prose_opening_with_a_rule_is_not_a_decision" 0 "$pr" build --no-db
+	# ⛔ Y LA MITAD QUE IMPIDE QUE ESTO SEA UN AGUJERO: la decision VECINA sigue indexandose.
+	# Sin esta fila, un mutante que hiciera `return None` para TODO documento pasaria la fila de
+	# arriba con nota — y habria borrado el indice entero. Se asevera sobre el NDJSON, no sobre la
+	# salida: `build` escribe y no imprime, y mi primera version de esta fila usaba `case_grep`
+	# contra stdout, verde por el motivo equivocado en la direccion contraria.
+	rc=0; grep -qF '"decision":"prosa-vecina"' "$pr/design/DECISIONES.ndjson" || rc=1
+	case_assert "and_the_real_decision_next_to_it_still_lands" "$rc"
+
 	# --- 10: two VIGENTE under one key => refused at BUILD time (measured failure #1) ----
 	local g; g="$(mkfixture)"
 	doc "$g" F entitlement-corte vigente 2026-08-15 fran

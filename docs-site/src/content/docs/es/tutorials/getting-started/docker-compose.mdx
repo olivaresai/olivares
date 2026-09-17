@@ -23,20 +23,23 @@ documentados del stack (`deploy/compose/*.yml`), y el flujo de primer arranque q
 es el mismo que se verifica de extremo a extremo contra el binario en el
 [tutorial de nodo único](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Hasta la primera release, compila la imagen localmente">
-Las imágenes de release se publican en `docker.io/olivaresai/olivares` en Docker Hub (firmadas,
-fijadas por digest) **cuando se publique la primera release pública** — la ruta del registro
-está vacía hasta que se corte ese tag (el mismo contenido también se espeja en
-`ghcr.io/olivaresai/olivares`, idéntico por digest). Hoy, compila la misma
-imagen distroless endurecida desde el código fuente y apunta el stack a ella:
+<Aside type="caution" title="Hasta que existan las imágenes v26.9.0, compila en local">
+Una versión etiquetada anterior ya publicó imágenes firmadas. El canon de este árbol es **v26.9.0**. El
+testigo de superficies de instalación sigue registrando Docker Hub y GHCR como
+**not-published** para `26.9.0` hasta que corra el trabajo de release de esa
+etiqueta (`docs/releases/v26.9.0-install-surfaces.json`). La misma nota está en
+[Desplegar con Docker](/how-to/docker-deployment/). Hasta que existan las
+etiquetas `26.9.0`, compila la imagen distroless endurecida desde el código
+fuente y apunta el stack a ella:
 
 ```bash
 task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-Una vez que existan releases: establece `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>`
-y [verifícala](/how-to/verify-a-release/) primero — por digest, nunca un tag.
+Cuando exista la imagen `26.9.0`: establece
+`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` y
+[verifícala](/how-to/verify-a-release/) primero — por digest, nunca un tag.
 </Aside>
 
 ## 1. Levanta el stack de nodo único (SQLite)
@@ -46,7 +49,7 @@ y [verifícala](/how-to/verify-a-release/) primero — por digest, nunca un tag.
 1. Arráncalo:
 
    ```bash
-   docker compose -f deploy/compose/docker-compose.yml up -d
+   docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
    ```
 
    Lo que obtienes, por diseño:
@@ -56,7 +59,7 @@ y [verifícala](/how-to/verify-a-release/) primero — por digest, nunca un tag.
    | Puertos | `127.0.0.1:8443` (HTTPS: REST + UI web), `127.0.0.1:8444` (gRPC) — vinculados a **localhost en el host**; expón deliberadamente |
    | Datos | volumen nombrado `olivares-data` → `/var/lib/olivares` (almacén SQLite, clave de firma de auditoría, material TLS) |
    | Endurecimiento | corre como `65532:65532`, root de solo lectura, todas las capabilities descartadas, `no-new-privileges`, tmpfs `/tmp` |
-   | Healthcheck | ninguno dentro del contenedor (la imagen es distroless — sin shell). Sondea `/livez` y `/readyz` desde el host |
+   | Healthcheck | ejecución directa de `olivares readyz` dentro del binario — sin shell, curl ni wget. Sólo un HTTP 200 de `/readyz` local es saludable |
 
 2. Lee el token de configuración de un solo uso de los logs:
 

@@ -48,11 +48,24 @@ func (f *fakeDirectory) ReadDirectoryTombstone(
 	return *f.tombstone, true, nil
 }
 
+// currentUserReads answers every User as a present, active member of the
+// tenant so these fence tests keep measuring the fence and nothing else. The
+// eligibility rules themselves are measured against a real SQLite store in
+// communicationdirectoryeligibility_test.go.
+func currentUserReads() *communicationDirectoryReads {
+	return &communicationDirectoryReads{
+		user: func(context.Context, model.TenantID, model.ID, model.ID) (directoryUserWitness, error) {
+			return directoryUserWitness{Found: true, Active: true, Member: true, Version: 1}, nil
+		},
+	}
+}
+
 func directoryResolverForTest(f *fakeDirectory) *communicationDirectoryResolver {
 	return newCommunicationDirectoryResolver(
 		func(ctx context.Context, _ model.TenantID, fn func(store.DirectorySnapshotReader) error) error {
 			return fn(f)
 		},
+		currentUserReads(),
 		func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 	)
 }

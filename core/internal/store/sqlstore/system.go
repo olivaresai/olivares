@@ -22,9 +22,10 @@ import (
 // operations (provisioning, deletion, global verification). It is only reachable
 // from Store.System, which the engine alone holds.
 type systemScope struct {
-	s        *sqlStore
-	tx       *sql.Tx
-	poisoned error
+	lineageWriter *lineageWriteTracker
+	s             *sqlStore
+	tx            *sql.Tx
+	poisoned      error
 }
 
 // poison records a lifecycle-operation refusal on the transaction envelope.
@@ -59,7 +60,13 @@ func (sys *systemScope) bindFor(ctx context.Context, tenant model.TenantID) erro
 	// SQLite also needs the ordinary tenant pin for its tripwire triggers.
 	// bindDirectoryTenant additionally clears the one-transaction writer
 	// presentation there, so a generation can never survive a rebind.
-	return bindDirectoryTenant(ctx, sys.tx, sys.s.dia, tenant)
+	if err := bindDirectoryTenant(ctx, sys.tx, sys.s.dia, tenant); err != nil {
+		return err
+	}
+	if sys.lineageWriter != nil && sys.lineageWriter.started {
+		return sys.lineageWriter.arm(ctx, tenant)
+	}
+	return nil
 }
 
 // CreateOrg provisions a new tenant: it allocates the tenant id (which is also
@@ -68,6 +75,10 @@ func (sys *systemScope) CreateOrg(
 	ctx context.Context,
 	org model.Org,
 ) (_ model.Org, retErr error) {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return model.Org{}, err
+	}
+
 	defer func() { sys.poison(retErr) }()
 	// HA write-gate: provisioning a tenant is a write, so a standby must not
 	// do it. EnsureSystemTenant is deliberately NOT gated (it is the idempotent
@@ -100,6 +111,9 @@ func (sys *systemScope) CreateOrg(
 	// tenant, directory epoch, default workspace and audit-chain head. A partial
 	// tenant can therefore never escape CreateOrg.
 	if err := insertAuthorizationEpochRow(ctx, sys.tx, sys.s.dia, tenant); err != nil {
+		return model.Org{}, err
+	}
+	if err := insertLineageEpochs(ctx, sys.tx, sys.s.dia, tenant); err != nil {
 		return model.Org{}, err
 	}
 	if err := armDirectoryWriter(ctx, sys.tx, sys.s.dia, writer); err != nil {
@@ -193,6 +207,10 @@ func (sys *systemScope) insertDefaultWorkspaceRow(ctx context.Context, tenant mo
 // SQLite and the per-tenant CreateOrg seed are unaffected. The reserved system
 // tenant holds no business workspaces and is skipped.
 func (sys *systemScope) EnsureDefaultWorkspaces(ctx context.Context) error {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return err
+	}
+
 	// ListOrgsVisible, not ListOrgs, and this is the named exception rather than a
 	// convenience. boot.go RETURNS this error, so inheriting the fail-closed read
 	// would stop every Postgres deployment without --admin-dsn from booting at all —
@@ -294,6 +312,10 @@ func (sys *systemScope) insertOrgRow(ctx context.Context, org model.Org) error {
 // that holds auth and cross-tenant events is well-formed from sequence 1. It is a
 // no-op returning the existing row on subsequent boots.
 func (sys *systemScope) EnsureSystemTenant(ctx context.Context) (model.Org, error) {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return model.Org{}, err
+	}
+
 	if err := sys.bindFor(ctx, model.SystemTenantID); err != nil {
 		return model.Org{}, err
 	}
@@ -331,6 +353,10 @@ func (sys *systemScope) EnsureSystemTenant(ctx context.Context) (model.Org, erro
 // data_region back through the codec) therefore fails its own version CAS instead
 // of silently reverting the pin. The change is recorded to the tenant's audit chain.
 func (sys *systemScope) SetOrgRegion(ctx context.Context, tenant model.TenantID, region string) (model.Org, error) {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return model.Org{}, err
+	}
+
 	// HA write-gate: re-pinning a tenant is a write, so a standby must not do
 	// it — same gate as CreateOrg/DropTenant; inert on a single-node store.
 	if !sys.s.elector.active() {
@@ -389,6 +415,10 @@ func (sys *systemScope) SetOrgStatus(
 	tenant model.TenantID,
 	status model.LifecycleStatus,
 ) (_ model.Org, retErr error) {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return model.Org{}, err
+	}
+
 	defer func() { sys.poison(retErr) }()
 	// HA write-gate: withdrawing service is a write, so a standby must not
 	// do it — same gate as CreateOrg/SetOrgRegion/DropTenant.
@@ -633,6 +663,10 @@ func (sys *systemScope) listOrgsVisibleRows(
 // whose lifecycle declares RetainOnTenantDrop survive; purging them is the
 // separate retention path.
 func (sys *systemScope) DropTenant(ctx context.Context, tenant model.TenantID) (retErr error) {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return err
+	}
+
 	defer func() { sys.poison(retErr) }()
 	// HA write-gate: deleting a tenant is a write; a standby must not do it.
 	if !sys.s.elector.active() {
@@ -737,6 +771,19 @@ func (sys *systemScope) DropTenant(ctx context.Context, tenant model.TenantID) (
 		}
 		if d.AuthorizationFact && tenantDropAfterAuthorizationFactTestHook != nil {
 			if err := tenantDropAfterAuthorizationFactTestHook(d.Kind); err != nil {
+				return err
+			}
+		}
+	}
+	// Source deletions participate before their generation is retired.
+	if sys.s.dia.Name() == store.EnginePostgres {
+		if _, err := sys.tx.ExecContext(ctx, "SELECT public.olivares_lineage_drop($1)", tenant.String()); err != nil {
+			return err
+		}
+	} else {
+		for _, relation := range lineageRelations {
+			// #nosec G202 -- SQLite branch: the relation is relation.descriptor().Table, "core_"+r.table+"_lineage_epoch" over the compiled lineageRelations catalog (six literals, lineage_catalog.go:21); the tenant travels as the bound ? argument.
+			if _, err := sys.tx.ExecContext(ctx, "DELETE FROM main."+relation.descriptor().Table+" WHERE tenant_id=?", tenant.String()); err != nil {
 				return err
 			}
 		}
@@ -1020,7 +1067,7 @@ func tenantDropDescriptors(reg *registry) []model.EntityDescriptor {
 		// Append-only tables and explicitly retained mutable no-delete tables are
 		// durable evidence. Org and epoch have exact, separately ordered deletes.
 		if d.AppendOnly || d.RetainOnTenantDrop ||
-			d.Kind == orgDescriptor.Kind || d.Kind == model.DirectoryEpochKind {
+			d.Kind == orgDescriptor.Kind || d.Kind == model.DirectoryEpochKind || model.IsLineageEpochKind(d.Kind) {
 			continue
 		}
 		if d.AuthorizationFact {

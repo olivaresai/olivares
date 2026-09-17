@@ -29,6 +29,22 @@ Eine Edge-Beobachtung trägt nur Identifier und eine Read/Write-Klassifikation �
 
 Ein Connector importiert das Connector-SDK und sonst nichts aus dem Produkt. Er importiert niemals `/core` (die AGPL-Engine). Diese Grenze wird in CI durchgesetzt, und sie ist es, die Connectoren erlaubt, unter Apache-2.0 auszuliefern, und Dritten erlaubt, ihre eigenen ohne Copyleft-Reibung zu bauen. Dasselbe Connector-Binary läuft in-process oder out-of-process über gRPC identisch. Siehe [Open Core und Lizenzierung](/de/explanation/open-core-and-licensing/) für die vollständige Grenze.
 
+Mehrere Quellen derselben Connector-Art können jetzt gleichzeitig registriert
+und betrieben werden (`CHANGELOG.md` `[26.9.0]` Fixed). Die Runtime indizierte
+jede Quelle nach dem Descriptor-Namen des Connectors, sodass eine zweite
+Roster-Zeile einer Art persistiert und gelistet wurde — und die Engine sie
+ablehnte. Quellen werden jetzt unter dem Namen des Operators (das `name` der
+Roster-Zeile) registriert, mit dem Connector-Descriptor daneben. `grok-home-a`
+und `grok-home-b` öffnen mit eigener Konfiguration und
+Credential-Referenzen, betreiben eigene Connector-Instanz und Prozess und
+rotieren, fallen und stoppen unabhängig. `sources plan` / `validate`
+verkünden die Ein-Instanz-pro-Connector-Beschränkung nicht mehr, die die
+Engine nicht mehr anwendet. Zwei Identitätseinträge, die ein Connector
+bedient (`okta` und `entra` teilen `idp`) mit `as_source: true`, verdrahten
+jetzt beide. Das trennt für sich genommen nicht zwei Anbieter-Sessions oder
+Konfigurations-Homes Ende zu Ende — das ist
+[Eine Anbieter-Session betreiben](/how-to/operate-provider-sessions/).
+
 ## Provenienz und Konfidenz: warum die Quelle zählt
 
 Jede Edge erfasst, **welche Quelle sie erzeugt hat**, und ein **Konfidenz**-Niveau, und das Produkt zeigt beides, statt sie zu kollabieren. Ein `pg_audit`-READ und ein `mcp_annotation`-Hinweis sind nicht dieselbe Evidenz und werden niemals als dieselbe behandelt.

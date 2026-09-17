@@ -49,7 +49,7 @@
 // name (Azure applies the platform default). Enable RAI posture on the azure-activity
 // connector, not here.
 //
-// # Security posture (docs/SECURITY-HARDENING.md-3)
+// # Security posture (docs/SECURITY-HARDENING.md §0-3)
 //
 // Read-only: every call is a GET against the ARM control plane (Cost Management's Query is
 // a POST action that is a READ — the body is a query, never a mutation). It never reads

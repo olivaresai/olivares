@@ -90,7 +90,7 @@ Olivares AI は単一目的のツールではありません。Grafana、Backsta
 
 ### マップへの到達
 
-アクセスグラフの閲覧は**特権アクション**です。テナントスコープであり、エディターロール以上で利用可能で (最下位のビューアーロールでは決して不可)、**すべての読み取りが監査されます**。マップのルート — グラフとドリフト結果 — は安定コア契約には含まれず、独立した **beta** [module-route リファレンス](/reference/api-beta/)（`/openapi.beta.json` で提供）で公開されます。フィールドレベルの形状は型付き Go と TypeScript のインターフェースに存在します。permitted-versus-observed の結果はエンジンの `drift` ルート (`/v1/m/accessmap/drift`) で公開されます。別個の `diff` エンドポイントはありません。安定コア REST サーフェス — 製品独自の OpenAPI 3.1 契約からレンダリングされる 53 のパス — は [API リファレンス](/reference/api/) に文書化されています。モジュールの完全な一覧については [モジュールカタログ](/ja/reference/modules/overview/) を参照してください。
+アクセスグラフの閲覧は**特権アクション**です。テナントスコープであり、エディターロール以上で利用可能で (最下位のビューアーロールでは決して不可)、**すべての読み取りが監査されます**。マップのルート — グラフとドリフト結果 — は安定コア契約には含まれず、独立した **beta** [module-route リファレンス](/reference/api-beta/)（`/openapi.beta.json` で提供）で公開されます。フィールドレベルの形状は型付き Go と TypeScript のインターフェースに存在します。permitted-versus-observed の結果はエンジンの `drift` ルート (`/v1/m/accessmap/drift`) で公開されます。別個の `diff` エンドポイントはありません。安定コア REST サーフェス — 製品独自の OpenAPI 3.1 契約からレンダリングされる 54 のパス — は [API リファレンス](/reference/api/) に文書化されています。モジュールの完全な一覧については [モジュールカタログ](/ja/reference/modules/overview/) を参照してください。
 
 ## デプロイトポロジ
 

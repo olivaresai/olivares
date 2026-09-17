@@ -27,7 +27,7 @@
 // kind. Group/role memberships are NOT edges (no resource is touched), so they
 // only ever travel the typed Graph.
 //
-// Minimal data (docs/SECURITY-HARDENING.md-3). The Graph carries identity METADATA only: natural
+// Minimal data (docs/SECURITY-HARDENING.md §2-3). The Graph carries identity METADATA only: natural
 // references, display labels, the human/NHI classification, account status and a
 // small map of non-sensitive attributes. It NEVER carries credential material —
 // no passwords, no Vault secret values, no API-key secrets, no private keys. A

@@ -422,6 +422,90 @@ func TestAuditGapBlockPreservesInheritedPending(t *testing.T) {
 	}
 }
 
+// TestAuditGapPersistedEpisodeIsSealedWithTheBudgetOff is the runtime fact the upgrade
+// preflight's audit_spool_gaps obligation rests on, and it is measured here rather than
+// argued there.
+//
+// An episode is durable state. The configuration that CREATES one — a positive budget and
+// the degrade policy — is not the configuration that has to CONSUME it. auditLog.Append
+// reads the pending episode before it looks at any budget, and seals it OUTSIDE the budget
+// block, so a node restarted with the option switched off still has to write the signed
+// marker and clear the mutable row.
+//
+// That is why the preflight owes DELETE on audit_spool_gaps unconditionally. The earlier
+// reading tied DELETE to the creating configuration and would have accepted an application
+// role that opens the service and then fails 42501 on the first append meeting inherited
+// state. TestAuditGapBlockPreservesInheritedPending already shows the `block` half of the
+// same property; this covers the one where the budget is gone entirely, which is the
+// ordinary shape of "an operator turned the option off after an incident".
+func TestAuditGapPersistedEpisodeIsSealedWithTheBudgetOff(t *testing.T) {
+	ctx := context.Background()
+	dsn := filepath.Join(t.TempDir(), "budget-off-recovery.db")
+	initial := openSQLiteSpoolTest(t, store.Config{DSN: dsn})
+	// The SYSTEM witness is a precondition of REOPENING a store that already holds a
+	// tenant, and this test reopens twice. Its sibling gap tests predate that
+	// requirement and are red on this baseline for exactly that reason; bootstrapping it
+	// here keeps this case measuring the episode-recovery property rather than
+	// re-reporting a defect that belongs elsewhere.
+	if err := initial.System(ctx, func(sys store.SystemScope) error {
+		_, serr := sys.EnsureSystemTenant(ctx)
+		return serr
+	}); err != nil {
+		t.Fatalf("bootstrap the SYSTEM tenant: %v", err)
+	}
+	tenant := provisionTenant(t, initial, "gap-recovery")
+	if err := initial.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	degraded := openSQLiteSpoolTest(t, store.Config{
+		DSN: dsn, Clock: gapTestClock(), SignEvent: fakeGapSigner,
+		AuditSpoolMaxBytes: 1, AuditSpoolOnFull: store.AuditSpoolDegrade,
+	})
+	appendDroppedEvents(t, degraded, tenant, 2)
+	pending, ok := readPendingAuditGap(t, degraded, tenant)
+	if !ok {
+		t.Fatal("fixture: budget+degrade recorded no episode, so there is nothing to recover")
+	}
+	if err := degraded.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// THE OPTION IS OFF. No budget and no degrade policy: recordDrop is unreachable from
+	// here, so nothing this store does can create an episode. The one it inherited is
+	// still its problem.
+	reopened := openSQLiteSpoolTest(t, store.Config{
+		DSN: dsn, Clock: gapTestClock(), SignEvent: fakeGapSigner,
+	})
+	if inherited, stillPending := readPendingAuditGap(t, reopened, tenant); !stillPending || inherited != pending {
+		t.Fatalf("the episode did not survive the restart intact (%+v, pending=%t), so this test would prove nothing", inherited, stillPending)
+	}
+	before := readAuditSpoolState(t, reopened, tenant)
+
+	if err := reopened.Mutate(ctx, tenant, func(sc store.Scope) error {
+		_, err := sc.Audit().Append(ctx, model.AuditDraft{
+			Actor: "user:recover", ActorKind: model.ActorUser, Action: "agent.update",
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("ordinary unsigned append with an inherited episode and no budget: %v", err)
+	}
+
+	if gap, stillPending := readPendingAuditGap(t, reopened, tenant); stillPending {
+		t.Fatalf("the inherited episode survived: %+v — with no budget the seal is the direct path, and clearing it is a DELETE", gap)
+	}
+	after := readAuditSpoolState(t, reopened, tenant)
+	if after.rows != before.rows+2 {
+		t.Fatalf("expected the signed marker AND the incoming event: rows %d -> %d", before.rows, after.rows)
+	}
+	rows := readTenantAuditRows(t, reopened, tenant)
+	marker := rows[len(rows)-2]
+	if marker.ev.Action != store.ActionAuditGap {
+		t.Fatalf("the row before the incoming event is %q, want the gap marker", marker.ev.Action)
+	}
+	requireGapInt(t, decodeGapMeta(t, marker.meta), store.GapMetaCount, pending.dropped)
+}
+
 func TestAuditGapEmptyChainEpisode(t *testing.T) {
 	ctx := context.Background()
 	st := openSQLiteSpoolTest(t, store.Config{

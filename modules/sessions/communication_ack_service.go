@@ -72,7 +72,7 @@ type DirectNoticeDeliveryAckResult struct {
 	Late            bool                  `json:"late"`
 	Fulfillment     FulfillmentProjection `json:"fulfillment"`
 	AuditSeq        int64                 `json:"audit_seq"`
-	Replayed        bool                  `json:"-"`
+	Replayed        bool                  `json:"replayed"`
 	messageEventSeq int64
 }
 
@@ -237,9 +237,8 @@ func directNoticeAckReplayCandidateSealed(candidate directNoticeAckReplayCandida
 	return err == nil && candidate.seal != ([sha256.Size]byte{}) && candidate.seal == commitment
 }
 
-// AcknowledgeDirectNoticeDelivery is the future handler-facing boundary. The
-// product readiness conjunction deliberately remains OFF; the private seam
-// below bypasses only that conjunction and retains exact request authority.
+// AcknowledgeDirectNoticeDelivery is the handler-facing boundary. The private
+// seam below bypasses only readiness and retains exact request authority.
 func (m *Module) AcknowledgeDirectNoticeDelivery(
 	ctx context.Context,
 	scope DirectoryScopeRef,
@@ -311,9 +310,16 @@ func (m *Module) mutateDirectNoticeAckWithCarrier(
 	if fn == nil {
 		return communicationTransactionUnavailable("delivery Ack mutation callback", nil)
 	}
+	claims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, normalized.scope.TenantID,
+		communicationClaimsForPrincipal(normalized.principal),
+	)
+	if err != nil {
+		return err
+	}
 	if normalized.carrier.class == "" {
 		return m.mutateCommunicationWithNarrowedAuthority(
-			ctx, question, bound, CommunicationClaimAuthoritySnapshot{}, window,
+			ctx, question, bound, claims, window,
 			func(tx *communicationTx, consumed communicationRequestAuthorityContext) error {
 				return fn(tx, consumed, nil)
 			},
@@ -328,7 +334,7 @@ func (m *Module) mutateDirectNoticeAckWithCarrier(
 		return err
 	}
 	request, consumed, err := bound.transactionSnapshot(
-		question, CommunicationClaimAuthoritySnapshot{},
+		question, claims,
 	)
 	if err != nil {
 		return err
@@ -350,7 +356,7 @@ func (m *Module) mutateDirectNoticeAckWithCarrier(
 			return err
 		}
 		tx, err := newCommunicationTxWithAuthority(
-			ctx, confined, request, CommunicationClaimAuthoritySnapshot{},
+			ctx, confined, request, claims,
 		)
 		if err != nil {
 			return err
@@ -401,9 +407,6 @@ func (m *Module) acknowledgeDirectNoticeDeliveryWithAuthorityBinder(
 			ErrCommunicationEvidenceUnknown,
 			"delivery-write authority context crossed its exact request",
 		)
-	}
-	if err := requireDirectNoticeUserBackedPrincipal(inspected); err != nil {
-		return DirectNoticeDeliveryAckResult{}, err
 	}
 	normalized, err := normalizeDirectNoticeDeliveryAckCommand(
 		scope, inspected.principal, deliveryID, cmd,
@@ -570,14 +573,10 @@ func normalizeDirectNoticeDeliveryAckCommand(
 	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
 		return directNoticeAckNormalizedCommand{}, err
 	}
-	if principal.UserID == "" || principal.AgentExternalID != "" || principal.SessionID != "" ||
-		principal.SessionRunRef != "" || principal.SessionFence != 0 ||
-		principal.SessionWorkspaceID != "" || principal.PurposeRestricted || principal.System ||
-		principal.SystemActorRef != "" || principal.SystemGrantAgentID != "" ||
-		!validCanonicalCommunicationID(deliveryID) {
+	if principal.System || !validCanonicalCommunicationID(deliveryID) {
 		return directNoticeAckNormalizedCommand{}, communicationError(
 			ErrInvalidCommunicationModel,
-			"DirectNotice Ack requires a claim-free authenticated User and exact Delivery",
+			"DirectNotice Ack requires an authenticated directory principal and exact Delivery",
 		)
 	}
 	expectedVersion, err := parseDirectNoticeAckETag(cmd.IfMatch)
@@ -600,9 +599,17 @@ func normalizeDirectNoticeDeliveryAckCommand(
 			ErrInvalidCommunicationModel, "DirectNotice Ack command scope is invalid",
 		)
 	}
-	actorRaw, err := canonicalJSON(CommunicationActorRef{
-		Kind: ActorUser, Ref: principal.UserID.String(),
-	})
+	actorKind := ActorUser
+	actorRef := principal.UserID.String()
+	if principal.SessionID != "" {
+		actorKind, actorRef = ActorSession, principal.SessionID
+	} else if principal.AgentExternalID != "" {
+		actorKind, actorRef = ActorAgent, principal.AgentExternalID
+	}
+	actorRaw, err := canonicalJSON(struct {
+		Kind CommunicationActorKind `json:"kind"`
+		Ref  string                 `json:"ref"`
+	}{Kind: actorKind, Ref: actorRef})
 	if err != nil {
 		return directNoticeAckNormalizedCommand{}, err
 	}

@@ -198,13 +198,24 @@ resource "aws_iam_role_policy" "execution_secrets" {
       # error de AWS habla de KMS, no del secreto, así que el diagnóstico sale caro.
       # `ViaService` lo acota a que la clave sólo sirva cuando quien descifra es el propio
       # servicio de secretos, y no para cualquier otro uso.
+      #
+      # ⛔ LA REGIÓN ERA UN LITERAL `us-east-1` AQUÍ Y EN LOS CUATRO `awslogs-region`, y el
+      # módulo tenía `data.aws_region.current` desde antes. Unificado el 2026-09-02, los
+      # cinco a la vez, tras el contraste `sol max`: la raíz ACEPTA una región
+      # (`var.region`, `deploy/aws/variables.tf:4-8`) y el proveedor la usa, así que un
+      # literal aquí no es una constante — es una suposición sobre el llamador. En otra
+      # región `ViaService` no casa y la lectura del secreto falla con un error de KMS que
+      # ni siquiera nombra al secreto, y los `awslogs-region` apuntan a un grupo de logs que
+      # allí no existe. Se cambian los CINCO en el mismo commit a propósito: dejar uno
+      # derivado y cuatro literales es peor que cinco literales, porque el siguiente que lea
+      # el fichero no sabrá cuál es el criterio.
       var.secrets_kms_key_arn == "" ? [] : [{
         Sid      = "DecryptOnlyThroughTheSecretsService"
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]
         Resource = var.secrets_kms_key_arn
         Condition = {
-          StringEquals = { "kms:ViaService" = "secretsmanager.us-east-1.amazonaws.com" }
+          StringEquals = { "kms:ViaService" = "secretsmanager.${data.aws_region.current.name}.amazonaws.com" }
         }
       }],
     )
@@ -243,6 +254,9 @@ resource "aws_ecs_task_definition" "cp" {
       { name = "ENGINE_BASE_URL", value = var.engine_base_url },
       { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_endpoint },
       { name = "CLOUD_OPERATOR_ALERT_TO", value = var.operator_alert_to },
+      # Not secret, optional in the binary, declared here so the value is reviewed in the diff:
+      # the client-slot budget for this ONE task's nine runtime pools, validated before migrations.
+      { name = "CLOUD_CP_MAX_POOL_CONNECTIONS", value = tostring(var.cloud_cp_max_pool_connections) },
     ]
 
     # ⛔ Y `DATABASE_URL` NO ESTÁ, Y ESO ES UNA DECISIÓN, NO UN OLVIDO: el plano de control
@@ -279,7 +293,7 @@ resource "aws_ecs_task_definition" "cp" {
       logDriver = "awslogs"
       options = {
         awslogs-group         = aws_cloudwatch_log_group.tasks.name
-        awslogs-region        = "us-east-1"
+        awslogs-region        = data.aws_region.current.name
         awslogs-stream-prefix = "cp"
       }
     }
@@ -337,7 +351,7 @@ resource "aws_ecs_task_definition" "engine" {
       logDriver = "awslogs"
       options = {
         awslogs-group         = aws_cloudwatch_log_group.tasks.name
-        awslogs-region        = "us-east-1"
+        awslogs-region        = data.aws_region.current.name
         awslogs-stream-prefix = "dsn-init"
       }
     }
@@ -364,7 +378,7 @@ resource "aws_ecs_task_definition" "engine" {
       logDriver = "awslogs"
       options = {
         awslogs-group         = aws_cloudwatch_log_group.tasks.name
-        awslogs-region        = "us-east-1"
+        awslogs-region        = data.aws_region.current.name
         awslogs-stream-prefix = "engine"
       }
     }
@@ -484,4 +498,230 @@ resource "aws_appautoscaling_policy" "engine_cpu" {
     }
     target_value = 70
   }
+}
+
+# ─── La tarea de UN SOLO USO que provisiona los roles de Postgres ────────────
+#
+# `cloud/control-plane/deploy/cloud-control-roles.sql` tiene que correr como SUPERUSUARIO
+# ANTES del primer arranque del plano de control: la migración 009 se niega si el owner no
+# existe, y el plano de control migra al arrancar con la identidad MIGRATOR
+# (`cmd/cloud-cp/main.go:111`), que no es superusuario. Y no había NINGÚN camino para ese
+# paso — la RDS es `publicly_accessible = false` y está en subredes privadas,
+# `enable_execute_command` es false en los dos servicios, y no hay bastión ni endpoints de
+# SSM (los de interfaz son ecr.api, ecr.dkr, logs y secretsmanager). **Cortaba la secuencia
+# entre APPLY 1 y APPLY 2**, que no es un detalle de procedimiento.
+#
+# ⛔ Y LLEVA SU PROPIO ROL DE EJECUCIÓN A PROPÓSITO — NO el `-exec` de arriba. Este paso
+# necesita la credencial del MASTER de RDS. Colgar ese permiso del rol que usan los
+# servicios de larga duración le daría autoridad de SUPERUSUARIO al servicio que atiende
+# tráfico, PARA SIEMPRE, a cambio de un paso que corre UNA VEZ. El rol de aquí no lo asume
+# ningún servicio: sólo lo nombra esta task definition.
+#
+# ⚠ Y LA TAREA NO SE DEJA APROVISIONADA, Y ESO ES UN PASO, NO UNA INTENCIÓN. Su valor es
+# que existe mientras corre y deja rastro en el log; si se queda parada en el estate, la
+# task definition sigue REGISTRADA y `ACTIVE`, reutilizable por cualquiera que pueda
+# invocarla, y el rol sigue pudiendo leer la credencial del master — es decir, vuelve a ser
+# la vía permanente que este rol propio existe para evitar.
+#
+# ⇒ EL PASO DE RETIRADA ES UN APPLY MÁS, y es el que cierra el ciclo: en cuanto el `run-task`
+# ha corrido y su log dice que los roles están, se vuelve a aplicar con `roles_task_image = ""`
+# y los cuatro recursos desaparecen (`count = 0`). Sin ese apply, «no se deja aprovisionada»
+# es una frase. Lo levantó el contraste `sol max` del 2026-09-02: la secuencia del diseño
+# acababa en el `run-task` y no en la retirada.
+#
+# Sin imagen no existe nada (`count = 0`), igual que el resto del módulo: un apply de hoy
+# no aprovisiona ninguno de estos cuatro recursos.
+resource "aws_iam_role" "roles_oneshot" {
+  count = var.roles_task_image == "" ? 0 : 1
+  name  = "${var.name}-roles-oneshot-exec"
+
+  # ⛔ LA MISMA PRECONDICIÓN QUE LA POLICY, Y NO ES REDUNDANTE. Estaba SÓLO en la policy, y
+  # el contraste `sol max` lo midió: si el ARN llega DESCONOCIDO al planificar y vacío al
+  # aplicar, la guarda se difiere al apply y sólo bloquea **el recurso que la lleva** — el
+  # rol, su attachment y la task definition son hermanos, no descendientes, y OpenTofu puede
+  # haberlos creado ya cuando la policy falla. El resultado es medio estate: un rol de
+  # ejecución sin la policy que le da sentido, en pie, y un apply en rojo.
+  lifecycle {
+    precondition {
+      condition     = var.roles_task_image == "" || var.master_user_secret_arn != ""
+      error_message = "roles_task_image is set but master_user_secret_arn arrives empty: the task would start and fail to read the RDS master credential."
+    }
+  }
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "roles_oneshot" {
+  count      = var.roles_task_image == "" ? 0 : 1
+  role       = aws_iam_role.roles_oneshot[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "roles_oneshot_master" {
+  count = var.roles_task_image == "" ? 0 : 1
+  name  = "${var.name}-roles-oneshot-master"
+  role  = aws_iam_role.roles_oneshot[0].id
+
+  # Mismo motivo que la precondición de `execution_secrets`: la imagen se conoce al
+  # planificar y el ARN del secreto del master no, así que los dos hechos no pueden
+  # derivar uno del otro. Si hay imagen, el ARN tiene que llegar; se comprueba al aplicar,
+  # que es cuando se conoce, y para ahí.
+  lifecycle {
+    precondition {
+      condition     = var.roles_task_image == "" || var.master_user_secret_arn != ""
+      error_message = "roles_task_image is set but master_user_secret_arn arrives empty: the task would start and fail to read the RDS master credential."
+    }
+  }
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # Sólo LEER EL VALOR, y sólo el de esa ÚNICA entrada: la que AWS gestiona con la
+        # contraseña del master (`manage_master_user_password = true`). Ni comodín en la
+        # acción ni `*` en el recurso — ese secreto es superusuario de la base de datos.
+        Sid    = "ReadOnlyTheOneRdsMasterEntry"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        # ⛔ DOS ENTRADAS, Y LA SEGUNDA NO AFLOJA NADA: es la ranura que el propio plano de
+        # control ya lee con su rol `-exec`, así que esta tarea no alcanza ninguna autoridad
+        # que otro no tuviera. La del master SÍ es exclusiva suya, y por eso el rol es
+        # propio. Lista acotada: ni comodín en la acción ni `*` en el recurso.
+        Resource = compact([var.master_user_secret_arn, var.cp_databases_secret_arn])
+      },
+      {
+        # ⛔ ACOTADO A **UNA CLAVE**, Y AQUÍ DECÍA `Resource = ["*"]`. Retirado el 2026-09-02
+        # tras el contraste `sol max`, que lo midió en las dos mitades y tenía razón en las
+        # dos: (a) la entrada del MASTER la cifra la clave GESTIONADA de AWS —`modules/data`
+        # pone `manage_master_user_password = true` y **no** fija `master_user_secret_kms_key_id`
+        # (`:78`)—, y para esa clave el principal no necesita ningún `kms:Decrypt` propio:
+        # lo concede la política de la clave a través del servicio. O sea, el permiso ancho
+        # ni siquiera hacía falta para lo que decía cubrir; (b) `ViaService` acota el
+        # SERVICIO, no la clave, la cuenta ni el secreto — así que un `*` seguía alcanzando
+        # cualquier clave cuya otra mitad de autorización lo admitiera.
+        #
+        # Lo que SÍ lo necesita es la ranura `cloud-cp-databases`, cifrada con NUESTRA CMK
+        # (`modules/secrets`: `kms_key_id = aws_kms_key.secrets.arn`): leer un secreto
+        # cifrado con una CMK exige `kms:Decrypt` sobre esa clave AL PRINCIPAL que lee. Es
+        # exactamente el mismo razonamiento —y la misma forma— que `execution_secrets`.
+        Sid      = "DecryptOnlyTheSecretsKeyAndOnlyThroughSecretsManager"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = [var.secrets_kms_key_arn]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "secretsmanager.${data.aws_region.current.name}.amazonaws.com" }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_ecs_task_definition" "roles_oneshot" {
+  count                    = var.roles_task_image == "" ? 0 : 1
+  family                   = "${var.name}-roles-oneshot"
+
+  # Misma guarda que el rol y que la policy, por la misma razón: los tres son hermanos y
+  # una precondición sólo detiene al recurso que la lleva.
+  lifecycle {
+    precondition {
+      condition     = var.roles_task_image == "" || var.master_user_secret_arn != ""
+      error_message = "roles_task_image is set but master_user_secret_arn arrives empty: the task would start and fail to read the RDS master credential."
+    }
+  }
+
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.roles_oneshot[0].arn
+
+  # Sin `task_role_arn`: el contenedor no llama a ninguna API de AWS. Lo único que
+  # necesita credencial es la INYECCIÓN del secreto, y ésa la hace el agente de ECS con el
+  # rol de ejecución antes de arrancar el proceso.
+  container_definitions = jsonencode([{
+    name      = "roles"
+    essential = true
+    image     = var.roles_task_image
+
+    # ⛔ EL MASTER NO BASTA: SIN LAS DIEZ, ESTA TAREA NO PUEDE HACER SU TRABAJO.
+    # `cloud-control-roles.sql` exige un `-v <rol>_password=…` por cada rol de login.
+    #
+    # ⛔ CORREGIDO EL 2026-09-02: aquí decía que sin ellas «el paso SALE EN VERDE y no hace
+    # nada». **Es falso en este árbol.** Ese defecto se curó el 2026-08-17 (`280326b45`) y hoy
+    # las diez guardas del SQL ejecutan `SELECT 1/0` bajo `ON_ERROR_STOP`, así que la tarea
+    # falla con código distinto de cero. Lo levantó el contraste `sol max` (F-10); yo había
+    # leído el comentario del SQL —que justifica la cura— como si describiera el estado actual.
+    # Lo que sigue siendo cierto: sin las diez la tarea **no puede** provisionar los roles, y
+    # eso se descubre en el `run-task`, con el estate ya aplicado.
+    #
+    # Las diez viven en la ranura `cloud-cp-databases`, cuyas claves son las MISMAS que lee
+    # el plano de control (`DATABASE_<X>_URL`, arriba). Se leen de ahí y no de otro sitio
+    # **para que las contraseñas que este paso fija y las que luego usa el servicio sean por
+    # construcción las mismas**: dos fuentes serían dos verdades y el desacuerdo saldría
+    # como un fallo de autenticación días después.
+    #
+    # ⛔ Y LA IMAGEN QUE LO HACE YA EXISTE — este comentario decía «la imagen todavía no
+    # existe» y describía un contrato que nadie cumplía. Es
+    # `cloud/control-plane/deploy/Dockerfile.roles`, dedicada, con base fijada por digest y el
+    # major de la RDS, y su lanzador es `roles-oneshot.sh`, que:
+    #
+    #   · DERIVA del propio SQL qué credenciales hacen falta —las parejas
+    #     `ALTER ROLE <rol> WITH LOGIN PASSWORD :'<variable>'`— porque la correspondencia es
+    #     IRREGULAR (`cloud_cp_sweeper_ro` usa `cloud_cp_sweeper_password`, sin el `_ro`);
+    #   · casa cada rol con la URL cuyo USUARIO es ese rol, y **para antes de invocar psql**
+    #     si falta una, en vez de dejar que el `\quit` del SQL convierta la ausencia en un
+    #     cero;
+    #   · y al terminar **compara el conjunto de nombres** que el SQL crea con el que hay, y
+    #     **se conecta como cada rol** con la contraseña que acaba de instalar — porque
+    #     «existe» no es «sirve», y porque un login es la única prueba de que la credencial
+    #     llegó intacta. (Decía «cuenta los roles»: eso describía una versión anterior, que
+    #     comparaba cardinalidades y que un rol rancio del mismo prefijo satisfacía.)
+    #
+    # Su banco es `scripts/test-roles-oneshot.sh` (`task lint:roles-oneshot`), que corre sin
+    # docker y sin Postgres: lo que verifica es el control de flujo. Y que las diez estén
+    # SUPLIDAS aquí lo comprueba `check-aws-estate.sh` contra el propio SQL.
+    # ⛔ EL COMANDO VA AQUI Y NO SOLO EN LA IMAGEN. La imagen trae un `CMD` seguro, pero el
+    # sitio donde se revisa que esta tarea corre EL LANZADOR y no otra cosa es el diff del
+    # estate — y el gate falla si esta task definition no lo declara. Es la misma razon por la
+    # que `dsn-init`, quince lineas mas arriba, lleva su `entryPoint` y su `command` escritos.
+    entryPoint = ["/bin/sh"]
+    command    = ["/opt/olivares/roles-oneshot.sh"]
+
+    secrets = concat(
+      # ⛔ DOS CLAVES Y NO EL JSON ENTERO, y eso quita codigo en vez de anadirlo: la entrada
+      # que AWS gestiona para el master es un JSON con `username` y `password`, y ECS sabe
+      # sacar UNA clave con la forma `arn:…:secret:nombre:clave::`. Inyectando las dos por
+      # separado, la imagen no necesita ningun analizador de JSON —ni `jq`, que habria sido un
+      # paquete mas corriendo junto a la credencial del master— y el analisis lo hace quien ya
+      # sabe hacerlo. Es la misma forma que usan las diez de abajo y las del plano de control.
+      [
+        { name = "PGMASTER_USER", valueFrom = "${var.master_user_secret_arn}:username::" },
+        { name = "PGMASTER_PASSWORD", valueFrom = "${var.master_user_secret_arn}:password::" },
+      ],
+      [for k in [
+        "ADMIN_URL", "BILLING_URL", "EXPORTER_URL", "IDEMPOTENCY_URL", "MIGRATOR_URL",
+        "NOTIFIER_URL", "POLLER_URL", "RESOLVER_URL", "SWEEPER_URL", "TENANT_URL",
+        ] : {
+        name      = "DATABASE_${k}"
+        valueFrom = "${var.cp_databases_secret_arn}:DATABASE_${k}::"
+      }],
+    )
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.tasks.name
+        awslogs-region        = data.aws_region.current.name
+        awslogs-stream-prefix = "roles-oneshot"
+      }
+    }
+  }])
+
+  tags = merge(var.tags, { Name = "${var.name}-roles-oneshot" })
 }

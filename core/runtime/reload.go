@@ -14,6 +14,7 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	"github.com/olivaresai/olivares/sdk"
+	"github.com/olivaresai/olivares/sdk/event"
 	sdkplugin "github.com/olivaresai/olivares/sdk/plugin"
 )
 
@@ -42,15 +43,26 @@ import (
 // SourceInfo is a non-secret snapshot of one live source, for diffing desired
 // configuration against what is actually running (the reconciler's input).
 type SourceInfo struct {
-	// Name is the connector's Descriptor name — the runtime's identity for the
-	// source (NOT the operator's spec name, which the runtime never sees).
+	// Name is the source's REGISTRATION name — the runtime's identity for THIS
+	// source. For a source registered by the composition root it is the operator's
+	// roster name (so two rows of one kind are two entries here); for a legacy,
+	// name-less registration it is still the connector's Descriptor name.
 	Name string
+	// Component is the connector's Descriptor name, kept SEPARATELY: it says which
+	// connector serves this source, never which source this is. Two registrations
+	// of one kind share it. Inspection and diagnosis read it; nothing keys on it.
+	Component string
 	// Tenant is the business tenant its observations are stamped with.
 	Tenant string
 	// Poll is the re-run interval (0 = one-shot/streaming).
 	Poll time.Duration
 	// Status is the current lifecycle state.
 	Status Status
+	// Registration is the roster snapshot the source was REGISTERED with (B1):
+	// nil for a legacy or merely named registration. It is what the composition
+	// root reports as "the revision this node applied" — the fact a binding is
+	// validated against — so it comes from the runtime, not from bookkeeping.
+	Registration *event.SourceRegistration
 }
 
 // LiveSourceInventory returns a snapshot of every source currently registered,
@@ -60,9 +72,22 @@ func (r *Runtime) LiveSourceInventory() []SourceInfo {
 	defer r.mu.Unlock()
 	out := make([]SourceInfo, 0, len(r.sources))
 	for _, s := range r.sources {
-		out = append(out, SourceInfo{Name: s.name, Tenant: s.tenant, Poll: s.poll, Status: s.status})
+		out = append(out, SourceInfo{Name: s.name, Component: s.component, Tenant: s.tenant, Poll: s.poll, Status: s.status, Registration: s.registration.Clone()})
 	}
 	return out
+}
+
+// SourceIsRegistered reports whether a source is currently registered under this
+// REGISTRATION name. A reconciler needs it because a prepared source (and, for a
+// plugin, its subprocess) is consumed by whichever of add/replace it is handed to:
+// the add-or-rotate decision has to be made before the call, from what is really
+// wired, not from the caller's own bookkeeping — which a failed remove can leave
+// pointing at nothing.
+func (r *Runtime) SourceIsRegistered(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.srcIndex[name]
+	return ok
 }
 
 // AddSourceLive registers and starts an in-process source connector while the
@@ -73,7 +98,19 @@ func (r *Runtime) LiveSourceInventory() []SourceInfo {
 func (r *Runtime) AddSourceLive(ctx context.Context, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.addSourceLiveLocked(ctx, conn, cfg, tenant, interval, nil)
+	return r.addSourceLiveLocked(ctx, conn.Descriptor().Name, conn, cfg, tenant, interval, nil, nil)
+}
+
+// AddSourceLiveNamed is AddSourceLive with the registration name supplied by the
+// composition root, so a second source of an already-running connector kind is a
+// NEW source rather than a duplicate-identity refusal.
+func (r *Runtime) AddSourceLiveNamed(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) error {
+	if err := validRegistrationName(name); err != nil {
+		return err
+	}
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+	return r.addSourceLiveLocked(ctx, name, conn, cfg, tenant, interval, nil, nil)
 }
 
 // ReplaceSourceLive rotates a running source IN PLACE: the connector whose
@@ -85,14 +122,30 @@ func (r *Runtime) AddSourceLive(ctx context.Context, conn sdk.SourceConnector, c
 func (r *Runtime) ReplaceSourceLive(ctx context.Context, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.replaceSourceLiveLocked(ctx, conn, cfg, tenant, interval, nil)
+	return r.replaceSourceLiveLocked(ctx, conn.Descriptor().Name, conn, cfg, tenant, interval, nil, nil)
+}
+
+// ReplaceSourceLiveNamed rotates the source REGISTERED UNDER name in place. The
+// replacement connector need not be of the same kind: a roster row that changed
+// its kind rotates exactly one source — its own — because the registration name,
+// not the descriptor, is the identity. Deny-closed as ever: the candidate is
+// Open()ed first and a failure leaves the running source untouched.
+func (r *Runtime) ReplaceSourceLiveNamed(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration) error {
+	if err := validRegistrationName(name); err != nil {
+		return err
+	}
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+	return r.replaceSourceLiveLocked(ctx, name, conn, cfg, tenant, interval, nil, nil)
 }
 
 // RemoveSourceLive quiesces, closes and unregisters a single running source by
-// its Descriptor name. It cancels only that source's gather goroutine,
+// its REGISTRATION name — the operator's roster name for a named source,
+// the connector's Descriptor name for a legacy one. It cancels only that source's gather goroutine,
 // waits for it to drain (bounded by ctx — on timeout it closes anyway, matching
 // Stop), Closes the connector once, Kills its plugin subprocess if any, and frees
-// the name so a source of the same kind can be re-added.
+// the name so a source can be re-added under it. Its siblings — including other
+// sources of the SAME connector kind — are untouched.
 func (r *Runtime) RemoveSourceLive(ctx context.Context, name string) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
@@ -118,21 +171,30 @@ func (r *Runtime) RemoveSourceLive(ctx context.Context, name string) error {
 
 // PreparedSource is a source connector that has been constructed (and, for a
 // plugin, its subprocess launched) but NOT yet wired into the engine. It
-// lets a reconciler learn the connector's identity (Name) BEFORE deciding whether
-// this is an add or a same-identity rotate, so two distinct desired sources that
-// would collide on one connector identity (e.g. two in-process sources of the
-// same kind) are rejected honestly instead of silently rotating each other. A
-// prepared source MUST end up either passed to AddPreparedSource /
-// ReplacePreparedSource or released with Discard, so a launched plugin subprocess
-// is never leaked.
+// lets a reconciler learn the CONNECTOR's identity (ComponentName) before wiring —
+// which is what plugin diagnosis, admission and honest reporting need — while the
+// SOURCE's identity stays the registration name the reconciler already holds. A
+// prepared source MUST end up either passed to AddPreparedSourceNamed /
+// ReplacePreparedSourceNamed (or their legacy twins) or released with Discard, so
+// a launched plugin subprocess is never leaked.
 type PreparedSource struct {
 	rt     *Runtime
 	conn   sdk.SourceConnector
 	client *goplugin.Client // nil for an in-process source
 }
 
-// Name is the connector's Descriptor name — its identity in the engine.
-func (p *PreparedSource) Name() string { return p.conn.Descriptor().Name }
+// ComponentName is the connector's Descriptor name — WHICH CONNECTOR this is, not
+// which source. An out-of-process plugin self-describes, so this is the first
+// point at which the host learns it; it is kept for inspection and diagnosis and
+// is never wrapped or faked, because plugin validation and admission depend on it.
+func (p *PreparedSource) ComponentName() string { return p.conn.Descriptor().Name }
+
+// Name is the LEGACY accessor for ComponentName, kept for existing callers.
+//
+// Deprecated: it reads as the source's identity and is not — it is the
+// connector's. Use ComponentName for the descriptor; the source's identity is the
+// registration name the caller supplies to AddPreparedSourceNamed.
+func (p *PreparedSource) Name() string { return p.ComponentName() }
 
 // Discard reaps a prepared source that will not be wired: it kills the plugin
 // subprocess (if any) AND releases its confinement (cgroup subtree + dir), so an
@@ -221,7 +283,44 @@ func (p *PreparedSource) Probe(ctx context.Context, cfg sdk.Config) error {
 func (r *Runtime) AddPreparedSource(ctx context.Context, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.addSourceLiveLocked(ctx, p.conn, cfg, tenant, interval, p.client)
+	return r.addSourceLiveLocked(ctx, p.ComponentName(), p.conn, cfg, tenant, interval, p.client, nil)
+}
+
+// AddPreparedSourceNamed wires a prepared source into the running engine under the
+// registration name the composition root supplies — the roster row's name. The
+// name must be free; the connector kind need not be. On failure the prepared
+// subprocess is reaped and its confinement released. Deny-closed: a failed Open is
+// not wired and does not disturb any other source.
+func (r *Runtime) AddPreparedSourceNamed(ctx context.Context, name string, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration) error {
+	if err := validRegistrationName(name); err != nil {
+		p.Discard()
+		return err
+	}
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+	return r.addSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, nil)
+}
+
+// AddPreparedSourceRegistered is AddPreparedSourceNamed for a source that comes
+// from the DURABLE ROSTER (B1): besides its registration name it carries the
+// roster snapshot — the row's persistent id, the revision being applied and the
+// applying execution environment — which the host stamps on every event the
+// source emits (event.Event.SourceRegistration). The snapshot is fixed at
+// registration: the revision recorded is the one whose Open SUCCEEDS here, so a
+// failed rotation leaves the previous revision running and stamped. A partial
+// snapshot is refused and the prepared source discarded.
+func (r *Runtime) AddPreparedSourceRegistered(ctx context.Context, name string, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration, reg event.SourceRegistration) error {
+	if err := validRegistrationName(name); err != nil {
+		p.Discard()
+		return err
+	}
+	if !reg.Valid() {
+		p.Discard()
+		return ErrInvalidSourceRegistration
+	}
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+	return r.addSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, &reg)
 }
 
 // ReplacePreparedSource rotates a running source IN PLACE with a prepared one of
@@ -230,7 +329,40 @@ func (r *Runtime) AddPreparedSource(ctx context.Context, p *PreparedSource, cfg 
 func (r *Runtime) ReplacePreparedSource(ctx context.Context, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration) error {
 	r.reloadMu.Lock()
 	defer r.reloadMu.Unlock()
-	return r.replaceSourceLiveLocked(ctx, p.conn, cfg, tenant, interval, p.client)
+	return r.replaceSourceLiveLocked(ctx, p.ComponentName(), p.conn, cfg, tenant, interval, p.client, nil)
+}
+
+// ReplacePreparedSourceNamed rotates the source registered under name with a
+// prepared one, which may be of a DIFFERENT connector kind (a roster row that
+// changed kind rotates only itself). The prepared connector is Open()ed first and
+// only on success is the old instance quiesced and replaced (deny-closed).
+func (r *Runtime) ReplacePreparedSourceNamed(ctx context.Context, name string, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration) error {
+	if err := validRegistrationName(name); err != nil {
+		p.Discard()
+		return err
+	}
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+	return r.replaceSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, nil)
+}
+
+// ReplacePreparedSourceRegistered is ReplacePreparedSourceNamed with the roster
+// snapshot of the NEW revision (B1). The running source keeps its own snapshot
+// until the replacement's Open succeeds: events it emits meanwhile still carry
+// the revision they were produced under, and if the rotation fails they keep
+// doing so. A partial snapshot is refused and the prepared source discarded.
+func (r *Runtime) ReplacePreparedSourceRegistered(ctx context.Context, name string, p *PreparedSource, cfg sdk.Config, tenant string, interval time.Duration, reg event.SourceRegistration) error {
+	if err := validRegistrationName(name); err != nil {
+		p.Discard()
+		return err
+	}
+	if !reg.Valid() {
+		p.Discard()
+		return ErrInvalidSourceRegistration
+	}
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+	return r.replaceSourceLiveLocked(ctx, name, p.conn, cfg, tenant, interval, p.client, &reg)
 }
 
 // --- internals (all run with reloadMu held) ----------------------------------
@@ -265,7 +397,7 @@ func secureConfigFor(path, sha256Hex string) (*goplugin.SecureConfig, error) {
 // addSourceLiveLocked is the shared add path for AddSourceLive and the live plugin
 // loaders. On any failure it reaps the plugin subprocess (client) so a rejected
 // add leaves nothing running. reloadMu MUST be held.
-func (r *Runtime) addSourceLiveLocked(ctx context.Context, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client) (err error) {
+func (r *Runtime) addSourceLiveLocked(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client, registration *event.SourceRegistration) (err error) {
 	defer func() {
 		if err != nil && client != nil {
 			client.Kill()
@@ -273,14 +405,26 @@ func (r *Runtime) addSourceLiveLocked(ctx context.Context, conn sdk.SourceConnec
 		}
 	}()
 
-	d := conn.Descriptor()
+	// Each registration owns its OWN settings map: a caller that reuses one map for
+	// two sources cannot make them share mutable state, and mutating one afterwards
+	// cannot reach the other.
+	cfg = cloneConfig(cfg)
 
 	r.mu.Lock()
 	if !r.started || r.stopped {
 		r.mu.Unlock()
 		return ErrNotRunning
 	}
-	if rerr := r.reserveName(d); rerr != nil {
+	// The connector's own identity, checked in the SAME position the descriptor
+	// reservation used to occupy: after "is the engine running", before the name is
+	// reserved and before Open. A component that does not name itself is refused
+	// here, so it is never Opened and never appears in the inventory — and the
+	// deferred reap above returns a prepared plugin's subprocess and its confinement.
+	if derr := validComponentDescriptor(conn.Descriptor()); derr != nil {
+		r.mu.Unlock()
+		return derr
+	}
+	if rerr := r.reserveNameLocked(name); rerr != nil {
 		r.mu.Unlock()
 		return rerr
 	}
@@ -291,28 +435,29 @@ func (r *Runtime) addSourceLiveLocked(ctx context.Context, conn sdk.SourceConnec
 	// the configuration-validation point; a failure means the source is NOT wired
 	// (deny-closed), and the reserved name is released so a later retry can reuse it.
 	if oerr := safe(func() error { return conn.Open(ctx, cfg) }); oerr != nil {
-		r.releaseName(d.Name)
+		r.releaseName(name)
 		_ = safe(func() error { return conn.Close(context.Background()) })
 		return fmt.Errorf("%w: %v", ErrSourceOpenFailed, oerr)
 	}
 
 	sctx, scancel := context.WithCancel(runCtx)
 	reg := &sourceReg{
-		conn: conn, cfg: cfg, tenant: tenant, name: d.Name, poll: interval,
+		conn: conn, cfg: cfg, tenant: tenant, name: name, component: conn.Descriptor().Name, poll: interval,
 		status: StatusRunning, ctx: sctx, cancel: scancel, done: make(chan struct{}), client: client,
+		registration: registration.Clone(),
 	}
 
 	r.mu.Lock()
 	if r.stopped {
 		// Lost a race with Stop after Open succeeded: undo cleanly, do not launch.
-		r.releaseNameLocked(d.Name)
+		r.releaseNameLocked(name)
 		r.mu.Unlock()
 		scancel()
 		_ = safe(func() error { return conn.Close(context.Background()) })
 		return ErrStopped
 	}
 	r.sources = append(r.sources, reg)
-	r.srcIndex[d.Name] = reg
+	r.srcIndex[name] = reg
 	if client != nil {
 		r.clients = append(r.clients, client)
 	}
@@ -326,7 +471,7 @@ func (r *Runtime) addSourceLiveLocked(ctx context.Context, conn sdk.SourceConnec
 // replaceSourceLiveLocked rotates a source in place: Open the new connector
 // first; only on success quiesce+remove the old and launch the new. reloadMu MUST
 // be held.
-func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client) (err error) {
+func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, name string, conn sdk.SourceConnector, cfg sdk.Config, tenant string, interval time.Duration, client *goplugin.Client, registration *event.SourceRegistration) (err error) {
 	defer func() {
 		if err != nil && client != nil {
 			client.Kill()
@@ -334,17 +479,27 @@ func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, conn sdk.SourceCo
 		}
 	}()
 
-	d := conn.Descriptor()
+	cfg = cloneConfig(cfg) // per-registration settings, never a shared mutable map
 
 	r.mu.Lock()
 	if !r.started || r.stopped {
 		r.mu.Unlock()
 		return ErrNotRunning
 	}
-	old, ok := r.srcIndex[d.Name]
+	old, ok := r.srcIndex[name]
 	if !ok {
 		r.mu.Unlock()
-		return fmt.Errorf("%w: %q", ErrSourceNotFound, d.Name)
+		return fmt.Errorf("%w: %q", ErrSourceNotFound, name)
+	}
+	// A malformed CANDIDATE is refused here — after the target is found, before it is
+	// Opened and long before the running instance is touched. The order matters twice
+	// over: it keeps the legacy answer for a name-less connector (its descriptor is
+	// the lookup key, so it misses and reports ErrSourceNotFound, exactly as before),
+	// and it guarantees a rotate can never swap a healthy source out for a component
+	// that does not name itself. The old instance and every sibling are untouched.
+	if derr := validComponentDescriptor(conn.Descriptor()); derr != nil {
+		r.mu.Unlock()
+		return derr
 	}
 	runCtx := r.runCtx
 	r.mu.Unlock()
@@ -369,8 +524,9 @@ func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, conn sdk.SourceCo
 
 	sctx, scancel := context.WithCancel(runCtx)
 	reg := &sourceReg{
-		conn: conn, cfg: cfg, tenant: tenant, name: d.Name, poll: interval,
+		conn: conn, cfg: cfg, tenant: tenant, name: name, component: conn.Descriptor().Name, poll: interval,
 		status: StatusRunning, ctx: sctx, cancel: scancel, done: make(chan struct{}), client: client,
+		registration: registration.Clone(),
 	}
 
 	r.mu.Lock()
@@ -381,14 +537,14 @@ func (r *Runtime) replaceSourceLiveLocked(ctx context.Context, conn sdk.SourceCo
 		return ErrStopped
 	}
 	// The old reg's name was freed by removeRegLocked; re-reserve it for the new.
-	if rerr := r.reserveName(d); rerr != nil {
+	if rerr := r.reserveNameLocked(name); rerr != nil {
 		r.mu.Unlock()
 		scancel()
 		_ = safe(func() error { return conn.Close(context.Background()) })
 		return rerr
 	}
 	r.sources = append(r.sources, reg)
-	r.srcIndex[d.Name] = reg
+	r.srcIndex[name] = reg
 	if client != nil {
 		r.clients = append(r.clients, client)
 	}
@@ -408,10 +564,10 @@ func (r *Runtime) quiesceAndClose(ctx context.Context, reg *sourceReg) {
 	select {
 	case <-reg.done:
 	case <-ctx.Done():
-		r.log.Warn("runtime: timed out waiting for source to quiesce; closing anyway", "source", reg.name, "error", ctx.Err())
+		r.log.Warn("runtime: timed out waiting for source to quiesce; closing anyway", "source", reg.name, "component", reg.component, "error", ctx.Err())
 	}
 	if cerr := safe(func() error { return reg.conn.Close(ctx) }); cerr != nil {
-		r.log.Warn("runtime: source close failed during live reconfigure", "source", reg.name, "error", cerr)
+		r.log.Warn("runtime: source close failed during live reconfigure", "source", reg.name, "component", reg.component, "error", cerr)
 	}
 	if reg.client != nil {
 		r.untrackClient(reg.client)

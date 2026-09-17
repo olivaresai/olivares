@@ -19,6 +19,7 @@ import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { useTenantStore } from '@/stores/tenant'
+import { PasskeyAddressNotice } from '@/features/identity/passkey-address'
 
 const schema = z.object({
   token: z.string().min(1),
@@ -166,6 +167,11 @@ export function SetupPage() {
           </Button>
         </form>
       </Card>
+      {/* First boot is the cheapest moment to learn that this address cannot
+       *  carry a passkey: the administrator being created here is the one who
+       *  will be asked for AAL3 later. It renders nothing when the address is
+       *  fine, and it gates nothing — setup is unchanged either way. */}
+      <PasskeyAddressNotice className="mt-1" />
     </AuthShell>
   )
 }

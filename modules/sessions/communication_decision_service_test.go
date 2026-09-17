@@ -11,6 +11,7 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,6 +40,7 @@ func newDecisionResponseFixtureWithDueDelay(
 		t.Fatal("DecisionRequest due delay must be positive")
 	}
 	fixture := newDirectNoticeExactAuthorityFixture(t)
+	fixture.reanchorOperationClock(t)
 	fixture.m.communicationDirectoryResolver = &directNoticeReadDirectoryResolver{
 		now: fixture.now, epoch: fixture.epoch,
 	}
@@ -593,10 +595,17 @@ func TestDecisionRequestDeadlineExpiresAtDBDeadlineAndReplays(t *testing.T) {
 	}
 	beforeItem := workItemRecordForDecisionTest(t, fixture)
 	beforeAudit := directNoticeAuditHead(t, fixture.directNoticeFixture)
-	if _, err := service.Expire(ctx, fixture.scope, command); !errors.Is(
-		err, ErrInvalidCommunicationTransition,
-	) {
-		t.Fatalf("DecisionRequest expiry before due_at = %v, want invalid transition", err)
+	negativeClock, restore := installFinalTransactionTimeOnExistingClockSeam(
+		t, fixture.m, fixture.request.DueAt.Add(-time.Nanosecond),
+	)
+	negativeResult, negativeErr := service.Expire(ctx, fixture.scope, command)
+	restore()
+	if !errors.Is(negativeErr, ErrInvalidCommunicationTransition) ||
+		!strings.Contains(negativeErr.Error(), "DecisionRequest deadline has not elapsed") ||
+		negativeResult != (DecisionRequestResponseResult{}) ||
+		negativeClock.calls.Load()-2 != 2 {
+		t.Fatalf("before-deadline DecisionRequest = (%+v, %v); raw-clock calls=%d, want invalid transition",
+			negativeResult, negativeErr, negativeClock.calls.Load()-2)
 	}
 	if got := decisionRequestForTest(t, fixture); got.State != DecisionPending || got.Version != 1 {
 		t.Fatalf("early DecisionRequest expiry changed request: %+v", got)

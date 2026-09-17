@@ -1,0 +1,514 @@
+{
+  "schema": "olivares.connect.v1.go-client-vectors",
+  "generator": "gen-vectors.ts over B blobs at 16b41ca56de959528557076b92731317872fb6c1",
+  "node": "v24.15.0",
+  "keys": [
+    {
+      "seed_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+      "public_key_b64url": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "kid": "sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e",
+      "fingerprint": "34:75:0f:98:bd:59:fc:fc"
+    },
+    {
+      "seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+      "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "kid": "sha256:21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9",
+      "fingerprint": "21:fe:31:df:a1:54:a2:61"
+    }
+  ],
+  "valid": [
+    {
+      "name": "b-committed-bind-pending",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "canonical": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"scope:dodo/bus_example/sub_example\"}",
+      "canonical_sha256": "194143722dcf27c99086aa31f9a8e638ea05ed1e38e75102adaf40103cc6f88f",
+      "signatures": [
+        {
+          "public_key_b64url": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "canonical_with_kid": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"scope:dodo/bus_example/sub_example\"}",
+          "signature_b64url": "4wj4mp1ZosnK6NvS-F57IDZTcCy7xdJeUfS6Iqq5ctFbrDVC6aKK3Rd1elFQpqA9aR3r1CKbhu33M1tyGV7AAw"
+        },
+        {
+          "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+          "canonical_with_kid": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"scope:dodo/bus_example/sub_example\"}",
+          "signature_b64url": "UEMU5nNWOM37WtPMvRVy8Ov0uBuXBXGf_60ZHgmAeMkalyQk1_Ej9rsEvpsfjtkLVTYikehkkv2x1Y9_4vrjCg"
+        }
+      ]
+    },
+    {
+      "name": "escapes-and-controls",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "q\"b\\s/n\nr\rt\tx\u0001y\u001fz"
+      },
+      "canonical": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"q\\\"b\\\\s/n\\nr\\rt\\tx\\u0001y\\u001fz\"}",
+      "canonical_sha256": "fa2e1afc6c0e6d9b8380b24a16585473ec55eb345d30379cd22377db7335abf3",
+      "signatures": [
+        {
+          "public_key_b64url": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "canonical_with_kid": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"q\\\"b\\\\s/n\\nr\\rt\\tx\\u0001y\\u001fz\"}",
+          "signature_b64url": "diRkY74V5Z5RIWQEuuyOtgVDyd1QwwMsUqK2LLGhGR61jdvR_DJpey5N8E9GyG_pJULTVChmrhhz2W_SbgWRDQ"
+        },
+        {
+          "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+          "canonical_with_kid": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"q\\\"b\\\\s/n\\nr\\rt\\tx\\u0001y\\u001fz\"}",
+          "signature_b64url": "U51kVVyx9hX9IaJWyYFnsfF5mTer4Abak-CzlU_eyHMyFFmxiHa5RYa-AquVPERphcTzdrvUioxqsmi2UEKiAA"
+        }
+      ]
+    },
+    {
+      "name": "non-ascii",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "café-日本-😀- - "
+      },
+      "canonical": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"café-日本-😀- - \"}",
+      "canonical_sha256": "72e7dd8fe294ec960a3d5ee52b95da119ecdc941a4e8172bace967034d2d7cee",
+      "signatures": [
+        {
+          "public_key_b64url": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "canonical_with_kid": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"café-日本-😀- - \"}",
+          "signature_b64url": "iHRgzfqSfmxthVqrit5thmOY9_kPjmHPVvvCuy0pBDKR7Qh5DkuwaG21bLK9S5gICpI1Oqt7oZu-oVfRLapqCw"
+        },
+        {
+          "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+          "canonical_with_kid": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"café-日本-😀- - \"}",
+          "signature_b64url": "M3cth8QOG0Usk8NGkUXLPfEubZDT19HM09joySlVVFTKo6SyHC8hKdBeBD_5CequsiI23OENasF7MUsUo0MUAQ"
+        }
+      ]
+    },
+    {
+      "name": "delete-large-numbers",
+      "message": {
+        "binding_epoch": 9007199254740991,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 4102444800,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "DELETE",
+        "operation": "delete",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments/dep_x",
+        "target": "dep_x"
+      },
+      "canonical": "{\"binding_epoch\":9007199254740991,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":4102444800,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"method\":\"DELETE\",\"operation\":\"delete\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_x\",\"target\":\"dep_x\"}",
+      "canonical_sha256": "b5fda4957bf981b4455490cb7361d0f494a9481d20b9946cd226e26c2fb1b288",
+      "signatures": [
+        {
+          "public_key_b64url": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "canonical_with_kid": "{\"binding_epoch\":9007199254740991,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":4102444800,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e\",\"method\":\"DELETE\",\"operation\":\"delete\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_x\",\"target\":\"dep_x\"}",
+          "signature_b64url": "D38VasZbgxaI1GG4sME4O5tGCAATjQu2hL6TVocrv4i35ziMLL3q2oSsW6SLj2zbQZxwbwN33xA8RNvF_pTcBA"
+        },
+        {
+          "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+          "canonical_with_kid": "{\"binding_epoch\":9007199254740991,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":4102444800,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9\",\"method\":\"DELETE\",\"operation\":\"delete\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_x\",\"target\":\"dep_x\"}",
+          "signature_b64url": "RAOrvxSqGS344qaSXiWVFEGS2FPQnFkH-xenunD_B337XkAlDJrlT_FaJZuwlHgevDlzZDgyLH9vB0xBA98dAw"
+        }
+      ]
+    },
+    {
+      "name": "refresh-epoch-one",
+      "message": {
+        "binding_epoch": 1,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "refresh",
+        "origin": "https://licenses.example",
+        "path": "/connect/refresh",
+        "target": "dep_abc"
+      },
+      "canonical": "{\"binding_epoch\":1,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"method\":\"POST\",\"operation\":\"refresh\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/refresh\",\"target\":\"dep_abc\"}",
+      "canonical_sha256": "df6f7f38f683adaa1e12b8971358be51c512a2e0cf15fbd16bf8addb374c7615",
+      "signatures": [
+        {
+          "public_key_b64url": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+          "canonical_with_kid": "{\"binding_epoch\":1,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e\",\"method\":\"POST\",\"operation\":\"refresh\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/refresh\",\"target\":\"dep_abc\"}",
+          "signature_b64url": "bqpjNNEB_ksUD3jN5QKhNUiY1o_plmVjms4dZO-yoae5OFGmzRSVQBD78t8zuYa-PuY9kKee4olTK8o0FLaZDw"
+        },
+        {
+          "public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+          "canonical_with_kid": "{\"binding_epoch\":1,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9\",\"method\":\"POST\",\"operation\":\"refresh\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/refresh\",\"target\":\"dep_abc\"}",
+          "signature_b64url": "sStWjDek9jEAzvhJ_OxOvIETlpGNXf4D5G7xSLDVuD05TFfkfPWJruQvfRGf6H_uyMKDrM8nBgaUFb96MTsQBQ"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "name": "empty-target",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": ""
+      },
+      "refused": true,
+      "reason": "connect canonical: target is empty"
+    },
+    {
+      "name": "uppercase-body-hash",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "refused": true,
+      "reason": "connect canonical: body_sha256 must be 64 lowercase hex"
+    },
+    {
+      "name": "short-body-hash",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "refused": true,
+      "reason": "connect canonical: body_sha256 must be 64 lowercase hex"
+    },
+    {
+      "name": "negative-epoch",
+      "message": {
+        "binding_epoch": -1,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "refused": true,
+      "reason": "connect canonical: binding_epoch must be a canonical integer >= 0"
+    },
+    {
+      "name": "fractional-epoch",
+      "message": {
+        "binding_epoch": 1.5,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "refused": true,
+      "reason": "connect canonical: binding_epoch must be a canonical integer >= 0"
+    },
+    {
+      "name": "zero-exp",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 0,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "refused": true,
+      "reason": "connect canonical: exp must be a canonical unix-seconds integer"
+    },
+    {
+      "name": "wrong-domain",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v2",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "refused": true,
+      "reason": "connect canonical: domain is not olivares.connect.v1"
+    },
+    {
+      "name": "empty-kid",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "refused": true,
+      "reason": "connect canonical: kid is empty"
+    }
+  ],
+  "strict": [
+    {
+      "input": "{\"a\":1}",
+      "accepted": true,
+      "reason": ""
+    },
+    {
+      "input": "{\"a\":1,\"a\":2}",
+      "accepted": false,
+      "reason": "duplicate field \"a\""
+    },
+    {
+      "input": "{\"a\":1.0}",
+      "accepted": false,
+      "reason": "connect-v1 numbers are canonical integers"
+    },
+    {
+      "input": "{\"a\":01}",
+      "accepted": false,
+      "reason": "canonical numbers have no leading zeros"
+    },
+    {
+      "input": "{\"a\":1e2}",
+      "accepted": false,
+      "reason": "connect-v1 numbers are canonical integers"
+    },
+    {
+      "input": "{\"a\":1}x",
+      "accepted": false,
+      "reason": "trailing bytes after the JSON value"
+    },
+    {
+      "input": "{\"a\":1,}",
+      "accepted": false,
+      "reason": "trailing comma"
+    },
+    {
+      "input": "{\"__proto__\":1}",
+      "accepted": false,
+      "reason": "prototype field names are refused"
+    },
+    {
+      "input": "{\"a\":\"x\u0001\"}",
+      "accepted": false,
+      "reason": "unescaped control in string"
+    },
+    {
+      "input": "{\"a\":\"\\q\"}",
+      "accepted": false,
+      "reason": "invalid escape"
+    },
+    {
+      "input": "{\"a\":-0}",
+      "accepted": true,
+      "reason": ""
+    },
+    {
+      "input": "{\"a\":9007199254740991}",
+      "accepted": true,
+      "reason": ""
+    },
+    {
+      "input": "{\"a\":9007199254740992}",
+      "accepted": false,
+      "reason": "connect-v1 numbers must be safe integers"
+    },
+    {
+      "input": "[1]",
+      "accepted": false,
+      "reason": "body must be a JSON object"
+    },
+    {
+      "input": " {\"a\":{\"b\":[1,2,{\"c\":null}]},\"d\":true} ",
+      "accepted": true,
+      "reason": ""
+    },
+    {
+      "input": "{\"a\":\"\\u00e9\\n\"}",
+      "accepted": true,
+      "reason": ""
+    },
+    {
+      "input": "{\"a\":\"\\u00G0\"}",
+      "accepted": false,
+      "reason": "invalid unicode escape"
+    },
+    {
+      "input": "{a:1}",
+      "accepted": false,
+      "reason": "object keys must be strings"
+    },
+    {
+      "input": "",
+      "accepted": false,
+      "reason": "unexpected token"
+    }
+  ],
+  "exact_fields": [
+    {
+      "obj": "{\"deployment_id\":\"d\",\"channel\":\"stable\",\"public_key\":\"k\"}",
+      "required": [
+        "deployment_id",
+        "channel",
+        "public_key"
+      ],
+      "optional": [],
+      "accepted": true,
+      "reason": ""
+    },
+    {
+      "obj": "{\"deployment_id\":\"d\",\"channel\":\"stable\"}",
+      "required": [
+        "deployment_id",
+        "channel",
+        "public_key"
+      ],
+      "optional": [],
+      "accepted": false,
+      "reason": "missing field \"public_key\""
+    },
+    {
+      "obj": "{\"deployment_id\":\"d\",\"channel\":\"stable\",\"public_key\":\"k\",\"extra\":1}",
+      "required": [
+        "deployment_id",
+        "channel",
+        "public_key"
+      ],
+      "optional": [],
+      "accepted": false,
+      "reason": "unknown field \"extra\""
+    },
+    {
+      "obj": "{\"deployment_id\":\"d\",\"label\":\"\"}",
+      "required": [
+        "deployment_id"
+      ],
+      "optional": [
+        "label"
+      ],
+      "accepted": true,
+      "reason": ""
+    }
+  ],
+  "body_digests": [
+    {
+      "body": "{\"deployment_id\":\"dep_abc\",\"channel\":\"stable\",\"public_key\":\"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w\"}",
+      "sha256": "08f5fdd6c4fe359c16e8f32e7cc1175e75b6c980bb2974619cf538f74ea6cc8b"
+    },
+    {
+      "body": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "dual_proofs": [
+    {
+      "name": "rotate-same-message",
+      "message": {
+        "binding_epoch": 3,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e",
+        "method": "POST",
+        "operation": "rotate-key",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments/dep_rot/rotate-key",
+        "target": "dep_rot"
+      },
+      "canonical": "{\"binding_epoch\":3,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e\",\"method\":\"POST\",\"operation\":\"rotate-key\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_rot/rotate-key\",\"target\":\"dep_rot\"}",
+      "old_public_key_b64url": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "new_public_key_b64url": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "old_signature_b64url": "Za3fh1tg_CLxmMy9LPooU32S2UE0xpIzBQ-_sE9b9pAvrycf_neBgbp4UUPez2s120q21xLs5nafypSaRWbICg",
+      "new_signature_b64url": "EZ7HwUqXX63T1PO9iqWBnXhkKXJKREpBkZnSygYwSKkD5Psd75m26gpQGf1NantWTRR0DFE9Yj2q9sQNHUz9Dw",
+      "new_signature_over_own_kid_b64url": "5XHo9978Ir0lbZ8Ll5UuZOx-36AM7vuliKndkwSXAo6bW1wMUGE5GV22j_YDfKH9OjJlWZSbJoc1Q1Ycqar_Ag",
+      "checks": {
+        "old_verifies": true,
+        "new_verifies_same_message": true,
+        "new_with_own_kid_verifies_same_message": false,
+        "old_signature_under_new_key": false
+      }
+    }
+  ]
+}

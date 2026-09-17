@@ -1,0 +1,20 @@
+{
+  "$comment": "SPDX-FileCopyrightText: 2026 Olivares.AI; SPDX-License-Identifier: AGPL-3.0-only",
+  "schema": "olivares.ai/install-endpoints/v1",
+  "status": "not-live",
+  "source": "scripts/install-bootstrap.sh",
+  "routes": [
+    {
+      "path": "/install.sh",
+      "behavior": "serve-source",
+      "content_type": "text/x-shellscript; charset=utf-8"
+    },
+    {
+      "path": "/get",
+      "behavior": "redirect",
+      "location": "/install.sh",
+      "status_code": 307
+    }
+  ],
+  "operator_act": "Delegate the public routes only after their versioned release asset exists."
+}

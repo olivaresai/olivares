@@ -22,19 +22,21 @@ stack elle-même (`deploy/compose/*.yml`), et le flux de premier démarrage qu'e
 est le même que celui vérifié de bout en bout contre le binaire dans le
 [tutoriel nœud unique](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Jusqu'à la première release, compilez l'image localement">
-Les images de release sont publiées sur `docker.io/olivaresai/olivares` sur Docker Hub (signées,
-épinglées par digest) **lorsque la première release publique sortira** — le chemin du
-registre est vide jusqu'à ce que ce tag soit coupé (le même contenu est aussi mis en miroir
-vers `ghcr.io/olivaresai/olivares`, identique par digest). Aujourd'hui, compilez la même
-image distroless durcie à partir des sources et pointez la stack vers elle :
+<Aside type="caution" title="Jusqu’à la publication des images v26.9.0, compilez en local">
+Une version étiquetée antérieure a déjà livré des images signées. Le canon de cet arbre est **v26.9.0**.
+Le témoin des surfaces d’installation enregistre encore Docker Hub et GHCR comme
+**not-published** pour `26.9.0` jusqu’à l’exécution du job de release de ce tag
+(`docs/releases/v26.9.0-install-surfaces.json`). La même honnêteté figure dans
+[Déployer avec Docker](/how-to/docker-deployment/). Tant que les tags `26.9.0`
+n’existent pas, compilez l’image distroless durcie depuis les sources et pointez
+la stack vers elle :
 
 ```bash
 task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-Une fois les releases existantes : définissez
+Lorsque l’image `26.9.0` existe : définissez
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` et
 [vérifiez-la](/how-to/verify-a-release/) d'abord — par digest, jamais par tag.
 </Aside>
@@ -46,7 +48,7 @@ Une fois les releases existantes : définissez
 1. Démarrez-la :
 
    ```bash
-   docker compose -f deploy/compose/docker-compose.yml up -d
+   docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
    ```
 
    Ce que vous obtenez, par conception :
@@ -56,7 +58,7 @@ Une fois les releases existantes : définissez
    | Ports | `127.0.0.1:8443` (HTTPS : REST + interface web), `127.0.0.1:8444` (gRPC) — liés à **localhost sur l'hôte** ; exposez délibérément |
    | Données | volume nommé `olivares-data` → `/var/lib/olivares` (store SQLite, clé de signature d'audit, matériel TLS) |
    | Durcissement | tourne en `65532:65532`, racine en lecture seule, toutes les capabilities supprimées, `no-new-privileges`, tmpfs `/tmp` |
-   | Healthcheck | aucun en-conteneur (l'image est distroless — pas de shell). Sondez `/livez` et `/readyz` depuis l'hôte |
+   | Healthcheck | exécution directe de la commande intégrée `olivares readyz` — sans shell, curl ni wget. Seul un HTTP 200 de `/readyz` local est sain |
 
 2. Lisez le jeton de configuration à usage unique depuis les journaux :
 
@@ -77,6 +79,14 @@ Une fois les releases existantes : définissez
    ```
 
 </Steps>
+
+<Aside type="note" title="Contrat actuel et qualification hébergée">
+**Contrat de l'arbre actuel DIST-24-12.** Des fixtures HTTP/TLS locales et hermétiques
+prouvent les trois réponses de la sonde : 200 → rc 0, une réponse non-200 reçue → rc 1,
+et un échec d'entrée, TLS ou transport → rc 2. **La qualification Docker reste non
+mesurée jusqu'à la réussite du workflow lancé manuellement** pour ce commit ; la présence
+d'un workflow dans le dépôt ne prouve pas que son exécution Docker a eu lieu.
+</Aside>
 
 <Aside type="tip" title="Jeton manqué ?">
 Un redémarrage ne le réaffiche pas (seul son hash est stocké). Tant qu'aucun utilisateur

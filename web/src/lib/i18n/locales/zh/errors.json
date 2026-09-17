@@ -13,6 +13,10 @@
     "description": "控制平面遇到意外错误。请重试。",
     "back": "返回概览"
   },
+  "evidenceUnavailable": {
+    "title": "无法核实此信息",
+    "description": "目前无法加载此信息。请重试；若问题持续，请联系管理员。"
+  },
   "network": {
     "title": "无法连接控制平面",
     "description": "我们无法连接控制平面。请检查您的网络连接以及引擎是否正在运行。"

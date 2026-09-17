@@ -40,7 +40,7 @@ const PX = { h1: 22, h2: 17, body: 16, small: 13, code: 13, wordmark: 18 }
 // --- the brand mark, in the only units a mail client is guaranteed to paint ---
 //
 // THE LEDGER O, DRAWN WITH TABLE CELLS. The canonical glyph (brandv4, locked
-// 2026-06-03, `sessions-logo-spec.md`) is an arc closing the counter on
+// 2026-06-03, ) is an arc closing the counter on
 // the right and four stacked audit-ledger rows on the left, the SECOND of them
 // orange — the flagged WRITE. It exists as SVG in five places, and none of them
 // can be used here: an `<svg>` is stripped by Gmail, an `<img>` is blocked by
@@ -75,7 +75,7 @@ const PX = { h1: 22, h2: 17, body: 16, small: 13, code: 13, wordmark: 18 }
 // one of them.
 const ARTBOARD = {
   // The canonical Ledger O on its 32x32 artboard (brandv4, BRAND-01 locked
-  // 2026-06-03; `sessions-logo-spec.md`). Rows top to bottom, x=8.4;
+  // 2026-06-03; ). Rows top to bottom, x=8.4;
   // index 1 is the flagged WRITE and is the only one that carries the accent.
   rows: [
     { y: 10.5, len: 4.8, stroke: 2.6 },

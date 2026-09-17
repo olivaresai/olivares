@@ -263,5 +263,9 @@
       "label": "Could not look",
       "help": "The engine could NOT complete the observation. This is not a pass and not an empty result — the answer is unknown."
     }
+  },
+  "handoff": {
+    "offer": "Offer handoff",
+    "offerHint": "Offer responsibility for this item to a recipient over a channel. Ownership does not move until they accept."
   }
 }

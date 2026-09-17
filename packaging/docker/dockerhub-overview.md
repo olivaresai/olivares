@@ -22,9 +22,9 @@ version tag or a digest in production; never rely on `latest` for a reproducible
 
 | Tag | Contents | Architectures |
 |-----|----------|---------------|
-| `26.8.0`, `latest` | Base engine + embedded web console | amd64, arm64 |
-| `26.8.0-fips` | FIPS 140-3 build (`GOFIPS140`, CMVP-validated module) | amd64 |
-| `26.8.0-stig` | STIG-hardened (UBI-micro, OpenSCAP-profiled) base image | amd64 |
+| `26.9.0`, `latest` | Base engine + embedded web console | amd64, arm64 |
+| `26.9.0-fips` | FIPS 140-3 build (`GOFIPS140`, CMVP-validated module) | amd64 |
+| `26.9.0-stig` | STIG-hardened (UBI-micro, OpenSCAP-profiled) base image | amd64 |
 
 **This is the official registry for Olivares AI.** Releases are built and signed on GitHub
 Container Registry and published here **by digest** with `cosign copy`, so the layers, cosign
@@ -42,7 +42,7 @@ docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
   -v olivares-data:/var/lib/olivares \
   --user 65532:65532 --read-only --tmpfs /tmp --cap-drop ALL \
   --security-opt no-new-privileges \
-  olivaresai/olivares:26.8.0 \
+  olivaresai/olivares:26.9.0 \
   serve --listen 0.0.0.0:8443 --grpc-listen 0.0.0.0:8444 --data-dir /var/lib/olivares
 ```
 
@@ -76,7 +76,7 @@ Every image is signed keylessly (Sigstore/cosign) and carries SBOM and SLSA Buil
 provenance attestations — all preserved on this registry by digest:
 
 ```sh
-cosign verify olivaresai/olivares:26.8.0 \
+cosign verify olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

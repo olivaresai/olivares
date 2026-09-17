@@ -23,6 +23,10 @@ import (
 // degrades back to the community edition, both at the next per-call evaluation. The
 // ONLY restart left is the binary swap open→enterprise.
 //
+// The holder verifies with a license trust KEYRING (license_trust.go), swapped together with the
+// source, so a reload applies a changed trust document and a changed license in one step and the
+// two can never be read from different generations.
+//
 // OPEN-CORE INVARIANT (LICENSING.md): the holder is pure edition plumbing. The open
 // binary wires it and DISPLAYS its status; it never reads a license to change
 // behavior. Since B10 that is true of USER ACCOUNTS in every build: accounts are
@@ -31,12 +35,13 @@ import (
 // feature, degrades a request, or blocks a boot on a license check; attestation-only
 // is preserved.
 type licenseHolder struct {
-	pub   ed25519.PublicKey
 	clock func() time.Time
 	log   *slog.Logger
 
 	mu         sync.RWMutex
 	src        licenseSource
+	trust      license.Keyring
+	trustErr   error  // why the keyring could not be established; every license reads invalid meanwhile
 	lastStatus string // last OBSERVED display status, for one-shot transition logging
 }
 
@@ -55,18 +60,51 @@ type licenseDisplay struct {
 	source   licenseSource
 }
 
-// newLicenseHolder seeds the holder with the boot-resolved license. clock may be nil
-// (system clock). It records the initial status WITHOUT logging a transition (boot
-// logs the initial posture separately) so the first reEvaluate/set only fires on a
-// real change.
+// newLicenseHolder trusts exactly pub, with the keyring's KID and epoch rules. Its signature is
+// kept for the callers that construct a holder over one key (the private overlay's CLI paths pass
+// license.DefaultPublicKey()); product paths use newDataDirLicenseHolder so the data directory's
+// administrative trust applies. clock may be nil (system clock).
 func newLicenseHolder(pub ed25519.PublicKey, src licenseSource, clock func() time.Time, log *slog.Logger) *licenseHolder {
+	kr, err := license.SingleKeyKeyring(pub, "embedded")
+	return newLicenseHolderWithTrust(kr, err, src, clock, log)
+}
+
+// newDataDirLicenseHolder is the holder over the data directory's license trust keyring.
+func newDataDirLicenseHolder(dataDir string, src licenseSource, clock func() time.Time, log *slog.Logger) *licenseHolder {
+	kr, err := licenseKeyringForDataDir(dataDir)
+	return newLicenseHolderWithTrust(kr, err, src, clock, log)
+}
+
+// newLicenseHolderWithTrust seeds the holder. It records the initial status WITHOUT logging a
+// transition (boot logs the initial posture separately) so the first reEvaluate/set only fires on
+// a real change.
+func newLicenseHolderWithTrust(kr license.Keyring, trustErr error, src licenseSource, clock func() time.Time, log *slog.Logger) *licenseHolder {
 	if clock == nil {
 		clock = func() time.Time { return time.Now() }
 	}
-	h := &licenseHolder{pub: pub, clock: clock, log: log, src: src}
-	h.lastStatus = h.displayFor(src).status
+	h := &licenseHolder{clock: clock, log: log, src: src, trust: kr, trustErr: trustErr}
+	h.lastStatus = h.displayFor(src, kr, trustErr).status
 	return h
 }
+
+func (h *licenseHolder) snapshot() (licenseSource, license.Keyring, error) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.src, h.trust, h.trustErr
+}
+
+// verify is the one verification call of the holder. No trust, no license: an unusable keyring
+// is reported as the reason every blob reads invalid.
+func (h *licenseHolder) verify(blob string, kr license.Keyring, trustErr error) (license.Verified, error) {
+	if trustErr != nil {
+		return license.Verified{}, trustErr
+	}
+	return kr.Verify(blob, h.clock())
+}
+
+// noTrust reports the state that has always displayed as "none": a build with no key and nothing
+// configured, which verifies nothing and has no error to report.
+func noTrust(kr license.Keyring, trustErr error) bool { return kr.Len() == 0 && trustErr == nil }
 
 // claims is the licenseClaimsFunc handed to newSeatPolicy. It returns the VERIFIED,
 // UNEXPIRED claims (ok=false otherwise), evaluated PER CALL so an expiry or a hot-
@@ -92,13 +130,11 @@ func newLicenseHolder(pub ed25519.PublicKey, src licenseSource, clock func() tim
 // cannot honor which lines were purchased; making that possible needs a container-aware source,
 // which is the overlay's own change and is reported as such.
 func (h *licenseHolder) claims() (license.Claims, bool) {
-	h.mu.RLock()
-	blob := h.src.Blob
-	h.mu.RUnlock()
-	if blob == "" || len(h.pub) != ed25519.PublicKeySize {
+	src, kr, trustErr := h.snapshot()
+	if src.Blob == "" || noTrust(kr, trustErr) {
 		return license.Claims{}, false
 	}
-	v, err := license.VerifyEnvelope(blob, h.pub)
+	v, err := h.verify(src.Blob, kr, trustErr)
 	if err != nil {
 		return license.Claims{}, false
 	}
@@ -119,13 +155,11 @@ func (h *licenseHolder) claims() (license.Claims, bool) {
 // own Active(now) is false. Filtering here would hide a purchased add-on
 // from the overlay and collapse every line onto the base term.
 func (h *licenseHolder) grants() ([]license.Grant, bool) {
-	h.mu.RLock()
-	blob := h.src.Blob
-	h.mu.RUnlock()
-	if blob == "" || len(h.pub) != ed25519.PublicKeySize {
+	src, kr, trustErr := h.snapshot()
+	if src.Blob == "" || noTrust(kr, trustErr) {
 		return nil, false
 	}
-	v, err := license.VerifyEnvelope(blob, h.pub)
+	v, err := h.verify(src.Blob, kr, trustErr)
 	if err != nil {
 		return nil, false
 	}
@@ -139,29 +173,27 @@ func (h *licenseHolder) grants() ([]license.Grant, bool) {
 	if !v.IsCredentialV3() {
 		return nil, true
 	}
-	src := v.Grants()
-	out := make([]license.Grant, len(src))
-	copy(out, src)
+	lines := v.Grants()
+	out := make([]license.Grant, len(lines))
+	copy(out, lines)
 	return out, true
 }
 
 // display returns the current verify-but-never-gate view of the live license.
 func (h *licenseHolder) display() licenseDisplay {
-	h.mu.RLock()
-	src := h.src
-	h.mu.RUnlock()
-	return h.displayFor(src)
+	src, kr, trustErr := h.snapshot()
+	return h.displayFor(src, kr, trustErr)
 }
 
-// displayFor derives the status of an arbitrary source against the embedded key and
-// the local clock. It NEVER gates — any verification error is reported as a status,
-// not an enforcement signal (LICENSING.md). It holds no lock (pure over src + immutable
-// pub + clock), so callers may invoke it inside or outside the mutex.
-func (h *licenseHolder) displayFor(src licenseSource) licenseDisplay {
-	if src.Blob == "" || len(h.pub) != ed25519.PublicKeySize {
+// displayFor derives the status of an arbitrary source against a keyring and the local clock. It
+// NEVER gates — any verification error is reported as a status, not an enforcement signal
+// (LICENSING.md). It holds no lock (pure over its arguments + clock), so callers may invoke it inside
+// or outside the mutex.
+func (h *licenseHolder) displayFor(src licenseSource, kr license.Keyring, trustErr error) licenseDisplay {
+	if src.Blob == "" || noTrust(kr, trustErr) {
 		return licenseDisplay{status: "none", source: src}
 	}
-	v, err := license.VerifyEnvelope(src.Blob, h.pub)
+	v, err := h.verify(src.Blob, kr, trustErr)
 	if err != nil {
 		// The REASON is kept, because collapsing every failure to "invalid" made this surface
 		// blame the wrong thing: the boot warning and the transition log both say the license
@@ -180,10 +212,18 @@ func (h *licenseHolder) displayFor(src licenseSource) licenseDisplay {
 	}
 }
 
-// set swaps the live license to src (the hot-apply). It is the SINGLE mutation point
-// — Install (after persisting) and the reload/SIGHUP reconcile both call it — so
-// every path converges on one swap and one transition log. Returns the new display.
-func (h *licenseHolder) set(src licenseSource) licenseDisplay { return h.update(src) }
+// set swaps the live license to src and keeps the current keyring.
+func (h *licenseHolder) set(src licenseSource) licenseDisplay {
+	_, kr, trustErr := h.snapshot()
+	return h.update(src, kr, trustErr)
+}
+
+// apply swaps the live license AND its keyring in one critical section (the hot-apply). It is the
+// mutation point install and the reload/SIGHUP reconcile converge on, so every path produces one
+// swap and one transition log. Returns the new display.
+func (h *licenseHolder) apply(src licenseSource, kr license.Keyring, trustErr error) licenseDisplay {
+	return h.update(src, kr, trustErr)
+}
 
 // reEvaluate re-derives the status of the UNCHANGED license and logs a transition if
 // it crossed (e.g. valid→expired as the clock passes ExpiresAt). It is what the
@@ -192,25 +232,25 @@ func (h *licenseHolder) set(src licenseSource) licenseDisplay { return h.update(
 // per call; this is the observability half.
 //
 // It re-derives from the CURRENT h.src inside ONE critical section and NEVER writes
-// h.src — only set()/reconcile mutate the source. (An earlier cut snapshot-read h.src
+// h.src — only set()/apply() mutate the source. (An earlier cut snapshot-read h.src
 // under RLock then wrote it back under a fresh Lock; that read-then-write split let a
 // concurrent set() — install/reload/SIGHUP coinciding with the hourly tick — be lost,
 // silently reverting a just-applied license. reEvaluate is read-and-reclassify only.)
 func (h *licenseHolder) reEvaluate() licenseDisplay {
 	h.mu.Lock()
 	prev := h.lastStatus
-	d := h.displayFor(h.src)
+	d := h.displayFor(h.src, h.trust, h.trustErr)
 	h.lastStatus = d.status
 	h.mu.Unlock()
 	h.logTransition(prev, d)
 	return d
 }
 
-func (h *licenseHolder) update(src licenseSource) licenseDisplay {
+func (h *licenseHolder) update(src licenseSource, kr license.Keyring, trustErr error) licenseDisplay {
 	h.mu.Lock()
 	prev := h.lastStatus
-	h.src = src
-	d := h.displayFor(src)
+	h.src, h.trust, h.trustErr = src, kr, trustErr
+	d := h.displayFor(src, kr, trustErr)
 	h.lastStatus = d.status
 	h.mu.Unlock()
 	h.logTransition(prev, d)

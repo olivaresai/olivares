@@ -94,6 +94,87 @@ check "PUBLISH_OTA_STABLE governs the phase-1 stable draft upload" "load-bearing
 grep 'AUTHORIZATION CONTRACT OF THIS DISPATCH' "$R" >/dev/null
 check "the OTA dispatch declares its separate authorization contract" "written, not implied" $?
 
+# --- release.yml: the phase-2 dispatch is a PUBLICATION ceremony (QA07) ----------------
+# The wording is load-bearing rather than cosmetic: the `ota-release-ceremony` environment's
+# reviewers are the only human gate on this operation, and until QA07 what they approved was
+# signing and attachment. Now approving makes a release public. A prompt that still described
+# the old meaning would be asking a person to consent to something else.
+p2="$(job publish-ota-manifest "$R")"
+[ -n "$p2" ]
+check "release.yml has the phase-2 publication job" "the ceremony exists" $?
+printf '%s' "$p2" | grep 'actions: read' >/dev/null
+check "phase 2 may read the run its candidate came from" "actions: read, bounded" $?
+printf '%s' "$p2" | grep -c ': write' | awk '{exit !($1 == 1)}'
+check "and it still holds exactly ONE write permission" "no widening beside it" $?
+printf '%s' "$p2" | grep '^          bash scripts/release-finalize-stable.sh "' >/dev/null
+check "phase 2 invokes the publication finalizer" "the ceremony finishes its own job" $?
+[ -f "$ROOT/scripts/release-finalize-stable.sh" ]
+check "the finalizer script exists in the tree" "not a dangling invocation" $?
+# ORDER, not mere presence: publishing before the custody upload would publish a release
+# whose verified pair is not on it yet.
+# ⛔ THE INVOCATION, NOT A MENTION OF IT. Both script names also appear in prose and inside
+# a diagnostic `echo` — the reconciliation step prints the finalizer command for an operator
+# — so a loose grep found the ECHO first and reported the order backwards. The anchor is the
+# run-block indentation plus the exact argument list, which only an invocation has.
+_att="$(printf '%s' "$p2" | grep -n '^          bash scripts/release-attach-stable-pair.sh "' | head -1 | cut -d: -f1)"
+_fin="$( { printf '%s' "$p2" | grep -n '^          bash scripts/release-finalize-stable.sh "' || true; } | awk -F: 'NR == 1 { print $1 }')"
+[ -n "$_att" ] && [ -n "$_fin" ] && [ "$_att" -lt "$_fin" ]
+check "publication comes AFTER the verified pair is attached" "order is the contract" $?
+# The reconciliation step must precede the signer: re-signing and clobbering a published
+# release is the one effect in this chain that cannot be undone.
+_rec="$(printf '%s' "$p2" | grep -n 'name: reconcile the release state before signing' | head -1 | cut -d: -f1)"
+_sign="$(printf '%s' "$p2" | grep -n 'name: sign the OTA manifest in-job' | head -1 | cut -d: -f1)"
+[ -n "$_rec" ] && [ -n "$_sign" ] && [ "$_rec" -lt "$_sign" ]
+check "the published-state reconciliation precedes the signer" "no re-sign of a public release" $?
+# --- the SLSA verifier prerequisite, and WHERE it may sit (root return 03) ---------------
+# scripts/verify-release.sh --strict-publication FAILS when slsa-verifier is absent, so the
+# tool is a deployment prerequisite of this job rather than a convenience. Its placement is
+# the load-bearing part: every later `run:` consumes the tree inside the untouched-checkout
+# assertion, and no step boundary — therefore no `uses:` — may be scheduled inside that
+# window. This pins the ordering, not the presence.
+printf '%s' "$p2" | grep 'uses: slsa-framework/slsa-verifier/actions/installer@[0-9a-f]\{40\} #' >/dev/null
+check "phase 2 installs slsa-verifier from a SHA-pinned action" "the strict-mode prerequisite" $?
+_inst="$(printf '%s' "$p2" | grep -n 'uses: slsa-framework/slsa-verifier/actions/installer@' | head -1 | cut -d: -f1)"
+_guard="$(printf '%s' "$p2" | grep -n 'name: assert the checkout is untouched before anything consumes it (phase 2)' | head -1 | cut -d: -f1)"
+[ -n "$_inst" ] && [ -n "$_guard" ] && [ "$_inst" -lt "$_guard" ]
+check "the installer runs BEFORE the untouched-checkout guard" "never inside the custody window" $?
+# LAST `uses:` OF THE JOB. A later action would reopen the window whatever its name is, so the
+# rule is positional and is asserted positionally.
+_lastuses="$(printf '%s' "$p2" | grep -n '^      - uses:' | tail -1 | cut -d: -f1)"
+[ -n "$_lastuses" ] && [ "$_lastuses" -eq "$_inst" ]
+check "and it is the LAST action of the job" "no step boundary after it" $?
+# The installed binary is asserted by digest at execution time, like the cosign binary: a
+# SHA-pinned installer still resolves its VERSION through the tags API.
+_assert="$(printf '%s' "$p2" | grep -n 'name: assert the slsa-verifier binary is the reviewed artifact' | head -1 | cut -d: -f1)"
+[ -n "$_assert" ] && [ "$_inst" -lt "$_assert" ] && [ "$_assert" -lt "$_guard" ]
+check "its digest assertion runs between the installer and the guard" "resolved, hashed, compared" $?
+printf '%s' "$p2" | grep "EXPECTED_SLSA_VERIFIER_SHA256: '946dbec729094195e88ef78e1734324a27869f03e2c6bd2f61cbc06bd5350339'" >/dev/null
+check "and it pins the upstream published linux/amd64 digest" "the reviewed artifact, by bytes" $?
+# SIGPIPE: `producer | grep -q` exits 141 when grep closes the pipe on a match, and under
+# pipefail that reads as a failure on success. The check consumes its input whole.
+! printf '%s' "$p2" | grep -E 'version_out.*\|.*grep" -q' >/dev/null
+check "the version predicate drains its producer" "no 141 on a successful match" $?
+
+grep -q 'description: "PUBLISH this draft release tag' "$R"
+check "the dispatch input says it PUBLISHES" "the approver is told what they approve" $?
+grep -q 'authorizes PUBLICATION of the release named by' "$R"
+check "the authorization contract names publication" "written, not implied" $?
+# The goreleaser recipe must still keep the draft — the finalizer is what undrafts it, and a
+# config that auto-published would route around the protected environment entirely.
+grep -qE '^  draft: true' "$ROOT/.goreleaser.yaml"
+check "the build config still creates a DRAFT" "publication stays in the protected job" $?
+# SAME-TAG SERIALIZATION SURVIVES THE NEW STEP. Phase 1 creates the draft and phase 2 now
+# publishes it; without one concurrency group over BOTH, a tag run and a publication of the
+# same release can interleave, and the QA contrast already measured what that buys — a
+# ceremony finishing rc=0 over a draft another writer had just changed. `cancel-in-progress:
+# false` because a publisher is never cancelled.
+grep -q 'group: release-${{ github.event_name ==' "$R" && grep -q 'cancel-in-progress: false' "$R"
+check "both phases share one same-tag concurrency group" "publication is serialized too" $?
+grep -q 'release-build-context.json' "$ROOT/.goreleaser.yaml"
+check "the build context is declared in the goreleaser recipe" "checksummed and uploaded" $?
+[ "$(grep -c 'glob: release-build-context.json' "$ROOT/.goreleaser.yaml")" -eq 2 ]
+check "and in BOTH extra_files declarations" "neither implies the other in v2.17.0" $?
+
 # --- release.yml: promotion aliases through the digest-asserting script ----------------
 job promote-latest "$R" | grep 'scripts/alias-image-digest.sh' >/dev/null
 check "latest* aliases go through the digest-asserting alias script" "P1-01" $?

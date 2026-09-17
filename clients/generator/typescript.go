@@ -48,9 +48,21 @@ func emitTypeScript(doc *Document) []byte {
 	b.WriteString("// Transport, auth, the error envelope, pagination and deprecation signaling\n")
 	b.WriteString("// live in the hand-written core (./core.ts); version constants in version.gen.ts.\n\n")
 	b.WriteString("import { ClientCore, type Json, type JsonInput, type RequestOptions } from \"./core.js\";\n")
+	if documentHasSessionsCommunication(doc) {
+		emitSessionsCommunicationTypeScriptTypes(&b, doc.sessionsCommunicationSchemas)
+		for _, op := range doc.Operations {
+			if op.sessionsCommunicationTyped() && op.sessionsCommunicationHasInput() {
+				emitTypeScriptSessionsCommunicationInput(&b, op)
+			}
+		}
+	}
 	b.WriteString("\nexport class Client extends ClientCore {\n")
 
 	for _, op := range doc.Operations {
+		if op.sessionsCommunicationTyped() {
+			emitTypeScriptSessionsCommunicationOp(&b, op)
+			continue
+		}
 		b.WriteString("  /**\n")
 		fmt.Fprintf(&b, "   * %s %s — %s\n", op.Method, op.Path, sentence(op.Summary))
 		if op.Stability != "" {
@@ -106,4 +118,86 @@ func emitTypeScript(doc *Document) []byte {
 	}
 	b.WriteString("}\n")
 	return []byte(b.String())
+}
+
+func emitTypeScriptSessionsCommunicationOp(b *strings.Builder, op Operation) {
+	inputType := op.sessionsCommunicationInputType()
+	b.WriteString("  /**\n")
+	fmt.Fprintf(b, "   * %s %s — %s\n", op.Method, op.Path, sentence(op.Summary))
+	// ⛔ THE OPERATION'S OWN STABILITY, NOT A CONSTANT. This line used to read
+	// "Stability: beta." because the only family routed through this emitter WAS beta,
+	// and the literal was true for every caller of the day. Adding a second family made
+	// it false without touching it: a stable published operation started advertising
+	// itself as beta in the TypeScript SDK, while the same operation's Go, Python and
+	// Java neighbours — which never wrote the line at all — said nothing and so said
+	// nothing wrong. A hard-coded fact about "everyone who uses this function" expires
+	// the moment somebody else uses it.
+	if op.Stability != "" {
+		fmt.Fprintf(b, "   * Stability: %s.\n", op.Stability)
+	}
+	b.WriteString("   */\n")
+	params := make([]string, 0, len(op.PathParams)+2)
+	for _, p := range op.PathParams {
+		params = append(params, paramIdent(p)+": string")
+	}
+	if op.sessionsCommunicationHasInput() {
+		params = append(params, "input: "+inputType)
+	}
+	params = append(params, "opts?: RequestOptions")
+	fmt.Fprintf(b, "  %s(%s): Promise<%s> {\n", op.tsName(), strings.Join(params, ", "), op.sessionsCommunicationResultType())
+	if len(op.Parameters) > 0 {
+		b.WriteString("    const query: Record<string, string> = {};\n    const headers: Record<string, string> = {};\n")
+		for _, parameter := range op.Parameters {
+			target := "query"
+			if parameter.In == "header" {
+				target = "headers"
+			}
+			field := "input." + paramIdent(parameter.Name)
+			value := field
+			if parameter.Type == "integer" {
+				value = "String(" + field + ")"
+			}
+			if parameter.Required {
+				fmt.Fprintf(b, "    %s[%q] = %s;\n", target, parameter.Name, value)
+			} else {
+				condition := field + " !== undefined"
+				if parameter.Type != "integer" {
+					condition += " && " + field + " !== \"\""
+				}
+				fmt.Fprintf(b, "    if (%s) %s[%q] = %s;\n", condition, target, parameter.Name, value)
+			}
+		}
+		b.WriteString("    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };\n")
+	} else {
+		b.WriteString("    const callOpts = opts;\n")
+	}
+	body := "undefined"
+	if op.sessionsCommunicationBodyType() != "" {
+		body = "input.body as unknown as JsonInput"
+	}
+	seam := "do"
+	if op.sessionsCommunicationBodyType() != "" {
+		seam = "doJsonRequired"
+	}
+	fmt.Fprintf(b, "    return this.%s(%q, %q, %s, %s, callOpts) as unknown as Promise<%s>;\n  }\n\n",
+		seam, op.Method, op.Path, tsPathExpr(op.Path), body, op.sessionsCommunicationResultType())
+}
+
+func emitTypeScriptSessionsCommunicationInput(b *strings.Builder, op Operation) {
+	fmt.Fprintf(b, "export interface %s {\n", op.sessionsCommunicationInputType())
+	if bodyType := op.sessionsCommunicationBodyType(); bodyType != "" {
+		fmt.Fprintf(b, "  body: %s;\n", bodyType)
+	}
+	for _, parameter := range op.Parameters {
+		typ := "string"
+		if parameter.Type == "integer" {
+			typ = "number"
+		}
+		optional := ""
+		if !parameter.Required {
+			optional = "?"
+		}
+		fmt.Fprintf(b, "  %s%s: %s;\n", paramIdent(parameter.Name), optional, typ)
+	}
+	b.WriteString("}\n\n")
 }

@@ -6,20 +6,24 @@ package api_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // stubSourceRoster implements api.SourceRoster with a canned list for testing.
 type stubSourceRoster struct {
 	sources []api.SourceRosterEntry
+	err     error
 }
 
 func (s *stubSourceRoster) ListSources(context.Context) ([]api.SourceRosterEntry, error) {
-	return s.sources, nil
+	return s.sources, s.err
 }
 
 func (s *stubSourceRoster) PutSource(context.Context, auth.Principal, api.SourceRosterInput) (api.SourceApplyResult, error) {
@@ -378,13 +382,7 @@ func TestConnectorHealth_RequiresAuth(t *testing.T) {
 }
 
 func TestConnectorHealth_ReturnsItems(t *testing.T) {
-	roster := &stubSourceRoster{
-		sources: []api.SourceRosterEntry{
-			{Name: "aws-prod", Kind: "aws", Tenant: "acme", Status: "running", Enabled: true, PollSeconds: 300, SourceMode: "live"},
-			{Name: "gcp-staging", Kind: "gcp-audit", Tenant: "acme", Status: "failed", Enabled: true},
-			{Name: "disabled-one", Kind: "slack", Tenant: "acme", Status: "disabled", Enabled: false},
-		},
-	}
+	roster := &stubSourceRoster{}
 	onboarding := &stubConnectorOnboarding{
 		connectors: []api.ConnectorInfo{
 			{Kind: "aws", Title: "AWS CloudTrail"},
@@ -398,6 +396,11 @@ func TestConnectorHealth_ReturnsItems(t *testing.T) {
 	})
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
+	roster.sources = []api.SourceRosterEntry{
+		{Name: "aws-prod", Kind: "aws", Tenant: tenant.String(), Status: "running", Enabled: true, PollSeconds: 300, SourceMode: "live"},
+		{Name: "gcp-staging", Kind: "gcp-audit", Tenant: tenant.String(), Status: "failed", Enabled: true},
+		{Name: "disabled-one", Kind: "slack", Tenant: tenant.String(), Status: "disabled", Enabled: false},
+	}
 
 	r := h.do("GET", "/v1/connectors/health", admin, nil, tenantHdr(tenant))
 	if r.code != http.StatusOK {
@@ -442,6 +445,141 @@ func TestConnectorHealth_ReturnsItems(t *testing.T) {
 	}
 	if summary["failed"] != float64(1) {
 		t.Errorf("summary failed = %v, want 1", summary["failed"])
+	}
+}
+
+// The durable source roster is deployment-global storage whose rows name their
+// business tenant. This tenant-facing projection must use only the canonical
+// tenant resolved by authzTenant: foreign and legacy malformed rows are neither
+// metadata nor aggregate input for the response.
+func TestConnectorHealth_TenantScopesItemsAndSummary(t *testing.T) {
+	roster := &stubSourceRoster{}
+	onboarding := &stubConnectorOnboarding{connectors: []api.ConnectorInfo{
+		{Kind: "t1-kind", Title: "Tenant One Connector"},
+		{Kind: "t2-private-kind", Title: "Tenant Two Private Connector"},
+		{Kind: "legacy-kind", Title: "Legacy Unassigned Connector"},
+		{Kind: "unknown-kind", Title: "Unknown Tenant Connector"},
+	}}
+	h := newHarnessOpts(t, func(o *api.Options) {
+		o.SourceRoster = roster
+		o.ConnectorOnboarding = onboarding
+	})
+	admin := h.adminLogin()
+	tenantOne := h.createOrg(admin, "tenant-one")
+	tenantTwo := h.createOrg(admin, "tenant-two")
+	emptyTenant := h.createOrg(admin, "empty-tenant")
+	unknownTenant := model.NewTenantID()
+
+	roster.sources = []api.SourceRosterEntry{
+		{Name: "t1-running", Kind: "t1-kind", Tenant: tenantOne.String(), Status: "running", Enabled: true},
+		{Name: "t1-disabled", Kind: "t1-kind", Tenant: tenantOne.String(), Status: "disabled", Enabled: false},
+		{Name: "t2-private-failure", Kind: "t2-private-kind", Tenant: tenantTwo.String(), Status: "failed", Enabled: true},
+		{Name: "legacy-unassigned", Kind: "legacy-kind", Tenant: "", Status: "failed", Enabled: true},
+		{Name: "unknown-tenant-row", Kind: "unknown-kind", Tenant: unknownTenant.String(), Status: "stopped", Enabled: true},
+	}
+
+	multi := h.tenantTokenMulti(admin, "multi@tenants.example", tenantOne, tenantTwo)
+	oneOnly := h.mkMember(admin, "one@tenant.example", "memberpass1", auth.RoleViewer, tenantOne)
+
+	t.Run("anonymous", func(t *testing.T) {
+		got := h.do("GET", "/v1/connectors/health", "", nil, tenantHdr(tenantOne))
+		if got.code != http.StatusUnauthorized {
+			t.Fatalf("status = %d %s, want 401", got.code, got.raw)
+		}
+	})
+	t.Run("multi membership requires active tenant", func(t *testing.T) {
+		got := h.do("GET", "/v1/connectors/health", multi, nil, nil)
+		if got.code != http.StatusBadRequest {
+			t.Fatalf("status = %d %s, want 400", got.code, got.raw)
+		}
+	})
+	t.Run("unknown active tenant is denied", func(t *testing.T) {
+		got := h.do("GET", "/v1/connectors/health", multi, nil, tenantHdr(unknownTenant))
+		if got.code != http.StatusForbidden {
+			t.Fatalf("status = %d %s, want 403", got.code, got.raw)
+		}
+	})
+	t.Run("single membership defaults", func(t *testing.T) {
+		assertConnectorHealth(t, h.do("GET", "/v1/connectors/health", oneOnly, nil, nil),
+			[]string{"t1-running", "t1-disabled"}, connectorSummaryWant{total: 2, running: 1, disabled: 1})
+	})
+	t.Run("tenant one selected from multi membership", func(t *testing.T) {
+		got := h.do("GET", "/v1/connectors/health", multi, nil, tenantHdr(tenantOne))
+		assertConnectorHealth(t, got, []string{"t1-running", "t1-disabled"},
+			connectorSummaryWant{total: 2, running: 1, disabled: 1})
+		for _, forbidden := range []string{
+			"t2-private-failure", "Tenant Two Private Connector", tenantTwo.String(),
+			"legacy-unassigned", "Legacy Unassigned Connector",
+			"unknown-tenant-row", "Unknown Tenant Connector", unknownTenant.String(),
+		} {
+			if strings.Contains(got.raw, forbidden) {
+				t.Errorf("response exposes foreign metadata %q: %s", forbidden, got.raw)
+			}
+		}
+	})
+	t.Run("tenant two selected from multi membership", func(t *testing.T) {
+		assertConnectorHealth(t, h.do("GET", "/v1/connectors/health", multi, nil, tenantHdr(tenantTwo)),
+			[]string{"t2-private-failure"}, connectorSummaryWant{total: 1, failed: 1})
+	})
+	t.Run("authorized tenant with no rows is empty", func(t *testing.T) {
+		assertConnectorHealth(t, h.do("GET", "/v1/connectors/health", admin, nil, tenantHdr(emptyTenant)),
+			[]string{}, connectorSummaryWant{})
+	})
+	t.Run("superadmin is scoped by selected business tenant", func(t *testing.T) {
+		withoutTenant := h.do("GET", "/v1/connectors/health", admin, nil, nil)
+		if withoutTenant.code != http.StatusBadRequest {
+			t.Fatalf("without tenant status = %d %s, want 400", withoutTenant.code, withoutTenant.raw)
+		}
+		assertConnectorHealth(t, h.do("GET", "/v1/connectors/health", admin, nil, tenantHdr(tenantOne)),
+			[]string{"t1-running", "t1-disabled"}, connectorSummaryWant{total: 2, running: 1, disabled: 1})
+	})
+	t.Run("roster error is preserved", func(t *testing.T) {
+		roster.err = errors.New("roster unavailable")
+		t.Cleanup(func() { roster.err = nil })
+		got := h.do("GET", "/v1/connectors/health", multi, nil, tenantHdr(tenantOne))
+		if got.code != http.StatusInternalServerError {
+			t.Fatalf("status = %d %s, want 500", got.code, got.raw)
+		}
+	})
+}
+
+type connectorSummaryWant struct {
+	total    int
+	running  int
+	failed   int
+	stopped  int
+	disabled int
+}
+
+func assertConnectorHealth(t *testing.T, got resp, names []string, want connectorSummaryWant) {
+	t.Helper()
+	if got.code != http.StatusOK {
+		t.Fatalf("status = %d %s, want 200", got.code, got.raw)
+	}
+	items, ok := got.body["items"].([]any)
+	if !ok {
+		t.Fatalf("items = %#v, want JSON array", got.body["items"])
+	}
+	if len(items) != len(names) {
+		t.Fatalf("items = %#v, want names %v", items, names)
+	}
+	for i, name := range names {
+		item, ok := items[i].(map[string]any)
+		if !ok || item["name"] != name {
+			t.Fatalf("item[%d] = %#v, want name %q", i, items[i], name)
+		}
+	}
+	summary, ok := got.body["summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("summary = %#v, want object", got.body["summary"])
+	}
+	for field, value := range map[string]int{
+		"total": want.total, "running": want.running, "failed": want.failed,
+		"stopped": want.stopped, "disabled": want.disabled,
+	} {
+		if summary[field] != float64(value) {
+			t.Errorf("summary.%s = %v, want %d", field, summary[field], value)
+		}
 	}
 }
 

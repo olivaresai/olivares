@@ -23,20 +23,22 @@ control plane с резервными копиями.
 действие, — тот же, что проверен от начала до конца против бинарника в
 [туториале по одному узлу](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="До первого релиза собирайте образ локально">
-Релизные образы публикуются в `docker.io/olivaresai/olivares` на Docker Hub (подписанные,
-закреплённые по digest) **когда выйдет первый публичный релиз** — путь в реестре пуст,
-пока этот тег не вырезан (то же содержимое также зеркалируется в
-`ghcr.io/olivaresai/olivares`, идентичное по digest). Сегодня соберите тот же
-укреплённый distroless-образ из исходников и направьте на него стек:
+<Aside type="caution" title="Пока образы v26.9.0 не опубликованы, собирайте локально">
+Предыдущий тегированный выпуск уже поставил подписанные образы. Канон этого дерева — **v26.9.0**.
+Свидетель поверхностей установки всё ещё записывает Docker Hub и GHCR как
+**not-published** для `26.9.0`, пока не выполнится release-задание этого тега
+(`docs/releases/v26.9.0-install-surfaces.json`). Та же честность есть в
+[Развёртывание с Docker](/how-to/docker-deployment/). Пока тегов `26.9.0` нет,
+соберите укреплённый distroless-образ из исходников и направьте на него стек:
 
 ```bash
 task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-Когда релизы появятся: установите `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>`
-и сначала [проверьте его](/how-to/verify-a-release/) — по digest, никогда по тегу.
+Когда образ `26.9.0` существует: установите
+`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` и сначала
+[проверьте его](/how-to/verify-a-release/) — по digest, никогда по тегу.
 </Aside>
 
 ## 1. Поднимите одноузловой стек (SQLite)
@@ -46,7 +48,7 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 1. Запустите его:
 
    ```bash
-   docker compose -f deploy/compose/docker-compose.yml up -d
+   docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
    ```
 
    Что вы получаете по проектированию:
@@ -56,7 +58,7 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
    | Порты | `127.0.0.1:8443` (HTTPS: REST + веб-UI), `127.0.0.1:8444` (gRPC) — привязаны к **localhost на хосте**; открывайте намеренно |
    | Данные | именованный том `olivares-data` → `/var/lib/olivares` (хранилище SQLite, ключ подписи аудита, материал TLS) |
    | Укрепление | работает как `65532:65532`, read-only root, все capabilities сброшены, `no-new-privileges`, tmpfs `/tmp` |
-   | Healthcheck | нет внутри контейнера (образ distroless — нет shell). Зондируйте `/livez` и `/readyz` с хоста |
+   | Healthcheck | прямой запуск встроенной команды `olivares readyz` — без shell, curl и wget. Здоровым считается только HTTP 200 локального `/readyz` |
 
 2. Прочитайте одноразовый setup-токен из логов:
 

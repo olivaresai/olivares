@@ -70,23 +70,35 @@ variable "enable_ha_nat" {
 # Quién les da valor y en qué orden: `.github/workflows/aws-terraform.yml`
 # (`workflow_dispatch` → `TF_VAR_*`) y `an internal design note (not shipped)`.
 
-# ⛔ HOSTNAMES ADJUDICADOS (orden 24 de 2026-08-28; el par de SANDBOX lo adjudica
-# the planner). Producción NO se toca en el primer apply, y por eso el default de aquí es el
-# de sandbox: lo que se aplica sin pasar nada es el estate de pruebas.
+# ⛔ HOSTNAMES — CORREGIDOS EL 2026-09-01 POR ORDEN DE FRAN: todo el cloud vive bajo
+# `cloud.olivares.ai`. Su razón, literal: «para evitar los `-` y tener todo el cloud dentro de
+# cloud.olivares.ai». Los defaults `*.cloud.olivaresai.dev` que había aquí quedan RANCIOS.
 #
-#   sandbox   api.cloud.olivaresai.dev   ·  ingest.cloud.olivaresai.dev   (zona olivaresai.dev)
-#   producción api.cloud.olivares.ai     ·  ingest.cloud.olivares.ai      (se pasan por dispatch)
+#   defaults de hoy   api.cloud.olivares.ai   ·  ingest.cloud.olivares.ai   (zona olivares.ai)
+#
+# Lo que decía antes, y se deja escrito porque explica de dónde venía el `.dev`: la orden 24
+# (2026-08-28) repartía sandbox en `*.cloud.olivaresai.dev` y producción en
+# `*.cloud.olivares.ai`, y por eso el default era el par de SANDBOX.
+#
+# ⚠ Y ESE REPARTO ES LO QUE LA CORRECCIÓN DESHACE, así que hay que decirlo en voz alta en vez
+# de dejarlo implícito: **el default ya NO es «el nombre de pruebas»**. Hoy sólo existe UN
+# estate —la clave del backend es `cloud/sandbox/terraform.tfstate` y el token de confirmación
+# es `apply-sandbox-estate`—, así que un dispatch sin variables aplica ese estate bajo el
+# nombre definitivo y **pide el certificado de ACM para él**. Si más adelante se quiere un
+# sandbox con nombre propio, ese nombre lo elige dentro de la misma zona y sin guiones
+# (p. ej. un `sandbox.cloud.olivares.ai`), y se pasa por dispatch como cualquier otro valor.
+# No se inventa aquí: esta línea sólo deja de mentir sobre lo que hace el default.
 variable "hostname" {
   type        = string
   description = "Public hostname for the control-plane ALB. Default is the SANDBOX name; production (api.cloud.olivares.ai) is passed explicitly and is not touched by the first apply."
-  default     = "api.cloud.olivaresai.dev"
+  default     = "api.cloud.olivares.ai"
   nullable    = false
 }
 
 variable "ingest_hostname" {
   type        = string
   description = "Public hostname for the collector NLB. Default is the SANDBOX name. It configures no AWS resource — the NLB is TCP passthrough and needs no ACM certificate — and exists so the CNAME to create is derived here instead of typed twice."
-  default     = "ingest.cloud.olivaresai.dev"
+  default     = "ingest.cloud.olivares.ai"
   nullable    = false
 }
 
@@ -121,4 +133,23 @@ variable "engine_image" {
   description = "Engine image BY DIGEST (repo@sha256:...). Empty keeps the engine task definition and service at count 0. Produced by .github/workflows/aws-images.yml."
   default     = ""
   nullable    = false
+}
+
+variable "roles_task_image" {
+  type        = string
+  description = "Image BY DIGEST (repo@sha256:...) with a Postgres client, for the one-shot task that provisions the control plane's database roles. Empty means no such task: its role, policy and task definition stay at count 0. Produced by .github/workflows/aws-images.yml, which builds three images: the control plane, the engine, and this client-only one."
+  default     = ""
+  nullable    = false
+}
+
+variable "cloud_cp_max_pool_connections" {
+  type        = number
+  description = "CLOUD_CP_MAX_POOL_CONNECTIONS for the control plane. Not a secret: the client connection slots ONE control-plane process may declare across its nine runtime pools. 36 is four per runtime capability, the binary's default, and the floor is one slot per capability. It bounds neither server sessions nor desired_count replicas, deployment surge, draining or rollback tasks, migrations or poolers: account for those per database target."
+  default     = 36
+  nullable    = false
+
+  validation {
+    condition     = var.cloud_cp_max_pool_connections >= 9 && var.cloud_cp_max_pool_connections <= 2147483647 && floor(var.cloud_cp_max_pool_connections) == var.cloud_cp_max_pool_connections
+    error_message = "cloud_cp_max_pool_connections must be a whole number from 9 (one slot per runtime capability) to 2147483647."
+  }
 }

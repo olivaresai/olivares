@@ -28,6 +28,9 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 
 // The live stream pings the network; stub it to report a closed stream and not call.

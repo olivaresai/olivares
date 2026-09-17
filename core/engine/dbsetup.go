@@ -55,3 +55,45 @@ func ProvisionPostgres(ctx context.Context, superuserDSN string, spec store.PgPr
 func MigrationStatus(ctx context.Context, cfg store.Config) ([]store.MigrationRecord, error) {
 	return sqlstore.MigrationStatus(ctx, cfg)
 }
+
+// CoreMigrationPlanVersions returns the versions of this binary's compiled core migration
+// plan for engine, in ascending order, without a database connection. A complete core history
+// equals this list; it is not assumed to be an integer range (v12 is reserved and
+// unregistered). It adds no behavior — only visibility.
+func CoreMigrationPlanVersions(engine store.Engine) ([]int, error) {
+	return sqlstore.CompiledCoreMigrationVersions(engine)
+}
+
+// ProbeConnAuthority opens a transient connection for cfg (no migrations, no
+// schema change) and reports what that connection actually is and may do — the
+// role posture, whether it may create in the engine schema, and which database
+// on which running cluster it reached — so `dr backup`/`dr restore` can refuse a
+// wrong or incoherent connection BEFORE anything is written rather than after.
+// A connection/auth failure is reported inside the returned value, never as an
+// error; the error is reserved for an unsupported engine.
+func ProbeConnAuthority(ctx context.Context, cfg store.Config) (store.ConnAuthority, error) {
+	return sqlstore.ProbeConnAuthority(ctx, cfg)
+}
+
+// ProbeSameLiveServer mounts the engine's own live-server challenge on transient
+// connections: the holder takes a random advisory key and keeps it while each
+// witness tries to take the same one, so a witness that ACQUIRES it has proved it
+// is a different server. It lets `dr backup`/`dr restore` establish the
+// prerequisite the store enforces at Open BEFORE anything is written, from the
+// same factored predicate, instead of discovering it after a restore. Nothing is
+// written and no lock outlives the call.
+func ProbeSameLiveServer(
+	ctx context.Context,
+	holder store.Config,
+	holderLabel string,
+	witnesses []store.SameServerWitness,
+) (store.SameServerReport, error) {
+	return sqlstore.ProbeSameLiveServer(ctx, holder, holderLabel, witnesses)
+}
+
+// RestorePostgresUserAuthorityPrivileges closes the two compiled H function
+// ACLs stripped by a successful logical pg_restore, before Open. It exposes no
+// runtime capability or SQL handle and leaves supported pre-H backups alone.
+func RestorePostgresUserAuthorityPrivileges(ctx context.Context, cfg store.Config) error {
+	return sqlstore.RestorePostgresUserAuthorityPrivileges(ctx, cfg)
+}

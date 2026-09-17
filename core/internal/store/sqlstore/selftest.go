@@ -176,11 +176,12 @@ func schemaInvariantViolation(
 		// Only the catalog's own text distinguishes that from the real trigger.
 		if required.DefinitionSHA256 != "" {
 			got := sha256.Sum256([]byte(info.Definition))
-			if hex.EncodeToString(got[:]) != required.DefinitionSHA256 {
+			live := hex.EncodeToString(got[:])
+			if !schemaInvariantDefinitionMatches(engine, key, required, info, live) {
 				tampered = append(tampered, fmt.Sprintf(
 					"%s (declared %s, live %s, %d bytes)",
 					key, shortDigest(required.DefinitionSHA256),
-					shortDigest(hex.EncodeToString(got[:])), len(info.Definition)))
+					shortDigest(live), len(info.Definition)))
 			}
 		}
 		if verifyAppPrivileges && engine == store.EnginePostgres && !info.CanExecute {
@@ -212,6 +213,74 @@ func schemaInvariantViolation(
 		return fmt.Errorf("self-test: %w", store.ErrSchemaBoundaryTableMissing)
 	}
 	return nil
+}
+
+// schemaInvariantDefinitionMatches is the complete-definition decision, kept pure so the whole
+// matrix is provable without a server.
+//
+// The rule is exact digest equality, with ONE closed equivalence: the core retention invariant
+// on PostgreSQL AS LONG AS the compiled declaration is still the revision the pair was measured
+// on, whose complete framed definition PostgreSQL renders two ways for the very same object.
+// See postgresRetentionMeasuredRevisionQualifiedDigest for the measurement and the mechanism,
+// and isMeasuredPostgresUserAuthorityRetentionRevision for the revision fence.
+//
+// EVERY gate below is load-bearing, and the structural identity is checked for BOTH accepted
+// forms rather than only for the alternative. A generic "the canonical digest always passes"
+// arm placed before this branch would be a different function: it would accept the canonical
+// rendering while the catalog reports a handler in another schema or under another name, which
+// is precisely the state the alternative makes reachable.
+//
+// ONE HONEST WEAKNESS, stated where it bites. When this branch refuses on the structural
+// identity ALONE, the caller's existing diagnostic prints "declared <d>, live <d>" with the two
+// digests equal, which reads as a contradiction. The message is deliberately left as it is —
+// this change replaces a decision, not an error format — and the state is not reachable through
+// dialect.SchemaTriggers, whose deparsed trigger text names the handler it also reports
+// structurally, so a moved handler moves the digest with it. It is a defensive arm, not a
+// diagnosed failure mode.
+func schemaInvariantDefinitionMatches(
+	engine store.Engine,
+	key dialect.TriggerKey,
+	required registeredSchemaTrigger,
+	info dialect.TriggerInfo,
+	liveDigest string,
+) bool {
+	if isMeasuredPostgresUserAuthorityRetentionRevision(engine, key, required) {
+		// The tgfoid-derived identity, from the SAME catalog join that produced the
+		// deparsed text. It is not parsed out of the rendering: a quoted identifier may
+		// itself contain dots and parentheses, which is why dialect.TriggerInfo carries
+		// these fields structurally at all.
+		if info.FunctionSchema != dialect.EngineSchema || info.FunctionName != userAuthorityRetentionFunction {
+			return false
+		}
+		return liveDigest == postgresRetentionMeasuredRevisionDigest ||
+			liveDigest == postgresRetentionMeasuredRevisionQualifiedDigest
+	}
+	return liveDigest == required.DefinitionSHA256
+}
+
+// isMeasuredPostgresUserAuthorityRetentionRevision answers "is the declaration under test the
+// exact revision the rendering pair was measured on", and it is deliberately answered from the
+// DECLARATION rather than from the catalog.
+//
+// THE LAST TERM IS THE REVISION FENCE, and it compares against the IMMUTABLE
+// postgresRetentionMeasuredRevisionDigest — never against the mutable current declaration,
+// which is where required.DefinitionSHA256 came from. Comparing a value with the constant that
+// produced it is a tautology: it survives any revision bump, because both operands move
+// together, and the old qualified companion would stay accepted under a body nobody measured.
+// That was the defect this predicate now closes.
+//
+// So a later revision of the retention body replaces postgresUserAuthorityRetentionDigest, this
+// predicate stops matching on its own, and the alternative rendering has to be remeasured
+// through the ordinary new-migration process instead of surviving as a free-standing exception.
+func isMeasuredPostgresUserAuthorityRetentionRevision(
+	engine store.Engine, key dialect.TriggerKey, required registeredSchemaTrigger,
+) bool {
+	return engine == store.EnginePostgres &&
+		required.namespace == coreSchemaInvariantNamespace &&
+		key.Schema == dialect.EngineSchema &&
+		key.Table == userAuthorityRetentionTable &&
+		key.Name == userAuthorityRetentionTriggerName &&
+		required.DefinitionSHA256 == postgresRetentionMeasuredRevisionDigest
 }
 
 func checkInvariantTablePrivileges(ctx context.Context, db *sql.DB, tables []string) error {

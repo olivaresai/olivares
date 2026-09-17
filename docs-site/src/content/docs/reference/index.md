@@ -23,7 +23,7 @@ overall contract.
 
 | Area | What it documents | Source of truth |
 |---|---|---|
-| **[REST API](/reference/api/)** | The control-plane HTTP API: auth, setup, tenancy, agents, the R/RW access map, tokens, and the audit ledger. | The product's **OpenAPI 3.1** contract (53 core paths), rendered at build time from the real file — not a copy. |
+| **[REST API](/reference/api/)** | The control-plane HTTP API: auth, setup, tenancy, agents, the R/RW access map, tokens, and the audit ledger. | The product's **OpenAPI 3.1** contract (54 core paths), rendered at build time from the real file — not a copy. |
 | **[Module routes (beta)](/reference/api-beta/)** | The product's module routes (`/v1/m/<ns>/…`) — finops, compliance, governance, sessions, models, knowledge, … — as a separate **beta** OpenAPI document. | The same OpenAPI 3.1 contract, reflected at build time from the routes the modules register. |
 | **[Stability policy](/reference/api-stability/)** | Versioning, stability tiers, deprecation/sunset signalling and the minimum support windows for the API, the provider and the client SDKs. | The in-code deprecation table and its build-failing window tests. |
 | **[gRPC](/reference/grpc/)** | The engine's gRPC mirror and the versioned plugin wire contract every out-of-process connector and module speaks. | The `grpc.ServiceDesc` registration tables the servers hand to gRPC. |
@@ -45,7 +45,7 @@ identity and tenancy, agents, the read/write access map
 access-map module rather than the core surface), token management, and the audit
 ledger.
 
-The contract describes **53 core paths**. That is deliberate: it is the stable,
+The contract describes **54 core paths**. That is deliberate: it is the stable,
 versioned surface of the control plane, not every route the engine can answer.
 What "stable" commits to — versioning, deprecation signalling and minimum
 support windows — is the [API stability policy](/reference/api-stability/).
@@ -53,7 +53,7 @@ support windows — is the [API stability policy](/reference/api-stability/).
 :::note[Module routes are a separate, beta contract]
 The module routes — for example the access-map module's
 `/v1/m/accessmap/graph`, `/v1/m/accessmap/neighbors` and `/v1/m/accessmap/drift`
-— are **not** part of the 53-path stable core document. They are published as a
+— are **not** part of the 54-path stable core document. They are published as a
 separate **beta** OpenAPI document at [`/reference/api-beta/`](/reference/api-beta/)
 (served at `/openapi.beta.json`, reflected from the routes the modules actually
 register), so the stable surface stays identifiable while the full product

@@ -8,6 +8,7 @@
 //   GET/PUT  /dlp/rules         — egress DLP allow/deny rules by classification
 //   DELETE   /dlp/rules/{id}
 //   POST     /device/approve    — approve/deny a device-authorization user code
+//   GET      /content-firewall  — startup attachment state of the Messages inspector
 // Reads are viewer-tier; config writes editor-tier; DLP writes admin-tier. The
 // console mirrors those tiers and adds an AAL3 step-up on the mutating actions.
 import { http } from '@/lib/api/client'
@@ -60,6 +61,60 @@ export interface DLPRule {
   created_by?: string
 }
 
+/**
+ * Startup attachment state of the inline Messages proxy content inspector, as the
+ * responding process recorded it at composition time. `inspector_attached` can be the
+ * deny-all fallback that an unreadable configuration installs, so it is never a claim
+ * that traffic is being inspected now.
+ */
+export type ContentFirewallState =
+  'unobserved' | 'pep_not_composed' | 'inspector_absent' | 'inspector_attached'
+
+export const CONTENT_FIREWALL_STATES: readonly ContentFirewallState[] = [
+  'unobserved',
+  'pep_not_composed',
+  'inspector_absent',
+  'inspector_attached',
+]
+
+/**
+ * The one enforcement point this operation describes. The engine publishes it as a
+ * single-value enum, so any other value is a body this console cannot interpret.
+ */
+export const CONTENT_FIREWALL_PEP = 'messages_proxy'
+
+/** The complete response body (contentFirewallDTO). It carries no tenant data. */
+export interface ContentFirewall {
+  pep: typeof CONTENT_FIREWALL_PEP
+  state: ContentFirewallState
+  note: string
+}
+
+/** True only for a state this console publishes a meaning for. */
+export function isContentFirewallState(v: unknown): v is ContentFirewallState {
+  return (
+    typeof v === 'string' &&
+    (CONTENT_FIREWALL_STATES as readonly string[]).includes(v)
+  )
+}
+
+/**
+ * Narrow an unknown response to the COMPLETE body before any attachment state is
+ * shown. Checking the state alone was not enough: a body naming another enforcement
+ * point, or carrying a non-string note, still painted an attachment reading.
+ *
+ * Extra fields are accepted so the engine can add one without blanking this card.
+ */
+export function isContentFirewall(v: unknown): v is ContentFirewall {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+  const body = v as Record<string, unknown>
+  return (
+    body.pep === CONTENT_FIREWALL_PEP &&
+    typeof body.note === 'string' &&
+    isContentFirewallState(body.state)
+  )
+}
+
 /** The outcome of a device-authorization decision (devicegrant.go). */
 export interface DeviceGrantResult {
   id: string
@@ -107,9 +162,15 @@ export const inferenceProxyApi = {
   // grant expired or was already consumed — both surfaced honestly to the operator.
   approveDevice: (input: { user_code: string; deny?: boolean }) =>
     http.post<DeviceGrantResult>(`${BASE}/device/approve`, input),
+
+  // Read-only, no tenant data, no mutation. Same viewer tier as the config read.
+  getContentFirewall: () =>
+    http.get<ContentFirewall>(`${BASE}/content-firewall`),
 }
 
 export const inferenceProxyKeys = {
   config: (t: string | null) => ['inferenceproxy', t, 'config'] as const,
   dlpRules: (t: string | null) => ['inferenceproxy', t, 'dlpRules'] as const,
+  contentFirewall: (t: string | null) =>
+    ['inferenceproxy', t, 'contentFirewall'] as const,
 }

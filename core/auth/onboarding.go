@@ -195,6 +195,11 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 		tok  string
 	)
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// R5: the absent-component guard runs before Users.Update takes directory/user
+		// authority, so a refusal leaves the invite, the user and the ledger unchanged.
+		if err := a.guardNewLoginSession(ctx, as); err != nil {
+			return err
+		}
 		invites, _, err := as.Invites().List(ctx, byEq("selector", selector, 1))
 		if err != nil {
 			return err
@@ -204,7 +209,11 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 		}
 		inv := invites[0]
 		now := a.clock.Now()
-		if inv.AcceptedAt != nil || inv.ExpiresAt.Before(now) || !SecretMatches(secret, inv.SecretHash) {
+		// The validity window is half-open, [created, ExpiresAt): an invite is
+		// expired from ExpiresAt onward, so the exact expiration instant is already
+		// too late. Written as "now is not strictly before ExpiresAt" because
+		// Timestamp exposes only Before.
+		if inv.AcceptedAt != nil || !now.Before(inv.ExpiresAt) || !SecretMatches(secret, inv.SecretHash) {
 			return ErrInviteInvalid
 		}
 		// The token is proven valid — only NOW pay for the argon2 hash, so an
@@ -271,7 +280,10 @@ func (a *Authenticator) ListPendingInvites(ctx context.Context, tenant model.Ten
 		}
 		now := a.clock.Now()
 		for _, inv := range invites {
-			if inv.AcceptedAt == nil && !inv.ExpiresAt.Before(now) {
+			// Same half-open window as AcceptInvite: pending means strictly before
+			// ExpiresAt, so an invite at its exact expiration instant is already gone
+			// from the list and the console never offers a token the accept leg refuses.
+			if inv.AcceptedAt == nil && now.Before(inv.ExpiresAt) {
 				out = append(out, inv)
 			}
 		}
@@ -284,6 +296,25 @@ func (a *Authenticator) ListPendingInvites(ctx context.Context, tenant model.Ten
 // can only revoke its own tenant's invites (a cross-tenant id reads as not-found).
 func (a *Authenticator) RevokeInvite(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID) error {
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// LOCK ORDER, not authorization. This callback deletes an invitation row and
+		// then appends an audit event, and the audit log the auth scope hands out
+		// takes the GLOBAL directory lock BEFORE any audit lock. Reaching the
+		// invitation row first therefore ran the pair in the INVERSE order to
+		// AcceptInvite, which already reaches global through Users().Update and only
+		// then locks that same invitation row. On PostgreSQL the two form a real
+		// cycle — Accept holds global and waits for the row, Revoke holds the row and
+		// waits for global — and one of them dies with a deadlock.
+		//
+		// The admission door is the compound-callback helper with an EMPTY User set:
+		// revocation changes no User, so it declares none. PrepareUserAuthorityWrite
+		// still runs the directory prepare for a zero-length set, which is precisely
+		// what is wanted here — it takes global before the first source write and
+		// restores the transaction's tenant presentation without bumping H or any
+		// tenant epoch. Nothing below is relaxed: the tenant check, the coarse
+		// not-found and the delete/audit atomicity are unchanged.
+		if err := prepareUserAuthorityWrite(ctx, as); err != nil {
+			return err
+		}
 		inv, err := as.Invites().Get(ctx, id)
 		if err != nil {
 			return err

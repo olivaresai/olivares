@@ -15,7 +15,7 @@
 // mockea nada y monta tablas de 100k filas. Aquí hace falta un doble de la ceremonia, y un
 // `vi.mock` es de MÓDULO — contaminaría las 20 celdas de virtualización que no lo piden.
 import type { TableColumn } from '@/components/data/data-table'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -321,12 +321,50 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
     )
     await screen.findByText('step-up ceremony')
     // Queda la cabecera. Antes decía 3, describiendo una rejilla de dos filas que el cuerpo
-    // ya había sustituido por el estado.
-    // DOS: la cabecera y la fila del estado, que es lo que el árbol accesible expone de
-    // verdad (medido por el contraste con Testing Library y con Chromium). Puse 1 y era
-    // otra cifra falsa, sólo que en la otra dirección; el literal no es la verdad.
-    expect(screen.getByRole('grid')).toHaveAttribute('aria-rowcount', '2')
-    expect(screen.getAllByRole('row')).toHaveLength(2)
+    // ya había sustituido por el estado; luego DOS, contando la fila fabricada que llevaba
+    // el estado dentro del cuerpo.
+    // The state is no longer a row at all — it is a block sibling of the table — so the
+    // only row the grid renders is its header. Asserted against the ACTUAL accessible
+    // tree, not against a literal: a count that agrees with itself cannot drift into a
+    // third false number the way the previous two did.
+    const grid = screen.getByRole('grid')
+    const renderedRows = screen.getAllByRole('row')
+    expect(renderedRows).toHaveLength(1)
+    expect(grid).toHaveAttribute('aria-rowcount', String(renderedRows.length))
+    // Y la fila que queda es la CABECERA, no una fila de datos conservada: sin esto, un
+    // cuerpo que pintara una sola de las dos filas retenidas satisfaría el recuento.
+    expect(
+      within(renderedRows[0]).getByRole('columnheader'),
+    ).toBeInTheDocument()
+    expect(grid.querySelector('tbody')?.children).toHaveLength(0)
+    // El estado vive FUERA de la rejilla y se asocia por descripción mientras exista.
+    const state = document.querySelector('[data-slot="data-table-state"]')!
+    expect(state).toBeInTheDocument()
+    expect(grid.contains(state)).toBe(false)
+    expect(grid.getAttribute('aria-describedby')).toBe(state.id)
+    expect(state).toContainElement(screen.getByText('step-up ceremony'))
+  })
+
+  it('sin estado, ni descripción colgando ni bloque hermano', async () => {
+    // La mitad simétrica: el ID de descripción es local y sólo mientras el estado existe.
+    // Sin ella, dejar `aria-describedby` fijo apuntando a un nodo que ya no está —el
+    // defecto clásico de esta costura— seguía verde.
+    render(
+      <DataTable
+        columns={columns}
+        data={[
+          { id: 'r1', name: 'a' },
+          { id: 'r2', name: 'b' },
+        ]}
+        empty={EMPTY}
+      />,
+    )
+    const grid = screen.getByRole('grid')
+    expect(grid).not.toHaveAttribute('aria-describedby')
+    expect(
+      document.querySelector('[data-slot="data-table-state"]'),
+    ).not.toBeInTheDocument()
+    expect(grid).toHaveAttribute('aria-rowcount', '3')
   })
 
   it('el botón de orden también responde a ENTER, y tampoco abre la fila', async () => {
@@ -637,7 +675,10 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
     await userEvent.keyboard(' ')
 
     expect(onRowClick).toHaveBeenCalledTimes(1)
-    expect(onRowClick).toHaveBeenCalledWith({ id: 'r2', name: 'b' })
+    expect(onRowClick).toHaveBeenCalledWith(
+      { id: 'r2', name: 'b' },
+      expect.any(HTMLElement),
+    )
 
     // Y con ENTER, que es la otra tecla de activación: el contraste dejó vivo un mutante que
     // devolvía sólo el caso de Enter a `active`, porque esta celda pulsaba únicamente Space.
@@ -645,7 +686,10 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
     celda2.focus()
     await userEvent.keyboard('{Enter}')
     expect(onRowClick).toHaveBeenCalledTimes(1)
-    expect(onRowClick).toHaveBeenCalledWith({ id: 'r2', name: 'b' })
+    expect(onRowClick).toHaveBeenCalledWith(
+      { id: 'r2', name: 'b' },
+      expect.any(HTMLElement),
+    )
   })
 
   it('desde la CABECERA se baja a la columna señalada, no a la marca del cuerpo', async () => {
@@ -672,8 +716,18 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
     await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowRight}')
     await waitFor(() => expect(document.activeElement?.tagName).toBe('TD'))
 
-    // Y el foco se lleva a la cabecera de la PRIMERA columna.
-    screen.getByRole('button', { name: /name/i }).focus()
+    // ⛔ Y ANTES DE MOVER EL FOCO, DEJAR QUE LA REJILLA TERMINE DE ASENTARLO: enfoca su celda
+    // activa en DOS requestAnimationFrame encadenados (data-table.tsx:486-492). `waitFor(TD)` ve
+    // el primero; con la suite entera y la caja cargada el segundo aterrizaba DESPUÉS de mi
+    // `.focus()` en la cabecera y devolvía el foco a la celda, así que ArrowDown partía de la
+    // marca del cuerpo (fila 3) y no de la cabecera. Medido en el hub el 2026-09-16 (run
+    // 35127191064, web, ci-runner-5): 5253 verdes y ésta roja con aria-rowindex 3. Misma clase
+    // que la nota de :289-295: una prueba que medía el reloj en vez del código.
+    await dosFrames()
+    // Y el foco se lleva a la cabecera de la PRIMERA columna, y se comprueba que se QUEDA ahí.
+    const cabecera = screen.getByRole('button', { name: /name/i })
+    cabecera.focus()
+    expect(document.activeElement).toBe(cabecera)
     await userEvent.keyboard('{ArrowDown}')
 
     await waitFor(() => expect(document.activeElement?.tagName).toBe('TD'))
@@ -684,7 +738,10 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
 
     // Y con PageDown, que es la otra que baja: sin esta línea, el mutante que sólo dejaba
     // ArrowDown sobrevivía. Una pareja de teclas no queda fijada por una de ellas.
-    screen.getByRole('button', { name: /name/i }).focus()
+    await dosFrames()
+    const cabecera2 = screen.getByRole('button', { name: /name/i })
+    cabecera2.focus()
+    expect(document.activeElement).toBe(cabecera2)
     await userEvent.keyboard('{PageDown}')
     await waitFor(() => expect(document.activeElement?.tagName).toBe('TD'))
     expect(

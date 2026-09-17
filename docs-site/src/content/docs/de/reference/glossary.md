@@ -185,6 +185,16 @@ Events außerhalb der Kontrolle des Agenten; die `ebpf`-Source konsumiert seinen
 Immer [`approximate`](#attribution-konfidenz), bis eine Identity den Prozess
 an einen Agenten bindet. Siehe [eBPF/Tetragon](/de/how-to/connectors/ebpf-tetragon/).
 
+### live_ref
+
+Die vom Server vergebene Identität **einer** Live-Session-Zeile. v26.9.0
+schlüsselt Beobachtung nach `(Beobachtungsumfang, externe ID)`, damit zwei
+Anbieter-Homes, die dieselbe Session-ID bekanntgeben, zwei Zeilen bleiben.
+Konsolen- und API-Reads, die „diese Zeile“ meinen, nutzen `live_ref`, nicht
+die bloße Anbieter-ID. Bloße External-ID-Routen sind Legacy und antworten nur
+die Legacy-Zeile (`CHANGELOG.md` `[26.9.0]` B2). Siehe
+[Live-Betrieb und Sessions](/reference/modules/ii-sessions/).
+
 ### Kill-Switch
 
 Der Estate- (oder Per-Agent-) Notfall-Stop: ein Admin-Tier-Aufruf killt jede
@@ -227,6 +237,16 @@ prägen kann.
 Die Isolationsgrenze. Jeder Modul-Read und -Write ist tenant-scoped; auf
 Postgres backstoppt Row-Level-Security es (die Engine weigert sich, als
 Rolle zu laufen, die RLS umgehen könnte).
+
+### Provider-Profil (provider profile)
+
+Die dauerhafte Identität **einer** konfigurierten Anbieterinstanz auf **einer**
+Ausführungsumgebung: Treiber, besitzende Umgebung und die kanonischen
+`config_home` / `user_home`, unter denen ein gestartetes Kind läuft.
+Konfigurations- und Speicheridentität, nie ein authentifiziertes Anbieterkonto.
+Homes müssen bereits existieren; die Registrierung installiert nicht und
+meldet sich nicht an. Der Start nennt `provider_profile_ref`. Siehe
+[Eine Anbieter-Session betreiben](/how-to/operate-provider-sessions/).
 
 ### Permitted vs Observed
 

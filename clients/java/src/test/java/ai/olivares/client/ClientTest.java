@@ -432,6 +432,48 @@ class ClientTest {
         }
     }
 
+    /**
+     * A faithful answer from GET /v1/m/finops/statements/{id}/export: the handler's nine
+     * columns and one line. 9007199254740993 is 2^53+1 — the oracle, not filler. A
+     * consumer that routed this value through a JSON number and an IEEE double would
+     * hand back 9007199254740992.
+     */
+    private static final String STATEMENT_EXPORT_CSV =
+            "cost_center_code,cost_center_name,model,provider,agent,"
+                    + "input_tokens,output_tokens,cost_micro_usd,sample_count\n"
+                    + "ENG-01,Engineering,claude-opus-5,anthropic,,100,50,9007199254740993,1\n";
+
+    /**
+     * The GENERATED statement export operation reads a CSV 200 as text.
+     *
+     * <p>⛔ While the document declared this 200 an application/json object, the emitter
+     * produced {@code Map<String, Object>} + {@code doJson}, which demands a JSON object:
+     * this exact response threw ApiError(bad_response) in every generated Java client. The
+     * assertion is on the OPERATION, not on {@code doRaw} — the transport seam was always
+     * right and would have stayed green through the whole defect.
+     */
+    @Test
+    void consumesCsvThroughTheGeneratedStatementExportOperation() throws IOException {
+        HttpServer s = start(ex -> {
+            record(ex);
+            send(ex, 200, STATEMENT_EXPORT_CSV,
+                    "Content-Type", "text/csv; charset=utf-8",
+                    "Content-Disposition", "attachment; filename=\"chargeback_ENG-01_2026-06-01.csv\"");
+        });
+        try {
+            String got = client(s).getV1MFinopsStatementsByIdExport("01a084d5-988c-7e46-b396-5cff04bf2793");
+            assertEquals(STATEMENT_EXPORT_CSV, got);
+            assertTrue(got.contains("9007199254740993"),
+                    "the exact micro-USD integer did not survive: " + got);
+            assertEquals("/v1/m/finops/statements/01a084d5-988c-7e46-b396-5cff04bf2793/export",
+                    seen.get(0).url());
+            // A CSV-only route must not demand JSON: the server does not negotiate.
+            assertNotEquals("application/json", seen.get(0).headers().getFirst("Accept"));
+        } finally {
+            s.stop(0);
+        }
+    }
+
     @Test
     void rejectsA200WhoseBodyIsNotAJsonObject() throws IOException {
         HttpServer s = start(ex -> {
@@ -483,6 +525,88 @@ class ClientTest {
                 ids.add((String) item.get("id"));
             }
             assertEquals(List.of("a", "b", "c"), ids);
+        } finally {
+            s.stop(0);
+        }
+    }
+
+    // --- capability projection, schema 2 --------------------------------------
+
+    /**
+     * docs/contracts/CAPABILITY-PROJECTION.md: one positive with its budget, one concealed
+     * non-verdict without one, one surface admission. Only the generated public records
+     * are used, and the request they build is the schema 2 wire contract.
+     */
+    private static final String CAPABILITY_RESULTS_SCHEMA_2 = "{\"schema_version\":2,\"results\":["
+            + "{\"id\":\"sheet\",\"kind\":\"operation\",\"state\":\"allowed\",\"code\":\"authorized\","
+            + "\"observed_at\":\"2026-09-07T10:00:00.250Z\",\"refresh_after_ms\":30000},"
+            + "{\"id\":\"held\",\"kind\":\"operation\",\"state\":\"undisclosed\",\"code\":\"not_disclosed\","
+            + "\"observed_at\":\"2026-09-07T10:00:00Z\"},"
+            + "{\"id\":\"list\",\"kind\":\"surface\",\"state\":\"reachable\",\"code\":\"admitted\","
+            + "\"observed_at\":\"2026-09-07T10:00:00.100Z\",\"refresh_after_ms\":12000}]}";
+
+    @Test
+    void roundTripsSchema2CapabilityProjectionThroughGeneratedRecords() throws IOException {
+        HttpServer s = start(ex -> {
+            record(ex);
+            json(ex, 200, CAPABILITY_RESULTS_SCHEMA_2, "Cache-Control", "no-store");
+        });
+        try {
+            String workspace = "00000000-0000-4000-8000-000000000010";
+            Client.AuthCapabilityQuestions questions = new Client.AuthCapabilityQuestions(
+                    List.of(
+                            new Client.AuthCapabilityQuestion("sheet", "operation",
+                                    "GET /v1/m/sessions/channels/{id}/grants",
+                                    new Client.AuthCapabilitySelectors(null,
+                                            Map.of("id", "00000000-0000-4000-8000-000000000001")),
+                                    workspace),
+                            new Client.AuthCapabilityQuestion("held", "operation",
+                                    "PATCH /v1/m/sessions/channels",
+                                    new Client.AuthCapabilitySelectors(
+                                            Map.of("channel_id", "00000000-0000-4000-8000-000000000002"), null),
+                                    workspace),
+                            new Client.AuthCapabilityQuestion("list", "surface",
+                                    "GET /v1/m/sessions/channels", null, workspace)),
+                    2);
+            Client.AuthCapabilityResults out = client(s)
+                    .postV1AuthCapabilities(new Client.PostV1AuthCapabilitiesInput(questions));
+
+            assertEquals("POST", seen.get(0).method());
+            assertEquals("/v1/auth/capabilities", seen.get(0).url());
+            assertEquals("application/json", seen.get(0).headers().getFirst("Content-Type"));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> wire = (Map<String, Object>) Json.parse(
+                    new String(seen.get(0).body(), StandardCharsets.UTF_8));
+            assertEquals(2L, ((Number) wire.get("schema_version")).longValue());
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> sent = (List<Map<String, Object>>) wire.get("questions");
+            assertEquals(List.of("sheet", "held", "list"),
+                    sent.stream().map(q -> q.get("id")).toList());
+            assertEquals(Map.of("path", Map.of("id", "00000000-0000-4000-8000-000000000001")),
+                    sent.get(0).get("selectors"));
+            assertEquals(Map.of("body", Map.of("channel_id", "00000000-0000-4000-8000-000000000002")),
+                    sent.get(1).get("selectors"));
+            assertFalse(sent.get(2).containsKey("selectors"),
+                    "a surface question without selectors must omit them");
+            assertEquals(workspace, sent.get(2).get("workspace_id"));
+
+            assertEquals(2L, out.schema_version());
+            assertEquals(3, out.results().size());
+            Client.AuthCapabilityResult positive = out.results().get(0);
+            Client.AuthCapabilityResult concealed = out.results().get(1);
+            Client.AuthCapabilityResult surface = out.results().get(2);
+            assertEquals(List.of("allowed", "undisclosed", "reachable"),
+                    out.results().stream().map(Client.AuthCapabilityResult::state).toList());
+            assertEquals(List.of("authorized", "not_disclosed", "admitted"),
+                    out.results().stream().map(Client.AuthCapabilityResult::code).toList());
+            assertEquals(30000L, positive.refresh_after_ms());
+            assertEquals("2026-09-07T10:00:00.250Z", positive.observed_at());
+            // The non-verdict carries no budget at all: null, not zero.
+            assertNull(concealed.refresh_after_ms());
+            assertEquals("2026-09-07T10:00:00Z", concealed.observed_at());
+            assertEquals(12000L, surface.refresh_after_ms());
+            // Re-serializing the typed result reproduces the wire exactly.
+            assertEquals(Json.parse(CAPABILITY_RESULTS_SCHEMA_2), Json.parse(Json.write(out)));
         } finally {
             s.stop(0);
         }

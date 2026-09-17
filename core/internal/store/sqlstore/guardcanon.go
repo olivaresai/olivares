@@ -54,6 +54,14 @@ const (
 	canonDomainDiagnostic = "olivares.guard-diagnostic"
 	canonDomainReceipt    = "olivares.guard-receipt"
 	canonDomainEvent      = "olivares.guard-event"
+	// canonDomainBaseCensus fingerprints the BASE census B — the sorted canonical
+	// specs a node keeps after subtracting every compiled edition delta.
+	//
+	// It is a SEPARATE domain from canonDomainManifest on purpose. The manifest digest
+	// is the durable identity a database stores; this one is an in-memory comparison
+	// aid that says "these two nodes describe the same product profile". Hashing both
+	// under one domain would let a base fingerprint be presented as a manifest digest.
+	canonDomainBaseCensus = "olivares.guard-base-census"
 )
 
 // The type tags. Written before every value.

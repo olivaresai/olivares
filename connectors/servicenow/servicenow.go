@@ -19,7 +19,7 @@
 //   - import   — Import Set API POST /api/now/import/{staging_table} (bulk staging +
 //     transform map), for an operator who routes through a transform.
 //
-// Minimal-data / credential handling (docs/SECURITY-HARDENING.md-3): only the displayable Notification
+// Minimal-data / credential handling (docs/SECURITY-HARDENING.md §2-3): only the displayable Notification
 // fields reach the wire. The operator credential is HTTP Basic (user+password) or an
 // OAuth bearer token, declared Secret in the config, held in memory only, applied as
 // the Authorization header, and NEVER logged — the delivery transport never logs

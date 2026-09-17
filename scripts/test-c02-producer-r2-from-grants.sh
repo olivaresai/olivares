@@ -11,6 +11,15 @@ _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/c02pk.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
+# export-closure: hub-only scripts/publish-enterprise-artifacts.sh — this bank
+# exercises the private producer and its Worker module graph. The public export
+# cannot run that fixture; report the omitted check before trying to stage it.
+if [ ! -r "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
+	printf 'SKIP %s: scripts/publish-enterprise-artifacts.sh is hub-only and absent from this tree\n' \
+		"$(basename "${BASH_SOURCE[0]}")"
+	exit 0
+fi
+. "$ROOT/scripts/lib/c02-download-contract-tests.sh"
 pass=0
 fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
@@ -24,35 +33,17 @@ stage() {
 	cp "$CHECK" "$TMP/tree/scripts/check-c02-producer-r2-from-grants.sh"
 	chmod +x "$TMP/tree/scripts/check-c02-producer-r2-from-grants.sh"
 	cp "$ROOT/design/c02-producer-r2-from-grants.json" "$TMP/tree/design/"
-	cat >"$TMP/tree/design/C02-PRODUCER-R2-FROM-GRANTS-2026-08-19.md" <<'EOF'
-delivery NOT CLOSED. Set-keyed R2 from live grants.
-EOF
-	cat >"$TMP/tree/commercial/license-worker/src/download/artifacts.ts" <<'EOF'
-export function artifactKey(version: string, os: string, arch: string, set: string): string {
-  return `enterprise/${version}/${set}/x.tar.gz`;
-}
-EOF
-	cat >"$TMP/tree/commercial/license-worker/src/download/gate.ts" <<'EOF'
-const purchased = setSlug(live);
-if (purchased === null) {
-  return text("Forbidden: no live grant for set", 403);
-}
-if (url.searchParams.has("variant")) {
-  return text("Bad Request: variant is not a binary download query", 400);
-}
-if (url.searchParams.has("set")) {
-  return text("Bad Request: set is the manifest axis, not a binary key", 400);
-}
-EOF
-	cat >"$TMP/tree/commercial/license-worker/test/download.test.ts" <<'EOF'
-test("engine-shaped query streams the set-keyed artifact from live grants", async () => {});
-test("an active licence with no grant rows does not open the binary", async () => {
-  assert.match(await res.text(), /no live grant for set/);
-});
-EOF
-	cat >"$TMP/tree/scripts/publish-enterprise-artifacts.sh" <<'EOF'
-plan+=("enterprise/${VERSION}/${SET}/$(basename "$a")|$a")
-EOF
+	cp "$ROOT/design/C02-PRODUCER-R2-FROM-GRANTS-2026-08-19.md" "$TMP/tree/design/"
+	cp -R "$ROOT/commercial/license-worker/src" "$TMP/tree/commercial/license-worker/"
+	cp "$ROOT/commercial/license-worker/package.json" "$TMP/tree/commercial/license-worker/"
+	cp "$ROOT/commercial/license-worker/test/download.test.ts" "$TMP/tree/commercial/license-worker/test/"
+	mkdir -p "$TMP/tree/commercial/license-worker/contracts" "$TMP/tree/scripts/lib"
+	cp "$ROOT/commercial/license-worker/contracts/publisher.gen.json" "$TMP/tree/commercial/license-worker/contracts/"
+	cp "$ROOT/scripts/lib/c02-download-contract.mjs" "$TMP/tree/scripts/lib/"
+	# export-closure: hub-only scripts/publish-enterprise-artifacts.sh — private producer fixture.
+	if [ -f "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
+		cp "$ROOT/scripts/publish-enterprise-artifacts.sh" "$TMP/tree/scripts/"
+	fi
 }
 
 run() {
@@ -102,15 +93,16 @@ fi
 
 stage
 python3 - "$TMP/tree/commercial/license-worker/src/download/artifacts.ts" <<'PY'
+from pathlib import Path
 import sys
-open(sys.argv[1], "w", encoding="utf-8").write(
-    'export function artifactKey(version: string, os: string, arch: string): string {\n'
-    '  return `enterprise/${version}/x.tar.gz`;\n'
-    '}\n'
-)
+p = Path(sys.argv[1])
+s = p.read_text()
+old = 'export function artifactKey(version: string, os: string, arch: string, set: string): string {'
+assert s.count(old) == 1
+p.write_text(s.replace(old, 'export function artifactKey(version: string, os: string, arch: string): string {'))
 PY
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
+if [ "$(cat "$TMP/rc")" = 1 ] && grep -Fq "artifactKey arity is 3, want 4" "$TMP/err"; then
 	ok "firing: three-arg monolith key is FAIL"
 else
 	bad "three-arg key should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
@@ -155,6 +147,8 @@ else
 	bad "missing JSON should LOOK 2 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
+c02_download_contract_mutants
+
 if OLIVARES_ROOT="$ROOT" bash "$CHECK" >/dev/null 2>"$TMP/err"; then
 	ok "no-fire: live checkout stays CLEAN"
 else
@@ -162,5 +156,15 @@ else
 fi
 
 echo
+c02_download_contract_overrides \
+  OLIVARES_C02PK_JSON=design/c02-producer-r2-from-grants.json \
+  OLIVARES_C02PK_DOC=design/C02-PRODUCER-R2-FROM-GRANTS-2026-08-19.md \
+  OLIVARES_C02PK_ART=commercial/license-worker/src/download/artifacts.ts \
+  OLIVARES_C02PK_SETS=commercial/license-worker/src/download/sets.ts \
+  OLIVARES_C02PK_GATE=commercial/license-worker/src/download/gate.ts \
+  OLIVARES_C02PK_PUB=scripts/publish-enterprise-artifacts.sh \
+  OLIVARES_C02_CONTRATO=commercial/license-worker/contracts/publisher.gen.json \
+  OLIVARES_C02PK_TEST=commercial/license-worker/test/download.test.ts
+
 echo "test-c02-producer-r2-from-grants: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

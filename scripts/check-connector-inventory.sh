@@ -78,17 +78,33 @@ if not filas:
 #    plugins TypeScript y NO lleva fila a propósito; es el mismo «−1 non-Go» que
 #    `check-public-counts.sh` descuenta al derivar la cifra pública. Exigirle fila haría rojo un
 #    árbol correcto, que es la forma más rápida de que un gate se desactive.
+# ⛔ EL DENOMINADOR ES «TIENE CÓDIGO GO», NO «ES UN DIRECTORIO». `connectors/backstage` son
+#    plugins TypeScript y NO lleva fila a propósito; es el mismo «−1 non-Go» que
+#    `check-public-counts.sh` descuenta al derivar la cifra pública. Exigirle fila haría rojo un
+#    árbol correcto, que es la forma más rápida de que un gate se desactive.
+#
+# ⛔ Y POR ESO SE PODAN LOS DIRECTORIOS DE DEPENDENCIAS. Medido el 2026-09-01, con un push muerto
+#    a los 22 minutos: un worktree con las dependencias instaladas tiene
+#    `connectors/backstage/node_modules/.pnpm/flatted@3.4.2/node_modules/flatted/golang/pkg/
+#    flatted/flatted.go` — un `.go` DENTRO de un paquete npm, sin trackear. Sin la poda, backstage
+#    «tenía Go», perdía su exención y el gate enrojecía un árbol correcto: el MISMO commit pasaba
+#    o moría según si habías corrido `pnpm install`. Un gate cuyo veredicto depende de ficheros
+#    que no son del repositorio da respuestas distintas en dos cajas con el mismo árbol.
+#    NO se poda `vendor/`: código Go vendorizado bajo un conector ES código Go de ese conector.
+VENDOR = {"node_modules", ".git", ".pnpm-store"}
+
 dirs, sin_go = set(), set()
 try:
     for d in sorted(os.listdir(raiz)):
         ruta = os.path.join(raiz, d)
         if not os.path.isdir(ruta):
             continue
-        tiene_go = any(
-            f.endswith(".go")
-            for _, _, fs in os.walk(ruta)
-            for f in fs
-        )
+        tiene_go = False
+        for _, subdirs, fs in os.walk(ruta):
+            subdirs[:] = [x for x in subdirs if x not in VENDOR]
+            if any(f.endswith(".go") for f in fs):
+                tiene_go = True
+                break
         (dirs if tiene_go else sin_go).add(d)
 except OSError as exc:
     ciego(f"no se pudo recorrer {raiz}/ ({exc})")

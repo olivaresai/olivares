@@ -161,8 +161,18 @@ unset _pb_first _pb_heads _pb_lines _pb_re
 # un rehuse aqui haria imposible probar el siguiente cambio. Pero lo dice con las dos huellas
 # delante, porque el operador no va a ir a compararlas por su cuenta.
 FRESCURA_REF="${OLIVARES_INBOX_FRESH_REF:-origin/main}"
-mia=$(git hash-object -- "$0" 2>/dev/null || true)
-suya=$(git rev-parse -q --verify "${FRESCURA_REF}:scripts/publish-inbox.sh" 2>/dev/null || true)
+# ⛔ EL SUJETO ES EL REPO DE ESTA COPIA, NO EL DIRECTORIO DESDE EL QUE ME LLAMAS. Hasta hoy las
+# dos consultas iban sin `-C`, o sea contra el CWD de la invocacion, y el `cd "$OLIVARES_PUB_DIR"`
+# no llega hasta ~50 lineas mas abajo: llamado desde cualquier sitio que no sea un arbol de git
+# —el directorio de trabajo de un carril, por ejemplo— `git` responde «not a git repository», las
+# dos huellas salen VACIAS y la guarda cae en la rama del `elif`, que solo AVISA. Es decir: la
+# guarda que existe para detectar copias rancias se desactivaba sola segun donde la invocaras, y
+# lo decia con una linea que se lee como ruido. Medido: desde /workspace/.hub-kernel24 -> fatal;
+# desde el worktree -> c2e58ce60353. La pregunta correcta es «¿es fresca ESTA copia?», y eso se
+# responde en el repositorio donde ESTA copia vive, que se deriva de $0 y no del CWD.
+_pb_repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd) || _pb_repo=
+mia=$(git -C "${_pb_repo:-.}" hash-object -- "$0" 2>/dev/null || true)
+suya=$(git -C "${_pb_repo:-.}" rev-parse -q --verify "${FRESCURA_REF}:scripts/publish-inbox.sh" 2>/dev/null || true)
 if [ -n "$mia" ] && [ -n "$suya" ] && [ "$mia" != "$suya" ]; then
 	{
 		echo "publica-buzon: ⚠ ESTA COPIA NO ES LA DE ${FRESCURA_REF}."
@@ -210,8 +220,21 @@ fi
 
 [ $# -ge 1 ] || { echo "publica-buzon: sin buzones" >&2; exit 2; }
 cd "${OLIVARES_PUB_DIR:?define OLIVARES_PUB_DIR con un worktree limpio}" || exit 2
-git fetch -q origin main || { echo "publica-buzon: NO HE PODIDO MIRAR: fetch falló" >&2; exit 2; }
-base=$(git rev-parse origin/main) || exit 2
+# EL `fetch` NO PUEDE ESCRIBIR EN `refs/remotes/origin/main`: ESE REF ES DE LOS CINCO CARRILES.
+# Medido el 2026-08-26: CINCO intentos seguidos murieron con «cannot lock ref
+# 'refs/remotes/origin/main': is at X but expected Y». No era contencion pasajera — con cinco
+# sesiones haciendo `fetch` sobre el MISMO almacen de refs la ventana no se abre nunca, y este
+# guion quedaba inusable justo en el entorno para el que se escribio. El rc=2 era honesto («no he
+# podido mirar»), y por eso el defecto no rompio nada: simplemente NO PUBLICABA, en silencio.
+# `--refmap=` desactiva la actualizacion oportunista del ref de seguimiento, y el destino privado
+# por PID no lo toca nadie mas.
+#
+# La limpieza de ese ref NO va en un trap propio: mas abajo ya hay uno para EXIT, y un segundo
+# trap sobre la misma senal no se suma, SUSTITUYE. Va dentro de aquel, y a mano antes del `exec`
+# (que reemplaza el proceso y por tanto no dispara EXIT). Ver ambos sitios.
+_pubref="refs/pubfetch/$$/main"
+git fetch -q --refmap= origin "+refs/heads/main:${_pubref}" || { echo "publica-buzon: NO HE PODIDO MIRAR: fetch falló" >&2; exit 2; }
+base=$(git rev-parse "$_pubref") || exit 2
 EXIST=$(git ls-tree --name-only "$base" sessions/status/inbox/) || exit 2
 for b in "$@"; do
   # ⛔ SIN TUBERÍA, y no es estilo. `printf … | grep -qxF` bajo `set -o pipefail` devuelve **141
@@ -236,7 +259,7 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/pub.XXXXXX") || exit 2
 #
 # El trap va DESPUÉS de comprobar que `$T` es un directorio usable, no antes: un `rm -rf` sobre
 # una variable vacía es la clase de arreglo que causa el problema que pretende evitar.
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "$T"; git update-ref -d "$_pubref" 2>/dev/null || true' EXIT
 export GIT_INDEX_FILE="$T/idx"; git read-tree "$base" || exit 2
 for b in "$@"; do
   git cat-file -p "${base}:sessions/status/inbox/${b}.md" > "$T/cur" || exit 2
@@ -296,7 +319,7 @@ tail -3 "$T/push.out" >&2
 
 # ANTES DE REINTENTAR, COMPROBAR QUE DE VERDAD NO LLEGÓ. Un fallo de red puede haber entregado
 # igual, y un reintento a ciegas duplicaría el mensaje en los cinco buzones.
-if git fetch -q origin main 2>/dev/null && git merge-base --is-ancestor "$commit" origin/main 2>/dev/null; then
+if git fetch -q --refmap= origin "+refs/heads/main:${_pubref}" 2>/dev/null && git merge-base --is-ancestor "$commit" "$_pubref" 2>/dev/null; then
 	echo "publica-buzon: el push devolvió error pero el commit SÍ está en origin/main — no reintento." >&2
 	exit 0
 fi
@@ -307,6 +330,7 @@ if [ "$intento" -lt 2 ]; then
 	# `exec` REEMPLAZA el proceso, asi que el `trap … EXIT` de arriba NO se dispara y el
 	# temporal quedaria huerfano en cada reintento. Se limpia a mano justo antes.
 	rm -rf -- "$T"
+	git update-ref -d "$_pubref" 2>/dev/null || true
 	OLIVARES_PUB_INTENTO=$((intento + 1)) exec bash "$0" "$MSG" "$CMSG" "$@"
 fi
 echo "publica-buzon: ⛔ NO PUBLICADO tras 3 intentos. El mensaje sigue en $MSG." >&2

@@ -68,11 +68,20 @@ const (
 // Enabled remains false until the later composition and activation cuts earn
 // readiness; complete epoch coverage alone never enables communication.
 type DirectoryStatus struct {
-	Enabled               bool
-	EpochCoverageComplete bool
-	ControlMode           DirectoryControlMode
-	WriterPosture         DirectoryWriterPosture
-	ExpectedGeneration    int64
+	Enabled                       bool
+	EpochCoverageComplete         bool
+	ControlMode                   DirectoryControlMode
+	WriterPosture                 DirectoryWriterPosture
+	ExpectedGeneration            int64
+	CoverageProtocol              string
+	UserAuthorityCoverageComplete bool
+	InventoryAuthority            string
+	InventoryOrgCount             int
+	InventoryBusinessOrgCount     int
+	InventoryEpochCount           int
+	// InventoryUnavailableReason distinguishes an attested empty first boot
+	// awaiting SYSTEM genesis from an unknown/missing inventory authority.
+	InventoryUnavailableReason string
 }
 
 // DirectoryStatuser is an optional Store capability. The supported result is

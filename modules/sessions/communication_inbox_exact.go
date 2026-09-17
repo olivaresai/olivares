@@ -78,7 +78,12 @@ func (m *Module) listDirectNoticeInboxWithBoundAuthority(
 	query DirectNoticeInboxQuery,
 	opener directNoticePayloadOpener,
 ) (DirectNoticeInboxPage, error) {
-	recipient := RecipientRef{Kind: RecipientUser, Ref: identity.principal.UserID.String()}
+	recipient, _, err := m.communicationPrincipalRecipient(
+		ctx, identity.scope, identity.principal,
+	)
+	if err != nil {
+		return DirectNoticeInboxPage{}, err
+	}
 	candidates, truncated, err := m.readDirectNoticeInboxCandidateIDs(
 		ctx, identity.scope, recipient, query.AfterDeliverySeq,
 		directNoticeInboxCandidateBound,
@@ -207,7 +212,7 @@ func (m *Module) listDirectNoticeInboxWithBoundAuthority(
 			return DirectNoticeInboxPage{}, openErr
 		}
 		page.Items = append(page.Items, result)
-		page.NextAfterDeliverySeq = result.Delivery.DeliverySeq
+		page.nextAfter = result.Delivery.DeliverySeq
 	}
 	return page, nil
 }

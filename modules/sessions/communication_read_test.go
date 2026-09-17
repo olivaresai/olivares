@@ -685,7 +685,7 @@ func TestDirectNoticePrincipalNotFoundPoint404AndInboxEmpty(t *testing.T) {
 				},
 			)
 			if listErr != nil || page.Items == nil || len(page.Items) != 0 || page.HasMore ||
-				page.NextAfterDeliverySeq != query.AfterDeliverySeq || opens.Load() != 0 {
+				page.nextAfter != query.AfterDeliverySeq || opens.Load() != 0 {
 				t.Fatalf("PrincipalNotFound inbox = %+v, %v; opens=%d", page, listErr, opens.Load())
 			}
 			wantResolverCalls := int64(0)
@@ -715,18 +715,18 @@ func TestListDirectNoticeInboxFiltersBeforeVisiblePagination(t *testing.T) {
 		t.Fatalf("list first visible page: %v", err)
 	}
 	if len(first.Items) != 1 || first.Items[0].Delivery.ID != published[0].DeliveryID ||
-		!first.HasMore || first.NextAfterDeliverySeq != first.Items[0].Delivery.DeliverySeq {
+		!first.HasMore || first.nextAfter != first.Items[0].Delivery.DeliverySeq {
 		t.Fatalf("first filtered page = %+v", first)
 	}
 	second, err := fixture.m.listDirectNoticeInbox(
 		context.Background(), fixture.scope, fixture.principal,
-		DirectNoticeInboxQuery{AfterDeliverySeq: first.NextAfterDeliverySeq, Limit: 1},
+		DirectNoticeInboxQuery{AfterDeliverySeq: first.nextAfter, Limit: 1},
 	)
 	if err != nil {
 		t.Fatalf("list second visible page: %v", err)
 	}
 	if len(second.Items) != 1 || second.Items[0].Delivery.ID != published[2].DeliveryID ||
-		second.HasMore || second.NextAfterDeliverySeq != second.Items[0].Delivery.DeliverySeq {
+		second.HasMore || second.nextAfter != second.Items[0].Delivery.DeliverySeq {
 		t.Fatalf("second filtered page = %+v", second)
 	}
 	raw, err := json.Marshal(first)
@@ -1336,7 +1336,7 @@ func TestDirectNoticeReadPublicBoundaryRemainsOffUntilFullReadiness(t *testing.T
 		t.Fatalf("public point read = %v; authorizer calls=%d", err, fixture.authorizer.callCount())
 	}
 	_, err = fixture.m.ListDirectNoticeInbox(
-		context.Background(), fixture.scope, fixture.ref, DirectNoticeInboxQuery{Limit: 1},
+		context.Background(), fixture.scope, fixture.ref, DirectNoticeInboxRequest{Limit: 1},
 	)
 	if !errors.Is(err, ErrCommunicationEvidenceUnknown) ||
 		fixture.authorizer.callCount() != beforeCalls {

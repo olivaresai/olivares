@@ -40,7 +40,7 @@ func bootPendingSetup(t *testing.T) *engine {
 func TestServeAnnouncesAPendingSetupInsteadOfSayingNothing(t *testing.T) {
 	eng := bootPendingSetup(t)
 	var out strings.Builder
-	if err := announceSetup(context.Background(), &out, eng, "https://127.0.0.1:8443", false); err != nil {
+	if err := announceSetup(context.Background(), &out, eng, declaredConsoleAddress(t, "https://127.0.0.1:8443", false), false); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
@@ -63,7 +63,7 @@ func TestServeAnnouncesAPendingSetupInsteadOfSayingNothing(t *testing.T) {
 func TestQuickstartDoesNotOfferABlankOneTimeToken(t *testing.T) {
 	eng := bootPendingSetup(t)
 	var out strings.Builder
-	if err := announceQuickstart(context.Background(), &out, eng, "https://127.0.0.1:8443"); err != nil {
+	if err := announceQuickstart(context.Background(), &out, eng, declaredConsoleAddress(t, "https://127.0.0.1:8443", false)); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()

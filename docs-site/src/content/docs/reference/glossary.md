@@ -185,6 +185,15 @@ events outside the agent's control; the `ebpf` source consumes its export.
 Always [`approximate`](#attribution-confidence) until an identity binds the
 process to an agent. See [eBPF/Tetragon](/how-to/connectors/ebpf-tetragon/).
 
+### live_ref
+
+The server-assigned identity of **one** live session row. v26.9.0 keys
+observation by `(observation scope, external id)` so two provider homes that
+announce the same session id stay two rows. Console and API reads that mean
+“this row” use `live_ref`, not the bare provider id. Bare external-id routes
+are legacy and answer only the legacy row (`CHANGELOG.md` `[26.9.0]` B2). See
+[Live operation & sessions](/reference/modules/ii-sessions/).
+
 ### Kill switch
 
 The estate (or per-agent) emergency stop: one admin-tier call kills every
@@ -226,6 +235,16 @@ deliberately not JWTs, so possession of a signing key can never mint access.
 The isolation boundary. Every module read and write is tenant-scoped; on
 Postgres, row-level security backstops it (the engine refuses to run as a
 role that could bypass RLS).
+
+### Provider profile
+
+The durable identity of **one** configured provider instance on **one**
+execution environment: driver, owning environment, and the canonical
+`config_home` / `user_home` a launched child runs under. Configuration and
+storage identity, never an authenticated provider account. Homes must already
+exist; registration does not install or log in. Launch names
+`provider_profile_ref`. See
+[Operate a provider session](/how-to/operate-provider-sessions/).
 
 ### Permitted vs Observed
 

@@ -15,27 +15,53 @@
     "body": "{{what}} 是一份已声明的契约——后端端点尚未上线，因此暂无可展示内容。该端点一旦上线，本面板将立即填充数据；它绝不伪造数据。"
   },
   "assurance": {
+    "address": {
+      "addressTitle": "此地址无法使用通行密钥。",
+      "ipBody": "通行密钥的依赖方必须是本部署的验证器接受的域名，而 IP 地址不是。请通过主机名访问此控制台，才能注册或使用通行密钥。",
+      "nameBody": "通行密钥的依赖方必须是本部署的验证器接受的域名，而此主机名不是：它需要包含点号，并且只能使用 ASCII 字母、数字和连字符。",
+      "insecureTitle": "此页面不是安全上下文。",
+      "insecureBody": "浏览器仅在安全上下文中运行通行密钥 API，因此此处无法注册或使用通行密钥。请通过 HTTPS 或在本地主机上访问此控制台。",
+      "unsupportedTitle": "此浏览器不支持通行密钥。",
+      "unsupportedBody": "此浏览器未提供 WebAuthn API，因此此处无法注册或使用通行密钥。请使用支持通行密钥的浏览器，或出示 PIV/CAC 卡。",
+      "sameDevice": "在此设备上，同一控制台也可通过以下地址访问："
+    },
     "stepUpTitle": "需要升级认证",
-    "stepUpBody": "{{action}} 需要 {{required}}。当前会话为 {{current}}。请使用硬件安全密钥完成认证以继续。",
-    "authenticate": "使用安全密钥认证",
+    "stepUpBody": "{{action}} 需要 {{required}}。当前会话为 {{current}}。请使用设备上的通行密钥或安全密钥继续。",
+    "authenticate": "使用通行密钥认证",
     "authenticatePiv": "使用 PIV/CAC 卡进行身份验证",
     "authenticating": "正在等待您的认证器……",
     "seamWhat": "特权登录流程（WebAuthn 升级认证）",
     "unsupported": "此浏览器不支持 WebAuthn。特权操作需要支持抗钓鱼认证器的平台。",
     "failed": "升级认证未完成。该操作仍被拒绝。",
+    "relyingPartyUnusable": "本部署无法使用通行密钥：对于当前提供控制台的地址，引擎没有可用的依赖方。运维人员需要配置有效的依赖方域名（含点号的主机名，或在适当情况下使用 localhost），通过该已声明的安全源访问控制台，并在更改后重启引擎。仅在其他地址重试无法修复此问题。",
     "actions": {
       "wif": "查看 Workload Identity Federation 图谱",
       "identity": "管理身份",
       "nhiLifecycleRotate": "轮换非人类身份凭据",
       "nhiLifecycleFinalize": "最终完成非人类身份下线",
-      "generic": "此操作"
+      "generic": "此操作",
+      "console": "管理连接器"
     },
     "aal": {
       "aal1": "AAL1（密码）",
       "aal2": "AAL2（多因素）",
-      "aal3": "AAL3（硬件、抗钓鱼）"
+      "aal3": "AAL3（抗钓鱼）"
     },
-    "unenrolled": "您的账户尚未注册任何通行密钥。请先在「特权登录」选项卡中注册硬件安全密钥，然后重试升级认证。"
+    "unenrolled": "您的账户尚未注册通行密钥。请在“特权登录”选项卡中注册设备通行密钥或安全密钥，然后进行认证。",
+    "unenrolledInline": "您的账户尚未注册通行密钥。请在下方注册，或使用已出示的 PIV/CAC 卡。",
+    "enrollHint": "在此设备或安全密钥上注册您的第一个通行密钥。仅注册不会认证会话，也不会完成待处理的操作。",
+    "passkeyName": "通行密钥名称",
+    "enrollUnsupported": "此浏览器无法注册通行密钥。请使用支持通行密钥的浏览器，或已出示的 PIV/CAC 卡。",
+    "registered": "通行密钥已注册。请进行认证以验证此会话，然后检查并完成待处理的操作。",
+    "registrationUnknown": "无法确认注册结果。通行密钥可能已保存。请选择“认证”进行检查；不会自动重新发送注册请求。",
+    "authenticationUnknown": "无法确认认证结果。会话可能已获得更高认证级别。请先检查会话，再重试。",
+    "needsAuthentication": "注册另一个通行密钥之前，必须使用现有通行密钥认证此会话。请选择“认证”。",
+    "checkSession": "检查会话",
+    "sessionExpired": "此会话已被拒绝。请关闭此操作并重新登录后再试。",
+    "verificationFailed": "无法验证此会话是否满足操作要求。认证可能已完成；此操作尚未继续。",
+    "cancelled": "通行密钥操作已取消或超时。您可以开始新的尝试。此操作尚未继续。",
+    "cancelHint": "关闭将取消此操作。已发送的注册或认证请求仍可能完成。",
+    "registrationUnknownElsewhere": "无法确认注册结果。通行密钥可能已保存。请关闭此对话框并检查你的通行密钥，然后再开始新的注册。"
   },
   "references": {
     "note": "本面板所遵循的标准。面板进行观测与验证；它不声称获得认证。",
@@ -530,7 +556,8 @@
     "pivRole": "映射的角色",
     "pivOcsp": "OCSP",
     "pivNote": "证书链与 OCSP 验证由后端执行；本面板反映其结果。",
-    "pivNotConfigured": "此部署未配置 PIV/CAC。运营者可通过在引擎上设置 OLIVARES_PIV_CONFIG（机构 CA、证书到角色映射）来启用它。",
+    "pivNotConfigured": "此部署未配置 PIV/CAC 智能卡登录，因此此处无法使用智能卡。管理员需要在引擎上完成配置后才可使用。",
+    "pivSetupGuide": "运营者指南：配置 PIV/CAC 登录",
     "ocsp": {
       "good": "良好",
       "revoked": "已吊销",

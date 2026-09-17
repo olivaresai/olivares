@@ -40,20 +40,66 @@ func newHarness(t *testing.T, modules ...api.Module) *harness {
 	return newHarnessOpts(t, nil, modules...)
 }
 
-// newHarnessOpts builds a harness, letting a caller customize the api.Options
-// before the server is built (e.g. wire a FederationService for the console
-// tests). configure runs after the required fields are set, so it can read
-// o.Store. A nil configure is the default harness.
-func newHarnessOpts(t *testing.T, configure func(*api.Options), modules ...api.Module) *harness {
+type harnessStoreOpener func(*testing.T) store.Store
+
+type harnessStoreSource struct {
+	// A borrowed store remains owned by its caller; only open may register cleanup.
+	borrowed store.Store
+	open     harnessStoreOpener
+}
+
+func (s harnessStoreSource) resolve(t *testing.T) store.Store {
 	t.Helper()
-	st, err := sqlstore.Open(context.Background(), store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, nil)
+	if s.borrowed != nil {
+		return s.borrowed
+	}
+	if s.open == nil {
+		t.Fatal("harness store source is empty")
+	}
+	return s.open(t)
+}
+
+func defaultHarnessStore(t *testing.T) store.Store {
+	t.Helper()
+	st, err := sqlstore.Open(context.Background(), store.Config{
+		Engine: store.EngineSQLite, DSN: ":memory:", Debug: true,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	if err := st.System(context.Background(), func(sys store.SystemScope) error { _, e := sys.EnsureSystemTenant(context.Background()); return e }); err != nil {
+	if err := st.System(context.Background(), func(sys store.SystemScope) error {
+		_, err := sys.EnsureSystemTenant(context.Background())
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
+	return st
+}
+
+// newHarnessOpts builds a harness, letting a caller customize the api.Options
+// before the server is built (e.g. wire a FederationService for the console
+// tests). configure runs after the required fields are set, so it can read
+// o.Store. A nil configure is the default harness.
+// newHarnessOptions builds the Options a harness would use, WITHOUT calling api.New.
+//
+// ⛔ IT IS SPLIT OUT SO A TEST CAN MEASURE api.New's REFUSALS. newHarnessOpts calls t.Fatal on a
+// construction error, which is right for the ninety-nine tests that need a server and useless for
+// the one that asserts a server must NOT be built. Duplicating the construction in that test would
+// leave two copies of the composition to drift apart, and the one that drifts is the one fewer
+// people read.
+func newHarnessOptions(t *testing.T, modules ...api.Module) (api.Options, store.Store, string, *secure.SetupToken, *auth.Authenticator, *audit.Signer) {
+	t.Helper()
+	return newHarnessOptionsFromStoreSource(t, harnessStoreSource{open: defaultHarnessStore}, modules...)
+}
+
+func newHarnessOptionsFromStoreSource(
+	t *testing.T,
+	source harnessStoreSource,
+	modules ...api.Module,
+) (api.Options, store.Store, string, *secure.SetupToken, *auth.Authenticator, *audit.Signer) {
+	t.Helper()
+	st := source.resolve(t)
 	_, priv, _ := ed25519.GenerateKey(nil)
 	signer, _ := audit.NewSigner(priv)
 	tok := secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token"))
@@ -62,10 +108,27 @@ func newHarnessOpts(t *testing.T, configure func(*api.Options), modules ...api.M
 		t.Fatal(err)
 	}
 	authr := auth.NewAuthenticator(st, nil)
-	o := api.Options{
+	return api.Options{
 		Store: st, Authenticator: authr, Authorizer: auth.NewAuthorizer(nil),
 		Signer: signer, SetupToken: tok, Version: "test", Modules: modules,
-	}
+	}, st, plaintext, tok, authr, signer
+}
+
+func newHarnessOpts(t *testing.T, configure func(*api.Options), modules ...api.Module) *harness {
+	t.Helper()
+	return newHarnessOptsFromStoreSource(
+		t, harnessStoreSource{open: defaultHarnessStore}, configure, modules...,
+	)
+}
+
+func newHarnessOptsFromStoreSource(
+	t *testing.T,
+	source harnessStoreSource,
+	configure func(*api.Options),
+	modules ...api.Module,
+) *harness {
+	t.Helper()
+	o, st, plaintext, tok, authr, signer := newHarnessOptionsFromStoreSource(t, source, modules...)
 	if configure != nil {
 		configure(&o)
 	}
@@ -95,6 +158,10 @@ type resp struct {
 	code int
 	body map[string]any
 	raw  string
+	// hdr carries the response headers, because some contracts live there and not in the body:
+	// Retry-After is what tells a client the third state is retryable, and a case that compares
+	// two responses "byte for byte" without it is comparing most of them.
+	hdr http.Header
 }
 
 func (h *harness) do(method, path, token string, body any, hdr map[string]string) resp {
@@ -116,7 +183,7 @@ func (h *harness) do(method, path, token string, body any, hdr map[string]string
 	}
 	rec := httptest.NewRecorder()
 	h.srv.Handler().ServeHTTP(rec, req)
-	out := resp{code: rec.Code, raw: rec.Body.String()}
+	out := resp{code: rec.Code, raw: rec.Body.String(), hdr: rec.Header()}
 	_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
 	return out
 }
@@ -340,6 +407,79 @@ func TestAuthRefresh(t *testing.T) {
 	}
 	if r := h.do("POST", "/v1/auth/refresh", revokable, nil, nil); r.code != http.StatusUnauthorized {
 		t.Errorf("refresh of a revoked session = %d, want 401 (deny-closed; re-login required)", r.code)
+	}
+}
+
+// TestAuthLoginEnforcementUnavailable (R5): a permitted credential on a build without the
+// recorded login enforcement component, over a configured global/default posture, is
+// refused as a deployment state through the central mapping (503
+// login_enforcement_unavailable, no new session, no posture detail). Invalid credentials
+// keep their 401.
+func TestAuthLoginEnforcementUnavailable(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	admin := h.adminLogin()
+	actor, err := h.authr.Authenticate(ctx, admin)
+	if err != nil {
+		t.Fatalf("authenticate admin: %v", err)
+	}
+	fed := auth.NewFederationService(h.st, fakeSealer{}, fakeBuilder, auth.NoFederation{}, nil)
+	if _, err := fed.PutConfig(ctx, actor, auth.GlobalFederationScope, auth.FederationConfigInput{
+		Protocol: auth.ProtocolOIDC, Enabled: true, OIDCIssuer: "https://idp.example",
+		OIDCClientID: "client", OIDCClientSecret: "secret", RequireSSO: true,
+	}); err != nil {
+		t.Fatalf("configure the global posture: %v", err)
+	}
+	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if _, err := as.LoginCapability().Lock(ctx); err != nil {
+			return err
+		}
+		_, err := as.LoginCapability().Observe(ctx, "r5-test-artifact")
+		return err
+	}); err != nil {
+		t.Fatalf("record the login capability: %v", err)
+	}
+	if err := auth.InstallLoginComponentState(auth.ClassifyLoginComponent(false, false), h.authr, fed); err != nil {
+		t.Fatalf("install the absent component state: %v", err)
+	}
+	sessions := func() int {
+		t.Helper()
+		var n int
+		if err := h.st.AuthView(ctx, func(as store.AuthScope) error {
+			rows, _, err := as.Sessions().List(ctx, model.Query{Limit: 1000})
+			n = len(rows)
+			return err
+		}); err != nil {
+			t.Fatalf("count sessions: %v", err)
+		}
+		return n
+	}
+	errorCode := func(r resp) string {
+		e, _ := r.body["error"].(map[string]any)
+		code, _ := e["code"].(string)
+		return code
+	}
+	before := sessions()
+
+	r := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "root@x.io", "password": "supersecret1"}, nil)
+	if r.code != http.StatusServiceUnavailable || errorCode(r) != "login_enforcement_unavailable" {
+		t.Fatalf("permitted login = %d %s, want 503 login_enforcement_unavailable", r.code, r.raw)
+	}
+	if got := r.hdr.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+	for _, leak := range []string{"idp.example", "require", "cidr", "r5-test-artifact"} {
+		if bytes.Contains(bytes.ToLower([]byte(r.raw)), []byte(leak)) {
+			t.Errorf("the refusal body reveals %q: %s", leak, r.raw)
+		}
+	}
+
+	bad := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "root@x.io", "password": "wrong-password1"}, nil)
+	if bad.code != http.StatusUnauthorized || errorCode(bad) != "unauthenticated" {
+		t.Fatalf("invalid credentials = %d %s, want 401 unauthenticated", bad.code, bad.raw)
+	}
+	if after := sessions(); after != before {
+		t.Fatalf("refused logins changed the session count %d -> %d", before, after)
 	}
 }
 

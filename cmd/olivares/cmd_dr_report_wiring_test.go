@@ -94,6 +94,18 @@ func TestDRDrillDoesNotAnnounceADrillWhoseReportCouldNotBeRendered(t *testing.T)
 // cmd_dr.go's checked printReport, and it asserts the property rather than the exit code:
 // the live estate is still the live estate.
 func TestDRInPlaceRestoreDoesNotPromoteWhenItsReportCannotBeRendered(t *testing.T) {
+	// ⛔ SELLA LA VERSION DEL BINARIO, porque el manifiesto de DR la toma de aqui.
+	// `core/dr.CheckImportCompatibility` (nueva en DIST-24) rechaza un bundle cuya version
+	// productora no sea ordenable: "un binario sin sellar no puede afirmar que un export
+	// sellado es compatible". En un binario de test `version` vale "dev", que
+	// `release.IsUnstamped` considera sin sellar, asi que este round-trip moria en `verify`
+	// con «engine version "dev" is not an orderable release version» — la guarda haciendo
+	// exactamente su trabajo sobre un senuelo que no la contemplaba.
+	// Se sella el SENUELO, no se ablanda la guarda: su contrato es explicito y relajarlo la
+	// dejaria sin sentido. Mismo patron que cmd_security_unstamped_test.go:229-231.
+	prevVersion := version
+	version = "26.9.0"
+	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 	live := filepath.Join(src, "olivares.db")
 

@@ -49,6 +49,36 @@ The governing headless `Service/<name>` is unchanged (it keeps the StatefulSet's
 per-pod DNS identity) and now includes Ready standbys — which is precisely why the
 in-engine leader gate exists.
 
+### The label is discovery; `/readyz` is readiness
+
+The leader label answers *where* client traffic goes. It does not answer whether
+the engine behind it will **take** that traffic, and the two really do come apart:
+the engine publishes the label as soon as it wins the election, while `GET /readyz`
+additionally checks store access, established writer identity and — while the first
+setup is incomplete — that the setup ceremony can actually run. A PostgreSQL
+install without the cross-tenant administrative pool
+(`spec.postgres.adminDsnKey`) converges, elects a leader, publishes the label and
+answers **503** on `/readyz`: a control plane nobody can use yet.
+
+So in this layout `phase: Ready` requires **both**: the rollout fully realized, and
+a fresh successful `/readyz` on the single leader-labeled pod. The operator makes
+that observation itself, through the Kubernetes API server's pod proxy (§2), on
+every reconcile — it is never cached, because a `200` describes the moment it was
+taken and nothing more.
+
+Three consequences worth stating plainly:
+
+- **`Available` does not follow it.** The endpoint still exists, and it is how an
+  administrator reaches `POST /v1/setup` to fix exactly this. Withdrawing it
+  because setup is incomplete would make an incomplete install unrecoverable.
+- **A `200` while `setup_required` is still true IS ready.** It means the engine
+  can serve the ceremony. It is not a claim that the install finished, and it
+  authorizes nothing: application routes keep refusing until setup completes.
+- **The observation can fail.** When it does, the operator says
+  `RouteProbeUnknown` and withholds `Ready`. That is "not verified", not "the
+  engine is broken" — and it is deliberately not treated as a reason to stop
+  measuring the rollout deadline.
+
 ## 2. What the operator creates in the leader-routing layout
 
 | Object | Purpose |
@@ -69,7 +99,21 @@ authority and every application request re-checks it. If that trade is unaccepta
 stay on `Legacy` and accept that HA cannot be rolling-updated in place.
 
 The manager's own ClusterRole grows accordingly (`operator/config/rbac/role.yaml`):
-`serviceaccounts` and `roles`/`rolebindings` CRUD, plus `pods` `get,list,watch,patch`.
+`serviceaccounts` and `roles`/`rolebindings` CRUD, `pods` `get,list,watch,patch`,
+and `pods/proxy` **`get`** — the read that observes traffic readiness.
+
+Be precise about what that last one is. Kubernetes RBAC authorizes the
+**subresource**, not a path inside it: `get pods/proxy` permits a GET of *any* path
+on any pod in scope, and there is no rule that can say "only `/readyz`". What
+limits this manager to `/readyz` on one verified pod is its own code
+(`operator/internal/controller/routereadiness.go`): a fixed path, a fixed port, a
+GET with no body, nothing taken from the ControlPlane, no redirect followed, a
+bounded read and a bounded deadline. The manager's ClusterRole is the trust
+boundary; the code is the constraint inside it. Do not read the grant as
+per-path authorization by the API server.
+
+No write verb is added on that subresource, and the operand's own Role is unchanged
+— this is a read the OPERATOR makes, not a new right for the engine.
 `patch pods` is not used by the reconciler — Kubernetes' privilege-escalation
 prevention refuses to let a caller create a Role granting rights it does not itself
 hold. Granting `patch pods` is strictly narrower than the alternative (`escalate`
@@ -94,7 +138,7 @@ apiVersion: ops.olivares.ai/v1alpha1
 kind: ControlPlane
 metadata: { name: cp }
 spec:
-  image: docker.io/olivaresai/olivares:26.8.0   # MUST serve /pod-readyz
+  image: docker.io/olivaresai/olivares:26.9.0   # MUST serve /pod-readyz
   engine: postgres
   replicas: 3
   haRouting: LeaderRouting
@@ -164,10 +208,27 @@ before you start.
 | `Degraded/RolloutStalled` + `Progressing=False/ProgressDeadlineExceeded` | No progress for `spec.progressDeadlineSeconds` (default 600). | A real wedge: image pull, PVC binding, failing probes. Inspect the pods. |
 | `Degraded/HARequiresRecreate` | The live StatefulSet is `OrderedReady`; HA needs `Parallel` (immutable). | `kubectl delete statefulset <name> --cascade=orphan`, then let the operator recreate it. |
 | `Progressing=True/WaitingForPodHealth` | Every pod is on the update revision; some do not pass `/pod-readyz`. | Check store reachability from those pods. |
+| `Degraded/SetupBlocked` | Converged, one leader published, and that leader answers `/readyz` with "first setup cannot complete": the cross-tenant administrative pool is missing. | Set `spec.postgres.adminDsnKey` to the key of the BYPASSRLS DSN inside the Secret named by `spec.postgres.dsnSecret`. The leader Service keeps its endpoint meanwhile, so `POST /v1/setup` stays reachable. |
+| `Degraded/RouteNotReady` | Converged, one leader published, and it does not report traffic readiness for another recognized reason. | Usually the seconds-long lag between losing the election and withdrawing the label, or a store that became unreachable under an already-Ready pod. If it persists, inspect that pod's engine log. |
+| `Degraded/RouteProbeForbidden` | The API server refused the **manager's** read of `pods/proxy`. | Operator authorization, not engine health: bind the generated ClusterRole (§2) to the manager's ServiceAccount. |
+| `Degraded/RouteProbeUnknown` | Traffic readiness could not be verified at all. | **Unverified, not a failing engine.** No observer wired into the manager, the pod changed identity while it was asked, or an answer the operator does not recognize. Check that the manager can reach the pod proxy and that `spec.image` serves `/readyz`. |
 
-`Available` answers "can clients reach a leader right now?" independently of
+`Available` answers "is there an endpoint right now?" independently of
 `Progressing` — an image rollout is normally `Progressing=True` *and*
-`Available=True`.
+`Available=True`. It stays `True` under all four route conditions above: the
+endpoint is reachable, and whether the engine behind it will serve is what `Ready`
+and `Degraded` report.
+
+A note on cadence, because it is visible in `kubectl get`: in this layout the
+operator re-reconciles every 30 seconds **even once Ready**. Traffic readiness is
+an HTTP fact that changes with no Kubernetes event at all — a store that dies, an
+administrative pool that is finally configured — so the periodic tick is what
+refreshes it. A *verified* `SetupBlocked` polls every 5 minutes instead: it is
+static until a human acts, and a configuration or pod event wakes it earlier.
+That same static verdict is the only route condition excluded from
+`spec.progressDeadlineSeconds`; the other three keep the deadline running, so an
+unverifiable control plane is still reported as `RolloutStalled` when it stops
+converging (it keeps its route reason on `Degraded` while it does).
 
 ## 7. The residual failover window (inherited, not introduced)
 
@@ -207,6 +268,16 @@ that pod; a rolling image update **completes** (the wedge regression) with
 `status.currentImage` lagging until it does; and killing the leader promotes a
 standby, moves the label and the endpoint, and never lets two pods serve application
 traffic.
+
+The traffic-readiness observation is covered in the ordinary gate at two seams:
+the classification of every response the engine actually gives (and of an API
+server failure envelope wearing the same words), and the production transport
+against a local authenticated fake API server — exact request path, credential
+handling, TLS verification, no redirect followed, the size bound and the deadline.
+What those cannot prove is the round trip on a real cluster: a positive
+(`/readyz` 200 → `Ready`) and a negative (no administrative pool → not `Ready`,
+with `Degraded/SetupBlocked`) through a real API server proxy belong to the kind
+job above and are **not yet demonstrated**.
 
 Those are the assertions the harness makes — not yet a result to cite. The workflow
 lands with this change and runs for the first time on its own pull request; until a

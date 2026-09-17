@@ -17,6 +17,12 @@
 # DOS FORMAS, y la segunda es la mayoritaria en este árbol:
 #   · `timeout [banderas] <dur> …`     — el reloj de coreutils (con su `--kill-after`)
 #   · `-timeout <dur>` / `--timeout=<dur>` — el reloj INTERNO de otro comando (`go test`, `kubectl`)
+#   · `-test.timeout <dur>` — la MISMA cosa cuando se invoca el BINARIO de test ya compilado en vez
+#     de `go test`. Se anadio el 2026-09-12 y no es cosmetico: al separar compilacion y ejecucion de
+#     `test:race-hot:hot`, el paso pasa a ejecutar el binario, el reloj se escribe `-test.timeout`, y
+#     este guion dejaba de verlo — MEDIDO: 17 relojes antes del cambio, 16 despues, y con el techo del
+#     paso bajado a los mismos 15m que el reloj interior contestaba «limpio», exit 0. El punto de
+#     `test.` no casaba con `--?timeout`, asi que la pata cuyo invariante ES este se quedaba sin guarda.
 # Las dos prometen un diagnóstico propio —un panic con su stack, un «context deadline exceeded»—
 # que sólo llega si al proceso le da tiempo a producirlo.
 #
@@ -128,7 +134,7 @@ def relojes(run):
             break
         if D is not None: out.append((f"timeout {toks[0] if toks else ''} …".strip(), D, K))
     # forma 2 · el reloj INTERNO de otro comando
-    for m in re.finditer(r'(?<![\w-])(--?timeout[= ])(\S+)', run):
+    for m in re.finditer(r'(?<![\w-])(--?(?:test\.)?timeout[= ])(\S+)', run):
         val = m.group(2)
         if val.startswith('$') or val.startswith('{{'):
             out.append((m.group(0).strip(), None, 0.0)); continue
@@ -200,7 +206,7 @@ for f in sorted(glob.glob(os.path.join(wfdir, '*.yml')) + glob.glob(os.path.join
             texto, _ = sustituye(str(s['run']), env)
             # los relojes escondidos en el propio `env` (GOFLAGS y compania) cuentan igual
             for k, v in env.items():
-                if re.search(r'--?timeout[= ]\S', v): texto += "\n" + v
+                if re.search(r'--?(?:test\.)?timeout[= ]\S', v): texto += "\n" + v
             # ⛔ SOLO ES «NO RESOLUBLE» SI LA VARIABLE ESTA EN LA POSICION DE LA DURACION. La primera
             # version marcaba cualquier paso con variables en su shell —`$RUNNER_TEMP`, `$rc`— aunque
             # su reloj fuese un literal: tres falsos «no pude mirar» sobre relojes perfectamente

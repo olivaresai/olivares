@@ -14,7 +14,7 @@
 // or directory). The live OAuth/API transport is a documented follow-up behind the
 // same Source interface; with no export configured it opens as an empty source.
 //
-// Minimal data / red line (docs/SECURITY-HARDENING.md-4): the source credential is configured BY
+// Minimal data / red line (docs/SECURITY-HARDENING.md §2-4): the source credential is configured BY
 // REFERENCE to a secret-store (never inline); a document's ACL carries Drive
 // permission references (group / domain / principal), never credential material;
 // the document body is returned RAW for the knowledge module to redact (this

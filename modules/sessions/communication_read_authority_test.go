@@ -496,6 +496,8 @@ func newDirectNoticeExactReadFixtureWithGrantExpiries(
 		t.Fatal("authenticated exact direct notice reader has no opaque ref")
 	}
 
+	fixture.reanchorOperationClock(t)
+
 	fixture.recipient = onboarded.User.ID
 	readerSubject := CommunicationSubjectRef{Kind: SubjectUser, Ref: fixture.recipient.String()}
 	var additionalSubjects []CommunicationSubjectRef

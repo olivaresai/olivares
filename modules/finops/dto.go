@@ -132,10 +132,107 @@ type budgetStatusDTO struct {
 	// budget exhaustion prediction from EWA daily rate.
 	ExhaustionDaysRemaining int    `json:"exhaustion_days_remaining"`
 	ExhaustionConfidence    string `json:"exhaustion_confidence,omitempty"` // high/medium/low
+	// Amount is the AUTHORITATIVE A4.2 section: the strictly evaluated figure with
+	// its class, components and threshold decisions. Every field above it is a legacy
+	// projection kept for structural compatibility — including remaining_micro_usd
+	// and over, whose zero/false are NOT evidence when Amount says otherwise. The
+	// forecast fields are not certified by A4.2 either: they still come from the
+	// older aggregates.
+	Amount *budgetAmountStatusDTO `json:"amount,omitempty"`
+}
+
+// budgetAmountStatusDTO is the strict evaluation as a status section. Money is a
+// decimal string or null; there is no float and no silent zero.
+type budgetAmountStatusDTO struct {
+	// State is "complete" only when the effective amount is exact.
+	State string `json:"state"`
+	// Class is exact | lower_bound | unknown.
+	Class string `json:"class"`
+	// EffectiveMicroUSD is the exact total or the proven bound; null when unknown.
+	EffectiveMicroUSD *string `json:"effective_micro_usd"`
+	// RemainingMicroUSD is limit - effective as an exact decimal, null whenever the
+	// amount is not established or the subtraction is not representable. Null is
+	// "not established", never "nothing left" and never "plenty left".
+	RemainingMicroUSD *string                    `json:"remaining_micro_usd"`
+	Currency          string                     `json:"currency"`
+	Causes            []string                   `json:"causes,omitempty"`
+	Components        alertEvidenceComponents    `json:"components"`
+	Thresholds        []budgetThresholdStatusDTO `json:"thresholds"`
+	// OverLimit is the AUTHORITATIVE decision about the limit itself — threshold 1.0 —
+	// evaluated whether or not the operator configured that threshold. Thresholds
+	// above lists only what was configured, so a budget with thresholds {0.5, 0.8} had
+	// no authoritative statement about being over its limit at all and the only
+	// "over" a reader could find was the legacy boolean. It admits unproven, which the
+	// boolean cannot.
+	OverLimit budgetThresholdStatusDTO `json:"over_limit"`
+	// LegacyProjection aggregates EXACTLY THREE of the fields below —
+	// spend_micro_usd, remaining_micro_usd and over — and is the weakest of those
+	// three, so a single one of them that is not a projection of this evaluation makes
+	// the whole label unavailable.
+	//
+	// It does NOT cover the forecast. projected_micro_usd and the exhaustion
+	// prediction come from aggregates A4.2 does not certify at all: they are always
+	// `unavailable` in LegacyFields and ForecastCertified is always false, and folding
+	// a permanent "unavailable" into this label would make it permanently unavailable
+	// while saying nothing about the three fields it is for. Read the forecast's
+	// classification from LegacyFields, never from this word.
+	//
+	// A4.2 CORRECTION. It used to be derived from the effective amount alone, so an
+	// exact amount labelled every older field "exact" — including a remaining_micro_usd
+	// that had not been published at all because the subtraction left int64, which the
+	// independent review measured as `LegacyProjection:exact` beside `remaining=0`.
+	LegacyProjection string `json:"legacy_projection"`
+	// LegacyFields classifies each older field of budgetStatusDTO separately, because
+	// they are not one number: spend_micro_usd is the raw actual cost, remaining is a
+	// subtraction from the effective total, over is a decision, and the forecast comes
+	// from aggregates this increment does not certify at all.
+	LegacyFields budgetLegacyFieldsDTO `json:"legacy_fields"`
+	// ForecastCertified is always false in A4.2: projected_* and the exhaustion
+	// prediction come from aggregates this increment does not certify.
+	ForecastCertified bool `json:"forecast_certified"`
+}
+
+// budgetLegacyFieldsDTO classifies the older numeric fields of budgetStatusDTO one
+// by one. The money fields use the legacy value-kind vocabulary
+// (exact/lower_bound/unavailable); Over uses the crossing vocabulary, because a
+// boolean cannot say "unproven".
+//
+// The classification is a COMPARISON, not an inference: budgetStatus computes those
+// fields from its own traversal of the aggregates and the reservation ledger, and
+// this section comes from a second, independent strict evaluation. Under READ
+// COMMITTED the two can legitimately observe different data, so a field is called
+// exact only when the authoritative evaluation actually re-derives the number that
+// was published. A divergence is reported as unavailable rather than certified by a
+// figure the reader is not being shown.
+type budgetLegacyFieldsDTO struct {
+	SpendMicroUSD     string `json:"spend_micro_usd"`
+	RemainingMicroUSD string `json:"remaining_micro_usd"`
+	ProjectedMicroUSD string `json:"projected_micro_usd"`
+	Over              string `json:"over"`
+}
+
+// budgetThresholdStatusDTO is one configured threshold and what was PROVEN about it.
+type budgetThresholdStatusDTO struct {
+	Threshold      string   `json:"threshold"`
+	TargetMicroUSD string   `json:"target_micro_usd,omitempty"`
+	Result         string   `json:"result"`
+	LegacyPct      int      `json:"legacy_threshold_pct,omitempty"`
+	Causes         []string `json:"causes,omitempty"`
 }
 
 // alertDTO is one recorded budget-threshold crossing.
+//
+// A4.2 adds the row's own id, the interpreted evidence and its digest. The older
+// numeric fields are KEPT for structural compatibility, and that is all it is:
+// LegacyValueKind says whether the number beside them is exact, a proven bound or
+// not a spend figure at all, and a consumer that ignores it has not been certified
+// by this increment.
 type alertDTO struct {
+	ID string `json:"id"`
+	// The fields below are the row's own cells. When Evidence is valid they are BOUND
+	// to it — the reader refuses an envelope whose committed legacy projection, limit,
+	// threshold, scope or instants disagree with the row it is stored on — so
+	// LegacyValueKind classifies a number the envelope actually authorized.
 	BudgetID      string `json:"budget_id"`
 	Dimension     string `json:"dimension"`
 	Key           string `json:"key,omitempty"`
@@ -146,20 +243,34 @@ type alertDTO struct {
 	LimitMicroUSD int64  `json:"limit_micro_usd"`
 	Severity      string `json:"severity"`
 	TriggeredAt   string `json:"triggered_at"`
+	// LegacyValueKind classifies SpendMicroUSD above, and ONLY that field: "exact",
+	// "lower_bound", "unavailable" (no amount was established) or "unverified" (a row
+	// written before this contract, or one whose evidence did not verify). It is
+	// never absent, so a reader cannot mistake silence for exactness.
+	LegacyValueKind string              `json:"legacy_value_kind"`
+	Evidence        interpretedEvidence `json:"amount_evidence"`
 }
 
-func toAlertDTO(rec model.Record) alertDTO {
+func toAlertDTO(rec model.Record, tenant model.TenantID) alertDTO {
+	evidence := interpretAlertEvidence(rec, tenant)
+	kind := legacyValueUnverified
+	if evidence.State == evidenceValid && evidence.Envelope != nil {
+		kind = evidence.Envelope.Legacy.ValueKind
+	}
 	return alertDTO{
-		BudgetID:      rec.String(colBudgetID),
-		Dimension:     rec.String(colDimension),
-		Key:           rec.String(colDimKey),
-		Period:        rec.String(colPeriod),
-		PeriodStart:   rec.String(colPeriodStart),
-		ThresholdPct:  rec.Int(colThresholdPct),
-		SpendMicroUSD: rec.Int(colAlertSpend),
-		LimitMicroUSD: rec.Int(colAlertLimit),
-		Severity:      rec.String(colSeverity),
-		TriggeredAt:   rec.String(colTriggeredAt),
+		ID:              rec.String(model.ColID),
+		LegacyValueKind: kind,
+		Evidence:        evidence,
+		BudgetID:        rec.String(colBudgetID),
+		Dimension:       rec.String(colDimension),
+		Key:             rec.String(colDimKey),
+		Period:          rec.String(colPeriod),
+		PeriodStart:     rec.String(colPeriodStart),
+		ThresholdPct:    rec.Int(colThresholdPct),
+		SpendMicroUSD:   rec.Int(colAlertSpend),
+		LimitMicroUSD:   rec.Int(colAlertLimit),
+		Severity:        rec.String(colSeverity),
+		TriggeredAt:     rec.String(colTriggeredAt),
 	}
 }
 
@@ -300,6 +411,13 @@ func listQuery(r *http.Request) model.Query {
 }
 
 func eq(col, val string) model.Filter { return model.Filter{Column: col, Op: model.OpEq, Value: val} }
+
+// eqInt is eq for a column the descriptor declares as KindInt. The value is bound
+// as an int64 rather than stringified: a text comparison against an INTEGER column
+// is a different predicate in both dialects.
+func eqInt(col string, val int64) model.Filter {
+	return model.Filter{Column: col, Op: model.OpEq, Value: val}
+}
 
 // timeParam parses an RFC3339 query param. ok=false with bad=false means the
 // param was absent; bad=true means it was present but unparseable — the caller

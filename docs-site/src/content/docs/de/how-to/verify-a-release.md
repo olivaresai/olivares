@@ -2,8 +2,8 @@
 title: Überprüfen, was Sie heruntergeladen haben
 description: >-
   Verifizieren Sie die Signatur, SLSA-Provenance, SBOM und OpenVEX-Attestierungen
-  eines Releases, bevor Sie es ausführen — online (keyless) oder vollständig offline
-  (schlüsselbasiert). Leiten Sie niemals einen Installer direkt in eine Shell.
+  eines Releases, bevor Sie es ausführen. Leiten Sie niemals einen Installer direkt
+  in eine Shell.
 ---
 
 Eine control plane ist ein Sicherheitsprodukt, daher sollten Sie als Erstes mit einem
@@ -28,7 +28,8 @@ wie.
 | `*.sbom.sigstore.json` | SBOM (SPDX) als signierte in-toto-Attestierung |
 | `*.vex.sigstore.json` | OpenVEX als signierte in-toto-Attestierung |
 | `*.intoto.jsonl` | SLSA Build L3 Provenance |
-| Container-Image + Helm-Chart | beim Release in eine Registry veröffentlicht, per Digest gepinnt |
+| Container-Image | in GHCR und Docker Hub veröffentlicht, per Digest geprüft und gepinnt |
+| Helm-Chart-Quelle | aus `deploy/helm/olivares` installieren; noch kein öffentliches OCI-Chart |
 
 ## Der Ein-Befehl-Weg
 
@@ -37,22 +38,28 @@ verifiziert die Signatur über `checksums.txt`, berechnet das SHA-256 jedes Arte
 und verifiziert dann die SBOM-, OpenVEX- und SLSA-Attestierungen.
 
 ```bash
-# Default: keyless (Sigstore). Needs network access to the transparency log (Rekor).
+# Default: keyless (Sigstore). Needs Rekor and Sigstore trusted-root material.
 scripts/verify-release.sh
 
-# Key-based (air-gap friendly): verify against the project's public key.
-scripts/verify-release.sh --key cosign.pub
-
-# Fully offline: no Rekor / no transparency-log network at all.
-scripts/verify-release.sh --key cosign.pub --offline
-
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.8.0
+scripts/verify-release.sh --source-tag v26.9.0
+
+# Key-based: only for files signed with a private key you control.
+# Releases are signed keyless and do not publish a public key.
+scripts/verify-release.sh --key /path/to/your-cosign.pub
 ```
 
-Mit `--offline` (oder immer wenn ein Schlüssel angegeben wird) fügt das Skript jedem
-cosign-Aufruf `--insecure-ignore-tlog` hinzu, sodass kein Sigstore-/Rekor-Netzwerk
-verwendet wird — das ist der Weg für getrennte Umgebungen.
+`--key` prüft Signaturen gegen einen öffentlichen Schlüssel statt gegen die Identität des
+Release-Workflows und ignoriert das Transparenzprotokoll. Das belegt, dass die Dateien mit dem
+passenden privaten Schlüssel signiert wurden, nicht dass das Projekt sie veröffentlicht hat.
+Beziehen Sie diesen öffentlichen Schlüssel von seinem Inhaber über einen Kanal, der von den
+geprüften Dateien getrennt ist.
+
+`--offline` entfernt nur die Rekor-Abfrage aus den cosign-Aufrufen; die Prüfung wird dadurch
+nicht netzwerkfrei. Die schlüssellose Prüfung benötigt weiterhin Sigstore-Trusted-Root-Material,
+das cosign abruft, sofern es nicht bereits zwischengespeichert ist, und das Skript hat keine
+Option `--trusted-root`. Die Prüfung der SBOM- und OpenVEX-Bundles benötigt auch mit `--key`
+Trusted-Root-Material, und der SLSA-Schritt ruft `slsa-verifier` ohne Offline-Option auf.
 
 ## Was es prüft, Schritt für Schritt
 
@@ -129,9 +136,12 @@ veränderlichen Tag.
 
 ## In einer air-gapped-Umgebung
 
-Falls Sie das Netzwerk überhaupt nicht erreichen können, verwenden Sie das
-**Air-Gap-Bundle**, das einen öffentlichen Schlüssel mitbringt und alles offline
-verifiziert (kein Rekor). Siehe
+Das **Air-Gap-Bundle** erstellt ein Betreiber mit einem eigenen cosign-Schlüssel; das Bundle
+enthält die passende `cosign.pub`. Seine Skripte prüfen das Helm-Chart und die gespeicherten
+Images ohne Rekor gegen diesen Schlüssel; ein Image besteht nur, wenn es eine mit diesem Schlüssel
+erstellte Signatur trägt. Ein Schlüssel aus dem Bundle, das mit ihm geprüft wird, authentifiziert
+dieses Bundle nicht: Vergleichen Sie ihn, bevor Sie dem Bundle vertrauen, mit einer Kopie, die
+Sie vom Schlüsselinhaber über einen getrennten Kanal erhalten haben. Siehe
 [Installation in einer air-gapped-Umgebung](/how-to/air-gap-install/).
 
 :::note[Ehrliche Anmerkung zur Verfügbarkeit von Attestierungen]

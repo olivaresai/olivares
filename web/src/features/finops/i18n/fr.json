@@ -358,13 +358,35 @@
     "mtd": "Ce mois-ci"
   },
   "rates": {
-    "title": "Model rate catalogue",
-    "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
-    "unit": "micro-USD per 1M tokens (integer)",
-    "empty": "No rates in the catalogue",
-    "inOut": "in {{in}} · out {{out}}",
-    "until": "until {{at}}",
-    "current": "current",
+    "title": "Catalogue des tarifs de modèles",
+    "description": "Prix catalogue utilisés pour ESTIMER le coût quand un fournisseur ne communique pas de montant. Ce n’est pas ce qui vous a été facturé.",
+    "unit": "micro-USD par million de tokens (entier)",
+    "unitNote": "Les tarifs d’entrée et de sortie sont exprimés en {{unit}}.",
+    "validityNote": "Les dates indiquent la validité déclarée par chaque entrée. Cette liste n’indique pas quelle entrée a servi au calcul d’un coût donné.",
+    "empty": "Aucun tarif dans le catalogue",
+    "emptyHint": "Aucun prix catalogue n’est enregistré pour cette organisation.",
+    "model": "Modèle",
+    "provider": "Fournisseur",
+    "inputRate": "Tarif d’entrée",
+    "outputRate": "Tarif de sortie",
+    "effectiveFrom": "Début de validité",
+    "effectiveUntil": "Fin de validité",
+    "noEndDate": "Sans date de fin",
+    "invalid": {
+      "title": "Catalogue des tarifs indisponible",
+      "description": "La réponse n’a pas pu être lue comme un catalogue de tarifs ; aucun tarif n’est donc affiché. Réessayer relance la même lecture et ne modifie rien.",
+      "reason": {
+        "envelope": "La réponse ne contient pas de liste lisible d’entrées tarifaires.",
+        "entry": "L’entrée {{n}} n’est pas un enregistrement de tarif.",
+        "missing": "Il manque le champ {{field}} dans l’entrée {{n}}.",
+        "empty": "Le champ {{field}} de l’entrée {{n}} est vide.",
+        "type": "Le champ {{field}} de l’entrée {{n}} n’a pas le bon type.",
+        "negative": "Le champ {{field}} de l’entrée {{n}} est négatif.",
+        "notInteger": "Le champ {{field}} de l’entrée {{n}} n’est pas un nombre entier.",
+        "unsafe": "Le champ {{field}} de l’entrée {{n}} est trop grand pour être affiché exactement.",
+        "timestamp": "Le champ {{field}} de l’entrée {{n}} n’est pas un horodatage RFC 3339."
+      }
+    },
     "truncated": "{{n}} tarifs chargés ; il y en a d’autres",
     "truncatedHint": "Il existe plus de tarifs de modèles que ceux affichés ; cette page est triée par date d’entrée en vigueur, la plus récente d’abord. Une absence ici n’établit pas une absence du catalogue : le calcul des coûts et la comparaison résolvent le tarif en vigueur dans le catalogue, indépendamment de cette page."
   },
@@ -457,5 +479,21 @@
     "riskDescription": "Sujets qui consomment de la dépense sans résultats satisfaits.",
     "riskEmpty": "Aucun sujet ne consomme de dépense sans résultats",
     "satisfiedOf": "{{satisfied}} sur {{outcomes}} satisfaits"
+  },
+  "evidence": {
+    "atLeast": "Au moins {{amount}}",
+    "original": "Montant déclaré à l’origine : {{amount}}",
+    "unknown": "Montant inconnu",
+    "exact": "Montant exact",
+    "lower_bound": "Borne inférieure ; total incomplet",
+    "historical": "Chiffre historique ; non vérifié",
+    "unavailable": "Indisponible",
+    "barUnavailable": "Barre indisponible : aucune base monétaire exacte.",
+    "forecast": "Prévision (non certifiée) : {{amount}}",
+    "cause": "Cause",
+    "reference": "Référence de l’alerte",
+    "digest": "Empreinte de la preuve enregistrée",
+    "lookup": "Consulter",
+    "clear": "Effacer"
   }
 }

@@ -152,7 +152,13 @@ func TestSQLiteEvidenceStateVocabProbePrecision(t *testing.T) {
 	if stale, found := sqliteEvidenceStateVocabStale(staleWithDecoy); !found || !stale {
 		t.Fatalf("stale-with-decoy: (stale=%t, found=%t), want (true, true): a 'withheld' outside the state CHECK must not silence the stale diagnostic", stale, found)
 	}
-	current := strings.Replace(staleWithDecoy, "'blocked')", "'blocked','withheld')", 1)
+	// Core v11 made 'refused' part of the current vocabulary, so the six-word
+	// list that was current through v10 is now stale as well.
+	sixWords := strings.Replace(staleWithDecoy, "'blocked')", "'blocked','withheld')", 1)
+	if stale, found := sqliteEvidenceStateVocabStale(sixWords); !found || !stale {
+		t.Fatalf("six-word DDL: (stale=%t, found=%t), want (true, true) after core v11", stale, found)
+	}
+	current := strings.Replace(staleWithDecoy, "'blocked')", "'blocked','withheld','refused')", 1)
 	if stale, found := sqliteEvidenceStateVocabStale(current); !found || stale {
 		t.Fatalf("current DDL: (stale=%t, found=%t), want (false, true)", stale, found)
 	}

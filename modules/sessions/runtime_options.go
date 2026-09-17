@@ -91,6 +91,123 @@ func WithProgram(program string) Option {
 	}
 }
 
+// WithProviderDriver registers an internal provider driver. Registration is what
+// makes that driver's profiles LAUNCHABLE on this node — readiness is per driver,
+// and there is deliberately no single flag that turns several on at once. An
+// invalid or duplicate registration panics at construction because a half-wired
+// driver would be discovered as a failed launch instead of a failed boot.
+func WithProviderDriver(d ProviderDriver) Option {
+	return func(m *Module) {
+		if d == nil {
+			return
+		}
+		if err := m.rt.registerDriver(d); err != nil {
+			panic(err)
+		}
+	}
+}
+
+// WithDriverProgram overrides the executable a registered driver spawns (the
+// operator's pinned official binary). Absent, the driver's own program name is
+// used and resolved through PATH.
+func WithDriverProgram(driver, program string) Option {
+	return func(m *Module) {
+		key, err := normalizeDriverKey(driver)
+		if err != nil || program == "" {
+			return
+		}
+		m.rt.driverPrograms[key] = program
+	}
+}
+
+// WithProviderCredentialSource wires the GOVERNED managed-injection adapter of one
+// driver. There is no default and no shared adapter: a managed launch of a driver
+// with no adapter is refused by name, never served by another provider's issuer.
+func WithProviderCredentialSource(driver string, src ProviderCredentialSource) Option {
+	return func(m *Module) {
+		key, err := normalizeDriverKey(driver)
+		if err != nil || src == nil {
+			return
+		}
+		m.rt.providerCreds[key] = src
+	}
+}
+
+// WithProviderApprovalGate wires the authority that answers provider approval
+// requests. The default is DENY-CLOSED: every approval is refused with its own
+// method's refusal codec.
+func WithProviderApprovalGate(g ProviderApprovalGate) Option {
+	return func(m *Module) {
+		if g != nil {
+			m.rt.approvalGate = g
+		}
+	}
+}
+
+// WithProductVersion sets the version Olivares presents to an official CLI in its
+// handshake. The composition root supplies the build's value; the module invents
+// none and never reports a version it cannot source.
+func WithProductVersion(v string) Option {
+	return func(m *Module) {
+		if v != "" {
+			m.rt.productVersion = v
+		}
+	}
+}
+
+// WithDriverTimeouts bounds one client→server protocol request and one
+// server→client approval. Both must be bounded: an unanswered request stalls a
+// provider turn, and an unbounded wait turns that into a stalled launch.
+func WithDriverTimeouts(call, approval time.Duration) Option {
+	return func(m *Module) {
+		if call > 0 {
+			m.rt.driverCallTimeout = call
+		}
+		if approval > 0 {
+			m.rt.driverApprovalDeadline = approval
+		}
+	}
+}
+
+// UseProviderDriver late-binds a provider driver after construction, for the same
+// reason the governance gates are late-bound: the composition root builds the
+// module before it can resolve the operator's per-driver configuration.
+func (m *Module) UseProviderDriver(d ProviderDriver) error {
+	if d == nil {
+		return nil
+	}
+	return m.rt.registerDriver(d)
+}
+
+// UseProviderCredentialSource late-binds one driver's governed managed adapter.
+func (m *Module) UseProviderCredentialSource(driver string, src ProviderCredentialSource) error {
+	key, err := normalizeDriverKey(driver)
+	if err != nil {
+		return err
+	}
+	if src == nil {
+		return nil
+	}
+	m.rt.providerCreds[key] = src
+	return nil
+}
+
+// OperableProviderDrivers reports the drivers this node can launch, beside the
+// historical Claude path. It exists so a boot log and an operator can read the
+// per-driver readiness instead of inferring it.
+func (m *Module) OperableProviderDrivers() []string {
+	out := make([]string, 0, len(m.rt.drivers))
+	for key := range m.rt.drivers {
+		out = append(out, key)
+	}
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j-1] > out[j]; j-- {
+			out[j-1], out[j] = out[j], out[j-1]
+		}
+	}
+	return out
+}
+
 // WithInferenceBaseURL sets ANTHROPIC_BASE_URL on launched sessions so their
 // inference routes through Olivares' own gateway (PEP/budget/model-gov).
 func WithInferenceBaseURL(url string) Option {
@@ -383,3 +500,14 @@ func (m *Module) UseWorkAuthorizer(a WorkAuthorizer) {
 		m.workAuthz = a
 	}
 }
+
+// EnableProfiledLaunches opens the productive create endpoint to
+// provider_profile_ref (B2). It is a boot-time decision of the composition root,
+// taken only when every session reader — list, detail, timeline, SSE, exports —
+// understands profile-scoped rows. Once enabled, new launches require a profile
+// and legacy runs without a proven home cannot continue. Before that the endpoint refuses the option
+// while the internal service (and its tests) can already launch profiled.
+func (m *Module) EnableProfiledLaunches() { m.rt.profiledLaunchesEnabled = true }
+
+// ProfiledLaunchesEnabled reports the switch above.
+func (m *Module) ProfiledLaunchesEnabled() bool { return m.rt.profiledLaunchesEnabled }

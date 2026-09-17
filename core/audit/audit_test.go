@@ -8,6 +8,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,19 +35,123 @@ func testStore(t *testing.T) store.Store {
 
 var tenantSeq int
 
+// provisionTenant creates a business tenant the way the active writer provisions
+// one at promotion (cmd/olivares/boot.go): EnsureSystemTenant, then CreateOrg, in
+// the same System transaction — the order the sqlstore package fixture already
+// uses (core/internal/store/sqlstore/helpers_test.go).
+//
+// Since core v10 the boot inventory decoder treats a business organization
+// without the SYSTEM witness as corruption and refuses to reopen
+// (sqlstore/directoryepoch.go: "nonempty directory inventory lacks SYSTEM
+// witness"). A fixture that skipped genesis was therefore not a smaller fixture:
+// it was a database no real deployment can produce, and every test in this
+// package that closes and reopens a file-backed store died at the second Open
+// (the declared-gap archive fixture and the emptied-chain checkpoint tests). The
+// genesis event lands on the SYSTEM chain, so the per-tenant seq comments
+// ("org.create at seq 1") stay exact. A test that needs the corrupt state on
+// purpose calls provisionTenantWithoutSystemWitness and says so.
 func provisionTenant(t *testing.T, st store.Store) model.TenantID {
 	t.Helper()
+	return provisionTenantWith(t, st, true)
+}
+
+// provisionTenantWithoutSystemWitness creates a business tenant on a store whose
+// SYSTEM organization has deliberately NOT been provisioned. It exists for the
+// negative that proves a nonempty inventory lacking the SYSTEM witness is refused
+// on reopen; it is never a shortcut for an ordinary fixture, because the store it
+// leaves behind cannot be reopened.
+func provisionTenantWithoutSystemWitness(t *testing.T, st store.Store) model.TenantID {
+	t.Helper()
+	return provisionTenantWith(t, st, false)
+}
+
+func provisionTenantWith(t *testing.T, st store.Store, systemFirst bool) model.TenantID {
+	t.Helper()
+	ctx := context.Background()
 	tenantSeq++
 	slug := "t" + strconv.Itoa(tenantSeq)
 	var id model.TenantID
-	if err := st.System(context.Background(), func(sys store.SystemScope) error {
-		o, err := sys.CreateOrg(context.Background(), model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		if systemFirst {
+			if _, err := sys.EnsureSystemTenant(ctx); err != nil {
+				return fmt.Errorf("ensure SYSTEM tenant: %w", err)
+			}
+		}
+		o, err := sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
 		id = o.TenantID
 		return err
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("provision tenant %q: %v", slug, err)
 	}
 	return id
+}
+
+// TestReopenRefusesTenantProvisionedWithoutSystemWitness is the discriminating
+// control for provisionTenant. The reopen fixtures in this package close a
+// file-backed store and open the same DSN again, and the boot inventory decoder
+// refuses a nonempty inventory that lacks the SYSTEM witness. The positive half
+// proves the ordinary helper leaves a store that reopens and still serves the
+// tenant it provisioned; the negative half proves the SAME shape, minus SYSTEM,
+// still receives the production refusal. Together they show the helper alignment
+// repaired a fixture and did not move the guard.
+func TestReopenRefusesTenantProvisionedWithoutSystemWitness(t *testing.T) {
+	ctx := context.Background()
+	open := func(dsn string) (store.Store, error) {
+		return sqlstore.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: dsn, Debug: true}, nil)
+	}
+
+	t.Run("with SYSTEM the store reopens", func(t *testing.T) {
+		dsn := filepath.Join(t.TempDir(), "witness.db")
+		first, err := open(dsn)
+		if err != nil {
+			t.Fatalf("first open: %v", err)
+		}
+		tenant := provisionTenant(t, first)
+		if err := first.Close(); err != nil {
+			t.Fatalf("close: %v", err)
+		}
+		again, err := open(dsn)
+		if err != nil {
+			t.Fatalf("reopen after SYSTEM-first provisioning: %v", err)
+		}
+		t.Cleanup(func() { _ = again.Close() })
+		// The reopened store still serves the tenant: exactly the org.create at seq 1.
+		var events int
+		if err := again.View(ctx, tenant, func(sc store.Scope) error {
+			return sc.Audit().Walk(ctx, 1, func(model.AuditEvent) error {
+				events++
+				return nil
+			})
+		}); err != nil {
+			t.Fatalf("walk the reopened tenant chain: %v", err)
+		}
+		if events != 1 {
+			t.Fatalf("reopened tenant chain holds %d events, want exactly the org.create", events)
+		}
+	})
+
+	t.Run("without SYSTEM the reopen is refused", func(t *testing.T) {
+		dsn := filepath.Join(t.TempDir(), "no-witness.db")
+		first, err := open(dsn)
+		if err != nil {
+			t.Fatalf("first open: %v", err)
+		}
+		provisionTenantWithoutSystemWitness(t, first)
+		if err := first.Close(); err != nil {
+			t.Fatalf("close: %v", err)
+		}
+		again, err := open(dsn)
+		if err == nil {
+			_ = again.Close()
+			t.Fatal("a nonempty inventory without the SYSTEM witness reopened: the decoder no longer refuses, and this package's fixture alignment would be hiding that")
+		}
+		if !errors.Is(err, store.ErrDirectoryUnavailable) {
+			t.Fatalf("reopen err = %v, want store.ErrDirectoryUnavailable", err)
+		}
+		if want := "nonempty directory inventory lacks SYSTEM witness"; !strings.Contains(err.Error(), want) {
+			t.Fatalf("reopen err = %q, want it to carry %q", err, want)
+		}
+	})
 }
 
 func appendEvents(t *testing.T, st store.Store, tenant model.TenantID, n int) {

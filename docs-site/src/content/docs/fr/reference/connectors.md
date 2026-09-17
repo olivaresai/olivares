@@ -401,11 +401,12 @@ PERMITTED du diff permitted-vs-observed :
 | `spiffe` | entrées d'enregistrement SPIRE | roster uniquement (`Gather` no-op) |
 
 Câblez `as_source: true` sur l'entrée `identity` pour une passe unique de grants permis par
-boot, ou une entrée `sources` séparée avec `poll_seconds` pour des re-scans périodiques —
-jamais les deux pour un même kind (`okta`/`entra` partagent le même connecteur `idp`, donc
-une seule instance de la famille idp peut s'enregistrer comme source par processus). Les
-appartenances aux groupes/rôles ne voyagent que dans le snapshot typé du roster, jamais
-sous forme d'arêtes.
+boot, ou une entrée `sources` séparée avec `poll_seconds` pour des re-scans périodiques.
+Chaque entrée s'enregistre sous **son propre `name`**, donc plusieurs entrées d'un même kind
+coexistent : `okta` et `entra` sont servis par le seul connecteur `idp` et restent deux sources
+distinctes, chacune avec sa configuration, son état et son cycle de vie. Ce qui doit être unique,
+c'est le nom, pas le connecteur. Les appartenances aux groupes/rôles ne voyagent que dans le
+snapshot typé du roster, jamais sous forme d'arêtes.
 
 ### Fédération d'identité d'agents
 
@@ -431,8 +432,9 @@ towers est une capacité distincte et ultérieure.
 Pour les sept kinds dotés d'un Gather re-pollable (`entra-agent`, `agent365`, `agentcore`,
 `foundry-agents`, `google-agent`, `oasf`, `onepassword`), câblez la moitié **roster** comme une entrée `identity` *sans* `as_source`
 et la moitié **arêtes/findings** comme une entrée `sources` séparée avec `poll_seconds` —
-pas les deux via `as_source: true`, qui n'exécute le scan qu'une seule fois par boot (et un
-enregistrement en double du même kind est rejeté).
+pas les deux via `as_source: true`, qui n'exécute le scan qu'une seule fois par boot. (Deux
+entrées d'un même kind ne sont plus l'obstacle : chacune s'enregistre sous son propre `name`.
+La raison est la cadence — une passe par boot n'est pas un re-scan.)
 
 Les **owner/sponsor** déclarés par le registry atterrissent sur les enregistrements de
 cycle de vie NHI pendant le sync du roster (la même sémantique que `PUT

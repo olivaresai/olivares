@@ -1,9 +1,8 @@
 ---
 title: ダウンロードしたものを検証する
 description: >-
-  実行する前に、リリースの署名、SLSA プロベナンス、SBOM、OpenVEX の表明を検証する —
-  オンライン (keyless) でも完全にオフライン (鍵ベース) でも。インストーラーをそのまま
-  シェルにパイプしないこと。
+  実行する前に、リリースの署名、SLSA プロベナンス、SBOM、OpenVEX の表明を検証する。
+  インストーラーをそのままシェルにパイプしないこと。
 ---
 
 control plane はセキュリティ製品なので、リリースに対して最初にすべきことは、それが
@@ -26,7 +25,8 @@ control plane はセキュリティ製品なので、リリースに対して最
 | `*.sbom.sigstore.json` | 署名済み in-toto 表明としての SBOM (SPDX) |
 | `*.vex.sigstore.json` | 署名済み in-toto 表明としての OpenVEX |
 | `*.intoto.jsonl` | SLSA Build L3 プロベナンス |
-| コンテナイメージ + Helm チャート | リリース時にレジストリへ公開、ダイジェストでピン留め |
+| コンテナイメージ | GHCR と Docker Hub に公開され、digest で検証・固定 |
+| Helm チャートのソース | `deploy/helm/olivares` からインストール。公開 OCI チャートはまだありません |
 
 ## ワンコマンドの経路
 
@@ -35,22 +35,27 @@ control plane はセキュリティ製品なので、リリースに対して最
 SBOM、OpenVEX、SLSA の表明を検証します。
 
 ```bash
-# Default: keyless (Sigstore). Needs network access to the transparency log (Rekor).
+# Default: keyless (Sigstore). Needs Rekor and Sigstore trusted-root material.
 scripts/verify-release.sh
 
-# Key-based (air-gap friendly): verify against the project's public key.
-scripts/verify-release.sh --key cosign.pub
-
-# Fully offline: no Rekor / no transparency-log network at all.
-scripts/verify-release.sh --key cosign.pub --offline
-
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.8.0
+scripts/verify-release.sh --source-tag v26.9.0
+
+# Key-based: only for files signed with a private key you control.
+# Releases are signed keyless and do not publish a public key.
+scripts/verify-release.sh --key /path/to/your-cosign.pub
 ```
 
-`--offline` を付けると (または鍵が指定されると)、スクリプトはすべての cosign 呼び出しに
-`--insecure-ignore-tlog` を追加するため、Sigstore/Rekor のネットワークは一切使われません —
-これがネットワーク非接続環境向けの経路です。
+`--key` は、リリースワークフローのアイデンティティではなく公開鍵に対して署名を検証し、透明性ログを
+無視します。これで証明されるのは、ファイルが対応する秘密鍵で署名されたことであり、プロジェクトが
+公開したことではありません。その公開鍵は、検証するファイルとは別の経路で鍵の所有者から入手して
+ください。
+
+`--offline` が cosign 呼び出しから取り除くのは Rekor の照会だけで、検証がネットワーク不要になる
+わけではありません。keyless 検証には引き続き Sigstore の信頼ルート材料が必要で、キャッシュ済みで
+なければ cosign が取得します。また、スクリプトには `--trusted-root` オプションがありません。
+SBOM と OpenVEX のバンドルの検証には `--key` を使っても信頼ルートが必要で、SLSA ステップは
+オフラインオプションなしで `slsa-verifier` を実行します。
 
 ## 何をチェックするか、ステップごと
 
@@ -127,8 +132,11 @@ slsa-verifier verify-image "$REF" \
 
 ## エアギャップ環境では
 
-ネットワークにまったく到達できない場合は、**エアギャップバンドル** を使ってください。
-これは公開鍵を携え、すべてをオフラインで (Rekor なしで) 検証します。
+**エアギャップバンドル** は運用者が自分で管理する cosign 鍵を使って作成し、対応する
+`cosign.pub` がバンドルに含まれます。バンドルのスクリプトは Rekor を使わずに、Helm チャートと
+保存されたイメージをその鍵で検証します。イメージが検証を通るのは、その鍵で作成された署名を持つ
+場合だけです。検証対象のバンドル自身から読み取った鍵は、そのバンドルを認証しません。バンドルを
+信頼する前に、鍵の所有者から別の経路で受け取った写しと比較してください。
 [エアギャップ環境でインストールする](/how-to/air-gap-install/) を参照してください。
 
 :::note[表明の利用可能性に関する正直な注記]

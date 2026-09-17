@@ -165,6 +165,16 @@ findings を監視し、コンテインメントを自動的に作動させる �
 バインドするまで、常に [`approximate`](#attributionconfidence) である。
 [eBPF/Tetragon](/ja/how-to/connectors/ebpf-tetragon/) を参照。
 
+### live_ref
+
+サーバーが割り当てる **1** 件のライブセッション行の識別です。v26.9.0 は観測を
+`(観測スコープ, 外部 id)` でキー付けし、同じセッション id を告げる 2 つの
+プロバイダーホームが 2 行のままになるようにします。「この行」を意味する
+コンソールと API の読み取りは `live_ref` を使い、素のプロバイダー id は使いません。
+素の外部 id ルートはレガシーであり、レガシー行にだけ答えます
+（`CHANGELOG.md` `[26.9.0]` B2）。
+[ライブ運用とセッション](/reference/modules/ii-sessions/) を参照。
+
 ### Kill switch
 
 estate（またはエージェント単位）の緊急停止: 1 回の admin-tier 呼び出しがすべての統治された actuation を
@@ -201,6 +211,15 @@ fail-closed で停止する。再有効化には 2 人の個別の人間と事�
 
 分離境界。すべてのモジュールの読み取りと書き込みは tenant スコープである。Postgres 上では row-level
 security がそれをバックストップする（エンジンは RLS をバイパスできるロールとして実行することを拒否する）。
+
+### プロバイダープロファイル (provider profile)
+
+**1** つの実行環境上の **1** つの構成済みプロバイダーインスタンスの永続的な
+識別です: ドライバー、所有環境、起動した子が使う正規の `config_home` /
+`user_home`。構成とストレージの識別であり、認証済みプロバイダーアカウントでは
+ありません。ホームは既に存在する必要があります。登録はインストールもログインも
+しません。起動は `provider_profile_ref` を指名します。
+[プロバイダーセッションを運用する](/how-to/operate-provider-sessions/) を参照。
 
 ### Permitted vs Observed
 

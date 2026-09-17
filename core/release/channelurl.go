@@ -46,6 +46,20 @@ import (
 //	DIRECTORY (the R2/mirror fallback)   a static channel host
 //	  <base>/<channel>/manifest.json[.sig]         artifact: <base>/<channel>/<filename>
 //
+// PERCENT-ENCODING IS READ, NEVER SUBTRACTED. A tag is one path segment, and an operator may
+// have to escape it: `v1%20beta`, `v1%C3%B1`, or a branch-shaped `a%2Fb`. The first cut of this
+// file measured the segments on the DECODED path and then cut the root out of the RAW endpoint
+// by those decoded lengths, so every escape moved the cut left by the bytes it saved:
+// `…/releases/tag/v1%20beta` produced the root `…/releases/t`, and `…/releases/%74ag/v1`
+// produced `…/releases/%` — a root carrying half an escape. Segments are therefore split out of
+// the RAW path, matched by their DECODED value, and the root is cut at a segment BOUNDARY.
+// Two consequences:
+//
+//   - `%2F` belongs to its segment and is never a separator. `…/releases/tag/a%2Fb` is the
+//     release tagged `a/b`, and the asset builders escape that tag once on the way back out.
+//   - The root keeps the bytes the operator typed, escapes included: a mirror published under
+//     `/%72eleases` is addressed as `/%72eleases`, never silently as `/releases`.
+//
 // THE LAYOUT IS DECIDED BY THE ENDPOINT'S SHAPE, NEVER BY SNIFFING THE ANSWER. Three
 // consequences worth stating, because each of them is a defect avoided:
 //
@@ -198,17 +212,36 @@ func ResolveChannel(endpoint, channel string) (ChannelLayout, error) {
 	if u.Scheme == "" || u.Host == "" {
 		return ChannelLayout{}, fmt.Errorf("release: bad update endpoint %q: want an absolute URL such as https://github.com/<owner>/<repo>", endpoint)
 	}
-	// ⛔ A QUERY OR A FRAGMENT MAKES THE STRING ARITHMETIC BELOW WRONG, silently. The SHAPE is
-	// read from u.Path, but every root is cut from the RAW string so the caller gets back the
-	// URL it typed. With `?x=1` on the end those two disagree: the query lands INSIDE the root
-	// and `/latest/download/<asset>` is appended after it, producing a URL that addresses
-	// nothing — and the length-based trim can cut the wrong suffix entirely. An update endpoint
-	// has no use for either, so they are refused here rather than mishandled later.
-	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+	// ⛔ A QUERY OR A FRAGMENT PUTS BYTES AFTER THE PATH, and every root below is cut out of the
+	// RAW endpoint so the caller gets back the URL it typed. With `?x=1` on the end the query
+	// lands INSIDE the root and `/latest/download/<asset>` is appended after it, producing a URL
+	// that addresses nothing. An update endpoint has no use for either, so they are refused here
+	// rather than mishandled later.
+	//
+	// A BARE `#` COUNTS. `https://h/base#` parses with an EMPTY Fragment, so the three tests
+	// above miss it while the delimiter is still in the string — the endpoint went on to be used
+	// as the directory base `https://h/base#`, and every URL built on it addressed `https://h/base`
+	// with the rest swallowed as a fragment. The delimiter is what disqualifies the endpoint, not
+	// whether anything follows it, and after this test u.Path spans the whole tail of trimmed.
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(trimmed, "#") {
 		return ChannelLayout{}, fmt.Errorf("release: bad update endpoint %q: an update endpoint is a base path, so it carries no query string and no fragment", endpoint)
 	}
-	segs := pathSegments(u.Path)
+	pathStart, ok := endpointPathStart(trimmed, u)
+	if !ok {
+		// Deny-closed belt: unreachable once the query and fragment delimiters are refused,
+		// because Go then parses the whole tail of trimmed as the path. Cutting a root out of
+		// bytes we cannot read back is the one failure this file must not have quietly.
+		return ChannelLayout{}, fmt.Errorf("release: bad update endpoint %q: its path does not read back byte for byte, so no root can be cut from it", endpoint)
+	}
+	segs, err := splitRawPath(trimmed[pathStart:])
+	if err != nil {
+		return ChannelLayout{}, fmt.Errorf("release: bad update endpoint %q: %w", endpoint, err)
+	}
 	n := len(segs)
+	// cut truncates the endpoint just before segment k, keeping every preceding segment as the
+	// operator typed it. The byte at that offset is the separator, so a root is never cut inside
+	// an escape and never inside a segment.
+	cut := func(k int) string { return trimmed[:pathStart+segs[k].start-1] }
 
 	// github.com is decided FIRST and EXHAUSTIVELY: on that host the accepted shapes are
 	// enumerated and everything else is refused, so no later rule can shadow one of them.
@@ -217,15 +250,15 @@ func ResolveChannel(endpoint, channel string) (ChannelLayout, error) {
 		case n == 2:
 			// The repository. The collection lives one segment below it.
 			return ChannelLayout{channel: ch, releasesRoot: trimmed + "/releases"}, nil
-		case n == 3 && segs[2] == "releases":
+		case n == 3 && segs[2].value == "releases":
 			// The releases page — the URL an operator most often has open.
 			return ChannelLayout{channel: ch, releasesRoot: trimmed}, nil
-		case n == 5 && segs[2] == "releases" && segs[3] == "latest" && segs[4] == "download":
-			return ChannelLayout{channel: ch, releasesRoot: trimmed[:len(trimmed)-len("/latest/download")]}, nil
-		case n == 5 && segs[2] == "releases" && (segs[3] == "tag" || segs[3] == "download"):
+		case n == 5 && segs[2].value == "releases" && segs[3].value == "latest" && segs[4].value == "download":
+			return ChannelLayout{channel: ch, releasesRoot: cut(3)}, nil
+		case n == 5 && segs[2].value == "releases" && (segs[3].value == "tag" || segs[3].value == "download"):
 			// A pinned release, INCLUDING one whose tag happens to be `releases`, `tag` or
 			// `download`: the position decides, never the word.
-			return ChannelLayout{channel: ch, releasesRoot: trimmed[:len(trimmed)-len("/"+segs[3]+"/"+segs[4])], tag: segs[4]}, nil
+			return ChannelLayout{channel: ch, releasesRoot: cut(3), tag: segs[4].value}, nil
 		}
 		return ChannelLayout{}, fmt.Errorf(
 			"release: REFUSING the update endpoint %q: on github.com a channel is served from a repository's RELEASES, so the endpoint must be one of\n"+
@@ -239,25 +272,76 @@ func ResolveChannel(endpoint, channel string) (ChannelLayout, error) {
 	// Any other host. Only the two EXPLICIT release shapes are recognised, most specific first;
 	// a bare `/releases` is NOT one of them, because on a foreign host it is indistinguishable
 	// from a directory base that happens to be called that.
-	if n >= 3 && segs[n-3] == "releases" && segs[n-2] == "latest" && segs[n-1] == "download" {
-		return ChannelLayout{channel: ch, releasesRoot: trimmed[:len(trimmed)-len("/latest/download")]}, nil
+	if n >= 3 && segs[n-3].value == "releases" && segs[n-2].value == "latest" && segs[n-1].value == "download" {
+		return ChannelLayout{channel: ch, releasesRoot: cut(n - 2)}, nil
 	}
-	if n >= 3 && segs[n-3] == "releases" && (segs[n-2] == "download" || segs[n-2] == "tag") {
-		root := trimmed[:len(trimmed)-len("/"+segs[n-2]+"/"+segs[n-1])]
-		return ChannelLayout{channel: ch, releasesRoot: root, tag: segs[n-1]}, nil
+	if n >= 3 && segs[n-3].value == "releases" && (segs[n-2].value == "download" || segs[n-2].value == "tag") {
+		return ChannelLayout{channel: ch, releasesRoot: cut(n - 2), tag: segs[n-1].value}, nil
 	}
 	return ChannelLayout{channel: ch, base: trimmed}, nil
 }
 
-// pathSegments returns the non-empty path segments of p.
-func pathSegments(p string) []string {
-	out := make([]string, 0, 6)
-	for _, s := range strings.Split(p, "/") {
-		if s != "" {
-			out = append(out, s)
+// pathSegment is one non-empty segment of an endpoint's path, kept BOTH as the caller typed it
+// and as the value it denotes. Keeping both is the whole point: the shape is matched on value
+// (`%74ag` IS `tag`) and the root is cut on raw bytes (`/%72eleases` stays `/%72eleases`).
+type pathSegment struct {
+	// start is the byte offset of raw within the raw path it was split out of.
+	start int
+	// value is the segment with its escapes resolved. `%2F` resolves to a slash INSIDE the
+	// value: an encoded separator is part of the segment, never a new one.
+	value string
+}
+
+// splitRawPath splits a RAW (still percent-encoded) path into its non-empty segments.
+//
+// Splitting the raw text rather than url.URL.Path is what keeps an encoded slash inside its
+// segment. On the decoded path `/o/r/releases/tag/a%2Fb` is six segments and matches no shape;
+// here it is five, the last of which is the tag `a/b`.
+func splitRawPath(rawPath string) ([]pathSegment, error) {
+	out := make([]pathSegment, 0, 6)
+	for i := 0; i < len(rawPath); {
+		if rawPath[i] == '/' {
+			i++
+			continue
 		}
+		end := len(rawPath)
+		if j := strings.IndexByte(rawPath[i:], '/'); j >= 0 {
+			end = i + j
+		}
+		value, err := url.PathUnescape(rawPath[i:end])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pathSegment{start: i, value: value})
+		i = end
 	}
-	return out
+	return out, nil
+}
+
+// endpointPathStart returns the byte offset in trimmed at which u's path begins, so a root can
+// be cut out of the endpoint the operator typed instead of out of a re-encoded copy of it.
+//
+// ⛔ IT IS NOT u.EscapedPath(), AND THAT IS MEASURED, NOT STYLISTIC. EscapedPath re-encodes
+// whenever RawPath is not a valid encoding of Path, so the endpoint `https://h/a b` — which
+// url.Parse accepts — yields `/a%20b`, one byte longer than the text it came from. An offset
+// derived from it would cut in the wrong place, which is the class of defect this file just
+// removed. The returned offset is verified by reading the suffix back: url.PathUnescape must
+// reproduce u.Path exactly, or the caller refuses the endpoint.
+func endpointPathStart(trimmed string, u *url.URL) (int, bool) {
+	i := strings.Index(trimmed, "://")
+	if i < 0 {
+		return 0, false
+	}
+	// Go itself ends the authority at the first `/`, so this agrees with what it parsed.
+	authority := i + len("://")
+	start := len(trimmed)
+	if j := strings.IndexByte(trimmed[authority:], '/'); j >= 0 {
+		start = authority + j
+	}
+	if got, err := url.PathUnescape(trimmed[start:]); err != nil || got != u.Path {
+		return 0, false
+	}
+	return start, true
 }
 
 // isGitHubHost reports whether h is github.com (with or without a port, a www prefix, or the

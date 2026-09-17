@@ -155,6 +155,8 @@ func modelsRoutingPolicySchema() map[string]any {
 		"pinned_model", oaObj("type", "string"),
 		"allow_deprecated", oaObj("type", "boolean"),
 		"gateway_endpoint", oaObj("type", "string"),
+		"execution_profile_ref", oaObj("type", "string"),
+		"execution_profile_revision", oaObj("type", "string", "pattern", `^sha256:[0-9a-f]{64}$`),
 		"deny_retired", oaObj("type", "boolean"),
 		"deny_deprecated", oaObj("type", "boolean"),
 		"require_zdr", oaObj("type", "boolean"),
@@ -171,6 +173,7 @@ func modelsExecuteRoutingSchema() map[string]any {
 		),
 		"session_ref", oaObj("type", "string"),
 		"surface", oaObj("type", "string"),
+		"operation", oaObj("type", "string", "enum", oaEnum("text.generate")),
 	), "input")
 }
 

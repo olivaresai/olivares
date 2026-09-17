@@ -260,6 +260,9 @@ func (sc *tenantScope) withDirectoryTenantBinding(
 	tenant model.TenantID,
 	fn func() error,
 ) error {
+	if sc.readOnly {
+		return sc.withReadAuthorityBinding(ctx, tenant, fn)
+	}
 	if err := sc.s.dia.BindTenant(ctx, sc.tx, tenant); err != nil {
 		return directoryUnavailable("bind directory evidence partition", err)
 	}

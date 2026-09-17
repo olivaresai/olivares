@@ -13,6 +13,10 @@
     "description": "El control plane ha encontrado un error inesperado. Inténtalo de nuevo.",
     "back": "Volver al resumen"
   },
+  "evidenceUnavailable": {
+    "title": "No se puede verificar esta información",
+    "description": "Esta información no se puede cargar ahora. Reintente, o contacte a un administrador si persiste."
+  },
   "network": {
     "title": "Control plane inaccesible",
     "description": "No hemos podido contactar con el control plane. Comprueba tu conexión y que el motor esté en ejecución."

@@ -147,6 +147,14 @@ agent identity）。名册来自[身份 source](/zh/how-to/connectors/sso-scim-i
 在某个 identity 把进程绑定到一个 agent 之前，始终为 [`approximate`](#attribution归因置信度)。见
 [eBPF/Tetragon](/zh/how-to/connectors/ebpf-tetragon/)。
 
+### live_ref
+
+服务器为 **一行** 实时会话分配的身份。v26.9.0 按 `(观察范围, 外部 id)` 为观察
+编制键，使两个宣布同一会话 id 的提供商主目录仍是两行。表示「这一行」的控制台
+和 API 读取使用 `live_ref`，而不是裸提供商 id。裸外部 id 路由是遗留的，只回答
+遗留行（`CHANGELOG.md` `[26.9.0]` B2）。见
+[实时运行与会话](/reference/modules/ii-sessions/)。
+
 ### Kill switch（终止开关）
 
 estate（或每个 agent）的紧急停止：一次 admin 层级的调用即终止每项受治理作动，fail-closed；重新
@@ -182,6 +190,14 @@ estate（或每个 agent）的紧急停止：一次 admin 层级的调用即终�
 
 隔离边界。每次模块读写都按 tenant 限定范围；在 Postgres 上，row-level security 作为后备
 （引擎拒绝以一个可能绕过 RLS 的角色运行）。
+
+### 提供商配置文件 (provider profile)
+
+**一个** 执行环境上 **一个** 已配置提供商实例的持久身份：驱动程序、所属环境，
+以及已启动子进程使用的规范 `config_home` / `user_home`。配置与存储身份，绝不是
+已认证的提供商账户。主目录必须已经存在；登记不安装、不登录。启动命名
+`provider_profile_ref`。见
+[运行提供商会话](/how-to/operate-provider-sessions/)。
 
 ### Permitted vs Observed
 

@@ -553,3 +553,57 @@ func TestHostingKnownCounterexample(t *testing.T) {
 	}
 	t.Fatal("catalog no longer offers the 'mcp' kind; the counterexample note is stale")
 }
+
+// TestPutConnectorSealsPerSourceNotPerKind: onboarding two connectors of the SAME
+// kind must give each its OWN sealed credential, under its OWN name, and wire both.
+// The whole point of running several sources of one kind is that they can hold
+// different credentials — a kind must never select a credential, and neither
+// registration may end up referencing the other's secret.
+func TestPutConnectorSealsPerSourceNotPerKind(t *testing.T) {
+	sr, srcStore, secretStore := newOnboardHarness(t)
+	ctx := context.Background()
+
+	for _, c := range []struct{ name, url, token string }{
+		{"vault-eu", "https://vault.eu.example:8200", "hvs.FIRST-FICTIONAL-VALUE"},
+		{"vault-us", "https://vault.us.example:8200", "hvs.SECOND-FICTIONAL-VALUE"},
+	} {
+		res, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
+			Name: c.name, Kind: "vault", Tenant: "acme", Enabled: true,
+			Config:  map[string]string{"base_url": c.url},
+			Secrets: map[string]string{"token": c.token},
+		})
+		if err != nil {
+			t.Fatalf("onboard %s: %v", c.name, err)
+		}
+		if !res.Persisted || !res.Applied {
+			t.Fatalf("onboard %s = %+v, want persisted and applied (a second connector of one kind is a second source)", c.name, res)
+		}
+	}
+
+	// Two rows, two references, two sealed secrets — none of them shared.
+	for name, want := range map[string]struct{ ref, value, url string }{
+		"vault-eu": {"store:source/vault-eu/token", "hvs.FIRST-FICTIONAL-VALUE", "https://vault.eu.example:8200"},
+		"vault-us": {"store:source/vault-us/token", "hvs.SECOND-FICTIONAL-VALUE", "https://vault.us.example:8200"},
+	} {
+		def, found, err := srcStore.Get(ctx, auth.GlobalSourceScope, name)
+		if err != nil || !found {
+			t.Fatalf("get %s = %v found=%v", name, err, found)
+		}
+		if def.Config["token"] != want.ref {
+			t.Errorf("%s references %q, want its own %q", name, def.Config["token"], want.ref)
+		}
+		if def.Config["base_url"] != want.url {
+			t.Errorf("%s base_url = %q, want its own %q", name, def.Config["base_url"], want.url)
+		}
+		got, rerr := secretStore.Resolve(ctx, auth.GlobalSecretScope, "source/"+name+"/token")
+		if rerr != nil || string(got) != want.value {
+			t.Errorf("%s owned secret resolve = %q,%v, want its own sealed value", name, string(got), rerr)
+		}
+	}
+
+	// And both are wired, under their own names.
+	live := liveNames(sr.rt)
+	if live["vault-eu"] != runtime.StatusRunning || live["vault-us"] != runtime.StatusRunning {
+		t.Fatalf("both onboarded connectors of one kind must run: %v", live)
+	}
+}

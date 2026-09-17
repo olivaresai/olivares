@@ -46,7 +46,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type PUBLISH to confirm this deploys docs.olivares.ai for real'
+        description: 'Type PUBLISH to confirm this deploys, for real, the docs host mapped to this repository in the first step'
         required: true
         default: ''
 
@@ -65,11 +65,32 @@ jobs:
     runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
+      # ⛔ WHICH SITE THIS RUN PUBLISHES IS DECIDED HERE, FROM A FIXED TABLE, BEFORE ANY CREDENTIAL.
+      # This file ships in three repositories: the private development hub, the public Community
+      # repository and the Community preprod repository. Until 2026-09-12 every copy deployed
+      # docs-site/wrangler.jsonc, i.e. the PRODUCTION `olivares-docs` Worker on docs.olivares.ai, so the
+      # preprod copy would have published production the first time it held a token.
+      # The table is keyed by `github.repository_id`: GitHub assigns it, nobody dispatching can choose
+      # it. Renames preserve the ID; a newly created repository gets a new one and is refused. No owner or repository
+      # name is used as a key or interpolated into a path or a host. (The private owner and hub names
+      # cannot be written here at all: this file is part of the public export, whose leak gate refuses
+      # them, so that row names its role.) An unmapped repository, such as a fork, refuses first.
       - name: refuse anything but an explicit PUBLISH, from main
+        id: target
         run: |
           set -u
+          case "${REPOSITORY_ID}" in
+          1263277317) config=wrangler.jsonc host=docs.olivares.ai ;; # private development hub
+          1268548683) config=wrangler.jsonc host=docs.olivares.ai ;; # olivaresai/olivares (public)
+          1269477539) config=wrangler.preprod.jsonc host=docs-preprod.olivaresai.dev ;; # olivares.preprod
+          *)
+            echo "::error::REFUSING: ${REPOSITORY} (repository id '${REPOSITORY_ID}') has no docs deploy target."
+            echo "::error::Only the repository ids listed in this step may publish; none is derived from a name."
+            exit 1
+            ;;
+          esac
           if [ "${CONFIRM}" != "PUBLISH" ]; then
-            echo "::error::This job publishes https://docs.olivares.ai. Re-run it with confirm=PUBLISH."
+            echo "::error::This job publishes https://${host}. Re-run it with confirm=PUBLISH."
             exit 1
           fi
           # ⛔ workflow_dispatch LETS THE OPERATOR PICK THE REF, and GitHub documents that branch
@@ -78,13 +99,17 @@ jobs:
           # word says "yes, publish", never "publish THIS". The ref is the second question and it
           # was not being asked.
           if [ "${REF}" != "refs/heads/main" ]; then
-            echo "::error::REFUSING: this workflow publishes production and may only run from main."
+            echo "::error::REFUSING: this workflow publishes https://${host} and may only run from main."
             echo "::error::It was dispatched from '${REF}'. Land the change first, then dispatch from main."
             exit 1
           fi
+          printf 'config=%s\nhost=%s\n' "${config}" "${host}" >>"${GITHUB_OUTPUT}"
+          echo "docs deploy target: docs-site/${config} -> https://${host}"
         env:
           CONFIRM: ${{ inputs.confirm }}
           REF: ${{ github.ref }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+          REPOSITORY: ${{ github.repository }}
 
       # THE THIRD ANSWER, FIRST: without the credential this job has not published and has not
       # verified anything, and it must not read as either. Named secret, so the reader knows what
@@ -96,12 +121,14 @@ jobs:
             echo "::error::NO HE PODIDO PUBLICAR: the repository secret CLOUDFLARE_API_TOKEN is not set."
             echo "::error::This is not a green and it is not a skip. Nothing was deployed and nothing"
             echo "::error::was verified. The token needs Workers Scripts:Edit on the account that owns"
-            echo "::error::the olivares-docs Worker, plus Zone:Workers Routes:Edit on the olivares.ai"
-            echo "::error::zone (docs-site/wrangler.jsonc declares docs.olivares.ai/* as a route)."
+            echo "::error::the Worker declared in docs-site/${DOCS_WRANGLER_CONFIG}, plus Zone:Workers Routes:Edit"
+            echo "::error::on the zone of its route (${DOCS_HOST}/*)."
             exit 1
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DOCS_WRANGLER_CONFIG: ${{ steps.target.outputs.config }}
+          DOCS_HOST: ${{ steps.target.outputs.host }}
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -170,31 +197,57 @@ jobs:
           fi
           echo "docs-site/dist: ${n} files, _redirects present"
 
-      # ⛔ WRANGLER IS NOT A DEPENDENCY OF docs-site, so `npx wrangler` would DOWNLOAD it and run
-      # unpinned code with a production Cloudflare token in its environment — undoing the `npm ci`
-      # of the step above, which exists precisely so the lockfile decides what executes. npm
-      # documents that npx installs a missing package into the cache and puts it on PATH.
-      # `--no-install` makes the absence LOUD instead of a silent fetch; the version is then
-      # whatever the lockfile pinned, and nothing else can run here.
-      - name: refuse an unpinned wrangler
-        run: |
-          set -u
-          if ! npm --prefix docs-site exec --no-install -- wrangler --version >/dev/null 2>&1; then
-            echo "::error::wrangler is not installed from docs-site's lockfile, and this step will"
-            echo "::error::NOT fetch it: that would run unpinned code with CLOUDFLARE_API_TOKEN in"
-            echo "::error::its environment. Add wrangler to docs-site/package.json devDependencies,"
-            echo "::error::commit the lockfile, and re-dispatch."
-            exit 1
-          fi
-          npm --prefix docs-site exec --no-install -- wrangler --version
+      # ⛔⛔ THE GUARD THAT USED TO BE HERE DID NOT WORK, AND IT RAN TWICE IN PRODUCTION.
+      # It was `npm --prefix docs-site exec --no-install -- wrangler --version`, with a comment
+      # claiming `--no-install` "makes the absence LOUD instead of a silent fetch".
+      # `--no-install` is an NPX flag, not an `npm exec` flag. npm says so itself —
+      # `npm warn Unknown cli config "--install"` — and IGNORES it. wrangler was also absent from
+      # docs-site/package.json entirely, so both deploys of 2026-08-29 (runs 33254456401 and
+      # 33263930597) FETCHED wrangler 4.127.1 from the registry at deploy time and ran it with
+      # CLOUDFLARE_API_TOKEN in scope. It is in run 33263930597's log: the warning twice, then
+      # `⛅️ wrangler 4.127.1`. Nobody chose that version; it was whatever the registry served.
+      #
+      # ⛔ SO THIS DOES NOT TRUST A FLAG. Flags get renamed, deprecated and silently ignored, and
+      # "is the flag right?" is a different question from "is the code that will hold my
+      # production token the code I chose?". scripts/check-wrangler-pin.mjs RUNS the binary that
+      # would run and compares what it REPORTS against the exact pin in docs-site/package.json,
+      # read at run time. (This comment used to name that version and call it identical to the web
+      # repository's; both claims went stale, so it names none.) Three answers: 0 clean, 1 finding,
+      # 2 could-not-look — and a missing
+      # binary is 2 with its reason, never a pass by falling back to a download.
+      #
+      # It runs BEFORE the step below, and carries no `env:`: the binary is checked while the
+      # credential is still out of scope.
+      - name: refuse a wrangler that is not the pinned one
+        run: node scripts/check-wrangler-pin.mjs
 
       - name: deploy the olivares-docs Worker
-        run: npm --prefix docs-site exec --no-install -- wrangler deploy --cwd docs-site
+        # `npm exec` resolves docs-site/node_modules/.bin first, and the step above has just
+        # proved that binary is the pinned one. Without that proof this line is a registry fetch
+        # wearing a local name.
+        # `--config` is the file the first step selected. Wrangler resolves it inside `--cwd`: measured
+        # with the pinned 4.128.0, `--cwd <dir> --config wrangler.preprod.jsonc` reads that file from
+        # <dir>, and without `--cwd` it looks in the repository root and fails.
+        run: npm --prefix docs-site exec -- wrangler deploy --cwd docs-site --config "${DOCS_WRANGLER_CONFIG}"
         env:
+          DOCS_WRANGLER_CONFIG: ${{ steps.target.outputs.config }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Wrangler has to discover which account owns the Worker. `docs-site/wrangler.jsonc`
+          # carries no `account_id`, so without this it asks the API — and the deploy token
+          # cannot read `/memberships` (403), which is how the licence-worker deploy died today.
+          # Naming the account removes the lookup instead of widening the token: a deploy
+          # credential that can enumerate the org is a bigger grant than one that cannot.
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       # A deploy that exits 0 is not a published site: this repository has measured that gap in
       # both directions. Probe the live host for the depth that was broken, and for the redirect
       # this deploy exists to publish.
       - name: verify the live site, not the exit code
-        run: bash scripts/check-docs-site-live.sh
+        # The runner IP receives WAF 403. The exact secret header identifies this one probe; if
+        # the edge still cannot be observed, rc=2 is a timed advisory, never a verdict on the tree.
+        # An observed stale/broken site remains rc=1 and blocks. Domain WAF rules are managed out
+        # of band and are deliberately not changed by this workflow.
+        run: bash scripts/run-network-observation.sh docs-live -- bash scripts/check-docs-site-live.sh --host "${DOCS_HOST}"
+        env:
+          DOCS_HOST: ${{ steps.target.outputs.host }}
+          DOCS_LIVE_PROBE: ${{ secrets.DOCS_LIVE_PROBE }}

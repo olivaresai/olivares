@@ -1,0 +1,124 @@
+/* SPDX-FileCopyrightText: 2026 Olivares.AI */
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/*
+ * Olivares AI docs — reading type scale.
+ *
+ * WHY THIS FILE EXISTS, and why it is not brand.css:
+ * brand.css is generated from colour tokens (scripts/gen-brand-css.mjs) and
+ * `npm run brand:check` compares the whole file. The generator is not in this
+ * lane's write set. Motion already follows the same split: generated colour
+ * file, then a hand-authored layer on the Starlight `customCss` list
+ * (astro.config.mjs). This is that layer for type and component sizing.
+ *
+ * STARLIGHT CONTRACT (0.42, cited after npm ci):
+ *   dist/style/props.css:62-85   --sl-text-* / --sl-text-h* / --sl-line-height*
+ *   dist/style/props.css:105-107 --sl-sidebar-width 18.75rem, --sl-content-width 45rem
+ *   dist/style/props.css:176-184 @media 50em jumps h1 to --sl-text-5xl (2.625rem)
+ *   dist/style/markdown.css:81-97 headings consume --sl-text-h1..h6
+ *   dist/components/PageTitle.astro:8-15 page h1 consumes --sl-text-h1
+ *   dist/components/Hero.astro:102-124 splash h1 clamp(3xl, 0.25rem+5vw, 6xl)
+ *                                     and padding-block clamp(2.5rem, 1rem+10vmin, 10rem)
+ *   dist/user-components/LinkButton.astro:29-69 padding 0.9375rem 1.25rem at 50rem
+ *   dist/components/Page.astro:57-59 splash pages set --sl-content-width: 67.5rem
+ *
+ * Stock --sl-text-6xl is 4rem (64px). Combined with the splash padding, the
+ * home hero measured 67.7 % of a 1440×900 viewport and 73.2 % at 1024×768
+ * (receipts/before/before.json). That is the owner's complaint.
+ *
+ * SCALE: minor third, ratio 1.2, base 1 rem.
+ *   1.00 body · 1.20 (snapped to 1.25 h3) · 1.44 (snapped to 1.50 h2)
+ *   · 1.728 (snapped to 1.75 h1 mobile) · 2.074 (snapped to 2.25 h1 desktop)
+ * Heading roles snap to the integrator ceilings rather than the raw powers so
+ * h3 is distinct from body and the desktop page title has a real step up from
+ * mobile. --sl-text-5xl and --sl-text-6xl are capped at 2.25 rem so the hero
+ * clamp cannot outgrow the page title.
+ *
+ * Display face (Space Grotesk, --olv-font-display) is used only on the page
+ * title — the same pairing as the public site, not a second body face.
+ *
+ * No !important. Unlayered rules beat Starlight's @layer starlight.*.
+ * No per-page selectors. No wording changes. No hidden content.
+ */
+
+:root {
+  --olv-type-ratio: 1.2;
+  --olv-type-base: 1rem;
+
+  --sl-text-2xs: 0.75rem;
+  --sl-text-xs: 0.8125rem;
+  --sl-text-sm: 0.875rem;
+  --sl-text-base: 1rem;
+  --sl-text-lg: 1.125rem;
+  --sl-text-xl: 1.25rem;
+  --sl-text-2xl: 1.5rem;
+  --sl-text-3xl: 1.75rem;
+  --sl-text-4xl: 2.25rem;
+  --sl-text-5xl: 2.25rem;
+  --sl-text-6xl: 2.25rem;
+
+  --sl-text-body: var(--sl-text-base);
+  --sl-text-body-sm: var(--sl-text-xs);
+  --sl-text-code: var(--sl-text-sm);
+  --sl-text-code-sm: var(--sl-text-xs);
+
+  --sl-text-h1: 1.75rem;
+  --sl-text-h2: 1.5rem;
+  --sl-text-h3: 1.25rem;
+  --sl-text-h4: 1.125rem;
+  --sl-text-h5: 1rem;
+
+  --sl-line-height: 1.6;
+  --sl-line-height-headings: 1.2;
+
+  --sl-sidebar-width: 18.75rem;
+  --sl-content-width: 45rem;
+}
+
+@media (min-width: 50em) {
+  :root {
+    --sl-text-h1: 2.25rem;
+    --sl-text-h2: 1.5rem;
+    --sl-text-h3: 1.25rem;
+    --sl-text-h4: 1.125rem;
+  }
+}
+
+/* Page title: the brand display face, only here. */
+.hero h1,
+h1#_top {
+  font-family: var(--olv-font-display), var(--sl-font);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Splash hero: stock padding-block is 10 vmin and eats the first screen. */
+.hero .stack {
+  gap: 1.25rem;
+}
+.hero .tagline {
+  font-size: var(--sl-text-base);
+  line-height: 1.5;
+}
+@media (min-width: 50rem) {
+  .hero {
+    padding-block: clamp(1.25rem, calc(1rem + 1.5vmin), 2rem);
+  }
+}
+
+/*
+ * Primary / secondary actions. Starlight's 50rem rule sets 0.9375rem block
+ * padding on 1 rem type (~51 px). Floor 40 px (WCAG 2.2 2.5.8 is 24 px);
+ * ceiling 44 px.
+ */
+.sl-link-button {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  box-sizing: border-box;
+}
+@media (min-width: 50rem) {
+  .sl-link-button {
+    font-size: var(--sl-text-sm);
+    padding: 0.5rem 1rem;
+  }
+}

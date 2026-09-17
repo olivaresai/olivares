@@ -131,6 +131,9 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 	}
 	var out model.User
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
+			return err
+		}
 		u, err := as.Users().Get(ctx, id)
 		if err != nil {
 			return err
@@ -160,6 +163,11 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 // exchanged children) and, when allSessions is true, every session the user
 // holds. It is the shared credential-cut used by both disable and deprovision.
 func revokeUserAccess(ctx context.Context, as store.AuthScope, actor Principal, id model.ID, tenant model.TenantID, allSessions bool) error {
+	if allSessions {
+		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
+			return err
+		}
+	}
 	toks, _, err := as.Tokens().List(ctx, byEq("user_id", id.String(), 1000))
 	if err != nil {
 		return err
@@ -197,6 +205,9 @@ func revokeUserAccess(ctx context.Context, as store.AuthScope, actor Principal, 
 // idempotent.
 func (a *Authenticator) SCIMDeprovisionUser(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID) error {
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
+			return err
+		}
 		// 1. Remove the membership in this tenant.
 		if m, ok, err := membershipOf(ctx, as, id, tenant); err != nil {
 			return err
@@ -274,6 +285,16 @@ func (a *Authenticator) SCIMDeprovisionUser(ctx context.Context, actor Principal
 		}
 		return nil
 	})
+}
+
+// Compound callbacks declare their complete H set before their first G write
+// or audit. Repeating that set in a shared helper cannot acquire a later H.
+func prepareUserAuthorityWrite(ctx context.Context, as store.AuthScope, ids ...model.ID) error {
+	writer, ok := as.(store.AuthUserAuthorityWriter)
+	if !ok {
+		return store.ErrDirectoryUnavailable
+	}
+	return writer.PrepareUserAuthorityWrite(ctx, ids)
 }
 
 // SCIMListMembers returns the users that are members of tenant (the SCIM resource

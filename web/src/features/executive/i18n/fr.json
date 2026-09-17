@@ -35,11 +35,25 @@
     "costCaption": "sur la plage sélectionnée",
     "usage": "Agents actifs",
     "usageCaption": "{{live}} en activité · {{entities}} suivis",
+    "sourceRestricted": "{{source}} — restreint pour votre rôle",
+    "sourceUnavailable": "{{source}} — chargement impossible",
+    "sourcePendingPaused": "{{source}} — requête en pause, en attente de reprise",
+    "sourcePendingIdle": "{{source}} — requête non démarrée",
+    "partialWhy": "Pourquoi des données partielles ?",
     "risk": "Risque ouvert",
     "riskCaption": "{{count}} critique/élevé",
     "silentEvasion": "{{count}} évasion silencieuse",
     "compliance": "Couverture des contrôles",
     "complianceCaption": "{{gap}} lacunes · {{unmapped}} non mappés"
+  },
+  "availability": {
+    "restricted": "{{source}} : restreint pour votre rôle.",
+    "unavailable": "{{source}} : chargement impossible.",
+    "pendingPaused": "{{source}} : requête en pause, en attente de reprise.",
+    "pendingIdle": "{{source}} : requête non démarrée.",
+    "loading": "{{source}} : chargement.",
+    "partial": "{{source}} : chiffres disponibles, données partielles.",
+    "current": "{{source}} : chiffres disponibles."
   },
   "cost": {
     "title": "Coût",

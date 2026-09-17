@@ -16,8 +16,12 @@ const { api, authState, assur } = vi.hoisted(() => ({
     putDLPRule: vi.fn(),
     deleteDLPRule: vi.fn(),
     approveDevice: vi.fn(),
+    getContentFirewall: vi.fn(),
   },
-  authState: { can: (_p: string): boolean => true, activeTenant: 't1' as string | null },
+  authState: {
+    can: (_p: string): boolean => true,
+    activeTenant: 't1' as string | null,
+  },
   assur: { aal: 3 },
 }))
 
@@ -52,6 +56,25 @@ function wrap(ui: ReactElement) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
 }
 
+/**
+ * Render against ONE QueryClient and re-render into that SAME client. A fresh client
+ * per render would prove nothing about cache isolation: an empty cache cannot leak.
+ */
+function wrapShared(ui: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const utils = render(
+    <QueryClientProvider client={qc}>{ui}</QueryClientProvider>,
+  )
+  return {
+    ...utils,
+    qc,
+    rerenderShared: (next: ReactElement) =>
+      utils.rerender(
+        <QueryClientProvider client={qc}>{next}</QueryClientProvider>,
+      ),
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   authState.can = () => true
@@ -63,8 +86,17 @@ beforeEach(() => {
     items: [{ id: 'r1', class: 'pii', action: 'deny', note: 'sensitive' }],
     has_more: false,
   })
-  api.putDLPRule.mockResolvedValue({ id: 'r2', class: 'secret', action: 'deny' })
+  api.putDLPRule.mockResolvedValue({
+    id: 'r2',
+    class: 'secret',
+    action: 'deny',
+  })
   api.deleteDLPRule.mockResolvedValue(undefined)
+  api.getContentFirewall.mockResolvedValue({
+    pep: 'messages_proxy',
+    state: 'inspector_attached',
+    note: 'Startup attachment for this process.',
+  })
   api.approveDevice.mockResolvedValue({
     id: 'd1',
     user_code: 'ABCD',
@@ -150,7 +182,9 @@ describe('InferenceProxyView', () => {
     const user = userEvent.setup()
     wrap(<InferenceProxyView />)
     await screen.findByText('Gates & ceilings')
-    await user.click(await screen.findByRole('switch', { name: 'Require recording' }))
+    await user.click(
+      await screen.findByRole('switch', { name: 'Require recording' }),
+    )
     await user.click(
       await screen.findByRole('button', { name: /save configuration/i }),
     )
@@ -166,7 +200,9 @@ describe('InferenceProxyView', () => {
     wrap(<InferenceProxyView />)
     await screen.findByText('Gates & ceilings')
     // Touch the evidence switch, then change your mind and Reset.
-    await user.click(await screen.findByRole('switch', { name: 'Require recording' }))
+    await user.click(
+      await screen.findByRole('switch', { name: 'Require recording' }),
+    )
     await user.click(await screen.findByRole('button', { name: /^reset$/i }))
     // Now edit something unrelated and save.
     await user.click(await screen.findByRole('switch', { name: 'Budget' }))
@@ -182,7 +218,9 @@ describe('InferenceProxyView', () => {
 
   it('abandons the edit when the active tenant changes', async () => {
     const user = userEvent.setup()
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
     // A FRESH element each time, same client and same component type. Passing the
     // identical element object back to rerender makes React bail out of the subtree,
     // and the test would then pass or fail for a reason that has nothing to do with
@@ -194,7 +232,9 @@ describe('InferenceProxyView', () => {
     )
     const { rerender } = render(tree())
     await screen.findByText('Gates & ceilings')
-    await user.click(await screen.findByRole('switch', { name: 'Require recording' }))
+    await user.click(
+      await screen.findByRole('switch', { name: 'Require recording' }),
+    )
     expect(screen.getByRole('button', { name: /^reset$/i })).toBeEnabled()
 
     // The tenant switcher only calls setActiveTenant; nothing unmounts this section,
@@ -230,7 +270,9 @@ describe('InferenceProxyView', () => {
 
   it('refuses all six write intents below AAL3 and exposes them after step-up', async () => {
     const user = userEvent.setup()
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
     const tree = () => (
       <QueryClientProvider client={qc}>
         <InferenceProxyView />
@@ -248,9 +290,7 @@ describe('InferenceProxyView', () => {
     expect(
       screen.queryByRole('button', { name: /save configuration/i }),
     ).toBeNull()
-    expect(
-      screen.queryByRole('button', { name: /add rule/i }),
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: /add rule/i })).toBeNull()
     expect(
       screen.queryByRole('button', { name: /edit rule for pii/i }),
     ).toBeNull()
@@ -290,7 +330,9 @@ describe('InferenceProxyView', () => {
       await screen.findByRole('button', { name: /delete rule for pii/i }),
     )
     dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: /delete rule/i }))
+    await user.click(
+      within(dialog).getByRole('button', { name: /delete rule/i }),
+    )
     await waitFor(() => expect(api.deleteDLPRule).toHaveBeenCalledTimes(1))
 
     let code = await screen.findByLabelText(/user code/i)
@@ -309,10 +351,7 @@ describe('InferenceProxyView', () => {
 
     await user.click(await screen.findByRole('button', { name: /add rule/i }))
     const dialog = await screen.findByRole('dialog')
-    await user.type(
-      within(dialog).getByLabelText(/classification/i),
-      'secret',
-    )
+    await user.type(within(dialog).getByLabelText(/classification/i), 'secret')
     await user.click(within(dialog).getByRole('button', { name: /add rule/i }))
 
     await waitFor(() =>
@@ -361,5 +400,142 @@ describe('InferenceProxyView', () => {
         deny: true,
       }),
     )
+  })
+})
+
+describe('Messages inspector attachment', () => {
+  it('scopes the query key by tenant so no scope reuses another result', async () => {
+    const { inferenceProxyKeys } =
+      await vi.importActual<typeof import('./api')>('./api')
+    expect(inferenceProxyKeys.contentFirewall('t1')).toEqual([
+      'inferenceproxy',
+      't1',
+      'contentFirewall',
+    ])
+    expect(inferenceProxyKeys.contentFirewall('t2')).not.toEqual(
+      inferenceProxyKeys.contentFirewall('t1'),
+    )
+  })
+
+  it.each([
+    ['unobserved', 'Not reported'],
+    ['pep_not_composed', 'Proxy not started'],
+    ['inspector_absent', 'Inspector not attached'],
+    ['inspector_attached', 'Inspector attached'],
+  ])('shows the published meaning of %s', async (state, label) => {
+    api.getContentFirewall.mockResolvedValue({
+      pep: 'messages_proxy',
+      state,
+      note: '',
+    })
+    wrap(<InferenceProxyView />)
+    expect(await screen.findByText(label)).toBeInTheDocument()
+  })
+
+  it('never renders a general protected claim for an attached inspector', async () => {
+    wrap(<InferenceProxyView />)
+    expect(await screen.findByText('Inspector attached')).toBeInTheDocument()
+    expect(screen.queryByText(/protected/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /restrictive fallback|does not mean content is being inspected/i,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('reports a state it does not publish as unreadable, never as attached', async () => {
+    api.getContentFirewall.mockResolvedValue({
+      pep: 'messages_proxy',
+      state: 'inspector_partially_attached',
+      note: '',
+    })
+    wrap(<InferenceProxyView />)
+    expect(await screen.findByText('Could not be read')).toBeInTheDocument()
+    expect(screen.queryByText('Inspector attached')).not.toBeInTheDocument()
+  })
+
+  it('does not call the API when the read permission is absent', async () => {
+    authState.can = (p: string) => p !== 'inferenceproxy:config:read'
+    wrap(<InferenceProxyView />)
+    await waitFor(() => expect(api.getContentFirewall).not.toHaveBeenCalled())
+  })
+
+  it('surfaces a request failure and refetches on operator retry', async () => {
+    api.getContentFirewall.mockRejectedValueOnce(new Error('unreachable'))
+    wrap(<InferenceProxyView />)
+    const retry = await screen.findByRole('button', {
+      name: /retry|reintentar/i,
+    })
+    api.getContentFirewall.mockResolvedValue({
+      pep: 'messages_proxy',
+      state: 'inspector_absent',
+      note: '',
+    })
+    await userEvent.click(retry)
+    expect(
+      await screen.findByText('Inspector not attached'),
+    ).toBeInTheDocument()
+    expect(api.getContentFirewall.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('does not serve one tenant the other tenant result from the same cache', async () => {
+    const { rerenderShared, qc } = wrapShared(<InferenceProxyView />)
+    expect(await screen.findByText('Inspector attached')).toBeInTheDocument()
+
+    authState.activeTenant = 't2'
+    api.getContentFirewall.mockResolvedValue({
+      pep: 'messages_proxy',
+      state: 'pep_not_composed',
+      note: '',
+    })
+    rerenderShared(<InferenceProxyView />)
+
+    expect(await screen.findByText('Proxy not started')).toBeInTheDocument()
+    expect(screen.queryByText('Inspector attached')).not.toBeInTheDocument()
+    // The t1 entry is still in the SAME cache; t2 simply never reads it.
+    expect(
+      qc.getQueryData(['inferenceproxy', 't1', 'contentFirewall']),
+    ).toMatchObject({
+      state: 'inspector_attached',
+    })
+    expect(
+      qc.getQueryData(['inferenceproxy', 't2', 'contentFirewall']),
+    ).toMatchObject({
+      state: 'pep_not_composed',
+    })
+  })
+
+  it.each([
+    [
+      'another enforcement point',
+      { pep: 'hook_pep', state: 'inspector_attached', note: '' },
+    ],
+    ['a missing pep', { state: 'inspector_attached', note: '' }],
+    [
+      'a non-string note',
+      { pep: 'messages_proxy', state: 'inspector_attached', note: 7 },
+    ],
+    ['a missing note', { pep: 'messages_proxy', state: 'inspector_attached' }],
+    ['a null body', null],
+    [
+      'an array body',
+      [{ pep: 'messages_proxy', state: 'inspector_attached', note: '' }],
+    ],
+  ])('reports %s as unreadable and never as attached', async (_label, body) => {
+    api.getContentFirewall.mockResolvedValue(body)
+    wrap(<InferenceProxyView />)
+    expect(await screen.findByText('Could not be read')).toBeInTheDocument()
+    expect(screen.queryByText('Inspector attached')).not.toBeInTheDocument()
+  })
+
+  it('accepts a body that carries an additional field the engine may add', async () => {
+    api.getContentFirewall.mockResolvedValue({
+      pep: 'messages_proxy',
+      state: 'inspector_attached',
+      note: '',
+      observed_at: '2026-09-12T00:00:00Z',
+    })
+    wrap(<InferenceProxyView />)
+    expect(await screen.findByText('Inspector attached')).toBeInTheDocument()
   })
 })

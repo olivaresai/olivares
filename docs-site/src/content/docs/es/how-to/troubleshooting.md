@@ -60,6 +60,41 @@ final: el motor imprime base64 sin relleno a propósito, para que el valor salga
 sin comillas en el log y sobreviva a un copiar y pegar, pero curl exige la forma
 con relleno.
 
+## Diagnóstico de la instalación del host
+
+La referencia CLI generada describe `olivares doctor` así: diagnose this host
+installation without printing secrets
+([CLI](/reference/cli/#command-olivares-doctor)). Los flags incluyen `--data-dir`, `--mode` (`auto` \| `user` \| `system`), `--init` (`auto` \| `systemd` \| `openrc` \| `launchd`), `--config`, `--unit`, `--binary`, `--server`, `--timeout`, `--ca-cert`, `--audit-tenant`, `--check-updates`.
+No trates esta tabla como texto de ayuda extra; es ese comando generado.
+
+### `agentops-layout` check
+
+`olivares doctor` informa una comprobación llamada `agentops-layout`
+(`CHANGELOG.md` `[26.9.0]`; `cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`).
+No es un subcomando. Mide el layout AgentOps nativo que registra el manifiesto
+de propiedad: el drop-in gestionado debe existir con su mode y debe nombrar el
+`HOME` de claude, el directorio de tokens y el workspace registrados; el runtime
+env debe existir con un mode de configuración (los valores nunca se leen); el
+workspace debe ser un directorio (`docs/RELEASE-INSTALLER.md`).
+
+Estados que devuelve la comprobación:
+
+| Status | When |
+|---|---|
+| `not_applicable` | no readable manifest; malformed manifest; or the manifest records no AgentOps files (`dropin`, `runtime-env`, `workspace_dir` all empty) |
+| `fail` | drop-in does not reference a recorded token (`$dataDir/claude-home`, `$dataDir/run`, or `workspace_dir`); workspace path is absent or is not a directory |
+| `unknown` | drop-in or workspace is not readable |
+| `pass` | drop-in, runtime-env (values not read) and workspace directory agree with the record |
+
+Required es false hasta que el manifiesto registra al menos un fichero AgentOps;
+entonces la comprobación es required. Las cadenas de remediación que imprime el
+motor incluyen
+`rerun install-agentops.sh; the managed drop-in and the recorded layout disagree`
+y `recreate the recorded workspace or rerun install-agentops.sh with OLIVARES_WORKSPACE_DIR`.
+
+Tanto el texto como `-o json` contienen nombres de clave y rutas, pero nunca
+valores de configuración (`docs/RELEASE-INSTALLER.md`).
+
 ## Fuentes y el access map
 
 ### El mapa está vacío
@@ -101,17 +136,42 @@ es, con honestidad, "inesperado". Ese es el estado inicial, no un fallo —
 
 ### `/readyz` devuelve 503
 
-Lee el cuerpo — distingue los dos casos:
+Lee el cuerpo. Un 503 no está ready y no es un éxito. Que `/livez` siga en 200
+solo significa que el proceso está arriba; que `/pod-readyz` siga en 200 solo
+significa salud del pod (almacén alcanzable) sin comprobación de liderazgo ni
+sonda de capacidad de primer arranque. Ninguno desbloquea el chart Helm por
+defecto ni el manifiesto plano, que cablean `/readyz` como `readinessProbe`
+del contenedor.
 
 - `{"status":"unavailable","store":"down"}` — el almacén es inalcanzable. En
   SQLite: disco lleno, problemas de PVC, permisos de fichero. En Postgres:
   alcanzabilidad y credenciales. **La liveness sigue pasando deliberadamente** (el
   proceso está vivo), así que nada entra en bucle de reinicio por una caída del almacén;
   reinicia el pod/servicio manualmente tras arreglar el almacén si se queda atascado.
-- `{"status":"standby","leader":false,…}` — un standby de HA respondiendo
+- `{"status":"standby","store":"up","leader":false}` — un standby de HA respondiendo
   con honestidad. No es un error: el Service enruta al líder; los standbys se drenan
   por diseño. Si **todas** las réplicas reportan standby, la elección de líder está
   atascada — comprueba la conectividad de los advisory-lock de Postgres.
+- `{"status":"setup_blocked","store":"up","leader":true,"setup_required":true,"code":"cross_tenant_admin_pool_not_configured"}`
+  — el primer arranque de PostgreSQL no puede enumerar organizaciones de forma
+  autoritativa. Aprovisiona el rol administrativo `NOSUPERUSER BYPASSRLS` y
+  `--admin-dsn` ([Postgres en Kubernetes](/es/tutorials/getting-started/kubernetes/#2-postgres-multi-tenant)).
+  El cuerpo lleva un remedio fijo. Hasta que se corrija ese prerrequisito, la
+  sonda de readiness por defecto mantiene el pod Not Ready. No reorientes la
+  sonda para ocultarlo.
+- `{"status":"setup_unavailable","store":"up","leader":true,"code":"setup_state_unavailable"}`
+  — este nodo no pudo observar si la instalación está configurada. `setup_required`
+  se **omite** porque su valor es desconocido. Eso no es una instalación vacía
+  conocida.
+- `{"status":"setup_unavailable","store":"up","leader":true,"setup_required":true,"code":"setup_probe_unavailable"}`
+  — se sabe que la instalación no está configurada, pero la sonda de capacidad
+  de primer arranque falló por una razón distinta de la negativa del pool
+  administrativo. Un timeout no es evidencia de un estate vacío.
+
+Un 200 `{"status":"ok",…,"setup_required":true}` es otra observación: el setup
+de primer arranque puede intentarse. `POST /v1/setup` sigue repitiendo sus
+comprobaciones de autoridad. Ese 200 no consume presupuesto de disponibilidad;
+estos 503 sí.
 
 ### El pod murió y nada tomó el relevo
 

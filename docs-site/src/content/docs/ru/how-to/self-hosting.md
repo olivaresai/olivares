@@ -65,7 +65,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.
@@ -86,6 +96,50 @@ curl -fsS -X POST https://localhost:8443/v1/auth/login \
 
 Каталог данных содержит базу данных SQLite, ключ подписи аудита и материал TLS —
 делайте его резервную копию и защищайте его.
+
+### Пользовательский каталог данных (`layout: custom`)
+
+Раскладка native по умолчанию — `/var/lib/olivares`. Подписанный адаптер службы
+(`install.sh --data-dir`, `scripts/install-service.sh`) допускает
+**пользовательский** каталог данных по **форме**, а не по списку разрешённых.
+Манифест владения записывает `"layout": "custom"` (`CHANGELOG.md` `[26.9.0]`
+Added; `INSTALL.md`).
+
+SDD 04 §6: каждое настраиваемое поле объявляет владельца, схему, допустимые
+источники и валидатор. Здесь адаптер владеет выделенным каталогом; оператор
+владеет родителем. Это собственные строки отказа адаптера
+(`scripts/install-service.sh`):
+
+| Condition | What the adapter prints and exits 1 |
+|---|---|
+| Path is not `/*/*` (a top-level directory) | `custom data directory must be a dedicated directory at least two levels deep (for example /srv/olivares), not a top-level directory: $data_dir` |
+| The data directory would contain the binary, config or unit | `custom data directory $data_dir must not contain the installed path $path` |
+| Any path component is a symbolic link | `path component is a symbolic link ($prefix -> …); pass the resolved path instead of provisioning through a link: $1` |
+| Parent of a new custom directory does not exist | `parent of the custom data directory does not exist; create it with the intended owner first: $(dirname -- "$data_target")` |
+| Existing system directory mode is not 0700 or 0750 | `existing system data directory mode is $data_mode; require 0700 or 0750` |
+| Path is under `/dev`, `/proc` or `/sys` | `data directory $data_dir is under an API file system (/dev, /proc, /sys): those hold kernel and device interfaces rather than durable state…; choose a real directory` |
+| Path under `/tmp` or `/var/tmp` on systemd older than 235 | `data directory $data_dir is under /tmp or /var/tmp and this host runs systemd $running: creating a BindPaths= destination inside the private /tmp needs systemd 235 or later…` |
+| A BindPaths= path contains `:` | `$2 $1 contains ':' and this location can only be reached with BindPaths=, whose value uses ':' to separate source from destination; choose a path without it` |
+
+`install-agentops.sh` использует то же правило двух уровней для `OLIVARES_DATA_DIR`:
+`OLIVARES_DATA_DIR must name a dedicated directory at least two levels deep
+(for example /srv/olivares), not a top-level directory`. Он учитывает `OLIVARES_DATA_DIR` и явно выбранный
+`OLIVARES_WORKSPACE_DIR`.
+
+Путь под `/home`, `/root` или `/run/user` выводится с `ProtectHome=tmpfs` и
+`BindPaths=` ровно для этого каталога. Путь под `/tmp` или `/var/tmp` сохраняет
+`PrivateTmp=true` и получает `BindPaths=` только для этого каталога
+(`sandbox_access` в `scripts/install-service.sh`).
+
+`olivares uninstall` допускает этот пользовательский каталог только когда юнит
+по индексированному пути запускает движок с ним, или когда preserve уже оставил
+свидетель удаления рядом с конфигурацией службы. Диагностируйте записанную
+раскладку AgentOps командой `olivares doctor` — см.
+[Устранение неполадок](/how-to/troubleshooting/#agentops-layout-check).
+
+Для пакетных установок значение по умолчанию остаётся `/var/lib/olivares`. См.
+[Установка из пакета](/how-to/install-from-packages/). На macOS см.
+[Установка через Homebrew](/how-to/install-from-homebrew/).
 
 ## Вариант 2 — Docker Compose (один узел, SQLite)
 
@@ -117,32 +171,29 @@ docker compose -f deploy/compose/docker-compose.yml \
 
 ## Вариант 3 — Kubernetes (Helm)
 
-Подписанный Helm-чарт развёртывает control plane как **core StatefulSet**
+Helm-чарт из `deploy/helm/olivares` развёртывает control plane как **core StatefulSet**
 (единственный писатель; его каталог данных содержит ключ подписи аудита и материал TLS)
 и, для распределённой топологии, **DaemonSet коллекторов**, которые отправляют
-наблюдения в ядро по **gRPC + mTLS**. При релизе чарт публикуется в OCI-реестр и
-подписывается cosign, так что вы проверяете его при установке и закрепляете по дайджесту.
-(Первый релиз пока остаётся **черновиком**: пока не вырезан тег `chart-v*`, путь реестра
-пуст, поэтому команда ниже — это путь, который вы будете использовать, как только релиз
-будет опубликован.)
+наблюдения в ядро по **gRPC + mTLS**. Релиз движка v26.9.0 не публикует чарт в
+OCI-реестр: отдельный тег `chart-v*` ещё не запускал workflow. Устанавливайте
+проверенный исходный чарт из checkout и закрепляйте опубликованный образ по digest.
 
 ```bash
 helm install olivares \
-  oci://ghcr.io/olivaresai/charts/olivares \
-  --version <chart-version> \
+  deploy/helm/olivares \
   --set image.repository=docker.io/olivaresai/olivares \
   --set image.digest=<sha256-digest>
 ```
 
-> Опубликованный чарт **подписан cosign поверх OCI-манифеста**, а не GPG: пайплайн релиза не
-> выпускает слой `.prov`, поэтому `helm --verify` его не проверит. Проверяйте через `cosign verify`
-> против identity `release-chart.yml@refs/tags/chart-v*` — см. `deploy/helm/README.md`.
+> Когда чарт будет опубликован, `release-chart.yml` подпишет его OCI-манифест через cosign
+> без слоя GPG `.prov`. Этот будущий артефакт надо проверять по digest; установка из
+> исходников не выдаётся за подписанную OCI-загрузку. См. `deploy/helm/README.md`.
 
 Чарт получает образ контейнера из Docker Hub (`docker.io/olivaresai/olivares`); тот же образ
 также находится в `ghcr.io/olivaresai/olivares`, идентичный по дайджесту; направьте
 `image.repository` туда, если мешает лимит **анонимных** пулов Docker Hub (ghcr.io не
-применяет его к публичным образам). Сам артефакт
-**чарта** остаётся в `oci://ghcr.io/olivaresai/charts/olivares`.
+применяет его к публичным образам). Сам чарт берётся из `deploy/helm/olivares`
+до отдельной публикации чарта.
 
 Всегда развёртывайте **по дайджесту**, никогда по изменяемому тегу. Для полностью
 отключённого от сети кластера сначала зеркалируйте бандл — см.

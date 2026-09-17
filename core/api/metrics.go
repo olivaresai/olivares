@@ -6,6 +6,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/metrics"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // httpDurationBuckets are the latency histogram bounds (seconds) for the API. They
@@ -149,19 +151,19 @@ func (s *Server) handlePodReadyz(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleReadyz is the readiness probe: the engine is ready to serve when its store
-// is reachable AND this node is the active writer. It pings with a short timeout so
-// a wedged backend yields 503 (the load balancer drains this instance) instead of
-// hanging the probe. setup_required is reported for observability but does NOT fail
-// readiness — a freshly booted engine is ready to BE set up.
-//
-// HA failover: in an active-passive cluster a STANDBY reports 503 here so
-// Kubernetes removes it from the Service endpoints — WITHOUT restarting it (that is
-// /livez's job; restarting a healthy hot standby would be wrong). When the leader
-// dies a standby acquires leadership and this flips to 200, so traffic follows the
-// new leader automatically. The store ping runs FIRST so a standby still surfaces a
-// real store outage; the body distinguishes the two states for an operator's logs.
-// On a single-node store the elector is always active, so this is unchanged.
+// readinessAdminPoolCode matches the setup ceremony's capability refusal.
+const readinessAdminPoolCode = "cross_tenant_admin_pool_not_configured"
+
+// readinessProbeUnavailableCode reports a failed capability observation.
+const readinessProbeUnavailableCode = "setup_probe_unavailable"
+
+// readinessSetupStateCode reports an unknown setup state.
+const readinessSetupStateCode = "setup_state_unavailable"
+
+// handleReadyz checks store access, writer leadership, and first-setup prerequisites.
+// All reads share one two-second budget. A standby drains from writer routing;
+// pod health is reported separately. Readiness does not authorize setup, mutate
+// installation state, or cache a capability result. POST /v1/setup repeats its checks.
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
@@ -173,7 +175,51 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "standby", "store": "up", "leader": false})
 		return
 	}
+	// Use the setup gate's global authentication authority.
+	complete, err := s.setupState(ctx)
+	if err != nil {
+		// Omit setup_required when its value is unknown.
+		s.log.Error("api: readiness could not observe setup state", "err", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "setup_unavailable", "store": "up", "leader": true,
+			"code": readinessSetupStateCode,
+		})
+		return
+	}
+	if complete {
+		// A configured installation needs this capability only for cross-tenant operations.
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status": "ok", "store": "up", "leader": true, "setup_required": false,
+		})
+		return
+	}
+	if err := s.probeFirstSetupReadCapability(ctx); err != nil {
+		if errors.Is(err, store.ErrEnumerationNotAuthoritative) {
+			// Use the setup ceremony's fixed remedy, without wrapped provider text.
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"status": "setup_blocked", "store": "up", "leader": true,
+				"setup_required": true, "code": readinessAdminPoolCode,
+				"remedy": honestSeamMessage[readinessAdminPoolCode],
+			})
+			return
+		}
+		s.log.Error("api: first-boot setup capability probe failed", "err", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "setup_unavailable", "store": "up", "leader": true,
+			"setup_required": true, "code": readinessProbeUnavailableCode,
+		})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok", "store": "up", "leader": true, "setup_required": !s.setupCompleteNow(r),
+		"status": "ok", "store": "up", "leader": true, "setup_required": true,
+	})
+}
+
+// probeFirstSetupReadCapability checks the same enumeration authority as firstOrg.
+// It discards the rows and does not create an organization or consume a setup token.
+func (s *Server) probeFirstSetupReadCapability(ctx context.Context) error {
+	return s.st.System(ctx, func(sys store.SystemScope) error {
+		_, err := sys.ListOrgs(ctx)
+		return err
 	})
 }

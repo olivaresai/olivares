@@ -29,7 +29,7 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 	}
 
 	var authrAssignments, authzAssignments []*ast.AssignStmt
-	var bindCalls, runtimeStarts []*ast.CallExpr
+	var bindCalls, runtimeStarts, compositionBinds, leaderRuns []*ast.CallExpr
 	forbidden := map[string]bool{}
 	ast.Inspect(boot.Body, func(node ast.Node) bool {
 		switch value := node.(type) {
@@ -52,15 +52,35 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 				bindCalls = append(bindCalls, value)
 			case "rt.Start":
 				runtimeStarts = append(runtimeStarts, value)
+			case "bindCommunicationComposition":
+				compositionBinds = append(compositionBinds, value)
+			case "st.Leader().Run":
+				leaderRuns = append(leaderRuns, value)
 			case "set.sessions.UseCommunicationCoreEntityReadAuthorizer",
 				"set.sessions.UseCommunicationCoreEntityOperationAuthorizer",
 				"set.sessions.UseCommunicationPumpReadinessWitness",
-				"set.sessions.EnableCommunicationSessionCredentials":
+				"set.sessions.EnableCommunicationSessionCredentials",
+				"set.sessions.UseWorkOutboxClaimAuthority":
+				// The two identity-only ports stay out of production for the reason
+				// recorded in communication_readiness.go. Pump readiness, the dual
+				// credential posture and the mandatory outbox authority are
+				// ACTIVATION: boot reaches them only through
+				// bindCommunicationComposition, which gates them on the requested
+				// configuration and its custody (K3 lot A, 2026-09-05) and never
+				// fabricates a cluster fact. A direct call here would bypass that
+				// gate or bind an authority the composition does not report on.
 				forbidden[communicationBootSelectorPath(value.Fun)] = true
 			}
 		}
 		return true
 	})
+	// Exactly one composition bind, and it precedes the first leader election so
+	// the existing promotion recovery observes the enabled posture on first boot.
+	if len(compositionBinds) != 1 || len(leaderRuns) != 1 ||
+		compositionBinds[0].End() >= leaderRuns[0].Pos() {
+		t.Fatalf("communication composition bind/leader run order = binds %#v runs %#v",
+			compositionBinds, leaderRuns)
+	}
 
 	if len(authrAssignments) != 1 || !communicationBootAuthenticatorAssignment(authrAssignments[0]) {
 		t.Fatalf("boot authenticator assignment count/shape = %d/%#v",
@@ -81,32 +101,42 @@ func TestBootWiresExactCommunicationRequestAuthoritySourcesOnly(t *testing.T) {
 			bindCalls, runtimeStarts)
 	}
 
-	directBinds := 0
+	directBinds, guardedCompositionBinds := 0, 0
 	for _, statement := range boot.Body.List {
 		conditional, ok := statement.(*ast.IfStmt)
 		if !ok || !communicationBootSessionsNonNil(conditional.Cond) {
 			continue
 		}
 		for _, guarded := range conditional.Body.List {
-			expression, ok := guarded.(*ast.ExprStmt)
-			if !ok {
-				continue
-			}
-			call, ok := expression.X.(*ast.CallExpr)
-			if ok && communicationBootSelectorPath(call.Fun) ==
-				"set.sessions.UseCommunicationRequestAuthority" {
-				directBinds++
+			switch guardedStatement := guarded.(type) {
+			case *ast.ExprStmt:
+				call, ok := guardedStatement.X.(*ast.CallExpr)
+				if ok && communicationBootSelectorPath(call.Fun) ==
+					"set.sessions.UseCommunicationRequestAuthority" {
+					directBinds++
+				}
+			case *ast.AssignStmt:
+				for _, rhs := range guardedStatement.Rhs {
+					call, ok := rhs.(*ast.CallExpr)
+					if ok && communicationBootSelectorPath(call.Fun) == "bindCommunicationComposition" {
+						guardedCompositionBinds++
+					}
+				}
 			}
 		}
 	}
 	if directBinds != 1 {
 		t.Fatalf("direct binds under exact sessions guard = %d, want one", directBinds)
 	}
+	if guardedCompositionBinds != 1 {
+		t.Fatalf("composition binds under exact sessions guard = %d, want one", guardedCompositionBinds)
+	}
 	for _, path := range []string{
 		"set.sessions.UseCommunicationCoreEntityReadAuthorizer",
 		"set.sessions.UseCommunicationCoreEntityOperationAuthorizer",
 		"set.sessions.UseCommunicationPumpReadinessWitness",
 		"set.sessions.EnableCommunicationSessionCredentials",
+		"set.sessions.UseWorkOutboxClaimAuthority",
 	} {
 		if forbidden[path] {
 			t.Fatalf("preparatory authority composition activated %q", path)
@@ -124,6 +154,15 @@ func communicationBootSelectorPath(expression ast.Expr) string {
 			return ""
 		}
 		return prefix + "." + value.Sel.Name
+	case *ast.CallExpr:
+		// A call inside a chain renders with its parentheses, so the leader
+		// election `st.Leader().Run` is addressable while every plain selector
+		// path keeps its historical spelling.
+		callee := communicationBootSelectorPath(value.Fun)
+		if callee == "" {
+			return ""
+		}
+		return callee + "()"
 	default:
 		return ""
 	}

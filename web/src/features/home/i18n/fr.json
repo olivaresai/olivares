@@ -37,7 +37,17 @@
     }
   },
   "state": {
-    "unavailable": "Échec du chargement — ouvrez pour réessayer"
+    "unavailable": "Échec du chargement — ouvrez pour réessayer",
+    "pendingIdle": "Requête non démarrée — ouvrez pour charger",
+    "pendingPaused": "Requête en pause — en attente de reprise"
+  },
+  "availability": {
+    "loading": "{{source}} : chargement.",
+    "pendingIdle": "{{source}} : requête non démarrée.",
+    "pendingPaused": "{{source}} : requête en pause, en attente de reprise.",
+    "unavailable": "{{source}} : chargement impossible.",
+    "partial": "{{source}} : chiffres disponibles, données partielles.",
+    "current": "{{source}} : chiffres disponibles."
   },
   "empty": {
     "title": "Rien à afficher pour l’instant",

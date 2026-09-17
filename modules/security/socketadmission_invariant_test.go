@@ -150,7 +150,7 @@ var allowedDirectBinds = map[string]string{
 	// NO plaintext refusal at all. The guard lives only on the unmerged branch of
 	// #565. This entry is not "already covered elsewhere" — it is an OPEN exposure
 	// on the mainline, deferred to avoid colliding with the PR that fixes it.
-	"cmd/olivares/cmd_serve.go": "DECLARED RESIDUE: migrate to netbind and delete this entry; see the note above.",
+	"cmd/olivares/serve_listeners.go": "DECLARED RESIDUE: migrate to netbind and delete this entry; see the note above.",
 
 	// Separate Go modules, outside go.work, with no dependency on the SDK module.
 	// Wiring netbind into them means editing their go.mod/go.sum, which is a

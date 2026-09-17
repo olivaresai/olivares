@@ -51,5 +51,16 @@
     "setPassword": "Sie wählen Ihr eigenes Passwort; der Administrator, der Sie eingeladen hat, wird es niemals sehen.",
     "ignore": "Wenn Sie diese Nachricht nicht erwartet haben, verwenden Sie den Link nicht und wenden Sie sich an den Administrator, der Sie eingeladen hat. Das Konto existiert bereits; wenn Sie diese Nachricht ignorieren, hat es lediglich weiterhin kein festgelegtes Passwort.",
     "textIntro": "Richten Sie Ihr Olivares AI-Konto über diesen Einladungslink ein:"
+  },
+  "portalInvite": {
+    "subject": "Sie wurden zu einer Organisation bei Olivares AI eingeladen",
+    "preheader": "Nehmen Sie diese Einladung an, um {{ORG_NAME}} im Olivares AI-Kundenportal beizutreten.",
+    "heading": "{{ORG_NAME}} beitreten",
+    "intro": "{{INVITER}} hat Sie eingeladen, {{ORG_NAME}} im Olivares AI-Kundenportal als {{ROLE}} beizutreten.",
+    "cta": "Einladung annehmen",
+    "expiry": "Diese Einladung kann nur einmal verwendet werden und läuft am {{EXPIRES_AT}} ab.",
+    "howYouSignIn": "Die Anmeldung erfolgt über einen Einmal-Link an diese Adresse, und die Einladung muss von der Adresse aus angenommen werden, an die sie gesendet wurde.",
+    "ignore": "Wenn Sie diese Nachricht nicht erwartet haben, verwenden Sie den Link nicht und wenden Sie sich an die Person, die Sie eingeladen hat. Sie zu ignorieren hinterlässt nichts und gewährt niemandem etwas.",
+    "textIntro": "{{INVITER}} hat Sie eingeladen, {{ORG_NAME}} im Olivares AI-Kundenportal als {{ROLE}} beizutreten. Verwenden Sie diesen Link:"
   }
 }

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -21,8 +22,8 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// cmd_agent.go is the operator CLI for the governed Claude Code session
-// runtime: `olivares agent session {create|ls|get|events|attach|input|stop|
+// cmd_agent.go is the operator CLI for the governed session runtime:
+// `olivares agent session {create|ls|get|events|attach|input|interrupt|stop|
 // resume|cleanup|delete}`. Every subcommand is a THIN HTTP client (Bearer token +
 // tenant header) against /v1/m/sessions/runs* — ALL lifecycle/runtime logic lives
 // server-side in module II; the CLI never spawns a process itself.
@@ -157,34 +158,44 @@ func (c *agentClientConfig) do(ctx context.Context, method, path string, body an
 func newAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agent",
-		Short: "Operate governed Claude Code sessions (launch, attach, stop, resume, clean up)",
-		Long: "agent is the operator surface for Claude Code under governance: the sessions\n" +
-			"themselves, the workspaces a session may read and write, and the\n" +
-			"managed-settings.json that binds a launched session to the PEP hook.\n\n" +
+		Short: "Operate governed provider sessions (launch, attach, interrupt, stop, resume, clean up)",
+		Long: "agent is the operator surface for official provider sessions under governance: the\n" +
+			"sessions themselves, the workspaces a session may read and write, and the\n" +
+			"managed-settings.json that binds a launched Claude Code session to the PEP hook.\n\n" +
 			"session and workspace act on a running control plane and need --server (or\n" +
-			"OLIVARES_SERVER_URL) plus a token; managed-settings renders a file locally.",
+			"OLIVARES_SERVER_URL) plus a token; managed-settings renders a file locally, and tool\n" +
+			"installs and inventories official provider CLIs from signed releases on this host\n" +
+			"without any server. Available session verbs depend on the driver and control plane;\n" +
+			"this CLI does not claim that every provider supports every operation.",
 		Example: "  olivares agent session ls\n" +
 			"  olivares agent workspace ls -o json\n" +
-			"  sudo olivares agent managed-settings --out /etc/claude-code/managed-settings.json",
+			"  sudo olivares agent managed-settings --out /etc/claude-code/managed-settings.json\n" +
+			"  olivares agent tool install --driver claude --version latest --yes",
 	}
 	cmd.AddCommand(newAgentSessionCmd())
 	cmd.AddCommand(newAgentWorkspaceCmd())
 	cmd.AddCommand(newAgentManagedSettingsCmd())
+	cmd.AddCommand(newAgentToolCmd())
 	return cmd
 }
 
 func newAgentSessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "session",
-		Short: "Manage the lifecycle of governed Claude Code sessions",
-		Long: "session covers a governed Claude Code run end to end: create and stop it,\n" +
-			"attach to its live output, feed it input, read its lifecycle ledger, and\n" +
-			"release its record once the work is done.\n\n" +
-			"Every verb here is a control-plane call, so a session outlives the terminal\n" +
-			"that launched it and stays inspectable from any authenticated CLI.",
+		Short: "Manage the lifecycle of governed provider sessions",
+		Long: "session covers a governed official-provider run end to end: create and stop it,\n" +
+			"attach to its live output, send input, interrupt an active turn, read its lifecycle\n" +
+			"ledger, and release its record once the work is done.\n\n" +
+			"interrupt cancels the active provider turn and leaves the owned process running.\n" +
+			"stop ends the session. interrupt does not stop, resume, or clean up a session.\n\n" +
+			"Every verb here is a control-plane call, so a session outlives the terminal that\n" +
+			"launched it and stays inspectable from any authenticated CLI. Which input form and\n" +
+			"which interrupt a run accepts is decided by its driver; this CLI does not convert\n" +
+			"payloads or claim that every provider supports every verb.",
 		Example: "  olivares agent session ls\n" +
-			"  olivares agent session create --name \"feature-work\" --workspace /src/myproject\n" +
-			"  olivares agent session attach run-123 --from 42",
+			"  olivares agent session create --name \"feature-work\" --workspace ws-123 --provider-profile prof-123\n" +
+			"  olivares agent session attach run-123 --from 42\n" +
+			"  olivares agent session interrupt run-123",
 	}
 	cmd.AddCommand(
 		newAgentSessionCreateCmd(),
@@ -193,6 +204,7 @@ func newAgentSessionCmd() *cobra.Command {
 		newAgentSessionEventsCmd(),
 		newAgentSessionAttachCmd(),
 		newAgentSessionInputCmd(),
+		newAgentSessionInterruptCmd(),
 		newAgentSessionStopCmd(),
 		newAgentSessionResumeCmd(),
 		newAgentSessionCleanupCmd(),
@@ -206,18 +218,22 @@ func newAgentSessionCreateCmd() *cobra.Command {
 		cfg                                                 agentClientConfig
 		name, transport, permMode, effort, model, workspace string
 		isolation                                           string
+		providerProfile                                     string
 		envAllow                                            []string
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Launch a governed Claude Code session",
 		Long: "create launches a Claude Code session through the Olivares sessions API, applying the\n" +
-			"selected transport, permission mode, workspace, isolation, model, effort and environment allowlist.",
-		Example: `  # Create a governed session with stream-json transport
-  olivares agent session create --name "feature-work" --workspace /src/myproject
+			"selected transport, permission mode, workspace, isolation, model, effort, environment\n" +
+			"allowlist and, when given, provider profile. Current control planes require\n" +
+			"--provider-profile; omitting it keeps the older request body, and the live API still\n" +
+			"refuses the launch rather than selecting a profile, home or environment implicitly.",
+		Example: `  # Create a governed session with stream-json transport under a selected profile
+  olivares agent session create --name "feature-work" --workspace ws-123 --provider-profile prof-123
 
   # Create with full bypass for trusted automation
-  olivares agent session create --name "ci-run" --permission-mode bypassPermissions --effort max`,
+  olivares agent session create --name "ci-run" --permission-mode bypassPermissions --effort max --provider-profile prof-123`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
@@ -227,6 +243,11 @@ func newAgentSessionCreateCmd() *cobra.Command {
 				"name": name, "transport": transport, "permission_mode": permMode,
 				"effort": effort, "model": model, "workspace_ref": workspace, "isolation": isolation,
 				"env_allow": envAllow,
+			}
+			// Only an explicit flag becomes provider_profile_ref. An omitted option
+			// keeps the older transport; the current server still refuses it honestly.
+			if cmd.Flags().Changed("provider-profile") {
+				body["provider_profile_ref"] = providerProfile
 			}
 			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/runs", body)
 			if err != nil {
@@ -242,6 +263,8 @@ func newAgentSessionCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&effort, "effort", "", "low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&model, "model", "", "model alias (opus) or id (claude-opus-4-8)")
 	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace reference (the session's working directory)")
+	cmd.Flags().StringVar(&providerProfile, "provider-profile", "",
+		"provider profile reference to launch under (current servers require it; omit to keep the older request body, which this API still refuses)")
 	// E6: the accepted values and the WIRED values are not the same set, and
 	// the help used to name all three as if they were. The only runner in this
 	// release is the native one, and it refuses container/sandbox deny-closed
@@ -461,27 +484,66 @@ func (c *agentClientConfig) streamAttach(cmd *cobra.Command, ref string, from in
 
 func newAgentSessionInputCmd() *cobra.Command {
 	var (
-		cfg  agentClientConfig
-		line string
+		cfg            agentClientConfig
+		line           string
+		text           string
+		workLeaseFence int64
 	)
 	cmd := &cobra.Command{
-		Use:     "input <run-ref>",
-		Short:   "Send one NDJSON line to a live session's stdin ('-' or empty reads stdin)",
-		Long:    "input sends one NDJSON message to a live governed session. Supply it with --line or pipe it through stdin.",
-		Example: `  printf '%s\n' '{"type":"user","message":"continue"}' | olivares agent session input run-123`,
-		Args:    cobra.ExactArgs(1),
+		Use:   "input <run-ref>",
+		Short: "Send one line or driver text to a live session",
+		Long: "input sends exactly one payload to a live governed session.\n\n" +
+			"With neither --text nor --line, one NDJSON line is read from stdin (legacy).\n" +
+			"--line sends a raw NDJSON line for stream-json stdin; an explicit empty value or\n" +
+			"'-' still reads stdin, and trailing newlines are trimmed.\n" +
+			"--text sends driver text as the session's turn input. '-' reads stdin; any other\n" +
+			"value is included unchanged in the HTTP request, including multiline UTF-8 and a\n" +
+			"trailing newline. Empty or whitespace-only text is refused locally. --text and\n" +
+			"--line cannot be combined, including when either flag is explicitly empty.\n\n" +
+			"--work-lease-fence, when set, must be a positive integer and is sent as\n" +
+			"work_lease_fence. The control plane decides whether the session accepts line or\n" +
+			"text; this command does not infer the provider, convert one form into the other,\n" +
+			"or retry after refusal.",
+		Example: `  printf '%s\n' '{"type":"user","message":"continue"}' | olivares agent session input run-123
+  olivares agent session input run-123 --line '{"type":"user","message":"continue"}'
+  olivares agent session input run-123 --text 'review the remaining tests'
+  cat prompt.txt | olivares agent session input run-123 --text -
+  olivares agent session input run-123 --text 'continue' --work-lease-fence 7`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			textSet := cmd.Flags().Changed("text")
+			lineSet := cmd.Flags().Changed("line")
+			if textSet && lineSet {
+				return sessionCLIUsage("--text and --line are mutually exclusive")
+			}
+			fence, err := optionalPositiveWorkLeaseFence(cmd, workLeaseFence)
+			if err != nil {
+				return err
+			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			if line == "" || line == "-" {
-				b, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 1<<20))
+			body := make(map[string]any, 2)
+			if textSet {
+				payload, err := sessionTextPayload(cmd, text)
 				if err != nil {
 					return err
 				}
-				line = strings.TrimRight(string(b), "\n")
+				body["text"] = payload
+			} else {
+				payload, err := sessionLinePayload(cmd, line)
+				if err != nil {
+					return err
+				}
+				body["line"] = payload
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/runs/"+args[0]+"/input", map[string]any{"line": line})
+			if fence != nil {
+				// int64 in the map so encoding/json writes a JSON integer, including
+				// values above 2^53; a float64 would silently change the fence.
+				body["work_lease_fence"] = *fence
+			}
+			status, b, err := cfg.do(cmd.Context(), "POST",
+				"/v1/m/sessions/runs/"+agentExecPathID(args[0])+"/input", body)
 			if err != nil {
 				return err
 			}
@@ -492,8 +554,128 @@ func newAgentSessionInputCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().StringVar(&line, "line", "", "the NDJSON message to write (default: read from stdin)")
+	cmd.Flags().StringVar(&line, "line", "", "raw NDJSON line (empty or '-' reads stdin; mutually exclusive with --text)")
+	cmd.Flags().StringVar(&text, "text", "", "driver text (use '-' to read stdin; mutually exclusive with --line)")
+	cmd.Flags().Int64Var(&workLeaseFence, "work-lease-fence", 0, "positive work-lease fence; omitted from the request when unset")
 	return cmd
+}
+
+func newAgentSessionInterruptCmd() *cobra.Command {
+	var (
+		cfg            agentClientConfig
+		workLeaseFence int64
+	)
+	cmd := &cobra.Command{
+		Use:   "interrupt <run-ref>",
+		Short: "Cancel the active provider turn without stopping the session",
+		Long: "interrupt cancels the active provider turn of a live governed session and keeps\n" +
+			"the owned process running. It is not stop: stop ends the session. interrupt does\n" +
+			"not stop, resume, or clean up a session, and it does not retry another lifecycle\n" +
+			"endpoint if the control plane refuses, reports the operation unsupported, or\n" +
+			"conflicts.\n\n" +
+			"An omitted --work-lease-fence sends no request body. A supplied fence must be a\n" +
+			"positive integer and is sent as work_lease_fence. Support depends on the session's\n" +
+			"driver; this command does not claim that every provider implements interrupt.",
+		Example: `  olivares agent session interrupt run-123
+  olivares agent session interrupt run-123 --work-lease-fence 7`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeSessions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fence, err := optionalPositiveWorkLeaseFence(cmd, workLeaseFence)
+			if err != nil {
+				return err
+			}
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			var body any
+			if fence != nil {
+				body = map[string]any{"work_lease_fence": *fence}
+			}
+			status, b, err := cfg.do(cmd.Context(), "POST",
+				"/v1/m/sessions/runs/"+agentExecPathID(args[0])+"/interrupt", body)
+			if err != nil {
+				return err
+			}
+			if status != http.StatusOK {
+				return httpErr(status, b)
+			}
+			return printRaw(cmd, b)
+		},
+	}
+	cfg.addFlags(cmd)
+	cmd.Flags().Int64Var(&workLeaseFence, "work-lease-fence", 0, "positive work-lease fence; omitted from the request when unset")
+	return cmd
+}
+
+// sessionInputMaxBytes is the local raw intake bound for session input. The
+// reader takes at most one extra byte so overflow is refused before any HTTP
+// call. Server work-text and JSON-expansion limits remain authoritative.
+const sessionInputMaxBytes = 1 << 20
+
+func sessionCLIUsage(msg string) error {
+	return exitcode.New(exitcode.Usage, fmt.Errorf("%s", msg))
+}
+
+func optionalPositiveWorkLeaseFence(cmd *cobra.Command, value int64) (*int64, error) {
+	if !cmd.Flags().Changed("work-lease-fence") {
+		return nil, nil
+	}
+	if value <= 0 {
+		return nil, sessionCLIUsage("--work-lease-fence must be a positive integer")
+	}
+	return &value, nil
+}
+
+func checkSessionInputBytes(b []byte) error {
+	if len(b) > sessionInputMaxBytes {
+		return sessionCLIUsage(fmt.Sprintf("input exceeds %d bytes", sessionInputMaxBytes))
+	}
+	if !utf8.Valid(b) {
+		return sessionCLIUsage("input is not valid UTF-8")
+	}
+	return nil
+}
+
+func readSessionInputBytes(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, int64(sessionInputMaxBytes)+1))
+	if err != nil {
+		return nil, err
+	}
+	if err := checkSessionInputBytes(b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func sessionLinePayload(cmd *cobra.Command, line string) (string, error) {
+	if line == "" || line == "-" {
+		b, err := readSessionInputBytes(cmd.InOrStdin())
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimRight(string(b), "\n"), nil
+	}
+	if err := checkSessionInputBytes([]byte(line)); err != nil {
+		return "", err
+	}
+	return line, nil
+}
+
+func sessionTextPayload(cmd *cobra.Command, text string) (string, error) {
+	if text == "-" {
+		b, err := readSessionInputBytes(cmd.InOrStdin())
+		if err != nil {
+			return "", err
+		}
+		text = string(b)
+	} else if err := checkSessionInputBytes([]byte(text)); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", sessionCLIUsage("text input is empty")
+	}
+	return text, nil
 }
 
 func newAgentSessionStopCmd() *cobra.Command {

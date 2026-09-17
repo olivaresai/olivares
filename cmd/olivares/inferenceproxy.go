@@ -1306,32 +1306,19 @@ func (d *inferenceProxyDecider) anchorIntent(ctx context.Context, sess *proxySes
 		EffectDigest: sdk.EffectDigest(hex.EncodeToString(sess.effectiveDigest)),
 	}
 	tip := proxyIntentHash(sess.requestRef, string(d.surface), sess.tenant.String(), sess.modelRef, sess.actor, sess.inputDigest, sess.effectiveDigest)
-	// F9 anchoring discipline: append INSIDE the txn, but never return an error from
-	// the callback on a degrade drop — that would roll back the loss accounting the store
-	// just committed (audit_spool_gaps), so the gap counter never advances and its signed
-	// marker never seals. Commit (return nil), capture the drop, and refuse AFTER.
-	var appendDropped bool
-	var evidenceRef string
-	if err := d.store.Mutate(ctx, sess.tenant, func(sc store.Scope) error {
-		ev, err := sc.Audit().Append(ctx, model.AuditDraft{
-			Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
-			Action: "inference.proxy.authorized", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
-			PayloadHash: tip,
-			Meta:        map[string]any{"request_ref": sess.requestRef, "surface": string(d.surface), "model": sess.modelRef, "decision": "allow", "input_digest": hex.EncodeToString(sess.inputDigest), "effective_digest": hex.EncodeToString(sess.effectiveDigest)},
-		})
-		if err != nil {
-			return err // block-mode spool-full / write fault ⇒ roll back (nothing durable), deny
-		}
-		if ev.Seq == 0 {
-			appendDropped = true // degrade drop: loss accounting is durable; COMMIT it, refuse after
-			return nil
-		}
-		evidenceRef = hex.EncodeToString(ev.Hash)
-		return nil
-	}); err != nil {
+	// The F9 anchoring discipline — append inside the txn, COMMIT a degrade drop's
+	// loss accounting instead of rolling it back, classify only afterwards — now lives in
+	// inferenceEvidenceWriter (inferenceevidence.go). This leg's action, target, payload
+	// hash, metadata and evidence-or-refuse posture are unchanged.
+	receipt, err := inferenceEvidenceWriter{store: d.store}.Append(ctx, sess.tenant, binding, model.AuditDraft{
+		Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
+		Action: "inference.proxy.authorized", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
+		PayloadHash: tip,
+		Meta:        map[string]any{"request_ref": sess.requestRef, "surface": string(d.surface), "model": sess.modelRef, "decision": "allow", "input_digest": hex.EncodeToString(sess.inputDigest), "effective_digest": hex.EncodeToString(sess.effectiveDigest)},
+	})
+	if err != nil {
 		return err // evidence-or-refuse: a real ledger fault denies the privileged call
 	}
-	receipt := sdk.ClassifyAnchor(binding, evidenceRef, appendDropped, sdk.EvidenceFaultNone)
 	if receipt.MustRefuse(binding) {
 		return errEvidenceRefused{fault: receipt.Fault}
 	}
@@ -1360,17 +1347,20 @@ func (d *inferenceProxyDecider) anchorOutcome(ctx context.Context, sess *proxySe
 		"streamed": out.Streamed, "upstream_status": out.UpstreamStatus,
 		"input_digest": hex.EncodeToString(sess.inputDigest), "effective_digest": hex.EncodeToString(sess.effectiveDigest),
 	}
-	err := d.store.Mutate(ctx, sess.tenant, func(sc store.Scope) error {
-		ev, aerr := sc.Audit().Append(ctx, model.AuditDraft{
-			Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
-			Action: "inference.proxy.recorded", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
-			PayloadHash: tip, Meta: meta,
-		})
-		if aerr == nil && ev.Seq == 0 && d.log != nil {
-			d.log.Error("inference-proxy: outcome evidence dropped by the degrade spool policy (evidence gap)", "request_ref", sess.requestRef)
-		}
-		return aerr
+	// The outcome leg anchors the SAME effect the intent leg bound, so it states that
+	// binding rather than leaving it implicit; it is best-effort, so the receipt is read
+	// only for the degrade-drop gap, never as an authorization.
+	receipt, err := inferenceEvidenceWriter{store: d.store}.Append(ctx, sess.tenant, sdk.EvidenceBinding{
+		OperationID:  sdk.OperationID(sess.requestRef),
+		EffectDigest: sdk.EffectDigest(hex.EncodeToString(sess.effectiveDigest)),
+	}, model.AuditDraft{
+		Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
+		Action: "inference.proxy.recorded", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
+		PayloadHash: tip, Meta: meta,
 	})
+	if evidenceAppendDropped(receipt, err) && d.log != nil {
+		d.log.Error("inference-proxy: outcome evidence dropped by the degrade spool policy (evidence gap)", "request_ref", sess.requestRef)
+	}
 	if err != nil && d.log != nil {
 		d.log.Error("inference-proxy: ledger outcome anchor failed (evidence gap)", "request_ref", sess.requestRef, "err", err)
 	}
@@ -1392,30 +1382,18 @@ func (d *inferenceProxyDecider) anchorBatchIntent(ctx context.Context, sess *pro
 		EffectDigest: sdk.EffectDigest(hex.EncodeToString(sess.effectiveDigest)),
 	}
 	tip := proxyIntentHash(sess.requestRef, string(d.surface), sess.tenant.String(), "batch", sess.actor, nil, sess.effectiveDigest)
-	// Same F9 discipline as anchorIntent: commit the degrade-drop's loss accounting,
-	// then refuse — never roll it back from inside the transaction.
-	var appendDropped bool
-	var evidenceRef string
-	if err := d.store.Mutate(ctx, sess.tenant, func(sc store.Scope) error {
-		ev, err := sc.Audit().Append(ctx, model.AuditDraft{
-			Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
-			Action: "inference.proxy.batch.authorized", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
-			PayloadHash: tip,
-			Meta:        map[string]any{"request_ref": sess.requestRef, "surface": string(d.surface), "kind": "batch", "entries": entries, "decision": "allow", "effective_digest": hex.EncodeToString(sess.effectiveDigest)},
-		})
-		if err != nil {
-			return err
-		}
-		if ev.Seq == 0 {
-			appendDropped = true
-			return nil
-		}
-		evidenceRef = hex.EncodeToString(ev.Hash)
-		return nil
-	}); err != nil {
+	// Same shared mechanism as anchorIntent (inferenceevidence.go): it commits the
+	// degrade-drop's loss accounting and refuses after, never rolling it back from inside
+	// the transaction. This leg's action, target, hash, metadata and posture are unchanged.
+	receipt, err := inferenceEvidenceWriter{store: d.store}.Append(ctx, sess.tenant, binding, model.AuditDraft{
+		Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
+		Action: "inference.proxy.batch.authorized", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
+		PayloadHash: tip,
+		Meta:        map[string]any{"request_ref": sess.requestRef, "surface": string(d.surface), "kind": "batch", "entries": entries, "decision": "allow", "effective_digest": hex.EncodeToString(sess.effectiveDigest)},
+	})
+	if err != nil {
 		return err
 	}
-	receipt := sdk.ClassifyAnchor(binding, evidenceRef, appendDropped, sdk.EvidenceFaultNone)
 	if receipt.MustRefuse(binding) {
 		return errEvidenceRefused{fault: receipt.Fault}
 	}
@@ -1445,17 +1423,19 @@ func (d *inferenceProxyDecider) anchorBatchOutcome(ctx context.Context, sess *pr
 		"req_bytes": out.ReqBytes, "upstream_status": out.UpstreamStatus,
 		"effective_digest": hex.EncodeToString(sess.effectiveDigest),
 	}
-	err := d.store.Mutate(ctx, sess.tenant, func(sc store.Scope) error {
-		ev, aerr := sc.Audit().Append(ctx, model.AuditDraft{
-			Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
-			Action: "inference.proxy.batch.recorded", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
-			PayloadHash: tip, Meta: meta,
-		})
-		if aerr == nil && ev.Seq == 0 && d.log != nil {
-			d.log.Error("inference-proxy: batch outcome evidence dropped by the degrade spool policy (evidence gap)", "request_ref", sess.requestRef)
-		}
-		return aerr
+	// Same shared mechanism and the same binding the batch intent leg bound; best-effort,
+	// so the receipt is read only for the degrade-drop gap.
+	receipt, err := inferenceEvidenceWriter{store: d.store}.Append(ctx, sess.tenant, sdk.EvidenceBinding{
+		OperationID:  sdk.OperationID(sess.requestRef),
+		EffectDigest: sdk.EffectDigest(hex.EncodeToString(sess.effectiveDigest)),
+	}, model.AuditDraft{
+		Actor: firstNonEmpty(sess.actor, model.ActorSystem), ActorKind: firstNonEmpty(sess.actorKind, model.ActorSystem),
+		Action: "inference.proxy.batch.recorded", TargetKind: proxyCallKind, TargetID: model.ID(sess.requestRef),
+		PayloadHash: tip, Meta: meta,
 	})
+	if evidenceAppendDropped(receipt, err) && d.log != nil {
+		d.log.Error("inference-proxy: batch outcome evidence dropped by the degrade spool policy (evidence gap)", "request_ref", sess.requestRef)
+	}
 	if err != nil && d.log != nil {
 		d.log.Error("inference-proxy: batch ledger outcome anchor failed (evidence gap)", "request_ref", sess.requestRef, "err", err)
 	}
@@ -1720,6 +1700,7 @@ func buildClaudeMessagesProxyServer(eng *engine, log *slog.Logger) (*http.Server
 		return nil, fmt.Errorf("load inference proxy operator config: %w", err)
 	}
 	if strings.TrimSpace(cfg.Surface) == "" {
+		eng.contentFirewall.record(nil)
 		return nil, nil // not provisioned
 	}
 	// the fixed tenant is validated FIRST, before anything else this config drives,
@@ -1736,12 +1717,14 @@ func buildClaudeMessagesProxyServer(eng *engine, log *slog.Logger) (*http.Server
 	surface := sdkmodel.Gateway(strings.TrimSpace(cfg.Surface))
 	if surface != sdkmodel.GatewayDirect && surface != sdkmodel.GatewayClaudePlatformAWS {
 		log.Error("inference-proxy: surface not supported in v1 (use direct or claude-platform-aws); NOT mounted", "surface", surface)
+		eng.contentFirewall.record(nil)
 		return nil, nil
 	}
 	// The governed decision needs all of these; in production they are always wired. If any
 	// is missing, do NOT mount an ungoverned proxy (deny-closed posture).
 	if eng.authr == nil || eng.models == nil || eng.finops == nil || eng.killSwitch == nil || eng.inferenceProxy == nil || eng.store == nil {
 		log.Error("inference-proxy: governance dependencies not wired; NOT mounted (deny-closed)")
+		eng.contentFirewall.record(nil)
 		return nil, nil
 	}
 
@@ -1827,5 +1810,6 @@ func buildClaudeMessagesProxyServer(eng *engine, log *slog.Logger) (*http.Server
 	log.Info("inference-proxy: inline /v1/messages PEP mounted (opt-in, governed)",
 		"addr", addr, "surface", surface, "geo", firstNonEmpty(cfg.InferenceGeo, "per-request"),
 		"tenant_hint", tenantHint.String(), "residency", eng.residencyReg != nil && eng.residencyReg.Enforces())
+	eng.contentFirewall.record(dec)
 	return srv, nil
 }

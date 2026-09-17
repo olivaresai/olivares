@@ -24,8 +24,17 @@ import (
 const directoryWriterLockKey = dialect.DirectoryWriterControlKey
 
 type directoryEpochBootResult struct {
-	coverageComplete bool
-	control          directoryWriterControlState
+	coverageComplete           bool
+	control                    directoryWriterControlState
+	userAuthorityComplete      bool
+	inventory                  BusinessDirectoryInventory
+	inventoryAuthority         string
+	inventoryUnavailableReason string
+}
+
+type directoryReconcileOptions struct {
+	roles       guardRoles
+	maintenance bool
 }
 
 // directoryEpochBeforeInsertTestHook is nil outside this package's tests. It
@@ -48,8 +57,11 @@ var tenantDropAfterAuthorizationFactTestHook func(model.Kind) error
 // cross-tenant enumeration comes from one independently attested BYPASSRLS
 // admin transaction. That repeatable-read/read-only snapshot is kept until the
 // inventory has been consumed and validated, then committed before the
-// application transaction. With no admin pool PostgreSQL returns an incomplete
-// witness without changing data. SQLite enumerates on the application
+// application transaction. With no admin pool PostgreSQL enumerates through the
+// attested closed inventory routine on the application transaction, under the
+// same global writer lock; an absent routine yields an explicitly incomplete
+// witness (nothing written) only for a staged legacy ordinary boot, and is a
+// refusal for enforced or maintenance. SQLite enumerates on the application
 // transaction, which also avoids asking its single-connection pool for a nested
 // connection.
 func reconcileDirectoryEpochs(
@@ -57,22 +69,13 @@ func reconcileDirectoryEpochs(
 	db, adminDB *sql.DB,
 	dia dialect.Dialect,
 	adminRoleForBoot guardRoleFact,
+	options ...directoryReconcileOptions,
 ) (directoryEpochBootResult, error) {
-	// Without the separate BYPASSRLS reader PostgreSQL cannot enumerate the
-	// estate. Return the honest incomplete/OFF witness before opening a
-	// transaction, taking a lock or binding any tenant: this boot has nothing it
-	// can authoritatively reconcile. The one read-only query preserves the
-	// already-verified durable mode/generation instead of inventing staged/v1.
-	if dia.Name() == store.EnginePostgres && adminDB == db {
-		state, err := readDirectoryWriterControlState(ctx, db, dia)
-		if err != nil {
-			return directoryEpochBootResult{},
-				fmt.Errorf("read directory writer status without admin enumeration: %w", err)
-		}
-		return directoryEpochBootResult{control: state}, nil
-	}
-
 	var out directoryEpochBootResult
+	var opts directoryReconcileOptions
+	if len(options) != 0 {
+		opts = options[0]
+	}
 	tx, err := db.BeginTx(ctx, directoryWriterTxOptions(dia))
 	if err != nil {
 		return out, fmt.Errorf("sqlstore: directory epoch reconcile begin: %w", err)
@@ -85,31 +88,84 @@ func reconcileDirectoryEpochs(
 	}
 	out.control = state
 
-	inventory, err := openDirectoryReconcileInventory(
-		ctx, tx, adminDB, dia, adminRoleForBoot,
-	)
-	if err != nil {
-		return out, fmt.Errorf("sqlstore: directory epoch reconcile inventory: %w", err)
+	inventory := directoryReconcileInventory{queryer: tx}
+	closedRoutine := dia.Name() == store.EnginePostgres && adminDB == db
+	out.inventoryAuthority = "sqlite"
+	if dia.Name() == store.EnginePostgres {
+		if err := verifyPostgresUserAuthorityLock(ctx, tx, opts.roles); err != nil {
+			return out, err
+		}
+		present, err := verifyPostgresDirectoryInventory(ctx, tx, opts.roles)
+		if err != nil {
+			return out, err
+		}
+		if closedRoutine {
+			if !present {
+				if state.Mode != directoryWriterStaged || state.CoverageProtocol != coverageProtocolLegacy || opts.maintenance {
+					return out, directoryUnavailable("closed directory inventory routine is required", nil)
+				}
+				out.inventoryAuthority = ""
+				out.inventoryUnavailableReason = "closed_routine_missing"
+				return out, nil
+			}
+			out.inventoryAuthority = "closed_routine"
+		} else {
+			out.inventoryAuthority = "admin_dsn"
+			inventory, err = openDirectoryReconcileInventory(ctx, tx, adminDB, dia, adminRoleForBoot)
+			if err != nil {
+				return out, err
+			}
+		}
 	}
 	defer inventory.close()
-	tenants, err := enumerateDirectoryTenants(ctx, inventory.queryer, dia)
+	allowPartial := state.Mode == directoryWriterStaged && state.CoverageProtocol == coverageProtocolLegacy && !opts.maintenance
+	observed, err := readDirectoryInventory(ctx, inventory.queryer, dia, closedRoutine, allowPartial)
 	if err != nil {
 		return out, fmt.Errorf("enumerate directory tenants: %w", err)
 	}
-	for _, tenant := range tenants {
+	out.inventory = observed
+	if observed.System.ID == "" {
+		if !allowPartial || len(observed.BusinessTenants) != 0 || len(observed.Epochs) != 0 {
+			return out, directoryUnavailable("nonempty directory inventory lacks SYSTEM witness", nil)
+		}
+		out.inventoryUnavailableReason = "system_bootstrap_pending"
+		return out, nil
+	}
+	for _, tenant := range observed.BusinessTenants {
 		if err := bindDirectoryTenant(ctx, tx, dia, tenant); err != nil {
 			return out, fmt.Errorf("bind directory tenant %s: %w", tenant, err)
 		}
-		_, found, err := readDirectoryEpochRow(ctx, tx, dia, tenant)
+		epoch, found, err := readDirectoryEpochRow(ctx, tx, dia, tenant)
 		if err != nil {
 			return out, fmt.Errorf("read directory epoch for tenant %s: %w", tenant, err)
 		}
 		if found {
+			if epoch.Version != observed.Epochs[tenant] {
+				return out, directoryUnavailable("directory inventory version changed under writer lock", nil)
+			}
 			continue
+		}
+		if !allowPartial {
+			return out, directoryUnavailable("enforced or maintenance directory epoch is absent", nil)
 		}
 		if err := insertDirectoryEpochRow(ctx, tx, dia, tenant); err != nil {
 			return out, fmt.Errorf("backfill directory epoch for tenant %s: %w", tenant, err)
 		}
+		out.inventory.Epochs[tenant] = 1
+	}
+	if err := out.inventory.requireComplete(); err != nil {
+		return out, err
+	}
+	if err := bindDirectoryTenant(ctx, tx, dia, model.SystemTenantID); err != nil {
+		return out, err
+	}
+	coverage, err := readUserAuthorityCoverage(ctx, tx, dia)
+	if err != nil {
+		return out, err
+	}
+	out.userAuthorityComplete = len(coverage.Missing) == 0
+	if !out.userAuthorityComplete && state.Mode == directoryWriterEnforced && (!opts.maintenance || state.CoverageProtocol != coverageProtocolLegacy) {
+		return out, directoryUnavailable("enforced User authority coverage is incomplete", nil)
 	}
 
 	if err := restoreSystemDirectoryBaseline(ctx, tx, dia); err != nil {
@@ -316,11 +372,11 @@ func reserveSQLiteDirectoryWriter(
 	return nil
 }
 
-// readDirectoryWriterControlState reads the already shape-verified singleton
+// readLegacyDirectoryWriterControlState reads the frozen three-column predecessor
 // from the application transaction. It intentionally does not call the full
 // per-boot verifier: that verifier creates a PostgreSQL shape probe and belongs
 // to the owner/migration authority, while split-owner app has SELECT only.
-func readDirectoryWriterControlState(
+func readLegacyDirectoryWriterControlState(
 	ctx context.Context,
 	q directoryTenantEnumerator,
 	dia dialect.Dialect,
@@ -424,46 +480,59 @@ func clearDirectoryTenant(ctx context.Context, tx *sql.Tx, dia dialect.Dialect) 
 	return dia.ClearTenant(ctx, tx)
 }
 
-func armDirectoryWriter(
-	ctx context.Context,
-	tx *sql.Tx,
-	dia dialect.Dialect,
-	state directoryWriterControlState,
-) error {
+func armDirectoryWriter(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, state directoryWriterControlState) error {
+	return armDirectoryWriterCoverage(ctx, tx, dia, state.ExpectedGeneration, false)
+}
+
+// The legacy presentation is private to the maintenance cutover. A normal writer
+// always presents the compiled target, including against an enforced predecessor.
+func armLegacyDirectoryActivation(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, state directoryWriterControlState) error {
+	if state.CoverageProtocol != coverageProtocolLegacy || state.ExpectedGeneration < 1 {
+		return directoryUnavailable("activation legacy prestate is not exact", nil)
+	}
+	return armDirectoryWriterCoverage(ctx, tx, dia, state.ExpectedGeneration, true)
+}
+
+func armDirectoryWriterCoverage(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, generation int64, legacy bool) error {
+	protocol := coverageProtocolTarget
+	if legacy {
+		protocol = coverageProtocolLegacy
+	}
 	switch dia.Name() {
 	case store.EnginePostgres:
-		var got string
-		if err := tx.QueryRowContext(ctx,
-			"SELECT pg_catalog.set_config($1, $2, true)",
-			dialect.DirectoryWriterGenerationGUC,
-			fmt.Sprint(state.ExpectedGeneration),
-		).Scan(&got); err != nil {
-			return fmt.Errorf("arm PostgreSQL directory writer generation: %w", err)
-		}
-		if got != fmt.Sprint(state.ExpectedGeneration) {
-			return fmt.Errorf("arm PostgreSQL directory writer generation returned %q", got)
+		for _, setting := range [][2]string{{dialect.DirectoryWriterGenerationGUC, fmt.Sprint(generation)}, {directoryCoverageProtocolGUC, protocol}} {
+			var got string
+			if err := tx.QueryRowContext(ctx, "SELECT pg_catalog.set_config($1, $2, true)", setting[0], setting[1]).Scan(&got); err != nil {
+				return err
+			}
+			if got != setting[1] {
+				return directoryUnavailable("writer presentation differs from compiled protocol", nil)
+			}
 		}
 		return nil
 	case store.EngineSQLite:
-		if _, err := tx.ExecContext(ctx,
-			// #nosec G202 -- dialect.DirectoryWriterMarkerTable through quoteIdent; the statement carries no value, only that identifier
-			"DELETE FROM "+directoryWriterRelation(dia, dialect.DirectoryWriterMarkerTable),
-		); err != nil {
-			return fmt.Errorf("clear SQLite directory writer marker before arm: %w", err)
+		// #nosec G202 -- SQLite branch: the only interpolated text is directoryWriterRelation(dia, dialect.DirectoryWriterMarkerTable), a dialect constant; the DELETE carries no values.
+		if _, err := tx.ExecContext(ctx, "DELETE FROM "+directoryWriterRelation(dia, dialect.DirectoryWriterMarkerTable)); err != nil {
+			return err
 		}
-		q := "INSERT INTO " + directoryWriterRelation(dia, dialect.DirectoryWriterMarkerTable) +
-			"(control_key, generation) VALUES (?, ?)"
-		if _, err := tx.ExecContext(ctx, dia.Rebind(q),
-			directoryWriterLockKey, state.ExpectedGeneration); err != nil {
-			return fmt.Errorf("arm SQLite directory writer generation: %w", err)
-		}
-		return nil
+		// #nosec G202 -- same dialect-constant relation; the control key, generation and coverage protocol travel as the three bound ? arguments.
+		_, err := tx.ExecContext(ctx, "INSERT INTO "+directoryWriterRelation(dia, dialect.DirectoryWriterMarkerTable)+"(control_key,generation,coverage_protocol) VALUES (?,?,?)", directoryWriterLockKey, generation, protocol)
+		return err
 	default:
 		return fmt.Errorf("arm directory writer: unsupported engine %q", dia.Name())
 	}
 }
 
 func finishDirectoryWriter(ctx context.Context, tx *sql.Tx, dia dialect.Dialect) error {
+	if dia.Name() == store.EnginePostgres {
+		var protocol string
+		if err := tx.QueryRowContext(ctx, "SELECT pg_catalog.set_config($1, '', true)", directoryCoverageProtocolGUC).Scan(&protocol); err != nil {
+			return err
+		}
+		if protocol != "" {
+			return directoryUnavailable("clear writer coverage protocol", nil)
+		}
+	}
 	switch dia.Name() {
 	case store.EnginePostgres:
 		var got string
@@ -536,6 +605,15 @@ func verifyDirectoryWriterPresentationBaseline(
 	tx *sql.Tx,
 	dia dialect.Dialect,
 ) error {
+	if dia.Name() == store.EnginePostgres {
+		var protocol string
+		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(pg_catalog.current_setting($1, true), '')", directoryCoverageProtocolGUC).Scan(&protocol); err != nil {
+			return err
+		}
+		if protocol != "" {
+			return directoryUnavailable("writer coverage protocol baseline is not empty", nil)
+		}
+	}
 	switch dia.Name() {
 	case store.EnginePostgres:
 		var generation string
@@ -740,17 +818,31 @@ func directoryStatusFromBoot(
 		posture = store.DirectoryWriterSplitOwner
 	}
 	return store.DirectoryStatus{
-		Enabled:               false,
-		EpochCoverageComplete: result.coverageComplete,
-		ControlMode:           store.DirectoryControlMode(result.control.Mode),
-		WriterPosture:         posture,
-		ExpectedGeneration:    result.control.ExpectedGeneration,
+		Enabled:                       false,
+		EpochCoverageComplete:         result.coverageComplete,
+		ControlMode:                   store.DirectoryControlMode(result.control.Mode),
+		WriterPosture:                 posture,
+		ExpectedGeneration:            result.control.ExpectedGeneration,
+		CoverageProtocol:              result.control.CoverageProtocol,
+		UserAuthorityCoverageComplete: result.userAuthorityComplete,
+		InventoryAuthority:            result.inventoryAuthority,
+		InventoryOrgCount:             len(result.inventory.BusinessTenants) + boolCount(result.inventory.System.ID != ""),
+		InventoryBusinessOrgCount:     len(result.inventory.BusinessTenants),
+		InventoryEpochCount:           len(result.inventory.Epochs),
+		InventoryUnavailableReason:    result.inventoryUnavailableReason,
 	}
 }
 
+func boolCount(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // DirectoryStatus implements store.DirectoryStatuser. The witness is immutable
-// for this process: B2 has no activation path, and a later cut must replace the
-// cached OFF result only after both readiness phases are present.
+// for this process. Maintenance returns separate durable evidence; every serving
+// process must reopen to recompute coverage after activation.
 func (s *sqlStore) DirectoryStatus(context.Context) (store.DirectoryStatus, bool, error) {
 	return s.directoryStatus, true, nil
 }

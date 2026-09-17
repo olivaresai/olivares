@@ -2,6 +2,9 @@
   "title": "Inventaire",
   "subtitle": "Chaque agent, session, MCP, modèle et identité découvert dans votre parc.",
   "refresh": "Actualiser",
+  "scope": {
+    "note": "Inventaire de tout le tenant. Le sélecteur d’espace de travail ne filtre pas cette vue."
+  },
   "summary": {
     "total": "Entités",
     "active": "Actif",
@@ -49,18 +52,68 @@
     "lastSeen": "Vu pour la dernière fois",
     "relations": "Relations",
     "viewAccess": "Carte des accès",
-    "viewSessions": "Sessions"
+    "viewSessions": "Sessions",
+    "gone": "Cette entrée ne figure plus dans le catalogue.",
+    "noProjection": "Aucun détail supplémentaire n’est disponible à l’affichage pour cette entrée. Cela ne permet pas d’établir si elle a des relations."
+  },
+  "freshness": {
+    "title": "Fraîcheur du catalogue",
+    "independent": "La fraîcheur du catalogue et l’historique d’observations sont des lectures indépendantes, pas un instantané atomique.",
+    "storedState": "État stocké du catalogue",
+    "storedHint": "Actif et périmé sont des états stockés du catalogue. Ils ne sont ni santé, ni disponibilité, ni couverture de source.",
+    "localReception": "Dernière réception locale",
+    "firstLocalReception": "Première réception locale",
+    "sourceOccurred": "Occurrence déclarée par la source",
+    "sourceOccurredUnknown": "La source n’a pas déclaré d’instant d’occurrence.",
+    "timeUnknown": "Aucun instant de réception n’est disponible.",
+    "occurrenceCount": "Compteur d’occurrences du catalogue",
+    "occurrenceHint": "Compte les matérialisations de catalogue de l’entité. Ce n’est ni un nombre de reçus, ni des livraisons à faits coïncidents, ni un total de couverture."
+  },
+  "history": {
+    "title": "Historique d’observations",
+    "coverageUnknown": "Cet historique n’établit ni couverture de source, ni exhaustivité de la découverte, ni santé actuelle.",
+    "loaded": "{{count}} chargés",
+    "empty": "Aucun reçu stocké n’est disponible. Cela ne prouve pas que cette entité n’a jamais été observée.",
+    "refresh": "Actualiser l’historique",
+    "loadMore": "Charger davantage",
+    "loading": "Chargement de l’historique d’observations",
+    "loadingMore": "Chargement de reçus supplémentaires",
+    "receipt": "Reçu",
+    "eventType": "Type d’événement",
+    "eventTypeEdge": "Arête observée",
+    "eventTypeCost": "Coût échantillonné",
+    "registration": "Enregistrement à la réception",
+    "registeredSnapshot": "Instantané historique d’enregistrement",
+    "unattributed": "Non attribué",
+    "invalid": "Instantané historique incomplet",
+    "sourceId": "Identifiant de source à la réception",
+    "sourceRevision": "Révision d’enregistrement appliquée",
+    "environmentRef": "Environnement d’exécution",
+    "sourceOccurred": "Occurrence déclarée par la source",
+    "sourceOccurredUnknown": "La source n’a pas déclaré d’instant d’occurrence.",
+    "timeUnknown": "Aucun instant de réception n’est disponible.",
+    "firstReceived": "Première réception des faits conservés",
+    "lastReceived": "Dernière livraison avec les faits conservés",
+    "deliveries": "Livraisons à faits coïncidents",
+    "conflict": "Relivraison conflictuelle",
+    "conflictYes": "Une relivraison avec des faits différents est conservée. Cela ne compte ni ne date ces variantes.",
+    "conflictNo": "Aucune relivraison conflictuelle n’est conservée.",
+    "malformed": "Cette page d’observations ne peut pas être affichée. Une liste d’éléments absente, une continuation sans curseur utilisable ou un curseur qui n’avance pas est une erreur, pas un historique vide."
   },
   "topology": {
     "note": "Composition du parc par type. L’usage à l’exécution (quel agent exécute quel modèle/MCP) apparaît dans Sessions ; l’accès aux ressources (R/RW) dans la carte des accès.",
     "bands": {
       "origins": "Qui agit",
       "capabilities": "Ce qu’ils peuvent utiliser",
-      "resources": "Ce qu’ils touchent"
+      "resources": "Ce qu’ils touchent",
+      "other": "Autres types"
     },
     "emptyTitle": "Rien de découvert pour l’instant",
     "emptyHint": "À mesure que les connecteurs signalent une activité, votre parc est catalogué ici.",
-    "truncated": "Affichage des {{n}} premières entités"
+    "truncated": "Affichage des {{n}} premières entités",
+    "countsAreLoaded": "Les comptes concernent les éléments chargés sur cette page, pas l’ensemble du parc.",
+    "loadedOnPage": "{{count}} chargés sur cette page",
+    "loadedCount": "{{count}} chargés"
   },
   "empty": {
     "catalog": {

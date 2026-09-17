@@ -52,13 +52,15 @@ func newQuickstartCmd() *cobra.Command {
 				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(),
 					&slog.HandlerOptions{Level: slog.LevelError})))
 			}
-			announce := func(ctx context.Context, out io.Writer, eng *engine) error {
-				return announceQuickstart(ctx, out, eng, consoleURL(opts.listen, false))
+			opts.publicURLSet = cmd.Flags().Changed("public-url")
+			announce := func(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
+				return announceQuickstart(ctx, out, eng, addr)
 			}
 			return runEngine(cmd.Context(), cmd.OutOrStdout(), opts, announce)
 		},
 	}
 	cmd.Flags().StringVar(&opts.listen, "listen", "127.0.0.1:8443", "HTTP (REST + web console) listen address")
+	cmd.Flags().StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
 	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", "127.0.0.1:8444", "gRPC listen address")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().BoolVar(&quiet, "quiet", false,
@@ -114,7 +116,8 @@ func quickstartHeader(out io.Writer, dataDir string, quiet bool) {
 // announceQuickstart prints the guided first-run panel: on a fresh install it
 // mints the one-time setup token and points at the console wizard; once an
 // administrator exists it simply points at the sign-in URL.
-func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, baseURL string) error {
+func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
+	baseURL := addr.URL()
 	has, err := eng.authr.HasAnyUser(ctx)
 	if err != nil {
 		return err
@@ -122,7 +125,7 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, baseURL
 	if has {
 		fmt.Fprintf(out, "\nOlivares AI is starting.\n"+
 			"  Open the console and sign in:  %s\n"+
-			"  (HTTPS with a self-signed certificate — your browser will warn once.)\n\n", baseURL)
+			"  (HTTPS with a self-signed certificate — your browser will warn once.)\n\n%s", baseURL, adviceBlock(addr.Advice))
 		return nil
 	}
 	token, created, err := eng.setupTok.Ensure()
@@ -147,8 +150,9 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, baseURL
 			"%s and start again: a fresh token is minted on the next\n"+
 			"boot. Removing it is safe while no administrator exists — the token gates only\n"+
 			"first-boot setup.\n"+
+			"%s"+
 			"=========================================\n\n",
-			baseURL, filepath.Join(eng.dataDir, "setup.token"))
+			baseURL, filepath.Join(eng.dataDir, "setup.token"), adviceBlock(addr.Advice))
 		return nil
 	}
 	fmt.Fprintf(out, "\n=== WELCOME TO OLIVARES AI ===\n"+
@@ -159,7 +163,18 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, baseURL
 		"      warn once; that is expected for a local install.)\n"+
 		"  2. Complete setup with this one-time token (shown once, single-use):\n\n"+
 		"         %s\n\n"+
+		"%s"+
 		"Press Ctrl-C to stop. For production install paths, see INSTALL.md.\n"+
-		"==============================\n\n", baseURL, token)
+		"==============================\n\n", baseURL, token, adviceBlock(addr.Advice))
 	return nil
+}
+
+// adviceBlock renders the address paragraphs as their own block, or nothing at
+// all. A panel with nothing to say about its address prints exactly what it
+// printed before.
+func adviceBlock(advice string) string {
+	if advice == "" {
+		return ""
+	}
+	return advice + "\n\n"
 }

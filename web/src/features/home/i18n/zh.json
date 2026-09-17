@@ -37,7 +37,17 @@
     }
   },
   "state": {
-    "unavailable": "加载失败——打开以重试"
+    "unavailable": "加载失败——打开以重试",
+    "pendingIdle": "查询未开始——打开以加载",
+    "pendingPaused": "查询已暂停——等待恢复"
+  },
+  "availability": {
+    "loading": "{{source}}：加载中。",
+    "pendingIdle": "{{source}}：查询未开始。",
+    "pendingPaused": "{{source}}：查询已暂停，等待恢复。",
+    "unavailable": "{{source}}：无法加载。",
+    "partial": "{{source}}：数据可用，为部分数据。",
+    "current": "{{source}}：数据可用。"
   },
   "empty": {
     "title": "暂无可显示内容",

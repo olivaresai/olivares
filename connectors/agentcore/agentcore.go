@@ -23,7 +23,7 @@
 //   - Export drift and apply-failure posture for Olivares-managed policies.
 //   - Evaluations health and guardrail-coverage posture.
 //
-// Read-only and minimal-data (docs/SECURITY-HARDENING.md-3). Every operation this connector
+// Read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3). Every operation this connector
 // invokes is a read (List*/Get*) even where the HTTP verb is POST: the identity
 // half of bedrock-agentcore-control is an RPC-style protocol (POST
 // /identities/<OperationName> with a JSON body), the policy/registry/gateway

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -119,9 +120,11 @@ func normalizeProtocolReplayClaim(claim ProtocolReplayClaim) (normalizedProtocol
 	return normalizedProtocolReplayClaim{ProtocolReplayClaim: claim, replayHash: digest[:]}, nil
 }
 
-// ApplyProtocolReplay is a claim/replay/settle transaction. On an exact replay
-// mutation is not called. A mutation error rolls back every joined sessions
-// write and leaves no guard, so a corrected retry can proceed.
+// ApplyProtocolReplay couples the guarded mutation and replay row in the owning
+// transaction. An owning call may retry on a Store conflict. A nested call joins
+// the existing replay Scope without retrying, committing, or rolling back; its
+// error must be propagated to the owning callback for rollback. On an exact
+// replay, mutation is not called.
 func (m *Module) ApplyProtocolReplay(
 	ctx context.Context,
 	tenant model.TenantID,
@@ -136,7 +139,17 @@ func (m *Module) ApplyProtocolReplay(
 		return ProtocolReplayResult{}, err
 	}
 	var result ProtocolReplayResult
-	for attempt := 0; attempt < 2; attempt++ {
+	owning := true
+	maxAttempts := 2
+	if _, joined := protocolReplayScopeFromContext(ctx, tenant); joined {
+		maxAttempts = 1
+		owning = false
+	}
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		var attemptCollector *deferredWorkOutboxCollector
+		if owning {
+			attemptCollector = &deferredWorkOutboxCollector{}
+		}
 		err = m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
 			repo, err := sc.Ext(protocolReplayGuardKind)
 			if err != nil {
@@ -163,6 +176,9 @@ func (m *Module) ApplyProtocolReplay(
 			}
 
 			joined, joinedCtx := newProtocolReplayTransactionContext(ctx, tenant, sc)
+			if attemptCollector != nil {
+				joined.collector = attemptCollector
+			}
 			settlement, mutationErr := mutation(joinedCtx)
 			joined.active.Store(false)
 			if mutationErr != nil {
@@ -200,6 +216,12 @@ func (m *Module) ApplyProtocolReplay(
 			result = ProtocolReplayResult{Guard: guard}
 			return nil
 		})
+		if attemptCollector != nil {
+			requests := attemptCollector.closeAndTake()
+			if err == nil {
+				m.flushDeferredWorkOutboxDrains(requests)
+			}
+		}
 		if err == nil || !errors.Is(err, store.ErrConflict) {
 			break
 		}
@@ -322,9 +344,54 @@ func classifyProtocolReplayStoreError(err error) error {
 type protocolReplayTransactionContextKey struct{}
 
 type protocolReplayTransactionContext struct {
-	tenant model.TenantID
-	scope  store.Scope
-	active atomic.Bool
+	tenant    model.TenantID
+	scope     store.Scope
+	collector *deferredWorkOutboxCollector
+	active    atomic.Bool
+}
+
+// deferredWorkOutboxDrain is one actual shared-drain call skipped while a
+// same-tenant replay frame was active. It retains the drain's originating
+// Module, workData, normalized limit, dead-letter flag, caller restriction
+// and request context. It must not retain a store.Scope or repository.
+type deferredWorkOutboxDrain struct {
+	module          *Module
+	ctx             context.Context
+	data            workData
+	tenant          model.TenantID
+	limit           int
+	allowDeadLetter bool
+	caller          WorkOutboxClaimPolicy
+}
+
+type deferredWorkOutboxCollector struct {
+	mu       sync.Mutex
+	closed   bool
+	requests []deferredWorkOutboxDrain
+}
+
+func (c *deferredWorkOutboxCollector) record(rec deferredWorkOutboxDrain) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return
+	}
+	c.requests = append(c.requests, rec)
+}
+
+func (c *deferredWorkOutboxCollector) closeAndTake() []deferredWorkOutboxDrain {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	out := c.requests
+	c.requests = nil
+	return out
 }
 
 func newProtocolReplayTransactionContext(
@@ -332,7 +399,12 @@ func newProtocolReplayTransactionContext(
 	tenant model.TenantID,
 	scope store.Scope,
 ) (*protocolReplayTransactionContext, context.Context) {
-	joined := &protocolReplayTransactionContext{tenant: tenant, scope: scope}
+	var collector *deferredWorkOutboxCollector
+	if parent, ok := ctx.Value(protocolReplayTransactionContextKey{}).(*protocolReplayTransactionContext); ok &&
+		parent != nil && parent.tenant == tenant && parent.collector != nil {
+		collector = parent.collector
+	}
+	joined := &protocolReplayTransactionContext{tenant: tenant, scope: scope, collector: collector}
 	joined.active.Store(true)
 	return joined, context.WithValue(ctx, protocolReplayTransactionContextKey{}, joined)
 }
@@ -349,4 +421,60 @@ func protocolReplayScopeFromContext(
 		return nil, false
 	}
 	return joined.scope, true
+}
+
+func protocolReplayDeferredDrainCollector(
+	ctx context.Context,
+	tenant model.TenantID,
+) *deferredWorkOutboxCollector {
+	if ctx == nil {
+		return nil
+	}
+	joined, ok := ctx.Value(protocolReplayTransactionContextKey{}).(*protocolReplayTransactionContext)
+	if !ok || joined == nil || joined.tenant != tenant || !joined.active.Load() {
+		return nil
+	}
+	return joined.collector
+}
+
+// protocolReplayMaskedContext drops only the replay-transaction value so a
+// post-commit drain cannot join the completed Mutate. Deadline, cancellation,
+// security and workspace values stay on the parent context.
+type protocolReplayMaskedContext struct {
+	context.Context
+}
+
+func (c protocolReplayMaskedContext) Value(key any) any {
+	if _, ok := key.(protocolReplayTransactionContextKey); ok {
+		return nil
+	}
+	return c.Context.Value(key)
+}
+
+func maskProtocolReplayTransaction(ctx context.Context) context.Context {
+	if ctx == nil {
+		return ctx
+	}
+	if _, ok := ctx.Value(protocolReplayTransactionContextKey{}).(*protocolReplayTransactionContext); !ok {
+		return ctx
+	}
+	return protocolReplayMaskedContext{Context: ctx}
+}
+
+func (m *Module) flushDeferredWorkOutboxDrains(requests []deferredWorkOutboxDrain) {
+	for i := range requests {
+		rec := requests[i]
+		receiver := rec.module
+		if receiver == nil {
+			continue
+		}
+		_ = receiver.drainWorkOutboxWithDataAndPolicy(
+			maskProtocolReplayTransaction(rec.ctx),
+			rec.data,
+			rec.tenant,
+			rec.limit,
+			rec.allowDeadLetter,
+			rec.caller,
+		)
+	}
 }

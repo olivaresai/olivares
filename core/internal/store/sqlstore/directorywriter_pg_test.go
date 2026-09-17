@@ -29,12 +29,13 @@ func TestDirectoryWritersBumpAtomicallyPostgresSplitOwner(t *testing.T) {
 		t.Fatalf("open split-owner directory writer store: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	directoryWriterTestEnforcePostgres(t, pg.Owner, 37)
+	// The membership-union User/G race is the staged legacy compatibility path.
+	directoryWriterTestStageLegacyPostgres(t, pg.Owner, 37)
 
 	tenantA := provisionTenant(t, st, "pg-directory-a")
 	tenantZ := provisionTenant(t, st, "pg-directory-z")
 
-	// Enforced tenant-local writers present the generation, pre-bump once for a
+	// Tenant-local writers present the generation, pre-bump once for a
 	// multi-source transaction and return to an empty transaction-local GUC.
 	beforeA := directoryWriterTestEpoch(t, st, tenantA).Version
 	if err := st.Mutate(ctx, tenantA, func(scope store.Scope) error {
@@ -315,7 +316,7 @@ func TestDirectoryWritersBumpAtomicallyPostgresReadCommittedAfterWait(t *testing
 		t.Fatalf("inherited transaction isolation = %q, want repeatable read", inherited)
 	}
 
-	directoryWriterTestEnforcePostgres(t, pg.Owner, 47)
+	directoryWriterTestStageLegacyPostgres(t, pg.Owner, 47)
 	tenantA := provisionTenant(t, st, "pg-directory-rr-a")
 	tenantZ := provisionTenant(t, st, "pg-directory-rr-z")
 
@@ -588,6 +589,16 @@ FOR EACH ROW EXECUTE FUNCTION public.directory_writer_test_ignore_identity()`); 
 
 func directoryWriterTestEnforcePostgres(t *testing.T, ownerDSN string, generation int64) {
 	t.Helper()
+	directoryWriterTestSetPostgresControl(t, ownerDSN, generation, directoryWriterEnforced, coverageProtocolTarget)
+}
+
+func directoryWriterTestStageLegacyPostgres(t *testing.T, ownerDSN string, generation int64) {
+	t.Helper()
+	directoryWriterTestSetPostgresControl(t, ownerDSN, generation, directoryWriterStaged, coverageProtocolLegacy)
+}
+
+func directoryWriterTestSetPostgresControl(t *testing.T, ownerDSN string, generation int64, mode directoryWriterMode, protocol string) {
+	t.Helper()
 	owner, err := sql.Open("pgx", ownerDSN)
 	if err != nil {
 		t.Fatalf("open PostgreSQL owner for directory activation: %v", err)
@@ -595,8 +606,8 @@ func directoryWriterTestEnforcePostgres(t *testing.T, ownerDSN string, generatio
 	defer owner.Close()
 	result, err := owner.ExecContext(context.Background(), `
 UPDATE public.directory_writer_control
-SET mode = 'enforced', expected_generation = $1
-WHERE control_key = $2`, generation, directoryWriterLockKey)
+SET mode = $3, expected_generation = $1, coverage_protocol = $4
+WHERE control_key = $2`, generation, directoryWriterLockKey, mode, protocol)
 	if err != nil {
 		t.Fatalf("enforce PostgreSQL directory writer control: %v", err)
 	}

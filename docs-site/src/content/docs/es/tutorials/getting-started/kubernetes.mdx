@@ -26,16 +26,10 @@ de copias de seguridad y las propias guard rails del chart). El chart requiere
 **Kubernetes ≥ 1.25**.
 
 <Aside type="caution" title="Estado de publicación del chart — con honestidad">
-En el lanzamiento, el chart se publica en un registro OCI y se firma con cosign,
-de modo que verificas en la instalación y fijas las imágenes por digest. El chart
-descarga la imagen del contenedor desde Docker Hub (`docker.io/olivaresai/olivares`; también
-en `ghcr.io/olivaresai/olivares`, idéntica por digest); el propio artefacto del
-**chart** vive en `oci://ghcr.io/olivaresai/charts/olivares`. La primera versión
-sigue siendo un **borrador**: hasta que se corte una etiqueta `chart-v*`, la ruta
-del registro está **vacía**. Hasta entonces, instala desde el checkout del
-repositorio (el chart en sí está completo y renderizado abajo); una vez publicado,
-cambia a `oci://ghcr.io/olivaresai/charts/olivares` y
-[verifica lo que descargaste](/how-to/verify-a-release/).
+La release v26.9.0 del motor es pública, pero el chart lleva un ciclo independiente
+y aún no tiene una publicación `chart-v*`. Instala la fuente revisada desde
+`deploy/helm/olivares`, como se muestra abajo, y fija la imagen por digest. Si más
+adelante se publica el chart, verifica ese artefacto separado antes de usarlo.
 </Aside>
 
 ## 1. La instalación por defecto (un solo nodo, SQLite)
@@ -117,12 +111,45 @@ helm install olivares deploy/helm/olivares \
 ```
 
 La clave `admin-dsn` del mismo Secret contiene un rol dedicado `NOSUPERUSER
-BYPASSRLS`. Es opcional **solo** si nunca vas a activar las copias de seguridad:
-es lo que hace **completas** las lecturas del sistema entre tenants — la lista de
-organizaciones y la cobertura multi-tenant —, y activar la copia de seguridad la
-**exige** ([copias de seguridad cifradas
-programadas](#4-copias-de-seguridad-cifradas-programadas)). Crearla ahora
-convierte ese paso posterior en un cambio de una sola línea.
+BYPASSRLS`. En Postgres la necesitas **desde el primer arranque**, no solo
+para las copias de seguridad. El rol de aplicación de arriba permanece
+`NOSUPERUSER NOBYPASSRLS`, así que una lectura entre tenants hecha a través
+de él queda limitada por la seguridad a nivel de fila al tenant autorizado y
+nunca puede leerse como el estate completo; el motor rechaza esa lectura en
+lugar de devolver una lista corta. El setup de primer arranque de
+[§1](#1-la-instalación-por-defecto-un-solo-nodo-sqlite) es una de esas
+lecturas — `POST /v1/setup` crea la primera organización — así que sin esta
+clave responde `501 cross_tenant_admin_pool_not_configured`. `GET /readyz`
+responde entonces `503` con `status=setup_blocked`, el mismo código y un
+remedio fijo en el cuerpo. Ese 503 no es un éxito: es la observación de que
+el setup aún no puede ejecutarse, y `POST /v1/setup` vuelve a comprobar su
+propia autoridad.
+
+El manifiesto plano enviado y la ruta Helm por defecto cablean `/readyz` como
+`readinessProbe` del contenedor. Por tanto, una instalación PostgreSQL sin
+arrancar y sin esa enumeración autoritativa permanece Not Ready hasta que se
+corrija el prerrequisito, lo que **puede atascar un rollout** (un pod que
+nunca está Ready no satisface la barrera de actualización del StatefulSet).
+`/livez` sigue en 200 — solo el proceso, así que el pod no se reinicia.
+`/pod-readyz` también sigue en 200: es la sonda de salud de pod de HA
+configurada por separado (almacén alcanzable, sin comprobación de liderazgo
+ni sonda de capacidad de primer arranque), usada con un enrutado distinto del
+escritor para que un standby sano pueda estar Ready mientras `/readyz` sigue
+drenando a quienes no escriben. Un 200 de `/livez` o `/pod-readyz` **no**
+significa que el rollout por defecto esté desbloqueado. No reorientes la
+sonda de readiness por defecto para ocultar un setup fallido.
+
+Cuando no se puede observar el estado de setup, `/readyz` responde `503` con
+`status=setup_unavailable` y `code=setup_state_unavailable`, y **omite**
+`setup_required` porque ese booleano es desconocido. Eso es distinto de una
+instalación vacía conocida (`setup_required=true`).
+
+Una instalación **ya** configurada sigue sirviendo sin la clave: lo que no
+puede hacer es el trabajo autoritativo entre tenants — la lista de
+organizaciones, la cobertura multi-tenant y `backup`, que la EXIGE (véase
+[§4](#4-copias-de-seguridad-cifradas-programadas)). Aprovisiona el rol con
+`olivares db init --admin-role olivares_admin …` (véase `deploy/postgres/README.md`)
+y apunta `--admin-dsn` a él.
 
 ## 3. HA activo-pasivo
 

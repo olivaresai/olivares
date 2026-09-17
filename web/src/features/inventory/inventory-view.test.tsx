@@ -18,15 +18,30 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 
 vi.mock('./api', () => ({
-  inventoryApi: { summary: vi.fn(), entities: vi.fn(), detail: vi.fn() },
+  inventoryApi: {
+    summary: vi.fn(),
+    entities: vi.fn(),
+    detail: vi.fn(),
+    observations: vi.fn(),
+  },
   inventoryKeys: {
     all: (t: string | null) => ['inv', t],
     summary: (t: string | null) => ['inv', t, 's'],
     entities: (t: string | null, p?: unknown) => ['inv', t, 'e', p ?? null],
     detail: (t: string | null, k: string, id: string) => ['inv', t, 'd', k, id],
+    observations: (t: string | null, k: string, id: string) => [
+      'inv',
+      t,
+      'o',
+      k,
+      id,
+    ],
   },
 }))
 
@@ -89,14 +104,27 @@ beforeEach(() => {
     has_more: false,
   })
   vi.mocked(inventoryApi.detail).mockResolvedValue(detail)
+  vi.mocked(inventoryApi.observations).mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
 })
 
 describe('InventoryView', () => {
   it('shows estate summary tiles', async () => {
     renderView()
-    // Total 4, active 3, stale 1 derived from the by-kind summary.
+    // Total 4, active 3, stale 1 derived from the by-kind summary. The tiles now
+    // render only once the summary has ANSWERED (AsyncSection), so by then the
+    // catalog rows — and their own "Stale" chip — are on the page too: the label is
+    // read inside its tile, together with the figure it labels.
     expect(await screen.findByText('Entities')).toBeInTheDocument()
-    expect(screen.getByText('Stale')).toBeInTheDocument()
+    const grid = screen.getByText('Entities').parentElement!
+      .parentElement as HTMLElement
+    const tile = (label: string) =>
+      within(grid).getByText(label).parentElement as HTMLElement
+    expect(within(tile('Entities')).getByText('4')).toBeInTheDocument()
+    expect(within(tile('Active')).getByText('3')).toBeInTheDocument()
+    expect(within(tile('Stale')).getByText('1')).toBeInTheDocument()
   })
 
   it('lists catalog entries and flags a stale one', async () => {

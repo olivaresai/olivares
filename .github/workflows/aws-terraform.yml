@@ -14,6 +14,10 @@ on:
       - "deploy/aws/**"
       - "scripts/check-aws-estate.sh"
       - "scripts/test-aws-estate.sh"
+      # Changes to the compiled-witness helper or its regression must trigger
+      # this workflow. A change only there is absence of verdict, not a green.
+      - "scripts/test-aws-estate-compiled-modcache.sh"
+      - "scripts/lib/aws-estate-compiled-modcache.sh"
       - ".github/workflows/aws-terraform.yml"
       # ⛔ ESTAS TRES SON ENTRADAS DIRECTAS DEL GATE Y FALTABAN. `check-aws-estate.sh`
       # construye un parser HCL desde `scripts/hcl-module-guard/`, y la toolchain la fija
@@ -26,6 +30,13 @@ on:
       # sin este filtro es AUSENCIA DE VEREDICTO, no un verde.
       - "scripts/aws-apply-guard/**"
       - ".github/workflows/aws-images.yml"
+      # ⛔ SUJETOS NUEVOS DE `check-aws-estate.sh` DESDE CLOUD-06, y por el mismo argumento que
+      # las cinco de arriba: el gate compara la task definition con el Dockerfile de la imagen
+      # de roles y su major con el de la RDS. Un cambio SOLO en uno de esos dos ficheros sin
+      # este filtro es AUSENCIA DE VEREDICTO, no un verde.
+      - "cloud/control-plane/deploy/Dockerfile.roles"
+      - "cloud/control-plane/deploy/roles-oneshot.sh"
+      - "cloud/control-plane/deploy/cloud-control-roles.sql"
       - "go.work"
       - "go.work.sum"
   pull_request:
@@ -33,6 +44,10 @@ on:
       - "deploy/aws/**"
       - "scripts/check-aws-estate.sh"
       - "scripts/test-aws-estate.sh"
+      # Changes to the compiled-witness helper or its regression must trigger
+      # this workflow. A change only there is absence of verdict, not a green.
+      - "scripts/test-aws-estate-compiled-modcache.sh"
+      - "scripts/lib/aws-estate-compiled-modcache.sh"
       - ".github/workflows/aws-terraform.yml"
       # ⛔ ESTAS TRES SON ENTRADAS DIRECTAS DEL GATE Y FALTABAN. `check-aws-estate.sh`
       # construye un parser HCL desde `scripts/hcl-module-guard/`, y la toolchain la fija
@@ -45,12 +60,19 @@ on:
       # sin este filtro es AUSENCIA DE VEREDICTO, no un verde.
       - "scripts/aws-apply-guard/**"
       - ".github/workflows/aws-images.yml"
+      # ⛔ SUJETOS NUEVOS DE `check-aws-estate.sh` DESDE CLOUD-06, y por el mismo argumento que
+      # las cinco de arriba: el gate compara la task definition con el Dockerfile de la imagen
+      # de roles y su major con el de la RDS. Un cambio SOLO en uno de esos dos ficheros sin
+      # este filtro es AUSENCIA DE VEREDICTO, no un verde.
+      - "cloud/control-plane/deploy/Dockerfile.roles"
+      - "cloud/control-plane/deploy/roles-oneshot.sh"
+      - "cloud/control-plane/deploy/cloud-control-roles.sql"
       - "go.work"
       - "go.work.sum"
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type apply-sandbox-estate to apply. Anything else is refused."
+        description: "Type apply-sandbox-estate for the pilot, or apply-production-estate for production. Anything else is refused."
         required: true
         default: "plan-only"
       # ── LAS CUATRO VARIABLES DE RAÍZ QUE HOY VAN VACÍAS, Y POR QUÉ ESTÁN AQUÍ.
@@ -69,11 +91,11 @@ on:
       #   3 · apply con image/engine_image -> task definitions y services.
       # Y `hostname` entra cuando su registro DNS exista, porque ACM valida por DNS.
       hostname:
-        description: "Root var.hostname (e.g. cloud-api.olivares.ai). Empty keeps ACM and the HTTPS listener at count 0."
+        description: "Root var.hostname. Empty means the PILOT name (api.cloud.olivaresai.dev); the production job never reads this input."
         required: false
         default: ""
       ingest_hostname:
-        description: "Root var.ingest_hostname (collector NLB name). Empty uses the sandbox default."
+        description: "Root var.ingest_hostname (collector NLB name). Empty means the PILOT name (ingest.cloud.olivaresai.dev)."
         required: false
         default: ""
       await_certificate_validation:
@@ -90,6 +112,17 @@ on:
         default: ""
       engine_image:
         description: "Engine image BY DIGEST (repo@sha256:...). Empty keeps the engine service at count 0."
+        required: false
+        default: ""
+      # ⛔ SIN ESTA ENTRADA, EL DIGEST QUE `aws-images.yml` PUBLICA NO LLEGA A NINGUN APPLY.
+      # La raiz declara `var.roles_task_image` y `main.tf` la pasa al modulo, pero el unico
+      # camino que existe para darle valor es este dispatch — y no estaba. La imagen se
+      # construia, se firmaba, se imprimia en el resumen del job… y no habia forma de usarla:
+      # la funcion quedaba inalcanzable con el gate del estate diciendo CLEAN. Lo levanto el
+      # contraste `sol max` (F-01), y es la MISMA clase que `deploy/aws/variables.tf` ya
+      # documenta de las cuatro que la raiz no pasaba.
+      roles_task_image:
+        description: "Roles one-shot image BY DIGEST (repo@sha256:...). Empty keeps its role, policy and task definition at count 0. Retire the task by re-applying with this empty."
         required: false
         default: ""
 
@@ -292,15 +325,27 @@ jobs:
       # `TF_VAR_<name>` es la vía documentada de OpenTofu para una variable de raíz, y
       # se prefiere a `-var` porque no imprime el valor en la línea de comando del paso.
       # Las cuatro vacías por defecto ⇒ el apply se comporta como antes de este cambio.
-      TF_VAR_hostname: ${{ github.event.inputs.hostname }}
+      # ⛔ LOS NOMBRES DEL PILOTO, EXPLÍCITOS, Y EL DEFAULT DE LA RAÍZ YA NO LOS DA.
+      # Decisión de del 2026-09-02 (ORD-49): producción es
+      # `api.cloud.olivares.ai` / `ingest.cloud.olivares.ai` y el piloto vive en la zona
+      # `olivaresai.dev`. Los defaults de la raíz SE QUEDAN en los de producción —también
+      # suyo—, y ahí está el filo: mientras hubo UN solo estate, «aplicar sin pasar nada»
+      # significaba montar el definitivo y era correcto; con dos, un dispatch del piloto que
+      # no rellenara el hostname **pediría el certificado ACM de PRODUCCIÓN y su CNAME**, y
+      # los dos estates se pisarían sobre el mismo nombre.
+      #
+      # Por eso no se dejan a la entrada del dispatch: la entrada GANA cuando trae algo, y
+      # cuando no, el respaldo es el nombre del PILOTO, no el de la raíz. Un olvido al
+      # teclear deja de ser un incidente de producción. Y que los dos jobs no puedan
+      # resolver al mismo nombre lo comprueba `scripts/aws-apply-guard`, que compara los
+      # hostnames de cada job de apply: un gate, no un comentario.
+      TF_VAR_hostname: ${{ github.event.inputs.hostname || 'api.cloud.olivaresai.dev' }}
+      TF_VAR_ingest_hostname: ${{ github.event.inputs.ingest_hostname || 'ingest.cloud.olivaresai.dev' }}
       TF_VAR_certificate_arn: ${{ github.event.inputs.certificate_arn }}
-      # ⛔ VACÍO NO ES "" AQUÍ, y por eso no se pasa a secas: `hostname` e `ingest_hostname`
-      # tienen DEFAULT en el estate (los nombres de sandbox), así que mandar una cadena
-      # vacía los BORRARÍA en vez de dejarlos por defecto. Se pasan sólo cuando traen algo.
-      TF_VAR_ingest_hostname: ${{ github.event.inputs.ingest_hostname }}
       TF_VAR_await_certificate_validation: ${{ github.event.inputs.await_certificate_validation }}
       TF_VAR_image: ${{ github.event.inputs.image }}
       TF_VAR_engine_image: ${{ github.event.inputs.engine_image }}
+      TF_VAR_roles_task_image: ${{ github.event.inputs.roles_task_image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -314,6 +359,51 @@ jobs:
             echo "CLOUD-ACC does not exist in this lote — apply is refused, not skipped."
             exit 1
           fi
+
+      # ⛔ LA SINTAXIS DEL DIGEST, Y ANTES DE TOCAR NADA. Estas tres entradas se TECLEAN en el
+      # dispatch, y una errata no falla pronto: OpenTofu se la pasa a ECS y el fallo aparece
+      # como una task definition que no puede tirar de su imagen, con el estate ya aplicado. Y
+      # una referencia POR ETIQUETA —`repo:tag` en vez de `repo@sha256:…`— es peor que una
+      # errata: aplica, y lo que se despliega deja de estar fijado.
+      #
+      # No necesita credenciales, asi que va antes del canje: si esto falla, no se ha asumido
+      # ningun rol y no hay nada que deshacer.
+      - name: every image reference is pinned by digest
+        run: |
+          set -euo pipefail
+          bad=0
+          for _v in TF_VAR_image TF_VAR_engine_image TF_VAR_roles_task_image; do
+            eval "_val=\${$_v-}"
+            [ -n "${_val}" ] || continue
+            case "${_val}" in
+              *@sha256:*) ;;
+              *) echo "aws-terraform: ${_v} no esta fijada por digest: '${_val}'" >&2; bad=1; continue ;;
+            esac
+            _hex="${_val##*@sha256:}"
+            case "${#_hex}:${_hex}" in
+              64:*[!0-9a-f]*) echo "aws-terraform: ${_v} lleva un digest que no es 64 hex minusculas: '${_val}'" >&2; bad=1 ;;
+              64:*) : ;;
+              *) echo "aws-terraform: ${_v} lleva un digest de ${#_hex} caracteres, no 64: '${_val}'" >&2; bad=1 ;;
+            esac
+          done
+          # ⛔⛔ Y EL CANAL QUE HARIA INUTIL TODO LO ANTERIOR. `TF_VAR_*` es la precedencia MAS
+          # BAJA de OpenTofu por encima de los defaults: un `terraform.tfvars` o cualquier
+          # `*.auto.tfvars` en el directorio del estate GANA. Es decir, el digest que este job
+          # valida y verifica no tiene por que ser el que OpenTofu aplica — el contraste
+          # `sol max` (B-02) lo midio con un tag SIN FIRMA que quedaba CLEAN. Aqui no hay
+          # ningun fichero de esos y no debe haberlo: si aparece uno, se para.
+          # export-closure: never-exists deploy/aws/terraform.tfvars.json — se nombra SOLO para
+          # refusarlo: un tfvars gana en precedencia a TF_VAR_* y el digest que este job acaba de
+          # verificar dejaria de ser el aplicado. Nunca se ejecuta ni se lee: su AUSENCIA es la
+          # senal, y que exista en cualquiera de los dos arboles seria el defecto.
+          for _f in deploy/aws/terraform.tfvars deploy/aws/terraform.tfvars.json; do
+            [ -e "$_f" ] && { echo "aws-terraform: existe ${_f}, que tiene MAS precedencia que TF_VAR_*: el valor verificado dejaria de ser el aplicado." >&2; bad=1; }
+          done
+          for _f in deploy/aws/*.auto.tfvars deploy/aws/*.auto.tfvars.json; do
+            [ -e "$_f" ] && { echo "aws-terraform: existe ${_f} (*.auto.tfvars), que tiene MAS precedencia que TF_VAR_*." >&2; bad=1; }
+          done
+          [ "$bad" -eq 0 ] || { echo "aws-terraform: se rechaza el apply antes de asumir ningun rol." >&2; exit 1; }
+          echo "aws-terraform: las referencias de imagen que llegan estan fijadas por digest, y ningun fichero tfvars puede sobreescribirlas"
 
       - name: install OpenTofu (pinned)
         run: |
@@ -386,9 +476,9 @@ jobs:
       #
       # ⛔ EL PIN ES UN OID DE COMMIT, NO UNA ETIQUETA. `@v6` es un puntero móvil: quien
       # controle ese repositorio decide qué código corre en un job que asume un rol con
-      # AdministratorAccess sobre nuestra cuenta. `e6de0542…` es el commit que la
-      # etiqueta v6.2.3 apuntaba el 2026-08-27 (`chore(main): release 6.2.3 (#1878)`,
-      # 2026-07-22T18:31:37Z, resuelto contra la API de GitHub). El comentario `# v6.2.3`
+      # AdministratorAccess sobre nuestra cuenta. `cbe3b392…` es el commit que la
+      # etiqueta v6.2.4 apuntaba el 2026-09-11 (`chore(main): release 6.2.4 (#1942)`,
+      # 2026-08-31T23:17:23Z, resuelto contra la API de GitHub). El comentario `# v6.2.4`
       # existe para que esa correspondencia se pueda re-verificar a mano al bumpear:
       # `scripts/aws-apply-guard` comprueba la FORMA del digest y **no puede** comprobar
       # que sea el commit que la etiqueta nombra — eso exige red y el gate no la tiene.
@@ -396,7 +486,7 @@ jobs:
       # `node24`, como `actions/checkout@v7.0.1` y `actions/setup-go@v7.0.0` que este
       # mismo workflow ya corre en estos runners: no estrena runtime.
       - name: assume the sandbox apply role (OIDC → STS)
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1
@@ -419,6 +509,51 @@ jobs:
       - name: the apply role is in the IAM phase this repository declares
         run: bash scripts/aws-iam-phase2.sh check "$GITHUB_REPOSITORY" design
 
+      # ⛔ Y LA FIRMA DEL DIGEST QUE ESTE APPLY VA A CONSUMIR. `aws-images.yml` firma lo que
+      # publica y lee su firma de vuelta — pero esa promesa acababa en el registro: nada ataba
+      # el digest que se TECLEA aqui con el que se firmo alli. Un digest de otro sitio se
+      # desplegaba igual. Lo levanto el contraste `sol max` (F-09).
+      #
+      # ⚠ Y LO QUE ESTA VERIFICACION PRUEBA, EXACTAMENTE, porque la primera redaccion decia
+      # «una corrida que nadie reviso» y eso es MAS de lo que el control da: prueba que la
+      # imagen la firmo el workflow `aws-images.yml` DE ESTE REPOSITORIO. La identidad admite
+      # **cualquier rama**, asi que no dice que nadie la revisara ni que saliera de `main`.
+      # Estrechar el regex a una rama es posible y es una decision aparte — hoy lo impediria el
+      # desarrollo, que firma desde ramas. Se deja dicho en vez de sugerido por el comentario.
+      #
+      # Va DESPUES de la comprobacion de fase de IAM porque el guard exige que esa vaya
+      # inmediatamente detras del canje, y ANTES de `tofu apply` porque despues ya no sirve de
+      # nada: el efecto externo ya se ha producido.
+      #
+      # La identidad se DERIVA de `GITHUB_REPOSITORY` y se escapa antes de meterla en una
+      # expresion regular, por la misma razon que en `aws-images.yml`: `scripts/` y
+      # `.github/workflows/` viajan al arbol publico y un nombre de repositorio privado escrito
+      # aqui se publica.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert the cosign binary is the reviewed artifact
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: the images this apply consumes carry our signature
+        env:
+          CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          CERT_IDENTITY_REGEXP="^https://github\.com/${repo_rx}/\.github/workflows/aws-images\.yml@refs/heads/.+$"
+          _n=0
+          for _v in TF_VAR_image TF_VAR_engine_image TF_VAR_roles_task_image; do
+            eval "_val=\${$_v-}"
+            [ -n "${_val}" ] || continue
+            bash scripts/cosign-verified.sh verify \
+              --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+              --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+              "${_val}" >/dev/null
+            _n=$((_n + 1))
+          done
+          echo "aws-terraform: ${_n} referencia(s) de imagen verificadas contra la firma de aws-images.yml"
+
       - name: tofu apply (sandbox estate only)
         working-directory: deploy/aws
         run: |
@@ -433,7 +568,8 @@ jobs:
           # su default. Se hace aquí y no duplicando los nombres en las entradas del
           # dispatch, porque un hecho escrito en dos sitios deriva.
           for _v in TF_VAR_hostname TF_VAR_ingest_hostname TF_VAR_certificate_arn \
-                    TF_VAR_image TF_VAR_engine_image TF_VAR_await_certificate_validation; do
+                    TF_VAR_image TF_VAR_engine_image TF_VAR_roles_task_image \
+                    TF_VAR_await_certificate_validation; do
             eval "_val=\${$_v-}"
             [ -n "${_val}" ] || unset "$_v"
           done
@@ -468,6 +604,247 @@ jobs:
       # los valores marcados `sensitive`** en esa forma, así que un output sensible que
       # alguien añada mañana no se publica en el resumen del job por descuido. La versión
       # JSON los trae en claro.
+      - name: publish the estate outputs into the job summary
+        working-directory: deploy/aws
+        run: |
+          set -euo pipefail
+          {
+            echo "## estate outputs"
+            echo '```'
+            tofu output
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ─── PRODUCCION. MISMO ESTATE, OTRO TODO LO DEMAS ────────────────────────────
+  #
+  # ⛔ ES UN JOB APARTE Y NO UN PARAMETRO DEL DE ARRIBA, y la razon es la puerta. Este
+  # workflow se protege con una condicion EXACTA por job (`scripts/aws-apply-guard`,
+  # `allowedApplyIf`): comparada entera, no por subcadena, porque una comprobacion por
+  # subcadena acepta las mismas palabras negadas. Un solo job que aceptara los DOS tokens
+  # tendria que llevar un `if` con un `||`, y ese `||` es exactamente el hueco por el que
+  # una negacion pasa desapercibida. Dos jobs, dos condiciones exactas, dos entornos.
+  #
+  # ⛔ Y `environment: production` NO ES ETIQUETA: ES LA MITAD DE LA CONFIANZA DEL ROL.
+  # GitHub solo pone `environment:<nombre>` en el `sub` del token OIDC cuando el job
+  # DECLARA un environment. La confianza del rol `olivares-apply-production` se restringe a
+  # `repo:<owner>/<repo>:environment:production`, asi que sin esta linea el
+  # canje falla — y falla CERRADO, que es lo que se quiere.
+  #
+  # ⛔ Y LA MITAD QUE ACOTA LA RAMA NO ESTA EN ESTE FICHERO: es la POLITICA DE RAMA del
+  # environment `production`, limitada a `main`. El `sub` por si solo NO acota la rama —
+  # cualquier rama que declare el environment emite el mismo `sub`—, asi que sin esa
+  # politica un dispatch desde una rama cualquiera podria asumir el rol de produccion. Con
+  # ella, GitHub rehusa el despliegue antes de que el job arranque. Es configuracion del
+  # servidor y ningun gate de este arbol la ve: esta escrita en
+  # `an internal design note (not shipped)` §4, y decirlo es la diferencia entre una
+  # barrera y la creencia de tenerla. (Los revisores obligatorios NO estan disponibles en
+  # este plan: 422 «billing plan», medido el 2026-09-02.)
+  #
+  # LO QUE DIFIERE DEL JOB DE ARRIBA, y es toda la lista:
+  #   · el token de confirmacion            apply-production-estate
+  #   · el environment de GitHub            production  (politica de rama: solo `main`)
+  #   · el rol                              secrets.AWS_ROLE_ARN_PRODUCTION
+  #   · el bucket de estado                 secrets.TF_BACKEND_BUCKET_PRODUCTION
+  #   · la clave de estado                  cloud/production/terraform.tfstate
+  #   · el prefijo de los recursos          TF_VAR_environment=production -> olivares-production
+  # Todo lo demas es identico A PROPOSITO, y no por copiar: `aws-apply-guard` compara los
+  # dos jobs paso a paso (`checkApplyJobsParity`) y falla si divergen en algo que no sea el
+  # nombre del entorno. Un pin de OpenTofu subido en un job y no en el otro es un hallazgo.
+  apply-production:
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'apply-production-estate'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+      TF_BACKEND_BUCKET: ${{ secrets.TF_BACKEND_BUCKET_PRODUCTION }}
+      IAM_PHASE: "1"
+      AWSCLI_VERSION: "2.31.9"
+      AWSCLI_SHA256: "bf1150ac34672ebec370f724578c85f6a49f72390670022a06b9cf0f68b6d36e"
+      # ⛔ FIJO, NO ENTRADA DE DISPATCH. `environment` decide el prefijo de TODOS los
+      # recursos (`main.tf`: `name = "olivares-${var.environment}"`), asi que una errata al
+      # teclearlo crearia un estate paralelo entero bajo otro nombre, con su RDS y sus dos
+      # balanceadores, y el `terraform.tfstate` de produccion diciendo que eso es produccion.
+      # Un valor asi no se teclea al lanzar: se commitea.
+      TF_VAR_environment: production
+      # ⛔ VA EN EL `env` DEL JOB Y NO PEGADO AL PASO. `scripts/aws-iam-phase2.sh` elige rol,
+      # piezas de policy y `sub` de confianza a partir de esta variable, y ponerla delante del
+      # comando (`OLIVARES_ESTATE=production bash scripts/…`) haria que la LINEA del paso
+      # difiriera de la del piloto — y esa linea es justo la que compara `checkApplyJobsParity`
+      # para que un pin o una comprobacion no se suban en un job y no en el otro.
+      OLIVARES_ESTATE: production
+      # ⛔ EXPLICITOS AUNQUE HOY COINCIDAN CON EL DEFAULT DE LA RAIZ. Los defaults de
+      # `deploy/aws/variables.tf` son hoy los nombres definitivos, y eso fue una correccion
+      # de dominio, no una decision de que el piloto los cediera: si manana alguien mueve
+      # esos defaults, produccion no debe seguirlos por accidente. Aqui el nombre de
+      # produccion esta escrito donde se lee el diff.
+      TF_VAR_hostname: api.cloud.olivares.ai
+      TF_VAR_ingest_hostname: ingest.cloud.olivares.ai
+      TF_VAR_certificate_arn: ${{ github.event.inputs.certificate_arn }}
+      TF_VAR_await_certificate_validation: ${{ github.event.inputs.await_certificate_validation }}
+      TF_VAR_image: ${{ github.event.inputs.image }}
+      TF_VAR_engine_image: ${{ github.event.inputs.engine_image }}
+      TF_VAR_roles_task_image: ${{ github.event.inputs.roles_task_image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # La razon entera de cada paso esta escrita UNA vez, en el job `apply` de arriba. No
+      # se repite aqui a proposito: un hecho escrito en dos sitios deriva, y lo que impide
+      # que los PASOS deriven es el control de paridad del guard, no un comentario gemelo.
+      - name: refuse apply without the role and backend
+        run: |
+          set -euo pipefail
+          if [ -z "${AWS_ROLE_ARN}" ] || [ -z "${TF_BACKEND_BUCKET}" ]; then
+            echo "C04-02: confirm was apply-production-estate but AWS_ROLE_ARN or TF_BACKEND_BUCKET is empty"
+            echo "CLOUD-ACC does not exist in this lote — apply is refused, not skipped."
+            exit 1
+          fi
+
+      # ⛔ LA SINTAXIS DEL DIGEST, Y ANTES DE TOCAR NADA. Estas tres entradas se TECLEAN en el
+      # dispatch, y una errata no falla pronto: OpenTofu se la pasa a ECS y el fallo aparece
+      # como una task definition que no puede tirar de su imagen, con el estate ya aplicado. Y
+      # una referencia POR ETIQUETA —`repo:tag` en vez de `repo@sha256:…`— es peor que una
+      # errata: aplica, y lo que se despliega deja de estar fijado.
+      #
+      # No necesita credenciales, asi que va antes del canje: si esto falla, no se ha asumido
+      # ningun rol y no hay nada que deshacer.
+      - name: every image reference is pinned by digest
+        run: |
+          set -euo pipefail
+          bad=0
+          for _v in TF_VAR_image TF_VAR_engine_image TF_VAR_roles_task_image; do
+            eval "_val=\${$_v-}"
+            [ -n "${_val}" ] || continue
+            case "${_val}" in
+              *@sha256:*) ;;
+              *) echo "aws-terraform: ${_v} no esta fijada por digest: '${_val}'" >&2; bad=1; continue ;;
+            esac
+            _hex="${_val##*@sha256:}"
+            case "${#_hex}:${_hex}" in
+              64:*[!0-9a-f]*) echo "aws-terraform: ${_v} lleva un digest que no es 64 hex minusculas: '${_val}'" >&2; bad=1 ;;
+              64:*) : ;;
+              *) echo "aws-terraform: ${_v} lleva un digest de ${#_hex} caracteres, no 64: '${_val}'" >&2; bad=1 ;;
+            esac
+          done
+          # ⛔⛔ Y EL CANAL QUE HARIA INUTIL TODO LO ANTERIOR. `TF_VAR_*` es la precedencia MAS
+          # BAJA de OpenTofu por encima de los defaults: un `terraform.tfvars` o cualquier
+          # `*.auto.tfvars` en el directorio del estate GANA. Es decir, el digest que este job
+          # valida y verifica no tiene por que ser el que OpenTofu aplica — el contraste
+          # `sol max` (B-02) lo midio con un tag SIN FIRMA que quedaba CLEAN. Aqui no hay
+          # ningun fichero de esos y no debe haberlo: si aparece uno, se para.
+          # export-closure: never-exists deploy/aws/terraform.tfvars.json — se nombra SOLO para
+          # refusarlo: un tfvars gana en precedencia a TF_VAR_* y el digest que este job acaba de
+          # verificar dejaria de ser el aplicado. Nunca se ejecuta ni se lee: su AUSENCIA es la
+          # senal, y que exista en cualquiera de los dos arboles seria el defecto.
+          for _f in deploy/aws/terraform.tfvars deploy/aws/terraform.tfvars.json; do
+            [ -e "$_f" ] && { echo "aws-terraform: existe ${_f}, que tiene MAS precedencia que TF_VAR_*: el valor verificado dejaria de ser el aplicado." >&2; bad=1; }
+          done
+          for _f in deploy/aws/*.auto.tfvars deploy/aws/*.auto.tfvars.json; do
+            [ -e "$_f" ] && { echo "aws-terraform: existe ${_f} (*.auto.tfvars), que tiene MAS precedencia que TF_VAR_*." >&2; bad=1; }
+          done
+          [ "$bad" -eq 0 ] || { echo "aws-terraform: se rechaza el apply antes de asumir ningun rol." >&2; exit 1; }
+          echo "aws-terraform: las referencias de imagen que llegan estan fijadas por digest, y ningun fichero tfvars puede sobreescribirlas"
+
+      - name: install OpenTofu (pinned)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/tofu.zip" \
+            "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip"
+          echo "${TOFU_SHA256}  $RUNNER_TEMP/tofu.zip" | sha256sum -c -
+          unzip -o "$RUNNER_TEMP/tofu.zip" -d "$RUNNER_TEMP/bin" tofu
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/tofu" version
+
+      - name: install the AWS CLI (pinned, no root)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/awscli.zip" \
+            "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"
+          echo "${AWSCLI_SHA256}  $RUNNER_TEMP/awscli.zip" | sha256sum -c -
+          unzip -q -o "$RUNNER_TEMP/awscli.zip" -d "$RUNNER_TEMP/awscli-src"
+          "$RUNNER_TEMP/awscli-src/aws/install" --update \
+            -i "$RUNNER_TEMP/awscli" -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/aws" --version
+
+      - name: assume the production apply role (OIDC → STS)
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: olivares-apply-${{ github.run_id }}
+          unset-current-credentials: true
+          mask-aws-account-id: true
+
+      - name: the apply role is in the IAM phase this repository declares
+        run: bash scripts/aws-iam-phase2.sh check "$GITHUB_REPOSITORY" design
+
+      # ⛔ Y LA FIRMA DEL DIGEST QUE ESTE APPLY VA A CONSUMIR. `aws-images.yml` firma lo que
+      # publica y lee su firma de vuelta — pero esa promesa acababa en el registro: nada ataba
+      # el digest que se TECLEA aqui con el que se firmo alli. Un digest de otro sitio se
+      # desplegaba igual. Lo levanto el contraste `sol max` (F-09).
+      #
+      # ⚠ Y LO QUE ESTA VERIFICACION PRUEBA, EXACTAMENTE, porque la primera redaccion decia
+      # «una corrida que nadie reviso» y eso es MAS de lo que el control da: prueba que la
+      # imagen la firmo el workflow `aws-images.yml` DE ESTE REPOSITORIO. La identidad admite
+      # **cualquier rama**, asi que no dice que nadie la revisara ni que saliera de `main`.
+      # Estrechar el regex a una rama es posible y es una decision aparte — hoy lo impediria el
+      # desarrollo, que firma desde ramas. Se deja dicho en vez de sugerido por el comentario.
+      #
+      # Va DESPUES de la comprobacion de fase de IAM porque el guard exige que esa vaya
+      # inmediatamente detras del canje, y ANTES de `tofu apply` porque despues ya no sirve de
+      # nada: el efecto externo ya se ha producido.
+      #
+      # La identidad se DERIVA de `GITHUB_REPOSITORY` y se escapa antes de meterla en una
+      # expresion regular, por la misma razon que en `aws-images.yml`: `scripts/` y
+      # `.github/workflows/` viajan al arbol publico y un nombre de repositorio privado escrito
+      # aqui se publica.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert the cosign binary is the reviewed artifact
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: the images this apply consumes carry our signature
+        env:
+          CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
+          repo_rx="$(printf '%s' "${GITHUB_REPOSITORY}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          CERT_IDENTITY_REGEXP="^https://github\.com/${repo_rx}/\.github/workflows/aws-images\.yml@refs/heads/.+$"
+          _n=0
+          for _v in TF_VAR_image TF_VAR_engine_image TF_VAR_roles_task_image; do
+            eval "_val=\${$_v-}"
+            [ -n "${_val}" ] || continue
+            bash scripts/cosign-verified.sh verify \
+              --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+              --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+              "${_val}" >/dev/null
+            _n=$((_n + 1))
+          done
+          echo "aws-terraform: ${_n} referencia(s) de imagen verificadas contra la firma de aws-images.yml"
+
+      - name: tofu apply (production estate only)
+        working-directory: deploy/aws
+        run: |
+          set -euo pipefail
+          for _v in TF_VAR_hostname TF_VAR_ingest_hostname TF_VAR_certificate_arn \
+                    TF_VAR_image TF_VAR_engine_image TF_VAR_roles_task_image \
+                    TF_VAR_await_certificate_validation; do
+            eval "_val=\${$_v-}"
+            [ -n "${_val}" ] || unset "$_v"
+          done
+          tofu init -input=false \
+            -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+            -backend-config="key=cloud/production/terraform.tfstate" \
+            -backend-config="region=us-east-1"
+          tofu apply -input=false -auto-approve
+
       - name: publish the estate outputs into the job summary
         working-directory: deploy/aws
         run: |

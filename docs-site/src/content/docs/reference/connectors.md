@@ -379,10 +379,12 @@ side of the permitted-vs-observed diff:
 | `spiffe` | SPIRE registration entries | roster only (no-op `Gather`) |
 
 Wire `as_source: true` on the `identity` entry for a one-shot permitted-grant pass
-per boot, or a separate `sources` entry with `poll_seconds` for periodic re-scans —
-never both for one kind (`okta`/`entra` share the one `idp` connector, so only one
-idp-family instance can register as a source per process). Group/role memberships
-travel only the typed roster snapshot, never as edges.
+per boot, or a separate `sources` entry with `poll_seconds` for periodic re-scans.
+Each entry registers under **its own `name`**, so several entries of one kind run
+side by side — `okta` and `entra` are served by the one `idp` connector and are
+still two separate sources, each with its own configuration, status and lifecycle.
+What must be unique is the name, not the connector. Group/role memberships travel
+only the typed roster snapshot, never as edges.
 
 ### Agent identity federation
 
@@ -408,7 +410,8 @@ For the seven kinds with a re-pollable Gather (`entra-agent`, `agent365`, `agent
 `foundry-agents`, `google-agent`, `oasf`, `onepassword`), wire the **roster** half as an `identity` entry *without*
 `as_source` and the **edges/findings** half as a separate `sources` entry with
 `poll_seconds` — not both via `as_source: true`, which runs the scan only once per
-boot (and a duplicate registration of the same kind is rejected).
+boot. (Two entries of one kind are no longer the obstacle: each registers under its
+own `name`. The reason is the cadence — a single pass per boot is not a re-scan.)
 
 Registry-declared **owner/sponsor** land on the NHI lifecycle records during roster
 sync (the same semantics as `PUT /nhi/{ref}/ownership`), and a registry-asserted

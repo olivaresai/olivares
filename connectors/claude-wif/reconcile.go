@@ -35,7 +35,7 @@ import (
 // — an honest offline, mirroring admin.go's listAll (the connector never fabricates a
 // live roster).
 //
-// Read-first and minimal data (docs/SECURITY-HARDENING.md-3): every call is a GET; the issuer jwks union
+// Read-first and minimal data (docs/SECURITY-HARDENING.md §2-3): every call is a GET; the issuer jwks union
 // is reduced to {mode, ca_cert_configured bool} — the inline JWK material (keys) and the
 // ca_cert_pem are NEVER decoded into a stored/emitted field; the org:admin token and any
 // minted credential are never persisted or logged. The reconciliation reports declared-

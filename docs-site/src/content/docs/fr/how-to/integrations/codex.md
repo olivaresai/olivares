@@ -12,6 +12,12 @@ système déployée. Enfin, `olivares codex-hook` achemine les sessions et les d
 le PEP local. Une session authentifiée avec un abonnement ChatGPT personnel ne donne pas, à elle
 seule, accès aux API enterprise.
 
+Cette page est le chemin **connecteur et hook PEP**. Elle ne lance pas la CLI
+officielle Codex comme enfant gouverné. Ce chemin d’exploitation est
+[Exploiter une session fournisseur](/how-to/operate-provider-sessions/)
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` plus un profil fournisseur ;
+`CHANGELOG.md` `[26.9.0]`).
+
 ## Ajouter Codex
 
 ### Prérequis

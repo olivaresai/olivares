@@ -44,7 +44,8 @@ set -u
 set -o pipefail
 export LC_ALL=C
 
-DIR="${OLIVARES_D1_MIGRATIONS_DIR:-commercial/license-worker/migrations}"
+DIR_POR_DEFECTO="commercial/license-worker/migrations"
+DIR="${OLIVARES_D1_MIGRATIONS_DIR:-$DIR_POR_DEFECTO}"
 
 say() { printf '%s\n' "$*"; }
 cannot_look() {
@@ -63,6 +64,26 @@ done
 
 command -v git >/dev/null 2>&1 || cannot_look "no git on PATH"
 if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then cd "$ROOT" || cannot_look "cannot enter $ROOT"; fi
+# ⛔ ANTES DEL «no he podido mirar», LA TERCERA RESPUESTA. En el arbol PUBLICADO
+# `commercial/` entero esta CURADO FUERA a proposito, asi que este directorio no esta
+# AUSENTE POR ERROR: la pata no tiene sujeto y nunca lo tendra alli. Un rc=2 es correcto
+# como «no he mirado» y es RUIDO como veredicto — y en el CI publico tumba el job entero
+# por una pata cuyo sujeto se curo a proposito. Se distingue con el clasificador de
+# hub-leg.sh —firma del generador MAS ausencia de todo camino hub-only—, nunca con un
+# fichero-marcador suelto, que es una contraseña que cualquier copia teclea. Misma
+# plantilla que test-cloud-roles-partial.sh:51 y check-int-12-no-land.sh:37.
+#
+# Y SOLO PARA EL SUJETO POR DEFECTO: si alguien apunto la pata a OTRO directorio (por
+# `--dir` o por el entorno) y ese no esta, eso es un error suyo y sigue siendo rc=2.
+# Ampararlo bajo el mismo rc=0 convertiria la excepcion en un comodin.
+if [ ! -d "$DIR" ] && [ "$DIR" = "$DIR_POR_DEFECTO" ] \
+   && [ "$(bash "${ROOT:-.}/scripts/hub-leg.sh" --classify --root "${ROOT:-.}" 2>/dev/null)" = "public" ]; then
+	say "check-d1-migrations: SCOPED — public export; commercial/ is curated out of the"
+	say "  published tree, so $DIR has no subject here and never will."
+	say "  In the hub this leg keeps grading every D1 migration; this is not a green from"
+	say "  having looked, it is a leg that does not apply to this tree."
+	exit 0
+fi
 [ -d "$DIR" ] || cannot_look "$DIR is not a directory; this gate has nothing to grade"
 
 FILES=""

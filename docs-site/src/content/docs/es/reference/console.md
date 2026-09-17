@@ -1,32 +1,48 @@
 ---
 title: Referencia de la consola — cada pantalla y el permiso que necesita
 description: >-
-  Todas las rutas que publica la consola de Olivares AI, agrupadas en sus cinco hubs,
-  con el permiso RBAC que requiere cada una y la página de referencia que abre su
-  enlace de ayuda dentro del producto. Generado a partir del censo de rutas de la consola.
+  Todas las rutas que publica la consola de Olivares AI, indexadas por categorías
+  históricas de hub, con el permiso RBAC que requiere cada una y la página de
+  referencia que abre su enlace de ayuda dentro del producto. Generado a partir
+  del censo de rutas de la consola.
 ---
 
 Esta página es el mapa de la consola. Enumera **todas las rutas que monta la aplicación**,
 no una selección ni las que alguien recordó documentar, junto al permiso que necesita un
 principal para entrar y el lugar donde puede leer más.
 
+La barra lateral actual son **nueve áreas con secciones**, no cinco hubs. Después de
+Resumen muestra las áreas que este principal puede abrir de verdad, cada una con su
+página de directorio y módulos desplegables, y al pie el atajo fijo Ajustes. Un filtro
+de navegación sustituye ese árbol agrupado por una lista ordenada de coincidencias
+autorizadas; la paleta de comandos usa el mismo índice, el mismo orden y la misma
+proyección de permisos. Un directorio de área es una página de enlaces —las entradas
+que permiten tus permisos—, no una lectura en vivo de capacidad, disponibilidad o
+preparación.
+
 Es una página **generada**. El inventario procede de `web/src/features/route-census.json`,
 el censo append-only que `registry.route-conservation.test.ts` coteja con el router compilado,
 por lo que ninguna pantalla puede añadirse, moverse ni perderse sin que esta página cambie con
 ella. El nombre y la descripción de una línea de cada pantalla son **las propias cadenas de la
 consola**, tomadas del mismo catálogo de traducción que renderiza la barra lateral: lo que lees
-aquí es lo que ves en el producto.
+aquí es lo que ves en el producto. Las tablas siguientes siguen agrupando esas filas por las
+cinco categorías históricas de hub (Operar, Automatizar, Conectar, Gobernar, Demostrar) más
+inicio de sesión, configuración y cuenta. Esa agrupación es un índice, no el orden actual de
+la barra lateral. Las nueve páginas de directorio de área aparecen ahora junto a las rutas
+montadas fuera del registro de funciones.
 
 :::note[Los permisos los aplica el motor, no esta tabla]
-La columna `Requiere` muestra el permiso que comprueba la consola antes de ofrecer la ruta y
-refleja el RBAC del motor. El motor sigue siendo la autoridad: un enlace directo a una pantalla
-para la que no tienes permiso es rechazado por la API, no solo ocultado en la barra lateral.
-Consulta [Roles y permisos](/es/reference/modules/vi-governance/).
+La columna `Requiere` indica el permiso que comprueba la consola antes de ofrecer una
+ruta, usando los permisos efectivos devueltos por el motor. El motor autoriza las
+peticiones a la API de forma independiente, incluidas las realizadas fuera de la consola.
+Que una entrada sea visible no acredita que el módulo esté configurado o preparado para
+funcionar. Consulta [Roles y permisos](/es/reference/modules/vi-governance/).
 :::
 
 ## Cómo leer esta página
 
-- **Pantalla**: el nombre que usan la barra lateral y la paleta de comandos.
+- **Pantalla**: el nombre que usan la barra lateral, los directorios de área y la paleta
+  de comandos.
 - **Ruta**: la URL bajo el origen de la consola de tu despliegue. Es un contrato publicado:
   un marcador, un enlace profundo de un runbook y una referencia cruzada de la documentación
   usan todos esta cadena.
@@ -35,12 +51,14 @@ Consulta [Roles y permisos](/es/reference/modules/vi-governance/).
   de que exista una sesión.
 - **Referencia**: la página que abre el propio enlace de ayuda de la consola para esa pantalla.
 
-Los cinco encabezados siguientes son los hubs de la consola, en el orden en que los muestra la
-barra lateral.
+Los encabezados siguientes son esas categorías históricas de hub, en el orden del índice
+generado — no el orden en que las muestra la barra lateral. La barra actual lista las áreas
+así: Infraestructura, IA, Datos y contexto, Trabajo y comunicaciones, Automatización,
+Seguridad e identidad, Despliegue, Observabilidad y evidencias, y Sistema y ajustes.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La consola publica **59 rutas**. Todas figuran en las tablas siguientes, con el permiso que
+La consola publica **75 rutas**. Todas figuran en las tablas siguientes, con el permiso que
 requieren y la página de referencia que abre su enlace de ayuda dentro del producto.
 
 ### Operar
@@ -50,10 +68,17 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Resumen | `/` | Visión general del estado y la salud del estate | cualquier usuario autenticado | [inicio de la documentación](/es/) |
 | Claude Code | `/agentops` | Crea, adjunta y gobierna sesiones de Claude Code — sin SSH | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/es/how-to/run-claude-code-with-olivares/) |
 | Copias de seguridad | `/backups` | Inicia, programa, descarga y restaura copias de seguridad, con una segunda confirmación en la vía destructiva. | `system:admin` | [how-to/backup-and-restore](/es/how-to/backup-and-restore/) |
+| Comunicaciones | `/communications` | Canales, avisos directos y bandeja personal del workspace seleccionado | `sessions:channel:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Administración de canales | `/communications/administration` | Administra canales: configuración e historial de concesiones, cada acto bajo el ETag actual del canal | `sessions:channel:admin` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Traspasos | `/communications/handoffs` | Ofertas de responsabilidad de trabajo dirigidas a ti: lee el contexto y acepta o rechaza | `sessions:delivery:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Bandeja de comunicaciones | `/communications/inbox` | Tu bandeja exacta: entregas dirigidas a ti, leídas en fresco y acusadas de forma explícita | `sessions:delivery:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Nuevo canal | `/communications/new` | Crea un canal con concesiones iniciales explícitas | `sessions:channel:write` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Salud y SLA | `/health` | Disponibilidad y SLA de agentes y MCP | `health:status:read` | [reference/modules/xxii-health](/es/reference/modules/xxii-health/) |
 | Kill switch | `/killswitch` | Parada de emergencia, recuperación con doble control y contención guardiana | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/es/how-to/cookbook/kill-switch-drill/) |
 | Registros | `/logs` | Flujo en vivo del log del motor, filtrado por nivel y módulo, con búsqueda y pausa. | `system:admin` | [how-to/troubleshooting](/es/how-to/troubleshooting/) |
 | Observabilidad | `/observability` | Salud de la ingesta por estándar y exploración de trazas | `health:status:read` | [reference/modules/observability](/es/reference/modules/observability/) |
+| Vínculos de fuentes | `/provider-bindings` | Dedica fuentes configuradas, en la revisión que aplicó este nodo, a perfiles de proveedor | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Perfiles de proveedor | `/provider-profiles` | Registra y administra los directorios de proveedor bajo los que se lanzan las sesiones, y lee su configuración bajo demanda | `sessions:profile:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Sandbox | `/sandbox` | Pruebas aisladas de agentes y replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/es/reference/modules/xvii-sandbox/) |
 | Sesiones | `/sessions` | Operación viva de agentes y cronologías | `sessions:live:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Retira o restaura el servicio de un tenant | `system:admin` | [how-to/troubleshooting](/es/how-to/troubleshooting/) |
@@ -130,6 +155,15 @@ sesión** se sirven antes de que exista una sesión; son las únicas rutas de co
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
 | Aceptar una invitación | `/accept-invite` | Destino de un enlace de invitación enviado por correo: la persona invitada define una contraseña y se une al workspace, sin sesión previa. | **sin inicio de sesión** | — |
+| IA | `/areas/ai` | Directorio del área IA: observación y gestión de sesiones, perfiles y entornos de proveedor, modelos, ejecución especializada y referencia del proveedor. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Automatización | `/areas/automation` | Directorio del área Automatización: flujos y orquestación, eventos y notificaciones. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Datos y contexto | `/areas/data-context` | Directorio del área Datos y contexto: capacidades, conocimiento y artefactos. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Despliegue | `/areas/deployment` | Directorio del área Despliegue: preparación y control de despliegues. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Infraestructura | `/areas/infrastructure` | Directorio del área Infraestructura: inventario y espacios de trabajo del entorno. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Observabilidad y evidencias | `/areas/observation` | Directorio del área Observabilidad y evidencias: estado y actividad, costes y adopción, auditoría y grabaciones, evaluación y evidencias. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Seguridad e identidad | `/areas/security-identity` | Directorio del área Seguridad e identidad: identidad y acceso, políticas, protección y respuesta, fronteras de gobierno. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Sistema y ajustes | `/areas/system` | Directorio del área Sistema y ajustes: administración, instalación y mantenimiento, herramientas de desarrollo y preferencias personales. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Trabajo y comunicaciones | `/areas/work-communications` | Directorio del área Trabajo y comunicaciones: trabajo duradero entre sesiones y comunicaciones gobernadas. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
 | Iniciar sesión | `/login` | Página de acceso con credenciales y token para una cuenta ya aprovisionada. | **sin inicio de sesión** | — |
 | Ajustes | `/settings` | Ajustes del espacio de trabajo y de la cuenta | cualquier usuario autenticado | — |
 | Configuración inicial | `/setup` | Página de una sola vez que convierte un despliegue nuevo en uno utilizable: consume el token de configuración y crea la primera cuenta owner. | **sin inicio de sesión** | — |
@@ -147,3 +181,4 @@ Las pantallas cuyo backend funciona en deny-closed hasta que un operador lo apro
 aparecen aquí como cualquier otra: la ruta existe y el permiso es real. La
 [vista general de módulos](/es/reference/modules/overview/) registra qué módulo actúa y cuál
 está gateado, y [Honestidad y límites](/es/start/honesty-and-limits/) expone la regla general.
+El listado de un directorio de área no es una lectura en vivo de capacidad o preparación.

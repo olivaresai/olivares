@@ -19,7 +19,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
 const navigate = vi.fn()
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }))
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
+}))
 
 vi.mock('@/features/recordings/recording-notice', () => ({
   RecordingNotice: () => null,
@@ -84,9 +89,13 @@ describe('IdentityView — the URL follows a manual tab change', () => {
     const arg = navigate.mock.calls[0]![0] as {
       search: (p: Record<string, unknown>) => Record<string, unknown>
       replace: boolean
+      resetScroll: boolean
     }
     expect(arg.replace).toBe(true)
     expect(arg.search({})).toEqual({ tab: 'inventory' })
+    // Out of scroll restoration too, like the console's setter: a tab switch is not a
+    // page change (console-tab-scroll-restoration, 2026-09-06).
+    expect(arg.resetScroll).toBe(false)
   })
 
   it('PRESERVES the parameters already on the URL instead of clearing them', async () => {

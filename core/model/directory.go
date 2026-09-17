@@ -19,12 +19,31 @@ const (
 	DirectoryEpochKind     Kind = "core.directory_epoch"
 	DirectoryTombstoneKind Kind = "core.directory_tombstone"
 	UserTombstoneKind      Kind = "core.user_tombstone"
+	UserAuthorityKind      Kind = "core.user_authority"
 )
 
 // ErrInvalidDirectoryEvidence marks a malformed epoch or tombstone. A reader
 // must treat it as unavailable evidence, never as proof that a principal was
 // retired or that an epoch is zero.
 var ErrInvalidDirectoryEvidence = errors.New("invalid directory evidence")
+
+// UserAuthority is the durable, never-reused fence for one global User identity.
+// Retirement preserves this row. Credentials refer to their User's fence, never
+// to a fence keyed by an AuthSession, Agent or communication Session identifier.
+type UserAuthority struct {
+	BaseFields
+}
+
+func (h UserAuthority) Validate() error {
+	if err := validateDirectoryID(h.ID, "user authority id"); err != nil {
+		return err
+	}
+	if h.TenantID != SystemTenantID || h.Version < 1 || h.DeletedAt != nil {
+		return fmt.Errorf("%w: user authority must be live SYSTEM evidence with a positive version",
+			ErrInvalidDirectoryEvidence)
+	}
+	return nil
+}
 
 // DirectoryPrincipalKind is the closed set of principals for which core can
 // persist irreversible-retirement evidence. Sessions deliberately have no

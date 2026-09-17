@@ -92,5 +92,25 @@
     "denied": "已拒绝设备代码 {{code}}",
     "notFound": "该用户代码没有待处理的请求。",
     "expired": "该请求已过期或已被使用。"
+  },
+  "firewall": {
+    "title": "Messages 检查器",
+    "intro": "此控制平面进程启动时，内容检查器是否已挂接到 Messages 代理。",
+    "refresh": "重新检查",
+    "limit": "这是响应进程在启动时记录的内容。它不报告代理当前是否可达、加载了哪条策略，也不报告任何单个请求是否被检查。",
+    "states": {
+      "unobserved": "未记录",
+      "pep_not_composed": "代理未启动",
+      "inspector_absent": "检查器未挂接",
+      "inspector_attached": "检查器已挂接",
+      "unreadable": "无法读取"
+    },
+    "statesHint": {
+      "unobserved": "此进程未记录挂接状态。不作任何方向的判断。",
+      "pep_not_composed": "此进程中未启动 Messages 代理，因此没有检查器能够挂接。",
+      "inspector_absent": "代理启动时未挂接内容检查器。",
+      "inspector_attached": "启动时挂接了检查器。它可能是配置无法读取时安装的限制性回退，因此这并不表示内容正按配置被检查。",
+      "unreadable": "响应与此控制台识别的任何状态都不匹配。不对检查器作任何判断。"
+    }
   }
 }

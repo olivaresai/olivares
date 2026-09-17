@@ -189,14 +189,27 @@ func TestAuditSpoolAccountingExactness(t *testing.T) {
 
 	usage := readAuditSpoolUsage(t, st)
 	sqlSum := readSQLiteAuditSpoolSum(t, st)
-	var goSum int64
-	if err := st.View(ctx, tenant, func(sc store.Scope) error {
-		return sc.Audit().(store.CanonicalWalker).WalkCanonical(ctx, 1, func(ev model.AuditEvent, meta string, blind []byte) error {
-			goSum += auditEventSpoolBytes(ev, meta, blind)
-			return nil
-		})
-	}); err != nil {
-		t.Fatalf("walk exactness fixtures: %v", err)
+	// The usage counter and the SQL sum cover EVERY chain in the ledger. Since the
+	// fixture provisions SYSTEM the way boot does, that includes the SYSTEM chain's
+	// genesis event, which is spool-accounted like any other System-path append. The
+	// Go-side recomputation therefore walks both chains, or the exactness it claims
+	// would silently exclude the one event every real ledger starts with.
+	var goSum, systemEvents int64
+	for _, chain := range []model.TenantID{tenant, model.SystemTenantID} {
+		if err := st.View(ctx, chain, func(sc store.Scope) error {
+			return sc.Audit().(store.CanonicalWalker).WalkCanonical(ctx, 1, func(ev model.AuditEvent, meta string, blind []byte) error {
+				if chain.IsSystem() {
+					systemEvents++
+				}
+				goSum += auditEventSpoolBytes(ev, meta, blind)
+				return nil
+			})
+		}); err != nil {
+			t.Fatalf("walk exactness fixtures on chain %s: %v", chain, err)
+		}
+	}
+	if systemEvents != 1 {
+		t.Fatalf("SYSTEM chain holds %d event(s), want exactly the genesis event this fixture bootstraps", systemEvents)
 	}
 	if usage != sqlSum || usage != goSum {
 		t.Fatalf("logical-byte accounting diverged: usage=%d sql=%d go=%d", usage, sqlSum, goSum)

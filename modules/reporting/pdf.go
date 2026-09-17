@@ -31,6 +31,12 @@ func PDFAvailable() bool {
 // RenderPDF converts HTML bytes to PDF via headless chromium --print-to-pdf.
 // Returns ErrPDFUnavailable if no chromium is found.
 func RenderPDF(ctx context.Context, html []byte) ([]byte, error) {
+	// The budget is read first: a malformed OLIVARES_PDF_RENDER_TIMEOUT is refused on every box,
+	// with or without a browser, before anything is written or spawned.
+	timeout, err := pdfRenderTimeout()
+	if err != nil {
+		return nil, err
+	}
 	bin := chromiumBinary()
 	if bin == "" {
 		return nil, ErrPDFUnavailable
@@ -49,7 +55,6 @@ func RenderPDF(ctx context.Context, html []byte) ([]byte, error) {
 		return nil, fmt.Errorf("pdf: write html: %w", err)
 	}
 
-	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -81,3 +86,32 @@ func RenderPDF(ctx context.Context, html []byte) ([]byte, error) {
 // ErrPDFUnavailable is returned when PDF generation is requested but no
 // chromium binary is found on the system.
 var ErrPDFUnavailable = fmt.Errorf("PDF generation requires chromium or google-chrome in PATH")
+
+// pdfRenderTimeoutEnv names the wall-clock budget for one Chromium render. The default,
+// 30 s, is the product's posture for a live request. The budget is a fact of the machine
+// that runs the render, not of the code: measured 2026-09-16 on a GitHub-hosted 4-vCPU
+// runner under the race detector, the structural test's render was killed at 30.05 s
+// ("pdf: chromium: signal: killed") while the same render fits on an 8-CPU host. A test
+// that inherits a live-request budget on a slower, instrumented box measures the clock,
+// not the renderer (08 §A row 2), so the budget is declared where the box is known.
+const pdfRenderTimeoutEnv = "OLIVARES_PDF_RENDER_TIMEOUT"
+
+const pdfRenderTimeoutDefault = 30 * time.Second
+
+// pdfRenderTimeout returns the render budget: the default unless OLIVARES_PDF_RENDER_TIMEOUT
+// carries a Go duration. A value that is not a duration, or not positive, is refused by name
+// rather than replaced by the default: a mistyped budget must not silently become 30 s.
+func pdfRenderTimeout() (time.Duration, error) {
+	raw, ok := os.LookupEnv(pdfRenderTimeoutEnv)
+	if !ok || raw == "" {
+		return pdfRenderTimeoutDefault, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("pdf: %s=%q is not a duration: %w", pdfRenderTimeoutEnv, raw, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("pdf: %s=%q must be positive", pdfRenderTimeoutEnv, raw)
+	}
+	return d, nil
+}

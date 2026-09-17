@@ -81,6 +81,17 @@ if [ -d "$ROOT/core/internal/webui/dist" ]; then
 	fi
 fi
 
+# ⛔ EL SPEC ES TYPESCRIPT QUE PLAYWRIGHT TRANSPILA SIN COMPROBAR TIPOS: un error de tipos en
+#    `e2e/launch-states.spec.ts` salía sólo después de sembrar el motor y abrir el navegador, o
+#    no salía nunca. El proyecto del arnés (`web/tsconfig.e2e.json`, `pnpm run typecheck:e2e`)
+#    comprueba todas las suites `e2e*/` y las configs de Playwright con noEmit. Va AQUÍ: después
+#    de validar directorio ejecutable, binario y bundle, y antes de arrancar nada. Rehúsa con 2
+#    como los demás controles: sin un spec que compile no hay captura que mirar.
+pnpm --dir "$ROOT/web" run typecheck:e2e || {
+	echo "launch-state-captures: ⛔ NO HE PODIDO MIRAR: el arnés de navegador no compila (el error de tsc va arriba)." >&2
+	exit 2
+}
+
 echo "==> Motor sembrado en 127.0.0.1:$PORT"
 TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
 "$BIN" serve --insecure --seed-demo --listen "127.0.0.1:$PORT" \

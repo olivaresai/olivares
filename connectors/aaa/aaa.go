@@ -19,7 +19,7 @@
 //     hardened transport that UPDATES 8907 (it does not replace it). The text
 //     accounting log this connector parses is the on-disk record of those packets.
 //
-// Minimal data (docs/SECURITY-HARDENING.md-3): the connector reads identity/accounting METADATA
+// Minimal data (docs/SECURITY-HARDENING.md §2-3): the connector reads identity/accounting METADATA
 // only. It NEVER reads the RADIUS shared secret (which is never on the wire —
 // RFC 2865 §3) and NEVER reads the User-Password attribute (the obfuscated
 // credential). A TACACS+ command (cmd=) can carry a secret, so it is redacted and

@@ -18,7 +18,7 @@ func ts() model.Timestamp { return model.NewTimestamp(time.Now()) }
 
 func TestAccessEdgeUpsertMerge(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 
 	origin := model.NewID()
@@ -66,7 +66,7 @@ func TestAccessEdgeUpsertMerge(t *testing.T) {
 
 func TestAccessEdgeDrift(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	origin := model.NewID()
 
@@ -117,7 +117,7 @@ func TestAccessEdgeDrift(t *testing.T) {
 
 func TestAccessEdgeNeighbors(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	origin := model.NewID()
 	resource := model.NewID()
@@ -158,7 +158,7 @@ func TestAccessEdgeNeighbors(t *testing.T) {
 // is returned once, not twice, by Neighbors(Both).
 func TestAccessEdgeNeighborsSelfLoop(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	node := model.NewID()
 

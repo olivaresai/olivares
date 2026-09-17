@@ -24,6 +24,7 @@ import (
 var (
 	directoryWriterAfterLockTestHook    func()
 	directoryWriterBeforeSourceTestHook func(context.Context, *directoryWriteTracker) error
+	errDirectoryWriterAuthorityFirst    = errors.New("directory writer must precede authority row locks")
 	errDirectoryWriterAuditFirst        = errors.New("tenant audit append preceded directory writer lock")
 )
 
@@ -47,14 +48,17 @@ func directoryWriterTxOptions(dia dialect.Dialect) *sql.TxOptions {
 // so one tenant is fenced at most once even when a callback changes several
 // directory facts.
 type directoryWriteTracker struct {
-	tx                   *sql.Tx
-	dia                  dialect.Dialect
-	presentationTenant   model.TenantID
-	locked               bool
-	control              directoryWriterControlState
-	bumped               map[model.TenantID]struct{}
-	poisoned             error
-	auditBeforeDirectory bool
+	tx                       *sql.Tx
+	dia                      dialect.Dialect
+	presentationTenant       model.TenantID
+	locked                   bool
+	control                  directoryWriterControlState
+	heldUsers                map[model.ID]userAuthorityHeldState
+	lastHeldUser             model.ID
+	bumped                   map[model.TenantID]struct{}
+	poisoned                 error
+	auditBeforeDirectory     bool
+	authorityBeforeDirectory bool
 }
 
 func newDirectoryWriteTracker(
@@ -98,6 +102,9 @@ func (t *directoryWriteTracker) prepare(
 ) error {
 	if t.poisoned != nil {
 		return fmt.Errorf("directory writer transaction is poisoned: %w", t.poisoned)
+	}
+	if !t.locked && t.authorityBeforeDirectory {
+		return errDirectoryWriterAuthorityFirst
 	}
 	if !t.locked && t.auditBeforeDirectory {
 		return fmt.Errorf(
@@ -249,6 +256,7 @@ func bumpDirectoryEpochExact(
 }
 
 type directoryTenantResolver[T any] struct {
+	lock   func(context.Context, model.ID) error
 	create func(context.Context, T) ([]model.TenantID, error)
 	update func(context.Context, T) ([]model.TenantID, error)
 	delete func(context.Context, model.ID) ([]model.TenantID, error)
@@ -315,7 +323,14 @@ func (r *directoryTrackedRepo[T]) Get(ctx context.Context, id model.ID) (T, erro
 	return r.inner.Get(ctx, id)
 }
 
-func (r *directoryTrackedRepo[T]) Lock(ctx context.Context, id model.ID) (T, error) {
+func (r *directoryTrackedRepo[T]) Lock(ctx context.Context, id model.ID) (_ T, retErr error) {
+	if r.tracker != nil && r.resolve.lock != nil {
+		defer func() { r.tracker.poison(retErr) }()
+		if err := r.tracker.prepare(ctx, func() ([]model.TenantID, error) { return nil, r.resolve.lock(ctx, id) }); err != nil {
+			var zero T
+			return zero, err
+		}
+	}
 	locker, ok := r.inner.(store.RowLocker[T])
 	if !ok {
 		var zero T
@@ -515,6 +530,12 @@ func authUserDirectoryResolver(
 			return nil, nil
 		},
 		update: func(ctx context.Context, user model.User) ([]model.TenantID, error) {
+			if err := ts.directoryWriter.bumpUserAuthorities(ctx, user.ID); err != nil {
+				return nil, err
+			}
+			if ts.directoryWriter.control.CoverageProtocol == coverageProtocolTarget {
+				return nil, nil
+			}
 			return authUserDirectoryTenants(ctx, ts, user.ID)
 		},
 		delete: func(ctx context.Context, id model.ID) ([]model.TenantID, error) {

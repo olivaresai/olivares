@@ -242,9 +242,9 @@ func ClaimEvidenceOperation(ctx context.Context, st Store, tenant model.TenantID
 	claim.LeaderEpoch = epoch
 	for attempt := 0; ; attempt++ {
 		var res EvidenceClaimResult
-		txErr := st.Mutate(ctx, tenant, func(sc Scope) error {
+		txErr := mutateEvidenceOperation(ctx, st, tenant, claim.OperationID, func(repo EvidenceOperationRepo) error {
 			var err error
-			res, err = sc.EvidenceOperations().Claim(ctx, claim)
+			res, err = repo.Claim(ctx, claim)
 			if err != nil {
 				return err
 			}
@@ -340,9 +340,9 @@ func SettleEvidenceOperation(ctx context.Context, st Store, tenant model.TenantI
 	}
 	for attempt := 0; ; attempt++ {
 		var res EvidenceSettleResult
-		txErr := st.Mutate(ctx, tenant, func(sc Scope) error {
+		txErr := mutateEvidenceOperation(ctx, st, tenant, settlement.OperationID, func(repo EvidenceOperationRepo) error {
 			var err error
-			res, err = sc.EvidenceOperations().Settle(ctx, settlement)
+			res, err = repo.Settle(ctx, settlement)
 			if err != nil {
 				return err
 			}
@@ -378,6 +378,33 @@ func SettleEvidenceOperation(ctx context.Context, st Store, tenant model.TenantI
 		out.Receipt = sdk.ClassifyAnchor(binding, res.Op.OutcomeEvidenceRef, false, sdk.EvidenceFaultNone)
 		return out, nil
 	}
+}
+
+// mutateEvidenceOperation prefers the business-only selective journal when the
+// complete Store stack exposes it. Reserved SYSTEM and zero tenants retain the
+// historical Store.Mutate path, as do stores and decorators without the optional
+// capability. The fallback is conservative and behavior-compatible.
+func mutateEvidenceOperation(
+	ctx context.Context,
+	st Store,
+	tenant model.TenantID,
+	operationID string,
+	fn func(EvidenceOperationRepo) error,
+) error {
+	if !tenant.IsZero() && !tenant.IsSystem() {
+		if selective, ok := st.(SelectiveMutator); ok {
+			plan, err := NewEvidenceOperationPlan(operationID)
+			if err != nil {
+				return err
+			}
+			return selective.MutateEvidenceOperation(ctx, tenant, plan, func(sc EvidenceOperationMutationScope) error {
+				return fn(sc.EvidenceOperations())
+			})
+		}
+	}
+	return st.Mutate(ctx, tenant, func(sc Scope) error {
+		return fn(sc.EvidenceOperations())
+	})
 }
 
 // evidencePreCommitFence is the in-transaction leadership recheck the drivers
@@ -481,6 +508,16 @@ func ValidateEvidenceClaim(c EvidenceClaim) error {
 	switch {
 	case blankEvidenceField(c.OperationID):
 		return fmt.Errorf("%w: claim: operation id required", ErrEvidenceInvalid)
+	// The custodial surfaces are RESERVED in the generic producers. Their
+	// insert-before-append order, their relation binding and their engine digest
+	// are the whole of what makes a managed Stop single-use; a generic claim
+	// under the same identity would write a row with none of them. Readers are
+	// deliberately untouched — a reserved row still decodes and still denies
+	// closed through its blank claim anchor — and this refusal is not a
+	// partition: an out-of-band SQL writer is stopped by the digest, not here.
+	case ReservedCustodialOperationID(c.OperationID):
+		return fmt.Errorf("%w: claim: operation id %q is reserved for a custodial surface",
+			ErrEvidenceInvalid, c.OperationID)
 	case blankEvidenceField(c.EffectDigest):
 		return fmt.Errorf("%w: claim: effect digest required", ErrEvidenceInvalid)
 	case blankEvidenceField(c.Surface):
@@ -496,10 +533,21 @@ func ValidateEvidenceClaim(c EvidenceClaim) error {
 // ValidateEvidenceSettlement checks that s names a complete, terminal
 // settlement (TrimSpace semantics, like ValidateEvidenceClaim). Failures wrap
 // ErrEvidenceInvalid.
+//
+// model.EvidenceOpRefused is not Terminal, so no settlement can request it. A
+// generic Claim replay of an existing refused row returns that row with
+// Fresh=false and a blank ClaimEvidenceRef, which sdk.ClassifyAnchor treats as
+// a missing anchor: the consumer refuses and nothing is dispatched.
 func ValidateEvidenceSettlement(s EvidenceSettlement) error {
 	switch {
 	case blankEvidenceField(s.OperationID):
 		return fmt.Errorf("%w: settlement: operation id required", ErrEvidenceInvalid)
+	// Reserved exactly as in ValidateEvidenceClaim: a custodial operation is
+	// settled through its own handle, which re-derives the engine digest and the
+	// stamped epoch, or it is not settled at all.
+	case ReservedCustodialOperationID(s.OperationID):
+		return fmt.Errorf("%w: settlement: operation id %q is reserved for a custodial surface",
+			ErrEvidenceInvalid, s.OperationID)
 	case blankEvidenceField(s.EffectDigest):
 		return fmt.Errorf("%w: settlement: effect digest required", ErrEvidenceInvalid)
 	case !s.State.Terminal():

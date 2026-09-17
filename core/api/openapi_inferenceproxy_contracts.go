@@ -113,6 +113,30 @@ func inferenceProxyDeviceApprovalSchema() map[string]any {
 	))
 }
 
+// inferenceProxyContentFirewallRoute is the read of the Messages proxy's startup
+// content-inspector attachment.
+func inferenceProxyContentFirewallRoute(r moduleRoute) bool {
+	return r.ns == "inferenceproxy" && r.method == http.MethodGet && r.pattern == "/content-firewall"
+}
+
+func inferenceProxyContentFirewallResponse() map[string]any {
+	return oaObj(
+		"description", "Startup attachment state of the inline Messages proxy content inspector in this process.",
+		"content", oaObj("application/json", oaObj("schema", inferenceProxyContentFirewallSchema())),
+	)
+}
+
+func inferenceProxyContentFirewallSchema() map[string]any {
+	return inferenceProxyClosedObject(oaObj(
+		"pep", oaObj("type", "string", "enum", oaEnum("messages_proxy"),
+			"description", "The only proxy this state describes."),
+		"state", oaObj("type", "string",
+			"enum", oaEnum("unobserved", "pep_not_composed", "inspector_absent", "inspector_attached"),
+			"description", "inspector_attached includes the deny-all fallback inspector. No state reports listener health, policy load or per-request inspection."),
+		"note", oaObj("type", "string", "description", "Constant scope note."),
+	), "pep", "state", "note")
+}
+
 func inferenceProxyDLPRuleSchema() map[string]any {
 	return inferenceProxyClosedObject(oaObj(
 		"id", inferenceProxyNullable(oaObj("type", "string", "description", "Accepted by the DTO but ignored on upsert.")),

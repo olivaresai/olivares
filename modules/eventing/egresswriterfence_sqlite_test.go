@@ -6,6 +6,7 @@ package eventing
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 
@@ -804,6 +806,69 @@ func TestInstallingTheFenceOnAnUpgradeChangesNothingUntilArmedOnSQLite(t *testin
 	if err := writeSubscription(ctx, st2, tenant, "after-arm-ok", "https://p6.example.com/h", true, gen); err != nil {
 		t.Fatalf("after arming, a writer carrying the gate was refused: %v", err)
 	}
+}
+
+// TestAnUpgradeReopenWithoutTheSystemWitnessIsRefusedOnSQLite is the discriminating control for
+// provisionFenceTenant on this engine, on the exact shape the two upgrade fixtures above use:
+// provision through a pre-fence binary, close the file, and open the same file with the module's
+// real schema.
+//
+// The positive half proves the ordinary helper leaves a file the upgraded binary can open and still
+// resolve its tenant in. The negative half proves the SAME file, minus the SYSTEM row, still
+// receives the PRODUCTION refusal — store.ErrDirectoryUnavailable carrying "nonempty directory
+// inventory lacks SYSTEM witness" from the decoder at sqlstore/directoryepoch.go. So the fixture
+// alignment repaired a database no deployment can produce and did not move the guard: weaken the
+// decoder and this test goes red exactly where the upgrade tests would go green.
+func TestAnUpgradeReopenWithoutTheSystemWitnessIsRefusedOnSQLite(t *testing.T) {
+	ctx := context.Background()
+	// The upgraded binary's open, WITHOUT the t.Fatalf that openWithModuleSchema applies: the
+	// negative half needs the error rather than a dead test.
+	upgradedOpen := func(dsn string) (store.Store, error) {
+		return engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: dsn}, New().RegisterSchema)
+	}
+
+	t.Run("with SYSTEM the upgraded binary reopens", func(t *testing.T) {
+		dsn := filepath.Join(t.TempDir(), "witness.db")
+		st1 := openWithoutTheFence(t, dsn)
+		tenant := provisionFenceTenant(t, st1, "acme")
+		_ = st1.Close()
+
+		st, err := upgradedOpen(dsn)
+		if err != nil {
+			t.Fatalf("reopen after SYSTEM-first provisioning: %v", err)
+		}
+		t.Cleanup(func() { _ = st.Close() })
+		var got model.Org
+		if err := st.System(ctx, func(sys store.SystemScope) error {
+			o, gerr := sys.GetOrg(ctx, tenant)
+			got = o
+			return gerr
+		}); err != nil {
+			t.Fatalf("the reopened store no longer resolves the provisioned tenant: %v", err)
+		}
+		if got.TenantID != tenant || got.Slug != "acme" {
+			t.Fatalf("reopened store resolved org %+v, want the provisioned tenant %s/acme", got, tenant)
+		}
+	})
+
+	t.Run("without SYSTEM the upgraded binary is refused", func(t *testing.T) {
+		dsn := filepath.Join(t.TempDir(), "no-witness.db")
+		st1 := openWithoutTheFence(t, dsn)
+		provisionFenceTenantWithoutSystemWitness(t, st1, "acme")
+		_ = st1.Close()
+
+		st, err := upgradedOpen(dsn)
+		if err == nil {
+			_ = st.Close()
+			t.Fatal("a nonempty inventory without the SYSTEM witness was opened: the decoder no longer refuses it, and this file's fixture alignment would be hiding that")
+		}
+		if !errors.Is(err, store.ErrDirectoryUnavailable) {
+			t.Fatalf("reopen err = %v, want store.ErrDirectoryUnavailable", err)
+		}
+		if want := "nonempty directory inventory lacks SYSTEM witness"; !strings.Contains(err.Error(), want) {
+			t.Fatalf("reopen err = %q, want it to carry %q", err, want)
+		}
+	})
 }
 
 // TestOneStoresWritesAndItsArmingCannotOverlap pins what the SQLite side actually relies on in place

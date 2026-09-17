@@ -106,7 +106,16 @@ func newDeliveryDispatchSuccessorFixture(
 	t *testing.T,
 ) (deliveryDispatchServiceFixture, *deliveryDispatchSuccessorService) {
 	t.Helper()
-	fixture := newDeliveryDispatchServiceFixture(t)
+	return newDeliveryDispatchSuccessorFixtureFor(t, newDeliveryDispatchServiceFixture(t))
+}
+
+// newDeliveryDispatchSuccessorFixtureFor prepares one failed dispatch and the
+// successor service on an already-built dispatch fixture, for either backend.
+func newDeliveryDispatchSuccessorFixtureFor(
+	t *testing.T,
+	fixture deliveryDispatchServiceFixture,
+) (deliveryDispatchServiceFixture, *deliveryDispatchSuccessorService) {
+	t.Helper()
 	fixture.service.config.ResolutionTTL = time.Nanosecond
 	refused, err := sdk.NewDeliveryAttemptResult(
 		sdk.DeliveryAttemptRefusedBeforeBoundary,

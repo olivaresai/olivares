@@ -31,7 +31,7 @@ func registerWidget(reg store.ExtensionRegistry) error { return reg.Register(wid
 
 func TestModuleEntityRoundTripAndIsolation(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, registerWidget)
+	st := openInitializedSQLiteTest(t, initializedSQLiteWidget)
 	tenantA := provisionTenant(t, st, "alpha")
 	tenantB := provisionTenant(t, st, "bravo")
 
@@ -107,6 +107,9 @@ func TestRegistryValidationRejects(t *testing.T) {
 		{"bad index name", model.EntityDescriptor{Kind: "rrw.g", Table: "rrw_g",
 			Fields:  []model.FieldSpec{{Name: "a", Kind: model.KindText}},
 			Indexes: []model.IndexSpec{{Name: "Bad Name", Columns: []string{"a"}}}}},
+		{"read-only confined without lineage", model.EntityDescriptor{Kind: "rrw.h", Table: "rrw_h",
+			Fields:                    []model.FieldSpec{{Name: "workspace_id", Kind: model.KindUUID, Nullable: true}},
+			WorkspaceConfinedReadOnly: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -118,6 +121,28 @@ func TestRegistryValidationRejects(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRegistryAcceptsReadOnlyConfinedWithLineage is the positive counterpart of
+// the read-only case above: the flag with a complete lineage registers.
+func TestRegistryAcceptsReadOnlyConfinedWithLineage(t *testing.T) {
+	st, err := Open(context.Background(),
+		store.Config{Engine: store.EngineSQLite, DSN: ":memory:"},
+		func(reg store.ExtensionRegistry) error {
+			return reg.Register(model.EntityDescriptor{
+				Kind: "rrw.reader", Table: "rrw_reader",
+				Fields: []model.FieldSpec{{Name: "workspace_id", Kind: model.KindUUID, Nullable: true}},
+				WorkspaceLineage: model.WorkspaceLineageSpec{
+					Column: "workspace_id", Encoding: model.WorkspaceLineageID,
+					Unset: model.WorkspaceUnsetMeansDefault,
+				},
+				WorkspaceConfinedReadOnly: true,
+			})
+		})
+	if err != nil {
+		t.Fatalf("Open with read-only confined lineage: %v", err)
+	}
+	_ = st.Close()
 }
 
 // TestModuleUniqueIndexWithTenantAccepted is the positive counterpart: a unique

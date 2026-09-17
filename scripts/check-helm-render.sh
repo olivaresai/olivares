@@ -116,6 +116,43 @@ if grep -F -- 'podAffinity:' "$HA_BACKUP" >/dev/null; then
 fi
 echo "check-helm-render: OK HA backup uses BYPASSRLS dump DSN + emptyDir data"
 
+# The owner/app split (postgres.ownerDsnKey). `dr backup` boots the engine to build
+# the chain-tip manifest, and that boot runs the schema's DDL preflight — which the
+# application role cannot do in the split, where it is denied CREATE on the engine
+# schema by design. Both directions are asserted, because the flag is WRONG in the
+# single-role posture: a CronJob that always passed --owner-dsn would point the DDL
+# at a role that does not exist there.
+DR_BACKUP_BLOCK="$RUN_DIR/postgres-ha-dr-backup.yaml"
+sed -n '/- name: dr-backup/,$p' "$HA_BACKUP" >"$DR_BACKUP_BLOCK"
+if grep -F -- '--owner-dsn' "$DR_BACKUP_BLOCK" >/dev/null; then
+	echo "check-helm-render: FAIL the SINGLE-ROLE render passes --owner-dsn" >&2
+	exit 1
+fi
+render postgres-ha-backup-split-owner \
+	--set core.engine=postgres --set core.replicaCount=2 \
+	--set core.auditSigningKeySecret=audit-key --set postgres.dsnSecret=postgres-dsn \
+	--set postgres.adminDsnKey=admin-dsn --set postgres.ownerDsnKey=owner-dsn \
+	--set backup.enabled=true --set backup.kekSecret=dr-kek
+SPLIT_BACKUP_BLOCK="$RUN_DIR/postgres-ha-split-dr-backup.yaml"
+sed -n '/- name: dr-backup/,$p' "$RUN_DIR/postgres-ha-backup-split-owner.yaml" >"$SPLIT_BACKUP_BLOCK"
+grep -F -- '--owner-dsn=$(OLIVARES_OWNER_DSN)' "$SPLIT_BACKUP_BLOCK" >/dev/null || {
+	echo "check-helm-render: FAIL the split render does not pass --owner-dsn to dr backup" >&2
+	exit 1
+}
+grep -F -- 'key: owner-dsn' "$SPLIT_BACKUP_BLOCK" >/dev/null || {
+	echo "check-helm-render: FAIL the split render does not resolve postgres.ownerDsnKey" >&2
+	exit 1
+}
+# The dump stays on the read-only BYPASSRLS role: the owner is the DDL connection,
+# never the dump credential.
+SPLIT_PG_DUMP_BLOCK="$RUN_DIR/postgres-ha-split-pg-dump.yaml"
+sed -n '/- name: pg-dump/,/- name: dr-backup/p' "$RUN_DIR/postgres-ha-backup-split-owner.yaml" >"$SPLIT_PG_DUMP_BLOCK"
+if grep -F -- 'OLIVARES_OWNER_DSN' "$SPLIT_PG_DUMP_BLOCK" >/dev/null; then
+	echo "check-helm-render: FAIL pg_dump received the owner DSN; it must dump as the BYPASSRLS admin role" >&2
+	exit 1
+fi
+echo "check-helm-render: OK owner/app split wires --owner-dsn only when postgres.ownerDsnKey is set"
+
 # HA is intentionally independent of the per-node persistence toggle: its store
 # and keys are external, and both core and backup data volumes render as emptyDir.
 render postgres-ha-backup-on-persistence-off \
@@ -137,4 +174,4 @@ expect_reject sqlite-backup-without-persistence "backup.enabled requires core.pe
 	--set core.persistence.enabled=false \
 	--set backup.enabled=true --set backup.kekSecret=dr-kek
 
-echo "check-helm-render: PASS (7 valid renders; 4 invalid postures rejected)"
+echo "check-helm-render: PASS (8 valid renders; 4 invalid postures rejected)"

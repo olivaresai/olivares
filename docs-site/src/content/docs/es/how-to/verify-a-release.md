@@ -2,8 +2,8 @@
 title: Verifica lo que has descargado
 description: >-
   Verifica la firma de una release, su procedencia SLSA, el SBOM y las
-  atestaciones OpenVEX antes de ejecutarla — online (sin clave) o totalmente
-  offline (basado en clave). Nunca canalices un instalador directamente a un shell.
+  atestaciones OpenVEX antes de ejecutarla. Nunca canalices un instalador
+  directamente a un shell.
 ---
 
 Un control plane es un producto de seguridad, así que lo primero que deberías hacer con una
@@ -26,7 +26,8 @@ solo entonces ejecútalos. Los pasos de abajo explican cómo.
 | `*.sbom.sigstore.json` | SBOM (SPDX) como atestación in-toto firmada |
 | `*.vex.sigstore.json` | OpenVEX como atestación in-toto firmada |
 | `*.intoto.jsonl` | procedencia SLSA Build L3 |
-| imagen del contenedor + chart de Helm | publicados en un registro al lanzar la release, fijados por digest |
+| imagen del contenedor | publicada en GHCR y Docker Hub, verificada y fijada por digest |
+| fuente del chart de Helm | instalar desde `deploy/helm/olivares`; aún no hay chart OCI público |
 
 ## La ruta de un solo comando
 
@@ -35,22 +36,27 @@ verifica la firma sobre `checksums.txt`, recalcula el SHA-256 de cada artefacto,
 y luego verifica las atestaciones de SBOM, OpenVEX y SLSA.
 
 ```bash
-# Default: keyless (Sigstore). Needs network access to the transparency log (Rekor).
+# Default: keyless (Sigstore). Needs Rekor and Sigstore trusted-root material.
 scripts/verify-release.sh
 
-# Key-based (air-gap friendly): verify against the project's public key.
-scripts/verify-release.sh --key cosign.pub
-
-# Fully offline: no Rekor / no transparency-log network at all.
-scripts/verify-release.sh --key cosign.pub --offline
-
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.8.0
+scripts/verify-release.sh --source-tag v26.9.0
+
+# Key-based: only for files signed with a private key you control.
+# Releases are signed keyless and do not publish a public key.
+scripts/verify-release.sh --key /path/to/your-cosign.pub
 ```
 
-Con `--offline` (o siempre que se proporcione una clave) el script añade
-`--insecure-ignore-tlog` a cada llamada de cosign, así que no se usa ninguna red de Sigstore/Rekor —
-esta es la ruta para entornos desconectados.
+`--key` comprueba las firmas contra una clave pública en lugar de la identidad del workflow de
+release e ignora el registro de transparencia. Demuestra que los archivos se firmaron con la
+clave privada correspondiente, no que el proyecto los publicara. Obtén esa clave pública de su
+propietario por un canal separado de los archivos que verificas.
+
+`--offline` quita solo la consulta a Rekor de las llamadas de cosign; no hace que la verificación
+funcione sin red. La verificación sin clave sigue necesitando el material de raíz de confianza de
+Sigstore, que cosign descarga salvo que ya esté en caché, y el script no tiene la opción
+`--trusted-root`. La comprobación de los bundles de SBOM y OpenVEX necesita una raíz de confianza
+incluso con `--key`, y el paso de SLSA ejecuta `slsa-verifier` sin ninguna opción offline.
 
 ## Qué comprueba, paso a paso
 
@@ -125,9 +131,12 @@ Despliega siempre la imagen **por digest** (`@sha256:…`), nunca por una etique
 
 ## En un entorno aislado de red
 
-Si no puedes alcanzar la red en absoluto, usa el **bundle aislado de red**, que lleva una
-clave pública y verifica todo offline (sin Rekor). Consulta
-[Instala en un entorno aislado de red](/how-to/air-gap-install/).
+Un operador construye el **bundle aislado de red** con una clave cosign propia, y el bundle
+incluye la `cosign.pub` correspondiente. Sus scripts comprueban el chart de Helm y las imágenes
+guardadas contra esa clave sin Rekor; una imagen solo pasa si lleva una firma hecha con esa clave.
+Una clave tomada del mismo bundle que verifica no autentica ese bundle: antes de confiar en el
+bundle, compárala con una copia que el propietario de la clave te haya entregado por un canal
+separado. Consulta [Instala en un entorno aislado de red](/how-to/air-gap-install/).
 
 :::note[Nota honesta sobre la disponibilidad de atestaciones]
 La verificación es solo tan completa como las atestaciones que una release concreta haya

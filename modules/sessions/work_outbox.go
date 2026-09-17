@@ -20,15 +20,32 @@ import (
 var errWorkEventSinkUnwired = errors.New("sessions: work event sink unwired")
 
 type workOutboxClaim struct {
-	row      model.Record
-	envelope WorkEventEnvelope
+	row       model.Record
+	envelope  WorkEventEnvelope
+	candidate WorkOutboxCandidate
 }
 
-// DrainWorkOutbox publishes at most limit committed events. Network/sink work
-// occurs outside every store transaction. A lost settlement is recovered by
-// the expiring claim and Eventing deduplicates the stable EventID.
+// DrainWorkOutbox publishes at most limit committed events under the module's
+// mandatory outbox authority (UseWorkOutboxClaimAuthority): K1/K2 work facts
+// recover unconditionally, the communication and unknown families only when
+// the authority allows them at the claim AND the effect boundary. Network/sink
+// work occurs outside every store transaction. A lost settlement is recovered
+// by the expiring claim and Eventing deduplicates the stable EventID.
 func (m *Module) DrainWorkOutbox(ctx context.Context, tenant model.TenantID, limit int) error {
 	return m.drainWorkOutboxWithData(ctx, m.workData(tenant), tenant, limit, true)
+}
+
+// drainWorkOutboxWithData is the entry point without a caller restriction; the
+// policy variant below is the single implementation every entry point shares,
+// and it composes the mandatory authority on all of them.
+func (m *Module) drainWorkOutboxWithData(
+	ctx context.Context,
+	data workData,
+	tenant model.TenantID,
+	limit int,
+	allowDeadLetter bool,
+) error {
+	return m.drainWorkOutboxWithDataAndPolicy(ctx, data, tenant, limit, allowDeadLetter, nil)
 }
 
 // ValidateWorkOutboxReplay observes the same state as replay without writing.
@@ -539,12 +556,13 @@ func findWorkOutboxReplayReceipt(
 	return result, true, nil
 }
 
-func (m *Module) drainWorkOutboxWithData(
+func (m *Module) drainWorkOutboxWithDataAndPolicy(
 	ctx context.Context,
 	data workData,
 	tenant model.TenantID,
 	limit int,
 	allowDeadLetter bool,
+	caller WorkOutboxClaimPolicy,
 ) error {
 	if m.workEventSink == nil {
 		return errWorkEventSinkUnwired
@@ -555,13 +573,47 @@ func (m *Module) drainWorkOutboxWithData(
 	if limit > 200 {
 		limit = 200
 	}
+	// A joined protocol-replay frame is still inside the owning Mutate. Claim
+	// or ingest here opens a nested store transaction against that parent
+	// (SQLite connection / PostgreSQL lineage lock). Record the actual request
+	// and return; the owner flushes once after that Mutate commits.
+	if _, joined := protocolReplayScopeFromContext(ctx, tenant); joined {
+		if collector := protocolReplayDeferredDrainCollector(ctx, tenant); collector != nil {
+			collector.record(deferredWorkOutboxDrain{
+				module: m, ctx: ctx, data: data, tenant: tenant, limit: limit,
+				allowDeadLetter: allowDeadLetter, caller: caller,
+			})
+		}
+		return nil
+	}
+	// One composed policy for the whole drain: the module's mandatory authority
+	// first, the caller's restriction second. Every entry point (the Apply
+	// nudge, DrainWorkOutbox, the periodic pump) reaches the sink only through
+	// this loop, so no caller can bypass the authority with a nil policy.
+	policy := m.composeWorkOutboxPolicy(caller)
 	for i := 0; i < limit; i++ {
-		claim, ok, err := m.claimWorkOutbox(ctx, data, tenant, allowDeadLetter)
+		claim, ok, err := m.claimWorkOutbox(ctx, data, tenant, allowDeadLetter, policy)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			return nil
+		}
+		// Effect boundary: the claim transaction committed, so re-ask the
+		// CURRENT authority before any byte leaves the process. A withdrawal
+		// here returns the claim through the ordinary settlement with its own
+		// cause and stops this drain; nothing is marked published and nothing
+		// spins, because the next claim re-samples the same authority.
+		allow, policyErr := policy.AllowWorkOutboxEffect(ctx, claim.candidate)
+		if policyErr != nil || !allow {
+			effectErr := ErrWorkOutboxAuthorityWithdrawn
+			if policyErr != nil {
+				effectErr = fmt.Errorf("%w: %w", ErrWorkOutboxAuthorityWithdrawn, policyErr)
+			}
+			if err := m.settleWorkOutbox(ctx, data, claim, effectErr); err != nil {
+				return err
+			}
+			return effectErr
 		}
 		deliveryErr := m.workEventSink.IngestDurable(ctx, claim.envelope)
 		if err := m.settleWorkOutbox(ctx, data, claim, deliveryErr); err != nil {
@@ -582,6 +634,7 @@ func (m *Module) claimWorkOutbox(
 	data workData,
 	tenant model.TenantID,
 	allowDeadLetter bool,
+	policy WorkOutboxClaimPolicy,
 ) (workOutboxClaim, bool, error) {
 	var claim workOutboxClaim
 	var found bool
@@ -617,7 +670,7 @@ func (m *Module) claimWorkOutbox(
 			return err
 		}
 		row, ev, candidateFound, err := firstClaimableWorkOutbox(
-			ctx, events, repo, pendingFilters, deliveringFilters,
+			ctx, events, repo, pendingFilters, deliveringFilters, tenant, policy,
 		)
 		if err != nil {
 			return err
@@ -642,7 +695,7 @@ func (m *Module) claimWorkOutbox(
 			AggregateID: model.ID(ev.String(colEventAggregateID)), Sequence: ev.Int(colEventSeq),
 			Type: ev.String(colEventType), OccurredAt: ev.String(colEventOccurredAt),
 			Payload: []byte(ev.String(colEventPayload)),
-		}}
+		}, candidate: workOutboxCandidateFromEvent(tenant, ev)}
 		found = true
 		return nil
 	})
@@ -655,8 +708,10 @@ func firstClaimableWorkOutbox(
 	outbox store.GenericRepo,
 	pendingFilters []model.Filter,
 	deliveringFilters []model.Filter,
+	tenant model.TenantID,
+	policy WorkOutboxClaimPolicy,
 ) (model.Record, model.Record, bool, error) {
-	row, event, found, err := firstReadyWorkOutbox(ctx, events, outbox, pendingFilters)
+	row, event, found, err := firstReadyWorkOutbox(ctx, events, outbox, pendingFilters, tenant, policy)
 	var firstEvidenceErr error
 	if err != nil {
 		if !candidateWorkOutboxEvidenceError(err) {
@@ -667,7 +722,7 @@ func firstClaimableWorkOutbox(
 		return row, event, true, nil
 	}
 
-	row, event, found, err = firstReadyWorkOutbox(ctx, events, outbox, deliveringFilters)
+	row, event, found, err = firstReadyWorkOutbox(ctx, events, outbox, deliveringFilters, tenant, policy)
 	if err != nil {
 		if !candidateWorkOutboxEvidenceError(err) {
 			return nil, nil, false, err
@@ -689,6 +744,8 @@ func firstReadyWorkOutbox(
 	events store.GenericRepo,
 	outbox store.GenericRepo,
 	filters []model.Filter,
+	tenant model.TenantID,
+	policy WorkOutboxClaimPolicy,
 ) (model.Record, model.Record, bool, error) {
 	query := model.Query{Filters: filters, Limit: 100}
 	var firstEvidenceErr error
@@ -727,9 +784,22 @@ func firstReadyWorkOutbox(
 				}
 				continue
 			}
-			if ready {
-				return candidate, event, true, nil
+			if !ready {
+				continue
 			}
+			if policy != nil {
+				// The policy sees a payload-free projection and answers inside the
+				// claim transaction. A refusal leaves the row untouched for a later
+				// tick; an error is "could not look" and aborts the whole drain.
+				allow, policyErr := policy.AllowWorkOutboxClaim(ctx, workOutboxCandidateFromEvent(tenant, event))
+				if policyErr != nil {
+					return nil, nil, false, unknown("claim_policy_unavailable", policyErr)
+				}
+				if !allow {
+					continue
+				}
+			}
+			return candidate, event, true, nil
 		}
 		if !page.HasMore || page.Cursor == "" {
 			if firstEvidenceErr != nil {
@@ -931,7 +1001,11 @@ func (m *Module) settleWorkOutbox(
 		row[colOutboxClaimOwner], row[colOutboxClaimUntil] = nil, nil
 		if deliveryErr == nil {
 			row[colOutboxState], row[colOutboxPublishedAt], row[colOutboxLastOutcome] = "published", now.String(), "published"
-		} else if row.Int(colOutboxAttempts) >= 10 {
+		} else if row.Int(colOutboxAttempts) >= 10 && !errors.Is(deliveryErr, ErrWorkOutboxAuthorityWithdrawn) {
+			// An authority withdrawal never reached the sink, so it is not a
+			// delivery failure and must not exhaust delivery retries into a
+			// dead letter; it takes the backoff branch below however often it
+			// happens and stays recoverable by the next authorized drain.
 			row[colOutboxState], row[colOutboxLastOutcome] = "dead_letter", "retry_exhausted"
 			_, findingErr := sc.Findings().Create(ctx, model.Finding{
 				Kind: "delivery", Severity: model.SeverityHigh, Status: model.FindingOpen,
@@ -968,6 +1042,8 @@ func classifySinkFailure(err error) string {
 	switch {
 	case err == nil:
 		return "published"
+	case errors.Is(err, ErrWorkOutboxAuthorityWithdrawn):
+		return "authority_withdrawn"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "deadline"
 	case errors.Is(err, context.Canceled):

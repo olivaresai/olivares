@@ -32,7 +32,7 @@
 //
 // A log entry naming no model or carrying no usable token count is skipped.
 //
-// # Minimal data (docs/SECURITY-HARDENING.md-3)
+// # Minimal data (docs/SECURITY-HARDENING.md §2-3)
 //
 // Only structural usage metadata is read: model, provider, tokens, cost,
 // duration, status, timestamp, and operator-configured attribution metadata

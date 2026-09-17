@@ -136,6 +136,8 @@ func (r *Runtime) startSources(ctx context.Context) {
 			r.fail(&s.status, &s.err, "source", s.name, "open", err)
 			continue
 		}
+		// Each source gets its OWN cfg (cloned at registration), so two sources of
+		// one connector kind cannot see each other's settings through a shared map.
 		// Per-source ctx/done: a child of runCtx so Stop's single cancel
 		// still cascades to every source, yet this one source can be canceled
 		// alone for a live remove/rotate. done is closed by gatherLoop on exit.
@@ -150,11 +152,24 @@ func (r *Runtime) startSources(ctx context.Context) {
 // sinkFor builds the Sink a source's Gather emits to: the configured SinkFactory
 // when set (a collector pushes to a remote core), else the default that lifts each
 // observation onto the local event bus.
-func (r *Runtime) sinkFor(tenant, source string) sdk.Sink {
+//
+// `source` is the source's REGISTRATION name, and that is the whole provenance
+// contract: an event emitted by the roster row "grok-home-a" carries
+// Source="grok-home-a", not the connector descriptor its sibling also has. A
+// legacy, name-less registration still carries the descriptor, so the value those
+// callers produced does not change. The connector never chooses this attribution —
+// the host stamps it — and it is an INGESTION-INSTANCE label, not an assertion
+// about a provider, a process, a home or a user (see event.Event.Source).
+//
+// A REGISTERED source (B1) additionally carries its roster snapshot, which the
+// local bus sink stamps on every event. A collector's SinkFactory does not: the
+// push envelope has no such field, and the receiving engine authenticates only
+// the tenant, so those events arrive unattributed by construction.
+func (r *Runtime) sinkFor(tenant, source string, registration *event.SourceRegistration) sdk.Sink {
 	if r.sinkFactory != nil {
 		return r.sinkFactory(tenant, source)
 	}
-	return &busSink{bus: r.bus, tenant: tenant, source: source}
+	return &busSink{bus: r.bus, tenant: tenant, source: source, registration: registration, admit: r.sourceAdmission}
 }
 
 // gatherLoop runs a source according to its schedule. A one-shot/streaming source
@@ -169,7 +184,7 @@ func (r *Runtime) gatherLoop(s *sourceReg) {
 	// Signal THIS source's drain so a live remove/rotate can wait for
 	// exactly this goroutine to exit, rather than the engine-wide WaitGroup.
 	defer close(s.done)
-	sink := r.sinkFor(s.tenant, s.name)
+	sink := r.sinkFor(s.tenant, s.name, s.registration)
 
 	if s.poll <= 0 {
 		r.runGatherOnce(s, sink, false)
@@ -218,10 +233,10 @@ func (r *Runtime) runGatherOnce(s *sourceReg, sink sdk.Sink, keepRunning bool) b
 		return err == nil
 	case err != nil:
 		if keepRunning {
-			r.log.Warn("runtime: source gather failed; will retry", "source", s.name, "error", err)
+			r.log.Warn("runtime: source gather failed; will retry", "source", s.name, "component", s.component, "error", err)
 			r.recordErr(&s.err, err)
 		} else {
-			r.log.Warn("runtime: source gather failed; left down", "source", s.name, "error", err)
+			r.log.Warn("runtime: source gather failed; left down", "source", s.name, "component", s.component, "error", err)
 			r.set(&s.status, &s.err, StatusFailed, err)
 		}
 		return false
@@ -346,7 +361,7 @@ func (r *Runtime) Stop(ctx context.Context) error {
 
 	for _, s := range sources {
 		if err := safe(func() error { return s.conn.Close(ctx) }); err != nil {
-			r.log.Warn("runtime: source close failed", "source", s.name, "error", err)
+			r.log.Warn("runtime: source close failed", "source", s.name, "component", s.component, "error", err)
 		}
 		r.markStoppedUnlessFailed(&s.status, &s.err)
 	}

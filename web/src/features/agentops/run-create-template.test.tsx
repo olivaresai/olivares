@@ -15,13 +15,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
-vi.mock('./api', () => ({
-  agentOpsApi: { createRun: vi.fn(), listWorkspaces: vi.fn() },
-  agentOpsKeys: {
-    all: (t: string | null) => ['agentops', t],
-    workspaces: (t: string | null) => ['agentops', t, 'ws'],
-  },
-}))
+vi.mock('./api', async (orig) => {
+  const real = (await orig()) as Record<string, unknown>
+  return {
+    ...real,
+    agentOpsApi: {
+      createRun: vi.fn(),
+      listWorkspaces: vi.fn(),
+      listProfiles: vi.fn(),
+      profileLaunchReadiness: vi.fn(),
+    },
+  }
+})
 vi.mock('@/features/workspace-templates/api', () => ({
   templatesApi: { list: vi.fn(), apply: vi.fn() },
   templatesKeys: {
@@ -35,6 +40,7 @@ vi.mock('@/components/ui/toaster', () => ({
 
 import { templatesApi } from '@/features/workspace-templates/api'
 import { agentOpsApi } from './api'
+import { fixtureReadiness } from './launch-readiness.fixture'
 import { RunCreateDialog } from './run-create-dialog'
 
 const tpl = {
@@ -68,11 +74,28 @@ beforeEach(() => {
     items: [],
     has_more: false,
   })
+  vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+    items: [
+      {
+        profile_ref: 'ppf_a',
+        driver: 'claude',
+        environment_ref: 'xenv_1',
+        display_name: 'Home A',
+        state: 'active',
+        local_environment: true,
+        operable: true,
+      },
+    ],
+    has_more: false,
+  })
   vi.mocked(templatesApi.list).mockResolvedValue({
     items: [tpl],
     has_more: false,
   })
   vi.mocked(agentOpsApi.createRun).mockResolvedValue({} as never)
+  vi.mocked(agentOpsApi.profileLaunchReadiness).mockResolvedValue(
+    fixtureReadiness(),
+  )
 })
 
 describe('RunCreateDialog — workspace templates', () => {
@@ -86,6 +109,8 @@ describe('RunCreateDialog — workspace templates', () => {
       has_more: true,
     })
     wrap()
+    await userEvent.click(await screen.findByLabelText('Provider profile'))
+    await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
     expect(
       await screen.findByText('Loaded 17 templates; there are more'),
     ).toBeVisible()
@@ -97,9 +122,14 @@ describe('RunCreateDialog — workspace templates', () => {
       conflicts: [],
     })
     wrap('tpl-1')
+    await userEvent.click(await screen.findByLabelText('Provider profile'))
+    await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
+    expect(
+      await screen.findByText('Local requirements checked'),
+    ).toBeInTheDocument()
 
     await userEvent.click(
-      screen.getByRole('button', { name: /create & launch/i }),
+      screen.getByRole('button', { name: /request launch/i }),
     )
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalled())
 
@@ -117,8 +147,13 @@ describe('RunCreateDialog — workspace templates', () => {
 
   it('sends no template_id when none is chosen', async () => {
     wrap()
+    await userEvent.click(await screen.findByLabelText('Provider profile'))
+    await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
+    expect(
+      await screen.findByText('Local requirements checked'),
+    ).toBeInTheDocument()
     await userEvent.click(
-      screen.getByRole('button', { name: /create & launch/i }),
+      screen.getByRole('button', { name: /request launch/i }),
     )
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalled())
 
@@ -140,12 +175,14 @@ describe('RunCreateDialog — workspace templates', () => {
       ],
     })
     wrap('tpl-1')
+    await userEvent.click(await screen.findByLabelText('Provider profile'))
+    await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
 
     // The refusal is shown BEFORE the launch, not as a surprise 422 after pressing it.
     expect(
       await screen.findByText(/does not provision hooks/i),
     ).toBeInTheDocument()
-    const submit = screen.getByRole('button', { name: /create & launch/i })
+    const submit = screen.getByRole('button', { name: /request launch/i })
     await waitFor(() => expect(submit).toBeDisabled())
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
@@ -160,6 +197,8 @@ describe('RunCreateDialog — workspace templates', () => {
       merged: { permission_mode: 'dontAsk', allowed_tools: ['Read'] },
     })
     wrap('tpl-1')
+    await userEvent.click(await screen.findByLabelText('Provider profile'))
+    await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
     expect(
       await screen.findByText(/human approval|approval|recorded/i),
     ).toBeInTheDocument()
@@ -177,6 +216,8 @@ describe('RunCreateDialog — workspace templates', () => {
       ],
     })
     wrap('tpl-1')
+    await userEvent.click(await screen.findByLabelText('Provider profile'))
+    await userEvent.click(await screen.findByRole('option', { name: /Home A/ }))
 
     // Scoped to the override list: "dontAsk" is also a permission-mode option, so a
     // bare text match would pass on the select and prove nothing.
@@ -185,10 +226,13 @@ describe('RunCreateDialog — workspace templates', () => {
     expect(entry).not.toBeNull()
     expect(entry).toHaveTextContent('bypassPermissions')
     expect(entry).toHaveTextContent('dontAsk')
+    expect(
+      await screen.findByText('Local requirements checked'),
+    ).toBeInTheDocument()
     // An override is not a refusal: the launch stays available.
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /create & launch/i }),
+        screen.getByRole('button', { name: /request launch/i }),
       ).not.toBeDisabled(),
     )
   })

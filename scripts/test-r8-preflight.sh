@@ -130,12 +130,10 @@ grep -qE 'NO SE.*TMPDIR ejecutable' "$WORK/o2.txt" && ok "TMPDIR no escribible =
 [ "$rc_tmp" = "2" ] && ok "y el guion sale 2, no 1" "rc=2" || malo "salió rc=$rc_tmp, no 2"
 grep -q 'NO HE PODIDO HACER' "$WORK/o2.txt" && ok "y lo dice en el resumen" || malo "el resumen no lo distingue"
 
-# 6 bis · ⛔ LOS RESIDUOS DE `task build`, en las dos direcciones. `task build` compila trece
-#    conectores en `cmd/olivares/firstparty/bins/` y el censo C03-41 exige que ahi SOLO este
-#    PLACEHOLDER; mide el DISCO, asi que ficheros sin trackear lo rompen igual. Como el pre-vuelo
-#    manda construir el binario, quien prepare el arbol se queda con los residuos y su siguiente
-#    push muere sin relacion aparente. Lo reporto N tras perder un push, y me alcanzo con el mio
-#    ya en vuelo.
+# 6 bis · LOS RESIDUOS DE `task build`, en las dos direcciones. `task build` compila trece
+#    conectores ignorados en `cmd/olivares/firstparty/bins/`. a repository gate hizo que el censo lea el
+#    indice y que el test de dominios limpie al salir; este pre-vuelo conserva la guarda como
+#    higiene para no retener ~249 MB en el arbol de capturas una vez construido el binario.
 mkdir -p "$WORK/r8/cmd/olivares/firstparty/bins"
 : >"$WORK/r8/cmd/olivares/firstparty/bins/PLACEHOLDER"
 R8_DIR="$WORK/r8" bash "$GUION" HEAD >"$WORK/o4.txt" 2>&1

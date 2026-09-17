@@ -964,6 +964,72 @@ func (s guardRolloutSummary) log() {
 //
 // On SQLite it returns immediately: the runner is PostgreSQL-only, and SQLite's append-only
 // defense is its unconditional trigger pair.
+// bridgeGuardEditionPredecessor converges the immediate predecessor of a module edge so
+// this boot can cross it.
+//
+// It reports whether it did anything. A false with no error means the target history is
+// simply unreadable for a reason no predecessor can fix, and the caller returns the
+// original diagnosis rather than this function's.
+//
+// THE PARENT IS SELECTED, NOT ASSUMED. An edition that carries the access-evidence delta
+// has two compiled parents — one across a module delta and one across DA — and only the
+// module one is this seam's business. The DA parent is skipped rather than refused,
+// because on a database that reached here through it the edge is already crossed.
+func bridgeGuardEditionPredecessor(
+	ctx context.Context,
+	mdb dialect.Execer,
+	dia dialect.Dialect,
+	m guardManifest,
+	observerDSN string,
+	hardened bool,
+	session func(ctx context.Context) (rowQuerier, func(), error),
+) (bool, error) {
+	graph, err := guardEditionGraphFor(m)
+	if err != nil {
+		return false, err
+	}
+	edges, err := graph.predecessorEdges(m.CodeEpoch)
+	if err != nil {
+		return false, err
+	}
+	for _, edge := range edges {
+		delta, derr := guardEditionEdgeDelta(edge.From.CodeEpoch, edge.To.CodeEpoch)
+		if derr != nil {
+			return false, derr
+		}
+		if delta != guardDeltaCommunication && delta != guardDeltaProtocol {
+			continue
+		}
+		predecessorHistory, perr := verifyGuardEditionHistory(ctx, mdb, dia, edge.From)
+		if perr != nil || !guardEditionPostModuleSourceReady(edge, predecessorHistory) {
+			continue
+		}
+		predecessorTables := make([]string, 0, len(edge.From.Specs))
+		for _, spec := range edge.From.Specs {
+			predecessorTables = append(predecessorTables, spec.Key.Relation)
+		}
+		if _, bridgeErr := runAppendOnlyGuardUnits(ctx, mdb, dia, predecessorTables,
+			observerDSN, hardened, session); bridgeErr != nil {
+			return false, fmt.Errorf("sqlstore: complete epoch-%d predecessor before epoch-%d transition: %w",
+				edge.From.CodeEpoch, m.CodeEpoch, bridgeErr)
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// guardEditionPostModuleSourceReady is what a module edge demands of its source: a
+// completed v7 always, and a completed v9 as well when the source already carries the
+// access-evidence delta. Without the second half an E5 whose v9 transaction never
+// committed could be walked forward to E6 as though it had.
+func guardEditionPostModuleSourceReady(edge guardManifestEdge, history guardEditionHistory) bool {
+	membership, ok := guardEditionMembershipForEpoch(edge.From.CodeEpoch)
+	if ok && membership.has(guardDeltaAccessEvidence) {
+		return guardEditionHistoryCompletesV9(history)
+	}
+	return guardEditionHistoryCompletesV7(history.Kind)
+}
+
 func runAppendOnlyGuardUnits(
 	ctx context.Context,
 	mdb dialect.Execer,
@@ -992,40 +1058,33 @@ func runAppendOnlyGuardUnits(
 	// them independently would accept cross-products no writer can commit (for example an
 	// epoch-1 bootstrap beside an epoch-2 inventory).
 	history, err := verifyGuardEditionHistory(ctx, mdb, dia, m)
-	if err != nil && m.CodeEpoch >= 3 {
-		// A direct epoch-1 -> current boot performs 1->2 inside core v7. On
-		// PostgreSQL each predecessor rollout may still be pending and may not be
-		// treated as ready for the next edge. Finish the exact immediate predecessor
-		// with the ordinary runner, under this same migration lock; recursion walks
-		// every compiled edge in order. SQLite has no gate, but the same exact chain
-		// keeps its inventory and receipts attributable.
-		edge, ok, edgeErr := guardManifestEditionEdge(m)
-		if edgeErr != nil {
-			return summary, edgeErr
+	if err != nil {
+		// A boot that has to cross more than one module edge arrives here with the
+		// target history unreadable, because the database is still standing at an
+		// earlier edition whose rollout may not even be closed yet. Finish the exact
+		// immediate predecessor with the ordinary runner, under this same migration
+		// lock; the recursion then walks every compiled edge in order.
+		//
+		// ONLY the module deltas are crossed this way. The directory edge belongs to
+		// core v7 and the access-evidence edge to core v9: both create relations inside
+		// their own migration transaction, and a seam that could cross them here would
+		// be authorizing an edition whose objects no migration made.
+		bridged, bridgeErr := bridgeGuardEditionPredecessor(ctx, mdb, dia, m, observerDSN, hardened, session)
+		if bridgeErr != nil {
+			return summary, bridgeErr
 		}
-		if ok {
-			predecessorHistory, predecessorErr := verifyGuardEditionHistory(ctx, mdb, dia, edge.From)
-			if predecessorErr == nil && guardEditionHistoryCompletesV7(predecessorHistory.Kind) {
-				predecessorTables := make([]string, 0, len(edge.From.Specs))
-				for _, spec := range edge.From.Specs {
-					predecessorTables = append(predecessorTables, spec.Key.Relation)
-				}
-				if _, bridgeErr := runAppendOnlyGuardUnits(ctx, mdb, dia, predecessorTables,
-					observerDSN, hardened, session); bridgeErr != nil {
-					return summary, fmt.Errorf("sqlstore: complete epoch-%d predecessor before epoch-%d transition: %w",
-						edge.From.CodeEpoch, m.CodeEpoch, bridgeErr)
-				}
-				history, err = verifyGuardEditionHistory(ctx, mdb, dia, m)
-			}
+		if bridged {
+			history, err = verifyGuardEditionHistory(ctx, mdb, dia, m)
 		}
 	}
 	if err != nil {
 		return summary, err
 	}
 	// Module editions are deliberately crossed here: core v7 runs before module tables,
-	// while this seam runs after authored module migrations and before the ordinary unit
-	// runner. A completed immediate predecessor is therefore evidence to begin exactly
-	// one transition, not permission to skip missing module objects or an intermediate edge.
+	// core v9 before them too, while this seam runs after authored module migrations and
+	// before the ordinary unit runner. A completed immediate predecessor is therefore
+	// evidence to begin exactly one transition, not permission to skip missing module
+	// objects or an intermediate edge.
 	if history.Kind == guardEditionHistoryPredecessorV7 {
 		history, err = transitionGuardEditionAfterModules(ctx, mdb, dia, m, history)
 		if err != nil {
@@ -1333,9 +1392,35 @@ func transitionGuardEditionAfterModules(
 	current guardManifest,
 	history guardEditionHistory,
 ) (guardEditionHistory, error) {
-	if current.CodeEpoch < 3 || history.Kind != guardEditionHistoryPredecessorV7 {
-		return history, fmt.Errorf("%w: post-module transition needs an epoch-3-or-later target over a completed immediate predecessor, got epoch %d history %q",
+	if history.Kind != guardEditionHistoryPredecessorV7 {
+		return history, fmt.Errorf("%w: post-module transition needs a completed immediate predecessor, got epoch %d history %q",
 			ErrGuardManifestNoEdge, current.CodeEpoch, history.Kind)
+	}
+	graph, err := guardEditionGraphFor(current)
+	if err != nil {
+		return history, err
+	}
+	edge, err := graph.edge(history.ParentEpoch, current.CodeEpoch)
+	if err != nil {
+		return history, err
+	}
+	// THE SEAM'S OWN BOUNDARY. It may cross the two module deltas and nothing else: the
+	// directory relations are core v7's and the access-evidence relations are core v9's,
+	// each created inside its own migration transaction. A transition committed here for
+	// either would activate an edition whose objects this code never made — and on the
+	// access-evidence edge specifically it would be exactly the "create DA in reconcile"
+	// path the contract forbids.
+	delta, err := guardEditionEdgeDelta(edge.From.CodeEpoch, edge.To.CodeEpoch)
+	if err != nil {
+		return history, err
+	}
+	if delta != guardDeltaCommunication && delta != guardDeltaProtocol {
+		return history, fmt.Errorf("%w: the post-module seam cannot cross the %s edge %d -> %d; that delta belongs to a core migration",
+			ErrGuardManifestNoEdge, delta, edge.From.CodeEpoch, edge.To.CodeEpoch)
+	}
+	if !guardEditionPostModuleSourceReady(edge, history) {
+		return history, fmt.Errorf("%w: edition %d cannot cross the %s edge from %d: its source history %q has not completed the core migration that establishes it",
+			ErrGuardManifestNoEdge, current.CodeEpoch, delta, edge.From.CodeEpoch, history.Kind)
 	}
 	tx, err := mdb.BeginTx(ctx, nil)
 	if err != nil {
@@ -1367,7 +1452,7 @@ func transitionGuardEditionAfterModules(
 				current.CodeEpoch, len(refusals), len(current.Specs), refusals[0])
 		}
 	}
-	if err := transitionGuardEditionInTx(ctx, tx, dia, current, history, plans, openCurrent); err != nil {
+	if err := transitionGuardEditionInTx(ctx, tx, dia, current, edge, history, plans, openCurrent); err != nil {
 		return history, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -2186,6 +2271,19 @@ func verifyGuardReceiptCensus(rollout guardRolloutContext, plans []guardUnitPlan
 			return ierr
 		}
 		k := receiptLookupKey(id, guardReceiptKindBootstrap)
+		allowed[k] = true
+		bootstrapKeys[k] = true
+	}
+	// AND CORE v9 ADDS ONE MORE, on the fresh and direct paths. It is the same argument
+	// as the two above and it had to be made again: the v9 completion witness is written
+	// under this same derived rollout id, so a census that did not recognize its distinct
+	// unit identity read it as a plan unit somebody smuggled into the stream — and
+	// refused every boot of a correctly upgraded database. ALLOWED, never required: a
+	// guarded transition writes an edge seal instead and holds no v9 completion at all.
+	if v9ID, ierr := guardAccessEvidenceV9SealUnitID(rollout.Format, metaSpecs[0].Key); ierr != nil {
+		return ierr
+	} else {
+		k := receiptLookupKey(v9ID, guardReceiptKindBootstrap)
 		allowed[k] = true
 		bootstrapKeys[k] = true
 	}

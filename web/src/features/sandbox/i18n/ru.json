@@ -181,6 +181,8 @@
     "baseline": "Baseline variant",
     "candidate": "Candidate variant",
     "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
-    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs."
+    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs.",
+    "liveRef": "Ссылка на экземпляр сеанса",
+    "legacySessionRef": "Ссылка на прежний сеанс (альтернатива)"
   }
 }

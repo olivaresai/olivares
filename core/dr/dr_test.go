@@ -75,12 +75,13 @@ func makeBundle(t *testing.T, e *estate) builtBundle {
 	if err != nil {
 		t.Fatalf("create bundle: %v", err)
 	}
-	if err := dr.WriteBundle(f, dr.BundleInput{
+	bundleInput := dr.BundleInput{
 		Manifest:     m,
 		KEK:          cipher.Params(),
 		SnapshotPath: snap,
 		SealedKeys:   map[string][]byte{keyRef.File: sealed},
-	}); err != nil {
+	}
+	if err := dr.WriteAuthenticatedBundle(f, bundleInput, cipher); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	if err := f.Close(); err != nil {

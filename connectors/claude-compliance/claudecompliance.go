@@ -8,7 +8,7 @@
 // output connector exports — turning the Claude platform's own activity log into
 // auditable, eDiscovery-grade evidence inside the control plane.
 //
-// READ-ONLY BY CONSTRUCTION (docs/SECURITY-HARDENING.md-3). Every call is a GET via the shared
+// READ-ONLY BY CONSTRUCTION (docs/SECURITY-HARDENING.md §0-3). Every call is a GET via the shared
 // GET-only modelprovider client, so this connector CANNOT perform the destructive
 // content-DELETE operations the Compliance API also exposes — that is deliberate. The
 // hard-delete endpoints (eDiscovery / GDPR erasure of chats/files/projects) are

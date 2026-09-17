@@ -1,39 +1,49 @@
 ---
 title: 控制台参考——每个屏幕及其所需权限
 description: >-
-  Olivares AI 控制台发布的每条路由，按五个中心分组，并列出各自需要的 RBAC
-  权限及产品内帮助链接打开的参考页面。由控制台自己的路由清单生成。
+  Olivares AI 控制台发布的每条路由，按历史中心类别编制索引，并列出各自需要的
+  RBAC 权限及产品内帮助链接打开的参考页面。由控制台自己的路由清单生成。
 ---
 
 本页是控制台的地图。它列出**应用挂载的每条路由**——不是选集，也不是某人记得
 写下的那些——以及主体进入路由所需的权限和更多信息所在的位置。
 
+当前侧边栏是**带分区的九个区域**，不是五个中心。在概览之后，它只渲染该主体
+实际可以打开的区域，每个区域都有目录页和可展开的模块，底部固定设置。导航过滤
+会把分组树替换成已授权匹配项的排序列表；命令面板使用同一索引、同一排序和同一
+权限投影。区域目录是链接页——列出你的权限允许的条目——不是能力、可用性或就绪
+状态的实时读数。
+
 本页是**生成的**。名册来自 `web/src/features/route-census.json`，这是一份只追加的
 清单，`registry.route-conservation.test.ts` 会将它与构建后的路由器固定比对，因此
 任何屏幕的新增、移动或丢失都会引起本页变化。每个屏幕的名称和单行描述都是
 **控制台自己的字符串**，来自侧边栏使用的同一翻译目录，所以你在这里读到的就是
-在产品中看到的内容。
+在产品中看到的内容。下面的表格仍按五个历史中心类别（运行、自动化、连接、治理、
+证明）以及登录、设置和账户来分组这些行。这是索引，不是当前侧边栏顺序。九个区域
+目录页目前与功能注册表之外挂载的路由列在同一张表中。
 
 :::note[权限由引擎强制实施，而不是由此表实施]
-`需要`列是控制台在提供路由前检查的权限，它映射引擎的 RBAC。引擎仍是权威：直接
-访问你没有权限的屏幕时，API 会拒绝请求，而不只是从侧边栏隐藏它。请参阅
-[角色与权限](/zh/reference/modules/vi-governance/)。
+`需要`列说明控制台在提供路由前，根据引擎返回的有效权限检查哪些权限。
+引擎独立授权 API 请求，包括来自控制台之外的请求。条目可见并不表示模块已完成配置或
+已准备好运行。请参阅[角色与权限](/zh/reference/modules/vi-governance/)。
 :::
 
 ## 如何阅读本页
 
-- **屏幕**——侧边栏和命令面板使用的名称。
+- **屏幕**——侧边栏、区域目录和命令面板使用的名称。
 - **路径**——相对于部署控制台 origin 的 URL。它是已发布契约：书签、runbook
   深层链接和文档交叉引用都使用这段字符串。
 - **需要**——RBAC 权限。`任何已登录用户`表示路由向所有已认证主体开放；
   **无需登录**表示它在建立任何会话前即可提供。
 - **参考**——控制台为该屏幕提供的帮助链接所打开的页面。
 
-下面五个标题是控制台的中心，顺序与侧边栏渲染顺序相同。
+下面的标题是生成索引使用的历史中心类别，不是侧边栏的渲染顺序。当前侧边栏按
+如下顺序列出区域：基础设施、AI、数据与上下文、工作与通信、自动化、安全与身份、
+部署、可观测性与证据，然后是系统与设置。
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **59 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **75 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 运维
@@ -43,10 +53,17 @@ description: >-
 | 概览 | `/` | 基础设施总览和健康情况 | 任何已登录用户 | [文档主页](/zh/) |
 | Claude Code | `/agentops` | 创建、接入并治理 Claude Code 会话——无需 SSH | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
 | 备份 | `/backups` | 触发、计划、下载和恢复备份，并在破坏性路径上进行第二次确认。 | `system:admin` | [how-to/backup-and-restore](/zh/how-to/backup-and-restore/) |
+| 通信 | `/communications` | 所选工作区的频道、直接通知与个人收件箱 | `sessions:channel:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 频道管理 | `/communications/administration` | 管理频道：配置与授权历史，每次操作都在频道当前 ETag 下 | `sessions:channel:admin` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 交接 | `/communications/handoffs` | 发给你的工作责任交接提议：阅读上下文后接受或拒绝 | `sessions:delivery:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 通信收件箱 | `/communications/inbox` | 你的精确收件箱：仅发给你的投递，每次重新读取并显式确认 | `sessions:delivery:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 新建频道 | `/communications/new` | 以显式初始授权创建频道 | `sessions:channel:write` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 健康与 SLA | `/health` | Agent 和 MCP 的运行时间及 SLA | `health:status:read` | [reference/modules/xxii-health](/zh/reference/modules/xxii-health/) |
 | 紧急开关 | `/killswitch` | 紧急停止、双人控制恢复和 guardian 遏制 | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/zh/how-to/cookbook/kill-switch-drill/) |
 | 日志 | `/logs` | 实时引擎日志流，可按级别和模块过滤，并支持搜索和暂停。 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
+| 来源绑定 | `/provider-bindings` | 将已配置的来源，以本节点应用的修订版本，专用于提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 提供商配置文件 | `/provider-profiles` | 登记并管理会话启动所依据的提供商主目录，并按需读取其配置 | `sessions:profile:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 沙箱 | `/sandbox` | 隔离的 Agent 测试与重放 | `sandbox:run:read` | [reference/modules/xvii-sandbox](/zh/reference/modules/xvii-sandbox/) |
 | 会话 | `/sessions` | 实时 Agent 操作和时间线 | `sessions:live:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 租户 | `/tenants` | 撤销或恢复租户服务 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
@@ -123,6 +140,15 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 接受邀请 | `/accept-invite` | 电子邮件邀请链接的落点：受邀者设置密码并加入工作区，无需预先建立会话。 | **无需登录** | — |
+| AI | `/areas/ai` | AI区域目录：会话观测与操作、提供商配置文件与环境、模型、专项执行和提供商参考。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 自动化 | `/areas/automation` | 自动化区域目录：流程与编排、事件与通知。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 数据与上下文 | `/areas/data-context` | 数据与上下文区域目录：能力、知识与工件。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 部署 | `/areas/deployment` | 部署区域目录：部署的准备与控制。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 基础设施 | `/areas/infrastructure` | 基础设施区域目录：环境清单与工作区。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 可观测性与证据 | `/areas/observation` | 可观测性与证据区域目录：状态与活动、成本与采用、审计与录制、评估与证据。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 安全与身份 | `/areas/security-identity` | 安全与身份区域目录：身份与访问、策略、防护与响应、治理边界。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 系统与设置 | `/areas/system` | 系统与设置区域目录：管理、安装与维护、开发者工具和个人偏好。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 工作与通信 | `/areas/work-communications` | 工作与通信区域目录：持久保存的跨会话工作清单与受治理的通信。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 登录 | `/login` | 已配置账户使用凭据和令牌登录的页面。 | **无需登录** | — |
 | 设置 | `/settings` | 工作区和账户设置 | 任何已登录用户 | — |
 | 首次运行设置 | `/setup` | 将全新部署变为可用部署的一次性页面：使用设置令牌并创建第一个所有者账户。 | **无需登录** | — |
@@ -138,4 +164,5 @@ description: >-
 
 后端在操作员完成配置前会拒绝关闭的屏幕，与其他屏幕一样出现在这里——路由存在，
 权限也真实有效。哪些模块启用、哪些受门控，记录在[模块概览](/zh/reference/modules/overview/)；
-[诚实性与限制](/zh/start/honesty-and-limits/)页面说明了通用规则。
+[诚实性与限制](/zh/start/honesty-and-limits/)页面说明了通用规则。区域目录列表不是能力或
+就绪状态的实时读数。

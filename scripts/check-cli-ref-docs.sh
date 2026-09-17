@@ -22,13 +22,23 @@
 #      in-package and writes it as JSON. It is a test and not a new hidden
 #      subcommand so the shipped binary carries nothing for the docs' sake; the
 #      two routes were measured at the same cost (2.4s build vs 2.6s test, warm).
-#   2. scripts/cli-ref-docs renders that JSON into the page's generated region and
-#      compares. It is a standalone module built with GOWORK=off, like
-#      scripts/config-env-docs, so a broken module elsewhere in the workspace
-#      cannot stop this gate from looking.
+#   2. This wrapper import()s docs-site/src/site-locales.mjs (via
+#      scripts/cli-ref-docs/published-locales.mjs — a real ESM import, not a
+#      text scan) and writes a JSON roster. scripts/cli-ref-docs renders the
+#      dump into the generated region of the English page and of every
+#      published locale in that roster, and compares each. A newly declared
+#      locale is therefore checked and written automatically. A missing copy,
+#      unreadable declaration or ambiguous markers is CANNOT LOOK, never
+#      "the pages I could read were in sync". Archived VERSIONS snapshots are
+#      not in the roster and are never regenerated. --write writes every page
+#      to a sibling temp first, then renames. A failure while writing those
+#      temps leaves published pages unreplaced. A failure during the rename
+#      loop is reported (exit 2) but already-renamed pages are not rolled back.
+#      The Go module is standalone, built with GOWORK=off, like
+#      scripts/config-env-docs.
 #
-#   scripts/check-cli-ref-docs.sh              check the published page against the binary
-#   scripts/check-cli-ref-docs.sh --write      regenerate the page
+#   scripts/check-cli-ref-docs.sh              check English + published locale copies
+#   scripts/check-cli-ref-docs.sh --write      regenerate the marked region on those pages
 #   scripts/check-cli-ref-docs.sh --self-test  build throwaway trees and prove it can fail
 #   scripts/check-cli-ref-docs.sh --list       print the enumerated command roster
 #
@@ -121,11 +131,47 @@ if [ ! -s "$DUMP" ]; then
 	exit 2
 fi
 
+# ── stage 1b: the published-locale roster, imported not parsed ────────────────────────
+#
+# The Go generator is stdlib-only and cannot import ESM. This wrapper is the
+# production path: it import()s site-locales.mjs and hands the generator a JSON
+# file. A hardcoded list here would fail open on a newly declared locale, which
+# is the defect this stage exists to close.
+LOCALES_JSON="$SCRATCH/locales.json"
+LOCALE_HELPER="$SRC/published-locales.mjs"
+locales_args=()
+if [ "$MODE" != "--list" ]; then
+	if ! command -v node >/dev/null 2>&1; then
+		echo "check-cli-ref-docs: CANNOT LOOK — no node on PATH, so docs-site/src/site-locales.mjs" >&2
+		echo "  was never imported and the published locale roster was never read." >&2
+		exit 2
+	fi
+	if [ ! -f "$LOCALE_HELPER" ]; then
+		echo "check-cli-ref-docs: CANNOT LOOK — $LOCALE_HELPER is missing, so the published" >&2
+		echo "  locale roster was never imported from site-locales.mjs." >&2
+		exit 2
+	fi
+	helper_err="$(node "$LOCALE_HELPER" "$ROOT" 2>&1 1>"$LOCALES_JSON")"
+	helper_rc=$?
+	if [ "$helper_rc" -ne 0 ]; then
+		echo "check-cli-ref-docs: CANNOT LOOK — could not import the published locale roster" >&2
+		echo "  from docs-site/src/site-locales.mjs (exit $helper_rc)." >&2
+		printf '%s\n' "$helper_err" | sed 's/^/    /' >&2
+		exit 2
+	fi
+	if [ ! -s "$LOCALES_JSON" ]; then
+		echo "check-cli-ref-docs: CANNOT LOOK — published-locales.mjs wrote no roster to" >&2
+		echo "  $LOCALES_JSON. An empty successful import is a skip in disguise." >&2
+		exit 2
+	fi
+	locales_args=(-locales-file "$LOCALES_JSON")
+fi
+
 # ── stage 2: render and compare ───────────────────────────────────────────────────────
 case "$MODE" in
---write) "$BIN" -root "$ROOT" -dump "$DUMP" -write ;;
+--write) "$BIN" -root "$ROOT" -dump "$DUMP" "${locales_args[@]}" -write ;;
 --list) "$BIN" -root "$ROOT" -dump "$DUMP" -list ;;
-"") "$BIN" -root "$ROOT" -dump "$DUMP" ;;
+"") "$BIN" -root "$ROOT" -dump "$DUMP" "${locales_args[@]}" ;;
 *)
 	echo "check-cli-ref-docs: CANNOT LOOK — unknown argument '$MODE' (want --write, --list," >&2
 	echo "  --self-test or nothing)." >&2

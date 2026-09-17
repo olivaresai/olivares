@@ -905,3 +905,168 @@ func TestCreatesDoAnnounceAConfirmedOne(t *testing.T) {
 		})
 	}
 }
+
+// TestAimsLsHitsThePackPath is operator-surface slice 1 of 16 (iso42001):
+// REST GET /aims/pack existed; olivares compliance had dora/oscal/depth but
+// not aims. A mutant that lists a different route, or none, dies here.
+func TestAimsLsHitsThePackPath(t *testing.T) {
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		_, _ = io.WriteString(w, `{"items":[{"id":"ap-1","standard":"ISO/IEC 42001:2023",
+			"organisation_name":"Acme","error_count":0,"generated_at":"2026-09-02"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL, "compliance", "aims", "ls")...)
+	if err != nil {
+		t.Fatalf("aims ls must succeed, got %v", err)
+	}
+	if gotMethod != http.MethodGet || gotPath != "/v1/m/compliance/aims/pack" {
+		t.Fatalf("request = %s %s, want GET .../aims/pack", gotMethod, gotPath)
+	}
+	if !strings.Contains(out, "ap-1") || !strings.Contains(out, "Acme") {
+		t.Errorf("aims ls must show the row, got:\n%s", out)
+	}
+}
+
+func TestAimsLsJSONIsTheServerBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"items":[{"id":"ap-1","organisation_name":"Acme"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL,
+		"compliance", "aims", "ls", "-o", "json")...)
+	if err != nil {
+		t.Fatalf("aims ls -o json must succeed, got %v", err)
+	}
+	var decoded struct {
+		Items []map[string]any `json:"items"`
+	}
+	if jerr := json.Unmarshal([]byte(out), &decoded); jerr != nil {
+		t.Fatalf("-o json must emit parseable JSON: %v\ngot:\n%s", jerr, out)
+	}
+	if len(decoded.Items) != 1 || decoded.Items[0]["id"] != "ap-1" {
+		t.Fatalf("JSON output lost the payload: %+v", decoded)
+	}
+}
+
+// TestDoraExportRegisterHitsTheExportPath is slice 2 of 16 (compliance-packs /
+// doraregister): listing already existed; export lived only on the console.
+func TestDoraExportRegisterHitsTheExportPath(t *testing.T) {
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		_, _ = io.WriteString(w, `{
+			"regulation":"DORA","entity_lei":"529900T8BM49AURSDO55",
+			"reference_date":"2026-03-31","error_count":0,"doc_sha256":"abc",
+			"disclaimer":"it does NOT make the tenant DORA-compliant and this is NOT a certification",
+			"ledger_anchor":{"seq":7}
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL, "compliance", "dora", "export", "dr-1")...)
+	if err != nil {
+		t.Fatalf("export must succeed, got %v", err)
+	}
+	if gotMethod != http.MethodGet || gotPath != "/v1/m/compliance/dora/register/dr-1/export" {
+		t.Fatalf("request = %s %s, want GET .../dora/register/dr-1/export", gotMethod, gotPath)
+	}
+	for _, want := range []string{"529900T8BM49AURSDO55", "DORA-compliant", "NOT a certification"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("export text must carry %q, got:\n%s", want, out)
+		}
+	}
+}
+func TestDoraExportRegisterJSONIsTheServerBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"entity_lei":"LEI-1","disclaimer":"DRAFT","doc_sha256":"deadbeef"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL,
+		"compliance", "dora", "export", "dr-1", "-o", "json")...)
+	if err != nil {
+		t.Fatalf("export -o json must succeed, got %v", err)
+	}
+	var decoded map[string]any
+	if jerr := json.Unmarshal([]byte(out), &decoded); jerr != nil {
+		t.Fatalf("-o json must emit parseable JSON: %v\ngot:\n%s", jerr, out)
+	}
+	if decoded["entity_lei"] != "LEI-1" || decoded["doc_sha256"] != "deadbeef" {
+		t.Fatalf("JSON output lost the payload: %+v", decoded)
+	}
+}
+
+// TestOscalGetHitsTheProfilePath is slice 3 of 16 (compliance-packs /
+// oscalingest): listing already existed; get-one lived only on the console.
+func TestOscalGetHitsTheProfilePath(t *testing.T) {
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		_, _ = io.WriteString(w, `{
+			"id":"op-1","framework":"eu_ai_act","doc_kind":"profile","title":"FedRAMP",
+			"selected_count":12,"doc_sha256":"abc","registered_at":"2026-09-02",
+			"registered_by":"dpo","disclaimer":"this is NOT a FedRAMP authorization"
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL, "compliance", "oscal", "get", "op-1")...)
+	if err != nil {
+		t.Fatalf("get must succeed, got %v", err)
+	}
+	if gotMethod != http.MethodGet || gotPath != "/v1/m/compliance/oscal/profiles/op-1" {
+		t.Fatalf("request = %s %s, want GET .../oscal/profiles/op-1", gotMethod, gotPath)
+	}
+	for _, want := range []string{"eu_ai_act", "FedRAMP", "NOT a FedRAMP authorization"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("get text must carry %q, got:\n%s", want, out)
+		}
+	}
+}
+func TestOscalGetJSONIsTheServerBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"id":"op-1","doc_sha256":"deadbeef","disclaimer":"DRAFT"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL,
+		"compliance", "oscal", "get", "op-1", "-o", "json")...)
+	if err != nil {
+		t.Fatalf("get -o json must succeed, got %v", err)
+	}
+	var decoded map[string]any
+	if jerr := json.Unmarshal([]byte(out), &decoded); jerr != nil {
+		t.Fatalf("-o json must emit parseable JSON: %v\ngot:\n%s", jerr, out)
+	}
+	if decoded["id"] != "op-1" || decoded["doc_sha256"] != "deadbeef" {
+		t.Fatalf("JSON output lost the payload: %+v", decoded)
+	}
+}
+
+// TestDepthFedrampListsTheKSIPath is slice 4 of 16 (compliance-packs /
+// compliancedepth): REST GET /depth/fedramp existed; the CLI listed us-law,
+// sector, snapshots and drift but not FedRAMP KSIs.
+func TestDepthFedrampListsTheKSIPath(t *testing.T) {
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		_, _ = io.WriteString(w, `{"items":[{"id":"fr-1","system_name":"cp","impact_level":"moderate",
+			"error_count":0,"generated_at":"2026-09-02"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := execRoot(t, complianceTestArgs(srv.URL, "compliance", "depth", "fedramp")...)
+	if err != nil {
+		t.Fatalf("fedramp ls must succeed, got %v", err)
+	}
+	if gotMethod != http.MethodGet || gotPath != "/v1/m/compliance/depth/fedramp" {
+		t.Fatalf("request = %s %s, want GET .../depth/fedramp", gotMethod, gotPath)
+	}
+	if !strings.Contains(out, "fr-1") || !strings.Contains(out, "moderate") {
+		t.Errorf("fedramp list must show the row, got:\n%s", out)
+	}
+}

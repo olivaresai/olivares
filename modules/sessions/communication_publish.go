@@ -144,6 +144,7 @@ type directNoticePublishAuthorityPreflight struct {
 	Scope                 DirectoryScopeRef                     `json:"scope"`
 	Principal             directNoticePublishAuthorityPrincipal `json:"principal"`
 	Sender                CommunicationActorRef                 `json:"sender"`
+	SenderResolution      *PrincipalResolution                  `json:"sender_resolution,omitempty"`
 	Channel               Channel                               `json:"channel"`
 	IDs                   directNoticePublishAuthorityIDs       `json:"ids"`
 	Payload               ProtectedPayload                      `json:"payload"`
@@ -168,6 +169,7 @@ func directNoticePublishAuthorityPreflightCommitment(
 		Scope:               preflight.Scope,
 		Principal:           directNoticePublishAuthorityPrincipalFrom(preflight.Principal),
 		Sender:              preflight.Sender,
+		SenderResolution:    preflight.SenderResolution,
 		Channel:             preflight.Channel,
 		IDs:                 directNoticePublishAuthorityIDsFrom(preflight.IDs),
 		Payload:             preflight.Payload,
@@ -234,7 +236,18 @@ func cloneDirectNoticeMessageContent(content MessageContent) MessageContent {
 func cloneDirectNoticePublishCommand(command DirectNoticePublishCommand) DirectNoticePublishCommand {
 	result := command
 	result.Content = cloneDirectNoticeMessageContent(command.Content)
+	result.senderResolution = cloneDirectNoticePrincipalResolutionPtr(command.senderResolution)
 	return result
+}
+
+func cloneDirectNoticePrincipalResolutionPtr(
+	resolution *PrincipalResolution,
+) *PrincipalResolution {
+	if resolution == nil {
+		return nil
+	}
+	cloned := cloneDirectNoticePrincipalResolution(*resolution)
+	return &cloned
 }
 
 func cloneDirectNoticePublicationAudienceRequest(
@@ -319,6 +332,7 @@ func cloneDirectNoticePublishPreflight(
 		preflight.AudienceAttestation,
 	)
 	result.Snapshot = cloneDirectNoticeDirectorySnapshot(preflight.Snapshot)
+	result.SenderResolution = cloneDirectNoticePrincipalResolutionPtr(preflight.SenderResolution)
 	result.GrantClosure = cloneDirectNoticeChannelGrantSubjectClosure(preflight.GrantClosure)
 	result.RecipientGrantClosure = cloneDirectNoticeChannelGrantSubjectClosure(
 		preflight.RecipientGrantClosure,
@@ -501,7 +515,9 @@ func applyDirectNoticePublishAfterAuthoritySnapshot(
 	if err != nil {
 		return DirectNoticePublishResult{}, false, err
 	}
-	if len(plan.RequiredClaims) != 0 || plan.GuardAdvance == nil ||
+	if !communicationClaimsEqualSnapshot(plan.RequiredClaims, CommunicationClaimAuthoritySnapshot{
+		facts: tx.claimAuthorityFacts,
+	}) || plan.GuardAdvance == nil ||
 		len(plan.Audiences) != 1 || len(plan.Contributions) != 1 || len(plan.Deliveries) != 1 ||
 		plan.Before.ID != preflight.IDs.Message || plan.After.ID != preflight.IDs.Message ||
 		plan.Before.Version != 1 || plan.After.Version != 2 ||
@@ -540,8 +556,9 @@ func applyDirectNoticePublishAfterAuthoritySnapshot(
 	if err != nil {
 		return DirectNoticePublishResult{}, false, err
 	}
+	_, auditKind := communicationAuditActor(preflight.Sender)
 	audit, err := tx.appendAudit(ctx, model.AuditDraft{
-		Actor: directNoticeActor(preflight.Principal), ActorKind: model.ActorUser,
+		Actor: directNoticeActor(preflight.Principal), ActorKind: auditKind,
 		Action: directNoticePublishAuditAction, TargetKind: communicationCommandKind,
 		TargetID: preflight.IDs.Command, PayloadHash: cloneDirectNoticeBytes(planHash),
 		Meta: map[string]any{
@@ -618,7 +635,8 @@ func lockDirectNoticePublishState(
 		return directNoticeLockedState{}, err
 	}
 	if !equalDirectNoticeChannel(channel, preflight.Channel) || channel.State != ChannelActive ||
-		channel.ContentProtection != ContentProtectionStorage {
+		!oneOf(channel.ContentProtection, ContentProtectionStorage,
+			ContentProtectionApplicationSealed) {
 		return directNoticeLockedState{}, fmt.Errorf("%w: channel_publish_fence_changed", store.ErrConflict)
 	}
 	routeGuard, err := lockCommunicationGuardByKind(ctx, tx, CommunicationGuardRouteRevision)
@@ -833,6 +851,18 @@ func directNoticePublishAuthorityFacts(
 		return nil, err
 	}
 	for _, fact := range facts {
+		// The lineage epochs are the SAME closed inventory the store registers
+		// as authorization facts, each with its own lock order and owner lock
+		// routine, so "can this edition lock it" is already true for them — the
+		// premise this switch tests. This narrower copy of the K3 consumer
+		// contract predates them, and leaving it as it was turned every
+		// message-send into UNKNOWN as soon as any Cedar/scoped-grant authority
+		// went live, because ScopedEvidence binds its decision to the exact
+		// generations it read. Every other kind still falls through to the
+		// deny-closed default below.
+		if model.IsLineageEpochKind(fact.Kind) {
+			continue
+		}
 		switch fact.Kind {
 		case "core.identity", "core.agent", model.DirectoryEpochKind,
 			model.AuthorizationEpochKind, "governance.nhi_lifecycle":
@@ -958,6 +988,17 @@ func materializeDirectNoticePublish(
 	preflight directNoticePublishPreflight,
 	locked directNoticeLockedState,
 ) (MessagePublishPlan, error) {
+	availableAt := dbNow
+	if preflight.Command.AvailableAt != "" {
+		stamp, err := model.ParseTimestamp(preflight.Command.AvailableAt)
+		if err != nil || stamp.Time().Before(dbNow) {
+			return MessagePublishPlan{}, communicationError(
+				ErrInvalidCommunicationTransition,
+				"direct notice availability cannot precede transaction time",
+			)
+		}
+		availableAt = stamp.Time()
+	}
 	required := locked.Channel.DefaultAckPolicy != AckPolicyNone
 	ackQuorum := int64(0)
 	var ackDueAt *time.Time
@@ -968,8 +1009,8 @@ func materializeDirectNoticePublish(
 				ErrInvalidCommunicationModel, "required Channel Ack timeout is not positive",
 			)
 		}
-		due := dbNow.Add(time.Duration(locked.Channel.DefaultAckTimeoutMS) * time.Millisecond)
-		if !due.After(dbNow) {
+		due := availableAt.Add(time.Duration(locked.Channel.DefaultAckTimeoutMS) * time.Millisecond)
+		if !due.After(availableAt) {
 			return MessagePublishPlan{}, communicationError(
 				ErrInvalidCommunicationModel, "Channel Ack timeout overflows DB time",
 			)
@@ -988,7 +1029,7 @@ func materializeDirectNoticePublish(
 		ChannelID:                  locked.Channel.ID, ThreadID: preflight.IDs.Message, Kind: MessageNotice,
 		State: MessageDraft, Sender: preflight.Sender, Payload: cloneProtectedPayload(preflight.Payload),
 		Urgency: preflight.Command.Urgency, AckPolicy: locked.Channel.DefaultAckPolicy,
-		AckQuorum: ackQuorum, AvailableAt: dbNow, AckDueAt: ackDueAt,
+		AckQuorum: ackQuorum, AvailableAt: availableAt, AckDueAt: ackDueAt,
 		AutomationDepth: 0, LastEventSeq: 0,
 	}
 	resolved := preflight.Snapshot.Contributions[0]
@@ -1023,6 +1064,21 @@ func materializeDirectNoticePublish(
 		RouteRevision:        locked.Channel.RouteRevision,
 		SubscriptionRevision: locked.Channel.SubscriptionRevision,
 		CausalKind:           resolved.CausalKind, CausalRef: resolved.CausalRef,
+		ObservedSessionSID:     resolved.ObservedSessionSID,
+		ObservedClaimFence:     resolved.ObservedClaimFence,
+		SubscriptionID:         resolved.SubscriptionID,
+		SubscriptionGeneration: resolved.SubscriptionGeneration,
+		RouteRuleID:            resolved.RouteRuleID,
+		RouteRuleGeneration:    resolved.RouteRuleGeneration,
+	}
+	if resolved.CausalFact != nil {
+		contribution.CausalFactKind = resolved.CausalFact.Kind
+		contribution.CausalFactID = resolved.CausalFact.ID
+		contribution.CausalFactVersion = resolved.CausalFact.Version
+	}
+	if resolved.OriginalSubscriber != nil {
+		original := *resolved.OriginalSubscriber
+		contribution.OriginalSubscriber = &original
 	}
 	contribution.CausalArcHash, err = CanonicalAudienceCausalArcHash(contribution)
 	if err != nil {
@@ -1044,7 +1100,7 @@ func materializeDirectNoticePublish(
 		MessageID: draft.ID, Recipient: fold.Recipient,
 		RecipientEpoch: resolved.Recipient.RecipientEpoch, Required: fold.Required,
 		RouteReasons: append([]RouteReason(nil), fold.RouteReasons...), WakePolicy: fold.WakePolicy,
-		State: DeliveryAvailable, AvailableAt: dbNow,
+		State: DeliveryAvailable, AvailableAt: availableAt,
 	}
 	if required {
 		delivery.AckDueAt = ackDueAt
@@ -1073,7 +1129,8 @@ func materializeDirectNoticePublish(
 			DirectoryEpoch: directoryFact, CurrentChannelWriteGrant: locked.WriteEvidence,
 		},
 		Principal: preflight.Principal, Sender: preflight.Sender,
-		SourceKind: RouteSourceUserMessage, DeliverySequenceGuard: locked.DeliveryGuard,
+		SenderResolution: preflight.SenderResolution,
+		SourceKind:       RouteSourceUserMessage, DeliverySequenceGuard: locked.DeliveryGuard,
 		DBNow: dbNow,
 	})
 }
@@ -1293,8 +1350,8 @@ func persistDirectNoticePublish(
 		colWorkWorkspaceID: preflight.Scope.WorkspaceID.String(),
 		colEventID:         preflight.IDs.Event.String(), colEventAggregateKind: string(messageKind),
 		colEventAggregateID: plan.After.ID.String(), colEventSeq: int64(1),
-		colEventType: communicationMessageAvailable, colEventActorKind: string(ActorUser),
-		colEventActorRef:   preflight.Principal.UserID.String(),
+		colEventType: communicationMessageAvailable, colEventActorKind: string(preflight.Sender.Kind),
+		colEventActorRef:   preflight.Sender.Ref,
 		colEventOccurredAt: tx.now.String(), colEventPayload: string(eventPayload),
 		colEventPayloadHash: hashBytes(eventPayload), colEventCommandID: preflight.IDs.Command.String(),
 		colEventAuditSeq: audit.Seq, colEventAuditHash: cloneDirectNoticeBytes(audit.Hash),

@@ -182,5 +182,46 @@ else
 	malo "NO HE PODIDO MIRAR: el mutante salio identico al original — el sed ya no casa"
 fi
 
+# --- 10 · exact banner tokens: foo is not announced by foobar --------------------------
+# Both names are genuinely called and declared. The banner names only foobar.
+# Substring membership would accept foo; token membership must name it. Restore
+# foo on the same tree and the gate must go clean. A substring mutant must miss
+# the omission — otherwise this case does not prove the defect it names.
+gancho "OLIVARES_Y=1 task lint:foo
+task lint:foobar"
+banco "lint:foo lint:foobar"
+sed -i 's/^echo "pre-push:   tres +"$/echo "pre-push:   tres + foobar +"/' "$T/gancho"
+SAL="$(corre)"; RC=$?
+[ "$RC" = 1 ] || malo "foo vs foobar: esperaba rc 1 y salio $RC"
+case "$SAL" in
+*"lint:foo —"*"banner"*) paso "foo ausente del banner: la NOMBRA aunque foobar este anunciada" ;;
+*) malo "foo ausente del banner: no nombra lint:foo" ;;
+esac
+case "$SAL" in
+*"lint:foobar"*) malo "foo vs foobar: acusa a foobar, que SI esta en el banner" ;;
+*) paso "foobar anunciada no se acusa" ;;
+esac
+case "$SAL" in
+*"lista declarada"*) malo "foo vs foobar: acusa a la lista, donde foo SI esta" ;;
+*) paso "no acusa a la lista, donde foo SI esta declarada" ;;
+esac
+
+MUT="$T/mutante-subcadena.sh"
+sed 's/not in banner_tokens/not in banner/' "$GATE" >"$MUT"
+if ! cmp -s "$GATE" "$MUT"; then
+	if OLIVARES_WIRING_HOOK="$T/gancho" OLIVARES_WIRING_BENCH="$T/banco" bash "$MUT" >/dev/null 2>&1; then
+		paso "MUTANTE 'subcadena' deja pasar foo dentro de foobar ⇒ el caso ACREDITA tokens exactos"
+	else
+		malo "MUTANTE 'subcadena' sigue cazando: el caso no acredita el defecto de subcadena"
+	fi
+else
+	malo "NO HE PODIDO MIRAR: el mutante de subcadena salio identico — el sed ya no casa"
+fi
+
+sed -i 's/^echo "pre-push:   tres + foobar +"$/echo "pre-push:   tres + foo + foobar +"/' "$T/gancho"
+SAL="$(corre)"; RC=$?
+[ "$RC" = 0 ] && case "$SAL" in *limpio*) paso "foo restaurada junto a foobar: sale 0 y lo dice" ;; *) malo "foo restaurada: rc 0 pero no dice limpio" ;; esac
+[ "$RC" = 0 ] || malo "foo restaurada junto a foobar: esperaba rc 0 y salio $RC"
+
 printf 'hook-leg-wiring selftest: %d passed, %d failed\n' "$OK" "$MAL"
 [ "$MAL" = 0 ]

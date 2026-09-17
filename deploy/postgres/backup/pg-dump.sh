@@ -18,9 +18,22 @@
 # Requires pg_dump AND the olivares binary on PATH, and READ access to the
 # engine's data dir (the signing keys live there).
 #
+# OLIVARES_OWNER_DSN is REQUIRED IN THE OWNER/APP SPLIT and must be omitted
+# otherwise. `olivares dr backup` boots the engine to build the chain-tip
+# manifest, and that boot runs the schema's DDL preflight; in the split posture
+# (01-app-role.sql "OPTIONAL: the owner/app SPLIT", `olivares db init
+# --owner-role`) the application role is DENIED CREATE on schema public BY
+# DESIGN, so the boot cannot run as it. Set this to the owner role and the boot
+# runs its DDL there while runtime traffic stays on the app role. In the
+# single-role posture the app role owns the schema, so leave it unset.
+#
+# Verify both roles first, without booting anything:
+#   olivares db check --dsn "$OLIVARES_DSN" --owner-dsn "$OLIVARES_OWNER_DSN" --strict
+#
 # Usage:
 #   OLIVARES_DSN=postgres://olivares_app:***@host:5432/olivares \
 #   OLIVARES_ADMIN_DSN=postgres://olivares_admin:***@host:5432/olivares \
+#   OLIVARES_OWNER_DSN=postgres://olivares_owner:***@host:5432/olivares \
 #   OLIVARES_DATA_DIR=/var/lib/olivares \
 #   OLIVARES_DR_PASSPHRASE_FILE=/run/secrets/dr-pass \
 #   ./pg-dump.sh /backups/olivares-dr-$(date -u +%Y%m%dT%H%M%SZ).drbundle
@@ -31,6 +44,14 @@ OUT="${1:?usage: pg-dump.sh <out.drbundle>}"
 : "${OLIVARES_ADMIN_DSN:?set OLIVARES_ADMIN_DSN (the NOSUPERUSER BYPASSRLS backup/admin role DSN)}"
 : "${OLIVARES_DATA_DIR:=/var/lib/olivares}"
 : "${OLIVARES_DR_PASSPHRASE_FILE:?set OLIVARES_DR_PASSPHRASE_FILE (the backup KEK passphrase)}"
+
+# POSIX sh has no arrays, so `set --` rebuilds the positional parameters — the
+# portable way to carry an OPTIONAL argument (the same shape pg-restore.sh uses
+# for OLIVARES_ADMIN_DSN). OUT was captured above, so overwriting $1 is safe.
+set --
+if [ -n "${OLIVARES_OWNER_DSN:-}" ]; then
+  set -- "$@" --owner-dsn="$OLIVARES_OWNER_DSN"
+fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -46,6 +67,7 @@ olivares dr backup \
   --engine=postgres \
   --dsn="$OLIVARES_DSN" \
   --admin-dsn="$OLIVARES_ADMIN_DSN" \
+  "$@" \
   --data-dir="$OLIVARES_DATA_DIR" \
   --snapshot-file="$TMP/dump.pgcustom" \
   --out="$OUT" \

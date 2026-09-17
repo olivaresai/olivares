@@ -15,27 +15,53 @@
     "body": "{{what}} is a declared contract — the backend endpoint is not live yet, so there is nothing to show. This panel will populate the moment it lands; it never fabricates data."
   },
   "assurance": {
+    "address": {
+      "addressTitle": "Passkeys are not available at this address.",
+      "ipBody": "A passkey relying party has to be a domain name that this deployment's verifier accepts, and an IP address is not one. Reach this console by a host name to register or use a passkey.",
+      "nameBody": "A passkey relying party has to be a domain name that this deployment's verifier accepts, and this host name is not one: it needs a dot, and only ASCII letters, digits and hyphens.",
+      "insecureTitle": "This page is not a secure context.",
+      "insecureBody": "Browsers run the passkey API only in a secure context, so no passkey can be registered or used here. Reach this console over HTTPS, or on the local host.",
+      "unsupportedTitle": "This browser has no passkey support.",
+      "unsupportedBody": "This browser exposes no WebAuthn API, so a passkey cannot be registered or used here. Use a browser with passkey support, or a presented PIV/CAC card.",
+      "sameDevice": "On this device the same console also answers at:"
+    },
     "stepUpTitle": "Step-up authentication required",
-    "stepUpBody": "{{action}} requires {{required}}. Your session is {{current}}. Authenticate with a hardware security key to continue.",
-    "authenticate": "Authenticate with security key",
+    "stepUpBody": "{{action}} requires {{required}}. Your session is {{current}}. Use a passkey on your device or a security key to continue.",
+    "authenticate": "Authenticate with passkey",
     "authenticatePiv": "Authenticate with PIV/CAC card",
     "authenticating": "Waiting for your authenticator…",
     "seamWhat": "The privileged-login ceremony (WebAuthn step-up)",
     "unsupported": "This browser does not support WebAuthn. A platform that supports phishing-resistant authenticators is required for privileged actions.",
     "failed": "Step-up did not complete. The action stays denied.",
+    "relyingPartyUnusable": "Passkeys are not available on this deployment: the engine has no usable relying party for the address the console is served at. An operator has to configure a valid relying-party domain — a dotted host name, or localhost where that is appropriate — reach the console at that declared secure origin, and restart the engine after the change. Retrying at a different address alone will not repair it.",
     "actions": {
       "wif": "Viewing the Workload Identity Federation graph",
       "identity": "Managing identity",
       "nhiLifecycleRotate": "Rotating a non-human identity credential",
       "nhiLifecycleFinalize": "Finalizing non-human identity offboarding",
-      "generic": "This action"
+      "generic": "This action",
+      "console": "Managing connectors"
     },
     "aal": {
       "aal1": "AAL1 (password)",
       "aal2": "AAL2 (multi-factor)",
-      "aal3": "AAL3 (hardware, phishing-resistant)"
+      "aal3": "AAL3 (phishing-resistant)"
     },
-    "unenrolled": "No passkey is registered for your account yet. Register a hardware security key in the Privileged login tab first, then retry the step-up."
+    "unenrolled": "No passkey is registered for your account yet. Register a passkey on your device or a security key in the Privileged login tab, then authenticate.",
+    "unenrolledInline": "No passkey is registered for your account yet. Register one below, or use a presented PIV/CAC card.",
+    "enrollHint": "Register your first passkey on this device or on a security key. Registration alone does not authenticate your session or complete the pending action.",
+    "passkeyName": "Passkey name",
+    "enrollUnsupported": "This browser cannot register a passkey. Use a browser with passkey support, or a presented PIV/CAC card.",
+    "registered": "Passkey registered. Authenticate to verify this session, then review and complete the pending action.",
+    "registrationUnknown": "Registration could not be confirmed. The passkey may have been saved. Select Authenticate to check; registration will not be sent again automatically.",
+    "authenticationUnknown": "Authentication could not be confirmed. Your session may already be elevated. Check the session before trying again.",
+    "needsAuthentication": "An existing passkey must authenticate this session before another can be registered. Select Authenticate.",
+    "checkSession": "Check session",
+    "sessionExpired": "This session was refused. Close this action and sign in again before retrying.",
+    "verificationFailed": "The session could not be verified for this action. Authentication may have completed; the action has not continued.",
+    "cancelled": "The passkey operation was dismissed or timed out. You can start a new attempt. The action has not continued.",
+    "cancelHint": "Closing cancels this action. A registration or authentication already sent may still complete.",
+    "registrationUnknownElsewhere": "Registration could not be confirmed. The passkey may have been saved. Close this dialog and check your passkeys before starting another registration."
   },
   "references": {
     "note": "Standards this panel reflects. The panel observes and verifies; it does not claim certification.",
@@ -531,7 +557,8 @@
     "pivRole": "Mapped role",
     "pivOcsp": "OCSP",
     "pivNote": "Chain and OCSP verification are performed by the backend; the panel reflects the result.",
-    "pivNotConfigured": "PIV/CAC is not configured on this deployment. An operator enables it by setting OLIVARES_PIV_CONFIG (agency CA, cert-to-role map) on the engine.",
+    "pivNotConfigured": "PIV/CAC smartcard sign-in is not configured on this deployment, so no card can be used here. An administrator has to configure it on the engine before it becomes available.",
+    "pivSetupGuide": "Operator guide: configure PIV/CAC sign-in",
     "ocsp": {
       "good": "Good",
       "revoked": "Revoked",

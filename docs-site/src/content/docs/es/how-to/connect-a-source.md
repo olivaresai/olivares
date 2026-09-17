@@ -29,6 +29,21 @@ Una observación de tipo edge transporta solo identificadores y una clasificaci�
 
 Un connector importa el SDK de connectors y nada más del producto. Nunca importa `/core` (el motor AGPL). Esa frontera se aplica en CI, y es lo que permite que los connectors se publiquen bajo Apache-2.0 y que terceros construyan los suyos propios sin fricción de copyleft. El mismo binario de connector se ejecuta en proceso o fuera de proceso sobre gRPC de forma idéntica. Consulta [Open core y licencias](/es/explanation/open-core-and-licensing/) para la frontera completa.
 
+Varias fuentes del **mismo** tipo de connector se pueden registrar y ejecutar a
+la vez (`CHANGELOG.md` `[26.9.0]` Fixed). El runtime indexaba cada fuente por el
+nombre Descriptor del connector, así que una segunda fila de roster de un tipo
+se persistía y listaba — y el motor la denegaba. Las fuentes se registran ahora
+bajo el nombre del operador (el `name` de la fila del roster), con el
+descriptor del connector al lado. `grok-home-a` y `grok-home-b` abren con su
+propia configuración y referencias de credencial, ejecutan su propia instancia
+y proceso, y rotan, fallan y se detienen de forma independiente. `sources plan`
+/ `validate` ya no anuncian la restricción de una instancia por connector que
+el motor ha dejado de aplicar. Dos entradas de identidad servidas por un
+connector (`okta` y `entra` comparten `idp`) con `as_source: true` ahora
+cablean ambas. Esto no separa por sí solo dos sesiones de proveedor ni homes
+de configuración de extremo a extremo — eso es
+[Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
+
 ## Procedencia y confianza: por qué importa la fuente
 
 Cada arista registra **qué fuente la produjo** y un nivel de **confianza**, y el producto muestra ambos en lugar de colapsarlos. Una lectura de `pg_audit` y una pista de `mcp_annotation` no son la misma evidencia y nunca se tratan como la misma.

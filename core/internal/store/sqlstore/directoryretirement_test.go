@@ -47,7 +47,21 @@ func newDirectoryRetirementSQLiteHarness(
 		t.Fatalf("open retirement SQLite store: %v", err)
 	}
 	t.Cleanup(func() { _ = raw.Close() })
+	// The activation ceremony these harnesses drive is a maintenance proof over the
+	// complete inventory, and the SYSTEM witness is part of that inventory. Boot
+	// provisions it at promotion before any tenant exists; the harness does the same.
+	retirementEnsureSystemTenant(t, raw)
 	return directoryRetirementSQLiteHarness{raw: raw, sql: raw.(*sqlStore), cfg: cfg}
+}
+
+func retirementEnsureSystemTenant(t *testing.T, raw store.Store) {
+	t.Helper()
+	if err := raw.System(context.Background(), func(sys store.SystemScope) error {
+		_, err := sys.EnsureSystemTenant(context.Background())
+		return err
+	}); err != nil {
+		t.Fatalf("provision the SYSTEM tenant before activation: %v", err)
+	}
 }
 
 func (h directoryRetirementSQLiteHarness) enforce(t *testing.T) {
@@ -62,6 +76,33 @@ func (h directoryRetirementSQLiteHarness) enforce(t *testing.T) {
 		after.ExpectedGeneration != 2 {
 		t.Fatalf("activation result = %+v changed=%t", after, changed)
 	}
+}
+
+// retirementSeedGuardedAgentDML issues deliberately corrupt raw DML against the
+// guarded agents relation through the ordinary writer protocol. The corruption
+// is the subject of the fixtures that call this; reaching around the guards is
+// not. The same statement on the engine connection aborts in the lineage
+// trigger ("lineage writer protocol required") before the retirement path ever
+// runs, so the seed proves nothing about denial. Arming the lineage and
+// directory writers the way a legitimate transaction does leaves the trigger,
+// the scanners and every denial assertion exactly as production has them.
+func retirementSeedGuardedAgentDML(
+	ctx context.Context,
+	st store.Store,
+	tenant model.TenantID,
+	query string,
+	args ...any,
+) error {
+	return st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		ts := sc.(*tenantScope)
+		if err := ts.directoryWriter.prepare(ctx, func() ([]model.TenantID, error) {
+			return []model.TenantID{tenant}, nil
+		}); err != nil {
+			return err
+		}
+		_, err := ts.tx.ExecContext(ctx, query, args...)
+		return err
+	})
 }
 
 func retirementCreateUser(t *testing.T, st store.Store, tag string) model.User {
@@ -329,7 +370,7 @@ func retirementWantMissing[T any](
 
 func TestDirectoryRetirementPublicRepositoriesDoNotExposeHardDeleteSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-public-seam")
 
 	if err := h.raw.AuthView(ctx, func(auth store.AuthScope) error {
@@ -378,7 +419,7 @@ func TestDirectoryRetirementPublicRepositoriesDoNotExposeHardDeleteSQLite(t *tes
 
 func TestDirectoryRetirementRefusesStagedControlWithoutMutationSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-staged")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "staged-identity")
 	beforeEpoch := directoryWriterTestEpoch(t, h.raw, tenant).Version
@@ -448,7 +489,7 @@ func TestDirectoryRetirementPinsExactBootAdminRole(t *testing.T) {
 
 func TestRetireIdentityDefinitiveReplayAndNoResurrectionSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retire-identity")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "identity-definitive")
 	h.enforce(t)
@@ -513,7 +554,7 @@ func TestRetireIdentityDefinitiveReplayAndNoResurrectionSQLite(t *testing.T) {
 
 func TestRetireIdentityRefusesRecoverableAgentBindingAtomicallySQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retire-identity-binding")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "identity-with-agent")
 	agent := retirementCreateAgent(
@@ -557,7 +598,7 @@ func TestRetireIdentityRefusesRecoverableAgentBindingAtomicallySQLite(t *testing
 
 func TestRetireIdentityAgentBindingInterleavingsSQLite(t *testing.T) {
 	t.Run("retirement-wins-agent-create-refused", func(t *testing.T) {
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		tenant := provisionTenant(t, h.raw, "retire-identity-race-retire-first")
 		identity := retirementCreateIdentity(t, h.raw, tenant, "identity-race-retire-first")
 		h.enforce(t)
@@ -624,7 +665,7 @@ func TestRetireIdentityAgentBindingInterleavingsSQLite(t *testing.T) {
 	})
 
 	t.Run("agent-create-wins-identity-retirement-refused", func(t *testing.T) {
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		tenant := provisionTenant(t, h.raw, "retire-identity-race-agent-first")
 		identity := retirementCreateIdentity(t, h.raw, tenant, "identity-race-agent-first")
 		h.enforce(t)
@@ -711,7 +752,7 @@ func TestRetireIdentityAgentBindingInterleavingsSQLite(t *testing.T) {
 
 func TestRetireAgentLastBindingReplayAndNoResurrectionSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retire-agent-last")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "agent-last-identity")
 	agent := retirementCreateAgent(
@@ -772,7 +813,7 @@ func TestRetireAgentLastBindingReplayAndNoResurrectionSQLite(t *testing.T) {
 }
 
 func TestRetiredAgentDefaultWorkspaceCannotBeReassignedOrResurrectedSQLite(t *testing.T) {
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retire-agent-default-workspace-stability")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "default-workspace-stable-identity")
 	agent := retirementCreateAgent(
@@ -906,7 +947,7 @@ func TestRetireAgentNonLastBindingHasAuditReceiptAndNoTombstoneSQLite(t *testing
 	} {
 		t.Run(siblingState.name, func(t *testing.T) {
 			ctx := context.Background()
-			h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+			h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 			tenant := provisionTenant(t, h.raw, "retire-agent-sibling-"+siblingState.name)
 			identity := retirementCreateIdentity(t, h.raw, tenant, "sibling-identity")
 			target := retirementCreateAgent(
@@ -982,7 +1023,7 @@ WHERE tenant_id = ? AND id = ?`, tenant.String(), result.AuditEventID.String()).
 }
 
 func TestRetireAgentConcurrentBindingsSerializeToOneReceiptAndOneTombstoneSQLite(t *testing.T) {
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retire-agent-concurrent-bindings")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "concurrent-agent-identity")
 	agents := []model.Agent{
@@ -1072,7 +1113,7 @@ func TestRetireAgentConcurrentBindingsSerializeToOneReceiptAndOneTombstoneSQLite
 
 func TestRetireAgentMalformedSiblingWorkspaceDeniesAndRollsBackSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retire-agent-malformed-sibling")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "malformed-sibling-identity")
 	target := retirementCreateAgent(
@@ -1081,7 +1122,7 @@ func TestRetireAgentMalformedSiblingWorkspaceDeniesAndRollsBackSQLite(t *testing
 	sibling := retirementCreateAgent(
 		t, h.raw, tenant, identity.ID, "", "malformed-sibling", model.StatusActive,
 	)
-	if _, err := h.sql.db.ExecContext(ctx, `
+	if err := retirementSeedGuardedAgentDML(ctx, h.raw, tenant, `
 UPDATE main.agents SET workspace_id = 'not-a-canonical-workspace' WHERE id = ?`,
 		sibling.ID.String(),
 	); err != nil {
@@ -1119,7 +1160,7 @@ UPDATE main.agents SET workspace_id = 'not-a-canonical-workspace' WHERE id = ?`,
 
 func TestRetireAgentNonCanonicalSiblingIdentityDeniesAndRollsBackSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retire-agent-noncanonical-identity")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "noncanonical-binding-identity")
 	target := retirementCreateAgent(
@@ -1132,7 +1173,7 @@ func TestRetireAgentNonCanonicalSiblingIdentityDeniesAndRollsBackSQLite(t *testi
 	if alias == identity.ID.String() {
 		t.Fatal("UUID fixture unexpectedly has no hexadecimal letters")
 	}
-	if _, err := h.sql.db.ExecContext(ctx, `
+	if err := retirementSeedGuardedAgentDML(ctx, h.raw, tenant, `
 UPDATE main.agents SET identity_id = ? WHERE tenant_id = ? AND id = ?`,
 		alias, tenant.String(), sibling.ID.String(),
 	); err != nil {
@@ -1166,9 +1207,40 @@ UPDATE main.agents SET identity_id = ? WHERE tenant_id = ? AND id = ?`,
 	}
 }
 
+// TestRetirementSiblingSeedOnRawConnectionStillRefusedSQLite is the positive
+// control for the two sibling-corruption fixtures above. They now seed through
+// retirementSeedGuardedAgentDML, so nothing in them would notice if the lineage
+// guard stopped refusing an unarmed writer: the seed would simply succeed and
+// the fixtures would still go green for the wrong reason. This case pins the
+// other half -- the identical statement on the engine connection, outside
+// Mutate, must still abort and must not land the corrupt value.
+func TestRetirementSiblingSeedOnRawConnectionStillRefusedSQLite(t *testing.T) {
+	ctx := context.Background()
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
+	tenant := provisionTenant(t, h.raw, "retire-agent-unarmed-seed-refused")
+	identity := retirementCreateIdentity(t, h.raw, tenant, "unarmed-seed-identity")
+	sibling := retirementCreateAgent(
+		t, h.raw, tenant, identity.ID, "", "unarmed-seed-sibling", model.StatusActive,
+	)
+	_, err := h.sql.db.ExecContext(ctx, `
+UPDATE main.agents SET workspace_id = 'not-a-canonical-workspace' WHERE id = ?`,
+		sibling.ID.String(),
+	)
+	if err == nil || !strings.Contains(err.Error(), "lineage writer protocol required") {
+		t.Fatalf("unarmed raw sibling seed = %v, want the lineage writer refusal", err)
+	}
+	if got := retirementRowCount(
+		t, h.sql, agentDescriptor.Table,
+		"tenant_id = ? AND id = ? AND workspace_id = ?",
+		tenant.String(), sibling.ID.String(), "not-a-canonical-workspace",
+	); got != 0 {
+		t.Fatalf("refused seed still landed %d corrupt rows, want 0", got)
+	}
+}
+
 func TestRetireDirectoryPrincipalRollbackAfterDeleteTombstoneAndAuditSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-rollback")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "rollback-identity")
 	h.enforce(t)
@@ -1220,7 +1292,7 @@ func TestRetireDirectoryPrincipalRollbackAfterDeleteTombstoneAndAuditSQLite(t *t
 
 func TestRetireDirectoryPrincipalRejectsTamperedAuditAnchorSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-audit-tamper")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "tampered-audit-identity")
 	h.enforce(t)
@@ -1301,7 +1373,7 @@ func TestRetireDirectoryPrincipalAuditDegradeCannotCommitWithoutReceiptSQLite(t 
 
 func TestRetireDirectoryPrincipalDiscardedErrorPoisonsSystemTransactionSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-poison")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "poison-identity")
 	h.enforce(t)
@@ -1340,7 +1412,7 @@ func TestRetireDirectoryPrincipalDiscardedErrorPoisonsSystemTransactionSQLite(t 
 
 func TestRetireDirectoryPrincipalIgnoresSQLiteTempShadows(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-temp-shadows")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "temp-shadow-identity")
 	h.enforce(t)
@@ -1415,7 +1487,7 @@ func TestRetireDirectoryPrincipalUsesDatabaseTimeSQLite(t *testing.T) {
 func TestDirectoryRetirementAuditHashesAreCopiedSQLite(t *testing.T) {
 	// This tiny discriminator prevents a future result/tombstone refactor from
 	// accidentally aliasing a mutable audit buffer after the transaction.
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-hash-copy")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "hash-copy-identity")
 	h.enforce(t)
@@ -1544,6 +1616,7 @@ func TestRetireUserAllTenantsAuthorityCleanupReplayAndDatabaseTimeSQLite(t *test
 	h.enforce(t)
 	beforeA := directoryWriterTestEpoch(t, h.raw, tenantA).Version
 	beforeB := directoryWriterTestEpoch(t, h.raw, tenantB).Version
+	beforeH := F2AUserAuthorityVersionForTest(t, h.raw, victim.user.ID)
 	beforeWall := time.Now().UTC().Add(-time.Second)
 	req := UserRetirementRequest{
 		UserID: victim.user.ID, ExpectedVersion: victim.user.Version,
@@ -1566,7 +1639,12 @@ func TestRetireUserAllTenantsAuthorityCleanupReplayAndDatabaseTimeSQLite(t *test
 		t.Fatalf("User retired_at = %s, fixed=%s range=[%s,%s]",
 			tombstone.RetiredAt.String(), fixed.String(), beforeWall, afterWall)
 	}
-	wantEpochs := map[model.TenantID]int64{tenantA: beforeA + 1, tenantB: beforeB + 1}
+	if got := F2AUserAuthorityVersionForTest(t, h.raw, victim.user.ID); got != beforeH+1 {
+		t.Fatalf("User authority after retirement = %d, want %d", got, beforeH+1)
+	}
+	// Target protocol: membership cleanup bumps tenant A. Tenant B is inventoried
+	// but structurally unaffected, so G is carried unchanged. Both receipts remain.
+	wantEpochs := map[model.TenantID]int64{tenantA: beforeA + 1, tenantB: beforeB}
 	if len(tombstone.ResultingEpochs) != len(wantEpochs) {
 		t.Fatalf("User epoch map = %+v, want both real tenants", tombstone.ResultingEpochs)
 	}
@@ -1636,8 +1714,11 @@ func TestRetireUserAllTenantsAuthorityCleanupReplayAndDatabaseTimeSQLite(t *test
 	if got := directoryWriterTestEpoch(t, h.raw, tenantA).Version; got != beforeA+1 {
 		t.Fatalf("User replay bumped tenant A to %d, want %d", got, beforeA+1)
 	}
-	if got := directoryWriterTestEpoch(t, h.raw, tenantB).Version; got != beforeB+1 {
-		t.Fatalf("User replay bumped tenant B to %d, want %d", got, beforeB+1)
+	if got := directoryWriterTestEpoch(t, h.raw, tenantB).Version; got != beforeB {
+		t.Fatalf("User replay bumped tenant B to %d, want unchanged %d", got, beforeB)
+	}
+	if got := F2AUserAuthorityVersionForTest(t, h.raw, victim.user.ID); got != beforeH+1 {
+		t.Fatalf("User replay bumped H to %d, want %d", got, beforeH+1)
 	}
 
 	for _, attempt := range []struct {
@@ -1708,7 +1789,7 @@ func TestRetireUserAllTenantsAuthorityCleanupReplayAndDatabaseTimeSQLite(t *test
 
 func TestDirectoryAuthorityGuardsTraverseFullTokenAncestryAndReplayRejectsResidualSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-token-ancestry")
 	victim := retirementCreateUser(t, h.raw, "retirement-token-ancestry-victim")
 	owner := retirementCreateUser(t, h.raw, "retirement-token-ancestry-owner")
@@ -1836,7 +1917,7 @@ func TestDirectoryAuthorityGuardsTraverseFullTokenAncestryAndReplayRejectsResidu
 
 func TestDirectoryAuthorityRepositoriesIgnoreSQLiteTempSourcesAndTargets(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-authority-temp")
 	user := retirementCreateUser(t, h.raw, "retirement-authority-temp-user")
 	var token model.APIToken
@@ -1955,6 +2036,11 @@ func TestDirectoryAuthorityRepositoriesIgnoreSQLiteTempSourcesAndTargets(t *test
 	// Leave the parent/session only in TEMP. Every source validation must read
 	// main and refuse before it can write any real target row.
 	if err := h.raw.AuthMutate(ctx, func(auth store.AuthScope) error {
+		if err := auth.(store.AuthUserAuthorityWriter).PrepareUserAuthorityWrite(
+			ctx, []model.ID{user.ID},
+		); err != nil {
+			return err
+		}
 		if err := auth.Tokens().Delete(ctx, qualifiedChild.ID); err != nil {
 			return err
 		}
@@ -2047,7 +2133,7 @@ func TestDirectoryAuthorityRepositoriesIgnoreSQLiteTempSourcesAndTargets(t *test
 
 func TestDirectoryAuthorityZeroUserTokenLocksBeforeCreateAndUpdateSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-zero-user-token-lock")
 	h.enforce(t)
 	// This used to assert lockCount==1 as the FIRST statement of the callback, which
@@ -2107,7 +2193,7 @@ func TestDirectoryAuthorityZeroUserTokenLocksBeforeCreateAndUpdateSQLite(t *test
 
 func TestRetireUserAuthorityPostLockInterleavingsSQLite(t *testing.T) {
 	t.Run("retirement-wins-stale-issuer-refused", func(t *testing.T) {
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		provisionTenant(t, h.raw, "retirement-race-wins")
 		staleUser := retirementCreateUser(t, h.raw, "retirement-race-stale-user")
 		h.enforce(t)
@@ -2170,7 +2256,7 @@ func TestRetireUserAuthorityPostLockInterleavingsSQLite(t *testing.T) {
 	})
 
 	t.Run("issuer-audit-before-credential-finishes-with-global-first", func(t *testing.T) {
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-race-issuer-first")
 		victim := retirementCreateUser(t, h.raw, "retirement-race-issuer-user")
 		h.enforce(t)
@@ -2253,13 +2339,14 @@ func TestRetireUserAuthorityPostLockInterleavingsSQLite(t *testing.T) {
 
 func TestRetireUserMembershipGlobalLockInterleavingsSQLite(t *testing.T) {
 	t.Run("retirement-wins-membership-refused", func(t *testing.T) {
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-membership-race-retire-first")
 		user := retirementCreateUser(t, h.raw, "retirement-membership-race-retire-first")
 		h.enforce(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		beforeEpoch := directoryWriterTestEpoch(t, h.raw, tenant).Version
+		beforeH := F2AUserAuthorityVersionForTest(t, h.raw, user.ID)
 		auditReached := make(chan struct{})
 		releaseRetirement := make(chan struct{})
 		directoryRetirementAfterAuditTestHook = func(*model.AuditEvent) {
@@ -2317,19 +2404,24 @@ func TestRetireUserMembershipGlobalLockInterleavingsSQLite(t *testing.T) {
 		); got != 0 {
 			t.Fatalf("retirement-first Membership rows = %d, want 0", got)
 		}
-		if got := directoryWriterTestEpoch(t, h.raw, tenant).Version; got != beforeEpoch+1 {
-			t.Fatalf("retirement-first epoch = %d, want %d", got, beforeEpoch+1)
+		if got := F2AUserAuthorityVersionForTest(t, h.raw, user.ID); got != beforeH+1 {
+			t.Fatalf("retirement-first H = %d, want %d", got, beforeH+1)
+		}
+		// No membership existed, so target protocol carries G unchanged.
+		if got := directoryWriterTestEpoch(t, h.raw, tenant).Version; got != beforeEpoch {
+			t.Fatalf("retirement-first epoch = %d, want unchanged %d", got, beforeEpoch)
 		}
 	})
 
 	t.Run("membership-wins-retirement-cleans", func(t *testing.T) {
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-membership-race-writer-first")
 		user := retirementCreateUser(t, h.raw, "retirement-membership-race-writer-first")
 		h.enforce(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		beforeEpoch := directoryWriterTestEpoch(t, h.raw, tenant).Version
+		beforeH := F2AUserAuthorityVersionForTest(t, h.raw, user.ID)
 		writerLocked := make(chan struct{})
 		releaseWriter := make(chan struct{})
 		var once sync.Once
@@ -2394,6 +2486,9 @@ func TestRetireUserMembershipGlobalLockInterleavingsSQLite(t *testing.T) {
 		); got != 0 {
 			t.Fatalf("Membership-first residual rows = %d, want 0", got)
 		}
+		if got := F2AUserAuthorityVersionForTest(t, h.raw, user.ID); got != beforeH+1 {
+			t.Fatalf("Membership-first H = %d, want %d", got, beforeH+1)
+		}
 		if got := directoryWriterTestEpoch(t, h.raw, tenant).Version; got != beforeEpoch+2 {
 			t.Fatalf("Membership-first epoch = %d, want %d", got, beforeEpoch+2)
 		}
@@ -2403,7 +2498,7 @@ func TestRetireUserMembershipGlobalLockInterleavingsSQLite(t *testing.T) {
 func TestDirectoryRetirementRejectsTenantAuditBeforeDirectoryWriteSQLite(t *testing.T) {
 	t.Run("identity-and-agent-reject-before-global", func(t *testing.T) {
 		ctx := context.Background()
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-audit-first-reject")
 		identity := retirementCreateIdentity(t, h.raw, tenant, "audit-first-identity")
 		agent := retirementCreateAgent(
@@ -2489,7 +2584,7 @@ func TestDirectoryRetirementRejectsTenantAuditBeforeDirectoryWriteSQLite(t *test
 	})
 
 	t.Run("audit-first-loser-rolls-back-and-retirement-finishes", func(t *testing.T) {
-		h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+		h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-audit-first-concurrent")
 		identity := retirementCreateIdentity(t, h.raw, tenant, "audit-first-concurrent-identity")
 		agent := retirementCreateAgent(
@@ -2569,7 +2664,7 @@ func TestDirectoryRetirementRejectsTenantAuditBeforeDirectoryWriteSQLite(t *test
 
 func TestRetireUserRollbackRestoresAuthoritySourceEpochAndAuditSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenantA := provisionTenant(t, h.raw, "retire-user-rollback-a")
 	tenantB := provisionTenant(t, h.raw, "retire-user-rollback-b")
 	victim, err := directoryEpochTestSeedRetainedAuth(ctx, h.raw, "retire-user-rollback")
@@ -2653,7 +2748,7 @@ func TestRetireUserRollbackRestoresAuthoritySourceEpochAndAuditSQLite(t *testing
 }
 
 func TestDirectoryRetirementReplayIgnoresRequestTraceCorrelationSQLite(t *testing.T) {
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "retirement-trace-replay")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "trace-replay-identity")
 	h.enforce(t)
@@ -2777,7 +2872,7 @@ func TestDirectorySnapshotRejectsUserTombstoneSourceContradictionAndMissingAncho
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+			h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 			tenant := provisionTenant(t, h.raw, "user-tombstone-"+tc.name)
 			userID := model.NewID()
 			var user model.User
@@ -2827,7 +2922,7 @@ func TestDirectorySnapshotRejectsUserTombstoneSourceContradictionAndMissingAncho
 
 func TestDirectorySnapshotRejectsIdentitySourceTombstoneContradictionSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "identity-source-tombstone-contradiction")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "identity-live-with-tombstone")
 	retirementSeedDirectoryTombstone(
@@ -2865,7 +2960,7 @@ func TestDirectorySnapshotRejectsIdentitySourceTombstoneContradictionSQLite(t *t
 
 func TestRetireAgentRejectsContradictoryStableIdentityTombstoneSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "agent-stable-identity-contradiction")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "agent-contradictory-identity")
 	agent := retirementCreateAgent(
@@ -2905,7 +3000,7 @@ func TestRetireAgentRejectsContradictoryStableIdentityTombstoneSQLite(t *testing
 
 func TestDirectorySnapshotRejectsAgentTombstoneBindingsAndOldUpdateSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "agent-tombstone-contradiction")
 	oldIdentity := retirementCreateIdentity(t, h.raw, tenant, "agent-old-identity")
 	newIdentity := retirementCreateIdentity(t, h.raw, tenant, "agent-new-identity")
@@ -2966,7 +3061,7 @@ func TestDirectorySnapshotRejectsAgentTombstoneBindingsAndOldUpdateSQLite(t *tes
 
 func TestDirectorySnapshotRejectsRetiredAgentSourceIDReboundElsewhereSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "agent-source-id-rebound")
 	retiredIdentity := retirementCreateIdentity(t, h.raw, tenant, "agent-source-retired-identity")
 	otherIdentity := retirementCreateIdentity(t, h.raw, tenant, "agent-source-other-identity")
@@ -3011,7 +3106,7 @@ func TestDirectorySnapshotRejectsRetiredAgentSourceIDReboundElsewhereSQLite(t *t
 
 func TestDirectorySnapshotRejectsIdentityTombstoneNewAgentBindingSQLite(t *testing.T) {
 	ctx := context.Background()
-	h := newDirectoryRetirementSQLiteHarness(t, store.Config{})
+	h := newCurrentSchemaDirectoryRetirementSQLiteHarness(t)
 	tenant := provisionTenant(t, h.raw, "identity-tombstone-agent-contradiction")
 	identity := retirementCreateIdentity(t, h.raw, tenant, "identity-tombstone-source")
 	h.enforce(t)

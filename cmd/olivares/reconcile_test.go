@@ -40,9 +40,10 @@ func (f *recFakeSource) Close(context.Context) error { return nil }
 
 // newReconcilerHarness builds a started runtime + a real SourceStore + a reconciler
 // whose prepare seam yields fake connectors keyed by kind: kind "boom" is always
-// refused (deny-closed), and every other kind maps to the connector identity
-// "olivares.<kind>" — so two sources of the same kind collide on identity (the
-// one-instance-per-kind reality), exactly as real in-proc connectors do.
+// refused (deny-closed), and every other kind maps to the connector descriptor
+// "olivares.<kind>" — so two rows of the same kind SHARE a descriptor, exactly as
+// real in-proc connectors do. They are still two distinct sources: the row's own
+// name is the runtime identity, and the descriptor is only the connector's type.
 func newReconcilerHarness(t *testing.T) (*sourceReconciler, *auth.SourceStore, *runtime.Runtime) {
 	t.Helper()
 	ctx := context.Background()
@@ -95,10 +96,23 @@ func recAdmin() auth.Principal {
 	return auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), CredID: model.NewID(), Superadmin: true, DisplayName: "test-admin"}
 }
 
+// liveNames maps each live source's REGISTRATION name (the roster row's name) to
+// its status. Sources are keyed by that name, not by the connector descriptor,
+// which is why two rows of one kind both appear here.
 func liveNames(rt *runtime.Runtime) map[string]runtime.Status {
 	out := map[string]runtime.Status{}
 	for _, s := range rt.LiveSourceInventory() {
 		out[s.Name] = s.Status
+	}
+	return out
+}
+
+// liveComponents maps each live source's registration name to the connector
+// descriptor serving it — the identity kept separately for inspection.
+func liveComponents(rt *runtime.Runtime) map[string]string {
+	out := map[string]string{}
+	for _, s := range rt.LiveSourceInventory() {
+		out[s.Name] = s.Component
 	}
 	return out
 }
@@ -121,8 +135,11 @@ func TestReconcileAddRotateRemove(t *testing.T) {
 	if len(rep.RequiresRestart) == 0 {
 		t.Error("reload report must always state the requires-restart domains")
 	}
-	if live := liveNames(rt); live["olivares.vault"] != runtime.StatusRunning || live["olivares.claudeapi"] != runtime.StatusRunning {
+	if live := liveNames(rt); live["vault-prod"] != runtime.StatusRunning || live["claude"] != runtime.StatusRunning {
 		t.Fatalf("sources not running after reconcile: %v", live)
+	}
+	if comp := liveComponents(rt); comp["vault-prod"] != "olivares.vault" || comp["claude"] != "olivares.claudeapi" {
+		t.Errorf("the connector descriptor must be retained beside the name: %v", comp)
 	}
 
 	// Re-reconcile with no change → all unchanged.
@@ -137,7 +154,7 @@ func TestReconcileAddRotateRemove(t *testing.T) {
 	if len(rep.Rotated) != 1 || rep.Rotated[0] != "vault-prod" || rep.Unchanged != 1 {
 		t.Fatalf("rotate reconcile = %+v, want vault-prod rotated", rep)
 	}
-	if liveNames(rt)["olivares.vault"] != runtime.StatusRunning {
+	if liveNames(rt)["vault-prod"] != runtime.StatusRunning {
 		t.Error("rotated source should still be running")
 	}
 
@@ -147,7 +164,7 @@ func TestReconcileAddRotateRemove(t *testing.T) {
 	if len(rep.Removed) != 1 || rep.Removed[0] != "claude" {
 		t.Fatalf("disable reconcile = %+v, want claude removed", rep)
 	}
-	if _, present := liveNames(rt)["olivares.claudeapi"]; present {
+	if _, present := liveNames(rt)["claude"]; present {
 		t.Error("disabled source must not be running")
 	}
 
@@ -164,7 +181,7 @@ func TestReconcileAddRotateRemove(t *testing.T) {
 	}
 }
 
-func TestReconcileDenyClosedAndCollision(t *testing.T) {
+func TestReconcileDenyClosedAndSameKindSiblings(t *testing.T) {
 	sr, store, rt := newReconcilerHarness(t)
 	ctx := context.Background()
 
@@ -178,23 +195,31 @@ func TestReconcileDenyClosedAndCollision(t *testing.T) {
 	if len(rep.Rejected) != 1 || rep.Rejected[0].Name != "broken" {
 		t.Fatalf("expected 'broken' rejected: %+v", rep)
 	}
-	if liveNames(rt)["olivares.vault"] != runtime.StatusRunning {
+	if liveNames(rt)["good"] != runtime.StatusRunning {
 		t.Error("the good source must run despite a sibling's rejection")
 	}
 
-	// Two sources of the SAME kind collide on connector identity → the second is
-	// rejected honestly (never silently rotates the first out). ('broken' stays
-	// rejected too — it is still an enabled, unbuildable row.)
+	// A second row of the SAME kind is a SECOND SOURCE, not a collision: it shares
+	// the connector descriptor and has its own name, so it is added and the first
+	// keeps running. ('broken' stays rejected — it is still an enabled, unbuildable
+	// row, which is what keeps this case a deny-closed test and not just a happy one.)
 	putRow(t, store, model.SourceDef{Name: "vault-two", Kind: "vault", Tenant: "acme", Enabled: true})
 	rep, _ = sr.reconcile(ctx)
-	if !rejectedBy(rep, "vault-two") {
-		t.Fatalf("expected identity collision to reject vault-two: %+v", rep)
+	if len(rep.Added) != 1 || rep.Added[0] != "vault-two" {
+		t.Fatalf("a second source of one kind must be added: %+v", rep)
 	}
-	if len(rep.Added) != 0 || len(rep.Rotated) != 0 {
-		t.Fatalf("a collision must not add or rotate anything: %+v", rep)
+	if rejectedBy(rep, "vault-two") {
+		t.Fatalf("vault-two was rejected; two rows of one kind are two sources: %+v", rep)
 	}
-	if liveNames(rt)["olivares.vault"] != runtime.StatusRunning {
-		t.Error("the original source must keep running through a collision")
+	if !rejectedBy(rep, "broken") {
+		t.Fatalf("the unbuildable row must stay rejected: %+v", rep)
+	}
+	live := liveNames(rt)
+	if live["good"] != runtime.StatusRunning || live["vault-two"] != runtime.StatusRunning {
+		t.Fatalf("both rows of the kind must run: %v", live)
+	}
+	if comp := liveComponents(rt); comp["good"] != comp["vault-two"] || comp["good"] != "olivares.vault" {
+		t.Errorf("both sources must report the SAME connector descriptor: %v", comp)
 	}
 }
 
@@ -206,7 +231,7 @@ func TestDeleteSourceTrimsName(t *testing.T) {
 	if _, err := sr.PutSource(ctx, actor, api.SourceRosterInput{Name: "s1", Kind: "vault", Tenant: "acme", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	if liveNames(rt)["olivares.vault"] != runtime.StatusRunning {
+	if liveNames(rt)["s1"] != runtime.StatusRunning {
 		t.Fatal("source not wired")
 	}
 	// A whitespace-padded name must still stop the LIVE source (regression: the
@@ -218,7 +243,7 @@ func TestDeleteSourceTrimsName(t *testing.T) {
 	if !res.Applied || res.Action != "removed" {
 		t.Fatalf("DeleteSource(padded) = %+v, want applied removed", res)
 	}
-	if _, present := liveNames(rt)["olivares.vault"]; present {
+	if _, present := liveNames(rt)["s1"]; present {
 		t.Error("a padded-name delete left the connector running (the HIGH bug)")
 	}
 }
@@ -292,7 +317,7 @@ func TestPutAndDeleteSourceApplyLive(t *testing.T) {
 	if !res.Persisted || !res.Applied || res.Action != "added" {
 		t.Fatalf("PutSource result = %+v, want persisted+applied+added", res)
 	}
-	if liveNames(rt)["olivares.vault"] != runtime.StatusRunning {
+	if liveNames(rt)["s1"] != runtime.StatusRunning {
 		t.Fatal("PutSource did not wire the source live")
 	}
 
@@ -322,7 +347,7 @@ func TestPutAndDeleteSourceApplyLive(t *testing.T) {
 	if !res.Applied || res.Action != "removed" {
 		t.Fatalf("DeleteSource = %+v", res)
 	}
-	if _, present := liveNames(rt)["olivares.vault"]; present {
+	if _, present := liveNames(rt)["s1"]; present {
 		t.Error("DeleteSource did not stop the live source")
 	}
 }

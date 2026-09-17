@@ -36,6 +36,38 @@ olivares status --server https://127.0.0.1:8443 \
 
 改为固定证书指纹并不会以「标志值非法」的方式失败——它是一个格式正确的 32 字节摘要，因此连接会被尝试并以 `TLS SPKI pin mismatch` 拒绝，而该错误会给出你本应使用的值。使用 `curl --pinnedpubkey sha256//…` 时，请补上结尾的 `=` 填充：引擎有意打印不带填充的 base64，这样该值在日志中不会被加引号、可以安全复制粘贴，但 curl 要求带填充的形式。
 
+## 主机安装诊断
+
+生成的 CLI 参考将 `olivares doctor` 描述为：diagnose this host
+installation without printing secrets
+（[CLI](/reference/cli/#command-olivares-doctor)）。标志包括 `--data-dir`, `--mode` (`auto` \| `user` \| `system`), `--init` (`auto` \| `systemd` \| `openrc` \| `launchd`), `--config`, `--unit`, `--binary`, `--server`, `--timeout`, `--ca-cert`, `--audit-tenant`, `--check-updates`。
+不要把这张表当成额外帮助文本；它就是那条生成命令。
+
+### `agentops-layout` check
+
+`olivares doctor` 报告名为 `agentops-layout` 的检查（`CHANGELOG.md`
+`[26.9.0]`；`cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`）。它不是子命令。
+它测量所有权清单记录的原生 AgentOps 布局：受管 drop-in 必须以其 mode 存在，并
+必须命名记录的 claude `HOME`、令牌目录和工作区；runtime env 必须以配置 mode
+存在（从不读取值）；工作区必须是目录（`docs/RELEASE-INSTALLER.md`）。
+
+该检查返回的状态：
+
+| Status | When |
+|---|---|
+| `not_applicable` | no readable manifest; malformed manifest; or the manifest records no AgentOps files (`dropin`, `runtime-env`, `workspace_dir` all empty) |
+| `fail` | drop-in does not reference a recorded token (`$dataDir/claude-home`, `$dataDir/run`, or `workspace_dir`); workspace path is absent or is not a directory |
+| `unknown` | drop-in or workspace is not readable |
+| `pass` | drop-in, runtime-env (values not read) and workspace directory agree with the record |
+
+在清单记录至少一个 AgentOps 文件之前，Required 为 false；之后该检查为
+required。引擎打印的修复字符串包括
+`rerun install-agentops.sh; the managed drop-in and the recorded layout disagree`
+和 `recreate the recorded workspace or rerun install-agentops.sh with OLIVARES_WORKSPACE_DIR`。
+
+文本和 `-o json` 都包含键名和路径，但从不包含配置值
+（`docs/RELEASE-INSTALLER.md`）。
+
 ## 数据源与访问图
 
 ### 访问图是空的
@@ -68,10 +100,18 @@ ingest: no observation sources configured (OLIVARES_SOURCES_CONFIG.sources is em
 
 ### `/readyz` 返回 503
 
-阅读响应体 — 它区分两种情况：
+阅读响应体。503 既不是 ready，也不是成功。`/livez` 保持 200 只表示进程仍在运行；`/pod-readyz` 保持 200 只表示 pod 健康（存储可达），不检查领导权，也不做首次启动能力探测。两者都不会解除默认 Helm chart 或扁平清单的阻塞，它们把 `/readyz` 接成容器的 `readinessProbe`。
 
 - `{"status":"unavailable","store":"down"}` — 存储不可达。在 SQLite 上：磁盘满、PVC 问题、文件权限。在 Postgres 上：可达性与凭据。**存活检查（liveness）有意保持通过**（进程仍存活），因此存储中断时不会有任何东西反复重启循环；若它持续卡住，修复存储后手动重启 pod/服务。
-- `{"status":"standby","leader":false,…}` — 一个诚实作答的 HA 备机。这不是错误：Service 会路由到 leader；备机按设计将流量排空。若 **所有** 副本都报告 standby，则 leader 选举卡住了 — 检查 Postgres advisory-lock 的连通性。
+- `{"status":"standby","store":"up","leader":false}` — 一个诚实作答的 HA 备机。这不是错误：Service 会路由到 leader；备机按设计将流量排空。若 **所有** 副本都报告 standby，则 leader 选举卡住了 — 检查 Postgres advisory-lock 的连通性。
+- `{"status":"setup_blocked","store":"up","leader":true,"setup_required":true,"code":"cross_tenant_admin_pool_not_configured"}`
+  — PostgreSQL 首次启动无法权威地枚举组织。请配置 `NOSUPERUSER BYPASSRLS` 管理角色和 `--admin-dsn`（[Kubernetes 上的 Postgres](/zh/tutorials/getting-started/kubernetes/#2-postgres多租户)）。响应体带有固定补救。在该前提被纠正之前，默认 readiness 探针会让 pod 保持 Not Ready。不要改接探针来掩盖这一点。
+- `{"status":"setup_unavailable","store":"up","leader":true,"code":"setup_state_unavailable"}`
+  — 此节点无法观察安装是否已完成设置。`setup_required` 被**省略**，因为其值未知。这不是已知的空安装。
+- `{"status":"setup_unavailable","store":"up","leader":true,"setup_required":true,"code":"setup_probe_unavailable"}`
+  — 已知安装尚未设置，但首次启动能力探测因管理池拒绝以外的原因失败。超时不是空资产域的证据。
+
+200 `{"status":"ok",…,"setup_required":true}` 是另一种观察：可以尝试首次启动设置。`POST /v1/setup` 仍会重复其权限检查。该 200 不消耗可用性预算；这些 503 会。
 
 ### pod 挂了却没有任何东西接管
 

@@ -42,7 +42,9 @@ exclusive to restoring it:
 a backup whose chain is not already green; the **bundle** carries the signing keys
 **encrypted** under an operator KEK; and `dr restore`/`dr verify` **re-verify**
 chain + per-event signatures + checkpoints against the restored store **and** check
-that the tip and the key fingerprint match the manifest.
+that the tip and the key fingerprint match the manifest. New bundles also bind the
+complete manifest and every non-manifest payload with `hmac-sha256-kek-v1` under that
+operator KEK, so metadata and payload tampering is rejected before restore writes.
 
 ---
 
@@ -52,7 +54,8 @@ A bundle (`*.drbundle`) is a `tar.gz` with a fixed layout:
 
 ```
 manifest.json      control record (NOT secret): tips per tenant, public key
-                   fingerprints, snapshot method and digest, instant (RPO).
+                   fingerprints, snapshot method and digest, instant (RPO),
+                   per-file digest inventory and keyed authentication tag.
 keys/kek.json      KDF parameters to re-derive the KEK (Argon2id salt; no secret).
 keys/*.key.enc     each signing key (audit + catalog), AES-256-GCM under the KEK.
 store/<snapshot>   the consistent store snapshot (absent in PITR mode).
@@ -64,6 +67,9 @@ store/<snapshot>   the consistent store snapshot (absent in PITR mode).
   (provided by the deployment).
 - **The key fingerprint is the public one** (one-way); the private key never appears in
   the manifest, only encrypted in `keys/*.enc`.
+- **Every non-manifest payload is inventoried by path, size and SHA-256.** The manifest is
+  authenticated with `hmac-sha256-kek-v1` under the operator KEK. This is keyed integrity,
+  not a public signature: anyone holding the KEK can authenticate a bundle.
 
 ---
 
@@ -196,10 +202,40 @@ manifest inventory. Without the latter, FORCE RLS makes the dump fail or makes t
 tenant inventory incomplete. See `deploy/postgres/README.md` and
 `deploy/postgres/backup/{pg-dump.sh,pitr-setup.md}`.
 
+**In the owner/app split, add a third: `OLIVARES_OWNER_DSN` (`--owner-dsn`).**
+`dr backup` boots the engine to build the chain-tip manifest, and that boot runs
+the schema's DDL preflight. In the split posture the application role is denied
+`CREATE` on the engine schema **by design** (`deploy/postgres/01-app-role.sql`,
+`olivares db init --owner-role`), so the boot cannot run as it — measured on
+PostgreSQL 16.15, the backup fails with `SQLSTATE 42501`. With `--owner-dsn` the
+DDL runs as the owner while runtime traffic stays on the app role. Leave it unset
+in the **single-role** posture, where the app role owns the schema and is its own
+DDL connection. Both roles must be NOSUPERUSER NOBYPASSRLS; check them first with
+`olivares db check --dsn … --owner-dsn … --strict`.
+
+**The `--admin-dsn` role must be able to `SELECT` EVERY relation the engine
+creates — all of them, not most.** `pg_dump` opens its snapshot by locking the whole
+schema in ONE `LOCK TABLE … IN ACCESS SHARE MODE` statement, so a single unreadable
+relation does not shrink the dump, it aborts it:
+
+    pg_dump: error: query failed: ERROR:  permission denied for table <relation>
+    pg_dump: detail: Query was: LOCK TABLE public.<every relation> IN ACCESS SHARE MODE
+
+`olivares db init --admin-role …` and `deploy/postgres/01-app-role.sql` establish that
+read for present and future relations (`GRANT SELECT ON ALL TABLES IN SCHEMA public`
+plus `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON TABLES`), and every engine migration
+leaves it in place. If a database was provisioned by hand, or its admin role was added
+after the schema existed, re-run the pair before the first backup — the grant is
+read-only and never gives the backup role a write:
+
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO <admin>;
+    ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT SELECT ON TABLES TO <admin>;
+
 ### Kubernetes / Compose
 - Helm: `--set backup.enabled=true --set backup.kekSecret=dr-kek` (CronJob; PG with
   a postgres-client initContainer for `pg_dump`; Postgres also requires
-  `--set postgres.adminDsnKey=admin-dsn`). See `deploy/helm/README.md`.
+  `--set postgres.adminDsnKey=admin-dsn`, and in the owner/app split
+  `--set postgres.ownerDsnKey=owner-dsn`). See `deploy/helm/README.md`.
 - Compose: `docker-compose.backup.yml`, profile `backup`. See `deploy/compose/README.md`.
 
 The backup **aborts** if some tenant chain does not verify at the moment of the backup
@@ -217,16 +253,92 @@ olivares dr restore --in /backups/olivares-dr-<ts>.drbundle \
   --passphrase-file /run/secrets/dr-pass
 # (offsite: olivares dr pull --name <bundle> --out /tmp/b.drbundle --offsite-bucket … first)
 # (Postgres: add --dsn=… to the EMPTY target; use deploy/postgres/backup/pg-restore.sh)
+# (Postgres owner/app split: ALSO add --owner-dsn=… — it is the pg_restore target
+#  AND the boot's DDL connection; without it the restore cannot create anything)
 ```
 
 `dr restore` does, in order:
-1. **Extracts** the bundle and checks the snapshot **digest** against the manifest
-   (detects a corrupt/tampered bundle).
-2. **Decrypts** the signing keys with the KEK and installs them 0600 in the data-dir
+0. **Refuses a wrong or incoherent connection BEFORE anything is written.** On
+   Postgres it opens **one probe per supplied pool — one pinned connection, one
+   transaction** — and checks the facts the *server* reports on that session, not
+   the DSN text, so a service alias or a connection pooler in front of one estate
+   is read as the estate behind it. It refuses when:
+
+   - the `--dsn` or `--owner-dsn` role is a superuser or `BYPASSRLS` (FORCE RLS
+     would be inert), or the `--admin-dsn` role is a superuser or is **not**
+     `BYPASSRLS`;
+   - a required role is unreachable;
+   - the DDL role (`--owner-dsn`, else `--dsn`) lacks `CREATE` on the engine
+     schema;
+   - a pool that must **write** cannot: its session is read-only, or its server is
+     in recovery. That is not the same question as the grant — a session under
+     `default_transaction_read_only`, and every session on a hot standby, holds
+     `CREATE` in the catalogue and still cannot execute one. The pools that must
+     write are the **DDL** pool always, **and on a restore the application pool
+     too**, because after the data lands the engine seals the restore declaration
+     into the restored ledger through it. A **backup** is not restricted for that
+     write, and `--admin-dsn` is never required to be writable: the cross-tenant
+     reader is read-only by design;
+   - the pools reached **different clusters**, compared by
+     `pg_control_system().system_identifier` — PostgreSQL's own cluster identity,
+     not the database name and not the postmaster's start time. An unrelated
+     cluster that merely serves a same-named database is refused here;
+   - **any pool is not on the same live server as the DDL pool.** This is proved,
+     not inferred: the DDL connection takes a random advisory key and holds it
+     while each other pool tries to take the same one. Advisory locks are
+     cluster-scoped, so a pool that *acquires* it has proved it is a different
+     server. It is the same challenge the engine runs at Open, asked earlier —
+     and it is the only check that catches a **physical replica**, which reports
+     its primary's cluster identifier and the same database name;
+   - that identifier could **not be read** — an unverifiable identity is refused,
+     never assumed to match. The refusal names the minimum grant
+     (`GRANT EXECUTE ON FUNCTION pg_catalog.pg_control_system() TO <role>`, metadata
+     only) and the command never grants anything itself.
+
+   The refusal names every problem at once and leaves the **target database and the
+   data dir unchanged** — no signing key installed, no `pg_restore` run. The
+   privilege half is the same verdict `olivares db check` prints and the boot guard
+   enforces, asked one step earlier: the guard itself used to run *after*
+   `pg_restore`, so a superuser `--dsn` wrote the whole estate before being refused.
+
+   > **What this gate binds, and what it does not.** Each verdict is true of one
+   > real session, which is then closed; `pg_restore` and the boot connect again.
+   > It is therefore a sound gate on those later writes **only where every backend
+   > reachable by a given DSN is uniform** in role authority, cluster identity,
+   > database and writability — a direct route, or a pooler in front of one estate.
+   > Behind a balancer free to answer a later dial with a different backend, this
+   > catches static misconfiguration and nothing more. Binding the check to the
+   > session that performs the first write is a different design and is not
+   > implemented.
+
+**Every DR pool must be on ONE LIVE SERVER, including `--admin-dsn`.** Reading
+through a physical replica is **not supported**, and the pre-flight now refuses it
+up front instead of letting a restore write and then failing at boot. The engine has
+always required this — its directory activation runs the same advisory-key challenge
+at Open and refuses with `directory activation admin DSN does not address the owner
+database: … challenge_acquired=true`, with the database names *agreeing*. Supporting
+a replica reader would need an authoritative snapshot/LSN contract for what the
+tenant inventory it enumerates is a snapshot **of**, and how stale it may be; that
+does not exist yet. Point every DSN at the same server.
+1. **Extracts** regular entries into scratch, refusing absolute, non-canonical and
+   traversing paths; no live path is touched.
+2. **Refuses** an export from a **newer engine** before deriving keys or writing restore
+   state, and names the minimum engine to install.
+3. **Derives** the KEK, authenticates the complete manifest and checks every declared
+   payload's path, size and digest. A separately authenticated pre-v26.9 bundle requires
+   the explicit `--allow-legacy-unsigned` exception.
+4. **Decrypts** the signing keys with the KEK and installs them 0600 in the data-dir
    (fail-closed on overwrite unless `--force`).
-3. **Restores** the store snapshot (SQLite: copies the file; Postgres: `pg_restore`;
-   PITR: skips — the store was recovered out-of-band by WAL replay).
-4. **Boots** the engine and runs `RestoreVerify`: for each tenant in the manifest,
+5. **Restores** the store snapshot (SQLite: copies the file; Postgres: `pg_restore`
+   **into the `--owner-dsn` role when one is configured**, else `--dsn` — never
+   `--admin-dsn`; PITR: skips — the store was recovered out-of-band by WAL replay).
+   `pg_restore` is a separate process that connects again, so it is the same
+   resolved **DSN** the pre-flight judged, not the same session — see the
+   precondition under step 0.
+   Restoring as the owner is also what makes the restored tables owner-owned, which
+   is what reproduces the source estate's append-only ACL posture rather than a
+   different one.
+6. **Boots** the engine and runs `RestoreVerify`: for each tenant in the manifest,
    chain (`Verify`) + per-event signatures (`VerifyEvents` against the restored key)
    + checkpoints + **tip == manifest** + **key fingerprint == manifest**. **Exits with
    a non-zero code if the restore is NOT continuity-safe** (do not resume writes).
@@ -356,6 +468,11 @@ olivares dr verify --in /backups/olivares-dr-<ts>.drbundle --passphrase-file /ru
 #           verification requires restoring to a scratch Postgres (see §9).
 ```
 
+`dr inspect` is metadata inspection only: it does not receive the KEK and therefore does
+not authenticate the manifest. Use `dr verify`, not `inspect`, for an integrity decision.
+For a separately authenticated older bundle, add `--allow-legacy-unsigned` deliberately;
+the default is deny-closed.
+
 **b) Full round-trip drill with a MEASURED RTO** (proves the whole pipeline), no prod:
 ```sh
 task dr:drill                 # or: olivares dr drill --events 1000
@@ -377,7 +494,8 @@ Record the result and the measured RTO (§5). A failed drill is an incident.
 | Restore with a **wrong key** | same as above (double detection: signatures + fingerprint). |
 | **Inconsistent snapshot** (head/tail mismatched, torn copy) | `Verify` → `tail-truncated`/`head-mismatch`. |
 | **Incomplete restore** (old/partial bundle, exact mode) | restored tip ≠ manifest tip → hard failure (SQLite). |
-| **Corrupt/tampered bundle** | snapshot digest ≠ manifest → restore rejected. |
+| **Corrupt/tampered bundle** | manifest HMAC or any per-file path/size/SHA-256 differs → restore rejected before writes. |
+| Export from a **newer engine** | version comparison refuses before writes and names the minimum engine to install. |
 | **Tamper** of a row after restoring | `Verify` → `hash-mismatch` (the ledger stays tamper-evident after the restore). |
 | **Wrong passphrase/KEK** | the AES-GCM tag fails → authenticated error, never a silently bad key. |
 
@@ -385,10 +503,54 @@ Everything above is covered by tests (`core/dr/*_test.go`,
 `cmd/olivares/cmd_dr_test.go`).
 
 ### Honest limits
-- **Postgres is not tested live in this environment** (there is no PG; the PG tests
-  skip). The mechanism (`pg_dump`/`pg_restore`/PITR) is the standard
-  supported one; the manifest/verification logic is **engine-agnostic** and IS tested
-  over SQLite, so the continuity guarantee is identical once PG is restored.
+- **What is exercised against a live Postgres, and what is not.** The Postgres leg
+  of `cmd/olivares` runs against a real server wherever
+  `OLIVARES_TEST_POSTGRES_SUPERUSER_DSN` is set (`mainline-ci` provides one) and
+  **skips** where it is not — a skipped leg is not a passing one. It provisions the
+  owner/app/admin roles through the product's own `db init` path and drives
+  `dr backup` → `dr restore` end to end in **both** the single-role and the
+  owner/app split postures, plus the wrong-role and mismatched-target refusals. Not
+  covered live anywhere: PITR WAL replay itself (only the companion bundle's
+  keys+manifest path), restore into an **occupied** Postgres target, `--force`,
+  offsite push/pull against a real bucket, and any multi-node/HA behaviour. Only
+  PostgreSQL **16** is measured; nothing here is claimed for 15/17/18. The
+  manifest/verification logic is **engine-agnostic** and is additionally tested over
+  SQLite.
+- **The owner/app split was UNSUPPORTED for DR before `--owner-dsn` existed, not
+  merely untested.** Measured on PostgreSQL 16.15 at Community `b71ef8ef19`: the
+  documented logical backup, logical restore, PITR companion backup and PITR
+  companion restore all exited 1 with `SQLSTATE 42501`, because `dr` was the one
+  boot path in the binary that never carried an owner DSN. It is recorded here
+  rather than deleted so an operator running an older binary knows what they have.
+- **Restoring as the owner does NOT close the pre-boot ACL window, and that window
+  is still open.** Between `pg_restore` finishing and the engine's boot re-asserting
+  the append-only guard, the restored tables carry whatever ACLs the target's
+  ownership and `ALTER DEFAULT PRIVILEGES` produce — the product's dump is
+  `--no-owner --no-privileges`, so the source's revokes are never in the bundle to
+  begin with and the guard is **reconciled at boot**, not preserved by the restore.
+  Measured on 16.15 with the product's own `pg_restore` argv: restoring as the
+  **owner** leaves the app role with `UPDATE`/`DELETE` (but not `TRUNCATE`) on all 64
+  append-only evidence tables in that window; restoring as the **app role** in the
+  single-role posture additionally leaves it implicit `TRUNCATE`, and a
+  `TRUNCATE public.audit_events` was accepted there. In a **successful** restore the
+  window closes seconds later inside the same command and the end state is correct
+  (verified). It becomes durable only if the command dies **between** those two
+  steps. Closing it properly is separate, registered work; do not read `--owner-dsn`
+  as having closed it.
+- **A failed restore leaves the bundle's signing keys in the data dir, and the retry
+  is harder than the first attempt.** Custody is installed before the store is
+  touched and is rolled back only on the `--force` replacement path, so a
+  `pg_restore` that fails into a *clean* target leaves `*-signing.key` behind — after
+  which the identical command classifies the data dir as an existing estate and
+  demands `--operator`/`--reason`. The target itself is untouched
+  (`--single-transaction`). Registered separately; remove the keys by hand before
+  retrying into a clean target.
+- **A bundle produced by a build stamped with a bare commit hash can never be
+  verified or restored, by any build including the one that wrote it.** The manifest
+  is refused with `… is not an orderable release version`, and `dr backup` emits no
+  warning. Release artifacts are stamped by goreleaser, so this bites DR drills run
+  from a source build. Registered separately; use a released binary for a drill whose
+  bundle must be restorable.
 - **Tip-match in Postgres is "advisory"** (the manifest is built from the live
   store, which can run ahead of the dump because of the online backup window). The
   verification of chain/signatures/checkpoints over the restored data is the real
@@ -445,6 +607,117 @@ triggers (`core/internal/store/sqlstore/selftest.go`). Closing that needs a gene
 the boot self-test, which is a known and tracked limitation rather than an oversight. Until it
 lands, the verification points are **arming** and **recovery**, and silent drift between two
 boots is not detected.
+
+---
+
+## 9.6 The local restore-coordination lock, and the read-only rollout prerequisite
+
+Every installation carries a **stable coordination lock** beside the thing it fences:
+
+| Anchor | Lock file | Durable record |
+|---|---|---|
+| the data directory (custody) | `<DATA_DIR>/.dr-control.lock` | `<DATA_DIR>/.dr-control` |
+| a SQLite store file | `<canonical DB path>.dr-control.lock` | `<canonical DB path>.dr-control` |
+
+They are two files on purpose. The lock's value is its **inode**: `flock()` is a property of
+the inode, so a lock whose file gets replaced fences nothing. The record is replaced by
+temp/write/fsync/rename on every transition, which gives it a new inode every time — so it
+cannot be the lock. **The lock file is never truncated, chmod-repaired, replaced or unlinked**,
+by the product or by an operator; the only supported operation on it is creating it once.
+
+### The prerequisite, stated plainly
+
+An ordinary boot **takes** that lock; it does not need to write to it. So the file is opened
+read-only, and a deployment whose custody directory is not writable — the common shape for a
+**remote-PostgreSQL** node with pre-installed signing keys — boots normally **as long as the
+lock file already exists**.
+
+**It must therefore be provisioned BEFORE the custody directory becomes read-only.** A node
+that first meets this control on an already read-only directory is refused with a named
+diagnosis that carries the exact path and the action. That refusal is deliberate: skipping the
+fence on a permission error would publish a store with no restore coordination at all and no
+symptom pointing at it, which is worse than a boot that stops and says what to do.
+
+This is a **migration constraint**, not a claim that nothing changed. A pre-existing read-only
+installation that has never run a writable boot of this version needs the step below.
+
+### The step
+
+Any ordinary writable boot of this version provisions the file as a side effect. To do it
+explicitly, offline, with nothing else running, save the script below and run it once as the
+account that owns the data directory, while the directory is still writable:
+
+```sh
+sh provision-dr-lock.sh '/var/lib/olivares/.dr-control.lock'
+# SQLite installations ALSO need it beside the database file itself:
+sh provision-dr-lock.sh '/var/lib/olivares/olivares.db.dr-control.lock'
+```
+
+**Quote the path, even though these examples do not need it.** A data directory whose
+name contains a space — or a quote, a `$`, a `;`, a `*` — is a valid deployment, and an
+unquoted operand is split by the shell before the script ever sees it: the script would
+be handed two arguments and would provision neither of the files you meant. Inside single
+quotes every byte but `'` is literal; for a path that itself contains one, close, escape
+and reopen: `'/srv/olivares'\''s data/.dr-control.lock'`. The refusal the product prints
+when the lock is missing already emits the pathname quoted this way.
+
+<!-- BEGIN provision-dr-lock.sh: executed verbatim by opgate's tests; keep it and
+     ProvisionLock making the same promise. -->
+
+```sh
+# provision-dr-lock.sh — create the DR coordination lock file, and nothing else.
+# usage: sh provision-dr-lock.sh <lock-path>...
+#
+# CREATE-ONLY. An existing lock is left exactly as it is: same inode, same bytes,
+# same mode. It is never truncated, replaced, unlinked or chmod-repaired, because
+# the exclusion IS that inode and a live holder is fencing on it right now.
+for lock in "$@"; do
+	if [ -L "$lock" ] || { [ -e "$lock" ] && [ ! -f "$lock" ]; }; then
+		echo "REFUSING $lock: it exists and is not a regular file. The product refuses it too; remove or repair it deliberately, with the service stopped." >&2
+		exit 1
+	elif [ -e "$lock" ]; then
+		echo "already provisioned, left untouched: $lock"
+	elif (umask 077; set -C; : > "$lock"); then
+		echo "created $lock"
+	else
+		echo "could not create $lock — is the directory writable, and are you its owner?" >&2
+		exit 1
+	fi
+done
+```
+
+<!-- END provision-dr-lock.sh -->
+
+⛔ **Do not use `install ... /dev/null <lock>` for this, which is what this section said until
+the F3 lot-A correction.** `install` opens the destination `O_CREAT|O_TRUNC` and falls back to
+**unlinking and recreating** it when that open fails — so on an existing lock it resets the mode
+and can hand the path a **new inode** while another process is still holding the old one. Two
+holders would then each believe they were alone, which is precisely the exclusion this file
+exists to provide. The recipe above uses the shell's `noclobber` (`set -C`), which creates with
+`O_EXCL` and fails rather than touching anything that is already there.
+
+Then make the directory read-only again. Verify with a boot: it either starts, or names the
+file it still needs.
+
+- The file is **empty and stays empty**. Nothing reads its contents; only its inode matters.
+- An **existing** file is verified and left exactly as it is. Provisioning is idempotent and
+  repairs nothing — if a file at that path is a symlink or is not a regular file, the boot
+  refuses rather than replacing it, and so does the recipe above.
+- One honest difference from the in-process `opgate.ProvisionLock`, which is what an ordinary
+  writable boot runs: that one **fsyncs** the new file and its directory, and a shell cannot
+  portably do either. If the machine loses power in the seconds after the script prints
+  `created`, the name may not have reached the disk — re-run it, it is create-only.
+- Do **not** point the lock somewhere else. There is one namespace, and a second one would mean
+  two nodes fencing the same destination through two different inodes, which is no fence.
+
+### Limits of this protocol, so nobody infers more than it gives
+
+The lock is keyed by **pathname**, so a destination reachable under several names is refused
+rather than half-fenced: an existing SQLite database with a link count greater than one is not
+opened. Bind-mount aliases, a namespace that swaps the directory underneath a running process,
+and a filesystem without working local `flock()` semantics are **outside** what this protocol
+can see. Detecting a lock file replaced during acquisition is a check that catches an observed
+race; it is not isolation from whoever owns the filesystem.
 
 ---
 

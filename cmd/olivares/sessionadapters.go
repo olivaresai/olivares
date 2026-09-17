@@ -67,7 +67,8 @@ func loadEvalsMonitorWindow(getenv func(string) string, log *slog.Logger) time.D
 // sessionsSampleAdapter bridges the evals.SessionSource seam to the sessions
 // module's public SampleLive: real, bus-observed sessions with module II's honest
 // cc_state vocabulary (which evals' scoreSignal understands — silent_evasion is
-// never a pass) and the canonical core findings attributed to each. It reads
+// never a pass). Legacy findings join only legacy rows; scoped rows explicitly
+// report unavailable findings until that store can prove the same scope. It reads
 // through the sessions module's own data handle, OUTSIDE the monitor's write
 // transaction (handleMonitor samples a wired source before opening it).
 type sessionsSampleAdapter struct {
@@ -98,7 +99,7 @@ func (a sessionsSampleAdapter) Sample(ctx context.Context, tenant model.TenantID
 	out := make([]evals.SessionSample, 0, len(live))
 	for _, s := range live {
 		out = append(out, evals.SessionSample{
-			SessionRef:   s.SessionRef,
+			SessionRef: s.SessionRef, LiveRef: s.LiveRef, Attribution: s.Attribution, ProfileRef: s.ProfileRef, FindingsUnavailable: s.FindingsUnavailable,
 			AgentRef:     s.AgentRef,
 			ModelRef:     s.ModelRef,
 			State:        s.CCState,
@@ -122,6 +123,13 @@ func (a sessionsSampleAdapter) Sample(ctx context.Context, tenant model.TenantID
 // exist" — the window bounds SAMPLES, never an explicit lookup.
 func liveQueryFor(q evals.SampleQuery, window time.Duration) (sessions.LiveSampleQuery, bool) {
 	lq := sessions.LiveSampleQuery{Window: window, Limit: q.Limit}
+	if q.LiveRef != "" {
+		if strings.TrimSpace(q.SubjectRef) != "" || (q.SubjectKind != "" && q.SubjectKind != "session") {
+			return sessions.LiveSampleQuery{}, false
+		}
+		lq.LiveRef, lq.Window = q.LiveRef, 0
+		return lq, true
+	}
 	ref := strings.TrimSpace(q.SubjectRef)
 	switch strings.TrimSpace(q.SubjectKind) {
 	case "":
@@ -157,11 +165,26 @@ type sessionsHistoryAdapter struct {
 var _ sandbox.HistorySource = sessionsHistoryAdapter{}
 
 func (a sessionsHistoryAdapter) Timeline(ctx context.Context, tenant model.TenantID, sessionRef string) ([]sandbox.ReplayStep, error) {
+	return a.timeline(ctx, tenant, sessionRef, "")
+}
+
+func (a sessionsHistoryAdapter) TimelineByLiveRef(ctx context.Context, tenant model.TenantID, liveRef string) ([]sandbox.ReplayStep, error) {
+	return a.timeline(ctx, tenant, "", liveRef)
+}
+
+func (a sessionsHistoryAdapter) timeline(ctx context.Context, tenant model.TenantID, sessionRef, liveRef string) ([]sandbox.ReplayStep, error) {
 	bound := a.max
 	if bound <= 0 {
 		bound = maxReplaySteps
 	}
-	events, truncated, err := a.ss.ReplayTimeline(ctx, tenant, sessionRef, bound)
+	var events []sessions.ReplayEvent
+	var truncated bool
+	var err error
+	if liveRef != "" {
+		events, truncated, err = a.ss.ReplayTimelineByLiveRef(ctx, tenant, liveRef, bound)
+	} else {
+		events, truncated, err = a.ss.ReplayTimeline(ctx, tenant, sessionRef, bound)
+	}
 	if err != nil {
 		return nil, err
 	}

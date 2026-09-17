@@ -108,8 +108,18 @@ func authSessionAuthorityRepo(
 		inner,
 		ts.directoryWriter,
 		directoryTenantResolver[model.AuthSession]{
+			lock: func(ctx context.Context, id model.ID) error {
+				session, err := inner.Get(ctx, id)
+				if err != nil {
+					return err
+				}
+				return ts.directoryWriter.lockUserAuthorities(ctx, []model.ID{session.UserID})
+			},
 			create: func(ctx context.Context, session model.AuthSession) ([]model.TenantID, error) {
-				return nil, validate(ctx, session)
+				if err := validate(ctx, session); err != nil {
+					return nil, err
+				}
+				return nil, ts.directoryWriter.bumpUserAuthorities(ctx, session.UserID)
 			},
 			update: func(ctx context.Context, session model.AuthSession) ([]model.TenantID, error) {
 				old, err := inner.Get(ctx, session.ID)
@@ -125,6 +135,12 @@ func authSessionAuthorityRepo(
 				if authSessionRenewalOnly(old, session) {
 					return nil, nil
 				}
+				if err := ts.directoryWriter.bumpUserAuthorities(ctx, old.UserID, session.UserID); err != nil {
+					return nil, err
+				}
+				if ts.directoryWriter.control.CoverageProtocol == coverageProtocolTarget {
+					return nil, nil
+				}
 				return authSessionDirectoryTenants(ctx, ts, old.UserID, session.UserID)
 			},
 			delete: func(ctx context.Context, id model.ID) ([]model.TenantID, error) {
@@ -134,6 +150,12 @@ func authSessionAuthorityRepo(
 				}
 				if err := validateAuthSessionDeleteShape(old); err != nil {
 					return nil, err
+				}
+				if err := ts.directoryWriter.bumpUserAuthorities(ctx, old.UserID); err != nil {
+					return nil, err
+				}
+				if ts.directoryWriter.control.CoverageProtocol == coverageProtocolTarget {
+					return nil, nil
 				}
 				return authSessionDirectoryTenants(ctx, ts, old.UserID)
 			},
@@ -298,7 +320,7 @@ func authSessionRenewalOnly(old, next model.AuthSession) bool {
 		old.Selector == next.Selector &&
 		bytes.Equal(old.SecretHash, next.SecretHash) &&
 		!old.ExpiresAt.IsZero() && !next.ExpiresAt.IsZero() &&
-		!next.ExpiresAt.Before(old.ExpiresAt) &&
+		old.ExpiresAt.Before(next.ExpiresAt) &&
 		old.Revoked == next.Revoked &&
 		old.CreatedIP == next.CreatedIP &&
 		old.AAL == next.AAL &&

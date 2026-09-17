@@ -49,17 +49,6 @@ interface EventSubscription {
   auth_value_hint?: string
 }
 
-interface Delivery {
-  id: string
-  subscription: string
-  event_seq: number
-  event_type: string
-  status: string
-  origin: string
-  attempts: number
-  last_status?: string
-}
-
 interface DeployDefinition {
   id: string
   name: string

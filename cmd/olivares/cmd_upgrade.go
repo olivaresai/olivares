@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,12 +21,14 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
 )
@@ -86,26 +89,28 @@ const (
 )
 
 type upgradeOptions struct {
-	enterprise     bool
-	token          string
-	endpoint       string
-	channel        string
-	pubkey         string
-	dataDir        string
-	license        string
-	goos           string
-	goarch         string
-	target         string
-	currentVersion string
-	bundle         string
-	check          bool
-	assumeYes      bool
-	forceRollback  bool
-	ifEligible     bool
-	installTimer   bool
-	timerDir       string
-	timerSchedule  string
-	timeout        time.Duration
+	enterprise       bool
+	token            string
+	endpoint         string
+	channel          string
+	pubkey           string
+	dataDir          string
+	license          string
+	goos             string
+	goarch           string
+	target           string
+	currentVersion   string
+	bundle           string
+	downloadProtocol string
+	check            bool
+	assumeYes        bool
+	forceRollback    bool
+	ifEligible       bool
+	installTimer     bool
+	connect          bool
+	timerDir         string
+	timerSchedule    string
+	timeout          time.Duration
 }
 
 func newUpgradeCmd() *cobra.Command {
@@ -154,13 +159,15 @@ func newUpgradeCmd() *cobra.Command {
 	f.StringVar(&o.target, "target", "", "binary path to replace (default: the running executable)")
 	f.StringVar(&o.currentVersion, "current-version", "", "declare the version installed at --target when it cannot be probed (cross-arch staging, a noexec mount, or a build from source); keeps anti-rollback and min_version armed instead of guessing")
 	f.StringVar(&o.bundle, "bundle", "", "install from a local air-gap bundle directory or .tar.gz (no network at all; installing needs a live installed license, verified offline; --check does not)")
+	f.StringVar(&o.downloadProtocol, "download-protocol", downloadProtocolReleaseV1, "gated download protocol for --enterprise: release-v1 (default; resolves one consistent {version,set,manifest,signature} tuple) or legacy (the existing per-request /download route, for a custom or older gateway). A 404 from the new route is a compatibility diagnostic, not an automatic downgrade")
 	f.BoolVar(&o.check, "check", false, "show the upgrade plan (current -> available, channel, CVEs) without swapping")
 	f.BoolVarP(&o.assumeYes, "yes", "y", false, "do not prompt for confirmation before swapping")
 	f.BoolVar(&o.forceRollback, "force-rollback", false, "allow installing an OLDER version than the running one (records an audit entry)")
 	f.BoolVar(&o.ifEligible, "if-eligible", false, "only proceed if this node is in the manifest's staged-rollout cohort (used by the timer)")
 	f.BoolVar(&o.installTimer, "install-timer", false, "emit an opt-in systemd timer+service that runs `upgrade --if-eligible` in a maintenance window")
+	f.BoolVar(&o.connect, "connect", false, "with --enterprise: refresh this data directory's connected credential and download token by proof of possession (`license connect`) instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary")
 	f.StringVar(&o.timerDir, "timer-dir", "", "write the systemd units to this directory instead of printing them")
-	f.StringVar(&o.timerSchedule, "timer-schedule", "Sun *-*-* 03:00:00", "systemd OnCalendar expression for the auto-check timer")
+	f.StringVar(&o.timerSchedule, "timer-schedule", "Sun *-*-* 03:00:00", "systemd OnCalendar expression for the auto-check timer; when omitted, an --enterprise --connect timer runs daily (*-*-* 03:00:00)")
 	f.DurationVar(&o.timeout, "timeout", 5*time.Minute, "overall network timeout")
 	return cmd
 }
@@ -229,8 +236,9 @@ type upgradeResult struct {
 	// build's embedded key and one that trusted a key the caller supplied.
 	OTAKey            string `json:"ota_key"`
 	OTAKeyFingerprint string `json:"ota_key_fingerprint"`
-	// Source is the transport label (public channel, licensed worker, air-gap
-	// bundle) — never a token; describe() is the same value the prose prints.
+	// Source is the sanitized transport label (public channel, licensed worker,
+	// air-gap bundle): scheme://host and a bounded tag, never a token, userinfo,
+	// path, query, fragment, or raw tag. describe() is the same value the prose prints.
 	Source  string `json:"source"`
 	Channel string `json:"channel"`
 	// Current is the version installed AT TARGET, and CurrentDeclared says whether
@@ -287,6 +295,30 @@ func upgradeStatusToken(plan release.UpgradePlan) string {
 }
 
 func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
+	// The two selectors every path PINS — the channel and the gated download protocol — are
+	// validated before anything is generated or fetched. They used to be checked after the
+	// timer branch, so `--install-timer` wrote a unit for whatever was typed (R7 of the
+	// 2026-09-05 review): a value the generator carries into a scheduled command is a value
+	// that must have been validated first.
+	if !release.ValidChannel(o.channel) {
+		return fmt.Errorf("unknown --channel %q (want one of %s)", o.channel, strings.Join(release.Channels, " | "))
+	}
+	if !validDownloadProtocol(o.downloadProtocol) {
+		return fmt.Errorf("unknown --download-protocol %q (want %s | %s)", o.downloadProtocol, downloadProtocolReleaseV1, downloadProtocolLegacy)
+	}
+	// --connect is the connected licensed route, so it is validated with the other selectors: a
+	// timer unit must never pin a combination the run would refuse.
+	if o.connect {
+		switch {
+		case !o.enterprise:
+			return exitcode.New(exitcode.Usage, errors.New("--connect applies to --enterprise: the public channel needs no credential"))
+		case o.bundle != "":
+			return exitcode.New(exitcode.Usage, errors.New("--connect contacts the licensing service; --bundle stays offline and is gated on the installed license"))
+		case strings.TrimSpace(o.token) != "":
+			return exitcode.New(exitcode.Usage, errors.New("--connect obtains the download token by proof of possession; do not pass --token"))
+		}
+	}
+
 	// --install-timer is a local, network-free generator: emit the opt-in units and stop.
 	// It runs BEFORE the progress stream is chosen because it shares none of the
 	// narration below — it prints unit files, which are an artifact, not commentary.
@@ -301,10 +333,6 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	// this is cmd.OutOrStdout() and not a byte moves. See progressstream.go.
 	out := progressStream(cmd)
 	warnings := []string{}
-	crlRecorded := ""
-	if !release.ValidChannel(o.channel) {
-		return fmt.Errorf("unknown --channel %q (want one of %s)", o.channel, strings.Join(release.Channels, " | "))
-	}
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), o.timeout)
 	defer cancel()
@@ -353,8 +381,25 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	// covers. Re-checked immediately before the swap (C03-23).
 	before := fingerprintTarget(target)
 
-	// 3) Build the update source (air-gap bundle | licensed worker | public channel).
-	src, cleanup, err := buildUpdateSource(o)
+	// 3) Build the update source (air-gap bundle | licensed worker | public channel). The
+	//    gated source receives the verification key because a bounded fresh resolution after a
+	//    same-version conflict re-verifies the re-resolved manifest against the SAME anchor.
+	// 3a) Connected route: refresh by proof of possession FIRST. It needs no live local license —
+	//     the service re-authorizes the purchase — and it installs the returned credential only
+	//     after it verifies and confers a current right, so the unchanged license gate below
+	//     then passes on that credential. The bearer stays in memory for this run. A refusal,
+	//     timeout or unverifiable answer returns here with the license, token and binary untouched.
+	if o.connect {
+		token, endpoint, cerr := connectRefreshForUpgrade(ctx, o, out)
+		if cerr != nil {
+			return cerr
+		}
+		o.token = token
+		if strings.TrimSpace(o.endpoint) == "" {
+			o.endpoint = endpoint
+		}
+	}
+	src, cleanup, err := buildUpdateSource(o, pub)
 	if err != nil {
 		return err
 	}
@@ -376,89 +421,22 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	if want == "" {
 		want = release.ChannelStable
 	}
-	// THE CHANNEL THE SERVER SERVED MUST BE THE CHANNEL WE ASKED FOR.
-	//
-	// The signature proves the manifest is OURS. It does not prove it is the one we
-	// requested: `stable`, `security` and `lts` are all signed by the same key, so a
-	// perfectly authentic stable manifest satisfies `--channel security` — and the only
-	// thing this command did with m.Channel was PRINT it. An operator asking for the
-	// security line would be told "already up to date" by a genuine stable manifest that
-	// simply does not carry the fix, and nothing in the output would look wrong.
-	//
-	// It is not hypothetical mischief: the gate that selects the channel is one query
-	// parameter (commercial/license-worker/src/download/gate.ts), a mirror is one
-	// redirect, and an air-gapped bundle is one file copied into the wrong directory.
-	// Three ordinary mistakes and one hostile one all land here.
-	//
-	// Deny-closed, and it does NOT fall back to stable: "the security manifest is not
-	// published yet" and "here is stable instead" are different answers, and collapsing
-	// them is how a missing security release reads as a healthy one. The external
-	// contrast on the channel plane raised exactly this as H-01.
-	if got := strings.TrimSpace(m.Channel); got != want {
-		return fmt.Errorf("REFUSING to upgrade: asked for channel %q and the server served a manifest signed for channel %q — the signature is valid, so this is a wrong-channel answer, not a forgery: a stale mirror, a misrouted gate, or the wrong air-gap bundle. Re-run against the %s endpoint, or use --channel %s deliberately",
-			want, got, want, got)
-	}
-	// Freshness (anti-freeze): a still-signed but EXPIRED manifest may be a stale or
-	// hostile mirror hiding a newer (security) release. Refuse to act on it — and do
-	// this BEFORE recording the license CRL, so a replayed stale manifest can never
-	// touch the observation store either.
-	if now := time.Now().UTC(); m.Stale(now) {
-		return fmt.Errorf("REFUSING to upgrade: the %s manifest expired at %s — it may be stale or a mirror serving an old (freeze) manifest; retry against a fresh endpoint/bundle",
-			m.Channel, m.Expires.Format(time.RFC3339))
-	}
-	// License CRL observation: the fresh, verified manifest is the pull
-	// channel the license CRL rides on. Record it independently of whether THIS
-	// upgrade proceeds (up-to-date / out-of-cohort still observe). Resolve the data
-	// dir the SAME way the rest of the command and the engine do, so the store lands
-	// where the enterprise seat policy reads it (crlViewFromDataDir(cfg.DataDir)).
-	// Recording failures warn and never block an upgrade.
-	crlNow := time.Now().UTC()
-	if rerr := recordCRLObservations(o.dataDir, m, crlNow); rerr != nil {
-		warnings = append(warnings, fmt.Sprintf("could not record the channel's license CRL: %v", rerr))
-		fmt.Fprintf(out, "WARNING: could not record the channel's license CRL: %v\n", rerr)
-	} else if !m.Revoked.Empty() {
-		crlRecorded = crlFilePath(o.dataDir)
-		fmt.Fprintf(out, "recorded the channel license CRL in %s\n", crlRecorded)
-	}
-	for _, w := range describeCRLForLicense(o.dataDir, m, crlNow) {
-		warnings = append(warnings, w)
-		fmt.Fprintf(out, "WARNING: %s\n", w)
-	}
-
-	// 5) Plan the move against the running version.
 	installID := resolveInstallID(o.dataDir)
-	plan, err := m.PlanUpgrade(current.Version.Raw, o.goos, o.goarch, installID, time.Now().UTC())
-	if err != nil {
-		return err
-	}
-	printPlan(out, o, m, plan, current)
-
-	// ONE base document for every terminal desenlace below, built HERE from the same
-	// manifest, plan and installed version printPlan just rendered. Building it once
-	// is what stops the two panes from reporting different plans for one run: there
-	// is no second place where a field could be recomputed differently.
+	// ONE base document for every terminal desenlace below. Identity fields are
+	// fixed for the run; bindVerifiedRelease fills the plan from the verified
+	// manifest so a same-version retry cannot keep a stale plan or omit a field.
 	res := upgradeResult{
-		Status:            upgradeStatusToken(plan),
 		OTAKey:            keySrc,
 		OTAKeyFingerprint: release.Fingerprint(pub),
 		Source:            src.describe(),
-		Channel:           m.Channel,
 		Current:           current.Version.Raw,
 		CurrentDeclared:   current.Declared,
-		Available:         m.Version,
-		ReleasedAt:        m.ReleasedAt.UTC().Format(time.RFC3339),
-		Security:          m.Security,
-		Advisories:        []string{},
-		MinVersion:        strings.TrimSpace(m.MinVersion),
-		Eligible:          plan.Eligible,
-		Notes:             m.Notes,
-		CRLRecorded:       crlRecorded,
-		Warnings:          warnings,
 		Target:            target,
+		Advisories:        []string{},
 	}
-	res.Advisories = append(res.Advisories, plan.Advisories...)
-	if m.EOLAt != nil {
-		res.EOLAt = m.EOLAt.UTC().Format(time.RFC3339)
+	plan, err := bindVerifiedRelease(out, o, src, m, want, current, installID, &warnings, &res)
+	if err != nil {
+		return err
 	}
 
 	// 6) Decide. The ordering guards come first, and they cannot run at all without a
@@ -469,48 +447,9 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	// forward step: a downgrade to a vulnerable release installed with exit 0 and an
 	// EMPTY audit log, because IsRollback() was false and --force-rollback was never
 	// required. One refusal serves both ways of not knowing (see installedVersion).
-	if !current.Known {
-		// Worded so it is TRUE on every path that reaches it, --check included: --check
-		// installs nothing, so it may not be told that an install was about to happen. It
-		// still fails, and should — a check that cannot evaluate the gates has not
-		// checked anything, and reporting that is the whole job.
-		return fmt.Errorf("cannot establish the version installed at %s: %s\n"+
-			"REFUSING: anti-rollback and the minimum-version gate are both claims ABOUT the installed version, so neither can be evaluated here. This upgrade is unverifiable, not merely unattempted.\n"+
-			"Way out: re-run with --current-version <version> to declare what is installed there (both guards stay armed, and the audit record says the value was declared), or make %s answer `%s version`",
-			target, current.Reason, target, target)
-	}
-	if plan.IsUpToDate() {
-		res.Action = upgradeActionUpToDate
-		return renderOut(cmd, func(w io.Writer) error {
-			_, werr := fmt.Fprintf(w, "\nalready on %s (channel %s) — nothing to do.\n", m.Version, m.Channel)
-			return werr
-		}, res)
-	}
-	if !plan.HasArtifact {
-		return fmt.Errorf("release %s has no artifact for %s/%s (platforms: %s)", m.Version, o.goos, o.goarch, strings.Join(m.Platforms(), ", "))
-	}
-	if plan.MinTooOld {
-		return fmt.Errorf("cannot jump directly to %s: it requires a minimum current version of %s (you are on %s) — upgrade to an intermediate release first",
-			m.Version, m.MinVersion, current.Version.Raw)
-	}
-	if plan.IsRollback() && !o.forceRollback {
-		return fmt.Errorf("REFUSING to downgrade %s -> %s (anti-rollback): re-run with --force-rollback to override (it will be audited)",
-			current.Version.Raw, m.Version)
-	}
-	if o.ifEligible && !plan.Eligible {
-		res.Action = upgradeActionNotInCohor
-		return renderOut(cmd, func(w io.Writer) error {
-			_, werr := fmt.Fprintf(w, "\nnot in the staged-rollout cohort for %s yet — skipping (this is expected during a partial rollout).\n", m.Version)
-			return werr
-		}, res)
-	}
-
-	if o.check {
-		res.Action = upgradeActionChecked
-		return renderOut(cmd, func(w io.Writer) error {
-			_, werr := fmt.Fprintln(w, "\n--check OK: manifest verifies and an upgrade is available. Re-run without --check to install.")
-			return werr
-		}, res)
+	proceed, err := concludeVerifiedPlan(cmd, o, m, plan, current, target, &res)
+	if err != nil || !proceed {
+		return err
 	}
 
 	// 7) Prepare the swap. From here to the swap there is exactly ONE agent per target:
@@ -538,6 +477,24 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	// 8) Download, bind to the signed digest, extract, swap.
 	fmt.Fprintf(out, "downloading %s %s/%s ...\n", m.Version, o.goos, o.goarch)
 	data, err := src.fetchArtifact(ctx, m, plan.Artifact)
+	if errors.Is(err, errFreshVerifiedManifest) {
+		fresh, ok := takeRefreshedVerifiedManifest(src)
+		if !ok {
+			return fmt.Errorf("release-v1 retry produced a freshly verified manifest, but the source did not store it")
+		}
+		fmt.Fprintf(out, "the release-v1 tuple was re-resolved at the same version; re-evaluating the freshly signed policy before install\n")
+		m = fresh
+		plan, err = bindVerifiedRelease(out, o, src, m, want, current, installID, &warnings, &res)
+		if err != nil {
+			return err
+		}
+		proceed, err = concludeVerifiedPlan(cmd, o, m, plan, current, target, &res)
+		if err != nil || !proceed {
+			return err
+		}
+		fmt.Fprintf(out, "downloading %s %s/%s ...\n", m.Version, o.goos, o.goarch)
+		data, err = src.fetchArtifact(ctx, m, plan.Artifact)
+	}
 	if err != nil {
 		return fmt.Errorf("download artifact: %w", err)
 	}
@@ -648,7 +605,7 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 // teach them to skip straight to --yes, which is a worse habit than the one it protects.
 // The invariant it leans on — --check never installs — is not left to trust: the witness
 // asserts the binary is untouched after an ungated `--bundle --check`.
-func buildUpdateSource(o *upgradeOptions) (updateSource, func(), error) {
+func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, func(), error) {
 	if o.bundle != "" {
 		// Refuse BEFORE openBundle: an unauthorized caller must not get this process to
 		// extract an untrusted tarball into a temp dir on its way to being refused.
@@ -676,14 +633,38 @@ func buildUpdateSource(o *upgradeOptions) (updateSource, func(), error) {
 		if err != nil {
 			return nil, nil, err
 		}
+		// The token may come from the environment so it never has to sit in argv (the systemd
+		// timer sets it in an EnvironmentFile). --token still wins when given. Read from the
+		// environment, not the flag, is what keeps the bearer out of `/proc/<pid>/cmdline`.
 		if strings.TrimSpace(o.token) == "" {
-			return nil, nil, fmt.Errorf("--token is required for --enterprise (it is in your license/fulfillment email)")
+			o.token = strings.TrimSpace(osGetenv("OLIVARES_UPGRADE_TOKEN"))
+		}
+		if strings.TrimSpace(o.token) == "" {
+			return nil, nil, fmt.Errorf("--enterprise needs a download token: pass --token, or set OLIVARES_UPGRADE_TOKEN (it is in your license/fulfillment email). It travels in the Authorization header, never the command line")
 		}
 		if o.endpoint == "" {
 			o.endpoint = defaultEnterpriseEndpoint
 		}
 		_ = claims // licensee is informational; the worker re-checks entitlement
-		return gatedSource{o: o, client: client}, nil, nil
+		// The gated client never follows a redirect (refuseGatedRedirect); gatedGet enforces the
+		// same policy on whatever client it is handed, so this is the stated default, not the
+		// only guard.
+		//
+		// cli-transport-exempt: the GATED release download, the licensed counterpart of the
+		// public OTA client above and the same transport class. Its trust anchor is not TLS
+		// either: the Ed25519 manifest signature and the cosign-verified checksums, verified
+		// AFTER the bytes arrive, plus the download token, which gatedGet places in the
+		// Authorization header of the release endpoint and nowhere else. It reaches the
+		// licence worker's download route, not the operator's control plane, so cliTransport's
+		// context, its pins and its control-plane credential do not apply and must not be
+		// attached: a control-plane bearer travelling to a download host would be exactly the
+		// credential leak this separation exists to prevent, and the download token must not
+		// travel to the control plane for the same reason. What this client keeps is stricter
+		// than the public one, not looser — no redirect at all (refuseGatedRedirect), so no
+		// second authenticated request is ever issued — and the gated tests hold that policy
+		// on the exact same code path this client feeds.
+		gated := &http.Client{Timeout: o.timeout, CheckRedirect: refuseGatedRedirect}
+		return &gatedSource{o: o, client: gated, pub: pub}, nil, nil
 	}
 	base := o.endpoint
 	if base == "" {
@@ -815,6 +796,163 @@ func versionToken(line string) string {
 		return fields[0]
 	}
 	return ""
+}
+
+// bindVerifiedRelease is the ONE policy/plan authority for a verified channel
+// manifest: wrong-channel, freshness, tuple corroboration, CRL observation, and
+// PlanUpgrade. The first resolution and a same-version retry both go through it
+// so a newly signed field cannot be ignored by keeping the previous plan.
+func bindVerifiedRelease(out io.Writer, o *upgradeOptions, src updateSource, m release.Manifest, want string, current installedVersion, installID string, warnings *[]string, res *upgradeResult) (release.UpgradePlan, error) {
+	// THE CHANNEL THE SERVER SERVED MUST BE THE CHANNEL WE ASKED FOR.
+	//
+	// The signature proves the manifest is OURS. It does not prove it is the one we
+	// requested: `stable`, `security` and `lts` are all signed by the same key, so a
+	// perfectly authentic stable manifest satisfies `--channel security` — and the only
+	// thing this command did with m.Channel was PRINT it. An operator asking for the
+	// security line would be told "already up to date" by a genuine stable manifest that
+	// simply does not carry the fix, and nothing in the output would look wrong.
+	//
+	// It is not hypothetical mischief: the gate that selects the channel is one query
+	// parameter (commercial/license-worker/src/download/gate.ts), a mirror is one
+	// redirect, and an air-gapped bundle is one file copied into the wrong directory.
+	// Three ordinary mistakes and one hostile one all land here.
+	//
+	// Deny-closed, and it does NOT fall back to stable: "the security manifest is not
+	// published yet" and "here is stable instead" are different answers, and collapsing
+	// them is how a missing security release reads as a healthy one. The external
+	// contrast on the channel plane raised exactly this as H-01.
+	if got := strings.TrimSpace(m.Channel); got != want {
+		return release.UpgradePlan{}, fmt.Errorf("REFUSING to upgrade: asked for channel %q and the server served a manifest signed for channel %q — the signature is valid, so this is a wrong-channel answer, not a forgery: a stale mirror, a misrouted gate, or the wrong air-gap bundle. Re-run against the %s endpoint, or use --channel %s deliberately",
+			want, got, want, got)
+	}
+	// Freshness (anti-freeze): a still-signed but EXPIRED manifest may be a stale or
+	// hostile mirror hiding a newer (security) release. Refuse to act on it — and do
+	// this BEFORE recording the license CRL, so a replayed stale manifest can never
+	// touch the observation store either.
+	if now := time.Now().UTC(); m.Stale(now) {
+		return release.UpgradePlan{}, fmt.Errorf("REFUSING to upgrade: the %s manifest expired at %s — it may be stale or a mirror serving an old (freeze) manifest; retry against a fresh endpoint/bundle",
+			m.Channel, m.Expires.Format(time.RFC3339))
+	}
+	// THE RESOLVED TUPLE MUST DESCRIBE THE RELEASE THAT WAS JUST VERIFIED (R5 of the 2026-09-05
+	// review). The release-v1 resolution declared a version in a header; the signature proved
+	// the manifest is ours and names a version of its own. Those two must be one string, byte
+	// for byte, before any decision is taken on either. A transport that ignores this installs
+	// what the signature covers while reporting what the header said — measured: a header
+	// declaring 26.9.0 over a genuinely signed 26.8.0 installed 26.8.0 with exit 0.
+	if c, ok := src.(verifiedCorroborator); ok {
+		if err := c.corroborateVerified(m); err != nil {
+			return release.UpgradePlan{}, fmt.Errorf("REFUSING to upgrade: %w", err)
+		}
+	}
+	// License CRL observation: the fresh, verified manifest is the pull
+	// channel the license CRL rides on. Record it independently of whether THIS
+	// upgrade proceeds (up-to-date / out-of-cohort still observe). Resolve the data
+	// dir the SAME way the rest of the command and the engine do, so the store lands
+	// where the enterprise seat policy reads it (crlViewFromDataDir(cfg.DataDir)).
+	// Recording failures warn and never block an upgrade.
+	crlNow := time.Now().UTC()
+	if rerr := recordCRLObservations(o.dataDir, m, crlNow); rerr != nil {
+		*warnings = append(*warnings, fmt.Sprintf("could not record the channel's license CRL: %v", rerr))
+		fmt.Fprintf(out, "WARNING: could not record the channel's license CRL: %v\n", rerr)
+		res.CRLRecorded = ""
+	} else if !m.Revoked.Empty() {
+		res.CRLRecorded = crlFilePath(o.dataDir)
+		fmt.Fprintf(out, "recorded the channel license CRL in %s\n", res.CRLRecorded)
+	} else {
+		res.CRLRecorded = ""
+	}
+	for _, w := range describeCRLForLicense(o.dataDir, m, crlNow) {
+		*warnings = append(*warnings, w)
+		fmt.Fprintf(out, "WARNING: %s\n", w)
+	}
+
+	plan, err := m.PlanUpgrade(current.Version.Raw, o.goos, o.goarch, installID, time.Now().UTC())
+	if err != nil {
+		return release.UpgradePlan{}, err
+	}
+	printPlan(out, o, m, plan, current)
+
+	res.Status = upgradeStatusToken(plan)
+	res.Channel = m.Channel
+	res.Available = m.Version
+	res.ReleasedAt = m.ReleasedAt.UTC().Format(time.RFC3339)
+	res.Security = m.Security
+	res.Advisories = []string{}
+	res.Advisories = append(res.Advisories, plan.Advisories...)
+	res.MinVersion = strings.TrimSpace(m.MinVersion)
+	res.Eligible = plan.Eligible
+	res.Notes = m.Notes
+	res.Warnings = *warnings
+	if m.EOLAt != nil {
+		res.EOLAt = m.EOLAt.UTC().Format(time.RFC3339)
+	} else {
+		res.EOLAt = ""
+	}
+	return plan, nil
+}
+
+func takeRefreshedVerifiedManifest(src updateSource) (release.Manifest, bool) {
+	taker, ok := src.(refreshedVerifiedManifest)
+	if !ok {
+		return release.Manifest{}, false
+	}
+	return taker.takeRefreshedVerifiedManifest()
+}
+
+// concludeVerifiedPlan applies the ordering and cohort gates to a plan produced
+// by bindVerifiedRelease. Both the first resolution and a same-version retry use
+// it, so a retry cannot keep a plan that the current signed policy would refuse.
+func concludeVerifiedPlan(cmd *cobra.Command, o *upgradeOptions, m release.Manifest, plan release.UpgradePlan, current installedVersion, target string, res *upgradeResult) (proceed bool, err error) {
+	if !current.Known {
+		// Worded so it is TRUE on every path that reaches it, --check included: --check
+		// installs nothing, so it may not be told that an install was about to happen. It
+		// still fails, and should — a check that cannot evaluate the gates has not
+		// checked anything, and reporting that is the whole job.
+		return false, fmt.Errorf("cannot establish the version installed at %s: %s\n"+
+			"REFUSING: anti-rollback and the minimum-version gate are both claims ABOUT the installed version, so neither can be evaluated here. This upgrade is unverifiable, not merely unattempted.\n"+
+			"Way out: re-run with --current-version <version> to declare what is installed there (both guards stay armed, and the audit record says the value was declared), or make %s answer `%s version`",
+			target, current.Reason, target, target)
+	}
+	if plan.IsUpToDate() {
+		res.Action = upgradeActionUpToDate
+		return false, renderOut(cmd, func(w io.Writer) error {
+			_, werr := fmt.Fprintf(w, "\nalready on %s (channel %s) — nothing to do.\n", m.Version, m.Channel)
+			return werr
+		}, *res)
+	}
+	if err := refuseIfPlanCannotInstall(o, m, plan, current); err != nil {
+		return false, err
+	}
+	if o.ifEligible && !plan.Eligible {
+		res.Action = upgradeActionNotInCohor
+		return false, renderOut(cmd, func(w io.Writer) error {
+			_, werr := fmt.Fprintf(w, "\nnot in the staged-rollout cohort for %s yet — skipping (this is expected during a partial rollout).\n", m.Version)
+			return werr
+		}, *res)
+	}
+	if o.check {
+		res.Action = upgradeActionChecked
+		return false, renderOut(cmd, func(w io.Writer) error {
+			_, werr := fmt.Fprintln(w, "\n--check OK: manifest verifies and an upgrade is available. Re-run without --check to install.")
+			return werr
+		}, *res)
+	}
+	return true, nil
+}
+
+func refuseIfPlanCannotInstall(o *upgradeOptions, m release.Manifest, plan release.UpgradePlan, current installedVersion) error {
+	if !plan.HasArtifact {
+		return fmt.Errorf("release %s has no artifact for %s/%s (platforms: %s)", m.Version, o.goos, o.goarch, strings.Join(m.Platforms(), ", "))
+	}
+	if plan.MinTooOld {
+		return fmt.Errorf("cannot jump directly to %s: it requires a minimum current version of %s (you are on %s) — upgrade to an intermediate release first",
+			m.Version, m.MinVersion, current.Version.Raw)
+	}
+	if plan.IsRollback() && !o.forceRollback {
+		return fmt.Errorf("REFUSING to downgrade %s -> %s (anti-rollback): re-run with --force-rollback to override (it will be audited)",
+			current.Version.Raw, m.Version)
+	}
+	return nil
 }
 
 // printPlan renders the human-readable upgrade plan (also the body of --check).
@@ -975,13 +1113,17 @@ func requireValidLicense(explicitPath, dataDir string) (license.Verified, error)
 		return license.Verified{}, fmt.Errorf("no license installed: run `olivares license install <file>` first " +
 			"(the enterprise download and --bundle are both gated on a live license)")
 	}
-	pub := license.DefaultPublicKey()
-	if len(pub) == 0 {
-		return license.Verified{}, fmt.Errorf("this build embeds no license key (license-key=%s); cannot verify the installed license", license.KeyOrigin())
+	// The same license trust keyring boot, reload and install use (license_trust.go).
+	kr, terr := licenseKeyringForDataDir(dir)
+	if terr != nil {
+		return license.Verified{}, fmt.Errorf("cannot establish this deployment's license trust: %w", withLicenseTrustAction(terr))
 	}
-	lic, verr := license.VerifyEnvelope(src.Blob, pub)
+	if kr.Len() == 0 {
+		return license.Verified{}, fmt.Errorf("this build embeds no license key (license-key=%s) and the data directory configures none; cannot verify the installed license", license.KeyOrigin())
+	}
+	lic, verr := kr.Verify(src.Blob, time.Now().UTC())
 	if verr != nil {
-		return license.Verified{}, fmt.Errorf("the installed license does not verify against this build's key: %w", verr)
+		return license.Verified{}, fmt.Errorf("the installed license does not verify against this deployment's license trust: %w", withLicenseTrustAction(verr))
 	}
 	// StatusPerpetual is unreachable since the v8 package made every offer term-only,
 	// but the arm stays: the constant is still exported for compatibility, and a build
@@ -1032,16 +1174,134 @@ func resolveReleaseKey(flag string) (ed25519.PublicKey, string, error) {
 	return pub, "--pubkey", nil
 }
 
-// downloadGated fetches one gated object from the licensed worker (gate
-// contract): kind "" is the binary; "manifest"/"manifest.sig" the signed channel
-// manifest and its detached signature (extends the gate with these two kinds).
-func downloadGated(ctx context.Context, client *http.Client, o *upgradeOptions, kind string) ([]byte, error) {
-	base, err := url.Parse(strings.TrimRight(o.endpoint, "/") + "/download")
-	if err != nil {
-		return nil, fmt.Errorf("bad --endpoint: %w", err)
+// Download protocols the engine speaks to the licensed worker.
+const (
+	// downloadProtocolReleaseV1 is the first-party default: /download/release-v1 resolves ONE
+	// consistent {version,set,manifest,signature} tuple and corroborates it on every request, so
+	// three fetches cannot mix two releases.
+	downloadProtocolReleaseV1 = "release-v1"
+	// downloadProtocolLegacy is the existing per-request /download route, kept for a custom or
+	// older gateway. It gains NO permission to bypass token version, manifest verification or the
+	// artifact SHA — it just does not negotiate consistency.
+	downloadProtocolLegacy = "legacy"
+)
+
+const (
+	releaseV1Path       = "/download/release-v1"
+	releaseV1Marker     = "release-v1"
+	hdrDownloadProtocol = "Olivares-Download-Protocol"
+	hdrDownloadError    = "Olivares-Download-Error"
+	hdrReleaseVersion   = "Olivares-Release-Version"
+	hdrReleaseSet       = "Olivares-Release-Set"
+	hdrManifestSHA256   = "Olivares-Manifest-SHA256"
+	hdrSignatureSHA256  = "Olivares-Signature-SHA256"
+	// hdrArtifactSHA256 is the signed descriptor's digest the worker echoes on the artifact
+	// response when the manifest carries one — a consistency identifier the client compares
+	// with the descriptor it verified, never a substitute for VerifyArtifactSHA256.
+	hdrArtifactSHA256 = "Olivares-Artifact-SHA256"
+)
+
+func validDownloadProtocol(p string) bool {
+	return p == "" || p == downloadProtocolReleaseV1 || p == downloadProtocolLegacy
+}
+
+// upgradeRedirectRefusal is the owned gated-redirect refusal. from and to are
+// display-only scheme://host labels (or fixed fallbacks). Operator text is
+// formatted from these fields only; it is never authenticated by matching
+// arbitrary transport error strings.
+type upgradeRedirectRefusal struct {
+	from string
+	to   string
+}
+
+func (e *upgradeRedirectRefusal) Error() string {
+	return "refusing to follow a redirect from " + e.from + " to " + e.to +
+		": gated downloads carry a bearer and are answered directly by the license worker, so no redirected request is sent — point --endpoint at the gateway you mean"
+}
+
+func newUpgradeRedirectRefusal(fromRaw, toRaw string) *upgradeRedirectRefusal {
+	from, to := "the endpoint", "another location"
+	if fromRaw != "" {
+		from = displayEndpoint(fromRaw)
 	}
-	q := base.Query()
-	q.Set("token", o.token)
+	if toRaw != "" {
+		to = displayEndpoint(toRaw)
+	}
+	return &upgradeRedirectRefusal{from: from, to: to}
+}
+
+// refuseGatedRedirect is the redirect policy of EVERY gated request: none is followed.
+//
+// The license worker answers its gated routes directly, so a redirect is a misconfigured
+// endpoint or something between the client and the worker — and following it would carry the
+// bearer to wherever it points. Go's client copies Authorization onto a redirect to the same
+// HOST regardless of scheme or port; measured on 2026-09-05: an HTTPS gateway answering 302 to
+// an HTTP origin on another port received the dummy bearer and the request "succeeded" (R1 of
+// the independent review). CheckRedirect runs BEFORE the redirected request is issued, so this
+// refusal means no second authenticated request is ever sent. The anonymous community transport
+// (httpGet) keeps the default policy: it carries no credential, and GitHub release assets are
+// served through redirects by design.
+func refuseGatedRedirect(req *http.Request, via []*http.Request) error {
+	fromRaw, toRaw := "", ""
+	if len(via) > 0 && via[0].URL != nil {
+		fromRaw = via[0].URL.String()
+	}
+	if req != nil && req.URL != nil {
+		toRaw = req.URL.String()
+	}
+	return newUpgradeRedirectRefusal(fromRaw, toRaw)
+}
+
+// gatedGet performs ONE authenticated GET against the licensed worker. The download token
+// travels in the Authorization header, NEVER the query string, argv or a redirect: a bearer in
+// the query lands in access logs, `/proc/<pid>/cmdline` and referers (C03-17), and a redirect
+// is refused before it is followed (refuseGatedRedirect). It returns the body, the response
+// headers (the v1 consumer reads its consistency identifiers from them) and the status (so a
+// typed 409/503/404 refusal is actionable) rather than only an error.
+func gatedGet(
+	ctx context.Context,
+	client *http.Client,
+	endpoint, token, path string,
+	q url.Values,
+) ([]byte, http.Header, int, error) {
+	base, err := url.Parse(strings.TrimRight(endpoint, "/") + path)
+	if err != nil {
+		return nil, nil, 0, wrapUpgradeTransport(endpoint, err)
+	}
+	base.RawQuery = q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.String(), nil)
+	if err != nil {
+		return nil, nil, 0, wrapUpgradeTransport(endpoint, err)
+	}
+	req.Header.Set("User-Agent", "olivares-upgrade")
+	req.Header.Set("Authorization", "Bearer "+token)
+	// The redirect policy is a property of the REQUEST CLASS, not of whichever client a caller
+	// happened to build: every gated request goes out through a copy of the caller's client
+	// (same transport, timeout and TLS settings) that refuses to follow any redirect.
+	gated := *client
+	gated.CheckRedirect = refuseGatedRedirect
+	resp, err := gated.Do(req)
+	if err != nil {
+		return nil, nil, 0, wrapUpgradeTransport(endpoint, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 512))
+		return nil, resp.Header, resp.StatusCode, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes))
+	if err != nil {
+		return nil, nil, 0, wrapUpgradeTransport(endpoint, err)
+	}
+	return body, resp.Header, resp.StatusCode, nil
+}
+
+// downloadGated fetches one gated object from the licensed worker's LEGACY /download route (gate contract): kind "" is the binary; "manifest"/"manifest.sig" the signed channel manifest
+// and its detached signature. The binary request carries the VERIFIED manifest's version
+// so the worker keys the artifact to the version the client just authenticated, never a mutable
+// "latest". The token is in Authorization, not the query (recovered from f32329a38d5).
+func downloadGated(ctx context.Context, client *http.Client, o *upgradeOptions, kind, version string) ([]byte, error) {
+	q := url.Values{}
 	q.Set("os", o.goos)
 	q.Set("arch", o.goarch)
 	if o.channel != "" {
@@ -1049,24 +1309,222 @@ func downloadGated(ctx context.Context, client *http.Client, o *upgradeOptions, 
 	}
 	if kind != "" {
 		q.Set("kind", kind)
+	} else {
+		if version == "" {
+			return nil, fmt.Errorf("signed manifest did not name a release version")
+		}
+		q.Set("version", version)
 	}
-	base.RawQuery = q.Encode()
+	body, _, status, err := gatedGet(ctx, client, o.endpoint, o.token, "/download", q)
+	if err != nil {
+		return nil, err
+	}
+	if status != http.StatusOK {
+		return nil, &httpStatusError{status: status, url: displayEndpoint(o.endpoint)}
+	}
+	return body, nil
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.String(), nil)
+// v1Tuple is the {set, digests, version} the release-v1 manifest resolution answers and the
+// signature and artifact requests corroborate. It is a consistency assertion the CLIENT records,
+// never authority: the Ed25519 manifest signature and the artifact SHA remain the trust anchors.
+type v1Tuple struct {
+	set             string
+	manifestSHA256  string
+	signatureSHA256 string
+	version         string
+}
+
+// releaseV1Refusal is a TYPED refusal from the release-v1 route: the HTTP status and the error
+// NAME the worker put in Olivares-Download-Error. A caller branches on `code` — the contract
+// (lot 1 addendum §4) — never on the sentence, which is for the operator and may be reworded.
+// The operator message displays only the documented code vocabulary; an unknown header
+// value becomes a fixed label, not an excerpt.
+type releaseV1Refusal struct {
+	status int
+	code   string // raw worker code; branching uses this, display uses displayV1RefusalCode
+}
+
+func (e *releaseV1Refusal) Error() string {
+	return fmt.Sprintf("release-v1 endpoint returned %d (%s)", e.status, displayV1RefusalCode(e.code))
+}
+
+// The worker's conflict names (commercial/license-worker/src/download/release-v1.ts).
+const (
+	v1ErrTokenVersionStale = "release_token_version_stale"
+	v1ErrSetChanged        = "entitlement_set_changed"
+	v1ErrMetadataChanged   = "release_metadata_changed"
+	v1RefusalCodeUnknown   = "unknown"
+)
+
+// v1RefusalCodes is the documented Olivares-Download-Error vocabulary from the
+// worker's ReleaseV1ErrorCode union. Display uses only these tokens.
+var v1RefusalCodes = map[string]struct{}{
+	"protocol_unknown_parameter":     {},
+	"protocol_selector_refused":      {},
+	"protocol_duplicate_parameter":   {},
+	"protocol_token_presented_twice": {},
+	"protocol_invalid_channel":       {},
+	"protocol_invalid_kind":          {},
+	"protocol_platform_incomplete":   {},
+	"protocol_platform_required":     {},
+	"protocol_invalid_platform":      {},
+	"protocol_unexpected_tuple":      {},
+	"protocol_missing_tuple":         {},
+	"protocol_invalid_expected_set":  {},
+	"protocol_invalid_hash":          {},
+	"release_token_version_invalid":  {},
+	"token_missing":                  {},
+	"token_invalid":                  {},
+	"ota_token_transport":            {},
+	"ota_lineage_refused":            {},
+	"license_not_live":               {},
+	"no_live_grants":                 {},
+	"channel_not_entitled":           {},
+	"platform_unsupported":           {},
+	"release_unavailable":            {},
+	v1ErrTokenVersionStale:           {},
+	v1ErrSetChanged:                  {},
+	v1ErrMetadataChanged:             {},
+	"release_metadata_unavailable":   {},
+	"release_metadata_invalid":       {},
+}
+
+func displayV1RefusalCode(code string) string {
+	if _, ok := v1RefusalCodes[code]; ok {
+		return code
+	}
+	return v1RefusalCodeUnknown
+}
+
+// sameVersionConflict reports whether err is a release-v1 refusal naming a SAME-VERSION conflict:
+// the publication's metadata or the holder's set moved while the token's version is still the
+// current one. Addendum §4 permits exactly ONE fresh resolution for these. A version conflict
+// (release_token_version_stale) is never one of them — a newer version needs a new authorization,
+// which no retry from an old bearer can obtain.
+func sameVersionConflict(err error) bool {
+	var r *releaseV1Refusal
+	if !errors.As(err, &r) {
+		return false
+	}
+	return r.code == v1ErrSetChanged || r.code == v1ErrMetadataChanged
+}
+
+var (
+	v1HexDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// The set slug alphabet the worker allowlists (`biz`, `biz+reg`, `ent`, …).
+	v1SetSlug = regexp.MustCompile(`^[a-z]+(\+[a-z]+)*$`)
+)
+
+// parseV1Tuple reads the resolution headers and validates every field's SHAPE before anything is
+// recorded: a missing or malformed field is a refusal, never a blank to carry forward as if it
+// had been answered (R5 of the 2026-09-05 review). The version must be a parseable release
+// version with no surrounding whitespace — the worker binds it byte for byte, and so does the
+// comparison against the verified manifest that follows.
+func parseV1Tuple(hdr http.Header) (v1Tuple, error) {
+	t := v1Tuple{
+		set:             hdr.Get(hdrReleaseSet),
+		manifestSHA256:  hdr.Get(hdrManifestSHA256),
+		signatureSHA256: hdr.Get(hdrSignatureSHA256),
+		version:         hdr.Get(hdrReleaseVersion),
+	}
+	var missing []string
+	for _, f := range []struct{ name, value string }{
+		{hdrReleaseVersion, t.version}, {hdrReleaseSet, t.set}, {hdrManifestSHA256, t.manifestSHA256}, {hdrSignatureSHA256, t.signatureSHA256},
+	} {
+		if f.value == "" {
+			missing = append(missing, f.name)
+		}
+	}
+	if len(missing) > 0 {
+		return v1Tuple{}, fmt.Errorf("the resolution answered without %s; an incomplete tuple is not a resolution", strings.Join(missing, ", "))
+	}
+	if strings.TrimSpace(t.version) != t.version {
+		return v1Tuple{}, fmt.Errorf("the resolution declared a version with surrounding whitespace; refusing to normalise a signed claim")
+	}
+	if _, err := release.ParseVersion(t.version); err != nil {
+		return v1Tuple{}, fmt.Errorf("the resolution declared an unparseable version")
+	}
+	if !v1SetSlug.MatchString(t.set) {
+		return v1Tuple{}, fmt.Errorf("the resolution declared a malformed set")
+	}
+	if !v1HexDigest.MatchString(t.manifestSHA256) || !v1HexDigest.MatchString(t.signatureSHA256) {
+		return v1Tuple{}, fmt.Errorf("the resolution declared malformed digests (%s, %s): lowercase 64-hex SHA-256 expected",
+			hdrManifestSHA256, hdrSignatureSHA256)
+	}
+	return t, nil
+}
+
+// corroborateV1Headers requires a SUBSEQUENT success response — the signature or the artifact —
+// to name exactly the tuple the resolution answered. The worker sets the four headers on every
+// release-v1 success; a response that names another version, set or pair is a response about
+// another release, and its bytes are not installed. These headers are consistency identifiers,
+// not signatures: the Ed25519 check and the artifact SHA remain the trust anchors.
+func corroborateV1Headers(hdr http.Header, t v1Tuple, step string) error {
+	got, err := parseV1Tuple(hdr)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("release-v1 %s response: %w", step, err)
 	}
-	req.Header.Set("User-Agent", "olivares-upgrade")
-	resp, err := client.Do(req)
+	if got != t {
+		return fmt.Errorf("release-v1 %s response names another tuple than the resolution; refusing to mix two releases", step)
+	}
+	return nil
+}
+
+// downloadReleaseV1 performs one request of the resolved-download protocol. `kind` empty is the
+// artifact (needs os/arch and the tuple); "manifest" is the resolution step (no tuple); the
+// signature and artifact requests carry the tuple. It refuses to treat a non-marked response as
+// a v1 answer — a 404 without the marker is an old gateway, an explicit compatibility diagnostic,
+// not an invitation to downgrade silently.
+func downloadReleaseV1(
+	ctx context.Context,
+	client *http.Client,
+	o *upgradeOptions,
+	kind string,
+	t *v1Tuple,
+) ([]byte, http.Header, error) {
+	q := url.Values{}
+	if o.channel != "" {
+		q.Set("channel", o.channel)
+	}
+	if kind != "" {
+		q.Set("kind", kind)
+	} else {
+		q.Set("os", o.goos)
+		q.Set("arch", o.goarch)
+	}
+	if kind == "manifest.sig" || kind == "" {
+		if t == nil {
+			return nil, nil, fmt.Errorf("release-v1 %q request needs the resolved tuple", kind)
+		}
+		q.Set("expected_set", t.set)
+		q.Set("manifest_sha256", t.manifestSHA256)
+		q.Set("signature_sha256", t.signatureSHA256)
+	}
+	body, hdr, status, err := gatedGet(ctx, client, o.endpoint, o.token, releaseV1Path, q)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+	marker := hdr.Get(hdrDownloadProtocol)
+	if status == http.StatusNotFound && marker != releaseV1Marker {
+		return nil, nil, fmt.Errorf(
+			"this endpoint does not speak the release-v1 download protocol (404 with no %s marker); "+
+				"re-run with --download-protocol=legacy for a custom or older gateway", hdrDownloadProtocol)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes))
+	if status != http.StatusOK {
+		// A MARKED refusal is typed: the worker's error name travels in the header and the
+		// caller branches on it (a same-version conflict may be re-resolved once; a version
+		// conflict never). An UNMARKED non-200 is not a release-v1 answer at all.
+		if marker == releaseV1Marker {
+			return nil, nil, &releaseV1Refusal{status: status, code: hdr.Get(hdrDownloadError)}
+		}
+		return nil, nil, fmt.Errorf("the gateway answered %d without the %s marker; not a release-v1 response",
+			status, hdrDownloadProtocol)
+	}
+	if marker != releaseV1Marker {
+		return nil, nil, fmt.Errorf("the gateway answered 200 without the %s marker; refusing to treat it as a release-v1 response", hdrDownloadProtocol)
+	}
+	return body, hdr, nil
 }
 
 // resolveTargetBinary resolves the binary path to replace: an explicit --target,

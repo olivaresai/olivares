@@ -226,6 +226,70 @@ type hookRunner struct {
 	hook  func(LaunchSpec) error
 }
 
+type successorInitGateRunner struct {
+	mu        sync.Mutex
+	sessionID string
+	procs     []*fakeProc
+	released  bool
+}
+
+func (r *successorInitGateRunner) Launch(_ context.Context, _ LaunchSpec) (Process, error) {
+	p := &fakeProc{out: make(chan OutputFrame, 16), stopped: make(chan struct{})}
+	r.mu.Lock()
+	r.procs = append(r.procs, p)
+	first := len(r.procs) == 1
+	sessionID := r.sessionID
+	r.mu.Unlock()
+	if first {
+		p.out <- runtimeInitFrame(sessionID)
+	}
+	return p, nil
+}
+
+func (r *successorInitGateRunner) releaseSuccessorInit(t *testing.T) {
+	t.Helper()
+	r.mu.Lock()
+	if len(r.procs) != 2 || r.released {
+		count, released := len(r.procs), r.released
+		r.mu.Unlock()
+		t.Fatalf("successor init release with launches=%d released=%v", count, released)
+	}
+	p, sessionID := r.procs[1], r.sessionID
+	r.released = true
+	r.mu.Unlock()
+	p.out <- runtimeInitFrame(sessionID)
+	p.out <- OutputFrame{Stream: streamStderr, Data: []byte(successorInitProcessedMarker)}
+}
+
+func runtimeInitFrame(sessionID string) OutputFrame {
+	return OutputFrame{Stream: streamStdout, Data: []byte(
+		`{"type":"system","subtype":"init","session_id":"` + sessionID + `"}`,
+	)}
+}
+
+const successorInitProcessedMarker = "successor-init-processed"
+
+type successorInitAckRecorder struct {
+	once sync.Once
+	done chan struct{}
+}
+
+func (r *successorInitAckRecorder) Record(
+	_ context.Context,
+	_ model.TenantID,
+	_ string,
+	frame RecordedFrame,
+) error {
+	if frame.Stream == streamStderr && string(frame.Data) == successorInitProcessedMarker {
+		r.once.Do(func() { close(r.done) })
+	}
+	return nil
+}
+
+func (*successorInitAckRecorder) Finalize(context.Context, model.TenantID, string) error {
+	return nil
+}
+
 type secretEchoProcess struct {
 	*fakeProc
 	mu                   sync.Mutex
@@ -810,9 +874,15 @@ func TestRuntimeCommunicationCredentialUsesExplicitIdentityWorkspace(t *testing.
 func TestRuntimeCallbacksFromOldLaunchCannotMutateSuccessor(t *testing.T) {
 	t.Parallel()
 
-	runner := &fakeRunner{initSID: "provider-incarnation"}
+	const providerSessionID = "provider-incarnation"
+	runner := &successorInitGateRunner{sessionID: providerSessionID}
+	initAck := &successorInitAckRecorder{done: make(chan struct{})}
 	m, _, tenant, clk := newRuntimeHarness(
-		t, WithRunner(runner), WithCredentialSource(staticCred()),
+		t,
+		WithRunner(runner),
+		WithCredentialSource(staticCred()),
+		WithLaunchGate(&recordingLaunchGate{dec: LaunchDecision{Allowed: true, RecordIO: true}}),
+		WithRecorder(initAck),
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
@@ -825,7 +895,7 @@ func TestRuntimeCallbacksFromOldLaunchCannotMutateSuccessor(t *testing.T) {
 	}
 	waitFor(t, "incarnation fixture provider session capture", func() bool {
 		dto, getErr := m.getRun(context.Background(), tenant, created.RunRef)
-		return getErr == nil && dto.ClaudeSessionID == "provider-incarnation"
+		return getErr == nil && dto.ClaudeSessionID == providerSessionID
 	})
 	first, ok := m.rt.getLive(tenant, created.RunRef)
 	if !ok {
@@ -843,9 +913,29 @@ func TestRuntimeCallbacksFromOldLaunchCannotMutateSuccessor(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = m.stopRun(context.Background(), tenant, resumed.RunRef, "test", "user") })
+	preInit, err := m.loadRun(context.Background(), tenant, created.RunRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The provider repeats the same session ID on resume. Holding that init in the
+	// runner keeps its callback ordered after the resumed transition; the following
+	// stderr marker is recorded only after the bridge has completed the init callback,
+	// including its durable row write. Waiting for the unchanged provider ID would not
+	// provide this ordering because that ID deliberately survives the stop/resume.
+	runner.releaseSuccessorInit(t)
+	// Match waitFor's three-second runtime-fixture bound and fail closed if the
+	// bridge stops draining or the recorder stops acknowledging frames.
+	select {
+	case <-initAck.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for successor init bridge/store acknowledgment")
+	}
 	before, err := m.loadRun(context.Background(), tenant, created.RunRef)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if before.Int(model.ColVersion) <= preInit.Int(model.ColVersion) {
+		t.Fatalf("successor init did not durably advance the run: before init %v after init %v", preInit, before)
 	}
 	stale := &liveRun{
 		tenant: tenant, runRef: created.RunRef, runID: first.runID,
@@ -860,7 +950,7 @@ func TestRuntimeCallbacksFromOldLaunchCannotMutateSuccessor(t *testing.T) {
 	m.mutateRunBest(context.Background(), stale, func(record model.Record) {
 		record[colReason] = "stale callback"
 	})
-	m.finalize(stale, 137)
+	m.finalize(stale, 137, nil)
 	after, err := m.loadRun(context.Background(), tenant, created.RunRef)
 	if err != nil {
 		t.Fatal(err)

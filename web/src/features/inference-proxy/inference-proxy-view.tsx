@@ -52,6 +52,7 @@ import {
 import {
   inferenceProxyApi,
   inferenceProxyKeys,
+  isContentFirewall,
   type DLPRule,
   type ProxyConfig,
   type ResponseDLPMode,
@@ -105,10 +106,85 @@ export function InferenceProxyView() {
         title={t('title')}
         description={t('description')}
       />
+      <ContentFirewallCard />
       <ConfigSection />
       <DLPSection />
       <DeviceSection />
     </div>
+  )
+}
+
+// --- Messages inspector attachment (read-only) --------------------------------
+
+function ContentFirewallCard() {
+  const { t } = useTranslation(['inferenceProxy', 'common'])
+  const { can, activeTenant } = useAuth()
+  const canRead = can('inferenceproxy:config:read')
+
+  const firewallQ = useQuery({
+    queryKey: inferenceProxyKeys.contentFirewall(activeTenant),
+    queryFn: () => inferenceProxyApi.getContentFirewall(),
+    enabled: canRead,
+  })
+
+  // The COMPLETE body is validated before any attachment state is shown: the
+  // enforcement point it names, the scope note and the state, all three. A body that
+  // fails any of them is reported as unreadable and never folded into an attached or
+  // healthy reading.
+  const data = firewallQ.data
+  const state = isContentFirewall(data) ? data.state : null
+  const malformed = data !== undefined && state === null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('firewall.title')}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">{t('firewall.intro')}</p>
+        {!canRead ? (
+          <ForbiddenState />
+        ) : firewallQ.isLoading ? (
+          <div role="status" className="flex justify-center py-6">
+            <span className="sr-only">{t('common:states.loading')}</span>
+            <Spinner />
+          </div>
+        ) : firewallQ.isError ? (
+          <ErrorState retry={() => void firewallQ.refetch()} />
+        ) : malformed || state === null ? (
+          <div className="flex flex-col gap-2">
+            <Badge variant="outline">{t('firewall.states.unreadable')}</Badge>
+            <p className="text-sm text-muted-foreground">
+              {t('firewall.statesHint.unreadable')}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => void firewallQ.refetch()}
+            >
+              {t('common:actions.retry')}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Badge variant="outline">{t(`firewall.states.${state}`)}</Badge>
+            <p className="text-sm text-muted-foreground">
+              {t(`firewall.statesHint.${state}`)}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => void firewallQ.refetch()}
+            >
+              {t('firewall.refresh')}
+            </Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">{t('firewall.limit')}</p>
+      </CardContent>
+    </Card>
   )
 }
 

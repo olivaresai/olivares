@@ -1012,14 +1012,14 @@ func TestPostgresSchemaTransitionAllowsConcurrentNewCallerOfUnchangedOldFunction
 			"ALTER TABLE ONLY public."+quoteIdent(transitionTestTable2)+
 				" DISABLE TRIGGER "+quoteIdent(transitionTestTrigger+"_witness")); err == nil {
 			return errors.New("concurrent pre-existing caller mutation escaped its table lock")
-		} else if !strings.Contains(err.Error(), "lock timeout") {
+		} else if !postgresLockNotAvailable(err) {
 			return fmt.Errorf("concurrent pre-existing caller mutation failed for the wrong reason: %w", err)
 		}
 		callerMutationBlocked = true
 		if _, err := contender.ExecContext(ctx,
 			postgresTransitionFunctionDDL(oldFunction, "EXTERNAL DRIFT")); err == nil {
 			return errors.New("concurrent old-function replacement escaped its fence")
-		} else if !strings.Contains(err.Error(), "lock timeout") {
+		} else if !postgresLockNotAvailable(err) {
 			return fmt.Errorf("concurrent old-function replacement failed for the wrong reason: %w", err)
 		}
 		functionMutationBlocked = true

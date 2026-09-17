@@ -7,10 +7,12 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -339,6 +341,266 @@ func ProbeTargetOccupied(ctx context.Context, cfg store.Config) (bool, error) {
 	return n > 0, nil
 }
 
+// ProbeConnAuthority opens a TRANSIENT connection for cfg (no migrations, no
+// schema change, no admin pool) and reports what that connection actually is and
+// may do: the connecting role's posture, whether the engine schema is there and
+// grants it CREATE, whether the session can write at all, and which database on
+// which cluster it reached.
+//
+// It exists for the DR pre-flight, which has to answer "may this connection do
+// the restore" BEFORE pg_restore writes an estate — the boot guard answers the
+// same question AFTER, which is one step too late to be a control. Everything it
+// reads is a SELECT: it is safe against a live database and changes nothing.
+//
+// ⛔ ONE PINNED CONNECTION, ONE TRANSACTION, AND THAT IS THE WHOLE POINT.
+//
+// The first version of this function took the facts off a *sql.DB. A *sql.DB is a
+// POOL: it makes no promise that two statements land on the same physical
+// connection, and this repository already says so where it matters — dialect.go's
+// Execer exists precisely so schema work can run "on ONE named connection …
+// instead of racing the pool for a different one". On a stable direct route
+// database/sql happens to reuse the idle connection, which is why that version
+// measured green; it was a coincidence, not a guarantee. Behind a pooler or a
+// balancer it could return Reachable=true built from one backend's ROLE and
+// another backend's DATABASE, CREATE grant and writability — a certificate no
+// real session ever satisfied. A probe whose entire job is "these facts describe
+// ONE session" must not be assembled from several.
+//
+// So: db.Conn pins a connection, BeginTx pins it further, and every read below
+// runs on that tx. The pin is released by the deferred Close.
+//
+// THE TRANSACTION IS DELIBERATELY NOT ReadOnly. sql.TxOptions{ReadOnly: true}
+// would make PostgreSQL report transaction_read_only=on for our OWN setting, so
+// the probe would be measuring the flag it just set and would report every
+// session as unwritable. With nil options pgx sends no access mode and the
+// session's inherited default is what answers — MEASURED on PostgreSQL 16.15:
+// with `ALTER ROLE … SET default_transaction_read_only = on` the nil-options
+// transaction reports `on`, and without it `off`. Reading, not writing, is
+// enforced by the statements themselves: every one is a SELECT.
+//
+// A connection, authentication or posture failure is captured in the returned
+// value (Posture.Reachable=false, Posture.Err set), not as a Go error, so a
+// caller can report every pool it was given in one pass instead of stopping at
+// the first. The returned error is reserved for a programmer-level fault (an
+// unsupported engine).
+func ProbeConnAuthority(ctx context.Context, cfg store.Config) (store.ConnAuthority, error) {
+	if cfg.Engine != store.EnginePostgres {
+		return store.ConnAuthority{}, fmt.Errorf("sqlstore: ProbeConnAuthority supports the postgres engine only, got %q", cfg.Engine)
+	}
+	out := store.ConnAuthority{
+		Schema:  dialect.EngineSchema,
+		Posture: store.RolePosture{Engine: cfg.Engine},
+	}
+	db, err := openDB(cfg)
+	if err != nil {
+		out.Posture.Err = err.Error()
+		return out, nil
+	}
+	defer db.Close() //nolint:errcheck // transient probe pool
+
+	// The pin. Both Close calls are deferred so a cancelled ctx still returns the
+	// connection to the pool and the pool to the driver.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		out.Posture.Err = fmt.Errorf("sqlstore: pin a probe connection: %w", err).Error()
+		return out, nil
+	}
+	defer conn.Close() //nolint:errcheck // transient pinned connection
+	measured := probeRetainedConnAuthority(ctx, conn)
+	return measured.ConnAuthority, nil
+}
+
+// retainedConnAuthority adds catalog identity to the public observation without
+// making it a maintenance capability. Every field comes from one retained
+// connection and one transaction; no caller-supplied role or OID is trusted.
+type retainedConnAuthority struct {
+	store.ConnAuthority
+	DatabaseOID int64
+	SchemaOID   int64
+	SessionRole string
+	CurrentRole string
+	RoleOID     int64
+	BackendPID  int
+	rolePosture dialect.RolePosture
+}
+
+func probeRetainedConnAuthority(ctx context.Context, conn *sql.Conn) (out retainedConnAuthority) {
+	out.ConnAuthority = store.ConnAuthority{
+		Schema:  dialect.EngineSchema,
+		Posture: store.RolePosture{Engine: store.EnginePostgres},
+	}
+	dia, _ := dialect.New(store.EnginePostgres)
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		out.Posture.Err = fmt.Errorf("sqlstore: begin the probe transaction: %w", err).Error()
+		return out
+	}
+	// Rollback, never Commit: nothing here writes, and a rollback is also the
+	// correct exit on a cancelled context.
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			out.Posture.Reachable = false
+			out.Posture.Err = fmt.Errorf("sqlstore: rollback the authority probe: %w", err).Error()
+		}
+	}()
+
+	posture, perr := dia.ConnRolePosture(ctx, tx)
+	if perr != nil {
+		out.Posture.Err = perr.Error()
+		return out
+	}
+
+	// SchemaExists is asked SEPARATELY from CanCreate on purpose: has_schema_privilege
+	// RAISES 3F000 on a schema that does not exist, so folding the two into one call
+	// would report a database with no engine schema as an unreachable connection. The
+	// scalar subquery yields NULL instead, and the COALESCE turns that into the honest
+	// "no, and here is why" the caller can name.
+	//
+	// transaction_read_only and pg_is_in_recovery() ride in this same statement
+	// because they are properties of THIS session and belong to the same snapshot
+	// of it as the CREATE grant they qualify.
+	const q = `SELECT pg_catalog.current_database(),
+       pg_catalog.pg_postmaster_start_time(),
+       (SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = $1) > 0,
+       COALESCE((SELECT pg_catalog.has_schema_privilege(oid, 'CREATE')
+                   FROM pg_catalog.pg_namespace WHERE nspname = $1), false),
+       pg_catalog.current_setting('transaction_read_only') = 'on',
+       pg_catalog.pg_is_in_recovery(),
+       (SELECT oid::pg_catalog.int8 FROM pg_catalog.pg_database WHERE datname=pg_catalog.current_database()),
+       COALESCE((SELECT oid::pg_catalog.int8 FROM pg_catalog.pg_namespace WHERE nspname=$1),0),
+       SESSION_USER, CURRENT_USER,
+       (SELECT oid::pg_catalog.int8 FROM pg_catalog.pg_roles WHERE rolname=CURRENT_USER),
+       pg_catalog.pg_backend_pid()`
+	var startedAt time.Time
+	if err := tx.QueryRowContext(ctx, q, dialect.EngineSchema).Scan(
+		&out.Database, &startedAt, &out.SchemaExists, &out.CanCreate,
+		&out.SessionReadOnly, &out.InRecovery,
+		&out.DatabaseOID, &out.SchemaOID, &out.SessionRole, &out.CurrentRole, &out.RoleOID,
+		&out.BackendPID,
+	); err != nil {
+		out.Posture.Err = fmt.Errorf("sqlstore: probe connection authority: %w", err).Error()
+		return out
+	}
+	// UTC and a fixed layout so two probes of the same instance compare EQUAL as
+	// strings: the driver's own location handling is not a property this check may
+	// depend on.
+	out.InstanceStartedAt = startedAt.UTC().Format(time.RFC3339Nano)
+
+	// LAST, and in its own statement, because it is the one read an operator can
+	// take away. EXECUTE on pg_control_system() is granted to PUBLIC by initdb —
+	// PostgreSQL 16's system_functions.sql revokes 56 functions from PUBLIC and
+	// this is not among them — but a hardened catalogue may revoke it, and then
+	// this statement fails with 42501 and ABORTS the transaction. Everything above
+	// is already scanned, so the caller still gets a complete picture with one
+	// honestly missing field instead of a probe that reports nothing.
+	//
+	// The failure is recorded, never defaulted: a caller comparing identities must
+	// be able to tell "different cluster" from "I could not look", because
+	// collapsing those two is how a cross-estate restore gets waved through.
+	if err := tx.QueryRowContext(ctx,
+		`SELECT system_identifier::text FROM pg_catalog.pg_control_system()`).Scan(&out.SystemIdentifier); err != nil {
+		out.SystemIdentifier = ""
+		out.SystemIdentifierErr = err.Error()
+	}
+
+	out.Posture.Reachable = true
+	out.rolePosture = posture
+	out.Posture.Role = posture.Role
+	out.Posture.Superuser = posture.Superuser
+	out.Posture.BypassRLS = posture.BypassRLS
+	out.Posture.ReplicationRole = posture.ReplicationRole
+	return out
+}
+
+// ProbeSameLiveServer mounts the engine's own live-server challenge on TRANSIENT
+// connections, so a caller can establish the prerequisite BEFORE it writes
+// anything instead of discovering it at Open.
+//
+// The holder connects, opens a transaction and takes a random advisory key, and
+// KEEPS HOLDING IT while each witness connects and tries to take the same key on
+// its own transaction. Advisory locks are cluster-scoped and session-held, so a
+// witness that ACQUIRES the key has proved it is a different server. Every
+// transaction is rolled back and every connection closed; nothing is written and
+// no lock outlives the call.
+//
+// ⛔ IT DOES NOT REPLACE THE ENGINE'S CHECK, IT ANTICIPATES IT. The store still
+// runs its own challenge at Open (verifyDirectoryActivationDatabaseIdentity) and
+// still refuses there. This exists so `dr restore` stops before installing
+// custody and running pg_restore rather than after — the same reading, taken one
+// step earlier, from the SAME factored predicate (askAdvisoryLockWitness) so the
+// two cannot answer differently.
+//
+// ⚠ AND IT BINDS THESE SESSIONS, NOT THE NEXT ONES. Like every other pre-flight
+// fact, it is closed when it returns; a pg_restore subprocess dials again. It is
+// a gate on later writes only where each DSN's reachable backends are uniform.
+//
+// A witness that cannot be examined is reported as NOT same-server with its Err
+// set — never as a pass. The returned error is reserved for a programmer-level
+// fault (an unsupported engine).
+func ProbeSameLiveServer(
+	ctx context.Context,
+	holder store.Config,
+	holderLabel string,
+	witnesses []store.SameServerWitness,
+) (out store.SameServerReport, err error) {
+	if holder.Engine != store.EnginePostgres {
+		return store.SameServerReport{}, fmt.Errorf(
+			"sqlstore: ProbeSameLiveServer supports the postgres engine only, got %q", holder.Engine)
+	}
+	out.HolderLabel = holderLabel
+	if len(witnesses) == 0 {
+		return out, nil
+	}
+	db, err := openDB(holder)
+	if err != nil {
+		out.HolderErr = err.Error()
+		return out, nil
+	}
+	defer db.Close() //nolint:errcheck // transient probe pool
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		out.HolderErr = fmt.Errorf("pin the challenge holder: %w", err).Error()
+		return out, nil
+	}
+	defer conn.Close() //nolint:errcheck // transient pinned connection
+	challenge, err := beginRetainedServerChallenge(ctx, conn)
+	if err != nil {
+		out.HolderErr = err.Error()
+		return out, nil
+	}
+	defer func() {
+		if err := challenge.rollback(); err != nil {
+			out.HolderErr = fmt.Errorf("rollback the holder challenge: %w", err).Error()
+		}
+	}()
+	out.HolderDatabase = challenge.database
+	for _, w := range witnesses {
+		out.Witnesses = append(out.Witnesses, askSameServerWitness(ctx, holder, w, challenge))
+	}
+	return out, nil
+}
+
+// Transient public probes and retained work sessions share the same challenge
+// predicate. This wrapper closes each transient witness before dialing the next.
+func askSameServerWitness(ctx context.Context, holder store.Config, w store.SameServerWitness, challenge *retainedServerChallenge) store.SameServerVerdict {
+	v := store.SameServerVerdict{Label: w.Label}
+	cfg := holder
+	cfg.DSN = w.DSN
+	db, err := openDB(cfg)
+	if err != nil {
+		v.Err = err.Error()
+		return v
+	}
+	defer db.Close() //nolint:errcheck // transient witness pool
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		v.Err = fmt.Errorf("pin the witness connection: %w", err).Error()
+		return v
+	}
+	defer conn.Close() //nolint:errcheck // transient pinned connection
+	return challenge.witness(ctx, conn, w.Label).SameServerVerdict
+}
+
 const (
 	attrsUnprivileged = "NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION"
 	attrsAdmin        = "NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION"
@@ -346,11 +608,19 @@ const (
 )
 
 // RenderProvisionSQL renders the provisioning steps for display (`db init
-// --print-sql`) WITHOUT a database connection. Password literals are redacted; the
-// statements are the unconditional CREATE/GRANT forms (the executor applies them
-// idempotently, gated on existence). It validates the spec's identifiers so a bad
-// name is caught before anything runs.
+// --print-sql`) WITHOUT a database connection. Password literals are redacted. It
+// validates the spec's identifiers so a bad name is caught before anything runs.
+//
+// This is the DESIRED STATE, not a transcript. The executor converges a role that
+// already exists with LOGIN plus only the attributes that actually differ, and it
+// creates one as NOLOGIN followed by a separate credential statement (see upsertRole);
+// neither text appears here, and a reader must not take these lines as the statements
+// a run executed. The unconditional CREATE form is what the plan is FOR — an operator
+// applying the model by hand, against a cluster where nothing exists yet.
 func RenderProvisionSQL(spec store.PgProvisionSpec) ([]store.PgProvisionStep, error) {
+	if spec.InstallDirectoryInventory {
+		return renderDirectoryInventoryInstall(spec)
+	}
 	if _, err := validIdent("database", spec.Database); err != nil {
 		return nil, err
 	}
@@ -431,6 +701,9 @@ func RenderProvisionSQL(spec store.PgProvisionSpec) ([]store.PgProvisionStep, er
 // pg_catalog.format('%L') from a bound parameter, so a password never enters a Go-assembled
 // SQL string.
 func ProvisionPostgres(ctx context.Context, superuserDSN string, spec store.PgProvisionSpec, execute bool) (store.PgProvisionResult, error) {
+	if spec.InstallDirectoryInventory {
+		return provisionDirectoryInventory(ctx, superuserDSN, spec, execute)
+	}
 	steps, err := RenderProvisionSQL(spec)
 	if err != nil {
 		return store.PgProvisionResult{}, err
@@ -586,11 +859,8 @@ func dsnHint(superCfg *pgx.ConnConfig, role, dbName, sslmode string) string {
 	return fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=%s", role, host, port, dbName, sslmode)
 }
 
-// upsertRole creates the role (with a password) or, when it already exists,
-// re-asserts its attributes (and rotates the password when one is supplied). The
-// password is bound into a server-side pg_catalog.format('%L'), never concatenated in Go.
-// execQuerier is what upsertRole needs, and it exists so the role DDL can run on a
-// *sql.Tx instead of the pool. Both *sql.DB and *sql.Tx satisfy it.
+// execQuerier is what the role stage needs, and it exists so the role DDL can run on
+// a *sql.Tx instead of the pool. Both *sql.DB and *sql.Tx satisfy it.
 type execQuerier interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
@@ -603,9 +873,9 @@ type execQuerier interface {
 // Roles are a CLUSTER object, not a database one, so isolating the database does
 // NOT isolate this: two provisioners against the same cluster contend on the same
 // pg_authid tuple even when their databases are unrelated. upsertRole is a
-// check-then-act — SELECT EXISTS, then CREATE or ALTER — and the window between
-// the two is exactly wide enough for both to read "absent" and both to CREATE, or
-// for both to ALTER the same tuple and for one to be told
+// check-then-act — read the catalog posture, then CREATE or ALTER — and the window
+// between the two is exactly wide enough for both to read "absent" and both to
+// CREATE, or for both to ALTER the same tuple and for one to be told
 // `tuple concurrently updated (XX000)`.
 //
 // Measured 2026-08-09 on mainline-ci, where it turned main red: the sqlstore suite
@@ -617,35 +887,376 @@ type execQuerier interface {
 // is released by COMMIT or ROLLBACK and cannot be leaked by an early return.
 const provisionRolesLockKey = "olivares.provision.roles.v1"
 
+// roleAttrs is the CLOSED posture provisioning knows how to converge: the six flags
+// the two published attribute sets name, and nothing else. rolinherit, rolconnlimit
+// and rolvaliduntil are deliberately absent — provisioning does not own them, so a
+// deployment that keeps its roles NOINHERIT keeps them NOINHERIT.
+type roleAttrs struct {
+	Login       bool
+	Superuser   bool
+	BypassRLS   bool
+	CreateRole  bool
+	CreateDB    bool
+	Replication bool
+}
+
+// roleOption is one convergeable attribute: how to read it off a posture, and the two
+// words that name it in CREATE/ALTER ROLE. The SLICE ORDER IS THE STATEMENT ORDER, so
+// the rendered options are deterministic and reviewable — and it is the order the
+// published attrsUnprivileged/attrsAdmin constants already print, which is what lets
+// the render path and the executor be read side by side.
+type roleOption struct {
+	Field string
+	Get   func(roleAttrs) bool
+	Yes   string
+	No    string
+}
+
+func (o roleOption) word(on bool) string {
+	if on {
+		return o.Yes
+	}
+	return o.No
+}
+
+// convergeableRoleOptions is every attribute BESIDES login. LOGIN is not here because
+// it is not conditional: see alterRoleAttributesSQL.
+var convergeableRoleOptions = []roleOption{
+	{"superuser", func(a roleAttrs) bool { return a.Superuser }, "SUPERUSER", "NOSUPERUSER"},
+	{"bypassrls", func(a roleAttrs) bool { return a.BypassRLS }, "BYPASSRLS", "NOBYPASSRLS"},
+	{"createrole", func(a roleAttrs) bool { return a.CreateRole }, "CREATEROLE", "NOCREATEROLE"},
+	{"createdb", func(a roleAttrs) bool { return a.CreateDB }, "CREATEDB", "NOCREATEDB"},
+	{"replication", func(a roleAttrs) bool { return a.Replication }, "REPLICATION", "NOREPLICATION"},
+}
+
+// desiredRoleAttrs resolves one of the two controlled attribute sets to the posture it
+// names. Anything else is refused HERE — before a catalog read and before a write —
+// rather than reaching the server as arbitrary SQL or quietly degrading to a partial
+// default. The sets are internal constants today; this keeps them closed if a later
+// caller ever tries to widen them from outside.
+func desiredRoleAttrs(attrs string) (roleAttrs, error) {
+	switch attrs {
+	case attrsUnprivileged:
+		return roleAttrs{Login: true}, nil
+	case attrsAdmin:
+		return roleAttrs{Login: true, BypassRLS: true}, nil
+	default:
+		return roleAttrs{}, fmt.Errorf(
+			"provisioning has no role attribute set %q; the controlled sets are %q (application/owner) and %q (runtime reader)",
+			attrs, attrsUnprivileged, attrsAdmin)
+	}
+}
+
+// createRoleSQL renders creation: NOLOGIN plus every remaining desired attribute, and
+// NO password. LOGIN and the credential arrive together in the separate step below, so
+// THIS statement — the one that names the privileged attributes, and therefore the one a
+// privilege check refuses — carries no credential literal, and the role is never a
+// committed login without one, because both statements are the caller's single
+// transaction.
+//
+// The claim is bounded to the create and attribute statements, and an earlier version of
+// this comment was not. The credential statement below still carries a literal, can
+// itself be refused, and is logged by a server configured to log failed statements.
+// Splitting the two narrows the exposure to one statement; it does not remove it, and the
+// complete credential-channel design remains a separate open obligation.
+func createRoleSQL(name string, want roleAttrs) string {
+	opts := make([]string, 0, len(convergeableRoleOptions)+1)
+	opts = append(opts, "NOLOGIN")
+	for _, o := range convergeableRoleOptions {
+		opts = append(opts, o.word(o.Get(want)))
+	}
+	return fmt.Sprintf("CREATE ROLE %s WITH %s", name, strings.Join(opts, " "))
+}
+
+// alterRoleAttributesSQL renders convergence for an EXISTING role: LOGIN always, then
+// only the options whose observed value actually differs from the desired one.
+//
+// LOGIN is unconditional for two reasons that happen to coincide. Both controlled sets
+// are LOGIN, so it is always the desired value and converges an observed NOLOGIN; and
+// it keeps the statement a real role administration under the server's rules, so a
+// rerun still requires CREATEROLE plus ADMIN OPTION on the target. An executor that
+// cannot administer a requested role is REFUSED rather than passed silently, which is
+// the whole point of not optimizing a zero-drift rerun into no statement at all.
+//
+// Everything else is conditional because PostgreSQL gates the PRESENCE of a restricted
+// option, not a change of value. Measured on 16.15: a non-superuser executor is refused
+// NOSUPERUSER on a role that is ALREADY NOSUPERUSER (user.c:764), and the same holds for
+// REPLICATION (:808) and BYPASSRLS (:814). Naming the whole list unconditionally is what
+// made the rerun path — the one `db init` is built for — unreachable for every
+// non-superuser maintenance role. Dropping the restricted options instead would leave
+// real drift uncorrected and silently publish a privileged application role, so a
+// MISMATCHING privileged attribute is still named here: that operation is meant to be
+// refused when the executor lacks the authority, and the refusal rolls the role
+// transaction back rather than reporting a converged role that is not.
+func alterRoleAttributesSQL(name string, want, have roleAttrs) string {
+	opts := make([]string, 0, len(convergeableRoleOptions)+1)
+	opts = append(opts, "LOGIN")
+	for _, o := range convergeableRoleOptions {
+		if o.Get(want) != o.Get(have) {
+			opts = append(opts, o.word(o.Get(want)))
+		}
+	}
+	return fmt.Sprintf("ALTER ROLE %s WITH %s", name, strings.Join(opts, " "))
+}
+
+// roleCredentialTemplate is the credential step's pg_catalog.format template: the
+// validated identifier, LOGIN and PASSWORD, and nothing else. %L is filled SERVER-SIDE
+// from a bound parameter, so a password is never concatenated into SQL in Go.
+func roleCredentialTemplate(name string) string {
+	return fmt.Sprintf("ALTER ROLE %s WITH LOGIN PASSWORD %%L", name)
+}
+
+// roleCatalogQuery reads the WHOLE posture of one role, by its exact name, through a
+// bound text parameter — never an interpolated name and never a pattern match. The OID
+// travels in the same row, so the row this transaction acted on is the row it verifies
+// afterwards. pg_roles rather than pg_authid: the view is readable without being a
+// superuser and it masks rolpassword.
+const roleCatalogQuery = `SELECT r.oid::pg_catalog.int8, r.rolname::pg_catalog.text,
+       r.rolcanlogin, r.rolsuper, r.rolbypassrls,
+       r.rolcreaterole, r.rolcreatedb, r.rolreplication
+  FROM pg_catalog.pg_roles AS r
+ WHERE r.rolname = $1::pg_catalog.text`
+
+// executorIdentityQuery resolves the two identities this transaction acts under — the
+// login it authenticated as, and the role it is currently executing as, which SET ROLE
+// separates — to their catalog OIDs. SESSION_USER and CURRENT_USER are reserved words
+// the parser answers itself, so neither depends on a resolvable name or the search_path.
+const executorIdentityQuery = `SELECT s.oid::pg_catalog.int8, c.oid::pg_catalog.int8
+  FROM pg_catalog.pg_roles AS s, pg_catalog.pg_roles AS c
+ WHERE s.rolname = SESSION_USER AND c.rolname = CURRENT_USER`
+
+// errExecutorIdentityUnresolved is the refusal for a transaction that cannot name its
+// own identity. It is a distinct value rather than a stage message because it is not a
+// server failure: the query succeeded and returned nothing.
+var errExecutorIdentityUnresolved = errors.New("this provisioning transaction's session_user/current_user do not resolve to catalog roles")
+
+// observedRole is what the catalog says about the target inside the caller's
+// transaction: identity and posture, read together in one row.
+type observedRole struct {
+	OID   int64
+	Name  string
+	Attrs roleAttrs
+}
+
+// Stage names for the diagnostics below. They say WHERE the role stage stopped and
+// carry no server text of their own.
+const (
+	roleStageLookup        = "catalog lookup"
+	roleStageIdentity      = "executor identity"
+	roleStageCreate        = "create"
+	roleStageAttributes    = "attribute administration"
+	roleStageCredential    = "credential"
+	roleStagePostcondition = "postcondition"
+)
+
+// sqlStateShape is the five characters a SQLSTATE is DEFINED to be (class plus
+// subclass, digits and upper-case letters). Anything else is not a SQLSTATE and is not
+// repeated into a diagnostic just because a driver put it in that field.
+var sqlStateShape = regexp.MustCompile(`^[0-9A-Z]{5}$`)
+
+// roleStageError is the ONLY error the role stage returns for a server or driver
+// failure, and it deliberately drops the server's own words.
+//
+// The reason is the credential step. A refused ALTER ROLE … PASSWORD is logged by the
+// server with its statement text under the default log_min_error_statement, and pgx
+// hands the driver error back with message, detail and hint attached. Wrapping that
+// error verbatim would move the exposure into the product's own diagnostics — an
+// operator's terminal, a support bundle, a JSON result — where it is far more likely to
+// be copied than a server log is. So a failure becomes: which stage, which role, and
+// the five-character SQLSTATE when the server supplied a well-formed one.
+//
+// Cancellation is the exception, and it is an identity rather than a message:
+// context.Canceled and context.DeadlineExceeded are preserved through %w so a caller
+// that distinguishes "the operator interrupted this" from "the server refused" still
+// can. Neither carries server text.
+func roleStageError(stage, name string, err error) error {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return fmt.Errorf("role %q: %s: %w", name, stage, context.Canceled)
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("role %q: %s: %w", name, stage, context.DeadlineExceeded)
+	}
+	if code := serverSQLState(err); code != "" {
+		return fmt.Errorf("role %q: %s refused by the server (SQLSTATE %s)", name, stage, code)
+	}
+	return fmt.Errorf("role %q: %s did not complete", name, stage)
+}
+
+// serverSQLState returns the server's SQLSTATE when the failure carries one in the
+// shape the standard defines, and "" otherwise.
+func serverSQLState(err error) string {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || !sqlStateShape.MatchString(pgErr.Code) {
+		return ""
+	}
+	return pgErr.Code
+}
+
+// readRoleFromCatalog reads the target's posture. A MISSING ROW is the create path and
+// is reported as such; every other outcome — an unreadable catalog, a refused query, a
+// canceled context — is an error, because "I could not look" must never be spelled the
+// same way as "it is not there".
+func readRoleFromCatalog(ctx context.Context, db execQuerier, name string) (observedRole, bool, error) {
+	var got observedRole
+	err := db.QueryRowContext(ctx, roleCatalogQuery, name).Scan(
+		&got.OID, &got.Name,
+		&got.Attrs.Login, &got.Attrs.Superuser, &got.Attrs.BypassRLS,
+		&got.Attrs.CreateRole, &got.Attrs.CreateDB, &got.Attrs.Replication,
+	)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return observedRole{}, false, nil
+	case err != nil:
+		return observedRole{}, false, err
+	}
+	return got, true, nil
+}
+
+// readExecutorIdentity resolves session_user and current_user to OIDs in this
+// transaction. Comparing OIDs rather than names is what makes the guard below an
+// identity check instead of a naming convention.
+func readExecutorIdentity(ctx context.Context, db execQuerier) (sessionOID, currentOID int64, err error) {
+	err = db.QueryRowContext(ctx, executorIdentityQuery).Scan(&sessionOID, &currentOID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return 0, 0, errExecutorIdentityUnresolved
+	case err != nil:
+		return 0, 0, err
+	}
+	return sessionOID, currentOID, nil
+}
+
+// firstRoleAttrMismatch names the first flag that did not converge, in the statement's
+// own order, or "" when the whole posture matches. It returns a FIELD NAME rather than
+// a rendering of either posture: a postcondition diagnostic has to be safe to print.
+func firstRoleAttrMismatch(want, got roleAttrs) string {
+	if want.Login != got.Login {
+		return "login"
+	}
+	for _, o := range convergeableRoleOptions {
+		if o.Get(want) != o.Get(got) {
+			return o.Field
+		}
+	}
+	return ""
+}
+
+// verifyRolePosture rereads the whole posture in the SAME transaction that wrote it and
+// requires all six desired flags, the exact name, and — for a role that already existed
+// — the same OID it was read with. A drop-and-recreate between the two statements, a
+// refused write that somehow reported success, or a converged flag that did not stick
+// is a failure of this role transaction, not a warning.
+//
+// What this is NOT: a guarantee about the catalog after commit, or a lock against an
+// independent administrator. It is transaction-bound, and the runtime posture checks at
+// boot remain the standing verification.
+func verifyRolePosture(ctx context.Context, db execQuerier, name string, want roleAttrs, existed bool, priorOID int64) error {
+	got, found, err := readRoleFromCatalog(ctx, db, name)
+	if err != nil {
+		return roleStageError(roleStagePostcondition, name, err)
+	}
+	switch {
+	case !found:
+		return fmt.Errorf("role %q: %s: the role is absent from the catalog in the same transaction that provisioned it", name, roleStagePostcondition)
+	case got.Name != name:
+		return fmt.Errorf("role %q: %s: the catalog resolved a different role name for this exact name", name, roleStagePostcondition)
+	case existed && got.OID != priorOID:
+		return fmt.Errorf("role %q: %s: the role's catalog identity changed during this transaction", name, roleStagePostcondition)
+	}
+	if field := firstRoleAttrMismatch(want, got.Attrs); field != "" {
+		return fmt.Errorf("role %q: %s: %s did not converge to the requested posture", name, roleStagePostcondition, field)
+	}
+	return nil
+}
+
+// setRolePassword is the separate credential step, and it is separate on purpose: it runs
+// only AFTER the create or attribute-administration statement has been accepted, so a
+// refusal AT THAT STAGE happens before the credential is ever formatted or sent.
+//
+// That is the whole of the guarantee, and it says nothing about this statement. The
+// credential ALTER carries a literal, can be refused on its own account, and when it is,
+// the caller's transaction rolls back. The template carries the validated identifier;
+// only the password is a server-side %L from a bound parameter, and neither the template
+// nor the formatted statement reaches a diagnostic.
+func setRolePassword(ctx context.Context, db execQuerier, name, password string) error {
+	var ddl string
+	if err := db.QueryRowContext(ctx,
+		"SELECT pg_catalog.format($1::pg_catalog.text, $2::pg_catalog.text)",
+		roleCredentialTemplate(name), password).Scan(&ddl); err != nil {
+		return roleStageError(roleStageCredential, name, err)
+	}
+	if _, err := db.ExecContext(ctx, ddl); err != nil {
+		return roleStageError(roleStageCredential, name, err)
+	}
+	return nil
+}
+
+// upsertRole converges ONE requested role to the posture provisioning documents, inside
+// the caller's role transaction: read the catalog, refuse the identities that must not
+// be touched, apply only what actually differs, set the credential separately, and
+// verify the whole posture before the caller is allowed to commit.
+//
+// The order of the refusals is the design. Both the target's posture and the executor's
+// own identity are resolved BEFORE any write, so a role that is this transaction's
+// session or effective identity, or any existing superuser, is refused rather than
+// converged: an administrative identity is not application-role drift, and demoting one
+// inside a provisioning transaction is a way to lose a cluster's only administrator. The
+// check is OID equality against session_user and current_user, not a guess from the
+// role's name — provisioning must not acquire a heuristic about which names are
+// privileged.
+//
+// This helper opens no pool and commits nothing. Every refusal below leaves the caller's
+// transaction to roll back, which is what makes a failure on the second requested role
+// undo the first.
 func upsertRole(ctx context.Context, db execQuerier, name, attrs, password string) error {
 	if _, err := validIdent("role", name); err != nil {
 		return err
 	}
-	var exists bool
-	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)", name).Scan(&exists); err != nil {
+	want, err := desiredRoleAttrs(attrs)
+	if err != nil {
 		return err
 	}
-	verb := "CREATE"
+
+	have, exists, err := readRoleFromCatalog(ctx, db, name)
+	if err != nil {
+		return roleStageError(roleStageLookup, name, err)
+	}
+	sessionOID, currentOID, err := readExecutorIdentity(ctx, db)
+	if err != nil {
+		if errors.Is(err, errExecutorIdentityUnresolved) {
+			return fmt.Errorf("role %q: %w, so provisioning cannot tell whether it is about to administer itself", name, err)
+		}
+		return roleStageError(roleStageIdentity, name, err)
+	}
 	if exists {
-		verb = "ALTER"
+		if have.OID == sessionOID || have.OID == currentOID {
+			return fmt.Errorf("role %q is the identity this provisioning transaction is running as; provisioning will not converge its own login or effective role to an application posture", name)
+		}
+		if have.Attrs.Superuser {
+			return fmt.Errorf("role %q is a SUPERUSER; provisioning will not demote an administrative identity as application-role drift", name)
+		}
 	}
-	if !exists && password == "" {
-		return fmt.Errorf("cannot create role %q without a password", name)
+
+	if !exists {
+		if password == "" {
+			return fmt.Errorf("cannot create role %q without a password", name)
+		}
+		if _, err := db.ExecContext(ctx, createRoleSQL(name, want)); err != nil {
+			return roleStageError(roleStageCreate, name, err)
+		}
+	} else if _, err := db.ExecContext(ctx, alterRoleAttributesSQL(name, want, have.Attrs)); err != nil {
+		return roleStageError(roleStageAttributes, name, err)
 	}
-	if password == "" {
-		// Existing role, keep the password; only re-assert the attributes.
-		_, err := db.ExecContext(ctx, fmt.Sprintf("ALTER ROLE %s WITH LOGIN %s", name, attrs))
-		return err
+
+	// An absent password PRESERVES the existing one: an operator rerunning `db init`
+	// without the password file is asking to converge attributes, not to lock a role
+	// out of its own database.
+	if password != "" {
+		if err := setRolePassword(ctx, db, name, password); err != nil {
+			return err
+		}
 	}
-	// The template carries the validated identifier and the controlled attribute
-	// list inline; only the password is a server-side %L from a bound parameter.
-	tmpl := fmt.Sprintf("%s ROLE %s WITH LOGIN PASSWORD %%L %s", verb, name, attrs)
-	var ddl string
-	if err := db.QueryRowContext(ctx, "SELECT pg_catalog.format($1::pg_catalog.text, $2::pg_catalog.text)", tmpl, password).Scan(&ddl); err != nil {
-		return err
-	}
-	_, err := db.ExecContext(ctx, ddl)
-	return err
+	return verifyRolePosture(ctx, db, name, want, exists, have.OID)
 }
 
 // ensureDatabase creates the database owned by ownerName when absent, else

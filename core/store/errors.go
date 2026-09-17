@@ -99,6 +99,10 @@ var (
 	// ErrCursorWithSort is returned when a keyset Cursor is combined with a
 	// custom Sort: the cursor is only valid for the default id ordering.
 	ErrCursorWithSort = errors.New("cursor not supported with custom sort")
+	// ErrInvalidProjection is returned by DistinctProjector implementations for a
+	// DistinctProjection whose shape (column, limit, filter operators, ORed
+	// alternatives) is unusable. It is a caller error, never a store fault.
+	ErrInvalidProjection = errors.New("invalid distinct projection")
 	// ErrNotLeader is returned when a write is attempted on a node that is not the
 	// active writer in an active-passive HA cluster. It is the store-level
 	// defense in depth behind the load-balancer drain: a standby is removed from the
@@ -241,4 +245,30 @@ var (
 	// this one is about ordinary tenant tables, and conflating them would give a
 	// caller asking "is the evidence boundary intact?" a false positive.
 	ErrTenantTablesUnresolved = errors.New("registered tenant tables did not resolve in the engine schema")
+	// ErrPostgresUpgradePrivilegePreflight is returned when a PostgreSQL boot with a
+	// separate owner role cannot prove, BEFORE its first durable schema change, that
+	// the application role will hold the effective privileges the schema this binary
+	// is about to apply requires.
+	//
+	// It is ONE sentinel for the whole preflight — schema access, owner authority, an
+	// existing relation, the future-relation probe, and a probe rollback that did not
+	// complete — because every one of them means the same thing to a caller: the
+	// upgrade was REFUSED and nothing was changed. Splitting that into a hierarchy
+	// would invite a caller to match on some and let the rest through, and "the
+	// preflight could not finish" is never a permit.
+	//
+	// Where an EXISTING sentinel already names the defect, the refusal carries BOTH,
+	// and that is not decoration. This check reaches several conditions earlier than
+	// the code that used to report them — ErrEngineSchemaUnusable,
+	// ErrAppendOnlyGrantMissing, ErrSchemaBoundaryGrantMissing and
+	// ErrAppendOnlyACLUnverifiable — and moving a refusal earlier must not rename it.
+	// This one answers "was the upgrade refused"; the other answers "what is wrong".
+	//
+	// The failure it exists to remove is causal and was measured: an upgrade applied
+	// schema the application role then could not use, so the migration advanced
+	// durably and the deployment failed with 42501 afterwards, with the tracking
+	// table already moved. The remedy is not a flag — it is `olivares migrate apply`,
+	// which separates "authorize the schema" from "authorize serving".
+	ErrPostgresUpgradePrivilegePreflight = errors.New(
+		"postgres upgrade effective-privilege preflight failed")
 )

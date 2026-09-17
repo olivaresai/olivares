@@ -25,14 +25,23 @@
 #   summary      one sentence, or "-" when nav.descriptions.<id> already says it
 #
 /accept-invite	Accept an invitation	Where an emailed invitation link lands: the invitee sets a password and joins the workspace, with no prior session.
-/agentcore-export	-	Plan and apply the Cedar policy export to AWS AgentCore, and review what would change before it does.
-/backups	-	Trigger, schedule, download and restore backups, with a second confirmation on the destructive path.
-/eventing	-	Outbound webhook subscriptions, their delivery log and the dead-letter queue.
+/agentcore-export	-	-
+/areas/ai	AI	Directory of the AI area: observe and operate sessions, provider profiles and environments, models, specialized execution and provider reference. Lists the entries your permissions allow.
+/areas/automation	Automation	Directory of the Automation area: flows and orchestration, events and notifications. Lists the entries your permissions allow.
+/areas/data-context	Data & context	Directory of the Data & context area: capabilities, knowledge and artifacts. Lists the entries your permissions allow.
+/areas/deployment	Deployment	Directory of the Deployment area: how deployments are prepared and controlled. Lists the entries your permissions allow.
+/areas/infrastructure	Infrastructure	Directory of the Infrastructure area: the inventory and workspaces of the estate. Lists the entries your permissions allow.
+/areas/observation	Observability & evidence	Directory of the Observability & evidence area: status and activity, costs and adoption, audit and recordings, evaluation and evidence. Lists the entries your permissions allow.
+/areas/security-identity	Security & identity	Directory of the Security & identity area: identity and access, policies, protection and response, governance boundaries. Lists the entries your permissions allow.
+/areas/system	System & settings	Directory of the System & settings area: administration, installation and maintenance, developer tools and personal preferences. Lists the entries your permissions allow.
+/areas/work-communications	Work & communications	Directory of the Work & communications area: the durable cross-session work backlog and governed communications. Lists the entries your permissions allow.
+/backups	-	-
+/eventing	-	-
 /login	Sign in	The credential and token sign-in page for an already provisioned account.
-/logs	-	The live engine log stream, filtered by level and module, with search and pause.
-/routine-policies	-	Cadence floors, concurrency caps, approval requirements and cron allowlists for Claude Code routines.
+/logs	-	-
+/routine-policies	-	-
 /session-viewer/$id	-	The full timeline of one recorded session, reached from a row in Recordings rather than from the sidebar.
 /setup	First-run setup	The one-time page that turns a fresh deployment into a usable one: it consumes the setup token and creates the first owner account.
 /status-page	Public status	Component health for people who are not signed in, refreshed on its own while the page is open.
-/team-costs	-	Spend attributed by team, expandable into the per-project and per-model breakdown.
-/workspace-templates	-	Reusable session configuration snapshots: hooks, settings, connectors and policies.
+/team-costs	-	-
+/workspace-templates	-	-

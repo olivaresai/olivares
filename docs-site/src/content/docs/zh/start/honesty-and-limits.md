@@ -21,13 +21,18 @@ description: >-
   正是复现这条路径。
 - **首次运行的初始化无需凭据。** 全新安装**没有默认凭据**；
   引擎在首次启动时打印一个一次性、单次使用的初始化令牌。
+- **固定后，官方 Codex 和 Grok CLI 即会话驱动程序。**
+  设置 `OLIVARES_SESSION_RUNTIME_CODEX_BIN` 或 `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  会在该节点注册该驱动程序。未设置时，该驱动程序的配置文件仍可观察但不能启动。
+  启动走 [提供商配置文件](/how-to/operate-provider-sessions/)。
+  `CHANGELOG.md` `[26.9.0]` **不断言**与已认证官方 Grok 账户的兼容性。
 - **REST API 和审计账本（audit ledger）是真实存在的。** [API 参考](/reference/api/)
   从产品自身的 OpenAPI 3.1 契约渲染而来。审计账本是
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可离线验证。** 签名、SLSA 来源、SBOM
   和 OpenVEX 都可[在无网络访问的情况下验证](/zh/how-to/verify-a-release/)，
-  且产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。**目前还没有任何带标签的发布版本**，因此这描述的是一个发布版本将会包含什么，而不是你今天可以下载并验证的产物 —— 与 `SECURITY.md` 所述的同一条保留说明。
+  且产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。最新的带标签发布版本 **v26.9.0** 已发布，附有签名归档、原生软件包和容器镜像；API、schema 和模块表面在 1.0 之前仍可能变化。
 
 ## 开放内核 —— 哪些开放、哪些属于企业版
 
@@ -121,7 +126,7 @@ Olivares AI 处于 **1.0 之前**阶段。产品设计文档明确指出，
   气隙化运行；经中介的前沿模型则不能。
 - **模块路由并非全部都在公开的 API 契约中。** 某些模块端点
   （例如访问图谱和漂移）是可达的，但*有意*
-  不属于所提供的 OpenAPI 文档；它们的字段级契约位于产品的
+  不属于 54 条路径的稳定核心契约；它们的字段级契约位于产品的
   类型化接口中。[API 参考](/reference/api/)记录了
   核心 REST 表面；它并非整个产品表面。
 

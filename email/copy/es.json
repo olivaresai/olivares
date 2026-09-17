@@ -51,5 +51,16 @@
     "setPassword": "Elegirá su propia contraseña; el administrador que le ha invitado nunca la verá.",
     "ignore": "Si no esperaba recibir este mensaje, no use el enlace y póngase en contacto con el administrador que le invitó. La cuenta ya existe; ignorar este mensaje solo deja sin establecer la contraseña de la cuenta.",
     "textIntro": "Use este enlace de invitación para configurar su cuenta de Olivares AI:"
+  },
+  "portalInvite": {
+    "subject": "Le han invitado a una organización en Olivares AI",
+    "preheader": "Acepte esta invitación para unirse a {{ORG_NAME}} en el portal de clientes de Olivares AI.",
+    "heading": "Únase a {{ORG_NAME}}",
+    "intro": "{{INVITER}} le ha invitado a unirse a {{ORG_NAME}} en el portal de clientes de Olivares AI como {{ROLE}}.",
+    "cta": "Aceptar la invitación",
+    "expiry": "Esta invitación solo puede usarse una vez y caduca el {{EXPIRES_AT}}.",
+    "howYouSignIn": "Se entra con un enlace de un solo uso enviado a esta dirección, y la invitación debe aceptarse desde la dirección a la que se envió.",
+    "ignore": "Si no esperaba este mensaje, no use el enlace y hable con quien le haya invitado. Ignorarlo no deja nada detrás ni concede nada a nadie.",
+    "textIntro": "{{INVITER}} le ha invitado a unirse a {{ORG_NAME}} en el portal de clientes de Olivares AI como {{ROLE}}. Use este enlace:"
   }
 }

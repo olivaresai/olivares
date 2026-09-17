@@ -19,7 +19,7 @@
 //   - jsm                — POST /rest/servicedeskapi/request: a JSM customer request /
 //     incident in the configured service desk + request type.
 //
-// Minimal-data / credential handling (docs/SECURITY-HARDENING.md-3): only the displayable Notification
+// Minimal-data / credential handling (docs/SECURITY-HARDENING.md §2-3): only the displayable Notification
 // fields reach the wire. The operator credential is HTTP Basic (email + API token) or
 // an OAuth 2.0 bearer token, declared Secret, held in memory only, applied as the
 // Authorization header, and NEVER logged — the delivery transport never logs headers,

@@ -32,6 +32,7 @@ import (
 	"github.com/olivaresai/olivares/modules/reporting"
 	"github.com/olivaresai/olivares/modules/sandbox"
 	"github.com/olivaresai/olivares/modules/security"
+	"github.com/olivaresai/olivares/modules/sessioncockpit"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/siemforward"
 	"github.com/olivaresai/olivares/modules/sourcescope"
@@ -91,6 +92,12 @@ func allModules() []api.Module {
 		reporting.New(),
 		sandbox.New(),
 		security.New(),
+		// Edition seam: the AGPL build mounts the availability placeholder from
+		// wire_noenterprise.go's editionModuleRegistrars(), not from wire.go's `all`.
+		// It declares a real permission and mounts in the shipped binary, so the
+		// inventory has to know it or the console's checks against that permission
+		// get reported as invented — the exact false positive this list prevents.
+		sessioncockpit.NewPlaceholder(),
 		sessions.New(),
 		siemforward.New(evt),
 		sourcescope.New(),

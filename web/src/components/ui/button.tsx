@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, Ref } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -55,6 +55,8 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   /** Render as the child element (Radix Slot) — e.g. an anchor or router Link. */
   asChild?: boolean
+  /** React 19 passes `ref` as an ordinary prop; the spread below forwards it to the element. */
+  ref?: Ref<HTMLButtonElement>
 }
 
 export function Button({

@@ -92,15 +92,29 @@ func (r entityReachRecorder) HandleEntity(method, pattern string, perm auth.Perm
 // express "only in this workspace". The console therefore hides the surface rather than probing
 // it with a request that would reveal the grant only through a 403.
 //
+// K3 MESSAGING DECISION. Existing channels, messages, deliveries and handoffs resolve their
+// stored workspace before the outer PEP decides. Their seven entity permissions therefore remain
+// grantable to an operator confined to that workspace; moving them to tenant scope would erase
+// that confinement. Channel creation remains a collection command and is deliberately absent.
+// This lot publishes REST/SDK operations only, so the console limitation remains explicit rather
+// than being disguised as tenant-wide authority or as a client call that does not exist.
+//
 // K1 moved the entity/collection ratio 5/659 -> 18/677; K2 moved it to 25/685; K5 moves it to
-// 30/694. The premise the bound rests on — entity routes remain the rare case — is still
-// asserted by the test rather than trusted from this dated measurement.
+// 30/694. K3 messaging moves it to 41/708. The premise the bound rests on — entity routes remain
+// the rare case — is still asserted by the test rather than trusted from this dated measurement.
 var moduleScopeTreeReach = []string{
+	"sessions:channel:admin",
+	"sessions:channel:read",
 	"sessions:decision:admin",
 	"sessions:decision:read",
+	"sessions:delivery:read",
+	"sessions:delivery:write",
+	"sessions:handoff-response:write",
 	"sessions:lease:admin",
 	"sessions:lease:read",
 	"sessions:lease:write",
+	"sessions:message-send:write",
+	"sessions:message:read",
 	"sessions:protocol-binding:admin",
 	"sessions:protocol-binding:read",
 	"sessions:protocol-binding:write",

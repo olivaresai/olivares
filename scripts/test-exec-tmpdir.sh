@@ -341,7 +341,24 @@ esac
 #    exige que la copia lo NOMBRE. La copia lleva OLIVARES_EXECTMP_META=0 para que no se mida a si
 #    misma: sin esa guarda, cada copia crearia otra y el banco no terminaria nunca.
 if [ "${OLIVARES_EXECTMP_META:-1}" = 1 ]; then
-	_META="$(mktemp -d "${TMPDIR:-/tmp}/meta.XXXXXX")" || _META=""
+	# ⛔ EL MUTANTE SE CORRE EN UN TEMPORAL EJECUTABLE, Y SI NO LO HAY SE CONTESTA 2. Medido el
+	#    2026-08-31 sobre `main`: con `TMPDIR=/tmp` —que en estas cajas es NOEXEC— esta fila daba
+	#    FAIL de forma DETERMINISTA (3 de 3), y no porque el arnes hubiera dejado de nombrar el rc:
+	#    la copia ES esta misma bateria, asi que su propio bloque del arnes PARA con rc 2 antes de
+	#    llegar a `_purga_caso` — exactamente el corte que la fila M de mas abajo acredita como
+	#    CORRECTO. El caso se estaba suicidando con la conducta que el resto del banco celebra.
+	#
+	#    Con el temporal ejecutable, la copia llega al mutante y lo nombra: comprobado, 0 vs 1
+	#    ocurrencias de «rc INESPERADO 7» segun donde viva. Y si esta caja no puede dar un dir
+	#    ejecutable, eso es NO HE PODIDO MIRAR y se dice: un banco que no puede fabricar su mutante
+	#    no ha demostrado nada, ni a favor ni en contra.
+	_EXECBASE=""
+	if [ -r "$RAIZ/scripts/lib/exec-tmpdir.sh" ]; then
+		# shellcheck source=/dev/null
+		. "$RAIZ/scripts/lib/exec-tmpdir.sh" 2>/dev/null || true
+		command -v olivares_exec_tmpdir >/dev/null 2>&1 && _EXECBASE="$(olivares_exec_tmpdir 2>/dev/null || true)"
+	fi
+	_META="$(mktemp -d "${_EXECBASE:-${TMPDIR:-/tmp}}/meta.XXXXXX")" || _META=""
 	if [ -n "$_META" ]; then
 		LC_ALL=C awk '{print} /mktemp -d "\$base\/\.purga/ && !d {print "\treturn 7"; d=1}' \
 			"$RAIZ/scripts/test-exec-tmpdir.sh" > "$_META/copia.sh"
@@ -351,9 +368,12 @@ if [ "${OLIVARES_EXECTMP_META:-1}" = 1 ]; then
 		#    mas larga: eso solo es cierto si la insercion ocurrio.
 		_LO="$(wc -l < "$RAIZ/scripts/test-exec-tmpdir.sh")"; _LC="$(wc -l < "$_META/copia.sh")"
 		if [ "$_LC" = "$(( _LO + 1 ))" ]; then
-			_MOUT="$(cd "$RAIZ" && OLIVARES_EXECTMP_META=0 timeout 300 bash "$_META/copia.sh" 2>&1)"
+			_MOUT="$(cd "$RAIZ" && OLIVARES_EXECTMP_META=0 TMPDIR="${_EXECBASE:-${TMPDIR:-/tmp}}" \
+				timeout 300 bash "$_META/copia.sh" 2>&1)"
 			if command grep -q 'rc INESPERADO 7' <<<"$_MOUT"; then
 				paso "el mutante del arnes queda VERSIONADO: un rc sin enumerar produce fila, no silencio"
+			elif [ -z "$_EXECBASE" ]; then
+				malo "NO HE PODIDO MIRAR: sin dir ejecutable, la copia para en su propio arnes y el mutante no llega a correr"
 			else
 				malo "el mutante del arnes NO fue nombrado: un rc sin enumerar sigue pudiendo desaparecer"
 			fi

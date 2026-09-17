@@ -76,6 +76,18 @@ var protocolBindingDescriptorKinds = map[model.Kind]string{
 	protocolSubscriptionEventKind:  protocolSubscriptionEventTable,
 }
 
+// providerProfileDescriptorKinds is the B1 provider-instance manifest — profiles,
+// source→profile bindings and profile-scoped aliases — the sessions descriptors
+// that are neither K1/K2 legacy, K3 communication nor K5 protocol. Like K5 they
+// are created by their descriptor and absent from the pre-K3 registration the
+// upgrade tables reopen from; their expression/partial indexes on the LIVE table
+// are the module migrations 0093–0095 (SQLite) and 0021–0023 (PostgreSQL).
+var providerProfileDescriptorKinds = map[model.Kind]string{
+	providerProfileKind: providerProfileTable,
+	providerBindingKind: providerBindingTable,
+	providerAliasKind:   providerAliasTable,
+}
+
 type communicationCapturedMigration struct {
 	namespace string
 	fs        fs.FS
@@ -183,10 +195,21 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 	got := make(map[model.Kind]model.EntityDescriptor, len(want))
 	legacySeen := make(map[model.Kind]struct{}, len(communicationLegacyDescriptorKinds))
 	protocolSeen := make(map[model.Kind]struct{}, len(protocolBindingDescriptorKinds))
+	profileSeen := make(map[model.Kind]struct{}, len(providerProfileDescriptorKinds))
 	tables := make(map[string]model.Kind, len(want))
 	for _, descriptor := range reg.descriptors {
 		entity, isCommunication := want[descriptor.Kind]
 		if !isCommunication {
+			if table, profile := providerProfileDescriptorKinds[descriptor.Kind]; profile {
+				if _, duplicate := profileSeen[descriptor.Kind]; duplicate {
+					t.Fatalf("B1 provider profile kind %s registered more than once", descriptor.Kind)
+				}
+				if descriptor.Table != table {
+					t.Fatalf("B1 provider profile kind %s table = %q, want %q", descriptor.Kind, descriptor.Table, table)
+				}
+				profileSeen[descriptor.Kind] = struct{}{}
+				continue
+			}
 			if table, protocol := protocolBindingDescriptorKinds[descriptor.Kind]; protocol {
 				if _, duplicate := protocolSeen[descriptor.Kind]; duplicate {
 					t.Fatalf("K5 protocol binding kind %s registered more than once", descriptor.Kind)
@@ -198,7 +221,7 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 				continue
 			}
 			if _, legacy := communicationLegacyDescriptorKinds[descriptor.Kind]; !legacy {
-				t.Fatalf("unexpected sessions descriptor outside the K1/K2 + exact-20 K3 + K5 manifests: %s", descriptor.Kind)
+				t.Fatalf("unexpected sessions descriptor outside the K1/K2 + exact-20 K3 + K5 + B1 manifests: %s", descriptor.Kind)
 			}
 			if _, duplicate := legacySeen[descriptor.Kind]; duplicate {
 				t.Fatalf("legacy sessions kind %s registered more than once", descriptor.Kind)
@@ -246,9 +269,10 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 	}
 	if len(legacySeen) != len(communicationLegacyDescriptorKinds) ||
 		len(protocolSeen) != len(protocolBindingDescriptorKinds) ||
-		len(reg.descriptors) != len(communicationLegacyDescriptorKinds)+len(communicationSchemaEntities)+len(protocolBindingDescriptorKinds) {
-		t.Fatalf("registered sessions descriptors = %d (%d legacy + %d K3 + %d K5), want exactly %d + 20 + 6",
-			len(reg.descriptors), len(legacySeen), len(got), len(protocolSeen), len(communicationLegacyDescriptorKinds))
+		len(profileSeen) != len(providerProfileDescriptorKinds) ||
+		len(reg.descriptors) != len(communicationLegacyDescriptorKinds)+len(communicationSchemaEntities)+len(protocolBindingDescriptorKinds)+len(providerProfileDescriptorKinds) {
+		t.Fatalf("registered sessions descriptors = %d (%d legacy + %d K3 + %d K5 + %d B1), want exactly %d + 20 + 6 + 3",
+			len(reg.descriptors), len(legacySeen), len(got), len(protocolSeen), len(profileSeen), len(communicationLegacyDescriptorKinds))
 	}
 
 	if got[handoffKind].Table != "sessions_work_handoff" {
@@ -302,6 +326,15 @@ func TestCommunicationSchemaRegistersNamespaceOnce(t *testing.T) {
 			"0018_communication_command_cursor_projection.sql",
 			"0019_protocol_binding_validate_functions.sql",
 			"0020_protocol_binding_triggers.sql",
+			// B1: the live plane's (scope, external id) uniqueness and the managed
+			// canonical-sid partial unique (provider-session-identity-lot.md §4).
+			"0021_live_scope_ref_uniq.sql",
+			"0022_contract_live_ref_uniq.sql",
+			"0023_live_canonical_sid_uniq.sql",
+			// OT-V: the Handoff guard moves to its own reserved validator identity
+			// so the accepted-state lease-effect rule can change without touching
+			// the shared function the other communication triggers are pinned to.
+			"0024_work_handoff_vacant_transfer.sql",
 		},
 		"sqlite": communicationSQLiteMigrationNames(),
 	}
@@ -439,6 +472,13 @@ func communicationSQLiteMigrationNames() []string {
 		"0090_protocol_binding_guard_upd.sql",
 		"0091_protocol_binding_spec_no_delete.sql",
 		"0092_protocol_binding_no_delete.sql",
+		// B1 (see providerProfileDescriptorKinds).
+		"0093_live_scope_ref_uniq.sql",
+		"0094_contract_live_ref_uniq.sql",
+		"0095_live_canonical_sid_uniq.sql",
+		// OT-V: the two halves of the accepted-state lease-effect rule.
+		"0096_work_handoff_vacant_transfer_ins.sql",
+		"0097_work_handoff_vacant_transfer_upd.sql",
 	)
 }
 
@@ -578,7 +618,7 @@ func TestCommunicationWorkEventDualAggregateAcrossBackends(t *testing.T) {
 		pendingFilters := []model.Filter{{Column: colOutboxState, Op: model.OpEq, Value: "pending"}}
 		deliveringFilters := []model.Filter{{Column: colOutboxState, Op: model.OpEq, Value: "delivering"}}
 		gotOutbox, gotEvent, found, err := firstClaimableWorkOutbox(
-			ctx, events, cohorts, pendingFilters, deliveringFilters,
+			ctx, events, cohorts, pendingFilters, deliveringFilters, model.TenantID(""), nil,
 		)
 		if err != nil || !found || gotOutbox.String(model.ColID) != expiredDelivery.String(model.ColID) ||
 			gotEvent.String(colEventID) != readyEventID.String() {
@@ -595,7 +635,7 @@ func TestCommunicationWorkEventDualAggregateAcrossBackends(t *testing.T) {
 			return nil, nil
 		}}
 		if _, _, found, err := firstClaimableWorkOutbox(
-			ctx, events, onlyPoison, pendingFilters, deliveringFilters,
+			ctx, events, onlyPoison, pendingFilters, deliveringFilters, model.TenantID(""), nil,
 		); err == nil || found ||
 			!candidateWorkOutboxEvidenceError(err) {
 			t.Fatalf("lone poisoned fact = found %v, err %v; want UNKNOWN/evidence_unavailable", found, err)
@@ -633,7 +673,7 @@ func TestCommunicationWorkEventDualAggregateAcrossBackends(t *testing.T) {
 			}
 			return []model.Record{poisonedOutbox, blockedOutbox}, nil
 		}}
-		if _, _, found, err := firstReadyWorkOutbox(ctx, blockedEvents, poisonAndBlocked, nil); err == nil ||
+		if _, _, found, err := firstReadyWorkOutbox(ctx, blockedEvents, poisonAndBlocked, nil, model.TenantID(""), nil); err == nil ||
 			found || !candidateWorkOutboxEvidenceError(err) {
 			t.Fatalf("poison plus valid blocked fact = found %v, err %v; want UNKNOWN", found, err)
 		}
@@ -1746,8 +1786,11 @@ func communicationK2Registration(
 		if _, protocol := protocolBindingDescriptorKinds[descriptor.Kind]; protocol {
 			continue
 		}
+		if _, profile := providerProfileDescriptorKinds[descriptor.Kind]; profile {
+			continue // B1, like K5: not part of the pre-K3 schema this reopens from
+		}
 		if _, legacy := communicationLegacyDescriptorKinds[descriptor.Kind]; !legacy {
-			t.Fatalf("unexpected descriptor %s cannot be classified as K2 or K3", descriptor.Kind)
+			t.Fatalf("unexpected descriptor %s cannot be classified as K2, K3, K5 or B1", descriptor.Kind)
 		}
 		legacyDescriptors = append(legacyDescriptors, descriptor)
 	}
@@ -1827,24 +1870,50 @@ func communicationPreCursorReceiptRegistration(
 		"postgres": 17,
 		"sqlite":   84,
 	})
-	invariants := communicationCloneSchemaInvariants(live.invariants[0].byEngine)
+	invariants := communicationInvariantsThrough(live.invariants[0].byEngine, map[store.Engine]int{
+		store.EnginePostgres: 17,
+		store.EngineSQLite:   84,
+	})
+	return communicationPreK5CapturedRegistration(live, migrations, invariants)
+}
+
+// communicationInvariantsThrough rewinds the LIVE declared invariant set to the
+// state a build whose migrations stop at `tips` would have declared. A
+// transition above the tip has no migration file to bind to, and the trigger's
+// declared digest is the destination of the last transition that survives — so
+// dropping one must also rewind the digest to that transition's prestate.
+//
+// It is derived rather than listed on purpose: every trigger transition added
+// afterwards used to require editing two hand-written digests here, and a lot
+// that forgot got "transition vNN must bind to exactly one migration file" from
+// a test about something else entirely.
+func communicationInvariantsThrough(
+	live map[store.Engine][]store.SchemaTrigger,
+	tips map[store.Engine]int,
+) map[store.Engine][]store.SchemaTrigger {
+	invariants := communicationCloneSchemaInvariants(live)
 	for engineName, triggers := range invariants {
+		tip, bounded := tips[engineName]
+		if !bounded {
+			continue
+		}
 		for i, trigger := range triggers {
-			if engineName == store.EnginePostgres &&
-				trigger.Name == "sessions_communication_command_guard" {
-				trigger.DefinitionSHA256 =
-					"93b8463fa70601b2c68318f3572c75e8341aae8753fa681d63cb4722f3bd396a"
-				trigger.Transitions = nil
-			} else if engineName == store.EngineSQLite &&
-				trigger.Name == "sessions_communication_command_guard_ins" {
-				trigger.DefinitionSHA256 =
-					"f67652ec1ac04d9a0cc42178a450a5416059578ee13a46854235cca57f67a085"
-				trigger.Transitions = nil
+			kept := trigger.Transitions[:0:0]
+			for _, transition := range trigger.Transitions {
+				if transition.MigrationVersion > tip {
+					if len(kept) == len(trigger.Transitions) {
+						break
+					}
+					trigger.DefinitionSHA256 = transition.PreviousDefinitionSHA256
+					break
+				}
+				kept = append(kept, transition)
 			}
+			trigger.Transitions = kept
 			invariants[engineName][i] = trigger
 		}
 	}
-	return communicationPreK5CapturedRegistration(live, migrations, invariants)
+	return invariants
 }
 
 func communicationPreCanonicalCursorReceiptRegistration(
@@ -1860,16 +1929,10 @@ func communicationPreCanonicalCursorReceiptRegistration(
 		"postgres": 18,
 		"sqlite":   85,
 	})
-	invariants := communicationCloneSchemaInvariants(live.invariants[0].byEngine)
-	for i, trigger := range invariants[store.EngineSQLite] {
-		if trigger.Name != "sessions_communication_command_guard_ins" {
-			continue
-		}
-		trigger.DefinitionSHA256 =
-			"ba6bdd1a2e669b4b54287edf4b1c2423a4b740af317e70c0f9f7c85e26088f40"
-		trigger.Transitions = trigger.Transitions[:1]
-		invariants[store.EngineSQLite][i] = trigger
-	}
+	invariants := communicationInvariantsThrough(live.invariants[0].byEngine, map[store.Engine]int{
+		store.EnginePostgres: 18,
+		store.EngineSQLite:   85,
+	})
 	return communicationPreK5CapturedRegistration(live, migrations, invariants)
 }
 
@@ -2227,9 +2290,19 @@ SELECT EXISTS (
 
 func communicationAssertPostgresCommandFunctionPosture(t *testing.T, dsn string) {
 	t.Helper()
+	// EIGHTEEN since OT-V, and it was nineteen for a reason that expired: 0018
+	// moved the CommunicationCommand guard off the shared validator and 0024
+	// moved the Handoff guard, so eighteen triggers keep it at the current tip.
+	// All three call sites of this helper are estates AT that tip.
+	//
+	// It said nineteen and went red on PostgreSQL the moment 0024 landed, and
+	// nothing caught it: these two tests SKIP without a server, and the lot that
+	// added 0024 swept ./modules/sessions/ with the PostgreSQL environment unset.
+	// Its own report had already MEASURED eighteen. A count in a test is the same
+	// kind of claim as a count in a comment — it ages, and only a run says so.
 	if got := communicationPostgresFunctionCallerCount(t, dsn,
-		"olivares_sessions_communication_validate"); got != 19 {
-		t.Fatalf("old shared communication validator callers = %d, want 19 unchanged callers", got)
+		"olivares_sessions_communication_validate"); got != 18 {
+		t.Fatalf("old shared communication validator callers = %d, want 18 unchanged callers", got)
 	}
 	if got := communicationPostgresFunctionCallerCount(t, dsn,
 		"olivares_sessions_communication_command_validate_v18"); got != 1 {
@@ -3118,6 +3191,17 @@ type communicationSchemaBackend struct {
 	name       string
 	engineName store.Engine
 	dsn        string
+	// ownerDSN, when set, opens the store in the split-owner topology
+	// (store.Config.OwnerDSN): the owner role runs DDL and the application
+	// role holds DML only. Empty for every existing backend, which keeps the
+	// single-role PostgreSQL leg and the SQLite leg exactly as they were.
+	ownerDSN string
+	// registerSchema, when set, opens the estate through a registration OTHER
+	// than the live one — the historical tips communicationMigrationThrough and
+	// communicationInvariantsThrough build. It is what lets a control write a row
+	// that was valid under the PREVIOUS schema and then meet the upgrade. Nil for
+	// every existing backend, which keeps them on New().RegisterSchema.
+	registerSchema func(store.ExtensionRegistry) error
 }
 
 func communicationSchemaBackends(t *testing.T) []communicationSchemaBackend {
@@ -3156,9 +3240,14 @@ func communicationOpenFixtureWithClock(
 	t.Helper()
 	ctx := context.Background()
 	m := New()
+	register := m.RegisterSchema
+	if backend.registerSchema != nil {
+		register = backend.registerSchema
+	}
 	st, err := engine.Open(ctx, store.Config{
-		Engine: backend.engineName, DSN: backend.dsn, Debug: true, Clock: clock,
-	}, m.RegisterSchema)
+		Engine: backend.engineName, DSN: backend.dsn, OwnerDSN: backend.ownerDSN,
+		Debug: true, Clock: clock,
+	}, register)
 	if err != nil {
 		t.Fatalf("open %s: %v", backend.name, err)
 	}

@@ -30,10 +30,15 @@ quickstart, а затем вернитесь сюда за реальной ус
 
 - Linux-хост с systemd и `curl`.
 - **Go 1.26+** для сборки бинарника (хранилище — это SQLite на чистом Go, поэтому
-  C-toolchain не нужен). Релизы с подписанными предсобранными артефактами появятся в
-  момент первого публичного релиза — до этого вы собираете из чекаута, а
-  [проверка релиза](/ru/how-to/verify-a-release/) документирует цепочку, которую вы
-  будете использовать, когда они появятся.
+  C-toolchain не нужен). Предыдущий тегированный выпуск уже поставил подписанные архивы и пакеты.
+  Канон этого дерева — **v26.9.0**; свидетель поверхностей установки всё ещё
+  записывает архивы GitHub и нативные пакеты как **not-published**, пока не
+  выполнится release-задание этого тега
+  (`docs/releases/v26.9.0-install-surfaces.json`). Пока этих артефактов нет,
+  собирайте из чекаута. Проверенный установщик на `main`
+  (`scripts/install.sh`) — опубликованная поверхность, не зависящая от тега.
+  [Проверка релиза](/ru/how-to/verify-a-release/) — цепочка для артефактов,
+  когда они появятся.
 
 ## 1. Сборка и установка бинарника
 
@@ -146,7 +151,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.

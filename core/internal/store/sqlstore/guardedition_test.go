@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -39,6 +40,29 @@ func coreOnlyCurrentGuardManifest(t *testing.T) guardManifest {
 	return m
 }
 
+// coreOnlyAccessEvidenceManifest is what a core-only build declares TODAY: the four
+// relations of the pre-access-evidence core-only edition plus the four the access-evidence
+// delta adds. It is edition 5 — the same base census as the epoch-2 manifest above, which
+// is exactly what makes the E2 -> E5 edge same-base.
+func coreOnlyAccessEvidenceManifest(t *testing.T) guardManifest {
+	t.Helper()
+	tables := []string{
+		"audit_events",
+		"set_seen_jtis",
+		guardEpoch2UserTombstoneTable,
+		guardEpoch2DirectoryTombstoneTable,
+	}
+	tables = append(tables, guardAccessEvidenceTables[:]...)
+	m, err := buildGuardManifest(tables)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.CodeEpoch != 5 {
+		t.Fatalf("core-only access-evidence census is edition %d, want 5", m.CodeEpoch)
+	}
+	return m
+}
+
 func TestK2GoldenCoreOnlyManifestAndBootstrapReceipts(t *testing.T) {
 	const (
 		sourceCommit = "727ca531a6a1cb13ccbf3ee041edf64393ea9fd3"
@@ -48,7 +72,7 @@ func TestK2GoldenCoreOnlyManifestAndBootstrapReceipts(t *testing.T) {
 		rolloutID    = "7d2fddc5ed461d3bfc55e10c1c2fdcb128b4100945c12d3535fb55a71be5a408"
 	)
 	current := coreOnlyCurrentGuardManifest(t)
-	edge, ok, err := guardManifestEditionEdge(current)
+	edge, ok, err := guardManifestSoleEditionEdge(current)
 	if err != nil || !ok {
 		t.Fatalf("derive K2 golden edge: ok=%v err=%v", ok, err)
 	}
@@ -259,27 +283,76 @@ func TestK2GoldenCoreOnlySQLiteUpgradesAndReopens(t *testing.T) {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	dia, _ := dialect.New(store.EngineSQLite)
-	history, err := verifyGuardEditionHistory(context.Background(), db, dia, coreOnlyCurrentGuardManifest(t))
+	// The K2 database is now at edition 5: core v7 crossed the directory edge E1 -> E2
+	// and core v9 crossed the access-evidence edge E2 -> E5. Both are still visible
+	// separately, and the epoch-2 reading below is the intermediate node of that lineage.
+	history, err := verifyGuardEditionHistory(context.Background(), db, dia, coreOnlyAccessEvidenceManifest(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if history.Kind != guardEditionHistoryTransitioned {
-		t.Fatalf("K2 golden upgraded history = %s, want transitioned", history.Kind)
+	if history.Kind != guardEditionHistoryTransitioned || history.Path != "1>2>5" ||
+		history.ParentEpoch != 2 || !history.CompletedV9 {
+		t.Fatalf("K2 golden upgraded history = %s/path-%s parent %d completedV9=%t, want transitioned/path-1>2>5 parent 2",
+			history.Kind, history.Path, history.ParentEpoch, history.CompletedV9)
 	}
-	if got := countRows(t, db, "SELECT COUNT(*) FROM "+guardReceiptsTable+" WHERE receipt_kind='bootstrap'"); got != 4 {
-		t.Fatalf("K2 golden upgraded bootstrap receipts = %d, want predecessor three plus transition seal", got)
+	// AND THE EDITION-2 READING IS NOW REFUSED, which is the fail-closed half of the
+	// same upgrade: the 2 -> 5 seal is a receipt an epoch-2 census does not enumerate, so
+	// a binary that stopped at edition 2 cannot read this history as its own.
+	if _, err := verifyGuardEditionHistory(context.Background(), db, dia, coreOnlyCurrentGuardManifest(t)); err == nil {
+		t.Fatal("an epoch-2 census still reads a database that has crossed the access-evidence edge")
+	} else if !errors.Is(err, ErrGuardBootstrapReceiptsInvalid) {
+		t.Fatalf("epoch-2 reading of a v9 database = %v, want ErrGuardBootstrapReceiptsInvalid", err)
+	}
+	if got := countRows(t, db, "SELECT COUNT(*) FROM "+guardReceiptsTable+" WHERE receipt_kind='bootstrap'"); got != 5 {
+		t.Fatalf("K2 golden upgraded bootstrap receipts = %d, want predecessor three plus the 1->2 and 2->5 seals", got)
+	}
+	// THE PRESERVED EVIDENCE: the epoch-1 bootstrap receipts the K2 source wrote are
+	// byte-identical, and the two seals were APPENDED beside them rather than replacing
+	// them. A migration that rewrote history would pass every count above.
+	for _, want := range []string{
+		"658df452758afa76442ed84dad069310827f0eaf8cfb5e94cb843600f1910a23",
+		"0b488903e6c73c8df6d7e498f97076016d9b8e85da2f445cbac7fafdb2e8fb38",
+		"e233720105fa0603b26cb70709ecc57cded15b80148e7a0efdb1081a344ec3a5",
+	} {
+		if got := countRows(t, db, dia.Rebind(
+			"SELECT COUNT(*) FROM "+guardReceiptsTable+" WHERE receipt_id = ?"), digestHexToBytes(t, want)); got != 1 {
+			t.Fatalf("the K2 source bootstrap receipt %s is no longer present exactly once (%d)", want, got)
+		}
+	}
+	// And the four access-evidence relations exist with their exact descriptor contract.
+	if err := verifyAccessEvidenceRelationsExact(context.Background(), db, dia, coreDescriptors()); err != nil {
+		t.Fatalf("K2 golden upgraded access-evidence relations: %v", err)
 	}
 }
 
+func digestHexToBytes(t *testing.T, hexDigestValue string) []byte {
+	t.Helper()
+	raw, err := hex.DecodeString(hexDigestValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// coreV5Descriptors is the census a real pre-v6 legacy source declared: the current core
+// entities MINUS the two families no <=v5 binary had.
+//
+// The access-evidence relations are excluded for the same reason the directory relations
+// are: a <=v5 source's v2 never created them, and a fixture whose v2 did would be seeding
+// the fresh start class while claiming to reproduce the legacy one — which is exactly the
+// substitution the direct path exists to tell apart.
 func coreV5Descriptors() []model.EntityDescriptor {
-	directory := map[string]bool{}
+	excluded := map[string]bool{}
 	for _, table := range coreDirectoryRelationNames {
-		directory[table] = true
+		excluded[table] = true
+	}
+	for _, table := range accessEvidenceRelationNames {
+		excluded[table] = true
 	}
 	all := coreDescriptors()
-	legacy := make([]model.EntityDescriptor, 0, len(all)-len(directory))
+	legacy := make([]model.EntityDescriptor, 0, len(all)-len(excluded))
 	for _, desc := range all {
-		if !directory[desc.Table] {
+		if !excluded[desc.Table] {
 			legacy = append(legacy, desc)
 		}
 	}
@@ -314,9 +387,28 @@ func seedCoreV5(t *testing.T, db *sql.DB, dia dialect.Dialect, legacyTracker boo
 	}
 }
 
+// assertDirectV9Completed is the direct <=v5 path's end state AFTER core v9.
+//
+// It was assertDirectV7Completed and its expectation legitimately moved: v7 is still the
+// migration that completes the directory contract, but a boot no longer stops there. The
+// v7 start and completion seals are still asserted byte-for-byte — the v9 seal is
+// APPENDED to them, not a replacement — and the fifth receipt is the new completion
+// witness that makes deleting the v9 tracker plus the four relations detectable.
+func assertDirectV9Completed(t *testing.T, db *sql.DB, dia dialect.Dialect) guardManifest {
+	t.Helper()
+	return assertDirectCompleted(t, db, dia, true)
+}
+
+// assertDirectV7Completed is the state at the v7 boundary, before core v9 has run. It is
+// the crash/retry boundary a fixture that applies migrations by hand stops at.
 func assertDirectV7Completed(t *testing.T, db *sql.DB, dia dialect.Dialect) guardManifest {
 	t.Helper()
-	current, err := buildGuardManifest(registryWithWidget(t).appendOnlyTables())
+	return assertDirectCompleted(t, db, dia, false)
+}
+
+func assertDirectCompleted(t *testing.T, db *sql.DB, dia dialect.Dialect, throughV9 bool) guardManifest {
+	t.Helper()
+	current, err := buildGuardManifest(coreOnlyRegistry(t).appendOnlyTables())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,18 +416,23 @@ func assertDirectV7Completed(t *testing.T, db *sql.DB, dia dialect.Dialect) guar
 	if err != nil {
 		t.Fatalf("verify direct v7 history: %v", err)
 	}
-	if history.Kind != guardEditionHistoryDirectCompleted {
-		t.Fatalf("direct v7 history = %s, want %s", history.Kind, guardEditionHistoryDirectCompleted)
+	wantKind, wantState, wantReceipts := guardEditionHistoryDirectCompleted, guardEditionReceiptsDirectCompleted, 5
+	if throughV9 {
+		wantKind, wantState, wantReceipts = guardEditionHistoryDirectV9Completed, guardEditionReceiptsDirectV9Completed, 6
+	}
+	if history.Kind != wantKind || history.CompletedV9 != throughV9 {
+		t.Fatalf("direct history = %s (completedV9=%t), want %s (completedV9=%t)",
+			history.Kind, history.CompletedV9, wantKind, throughV9)
 	}
 	state, receipts, err := verifyGuardBootstrapReceiptHistory(context.Background(), db, dia, current)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state != guardEditionReceiptsDirectCompleted || len(receipts) != 5 {
-		t.Fatalf("direct v7 bootstrap state=%s receipts=%d, want %s/5",
-			state, len(receipts), guardEditionReceiptsDirectCompleted)
+	if state != wantState || len(receipts) != wantReceipts {
+		t.Fatalf("direct bootstrap state=%s receipts=%d, want %s/%d",
+			state, len(receipts), wantState, wantReceipts)
 	}
-	for _, expected := range []guardReceipt{
+	expected := []guardReceipt{
 		func() guardReceipt {
 			r, e := guardV7Seal(current, guardV7SealStart, false)
 			if e != nil {
@@ -350,18 +447,27 @@ func assertDirectV7Completed(t *testing.T, db *sql.DB, dia dialect.Dialect) guar
 			}
 			return r
 		}(),
-	} {
+	}
+	if throughV9 {
+		completion := expected[1]
+		v9, e := guardAccessEvidenceV9Seal(current, completion.ReceiptID, true)
+		if e != nil {
+			t.Fatal(e)
+		}
+		expected = append(expected, v9)
+	}
+	for _, expected := range expected {
 		found := false
 		for _, actual := range receipts {
 			if actual.UnitID == expected.UnitID {
 				found = true
 				if diff := receiptDifference(actual, expected); diff != "" {
-					t.Fatalf("direct v7 seal %s differs: %s", expected.AttemptID, diff)
+					t.Fatalf("direct seal %s differs: %s", expected.AttemptID, diff)
 				}
 			}
 		}
 		if !found {
-			t.Fatalf("direct v7 seal %s is absent", expected.AttemptID)
+			t.Fatalf("direct seal %s is absent", expected.AttemptID)
 		}
 	}
 	return current
@@ -506,6 +612,12 @@ $body$`, quoteLiteral(targetDDL), quoteLiteral(targetRelation))); err != nil {
 	}
 }
 
+// THE RATIFIED <=v5 PROFILE IS core-only, `register == nil`, and these fixtures open
+// with it because that is what they claim to reproduce. They used to pass registerWidget
+// over a core-only v5 seed, which is a module the source never had — the exact shape the
+// independent review reproduced as F1, and which the boot classifier now refuses before
+// any write. Nothing about v7's direct path is lost: the widget descriptor is not
+// append-only, so the guard census and every digest below are unchanged.
 func TestCoreV7DirectUpgradeFromV5BothTrackingShapes(t *testing.T) {
 	for _, engine := range []store.Engine{store.EngineSQLite, store.EnginePostgres} {
 		for _, legacyTracker := range []bool{false, true} {
@@ -517,16 +629,16 @@ func TestCoreV7DirectUpgradeFromV5BothTrackingShapes(t *testing.T) {
 				cfg, db, dia := directV7StoreFixture(t, engine)
 				seedCoreV5(t, db, dia, legacyTracker)
 
-				st, err := Open(context.Background(), cfg, registerWidget)
+				st, err := Open(context.Background(), cfg, nil)
 				if err != nil {
 					t.Fatalf("direct v5 -> v7 Open: %v", err)
 				}
 				if err := st.Close(); err != nil {
 					t.Fatal(err)
 				}
-				assertDirectV7Completed(t, db, dia)
+				assertDirectV9Completed(t, db, dia)
 
-				reopened, err := Open(context.Background(), cfg, registerWidget)
+				reopened, err := Open(context.Background(), cfg, nil)
 				if err != nil {
 					t.Fatalf("reopen completed direct v7: %v", err)
 				}
@@ -544,7 +656,7 @@ func TestCoreV7DirectUpgradeFromV5BothTrackingShapes(t *testing.T) {
 					coreDirectoryMigrationVersion); err != nil {
 					t.Fatal(err)
 				}
-				if got, err := Open(context.Background(), cfg, registerWidget); err == nil {
+				if got, err := Open(context.Background(), cfg, nil); err == nil {
 					_ = got.Close()
 					t.Fatal("Open re-tracked a completed v7 history after its row was deleted")
 				}
@@ -567,14 +679,14 @@ func TestCoreV7DirectCompletedHistoryCannotBeReplayedAfterTableDeletion(t *testi
 		t.Run(string(engine), func(t *testing.T) {
 			cfg, db, dia := directV7StoreFixture(t, engine)
 			seedCoreV5(t, db, dia, true)
-			st, err := Open(context.Background(), cfg, registerWidget)
+			st, err := Open(context.Background(), cfg, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if err := st.Close(); err != nil {
 				t.Fatal(err)
 			}
-			assertDirectV7Completed(t, db, dia)
+			assertDirectV9Completed(t, db, dia)
 
 			if _, err := db.ExecContext(context.Background(), dia.Rebind(
 				"DELETE FROM "+coreTrackingRelation(dia)+" WHERE version = ?"), coreDirectoryMigrationVersion); err != nil {
@@ -600,10 +712,19 @@ func TestCoreV7DirectCompletedHistoryCannotBeReplayedAfterTableDeletion(t *testi
 				}
 			}
 			receiptsBefore := countRows(t, db, "SELECT COUNT(*) FROM "+guardReceiptsTable)
-			if got, err := Open(context.Background(), cfg, registerWidget); err == nil {
+			if got, err := Open(context.Background(), cfg, nil); err == nil {
 				_ = got.Close()
 				t.Fatal("Open replayed a completed direct-v7 history after deleting its tables")
-			} else if !strings.Contains(err.Error(), string(guardEditionHistoryDirectCompleted)) {
+			} else if !errors.Is(err, ErrCoreSchemaVersionAhead) &&
+				!strings.Contains(err.Error(), "read v7 tracking row") &&
+				!strings.Contains(err.Error(), string(guardEditionHistoryDirectV9Completed)) {
+				// The boundary MOVED with v9 and the move is a strengthening, so it is
+				// named rather than loosened. Deleting the v7 tracking row while v8 and
+				// v9 remain recorded is now caught by the core-version preflight — the
+				// FIRST operation under the migration lock, before ensureTracking can
+				// perform any DDL — instead of later by the guard-history selector.
+				// Either way nothing is recreated, which is what the assertions below
+				// measure.
 				t.Fatalf("Open refused at the wrong boundary: %v", err)
 			}
 			assertCoreDirectoryExistence(t, db, dia, map[string]bool{
@@ -622,7 +743,7 @@ func TestCoreV7DirectUpgradeCrashBetweenV6AndV7RetriesAtomically(t *testing.T) {
 		t.Run(string(engine), func(t *testing.T) {
 			cfg, db, dia := directV7StoreFixture(t, engine)
 			seedCoreV5(t, db, dia, true)
-			current, err := buildGuardManifest(registryWithWidget(t).appendOnlyTables())
+			current, err := buildGuardManifest(coreOnlyRegistry(t).appendOnlyTables())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -690,13 +811,16 @@ func TestCoreV7DirectUpgradeCrashBetweenV6AndV7RetriesAtomically(t *testing.T) {
 				t.Fatalf("retry direct v7: %v", err)
 			}
 			assertDirectV7Completed(t, db, dia)
-			st, err := Open(context.Background(), cfg, registerWidget)
+			st, err := Open(context.Background(), cfg, nil)
 			if err != nil {
 				t.Fatalf("Open after direct-v7 retry: %v", err)
 			}
 			if err := st.Close(); err != nil {
 				t.Fatal(err)
 			}
+			// The retried v7 leaves the database at the pre-v9 direct checkpoint; the
+			// Open above is what carries it across v9, and the two are asserted apart.
+			assertDirectV9Completed(t, db, dia)
 		})
 	}
 }
@@ -712,7 +836,7 @@ func guardEditionFixture(t *testing.T) (guardManifest, guardManifestEdge) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edge, ok, err := guardManifestEditionEdge(current)
+	edge, ok, err := guardManifestSoleEditionEdge(current)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -735,11 +859,11 @@ func guardEditionThreeFixture(t *testing.T) (guardManifest, guardManifestEdge, g
 	if err != nil {
 		t.Fatal(err)
 	}
-	edge23, ok, err := guardManifestEditionEdge(current)
+	edge23, ok, err := guardManifestSoleEditionEdge(current)
 	if err != nil || !ok {
 		t.Fatalf("derive epoch 2->3 edge: ok=%v err=%v", ok, err)
 	}
-	edge12, ok, err := guardManifestEditionEdge(edge23.From)
+	edge12, ok, err := guardManifestSoleEditionEdge(edge23.From)
 	if err != nil || !ok {
 		t.Fatalf("derive epoch 1->2 edge: ok=%v err=%v", ok, err)
 	}
@@ -762,15 +886,15 @@ func guardEditionFourFixture(
 	if err != nil {
 		t.Fatal(err)
 	}
-	edge34, ok, err := guardManifestEditionEdge(current)
+	edge34, ok, err := guardManifestSoleEditionEdge(current)
 	if err != nil || !ok {
 		t.Fatalf("derive epoch 3->4 edge: ok=%v err=%v", ok, err)
 	}
-	edge23, ok, err := guardManifestEditionEdge(edge34.From)
+	edge23, ok, err := guardManifestSoleEditionEdge(edge34.From)
 	if err != nil || !ok {
 		t.Fatalf("derive epoch 2->3 edge: ok=%v err=%v", ok, err)
 	}
-	edge12, ok, err := guardManifestEditionEdge(edge23.From)
+	edge12, ok, err := guardManifestSoleEditionEdge(edge23.From)
 	if err != nil || !ok {
 		t.Fatalf("derive epoch 1->2 edge: ok=%v err=%v", ok, err)
 	}
@@ -936,8 +1060,8 @@ func TestGuardEditionFourSQLiteRunnerChainsEpochTwoThroughThree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if history.Kind != guardEditionHistoryTransitioned || history.Path != 2 {
-		t.Fatalf("final epoch-4 history = %s/path-%d, want %s/path-2",
+	if history.Kind != guardEditionHistoryTransitioned || history.Path != "2>3>4" {
+		t.Fatalf("final epoch-4 history = %s/path-%s, want %s/path-2>3>4",
 			history.Kind, history.Path, guardEditionHistoryTransitioned)
 	}
 
@@ -975,8 +1099,8 @@ func TestGuardEditionFourSQLiteChainsEpochOneThroughV7Bridge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if history.Kind != guardEditionHistoryTransitioned || history.Path != 1 {
-		t.Fatalf("final epoch-4 history = %s/path-%d, want %s/path-1",
+	if history.Kind != guardEditionHistoryTransitioned || history.Path != "1>2>3>4" {
+		t.Fatalf("final epoch-4 history = %s/path-%s, want %s/path-1>2>3>4",
 			history.Kind, history.Path, guardEditionHistoryTransitioned)
 	}
 
@@ -997,24 +1121,25 @@ func TestGuardEditionThreeSQLiteUpgradePathsAreExact(t *testing.T) {
 	current, edge23, edge12 := guardEditionThreeFixture(t)
 	ctx := context.Background()
 	tests := []struct {
-		name       string
-		seed       func(*testing.T, *sql.DB, dialect.Dialect)
-		wantPath   guardEditionPath
-		wantBefore guardEditionHistoryKind
+		name        string
+		seed        func(*testing.T, *sql.DB, dialect.Dialect)
+		wantPath    guardEditionPath
+		wantCrossed guardEditionPath
+		wantBefore  guardEditionHistoryKind
 	}{
 		{
 			name: "fresh epoch two completed",
 			seed: func(t *testing.T, db *sql.DB, dia dialect.Dialect) {
 				appendGuardV7Witness(t, db, dia, edge23.From, false)
 			},
-			wantPath: 2, wantBefore: guardEditionHistoryCurrentCompleted,
+			wantPath: "2", wantCrossed: "2>3", wantBefore: guardEditionHistoryCurrentCompleted,
 		},
 		{
 			name: "direct epoch two completed",
 			seed: func(t *testing.T, db *sql.DB, dia dialect.Dialect) {
 				appendGuardV7Witness(t, db, dia, edge23.From, true)
 			},
-			wantPath: 2, wantBefore: guardEditionHistoryDirectCompleted,
+			wantPath: "2", wantCrossed: "2>3", wantBefore: guardEditionHistoryDirectCompleted,
 		},
 		{
 			name: "epoch one bridged through v7",
@@ -1025,13 +1150,13 @@ func TestGuardEditionThreeSQLiteUpgradePathsAreExact(t *testing.T) {
 					t.Fatalf("epoch-3 v7 bridge: %v", err)
 				}
 			},
-			wantPath: 1, wantBefore: guardEditionHistoryTransitioned,
+			wantPath: "1>2", wantCrossed: "1>2>3", wantBefore: guardEditionHistoryTransitioned,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			bootstrap := edge23.From
-			if tc.wantPath == 1 {
+			if tc.wantPath == "1>2" {
 				bootstrap = edge12.From
 			}
 			db, dia := guardHistoricalEditionSQLiteDB(t, bootstrap)
@@ -1041,7 +1166,7 @@ func TestGuardEditionThreeSQLiteUpgradePathsAreExact(t *testing.T) {
 				t.Fatalf("verify completed epoch 2: %v", err)
 			}
 			if beforeE2.Kind != tc.wantBefore || beforeE2.Path != tc.wantPath {
-				t.Fatalf("epoch-2 history = %s/path-%d, want %s/path-%d",
+				t.Fatalf("epoch-2 history = %s/path-%s, want %s/path-%s",
 					beforeE2.Kind, beforeE2.Path, tc.wantBefore, tc.wantPath)
 			}
 			predecessor, err := verifyGuardEditionHistory(ctx, db, dia, current)
@@ -1049,7 +1174,7 @@ func TestGuardEditionThreeSQLiteUpgradePathsAreExact(t *testing.T) {
 				t.Fatalf("verify epoch-3 predecessor: %v", err)
 			}
 			if predecessor.Kind != guardEditionHistoryPredecessorV7 || predecessor.Path != tc.wantPath {
-				t.Fatalf("epoch-3 pre-transition = %s/path-%d, want %s/path-%d",
+				t.Fatalf("epoch-3 pre-transition = %s/path-%s, want %s/path-%s",
 					predecessor.Kind, predecessor.Path, guardEditionHistoryPredecessorV7, tc.wantPath)
 			}
 			terminal := predecessor.TerminalReceiptID
@@ -1057,8 +1182,9 @@ func TestGuardEditionThreeSQLiteUpgradePathsAreExact(t *testing.T) {
 			if err != nil {
 				t.Fatalf("post-module epoch 2->3 transition: %v", err)
 			}
-			if transitioned.Kind != guardEditionHistoryTransitioned || transitioned.Path != tc.wantPath {
-				t.Fatalf("epoch-3 post-transition = %s/path-%d", transitioned.Kind, transitioned.Path)
+			if transitioned.Kind != guardEditionHistoryTransitioned || transitioned.Path != tc.wantCrossed {
+				t.Fatalf("epoch-3 post-transition = %s/path-%s, want %s/path-%s",
+					transitioned.Kind, transitioned.Path, guardEditionHistoryTransitioned, tc.wantCrossed)
 			}
 			actual, err := readGuardBootstrapReceiptHistory(ctx, db, dia)
 			if err != nil {
@@ -1102,7 +1228,7 @@ func TestGuardEditionThreeRejectsReceiptInventoryPathCrossProducts(t *testing.T)
 				return variant.Receipts
 			}
 		}
-		t.Fatalf("missing receipt variant %s/path-%d", state, path)
+		t.Fatalf("missing receipt variant %s/path-%s", state, path)
 		return nil
 	}
 	for _, tc := range []struct {
@@ -1111,8 +1237,8 @@ func TestGuardEditionThreeRejectsReceiptInventoryPathCrossProducts(t *testing.T)
 		receiptState guardEditionReceiptState
 		receiptPath  guardEditionPath
 	}{
-		{"fresh receipts over transitioned inventory", 1, guardEditionReceiptsCurrentCompleted, 2},
-		{"transitioned receipts over fresh inventory", 2, guardEditionReceiptsSealed, 1},
+		{"fresh receipts over transitioned inventory", "1>2", guardEditionReceiptsCurrentCompleted, "2"},
+		{"transitioned receipts over fresh inventory", "2", guardEditionReceiptsSealed, "1>2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, dia := guardEmptyEditionSQLiteDB(t)
@@ -1240,28 +1366,52 @@ func TestGuardEditionThreePostgresChainsAndResumesEpochTwoBeforeTransition(t *te
 			if err != nil {
 				t.Fatal(err)
 			}
-			edge23, ok, err := guardManifestEditionEdge(current)
-			if err != nil || !ok {
-				t.Fatalf("derive 2->3 edge: ok=%v err=%v", ok, err)
+			// The chain this fixture walks is now four editions long, and each hop
+			// belongs to a different mechanism: core v7 crosses 1 -> 2, core v9 crosses
+			// 2 -> 5, and the post-module seam crosses 5 -> 6. Naming the nodes from the
+			// compiled graph is what keeps the fixture describing the real route instead
+			// of "one step below wherever the binary is".
+			graph, err := guardEditionGraphFor(current)
+			if err != nil {
+				t.Fatal(err)
 			}
-			edge12, ok, err := guardManifestEditionEdge(edge23.From)
-			if err != nil || !ok {
-				t.Fatalf("derive 1->2 edge: ok=%v err=%v", ok, err)
+			if current.CodeEpoch != 6 {
+				t.Fatalf("the epoch-three module fixture is now edition %d, want 6", current.CodeEpoch)
 			}
+			edition1, _ := graph.node(1)
+			edition2, _ := graph.node(2)
+			edition5, _ := graph.node(5)
 
 			// Reproduce the durable K1 state over the real canonical catalog. The
 			// current tables remain present as an in-place upgrade would find them;
-			// only v7's relations/tracker and the guard edition ledgers are rewound.
+			// only the migration-owned objects above v6 and the guard edition ledgers
+			// are rewound. v10 goes first and whole — back to the v9 predecessor it
+			// migrated — because its control and source guards are the ones v7's
+			// removal below is about; v8's independent relations follow.
+			dropUserAuthorityForHistoricalFixture(t, db, dia)
+			dropDirectoryWriterGuardsForFixture(t, db, dia)
 			dropCoreDirectoryTables(t, db)
-			if _, err := db.ExecContext(ctx, dia.Rebind(
-				"DELETE FROM "+coreTrackingTable+" WHERE version = ?"), coreDirectoryMigrationVersion); err != nil {
-				t.Fatal(err)
+			for _, table := range accessEvidenceRelationNames {
+				if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+					t.Fatalf("drop %s for the K1 fixture: %v", table, err)
+				}
+			}
+			// The v8 lineage relations go with their tracking row: leaving the objects
+			// behind while deleting the row stages a history no migration could have
+			// produced, and v8 would then fail on CREATE TABLE instead of on anything
+			// this fixture is about.
+			dropLineageForHistoricalFixture(t, db, dia)
+			for _, version := range []int{coreDirectoryMigrationVersion, coreAccessEvidenceMigrationVersion} {
+				if _, err := db.ExecContext(ctx, dia.Rebind(
+					"DELETE FROM "+coreTrackingTable+" WHERE version = ?"), version); err != nil {
+					t.Fatal(err)
+				}
 			}
 			wipeGuardLogForFixture(t, db, guardGateEventsTable, "")
 			wipeGuardLogForFixture(t, db, guardReceiptsTable, "")
 			wipeGuardLogForFixture(t, db, guardInventoryEventsTable, "")
-			seedGuardHistoricalEdition(t, db, dia, edge12.From)
-			seedGuardPredecessorReady(t, db, dia, edge12.From, guardPredecessorComplete)
+			seedGuardHistoricalEdition(t, db, dia, edition1.Manifest)
+			seedGuardPredecessorReady(t, db, dia, edition1.Manifest, guardPredecessorComplete)
 
 			if crashAfterV7 {
 				migration := coreDirectoryMigration(
@@ -1270,7 +1420,7 @@ func TestGuardEditionThreePostgresChainsAndResumesEpochTwoBeforeTransition(t *te
 				if err := migrate.Apply(ctx, db, dia, coreTrackingTable, []migrate.Migration{migration}); err != nil {
 					t.Fatalf("commit v7 epoch-2 bridge: %v", err)
 				}
-				bridged, err := verifyGuardEditionHistory(ctx, db, dia, edge23.From)
+				bridged, err := verifyGuardEditionHistory(ctx, db, dia, edition2.Manifest)
 				if err != nil {
 					t.Fatalf("verify crash-boundary epoch 2: %v", err)
 				}
@@ -1292,17 +1442,21 @@ func TestGuardEditionThreePostgresChainsAndResumesEpochTwoBeforeTransition(t *te
 			if err != nil {
 				t.Fatal(err)
 			}
-			if history.Kind != guardEditionHistoryTransitioned || history.Path != 1 ||
+			if history.Kind != guardEditionHistoryTransitioned || history.Path != "1>2>5>6" ||
+				history.ParentEpoch != 5 || !history.CompletedV9 ||
 				history.GateState != guardEditionGateCurrent || history.Gate.Phase != gatePhaseReady ||
 				history.Gate.Condition != gateConditionVerified {
-				t.Fatalf("final history = %s/path-%d gate %s/%s/%s",
-					history.Kind, history.Path, history.GateState, history.Gate.Phase, history.Gate.Condition)
+				t.Fatalf("final history = %s/path-%s parent %d completedV9=%t gate %s/%s/%s",
+					history.Kind, history.Path, history.ParentEpoch, history.CompletedV9,
+					history.GateState, history.Gate.Phase, history.Gate.Condition)
 			}
 			if got := countRows(t, db, "SELECT COUNT(*) FROM "+guardReceiptsTable+
-				" WHERE receipt_kind='bootstrap'"); got != 5 {
-				t.Fatalf("bootstrap receipts = %d, want e1 bootstrap plus e2/e3 seals", got)
+				" WHERE receipt_kind='bootstrap'"); got != 6 {
+				t.Fatalf("bootstrap receipts = %d, want the e1 bootstrap three plus the 1->2, 2->5 and 5->6 seals", got)
 			}
-			for _, manifest := range []guardManifest{edge12.From, edge23.From, current} {
+			for _, manifest := range []guardManifest{
+				edition1.Manifest, edition2.Manifest, edition5.Manifest, current,
+			} {
 				empty, err := emptyRetainedDigest()
 				if err != nil {
 					t.Fatal(err)
@@ -1360,6 +1514,23 @@ func guardEmptyEditionSQLiteDB(t *testing.T) (*sql.DB, dialect.Dialect) {
 	return db, dia
 }
 
+// guardLineageForPath resolves one compiled candidate history by its path token, so a
+// fixture can seed the exact inventory a named upgrade route writes.
+func guardLineageForPath(t *testing.T, manifest guardManifest, path guardEditionPath) guardEditionLineage {
+	t.Helper()
+	lineages, err := guardEditionLineagesFor(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lineage := range lineages {
+		if lineage.path() == path {
+			return lineage
+		}
+	}
+	t.Fatalf("no compiled lineage %s ends at edition %d", path, manifest.CodeEpoch)
+	return guardEditionLineage{}
+}
+
 func seedGuardEditionVariant(
 	t *testing.T,
 	db *sql.DB,
@@ -1369,10 +1540,7 @@ func seedGuardEditionVariant(
 	receipts []guardReceipt,
 ) {
 	t.Helper()
-	expected, err := guardActivationExpectationsForPath(manifest, path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	expected := guardActivationExpectationsForLineage(guardLineageForPath(t, manifest, path))
 	retained, err := emptyRetainedDigest()
 	if err != nil {
 		t.Fatal(err)
@@ -1523,7 +1691,7 @@ func TestGuardEditionTwoRefusesAnIncompleteClosedRegistry(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, ok, err := guardManifestEditionEdge(incomplete); err != nil {
+			if _, ok, err := guardManifestSoleEditionEdge(incomplete); err != nil {
 				t.Fatal(err)
 			} else if ok {
 				t.Fatal("an incomplete epoch-2 census exposes a predecessor edge")
@@ -1775,7 +1943,7 @@ func TestSQLiteGuardEditionTransitionIsAtomicAndIdempotent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := transitionGuardEditionInTx(ctx, tx, dia, current, history, nil, false); err != nil {
+		if err := transitionGuardEditionInTx(ctx, tx, dia, current, edge, history, nil, false); err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.Rollback(); err != nil {
@@ -2055,26 +2223,27 @@ func TestGuardEditionPostgresV7TransitionIsAtomicAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edge, ok, err := guardManifestEditionEdge(current)
-	if err != nil || !ok {
-		t.Fatalf("derive edition edge: ok=%v err=%v", ok, err)
-	}
-
-	// Turn the fresh fixture into the exact durable state a K2 deployment leaves.
-	// The fixture helper restores every metadata guard in ALWAYS before v7 sees it;
-	// the three directory relations and v7 tracking row are removed together so the
-	// real migration observes the physical `absent` disposition an upgrade starts in.
-	dropCoreDirectoryTables(t, db)
-	if _, err := db.ExecContext(ctx, dia.Rebind(
-		"DELETE FROM "+coreTrackingTable+" WHERE version = ?"), coreDirectoryMigrationVersion); err != nil {
+	// A K2 deployment stands at edition 1, which is two hops below where this binary
+	// is; the fixture names that node from the compiled graph rather than stepping once
+	// down from the current edition.
+	editionOne := k2EditionOneManifest(t, current)
+	editionTwo := k2EditionTwoManifest(t, current)
+	edge, err := guardEditionGraphMustEdge(t, current, 1, 2)
+	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Reconstruct the complete K2 schema and contiguous [1..6] history before
+	// invoking v7 directly. The shared rewind removes v10, v9, v8 and v7 objects;
+	// the original ledger seeding and transition assertions below remain local.
+	rewindPostgresToK2(t, db, dia, editionOne)
+	assertDirectV7FixtureHistory(t, db, dia)
 	wipeGuardLogForFixture(t, db, guardGateEventsTable, "")
 	wipeGuardLogForFixture(t, db, guardReceiptsTable, "")
 	wipeGuardLogForFixture(t, db, guardInventoryEventsTable, "")
-	seedGuardHistoricalEdition(t, db, dia, edge.From)
-	seedGuardPredecessorReady(t, db, dia, edge.From, guardPredecessorComplete)
-	predecessor, err := verifyGuardEditionHistory(ctx, db, dia, current)
+	seedGuardHistoricalEdition(t, db, dia, editionOne)
+	seedGuardPredecessorReady(t, db, dia, editionOne, guardPredecessorComplete)
+	predecessor, err := verifyGuardEditionHistory(ctx, db, dia, editionTwo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2119,7 +2288,7 @@ EXECUTE FUNCTION guard_fail_epoch_two_pending()`,
 	if hookCalls != 1 {
 		t.Fatalf("failed PostgreSQL v7 invoked its continuation %d times, want one", hookCalls)
 	}
-	afterFailure, err := verifyGuardEditionHistory(ctx, db, dia, current)
+	afterFailure, err := verifyGuardEditionHistory(ctx, db, dia, editionTwo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2153,7 +2322,12 @@ EXECUTE FUNCTION guard_fail_epoch_two_pending()`,
 	if hookCalls != 2 {
 		t.Fatalf("successful PostgreSQL v7 continuation calls = %d, want failed attempt plus retry", hookCalls)
 	}
-	transitioned, err := verifyGuardEditionHistory(ctx, db, dia, current)
+	// READ FROM EDITION TWO, which is where core v7 leaves the database. Reading from
+	// the CURRENT edition here would ask a different question and get the right answer to
+	// it: the edition-2 rollout v7 just opened is still pending, and a pending predecessor
+	// is exactly what the access-evidence edge refuses to cross until the barrier has
+	// converged it (see convergeGuardEditionPredecessorForV9).
+	transitioned, err := verifyGuardEditionHistory(ctx, db, dia, editionTwo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2223,21 +2397,17 @@ func TestGuardEditionRefusesIncompleteK2PredecessorAttestations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			edge, ok, err := guardManifestEditionEdge(current)
-			if err != nil || !ok {
-				t.Fatalf("derive edition edge: ok=%v err=%v", ok, err)
-			}
+			editionOne := k2EditionOneManifest(t, current)
 
-			dropCoreDirectoryTables(t, db)
-			if _, err := db.ExecContext(ctx, dia.Rebind(
-				"DELETE FROM "+coreTrackingTable+" WHERE version = ?"), coreDirectoryMigrationVersion); err != nil {
-				t.Fatal(err)
-			}
+			// Start from the complete K2 schema and history, then install only the
+			// malformed predecessor attestation this subtest is meant to refuse.
+			rewindPostgresToK2(t, db, dia, editionOne)
+			assertDirectV7FixtureHistory(t, db, dia)
 			wipeGuardLogForFixture(t, db, guardGateEventsTable, "")
 			wipeGuardLogForFixture(t, db, guardReceiptsTable, "")
 			wipeGuardLogForFixture(t, db, guardInventoryEventsTable, "")
-			seedGuardHistoricalEdition(t, db, dia, edge.From)
-			seedGuardPredecessorReady(t, db, dia, edge.From, mode)
+			seedGuardHistoricalEdition(t, db, dia, editionOne)
+			seedGuardPredecessorReady(t, db, dia, editionOne, mode)
 			inventoryBefore := countRows(t, db, "SELECT COUNT(*) FROM "+guardInventoryEventsTable)
 			receiptsBefore := countRows(t, db, "SELECT COUNT(*) FROM "+guardReceiptsTable)
 			gatesBefore := countRows(t, db, "SELECT COUNT(*) FROM "+guardGateEventsTable)

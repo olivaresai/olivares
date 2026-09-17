@@ -1,0 +1,6 @@
+de/reference/configuration.md
+es/reference/configuration.md
+fr/reference/configuration.md
+ja/reference/configuration.md
+ru/reference/configuration.md
+zh/reference/configuration.md

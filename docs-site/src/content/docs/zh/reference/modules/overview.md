@@ -119,6 +119,17 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 全部 30 个模块都在那里构造并通过 `rt.AddModule` 注册（已于 2026-08-01 对
 main @ f632f03f 进行验证）。
 
+## 版本可用性接缝（不计入 30 个模块之内）
+
+上表目录是组合根作为产品模块构造的 **30 个模块**。另外，Community 在
+`session-cockpit` API 命名空间下注册一个可用性描述符。它不是那 30 个之一。
+
+- [会话驾驶舱（可用性）](/zh/reference/modules/session-cockpit/) ——
+  Community 中没有处理程序；`/v1/m/session-cockpit` 因**缺失而返回 404**。
+  本制品没有交互式驾驶舱。实时会话、AgentOps 与官方 CLI 生命周期仍在开放产品中 ——
+  见 [实时运行与会话](/zh/reference/modules/ii-sessions/) 和
+  [在 Olivares 中运行 Claude Code](/zh/how-to/run-claude-code-with-olivares/)。
+
 ## 平台与核心能力（不计入 30 个模块之内）
 
 以下是真实的、已交付的能力，但它们是**引擎/核心/Web 能力**，而非 `modules/` 集合中的

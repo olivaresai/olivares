@@ -6,6 +6,7 @@ package models
 
 import (
 	"context"
+	"strings"
 
 	"github.com/olivaresai/olivares/connectors/modelrouter"
 	"github.com/olivaresai/olivares/core/model"
@@ -31,6 +32,10 @@ type routingSpec struct {
 	PinnedModel          string   `json:"pinned_model,omitempty"`
 	AllowDeprecated      bool     `json:"allow_deprecated,omitempty"`
 	GatewayEndpoint      string   `json:"gateway_endpoint,omitempty"`
+	// ExecutionProfileRef and ExecutionProfileRevision form one atomic,
+	// content-addressed pin. An absent pair preserves the legacy executor path.
+	ExecutionProfileRef      string `json:"execution_profile_ref,omitempty"`
+	ExecutionProfileRevision string `json:"execution_profile_revision,omitempty"`
 
 	// --- model-governance knobs (additive; absent = zero values = no
 	// lifecycle/retention deny — opt-in like the budget gate). They act on the
@@ -58,23 +63,27 @@ func (s *routingSpec) normalize() modelrouter.Policy {
 		p = modelrouter.PolicyCost
 	}
 	s.Strategy = string(p)
+	s.ExecutionProfileRef = strings.TrimSpace(s.ExecutionProfileRef)
+	s.ExecutionProfileRevision = strings.TrimSpace(s.ExecutionProfileRevision)
 	return p
 }
 
 // toSpecMap renders the typed spec to the Policy.Spec map (the JSON column).
 func (s routingSpec) toSpecMap() map[string]any {
 	return map[string]any{
-		"strategy":              s.Strategy,
-		"required_capabilities": s.RequiredCapabilities,
-		"preferred_providers":   s.PreferredProviders,
-		"min_context_window":    s.MinContextWindow,
-		"pinned_model":          s.PinnedModel,
-		"allow_deprecated":      s.AllowDeprecated,
-		"gateway_endpoint":      s.GatewayEndpoint,
-		"deny_retired":          s.DenyRetired,
-		"deny_deprecated":       s.DenyDeprecated,
-		"require_zdr":           s.RequireZDR,
-		"access_tiers":          s.AccessTiers,
+		"strategy":                   s.Strategy,
+		"required_capabilities":      s.RequiredCapabilities,
+		"preferred_providers":        s.PreferredProviders,
+		"min_context_window":         s.MinContextWindow,
+		"pinned_model":               s.PinnedModel,
+		"allow_deprecated":           s.AllowDeprecated,
+		"gateway_endpoint":           s.GatewayEndpoint,
+		"execution_profile_ref":      s.ExecutionProfileRef,
+		"execution_profile_revision": s.ExecutionProfileRevision,
+		"deny_retired":               s.DenyRetired,
+		"deny_deprecated":            s.DenyDeprecated,
+		"require_zdr":                s.RequireZDR,
+		"access_tiers":               s.AccessTiers,
 	}
 }
 
@@ -82,17 +91,19 @@ func (s routingSpec) toSpecMap() map[string]any {
 // JSON-typed: numbers as float64, arrays as []any).
 func parseRoutingSpec(spec map[string]any) routingSpec {
 	return routingSpec{
-		Strategy:             specString(spec, "strategy"),
-		RequiredCapabilities: specStrings(spec, "required_capabilities"),
-		PreferredProviders:   specStrings(spec, "preferred_providers"),
-		MinContextWindow:     specInt64(spec, "min_context_window"),
-		PinnedModel:          specString(spec, "pinned_model"),
-		AllowDeprecated:      specBool(spec, "allow_deprecated"),
-		GatewayEndpoint:      specString(spec, "gateway_endpoint"),
-		DenyRetired:          specBool(spec, "deny_retired"),
-		DenyDeprecated:       specBool(spec, "deny_deprecated"),
-		RequireZDR:           specBool(spec, "require_zdr"),
-		AccessTiers:          specStrings(spec, "access_tiers"),
+		Strategy:                 specString(spec, "strategy"),
+		RequiredCapabilities:     specStrings(spec, "required_capabilities"),
+		PreferredProviders:       specStrings(spec, "preferred_providers"),
+		MinContextWindow:         specInt64(spec, "min_context_window"),
+		PinnedModel:              specString(spec, "pinned_model"),
+		AllowDeprecated:          specBool(spec, "allow_deprecated"),
+		GatewayEndpoint:          specString(spec, "gateway_endpoint"),
+		ExecutionProfileRef:      specString(spec, "execution_profile_ref"),
+		ExecutionProfileRevision: specString(spec, "execution_profile_revision"),
+		DenyRetired:              specBool(spec, "deny_retired"),
+		DenyDeprecated:           specBool(spec, "deny_deprecated"),
+		RequireZDR:               specBool(spec, "require_zdr"),
+		AccessTiers:              specStrings(spec, "access_tiers"),
 	}
 }
 

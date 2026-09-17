@@ -92,7 +92,15 @@ if not llamadas or not declaradas:
           % (len(llamadas), len(declaradas)), file=sys.stderr)
     sys.exit(2)
 
-sin_banner = [t for t in llamadas if t.replace("lint:", "", 1) not in banner]
+# Exact task-name tokens, not substring ("foo" is in "foobar"). Same identifier
+# class as the call matcher. A HEAVY "lint:x" token also counts as "x".
+# Neighboring '+' and ').' stay outside the name. Not a Bash parser.
+banner_tokens = set()
+for tok in re.findall(r"[A-Za-z0-9:_.\-]+", banner):
+    banner_tokens.add(tok)
+    if tok.startswith("lint:"):
+        banner_tokens.add(tok.replace("lint:", "", 1))
+sin_banner = [t for t in llamadas if t.replace("lint:", "", 1) not in banner_tokens]
 sin_lista = [t for t in llamadas if t not in declaradas]
 
 print("check-hook-leg-wiring: %d pata(s) lint: llamadas por el gancho · %d declarada(s) en el banco"

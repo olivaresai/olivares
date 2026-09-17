@@ -244,7 +244,7 @@ voir [connecter une source](/fr/how-to/connect-a-source/). L'estate de démo mon
 :::note[La forme de l'endpoint]
 Le résultat Permis-vs-Observé est servi à `/v1/m/accessmap/drift` (il n'y a pas de
 `/diff`). Les routes `/v1/m/accessmap/*` ne figurent pas dans le contrat stable du cœur à
-53 routes ; elles sont publiées dans un document **bêta** distinct — la
+54 routes ; elles sont publiées dans un document **bêta** distinct — la
 [référence des routes de module](/reference/api-beta/). La
 [référence API](/reference/api/) documente la surface stable du cœur.
 :::

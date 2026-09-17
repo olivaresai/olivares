@@ -353,6 +353,169 @@
         ],
         "type": "object"
       },
+      "CapabilityQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Correlates this question with its result.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "`surface` asks whether this registered COLLECTION may be loaded at all in the named workspace. It asserts nothing about rows: an authorized empty list is reachable, and a not_reachable collection never denies an `operation` on another route. `operation` asks whether this exact operation on this exact resource is authorized right now.",
+            "enum": [
+              "surface",
+              "operation"
+            ],
+            "type": "string"
+          },
+          "operation": {
+            "description": "`METHOD \u003cregistered pattern\u003e`, e.g. `GET /v1/m/sessions/channels/administration`. It names a route as it is MOUNTED; it is never a resolved URL, and no HTTP call is made for it.",
+            "type": "string"
+          },
+          "selectors": {
+            "$ref": "#/components/schemas/CapabilitySelectors"
+          },
+          "workspace_id": {
+            "description": "For a collection: the workspace selector the route declares, corroborated by the server against the stored workspace row. For an entity: an assertion COMPARED with the row's stored workspace — a mismatch is answered with that route's own concealment and is never silently corrected.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "CapabilityQuestions": {
+        "additionalProperties": false,
+        "properties": {
+          "questions": {
+            "description": "Up to 32 independent questions. The limit protects one request; it does not cap the inventory of operations and does not prevent a later batch. Results stay independent per id — the batch never ANDs or ORs them, and its 200 never turns an unknown into a denial.",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityQuestion"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "schema_version": {
+            "description": "Contract version. Only 2 is accepted; version 1 and every other value are rejected with 400 before any question lookup.",
+            "enum": [
+              2
+            ],
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "questions"
+        ],
+        "type": "object"
+      },
+      "CapabilityResult": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "`not_permitted` is an established non-concealing denial. `not_disclosed` accompanies `undisclosed` and carries no negative explanation. `not_supported`, `inputs_required` and `step_up_required` may accompany `unknown` only as target-free request gates on a concealing operation. Later authority failures, including unusable evidence, are not disclosed there. For other projections `engine_unready` and `evidence_unavailable` accompany `unknown`. `stale` is the CLIENT's own verdict after expiry or context change; the server never sends it.",
+            "enum": [
+              "authorized",
+              "admitted",
+              "not_permitted",
+              "not_disclosed",
+              "not_supported",
+              "inputs_required",
+              "engine_unready",
+              "evidence_unavailable",
+              "step_up_required",
+              "stale"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "surface",
+              "operation"
+            ],
+            "type": "string"
+          },
+          "observed_at": {
+            "description": "For undisclosed, the common batch dispatch marker, not an authority fact. Other results retain their own observation instant.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "refresh_after_ms": {
+            "description": "How long this POSITIVE may be shown, in milliseconds: the minimum of 30000 and what REMAINS of the evidence window of every predicate that founds it. It is present ONLY on `allowed`/`reachable`, and its ABSENCE on one is itself an instruction — treat that result as unknown rather than believing it. Discount the whole request with a MONOTONIC clock, including retries of the same question; a late response does not start a fresh window on arrival. It is an observation budget, NOT a lease: it grants nothing, and it does not promise that a revocation elsewhere will reach you within it. The handler re-authorizes every real act and accepts nothing from this response.",
+            "type": "integer"
+          },
+          "state": {
+            "description": "Operations answer `allowed`, `denied` or `unknown`. A registered concealing operation instead publishes `undisclosed` for every nonpositive authority outcome: it asserts neither denial, absence nor outage. Target-free input/support/step-up rejections remain `unknown`. Surfaces answer `reachable`, `not_reachable` or `unknown` and confer no row authority. Only a fresh positive with its finite budget may enable an action; no other state is a permit.",
+            "enum": [
+              "allowed",
+              "denied",
+              "unknown",
+              "undisclosed",
+              "reachable",
+              "not_reachable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "code",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "CapabilityResults": {
+        "additionalProperties": false,
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityResult"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "enum": [
+              2
+            ],
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "results"
+        ],
+        "type": "object"
+      },
+      "CapabilitySelectors": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The ONE declared top-level body field an entity route uses to locate its row. It is an identification input, not a write payload: no other field of a command is admitted or consulted, and nothing is executed.",
+            "type": "object"
+          },
+          "path": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The declared path locator of an entity route (its `{id}`).",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
       "ConnectorApplyResult": {
         "properties": {
           "action": {
@@ -1757,6 +1920,10 @@
       },
       "SourceRosterEntry": {
         "properties": {
+          "component": {
+            "readOnly": true,
+            "type": "string"
+          },
           "config": {
             "additionalProperties": {
               "type": "string"
@@ -1984,6 +2151,19 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "authentication_configuration": {
+            "description": "Deployment authentication configuration observed for this response. This is not certificate validation or authorization.",
+            "properties": {
+              "piv_configured": {
+                "description": "Whether this deployment has configured PIV verifier roots. Does not indicate certificate presence, OCSP status, or assurance level.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "piv_configured"
+            ],
+            "type": "object"
           },
           "display_name": {
             "type": "string"
@@ -2565,7 +2745,7 @@
     },
     "/readyz": {
       "get": {
-        "description": "Answers 200 when the store is reachable AND this node is the active writer, so a load balancer drains a standby or a wedged instance. The store ping carries a short timeout, and a pending first-run setup is reported without failing readiness.",
+        "description": "Answers 200 when the store is reachable, this node is the active writer, and, when the install is not yet set up, the first-boot setup read can run. HTTP 200 with setup_required true is an observation that setup can be attempted; POST /v1/setup still rechecks authority. Answers 503 when the store is down, this node is a standby, setup state cannot be observed (setup_required is omitted because it is unknown), first-boot enumeration is not authoritative (setup_blocked), or the setup capability probe fails. A 503 is not ready.",
         "operationId": "readyz",
         "responses": {
           "200": {
@@ -2647,7 +2827,7 @@
         "security": [
           {}
         ],
-        "summary": "Readiness probe (store reachable AND this node is the active writer); 503 on a standby or when the store is down",
+        "summary": "Readiness probe (store reachable AND this node is the active writer AND, before first setup, that setup read can run); 503 on standby, store down, unknown setup state, blocked first boot, or a failed setup probe",
         "tags": [
           "health"
         ],
@@ -4158,6 +4338,127 @@
           "audit"
         ],
         "x-required-permission": "audit:read",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/capabilities": {
+      "post": {
+        "description": "Projects the CALLING credential's authority over registered operations, up to 32 independent questions per batch. A surface question asks whether one registered collection may be loaded in the named workspace; an operation question asks whether one exact operation on one exact resource is authorized right now. It never executes the operation, so asking writes no row, no audit event and no expiry. UNKNOWN means the decision could not be established, never that a role is insufficient. A positive carries refresh_after_ms, the remaining evidence window capped at 30s: an observation budget, not a lease. The handler re-authorizes every real act.",
+        "operationId": "authCapabilities",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapabilityQuestions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityResults"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Common authorization evidence is unavailable; no target was resolved"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Project the CALLING credential's authority over registered operations",
+        "tags": [
+          "auth"
+        ],
+        "x-olivares-sdk-family": "auth-capabilities-v1",
         "x-stability": "stable"
       }
     },

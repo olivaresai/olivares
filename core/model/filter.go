@@ -35,6 +35,15 @@ const (
 	// would deform Limit, Cursor and HasMore, which the store computes before it
 	// returns the page.
 	OpEqOrUnset Op = "eq_or_unset"
+	// OpUnsetOrGt matches rows whose NULLABLE column is unset OR strictly greater
+	// than the value. It is the second composite predicate, and it exists for the
+	// same reason as OpEqOrUnset: an optional deadline column — a K3 ChannelGrant's
+	// expires_at — stores NULL for "never expires" and canonical timestamp text
+	// otherwise, so "still current at database time T" is `expires_at IS NULL OR
+	// expires_at > T`. Splitting that into two List calls and merging in Go would
+	// deform Limit, Cursor and HasMore, which the store computes before it returns.
+	// It binds one value, exactly like OpGt.
+	OpUnsetOrGt Op = "unset_or_gt"
 	// OpIsNull matches rows whose nullable column is unset. It binds no value.
 	OpIsNull Op = "is_null"
 	// OpNotNull matches rows whose nullable column is set. It binds no value.
@@ -44,7 +53,7 @@ const (
 // Valid reports whether o is a supported operator.
 func (o Op) Valid() bool {
 	switch o {
-	case OpEq, OpNe, OpLt, OpLte, OpGt, OpGte, OpLike, OpEqOrUnset, OpIsNull, OpNotNull:
+	case OpEq, OpNe, OpLt, OpLte, OpGt, OpGte, OpLike, OpEqOrUnset, OpUnsetOrGt, OpIsNull, OpNotNull:
 		return true
 	default:
 		return false

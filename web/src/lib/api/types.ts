@@ -121,6 +121,14 @@ export interface Whoami {
   /** Authentication methods of the current session (e.g. "pwd", "webauthn",
    *  "piv"). DECLARED alongside `aal`; absent today. */
   amr?: string[]
+  /**
+   * Deployment authentication configuration. Present on current servers;
+   * absent on older servers. `piv_configured` means verifier roots exist. It
+   * is not certificate presence, OCSP success, AAL3, or authorization.
+   */
+  authentication_configuration?: {
+    piv_configured: boolean
+  }
 }
 
 /** A user (never includes the password hash). */

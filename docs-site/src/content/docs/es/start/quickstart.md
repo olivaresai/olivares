@@ -239,7 +239,7 @@ aristas `firm` precisamente porque pre-liga sus agentes.
 :::note[La forma del endpoint]
 El resultado Permitido-frente-a-Observado se sirve en `/v1/m/accessmap/drift` (no hay
 `/diff`). Las rutas `/v1/m/accessmap/*` no están en el contrato estable del núcleo de
-53 rutas; se publican en un documento **beta** separado — la
+54 rutas; se publican en un documento **beta** separado — la
 [referencia de rutas de módulos](/reference/api-beta/). La
 [referencia de la API](/reference/api/) documenta la superficie estable del núcleo.
 :::

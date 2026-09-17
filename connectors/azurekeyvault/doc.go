@@ -25,7 +25,7 @@
 // (ARCHITECTURE.md, never guessed). Both Key Vault and Managed HSM share this one
 // AuditEvent plane.
 //
-// Minimal data (docs/SECURITY-HARDENING.md-3): the connector reads ONLY the caller identity, the
+// Minimal data (docs/SECURITY-HARDENING.md §2-3): the connector reads ONLY the caller identity, the
 // operationName, the object/vault id and the timestamp — never the request URL
 // query string (it can carry a SAS token), the request/response bodies, or any
 // credential. The caller identity arrives either as a nested object

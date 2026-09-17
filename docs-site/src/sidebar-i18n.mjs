@@ -401,6 +401,22 @@ export const SIDEBAR_LABELS = {
     "de": "Air-Gapped installieren",
     "fr": "Installer en environnement isolé"
   },
+  "Install from a package": {
+    "es": "Instalar desde un paquete",
+    "zh-CN": "从软件包安装",
+    "ru": "Установка из пакета",
+    "ja": "パッケージからインストール",
+    "de": "Aus einem Paket installieren",
+    "fr": "Installer depuis un paquet"
+  },
+  "Install with Homebrew": {
+    "es": "Instalar con Homebrew",
+    "zh-CN": "使用 Homebrew 安装",
+    "ru": "Установка через Homebrew",
+    "ja": "Homebrew でインストール",
+    "de": "Mit Homebrew installieren",
+    "fr": "Installer avec Homebrew"
+  },
   "Internal catalog & marketplace": {
     "es": "Catálogo interno y marketplace",
     "zh-CN": "内部目录与市场",
@@ -649,6 +665,14 @@ export const SIDEBAR_LABELS = {
     "de": "Claude Code mit Olivares ausführen",
     "fr": "Exécuter Claude Code avec Olivares"
   },
+  "Operate a provider session": {
+    "es": "Operar una sesión de proveedor",
+    "zh-CN": "运行提供商会话",
+    "ru": "Управлять сеансом провайдера",
+    "ja": "プロバイダーセッションを運用する",
+    "de": "Eine Anbieter-Session betreiben",
+    "fr": "Exploiter une session fournisseur"
+  },
   "SIEM/ITSM forwarder": {
     "es": "Reenviador SIEM/ITSM",
     "zh-CN": "SIEM/ITSM 转发器",
@@ -656,6 +680,14 @@ export const SIDEBAR_LABELS = {
     "ja": "SIEM/ITSM フォワーダー",
     "de": "SIEM/ITSM-Forwarder",
     "fr": "Relais SIEM/ITSM"
+  },
+  "Session cockpit (availability)": {
+    "es": "Cockpit de sesiones (disponibilidad)",
+    "zh-CN": "会话驾驶舱（可用性）",
+    "ru": "Сессионный кокпит (доступность)",
+    "ja": "セッションコックピット（可用性）",
+    "de": "Session-Cockpit (Verfügbarkeit)",
+    "fr": "Cockpit de sessions (disponibilité)"
   },
   "Saved console views": {
     "es": "Vistas guardadas de la consola",

@@ -8,15 +8,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -37,43 +31,19 @@ var _ func(
 	DirectNoticeDeliveryAckCommand,
 ) (DirectNoticeDeliveryAckResult, error) = (*Module).AcknowledgeDirectNoticeDelivery
 
-func TestDirectNoticeExactAckHasNoProductionCallerWhileOff(t *testing.T) {
+func TestDirectNoticeExactAckPublicBoundaryDenyClosesWhenUnconfigured(t *testing.T) {
 	t.Parallel()
-
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate exact Ack test")
-	}
-	directory := filepath.Dir(currentFile)
-	entries, err := os.ReadDir(directory)
-	if err != nil {
-		t.Fatalf("read sessions package: %v", err)
-	}
-	files := token.NewFileSet()
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") ||
-			strings.HasSuffix(entry.Name(), "_test.go") {
-			continue
-		}
-		name := filepath.Join(directory, entry.Name())
-		file, parseErr := parser.ParseFile(files, name, nil, 0)
-		if parseErr != nil {
-			t.Fatalf("parse %s: %v", entry.Name(), parseErr)
-		}
-		ast.Inspect(file, func(node ast.Node) bool {
-			selector, selectorOK := node.(*ast.SelectorExpr)
-			if !selectorOK {
-				return true
-			}
-			if selector.Sel.Name == "AcknowledgeDirectNoticeDelivery" ||
-				selector.Sel.Name == "acknowledgeDirectNoticeDeliveryWithAuthority" {
-				t.Errorf(
-					"OFF exact Ack seam referenced by production %s:%d",
-					entry.Name(), files.Position(selector.Pos()).Line,
-				)
-			}
-			return true
-		})
+	m := &Module{}
+	_, err := m.AcknowledgeDirectNoticeDelivery(
+		context.Background(),
+		DirectoryScopeRef{TenantID: model.TenantID(model.NewID()), WorkspaceID: model.NewID()},
+		auth.PrincipalRef{}, model.NewID(),
+		DirectNoticeDeliveryAckCommand{
+			IfMatch: "\"v1\"", IdempotencyKey: model.NewID().String(),
+		},
+	)
+	if !errors.Is(err, ErrCommunicationEvidenceUnknown) {
+		t.Fatalf("unconfigured public Ack must deny closed, got %v", err)
 	}
 }
 
@@ -600,10 +570,24 @@ func newDirectNoticeExactAckFixtureWithPolicy(
 	ackTimeoutMS int64,
 ) directNoticeExactAckFixture {
 	t.Helper()
-	fixture := newDirectNoticeFixtureForBackend(t, communicationSchemaBackend{
+	return newDirectNoticeExactAckFixtureForBackend(t, communicationSchemaBackend{
 		name: "sqlite-direct-notice-exact-ack", engineName: store.EngineSQLite,
 		dsn: filepath.Join(t.TempDir(), "direct-notice-exact-ack.db"),
-	}, ackPolicy, 0, true, true, true)
+	}, ackPolicy, ackTimeoutMS)
+}
+
+// newDirectNoticeExactAckFixtureForBackend is the backend-parametric form of
+// the exact Ack fixture: the SQLite entry above delegates to it unchanged, and
+// the split-owner PostgreSQL receipt-fence tests open the same product fixture
+// on their own estate.
+func newDirectNoticeExactAckFixtureForBackend(
+	t *testing.T,
+	backend communicationSchemaBackend,
+	ackPolicy AckPolicy,
+	ackTimeoutMS int64,
+) directNoticeExactAckFixture {
+	t.Helper()
+	fixture := newDirectNoticeFixtureForBackend(t, backend, ackPolicy, 0, true, true, true)
 	if ackTimeoutMS != fixture.channel.DefaultAckTimeoutMS {
 		channelRecord, err := channelToRecord(fixture.channel)
 		if err != nil {
@@ -631,6 +615,7 @@ func newDirectNoticeExactAckFixtureWithPolicy(
 	if err != nil {
 		t.Fatalf("publish exact Ack fixture: %v", err)
 	}
+	fixture.reanchorOperationClock(t)
 	resolver := &directNoticeReadDirectoryResolver{now: fixture.now, epoch: fixture.epoch}
 	closure := &directNoticeReadClosureResolver{now: fixture.now, epoch: fixture.epoch}
 	legacyRead := &directNoticeExactReadLegacyAuthorizer{}
@@ -2709,11 +2694,11 @@ func TestDirectNoticeExactAckUsesHistoricalStorageGenerationAfterChannelUpgrade(
 	}
 }
 
-func TestDirectNoticeExactAckRejectsValidCurrentApplicationSealedCarrier(t *testing.T) {
+func TestDirectNoticeExactAckRecognizesValidCurrentApplicationSealedCarrier(t *testing.T) {
 	t.Parallel()
 
 	fixture := newDirectNoticeExactAckFixture(t)
-	message, delivery := directNoticeExactAckMessageAndDelivery(t, fixture.directNoticeFixture)
+	message, _ := directNoticeExactAckMessageAndDelivery(t, fixture.directNoticeFixture)
 	sealedChannel := fixture.channel
 	sealedChannel.ContentProtection = ContentProtectionApplicationSealed
 	sealedChannel.ProtectionGeneration++
@@ -2728,57 +2713,13 @@ func TestDirectNoticeExactAckRejectsValidCurrentApplicationSealedCarrier(t *test
 	if err := ValidateMessageForPublishChannel(sealedMessage, sealedChannel, 1); err != nil {
 		t.Fatalf("build valid current application-sealed Message: %v", err)
 	}
-	channelRecord, err := channelToRecord(sealedChannel)
-	if err != nil {
-		t.Fatalf("encode current application-sealed Channel: %v", err)
+	if !directNoticeAckProtectedCarrier(sealedChannel, sealedMessage) {
+		t.Fatal("valid current application-sealed carrier was rejected")
 	}
-	messageRecord, err := messageToRecord(sealedMessage, 1)
-	if err != nil {
-		t.Fatalf("encode current application-sealed Message: %v", err)
+	sealedMessage.Payload.ProtectionGeneration = sealedChannel.ProtectionGeneration + 1
+	if directNoticeAckProtectedCarrier(sealedChannel, sealedMessage) {
+		t.Fatal("future application-sealed carrier generation was accepted")
 	}
-	before := directNoticeExactAckEffects(t, fixture.directNoticeFixture)
-	base := fixture.m.data
-	fault := &directNoticeExactAckAuthorityFirstData{
-		inner: base,
-		transformRecord: func(kind model.Kind, record model.Record) model.Record {
-			switch kind {
-			case channelKind:
-				return directNoticeExactAckReplaceRecord(record, channelRecord)
-			case messageKind:
-				return directNoticeExactAckReplaceRecord(record, messageRecord)
-			default:
-				return record
-			}
-		},
-	}
-	observer := &directNoticeMutateObserverData{inner: fault}
-	fixture.m.data = observer
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	result, err := fixture.m.acknowledgeDirectNoticeDeliveryWithAuthority(
-		ctx,
-		fixture.scope,
-		fixture.ref,
-		fixture.published.DeliveryID,
-		directNoticeExactAckCommand(delivery.Version, model.NewID()),
-	)
-	fixture.m.data = base
-	assertDirectNoticeAckUnknownOnly(t, err)
-	if result != (DirectNoticeDeliveryAckResult{}) || observer.views.Load() != 1 ||
-		observer.mutates.Load() != 1 || fault.authorityLocks.Load() != 1 ||
-		fault.earlyAccess.Load() || fault.operations.Load() == 0 {
-		t.Fatalf(
-			"current application-sealed exact Ack = %+v, %v; view/mutate/authority/early/carrier %d/%d/%d/%t/%d",
-			result,
-			err,
-			observer.views.Load(),
-			observer.mutates.Load(),
-			fault.authorityLocks.Load(),
-			fault.earlyAccess.Load(),
-			fault.operations.Load(),
-		)
-	}
-	assertDirectNoticeExactAckEffectsUnchanged(t, fixture.directNoticeFixture, before)
 }
 
 func TestDirectNoticeExactAckHistoricalStorageCarrierIsGenerationBound(t *testing.T) {
@@ -3805,7 +3746,7 @@ func TestDirectNoticeExactAckBindingFailuresDoNotOpenCommunicationData(t *testin
 	}
 }
 
-func TestDirectNoticeExactAckNormalizationRequiresClaimFreeUser(t *testing.T) {
+func TestDirectNoticeExactAckNormalizationSupportsDirectoryPrincipals(t *testing.T) {
 	t.Parallel()
 
 	fixture := newDirectNoticeExactAckFixture(t)
@@ -3821,6 +3762,19 @@ func TestDirectNoticeExactAckNormalizationRequiresClaimFreeUser(t *testing.T) {
 	}
 	for _, principal := range []CommunicationPrincipal{
 		{AgentExternalID: "agent-external"},
+		{
+			AgentExternalID: "agent-session", SessionID: "osn_" + model.NewID().String(),
+			SessionRunRef: model.NewID().String(), SessionFence: 2,
+			SessionWorkspaceID: fixture.scope.WorkspaceID, PurposeRestricted: true,
+		},
+	} {
+		if normalized, err := normalizeDirectNoticeDeliveryAckCommand(
+			fixture.scope, principal, fixture.published.DeliveryID, command,
+		); err != nil || normalized.principal != principal || len(normalized.requestDigest) != 32 {
+			t.Fatalf("normalize directory Ack principal %+v = %+v, %v", principal, normalized, err)
+		}
+	}
+	for _, principal := range []CommunicationPrincipal{
 		{
 			System: true, SystemActorRef: "system-actor",
 			SystemGrantAgentID: model.NewID(),

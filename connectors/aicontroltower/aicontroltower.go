@@ -28,7 +28,7 @@
 // (the WRITE-side notify output): they share only the basic/bearer operator
 // auth conventions, never code paths or direction of data flow.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET (the
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): every call is a GET (the
 // shared httpx client is GET-only by construction) and only asset METADATA is
 // read — never credential material. The operator credential (HTTP Basic
 // username+password, or an OAuth bearer token) is declared Secret, held in

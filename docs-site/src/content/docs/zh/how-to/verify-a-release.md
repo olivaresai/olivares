@@ -1,7 +1,7 @@
 ---
 title: 验证你下载的内容
 description: >-
-  在运行之前，先验证一个发布的签名、SLSA 来源证明、SBOM 和 OpenVEX 证明 — 在线（无密钥）或完全离线（基于密钥）。绝不要把安装脚本直接管道送入
+  在运行之前，先验证一个发布的签名、SLSA 来源证明、SBOM 和 OpenVEX 证明。绝不要把安装脚本直接管道送入
   shell。
 ---
 
@@ -20,28 +20,28 @@ description: >-
 | `*.sbom.sigstore.json` | 作为已签名 in-toto 证明的 SBOM（SPDX） |
 | `*.vex.sigstore.json` | 作为已签名 in-toto 证明的 OpenVEX |
 | `*.intoto.jsonl` | SLSA Build L3 来源证明 |
-| 容器镜像 + Helm chart | 发布时发布到 registry，按 digest 固定 |
+| 容器镜像 | 发布到 GHCR 和 Docker Hub，按 digest 验证并固定 |
+| Helm chart 源码 | 从 `deploy/helm/olivares` 安装；目前尚无公开 OCI chart |
 
 ## 单命令路径
 
 仓库提供了 `scripts/verify-release.sh`，它会运行完整链条：验证对 `checksums.txt` 的签名，重新计算每个产物的 SHA-256，然后验证 SBOM、OpenVEX 和 SLSA 证明。
 
 ```bash
-# Default: keyless (Sigstore). Needs network access to the transparency log (Rekor).
+# Default: keyless (Sigstore). Needs Rekor and Sigstore trusted-root material.
 scripts/verify-release.sh
 
-# Key-based (air-gap friendly): verify against the project's public key.
-scripts/verify-release.sh --key cosign.pub
-
-# Fully offline: no Rekor / no transparency-log network at all.
-scripts/verify-release.sh --key cosign.pub --offline
-
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.8.0
+scripts/verify-release.sh --source-tag v26.9.0
+
+# Key-based: only for files signed with a private key you control.
+# Releases are signed keyless and do not publish a public key.
+scripts/verify-release.sh --key /path/to/your-cosign.pub
 ```
 
-使用 `--offline`（或在提供了密钥时）脚本会向每次 cosign 调用添加
-`--insecure-ignore-tlog`，因此不会使用任何 Sigstore/Rekor 网络 — 这就是面向断网环境的路径。
+`--key` 使用公钥而不是发布工作流的身份来验证签名，并忽略透明日志。它证明文件是用对应的私钥签名的，但不能证明这些文件由项目发布。请通过与待验证文件分离的渠道，从密钥所有者处获取该公钥。
+
+`--offline` 只从 cosign 调用中去掉 Rekor 查询，并不会让验证无需网络。无密钥验证仍然需要 Sigstore 信任根材料，尚未缓存时由 cosign 获取；而且脚本没有 `--trusted-root` 选项。即使使用 `--key`，验证 SBOM 和 OpenVEX bundle 也需要信任根；SLSA 步骤运行 `slsa-verifier` 时不带任何离线选项。
 
 ## 它逐步检查什么
 
@@ -115,7 +115,7 @@ slsa-verifier verify-image "$REF" \
 
 ## 在气隙环境中
 
-如果你完全无法访问网络，请使用 **气隙 bundle**，它携带一个公钥并完全离线（无 Rekor）地验证一切。参阅
+**气隙 bundle** 由运维人员使用自己控制的 cosign 密钥构建，bundle 中包含对应的 `cosign.pub`。bundle 的脚本在不使用 Rekor 的情况下，用该密钥验证 Helm chart 和已保存的镜像；只有带有该密钥所做签名的镜像才能通过。从被验证的 bundle 本身读取的密钥不能认证该 bundle：在信任 bundle 之前，请将它与密钥所有者通过独立渠道交给你的副本进行比较。参阅
 [在气隙环境中安装](/how-to/air-gap-install/)。
 
 :::note[关于证明可用性的诚实说明]

@@ -58,6 +58,27 @@ const (
 	// yet made a tool call has told us nothing about its engine.
 	colEngine  = "engine"
 	colPosture = "posture"
+	// B1 provider-instance identity of a live row (all nullable — additive
+	// reconcile, and NULL is the honest legacy answer). observation_scope is
+	// computed by the SERVER from the stamped source registration or the owning
+	// bridge, never from a payload label:
+	//   NULL                                  legacy (read as "legacy")
+	//   observed:<profile_id>                 cooperative observation attributed to a profile
+	//   source:<source_id>:<rev>:<env>:<drv>  known registration without a verifiable profile
+	//   managed:<canonical_sid>               fed by the plane's own bridge for a launched run
+	// session_ref keeps the external id for compatibility; sessions_live.id is the
+	// opaque public live_ref new readers navigate by. canonical_sid is written ONLY
+	// by the owning bridge and is what a run may be joined on — never a
+	// retrospective external-id join.
+	colObservationScope = "observation_scope"
+	colLiveProfileID    = "provider_profile_id"
+	colLiveProvider     = "provider"
+	colLiveCanonicalSID = "canonical_sid"
+	colLiveEnvRef       = "environment_ref"
+	colLiveBindingRef   = "source_binding_ref"
+	// colLiveRunRef is the run a MANAGED row belongs to, written by the bridge in
+	// the transaction that proved the run owns the announced id. NULL elsewhere.
+	colLiveRunRef = "run_ref"
 )
 
 // sessions.timeline columns: one replayable event in a session's history.
@@ -70,6 +91,11 @@ const (
 	colTLMode       = "mode"
 	colTLSource     = "source"
 	colTLTitle      = "title"
+	// B1: the EXACT live row this event was folded into, written in the same
+	// mutation as the fold, plus the binding it was attributed under. Legacy rows
+	// keep only session_ref; nothing assigns them a live_ref after the fact.
+	colTLLiveRef    = "live_ref"
+	colTLBindingRef = "source_binding_ref"
 )
 
 // sessions.template columns: the workspace template definition. The "version"
@@ -131,11 +157,26 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colUnclaimedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colEngine, Kind: model.KindText, Nullable: true},
 			{Name: colPosture, Kind: model.KindText, Nullable: true},
+			{Name: colObservationScope, Kind: model.KindText, Nullable: true},
+			{Name: colLiveProfileID, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colLiveProvider, Kind: model.KindText, Nullable: true},
+			{Name: colLiveCanonicalSID, Kind: model.KindText, Nullable: true},
+			{Name: colLiveEnvRef, Kind: model.KindText, Nullable: true},
+			{Name: colLiveBindingRef, Kind: model.KindText, Nullable: true},
+			{Name: colLiveRunRef, Kind: model.KindText, Nullable: true},
 		},
+		// B1: the historical UNIQUE (tenant_id, session_ref) index is deliberately
+		// NOT declared any more. Its successor is UNIQUE (tenant_id,
+		// COALESCE(observation_scope,'legacy'), session_ref) — an expression index the
+		// descriptor cannot express (IndexSpec.Columns are column names) — created by
+		// the module migrations, which also drop the old one. Declaring the old one
+		// here would make reconcileColumns recreate it on every boot and refuse the
+		// scoped rows the new index exists to admit. NOTE for operators: an OLDER
+		// binary booting this database would recreate it from its own descriptor;
+		// that is why a downgrade across this change is not a supported rolling path.
 		Indexes: []model.IndexSpec{{
-			Name:    "sessions_live_ref_uniq",
-			Columns: []string{model.ColTenantID, colSessionRef},
-			Unique:  true,
+			Name:    "sessions_live_profile_scope_idx",
+			Columns: []string{model.ColTenantID, colObservationScope},
 		}},
 	}); err != nil {
 		return err
@@ -152,6 +193,8 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colTLMode, Kind: model.KindText, Nullable: true},
 			{Name: colTLSource, Kind: model.KindText, Nullable: true},
 			{Name: colTLTitle, Kind: model.KindText, Nullable: true},
+			{Name: colTLLiveRef, Kind: model.KindText, Nullable: true, Indexed: true},
+			{Name: colTLBindingRef, Kind: model.KindText, Nullable: true},
 		},
 	}); err != nil {
 		return err
@@ -186,6 +229,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	}
 	// SG-02: the admission plane (claim + lease + fencing).
 	if err := m.registerClaimSchema(reg); err != nil {
+		return err
+	}
+	// B1: provider profiles, source→profile bindings and profile-scoped aliases.
+	if err := m.registerProviderProfileSchema(reg); err != nil {
 		return err
 	}
 	// the WORKSPACE registry (host filesystem root bound to sessions).

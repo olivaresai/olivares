@@ -25,7 +25,7 @@
 // Workflow posts back to the HITL inbound receiver). It never renders an Action.Execute
 // button it cannot service, which would silently do nothing.
 //
-// Minimal-data / credential handling (docs/SECURITY-HARDENING.md-3): the only secret is the
+// Minimal-data / credential handling (docs/SECURITY-HARDENING.md §2-3): the only secret is the
 // Workflows webhook URL itself (it embeds an unguessable token). It is declared Secret,
 // held in memory only, and never logged — the delivery transport never logs request
 // bodies, headers or URLs, and this package never puts the webhook URL into an error.

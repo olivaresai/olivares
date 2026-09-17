@@ -132,6 +132,19 @@ actuates on a growing, mostly provision-gated subset** — see
 composition root (`cmd/olivares/wire.go`): all 30 modules are constructed there
 and registered via `rt.AddModule` (verified 2026-07-24).
 
+## Edition availability seam (not counted among the 30 modules)
+
+The catalog above is the **30 modules** the composition root constructs as
+product modules. Separately, Community registers an availability descriptor
+under the `session-cockpit` API namespace. It is not one of those 30.
+
+- [Session cockpit (availability)](/reference/modules/session-cockpit/) —
+  zero handlers in Community; `/v1/m/session-cockpit` returns **404 by
+  absence**. No interactive cockpit in this artifact. Live sessions, AgentOps
+  and official CLI lifecycle remain in the open product —
+  [Live operation & sessions](/reference/modules/ii-sessions/) and
+  [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/).
+
 ## Platform & core capabilities (not counted among the 30 modules)
 
 These are real, shipped capabilities, but they are **engine/core/web capabilities**,

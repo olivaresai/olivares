@@ -29,14 +29,23 @@ stage() {
 	cp "$ROOT/design/HOLD-AIRS-AR-CRITERIOS-2026-08-18.md" \
 		"$TMP/tree/design/"
 	cp "$ROOT/commercial/module-slug-package.json" "$TMP/tree/commercial/"
-	cat >"$TMP/ent/enterprise/activation/catalog.go" <<'EOF'
-package activation
-
-var Catalog = []struct{ Key string }{
-	{Key: "reporting"},
-	{Key: "credential-minter"},
-}
-EOF
+	# ⛔ EL FIXTURE MONTA EL ESTADO CURADO, no el defecto. Antes eran dos claves sueltas
+	# (`reporting` y `credential-minter`) porque el gate EXIGÍA divergencia; con el gate exigiendo
+	# igualdad, ese fixture es una divergencia real y el caso «vivo» saldría rojo con razón. El
+	# catálogo se genera desde el mapa vendido para que los dos lados digan lo mismo por
+	# construcción, y son los MUTANTES los que rompen esa igualdad.
+	python3 - "$TMP/tree/commercial/module-slug-package.json" \
+		"$TMP/ent/enterprise/activation/catalog.go" <<'PY'
+import json, sys
+from pathlib import Path
+sold = json.load(open(sys.argv[1], encoding="utf-8"))
+keys = sorted({e["slug"] for e in sold["entries"]})
+assert keys, "control: el mapa vendido no trajo slugs"
+body = "package activation\n\nvar Catalog = []struct{ Key string }{\n" + "".join(
+    '\t{Key: "%s"},\n' % k for k in keys
+) + "}\n"
+Path(sys.argv[2]).write_text(body)
+PY
 }
 
 run() {
@@ -56,23 +65,57 @@ else
 	bad "live should be CLEAN ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
+# ⛔ EL CASO QUE HABÍA AQUÍ EXIGÍA QUE UN CATÁLOGO IGUAL AL MAPA FUERA UN FALLO. Era el estado
+# fijado, no la propiedad, y con la divergencia curada convertía la cura en regresión. Se sustituye
+# por las DOS direcciones de la desigualdad, que es lo que de verdad hay que cazar.
+
 stage
-python3 - "$TMP/tree/commercial/module-slug-package.json" \
-	"$TMP/ent/enterprise/activation/catalog.go" <<'PY'
-import json, sys
+# Dirección A: el overlay pierde un módulo que el mapa vende. Un comprador paga por bytes que su
+# artefacto no activa.
+python3 - "$TMP/ent/enterprise/activation/catalog.go" <<'PY'
+import sys
 from pathlib import Path
-sold = json.load(open(sys.argv[1], encoding="utf-8"))
-keys = sorted({e["slug"] for e in sold["entries"]})
-body = "package activation\n" + "".join(
-    'Key: "%s"\n' % k for k in keys
-)
-Path(sys.argv[2]).write_text(body)
+p = Path(sys.argv[1]); t = p.read_text()
+assert '{Key: "iso42001"},' in t, "control de mutacion: iso42001 no estaba en el catalogo"
+p.write_text(t.replace('\t{Key: "iso42001"},\n', ""))
 PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: catalog equal to sold map is FAIL"
+	grep -q 'iso42001' "$TMP/err" \
+		&& ok "firing: a sold module missing from the overlay catalog is FAIL, BY NAME" \
+		|| bad "killed, but the message does not name iso42001 ($(cat "$TMP/err"))"
 else
-	bad "matched catalog should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+	bad "missing overlay key should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+stage
+# Dirección B: el overlay activa un módulo que nadie vende.
+python3 - "$TMP/ent/enterprise/activation/catalog.go" <<'PY'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1]); t = p.read_text()
+assert 'ghost-module' not in t, "control de mutacion: ghost-module ya estaba"
+p.write_text(t.replace("}\n", '\t{Key: "ghost-module"},\n}\n'))
+PY
+run
+if [ "$(cat "$TMP/rc")" = 1 ]; then
+	grep -q 'ghost-module' "$TMP/err" \
+		&& ok "firing: an overlay module nobody sells is FAIL, BY NAME" \
+		|| bad "killed, but the message does not name ghost-module ($(cat "$TMP/err"))"
+else
+	bad "surplus overlay key should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+stage
+# Y un HOLD de empaquetado cuya condición está curada sigue escrito: teatro, y el gate lo dice.
+printf '\nhold-slug: content-firewall\n' >>"$TMP/tree/design/HOLD-AIRS-AR-CRITERIOS-2026-08-18.md"
+run
+if [ "$(cat "$TMP/rc")" = 1 ]; then
+	grep -q 'content-firewall' "$TMP/err" \
+		&& ok "firing: a cured HOLD still written is FAIL, BY NAME" \
+		|| bad "killed, but the message does not name content-firewall ($(cat "$TMP/err"))"
+else
+	bad "cured HOLD should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
 stage
@@ -81,23 +124,33 @@ import json, sys
 from pathlib import Path
 p = Path(sys.argv[1])
 d = json.loads(p.read_text())
-d["overlay_matches_sold"] = True
+assert d["overlay_matches_sold"] is True, "control de mutacion: ya estaba en false"
+d["overlay_matches_sold"] = False
 p.write_text(json.dumps(d))
 PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: overlay_matches_sold true is FAIL"
+	ok "firing: a record that still claims the divergence is FAIL"
 else
-	bad "match flag should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+	bad "stale divergence record should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
 stage
-echo 'C13-05 closed' >>"$TMP/tree/design/C13-05-OVERLAY-CATALOG-DIVERGE-2026-08-20.md"
+# El documento pierde la frase que dice QUÉ LADO iba por detrás. Sin ella la divergencia curada
+# vuelve a leerse como folclore sobre «el overlay equivocado», que es justo lo que no era.
+python3 - "$TMP/tree/design/C13-05-OVERLAY-CATALOG-DIVERGE-2026-08-20.md" <<'PY'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1]); t = p.read_text()
+anchor = "**El lado que iba por detrás era el hub, no el overlay.**"
+assert anchor in t, "control de mutacion: la frase no estaba"
+p.write_text(t.replace(anchor, ""))
+PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: doc claims closed is FAIL"
+	ok "firing: the doc losing the sentence that names which side was behind is FAIL"
 else
-	bad "closed claim should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+	bad "lost sentence should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
 stage

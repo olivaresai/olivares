@@ -129,13 +129,13 @@ class ClientCore:
     # -- request execution -----------------------------------------------------
 
     def _do(self, method: str, route: str, path: str, *, body=None, query=None,
-            tenant=None, raw_request=False, raw_request_content_type=None,
+            headers=None, tenant=None, raw_request=False, raw_request_content_type=None,
             _required_json_body=False):
         """One JSON operation. ``route`` is the spec path template (the
         deprecation-dedup key, e.g. ``/v1/agents/{id}``); ``path`` is the
         concrete escaped request path. ``raw_request_content_type`` sends
         ``body`` as raw bytes under the contract's exact media type."""
-        raw = self._execute(method, route, path, body=body, query=query,
+        raw = self._execute(method, route, path, body=body, query=query, headers=headers,
                             tenant=tenant, raw_request=raw_request,
                             raw_request_content_type=raw_request_content_type,
                             required_json_body=_required_json_body)
@@ -150,19 +150,19 @@ class ClientCore:
         return out
 
     def _do_json_required(self, method: str, route: str, path: str, *, body,
-                          query=None, tenant=None):
+                          query=None, headers=None, tenant=None):
         """Execute a required JSON request. ``None`` is the present JSON value
         ``null``; optional and legacy calls through :meth:`_do` still omit it."""
-        return self._do(method, route, path, body=body, query=query, tenant=tenant,
+        return self._do(method, route, path, body=body, query=query, headers=headers, tenant=tenant,
                         _required_json_body=True)
 
-    def _do_raw(self, method: str, route: str, path: str, *, query=None, tenant=None) -> bytes:
+    def _do_raw(self, method: str, route: str, path: str, *, query=None, headers=None, tenant=None) -> bytes:
         """An operation whose success body is NOT JSON (e.g. /metrics); errors
         still arrive in the JSON envelope and raise :class:`APIError`."""
-        return self._execute(method, route, path, body=None, query=query,
+        return self._execute(method, route, path, body=None, query=query, headers=headers,
                              tenant=tenant, want_json=False)
 
-    def _execute(self, method, route, path, *, body, query, tenant, want_json=True,
+    def _execute(self, method, route, path, *, body, query, headers, tenant, want_json=True,
                  raw_request=False, raw_request_content_type=None,
                  required_json_body=False) -> bytes:
         """The policy-aware retry loop: 429 is always retryable (the limiter
@@ -171,7 +171,7 @@ class ClientCore:
         attempt = 0
         while True:
             try:
-                return self._once(method, route, path, body=body, query=query,
+                return self._once(method, route, path, body=body, query=query, headers=headers,
                                   tenant=tenant, want_json=want_json,
                                   raw_request=raw_request,
                                   raw_request_content_type=raw_request_content_type,
@@ -186,7 +186,7 @@ class ClientCore:
                 attempt += 1
                 self._sleep(wait)
 
-    def _once(self, method, route, path, *, body, query, tenant, want_json,
+    def _once(self, method, route, path, *, body, query, headers, tenant, want_json,
               raw_request=False, raw_request_content_type=None,
               required_json_body=False) -> bytes:
         url = self._endpoint + path
@@ -199,29 +199,31 @@ class ClientCore:
             # repeatable query parameter; it will not be the last.
             url += "?" + urlencode(q, doseq=True)
         data = None
-        headers = {"User-Agent": self._user_agent}
+        request_headers = {"User-Agent": self._user_agent}
         if want_json:
-            headers["Accept"] = "application/json"
+            request_headers["Accept"] = "application/json"
         if raw_request_content_type is not None:
             if body is not None:
                 data = bytes(body)
-                headers["Content-Type"] = raw_request_content_type
+                request_headers["Content-Type"] = raw_request_content_type
         elif raw_request:
             # Compatibility with operation layers generated before media types
             # were propagated explicitly; those callers were octet-stream.
             if body is not None:
                 data = bytes(body)
-                headers["Content-Type"] = "application/octet-stream"
+                request_headers["Content-Type"] = "application/octet-stream"
         elif required_json_body or body is not None:
             data = json.dumps(body).encode()
-            headers["Content-Type"] = "application/json"
+            request_headers["Content-Type"] = "application/json"
         if self._token:
-            headers["Authorization"] = f"Bearer {self._token}"
+            request_headers["Authorization"] = f"Bearer {self._token}"
         t = tenant or self._tenant
         if t:
-            headers["X-Olivares-Tenant"] = t
+            request_headers["X-Olivares-Tenant"] = t
 
-        req = _urlrequest.Request(url, data=data, method=method, headers=headers)
+        request_headers.update(headers or {})
+
+        req = _urlrequest.Request(url, data=data, method=method, headers=request_headers)
         try:
             with self._opener.open(req, timeout=self._timeout) as resp:
                 self._notice_deprecation(method, route, path, resp.headers)

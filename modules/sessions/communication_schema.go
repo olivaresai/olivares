@@ -398,6 +398,78 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 				model.IndexSpec{Name: "sessions_channel_grant_predecessor_uniq", Columns: []string{model.ColTenantID, colCommSupersedesID}, Unique: true},
 				model.IndexSpec{Name: "sessions_channel_grant_subject", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommSubjectKind, colCommSubjectRef, colCommState, model.ColID}},
 				model.IndexSpec{Name: "sessions_channel_grant_channel", Columns: []string{model.ColTenantID, colCommChannelID, colCommState, model.ColID}},
+				// sessions_channel_grant_catalog is the grant-first catalog projection
+				// index: for one closure subject it answers "which channel_id values
+				// carry a current read grant" as an index range scan ordered by
+				// channel_id, with the expiry column available in the index so the
+				// unset-or-after predicate needs no row visit. It is declared here,
+				// not in a migration, because the schema reconciler creates a newly
+				// declared index on an existing table with CREATE INDEX IF NOT EXISTS
+				// on both engines (core/internal/store/sqlstore/schema.go
+				// reconcileIndexStmts); prior migrations are untouched.
+				model.IndexSpec{Name: "sessions_channel_grant_catalog", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommSubjectKind, colCommSubjectRef, colCommState, colCommCanRead, colCommChannelID, colCommExpiresAt}},
+				// sessions_channel_grant_administration is the SAME measured shape for
+				// the administrative catalog's projection, on the admin bit instead of
+				// the read bit: for one closure subject it answers "which channel_id
+				// values carry a current ADMIN grant" as an index range scan ordered by
+				// channel_id, with the expiry column in the index so the unset-or-after
+				// predicate needs no row visit. It is a separate index and not a widened
+				// catalog one, because widening would move can_read behind can_admin and
+				// deform the read catalog's own measured plan.
+				model.IndexSpec{Name: "sessions_channel_grant_administration", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommSubjectKind, colCommSubjectRef, colCommState, colCommCanAdmin, colCommChannelID, colCommExpiresAt}},
+				// sessions_channel_grant_history serves the administrative sheet's
+				// keyset page over one Channel's generations. The existing
+				// sessions_channel_grant_channel index leads with state, so the `all`
+				// selection could not range-scan it by id; this one leads with the
+				// Channel and keeps id as the ordered keyset column, and the state
+				// column trails so a state-filtered page is still index-covered.
+				model.IndexSpec{Name: "sessions_channel_grant_history", Columns: []string{model.ColTenantID, colCommChannelID, model.ColID, colCommState}},
+				// sessions_channel_grant_subject_history serves the same page with the
+				// exact-subject filter, so inspecting one subject's generations never
+				// walks the whole Channel history.
+				model.IndexSpec{Name: "sessions_channel_grant_subject_history", Columns: []string{model.ColTenantID, colCommChannelID, colCommSubjectKind, colCommSubjectRef, model.ColID, colCommState}},
+				// sessions_channel_grant_subject_generation serves the ADMIN WRITER's
+				// one history question: the exact highest generation ONE subject
+				// holds on ONE Channel, which fixes the successor's number and its
+				// supersedes_id. Every equality the statement binds — the tenant and
+				// the workspace lineage the store forces, then the Channel and the
+				// subject — leads, and `generation` follows them with `id` as the
+				// tiebreaker in the same direction, so the read is an exact reverse
+				// index scan of two rows however long the history behind them is.
+				// MEASURED, not assumed: without it SQLite serves the same statement
+				// from sessions_channel_grant_catalog and adds
+				// "USE TEMP B-TREE FOR ORDER BY", i.e. it sorts the subject's whole
+				// history to answer a two-row question; dropping `id` from the tail
+				// downgrades it to "USE TEMP B-TREE FOR LAST TERM OF ORDER BY", and
+				// dropping the workspace column makes the planner prefer the catalog
+				// index again. It is declared here, like the three above, because the
+				// reconciler issues a newly declared index on an existing table with
+				// CREATE INDEX IF NOT EXISTS on both engines; no migration is edited.
+				model.IndexSpec{Name: "sessions_channel_grant_subject_generation", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommChannelID, colCommSubjectKind, colCommSubjectRef, colCommGeneration, model.ColID}},
+				// sessions_channel_grant_subject_current serves the ADMIN WRITER's
+				// other current-row question, asked once per closure subject and once
+				// more for the subject a grant serves: "which persisted-active
+				// generation does this subject hold on this Channel?". It shares the
+				// previous index's equality prefix, adds `state` to it, and then
+				// orders by `generation` with `id` as the tiebreaker — the same
+				// ordering the statement asks for. An ABSENT current row therefore
+				// costs an empty range rather than a search for a row that is not
+				// there.
+				// MEASURED on PostgreSQL 16, twice, and both measurements are the
+				// reason this index has this exact shape:
+				//   · without channel_id — i.e. relying on the pre-existing
+				//     sessions_channel_grant_subject — the planner answered the
+				//     question from sessions_channel_grant_pkey with
+				//     "Rows Removed by Filter: 2199" of 2200 rows;
+				//   · WITH channel_id but ordered by `id`, it did the same thing for
+				//     the one subject that owned most of the relation, because an
+				//     ordered primary-key scan satisfies `ORDER BY id` and the row
+				//     estimate for a most-common subject_ref made an early LIMIT hit
+				//     look cheap. Ordering by `generation` removes that substitution:
+				//     the primary key cannot serve it.
+				// SQLite chose a bounded plan in every one of those variants. One
+				// engine agreeing is not the measurement.
+				model.IndexSpec{Name: "sessions_channel_grant_subject_current", Columns: []string{model.ColTenantID, colWorkWorkspaceID, colCommChannelID, colCommSubjectKind, colCommSubjectRef, colCommState, colCommGeneration, model.ColID}},
 			),
 		},
 		{
@@ -997,7 +1069,7 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 		"sessions_message_guard":                      "8b8387002aa86ed1bacdfbe9ce413d5108a818af793a84be2f09f4a42a43c38e",
 		"sessions_message_no_delete":                  "6dbe749a6f6303c8517ae2257b9005a05945a22f5ae7ed8460645fd9fb23b4ed",
 		"sessions_work_event_guard":                   "c73cb52c4c398031b55605934931b26f62aabca9ffc8839afdaf82bde97d37d6",
-		"sessions_work_handoff_guard":                 "516b6c0c369788e1276c201348f855b273480f927f7ddd88334398a6a7e4e840",
+		"sessions_work_handoff_guard":                 "ddb234d47a9aaba46fc9d85d122ff8ed2d0c584b9dfffaaccc90a8a1ec4cc4b7",
 		"sessions_work_handoff_no_delete":             "c406b889147cffce2ac4c85fe311cc5cfc22164d0a54d79e27e46161256753f6",
 	}
 	sqliteDigests := map[string]string{
@@ -1049,8 +1121,8 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 		"sessions_message_guard_upd":                    "450bf53ee30b25ca0d35aa14cdf9a5f1113b6bf921c3c3be5d1783f55151fb53",
 		"sessions_message_no_delete":                    "48ecbebde94ce17d52d729b5866c8692ca9aee2f7c3d790ace60c7e74061126d",
 		"sessions_work_event_guard_ins":                 "8f7247fd7c0e8f2be3e75950d085f1199bfac643cdb17c610a8f119f982af334",
-		"sessions_work_handoff_guard_ins":               "e4963f98519967bdf70719084c2aea92d4a6a8f75c4d0a44a8d22eac54890e61",
-		"sessions_work_handoff_guard_upd":               "33d8411f8dbb0ea700633e5e0ecff54e85edd8745e21ffb3b0f70c331d7830a0",
+		"sessions_work_handoff_guard_ins":               "5729768a24c1296b8cf82566dacb31cd6402b2fa7d098e84b7eccf2f8dda8ec1",
+		"sessions_work_handoff_guard_upd":               "39cce761174b8660321bdd5740873031df0232a2d776375d3a78a78311df027b",
 		"sessions_work_handoff_no_delete":               "49016fd089d66a5a292ad9d5567179037e1f9a07742e630685e0cb46e9eef438",
 	}
 
@@ -1072,6 +1144,25 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 				},
 			}}
 		}
+		// OT-V moves only the Handoff guard off the shared validator, for the
+		// accepted-state lease-effect rule. Shared-function replacement is not
+		// supported, so the transition names a freshly reserved identity; the other
+		// EIGHTEEN triggers keep the immutable shared function and their digests.
+		// Nineteen were attached at the assigned baseline, not the proposal's twenty:
+		// migration 0018 had already detached the CommunicationCommand guard. The
+		// invariant is the enumerated set above, never the count, but a count that
+		// disagrees with the catalog is one a later reader will trust; this one was
+		// captured from a real migrated database on both engines.
+		if postgresGuard == "sessions_work_handoff_guard" {
+			postgresTrigger.Transitions = []store.SchemaTriggerTransition{{
+				MigrationVersion:         24,
+				PreviousDefinitionSHA256: "516b6c0c369788e1276c201348f855b273480f927f7ddd88334398a6a7e4e840",
+				PostgresFunctionIdentity: &store.SchemaTriggerFunctionIdentityTransition{
+					PreviousName: "olivares_sessions_communication_validate",
+					NextName:     "olivares_sessions_work_handoff_validate_v24",
+				},
+			}}
+		}
 		postgres = append(postgres, postgresTrigger)
 		sqliteInsert := definition.table + "_guard_ins"
 		sqliteTrigger := store.SchemaTrigger{
@@ -1090,6 +1181,15 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 				},
 			}
 		}
+		// SQLite has no separately addressable trigger function, so its OT-V
+		// transitions carry no PostgresFunctionIdentity: 0096 replaces the INSERT
+		// half and 0097 the UPDATE half of the same rule.
+		if sqliteInsert == "sessions_work_handoff_guard_ins" {
+			sqliteTrigger.Transitions = []store.SchemaTriggerTransition{{
+				MigrationVersion:         96,
+				PreviousDefinitionSHA256: "e4963f98519967bdf70719084c2aea92d4a6a8f75c4d0a44a8d22eac54890e61",
+			}}
+		}
 		sqlite = append(sqlite, sqliteTrigger)
 		if definition.mutable {
 			postgresNoDelete := definition.table + "_no_delete"
@@ -1099,11 +1199,18 @@ func communicationSchemaInvariants() map[store.Engine][]store.SchemaTrigger {
 			})
 			sqliteUpdate := definition.table + "_guard_upd"
 			sqliteNoDelete := definition.table + "_no_delete"
+			sqliteUpdateTrigger := store.SchemaTrigger{
+				Name: sqliteUpdate, Table: definition.table,
+				DefinitionSHA256: sqliteDigests[sqliteUpdate],
+			}
+			if sqliteUpdate == "sessions_work_handoff_guard_upd" {
+				sqliteUpdateTrigger.Transitions = []store.SchemaTriggerTransition{{
+					MigrationVersion:         97,
+					PreviousDefinitionSHA256: "33d8411f8dbb0ea700633e5e0ecff54e85edd8745e21ffb3b0f70c331d7830a0",
+				}}
+			}
 			sqlite = append(sqlite,
-				store.SchemaTrigger{
-					Name: sqliteUpdate, Table: definition.table,
-					DefinitionSHA256: sqliteDigests[sqliteUpdate],
-				},
+				sqliteUpdateTrigger,
 				store.SchemaTrigger{
 					Name: sqliteNoDelete, Table: definition.table,
 					DefinitionSHA256: sqliteDigests[sqliteNoDelete],

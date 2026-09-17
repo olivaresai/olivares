@@ -27,7 +27,7 @@
 // EXPLICITLY enable (Data Access audit logs are off by default); this connector
 // reads only what the exported log contains and never enables anything itself.
 //
-// Minimal data (docs/SECURITY-HARDENING.md-3): the connector reads ONLY principalEmail, methodName,
+// Minimal data (docs/SECURITY-HARDENING.md §2-3): the connector reads ONLY principalEmail, methodName,
 // resourceName and the timestamp — never request/response, status, or the
 // AccessSecretVersion payload. A test asserts no secret value reaches the store.
 //

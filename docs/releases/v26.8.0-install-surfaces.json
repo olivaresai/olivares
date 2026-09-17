@@ -1,0 +1,112 @@
+{
+  "$comment": "SPDX-FileCopyrightText: 2026 Olivares.AI; SPDX-License-Identifier: AGPL-3.0-only",
+  "schema": "olivares.ai/install-surfaces/v1",
+  "version": "v26.8.0",
+  "measured_at": "2026-09-02T01:20:00Z",
+  "surfaces": [
+    {
+      "id": "github-release",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^release:$"
+      },
+      "prose": {
+        "path": "README.md",
+        "contains": "https://github.com/olivaresai/olivares/releases/tag/v26.8.0"
+      },
+      "evidence": "GitHub Releases API: public, draft=false, prerelease=false, published 2026-09-01T11:15:52Z"
+    },
+    {
+      "id": "archives",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^archives:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "olivares_${ver#v}_${os}_${arch}.tar.gz"
+      },
+      "evidence": "GitHub release v26.8.0 contains eight base/FIPS Linux/macOS amd64/arm64 archives"
+    },
+    {
+      "id": "native-packages",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^nfpms:$"
+      },
+      "prose": {
+        "path": "docs-site/src/content/docs/how-to/install-from-packages.md",
+        "contains": "olivares_26.8.0_linux_amd64.deb"
+      },
+      "evidence": "GitHub release v26.8.0 contains amd64/arm64 assets in deb, rpm and apk formats"
+    },
+    {
+      "id": "ghcr",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^dockers:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "ghcr.io/olivaresai/olivares:26.8.0"
+      },
+      "evidence": "Anonymous manifest resolution succeeded for ghcr.io/olivaresai/olivares:26.8.0"
+    },
+    {
+      "id": "docker-hub",
+      "status": "published",
+      "producer": {
+        "path": ".github/workflows/release.yml",
+        "matches": "^[[:space:]]+MIRROR_IMAGE_REPO:.*['\"]docker[.]io/olivaresai/olivares['\"]"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "docker.io/olivaresai/olivares:26.8.0"
+      },
+      "evidence": "Docker Hub and GHCR 26.8.0 resolved to the same manifest-list digest"
+    },
+    {
+      "id": "homebrew",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^homebrew_casks:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "brew install olivaresai/tap/olivares"
+      },
+      "evidence": "olivaresai/homebrew-tap Casks/olivares.rb names version 26.8.0 and four platform assets"
+    },
+    {
+      "id": "installer",
+      "status": "published",
+      "producer": {
+        "path": "scripts/install.sh",
+        "matches": "^[[:space:]]+cosign verify-blob"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh"
+      },
+      "evidence": "The raw main installer resolves and verifies the signed release payload; it is not itself a signed release asset"
+    },
+    {
+      "id": "helm-oci",
+      "status": "not-published",
+      "producer": {
+        "path": ".github/workflows/release-chart.yml",
+        "matches": "^[[:space:]]+tags: [[][\"]chart-v[*][\"][]]$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "is **not live yet**"
+      },
+      "evidence": "No chart-v tag or release-chart run existed and the public OCI name returned NAME_UNKNOWN when measured"
+    }
+  ]
+}

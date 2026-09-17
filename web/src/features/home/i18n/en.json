@@ -37,7 +37,17 @@
     }
   },
   "state": {
-    "unavailable": "Couldn't load — open to retry"
+    "unavailable": "Couldn't load — open to retry",
+    "pendingIdle": "Query not started — open to load",
+    "pendingPaused": "Query paused — waiting to resume"
+  },
+  "availability": {
+    "loading": "{{source}}: loading.",
+    "pendingIdle": "{{source}}: query not started.",
+    "pendingPaused": "{{source}}: query paused, waiting to resume.",
+    "unavailable": "{{source}}: could not be loaded.",
+    "partial": "{{source}}: figures available, partial data.",
+    "current": "{{source}}: figures available."
   },
   "empty": {
     "title": "Nothing to show yet",

@@ -12,9 +12,9 @@ SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 
 每条路径都保持相同的安全默认值：无默认凭据、一次性 setup token、默认开启 TLS，
 以及将主机端口绑定到 loopback。
 
-:::note[Beta——尚未发布任何版本]
-Olivares AI 处于 **beta** 阶段。下文的镜像坐标只有在**第一个版本
-（CalVer `26.8.0`）发布之后**才能解析；在此之前各 registry 上没有任何可拉取的内容。
+:::note[Beta——26.9.0 尚未发布]
+Olivares AI 处于 **beta** 阶段。下文的镜像坐标只有在**版本
+`26.9.0` 发布之后**才能解析；在此之前各 registry 上没有任何可拉取的内容。
 请将其视为你将要使用的部署形态，而非可投入生产的保证。
 :::
 
@@ -28,14 +28,14 @@ Olivares AI 处于 **beta** 阶段。下文的镜像坐标只有在**第一个�
 主要的容器拉取来源是 **Docker Hub**：
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.8.0
+docker pull docker.io/olivaresai/olivares:26.9.0
 ```
 
 相同的内容也发布到 `ghcr.io/olivaresai/olivares`——按 digest 完全一致，
 用作备份和构建 registry。Docker Hub 对**匿名**拉取施加速率限制；ghcr.io 不对公共镜像的匿名拉取
 限速——因此当 CI 节点或大规模集群触及上限时，可以先 `docker login`，或改用 ghcr.io 坐标。
 Tag **不带前导 `v`**：
-`:26.8.0` 固定一个版本，`:latest` 浮动，而 `:26.8.0-fips` / `:26.8.0-stig`
+`:26.9.0` 固定一个版本，`:latest` 浮动，而 `:26.9.0-fips` / `:26.9.0-stig`
 是加固变体。基础 tag 和 `:latest` 是多架构的
 （`linux/amd64`、`linux/arm64`）；`fips`/`stig` 仅有 `amd64`。
 
@@ -46,7 +46,7 @@ control plane 是一款安全产品，所以运行前先验证。签名是
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.8.0")"
+DIGEST="$(crane digest "$IMAGE:26.9.0")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -82,7 +82,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 127.0.0.1:8443:8443 \
   -p 127.0.0.1:8444:8444 \
-  docker.io/olivaresai/olivares:26.8.0 \
+  docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -265,7 +265,7 @@ gRPC 摄取端口（`8444`）用于 collector；只有在你运行分布式拓�
 ```bash
 # 1. Back up first (see §4).
 # 2. Pull the new release and re-verify it (see §1):
-docker pull docker.io/olivaresai/olivares:26.8.1
+docker pull docker.io/olivaresai/olivares:26.9.1
 
 # docker run:
 docker stop olivares && docker rm olivares
@@ -280,7 +280,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 生产环境按 digest 固定
 
-可变 tag（`:26.8.0`、`:latest`）用于评估。在生产环境中，请固定你所验证的
+可变 tag（`:26.9.0`、`:latest`）用于评估。在生产环境中，请固定你所验证的
 **digest**——digest 不可变，且正是你签字确认过的东西：
 
 ```bash
@@ -293,7 +293,7 @@ docker run ... docker.io/olivaresai/olivares@sha256:<digest> serve ...
 OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
-对于横向扩展和多节点，使用 Helm chart——它作为 OCI artifact 发布于
-`oci://ghcr.io/olivaresai/charts/olivares`，经 cosign 签名，并按镜像 digest 固定。
-chart 命令参见[自托管 control plane](/how-to/self-hosting/)，
+对于横向扩展和多节点，请使用 `deploy/helm/olivares` 中的 Helm chart，
+并按 digest 固定已发布的镜像。该 chart 尚不是公开 OCI artifact。
+源 chart 命令参见[自托管 control plane](/how-to/self-hosting/)，
 完全断网站点参见[在 air-gapped 环境中安装](/how-to/air-gap-install/)。

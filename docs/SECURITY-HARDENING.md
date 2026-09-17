@@ -209,7 +209,7 @@ Boot the product with no flags and you get: **no credentials** (setup token prin
 | **Signed releases** | cosign — keyless/Sigstore by default (GitHub OIDC → Fulcio/Rekor); key-based path documented for air-gap | `.goreleaser.yaml` `signs`/`docker_signs`; user verifies with `scripts/verify-release.sh` |
 | **Distroless images** | `gcr.io/distroless/static-debian12:nonroot`, non-root 65532, no shell/pkg-mgr | `Dockerfile`, `Dockerfile.release`, `Dockerfile.ebpf-source` |
 | **Dependency CVE gate** | `govulncheck` per module, blocking | CI `govulncheck` job |
-| **Secret scanning gate** | gitleaks (pinned v8.30.1) over full history, blocking | CI `secrets` job; `task lint:secrets`; config `.gitleaks.toml` |
+| **Secret scanning gate** | gitleaks (pinned v8.30.1) over full HEAD history, blocking; whole-repository audit is explicit `OLIVARES_SECRETS_SCOPE=all` | CI `secrets` job; `task lint:secrets`; config `.gitleaks.toml` |
 | **No `curl\|bash` without checksum** | dev tools installed via `go install @version` (go.sum-checksummed) | `Taskfile.yml` `tools`; CI lint/secrets jobs |
 | **Minimal pinned deps** | go.work `toolchain go1.26.4`; small direct dep set (chi, pgx, cobra, grpc, modernc/sqlite, go-plugin) | `core/go.mod` |
 

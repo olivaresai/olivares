@@ -19,10 +19,11 @@ OpenAPI, который движок отдаёт, а [справочник API]
 
 :::note[Статус распространения]
 SDK находятся в репозитории продукта в каталоге `clients/` и версионируются вместе
-с ним. Публикация в публичные реестры (pkg.go.dev, Maven Central, PyPI, npm)
-происходит вместе с публичным релизом — до тех пор используйте их из репозитория
-(путь модуля Go выше, `mvn -f clients/java install`, `pip install ./clients/python`,
-`npm install ./clients/typescript`).
+с ним. Эта страница не утверждает, что клиенты v26.9.0 есть в pkg.go.dev,
+Maven Central, PyPI или npm. Берите их из репозитория (путь модуля Go выше,
+`mvn -f clients/java install`, `pip install ./clients/python`,
+`npm install ./clients/typescript`), если вы сами не проверили пакет реестра
+для этой версии.
 :::
 
 Все четыре используют один дизайн. Написанное вручную ядро реализует контрактное

@@ -24,16 +24,10 @@ configurations and the chart's own guard rails). The chart requires
 **Kubernetes ≥ 1.25**.
 
 <Aside type="caution" title="Chart publication status — honest">
-At release the chart is published to an OCI registry and cosign-signed, so you
-verify on install and pin images by digest. The chart pulls the container image
-from Docker Hub (`docker.io/olivaresai/olivares`; also at `ghcr.io/olivaresai/olivares`,
-identical by digest); the **chart** artifact itself lives on
-`oci://ghcr.io/olivaresai/charts/olivares`. The first release is still a
-**draft**: until a `chart-v*` tag is cut the registry path is **empty**. Until
-then, install from the repository checkout (the chart itself is complete and
-rendered below); once published, switch to
-`oci://ghcr.io/olivaresai/charts/olivares` and
-[verify what you downloaded](/how-to/verify-a-release/).
+The v26.9.0 engine release is public, but the chart has an independent release
+cycle and no `chart-v*` publication yet. Install the reviewed chart source from
+`deploy/helm/olivares` as shown below and pin its container image by digest.
+If a chart release is published later, verify that separate artifact before use.
 </Aside>
 
 ## 1. The default install (single node, SQLite)
@@ -110,11 +104,43 @@ helm install olivares deploy/helm/olivares \
   --set postgres.adminDsnKey=admin-dsn
 ```
 
-The `admin-dsn` key holds a dedicated `NOSUPERUSER BYPASSRLS` role. It is
-optional **only if you never enable backups**: it is what makes cross-tenant
-system reads complete (the org list, multi-tenant coverage), and enabling
-`backup` REQUIRES it — see [§4](#4-scheduled-encrypted-backups). Creating it now
-means the backup step later is a one-line change.
+The `admin-dsn` key holds a dedicated `NOSUPERUSER BYPASSRLS` role, and on
+Postgres you need it **from the first boot** — not only for backups. The
+application role above stays `NOSUPERUSER NOBYPASSRLS`, so a cross-tenant read
+made through it is limited by row-level security to the cleared tenant and can
+never be read as the whole estate; the engine refuses such a read instead of
+returning a short list. The first-run setup in [§1](#1-the-default-install-single-node-sqlite)
+is one of those reads — `POST /v1/setup` creates the first organization — so
+without this key it answers `501 cross_tenant_admin_pool_not_configured`.
+`GET /readyz` then answers `503` with `status=setup_blocked`, the same code,
+and a fixed remedy in the body. That 503 is not success: it is an observation
+that setup cannot run yet, and `POST /v1/setup` still repeats its own
+authority checks.
+
+The shipped flat manifest and the default Helm path wire `/readyz` as the
+container `readinessProbe`. An unbootstrapped PostgreSQL install without that
+authoritative enumeration therefore stays Not Ready until the prerequisite is
+corrected, which **can wedge a rollout** (a never-Ready pod never satisfies
+the StatefulSet update barrier). `/livez` stays 200 — process only, so the
+pod is not restarted. `/pod-readyz` also stays 200: it is the separately
+configured HA pod-health probe (store reachable, no leadership check and no
+first-boot capability probe), used with a distinct writer-routing arrangement
+so a healthy standby can be Ready while `/readyz` still drains non-writers.
+A 200 from `/livez` or `/pod-readyz` does **not** mean the default rollout is
+unblocked. Do not retarget the default readiness probe to conceal a failed
+setup.
+
+When setup state cannot be observed, `/readyz` answers `503` with
+`status=setup_unavailable` and `code=setup_state_unavailable`, and **omits**
+`setup_required` because that boolean is unknown. That is distinct from a
+known empty install (`setup_required=true`).
+
+An install that is **already** set up keeps serving without the key: what it
+cannot do is authoritative cross-tenant work — the org list, multi-tenant
+coverage, and `backup`, which REQUIRES it (see
+[§4](#4-scheduled-encrypted-backups)). Provision the role with
+`olivares db init --admin-role olivares_admin …` (see `deploy/postgres/README.md`)
+and point `--admin-dsn` at it.
 
 ## 3. Active-passive HA
 

@@ -52,6 +52,11 @@ type Module struct {
 	workContent   WorkContentGuard
 	workEventSink WorkEventSink
 	workAuthz     WorkAuthorizer
+	// workOutboxAuthority is the composition root's mandatory claim/effect
+	// authority for the outbox families that are not K1/K2 work facts
+	// (work_outbox_policy.go). Every drain entry point composes it; nil on a
+	// composed module holds those families deny-closed.
+	workOutboxAuthority WorkOutboxClaimPolicy
 	// protocolBindingReconciler is the K5 composition seam for authenticated
 	// peer reads. Nil is an explicit OFF state: REST reconciliation fails
 	// closed instead of accepting a client-supplied remote observation.
@@ -60,6 +65,9 @@ type Module struct {
 	// keyed by protocol. Browser/CLI input is never trusted as validation.
 	protocolBindingSpecValidators map[BindingProtocol][]ProtocolBindingSpecValidator
 	protocolLocalResourceResolver ProtocolLocalResourceResolver
+	// providerSources is the B1 composition port behind source→profile bindings.
+	// Nil is deny-closed: no roster row can be validated, so nothing binds.
+	providerSources ProviderSourceResolver
 
 	// K3 communication ports are late-bound after Store.Open and core/auth
 	// composition. Nil readiness ports are meaningful OFF witnesses and the
@@ -76,6 +84,21 @@ type Module struct {
 	communicationGuardData           communicationGuardReconciliationData
 	communicationStoreReadiness      CommunicationStoreReadinessWitness
 	communicationPumpReadiness       CommunicationPumpReadinessWitness
+	// managedStop carries the P2 managed-Stop composition ports: the mutation
+	// authorizer that answers its three questions and the durable elector that
+	// fences its effect. Nil is a meaningful OFF state — StopManagedRun refuses
+	// with ErrManagedStopUnwired before it reads anything — and it is deliberately
+	// NOT part of the K3 communication readiness set: a deployment can run the
+	// legacy operator Stop with no managed Stop at all.
+	managedStop *managedStopPorts
+	// managedStopAdmissionTimeout is the configured T
+	// (WithManagedStopAdmissionTimeout); zero selects the module default.
+	managedStopAdmissionTimeout time.Duration
+
+	// communicationCursorKeyring is the durable C2 navigation-token key
+	// snapshot bound by the composition root from operator custody. Nil keeps
+	// the cursor surface unavailable; it is never a readiness term by itself.
+	communicationCursorKeyring *communicationCursorTokenKeyring
 
 	mu     sync.Mutex
 	cancel func()
@@ -184,18 +207,22 @@ func (m *Module) onEvent(ctx context.Context, e event.Event) error {
 	if m.data == nil {
 		return nil
 	}
+	// B2: the HOST-stamped registration snapshot decides the row an observation
+	// folds into (live_scope.go). It is read from the envelope the engine built,
+	// never from the payload; a pushed collector envelope arrives with it nil.
+	reg := e.SourceRegistration
 	switch e.Type {
 	case event.TypeEdgeObserved:
 		if edge, ok := event.EdgeOf(e); ok {
-			return m.onEdge(ctx, e.Tenant, edge)
+			return m.foldEdge(ctx, e.Tenant, reg, edge)
 		}
 	case event.TypeCostSampled:
 		if cost, ok := event.CostOf(e); ok {
-			return m.onCost(ctx, e.Tenant, cost)
+			return m.foldCost(ctx, e.Tenant, reg, cost)
 		}
 	case event.TypeFindingReported:
 		if f, ok := event.FindingOf(e); ok {
-			return m.onFinding(ctx, e.Tenant, f)
+			return m.foldFinding(ctx, e.Tenant, reg, f)
 		}
 	}
 	return nil

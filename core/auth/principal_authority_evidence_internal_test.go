@@ -1171,8 +1171,10 @@ func deterministicPrincipalAuthoritySealFixture(t *testing.T) Principal {
 	ref := PrincipalRef{kind: KindUser, credentialID: credentialID, version: 9}
 	principal.credentialRef = ref
 	principal.evidence = principalEvidenceProvenance{
-		tenant: tenant,
-		ref:    ref,
+		tenant:        tenant,
+		ref:           ref,
+		authorityMode: principalHumanAuthority,
+		userAuthority: store.UserAuthorityFactRef{UserID: userID, Version: 23},
 		directoryEpoch: store.AuthorizationFactRef{
 			Kind: model.DirectoryEpochKind, ID: model.ID(tenant), Version: 17,
 		},
@@ -1189,7 +1191,7 @@ func deterministicPrincipalAuthoritySealFixture(t *testing.T) Principal {
 
 func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *testing.T) {
 	baseline := deterministicPrincipalAuthoritySealFixture(t)
-	const wantGolden = "4da21aa47fbbc5f860ade3eb24aec8f512691250f3a264056f4f5c038f630347"
+	const wantGolden = "80c3e8220c64124c9e4c47bc26ce6174a970911012f790d6ba00311bedff61ba"
 	if got := hex.EncodeToString(baseline.evidence.seal[:]); got != wantGolden {
 		t.Fatalf("authority seal golden = %s, want %s", got, wantGolden)
 	}
@@ -1213,7 +1215,8 @@ func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *tes
 		name   string
 		mutate func(*Principal)
 	}{
-		{name: "user id", mutate: func(p *Principal) { p.UserID = otherUser }},
+		{name: "user id", mutate: func(p *Principal) { p.UserID = otherUser; p.evidence.userAuthority.UserID = otherUser }},
+		{name: "User authority version", mutate: func(p *Principal) { p.evidence.userAuthority.Version++ }},
 		{name: "credential identity", mutate: func(p *Principal) {
 			p.CredID = otherCredential
 			p.credentialRef.credentialID = otherCredential
@@ -1262,7 +1265,7 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 	}
 	principalType := reflect.TypeOf(Principal{})
 	if principalType.NumField() != len(wantPrincipalFields) {
-		t.Fatalf("Principal field count = %d, want sealed v1 inventory %d; review and version the seal",
+		t.Fatalf("Principal field count = %d, want sealed v2 inventory %d; review and version the seal",
 			principalType.NumField(), len(wantPrincipalFields))
 	}
 	for i, want := range wantPrincipalFields {
@@ -1271,7 +1274,7 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 		}
 	}
 	wantEvidenceFields := []string{
-		"tenant", "ref", "directoryEpoch", "observedAt", "freshUntil", "seal",
+		"tenant", "ref", "directoryEpoch", "authorityMode", "userAuthority", "observedAt", "freshUntil", "seal",
 	}
 	evidenceType := reflect.TypeOf(principalEvidenceProvenance{})
 	if evidenceType.NumField() != len(wantEvidenceFields) {

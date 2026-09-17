@@ -105,7 +105,7 @@ type LoginEnforcementPosture struct {
 // console renders it as "no enforcement configured" rather than implying a control is
 // off when none was ever set (docs/SECURITY-HARDENING.md: unknown ≠ disabled).
 func (p LoginEnforcementPosture) Configured() bool {
-	return p.RequireSSO || len(p.NetworkAllowCIDRs) > 0
+	return LoginPostureConfigured(p.RequireSSO, p.NetworkAllowCIDRs)
 }
 
 // WithLoginPolicy sets the login-enforcement policy and returns the Authenticator for

@@ -10,7 +10,6 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
-import { useWorkspaceFilter } from '@/lib/hooks/use-workspace-filter'
 import { cn } from '@/lib/utils'
 import { inventoryApi, inventoryKeys } from './api'
 import { Box, ENTITY_ICON } from './entity-icons'
@@ -24,6 +23,11 @@ const PAGE = 50
  * reuses sort / search / density / load-more). Kind & status are server facets;
  * free-text search runs client-side over the loaded rows. Stale rows are tinted so
  * a gone-quiet entity reads as a signal (docs/SECURITY-HARDENING.md), not as missing data.
+ *
+ * Read TENANT-WIDE: no `workspace_id`, no workspace segment in the key — the engine
+ * ignores the parameter and the catalog has no workspace lineage (api.ts). The
+ * DataTable renders a 403 as a calm forbidden state and any other failure with a
+ * retry, never as an empty estate.
  */
 export function CatalogTable({
   kind,
@@ -32,22 +36,17 @@ export function CatalogTable({
 }: {
   kind?: string
   status?: string
-  onSelect: (entry: CatalogEntry) => void
+  onSelect: (entry: CatalogEntry, launcher?: HTMLElement) => void
 }) {
   const { t } = useTranslation('inventory')
   const { activeTenant } = useAuth()
-  const { workspaceId, queryKey: wsKey } = useWorkspaceFilter()
 
   const query = useInfiniteQuery({
-    queryKey: [
-      ...inventoryKeys.entities(activeTenant, { kind, status }),
-      wsKey,
-    ],
+    queryKey: inventoryKeys.entities(activeTenant, { kind, status }),
     queryFn: ({ pageParam }) =>
       inventoryApi.entities({
         kind,
         status,
-        workspace_id: workspaceId,
         limit: PAGE,
         cursor: pageParam,
       }),

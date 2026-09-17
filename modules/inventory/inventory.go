@@ -6,6 +6,7 @@ package inventory
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
+	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
 // Name is the module's globally unique identifier (the runtime registry key).
@@ -32,6 +34,58 @@ const defaultStaleAfter = 30 * time.Minute
 // defaultSweepInterval is how often the staleness sweep runs.
 const defaultSweepInterval = 5 * time.Minute
 
+// defaultSweepBudget is the deadline the sweep gives EACH of its operations: the
+// tenant enumeration, and then every tenant turn separately.
+//
+// Separately is the whole point. One deadline over the whole pass let an early
+// tenant spend the budget of every tenant after it, so the last tenant of a
+// large directory could never be reached. A per-operation budget makes one slow
+// or wedged tenant cost one turn.
+const defaultSweepBudget = 30 * time.Second
+
+// ErrSweepScopeUnavailable is returned by Sweep when no authoritative source of
+// sweep scope has been wired.
+//
+// It is an ERROR and not an empty pass on purpose. The scope is the estate's
+// durable directory, and a module that answered "nothing to do" when it simply
+// could not ask would report a silent gap as a clean sweep. There is deliberately
+// no fallback to the tenants this process happens to have observed: that was the
+// pre-C2a authority, and it is exactly what cannot survive a restart.
+var ErrSweepScopeUnavailable = errors.New("inventory: the durable freshness sweep has no authoritative tenant scope source")
+
+// ErrSweepDataUnavailable is returned by Sweep when the module holds no data
+// handle. Start already degrades honestly in that configuration (it logs and
+// does not run the loop); this is the same honesty for a direct caller — an
+// absent data handle is never presented as available persistence.
+var ErrSweepDataUnavailable = errors.New("inventory: the durable freshness sweep has no data handle")
+
+// SweepScopeSource names the tenants the durable freshness sweep must visit.
+//
+// The whole interface is one method returning ids and an error, and every fact a
+// caller needs is stated here rather than discovered:
+//
+//   - It is CONFIGURATION, wired once by the composition root before Start. The
+//     module never rotates it concurrently and never invents one.
+//   - The returned ids are CANDIDATES, not authority. They grant the module
+//     nothing: every mutation still goes through the same tenant-scoped
+//     ModuleData, behind the residency, suspension and leadership guards the
+//     store already applies, so a tenant whose state changed between the
+//     snapshot and its turn is refused there.
+//   - The ids must be valid, non-zero, non-system, unique and ordered; an
+//     implementation that cannot make its enumeration authoritative returns an
+//     error, and the sweep then discards ANY rows that came with it.
+//   - It is called once per pass, with a context carrying its own deadline. It
+//     must not be a place to do tenant work: the sweep gives each tenant turn a
+//     fresh budget precisely so this call cannot consume it.
+//
+// The privileged enumeration lives behind this seam, in the composition root
+// that already holds the store. Inventory receives ids, never a Store, a
+// SystemScope, a SourceStore or Auth — the module still cannot open a scope it
+// was not given.
+type SweepScopeSource interface {
+	ListSweepTenants(ctx context.Context) ([]model.TenantID, error)
+}
+
 // Module is the inventory/discovery module. It materializes the estate from the
 // connector observation stream and exposes the catalog and staleness
 // over the API.
@@ -42,12 +96,17 @@ type Module struct {
 
 	staleAfter    time.Duration
 	sweepInterval time.Duration
+	sweepBudget   time.Duration
 
-	mu          sync.Mutex
-	cancel      func()                      // bus unsubscribe
-	stop        chan struct{}               // closed to stop the sweeper
-	wg          sync.WaitGroup              // sweeper goroutine
-	seenTenants map[model.TenantID]struct{} // tenants observed (the sweep's scope)
+	// scope is the durable sweep scope. It is written once by
+	// UseSweepScopeSource before Start and read under mu, so a pass never sees a
+	// half-installed seam.
+	scope SweepScopeSource
+
+	mu     sync.Mutex
+	cancel func()        // bus unsubscribe
+	stop   chan struct{} // closed to stop the sweeper
+	wg     sync.WaitGroup
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side
@@ -75,13 +134,29 @@ type Option func(*Module)
 // that idiom, not a new one.
 func WithClock(c model.Clock) Option { return func(m *Module) { m.clock = c } }
 
+// WithSweepBudget overrides the per-operation deadline of the durable sweep
+// (defaultSweepBudget). A non-positive value keeps the default.
+//
+// It is part of the interface rather than a test convenience: "each operation
+// gets its own 30s" is a fact a caller has to know, and the only way to assert
+// that a wedged tenant does not consume the following tenants' budget is to be
+// able to shorten it. A test that proved it by waiting the real 30s would be
+// measuring the box.
+func WithSweepBudget(d time.Duration) Option {
+	return func(m *Module) {
+		if d > 0 {
+			m.sweepBudget = d
+		}
+	}
+}
+
 // New returns an inventory module with default thresholds.
 func New(opts ...Option) *Module {
 	m := &Module{
 		clock:         model.SystemClock{},
 		staleAfter:    defaultStaleAfter,
 		sweepInterval: defaultSweepInterval,
-		seenTenants:   make(map[model.TenantID]struct{}),
+		sweepBudget:   defaultSweepBudget,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -105,6 +180,21 @@ func (m *Module) Descriptor() sdk.Descriptor {
 // engine boot (the api.DataConsumer seam), before Start. The event handlers
 // persist through it.
 func (m *Module) UseData(d api.ModuleData) { m.data = d }
+
+// UseSweepScopeSource receives the durable sweep scope from the composition
+// root. Like UseData it is boot-time wiring, called before Start.
+func (m *Module) UseSweepScopeSource(src SweepScopeSource) {
+	m.mu.Lock()
+	m.scope = src
+	m.mu.Unlock()
+}
+
+// sweepScope returns the wired scope source, or nil.
+func (m *Module) sweepScope() SweepScopeSource {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.scope
+}
 
 // Init wires the module to the bus. It subscribes to the discovery-relevant
 // observation types: access edges (the estate's relationships) and cost samples
@@ -175,14 +265,25 @@ func (m *Module) onEvent(ctx context.Context, e event.Event) error {
 	if m.data == nil {
 		return nil // not wired for persistence; drop (logged once in Start)
 	}
+	// SDK extraction accepts pointer payloads; a typed nil is not an observation.
+	switch payload := e.Payload.(type) {
+	case *sdkmodel.EdgeObservation:
+		if payload == nil {
+			return nil
+		}
+	case *sdkmodel.CostSample:
+		if payload == nil {
+			return nil
+		}
+	}
 	switch e.Type {
 	case event.TypeEdgeObserved:
 		if edge, ok := event.EdgeOf(e); ok {
-			return m.onEdge(ctx, e.Tenant, edge)
+			return m.onEdgeEvent(ctx, e, edge)
 		}
 	case event.TypeCostSampled:
 		if cost, ok := event.CostOf(e); ok {
-			return m.onCost(ctx, e.Tenant, cost)
+			return m.onCostEvent(ctx, e, cost)
 		}
 	}
 	return nil
@@ -200,32 +301,18 @@ func tenantOf(ref string) (model.TenantID, bool) {
 	return t, true
 }
 
-// noteTenant records a tenant the module has observed, so the staleness sweep —
-// which cannot enumerate tenants (least-privilege: ModuleData withholds System)
-// — knows which tenants to sweep.
-func (m *Module) noteTenant(t model.TenantID) {
-	m.mu.Lock()
-	if m.seenTenants == nil {
-		m.seenTenants = make(map[model.TenantID]struct{})
-	}
-	m.seenTenants[t] = struct{}{}
-	m.mu.Unlock()
-}
-
-// tenantsSnapshot returns a copy of the observed tenants for the sweep.
-func (m *Module) tenantsSnapshot() []model.TenantID {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]model.TenantID, 0, len(m.seenTenants))
-	for t := range m.seenTenants {
-		out = append(out, t)
-	}
-	return out
-}
-
 // debugf logs at debug level if a logger is set.
 func (m *Module) debugf(msg string, args ...any) {
 	if m.log != nil {
 		m.log.Debug(msg, args...)
+	}
+}
+
+// warnf logs at warn level if a logger is set. The sweep failing is a WARN and
+// not a debug line: the estate's freshness has stopped advancing, and an
+// operator reading default-level logs has to be able to see that.
+func (m *Module) warnf(msg string, args ...any) {
+	if m.log != nil {
+		m.log.Warn(msg, args...)
 	}
 }

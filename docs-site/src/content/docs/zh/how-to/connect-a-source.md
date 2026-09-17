@@ -44,6 +44,17 @@ description: "把一个真实的观测源接入 control plane，理解连接器�
 而无需面对 copyleft 的摩擦。同一个连接器二进制无论在进程内还是通过 gRPC 在进程外运行，行为完全一致。
 完整边界参见 [开放内核与许可](/zh/explanation/open-core-and-licensing/)。
 
+同一连接器 kind 的多个源现在可以同时登记并运行（`CHANGELOG.md` `[26.9.0]`
+Fixed）。运行时曾用连接器的 Descriptor 名作为每个源的键，因此同 kind 的第二
+行名册会被持久化并列出——但引擎拒绝它。源现在按操作者自己的名称（名册行的
+`name`）登记，连接器 descriptor 放在旁边。`grok-home-a` 与 `grok-home-b` 各自
+打开自己的配置和凭证引用，运行自己的连接器实例和进程，并独立轮换、失败和停
+止。`sources plan` / `validate` 不再宣布引擎已停止应用的“每种连接器一个实例”
+限制。由一个连接器服务的两条身份记录（`okta` 与 `entra` 共享 `idp`）在
+`as_source: true` 时现在会接好两者。这本身不会端到端分开两个提供商会话或配置
+主目录——那是
+[运行提供商会话](/how-to/operate-provider-sessions/)。
+
 ## 来源与置信度：为什么源很重要
 
 每条 edge 都记录**是哪个源产生了它**以及一个**置信度**级别，且产品同时展示二者，而不是把它们

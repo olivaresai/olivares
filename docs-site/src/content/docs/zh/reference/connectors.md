@@ -344,8 +344,9 @@ permitted-vs-observed 差异中的 PERMITTED 侧：
 | `spiffe` | SPIRE 注册条目 | 仅名册（空操作 `Gather`） |
 
 在 `identity` 条目上接入 `as_source: true` 可在每次引导时执行一次性的 permitted-grant 扫描，
-或用一个带 `poll_seconds` 的单独 `sources` 条目进行周期性重扫——同一 kind 绝不可两者并用
-（`okta`/`entra` 共享同一个 `idp` 连接器，因此每个进程只能注册一个 idp 家族实例作为 source）。
+或用一个带 `poll_seconds` 的单独 `sources` 条目进行周期性重扫。每个条目都以**它自己的 `name`**
+注册，因此同一 kind 的多个条目可以并存：`okta` 与 `entra` 由同一个 `idp` 连接器提供服务，但它们
+仍是两个各自独立的 source，各有自己的配置、状态与生命周期。必须唯一的是名称，而不是连接器。
 组/角色成员关系仅随类型化的名册快照传递，绝不作为 edge。
 
 ### Agent 身份 federation
@@ -371,7 +372,8 @@ tower 的*导出*是一项独立的、后续的能力。
 `foundry-agents`、`google-agent`、`oasf`、`onepassword`），将
 **名册**那半作为一个*不带* `as_source` 的 `identity` 条目接入，将 **edge/finding** 那半作为一个
 带 `poll_seconds` 的单独 `sources` 条目接入——不要两者皆用 `as_source: true`，那只会每次引导
-扫描一次（且同一 kind 的重复注册会被拒绝）。
+扫描一次。（同一 kind 的两个条目已不再是障碍：各自以自己的 `name` 注册。原因在于频率——每次引导
+一次的扫描并不是重扫。）
 
 registry 声明的 **owner/sponsor** 会在名册同步期间落到 NHI 生命周期记录上（与
 `PUT /nhi/{ref}/ownership` 同语义），而 registry 断言的**孤儿**（一个 blueprint 已不存在的 Entra

@@ -89,6 +89,9 @@ type Verified struct {
 	Claims Claims
 	// Credential is the aggregate credential. Meaningful only when Container == ContainerCredentialV3.
 	Credential Credential
+	// Trust names the keyring entry that verified the blob. It is zero when the single-key
+	// VerifyEnvelope primitive verified it, because no keyring was consulted.
+	Trust Trust
 }
 
 // IsCredentialV3 reports whether this blob carried the aggregate container.
@@ -337,23 +340,34 @@ func openEnvelope(blob string, pub ed25519.PublicKey) ([]byte, error) {
 	if len(pub) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("license: bad public key size %d", len(pub))
 	}
-	payloadB64, sigB64, ok := strings.Cut(blob, ".")
-	if !ok {
-		return nil, ErrMalformed
-	}
-	enc := base64.RawURLEncoding
-	payload, err := enc.DecodeString(payloadB64)
+	payload, sig, err := splitEnvelope(blob)
 	if err != nil {
-		return nil, ErrMalformed
-	}
-	sig, err := enc.DecodeString(sigB64)
-	if err != nil {
-		return nil, ErrMalformed
+		return nil, err
 	}
 	if !ed25519.Verify(pub, payload, sig) {
 		return nil, ErrBadSignature
 	}
 	return payload, nil
+}
+
+// splitEnvelope decodes the two halves of a blob WITHOUT verifying anything. Its output is
+// unauthenticated: callers verify the signature before reading the payload (openEnvelope,
+// Keyring.Verify).
+func splitEnvelope(blob string) (payload, sig []byte, err error) {
+	payloadB64, sigB64, ok := strings.Cut(blob, ".")
+	if !ok {
+		return nil, nil, ErrMalformed
+	}
+	enc := base64.RawURLEncoding
+	payload, err = enc.DecodeString(payloadB64)
+	if err != nil {
+		return nil, nil, ErrMalformed
+	}
+	sig, err = enc.DecodeString(sigB64)
+	if err != nil {
+		return nil, nil, ErrMalformed
+	}
+	return payload, sig, nil
 }
 
 // readContainer decides which container an ALREADY-VERIFIED payload holds and parses it with

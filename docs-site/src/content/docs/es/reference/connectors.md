@@ -384,10 +384,12 @@ del diff permitido-frente-a-observado:
 | `spiffe` | entradas de registro de SPIRE | solo roster (`Gather` no-op) |
 
 Cablea `as_source: true` en la entrada `identity` para una pasada de grants permitidos de una sola vez
-por arranque, o una entrada `sources` separada con `poll_seconds` para re-escaneos periódicos —
-nunca ambas para un mismo kind (`okta`/`entra` comparten el único conector `idp`, así que solo una
-instancia de la familia idp puede registrarse como fuente por proceso). Las membresías de grupo/rol
-viajan solo en el snapshot tipado del roster, nunca como aristas.
+por arranque, o una entrada `sources` separada con `poll_seconds` para re-escaneos periódicos.
+Cada entrada se registra con **su propio `name`**, así que varias entradas de un mismo kind
+conviven: `okta` y `entra` los sirve el único conector `idp` y siguen siendo dos fuentes
+distintas, cada una con su configuración, su estado y su ciclo de vida. Lo que debe ser único
+es el nombre, no el conector. Las membresías de grupo/rol viajan solo en el snapshot tipado del
+roster, nunca como aristas.
 
 ### Federación de identidad de agentes
 
@@ -413,7 +415,8 @@ Para los siete kinds con un Gather re-poleable (`entra-agent`, `agent365`, `agen
 `foundry-agents`, `google-agent`, `oasf`, `onepassword`), cablea la mitad del **roster** como una entrada `identity` *sin*
 `as_source` y la mitad de **aristas/hallazgos** como una entrada `sources` separada con
 `poll_seconds` — no ambas vía `as_source: true`, que corre el escaneo solo una vez por
-arranque (y un registro duplicado del mismo kind es rechazado).
+arranque. (Dos entradas de un mismo kind ya no son el obstáculo: cada una se registra con su
+propio `name`. La razón es la cadencia: una pasada por arranque no es un re-escaneo.)
 
 El **owner/sponsor** declarado por el registro aterriza en los registros de ciclo de vida NHI durante el sync
 del roster (la misma semántica que `PUT /nhi/{ref}/ownership`), y un **huérfano** afirmado por el

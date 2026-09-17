@@ -19,6 +19,9 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 
 vi.mock('@/features/shared', async () => {
@@ -42,15 +45,29 @@ vi.mock('@/features/agentops/run-detail', () => ({
 vi.mock('./timeline', () => ({ SessionTimeline: () => <div>timeline</div> }))
 
 vi.mock('./api', () => ({
-  sessionsApi: { live: vi.fn(), liveOne: vi.fn(), timeline: vi.fn() },
+  sessionsApi: {
+    live: vi.fn(),
+    liveOne: vi.fn(),
+    liveById: vi.fn(),
+    timeline: vi.fn(),
+    timelineById: vi.fn(),
+  },
   sessionsKeys: {
     all: (t: string | null) => ['s', t],
     live: (t: string | null, p?: unknown) => ['s', t, 'live', p ?? null],
     liveOne: (t: string | null, ref: string) => ['s', t, 'one', ref],
+    liveById: (t: string | null, ref: string) => ['s', t, 'by-id', ref],
     timeline: (t: string | null, ref: string, p?: unknown) => [
       's',
       t,
       'tl',
+      ref,
+      p ?? null,
+    ],
+    timelineById: (t: string | null, ref: string, p?: unknown) => [
+      's',
+      t,
+      'tl-id',
       ref,
       p ?? null,
     ],
@@ -80,6 +97,8 @@ import { SessionCard } from './session-card'
 
 const live: LiveDTO = {
   session_ref: 'sess-ours',
+  live_ref: 'lr-ours',
+  attribution: 'legacy',
   cc_state: 'active',
   input_tokens: 1200,
   output_tokens: 800,
@@ -106,7 +125,11 @@ const run: RunDTO = {
   created_at: '2026-08-10T10:01:00Z',
 }
 
-function renderCard(target: { sessionRef?: string; runRef?: string }) {
+function renderCard(target: {
+  sessionRef?: string
+  runRef?: string
+  liveRef?: string
+}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
@@ -395,5 +418,190 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     expect(
       screen.queryByRole('button', { name: 'Clean up' }),
     ).not.toBeInTheDocument()
+  })
+})
+
+// B2 — a row is named by its live_ref. Two homes may announce one provider session
+// id, so the card resolves a scoped row by its own id, asks the engine for the run
+// it PROVED owns that row, and never falls back to the bare id.
+const managedLive: LiveDTO = {
+  ...live,
+  session_ref: 'sess-dup',
+  live_ref: 'lr-managed-a',
+  attribution: 'managed',
+  provider_profile_ref: 'ppf_a',
+  provider: 'claude',
+  environment_ref: 'xenv_1',
+  canonical_sid: 'osn_a',
+  run_ref: 'run-a',
+}
+const observedLive: LiveDTO = {
+  ...live,
+  session_ref: 'sess-dup',
+  live_ref: 'lr-observed-a',
+  attribution: 'observed',
+  provider_profile_ref: 'ppf_a',
+  provider: 'claude',
+  environment_ref: 'xenv_1',
+  source_binding_ref: 'psb_1',
+  input_tokens: 77,
+  output_tokens: 11,
+}
+const profiledRun: RunDTO = {
+  ...run,
+  run_ref: 'run-a',
+  name: 'home-a',
+  claude_session_id: 'sess-dup',
+  provider_profile_ref: 'ppf_a',
+  provider_driver: 'claude',
+  provider_environment_ref: 'xenv_1',
+  live_ref: 'lr-managed-a',
+}
+
+describe('SessionCard — B2: a scoped row is named by its live_ref', () => {
+  beforeEach(() => {
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+  })
+
+  it('opened by live_ref, reads the row by id and asks for the run the plane PROVED', async () => {
+    vi.mocked(sessionsApi.liveById).mockResolvedValue(managedLive)
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [profiledRun],
+      has_more: false,
+    })
+    renderCard({ liveRef: 'lr-managed-a' })
+    await waitFor(() =>
+      expect(vi.mocked(sessionsApi.liveById)).toHaveBeenCalledWith(
+        'lr-managed-a',
+      ),
+    )
+    await waitFor(() =>
+      expect(vi.mocked(agentOpsApi.listRuns)).toHaveBeenCalledWith({
+        live_ref: 'lr-managed-a',
+      }),
+    )
+    expect(await screen.findByText('Launched')).toBeInTheDocument()
+    expect(screen.getAllByText('Managed by Olivares').length).toBeGreaterThan(0)
+    expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
+    expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalledWith({
+      claude_session_id: 'sess-dup',
+    })
+  })
+
+  it('opened from a PROFILED run, resolves its managed row by live_ref — never by the bare id', async () => {
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue(profiledRun)
+    vi.mocked(sessionsApi.liveById).mockResolvedValue(managedLive)
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [profiledRun],
+      has_more: false,
+    })
+    renderCard({ runRef: 'run-a' })
+    await waitFor(() =>
+      expect(vi.mocked(sessionsApi.liveById)).toHaveBeenCalledWith(
+        'lr-managed-a',
+      ),
+    )
+    expect(await screen.findByText('Full control')).toBeInTheDocument()
+    expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
+    expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalledWith({
+      claude_session_id: 'sess-dup',
+    })
+  })
+
+  it('says DISCOVERED for an observed row that copies a run id: no process is proven for it', async () => {
+    vi.mocked(sessionsApi.liveById).mockResolvedValue(observedLive)
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderCard({ liveRef: 'lr-observed-a' })
+    expect(await screen.findByText('Discovered')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Arrived through a source dedicated to this provider profile/i,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Observe only')).toBeInTheDocument()
+    expect(vi.mocked(agentOpsApi.listRuns)).toHaveBeenCalledWith({
+      live_ref: 'lr-observed-a',
+    })
+  })
+
+  it('lists the observation rows of the same profile and id BESIDE a managed row, opened by their own live_ref', async () => {
+    const user = userEvent.setup()
+    vi.mocked(sessionsApi.liveById).mockResolvedValue(managedLive)
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [profiledRun],
+      has_more: false,
+    })
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [managedLive, observedLive],
+      has_more: false,
+    })
+    const onNavigate = vi.fn()
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <SessionCard
+          target={{ liveRef: 'lr-managed-a' }}
+          onClose={() => {}}
+          onNavigate={onNavigate}
+        />
+      </QueryClientProvider>,
+    )
+    const related = await screen.findByTestId('related-observations')
+    await waitFor(() =>
+      expect(vi.mocked(sessionsApi.live)).toHaveBeenCalledWith({
+        provider_profile_ref: 'ppf_a',
+        session_ref: 'sess-dup',
+        limit: 20,
+      }),
+    )
+    expect(within(related).getByText('psb_1')).toBeInTheDocument()
+    // The managed row itself is not listed as its own relative.
+    expect(within(related).getAllByRole('listitem')).toHaveLength(1)
+    await user.click(within(related).getByRole('button', { name: 'Open' }))
+    expect(onNavigate).toHaveBeenCalledWith({ liveRef: 'lr-observed-a' })
+  })
+
+  it('a profiled run whose id is not proven yet has no observed half — and borrows none', async () => {
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue({
+      ...profiledRun,
+      claude_session_id: undefined,
+      live_ref: undefined,
+    })
+    renderCard({ runRef: 'run-a' })
+    // Twice on purpose: the overview says it and the capability list gives it as
+    // the reason nothing can be watched.
+    expect(
+      (await screen.findAllByText(/Nothing observed for this session yet/i))
+        .length,
+    ).toBeGreaterThan(0)
+    expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
+    expect(vi.mocked(sessionsApi.liveById)).not.toHaveBeenCalled()
+    expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalled()
+  })
+
+  it('subscribes a legacy target to its bare id and ignores a scoped frame sharing it', async () => {
+    // The stream hook is mocked to a status here; the matching rule is what the
+    // card applies to every frame, and it is the same rule the server applies.
+    vi.mocked(sessionsApi.liveOne).mockResolvedValue({
+      ...live,
+      session_ref: 'sess-dup',
+      live_ref: 'lr-legacy',
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderCard({ sessionRef: 'sess-dup' })
+    expect(await screen.findByText('Discovered')).toBeInTheDocument()
+    expect(vi.mocked(sessionsApi.liveOne)).toHaveBeenCalledWith('sess-dup')
+    expect(vi.mocked(sessionsApi.liveById)).not.toHaveBeenCalled()
   })
 })

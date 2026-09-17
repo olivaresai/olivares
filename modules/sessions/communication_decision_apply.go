@@ -271,8 +271,8 @@ func lockDecisionRequestCarrier(
 	if err != nil {
 		return decisionRequestLockedCarrier{}, err
 	}
-	audienceRecords, err := lockDirectNoticeRecordSet(
-		ctx, tx, messageAudienceKind,
+	audienceRecords, err := observeAppendOnlyRecordSet(
+		ctx, tx, messageAudienceKind, publishedMessageSetFence(messageID),
 		[]model.Filter{{Column: colCommMessageID, Op: model.OpEq, Value: messageID.String()}},
 		64,
 	)
@@ -290,7 +290,9 @@ func lockDecisionRequestCarrier(
 		}
 		audiences = append(audiences, audience)
 	}
-	contributionRecords, err := lockDirectNoticeContributionSet(ctx, tx, audiences)
+	contributionRecords, err := observeAppendOnlyContributionSet(
+		ctx, tx, publishedMessageSetFence(messageID), audiences,
+	)
 	if err != nil {
 		return decisionRequestLockedCarrier{}, err
 	}

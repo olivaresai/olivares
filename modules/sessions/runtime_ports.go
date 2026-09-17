@@ -180,6 +180,19 @@ const (
 type Process interface {
 	// Send writes one line to the process's stdin (a stream-json user/control
 	// message). It is a no-op error for a transport with no bridged input.
+	//
+	// ⛔ THE CONTEXT IS THE BOUND, AND AN IMPLEMENTATION OWES IT. A caller that
+	// wraps this in a deadline — every driver dispatch does — is promised a return
+	// by then even if the child has stopped reading its stdin; io.Writer has no
+	// context, so honouring it takes a mechanism the writer actually supports
+	// (procrunner.go uses the pipe's write deadline). An implementation that only
+	// reads ctx before writing turns that promise into an unbounded wait.
+	//
+	// The error tells the caller WHAT HAPPENED TO THE BYTES, which is what it must
+	// record: "not attempted" means none of them crossed and the frame may be
+	// retried; anything else may have crossed in part, and an implementation that
+	// left a frame half written must refuse every later Send rather than continue a
+	// corrupted stream.
 	Send(ctx context.Context, line []byte) error
 	// Output returns the channel of output frames; it is closed when the process
 	// exits and the output pumps drain.
@@ -188,6 +201,14 @@ type Process interface {
 	Wait() (exitCode int, err error)
 	// Stop gracefully terminates the process group (close stdin, SIGTERM, then
 	// SIGKILL after WaitDelay) so grandchildren holding the pipe cannot wedge it.
+	// It is BOUNDED and it reaps: returning nil means the child is gone, and a
+	// teardown that had to give something up to get there says so in its error.
+	//
+	// The two outcomes are told apart by classification, not by text, because the
+	// runtime redacts the text: ErrOutputAbandoned means the child WAS collected and
+	// output was lost doing it, ErrChildNotReaped means it was not collected at all.
+	// childWasReaped is how a caller reads that verdict; a report about output must
+	// never be read as a process that is still running.
 	Stop(ctx context.Context) error
 	// PID is the non-sensitive process id (0 when not applicable, e.g. a fake).
 	PID() int
@@ -417,6 +438,13 @@ type LaunchIntent struct {
 	// the gate need not resolve it again — which also stops a DENIED launch from minting
 	// identity as a side effect of the gate's own lookup.
 	ClaimSID string
+
+	// ProviderProfileRef / ProviderEnvironmentRef are the profile and execution
+	// environment a PROFILED launch was resolved to (B1), references only — no home
+	// path reaches a gate. Empty for an unprofiled launch. They are here so a gate's
+	// decision is bound to the terms the launch will actually run under.
+	ProviderProfileRef     string
+	ProviderEnvironmentRef string
 }
 
 // LaunchDecision is the gate's verdict AND the governance instructions the module

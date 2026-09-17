@@ -14,6 +14,12 @@ Estate materialisiert, hält Modul II ein **Live-Betriebs-Overlay** pro Session
 über demselben Beobachtungsstrom — und zeigt nur, was dieser Strom ehrlich
 trägt.
 
+v26.9.0 **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
+[Anbieterprofil](/how-to/operate-provider-sessions/). Dieser verwaltete Pfad
+ist dasselbe Modul. Er ersetzt das Overlay nicht und führt zwei Homes, die
+dieselbe Anbieter-Session-ID bekanntgeben, nicht zusammen
+(`CHANGELOG.md` `[26.9.0]` B1/B2).
+
 ## Was es ist
 
 Modul II ist ein busgetriebenes Modul der Core-Schicht, Geschwister des
@@ -50,6 +56,41 @@ auditiert**. Der SSE-Kanal ist streng **mandantenisoliert** (ein Client erhält
 nur Snapshots für seinen autorisierten Mandanten) und **Best-Effort** (ein
 langsamer Client verwirft den Zwischenframe und erhält den nächsten — die
 Ingestion blockiert nie).
+
+## Provider profiles and `live_ref`
+
+Ein **Provider-Profil** ist die dauerhafte Identität einer konfigurierten
+Provider-Instanz auf einer Ausführungsumgebung: Treiber, Umgebung und das
+kanonische `config_home` / `user_home`. Es ist kein authentifiziertes
+Provider-Konto. Registrieren, umbenennen, deaktivieren/aktivieren und
+zurückziehen leben unter `/v1/m/sessions/provider-profiles`. Pfade erscheinen
+nur auf dem Admin-`configuration`-Read. Ein Start nennt `provider_profile_ref`;
+der Server löst die Homes auf und speichert vor dem Spawn einen nicht-geheimen
+Snapshot auf dem Run (`CHANGELOG.md` `[26.9.0]` B1;
+`web/src/features/agentops/types.ts`).
+
+Eine Beobachtung fällt in die Live-Zeile ihres **Kanals**, den der Server aus
+der host-gestempelten Quellenregistrierung berechnet (`CHANGELOG.md` `[26.9.0]`
+B2):
+
+| Channel | Meaning |
+|---|---|
+| `legacy` | no registration |
+| `observed` | a source dedicated to a profile by a binding approved at host admission for the exact applied revision |
+| `source` | a known registration with no verifiable profile |
+| `managed` | a run the plane launched; the only row carrying `canonical_sid` and `run_ref` |
+
+Jede Live-Zeile stellt `live_ref` und `attribution` bereit. Zwei Homes, die
+dieselbe Provider-Session-ID bekanntgeben, sind zwei Zeilen mit zwei Timelines.
+Lesen Sie eine Zeile mit `GET /v1/m/sessions/live/by-id/{live_ref}` (und ihrer
+Timeline- / Stream- / Runs-Abfrage). Nackte External-ID-Routen bleiben und sind
+**Legacy**: sie antworten nur für die Legacy-Zeile.
+
+Treiber werden **pro Knoten** durch Pinning einer offiziellen Binärdatei
+registriert (`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` —
+siehe [Konfiguration](/reference/configuration/)). Ungesetzt bleiben die
+Profile dieses Treibers beobachtbar und sind nicht startbar. Operator-Schritte:
+[Eine Provider-Session betreiben](/how-to/operate-provider-sessions/).
 
 ## Was es konsumiert (und was es ableitet)
 

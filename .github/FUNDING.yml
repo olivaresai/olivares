@@ -4,16 +4,22 @@
 # Sponsorship / funding — displayed in the "Sponsor" button on GitHub.
 # Commercial licensing and enterprise enquiries: enterprise@olivares.ai
 #
-# ⛔ THE ORGANISATION HANDLE WAS REMOVED ON 2026-08-27, AND IT WAS THE ONE THIS FILE CALLED
-# "the principal channel". Measured that day: https://github.com/sponsors/olivaresai does not
-# serve a Sponsors profile — it REDIRECTS to https://github.com/olivaresai, which is what GitHub
-# does when an account is not enrolled — while https://github.com/sponsors/fran-olivares answers
-# 200 with a live "Sponsor @fran-olivares". Listing an account that cannot receive sponsorship is
-# a promise the button cannot keep, and this file was making it about the channel it named first.
+# THE ORGANISATION HANDLE IS BACK AT THE HEAD OF THE ARRAY — RESTORED 2026-09-01, on the
+# exact condition this file wrote on 2026-08-27 when it removed it. That day the organisation was
+# not enrolled: https://github.com/sponsors/olivaresai REDIRECTED to https://github.com/olivaresai
+# (what GitHub does for an account that cannot receive sponsorship), so listing it was a promise
+# the button could not keep. Measured again on 2026-09-01 ~21:30Z, with curl and WITHOUT following
+# redirects: /sponsors/olivaresai answers 200 and no redirect, the page is titled "Sponsor
+# @olivaresai on GitHub Sponsors" and offers three monthly tiers (the amounts live on that page, not here);
+# /sponsors/fran-olivares still answers 200. Enrolling was the maintainer act (bank/tax details)
+# the 08-27 note asked for; this line is the code half of it, and ratifies or reverts it
+# (the planner relayed the decision the same day). If /sponsors/olivaresai ever answers a 3xx again,
+# take the handle out again — the rule has not changed, only the measurement.
 #
-# RESTORE IT by enrolling the `olivaresai` organisation in GitHub Sponsors and putting the handle
-# back at the head of the array. That is a maintainer action (bank/tax details), not a code change,
-# and it is listed with the other day-D maintainer acts in docs/RELEASE-GO-LIVE-RUNBOOK.md §4.
+# 2026-09-02 (words, relayed by the planner): the organisation and the founder's profile are
+# public, active and THE MAIN channel; ko-fi (franolivares, checkout id Z1R625SAD2) is secondary.
+# The array below is that order. The 09-01 lot described this array in the comment but left the
+# line itself at [fran-olivares] — fixed here, with the words that decide it.
 #
 # WHY THESE DESTINATIONS ARE NOT IN scripts/check-emitted-urls.sh, decided here rather than left
 # unstated: that gate's verdict is an HTTP status, and a sponsors handle with NO profile answers
@@ -22,6 +28,6 @@
 # cannot fail for the reason it exists is worse than no row. Re-check these by hand, without
 # following redirects: an enrolled handle answers 200 at /sponsors/<handle>; an unenrolled one
 # answers a 3xx to /<handle>.
-github: [fran-olivares]
+github: [olivaresai, fran-olivares]
 ko_fi: franolivares
 custom: ["https://olivares.ai/pricing"]

@@ -33,12 +33,17 @@
     "home": "Übersicht",
     "onboarding": "Einrichtungsassistent",
     "inventory": "Inventar",
-    "sessions": "Sitzungen",
+    "sessions": "Sitzungen beobachten",
     "accessMap": "Zugriffskarte",
     "health": "Zustand & SLA",
     "capabilities": "MCP & Skills",
     "protocolBindings": "Protokollbindungen",
-    "console": "Steuerungskonsole",
+    "communications": "Kommunikation",
+    "communicationsInbox": "Kommunikations-Posteingang",
+    "communicationsNew": "Neuer Kanal",
+    "communicationsAdministration": "Kanalverwaltung",
+    "communicationsHandoffs": "Übergaben",
+    "console": "Verwaltung",
     "permissions": "Berechtigungen",
     "identity": "Identität & NHI",
     "claudePolicy": "Claude Code-Governance",
@@ -48,7 +53,7 @@
     "catalog": "Katalog",
     "killswitch": "Not-Aus",
     "work": "Arbeit",
-    "agentops": "Claude Code",
+    "agentops": "Sitzungen betreiben",
     "agentArtifacts": "Agent Artifacts",
     "models": "Modelle",
     "modelOps": "Modellbetrieb",
@@ -84,7 +89,9 @@
     "reporting": "Berichte",
     "postureExport": "Posture-Export",
     "automations": "Automatisierungen",
-    "agentcoreExport": "AgentCore-Export"
+    "agentcoreExport": "AgentCore-Export",
+    "providerProfiles": "Anbieterprofile",
+    "providerBindings": "Quellenbindungen"
   },
   "workspace": {
     "switch": "Arbeitsbereich wechseln",
@@ -99,12 +106,17 @@
     "home": "Bestandsübersicht und Zustand auf einen Blick",
     "onboarding": "Schrittweise Installationskonfiguration",
     "inventory": "Jeden Agent, jedes MCP und Modell erkennen und katalogisieren",
-    "sessions": "Live-Betrieb und Zeitachsen von Agenten",
+    "sessions": "Live- und entdeckte Sitzungen mit ihren Zeitleisten beobachten; teilt sich den Bildschirm mit „Sitzungen betreiben“",
     "accessMap": "Was jeder Agent liest und schreibt (R/RW)",
     "health": "Verfügbarkeit und SLAs von Agenten und MCP",
     "capabilities": "MCP-Server, Skills und Werkzeuge steuern",
     "protocolBindings": "Verwaltete A2A- und MCP-Bindungen erstellen und abgleichen",
-    "console": "Benutzer onboarden, SSO/IdP verbinden sowie Arbeitsbereiche und Agent-Gruppen gestalten.",
+    "communications": "Kanäle, direkte Mitteilungen und der persönliche Posteingang des gewählten Workspace",
+    "communicationsInbox": "Ihr exaktes Postfach: an Sie adressierte Zustellungen, frisch gelesen und ausdrücklich bestätigt",
+    "communicationsNew": "Einen Kanal mit ausdrücklichen Anfangsberechtigungen anlegen",
+    "communicationsAdministration": "Kanäle verwalten: Konfiguration und Berechtigungsverlauf, jeder Akt unter dem aktuellen ETag des Kanals",
+    "communicationsHandoffs": "An Sie gerichtete Angebote zur Übernahme von Arbeitsverantwortung: Kontext lesen und annehmen oder ablehnen",
+    "console": "Benutzer, SSO/IdP, Arbeitsbereiche, Agentengruppen, Rollen, Geheimnisse, Konnektoren, API-Schlüssel und die Lizenz dieser Installation",
     "permissions": "Identität, Rollen und Genehmigungen",
     "identity": "SSO, SCIM, das NHI-Verzeichnis und der WIF-Graph",
     "claudePolicy": "Verwaltete Richtlinie, Hooks, MCP, Sandbox und Policy-as-Code",
@@ -113,7 +125,7 @@
     "catalog": "Kuratierte, genehmigte Agenten und Fähigkeiten",
     "killswitch": "Notabschaltung, Wiederherstellung im Vier-Augen-Prinzip und Guardian-Eindämmung",
     "work": "Das dauerhafte sitzungsübergreifende Backlog: Einheiten, Abhängigkeiten, Abnahme und Entscheidungen",
-    "agentops": "Claude Code-Sitzungen erstellen, sich verbinden und steuern – kein SSH",
+    "agentops": "Claude-Code-Sitzungen erstellen, anhängen und steuern — ohne SSH; teilt sich den Bildschirm mit „Sitzungen beobachten“",
     "agentArtifacts": "Skills, MCP-Erweiterungen und Instruktionsdateien — Registry, Sicherheitslage und Supply-Chain-BOM",
     "models": "Modelle, Routing und Anbieterschlüssel",
     "modelOps": "Eigene Modelle, Zulassung und Deployments",
@@ -129,8 +141,8 @@
     "redteam": "Adversariale Tests Ihrer Agenten",
     "dashboards": "KPIs und Berichte für die Führungsebene",
     "observability": "Zustand der Datenaufnahme nach Standard und Trace-Detailanalyse",
-    "platforms": "Bereitstellungsflächen, Compliance-Matrix und Modell-Lebenszyklus je Plattform",
-    "rateLimits": "Inventar der Anthropic-Ratenbegrenzungen (schreibgeschützt)",
+    "platforms": "Plattformoberflächen der Anbieter, Compliance-Matrix und Modelllebenszyklus je Plattform — Referenz, nicht Ihre Server",
+    "rateLimits": "Inventar der Anthropic-Ratenlimits und ihre Verfügbarkeit (schreibgeschützte Referenz)",
     "attestation": "Release-Attestierung – SLSA, SBOM, VEX und Scorecard",
     "apiPlayground": "API Playground",
     "audit": "Manipulationssicheres Nachweis-Hauptbuch",
@@ -142,7 +154,16 @@
     "alerting": "Befunde an Ziele leiten und Zustellungen prüfen",
     "reporting": "Governance-Berichte erstellen und herunterladen",
     "postureExport": "Grundwahrheits-Posture für einen Control Tower exportieren",
-    "automations": "Alle drei Automatisierungsschienen und ihr Trigger-Katalog"
+    "automations": "Alle drei Automatisierungsschienen und ihr Trigger-Katalog",
+    "providerProfiles": "Anbieterverzeichnisse registrieren und verwalten, unter denen Sitzungen starten, und ihre Konfiguration auf Anfrage lesen",
+    "providerBindings": "Konfigurierte Quellen in der von diesem Knoten angewendeten Revision Anbieterprofilen widmen",
+    "routinePolicies": "Kadenzuntergrenzen, Parallelitätsobergrenzen, Genehmigungspflichten, Cron-Freigabelisten und gesperrte Umgebungen für Claude-Code-Routinen",
+    "agentcoreExport": "Die Projektion der Governance-Regeln dieses Mandanten auf AWS AgentCore als Cedar-Richtlinien planen, prüfen und anwenden; das Planen schreibt nichts",
+    "workspace-templates": "Wiederverwendbare Schnappschüsse von Hooks, Einstellungen, Konnektoren und Richtlinien für Arbeitsbereichssitzungen",
+    "eventing": "Ausgehende Webhook-Abonnements, das Protokoll erfasster Ereignisse, Zustellungen und die Dead-Letter-Warteschlange",
+    "team-costs": "Kostenzuordnung nach Team: Sitzungen, Token und Ausgaben, mit Tagesverlauf und Aufschlüsselung nach Projekt und Modell",
+    "backups": "Verschlüsselte Disaster-Recovery-Schnappschüsse der Steuerungsebene: erstellen, planen, herunterladen und wiederherstellen",
+    "logs": "Der Live-Protokollstrom der Engine mit Filtern nach Stufe und Modul, Suche und Pause"
   },
   "commandActions": {
     "eventing": {
@@ -154,5 +175,122 @@
     "orchestration": {
       "createSchedule": "Neuer Zeitplan"
     }
+  },
+  "aliases": {
+    "sessions": "Sitzungen",
+    "agentops": "Claude Code · agentops",
+    "console": "Steuerungskonsole · Mandantenverwaltung"
+  },
+  "areas": {
+    "infrastructure": {
+      "label": "Infrastruktur",
+      "question": "Welche Ressourcen und Arbeitsbereiche habe ich?",
+      "sections": {
+        "estate": "Inventar und Arbeitsbereiche"
+      }
+    },
+    "ai": {
+      "label": "KI",
+      "question": "Welche Sitzungen, Profile und Modelle beobachte oder verwalte ich?",
+      "sections": {
+        "sessions": "Sitzungen",
+        "environments": "Profile und Umgebungen",
+        "models": "Modelle",
+        "execution": "Spezialisierte Ausführung",
+        "provider-reference": "Anbieterreferenz"
+      }
+    },
+    "data-context": {
+      "label": "Daten & Kontext",
+      "question": "Welches Wissen, welche Fähigkeiten und Artefakte verbinde oder nutze ich wieder?",
+      "sections": {
+        "capabilities": "Fähigkeiten",
+        "knowledge": "Wissen",
+        "artifacts": "Artefakte"
+      }
+    },
+    "work-communications": {
+      "label": "Arbeit & Kommunikation",
+      "question": "Welche Arbeit koordiniere ich und wie kommuniziert sie?",
+      "sections": {
+        "work": "Arbeit",
+        "communications": "Kommunikation"
+      }
+    },
+    "automation": {
+      "label": "Automatisierung",
+      "question": "Welche Abläufe, Ereignisse und Benachrichtigungen automatisiere ich?",
+      "sections": {
+        "workflows": "Abläufe und Orchestrierung",
+        "events": "Ereignisse und Benachrichtigungen"
+      }
+    },
+    "security-identity": {
+      "label": "Sicherheit & Identität",
+      "question": "Wer hat Zugriff, nach welchen Regeln, und wie schütze ich die Umgebung?",
+      "sections": {
+        "access": "Identität und Zugriff",
+        "policy": "Richtlinien",
+        "defense": "Schutz und Reaktion",
+        "boundaries": "Governance-Grenzen"
+      }
+    },
+    "deployment": {
+      "label": "Bereitstellung",
+      "question": "Wie bereite ich eine Bereitstellung vor und steuere sie?",
+      "sections": {
+        "deployments": "Bereitstellungen"
+      }
+    },
+    "observation": {
+      "label": "Beobachtbarkeit & Nachweise",
+      "question": "Was passiert, was kostet es, und was kann ich belegen?",
+      "sections": {
+        "operations": "Status und Aktivität",
+        "cost-adoption": "Kosten und Einführung",
+        "audit-recordings": "Audit und Aufzeichnungen",
+        "evaluation-evidence": "Bewertung und Nachweise"
+      }
+    },
+    "system": {
+      "label": "System & Einstellungen",
+      "question": "Wie verwalte ich die Organisation, die Installation und meine Einstellungen?",
+      "sections": {
+        "administration": "Verwaltung",
+        "maintenance": "Installation und Wartung",
+        "development": "Entwicklerwerkzeuge",
+        "preferences": "Persönliche Einstellungen"
+      }
+    }
+  },
+  "directory": {
+    "areas": "Bereiche",
+    "expand": "Module von {{area}} anzeigen",
+    "collapse": "Module von {{area}} ausblenden",
+    "expandAll": "Alle Bereiche ausklappen",
+    "collapseAll": "Alle Bereiche einklappen",
+    "modulesOf": "Module von {{area}}",
+    "empty": "In diesem Bereich sind für Sie keine Einträge verfügbar",
+    "emptyHint": "Einträge erscheinen hier, sobald Ihre Rolle in der aktuellen Organisation Zugriff auf ein Modul dieses Bereichs gewährt.",
+    "backHome": "Zur Übersicht",
+    "area": "Bereich"
+  },
+  "personal": {
+    "favorites": "Favoriten",
+    "add": "{{name}} zu Favoriten hinzufügen",
+    "remove": "{{name}} aus Favoriten entfernen",
+    "viewAll": "Alle anzeigen ({{count}})",
+    "manage": "Favoriten verwalten",
+    "empty": "Markiere ein Modul mit dem Stern, um es hier zu speichern.",
+    "scope": "In diesem Browser für dein Konto und deine Organisation gespeichert.",
+    "temporary": "Favoriten bleiben vorerst im Arbeitsspeicher.",
+    "clear": "Favoriten löschen",
+    "recents": "Zuletzt geöffnet",
+    "recentManage": "Zuletzt geöffnete Module verwalten",
+    "recentViewAll": "Alle anzeigen ({{count}})",
+    "recentEmpty": "Hier erscheinen die Module, die du öffnest.",
+    "recentScope": "In diesem Tab geöffnet. Wird beim Neuladen, Abmelden oder Wechsel von Konto oder Organisation gelöscht.",
+    "recentRemove": "{{name}} aus zuletzt geöffneten Modulen entfernen",
+    "recentClear": "Zuletzt geöffnete Module löschen"
   }
 }

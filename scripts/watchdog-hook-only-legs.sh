@@ -352,10 +352,26 @@ fi
 # `lint:L` si esa tarea existe, o `L` si existe. Si no existe ninguna, o existen LAS DOS, **rehusa**:
 # adivinar cual de dos es la buena seria elegir, y elegir es lo que este guion no hace.
 declare -A TAREA_DE
-if ! LISTADO="$(task --list-all 2>/dev/null | sed -n 's/^\* \([a-z0-9:._-]*\):.*/\1/p' | sort -u)"; then
-	echo "watchdog-hook-only-legs: ⛔ NO HE PODIDO MIRAR: \`task --list-all\` fallo." >&2
+# ⛔ SIN COLOR POR BANDERA, Y EL rc DEL PRODUCTOR ANTES QUE SU SALIDA. Misma costura que
+#    `pre-verify-tanda.sh` y medida el mismo dia (2026-09-07, `mainline-ci` run 34167328609): Task
+#    3.51.1 con `CI=true` en el entorno escribe secuencias ANSI en `--list-all` AUNQUE la salida vaya
+#    por un tubo, asi que cada fila empieza por `ESC[0m ESC[33m* ` y el `sed` de abajo no casa NINGUNA:
+#    este centinela rehusaba por «0 tareas» justo en el entorno donde tiene que correr. `--color=false`
+#    es la forma documentada de apagarlo y gana a `CI=true` y a `FORCE_COLOR=1` juntas, sondeado sobre
+#    el binario real. No se limpia el ANSI a posteriori: si la bandera dejara de valer, el parseo
+#    estricto sigue rehusando y el banco lo ve.
+#
+#    Y el rc se lee ANTES de parsear, con la salida entera guardada. La version anterior leia el rc
+#    de un tubo `task | sed | sort` y dependia de `pipefail` para verlo; ahora es explicito: un Task
+#    que muere despues de imprimir media lista no deja NADA que valga, porque «esa etiqueta no tiene
+#    tarea» sobre una lista a medias seria un veredicto sobre lo que no se leyo.
+SALIDA_LISTA="$(task --list-all --color=false 2>&1)"; RC_LISTA=$?
+if [ "$RC_LISTA" -ne 0 ]; then
+	echo "watchdog-hook-only-legs: ⛔ NO HE PODIDO MIRAR: \`task --list-all\` salio $RC_LISTA; no acepto la parte de lista que imprimio antes de fallar." >&2
+	printf '%s\n' "$SALIDA_LISTA" | tail -3 | sed 's/^/                          /' >&2
 	exit 2
 fi
+LISTADO="$(printf '%s\n' "$SALIDA_LISTA" | sed -n 's/^\* \([a-z0-9:._-]*\):.*/\1/p' | sort -u)"
 N_TAREAS="$(printf '%s\n' "$LISTADO" | grep -c . || true)"
 MIN_TAREAS="${OLIVARES_WATCHDOG_MIN_TASKS:-50}"
 if [ "${N_TAREAS:-0}" -lt "$MIN_TAREAS" ]; then
@@ -425,12 +441,22 @@ while IFS= read -r p; do
 		# entre el listado y la ejecucion, es la carrera —otro carril reescribio el `Taskfile`, un
 		# merge aterrizo, alguien renombro— y no es del arbol que mido: CIEGA. Si sigue ahi, la
 		# pata salio 200 de verdad: ROJA.
-		_ahora="$(task --list-all 2>/dev/null | sed -n 's/^\* \([a-z0-9:._-]*\):.*/\1/p')"
-		case $'\n'"$_ahora"$'\n' in *$'\n'"${TAREA_DE[$p]}"$'\n'*) _sigue=1 ;; *) _sigue=0 ;; esac
-		if [ "$_sigue" = 1 ]; then
-			ROJAS=$((ROJAS + 1)); estado="ROJA (la pata salio 200 y su tarea sigue existiendo)"
+		#
+		# ⛔ Y LA RE-LISTA TIENE LAS MISMAS DOS GUARDAS QUE LA LISTA: sin color por bandera y rc antes
+		# que salida. Si Task no puede re-listar, NO se sabe si la tarea sigue — y las dos respuestas
+		# posibles («ROJA», «ya no existe») serian afirmaciones sobre una lista que no se leyo. Eso es
+		# CIEGA con su propia causa, que nombra el rc del productor y no la carrera.
+		_salida_ahora="$(task --list-all --color=false 2>&1)"; _rc_ahora=$?
+		if [ "$_rc_ahora" -ne 0 ]; then
+			CIEGAS=$((CIEGAS + 1)); estado="NO HE PODIDO MIRAR (la pata salio 200 y no pude re-listar las tareas: \`task --list-all\` salio $_rc_ahora, asi que no se si la tarea sigue existiendo)"
 		else
-			CIEGAS=$((CIEGAS + 1)); estado="NO HE PODIDO MIRAR (la tarea no existe ya: carrera lista→ejecucion)"
+			_ahora="$(printf '%s\n' "$_salida_ahora" | sed -n 's/^\* \([a-z0-9:._-]*\):.*/\1/p')"
+			case $'\n'"$_ahora"$'\n' in *$'\n'"${TAREA_DE[$p]}"$'\n'*) _sigue=1 ;; *) _sigue=0 ;; esac
+			if [ "$_sigue" = 1 ]; then
+				ROJAS=$((ROJAS + 1)); estado="ROJA (la pata salio 200 y su tarea sigue existiendo)"
+			else
+				CIEGAS=$((CIEGAS + 1)); estado="NO HE PODIDO MIRAR (la tarea no existe ya: carrera lista→ejecucion)"
+			fi
 		fi
 		;;
 	*) ROJAS=$((ROJAS + 1)); estado="ROJA" ;;

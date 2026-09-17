@@ -27,7 +27,7 @@ var ErrDirectoryWriterActivationIndeterminate = sqlstore.ErrDirectoryWriterActiv
 // new wrapper, and old writer activity has been drained.
 var ErrDirectoryWriterActivationAssertion = errors.New("directory writer activation assertion missing")
 
-// DirectoryWriterActivationRequest is the explicit, one-way Slice-C cutover.
+// DirectoryWriterActivationRequest is the explicit User authority protocol cutover.
 // The two assertions are deliberately independent: an upgraded process may
 // still have an old transaction in flight, and the database cannot enumerate
 // either fact on the caller's behalf.
@@ -51,8 +51,8 @@ type DirectoryWriterActivationResult struct {
 	ReopenRequired bool
 }
 
-// ActivateDirectoryWriter moves core.directory.writer from staged generation N
-// to enforced generation N+1 through the raw engine-owned seam. raw must be the
+// ActivateDirectoryWriter moves an exact legacy predecessor to User authority
+// target generation N+1 through the existing raw engine-owned seam. raw must be the
 // undecorated Store returned by Open; residency/suspension wrappers intentionally
 // do not forward this authority. cfg must be the same already-resolved Config
 // used for that Open so the transient owner authority can be re-established
@@ -63,8 +63,30 @@ func ActivateDirectoryWriter(
 	cfg store.Config,
 	req DirectoryWriterActivationRequest,
 ) (DirectoryWriterActivationResult, error) {
+	if err := validateDirectoryWriterActivationRequest(req); err != nil {
+		return DirectoryWriterActivationResult{}, err
+	}
+
+	before, after, changed, err := sqlstore.ActivateDirectoryWriter(
+		ctx, raw, cfg, req.ExpectedGeneration,
+	)
+	return finishDirectoryWriterActivation(req, before, after, changed, err)
+}
+
+// ActivateDirectoryWriterMaintenance prepares and activates a stopped installation
+// without returning a serving Store. It can enter both staged and enforced legacy
+// predecessors while retaining every ordinary Open schema/edition/role guard.
+func ActivateDirectoryWriterMaintenance(ctx context.Context, cfg store.Config, registrar func(store.ExtensionRegistry) error, req DirectoryWriterActivationRequest) (DirectoryWriterActivationResult, error) {
+	if err := validateDirectoryWriterActivationRequest(req); err != nil {
+		return DirectoryWriterActivationResult{}, err
+	}
+	before, after, changed, err := sqlstore.OpenDirectoryWriterMaintenance(ctx, cfg, registrar, req.ExpectedGeneration)
+	return finishDirectoryWriterActivation(req, before, after, changed, err)
+}
+
+func validateDirectoryWriterActivationRequest(req DirectoryWriterActivationRequest) error {
 	if !req.WritersUpgraded || !req.WritersDrained {
-		return DirectoryWriterActivationResult{}, fmt.Errorf(
+		return fmt.Errorf(
 			"%w: writers_upgraded=%t writers_drained=%t",
 			ErrDirectoryWriterActivationAssertion,
 			req.WritersUpgraded,
@@ -72,21 +94,22 @@ func ActivateDirectoryWriter(
 		)
 	}
 	if req.ExpectedGeneration <= 0 || req.ExpectedGeneration == math.MaxInt64 {
-		return DirectoryWriterActivationResult{}, fmt.Errorf(
+		return fmt.Errorf(
 			"%w: expected generation must be between 1 and %d",
 			ErrDirectoryWriterActivationAssertion,
 			int64(math.MaxInt64-1),
 		)
 	}
 	if strings.TrimSpace(req.Actor) == "" || strings.TrimSpace(req.Reason) == "" {
-		return DirectoryWriterActivationResult{}, fmt.Errorf(
+		return fmt.Errorf(
 			"%w: actor and reason are required", ErrDirectoryWriterActivationAssertion,
 		)
 	}
 
-	before, after, changed, err := sqlstore.ActivateDirectoryWriter(
-		ctx, raw, cfg, req.ExpectedGeneration,
-	)
+	return nil
+}
+
+func finishDirectoryWriterActivation(req DirectoryWriterActivationRequest, before, after store.DirectoryStatus, changed bool, err error) (DirectoryWriterActivationResult, error) {
 	result := DirectoryWriterActivationResult{
 		Before: before, After: after, Changed: changed,
 		ReopenRequired: directoryWriterActivationRequiresReopen(err),
@@ -98,6 +121,7 @@ func ActivateDirectoryWriter(
 			"changed", changed,
 			"mode", after.ControlMode,
 			"expected_generation", after.ExpectedGeneration,
+			"coverage_protocol", after.CoverageProtocol,
 			"reopen_required", true,
 		)
 	}

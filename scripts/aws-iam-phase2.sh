@@ -64,7 +64,32 @@ MODE="${1:-check}"
 REPO="${2:-${GITHUB_REPOSITORY:-}}"
 POLICY_DIR="${3:-design}"
 TRUST_BACKUP="${4:-}"   # sólo `revert`: la trust que `apply` volcó, para restaurarla tal cual
-ROLE="olivares-apply-sandbox"
+
+# ── EL ESTATE, Y LO QUE SE DERIVA DE ÉL ──────────────────────────────────────
+#
+# ⛔ LAS TRES COSAS QUE CAMBIAN CON EL ENTORNO VAN EN UNA SOLA TABLA, y no en tres sitios.
+# El rol, sus piezas de policy y —la que de verdad importa— el `sub` EXACTO al que se
+# estrecha su confianza. Ese `sub` no es una preferencia: es lo que GitHub emite, y emite
+# cosas DISTINTAS según el job declare o no un `environment`. Un job sin environment emite
+# `repo:<owner>/<repo>:ref:refs/heads/main`; uno con `environment: production` emite
+# `repo:<owner>/<repo>:environment:production` EN SU LUGAR — no los dos.
+#
+# ⇒ Emparejarlos mal no da un error de configuración: da un `AssumeRoleWithWebIdentity`
+# denegado con el dispatch ya lanzado. Es un invariante ENTRE este fichero y
+# `.github/workflows/aws-terraform.yml`, y quien lo sostiene es `scripts/aws-apply-guard`,
+# que lee esta tabla y la compara con los `environment:` de los jobs. Por eso la tabla está
+# escrita en una forma que una máquina puede leer, y no repartida en condicionales.
+#
+# `production` se estrecha a `environment:production` A PROPÓSITO y no a un ref: la guarda de
+# un environment la aplica GitHub del lado del servidor, y no una condición dentro del propio
+# fichero que se quiere proteger.
+#
+# ⚠ Con una salvedad que hay que decir, porque sin ella el razonamiento se cae: el `sub` NO
+# acota la rama —cualquier rama que declare el environment emite el mismo—, así que quien
+# acota es la POLÍTICA DE RAMA del environment (limitado a `main`), que es configuración del
+# servidor y ningún gate de este árbol la ve. Los revisores obligatorios no están disponibles
+# en este plan (422 «billing plan», 2026-09-02). Los pasos, en
+# `an internal design note (not shipped)` §4.
 BOOTSTRAP_MANAGED="arn:aws:iam::aws:policy/AdministratorAccess"
 
 case "$MODE" in
@@ -75,6 +100,27 @@ esac
 command -v aws     >/dev/null || cannot "no hay AWS CLI en esta caja"
 command -v python3 >/dev/null || cannot "no hay python3"
 [ -n "$REPO" ] || cannot "sin repositorio: pásalo como 2.º argumento o en GITHUB_REPOSITORY"
+
+# ⛔ Y LA CONFIANZA Y LAS POLICIES SON DOS EJES, NO UNO. Este guion los trataba como una sola
+# «fase» porque en sandbox se mueven a la vez: nace con la trust ANCHA y AdministratorAccess, y
+# la fase 2 estrecha la trust y adjunta las cinco piezas en el mismo acto.
+#
+# **Produccion demuestra que son independientes**, y lo demuestra en produccion de verdad: su
+# rol nacio con la trust ESTRECHA —`environment:production` desde el primer dia, que es mejor y
+# no cuesta mas, porque el job declara el environment— y con AdministratorAccess adjunta,
+# porque la fase 2 no bloquea (ORD-49). Con un solo eje, ese estado legitimo no existe: el
+# `check` del propio job de apply, que declara `IAM_PHASE: "1"`, exigia la trust ancha y
+# **habria abortado el apply de produccion antes de tocar nada**. Fallaba CERRADO, que es lo
+# correcto, pero por un modelo equivocado.
+#
+# `TRUST_NARROW_FROM` dice desde que fase se espera la trust estrecha. Es un dato del estate y
+# no una excepcion en el codigo.
+ESTATE="${OLIVARES_ESTATE:-sandbox}"
+case "$ESTATE" in
+sandbox)    ROLE="olivares-apply-sandbox";    SUB_TARGET="repo:$REPO:ref:refs/heads/main";      TRUST_NARROW_FROM=2 ;;
+production) ROLE="olivares-apply-production"; SUB_TARGET="repo:$REPO:environment:production";   TRUST_NARROW_FROM=1 ;;
+*) cannot "estate '$ESTATE' desconocido: sandbox o production" ;;
+esac
 
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text 2>/dev/null)" \
 	|| cannot "sts:GetCallerIdentity no contestó: ¿hay credenciales en el entorno?"
@@ -87,13 +133,13 @@ esac
 # copiada a mano certifica la deriva que existe para cazar. Si el directorio no está —el
 # árbol público no lleva `design/`— se dice, no se comprueba a medias.
 [ -d "$POLICY_DIR" ] || cannot "no encuentro '$POLICY_DIR': sin las piezas no hay nada que verificar"
-PARTS="$(ls "$POLICY_DIR"/aws-apply-role-policy.sandbox.*.json 2>/dev/null | sort)"
-[ -n "$PARTS" ] || cannot "no hay piezas 'aws-apply-role-policy.sandbox.*.json' en '$POLICY_DIR'"
+PARTS="$(ls "$POLICY_DIR"/aws-apply-role-policy."$ESTATE".*.json 2>/dev/null | sort)"
+[ -n "$PARTS" ] || cannot "no hay piezas 'aws-apply-role-policy.$ESTATE.*.json' en '$POLICY_DIR'"
 NPARTS="$(printf '%s\n' "$PARTS" | wc -l | tr -d ' ')"
 
-policy_name() { # an internal design note (not shipped) -> <rol>-0-guardrails
+policy_name() { # an internal design note (not shipped)<estate>.0-guardrails.json -> <rol>-0-guardrails
 	local b="${1##*/}"
-	b="${b#aws-apply-role-policy.sandbox.}"
+	b="${b#aws-apply-role-policy.$ESTATE.}"
 	printf '%s-%s' "$ROLE" "${b%.json}"
 }
 
@@ -159,7 +205,6 @@ sys.exit(0 if json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True) els
 ATTACHED="$(attached)" || cannot "no pude leer las policies adjuntas de '$ROLE'"
 [ -n "$(trust_now)" ]  || cannot "no pude leer la trust de '$ROLE'"
 
-SUB_TARGET="repo:$REPO:ref:refs/heads/main"
 
 # ── la verificación, idéntica en los tres modos: antes de tocar y después ────
 #
@@ -231,7 +276,11 @@ verify() { # verify <fase: 1|2> → 0 como se espera · 1 hallazgo · 2 no he po
 
 	doc="$(trust_now)" || return 2
 	[ -n "$doc" ] || return 2
-	trust_judge "$want" "$doc" || bad=1
+	# La fase de la TRUST no es la de las policies: se deriva de `TRUST_NARROW_FROM`, que es
+	# un dato del estate. En sandbox coinciden; en produccion la trust nace estrecha.
+	local tphase=1
+	[ "$want" -ge "$TRUST_NARROW_FROM" ] && tphase=2
+	trust_judge "$tphase" "$doc" || bad=1
 	return "$bad"
 }
 
@@ -354,6 +403,11 @@ revert)
 		say "  restaurando la trust de '$TRUST_BACKUP' (la original, no una reconstrucción)"
 		aws_write update-assume-role-policy --role-name "$ROLE" \
 			--policy-document "file://$TRUST_BACKUP"
+	elif [ "$TRUST_NARROW_FROM" -le 1 ]; then
+		# ⛔ NO SE ENSANCHA UNA TRUST QUE NACIO ESTRECHA. En produccion la fase 1 YA es la
+		# estrecha, asi que «revertir» a la ancha no seria volver atras: seria abrir el rol a
+		# cualquier ref del repositorio, que es un estado en el que nunca estuvo.
+		say "  la trust de '$ESTATE' es estrecha desde la fase 1: NO se toca al revertir"
 	else
 		say "  ⚠ sin respaldo: se RECONSTRUYE la trust ancha, no se restaura la anterior"
 		aws_write update-assume-role-policy --role-name "$ROLE" --policy-document "$(trust_doc "")"

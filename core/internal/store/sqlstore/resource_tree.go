@@ -15,13 +15,13 @@ import (
 
 // resourceRepo is the typed Resource repository plus the tree operations
 // (folders/hierarchy, FASE X /). The embedded Repository supplies the flat
-// Get/List/Delete; Create and Update are overridden to MAINTAIN the materialized
+// Get/List; Create, Update and Delete are overridden to MAINTAIN the materialized
 // path, and CreateUnder/Children/Subtree/Move add the hierarchy. The path
 // ("/<root>/…/<self>") is store-managed end to end: Create derives it from the
 // parent, Move rewrites it across the subtree, and Update preserves it — so a
 // caller can never desync parent_id from path.
 type resourceRepo struct {
-	store.Repository[model.Resource] // promoted Get/List/Delete; Create/Update overridden
+	store.Repository[model.Resource] // promoted Get/List; writes overridden
 	g                                *genericRepo
 }
 
@@ -35,7 +35,12 @@ func newResourceRepo(g *genericRepo) store.ResourceRepo {
 // embedded in the path before the insert. If the parent is a legacy (pre-
 // NULL-path) resource, its root path is healed first (see effectivePath), so the
 // child is rooted UNDER the parent and not mistaken for a second root.
-func (r *resourceRepo) Create(ctx context.Context, res model.Resource) (model.Resource, error) {
+func (r *resourceRepo) Create(ctx context.Context, res model.Resource) (_ model.Resource, retErr error) {
+	defer func() {
+		if r.g.poison != nil {
+			r.g.poison(retErr)
+		}
+	}()
 	if r.g.readOnly {
 		return model.Resource{}, store.ErrReadOnly
 	}
@@ -63,6 +68,15 @@ func (r *resourceRepo) Create(ctx context.Context, res model.Resource) (model.Re
 	return decodeResource(full)
 }
 
+func (r *resourceRepo) Delete(ctx context.Context, id model.ID) (retErr error) {
+	defer func() {
+		if r.g.poison != nil {
+			r.g.poison(retErr)
+		}
+	}()
+	return r.Repository.Delete(ctx, id)
+}
+
 // CreateUnder creates res as a child of parent (zero parent = root). It is sugar
 // for setting ParentID and calling Create.
 func (r *resourceRepo) CreateUnder(ctx context.Context, parent model.ID, res model.Resource) (model.Resource, error) {
@@ -74,7 +88,12 @@ func (r *resourceRepo) CreateUnder(ctx context.Context, parent model.ID, res mod
 // are forced back to the stored row's values, so structure changes only through
 // Move. Everything else (name, uri, sensitivity, owner, workspace_id, metadata)
 // updates normally, optimistic-concurrency checked on res.Version.
-func (r *resourceRepo) Update(ctx context.Context, res model.Resource) (model.Resource, error) {
+func (r *resourceRepo) Update(ctx context.Context, res model.Resource) (_ model.Resource, retErr error) {
+	defer func() {
+		if r.g.poison != nil {
+			r.g.poison(retErr)
+		}
+	}()
 	if r.g.readOnly {
 		return model.Resource{}, store.ErrReadOnly
 	}
@@ -120,7 +139,12 @@ func (r *resourceRepo) Subtree(ctx context.Context, root model.ID, q model.Query
 // node's version (ErrConflict if node changed concurrently). It must run inside a
 // Mutate scope; the surrounding transaction makes the self+descendant rewrite
 // all-or-nothing.
-func (r *resourceRepo) Move(ctx context.Context, node, newParent model.ID) (model.Resource, error) {
+func (r *resourceRepo) Move(ctx context.Context, node, newParent model.ID) (_ model.Resource, retErr error) {
+	defer func() {
+		if r.g.poison != nil {
+			r.g.poison(retErr)
+		}
+	}()
 	g := r.g
 	if g.readOnly {
 		return model.Resource{}, store.ErrReadOnly
@@ -160,6 +184,12 @@ func (r *resourceRepo) Move(ctx context.Context, node, newParent model.ID) (mode
 	}
 	newSelfPath := newParentPath + "/" + node.String()
 	now := g.clock.Now()
+	// Both statements below are built here rather than through updateAt, so the
+	// custodial write gate is reported explicitly. One report covers the pair:
+	// the descendant rewrite and the node update are one logical move.
+	if err := g.noteWrite(node); err != nil {
+		return model.Resource{}, err
+	}
 
 	// 1. Rewrite the descendants' path prefix (curPath -> newSelfPath). substr is
 	//    1-based and the start index is the constant byte length of the old prefix
@@ -167,7 +197,7 @@ func (r *resourceRepo) Move(ctx context.Context, node, newParent model.ID) (mode
 	//    path-keyed descendants, so the LIKE matches nothing — harmless.
 	updDesc := g.dia.Rebind(fmt.Sprintf(
 		"UPDATE %s SET path = ? || substr(path, ?), updated_at = ?, version = version + 1 WHERE tenant_id = ? AND path LIKE ?",
-		resourceDescriptor.Table))
+		g.relation()))
 	if _, err := g.tx.ExecContext(ctx, updDesc,
 		newSelfPath, len(curPath)+1, now.String(), g.tenant.String(), curPath+"/%"); err != nil {
 		return model.Resource{}, mapWriteErr(err)
@@ -178,7 +208,7 @@ func (r *resourceRepo) Move(ctx context.Context, node, newParent model.ID) (mode
 	//    is the prefix, not under it), so its version is unchanged here.
 	updSelf := g.dia.Rebind(fmt.Sprintf(
 		"UPDATE %s SET parent_id = ?, path = ?, updated_at = ?, version = version + 1 WHERE id = ? AND tenant_id = ? AND version = ?",
-		resourceDescriptor.Table))
+		g.relation()))
 	res, err := g.tx.ExecContext(ctx, updSelf,
 		encOptID(newParent), newSelfPath, now.String(), node.String(), g.tenant.String(), cur.Version)
 	if err != nil {
@@ -235,7 +265,7 @@ func (r *resourceRepo) queryResources(ctx context.Context, extraWhere string, ex
 		limit = maxLimit
 	}
 	sqlText := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %d",
-		strings.Join(cols, ", "), resourceDescriptor.Table, strings.Join(where, " AND "), orderBy, limit+1)
+		strings.Join(cols, ", "), g.relation(), strings.Join(where, " AND "), orderBy, limit+1)
 	g.guard(sqlText)
 	rows, err := g.tx.QueryContext(ctx, g.dia.Rebind(sqlText), args...)
 	if err != nil {
@@ -287,11 +317,14 @@ func (r *resourceRepo) effectivePath(ctx context.Context, res model.Resource) (s
 	}
 	p := "/" + res.ID.String()
 	now := r.g.clock.Now()
+	if err := r.g.noteWrite(res.ID); err != nil {
+		return "", err
+	}
 	// The "path IS NULL" guard keeps the heal idempotent under a concurrent toucher
 	// (the path is deterministic — "/<id>" — so a lost race still converges).
 	q := r.g.dia.Rebind(fmt.Sprintf(
 		"UPDATE %s SET path = ?, updated_at = ?, version = version + 1 WHERE id = ? AND tenant_id = ? AND path IS NULL",
-		resourceDescriptor.Table))
+		r.g.relation()))
 	if _, err := r.g.tx.ExecContext(ctx, q, p, now.String(), res.ID.String(), r.g.tenant.String()); err != nil {
 		return "", mapWriteErr(err)
 	}

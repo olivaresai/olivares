@@ -233,6 +233,92 @@ comprueba "prefijo de entorno · pero CITADO sigue sin fijar tope" "$TMP/envpros
 comprueba "ceguera real · sin orden visible responde 2" "$TMP/ciego" 2 "fuzz"
 
 
+# ── MODO --raw: el log que un job deja con `tee`, SIN prefijo de gh ──────────────────────────
+# Anadido el 2026-08-26. El defecto es real y estaba medido: sobre un log crudo de `race-rest` con
+# tres paquetes al 100 % de su tope, el modo posicional contesta «NO HE PODIDO MIRAR: el log no
+# trae NINGUNA duracion». Causa: separa el prefijo `<job>\t<paso>\t` BUSCANDO tabuladores, y en un
+# log crudo el PRIMER tabulador es de Go (`FAIL\tpaquete\t7284.106s`), asi que se come el marcador.
+
+# crudo <fichero> <cap> <pkg:segundos>...   — sin columnas de job/paso, con los tabuladores de Go
+crudo() {
+  local f="$1" cap="$2"; shift 2
+  printf '2026-08-26T00:00:00.0Z go test -race -count=1 -timeout %s ./...\n' "$cap" > "$f"
+  local p
+  for p in "$@"; do
+    printf '2026-08-26T00:00:01.0Z FAIL\tgithub.com/olivaresai/olivares/%s\t%ss\n' \
+      "${p%%:*}" "${p##*:}" >> "$f"
+  done
+}
+
+comprueba_raw() { # <nombre> <job> <fichero> <rc esperado> [texto]
+  local nombre="$1" job="$2" f="$3" esperado="$4" texto="${5:-}"
+  local salida rc
+  salida=$(bash "$GATE" --raw "$job" "$f" 2>&1); rc=$?
+  if [ "$rc" -ne "$esperado" ]; then
+    echo "  ✖ $nombre — rc=$rc, esperaba $esperado"; echo "$salida" | head -3 | sed 's|^|      |'
+    falla=$((falla+1)); return
+  fi
+  if [ -n "$texto" ] && ! grep -qF "$texto" <<<"$salida"; then
+    echo "  ✖ $nombre — rc correcto pero NO nombra «$texto»"; echo "$salida" | head -4 | sed 's|^|      |'
+    falla=$((falla+1)); return
+  fi
+  pasa=$((pasa+1))
+}
+
+crudo "$TMP/crudo" 45m core/api:2700.5 core/auth:2700.3 core/otro:600
+comprueba_raw "crudo · --raw encuentra las duraciones que el modo posicional pierde" \
+  race-rest "$TMP/crudo" 1 "core/api"
+
+# ⛔ CONTROL DE MUTACION: el MISMO fichero SIN --raw tiene que seguir ciego. Sin este caso, el
+# anterior no prueba que sea el modo lo que cambia — podria ser el fichero.
+comprueba "crudo SIN --raw sigue ciego (control de mutacion)" "$TMP/crudo" 2 "NINGUNA duración"
+
+# El job se NOMBRA, no se deduce: con --raw el nombre viene de la orden.
+comprueba_raw "crudo · el veredicto nombra el job que le dan" race-rest "$TMP/crudo" 1 "45 min"
+
+# Un crudo con holgura de sobra sale limpio, y el conteo lo dice.
+crudo "$TMP/crudo_ok" 45m core/api:600 core/auth:300
+comprueba_raw "crudo con holgura sale LIMPIO" race-rest "$TMP/crudo_ok" 0 ""
+
+# Fichero que no existe: 2, no 0.
+comprueba_raw "--raw sobre un fichero ausente es NO HE PODIDO MIRAR" race-rest "$TMP/no-existe" 2 ""
+
+# Sin argumentos suficientes: 2 y lo dice.
+salida=$(bash "$GATE" --raw 2>&1); rc=$?
+if [ "$rc" -eq 2 ]; then pasa=$((pasa+1)); else echo "  ✖ --raw sin argumentos — rc=$rc, esperaba 2"; falla=$((falla+1)); fi
+
+# ── LOCALE: el veredicto no depende del idioma de la caja ──────────────────────────────────
+# Medido el 2026-09-05: con LC_ALL=es_ES.UTF-8 heredado, `printf %.1f` rechazaba el «10.0» que el
+# awk (ya en C) le pasaba, y siete casos de arriba salian 1 con LIMPIO escrito. Se ejerce el gate
+# bajo un locale instalado con COMA decimal (se comprueba, no se supone: un locale que no esta
+# instalado cae a C en silencio y el caso no mediria nada). Si no hay ninguno, se DICE y no cuenta
+# como pasado.
+omitido=0
+LOC_COMA=""
+while IFS= read -r cand; do
+  [ -n "$cand" ] || continue
+  # `printf %.1f 1` escribe «1,0» solo si el locale esta instalado Y usa coma: un locale ausente
+  # cae a C y escribe «1.0», y entonces el caso no mediria nada.
+  if [ "$(LC_ALL="$cand" bash -c 'printf "%.1f" 1' 2>/dev/null)" = "1,0" ]; then LOC_COMA="$cand"; break; fi
+done < <(locale -a 2>/dev/null | grep -iE '^(es_ES|de_DE|fr_FR|it_IT|pt_BR|ru_RU)\.(utf8|UTF-8)$' || true)
+if [ -n "$LOC_COMA" ]; then
+  salida=$(LC_ALL="$LOC_COMA" bash "$GATE" "$TMP/neg" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ] && grep -qF "LIMPIO" <<<"$salida" && grep -qF "10.0%" <<<"$salida" \
+     && ! grep -qF "invalid number" <<<"$salida"; then
+    pasa=$((pasa+1))
+  else
+    echo "  ✖ locale · bajo LC_ALL=$LOC_COMA el LIMPIO del 10% tiene que salir 0 con punto decimal — rc=$rc"
+    echo "$salida" | head -3 | sed 's|^|      |'; falla=$((falla+1))
+  fi
+  # y el positivo sigue nombrando al paquete bajo ese locale: la cura no ha aflojado el rojo
+  salida=$(LC_ALL="$LOC_COMA" bash "$GATE" "$TMP/pos" 2>&1); rc=$?
+  if [ "$rc" -eq 1 ] && grep -qF "modules/lento" <<<"$salida"; then pasa=$((pasa+1)); else
+    echo "  ✖ locale · bajo LC_ALL=$LOC_COMA el 90% sigue nombrandose — rc=$rc"; falla=$((falla+1)); fi
+else
+  omitido=1
+  echo "  SKIP locale · ningun locale con coma decimal instalado: el caso de locale NO se ha ejercido"
+fi
+
 echo
-echo "$pasa passed, $falla failed"
+if [ "$omitido" -eq 1 ]; then echo "$pasa passed, $falla failed, 1 skipped (locale)"; else echo "$pasa passed, $falla failed"; fi
 [ "$falla" -eq 0 ]

@@ -67,7 +67,7 @@ jobs:
         with:
           fetch-depth: 0 # goreleaser needs tags/history for the changelog
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # Provider module go.mod pins go 1.26.x; read it rather than hardcoding.
           go-version-file: ${{ env.PROVIDER_DIR }}/go.mod

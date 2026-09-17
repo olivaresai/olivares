@@ -49,6 +49,18 @@ if ! "$WORK/.execprobe" >/dev/null 2>&1; then
 fi
 rm -f "$WORK/.execprobe"
 
+# Subjects write GitHub command files as part of their normal handoff. In Actions,
+# inheriting the caller's files published fixture cosign paths into later steps
+# (mainline-ci run 34167328609). Give every subject a writable local destination;
+# individual handoff/isolation cases can still override or unset these ports.
+mkdir -p "$WORK/github-command-files" || exit 1
+for command_file in GITHUB_ENV GITHUB_STEP_SUMMARY GITHUB_PATH GITHUB_OUTPUT; do
+	printf -v "$command_file" '%s' "$WORK/github-command-files/$command_file"
+	export "$command_file"
+	: >"${!command_file}" || { echo "cannot create fixture command file $command_file" >&2; exit 1; }
+done
+unset command_file
+
 BASH_BIN="$(command -v bash)"   # an emptied PATH must break the SUBJECT, not the harness
 
 pass=0
@@ -117,6 +129,16 @@ out="$(PATH="$GOOD:$PATH" bash "$S1" 2>&1)" && rc=0 || rc=$?
 if [ "$rc" -eq 0 ] && grep -q "OK (v2.6.4, cosign-linux-amd64"; then check "a published artifact of the approved version is accepted" "rc=0" 0; else check "a published artifact of the approved version is accepted" "rc=0" 1; fi <<<"$out"
 if grep -q "lane: approved"; then check "and reports which lane approved it" "lane named" 0; else check "and reports which lane approved it" "lane named" 1; fi <<<"$out"
 if grep -q "verified binary is $GOOD/cosign"; then check "and prints the ABSOLUTE path it verified" "path echoed" 0; else check "and prints the ABSOLUTE path it verified" "path echoed" 1; fi <<<"$out"
+if grep -Fqx "OLIVARES_COSIGN_BIN=$GOOD/cosign" "$GITHUB_ENV"; then
+	check "the default handoff still writes the fixture command file" "verified path captured" 0
+else
+	check "the default handoff still writes the fixture command file" "verified path missing" 1
+fi
+if grep -Fq "| path | \`$GOOD/cosign\` |" "$GITHUB_STEP_SUMMARY"; then
+	check "the default summary still identifies the verified fixture" "summary captured" 0
+else
+	check "the default summary still identifies the verified fixture" "summary missing" 1
+fi
 
 # THE case: same version, different bytes. This is what a version-only check cannot see.
 BAD="$WORK/selfbuilt"
@@ -164,13 +186,108 @@ if grep -q "boom: no cosign behind this shim"; then check "and surfaces what the
 
 # --- absent cosign is a hard failure, never a skip ----------------------------------------
 set +e
-# The ambient PATH, which on this container has coreutils and NO cosign — the real shape of
-# "cosign is not installed". Blanking PATH entirely removed awk/sha256sum too, so the script
-# died on a missing tool before it could report the missing cosign, and the case was
-# measuring the fixture rather than the subject.
-out_none="$("$BASH_BIN" "$S1" 2>&1)"
+# The subject needs its declared tools and NO cosign — the real shape of "cosign is not
+# installed". Blanking PATH entirely removed awk/sha256sum too, so the script died on a
+# missing tool before it could report the missing cosign, and the case was measuring the
+# fixture rather than the subject.
+#
+# The ambient PATH is not that fixture either: any host with cosign installed — a lane's
+# ~/.local/bin on a shared home (2026-09-04), or a correctly provisioned CI runner — turns
+# this negative case into a verdict about THAT binary. So the subject gets a PATH built here:
+# one symlink per external tool the subject needs before it looks for cosign, each pointing
+# at the path resolved from the harness PATH before anything is narrowed, and nothing else.
+# run_without_cosign and the isolation fixture below use that PATH; every other case keeps the
+# ambient one.
+link_tools() { # link_tools <dir> <tool>... -> one symlink per tool, to its harness-resolved path
+	local dir="$1" tool tool_path
+	shift
+	mkdir -p "$dir" || exit 1
+	for tool in "$@"; do
+		tool_path="$(type -P "$tool")" || tool_path=""
+		case "$tool_path" in
+		/*) ln -s "$tool_path" "$dir/$tool" || exit 1 ;;
+		*)
+			echo "cannot build the fixture $dir: prerequisite '$tool' is not on the harness PATH" >&2
+			exit 1
+			;;
+		esac
+	done
+}
+links_resolved() { # links_resolved <dir> <tool>... -> exactly these links, each to its resolved path
+	local dir="$1" tool
+	shift
+	[ "$(ls -A "$dir" | wc -l)" -eq "$#" ] || return 1
+	for tool in "$@"; do
+		[ "$(readlink "$dir/$tool")" = "$(type -P "$tool")" ] || return 1
+	done
+}
+NO_COSIGN_TOOLS=(readlink sha256sum awk sed date) # `command` and `printf` are builtins
+NO_COSIGN_PATH="$WORK/no-cosign-path"
+link_tools "$NO_COSIGN_PATH" "${NO_COSIGN_TOOLS[@]}"
+fixture_bad=0
+links_resolved "$NO_COSIGN_PATH" "${NO_COSIGN_TOOLS[@]}" || fixture_bad=1
+if PATH="$NO_COSIGN_PATH" "$BASH_BIN" -c 'command -v cosign' >/dev/null 2>&1; then fixture_bad=1; fi
+check "the no-cosign fixture is the resolved prerequisites only" "no cosign resolvable" "$fixture_bad"
+
+run_without_cosign() { PATH="$NO_COSIGN_PATH" "$BASH_BIN" "$@"; }
+
+out_none="$(run_without_cosign "$S1" 2>&1)"
 rc_none=$?
 if [ "$rc_none" -ne 0 ] && grep -q "hard failure, not a skip"; then check "no cosign at all is a hard failure" "rc!=0" 0; else check "no cosign at all is a hard failure" "rc!=0" 1; fi <<<"$out_none"
+# 1 is the missing-cosign verdict; 2 is the subject's "a prerequisite is missing, could not look".
+if [ "$rc_none" -eq 1 ] && ! grep -q "NO HE PODIDO MIRAR"; then
+	check "and it is the missing-cosign answer, not a missing-tool one" "rc=1" 0
+else
+	check "and it is the missing-cosign answer, not a missing-tool one" "rc=$rc_none" 1
+fi <<<"$out_none"
+
+# The regression the fixture exists for: an APPROVED, runnable cosign on the harness's own
+# PATH. The control proves the subject would authenticate and run it; the negative case must
+# still see no cosign, and the canary proves the decoy never ran.
+DECOY="$WORK/ambient-decoy"
+DECOY_CANARY="$WORK/ambient-decoy-was-executed"
+mkdir -p "$DECOY" || exit 1
+{
+	echo '#!/usr/bin/env bash'
+	echo "touch '$DECOY_CANARY'"
+	echo "echo 'GitVersion:    v2.6.4'"
+} >"$DECOY/cosign" || exit 1
+chmod 0755 "$DECOY/cosign" || exit 1
+decoy_sha="$(sha256sum "$DECOY/cosign" | awk '{print $1}')"
+S_decoy="$(script_with ambient-decoy)"
+set_table "$S_decoy" APPROVED_DIGESTS "$decoy_sha" cosign-linux-amd64
+PATH="$DECOY:$PATH" "$BASH_BIN" "$S_decoy" >/dev/null 2>&1
+rc_ctl=$?
+if [ "$rc_ctl" -eq 0 ] && [ -e "$DECOY_CANARY" ]; then
+	check "control: the ambient decoy is an approved cosign the subject runs" "rc=0, canary written" 0
+else
+	check "control: the ambient decoy is an approved cosign the subject runs" "rc=$rc_ctl" 1
+fi
+rm -f "$DECOY_CANARY"
+out_dec="$(PATH="$DECOY:$PATH" run_without_cosign "$S_decoy" 2>&1)"
+rc_dec=$?
+if [ "$rc_dec" -eq 1 ] && grep -q "hard failure, not a skip"; then
+	check "an ambient cosign does not reach the missing-cosign case" "rc=1, still missing" 0
+else
+	check "an ambient cosign does not reach the missing-cosign case" "rc=$rc_dec" 1
+fi <<<"$out_dec"
+if [ ! -e "$DECOY_CANARY" ]; then check "and the ambient decoy was never executed" "canary absent" 0; else check "and the ambient decoy was never executed" "canary written" 1; fi
+
+# The prerequisites are load-bearing: without sha256sum the same fixture gets the subject's
+# could-not-look answer, so a fixture that is too narrow cannot pass as the verdict above.
+NO_SHA_PATH="$WORK/no-cosign-no-sha256sum-path"
+mkdir -p "$NO_SHA_PATH" || exit 1
+for tool in "${NO_COSIGN_TOOLS[@]}"; do
+	[ "$tool" = sha256sum ] || ln -s "$(readlink "$NO_COSIGN_PATH/$tool")" "$NO_SHA_PATH/$tool" || exit 1
+done
+unset tool
+out_nosha="$(PATH="$NO_SHA_PATH" "$BASH_BIN" "$S1" 2>&1)"
+rc_nosha=$?
+if [ "$rc_nosha" -eq 2 ] && grep -q "NO HE PODIDO MIRAR: 'sha256sum'"; then
+	check "control: without sha256sum it is the could-not-look answer" "rc=2" 0
+else
+	check "control: without sha256sum it is the could-not-look answer" "rc=$rc_nosha" 1
+fi <<<"$out_nosha"
 
 # --- GITHUB_ENV handoff: later steps must be able to use the VERIFIED path ----------------
 env_file="$WORK/github_env"
@@ -297,8 +414,25 @@ cp "$GOOD/cosign" "$ISO/bin/cosign"
 S_iso="$(script_with isolate)"
 set_table "$S_iso" APPROVED_DIGESTS "$good_sha" cosign-linux-amd64
 
+# The successful run gets a PATH built here, not the host's. On a host with cosign installed (a
+# correctly provisioned runner), the production postcondition would find that copy after the
+# move and refuse, rightly, so the positive case measured the host. The subject needs the
+# absent-cosign prerequisites plus what its isolation path runs: mktemp, chmod, mv, and bash for
+# the stub's `#!/usr/bin/env bash`. Those live in their own directory, so NO_COSIGN_PATH keeps
+# meaning exactly "the prerequisites and nothing else".
+ISO_TOOLS=(bash mktemp chmod mv)
+ISO_TOOLS_PATH="$WORK/isolation-tools-path"
+link_tools "$ISO_TOOLS_PATH" "${ISO_TOOLS[@]}"
+ISO_PATH_TAIL="$ISO_TOOLS_PATH:$NO_COSIGN_PATH"
+iso_fixture_bad=0
+links_resolved "$ISO_TOOLS_PATH" "${ISO_TOOLS[@]}" || iso_fixture_bad=1
+links_resolved "$NO_COSIGN_PATH" "${NO_COSIGN_TOOLS[@]}" || iso_fixture_bad=1
+[ "$(readlink "$ISO_TOOLS_PATH/bash")" = "$BASH_BIN" ] || iso_fixture_bad=1
+if PATH="$ISO_PATH_TAIL" "$BASH_BIN" -c 'command -v cosign' >/dev/null 2>&1; then iso_fixture_bad=1; fi
+check "the isolation fixture adds only its resolved tools" "no cosign resolvable" "$iso_fixture_bad"
+
 : >"$ISO/env"
-out_iso="$(cd "$WORK" && RUNNER_TEMP="$ISO/rt" GITHUB_ENV="$ISO/env" PATH="$ISO/bin:$PATH" bash "$S_iso" --isolate 2>&1)"
+out_iso="$(cd "$WORK" && RUNNER_TEMP="$ISO/rt" GITHUB_ENV="$ISO/env" PATH="$ISO/bin:$ISO_PATH_TAIL" "$BASH_BIN" "$S_iso" --isolate 2>&1)"
 rc_iso=$?
 if [ "$rc_iso" -eq 0 ] && grep -q "ISOLATED to"; then check "isolation succeeds and says so" "rc=0" 0; else check "isolation succeeds and says so" "rc=$rc_iso" 1; printf '%s\n' "$out_iso" | sed 's/^/          /'; fi <<<"$out_iso"
 
@@ -319,6 +453,75 @@ cp "$GOOD/cosign" "$ISO/bin2b/cosign" 2>/dev/null || { mkdir -p "$ISO/bin2b"; cp
 out_two="$(cd "$WORK" && RUNNER_TEMP="$ISO/rt2" GITHUB_ENV="$ISO/env2" PATH="$ISO/bin2:$ISO/bin2b:$PATH" bash "$S_iso" --isolate 2>&1)"
 rc_two=$?
 if [ "$rc_two" -ne 0 ] && grep -q "still resolves on PATH after isolation"; then check "a SECOND cosign on PATH fails isolation" "theatre refused" 0; else check "a SECOND cosign on PATH fails isolation" "accepted with a leftover" 1; fi <<<"$out_two"
+
+# The same postcondition on the fixture PATH, so the host cannot satisfy it: two owned
+# directories holding byte-identical approved stubs. The first is authenticated, run for its
+# version and moved; the production postcondition must then name the second. Each copy records
+# its own directory name if it runs.
+TWO="$ISO/two"
+mkdir -p "$TWO/first" "$TWO/second" "$TWO/rt" "$TWO/ran" || exit 1
+{
+	echo '#!/usr/bin/env bash'
+	echo "[ \"\${1:-}\" = version ] || { echo 'stub: only version'; exit 1; }"
+	echo 'd="${0%/*}"'
+	echo ": >\"$TWO/ran/\${d##*/}\""
+	echo "echo 'GitVersion:    v2.6.4'"
+} >"$TWO/first/cosign" || exit 1
+chmod 0755 "$TWO/first/cosign" || exit 1
+cp -p "$TWO/first/cosign" "$TWO/second/cosign" || exit 1
+two_sha="$(sha256sum "$TWO/first/cosign" | awk '{print $1}')"
+second_sha="$(sha256sum "$TWO/second/cosign" | awk '{print $1}')"
+S_two="$(script_with isolate-two)"
+set_table "$S_two" APPROVED_DIGESTS "$two_sha" cosign-linux-amd64
+: >"$TWO/env"
+out_twofx="$(cd "$WORK" && RUNNER_TEMP="$TWO/rt" GITHUB_ENV="$TWO/env" PATH="$TWO/first:$TWO/second:$ISO_PATH_TAIL" "$BASH_BIN" "$S_two" --isolate 2>&1)"
+rc_twofx=$?
+if [ "$rc_twofx" -eq 1 ] && grep -Fq "still resolves on PATH after isolation, to $TWO/second/cosign." <<<"$out_twofx" &&
+	! grep -q "ISOLATED to" <<<"$out_twofx"; then
+	check "fixture PATH: a second owned copy trips the postcondition" "rc=1, second copy named" 0
+else
+	check "fixture PATH: a second owned copy trips the postcondition" "rc=$rc_twofx" 1
+	printf '%s\n' "$out_twofx" | sed 's/^/          /'
+fi
+printf '          second copy: %s sha256 %s\n' "$TWO/second/cosign" "$second_sha"
+if [ "$second_sha" = "$two_sha" ] && [ -e "$TWO/ran/first" ] && [ ! -e "$TWO/ran/second" ] &&
+	[ ! -e "$TWO/first/cosign" ] && [ -x "$TWO/second/cosign" ]; then
+	check "and it is the same approved bytes, left in place, never run" "only the first ran" 0
+else
+	check "and it is the same approved bytes, left in place, never run" "identity or execution wrong" 1
+fi
+if ! grep -q '^OLIVARES_COSIGN_BIN=' "$TWO/env" && ! grep -Fq "$TWO/" "$GITHUB_STEP_SUMMARY"; then
+	check "and nothing is handed to later steps" "command files untouched" 0
+else
+	check "and nothing is handed to later steps" "path published" 1
+fi
+
+# A missing isolation tool is not that refusal: each gets its own diagnostic, never the
+# postcondition's and never success, so a fixture that lost a tool cannot pass as policy.
+for spec in "bash|version' failed even though its bytes are a published artifact" \
+	"mktemp|cannot create an isolation directory" \
+	"chmod|cannot restrict" \
+	"mv|could not move"; do
+	gone="${spec%%|*}"
+	want="${spec#*|}"
+	MISS="$ISO/missing-$gone"
+	mkdir -p "$MISS/bin" "$MISS/tools" "$MISS/rt" || exit 1
+	cp "$GOOD/cosign" "$MISS/bin/cosign" || exit 1
+	for tool in "${ISO_TOOLS[@]}"; do
+		[ "$tool" = "$gone" ] || ln -s "$(readlink "$ISO_TOOLS_PATH/$tool")" "$MISS/tools/$tool" || exit 1
+	done
+	: >"$MISS/env"
+	out_miss="$(cd "$WORK" && RUNNER_TEMP="$MISS/rt" GITHUB_ENV="$MISS/env" PATH="$MISS/bin:$MISS/tools:$NO_COSIGN_PATH" "$BASH_BIN" "$S_iso" --isolate 2>&1)"
+	rc_miss=$?
+	if [ "$rc_miss" -ne 0 ] && grep -Fq "$want" <<<"$out_miss" &&
+		! grep -Eq "still resolves on PATH after isolation|ISOLATED to" <<<"$out_miss"; then
+		check "isolation without $gone fails on $gone, not on policy" "own diagnostic" 0
+	else
+		check "isolation without $gone fails on $gone, not on policy" "rc=$rc_miss" 1
+		printf '%s\n' "$out_miss" | sed 's/^/          /'
+	fi
+done
+unset spec gone want tool
 
 # Preconditions, each fail-closed.
 mkdir -p "$ISO/bin3" && cp "$GOOD/cosign" "$ISO/bin3/cosign"

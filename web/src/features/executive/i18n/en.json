@@ -35,11 +35,25 @@
     "costCaption": "in the selected range",
     "usage": "Active agents",
     "usageCaption": "{{live}} live · {{entities}} tracked",
+    "sourceRestricted": "{{source}} — restricted to your role",
+    "sourceUnavailable": "{{source}} — couldn't load",
+    "sourcePendingPaused": "{{source}} — query paused, waiting to resume",
+    "sourcePendingIdle": "{{source}} — query not started",
+    "partialWhy": "Why partial data?",
     "risk": "Open risk",
     "riskCaption": "{{count}} critical/high",
     "silentEvasion": "{{count}} silent-evasion",
     "compliance": "Control coverage",
     "complianceCaption": "{{gap}} gaps · {{unmapped}} unmapped"
+  },
+  "availability": {
+    "restricted": "{{source}}: restricted to your role.",
+    "unavailable": "{{source}}: could not be loaded.",
+    "pendingPaused": "{{source}}: query paused, waiting to resume.",
+    "pendingIdle": "{{source}}: query not started.",
+    "loading": "{{source}}: loading.",
+    "partial": "{{source}}: figures available, partial data.",
+    "current": "{{source}}: figures available."
   },
   "cost": {
     "title": "Cost",

@@ -1,31 +1,44 @@
 ---
 title: コンソールリファレンス — 全画面と必要な権限
 description: >-
-  Olivares AI コンソールが公開するすべてのルートを 5 つのハブ別にまとめ、
-  それぞれに必要な RBAC 権限と、製品内ヘルプリンクが開くリファレンスページを
-  示します。コンソール自身のルート一覧から生成されています。
+  Olivares AI コンソールが公開するすべてのルートを、歴史的なハブ区分による索引として
+  示し、それぞれに必要な RBAC 権限と、製品内ヘルプリンクが開くリファレンスページを
+  掲載します。コンソール自身のルート一覧から生成されています。
 ---
 
 このページはコンソールの地図です。アプリケーションがマウントする**すべてのルート**を、
 選抜でも、誰かが覚えていて文書化したものだけでもなく、principal が開くために必要な
 権限と詳細情報の参照先とともに列挙します。
 
+現在のサイドバーは 5 つのハブではなく、**セクション付きの 9 エリア**です。概要のあとに、
+この principal が実際に開けるエリアだけを、各エリアのディレクトリページと展開できる
+モジュールとともに表示し、末尾に固定の設定があります。ナビゲーションのフィルタは、
+そのグループ化されたツリーを、権限のある一致結果の順位付き一覧に置き換えます。
+コマンドパレットも同じ索引、同じ順位、同じ権限の投影を使います。エリアの
+ディレクトリはリンクのページであり、権限が許すエントリを列挙します。能力、可用性、
+準備状態のライブな読み取りではありません。
+
 このページは**生成物**です。一覧は `web/src/features/route-census.json` から取得されます。
 これは `registry.route-conservation.test.ts` がビルド済みルーターに対して固定する
 append-only な一覧であり、画面が追加、移動、消失すれば、このページも必ず変わります。
 各画面の名前と 1 行説明は、サイドバーと同じ翻訳カタログから取得した**コンソール自身の
-文字列**です。ここで読む内容は製品で目にする内容と同じです。
+文字列**です。ここで読む内容は製品で目にする内容と同じです。以下の表は、それらの行を
+いまも 5 つの歴史的ハブ区分（運用、自動化、接続、統制、証明）と、サインイン、セットアップ、
+アカウントでグループ化しています。これは索引であり、現在のサイドバーの並びではありません。
+9 つのエリアディレクトリページは、現在、機能レジストリの外にマウントされたルートと同じ表に
+あります。
 
 :::note[権限を強制するのはこの表ではなくエンジン]
-`必要な権限` 列は、コンソールがルートを提示する前に確認する権限であり、エンジンの
-RBAC を反映します。権限の主体はあくまでエンジンです。持っていない権限が必要な画面への
-ディープリンクは、サイドバーで隠されるだけでなく API によって拒否されます。
+`必要な権限` 列は、エンジンが返す実効権限に基づき、コンソールがルートを提示する前に
+確認する権限を示します。エンジンは、コンソール外からのリクエストも含め、API
+リクエストを独立して認可します。項目が表示されることは、そのモジュールが設定済みで
+実行準備が整っていることを保証しません。
 [ロールと権限](/ja/reference/modules/vi-governance/)を参照してください。
 :::
 
 ## このページの読み方
 
-- **画面** — サイドバーとコマンドパレットで使われる名前。
+- **画面** — サイドバー、エリアディレクトリ、コマンドパレットで使われる名前。
 - **パス** — デプロイしたコンソールの origin 配下の URL。これは公開 contract です。
   ブックマーク、runbook のディープリンク、ドキュメントの相互参照はいずれもこの文字列を
   使います。
@@ -34,11 +47,14 @@ RBAC を反映します。権限の主体はあくまでエンジンです。持
   提供されることを意味します。
 - **リファレンス** — その画面でコンソール自身のヘルプリンクが開くページ。
 
-以下の 5 つの見出しは、サイドバーで表示される順に並べたコンソールのハブです。
+以下の見出しは、生成された索引が使う歴史的ハブ区分であり、サイドバーの表示順では
+ありません。現在のサイドバーは次の順でエリアを並べます。インフラ、AI、データと
+コンテキスト、作業とコミュニケーション、自動化、セキュリティとアイデンティティ、
+デプロイ、可観測性とエビデンス、システムと設定。
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-コンソールは **59 ルート**を公開します。以下の表に、必要な権限と、製品内
+コンソールは **75 ルート**を公開します。以下の表に、必要な権限と、製品内
 ヘルプリンクが開くリファレンスページとともに、すべて掲載されています。
 
 ### 運用
@@ -48,10 +64,17 @@ RBAC を反映します。権限の主体はあくまでエンジンです。持
 | 概要 | `/` | 環境全体の概要と健全性を一覧表示 | any signed-in user | [ドキュメントホーム](/ja/) |
 | Claude Code | `/agentops` | SSH を使わず Claude Code セッションを作成、接続、統制 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ja/how-to/run-claude-code-with-olivares/) |
 | バックアップ | `/backups` | バックアップの実行、スケジュール、ダウンロード、リストア。破壊的経路では 2 回目の確認を行う。 | `system:admin` | [how-to/backup-and-restore](/ja/how-to/backup-and-restore/) |
+| コミュニケーション | `/communications` | 選択中ワークスペースのチャネル、ダイレクト通知、個人受信箱 | `sessions:channel:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| チャネル管理 | `/communications/administration` | チャネルを管理：設定と付与履歴、各操作はチャネルの現在の ETag のもとで | `sessions:channel:admin` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| ハンドオフ | `/communications/handoffs` | あなた宛ての作業責任のオファー: コンテキストを読んで承諾または拒否します | `sessions:delivery:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| コミュニケーション受信箱 | `/communications/inbox` | 自分宛ての配信だけを新規に読み取り、明示的に確認する正確な受信箱 | `sessions:delivery:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| 新しいチャネル | `/communications/new` | 明示的な初期付与でチャネルを作成 | `sessions:channel:write` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | 健全性と SLA | `/health` | エージェントと MCP の稼働時間および SLA | `health:status:read` | [reference/modules/xxii-health](/ja/reference/modules/xxii-health/) |
 | キルスイッチ | `/killswitch` | 緊急停止、二重統制による復旧、guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ja/how-to/cookbook/kill-switch-drill/) |
 | ログ | `/logs` | レベルやモジュールで絞り込み、検索、一時停止ができるエンジンのライブログストリーム。 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 | オブザーバビリティ | `/observability` | 標準別の取り込み健全性とトレースのドリルダウン | `health:status:read` | [reference/modules/observability](/ja/reference/modules/observability/) |
+| ソースバインディング | `/provider-bindings` | 構成済みのソースを、このノードが適用したリビジョンのまま、プロバイダープロファイルに専用で割り当てる | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| プロバイダープロファイル | `/provider-profiles` | セッションの起動元となるプロバイダーのホームを登録、管理し、その設定を必要に応じて読み取る | `sessions:profile:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | サンドボックス | `/sandbox` | 隔離されたエージェントのテストとリプレイ | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ja/reference/modules/xvii-sandbox/) |
 | セッション | `/sessions` | エージェントのライブ運用とタイムライン | `sessions:live:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | テナント | `/tenants` | テナントのサービスを停止または復旧 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
@@ -128,6 +151,15 @@ RBAC を反映します。権限の主体はあくまでエンジンです。持
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
 | 招待を受け入れる | `/accept-invite` | メールで届いた招待リンクの遷移先。事前のセッションなしでパスワードを設定し、ワークスペースへ参加する。 | **no sign-in** | — |
+| AI | `/areas/ai` | AI 領域のディレクトリです。セッションの監視と運用、プロバイダーのプロファイルと環境、モデル、専用実行、プロバイダーリファレンスを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| 自動化 | `/areas/automation` | 自動化 領域のディレクトリです。フローとオーケストレーション、イベントと通知を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| データとコンテキスト | `/areas/data-context` | データとコンテキスト 領域のディレクトリです。能力、ナレッジ、成果物を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| デプロイ | `/areas/deployment` | デプロイ 領域のディレクトリです。デプロイの準備と制御を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| インフラ | `/areas/infrastructure` | インフラ 領域のディレクトリです。環境のインベントリとワークスペースを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| 可観測性とエビデンス | `/areas/observation` | 可観測性とエビデンス 領域のディレクトリです。状態とアクティビティ、コストと導入、監査と記録、評価と証跡を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| セキュリティとアイデンティティ | `/areas/security-identity` | セキュリティとアイデンティティ 領域のディレクトリです。アイデンティティとアクセス、ポリシー、保護と対応、ガバナンス境界を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| システムと設定 | `/areas/system` | システムと設定 領域のディレクトリです。管理、インストールと保守、開発者ツール、個人設定を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| 作業とコミュニケーション | `/areas/work-communications` | 作業とコミュニケーション 領域のディレクトリです。セッション間で永続的に記録される作業とガバナンス下の通信を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | ログイン | `/login` | プロビジョニング済みアカウントのクレデンシャルまたはトークンによるログインページ。 | **no sign-in** | — |
 | 設定 | `/settings` | ワークスペースとアカウントの設定 | any signed-in user | — |
 | 初回セットアップ | `/setup` | 新規デプロイメントを利用可能にする 1 回限りのページ。セットアップトークンを消費して最初の owner アカウントを作成する。 | **no sign-in** | — |
@@ -145,4 +177,5 @@ RBAC を反映します。権限の主体はあくまでエンジンです。持
 バックエンドが operator によってプロビジョニングされるまで deny-closed である画面も、
 他と同様にここへ表示されます。ルートは存在し、権限も実在します。どのモジュールが
 作動し、どれがゲートされるかは[モジュール概要](/ja/reference/modules/overview/)に、
-一般原則は[正直さと限界](/ja/start/honesty-and-limits/)に記録されています。
+一般原則は[正直さと限界](/ja/start/honesty-and-limits/)に記録されています。エリア
+ディレクトリの一覧は、能力や準備状態のライブな読み取りではありません。

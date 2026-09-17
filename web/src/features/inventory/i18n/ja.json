@@ -2,6 +2,9 @@
   "title": "インベントリ",
   "subtitle": "エステート全体で検出された、すべてのエージェント・セッション・MCP・モデル・アイデンティティ。",
   "refresh": "更新",
+  "scope": {
+    "note": "テナント全体のインベントリです。ワークスペースセレクターはこのビューを絞り込みません。"
+  },
   "summary": {
     "total": "エンティティ",
     "active": "アクティブ",
@@ -49,18 +52,68 @@
     "lastSeen": "最終確認",
     "relations": "関係",
     "viewAccess": "アクセスマップ",
-    "viewSessions": "セッション"
+    "viewSessions": "セッション",
+    "gone": "このエントリはカタログに存在しなくなりました。",
+    "noProjection": "このエントリには表示できる追加の詳細がありません。これは関係の有無を示すものではありません。"
+  },
+  "freshness": {
+    "title": "カタログの鮮度",
+    "independent": "カタログの鮮度と観測履歴は独立した読み取りであり、一つの原子的なスナップショットではありません。",
+    "storedState": "保存されたカタログ状態",
+    "storedHint": "アクティブと陳腐化は保存されたカタログ状態です。健全性、可用性、ソース網羅ではありません。",
+    "localReception": "最後のローカル受信",
+    "firstLocalReception": "最初のローカル受信",
+    "sourceOccurred": "ソースが宣言した発生時刻",
+    "sourceOccurredUnknown": "ソースは発生時刻を宣言していません。",
+    "timeUnknown": "受信時刻はありません。",
+    "occurrenceCount": "カタログ出現回数",
+    "occurrenceHint": "このエンティティのカタログ実体化回数です。レシート数でも、一致事実の配信数でも、網羅の合計でもありません。"
+  },
+  "history": {
+    "title": "観測履歴",
+    "coverageUnknown": "この履歴はソース網羅、発見の完全性、現在の健全性を証明しません。",
+    "loaded": "{{count}} 件を読み込み済み",
+    "empty": "保存されたレシートはありません。このエンティティが観測されたことがない証明にはなりません。",
+    "refresh": "履歴を更新",
+    "loadMore": "さらに読み込む",
+    "loading": "観測履歴を読み込み中",
+    "loadingMore": "追加のレシートを読み込み中",
+    "receipt": "レシート",
+    "eventType": "イベント種別",
+    "eventTypeEdge": "エッジ観測",
+    "eventTypeCost": "コスト標本",
+    "registration": "受信時の登録",
+    "registeredSnapshot": "登録の歴史的スナップショット",
+    "unattributed": "未帰属",
+    "invalid": "不完全な歴史的スナップショット",
+    "sourceId": "受信時のソース ID",
+    "sourceRevision": "適用された登録リビジョン",
+    "environmentRef": "実行環境",
+    "sourceOccurred": "ソースが宣言した発生時刻",
+    "sourceOccurredUnknown": "ソースは発生時刻を宣言していません。",
+    "timeUnknown": "受信時刻はありません。",
+    "firstReceived": "保持された事実の最初の受信",
+    "lastReceived": "保持された事実での最後の配信",
+    "deliveries": "一致する事実の配信",
+    "conflict": "衝突する再配信",
+    "conflictYes": "異なる事実の再配信が保持されています。これはそれらの変種を数えたり日付付けしたりしません。",
+    "conflictNo": "衝突する再配信は保持されていません。",
+    "malformed": "この観測ページは表示できません。項目リストの欠落、利用可能なカーソルのない継続、または進まないカーソルは、空の履歴ではなくエラーです。"
   },
   "topology": {
     "note": "種別ごとのエステート構成です。ランタイムでの利用状況（どのエージェントがどのモデル／MCP を実行するか）はセッションに、リソースアクセス（R/RW）はアクセスマップに表示されます。",
     "bands": {
       "origins": "誰が動作するか",
       "capabilities": "何を利用できるか",
-      "resources": "何に触れるか"
+      "resources": "何に触れるか",
+      "other": "その他の種別"
     },
     "emptyTitle": "まだ何も検出されていません",
     "emptyHint": "コネクターがアクティビティを報告すると、エステートがここにカタログ化されます。",
-    "truncated": "最初の {{n}} 件のエンティティを表示しています"
+    "truncated": "最初の {{n}} 件のエンティティを表示しています",
+    "countsAreLoaded": "件数はこのページに読み込まれた項目であり、エステート全体の総数ではありません。",
+    "loadedOnPage": "このページで {{count}} 件を読み込み",
+    "loadedCount": "{{count}} 件を読み込み"
   },
   "empty": {
     "catalog": {

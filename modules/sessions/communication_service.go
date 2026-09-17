@@ -41,10 +41,13 @@ type DirectNoticePublishCommand struct {
 	Recipient        RecipientRef   `json:"recipient"`
 	Content          MessageContent `json:"content"`
 	Urgency          MessageUrgency `json:"urgency,omitempty"`
+	AvailableAt      string         `json:"available_at,omitempty"`
 	IdempotencyKey   string         `json:"-"`
 	ExpectedPlanHash string         `json:"-"`
 	HTTPMethod       string         `json:"-"`
 	CommandScope     string         `json:"-"`
+	sender           CommunicationActorRef
+	senderResolution *PrincipalResolution
 }
 
 // DirectNoticePublishResult is reconstructible from the durable receipt. Raw
@@ -67,7 +70,7 @@ type DirectNoticePublishResult struct {
 	PayloadDigest string                `json:"payload_digest"`
 	PlanHash      string                `json:"plan_hash"`
 	AuditSeq      int64                 `json:"audit_seq"`
-	Replayed      bool                  `json:"-"`
+	Replayed      bool                  `json:"replayed"`
 }
 
 type directNoticePublishIDs struct {
@@ -93,6 +96,7 @@ type directNoticePublishPreflight struct {
 	Scope                 DirectoryScopeRef
 	Principal             CommunicationPrincipal
 	Sender                CommunicationActorRef
+	SenderResolution      *PrincipalResolution
 	Channel               Channel
 	IDs                   directNoticePublishIDs
 	Payload               ProtectedPayload
@@ -108,6 +112,16 @@ type directNoticePublishPreflight struct {
 	bindingID             *communicationRequestAuthorityBindingID
 }
 
+// directNoticePublishVariant is an internal-only carrier construction seam.
+// Public direct notices always use the zero/default variant; Handoff offer uses
+// it to bind server-derived stable IDs and required audience semantics before
+// payload sealing and audience attestation occur.
+type directNoticePublishVariant struct {
+	IDs         directNoticePublishIDs
+	MessageKind MessageKind
+	Required    bool
+}
+
 type directNoticeRequestDigestInput struct {
 	Operation        string         `json:"operation"`
 	Method           string         `json:"method"`
@@ -116,6 +130,7 @@ type directNoticeRequestDigestInput struct {
 	Recipient        RecipientRef   `json:"recipient"`
 	Content          MessageContent `json:"content"`
 	Urgency          MessageUrgency `json:"urgency"`
+	AvailableAt      string         `json:"available_at,omitempty"`
 	ExpectedPlanHash string         `json:"expected_plan_hash,omitempty"`
 }
 
@@ -310,10 +325,8 @@ func directNoticeApplyCommitmentFromReceipt(
 	})
 }
 
-// PublishDirectNotice is the future handler-facing boundary. The private
-// vertical below remains directly testable while WP-3 deliberately keeps the
-// production readiness conjunction OFF: permissions, resolver and pump are not
-// all wired (and the sealer remains an optional readiness witness).
+// PublishDirectNotice is the handler-facing boundary. It admits traffic only
+// when the complete production readiness conjunction is effective.
 func (m *Module) PublishDirectNotice(
 	ctx context.Context,
 	scope DirectoryScopeRef,
@@ -326,7 +339,7 @@ func (m *Module) PublishDirectNotice(
 // publishDirectNoticeWithAuthority is the private exact-authority test seam. It
 // deliberately bypasses only the still-OFF aggregate readiness conjunction; it
 // retains the same current credential resolution, authorization and transaction
-// binding as the future handler-facing boundary above.
+// binding as the handler-facing boundary above.
 func (m *Module) publishDirectNoticeWithAuthority(
 	ctx context.Context,
 	scope DirectoryScopeRef,
@@ -360,12 +373,21 @@ func (m *Module) publishDirectNoticeWithCurrentAuthority(
 			"message-send authority context crossed its exact request",
 		)
 	}
-	if err := requireDirectNoticeUserBackedPrincipal(boundContext); err != nil {
+	principal := boundContext.principal
+	cmd.sender, cmd.senderResolution, err = m.communicationActorAndResolutionForPrincipal(
+		ctx, scope, principal,
+	)
+	if err != nil {
 		return DirectNoticePublishResult{}, err
 	}
-	principal := boundContext.principal
 	normalized, actorFingerprint, idempotencyHash, requestDigest, err :=
 		normalizeDirectNoticePublishCommand(scope, principal, cmd)
+	if err != nil {
+		return DirectNoticePublishResult{}, err
+	}
+	callerClaims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, scope.TenantID, communicationClaimsForPrincipal(principal),
+	)
 	if err != nil {
 		return DirectNoticePublishResult{}, err
 	}
@@ -386,7 +408,7 @@ func (m *Module) publishDirectNoticeWithCurrentAuthority(
 	); errors.Is(replayErr, store.ErrConflict) {
 		if confirmErr := m.confirmDirectNoticeIdempotencyConflictWithAuthority(
 			ctx, scope, question, bound, boundContext, normalized,
-			actorFingerprint, idempotencyHash, requestDigest,
+			actorFingerprint, idempotencyHash, requestDigest, callerClaims,
 		); confirmErr != nil {
 			return DirectNoticePublishResult{}, confirmErr
 		}
@@ -401,7 +423,7 @@ func (m *Module) publishDirectNoticeWithCurrentAuthority(
 	} else if found {
 		if confirmErr := m.confirmDirectNoticeReplayWithAuthority(
 			ctx, scope, question, bound, boundContext, normalized,
-			actorFingerprint, idempotencyHash, requestDigest, replay,
+			actorFingerprint, idempotencyHash, requestDigest, replay, callerClaims,
 		); confirmErr != nil {
 			return DirectNoticePublishResult{}, confirmErr
 		}
@@ -415,6 +437,18 @@ func (m *Module) publishDirectNoticeWithCurrentAuthority(
 	if err != nil {
 		return DirectNoticePublishResult{}, err
 	}
+	claimRefs := communicationClaimsForPrincipal(principal)
+	if preflight.Command.Recipient.Kind == RecipientSession {
+		contribution := preflight.Snapshot.Contributions[0]
+		claimRefs = append(claimRefs, CommunicationClaimRef{
+			SessionSID: contribution.ObservedSessionSID,
+			Fence:      contribution.ObservedClaimFence,
+		})
+	}
+	claims, err := m.communicationClaimAuthoritySnapshot(ctx, scope.TenantID, claimRefs)
+	if err != nil {
+		return DirectNoticePublishResult{}, err
+	}
 
 	var result DirectNoticePublishResult
 	var auditGap bool
@@ -422,7 +456,7 @@ func (m *Module) publishDirectNoticeWithCurrentAuthority(
 		ctx,
 		question,
 		bound,
-		CommunicationClaimAuthoritySnapshot{},
+		claims,
 		func(tx *communicationTx, mutationContext communicationRequestAuthorityContext) error {
 			boundPreflight, err := directNoticePublishPreflightWithBoundAuthority(
 				preflight, boundContext, mutationContext,
@@ -569,12 +603,13 @@ func (m *Module) confirmDirectNoticeReplayWithAuthority(
 	idempotencyHash []byte,
 	requestDigest []byte,
 	candidate DirectNoticePublishResult,
+	claims CommunicationClaimAuthoritySnapshot,
 ) error {
 	return m.mutateCommunicationWithAuthority(
 		ctx,
 		question,
 		bound,
-		CommunicationClaimAuthoritySnapshot{},
+		claims,
 		func(tx *communicationTx, consumed communicationRequestAuthorityContext) error {
 			if err := validateConsumedDirectNoticeAuthority(inspected, consumed); err != nil {
 				return err
@@ -629,12 +664,13 @@ func (m *Module) confirmDirectNoticeIdempotencyConflictWithAuthority(
 	actorFingerprint []byte,
 	idempotencyHash []byte,
 	requestDigest []byte,
+	claims CommunicationClaimAuthoritySnapshot,
 ) error {
 	return m.mutateCommunicationWithAuthority(
 		ctx,
 		question,
 		bound,
-		CommunicationClaimAuthoritySnapshot{},
+		claims,
 		func(tx *communicationTx, consumed communicationRequestAuthorityContext) error {
 			if err := validateConsumedDirectNoticeAuthority(inspected, consumed); err != nil {
 				return err
@@ -687,7 +723,10 @@ func (m *Module) lookupDirectNoticeReplayAfterAuthorityRace(
 			"replay authority context crossed its exact request",
 		)
 	}
-	if err := requireDirectNoticeUserBackedPrincipal(reboundContext); err != nil {
+	cmd.sender, cmd.senderResolution, err = m.communicationActorAndResolutionForPrincipal(
+		ctx, scope, reboundContext.principal,
+	)
+	if err != nil {
 		return DirectNoticePublishResult{}, false, err
 	}
 	normalized, reboundActor, reboundIdempotency, reboundRequest, err :=
@@ -703,6 +742,12 @@ func (m *Module) lookupDirectNoticeReplayAfterAuthorityRace(
 			"replay authority changed request identity",
 		)
 	}
+	claims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, scope.TenantID, communicationClaimsForPrincipal(reboundContext.principal),
+	)
+	if err != nil {
+		return DirectNoticePublishResult{}, false, err
+	}
 	candidate, found, err := m.lookupDirectNoticeReplay(
 		ctx, scope, reboundContext.principal, normalized,
 		reboundActor, reboundIdempotency, reboundRequest,
@@ -710,7 +755,7 @@ func (m *Module) lookupDirectNoticeReplayAfterAuthorityRace(
 	if errors.Is(err, store.ErrConflict) {
 		if confirmErr := m.confirmDirectNoticeIdempotencyConflictWithAuthority(
 			ctx, scope, question, rebound, reboundContext, normalized,
-			reboundActor, reboundIdempotency, reboundRequest,
+			reboundActor, reboundIdempotency, reboundRequest, claims,
 		); confirmErr != nil {
 			return DirectNoticePublishResult{}, false, confirmErr
 		}
@@ -729,7 +774,7 @@ func (m *Module) lookupDirectNoticeReplayAfterAuthorityRace(
 	}
 	if err := m.confirmDirectNoticeReplayWithAuthority(
 		ctx, scope, question, rebound, reboundContext, normalized,
-		reboundActor, reboundIdempotency, reboundRequest, candidate,
+		reboundActor, reboundIdempotency, reboundRequest, candidate, claims,
 	); err != nil {
 		return DirectNoticePublishResult{}, false, err
 	}
@@ -835,13 +880,13 @@ func normalizeDirectNoticePublishCommand(
 	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
 		return DirectNoticePublishCommand{}, nil, nil, nil, err
 	}
-	if principal.UserID == "" {
+	if principal.System {
 		return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
-			ErrInvalidCommunicationModel, "direct notice sender must be an authenticated User",
+			ErrInvalidCommunicationModel, "direct notice sender must be an authenticated principal",
 		)
 	}
 	_, idempotencyErr := model.ParseID(cmd.IdempotencyKey)
-	if !validCanonicalCommunicationID(cmd.ChannelID) || cmd.Recipient.Kind != RecipientUser ||
+	if !validCanonicalCommunicationID(cmd.ChannelID) ||
 		cmd.Recipient.Validate() != nil || cmd.IdempotencyKey == "" || idempotencyErr != nil {
 		return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
 			ErrInvalidCommunicationModel, "invalid direct notice command envelope",
@@ -857,6 +902,14 @@ func normalizeDirectNoticePublishCommand(
 		return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
 			ErrInvalidCommunicationModel, "invalid direct notice urgency",
 		)
+	}
+	if cmd.AvailableAt != "" {
+		availableAt, err := model.ParseTimestamp(cmd.AvailableAt)
+		if err != nil || availableAt.String() != cmd.AvailableAt {
+			return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
+				ErrInvalidCommunicationModel, "invalid direct notice availability timestamp",
+			)
+		}
 	}
 	if cmd.HTTPMethod == "" {
 		cmd.HTTPMethod = http.MethodPost
@@ -891,10 +944,29 @@ func normalizeDirectNoticePublishCommand(
 		// rejected merely for changing prefix or hex case.
 		cmd.ExpectedPlanHash = hex.EncodeToString(decoded)
 	}
+	sender := cmd.sender
+	if sender == (CommunicationActorRef{}) {
+		recipient, ok := CanonicalPrincipalRecipient(principal)
+		if !ok {
+			return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
+				ErrCommunicationEvidenceUnknown,
+				"direct notice sender canonical identity is unavailable",
+			)
+		}
+		var err error
+		sender, err = communicationActorForRecipient(recipient)
+		if err != nil {
+			return DirectNoticePublishCommand{}, nil, nil, nil, err
+		}
+		cmd.sender = sender
+	}
+	if err := sender.Validate(); err != nil {
+		return DirectNoticePublishCommand{}, nil, nil, nil, err
+	}
 	actorBytes, err := canonicalJSON(struct {
 		Kind CommunicationActorKind `json:"kind"`
 		Ref  string                 `json:"ref"`
-	}{Kind: ActorUser, Ref: principal.UserID.String()})
+	}{Kind: sender.Kind, Ref: sender.Ref})
 	if err != nil {
 		return DirectNoticePublishCommand{}, nil, nil, nil, err
 	}
@@ -904,6 +976,7 @@ func normalizeDirectNoticePublishCommand(
 		Operation: directNoticePublishOperation, Method: cmd.HTTPMethod,
 		CommandScope: cmd.CommandScope, ChannelID: cmd.ChannelID,
 		Recipient: cmd.Recipient, Content: cmd.Content, Urgency: cmd.Urgency,
+		AvailableAt:      cmd.AvailableAt,
 		ExpectedPlanHash: cmd.ExpectedPlanHash,
 	})
 	if err != nil {
@@ -959,7 +1032,7 @@ func (m *Module) preflightDirectNoticePublishWithCore(
 ) (directNoticePublishPreflight, error) {
 	return m.preflightDirectNoticePublishBody(
 		ctx, scope, principal, coreWitness, true, cmd,
-		actorFingerprint, idempotencyHash, requestDigest,
+		actorFingerprint, idempotencyHash, requestDigest, nil,
 	)
 }
 
@@ -974,7 +1047,24 @@ func (m *Module) preflightDirectNoticePublishWithoutCore(
 ) (directNoticePublishPreflight, error) {
 	return m.preflightDirectNoticePublishBody(
 		ctx, scope, principal, ReadWitness{}, false, cmd,
+		actorFingerprint, idempotencyHash, requestDigest, nil,
+	)
+}
+
+func (m *Module) preflightWorkItemHandoffCarrierWithoutCore(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	principal CommunicationPrincipal,
+	cmd DirectNoticePublishCommand,
+	actorFingerprint []byte,
+	idempotencyHash []byte,
+	requestDigest []byte,
+	ids directNoticePublishIDs,
+) (directNoticePublishPreflight, error) {
+	return m.preflightDirectNoticePublishBody(
+		ctx, scope, principal, ReadWitness{}, false, cmd,
 		actorFingerprint, idempotencyHash, requestDigest,
+		&directNoticePublishVariant{IDs: ids, MessageKind: MessageHandoffOffer, Required: true},
 	)
 }
 
@@ -988,10 +1078,26 @@ func (m *Module) preflightDirectNoticePublishBody(
 	actorFingerprint []byte,
 	idempotencyHash []byte,
 	requestDigest []byte,
+	variant *directNoticePublishVariant,
 ) (directNoticePublishPreflight, error) {
 	cmd = cloneDirectNoticePublishCommand(cmd)
 	coreWitness = cloneCommunicationRequestAuthorityWitness(coreWitness)
-	sender := CommunicationActorRef{Kind: ActorUser, Ref: principal.UserID.String()}
+	sender := cmd.sender
+	senderResolution := cloneDirectNoticePrincipalResolutionPtr(cmd.senderResolution)
+	if sender == (CommunicationActorRef{}) {
+		recipient, ok := CanonicalPrincipalRecipient(principal)
+		if !ok {
+			return directNoticePublishPreflight{}, communicationError(
+				ErrCommunicationEvidenceUnknown,
+				"direct notice sender canonical identity is unavailable",
+			)
+		}
+		var err error
+		sender, err = communicationActorForRecipient(recipient)
+		if err != nil {
+			return directNoticePublishPreflight{}, err
+		}
+	}
 	if !communicationPortBound(m.communicationAudienceAttestor) ||
 		!communicationPortBound(m.communicationGrantClosure) {
 		return directNoticePublishPreflight{}, communicationError(
@@ -1049,7 +1155,8 @@ func (m *Module) preflightDirectNoticePublishBody(
 	}
 	if channel.TenantID != scope.TenantID || channel.WorkspaceID != scope.WorkspaceID ||
 		channel.ID != cmd.ChannelID || channel.State != ChannelActive ||
-		channel.ContentProtection != ContentProtectionStorage {
+		!oneOf(channel.ContentProtection, ContentProtectionStorage,
+			ContentProtectionApplicationSealed) {
 		return directNoticePublishPreflight{}, communicationError(
 			ErrInvalidCommunicationTransition,
 			"direct notice requires an active storage-protected Channel",
@@ -1058,7 +1165,16 @@ func (m *Module) preflightDirectNoticePublishBody(
 	// The closure is allowed to timestamp its evidence while resolving it. Take
 	// a fresh evaluation instant after that call and the local read instead of
 	// comparing a healthy closure against the earlier core-authorization sample.
-	observedAt := m.clock.Now().Time()
+	// Production directory/core evidence and SQLite DB time are millisecond
+	// witnesses, so use that same floor when it remains at or after every input.
+	// Exact/fake evidence may carry finer precision; preserve the exact process
+	// instant in that case rather than manufacturing an instant before evidence.
+	observedAt := m.clock.Now().Time().UTC()
+	millisecondObservedAt := observedAt.Truncate(time.Millisecond)
+	if !closure.ObservedAt.After(millisecondObservedAt) &&
+		(!requireCoreWitness || !coreWitness.ObservedAt.After(millisecondObservedAt)) {
+		observedAt = millisecondObservedAt
+	}
 	if (requireCoreWitness && !communicationEvidenceCurrent(
 		coreWitness.ObservedAt, coreWitness.FreshUntil, observedAt,
 	)) || !communicationEvidenceCurrent(
@@ -1089,6 +1205,19 @@ func (m *Module) preflightDirectNoticePublishBody(
 	}
 
 	ids := newDirectNoticePublishIDs()
+	carrierMessageKind := MessageNotice
+	required := channel.DefaultAckPolicy != AckPolicyNone
+	if variant != nil {
+		if !validDirectNoticePublishAuthorityIDs(variant.IDs) ||
+			variant.MessageKind != MessageHandoffOffer || !variant.Required {
+			return directNoticePublishPreflight{}, communicationError(
+				ErrInvalidCommunicationModel, "invalid internal publish carrier variant",
+			)
+		}
+		ids = variant.IDs
+		carrierMessageKind = variant.MessageKind
+		required = variant.Required
+	}
 	policy, err := ProtectedPayloadPolicyForChannel(channel)
 	if err != nil {
 		return directNoticePublishPreflight{}, err
@@ -1099,7 +1228,7 @@ func (m *Module) preflightDirectNoticePublishBody(
 			ErrInvalidCommunicationModel, "message content schema is unavailable",
 		)
 	}
-	payload, err := PrepareProtectedPayload(ctx, nil, PayloadSlotMessage, policy, ContentAAD{
+	payload, err := PrepareProtectedPayload(ctx, m.communicationSealer, PayloadSlotMessage, policy, ContentAAD{
 		TenantID: scope.TenantID, WorkspaceID: scope.WorkspaceID, ChannelID: channel.ID,
 		EntityKind: messageKind, EntityID: ids.Message, Schema: schema,
 		ProtectionGeneration: channel.ProtectionGeneration,
@@ -1109,16 +1238,19 @@ func (m *Module) preflightDirectNoticePublishBody(
 	}
 	payload = cloneProtectedPayload(payload)
 
-	required := channel.DefaultAckPolicy != AckPolicyNone
+	audienceKind, err := recipientAudienceKind(cmd.Recipient)
+	if err != nil {
+		return directNoticePublishPreflight{}, err
+	}
 	selector := AudienceSelector{
-		Kind: AudienceUser, Ref: cmd.Recipient.Ref, Required: required,
+		Kind: audienceKind, Ref: cmd.Recipient.Ref, Required: required,
 		WakePolicy: channel.DefaultWake,
 	}
 	requestedAt := observedAt
 	audienceRequest := PublicationAudienceRequest{
 		Scope: scope, ChannelID: channel.ID, ChannelACLRevision: channel.ACLRevision,
 		RouteRevision: channel.RouteRevision, SubscriptionRevision: channel.SubscriptionRevision,
-		MessageKind: MessageNotice, Urgency: cmd.Urgency, Sender: sender,
+		MessageKind: carrierMessageKind, Urgency: cmd.Urgency, Sender: sender,
 		SourceKind: RouteSourceUserMessage, ChannelDefaultWake: channel.DefaultWake,
 		ContentProtection:    channel.ContentProtection,
 		ProtectionGeneration: channel.ProtectionGeneration, RequestedAt: requestedAt,
@@ -1155,7 +1287,10 @@ func (m *Module) preflightDirectNoticePublishBody(
 			"message-send authorization is not bound to the attested directory epoch",
 		)
 	}
-	recipientPrincipal := CommunicationPrincipal{UserID: model.ID(cmd.Recipient.Ref)}
+	recipientPrincipal, err := m.communicationRecipientGrantPrincipal(ctx, scope, cmd.Recipient)
+	if err != nil {
+		return directNoticePublishPreflight{}, err
+	}
 	recipientClosure, err := m.communicationGrantClosure.ResolveChannelGrantSubjects(
 		ctx, scope, recipientPrincipal,
 	)
@@ -1169,7 +1304,8 @@ func (m *Module) preflightDirectNoticePublishBody(
 		)
 	}
 	return cloneDirectNoticePublishPreflight(directNoticePublishPreflight{
-		Command: cmd, Scope: scope, Principal: principal, Sender: sender, Channel: channel,
+		Command: cmd, Scope: scope, Principal: principal, Sender: sender,
+		SenderResolution: senderResolution, Channel: channel,
 		IDs: ids, Payload: payload, AudienceRequest: audienceRequest,
 		AudienceAttestation: attestation, Snapshot: snapshot, GrantClosure: closure,
 		RecipientGrantClosure: recipientClosure,
@@ -1264,13 +1400,19 @@ func validateDirectNoticeSnapshot(
 		)
 	}
 	resolved := snapshot.Contributions[0]
+	sessionWitnessValid := resolved.ObservedSessionSID == "" &&
+		resolved.ObservedClaimFence == 0
+	if recipient.Kind == RecipientSession {
+		sessionWitnessValid = resolved.ObservedSessionSID == recipient.Ref &&
+			resolved.ObservedClaimFence > 0
+	}
 	if snapshot.Recipients[0].Recipient != recipient || resolved.Recipient != snapshot.Recipients[0] ||
 		resolved.SelectorOrdinal != 1 || resolved.Selector != request.Selectors[0] ||
 		resolved.CausalKind != CausalDirect || resolved.CausalRef != recipient.Ref ||
 		resolved.CausalFact != nil || resolved.RouteRuleID != "" ||
 		resolved.RouteRuleGeneration != 0 || resolved.OriginalSubscriber != nil ||
 		resolved.SubscriptionID != "" || resolved.SubscriptionGeneration != 0 ||
-		resolved.ObservedSessionSID != "" || resolved.ObservedClaimFence != 0 ||
+		!sessionWitnessValid ||
 		len(resolved.RouteReasons) != 1 || resolved.RouteReasons[0] != RouteReason("direct") ||
 		resolved.Required != request.Selectors[0].Required ||
 		resolved.WakePolicy != request.Selectors[0].WakePolicy {
@@ -1524,7 +1666,8 @@ func verifyDirectNoticeAuditAnchor(
 		return communicationError(ErrCommunicationEvidenceUnknown, "receipt audit evidence is unavailable")
 	}
 	if found.Seq != receipt.AuditSeq || found.TenantID != scope.TenantID ||
-		found.Actor != directNoticeActor(principal) || found.ActorKind != model.ActorUser ||
+		found.Actor != directNoticeActor(principal) ||
+		found.ActorKind != communicationAuditKindForPrincipal(principal) ||
 		found.Action != directNoticePublishAuditAction ||
 		found.TargetKind != communicationCommandKind || found.TargetID != receipt.CommandID ||
 		!bytes.Equal(found.PayloadHash, receipt.PlanHash) ||
@@ -1669,19 +1812,25 @@ func directNoticeResultFromReceipt(
 		)
 	}
 	message, err := messageFromRecord(messageRecord, projection.Counts["required"])
+	expectedAvailableAt := receipt.CompletedAt
+	if cmd.AvailableAt != "" {
+		stamp, parseErr := model.ParseTimestamp(cmd.AvailableAt)
+		if parseErr != nil {
+			return DirectNoticePublishResult{}, communicationError(
+				ErrCommunicationEvidenceUnknown, "receipt availability binding is malformed",
+			)
+		}
+		expectedAvailableAt = stamp.Time()
+	}
 	expectedContent, contentErr := CanonicalMessageContent(cmd.Content)
-	expectedContentDigest := sha256.Sum256(expectedContent)
+	expectedSender, senderErr := expectedDirectNoticeSender(principal, cmd)
 	if err != nil || message.ChannelID != cmd.ChannelID || message.Kind != MessageNotice ||
 		contentErr != nil || message.WorkItemID != "" || message.ThreadID != message.ID ||
 		message.ReplyToID != "" || message.SupersedesID != "" || message.OriginEventID != "" ||
 		message.AutomationDepth != 0 || message.ExpiresAt != nil ||
 		len(message.LabelsJSON) != 0 || len(message.LabelsHash) != 0 ||
-		message.Urgency != cmd.Urgency ||
-		message.Payload.Encoding != PayloadPlainJSON || len(message.Payload.PlainJSON) == 0 ||
-		message.Payload.Sealed != nil || message.Payload.SealKeyVersion != "" ||
-		message.Payload.DigestKeyVersion != "" ||
-		!bytes.Equal(message.Payload.PlainJSON, expectedContent) ||
-		!bytes.Equal(message.Payload.Digest, expectedContentDigest[:]) ||
+		message.Urgency != cmd.Urgency || senderErr != nil ||
+		!directNoticeReplayPayloadMatches(message.Payload, expectedContent) ||
 		!oneOf(message.State, MessagePublished, MessageRetracted) ||
 		message.Version < projection.Version || message.LastEventSeq < 1 ||
 		message.Version != message.LastEventSeq+1 || message.UpdatedAt.Before(receipt.CompletedAt) ||
@@ -1690,8 +1839,7 @@ func directNoticeResultFromReceipt(
 		message.AckQuorum != fulfillment.Quorum ||
 		!message.CreatedAt.Equal(receipt.CompletedAt) || message.PublishedAt == nil ||
 		!message.PublishedAt.Equal(receipt.CompletedAt) ||
-		!message.AvailableAt.Equal(receipt.CompletedAt) ||
-		message.Sender != (CommunicationActorRef{Kind: ActorUser, Ref: principal.UserID.String()}) {
+		!message.AvailableAt.Equal(expectedAvailableAt) || message.Sender != expectedSender {
 		return DirectNoticePublishResult{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "receipt Message anchor does not match",
 		)
@@ -1717,7 +1865,7 @@ func directNoticeResultFromReceipt(
 		delivery.RouteReasons[0] != RouteReason("direct") ||
 		delivery.Required != (fulfillment.Required == 1) ||
 		!delivery.CreatedAt.Equal(receipt.CompletedAt) ||
-		!delivery.AvailableAt.Equal(receipt.CompletedAt) ||
+		!delivery.AvailableAt.Equal(expectedAvailableAt) ||
 		!directNoticeAckEvidenceMatches(message, delivery, fulfillment) {
 		return DirectNoticePublishResult{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "receipt Delivery anchor does not match",
@@ -1741,7 +1889,7 @@ func directNoticeResultFromReceipt(
 	); err != nil {
 		return DirectNoticePublishResult{}, err
 	}
-	if err := validateDirectNoticeEventAnchors(ctx, resolve, principal, receipt, result); err != nil {
+	if err := validateDirectNoticeEventAnchors(ctx, resolve, message.Sender, receipt, result); err != nil {
 		return DirectNoticePublishResult{}, err
 	}
 	return result, nil
@@ -1917,11 +2065,17 @@ func validateDirectNoticeAudienceAnchors(
 			ErrCommunicationEvidenceUnknown, "receipt Audience contribution cannot be decoded",
 		)
 	}
+	wantAudienceKind, kindErr := recipientAudienceKind(delivery.Recipient)
 	wantSelector := AudienceSelector{
-		Kind: AudienceUser, Ref: delivery.Recipient.Ref, Required: fulfillment.Required == 1,
+		Kind: wantAudienceKind, Ref: delivery.Recipient.Ref, Required: fulfillment.Required == 1,
 		WakePolicy: delivery.WakePolicy,
 	}
-	if audience.MessageID != message.ID || audience.Ordinal != 1 ||
+	sessionCauseValid := contribution.ObservedSessionSID == "" && contribution.ObservedClaimFence == 0
+	if delivery.Recipient.Kind == RecipientSession {
+		sessionCauseValid = contribution.ObservedSessionSID == delivery.Recipient.Ref &&
+			contribution.ObservedClaimFence >= 1
+	}
+	if kindErr != nil || audience.MessageID != message.ID || audience.Ordinal != 1 ||
 		audience.Selector != wantSelector || audience.RouteRuleID != "" ||
 		audience.ResolvedCount != 1 || !audience.CreatedAt.Equal(receipt.CompletedAt) ||
 		contribution.MessageAudienceID != audience.ID ||
@@ -1932,7 +2086,7 @@ func validateDirectNoticeAudienceAnchors(
 		contribution.Selector != wantSelector || contribution.CausalKind != CausalDirect ||
 		contribution.CausalRef != delivery.Recipient.Ref || contribution.CausalFactKind != "" ||
 		contribution.CausalFactID != "" || contribution.CausalFactVersion != 0 ||
-		contribution.ObservedSessionSID != "" || contribution.ObservedClaimFence != 0 ||
+		!sessionCauseValid ||
 		contribution.OriginalSubscriber != nil || contribution.SubscriptionID != "" ||
 		contribution.SubscriptionGeneration != 0 || contribution.RouteRuleID != "" ||
 		contribution.RouteRuleGeneration != 0 || len(contribution.RouteReasons) != 1 ||
@@ -2020,7 +2174,7 @@ func directNoticeAckEvidenceMatches(
 func validateDirectNoticeEventAnchors(
 	ctx context.Context,
 	resolve communicationReadRepositoryResolver,
-	principal CommunicationPrincipal,
+	sender CommunicationActorRef,
 	receipt CommunicationCommandReceipt,
 	result DirectNoticePublishResult,
 ) error {
@@ -2046,8 +2200,8 @@ func validateDirectNoticeEventAnchors(
 		event.String(colEventAggregateKind) != string(messageKind) ||
 		event.String(colEventAggregateID) != result.MessageID.String() ||
 		event.Int(colEventSeq) != 1 || event.String(colEventType) != communicationMessageAvailable ||
-		event.String(colEventActorKind) != string(ActorUser) ||
-		event.String(colEventActorRef) != principal.UserID.String() ||
+		event.String(colEventActorKind) != string(sender.Kind) ||
+		event.String(colEventActorRef) != sender.Ref ||
 		event.String(colEventCommandID) != receipt.CommandID.String() ||
 		event.Int(colEventAuditSeq) != receipt.AuditSeq ||
 		!bytes.Equal(event.Bytes(colEventAuditHash), receipt.AuditHash) ||
@@ -2073,7 +2227,63 @@ func validateDirectNoticeEventAnchors(
 }
 
 func directNoticeActor(principal CommunicationPrincipal) string {
+	if principal.SessionID != "" {
+		return "session:" + principal.SessionID
+	}
+	if principal.AgentExternalID != "" {
+		return "agent:" + principal.AgentExternalID
+	}
 	return "user:" + principal.UserID.String()
+}
+
+func communicationAuditKindForPrincipal(principal CommunicationPrincipal) string {
+	if principal.AgentExternalID != "" || principal.SessionID != "" {
+		return model.ActorAgent
+	}
+	return model.ActorUser
+}
+
+func expectedDirectNoticeSender(
+	principal CommunicationPrincipal,
+	cmd DirectNoticePublishCommand,
+) (CommunicationActorRef, error) {
+	if cmd.sender != (CommunicationActorRef{}) {
+		if cmd.sender.Validate() != nil || !communicationActorMatchesPrincipalKind(cmd.sender, principal) {
+			return CommunicationActorRef{}, communicationError(
+				ErrCommunicationEvidenceUnknown, "direct notice sender binding is unavailable",
+			)
+		}
+		return cmd.sender, nil
+	}
+	recipient, ok := CanonicalPrincipalRecipient(principal)
+	if !ok {
+		return CommunicationActorRef{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "direct notice sender binding is unavailable",
+		)
+	}
+	return communicationActorForRecipient(recipient)
+}
+
+func directNoticeReplayPayloadMatches(payload ProtectedPayload, canonicalContent []byte) bool {
+	if len(canonicalContent) == 0 || ValidateProtectedPayloadSlot(
+		payload, PayloadSlotMessage, protectedPayloadPolicyFrom(payload),
+	) != nil {
+		return false
+	}
+	switch payload.Encoding {
+	case PayloadPlainJSON:
+		digest := sha256.Sum256(canonicalContent)
+		return bytes.Equal(payload.PlainJSON, canonicalContent) &&
+			bytes.Equal(payload.Digest, digest[:])
+	case PayloadSealedV1:
+		// RequestDigest commits the canonical caller content. The retained
+		// Message/receipt/audit graph commits this opaque keyed digest and
+		// ciphertext; replay never opens content before fresh authorization.
+		return len(payload.PlainJSON) == 0 && payload.Sealed != nil &&
+			payload.SealKeyVersion != "" && payload.DigestKeyVersion != ""
+	default:
+		return false
+	}
 }
 
 func cloneDirectNoticeBytes(value []byte) []byte {

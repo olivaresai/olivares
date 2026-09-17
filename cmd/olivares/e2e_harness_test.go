@@ -99,7 +99,7 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	}
 
 	rt := runtime.New(runtime.Options{Logger: log})
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, log)
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}

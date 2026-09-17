@@ -17,7 +17,7 @@
 // Gather consumes the operator's own Vertex/Cloud-Billing token-usage export
 // (usage_url); with no usage_url configured Gather emits nothing.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): it performs only GETs, never
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §0-3): it performs only GETs, never
 // persists or logs the API key, and carries token counts, cost, capabilities and
 // inventory METADATA — never prompts, completions, or key values. It imports only
 // the SDK and the Apache modelprovider contract, never the engine.

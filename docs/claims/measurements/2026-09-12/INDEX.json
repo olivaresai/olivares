@@ -1,0 +1,493 @@
+{
+  "schema": "claims-measurement-index/v1",
+  "measuredAt": "2026-09-12",
+  "observation": {
+    "start_utc": "2026-09-12T03:53:53Z",
+    "end_utc": "2026-09-12T03:55:54Z",
+    "clock_source": "container CLOCK_REALTIME via date -u during the measurement process"
+  },
+  "provider": {
+    "provider": "Claude Opus 5",
+    "model": "claude-opus-5",
+    "effort": "xhigh",
+    "role": "Community documentation writer, MC3-P"
+  },
+  "reviewer": "Root Astra (separate review)",
+  "objects": {
+    "H": "97f799be6c5822ec4a0af1ec30511c4c50084ae4",
+    "W": "459faf501325cd9fb51e3944da5df4f4577d8f73",
+    "E": "2a603663d00e4d53a97d038deb220d342b52859e",
+    "W_note": "During the original observation the author did not resolve this commit in the stores consulted; tree e204cc6e5af2fa7a8383811027abf7e183cc086d was read through tree-identical b51d885eb77f26c391d73e5b453bb9f265d39194. The earlier all-local-stores assertion is withdrawn. The later dated correction resolved W in the shared website store.",
+    "E_note": "Confirmed present as a commit object; used as a read-only comparison identity only."
+  },
+  "preserved_history": {
+    "path": "docs/claims/history/2026-08-09-public-claims.v1.json",
+    "sha256": "507568144d300f67606d8d1e4c1fe7bfeca337829940fc27e0c4f62d12e9cdf9",
+    "blob": "b24f2b831d5f2bf5648a7d042210addc198cd8fc",
+    "bytes": 22693
+  },
+  "audit": {
+    "path": "docs/claims/measurements/2026-09-12/AUDIT.md",
+    "sha256": "e3e3da52dee6f7af61e123714cf7b7412277bc4d378baff123e500d5f4cb44e9",
+    "bytes": 8570,
+    "title": "Current capability measurement, 2026-09-12"
+  },
+  "inspected_anchors_at_H": [
+    {
+      "path": "cmd/olivares/appsgateway.go",
+      "blob": "84ccfbc9b087b03746546fd8d80c72b960b174eb"
+    },
+    {
+      "path": "cmd/olivares/appsgateway_test.go",
+      "blob": "74c2246d13c74de61d83e1d8fdbf2a0c1eaec5e0"
+    },
+    {
+      "path": "cmd/olivares/boot.go",
+      "blob": "0180418bfa031cfd92113305b0d8b66deb27b403"
+    },
+    {
+      "path": "cmd/olivares/budgetgate.go",
+      "blob": "ca784df5347735bf737ed642b017fb4c93bd7c40"
+    },
+    {
+      "path": "cmd/olivares/budgetgate_test.go",
+      "blob": "20690a4e916718d72ce28cfcabcaaa60481e95d7"
+    },
+    {
+      "path": "cmd/olivares/circuitbreakergate.go",
+      "blob": "f07b15578c1bd76aba1b74447cc6b85f5575277b"
+    },
+    {
+      "path": "cmd/olivares/claudehookpep.go",
+      "blob": "d38f7f8e323e825d704c50daf933aaec11118a2f"
+    },
+    {
+      "path": "cmd/olivares/cmd_agent.go",
+      "blob": "9c24474bebdad13e1fe752db35aea5e0850d4a69"
+    },
+    {
+      "path": "cmd/olivares/cmd_governance.go",
+      "blob": "2fe2df469380b3b42721cf577b8f347d2c61812b"
+    },
+    {
+      "path": "cmd/olivares/cmd_managedsettings.go",
+      "blob": "e97e9d3ab8d6695328c613cb7b0bfd4eaa165e95"
+    },
+    {
+      "path": "cmd/olivares/killswitch_e2e_test.go",
+      "blob": "befa65cf1a1c1da0e0cc9698e4cc2f2b25396ab6"
+    },
+    {
+      "path": "cmd/olivares/killswitchgate.go",
+      "blob": "908d6628115e0f7d6538286b8c2646167aaa99b1"
+    },
+    {
+      "path": "cmd/olivares/license_service.go",
+      "blob": "74086fe59482bd832eb951979dfcbc8a933de05e"
+    },
+    {
+      "path": "cmd/olivares/modelsactuate.go",
+      "blob": "29e25a6975d3d64d1dccaec0b82b737b486ebcea"
+    },
+    {
+      "path": "cmd/olivares/sandboxrt.go",
+      "blob": "c446023ef58a8ee83d780e7dbce8fa19c53fedff"
+    },
+    {
+      "path": "cmd/olivares/sandboxrt_load.go",
+      "blob": "47169fa174ffeb0269d7272963fee3e1254904f9"
+    },
+    {
+      "path": "cmd/olivares/wire.go",
+      "blob": "837f1a69a8b25bc7ffd1ade3242adedeeeb01348"
+    },
+    {
+      "path": "connectors/managedsettings/delivery.go",
+      "blob": "0fced3eb80b48ef46788fb9aa6e491f1857c6834"
+    },
+    {
+      "path": "connectors/modelrouter/router.go",
+      "blob": "1a519c4c2f5df068d64cf774062a5d2d6ddf309f"
+    },
+    {
+      "path": "connectors/modelrouter/router_test.go",
+      "blob": "d631385ef722cc99fdf4adebe19db3a6ec536b3a"
+    },
+    {
+      "path": "core/runtime/sandboxrt/engine.go",
+      "blob": "6d7753f330fb0bc58c6972002d1b6e2f51971a7f"
+    },
+    {
+      "path": "modules/access-map/api.go",
+      "blob": "5a498e8e4c5f0aa91861d9b24728b02a49ea601f"
+    },
+    {
+      "path": "modules/access-map/evidence.go",
+      "blob": "36327fccee95b318e689fe16fc2d0315d4b46995"
+    },
+    {
+      "path": "modules/access-map/evidence_test.go",
+      "blob": "20235c97be70f4dd40c28f25d4e732e09c641e20"
+    },
+    {
+      "path": "modules/access-map/query.go",
+      "blob": "14391f90cd1c6358c27ff4c8d9e8d4c494af97e0"
+    },
+    {
+      "path": "modules/access-map/query_test.go",
+      "blob": "107d39dabc1354361c1496d10965f2e478f97527"
+    },
+    {
+      "path": "modules/catalog/mcpadmission.go",
+      "blob": "1baa64388fed5973043da26e4645e8590d0270f9"
+    },
+    {
+      "path": "modules/catalog/mcpadmission_test.go",
+      "blob": "15c22fbab79277d1e490aafbc3cab7682fa54468"
+    },
+    {
+      "path": "modules/catalog/provision_e2e_test.go",
+      "blob": "6bc49c79a8064bf839e2723aee1a10c3ef34f0cd"
+    },
+    {
+      "path": "modules/catalog/sign.go",
+      "blob": "f4efdd45476f7746f1e3839ec16787ba9ffc5312"
+    },
+    {
+      "path": "modules/compliance/compliance_test.go",
+      "blob": "e54708426d11780701abcbbbea91bd7ebec662ec"
+    },
+    {
+      "path": "modules/compliance/evidence.go",
+      "blob": "f616312c2af707f1be52d04a1989c79eefae622c"
+    },
+    {
+      "path": "modules/compliance/export.go",
+      "blob": "40871237ffcd1d42e02bd4a7a6f5fd10746e6315"
+    },
+    {
+      "path": "modules/finops/reservation.go",
+      "blob": "72b3b68617f6e5906bf88d2e38dc50986f616533"
+    },
+    {
+      "path": "modules/finops/reservation_group_test.go",
+      "blob": "5d159b248b5d3c1515a4177ded96a6e09e4a4170"
+    },
+    {
+      "path": "modules/governance/approvals_test.go",
+      "blob": "b4d2a9f974af7e0bf540049b20f43b58a6cf90a8"
+    },
+    {
+      "path": "modules/governance/claudeagents.go",
+      "blob": "2b24706c7d1c3e237a13b79b04a3299ee632e340"
+    },
+    {
+      "path": "modules/governance/claudepolicy.go",
+      "blob": "bcbf5902fcc015a2e2c202f99adf2c0e6eef3fa8"
+    },
+    {
+      "path": "modules/governance/claudepolicy_truth.go",
+      "blob": "dd113b474ab80a3f33ad1ea9468bab161f292930"
+    },
+    {
+      "path": "modules/governance/s160_test.go",
+      "blob": "3bd456c3a974882282d94ebfe73c30f4fca09336"
+    },
+    {
+      "path": "modules/models/api.go",
+      "blob": "c38d24d38e8d15204cbd7d66ecbfc1ae580bce96"
+    },
+    {
+      "path": "modules/models/api_test.go",
+      "blob": "ac0469bcb2ee5b18ffb9c759679e73f3fe24b5e3"
+    },
+    {
+      "path": "modules/models/execute.go",
+      "blob": "4d0b01044af2bb10e1718561a2d01e8f8ebd6c4f"
+    },
+    {
+      "path": "modules/models/execute_ratelimits_test.go",
+      "blob": "b272196d1afccd6fec1ec116885b04201e64d5e2"
+    },
+    {
+      "path": "modules/models/keys.go",
+      "blob": "b4fcbf5b8a6dafb2b30f1b5c1059707f5c50086b"
+    },
+    {
+      "path": "modules/models/models.go",
+      "blob": "224a070b4b558ff5490c77dce29baba205657c69"
+    },
+    {
+      "path": "modules/models/routing.go",
+      "blob": "1a83e05103d026337073917ea39a234f4e4aee75"
+    },
+    {
+      "path": "modules/orchestration/api.go",
+      "blob": "a5fa2fac754cc924b2261a708fa375770b8e8000"
+    },
+    {
+      "path": "modules/orchestration/dto.go",
+      "blob": "00fe6645566aab8b3ea841bb36b20d8287d376b9"
+    },
+    {
+      "path": "modules/orchestration/orchestration_test.go",
+      "blob": "d68705785a2a899c3e7c07a0772fd4d0cc522ef0"
+    },
+    {
+      "path": "modules/orchestration/workflow_graph.go",
+      "blob": "85355cca1a9a0f264e144190219f97f5d84078c2"
+    },
+    {
+      "path": "modules/sandbox/doc.go",
+      "blob": "353a68d29e2860c2b112835178f30bf52e0cfc43"
+    },
+    {
+      "path": "modules/sandbox/ports.go",
+      "blob": "0570ea99aa434c3c096d14c0f579cf81270ab815"
+    },
+    {
+      "path": "modules/sandbox/sandbox.go",
+      "blob": "1ff188f23eaae00dadf3cca869148de0353dc8e3"
+    },
+    {
+      "path": "modules/sandbox/sandbox_test.go",
+      "blob": "7915c26b57c232dd90cca356b6c7d5d975089ff0"
+    },
+    {
+      "path": "modules/sessions/communication_ack_service.go",
+      "blob": "ae9363c7937cef02ed4169aecd43720b9f5d6ae9"
+    },
+    {
+      "path": "modules/sessions/communication_api.go",
+      "blob": "c884b40074aafd24779f7441c5e65794048aabe3"
+    },
+    {
+      "path": "modules/sessions/communication_handoff_apply.go",
+      "blob": "45479488e1222a2d708cd3e6769e2b275b1c4b88"
+    },
+    {
+      "path": "modules/sessions/communication_handoff_service_test.go",
+      "blob": "db382baec861e1acad1f46b8ebbd97cd08ea4e52"
+    },
+    {
+      "path": "modules/sessions/communication_model.go",
+      "blob": "ebe32a69f5ebb352337f2b41b535b549dde56aed"
+    },
+    {
+      "path": "modules/sessions/doc.go",
+      "blob": "ac55d5594097c86401de86e137c4a6b2ef6eb6ca"
+    },
+    {
+      "path": "modules/sessions/live_test.go",
+      "blob": "a6c9fbe99bc524d69604ff9598b7bf290fc224b8"
+    },
+    {
+      "path": "modules/sessions/schema.go",
+      "blob": "57eb21d7362cd6837d1ab994d65caa8c96de2e4e"
+    },
+    {
+      "path": "modules/sessions/work_api.go",
+      "blob": "021a10133d998c69fac5658e3ced94c34475e8ed"
+    },
+    {
+      "path": "modules/sessions/work_model.go",
+      "blob": "574a60a5662f6c0f1f898e1888cfb25fb59d4bfc"
+    },
+    {
+      "path": "modules/sessions/workflow_communication_ack.go",
+      "blob": "b19093137140456a73f362130847fb7c64f201be"
+    },
+    {
+      "path": "modules/sessions/workflow_communication_handoff.go",
+      "blob": "7dd45e72137570acdde3bc8fb6bfa46643b6a598"
+    },
+    {
+      "path": "operator/api/v1alpha1/controlplane_types.go",
+      "blob": "0ef43fe5dbcea2a26e253a7e1dba7b81e119be02"
+    },
+    {
+      "path": "operator/internal/controller/convergence.go",
+      "blob": "d9b1c0bd069855096d7d155f505dfc8b78bd9a9b"
+    },
+    {
+      "path": "modules/sessions/communication_ack_service_test.go",
+      "blob": "c96d20b1069048216b12ca1449e2b26dbb084ce7",
+      "lines": 3907,
+      "kind": "test source anchor",
+      "executed": false,
+      "note": "Cited by agent-coordination.acceptance.tests. Present at H as a source anchor; 36 Test functions. Not executed for this measurement (R3)."
+    },
+    {
+      "path": "modules/sessions/api.go",
+      "blob": "727d9fc3b1652bbfbb3dcac58488ae635e92e58d",
+      "lines": 383,
+      "kind": "permission declaration source anchor",
+      "executed": false,
+      "note": "Root inspected permWorkRead/Write/Admin at lines26-28 during correction; no behavior test executed."
+    }
+  ],
+  "inspected_anchor_count": 71,
+  "source_inventory_vs_executed": {
+    "source_anchors": 71,
+    "executed_claim_runs": 0,
+    "test_suites_executed": 0,
+    "statement": "Every anchor above is source inventory at H. A named test is a source anchor until an execution receipt exists. No claim-acceptance job was executed during this measurement."
+  },
+  "validator_source": {
+    "repo": "website",
+    "tree": "e204cc6e5af2fa7a8383811027abf7e183cc086d",
+    "scripts/claims-contract.mjs": "94d68076a4438d03fe651603f45d40608c3bb656",
+    "src/data/claim-states.ts": "71b567dc08fd6f8548ef0baeb708ce82cb905e61",
+    "src/data/claim-contract-types.ts": "f25ac5c25e1e73f63d2e4343ed0ee8cacba30dab",
+    "mode": "read-only"
+  },
+  "states": {
+    "implemented_unaccepted": 12,
+    "accepted": 0,
+    "shipped": 0
+  },
+  "jobs_implemented": {
+    "claim-sessions-work": false,
+    "claim-agent-coordination": false,
+    "claim-sandbox-agent-isolation": false,
+    "claim-model-routing-providers": false,
+    "claim-managed-settings-fleet": false,
+    "claim-roadmap-bindings": false
+  },
+  "accepted_component_receipts": [
+    {
+      "path": "assessments/implementation/r62-web-claims-core-review-20260912/root-review/ACCEPTANCE.json",
+      "scope": "MC1 contract core validators at website e9571781; no page wiring, no capability promotion"
+    },
+    {
+      "path": "assessments/integration/r62-web-publication-20260912/ACCEPTANCE.json",
+      "scope": "Website persona pages and MC1 core at b51d885e; no product RC or release claim"
+    },
+    {
+      "path": "assessments/integration/r61-private-composition-20260912-attempt04/ACCEPTANCE.json",
+      "scope": "Enterprise CI/release wiring, local gate exit 0; not remote receipt, binds no claim job"
+    },
+    {
+      "path": "assessments/integration/r62-web-live-20260912/root-review/ACCEPTANCE.md",
+      "scope": "117/117 persona page title and H1 observations matched; complete page-byte equality and deployment identity not established; no capability acceptance"
+    }
+  ],
+  "limits": [
+    "Anchors resolved by path, blob and line count; cited symbols re-read from actual bodies; whole-file semantics not re-derived.",
+    "No test executed; host-dependent tests remain not run.",
+    "Task-progress absence is a bounded observation over inspected sessions files, not a repository-wide assertion.",
+    "Release facts are not in the capability manifest."
+  ],
+  "correction": {
+    "revision": "MC3-P correction 1",
+    "returned_producer": "58e3b76c405a80e7d033e4aecf8ead3c5139b83e",
+    "returned_by": "Root Astra",
+    "returned_on": "2026-09-12",
+    "independent_review": "assessments/product/r63-claims-producer-review-20260912/REPORT.md (grok/grok-4.6, RETURN)",
+    "adjudication": "assessments/product/r63-claims-producer-review-20260912/root-review/ADJUDICATION.md",
+    "status": "corrected; awaiting Root review. Not accepted.",
+    "corrections_applied": [
+      "R1 complete registrar (15 routes)",
+      "R2 removed MC2-rejected \"exercised\"",
+      "R3 communication_ack_service_test.go added to the anchor inventory as an unexecuted source anchor",
+      "R4 organizational source-review label; no account routing, no asserted acceptance",
+      "R5 private-composition receipt attributed to its actual document and fields",
+      "C2 surviving combined-mechanism inference removed",
+      "public/internal prose separation: implementation receipts moved out of projected prose",
+      "W459 author-time limit preserved; dated current object check added; all-local-stores assertion withdrawn"
+    ],
+    "observations": [
+      {
+        "at": "2026-09-12",
+        "what": "W 459faf50… resolves as a commit in the shared website store; tree e204cc6e… equals b51d885e…^{tree}",
+        "commands": [
+          "git cat-file -t 459faf501325cd9fb51e3944da5df4f4577d8f73",
+          "git rev-parse 459faf50…^{tree}",
+          "git rev-parse b51d885e…^{tree}"
+        ],
+        "stores": [
+          "website support worktree",
+          "shared website repository"
+        ]
+      },
+      {
+        "at": "2026-09-12",
+        "what": "work_api.go registrar counted in full: 13 registrations at lines 30-42 plus lines 51 and 57 = 15 routes behind sessions:work permissions"
+      },
+      {
+        "at": "2026-09-12",
+        "what": "communication_ack_service_test.go resolved at H, blob c96d20b1069048216b12ca1449e2b26dbb084ce7, 3907 lines, 36 Test functions; not executed"
+      }
+    ],
+    "source_locations_for_public_prose": {
+      "sessions-live-operations.conditions[2]": {
+        "public": "Fifteen governed work-item routes are registered behind separate sessions:work read, write and admin permissions. They cover creating, listing, reading and updating a work item, its transitions, assignment, dependencies, acceptance criteria and per-item events, plus administrative event replay and a work stream.",
+        "source": "modules/sessions/work_api.go workRoutes: 13 registrations at lines 30-42, plus line 51 (POST /work-events/{event_id}/replay, permWorkAdmin) and line 57 (GET /work-stream, permWorkRead) = 15. Permission constants modules/sessions/api.go:26-28."
+      },
+      "sessions-live-operations.gaps[0]": {
+        "public": "The live-operation component test covers ingestion and observable state. It does not bind the published sentence to a user journey, and it was not executed for this measurement.",
+        "source": "modules/sessions/live_test.go TestLiveOperation, lines 120-168; next test begins at line 170."
+      },
+      "agent-coordination.conditions[3]": {
+        "public": "Work, runtime, message and handoff controls have separate owners, and durable acknowledgment state is read through its own port. The orchestration and session modules do not depend on each other.",
+        "source": "cmd/olivares/wire.go:917-921 binds work/runtime/message/handoff control ports and WithWorkflowAckReader; modules/orchestration and modules/sessions do not import each other."
+      },
+      "simulation-sandbox.conditions[1]": {
+        "public": "Operating-system isolation applies only when the OS runner is configured at composition time; otherwise a configured mock or replay executor runs instead and does not provide it.",
+        "source": "cmd/olivares/sandboxrt_load.go:84-89."
+      },
+      "model-routing-providers.conditions[1]": {
+        "public": "The module always resolves a route and acts only through an executor port. The default executor is unwired, so routing resolves without any provider call until an executor is composed.",
+        "source": "unwiredExecutor modules/models/models.go:123; route composition cmd/olivares/wire.go:735-736."
+      },
+      "model-routing-providers.conditions[2]": {
+        "public": "The executor composed for this measured model-routing path speaks the Claude Messages protocol. This does not establish a provider or model matrix, and other product generation paths are separate.",
+        "source": "newModelsExecutor, cmd/olivares/modelsactuate.go:53-59; separate Chat port cmd/olivares/wire.go:738-741."
+      },
+      "roadmap-claude-code-governance.conditions[0]": {
+        "public": "The hook enforcement point reads governed kill-switch state before it allows an action.",
+        "source": "cmd/olivares/claudehookpep.go:604."
+      },
+      "roadmap-finops-cost-controls.conditions[0]": {
+        "public": "Four composed gates consult budget admission before an action is actuated.",
+        "source": "cmd/olivares/budgetgate.go lines 59, 82, 115, 134."
+      },
+      "roadmap-finops-cost-controls.unpromoted[0]": {
+        "public": "Reservation and settlement on a production path: the reservation and release operations are declared in the module and have no non-test caller in the measured sources beyond their own definition, so the production-path integration remains an open obligation.",
+        "source": "ReserveBudget( at H has no non-test caller besides the method definition at modules/finops/reservation.go:355."
+      },
+      "roadmap-kill-switch.conditions[1]": {
+        "public": "The circuit breaker returns no denial when it cannot read state and defers to the stop gate.",
+        "source": "cmd/olivares/circuitbreakergate.go line 25."
+      }
+    },
+    "receipts_cited": {
+      "private_composition": "assessments/integration/r61-private-composition-20260912-attempt04/ACCEPTANCE.json (state accepted-local-private-composition, gate_exit 0, remote_received false, complete_rc false)",
+      "private_wiring": "assessments/integration/r61-private-composition-20260912-attempt04/WIRING-ACCEPTANCE.json (owner Astra, fixed gate floor and membership cross-check)",
+      "live_observation": "assessments/integration/r62-web-live-20260912/RESULT.json (verdict partially-observed; deploy identity not verified)"
+    },
+    "not_established": [
+      "No capability acceptance",
+      "No executed claim run",
+      "No release-state change",
+      "Contrast/gradient and screen-reader review unrelated to this document"
+    ]
+  },
+  "root_correction": {
+    "at": "2026-09-12T04:35:41.685142+00:00",
+    "reviewed_producer": "19e7b1834fd6cfcc9fe8a1c5ba656eee4002a34c",
+    "independent_review": "assessments/product/r63-claims-correction-review-20260912/REPORT.md",
+    "author": "Root Astra",
+    "status": "Documentation corrected; producer acceptance recorded separately",
+    "changes": [
+      "D1 actual source paths plus permission declaration anchor",
+      "D2 bounded website lookup claim",
+      "D3 all counts consistent",
+      "D4 full route registrar",
+      "Correct authors and bounded live title/H1 observation",
+      "Public gaps omit correction history",
+      "Existing work/handoff acceptance obligation retained; no capability promotion",
+      "Selected audit omits account routing and absolute environment paths; full provenance retained in private orchestration receipts."
+    ]
+  }
+}

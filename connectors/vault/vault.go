@@ -16,7 +16,7 @@
 // path". The engine diffs these declared grants against what was actually
 // observed (eBPF/OTEL/CloudTrail) to surface over-provisioned and shadow access.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET, it reads
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): every call is a GET, it reads
 // identity METADATA and policy GRANTS only, and it NEVER reads a secret value
 // (it never GETs the secret paths a policy mentions — only the policy document).
 // The X-Vault-Token operator credential is held in memory, applied per request

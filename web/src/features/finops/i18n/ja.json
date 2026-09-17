@@ -354,13 +354,35 @@
     "mtd": "今月"
   },
   "rates": {
-    "title": "Model rate catalogue",
-    "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
-    "unit": "micro-USD per 1M tokens (integer)",
-    "empty": "No rates in the catalogue",
-    "inOut": "in {{in}} · out {{out}}",
-    "until": "until {{at}}",
-    "current": "current",
+    "title": "モデル料金カタログ",
+    "description": "プロバイダーが金額を報告しない場合に、コストを「推定」するために使う表示価格です。実際の請求額ではありません。",
+    "unit": "100万トークンあたりのマイクロUSD（整数）",
+    "unitNote": "入力料金と出力料金の単位は{{unit}}です。",
+    "validityNote": "日付は各エントリーが宣言している有効期間を示します。特定の課金にどのエントリーが使われたかは、この一覧では示されません。",
+    "empty": "カタログに料金がありません",
+    "emptyHint": "この組織には表示価格が登録されていません。",
+    "model": "モデル",
+    "provider": "プロバイダー",
+    "inputRate": "入力料金",
+    "outputRate": "出力料金",
+    "effectiveFrom": "適用開始",
+    "effectiveUntil": "適用終了",
+    "noEndDate": "終了日なし",
+    "invalid": {
+      "title": "料金カタログを表示できません",
+      "description": "応答を料金カタログとして読み取れなかったため、料金を表示していません。再試行しても同じ読み取りを繰り返すだけで、何も変更されません。",
+      "reason": {
+        "envelope": "応答に読み取り可能な料金エントリーの一覧が含まれていません。",
+        "entry": "エントリー {{n}} は料金レコードではありません。",
+        "missing": "エントリー {{n}} に {{field}} がありません。",
+        "empty": "エントリー {{n}} の {{field}} が空です。",
+        "type": "エントリー {{n}} の {{field}} の型が正しくありません。",
+        "negative": "エントリー {{n}} の {{field}} が負の値です。",
+        "notInteger": "エントリー {{n}} の {{field}} が整数ではありません。",
+        "unsafe": "エントリー {{n}} の {{field}} は大きすぎて正確に表示できません。",
+        "timestamp": "エントリー {{n}} の {{field}} が RFC 3339 のタイムスタンプではありません。"
+      }
+    },
     "truncated": "{{n}} 件の料金を読み込みました。さらに存在します",
     "truncatedHint": "表示されているより多くのモデル料金があります。このページは適用開始日の新しい順に並びます。ここに無いことはカタログに無いことを示しません。原価計算と比較は、このページとは無関係にカタログから有効な料金を解決します。"
   },
@@ -453,5 +475,21 @@
     "riskDescription": "成果を満たさずに支出を消費している対象。",
     "riskEmpty": "支出を消費して成果のない対象はありません",
     "satisfiedOf": "{{outcomes}} 件中 {{satisfied}} 件が満たされました"
+  },
+  "evidence": {
+    "atLeast": "少なくとも {{amount}}",
+    "original": "当初の報告額: {{amount}}",
+    "unknown": "金額不明",
+    "exact": "確定金額",
+    "lower_bound": "下限額・総額は未確定",
+    "historical": "過去の報告値・未検証",
+    "unavailable": "利用不可",
+    "barUnavailable": "正確な金額が未確定のため、消費バーは表示できません。",
+    "forecast": "予測（未認証）: {{amount}}",
+    "cause": "原因",
+    "reference": "アラート参照",
+    "digest": "記録された証拠のハッシュ",
+    "lookup": "検索",
+    "clear": "クリア"
   }
 }

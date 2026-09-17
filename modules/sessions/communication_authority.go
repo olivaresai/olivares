@@ -180,6 +180,14 @@ func communicationAuthorityPermission(
 		if kind == handoffKind {
 			return permHandoffResponseWrite, true
 		}
+	case CommunicationChannelWrite:
+		if kind == channelKind {
+			return permChannelWrite, true
+		}
+	case CommunicationChannelAdmin:
+		if kind == channelKind {
+			return permChannelAdmin, true
+		}
 	}
 	return "", false
 }
@@ -296,7 +304,17 @@ func bindCommunicationRequestAuthority(
 			WorkspaceID: question.entity.WorkspaceID,
 		},
 	}
-	evidence := source.AuthorizeEvidence(ctx, request)
+	// Module HTTP handlers run under core/api's workspace-confined data boundary.
+	// That boundary must continue to constrain every sessions read and mutation,
+	// but it cannot constrain the core PDP while the PDP reconstructs tenant-wide
+	// policy and authorization-epoch evidence: the outer route already evaluated
+	// it with engine authority before installing the module boundary. Re-evaluate
+	// this exact server-built question on a value-free context carrying only the
+	// caller's finite lifetime. The resulting facts are still consumed and locked
+	// inside the workspace-confined communication transaction below.
+	authorityCtx, cancelAuthority := communicationCoreAuthorityContext(ctx, deadline)
+	defer cancelAuthority()
+	evidence := source.AuthorizeEvidence(authorityCtx, request)
 	outcome, facts, err := validateCommunicationCoreAuthorizationEvidence(
 		evidence, question.entity.TenantID,
 	)
@@ -420,6 +438,23 @@ func bindCommunicationRequestAuthority(
 			},
 		}, nil
 	}}, nil
+}
+
+// communicationCoreAuthorityContext preserves cancellation/deadline but no
+// caller context values. In particular it cannot carry core/api's private
+// module-data confinement into a tenant-wide PDP evidence read. The authority
+// question itself is an immutable value assembled above from the authenticated
+// credential and the server-resolved entity scope.
+func communicationCoreAuthorityContext(
+	request context.Context,
+	deadline time.Time,
+) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	stop := context.AfterFunc(request, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
 }
 
 func cloneCommunicationRequestAuthorityWitness(witness ReadWitness) ReadWitness {
@@ -587,7 +622,7 @@ func validateCommunicationAuthorityFacts(
 	foundDirectoryEpoch := false
 	foundAuthorizationEpoch := false
 	for _, fact := range canonical {
-		if fact.Kind != model.DirectoryEpochKind && fact.Kind != model.AuthorizationEpochKind {
+		if fact.Kind != model.DirectoryEpochKind && fact.Kind != model.AuthorizationEpochKind && !model.IsLineageEpochKind(fact.Kind) {
 			continue
 		}
 		if fact.ID != model.ID(tenant) {

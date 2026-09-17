@@ -101,8 +101,8 @@
     "envAllow": "转发宿主环境变量（名称）",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "允许透传的宿主环境变量名称白名单（从不发送其值）。",
-    "submit": "创建并启动",
-    "submitting": "正在启动……",
+    "submit": "请求启动",
+    "submitting": "正在请求…",
     "criticalWarning": "这是一次特权启动（它移除了逐工具确认提示）。需要双人审批且会被录制——在获批前可能保持待处理状态。",
     "classifiedWarning": "对已分级工作区进行读/写挂载属于特权启动（需审批 + 录制）。",
     "success": "会话已启动",
@@ -110,7 +110,13 @@
     "templateNone": "不使用模板",
     "templateHint": "引擎会在启动校验之前将模板条款合并到上述字段，并写入会话自身的进程——因此即使调用方不打开此控制台，该限制依然生效。",
     "templateUnenforceable": "此模板声明了本次启动无法强制执行的条款，因此拒绝启动，而不是在缺少这些条款的情况下启动：",
-    "templateOverrides_other": "模板覆盖了你的 {{count}} 项设置："
+    "templateOverrides_other": "模板覆盖了你的 {{count}} 项设置：",
+    "profile": "提供商配置档案",
+    "profileNone": "选择配置档案",
+    "profileHint": "请选择此会话的提供方配置档案。必须选择档案。本地要求在模板预览之后按当前选择读取。",
+    "profileNotOperable": "在此环境未启用",
+    "profilesNotRead": "无法读取提供商配置档案；仍可在没有配置档案的情况下启动。",
+    "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME 和 GROK_HOME 属于配置档案：此处会拒绝转发其中任一变量的启动。其他名称仍需通过服务端自身的校验。"
   },
   "detail": {
     "live": "实时",
@@ -137,11 +143,17 @@
     "started": "启动时间",
     "lastActivity": "最近活动",
     "stopped": "停止时间",
-    "none": "无"
+    "none": "无",
+    "providerProfile": "提供商配置档案",
+    "providerDriver": "驱动",
+    "providerEnvironment": "执行环境",
+    "liveRef": "实时行"
   },
   "live": {
     "inputPlaceholder": "向 stdin 发送一行 NDJSON……",
     "inputAria": "会话输入行",
+    "textPlaceholder": "向会话发送一条消息……",
+    "textAria": "会话消息",
     "send": "发送",
     "noOutput": "暂无输出。",
     "waiting": "正在等待输出……",
@@ -149,10 +161,20 @@
     "lag": "丢弃了 {{count}} 帧（缓冲区溢出）——下方输出在间隔之后继续。",
     "remoteControl": "这是一个 remote-control 会话：其 I/O 被中继至 Anthropic 云端，未在此桥接。Olivares 仅管理其生命周期。",
     "notLive": "此会话未处于实时状态（当前为 {{state}}）。请恢复它以接入其 I/O。",
+    "ioUnavailableNotLiveOnNode": "此节点没有桥接的 I/O。",
+    "ioUnavailableRemoteControl": "此会话的 I/O 未在此桥接（remote-control）。",
+    "retryAttach": "重试接入",
     "autoscroll": "自动滚动",
     "clear": "清空视图",
     "inputNotAllowed": "仅当会话处于运行中时才接受输入。",
-    "inputSent": "已发送"
+    "inputSent": "已发送",
+    "interrupt": "中断当前轮次",
+    "interruptHint": "取消当前轮次并保持会话打开。",
+    "interrupted": "已中断当前轮次。会话仍保持打开。",
+    "interruptFailed": "无法中断当前轮次。",
+    "interruptFenceUnavailable": "请先刷新运行以获取当前任务代次，再执行中断。",
+    "interruptUnknown": "中断结果未知。再次尝试前，请先检查会话。",
+    "interruptWorkConflict": "会话当前的任务状态不允许此次中断。请刷新运行以检查其状态。"
   },
   "gov": {
     "title": "治理态势",
@@ -301,5 +323,387 @@
   "forbidden": {
     "title": "无访问权限",
     "description": "您无权操作 Claude Code 会话。"
+  },
+  "profiles": {
+    "title": "提供商配置文件",
+    "subtitle": "一个执行环境上一个已配置提供商实例的持久身份：由哪个驱动提供服务，以及启动的会话在哪个配置主目录下运行。配置文件只登记已存在的主目录，不安装任何内容，也不登录任何账户。",
+    "register": "登记配置文件",
+    "search": "搜索配置文件…",
+    "allStates": "所有状态",
+    "cols": {
+      "name": "配置文件",
+      "driver": "驱动",
+      "environment": "执行环境",
+      "state": "状态",
+      "launch": "在此启用",
+      "created": "创建时间"
+    },
+    "state": {
+      "active": "活跃",
+      "disabled": "已禁用",
+      "retired": "已退役"
+    },
+    "environment": {
+      "local": "本节点",
+      "foreign": "其他环境",
+      "foreignHint": "此配置文件属于另一个执行环境。它会如实显示，且永远不会从本节点启动。"
+    },
+    "operable": {
+      "yes": "在此环境已启用",
+      "no": "在此环境未启用",
+      "noHint": "遗留启用标志：配置档案未处于活动状态、属于其他环境，或其驱动程序未在此注册。这不是启动判定。"
+    },
+    "empty": {
+      "title": "没有提供商配置文件",
+      "registerHint": "使用上方的“{{control}}”登记本节点上现有提供商安装的配置主目录；之后会话即可在稳定身份下启动并归属。",
+      "noWrite": "登记现有提供商安装的配置主目录需要 sessions:profile:write，您的角色不包含该权限。"
+    },
+    "filteredEmpty": {
+      "title": "没有匹配此状态的配置文件",
+      "description": "仅列出状态为“{{state}}”的配置文件。显示所有状态即可移除此筛选。",
+      "clear": "显示所有状态"
+    },
+    "noRead": "未显示提供商配置文件：您的角色不包含 sessions:profile:read。",
+    "listTruncation": {
+      "label": "已加载 {{n}} 个配置文件；还有更多",
+      "hint": "此处只能选择已加载的配置文件。本页之外可能还有未显示的配置文件。"
+    },
+    "actions": {
+      "details": "详情",
+      "rename": "重命名",
+      "disable": "禁用",
+      "enable": "启用",
+      "retire": "退役",
+      "reveal": "显示配置",
+      "hide": "隐藏配置",
+      "bind": "绑定来源",
+      "revoke": "撤销"
+    },
+    "create": {
+      "title": "登记提供商配置文件",
+      "description": "登记此执行环境上现有提供商安装的主目录。服务器在本节点上验证每条路径——绝对路径、已解析符号链接、存在且为目录。不会创建、安装或登录任何内容，也不会发送任何凭据。",
+      "driver": "驱动",
+      "driverPlaceholder": "claude",
+      "driverHint": "小写驱动键（字母、数字、- _ .）。本节点能否启动该配置文件由服务器在登记后报告，而不由名称决定。",
+      "configHome": "配置主目录",
+      "configHomePlaceholder": "/home/agent/.claude-work",
+      "configHomeHint": "提供商配置目录的绝对路径（对 Claude Code 而言即其 CLAUDE_CONFIG_DIR）。在本节点上验证；不存在的目录将被拒绝，绝不会被创建。",
+      "userHome": "用户主目录",
+      "userHomePlaceholder": "/home/agent",
+      "userHomeHint": "启动的会话作为 HOME 运行所在的绝对路径。在本节点上验证。",
+      "displayName": "显示名称",
+      "displayNamePlaceholder": "一个标签（可选）",
+      "environmentKnown": "登记到本节点的执行环境 {{env}}，由其验证路径。面向其他环境的配置文件需从该环境登记。",
+      "environmentUnknown": "登记到本节点的执行环境，由其验证路径。面向其他环境的配置文件需从该环境登记。",
+      "submit": "登记",
+      "submitting": "登记中…",
+      "success": "提供商配置文件已登记"
+    },
+    "rename": {
+      "title": "重命名配置文件",
+      "description": "标签可以更改；身份（驱动、环境和主目录）不会更改。",
+      "label": "显示名称",
+      "submit": "重命名",
+      "submitting": "重命名中…",
+      "success": "配置文件已重命名"
+    },
+    "disable": {
+      "success": "配置文件已禁用",
+      "hint": "已禁用的配置文件拒绝新的启动、恢复和绑定；它已管理的会话继续运行。可恢复。"
+    },
+    "enable": {
+      "success": "配置文件已启用"
+    },
+    "retire": {
+      "title": "退役配置文件",
+      "description": "退役不可逆：此配置文件 ID 之后不再接受任何操作（包括重命名），其历史保持原样。该主目录将释放给新的配置文件 ID。",
+      "confirm": "退役",
+      "success": "配置文件已退役"
+    },
+    "details": {
+      "ref": "引用",
+      "driver": "驱动",
+      "environment": "执行环境",
+      "state": "状态",
+      "launch": "在此启用",
+      "created": "创建时间",
+      "updated": "更新时间",
+      "retiredAt": "退役时间",
+      "loadFailed": "无法读取此配置文件。"
+    },
+    "configuration": {
+      "title": "配置",
+      "hint": "存储的主目录仅管理员可读，仅在您请求时获取，且从不在列表中显示。绝不会返回任何凭据值。",
+      "configHome": "配置主目录",
+      "userHome": "用户主目录",
+      "validatedOn": "由执行环境 {{env}} 验证并存储的路径。",
+      "loading": "正在读取配置…",
+      "failed": "无法读取配置。"
+    },
+    "bindings": {
+      "title": "来源绑定",
+      "subtitle": "将一个已配置的来源，以本节点应用的确切修订版，专用于一个配置文件，使该来源观测到的会话归属于它。身份是来源的持久 ID 和修订版，而非其名称。",
+      "cols": {
+        "source": "来源",
+        "revision": "已应用修订版",
+        "profile": "配置文件",
+        "environment": "执行环境",
+        "state": "状态",
+        "bound": "绑定时间"
+      },
+      "state": {
+        "active": "活跃",
+        "revoked": "已撤销"
+      },
+      "empty": {
+        "title": "没有来源绑定",
+        "description": "将已配置的来源绑定到配置文件，以归属其观测到的会话。"
+      },
+      "noRead": "未显示来源绑定：您的角色不包含 sessions:profile-binding:read。",
+      "notBindable": "只有本执行环境的活跃配置文件才能接受绑定。",
+      "revoke": {
+        "title": "撤销绑定",
+        "description": "已在此绑定下归属的会话保留其来源；此后经该来源的观测不再归属于该配置文件。此操作无法撤销——新的绑定是新的一行。",
+        "confirm": "撤销",
+        "success": "绑定已撤销"
+      },
+      "create": {
+        "title": "将来源绑定到配置文件",
+        "description": "引擎以本节点应用的修订版绑定来源的持久 ID。两者均从来源名册读取——绝不手动输入，也绝不从名称推导。",
+        "profile": "配置文件",
+        "profileNone": "选择配置文件",
+        "profileNotBindable": "此处不可绑定",
+        "profileHint": "只有本执行环境的活跃配置文件才能接受绑定。",
+        "profilesNotRead": "无法读取配置文件，因此无法选择。",
+        "source": "来源",
+        "sourceNone": "选择来源",
+        "sourceNotApplied": "未在本节点应用",
+        "sourceHint": "部署名册中的来源及本节点应用的修订版。本节点未应用的来源无法在此绑定。",
+        "needsSourceAdmin": "绑定来源还需要部署级来源管理权限（系统管理员）。您的账户无法读取来源名册，因此此处无法选择来源。",
+        "rosterFailed": "无法读取来源名册。",
+        "rosterEmpty": "此部署未配置任何来源。",
+        "revision": "修订版 {{n}}",
+        "submit": "绑定",
+        "submitting": "绑定中…",
+        "success": "来源已绑定到配置文件"
+      },
+      "details": {
+        "open": "绑定 {{ref}} 的详情",
+        "title": "绑定详情",
+        "description": "所选租户的当前绑定详情。刷新以检查更改。",
+        "loading": "正在从引擎读取绑定…",
+        "forbidden": "引擎刚刚拒绝向您的账户提供此绑定（活动租户上的 sessions:profile-binding:read）；这是引擎刚刚做出的决定，而非缓存的结果。不显示其任何内容。",
+        "missing": "引擎当前在活动租户中没有此引用的绑定。它可能在读取列表后已被移除；请刷新列表以查看当前行。",
+        "error": "无法读取绑定：{{message}}",
+        "ended": "由于您的权限、租户或会话发生变化，读取已结束。请重新打开“详情”，以当前权限重新读取。",
+        "readAt": "于 {{at}} 从引擎读取。",
+        "ref": "引用",
+        "source": "来源",
+        "sourceId": "来源 ID",
+        "revision": "已应用修订版",
+        "profile": "配置文件",
+        "driver": "驱动",
+        "environment": "执行环境",
+        "selector": "选择器",
+        "state": "状态",
+        "bound": "绑定时间",
+        "revoked": "撤销时间",
+        "refresh": "刷新",
+        "retry": "重试",
+        "close": "关闭"
+      }
+    },
+    "view": {
+      "profilesTitle": "提供商配置文件",
+      "bindingsTitle": "来源绑定",
+      "tabProfiles": "配置文件",
+      "tabBindings": "绑定",
+      "openProfiles": "打开提供商配置文件页面",
+      "openBindings": "打开来源绑定页面",
+      "crossHint": "配置文件和绑定也各有专属页面，分别以各自的读取权限进入。"
+    },
+    "authority": {
+      "lost": "以您当前的权限，此操作不再被允许；未发送任何内容。",
+      "confirmationClosed": "所需权限已不存在，确认对话框已关闭。"
+    },
+    "roster": {
+      "loading": "正在读取来源名册…",
+      "forbidden": "部署拒绝向您的账户提供来源名册，因此无法从这里绑定任何来源。绑定除了绑定写入权限外，还需要部署级来源管理权限；这是引擎刚刚做出的决定，而非缓存的结果。",
+      "error": "无法读取来源名册：{{message}}",
+      "ended": "由于您的权限、租户或会话发生变化，名册读取已结束。请重新打开“绑定”，以当前权限重新读取。",
+      "loadMoreProfiles": "加载更多配置文件",
+      "loadedProfiles": "已加载 {{n}} 个活跃配置文件；还有更多。",
+      "loadingProfiles": "正在加载配置文件…"
+    }
+  },
+  "readiness": {
+    "title": "本地启动要求",
+    "loading": "正在检查所选配置档案的本地要求…",
+    "unavailable": "无法读取要求。这不是启动判定。",
+    "forbidden": "当前角色不能读取此配置档案的要求 (sessions:profile:read)。",
+    "notFound": "当前租户中没有此配置档案。已丢弃先前结果。",
+    "unauthenticated": "会话已不再通过认证。已丢弃先前结果。",
+    "conflict": "检查期间配置档案已变更。观测结果已丢弃。",
+    "reread": "重新读取要求",
+    "rereading": "正在读取…",
+    "request": "请求启动",
+    "requesting": "正在请求…",
+    "requestHintReady": "请求启动仍会走完授权、签发与进程启动。这不能证明提供方已登录。",
+    "requestHintUnknown": "检查未完成。仍可请求启动；服务器会重新校验全部项目。这不是 ready。",
+    "requestBlocked": "不提供启动请求：已知此选择无法执行。",
+    "noWrite": "你可以查看这些要求，但请求启动需要 sessions:run:write。",
+    "waitingPreview": "正在等待模板预览，然后才读取有效传输的要求。",
+    "providerAuth": "此处不观察提供方登录。有效的家目录或可执行文件不是已认证账户。",
+    "launchAuth": "启动授权在提交时决定，并且需要 sessions:run:write。",
+    "remoteControl": "仅生命周期：对话输入输出留在提供方，没有桥接的回合控制台。",
+    "managedInjectionUnused": "此传输不应用所选的受管注入。它不会签发推理凭据，也不证明账户认证。",
+    "codexProtocol": "Codex app-server 协议；输入是文本回合，不是 Claude NDJSON。",
+    "grokProtocol": "Grok ACP 协议；输入是文本回合，不是 Claude NDJSON。",
+    "opencodeProtocol": "OpenCode ACP 协议；输入是文本回合，不是 Claude NDJSON。",
+    "remaining": "仍在提交时决定",
+    "transport": "传输",
+    "isolation": "隔离",
+    "failedInline": "启动请求被拒绝。你的选择保持不变。",
+    "state": {
+      "ready": "已检查本地要求",
+      "not_configured": "缺少配置",
+      "unsupported": "此环境不支持",
+      "unknown": "无法检查"
+    },
+    "checkState": {
+      "ready": "已检查",
+      "not_configured": "未配置",
+      "unsupported": "不支持",
+      "unknown": "无法检查",
+      "not_applicable": "不适用"
+    },
+    "check": {
+      "profile": "配置文件",
+      "local_environment": "本节点",
+      "driver": "驱动",
+      "runner": "Runner",
+      "program": "程序",
+      "homes": "Homes",
+      "auth_source": "认证来源",
+      "credential_source": "凭据接线",
+      "runtime_credentials": "运行时凭据"
+    },
+    "code": {
+      "profile_active": "该配置文件处于活动状态。",
+      "profile_disabled": "该配置文件已禁用。启用需要 sessions:profile:write；已退役的配置文件不能重新激活。",
+      "profile_retired": "该配置文件已退役，不能用于新的启动。",
+      "environment_local": "该配置文件属于本节点。",
+      "other_environment": "该配置文件属于另一个执行环境。请选择本地配置文件，或使用管理它的环境。没有自动远程执行。",
+      "environment_unavailable": "管理该配置文件的执行环境在此不可用。",
+      "driver_operable": "此运行时已注册驱动路径。",
+      "driver_not_registered": "此驱动未在此运行时注册。Codex 请设置 OLIVARES_SESSION_RUNTIME_CODEX_BIN；Grok 请设置 OLIVARES_SESSION_RUNTIME_GROK_BIN。",
+      "transport_unsupported": "此传输不是所选驱动的契约。",
+      "runner_ready": "可以检查会话 Runner。",
+      "runner_not_configured": "此运行时未配置会话 Runner。",
+      "isolation_unsupported": "原生 Runner 无法提供此隔离。请保持 native，或使用能够证明所请求隔离的 Runner。",
+      "runner_inspection_unavailable": "已接线的 Runner 无法在不启动的情况下检查。这不是安装缺失。",
+      "program_present": "解析到的程序存在，并且对此身份可执行。",
+      "program_missing": "解析到的程序不存在。请按现有流程配置官方 CLI；对于 Claude，可以指定 OLIVARES_SESSION_RUNTIME_CLAUDE_BIN。本次读取不会安装任何内容。",
+      "program_not_executable": "解析到的程序对此身份不可执行。",
+      "homes_resolved": "已登记的 Homes 解析为目录。",
+      "home_unavailable": "已登记的 Home 不可用。若有管理权限，请查看配置文件设置。路径不会向普通读者显示。",
+      "home_changed": "已登记的 Home 已不再是当时存储的目录。",
+      "auth_source_account_home": "授权来源是该配置文件自己的 account-home。",
+      "auth_source_managed_injection": "授权来源是此驱动的托管注入。",
+      "auth_source_legacy_claude": "授权来源是 Claude 凭据的历史路径。",
+      "auth_source_required": "此驱动需要明确的认证来源：account-home 或托管注入。该选择在配置文件上完成，而不是通过本次检查。",
+      "managed_injection_not_applied_for_transport": "已选择托管注入，但此传输不会应用它。",
+      "claude_credential_source_configured": "Claude 推理凭据来源已接线。",
+      "claude_credential_source_not_configured": "Claude 推理凭据来源未接线。请配置 OLIVARES_SESSION_RUNTIME_WIF 或 OLIVARES_SESSION_RUNTIME_TOKEN_FILE。只使用名称，从不使用值。",
+      "provider_credential_adapter_configured": "此驱动的凭据适配器已接线。",
+      "provider_credential_adapter_not_configured": "此驱动的受治理凭据适配器未接线。不要复用其他提供商的 bearer，也不要回退到 account-home。",
+      "credential_source_not_injected": "此组合不会注入推理凭据。",
+      "runtime_credentials_wired": "work/K3 运行时凭据已接线。",
+      "runtime_credentials_not_requested": "此组合不请求 work/K3 运行时凭据。",
+      "runtime_credential_wiring_incomplete": "work/K3 运行时凭据接线不完整。由操作员审查该组合；本次读取不请求商业凭据。",
+      "runtime_readiness_unavailable": "无法观测 work/K3 运行时 readiness。",
+      "inspection_unavailable": "无法检查此要求。请重新读取，或请人审查环境。不确定不等于「未安装」。",
+      "not_checked_in_this_environment": "因配置文件属于其他环境，本节点未检查此要求。这不是「Homes 缺失」。"
+    },
+    "remediation": {
+      "review_profile": "查看该配置文件，或登记另一个。",
+      "select_local_profile": "选择本节点的本地配置文件。",
+      "configure_execution_environment": "使用管理该配置文件的环境。",
+      "configure_provider_driver": "在此运行时配置提供商驱动。",
+      "configure_session_runner": "配置会话 Runner。",
+      "configure_provider_program": "在此运行时配置官方提供商 CLI。",
+      "review_profile_homes": "通过管理配置读取查看已存储的 Homes。",
+      "authorize_auth_source": "在配置文件上授权 account-home 或托管注入（sessions:profile:write）。",
+      "configure_claude_credential_source": "接线 OLIVARES_SESSION_RUNTIME_WIF 或 OLIVARES_SESSION_RUNTIME_TOKEN_FILE。",
+      "configure_provider_credential_adapter": "接线此驱动的受治理凭据适配器。",
+      "review_runtime_credential_composition": "审查 work/K3 运行时凭据组合。",
+      "select_supported_selection": "选择此运行时能够证明的传输和隔离。",
+      "retry_inspection": "再次读取要求。"
+    },
+    "remainingCheck": {
+      "workspace_and_template_validation": "工作区与模板校验",
+      "current_launch_authorization": "当前启动授权",
+      "claim_admission": "Claim 准入",
+      "credential_mint_when_required": "需要时签发凭据",
+      "process_start": "进程启动",
+      "provider_authentication_and_protocol": "提供商认证与协议"
+    },
+    "protocol": {
+      "claude_stream_json": "Claude stream-json",
+      "claude_remote_control": "Claude remote-control",
+      "codex_app_server": "Codex app-server",
+      "grok_acp": "Grok ACP",
+      "opencode_acp": "OpenCode ACP",
+      "unknown": "未知协议"
+    }
+  },
+  "hostTools": {
+    "title": "服务主机上的官方 CLI 候选项",
+    "loading": "正在观察服务环境中的官方 CLI 候选项…",
+    "refresh": "重新观察",
+    "refreshing": "正在观察…",
+    "advisory": "仅供参考。此观察不会改变就绪状态、不会启用启动，也不会安装、固定或注册任何工具。",
+    "environment": "配置文件环境：{{environment}} · 应答方：{{answering}}",
+    "noIdentity": "没有持久环境标识的节点",
+    "observedAt": "观察时间 {{time}}（UTC）",
+    "summary": "在已配置的搜索位置中观察到的候选项：{{total}}",
+    "groupCount": "候选项：{{total}}",
+    "groupsLabel": "观察到的候选项分组",
+    "mismatch": "该应答属于其他配置文件版本、驱动或环境，已丢弃。",
+    "conflict": "观察期间配置文件已更改。观察结果已丢弃。",
+    "unavailable": "无法读取主机工具观察结果。这不是关于该工具的结论。",
+    "forbidden": "你的角色无法读取此配置文件的主机工具观察结果（sessions:profile:read）。",
+    "notFound": "此配置文件在当前租户中不可用。之前的观察结果已丢弃。",
+    "unauthenticated": "会话已不再经过身份验证。之前的观察结果已丢弃。",
+    "state": {
+      "none_observed": "在已配置的搜索位置中未观察到候选项。这并不能证明主机其他位置没有该工具。",
+      "unsupported_driver": "此驱动暂不支持主机工具观察。请通过配置文件设置来配置程序。",
+      "unknown": "服务无法完成此次观察。这表示不确定，并非工具缺失的结论。",
+      "not_checked_in_this_environment": "未检查：应答的服务没有环境标识，或不是此配置文件的环境。"
+    },
+    "origin": {
+      "managed": "托管安装位置",
+      "vendor-default": "厂商默认位置",
+      "path": "服务 PATH",
+      "named": "命名程序位置",
+      "unknown": "未知位置"
+    },
+    "match": {
+      "registered": "已注册",
+      "manifest-corroborated": "已由托管清单佐证",
+      "unregistered-observed": "已观察到，未注册",
+      "unverified": "签名未验证",
+      "damaged": "安装已损坏",
+      "unknown": "验证状态未知"
+    },
+    "executable": {
+      "true": "可执行",
+      "false": "不可执行"
+    },
+    "configured": {
+      "same": "与已配置程序为同一文件",
+      "different": "不是已配置的程序",
+      "unknown": "与已配置程序的比较结果未知"
+    }
   }
 }

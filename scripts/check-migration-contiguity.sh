@@ -63,7 +63,38 @@ fi
 # repository runs zsh interactively, zsh does NOT word-split an unquoted
 # variable, and the loop would run ONCE over the whole string while looking
 # exactly like it iterated.
-MIGRATION_DIRS="${OLIVARES_MIGRATION_DIRS:-cloud/control-plane/migrations}"
+DIRS_POR_DEFECTO="cloud/control-plane/migrations"
+MIGRATION_DIRS="${OLIVARES_MIGRATION_DIRS:-$DIRS_POR_DEFECTO}"
+
+# ⛔ LA TERCERA RESPUESTA, Y VA ANTES DEL BUCLE A PROPOSITO. El repliegue por directorio
+# ausente sale con exit 2 DENTRO del bucle (tres sitios, :93/:101/:109), asi que una guarda
+# puesta en el `looked -eq 0` de mas abajo seria inalcanzable — lo medi antes de escribir
+# esto. En el arbol PUBLICADO `cloud/control-plane` se cura fuera entero: la pata no tiene
+# sujeto y nunca lo tendra, asi que ese 2 es correcto como «no he mirado» y es RUIDO como
+# veredicto, y en el CI publico tumba el job por una ausencia deliberada. Quien distingue es
+# el clasificador de hub-leg.sh —firma del generador MAS ausencia de todo camino hub-only—,
+# nunca un fichero-marcador suelto, que es una contraseña que cualquier copia teclea.
+#
+# Y SOLO CON LA LISTA POR DEFECTO, Y SOLO SI NO ESTA NINGUNO: si alguien apunto la pata a
+# otros directorios, o si alguno de los suyos SI esta, eso se mide. Sin las dos condiciones
+# la excepcion seria un comodin en vez de una respuesta acotada.
+if [ "${MIGRATION_DIRS}" = "${DIRS_POR_DEFECTO}" ]; then
+	_alguno=0
+	while IFS= read -r _d; do
+		[ -n "${_d}" ] || continue
+		[ -d "${_d}" ] && _alguno=1
+	done <<EOF
+${DIRS_POR_DEFECTO}
+EOF
+	if [ "${_alguno}" -eq 0 ] \
+	   && [ "$(bash "${ROOT}/scripts/hub-leg.sh" --classify --root "${ROOT}" 2>/dev/null)" = "public" ]; then
+		echo "check-migration-contiguity: SCOPED — export publico; cloud/control-plane se cura fuera"
+		echo "  del arbol publicado, asi que ${MIGRATION_DIRS} no tiene sujeto aqui y nunca lo tendra."
+		echo "  En el hub esta pata sigue midiendo la contiguidad. Esto NO es un verde de haber"
+		echo "  mirado: es una pata que no aplica a este arbol."
+		exit 0
+	fi
+fi
 
 rc=0
 looked=0
@@ -93,7 +124,15 @@ while IFS= read -r dir; do
 			exit 2
 		}
 		modo="árbol solicitado ${TREE_SHA:0:12} (git ls-tree)"
-		versions="$(git ls-tree --name-only "${TREE_SHA}:${dir}" 2>/dev/null \
+		# A failed read can emit a partial listing. Check its status before parsing
+		# migration versions, and leave Git diagnostics on stderr for the caller.
+		ls_tree_status=0
+		ls_tree_output="$(git ls-tree --name-only "${TREE_SHA}:${dir}")" || ls_tree_status=$?
+		if [ "${ls_tree_status}" -ne 0 ]; then
+			echo "check-migration-contiguity: NO HE PODIDO MIRAR: git ls-tree ${TREE_SHA:0:12}:${dir} salió con ${ls_tree_status}." >&2
+			exit 2
+		fi
+		versions="$(printf '%s\n' "${ls_tree_output}" \
 			| command grep -E '^[0-9]+_.*\.up\.sql$' || true)"
 	elif [ "${REPO_AVAILABLE}" -eq 1 ]; then
 		[ -d "${dir}" ] || {

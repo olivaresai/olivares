@@ -247,7 +247,14 @@ func fakeCodesFromSlug(slug string) ([]string, bool) {
 // also require a derivable grant set and reject client steering.
 func (f *updFixture) resolveEnterpriseSet(w http.ResponseWriter, r *http.Request) (string, bool) {
 	q := r.URL.Query()
-	live, knownToken := f.enterpriseGrants[q.Get("token")]
+	// The download token now travels in Authorization, never the query (C03-17). A query token
+	// would be a leak, so the fake refuses to read one from there.
+	if _, leaked := q["token"]; leaked {
+		http.Error(w, "Bad Request: token in query", http.StatusBadRequest)
+		return "", false
+	}
+	bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	live, knownToken := f.enterpriseGrants[bearer]
 	if !knownToken {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return "", false
@@ -524,7 +531,7 @@ func TestUpgradeE2E(t *testing.T) {
 		installDevLicense(t, dataDir)
 		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
 		target := writeTarget(t, v1)
-		_, err := runUpgradeCmd(t, "--enterprise", "--token", "tkn", "--endpoint", f.server.URL,
+		_, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
 			"--pubkey", f.pubB64, "--data-dir", dataDir, "--target", target, "--os", "linux", "--arch", "amd64", "--yes")
 		if err != nil {
 			t.Fatalf("enterprise upgrade: %v", err)
@@ -550,9 +557,9 @@ func TestUpgradeE2E(t *testing.T) {
 		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
 		f.enterpriseGrants["tkn"] = nil
 		target := writeTarget(t, v1)
-		_, err := runUpgradeCmd(t, "--enterprise", "--token", "tkn", "--endpoint", f.server.URL,
+		_, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
 			"--pubkey", f.pubB64, "--data-dir", dataDir, "--target", target, "--os", "linux", "--arch", "amd64", "--check")
-		if err == nil || !strings.Contains(err.Error(), "endpoint returned 403: Forbidden: no live grant for set") {
+		if err == nil || !isHTTPStatus(err, http.StatusForbidden) {
 			t.Fatalf("the gate double must 403 a set-less manifest without live grants, got %v", err)
 		}
 		if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
@@ -618,7 +625,7 @@ func TestUpgradeE2E(t *testing.T) {
 	t.Run("no license refuses enterprise with guidance", func(t *testing.T) {
 		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
 		target := writeTarget(t, v1)
-		_, err := runUpgradeCmd(t, "--enterprise", "--token", "tkn", "--endpoint", f.server.URL,
+		_, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
 			"--pubkey", f.pubB64, "--data-dir", t.TempDir(), "--target", target, "--os", "linux", "--arch", "amd64", "--yes")
 		if err == nil || !strings.Contains(err.Error(), "license") {
 			t.Fatalf("missing license must refuse, got %v", err)

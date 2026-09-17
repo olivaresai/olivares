@@ -27,7 +27,7 @@
 //
 // Run: node scripts/check-console-perms.selftest.mjs   (task lint:console-perms-selftest)
 
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -78,9 +78,20 @@ const TSCONFIG = {
     jsxImportSource: '@/jsx-shim',
     strict: true,
     skipLibCheck: true,
-    paths: { '@/*': ['./src/*'] },
+    paths: { '@/*': ['./src/*'], react: ['./src/react.ts'] },
   },
   include: ['src'],
+}
+
+// These fixtures deliberately resolve React from the installed web dependency graph.
+// The positive controls below therefore fail if symbol identity cannot cross React's
+// real declaration files; the local source stub remains useful to the older fixtures.
+const INSTALLED_REACT_TSCONFIG = {
+  ...TSCONFIG,
+  compilerOptions: {
+    ...TSCONFIG.compilerOptions,
+    paths: { '@/*': ['./src/*'] },
+  },
 }
 
 // The smallest thing that makes `jsx: react-jsx` type-check without React.
@@ -93,6 +104,18 @@ export namespace JSX {
 export declare function jsx(type: unknown, props: unknown, key?: unknown): JSX.Element
 export declare function jsxs(type: unknown, props: unknown, key?: unknown): JSX.Element
 export declare const Fragment: unique symbol
+`
+
+// A real module identity for the two React wrappers the guard understands. The body
+// is deliberately ordinary: credit must come from resolving the export of `react`,
+// including aliases/re-exports, rather than from the local spelling at a call site.
+const REACT_STUB = `
+export function useMemo<T>(factory: () => T, _deps: readonly unknown[]): T {
+  return factory()
+}
+export function useCallback<T extends (...args: never[]) => unknown>(callback: T, _deps: readonly unknown[]): T {
+  return callback
+}
 `
 
 // A minimal auth context: the guard anchors can() on the AuthContextValue member
@@ -160,6 +183,10 @@ function makeRepo(
     // Knobs that break the ENVIRONMENT rather than the console. Each exists because a
     // fail-closed guard with no case is a guard nobody has watched refuse.
     noTypescript = false,
+    // A file at the compiler path that is not a compiler: found, then unloadable.
+    fakeTypescript = null,
+    unreadableCompiler = false,
+    unreadableStore = false,
     noGoModule = false,
     badInventoryJson = false,
     tsconfig = TSCONFIG, // null omits it; a string writes it verbatim (malformed JSON)
@@ -187,7 +214,16 @@ function makeRepo(
   // root pointed at web's store. A battery that only goes green at home is a battery
   // that tests the home, and this one sits in the FAST lane, where it would have
   // reddened every feature push.
-  if (!noTypescript) {
+  if (unreadableStore) {
+    const store = path.join(root, 'web', 'node_modules', '.pnpm')
+    fs.mkdirSync(store, { recursive: true })
+    fs.chmodSync(store, 0o000)
+  } else if (unreadableCompiler) {
+    write('web/node_modules/typescript/lib/typescript.js', 'export default {}\n')
+    fs.chmodSync(path.join(root, 'web', 'node_modules', 'typescript', 'lib', 'typescript.js'), 0o000)
+  } else if (fakeTypescript != null) {
+    write('web/node_modules/typescript/lib/typescript.js', fakeTypescript)
+  } else if (!noTypescript) {
     const hostModules = [path.join(REPO, 'web', 'node_modules'), path.join(REPO, 'node_modules')]
     const src = hostModules.find((p) => fs.existsSync(path.join(p, '.pnpm')) || fs.existsSync(path.join(p, 'typescript')))
     if (!src) {
@@ -212,6 +248,7 @@ function makeRepo(
     )
   }
   write('web/src/jsx-shim/jsx-runtime.d.ts', JSX_SHIM)
+  write('web/src/react.ts', REACT_STUB)
   if (rbac !== null) write('web/src/lib/auth/rbac.ts', rbac)
   write('web/src/lib/auth/context.tsx', context)
   for (const [rel, body] of Object.entries(files)) write(rel, body)
@@ -240,25 +277,60 @@ func main() {
   return root
 }
 
-/** Run the guard against a throwaway repo; return {code, findings, stderr}. */
-function run(root) {
+function removeFixture(root) {
+  spawnSync('chmod', ['-R', 'u+rwx', root], { stdio: 'ignore' })
+  fs.rmSync(root, { recursive: true, force: true })
+}
+
+function runnerHonorsMode000() {
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'mode000-'))
+  const f = path.join(dir, 'x')
+  fs.writeFileSync(f, 'x')
+  fs.chmodSync(f, 0o000)
+  let honored = false
   try {
-    const out = execFileSync('node', [GUARD, '--json'], {
-      encoding: 'utf8',
-      env: { ...process.env, OLIVARES_CONSOLE_PERMS_REPO: root },
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    return { code: 0, ...JSON.parse(out), stderr: '' }
-  } catch (e) {
-    const stdout = e.stdout?.toString() ?? ''
-    let parsed = null
-    try {
-      parsed = JSON.parse(stdout)
-    } catch {
-      /* exit 2 paths print no JSON */
-    }
-    return { code: e.status, findings: parsed?.findings ?? [], checked: parsed?.checked, stderr: e.stderr?.toString() ?? '' }
+    fs.accessSync(f, fs.constants.R_OK)
+  } catch {
+    honored = true
+  }
+  spawnSync('chmod', ['-R', 'u+rwx', dir], { stdio: 'ignore' })
+  fs.rmSync(dir, { recursive: true, force: true })
+  return honored
+}
+
+const MODE000 = runnerHonorsMode000()
+
+/** Run the guard against a throwaway repo; return {code, findings, stderr}. */
+function run(root, opts = {}) {
+  const guard = opts.guard ?? GUARD
+  // `--json` by default; `args: []` runs the guard in its ORDINARY mode, which is the only
+  // one where the surface census reaches stderr (it sits after the JSON early return).
+  const r = spawnSync('node', [guard, ...(opts.args ?? ['--json'])], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      OLIVARES_CONSOLE_PERMS_REPO: root,
+      // Isolated module lookup: a host NODE_PATH must not supply a compiler
+      // the fixture deliberately omitted.
+      NODE_PATH: '',
+      ...(opts.env ?? {}),
+    },
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  const stdout = r.stdout ?? ''
+  const stderr = r.stderr ?? ''
+  let parsed = null
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    /* exit 2 / mutant-clean paths print no JSON */
+  }
+  return {
+    code: r.status,
+    findings: parsed?.findings ?? [],
+    checked: parsed?.checked,
+    stderr,
+    stdout,
   }
 }
 
@@ -287,26 +359,33 @@ function check(name, root, expected, expectedCode = expected.length ? 1 : 0) {
   results.push({ name, ok })
   // CONSOLE_PERMS_SELFTEST_KEEP=1 leaves the throwaway consoles on disk so a failing
   // case can be inspected and re-run by hand instead of guessed at.
-  if (!process.env.CONSOLE_PERMS_SELFTEST_KEEP) fs.rmSync(root, { recursive: true, force: true })
+  if (!process.env.CONSOLE_PERMS_SELFTEST_KEEP) removeFixture(root)
   else console.error(`    kept: ${root}`)
   return r
 }
 
-function checkExit(name, root, expectedCode, stderrMustMatch) {
-  const r = run(root)
-  const ok = r.code === expectedCode && (!stderrMustMatch || stderrMustMatch.test(r.stderr))
+function checkExit(name, root, expectedCode, stderrMustMatch, opts = {}) {
+  const r = run(root, opts)
+  const notMatch = opts.stderrMustNotMatch
+  const ok =
+    r.code === expectedCode &&
+    (!stderrMustMatch || stderrMustMatch.test(r.stderr)) &&
+    (!notMatch || !notMatch.test(r.stderr))
   if (!ok) {
     failures++
     console.error(`\n✗ ${name}`)
     console.error(`  exit: got ${r.code}, want ${expectedCode}`)
     console.error(`  stderr: ${r.stderr.slice(0, 600)}`)
+    if (notMatch && notMatch.test(r.stderr)) {
+      console.error(`  stderr matched forbidden pattern: ${notMatch}`)
+    }
   } else {
     console.log(`✓ ${name}`)
   }
   results.push({ name, ok })
   // CONSOLE_PERMS_SELFTEST_KEEP=1 leaves the throwaway consoles on disk so a failing
   // case can be inspected and re-run by hand instead of guessed at.
-  if (!process.env.CONSOLE_PERMS_SELFTEST_KEEP) fs.rmSync(root, { recursive: true, force: true })
+  if (!process.env.CONSOLE_PERMS_SELFTEST_KEEP) removeFixture(root)
   else console.error(`    kept: ${root}`)
 }
 
@@ -677,6 +756,62 @@ checkExit(
   /cannot find the typescript compiler/,
 )
 
+{
+  // Harness control: if die() were rewritten to exit 0, the missing-compiler
+  // fixture would go green. Independent review B1: baseline 13ca already exits 2
+  // when the compiler is absent; this arm is not a reproduction of that tree.
+  const mutantDir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'console-perms-mut-'))
+  const mutantGuard = path.join(mutantDir, 'check-console-perms.mjs')
+  const src = fs.readFileSync(GUARD, 'utf8')
+  const mutated = src.replace('process.exit(2)', 'process.exit(0)').replace('process.exitCode = 2', 'process.exitCode = 0')
+  if (mutated === src || !mutated.includes('process.exit(0)')) {
+    failures++
+    console.error('\n✗ fail-closed: TypeScript-absent mutant did not apply — die() moved')
+    results.push({ name: 'fail-closed: TypeScript-absent mutant applies', ok: false })
+  } else {
+    fs.writeFileSync(mutantGuard, mutated)
+    checkExit(
+      'fail-closed: mutant of die() exiting 0 is a harness control, not a baseline reproduction',
+      makeRepo(OK_VIEW, { noTypescript: true }),
+      0,
+      /cannot find the typescript compiler|nothing was checked/,
+      { guard: mutantGuard },
+    )
+  }
+  if (!process.env.CONSOLE_PERMS_SELFTEST_KEEP) removeFixture(mutantDir)
+}
+
+checkExit(
+  'fail-closed: a compiler file that throws on import is exit 2, not a finding',
+  makeRepo(OK_VIEW, { fakeTypescript: 'throw new Error("boom: compiler cannot load")\n' }),
+  2,
+  /cannot load the typescript compiler/,
+)
+
+checkExit(
+  'fail-closed: a file at the compiler path that is not a compiler is exit 2',
+  makeRepo(OK_VIEW, { fakeTypescript: 'export default {}\n' }),
+  2,
+  /not a usable TypeScript compiler|cannot load the typescript compiler/,
+)
+
+if (MODE000) {
+  checkExit(
+    'fail-closed: an unreadable compiler file is exit 2, not a finding',
+    makeRepo(OK_VIEW, { unreadableCompiler: true }),
+    2,
+    /exists but is unreadable|cannot load the typescript compiler/,
+  )
+  checkExit(
+    'fail-closed: an unreadable compiler store is exit 2, not a finding',
+    makeRepo(OK_VIEW, { unreadableStore: true }),
+    2,
+    /cannot read /,
+  )
+} else {
+  console.log('skip fail-closed: unreadable compiler/store — runner does not honor mode 000')
+}
+
 checkExit(
   'fail-closed: no Go module is exit 2 — the engine half cannot run',
   makeRepo(OK_VIEW, { noGoModule: true }),
@@ -820,6 +955,692 @@ check(
     'undeclared ghost:write @ web/src/features/one.tsx:4',
     'divergent authz:read @ web/src/features/two.tsx:4',
   ],
+)
+
+// ---------------------------------------------------------------------------
+// 8. THE REGISTERED CAPABILITY QUESTION as a console surface (G1-B).
+//
+//    A migrated screen no longer mirrors its permission with `can()`: it asks the engine
+//    about the exact registered operation. The surface census must recognise that, and —
+//    this is the half that matters — it must recognise it BECAUSE THE QUESTION IS THERE.
+//    A recognition that cannot go back to red is an exemption with extra steps, so the
+//    two cases below are the same fixture with and without the question.
+//
+//    They run WITHOUT `--json`: the surface census sits after the JSON early-return, so it
+//    is only observable on stderr. That is a property of the guard's existing shape, not a
+//    choice made to make these pass.
+// ---------------------------------------------------------------------------
+const CAPS_MODULE = `export function capabilityQuestion(input: {
+  kind: 'surface' | 'operation'
+  operation: string
+  workspaceId?: string | null
+}): { kind: string; operation: string } {
+  return { kind: input.kind, operation: input.operation }
+}
+export function useCapability(question: { kind: string; operation: string } | null): {
+  access: string
+  question: { kind: string; operation: string } | null
+} {
+  return { access: 'unknown', question }
+}
+export interface CapabilityPreflight {
+  request: (question: { kind: string; operation: string }) => Promise<unknown>
+}
+export function useCapabilityPreflight(): CapabilityPreflight {
+  return { request: async (question) => question }
+}
+`
+const SPECTRE_OP = 'GET /v1/m/spectre/things/administration'
+const CREDIT_LINE = /spectre:thing:admin \(GET \/v1\/m\/spectre\/things\/administration\)/
+const UNCOVERED_LINE = /spectre:thing:admin — 1 route\(s\) require it and no can\(\) asks for it/
+const capsView = (operation) => `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export const SPECTRE_SURFACE = ${operation}
+export function spectreSurfaceQuestion(workspace: string | null): { kind: string; operation: string } | null {
+  if (!workspace) return null
+  return capabilityQuestion({
+    kind: 'surface',
+    operation: SPECTRE_SURFACE,
+    workspaceId: workspace,
+  })
+}
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const observation = useCapability(spectreSurfaceQuestion('w1'))
+  return observation.access
+}
+`
+/** An engine that mounts one module route under a permission NO can() asks for. */
+const SPECTRE_INVENTORY = {
+  ...INVENTORY,
+  declared: {
+    ...INVENTORY.declared,
+    'spectre:thing:admin': {
+      forms: ['module:spectre', 'route:spectre'],
+      grants: { viewer: false, editor: false, admin: true, owner: true },
+    },
+  },
+  modules: [
+    {
+      namespace: 'spectre',
+      routes: [
+        { method: 'GET', pattern: '/things/administration', permission: 'spectre:thing:admin' },
+      ],
+    },
+  ],
+}
+
+checkExit(
+  'a registered capability question IS a console surface: the route drops out of the census',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/spectre.tsx': capsView(
+        `'GET /v1/m/spectre/things/administration'`,
+      ),
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'and it goes back to RED without it: the same fixture with the question removed reports the route uncovered',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      // The screen still exists and still holds an unrelated `can()`; only the question
+      // is gone. Nothing else about the fixture changed.
+      'web/src/features/spectre.tsx': view(`  return can('session:read')`),
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+// A question that names an operation the engine mounts under NO route is the defect in
+// the other direction: the screen can only ever be answered `not_supported`, which grants
+// nothing and also never works. It is a finding, not a silent pass.
+check(
+  'a capability question naming an unmounted operation is undeclared, not ignored',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/spectre.tsx': capsView(
+        `'GET /v1/m/spectre/things/does-not-exist'`,
+      ),
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  ['undeclared - @ web/src/features/spectre.tsx:14'],
+)
+
+// And an operation string this guard cannot READ fails the run, exactly like an
+// unreadable can() argument: a question it could not resolve is where a divergence hides.
+check(
+  'an unresolvable capability operation is unreadable, never skipped',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/spectre.tsx': capsView(
+        `('GET /v1/m/spectre/' + String(Math.random()))`,
+      ),
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  ['unreadable - @ web/src/features/spectre.tsx:14'],
+)
+
+// ---------------------------------------------------------------------------
+// 8b. CONSUMER PATH — matching the text `capabilityQuestion` is not a surface.
+//     The independent census harness's three originals all exited 0 under the
+//     ratchet; the causal is one unaccounted permission versus a fake zero.
+// ---------------------------------------------------------------------------
+const spectreVisible = {
+  'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+  'web/src/features/visible.tsx': view(`  return can('session:read')`),
+}
+
+checkExit(
+  'absent capability question: the spectre route stays uncovered (no fake credit)',
+  makeRepo(spectreVisible, { inventory: SPECTRE_INVENTORY }),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+checkExit(
+  'an exported builder that is never imported or called is not a console surface',
+  makeRepo(
+    {
+      ...spectreVisible,
+      'web/src/features/never-imported.ts': `import { capabilityQuestion } from '@/lib/auth/capabilities'
+export function neverCalled() {
+  return capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  })
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+checkExit(
+  'an unrelated local namesake of capabilityQuestion is not a console surface',
+  makeRepo(
+    {
+      ...spectreVisible,
+      'web/src/features/never-imported.ts': `function capabilityQuestion(x: unknown) { return x }
+export const inert = capabilityQuestion({
+  kind: 'surface',
+  operation: '${SPECTRE_OP}',
+  workspaceId: 'w1',
+})
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+checkExit(
+  'an unused intermediate consumer does not cover a question it never receives',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const question = capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  })
+  return can('session:read') && question.operation
+}
+function unusedConsumer(question: { kind: string; operation: string }) {
+  return useCapability(question)
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+checkExit(
+  'a dead hook in an unimported module is not coverage',
+  makeRepo(
+    {
+      ...spectreVisible,
+      'web/src/features/never-imported.ts': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+export function unusedHook() {
+  return useCapability(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }))
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+// IR2: the wrapper name does not establish React identity. This function never runs
+// its callback, so the question does not exist at runtime and must earn no credit.
+checkExit(
+  'a local useMemo namesake that does not invoke its callback earns no credit',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+function useMemo<T>(_factory: () => T, _deps: readonly unknown[]): T | null { return null }
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const question = useMemo(() => capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }), [])
+  const observation = useCapability(question)
+  return observation.access
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+checkExit(
+  'a consumer inside an ignored local callback is not reachable',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+function useCallback(_ignored: () => unknown, _deps: readonly unknown[]): null { return null }
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  useCallback(() => useCapability(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  })), [])
+  return control
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+// IR3: importing a file is only a bound on the graph. The real `can()` makes View
+// a root, but there is no call edge from it to unusedHook, so the hook is not a surface.
+checkExit(
+  'a never-called hook in the same live module earns no credit',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export function View() {
+  const { can } = useAuth()
+  return can('session:read')
+}
+export function unusedHook() {
+  return useCapability(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }))
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+checkExit(
+  'a hook reached by a direct call from the can-root earns credit',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+function useSpectre() {
+  return useCapability(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }))
+}
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  return useSpectre().access
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'a capability child reached through JSX from the can-root earns credit',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+function CapabilityChild() {
+  const observation = useCapability(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }))
+  return <span>{observation.access}</span>
+}
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  return <CapabilityChild />
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'a re-exported alias of React useMemo preserves a consumed question',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/lib/react-hooks.ts': `export { useMemo as useQuestionMemo } from 'react'\n`,
+      'web/src/features/visible.tsx': `import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+import { useQuestionMemo } from '@/lib/react-hooks'
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const question = useQuestionMemo(() => capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }), [])
+  return useCapability(question).access
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY, tsconfig: INSTALLED_REACT_TSCONFIG },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'React namespace useCallback preserves a consumed question builder',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import * as React from 'react'
+import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const ask = React.useCallback(() => capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }), [])
+  return useCapability(ask()).access
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY, tsconfig: INSTALLED_REACT_TSCONFIG },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+// CCR2-IR1: React's installed declaration is external, but useCallback retains its
+// argument instead of invoking it. Keeping the value alive with `void ask` must not
+// manufacture a consumer. The called twin proves that the real declaration resolved
+// and that invoking the returned callback establishes the missing execution edge.
+checkExit(
+  'installed React useCallback retained without invocation earns no credit',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import * as React from 'react'
+import { capabilityQuestion, useCapabilityPreflight } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const preflight = useCapabilityPreflight()
+  const ask = React.useCallback(() => preflight.request(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  })), [preflight])
+  void ask
+  return control
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY, tsconfig: INSTALLED_REACT_TSCONFIG },
+  ),
+  0,
+  UNCOVERED_LINE,
+  { args: [], stderrMustNotMatch: CREDIT_LINE },
+)
+
+checkExit(
+  'installed React useCallback earns credit once its returned callback is invoked',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import * as React from 'react'
+import { capabilityQuestion, useCapabilityPreflight } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const preflight = useCapabilityPreflight()
+  const ask = React.useCallback(() => preflight.request(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  })), [preflight])
+  void ask()
+  return control
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY, tsconfig: INSTALLED_REACT_TSCONFIG },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'installed React useMemo factory still executes and earns consumer credit',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import * as React from 'react'
+import { capabilityQuestion, useCapabilityPreflight } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const preflight = useCapabilityPreflight()
+  const request = React.useMemo(() => preflight.request(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  })), [preflight])
+  void request
+  return control
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY, tsconfig: INSTALLED_REACT_TSCONFIG },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'a can-root nested in a React callback keeps its containing hook reachable',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { useMemo } from 'react'
+import { capabilityQuestion, useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export function View() {
+  const { can } = useAuth()
+  const control = useMemo(() => can('voice:policy:admin'), [can])
+  const observation = useCapability(capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  }))
+  return control && observation.access
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY, tsconfig: INSTALLED_REACT_TSCONFIG },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'the shared projection path (FeatureView.capability.surface + useCapability) is a consumer',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/registry.ts': `import { capabilityQuestion } from '@/lib/auth/capabilities'
+export const SPECTRE_SURFACE = '${SPECTRE_OP}'
+export function spectreSurfaceQuestion(workspace: string | null): { kind: string; operation: string } | null {
+  if (!workspace) return null
+  return capabilityQuestion({ kind: 'surface', operation: SPECTRE_SURFACE, workspaceId: workspace })
+}
+export interface FeatureCapability {
+  surface: (workspace: string | null) => { kind: string; operation: string } | null
+  deepLink?: (
+    workspace: string | null,
+    search: string,
+  ) => { kind: string; operation: string } | null
+}
+export interface FeatureView {
+  capability?: FeatureCapability
+}
+export const FEATURE_VIEWS: FeatureView[] = [
+  { capability: { surface: spectreSurfaceQuestion } },
+]
+`,
+      'web/src/features/visible.tsx': `import { useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+import { FEATURE_VIEWS } from '@/features/registry'
+const VIEW = FEATURE_VIEWS[0]
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const observation = useCapability(VIEW?.capability?.surface('w1') ?? null)
+  return observation.access
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+checkExit(
+  'import aliases of the real builder and hook still count as a consumed question',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/spectre.tsx': `import { capabilityQuestion as ask, useCapability as observe } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+export const SPECTRE_SURFACE = '${SPECTRE_OP}'
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const observation = observe(ask({
+    kind: 'surface',
+    operation: SPECTRE_SURFACE,
+    workspaceId: 'w1',
+  }))
+  return observation.access
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+
+{
+  const mutantDir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'console-perms-cap-'))
+  const mutantGuard = path.join(mutantDir, 'check-console-perms.mjs')
+  const src = fs.readFileSync(GUARD, 'utf8')
+  const needle =
+    'function recordConsumedCapabilityQuestionSite(operation, node) {\n' +
+    '  capabilityQuestions.push({ operation, node })\n' +
+    '}'
+  const mutated = src.replace(
+    needle,
+    'function recordConsumedCapabilityQuestionSite(operation, node) {\n' +
+      '  /* removed-recognizer control: credit is stripped */\n' +
+      '}',
+  )
+  if (mutated === src || mutated.includes('capabilityQuestions.push({ operation, node })')) {
+    failures++
+    console.error('\n✗ removed-recognizer: mutant of consumed-credit did not apply')
+    results.push({ name: 'removed-recognizer: consumed-credit mutant applies', ok: false })
+  } else {
+    fs.writeFileSync(mutantGuard, mutated)
+    checkExit(
+      'removed-recognizer: blanking consumed credit leaves the spectre route uncovered',
+      makeRepo(
+        {
+          'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+          'web/src/features/spectre.tsx': capsView(`'${SPECTRE_OP}'`),
+        },
+        { inventory: SPECTRE_INVENTORY },
+      ),
+      0,
+      UNCOVERED_LINE,
+      { guard: mutantGuard, args: [], stderrMustNotMatch: CREDIT_LINE },
+    )
+  }
+  if (!process.env.CONSOLE_PERMS_SELFTEST_KEEP) removeFixture(mutantDir)
+}
+
+checkExit(
+  'a live-file namesake of capabilityQuestion is unreadable, not a surface',
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/visible.tsx': `import { useAuth } from '@/lib/auth/context'
+function capabilityQuestion(x: unknown) { return x }
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const inert = capabilityQuestion({
+    kind: 'surface',
+    operation: '${SPECTRE_OP}',
+    workspaceId: 'w1',
+  })
+  return can('session:read') && inert
+}
+`,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  ),
+  1,
+  /named capabilityQuestion/,
+  { args: [] },
 )
 
 // ---------------------------------------------------------------------------

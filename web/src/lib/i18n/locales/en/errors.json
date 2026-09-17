@@ -13,6 +13,10 @@
     "description": "The control plane hit an unexpected error. Please try again.",
     "back": "Back to overview"
   },
+  "evidenceUnavailable": {
+    "title": "This information cannot be verified",
+    "description": "This information cannot currently be loaded. Retry, or contact an administrator if it persists."
+  },
   "network": {
     "title": "Control plane unreachable",
     "description": "We could not reach the control plane. Check your connection and that the engine is running."

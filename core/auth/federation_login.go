@@ -78,13 +78,35 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 		a.auditLoginBlocked(ctx, "user:"+user.ID.String(), ip, "sso_into_superadmin_refused")
 		return "", model.AuthSession{}, ErrUnauthenticated
 	}
+	// A federated login is AAL1 here regardless of how the IdP authenticated:
+	// this engine verified only the assertion, not the authenticator, and the
+	// assurance claim is never inflated beyond what was verified first-party
+	// (SP 800-63-4 defines no acr/amr conveyance mapping to trust instead).
+	//
+	// R5 (ROOT-R5-SSO-COMPLETION-1): the session is issued FIRST and its whole AuthMutate
+	// is awaited. The new-session commit under the login capability lock is the admission
+	// point, so a refused session (for example ErrLoginEnforcementComponentAbsent) returns
+	// here with no subject binding, no group membership and no completion audit event. An
+	// earlier independent posture check would not serialize through that commit.
+	token, sess, err := a.mintSession(ctx, user, ip, "sso.login", []string{"sso"})
+	if err != nil {
+		return "", model.AuthSession{}, err
+	}
+	// Completion effects of the admitted login run in their own best-effort transactions:
+	// they are not atomic with issuance, and a failure never revokes the issued session.
+	// They finish before the token is returned. A session carries no grant snapshot and
+	// every request loads grants in its own AuthView, so the first use of this token
+	// already sees the reconciled membership. The audit order is sso.login, then
+	// sso.user.subject_bound and sso.group.reconcile.
+	//
 	// U3 — bind the issuer-qualified subject onto an email-matched account that
-	// has none, NOW that it has passed every eligibility guard (active, non-superadmin).
-	// Deferring the stamp to here — rather than to findOrProvision, which runs before
-	// the guards — is the fix for the "a refused login must leave no trace" invariant:
-	// a disabled or superadmin account, or any assertion refused above, never persists
-	// an attacker-influenced binding or audit row. Best-effort and never-overwrite; a
-	// no-op for a JIT-created account (bound at create) or when no issuer was surfaced.
+	// has none, NOW that it has passed every eligibility guard (active, non-superadmin)
+	// and its session was issued. Deferring the stamp to here — rather than to
+	// findOrProvision, which runs before the guards — is the fix for the "a refused login
+	// must leave no trace" invariant: a disabled or superadmin account, any assertion
+	// refused above, or a refused session never persists an attacker-influenced binding
+	// or audit row. Best-effort and never-overwrite; a no-op for a JIT-created account
+	// (bound at create) or when no issuer was surfaced.
 	a.bindSubjectIfUnset(ctx, user.ID, id.QualifiedSubject())
 	// U2 — reconcile the user's directory-group membership from the groups the
 	// IdP asserted, so login-driven membership lights up the MappedRole elevation and
@@ -95,11 +117,7 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	if a.groupMapper != nil && !authoritative && tenant != "" && tenant != GlobalFederationScope && len(id.Groups) > 0 {
 		a.reconcileAssertedGroups(ctx, user.ID, tenant, id.Groups)
 	}
-	// A federated login is AAL1 here regardless of how the IdP authenticated:
-	// this engine verified only the assertion, not the authenticator, and the
-	// assurance claim is never inflated beyond what was verified first-party
-	// (SP 800-63-4 defines no acr/amr conveyance mapping to trust instead).
-	return a.mintSession(ctx, user, ip, "sso.login", []string{"sso"})
+	return token, sess, nil
 }
 
 // FindOrProvisionByEmail returns the local user for a federated identity, JIT-
@@ -199,8 +217,9 @@ func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentit
 
 // bindSubjectIfUnset stamps the issuer-qualified subject onto an account that has
 // none, so a later login correlates by subject (rename-resilient U3). It runs
-// ONLY from CompleteSSO, AFTER the eligibility guards (active + non-superadmin), so a
-// refused login never persists a binding or an audit row. It re-reads the account in
+// ONLY from CompleteSSO, AFTER the eligibility guards (active + non-superadmin) and a
+// successful session issuance, so a refused login or a refused session never persists a
+// binding or an audit row. It re-reads the account in
 // its own transaction and NEVER overwrites an existing binding — a second issuer that
 // merely matched the account's email cannot seize its identity. Best-effort: any error
 // (including a lost race on the unique index) is swallowed, the login still succeeds,
@@ -237,6 +256,8 @@ func (a *Authenticator) bindSubjectIfUnset(ctx context.Context, userID model.ID,
 // (SCIM/operator own removal); the SCIM-authoritative toggle (D4) is the escape
 // hatch for deployments that want SCIM to be the only writer. Best-effort — the
 // caller ignores the error (login still succeeds with the memberships already held).
+// CompleteSSO calls it only after the session was issued, so a refused session adds no
+// membership.
 //
 // No per-add role-ceiling is applied here (unlike the SCIM member-add path,
 // scim_groups.go: "a role grant by the ACTOR … NOT by the IdP"). Login membership

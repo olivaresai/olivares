@@ -132,6 +132,16 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     goos: [linux, darwin]
     goarch: [amd64, arm64]
+    # Render the VERSION-PINNED second-stage installer as a PRE-BUILD hook of this build, not
+    # as a global `before` hook. GoReleaser 2.17.0 runs `before` hooks and only THEN ensures
+    # that dist/ is empty, so a `before` hook writing dist/olivares-install-*.sh stopped every
+    # `release --clean`, `build --clean` and `task release:snapshot` with "dist is not empty".
+    # Build pre-hooks run after that check. Each target renders identical bytes through an
+    # atomic rename, `dist/` stays ignored, and the checksum/release extra_files below still
+    # declare the same asset; neither declaration implies the other in v2.17.0.
+    hooks:
+      pre:
+        - bash scripts/render-release-installer.sh {{ .Version }} dist/olivares-install-{{ .Version }}.sh {{ .IsSnapshot }}
 
   # ---- FIPS 140-3 build variant (SCP-09) — a SEPARATE, opt-in artifact -----------
   # IDENTICAL to the `olivares` build above (same -trimpath / -ldflags /
@@ -196,6 +206,11 @@ archives:
       - DISCLAIMER.md
       - SECURITY.md
       - README.md
+      # DIST-24-04: the verified archive carries the service adapter invoked by
+      # the signed installer. Paths are preserved so templates are addressable
+      # without downloading a second, unauthenticated payload.
+      - scripts/install-service.sh
+      - packaging/service/
       # The canonical texts of every licence used in the tree (REUSE). LICENSING.md and
       # NOTICE both cite them BY PATH; shipping the pointers without the documents leaves an
       # Apache-2.0 recipient holding a reference to a file that is not there.
@@ -216,6 +231,8 @@ archives:
       - DISCLAIMER.md
       - SECURITY.md
       - README.md
+      - scripts/install-service.sh
+      - packaging/service/
       # The canonical texts of every licence used in the tree (REUSE). LICENSING.md and
       # NOTICE both cite them BY PATH; shipping the pointers without the documents leaves an
       # Apache-2.0 recipient holding a reference to a file that is not there.
@@ -236,6 +253,14 @@ checksum:
   # duplicate of the other.
   extra_files:
     - glob: release-commit.txt
+    # THE RUN THIS ARTIFACT SET CAME OUT OF, inside the same signed set. The commit above
+    # says which SOURCE was built; it cannot say that this set was produced by a completed,
+    # successful phase-1 run of this workflow in this repository, and the finalizer refuses
+    # to publish without that second fact (scripts/release-finalize-stable.sh). Same pairing
+    # rule as the line above: this declaration CHECKSUMS, `release.extra_files` UPLOADS, and
+    # neither implies the other in v2.17.0.
+    - glob: release-build-context.json
+    - glob: dist/olivares-install-*.sh
 
 # Per-archive SBOMs as SIDECAR files. SPDX-2.3 (the interchange baseline) AND
 # CycloneDX 1.6 (security-native) are generated through scripts/sbom-generate.sh:
@@ -302,9 +327,11 @@ signs:
 
 # Native Linux packages (.deb / .rpm / .apk) from the BASE binary only — the FIPS
 # variant ships as the *_fips_* archive and the *-fips image, never as the default
-# package. Each package carries the systemd unit and an example env file; the
-# postinstall creates a hardened service user + /var/lib/olivares and reloads systemd,
-# but never enables/starts the service (the operator opts in: systemctl enable --now).
+# package. .deb/.rpm carry the systemd unit; .apk carries an executable OpenRC
+# unit. The postinstall creates a hardened service user + /var/lib/olivares and
+# never enables/starts the service (the operator opts in). Contents use the
+# packager field (goreleaser v2.17.0 NFPMContent) so APK does not receive the
+# systemd unit. APK upgrade scripts are apk.scripts, not host-tool detection.
 nfpms:
   - id: olivares-nfpm
     package_name: olivares
@@ -340,32 +367,87 @@ nfpms:
         dst: /usr/share/doc/olivares/LICENSES
       - src: packaging/systemd/olivares.service
         dst: /usr/lib/systemd/system/olivares.service
+        packager: deb
+      - src: packaging/systemd/olivares.service
+        dst: /usr/lib/systemd/system/olivares.service
+        packager: rpm
+      - src: packaging/nfpm/package-init-systemd.txt
+        dst: /usr/lib/olivares/package-init
+        packager: deb
+      - src: packaging/nfpm/package-init-systemd.txt
+        dst: /usr/lib/olivares/package-init
+        packager: rpm
+      - src: packaging/openrc/olivares.sh
+        dst: /etc/init.d/olivares
+        packager: apk
+        file_info:
+          mode: 0755
+      - src: packaging/openrc/load-env.sh
+        dst: /usr/lib/olivares/openrc-load-env.sh
+        packager: apk
+      - src: packaging/nfpm/package-init-openrc.txt
+        dst: /usr/lib/olivares/package-init
+        packager: apk
       - src: packaging/olivares.env.example
         dst: /etc/olivares/olivares.env
         type: "config|noreplace"
+        packager: deb
+      - src: packaging/olivares.env.example
+        dst: /etc/olivares/olivares.env
+        type: "config|noreplace"
+        packager: rpm
+      - src: packaging/olivares.env.example
+        dst: /usr/share/olivares/olivares.env.example
+        packager: apk
+      # APK must not ship this directory: apk applies the packaged root:root
+      # 0750 node after post-install, so the service user cannot write
+      # .gitignore/keys (measured Alpine 3.22). postinstall mkdir+chown and
+      # OpenRC start_pre re-apply ownership. deb/rpm keep the directory node.
       - dst: /var/lib/olivares
         type: dir
         file_info:
           mode: 0750
+        packager: deb
+      - dst: /var/lib/olivares
+        type: dir
+        file_info:
+          mode: 0750
+        packager: rpm
     scripts:
       postinstall: packaging/nfpm/postinstall.sh
       preremove: packaging/nfpm/preremove.sh
       postremove: packaging/nfpm/postremove.sh
+    apk:
+      scripts:
+        preupgrade: packaging/nfpm/apk-preupgrade.sh
+        postupgrade: packaging/nfpm/postinstall.sh
 
 # Homebrew tap, as a CASK (the non-deprecated successor to `brews`; Homebrew now wants
 # casks for pre-built binaries). A cask auto-strips the Gatekeeper quarantine xattr on
 # install, so it doubles as the macOS-notarization stopgap until an Apple Developer ID
-# notarizes the darwin binaries (a documented later step). Pushes to olivaresai/homebrew-tap.
-# PREREQUISITE (before the first public release): create the public repo
-# olivaresai/homebrew-tap and add a HOMEBREW_TAP_GITHUB_TOKEN secret (a token with
-# contents:write on that tap repo) to the release workflow — until then, set it up or
-# comment this block out (a real `release` push would otherwise fail to publish the cask).
+# notarizes the darwin binaries (a documented later step). The validated release profile
+# supplies the repository coordinate: production still resolves to olivaresai/homebrew-tap;
+# preprod resolves to the dedicated preprod tap. Owner/name are public routing data and
+# therefore environment variables, never secrets. The token remains a secret and retains
+# the exact GoReleaser token-template form required by REL-83.
 homebrew_casks:
   - name: olivares
     ids: [olivares]
     repository:
-      owner: olivaresai
-      name: homebrew-tap
+      owner: "{{ .Env.HOMEBREW_TAP_OWNER }}"
+      name: "{{ .Env.HOMEBREW_TAP_NAME }}"
+      # ⛔ LA FORMA LITERAL `{{ .Env.VAR }}` ES OBLIGATORIA AQUI, y no es estilo.
+      # El validador de goreleaser para campos `token:` exige esa forma exacta; el equivalente
+      # semantico `{{ index .Env "VAR" }}` lo rechaza. Y la validacion corre SOLO en la fase
+      # publish, que ningun ensayo ejercita: `--snapshot` la salta y ningun intento de release
+      # anterior habia llegado tan lejos. Por eso el defecto sobrevivio a todo.
+      #
+      # Medido en produccion el 2026-09-01: el release murio en «homebrew cask» AL FINAL, con las
+      # cuatro imagenes docker ya construidas, los binarios, los .deb/.rpm/.apk, los SBOMs y los
+      # checksums FIRMADOS y subidos. Todo el trabajo hecho y tirado por la forma de una plantilla.
+      #
+      # ⚠ El `index .Env` de `skip_upload` mas abajo NO es un campo token y se queda: alli la
+      # forma no esta restringida. Cambiar los dos seria copiar la cura sin su razon.
       token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
     # Self-gating, now mode-aware (§C.2): PUBLISH_HOMEBREW is a REQUIRED profile value.
     #   auto  — production: publish ONLY when the tap token is set, so a release never
@@ -401,6 +483,7 @@ dockers:
       - LICENSING.md
       - DISCLAIMER.md
       - LICENSES
+      - packaging/container/data-dir
     use: buildx
     goos: linux
     goarch: amd64
@@ -429,6 +512,7 @@ dockers:
       - LICENSING.md
       - DISCLAIMER.md
       - LICENSES
+      - packaging/container/data-dir
     use: buildx
     goos: linux
     goarch: arm64
@@ -461,6 +545,7 @@ dockers:
       - LICENSING.md
       - DISCLAIMER.md
       - LICENSES
+      - packaging/container/data-dir
     use: buildx
     goos: linux
     goarch: amd64
@@ -499,6 +584,7 @@ dockers:
       - LICENSING.md
       - DISCLAIMER.md
       - LICENSES
+      - packaging/container/data-dir
     use: buildx
     goos: linux
     goarch: amd64
@@ -569,7 +655,16 @@ release:
   github:
     owner: "{{ .Env.RELEASE_GITHUB_OWNER }}"
     name: "{{ .Env.RELEASE_GITHUB_NAME }}"
-  draft: true # never auto-publish; a human reviews and publishes the draft
+  # ⛔ STILL A DRAFT, AND THE NEXT STEP IS NO LONGER A HUMAN CLICKING PUBLISH. This line
+  # used to say "a human reviews and publishes the draft", and that instruction is what QA07
+  # measured: v26.8.0 went out with a 404 on its required `.sig` because the UI publish is a
+  # separate effect no workflow can gate. The supported operation is now the protected
+  # phase-2 dispatch, which signs, freshly verifies the complete candidate and publishes it
+  # by its retained release ID (.github/workflows/release.yml, job publish-ota-manifest;
+  # scripts/release-finalize-stable.sh). The human approval did not disappear — it moved to
+  # the `ota-release-ceremony` environment reviewers, who now approve PUBLICATION of an exact
+  # tag and commit, before the job starts.
+  draft: true # never auto-publish from this config; publication is the protected phase 2
   prerelease: auto
   mode: replace
   # THE OTHER HALF OF THE EVIDENCE CONTRACT. `checksum.extra_files` puts the digest of
@@ -579,6 +674,9 @@ release:
   # draft does not carry it, so dropping this line stops the ceremony rather than weakening it.
   extra_files:
     - glob: release-commit.txt
+    # The upload half for the build context; see the checksum.extra_files note above.
+    - glob: release-build-context.json
+    - glob: dist/olivares-install-*.sh
   header: |
     ## Olivares AI {{ .Tag }}
 

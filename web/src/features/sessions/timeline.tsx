@@ -51,16 +51,31 @@ const KIND_META: Record<string, { icon: LucideIcon; tone: string }> = {
  * the requested class; a "load more" walks the cursor. Each entry renders its time,
  * kind, refs and mode — never a payload (minimal-data, docs/SECURITY-HARDENING.md).
  */
-export function SessionTimeline({ sessionRef }: { sessionRef: string }) {
+export function SessionTimeline({
+  sessionRef,
+  liveRef,
+}: {
+  /** The LEGACY timeline of a bare provider session id (the events with no live_ref). */
+  sessionRef?: string
+  /** The timeline of exactly ONE live row (B2). Preferred whenever the row is known:
+   * a scoped row has no other name, and a legacy row's is the same events. */
+  liveRef?: string
+}) {
   const { t } = useTranslation('sessions')
   const { activeTenant } = useAuth()
   const [kind, setKind] = useState<string>(ALL)
   const facetKind = kind === ALL ? undefined : kind
+  const ref = liveRef || sessionRef || ''
 
   const query = useInfiniteQuery({
-    queryKey: sessionsKeys.timeline(activeTenant, sessionRef, { limit: PAGE }),
+    queryKey: liveRef
+      ? sessionsKeys.timelineById(activeTenant, liveRef, { limit: PAGE })
+      : sessionsKeys.timeline(activeTenant, ref, { limit: PAGE }),
     queryFn: ({ pageParam }) =>
-      sessionsApi.timeline(sessionRef, { limit: PAGE, cursor: pageParam }),
+      liveRef
+        ? sessionsApi.timelineById(liveRef, { limit: PAGE, cursor: pageParam })
+        : sessionsApi.timeline(ref, { limit: PAGE, cursor: pageParam }),
+    enabled: !!ref,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => (last.has_more ? last.cursor : undefined),
   })

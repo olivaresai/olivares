@@ -183,6 +183,16 @@ fichier/réseau hors du contrôle de l'agent ; la source `ebpf` consomme son exp
 Toujours [`approximate`](#attribution-confiance) jusqu'à ce qu'une identité lie le
 processus à un agent. Voir [eBPF/Tetragon](/fr/how-to/connectors/ebpf-tetragon/).
 
+### live_ref
+
+Identité attribuée par le serveur d’**une** ligne de session live. v26.9.0
+classe l’observation par `(périmètre d’observation, id externe)` afin que deux
+homes fournisseur qui annoncent le même id de session restent deux lignes. Les
+lectures console et API qui signifient « cette ligne » utilisent `live_ref`,
+pas l’id fournisseur nu. Les routes d’id externe nu sont héritées et ne
+répondent que la ligne héritée (`CHANGELOG.md` `[26.9.0]` B2). Voir
+[Exploitation en direct et sessions](/reference/modules/ii-sessions/).
+
 ### Kill switch
 
 L'arrêt d'urgence de l'estate (ou per-agent) : un seul appel admin-tier tue chaque
@@ -225,6 +235,17 @@ jamais émettre d'accès.
 La frontière d'isolation. Chaque lecture et écriture de module est tenant-scopée ; sur
 Postgres, la row-level security la backstoppe (le moteur refuse de s'exécuter sous un
 rôle qui pourrait contourner la RLS).
+
+### Profil fournisseur (provider profile)
+
+Identité durable d’**une** instance fournisseur configurée sur **un**
+environnement d’exécution : pilote, environnement propriétaire et les
+`config_home` / `user_home` canoniques sous lesquels un enfant lancé
+s’exécute. Identité de configuration et de stockage, jamais un compte
+fournisseur authentifié. Les homes doivent déjà exister ; l’enregistrement
+n’installe pas et ne se connecte pas. Le lancement nomme
+`provider_profile_ref`. Voir
+[Exploiter une session fournisseur](/how-to/operate-provider-sessions/).
 
 ### Permitted vs Observed
 

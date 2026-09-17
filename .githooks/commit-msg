@@ -117,7 +117,7 @@ TYPES='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert'
 
 # <type>[optional (scope)][optional !]: <description>
 if printf '%s\n' "$header" \
-   | grep -Eq "^(${TYPES})(\([a-z0-9 ,_/.-]+\))?(!)?: .+"; then
+   | grep -Eq "^(${TYPES})(\([a-z0-9]+(-[a-z0-9]+)*\))?(!)?: .+"; then
   desc="${header#*: }"
   if [ -n "$(printf '%s' "$desc" | tr -d '[:space:]')" ]; then
     exit 0

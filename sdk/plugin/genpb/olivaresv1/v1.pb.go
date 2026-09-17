@@ -679,11 +679,14 @@ type FindingReport struct {
 	// ids, and MITRE ATLAS technique ids. Each axis is a deterministic set (sorted,
 	// de-duped by the producer); empty = none. Additive (S142) — previously these
 	// were silently dropped on the wire.
-	OwaspLlm      []string `protobuf:"bytes,8,rep,name=owasp_llm,json=owaspLlm,proto3" json:"owasp_llm,omitempty"`
-	OwaspAsi      []string `protobuf:"bytes,9,rep,name=owasp_asi,json=owaspAsi,proto3" json:"owasp_asi,omitempty"`
-	Atlas         []string `protobuf:"bytes,10,rep,name=atlas,proto3" json:"atlas,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	OwaspLlm []string `protobuf:"bytes,8,rep,name=owasp_llm,json=owaspLlm,proto3" json:"owasp_llm,omitempty"`
+	OwaspAsi []string `protobuf:"bytes,9,rep,name=owasp_asi,json=owaspAsi,proto3" json:"owasp_asi,omitempty"`
+	Atlas    []string `protobuf:"bytes,10,rep,name=atlas,proto3" json:"atlas,omitempty"`
+	// Optional FinOps summary. Presence, including invalid/future content, must
+	// survive a bridge; absence is legacy/unverified, never a proven crossing.
+	BudgetEvidence *BudgetAlertEvidenceSummary `protobuf:"bytes,11,opt,name=budget_evidence,json=budgetEvidence,proto3" json:"budget_evidence,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *FindingReport) Reset() {
@@ -786,6 +789,99 @@ func (x *FindingReport) GetAtlas() []string {
 	return nil
 }
 
+func (x *FindingReport) GetBudgetEvidence() *BudgetAlertEvidenceSummary {
+	if x != nil {
+		return x.BudgetEvidence
+	}
+	return nil
+}
+
+// Bounded financial classification only: no amounts or raw ledger/config data.
+// Producer authority and durable record verification are not wire assertions.
+type BudgetAlertEvidenceSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	AlertId       string                 `protobuf:"bytes,2,opt,name=alert_id,json=alertId,proto3" json:"alert_id,omitempty"`
+	AmountClass   string                 `protobuf:"bytes,3,opt,name=amount_class,json=amountClass,proto3" json:"amount_class,omitempty"`
+	Crossing      string                 `protobuf:"bytes,4,opt,name=crossing,proto3" json:"crossing,omitempty"`
+	Causes        []string               `protobuf:"bytes,5,rep,name=causes,proto3" json:"causes,omitempty"`
+	DigestVersion uint32                 `protobuf:"varint,6,opt,name=digest_version,json=digestVersion,proto3" json:"digest_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BudgetAlertEvidenceSummary) Reset() {
+	*x = BudgetAlertEvidenceSummary{}
+	mi := &file_olivaresv1_v1_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BudgetAlertEvidenceSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BudgetAlertEvidenceSummary) ProtoMessage() {}
+
+func (x *BudgetAlertEvidenceSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_olivaresv1_v1_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BudgetAlertEvidenceSummary.ProtoReflect.Descriptor instead.
+func (*BudgetAlertEvidenceSummary) Descriptor() ([]byte, []int) {
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *BudgetAlertEvidenceSummary) GetSchemaVersion() uint32 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *BudgetAlertEvidenceSummary) GetAlertId() string {
+	if x != nil {
+		return x.AlertId
+	}
+	return ""
+}
+
+func (x *BudgetAlertEvidenceSummary) GetAmountClass() string {
+	if x != nil {
+		return x.AmountClass
+	}
+	return ""
+}
+
+func (x *BudgetAlertEvidenceSummary) GetCrossing() string {
+	if x != nil {
+		return x.Crossing
+	}
+	return ""
+}
+
+func (x *BudgetAlertEvidenceSummary) GetCauses() []string {
+	if x != nil {
+		return x.Causes
+	}
+	return nil
+}
+
+func (x *BudgetAlertEvidenceSummary) GetDigestVersion() uint32 {
+	if x != nil {
+		return x.DigestVersion
+	}
+	return 0
+}
+
 // MetricSample mirrors model.MetricSample: a non-cost MEASURE a source emits — one
 // metric datapoint (a count, a token tally, a duration) attributed to a subject and an
 // instant (the Claude Code productivity/adoption metrics). Additive — a new
@@ -814,7 +910,7 @@ type MetricSample struct {
 
 func (x *MetricSample) Reset() {
 	*x = MetricSample{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[6]
+	mi := &file_olivaresv1_v1_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -826,7 +922,7 @@ func (x *MetricSample) String() string {
 func (*MetricSample) ProtoMessage() {}
 
 func (x *MetricSample) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[6]
+	mi := &file_olivaresv1_v1_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -839,7 +935,7 @@ func (x *MetricSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricSample.ProtoReflect.Descriptor instead.
 func (*MetricSample) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{6}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *MetricSample) GetName() string {
@@ -923,7 +1019,7 @@ type Observation struct {
 
 func (x *Observation) Reset() {
 	*x = Observation{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[7]
+	mi := &file_olivaresv1_v1_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -935,7 +1031,7 @@ func (x *Observation) String() string {
 func (*Observation) ProtoMessage() {}
 
 func (x *Observation) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[7]
+	mi := &file_olivaresv1_v1_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -948,7 +1044,7 @@ func (x *Observation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Observation.ProtoReflect.Descriptor instead.
 func (*Observation) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{7}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Observation) GetPayload() isObservation_Payload {
@@ -1039,14 +1135,21 @@ type Event struct {
 	//	*Event_Finding
 	//	*Event_JsonPayload
 	//	*Event_Metric
-	Payload       isEvent_Payload `protobuf_oneof:"payload"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Payload isEvent_Payload `protobuf_oneof:"payload"`
+	// Host-stamped registration snapshot of the configured source the event
+	// arrived through (mirrors event.SourceRegistration). Added field,
+	// backward-compatible: an old peer omits it and the consumer reads
+	// "unattributed"; a decoder never invents one. It is only ever set by an
+	// engine node that registered the source — the collector push envelope
+	// (IngestEnvelope) deliberately has no such field.
+	SourceRegistration *SourceRegistration `protobuf:"bytes,11,opt,name=source_registration,json=sourceRegistration,proto3" json:"source_registration,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[8]
+	mi := &file_olivaresv1_v1_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1058,7 +1161,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[8]
+	mi := &file_olivaresv1_v1_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1071,7 +1174,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{8}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Event) GetId() string {
@@ -1161,6 +1264,13 @@ func (x *Event) GetMetric() *MetricSample {
 	return nil
 }
 
+func (x *Event) GetSourceRegistration() *SourceRegistration {
+	if x != nil {
+		return x.SourceRegistration
+	}
+	return nil
+}
+
 type isEvent_Payload interface {
 	isEvent_Payload()
 }
@@ -1195,6 +1305,79 @@ func (*Event_JsonPayload) isEvent_Payload() {}
 
 func (*Event_Metric) isEvent_Payload() {}
 
+// SourceRegistration mirrors event.SourceRegistration: the durable roster row's
+// persistent id, the revision the runtime successfully opened, and the execution
+// environment that applied it.
+type SourceRegistration struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SourceId       string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	SourceRevision int64                  `protobuf:"varint,2,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	EnvironmentRef string                 `protobuf:"bytes,3,opt,name=environment_ref,json=environmentRef,proto3" json:"environment_ref,omitempty"`
+	// Host-approved decision for this observation, before queue/replay. Empty
+	// stays unattributed; never filled by a receiving decoder or connector.
+	BindingRef    string `protobuf:"bytes,4,opt,name=binding_ref,json=bindingRef,proto3" json:"binding_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SourceRegistration) Reset() {
+	*x = SourceRegistration{}
+	mi := &file_olivaresv1_v1_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SourceRegistration) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SourceRegistration) ProtoMessage() {}
+
+func (x *SourceRegistration) ProtoReflect() protoreflect.Message {
+	mi := &file_olivaresv1_v1_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SourceRegistration.ProtoReflect.Descriptor instead.
+func (*SourceRegistration) Descriptor() ([]byte, []int) {
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SourceRegistration) GetSourceId() string {
+	if x != nil {
+		return x.SourceId
+	}
+	return ""
+}
+
+func (x *SourceRegistration) GetSourceRevision() int64 {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return 0
+}
+
+func (x *SourceRegistration) GetEnvironmentRef() string {
+	if x != nil {
+		return x.EnvironmentRef
+	}
+	return ""
+}
+
+func (x *SourceRegistration) GetBindingRef() string {
+	if x != nil {
+		return x.BindingRef
+	}
+	return ""
+}
+
 // Notification mirrors sdk.Notification.
 type Notification struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -1215,7 +1398,7 @@ type Notification struct {
 
 func (x *Notification) Reset() {
 	*x = Notification{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[9]
+	mi := &file_olivaresv1_v1_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1227,7 +1410,7 @@ func (x *Notification) String() string {
 func (*Notification) ProtoMessage() {}
 
 func (x *Notification) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[9]
+	mi := &file_olivaresv1_v1_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1240,7 +1423,7 @@ func (x *Notification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Notification.ProtoReflect.Descriptor instead.
 func (*Notification) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{9}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Notification) GetType() string {
@@ -1314,7 +1497,7 @@ type NotificationAction struct {
 
 func (x *NotificationAction) Reset() {
 	*x = NotificationAction{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[10]
+	mi := &file_olivaresv1_v1_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1326,7 +1509,7 @@ func (x *NotificationAction) String() string {
 func (*NotificationAction) ProtoMessage() {}
 
 func (x *NotificationAction) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[10]
+	mi := &file_olivaresv1_v1_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1339,7 +1522,7 @@ func (x *NotificationAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotificationAction.ProtoReflect.Descriptor instead.
 func (*NotificationAction) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{10}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *NotificationAction) GetLabel() string {
@@ -1387,7 +1570,7 @@ type ContentDocRef struct {
 
 func (x *ContentDocRef) Reset() {
 	*x = ContentDocRef{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[11]
+	mi := &file_olivaresv1_v1_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1399,7 +1582,7 @@ func (x *ContentDocRef) String() string {
 func (*ContentDocRef) ProtoMessage() {}
 
 func (x *ContentDocRef) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[11]
+	mi := &file_olivaresv1_v1_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1412,7 +1595,7 @@ func (x *ContentDocRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentDocRef.ProtoReflect.Descriptor instead.
 func (*ContentDocRef) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{11}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ContentDocRef) GetDocId() string {
@@ -1466,7 +1649,7 @@ type ContentListRequest struct {
 
 func (x *ContentListRequest) Reset() {
 	*x = ContentListRequest{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[12]
+	mi := &file_olivaresv1_v1_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1478,7 +1661,7 @@ func (x *ContentListRequest) String() string {
 func (*ContentListRequest) ProtoMessage() {}
 
 func (x *ContentListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[12]
+	mi := &file_olivaresv1_v1_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1491,7 +1674,7 @@ func (x *ContentListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentListRequest.ProtoReflect.Descriptor instead.
 func (*ContentListRequest) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{12}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ContentListRequest) GetCursor() string {
@@ -1536,7 +1719,7 @@ type ContentDocument struct {
 
 func (x *ContentDocument) Reset() {
 	*x = ContentDocument{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[13]
+	mi := &file_olivaresv1_v1_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1548,7 +1731,7 @@ func (x *ContentDocument) String() string {
 func (*ContentDocument) ProtoMessage() {}
 
 func (x *ContentDocument) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[13]
+	mi := &file_olivaresv1_v1_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1561,7 +1744,7 @@ func (x *ContentDocument) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentDocument.ProtoReflect.Descriptor instead.
 func (*ContentDocument) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{13}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ContentDocument) GetSource() string {
@@ -1650,7 +1833,7 @@ type ContentFetchRequest struct {
 
 func (x *ContentFetchRequest) Reset() {
 	*x = ContentFetchRequest{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[14]
+	mi := &file_olivaresv1_v1_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1662,7 +1845,7 @@ func (x *ContentFetchRequest) String() string {
 func (*ContentFetchRequest) ProtoMessage() {}
 
 func (x *ContentFetchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[14]
+	mi := &file_olivaresv1_v1_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1675,7 +1858,7 @@ func (x *ContentFetchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentFetchRequest.ProtoReflect.Descriptor instead.
 func (*ContentFetchRequest) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{14}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ContentFetchRequest) GetDocId() string {
@@ -1698,7 +1881,7 @@ type ContentACLResult struct {
 
 func (x *ContentACLResult) Reset() {
 	*x = ContentACLResult{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[15]
+	mi := &file_olivaresv1_v1_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1710,7 +1893,7 @@ func (x *ContentACLResult) String() string {
 func (*ContentACLResult) ProtoMessage() {}
 
 func (x *ContentACLResult) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[15]
+	mi := &file_olivaresv1_v1_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1723,7 +1906,7 @@ func (x *ContentACLResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentACLResult.ProtoReflect.Descriptor instead.
 func (*ContentACLResult) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{15}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ContentACLResult) GetAcl() []string {
@@ -1756,7 +1939,7 @@ type ContentDeltaRequest struct {
 
 func (x *ContentDeltaRequest) Reset() {
 	*x = ContentDeltaRequest{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[16]
+	mi := &file_olivaresv1_v1_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1768,7 +1951,7 @@ func (x *ContentDeltaRequest) String() string {
 func (*ContentDeltaRequest) ProtoMessage() {}
 
 func (x *ContentDeltaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[16]
+	mi := &file_olivaresv1_v1_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1781,7 +1964,7 @@ func (x *ContentDeltaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentDeltaRequest.ProtoReflect.Descriptor instead.
 func (*ContentDeltaRequest) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{16}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ContentDeltaRequest) GetCursor() string {
@@ -1809,7 +1992,7 @@ type ContentChange struct {
 
 func (x *ContentChange) Reset() {
 	*x = ContentChange{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[17]
+	mi := &file_olivaresv1_v1_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1821,7 +2004,7 @@ func (x *ContentChange) String() string {
 func (*ContentChange) ProtoMessage() {}
 
 func (x *ContentChange) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[17]
+	mi := &file_olivaresv1_v1_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1834,7 +2017,7 @@ func (x *ContentChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentChange.ProtoReflect.Descriptor instead.
 func (*ContentChange) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{17}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ContentChange) GetKind() string {
@@ -1889,7 +2072,7 @@ type DescribeResponse struct {
 
 func (x *DescribeResponse) Reset() {
 	*x = DescribeResponse{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[18]
+	mi := &file_olivaresv1_v1_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1901,7 +2084,7 @@ func (x *DescribeResponse) String() string {
 func (*DescribeResponse) ProtoMessage() {}
 
 func (x *DescribeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[18]
+	mi := &file_olivaresv1_v1_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1914,7 +2097,7 @@ func (x *DescribeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DescribeResponse.ProtoReflect.Descriptor instead.
 func (*DescribeResponse) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{18}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *DescribeResponse) GetDescriptor_() *Descriptor {
@@ -1940,7 +2123,7 @@ type OpenRequest struct {
 
 func (x *OpenRequest) Reset() {
 	*x = OpenRequest{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[19]
+	mi := &file_olivaresv1_v1_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1952,7 +2135,7 @@ func (x *OpenRequest) String() string {
 func (*OpenRequest) ProtoMessage() {}
 
 func (x *OpenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[19]
+	mi := &file_olivaresv1_v1_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1965,7 +2148,7 @@ func (x *OpenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenRequest.ProtoReflect.Descriptor instead.
 func (*OpenRequest) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{19}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *OpenRequest) GetConfig() *Config {
@@ -1983,7 +2166,7 @@ type Empty struct {
 
 func (x *Empty) Reset() {
 	*x = Empty{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[20]
+	mi := &file_olivaresv1_v1_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1995,7 +2178,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[20]
+	mi := &file_olivaresv1_v1_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2008,7 +2191,7 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{20}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{22}
 }
 
 type NotifyRequest struct {
@@ -2020,7 +2203,7 @@ type NotifyRequest struct {
 
 func (x *NotifyRequest) Reset() {
 	*x = NotifyRequest{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[21]
+	mi := &file_olivaresv1_v1_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2032,7 +2215,7 @@ func (x *NotifyRequest) String() string {
 func (*NotifyRequest) ProtoMessage() {}
 
 func (x *NotifyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[21]
+	mi := &file_olivaresv1_v1_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2045,7 +2228,7 @@ func (x *NotifyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotifyRequest.ProtoReflect.Descriptor instead.
 func (*NotifyRequest) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{21}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *NotifyRequest) GetNotification() *Notification {
@@ -2101,7 +2284,7 @@ type NotifyResponse struct {
 
 func (x *NotifyResponse) Reset() {
 	*x = NotifyResponse{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[22]
+	mi := &file_olivaresv1_v1_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2113,7 +2296,7 @@ func (x *NotifyResponse) String() string {
 func (*NotifyResponse) ProtoMessage() {}
 
 func (x *NotifyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[22]
+	mi := &file_olivaresv1_v1_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2126,7 +2309,7 @@ func (x *NotifyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotifyResponse.ProtoReflect.Descriptor instead.
 func (*NotifyResponse) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{22}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *NotifyResponse) GetOutcome() uint32 {
@@ -2194,7 +2377,7 @@ type IngestEnvelope struct {
 
 func (x *IngestEnvelope) Reset() {
 	*x = IngestEnvelope{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[23]
+	mi := &file_olivaresv1_v1_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2206,7 +2389,7 @@ func (x *IngestEnvelope) String() string {
 func (*IngestEnvelope) ProtoMessage() {}
 
 func (x *IngestEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[23]
+	mi := &file_olivaresv1_v1_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2219,7 +2402,7 @@ func (x *IngestEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestEnvelope.ProtoReflect.Descriptor instead.
 func (*IngestEnvelope) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{23}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *IngestEnvelope) GetTenant() string {
@@ -2253,7 +2436,7 @@ type IngestSummary struct {
 
 func (x *IngestSummary) Reset() {
 	*x = IngestSummary{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[24]
+	mi := &file_olivaresv1_v1_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2265,7 +2448,7 @@ func (x *IngestSummary) String() string {
 func (*IngestSummary) ProtoMessage() {}
 
 func (x *IngestSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[24]
+	mi := &file_olivaresv1_v1_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2278,7 +2461,7 @@ func (x *IngestSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestSummary.ProtoReflect.Descriptor instead.
 func (*IngestSummary) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{24}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *IngestSummary) GetAccepted() uint64 {
@@ -2300,7 +2483,7 @@ type InitRequest struct {
 
 func (x *InitRequest) Reset() {
 	*x = InitRequest{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[25]
+	mi := &file_olivaresv1_v1_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2312,7 +2495,7 @@ func (x *InitRequest) String() string {
 func (*InitRequest) ProtoMessage() {}
 
 func (x *InitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[25]
+	mi := &file_olivaresv1_v1_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2325,7 +2508,7 @@ func (x *InitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitRequest.ProtoReflect.Descriptor instead.
 func (*InitRequest) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{25}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *InitRequest) GetConfig() *Config {
@@ -2351,7 +2534,7 @@ type SubscribeRequest struct {
 
 func (x *SubscribeRequest) Reset() {
 	*x = SubscribeRequest{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[26]
+	mi := &file_olivaresv1_v1_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2363,7 +2546,7 @@ func (x *SubscribeRequest) String() string {
 func (*SubscribeRequest) ProtoMessage() {}
 
 func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[26]
+	mi := &file_olivaresv1_v1_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2376,7 +2559,7 @@ func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeRequest) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{26}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *SubscribeRequest) GetTypes() []string {
@@ -2397,7 +2580,7 @@ type LogRecord struct {
 
 func (x *LogRecord) Reset() {
 	*x = LogRecord{}
-	mi := &file_olivaresv1_v1_proto_msgTypes[27]
+	mi := &file_olivaresv1_v1_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2409,7 +2592,7 @@ func (x *LogRecord) String() string {
 func (*LogRecord) ProtoMessage() {}
 
 func (x *LogRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_olivaresv1_v1_proto_msgTypes[27]
+	mi := &file_olivaresv1_v1_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2422,7 +2605,7 @@ func (x *LogRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogRecord.ProtoReflect.Descriptor instead.
 func (*LogRecord) Descriptor() ([]byte, []int) {
-	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{27}
+	return file_olivaresv1_v1_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *LogRecord) GetLevel() string {
@@ -2524,7 +2707,7 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\x05speed\x18\x15 \x01(\tR\x05speed\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9d\x03\n" +
 	"\rFindingReport\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1a\n" +
 	"\bseverity\x18\x02 \x01(\tR\bseverity\x12!\n" +
@@ -2539,7 +2722,15 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\towasp_llm\x18\b \x03(\tR\bowaspLlm\x12\x1b\n" +
 	"\towasp_asi\x18\t \x03(\tR\bowaspAsi\x12\x14\n" +
 	"\x05atlas\x18\n" +
-	" \x03(\tR\x05atlas\"\xf5\x03\n" +
+	" \x03(\tR\x05atlas\x12T\n" +
+	"\x0fbudget_evidence\x18\v \x01(\v2+.olivares.sdk.v1.BudgetAlertEvidenceSummaryR\x0ebudgetEvidence\"\xdc\x01\n" +
+	"\x1aBudgetAlertEvidenceSummary\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x19\n" +
+	"\balert_id\x18\x02 \x01(\tR\aalertId\x12!\n" +
+	"\famount_class\x18\x03 \x01(\tR\vamountClass\x12\x1a\n" +
+	"\bcrossing\x18\x04 \x01(\tR\bcrossing\x12\x16\n" +
+	"\x06causes\x18\x05 \x03(\tR\x06causes\x12%\n" +
+	"\x0edigest_version\x18\x06 \x01(\rR\rdigestVersion\"\xf5\x03\n" +
 	"\fMetricSample\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value\x12\x12\n" +
@@ -2565,7 +2756,7 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\x04cost\x18\x02 \x01(\v2\x1b.olivares.sdk.v1.CostSampleH\x00R\x04cost\x12:\n" +
 	"\afinding\x18\x03 \x01(\v2\x1e.olivares.sdk.v1.FindingReportH\x00R\afinding\x127\n" +
 	"\x06metric\x18\x04 \x01(\v2\x1d.olivares.sdk.v1.MetricSampleH\x00R\x06metricB\t\n" +
-	"\apayload\"\x9b\x03\n" +
+	"\apayload\"\xf1\x03\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x16\n" +
@@ -2577,8 +2768,15 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\afinding\x18\b \x01(\v2\x1e.olivares.sdk.v1.FindingReportH\x00R\afinding\x12#\n" +
 	"\fjson_payload\x18\t \x01(\fH\x00R\vjsonPayload\x127\n" +
 	"\x06metric\x18\n" +
-	" \x01(\v2\x1d.olivares.sdk.v1.MetricSampleH\x00R\x06metricB\t\n" +
-	"\apayload\"\xed\x02\n" +
+	" \x01(\v2\x1d.olivares.sdk.v1.MetricSampleH\x00R\x06metric\x12T\n" +
+	"\x13source_registration\x18\v \x01(\v2#.olivares.sdk.v1.SourceRegistrationR\x12sourceRegistrationB\t\n" +
+	"\apayload\"\xa4\x01\n" +
+	"\x12SourceRegistration\x12\x1b\n" +
+	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12'\n" +
+	"\x0fsource_revision\x18\x02 \x01(\x03R\x0esourceRevision\x12'\n" +
+	"\x0fenvironment_ref\x18\x03 \x01(\tR\x0eenvironmentRef\x12\x1f\n" +
+	"\vbinding_ref\x18\x04 \x01(\tR\n" +
+	"bindingRef\"\xed\x02\n" +
 	"\fNotification\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
@@ -2728,132 +2926,136 @@ func file_olivaresv1_v1_proto_rawDescGZIP() []byte {
 }
 
 var file_olivaresv1_v1_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_olivaresv1_v1_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_olivaresv1_v1_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_olivaresv1_v1_proto_goTypes = []any{
-	(ComponentType)(0),            // 0: olivares.sdk.v1.ComponentType
-	(*ConfigField)(nil),           // 1: olivares.sdk.v1.ConfigField
-	(*Descriptor)(nil),            // 2: olivares.sdk.v1.Descriptor
-	(*Config)(nil),                // 3: olivares.sdk.v1.Config
-	(*EdgeObservation)(nil),       // 4: olivares.sdk.v1.EdgeObservation
-	(*CostSample)(nil),            // 5: olivares.sdk.v1.CostSample
-	(*FindingReport)(nil),         // 6: olivares.sdk.v1.FindingReport
-	(*MetricSample)(nil),          // 7: olivares.sdk.v1.MetricSample
-	(*Observation)(nil),           // 8: olivares.sdk.v1.Observation
-	(*Event)(nil),                 // 9: olivares.sdk.v1.Event
-	(*Notification)(nil),          // 10: olivares.sdk.v1.Notification
-	(*NotificationAction)(nil),    // 11: olivares.sdk.v1.NotificationAction
-	(*ContentDocRef)(nil),         // 12: olivares.sdk.v1.ContentDocRef
-	(*ContentListRequest)(nil),    // 13: olivares.sdk.v1.ContentListRequest
-	(*ContentDocument)(nil),       // 14: olivares.sdk.v1.ContentDocument
-	(*ContentFetchRequest)(nil),   // 15: olivares.sdk.v1.ContentFetchRequest
-	(*ContentACLResult)(nil),      // 16: olivares.sdk.v1.ContentACLResult
-	(*ContentDeltaRequest)(nil),   // 17: olivares.sdk.v1.ContentDeltaRequest
-	(*ContentChange)(nil),         // 18: olivares.sdk.v1.ContentChange
-	(*DescribeResponse)(nil),      // 19: olivares.sdk.v1.DescribeResponse
-	(*OpenRequest)(nil),           // 20: olivares.sdk.v1.OpenRequest
-	(*Empty)(nil),                 // 21: olivares.sdk.v1.Empty
-	(*NotifyRequest)(nil),         // 22: olivares.sdk.v1.NotifyRequest
-	(*NotifyResponse)(nil),        // 23: olivares.sdk.v1.NotifyResponse
-	(*IngestEnvelope)(nil),        // 24: olivares.sdk.v1.IngestEnvelope
-	(*IngestSummary)(nil),         // 25: olivares.sdk.v1.IngestSummary
-	(*InitRequest)(nil),           // 26: olivares.sdk.v1.InitRequest
-	(*SubscribeRequest)(nil),      // 27: olivares.sdk.v1.SubscribeRequest
-	(*LogRecord)(nil),             // 28: olivares.sdk.v1.LogRecord
-	nil,                           // 29: olivares.sdk.v1.Config.SettingsEntry
-	nil,                           // 30: olivares.sdk.v1.EdgeObservation.LabelsEntry
-	nil,                           // 31: olivares.sdk.v1.CostSample.LabelsEntry
-	nil,                           // 32: olivares.sdk.v1.MetricSample.DimensionsEntry
-	nil,                           // 33: olivares.sdk.v1.MetricSample.LabelsEntry
-	nil,                           // 34: olivares.sdk.v1.Notification.FieldsEntry
-	nil,                           // 35: olivares.sdk.v1.ContentDocument.AttributesEntry
-	nil,                           // 36: olivares.sdk.v1.LogRecord.FieldsEntry
-	(*timestamppb.Timestamp)(nil), // 37: google.protobuf.Timestamp
+	(ComponentType)(0),                 // 0: olivares.sdk.v1.ComponentType
+	(*ConfigField)(nil),                // 1: olivares.sdk.v1.ConfigField
+	(*Descriptor)(nil),                 // 2: olivares.sdk.v1.Descriptor
+	(*Config)(nil),                     // 3: olivares.sdk.v1.Config
+	(*EdgeObservation)(nil),            // 4: olivares.sdk.v1.EdgeObservation
+	(*CostSample)(nil),                 // 5: olivares.sdk.v1.CostSample
+	(*FindingReport)(nil),              // 6: olivares.sdk.v1.FindingReport
+	(*BudgetAlertEvidenceSummary)(nil), // 7: olivares.sdk.v1.BudgetAlertEvidenceSummary
+	(*MetricSample)(nil),               // 8: olivares.sdk.v1.MetricSample
+	(*Observation)(nil),                // 9: olivares.sdk.v1.Observation
+	(*Event)(nil),                      // 10: olivares.sdk.v1.Event
+	(*SourceRegistration)(nil),         // 11: olivares.sdk.v1.SourceRegistration
+	(*Notification)(nil),               // 12: olivares.sdk.v1.Notification
+	(*NotificationAction)(nil),         // 13: olivares.sdk.v1.NotificationAction
+	(*ContentDocRef)(nil),              // 14: olivares.sdk.v1.ContentDocRef
+	(*ContentListRequest)(nil),         // 15: olivares.sdk.v1.ContentListRequest
+	(*ContentDocument)(nil),            // 16: olivares.sdk.v1.ContentDocument
+	(*ContentFetchRequest)(nil),        // 17: olivares.sdk.v1.ContentFetchRequest
+	(*ContentACLResult)(nil),           // 18: olivares.sdk.v1.ContentACLResult
+	(*ContentDeltaRequest)(nil),        // 19: olivares.sdk.v1.ContentDeltaRequest
+	(*ContentChange)(nil),              // 20: olivares.sdk.v1.ContentChange
+	(*DescribeResponse)(nil),           // 21: olivares.sdk.v1.DescribeResponse
+	(*OpenRequest)(nil),                // 22: olivares.sdk.v1.OpenRequest
+	(*Empty)(nil),                      // 23: olivares.sdk.v1.Empty
+	(*NotifyRequest)(nil),              // 24: olivares.sdk.v1.NotifyRequest
+	(*NotifyResponse)(nil),             // 25: olivares.sdk.v1.NotifyResponse
+	(*IngestEnvelope)(nil),             // 26: olivares.sdk.v1.IngestEnvelope
+	(*IngestSummary)(nil),              // 27: olivares.sdk.v1.IngestSummary
+	(*InitRequest)(nil),                // 28: olivares.sdk.v1.InitRequest
+	(*SubscribeRequest)(nil),           // 29: olivares.sdk.v1.SubscribeRequest
+	(*LogRecord)(nil),                  // 30: olivares.sdk.v1.LogRecord
+	nil,                                // 31: olivares.sdk.v1.Config.SettingsEntry
+	nil,                                // 32: olivares.sdk.v1.EdgeObservation.LabelsEntry
+	nil,                                // 33: olivares.sdk.v1.CostSample.LabelsEntry
+	nil,                                // 34: olivares.sdk.v1.MetricSample.DimensionsEntry
+	nil,                                // 35: olivares.sdk.v1.MetricSample.LabelsEntry
+	nil,                                // 36: olivares.sdk.v1.Notification.FieldsEntry
+	nil,                                // 37: olivares.sdk.v1.ContentDocument.AttributesEntry
+	nil,                                // 38: olivares.sdk.v1.LogRecord.FieldsEntry
+	(*timestamppb.Timestamp)(nil),      // 39: google.protobuf.Timestamp
 }
 var file_olivaresv1_v1_proto_depIdxs = []int32{
 	0,  // 0: olivares.sdk.v1.Descriptor.type:type_name -> olivares.sdk.v1.ComponentType
 	1,  // 1: olivares.sdk.v1.Descriptor.config_fields:type_name -> olivares.sdk.v1.ConfigField
-	29, // 2: olivares.sdk.v1.Config.settings:type_name -> olivares.sdk.v1.Config.SettingsEntry
-	37, // 3: olivares.sdk.v1.EdgeObservation.observed_at:type_name -> google.protobuf.Timestamp
-	30, // 4: olivares.sdk.v1.EdgeObservation.labels:type_name -> olivares.sdk.v1.EdgeObservation.LabelsEntry
-	37, // 5: olivares.sdk.v1.CostSample.occurred_at:type_name -> google.protobuf.Timestamp
-	31, // 6: olivares.sdk.v1.CostSample.labels:type_name -> olivares.sdk.v1.CostSample.LabelsEntry
-	37, // 7: olivares.sdk.v1.FindingReport.occurred_at:type_name -> google.protobuf.Timestamp
-	37, // 8: olivares.sdk.v1.MetricSample.occurred_at:type_name -> google.protobuf.Timestamp
-	32, // 9: olivares.sdk.v1.MetricSample.dimensions:type_name -> olivares.sdk.v1.MetricSample.DimensionsEntry
-	33, // 10: olivares.sdk.v1.MetricSample.labels:type_name -> olivares.sdk.v1.MetricSample.LabelsEntry
-	4,  // 11: olivares.sdk.v1.Observation.edge:type_name -> olivares.sdk.v1.EdgeObservation
-	5,  // 12: olivares.sdk.v1.Observation.cost:type_name -> olivares.sdk.v1.CostSample
-	6,  // 13: olivares.sdk.v1.Observation.finding:type_name -> olivares.sdk.v1.FindingReport
-	7,  // 14: olivares.sdk.v1.Observation.metric:type_name -> olivares.sdk.v1.MetricSample
-	37, // 15: olivares.sdk.v1.Event.time:type_name -> google.protobuf.Timestamp
-	4,  // 16: olivares.sdk.v1.Event.edge:type_name -> olivares.sdk.v1.EdgeObservation
-	5,  // 17: olivares.sdk.v1.Event.cost:type_name -> olivares.sdk.v1.CostSample
-	6,  // 18: olivares.sdk.v1.Event.finding:type_name -> olivares.sdk.v1.FindingReport
-	7,  // 19: olivares.sdk.v1.Event.metric:type_name -> olivares.sdk.v1.MetricSample
-	34, // 20: olivares.sdk.v1.Notification.fields:type_name -> olivares.sdk.v1.Notification.FieldsEntry
-	37, // 21: olivares.sdk.v1.Notification.time:type_name -> google.protobuf.Timestamp
-	11, // 22: olivares.sdk.v1.Notification.actions:type_name -> olivares.sdk.v1.NotificationAction
-	37, // 23: olivares.sdk.v1.ContentDocRef.modified_at:type_name -> google.protobuf.Timestamp
-	37, // 24: olivares.sdk.v1.ContentDocument.modified_at:type_name -> google.protobuf.Timestamp
-	35, // 25: olivares.sdk.v1.ContentDocument.attributes:type_name -> olivares.sdk.v1.ContentDocument.AttributesEntry
-	12, // 26: olivares.sdk.v1.ContentChange.ref:type_name -> olivares.sdk.v1.ContentDocRef
-	2,  // 27: olivares.sdk.v1.DescribeResponse.descriptor:type_name -> olivares.sdk.v1.Descriptor
-	3,  // 28: olivares.sdk.v1.OpenRequest.config:type_name -> olivares.sdk.v1.Config
-	10, // 29: olivares.sdk.v1.NotifyRequest.notification:type_name -> olivares.sdk.v1.Notification
-	8,  // 30: olivares.sdk.v1.IngestEnvelope.observation:type_name -> olivares.sdk.v1.Observation
-	3,  // 31: olivares.sdk.v1.InitRequest.config:type_name -> olivares.sdk.v1.Config
-	36, // 32: olivares.sdk.v1.LogRecord.fields:type_name -> olivares.sdk.v1.LogRecord.FieldsEntry
-	21, // 33: olivares.sdk.v1.SourceService.Describe:input_type -> olivares.sdk.v1.Empty
-	20, // 34: olivares.sdk.v1.SourceService.Open:input_type -> olivares.sdk.v1.OpenRequest
-	21, // 35: olivares.sdk.v1.SourceService.Gather:input_type -> olivares.sdk.v1.Empty
-	21, // 36: olivares.sdk.v1.SourceService.Close:input_type -> olivares.sdk.v1.Empty
-	21, // 37: olivares.sdk.v1.OutputService.Describe:input_type -> olivares.sdk.v1.Empty
-	20, // 38: olivares.sdk.v1.OutputService.Open:input_type -> olivares.sdk.v1.OpenRequest
-	22, // 39: olivares.sdk.v1.OutputService.Notify:input_type -> olivares.sdk.v1.NotifyRequest
-	21, // 40: olivares.sdk.v1.OutputService.Close:input_type -> olivares.sdk.v1.Empty
-	21, // 41: olivares.sdk.v1.ContentSourceService.Describe:input_type -> olivares.sdk.v1.Empty
-	20, // 42: olivares.sdk.v1.ContentSourceService.Open:input_type -> olivares.sdk.v1.OpenRequest
-	13, // 43: olivares.sdk.v1.ContentSourceService.List:input_type -> olivares.sdk.v1.ContentListRequest
-	15, // 44: olivares.sdk.v1.ContentSourceService.Fetch:input_type -> olivares.sdk.v1.ContentFetchRequest
-	15, // 45: olivares.sdk.v1.ContentSourceService.FetchACL:input_type -> olivares.sdk.v1.ContentFetchRequest
-	17, // 46: olivares.sdk.v1.ContentSourceService.DeltaList:input_type -> olivares.sdk.v1.ContentDeltaRequest
-	21, // 47: olivares.sdk.v1.ContentSourceService.Close:input_type -> olivares.sdk.v1.Empty
-	24, // 48: olivares.sdk.v1.IngestService.Push:input_type -> olivares.sdk.v1.IngestEnvelope
-	21, // 49: olivares.sdk.v1.ModuleService.Describe:input_type -> olivares.sdk.v1.Empty
-	26, // 50: olivares.sdk.v1.ModuleService.Init:input_type -> olivares.sdk.v1.InitRequest
-	21, // 51: olivares.sdk.v1.ModuleService.Start:input_type -> olivares.sdk.v1.Empty
-	21, // 52: olivares.sdk.v1.ModuleService.Stop:input_type -> olivares.sdk.v1.Empty
-	9,  // 53: olivares.sdk.v1.HostService.Publish:input_type -> olivares.sdk.v1.Event
-	27, // 54: olivares.sdk.v1.HostService.Subscribe:input_type -> olivares.sdk.v1.SubscribeRequest
-	28, // 55: olivares.sdk.v1.HostService.Log:input_type -> olivares.sdk.v1.LogRecord
-	19, // 56: olivares.sdk.v1.SourceService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
-	21, // 57: olivares.sdk.v1.SourceService.Open:output_type -> olivares.sdk.v1.Empty
-	8,  // 58: olivares.sdk.v1.SourceService.Gather:output_type -> olivares.sdk.v1.Observation
-	21, // 59: olivares.sdk.v1.SourceService.Close:output_type -> olivares.sdk.v1.Empty
-	19, // 60: olivares.sdk.v1.OutputService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
-	21, // 61: olivares.sdk.v1.OutputService.Open:output_type -> olivares.sdk.v1.Empty
-	23, // 62: olivares.sdk.v1.OutputService.Notify:output_type -> olivares.sdk.v1.NotifyResponse
-	21, // 63: olivares.sdk.v1.OutputService.Close:output_type -> olivares.sdk.v1.Empty
-	19, // 64: olivares.sdk.v1.ContentSourceService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
-	21, // 65: olivares.sdk.v1.ContentSourceService.Open:output_type -> olivares.sdk.v1.Empty
-	12, // 66: olivares.sdk.v1.ContentSourceService.List:output_type -> olivares.sdk.v1.ContentDocRef
-	14, // 67: olivares.sdk.v1.ContentSourceService.Fetch:output_type -> olivares.sdk.v1.ContentDocument
-	16, // 68: olivares.sdk.v1.ContentSourceService.FetchACL:output_type -> olivares.sdk.v1.ContentACLResult
-	18, // 69: olivares.sdk.v1.ContentSourceService.DeltaList:output_type -> olivares.sdk.v1.ContentChange
-	21, // 70: olivares.sdk.v1.ContentSourceService.Close:output_type -> olivares.sdk.v1.Empty
-	25, // 71: olivares.sdk.v1.IngestService.Push:output_type -> olivares.sdk.v1.IngestSummary
-	19, // 72: olivares.sdk.v1.ModuleService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
-	21, // 73: olivares.sdk.v1.ModuleService.Init:output_type -> olivares.sdk.v1.Empty
-	21, // 74: olivares.sdk.v1.ModuleService.Start:output_type -> olivares.sdk.v1.Empty
-	21, // 75: olivares.sdk.v1.ModuleService.Stop:output_type -> olivares.sdk.v1.Empty
-	21, // 76: olivares.sdk.v1.HostService.Publish:output_type -> olivares.sdk.v1.Empty
-	9,  // 77: olivares.sdk.v1.HostService.Subscribe:output_type -> olivares.sdk.v1.Event
-	21, // 78: olivares.sdk.v1.HostService.Log:output_type -> olivares.sdk.v1.Empty
-	56, // [56:79] is the sub-list for method output_type
-	33, // [33:56] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	31, // 2: olivares.sdk.v1.Config.settings:type_name -> olivares.sdk.v1.Config.SettingsEntry
+	39, // 3: olivares.sdk.v1.EdgeObservation.observed_at:type_name -> google.protobuf.Timestamp
+	32, // 4: olivares.sdk.v1.EdgeObservation.labels:type_name -> olivares.sdk.v1.EdgeObservation.LabelsEntry
+	39, // 5: olivares.sdk.v1.CostSample.occurred_at:type_name -> google.protobuf.Timestamp
+	33, // 6: olivares.sdk.v1.CostSample.labels:type_name -> olivares.sdk.v1.CostSample.LabelsEntry
+	39, // 7: olivares.sdk.v1.FindingReport.occurred_at:type_name -> google.protobuf.Timestamp
+	7,  // 8: olivares.sdk.v1.FindingReport.budget_evidence:type_name -> olivares.sdk.v1.BudgetAlertEvidenceSummary
+	39, // 9: olivares.sdk.v1.MetricSample.occurred_at:type_name -> google.protobuf.Timestamp
+	34, // 10: olivares.sdk.v1.MetricSample.dimensions:type_name -> olivares.sdk.v1.MetricSample.DimensionsEntry
+	35, // 11: olivares.sdk.v1.MetricSample.labels:type_name -> olivares.sdk.v1.MetricSample.LabelsEntry
+	4,  // 12: olivares.sdk.v1.Observation.edge:type_name -> olivares.sdk.v1.EdgeObservation
+	5,  // 13: olivares.sdk.v1.Observation.cost:type_name -> olivares.sdk.v1.CostSample
+	6,  // 14: olivares.sdk.v1.Observation.finding:type_name -> olivares.sdk.v1.FindingReport
+	8,  // 15: olivares.sdk.v1.Observation.metric:type_name -> olivares.sdk.v1.MetricSample
+	39, // 16: olivares.sdk.v1.Event.time:type_name -> google.protobuf.Timestamp
+	4,  // 17: olivares.sdk.v1.Event.edge:type_name -> olivares.sdk.v1.EdgeObservation
+	5,  // 18: olivares.sdk.v1.Event.cost:type_name -> olivares.sdk.v1.CostSample
+	6,  // 19: olivares.sdk.v1.Event.finding:type_name -> olivares.sdk.v1.FindingReport
+	8,  // 20: olivares.sdk.v1.Event.metric:type_name -> olivares.sdk.v1.MetricSample
+	11, // 21: olivares.sdk.v1.Event.source_registration:type_name -> olivares.sdk.v1.SourceRegistration
+	36, // 22: olivares.sdk.v1.Notification.fields:type_name -> olivares.sdk.v1.Notification.FieldsEntry
+	39, // 23: olivares.sdk.v1.Notification.time:type_name -> google.protobuf.Timestamp
+	13, // 24: olivares.sdk.v1.Notification.actions:type_name -> olivares.sdk.v1.NotificationAction
+	39, // 25: olivares.sdk.v1.ContentDocRef.modified_at:type_name -> google.protobuf.Timestamp
+	39, // 26: olivares.sdk.v1.ContentDocument.modified_at:type_name -> google.protobuf.Timestamp
+	37, // 27: olivares.sdk.v1.ContentDocument.attributes:type_name -> olivares.sdk.v1.ContentDocument.AttributesEntry
+	14, // 28: olivares.sdk.v1.ContentChange.ref:type_name -> olivares.sdk.v1.ContentDocRef
+	2,  // 29: olivares.sdk.v1.DescribeResponse.descriptor:type_name -> olivares.sdk.v1.Descriptor
+	3,  // 30: olivares.sdk.v1.OpenRequest.config:type_name -> olivares.sdk.v1.Config
+	12, // 31: olivares.sdk.v1.NotifyRequest.notification:type_name -> olivares.sdk.v1.Notification
+	9,  // 32: olivares.sdk.v1.IngestEnvelope.observation:type_name -> olivares.sdk.v1.Observation
+	3,  // 33: olivares.sdk.v1.InitRequest.config:type_name -> olivares.sdk.v1.Config
+	38, // 34: olivares.sdk.v1.LogRecord.fields:type_name -> olivares.sdk.v1.LogRecord.FieldsEntry
+	23, // 35: olivares.sdk.v1.SourceService.Describe:input_type -> olivares.sdk.v1.Empty
+	22, // 36: olivares.sdk.v1.SourceService.Open:input_type -> olivares.sdk.v1.OpenRequest
+	23, // 37: olivares.sdk.v1.SourceService.Gather:input_type -> olivares.sdk.v1.Empty
+	23, // 38: olivares.sdk.v1.SourceService.Close:input_type -> olivares.sdk.v1.Empty
+	23, // 39: olivares.sdk.v1.OutputService.Describe:input_type -> olivares.sdk.v1.Empty
+	22, // 40: olivares.sdk.v1.OutputService.Open:input_type -> olivares.sdk.v1.OpenRequest
+	24, // 41: olivares.sdk.v1.OutputService.Notify:input_type -> olivares.sdk.v1.NotifyRequest
+	23, // 42: olivares.sdk.v1.OutputService.Close:input_type -> olivares.sdk.v1.Empty
+	23, // 43: olivares.sdk.v1.ContentSourceService.Describe:input_type -> olivares.sdk.v1.Empty
+	22, // 44: olivares.sdk.v1.ContentSourceService.Open:input_type -> olivares.sdk.v1.OpenRequest
+	15, // 45: olivares.sdk.v1.ContentSourceService.List:input_type -> olivares.sdk.v1.ContentListRequest
+	17, // 46: olivares.sdk.v1.ContentSourceService.Fetch:input_type -> olivares.sdk.v1.ContentFetchRequest
+	17, // 47: olivares.sdk.v1.ContentSourceService.FetchACL:input_type -> olivares.sdk.v1.ContentFetchRequest
+	19, // 48: olivares.sdk.v1.ContentSourceService.DeltaList:input_type -> olivares.sdk.v1.ContentDeltaRequest
+	23, // 49: olivares.sdk.v1.ContentSourceService.Close:input_type -> olivares.sdk.v1.Empty
+	26, // 50: olivares.sdk.v1.IngestService.Push:input_type -> olivares.sdk.v1.IngestEnvelope
+	23, // 51: olivares.sdk.v1.ModuleService.Describe:input_type -> olivares.sdk.v1.Empty
+	28, // 52: olivares.sdk.v1.ModuleService.Init:input_type -> olivares.sdk.v1.InitRequest
+	23, // 53: olivares.sdk.v1.ModuleService.Start:input_type -> olivares.sdk.v1.Empty
+	23, // 54: olivares.sdk.v1.ModuleService.Stop:input_type -> olivares.sdk.v1.Empty
+	10, // 55: olivares.sdk.v1.HostService.Publish:input_type -> olivares.sdk.v1.Event
+	29, // 56: olivares.sdk.v1.HostService.Subscribe:input_type -> olivares.sdk.v1.SubscribeRequest
+	30, // 57: olivares.sdk.v1.HostService.Log:input_type -> olivares.sdk.v1.LogRecord
+	21, // 58: olivares.sdk.v1.SourceService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
+	23, // 59: olivares.sdk.v1.SourceService.Open:output_type -> olivares.sdk.v1.Empty
+	9,  // 60: olivares.sdk.v1.SourceService.Gather:output_type -> olivares.sdk.v1.Observation
+	23, // 61: olivares.sdk.v1.SourceService.Close:output_type -> olivares.sdk.v1.Empty
+	21, // 62: olivares.sdk.v1.OutputService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
+	23, // 63: olivares.sdk.v1.OutputService.Open:output_type -> olivares.sdk.v1.Empty
+	25, // 64: olivares.sdk.v1.OutputService.Notify:output_type -> olivares.sdk.v1.NotifyResponse
+	23, // 65: olivares.sdk.v1.OutputService.Close:output_type -> olivares.sdk.v1.Empty
+	21, // 66: olivares.sdk.v1.ContentSourceService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
+	23, // 67: olivares.sdk.v1.ContentSourceService.Open:output_type -> olivares.sdk.v1.Empty
+	14, // 68: olivares.sdk.v1.ContentSourceService.List:output_type -> olivares.sdk.v1.ContentDocRef
+	16, // 69: olivares.sdk.v1.ContentSourceService.Fetch:output_type -> olivares.sdk.v1.ContentDocument
+	18, // 70: olivares.sdk.v1.ContentSourceService.FetchACL:output_type -> olivares.sdk.v1.ContentACLResult
+	20, // 71: olivares.sdk.v1.ContentSourceService.DeltaList:output_type -> olivares.sdk.v1.ContentChange
+	23, // 72: olivares.sdk.v1.ContentSourceService.Close:output_type -> olivares.sdk.v1.Empty
+	27, // 73: olivares.sdk.v1.IngestService.Push:output_type -> olivares.sdk.v1.IngestSummary
+	21, // 74: olivares.sdk.v1.ModuleService.Describe:output_type -> olivares.sdk.v1.DescribeResponse
+	23, // 75: olivares.sdk.v1.ModuleService.Init:output_type -> olivares.sdk.v1.Empty
+	23, // 76: olivares.sdk.v1.ModuleService.Start:output_type -> olivares.sdk.v1.Empty
+	23, // 77: olivares.sdk.v1.ModuleService.Stop:output_type -> olivares.sdk.v1.Empty
+	23, // 78: olivares.sdk.v1.HostService.Publish:output_type -> olivares.sdk.v1.Empty
+	10, // 79: olivares.sdk.v1.HostService.Subscribe:output_type -> olivares.sdk.v1.Event
+	23, // 80: olivares.sdk.v1.HostService.Log:output_type -> olivares.sdk.v1.Empty
+	58, // [58:81] is the sub-list for method output_type
+	35, // [35:58] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_olivaresv1_v1_proto_init() }
@@ -2861,13 +3063,13 @@ func file_olivaresv1_v1_proto_init() {
 	if File_olivaresv1_v1_proto != nil {
 		return
 	}
-	file_olivaresv1_v1_proto_msgTypes[7].OneofWrappers = []any{
+	file_olivaresv1_v1_proto_msgTypes[8].OneofWrappers = []any{
 		(*Observation_Edge)(nil),
 		(*Observation_Cost)(nil),
 		(*Observation_Finding)(nil),
 		(*Observation_Metric)(nil),
 	}
-	file_olivaresv1_v1_proto_msgTypes[8].OneofWrappers = []any{
+	file_olivaresv1_v1_proto_msgTypes[9].OneofWrappers = []any{
 		(*Event_Edge)(nil),
 		(*Event_Cost)(nil),
 		(*Event_Finding)(nil),
@@ -2880,7 +3082,7 @@ func file_olivaresv1_v1_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_olivaresv1_v1_proto_rawDesc), len(file_olivaresv1_v1_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   36,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   6,
 		},

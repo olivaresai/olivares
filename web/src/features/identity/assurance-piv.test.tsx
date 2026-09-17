@@ -21,7 +21,22 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const authState = vi.hoisted(() => ({ principal: { aal: 1, amr: ['pwd'] } }))
+const authState = vi.hoisted(() => ({
+  principal: {
+    aal: 1,
+    amr: ['pwd'],
+  } as {
+    aal?: number
+    amr?: string[]
+    kind?: string
+    user_id?: string
+    actor?: string
+    display_name?: string
+    superadmin?: boolean
+    grants?: unknown[]
+    authentication_configuration?: { piv_configured: boolean }
+  } | null,
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
 const api = vi.hoisted(() => ({
@@ -34,14 +49,29 @@ vi.mock('./api', async (orig) => {
 })
 
 import { AAL, StepUpPanel } from './assurance'
+import { authApi } from '@/lib/api/endpoints'
+import { queryKeys } from '@/lib/api/query'
+import type { Whoami } from '@/lib/api/types'
+import { useSessionStore } from '@/stores/session'
+import { pivStatusQueryKey } from './piv-configuration'
+const actor: Whoami = {
+  kind: 'user',
+  user_id: 'u1',
+  actor: 'u1',
+  display_name: 'Operator',
+  superadmin: true,
+  grants: [],
+  aal: 1,
+}
+function client() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  qc.setQueryData(queryKeys.whoami, actor)
+  return qc
+}
 
-const wrap = (onElevated?: () => void) =>
+const wrap = (onElevated?: () => void, qc = client()) =>
   render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+    <QueryClientProvider client={qc}>
       <StepUpPanel
         minAal={AAL.HARDWARE}
         currentAal={AAL.PASSWORD}
@@ -56,6 +86,9 @@ const boton = () => screen.queryByRole('button', { name: /PIV\/CAC/i })
 describe('StepUpPanel ofrece PIV/CAC', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    authState.principal = { ...actor }
+    useSessionStore.setState({ credentialGeneration: 0 })
+    vi.spyOn(authApi, 'whoami').mockResolvedValue({ ...actor, aal: 3 })
     api.pivElevate.mockResolvedValue({ ok: true, aal: 3 })
   })
 
@@ -77,7 +110,7 @@ describe('StepUpPanel ofrece PIV/CAC', () => {
     // de un `waitFor` se cumple en cuanto se evalúa y no prueba nada.
     api.pivStatus.mockResolvedValue({ presented: false })
     wrap()
-    await screen.findByRole('button', { name: /security key/i })
+    await screen.findByRole('button', { name: /passkey/i })
     await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
     expect(boton()).toBeNull()
   })
@@ -90,7 +123,103 @@ describe('StepUpPanel ofrece PIV/CAC', () => {
       }),
     )
     wrap()
-    await screen.findByRole('button', { name: /security key/i })
+    await screen.findByRole('button', { name: /passkey/i })
+    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
+    expect(boton()).toBeNull()
+  })
+
+  it('exact false skips the status request and hides cached presented elevation', async () => {
+    const qc = client()
+    const configured = {
+      ...actor,
+      authentication_configuration: { piv_configured: true },
+    }
+    qc.setQueryData(pivStatusQueryKey(null, configured, 0), {
+      presented: true,
+    })
+    authState.principal = {
+      ...actor,
+      authentication_configuration: { piv_configured: false },
+    }
+    wrap(undefined, qc)
+    await screen.findByRole('button', { name: /passkey/i })
+    expect(api.pivStatus).not.toHaveBeenCalled()
+    expect(boton()).toBeNull()
+  })
+
+  it('true still queries status and requires presented for the button', async () => {
+    authState.principal = {
+      ...actor,
+      authentication_configuration: { piv_configured: true },
+    }
+    api.pivStatus.mockResolvedValue({ presented: false })
+    wrap()
+    await screen.findByRole('button', { name: /passkey/i })
+    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
+    expect(boton()).toBeNull()
+  })
+
+  it('absent field keeps the legacy 501 fallback', async () => {
+    authState.principal = { ...actor }
+    api.pivStatus.mockRejectedValue(
+      Object.assign(new Error('piv_not_configured'), {
+        status: 501,
+        code: 'piv_not_configured',
+      }),
+    )
+    wrap()
+    await screen.findByRole('button', { name: /passkey/i })
+    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
+    expect(boton()).toBeNull()
+  })
+
+  it('absent principal is not treated as unconfigured', async () => {
+    authState.principal = null
+    api.pivStatus.mockRejectedValue(
+      Object.assign(new Error('internal'), { status: 500, code: 'internal' }),
+    )
+    wrap()
+    await screen.findByRole('button', { name: /passkey/i })
+    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
+    expect(boton()).toBeNull()
+  })
+
+  it('principal change does not keep the previous presented button', async () => {
+    const qc = client()
+    const previous = {
+      ...actor,
+      authentication_configuration: { piv_configured: true },
+    }
+    qc.setQueryData(pivStatusQueryKey(null, previous, 0), { presented: true })
+    authState.principal = {
+      ...actor,
+      user_id: 'u2',
+      actor: 'u2',
+      authentication_configuration: { piv_configured: true },
+    }
+    api.pivStatus.mockResolvedValue({ presented: false })
+    wrap(undefined, qc)
+    await screen.findByRole('button', { name: /passkey/i })
+    expect(boton()).toBeNull()
+    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
+    expect(boton()).toBeNull()
+  })
+
+  it('credential generation change does not keep the previous presented button', async () => {
+    const qc = client()
+    const configured = {
+      ...actor,
+      authentication_configuration: { piv_configured: true },
+    }
+    qc.setQueryData(pivStatusQueryKey(null, configured, 0), {
+      presented: true,
+    })
+    useSessionStore.setState({ credentialGeneration: 1 })
+    authState.principal = configured
+    api.pivStatus.mockResolvedValue({ presented: false })
+    wrap(undefined, qc)
+    await screen.findByRole('button', { name: /passkey/i })
+    expect(boton()).toBeNull()
     await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
     expect(boton()).toBeNull()
   })

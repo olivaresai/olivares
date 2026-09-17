@@ -33,7 +33,7 @@
 // in sign.go to cover the object-lock headers (S3 requires every x-amz-*
 // request header in the signed set).
 //
-// Minimal data and secret discipline (docs/SECURITY-HARDENING.md-4). Archive segments carry
+// Minimal data and secret discipline (docs/SECURITY-HARDENING.md §3-4). Archive segments carry
 // only ledger events (ids, hashes, canonical meta) and notifications carry
 // only non-sensitive displayable fields; this connector adds no enrichment.
 // The AWS credentials live only in memory, ride only in the Authorization /

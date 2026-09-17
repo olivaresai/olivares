@@ -12,6 +12,12 @@ Claude Code 状態、そして再構成可能なタイムラインである。�
 永続的なエステートを具現化するのに対し、モジュール II は同じ観測ストリーム上で、セッション
 ごとの**ライブ運用オーバーレイ**を保持し、そのストリームが誠実に運ぶものだけを表示する。
 
+v26.9.0 は公式プロバイダー CLI も
+[プロバイダープロファイル](/how-to/operate-provider-sessions/) の下で所有する子として
+**起動**します。その管理経路は同じモジュールです。オーバーレイを置き換えず、同じ
+プロバイダーセッション id を告げる 2 つのホームをマージしません
+（`CHANGELOG.md` `[26.9.0]` B1/B2）。
+
 ## それは何か
 
 モジュール II はバス駆動の Core レイヤーモジュールであり、インベントリの兄弟である。
@@ -43,6 +49,39 @@ Claude Code 状態、そして再構成可能なタイムラインである。�
 (クライアントは認可されたテナントのスナップショットのみを受信する)、**ベストエフォート**である
 (遅いクライアントは中間フレームをドロップして次のフレームを取得する。取り込みが
 ブロックされることは決してない)。
+
+## Provider profiles and `live_ref`
+
+**プロバイダープロファイル**は、1 つの実行環境上の 1 つの設定済みプロバイダー
+インスタンスの永続的な識別です: ドライバー、環境、および正規の `config_home` /
+`user_home`。認証済みプロバイダーアカウントではありません。登録、改名、
+無効化/有効化、退役は `/v1/m/sessions/provider-profiles` の下にあります。パスは
+admin の `configuration` 読み取りにだけ現れます。起動は `provider_profile_ref`
+を指名します。サーバはホームを解決し、spawn 前に非秘密スナップショットを run に
+永続化します（`CHANGELOG.md` `[26.9.0]` B1、
+`web/src/features/agentops/types.ts`）。
+
+観測はその **チャネル** のライブロウに折り畳まれます。サーバがホスト印のソース
+登録から計算します（`CHANGELOG.md` `[26.9.0]` B2）:
+
+| Channel | Meaning |
+|---|---|
+| `legacy` | no registration |
+| `observed` | a source dedicated to a profile by a binding approved at host admission for the exact applied revision |
+| `source` | a known registration with no verifiable profile |
+| `managed` | a run the plane launched; the only row carrying `canonical_sid` and `run_ref` |
+
+各ライブロウは `live_ref` と `attribution` を公開します。同じプロバイダー
+セッション id を告知する 2 つのホームは、2 つのタイムラインを持つ 2 行です。
+1 行は `GET /v1/m/sessions/live/by-id/{live_ref}`（およびその timeline /
+stream / runs クエリ）で読みます。裸の外部 id ルートは残り、**legacy** です:
+legacy 行にだけ答えます。
+
+ドライバーは公式バイナリをピンして **ノードごと** に登録されます
+（`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`、`_CODEX_BIN`、`_GROK_BIN` —
+[設定](/reference/configuration/)）。未設定ならそのドライバーのプロファイルは
+観測可能のままで起動できません。オペレータ手順:
+[プロバイダーセッションを運用する](/how-to/operate-provider-sessions/)。
 
 ## 何を消費するか(そして何を導出するか)
 

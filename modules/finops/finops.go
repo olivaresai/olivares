@@ -33,6 +33,30 @@ type Module struct {
 
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe
+
+	// attemptVerifier is the ONE fixed dependency of the D02 attempt lifecycle:
+	// the component that establishes, per call, that the configured executing or
+	// reconciliation component still holds recovery access to the scope's tenant.
+	//
+	// It is set ONCE through WithAttemptEvidenceVerifier before serving and is
+	// never reconfigured at runtime. A nil verifier is NOT "no check configured,
+	// therefore allowed": every lifecycle operation refuses with
+	// capability_unavailable before it reads anything. New() deliberately installs
+	// nothing — a default adapter here would be an operational authority this cut
+	// has not built, wearing the interface of one that was.
+	attemptVerifier AttemptEvidenceVerifier
+}
+
+// Option configures the module at construction. Options are applied before the
+// module serves anything; there is no runtime reconfiguration seam.
+type Option func(*Module)
+
+// WithAttemptEvidenceVerifier fixes the attempt-lifecycle evidence verifier. It is
+// the only way the dependency is supplied: there is no setter, no HTTP surface and
+// no configuration key, so the wiring is visible in the composition that built the
+// module.
+func WithAttemptEvidenceVerifier(v AttemptEvidenceVerifier) Option {
+	return func(m *Module) { m.attemptVerifier = v }
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side
@@ -44,7 +68,21 @@ var (
 )
 
 // New returns a FinOps module with the system clock.
-func New() *Module { return &Module{clock: model.SystemClock{}} }
+//
+// The variadic options are ADDITIVE: every existing New() call site keeps
+// compiling and keeps producing exactly the module it produced before, including
+// a nil attempt verifier. That is the intended default — the D02 lifecycle
+// operations are unreachable without an explicitly configured verifier, and
+// nothing in boot fabricates one.
+func New(opts ...Option) *Module {
+	m := &Module{clock: model.SystemClock{}}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(m)
+		}
+	}
+	return m
+}
 
 // Descriptor returns the module's self-description.
 func (m *Module) Descriptor() sdk.Descriptor {

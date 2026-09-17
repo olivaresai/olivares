@@ -46,7 +46,7 @@ func TestBetaOpenAPICoversEveryMountedModuleRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, log)
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestBetaOpenAPIClassifiesEveryMutationRequestBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, log)
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestBetaModuleRouteSetIsDepIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	nilDeps, err := buildModules(sg1, nil, nil, nil, nil, sourcesConfig{}, log)
+	nilDeps, err := buildModules(sg1, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		t.Fatalf("build nil-dependency modules: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestBetaModuleRouteSetIsDepIndependent(t *testing.T) {
 	_, policyKey, _ := ed25519.GenerateKey(nil)
 	priorPub, _, _ := ed25519.GenerateKey(nil)
 	realDeps, err := buildModules(sg2, catalogKey, policyKey, []ed25519.PublicKey{priorPub},
-		http.DefaultClient, sourcesConfig{}, log)
+		http.DefaultClient, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		t.Fatalf("build real-dependency modules: %v", err)
 	}

@@ -4,7 +4,7 @@
 //
 // DTOs for module XI (FinOps), hand-authored 1:1 with the Go response structs
 // (modules/finops/{dto.go,analytics.go,allocation.go,schema.go,focus.go}). Money is
-// ALWAYS integer `*_micro_usd` (millionths of USD); the view formats to USD
+// Integer micro-USD uses legacy numbers or canonical evidence strings; the view formats to USD
 // (lib/format) — it presents, never recomputes (ARCHITECTURE.md). No response carries a
 // prompt, completion or credential — aggregates and metadata only.
 //
@@ -214,16 +214,15 @@ export interface Budget {
   reserved_micro_usd?: number
 }
 
-/** GET /budgets/{id}/status — consumption vs limit + run-rate projection
- *  (dto.go:budgetStatusDTO). Reserved capacity counts toward the limit: all
- *  consumption signals (consumed_pct, remaining, projection, over) are computed on
- *  effective spend (actual + reserved); `spend_micro_usd` is the raw actual spend. */
+/** GET /budgets/{id}/status (dto.go:budgetStatusDTO). Use `amount` for
+ *  financial claims. The older numbers are separately classified projections;
+ *  `spend_micro_usd` is raw actual cost and forecast remains uncertified. */
 export interface BudgetStatus {
   id: string
   name: string
   enabled: boolean
   dimension: SpendDimension
-  key: string
+  key?: string
   period: BudgetPeriod
   period_start: string
   currency: string
@@ -236,17 +235,122 @@ export interface BudgetStatus {
   consumed_pct: number
   projected_micro_usd: number
   projected_pct: number
-  /** true = already over the (reservation-adjusted) limit. */
+  /** Legacy projection; use amount.over_limit for a financial decision. */
   over: boolean
   samples: number
   truncated: boolean
+  /** Canonical financial evaluation. Absence on an older server is not zero. */
+  amount?: BudgetAmountStatus
+  exhaustion_days_remaining?: number
+  exhaustion_confidence?: 'high' | 'medium' | 'low'
 }
 
 /** A historical budget-threshold crossing (GET /alerts). */
+export type AmountClass = 'exact' | 'lower_bound' | 'unknown'
+export type Crossing = 'proven' | 'not_reached' | 'unproven'
+export type LegacyValueKind =
+  'exact' | 'lower_bound' | 'unavailable' | 'unverified'
+export interface AmountComponent {
+  state: 'known' | 'unknown' | 'nonnegative_unknown' | 'indeterminate'
+  value_micro_usd: string | null
+  causes?: string[]
+  rows_read?: number
+  pages_read?: number
+}
+export interface AmountComponents {
+  cost: AmountComponent
+  static_reservation: AmountComponent
+  dynamic_reservation: AmountComponent
+}
+export interface AmountThreshold {
+  threshold: string
+  target_micro_usd?: string
+  result: Crossing
+  legacy_threshold_pct?: number
+  causes?: string[]
+}
+export interface BudgetAmountStatus {
+  state: 'complete' | 'incomplete'
+  class: AmountClass
+  effective_micro_usd: string | null
+  remaining_micro_usd: string | null
+  currency: string
+  causes?: string[]
+  components: AmountComponents
+  thresholds: AmountThreshold[] | null
+  over_limit: AmountThreshold
+  legacy_projection: Exclude<LegacyValueKind, 'unverified'>
+  legacy_fields: {
+    spend_micro_usd: Exclude<LegacyValueKind, 'unverified'>
+    remaining_micro_usd: Exclude<LegacyValueKind, 'unverified'>
+    projected_micro_usd: Exclude<LegacyValueKind, 'unverified'>
+    over: Crossing
+  }
+  forecast_certified: false
+}
+export interface AlertEvidenceEnvelope {
+  schema_version: 1
+  digest_version: 1
+  alert_id: string
+  tenant_id: string
+  budget_id: string
+  policy: {
+    id: string
+    version: number
+    name: string
+    dimension: string
+    key: string
+    period: string
+    currency: string
+    action: string
+    limit_micro_usd: string
+    reserved_micro_usd?: string
+    config_fault?: string
+  }
+  amount: {
+    class: AmountClass
+    value_micro_usd: string | null
+    currency: string
+    causes?: string[]
+  }
+  components: AmountComponents
+  decision: AmountThreshold & {
+    target_numerator: string
+    target_denominator: string
+    legacy_threshold_pct: number
+  }
+  context: {
+    window_start?: string
+    window_end?: string
+    window_bounds: string
+    provenance_filter: string
+    scope_resolved: boolean
+    scope_column?: string
+    scope_value?: string
+    evaluated_at: string
+    sample_occurred_at: string
+    read_consistency: string
+  }
+  legacy: {
+    value_kind: Exclude<LegacyValueKind, 'unverified'>
+    spend_micro_usd: number
+    note?: string
+  }
+}
+export interface AlertEvidence {
+  state: 'valid' | 'unknown'
+  cause?: string
+  evidence_hash?: string
+  envelope?: AlertEvidenceEnvelope
+}
+
 export interface Alert {
+  id: string
+  legacy_value_kind: LegacyValueKind
+  amount_evidence: AlertEvidence
   budget_id: string
   dimension: SpendDimension
-  key: string
+  key?: string
   period: BudgetPeriod
   period_start: string
   threshold_pct: number
@@ -483,10 +587,8 @@ export interface EnhancedForecastResponse extends ForecastResponse {
   dimension_forecasts?: DimensionForecast[]
 }
 
-export interface EnhancedBudgetStatus extends BudgetStatus {
-  exhaustion_days_remaining: number
-  exhaustion_confidence?: 'high' | 'medium' | 'low'
-}
+/** Both helpers read the same endpoint and the same financial contract. */
+export type EnhancedBudgetStatus = BudgetStatus
 
 // ── C07-04 · las doce rutas de finops que la consola nunca llamaba ───────────────────
 //

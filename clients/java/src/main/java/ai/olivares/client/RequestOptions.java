@@ -20,6 +20,7 @@ public final class RequestOptions {
     public static final RequestOptions NONE = builder().build();
 
     final Map<String, List<String>> query;
+    final Map<String, String> headers;
     final String tenant;
 
     private RequestOptions(Builder b) {
@@ -32,6 +33,7 @@ public final class RequestOptions {
             copy.put(e.getKey(), List.copyOf(e.getValue()));
         }
         this.query = Collections.unmodifiableMap(copy);
+        this.headers = Collections.unmodifiableMap(new LinkedHashMap<>(b.headers));
         this.tenant = b.tenant;
     }
 
@@ -42,6 +44,7 @@ public final class RequestOptions {
     /** Fluent builder for {@link RequestOptions}. */
     public static final class Builder {
         private final Map<String, List<String>> query = new LinkedHashMap<>();
+        private final Map<String, String> headers = new LinkedHashMap<>();
         private String tenant;
 
         /** Add (or replace) one query parameter. */
@@ -61,6 +64,12 @@ public final class RequestOptions {
             return this;
         }
 
+        /** Add or replace an explicitly declared operation header. */
+        public Builder header(String key, String value) {
+            this.headers.put(key, value);
+            return this;
+        }
+
         /** Override the client's default tenant for this call. */
         public Builder tenant(String tenant) {
             this.tenant = tenant;
@@ -70,5 +79,21 @@ public final class RequestOptions {
         public RequestOptions build() {
             return new RequestOptions(this);
         }
+    }
+
+    static RequestOptions contract(RequestOptions base, Map<String, String> query,
+                                   Map<String, String> headers) {
+        Builder builder = builder().tenant(base.tenant);
+        for (Map.Entry<String, List<String>> entry : base.query.entrySet()) {
+            for (String value : entry.getValue()) {
+                builder.queryAdd(entry.getKey(), value);
+            }
+        }
+        for (Map.Entry<String, String> entry : base.headers.entrySet()) {
+            builder.header(entry.getKey(), entry.getValue());
+        }
+        query.forEach(builder::query);
+        headers.forEach(builder::header);
+        return builder.build();
     }
 }

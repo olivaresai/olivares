@@ -36,6 +36,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods/proxy
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   - services
   verbs:

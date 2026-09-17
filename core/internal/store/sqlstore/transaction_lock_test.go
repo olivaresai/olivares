@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -36,12 +37,20 @@ func TestRowLockSQLContract(t *testing.T) {
 
 func TestAuthorizationFactAllowlist(t *testing.T) {
 	if err := validateAuthorizationFact(model.EntityDescriptor{
-		Kind: "core.identity", AuthorizationFact: true, AuthorizationLockOrder: 1,
+		Kind: identityDescriptor.Kind, AuthorizationFact: true,
+		AuthorizationLockOrder: identityDescriptor.AuthorizationLockOrder,
 	}); err != nil {
 		t.Fatalf("allowlisted identity fact: %v", err)
 	}
 	if err := validateAuthorizationFact(model.EntityDescriptor{
-		Kind: "sessions.work_item", AuthorizationFact: true, AuthorizationLockOrder: 1,
+		Kind: identityDescriptor.Kind, AuthorizationFact: true,
+		AuthorizationLockOrder: userAuthorityDescriptor.AuthorizationLockOrder,
+	}); err == nil {
+		t.Fatal("identity fact at reserved User-authority order was accepted")
+	}
+	if err := validateAuthorizationFact(model.EntityDescriptor{
+		Kind: "sessions.work_item", AuthorizationFact: true,
+		AuthorizationLockOrder: identityDescriptor.AuthorizationLockOrder,
 	}); err == nil {
 		t.Fatal("arbitrary module entity opted itself into authorization snapshots")
 	}
@@ -106,11 +115,18 @@ func registerAuthorityLeaseFact(reg store.ExtensionRegistry) error {
 // disable this identity while the first caller still believed its authorization
 // snapshot was stable.
 func TestSQLiteRowLockerFencesAnotherStoreInstance(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// Setup keeps a budget of its own because this test opens TWO stores, and each open
+	// runs the whole core migration preflight. The three sibling tests in this file that
+	// hold a 10s budget open ONE. Under -race on a loaded runner a single deadline across
+	// setup and assertion is spent before the fence is ever exercised: in run 34935769735
+	// (race-core partition 4) the second open died in the preflight with "context deadline
+	// exceeded" 10.77s in, and the fence below never ran. Sampling the fence deadline after
+	// the expensive prerequisites keeps it measuring the fence instead of the migrations.
+	setupCtx, cancelSetup := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancelSetup()
 	dsn := filepath.Join(t.TempDir(), "row-lock.sqlite")
 	open := func() store.Store {
-		st, err := Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: dsn, Debug: true}, nil)
+		st, err := Open(setupCtx, store.Config{Engine: store.EngineSQLite, DSN: dsn, Debug: true}, nil)
 		if err != nil {
 			t.Fatalf("open SQLite row-lock store: %v", err)
 		}
@@ -122,9 +138,9 @@ func TestSQLiteRowLockerFencesAnotherStoreInstance(t *testing.T) {
 	second := open()
 
 	var identity model.Identity
-	if err := first.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := first.Mutate(setupCtx, tenant, func(sc store.Scope) error {
 		var err error
-		identity, err = sc.Identities().Create(ctx, model.Identity{
+		identity, err = sc.Identities().Create(setupCtx, model.Identity{
 			Name: "row-lock-agent", Kind: "service_account", ExternalID: "agent:row-lock",
 			Metadata: map[string]any{"disabled": false},
 		})
@@ -132,6 +148,11 @@ func TestSQLiteRowLockerFencesAnotherStoreInstance(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed identity: %v", err)
 	}
+
+	// The fence itself is fast: the holder takes SQLite's writer slot and the updater must
+	// still be blocked 200ms later. This deadline bounds that, not the setup above.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	holderReady := make(chan struct{})
 	releaseHolder := make(chan struct{})
@@ -533,11 +554,24 @@ func TestAuthoritySnapshotLeaseFenceTouchIsPayloadFreeAndDenyClosed(t *testing.T
 		t.Helper()
 		before := readClaim().Int(model.ColVersion)
 		if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
-			err := sc.(store.AuthoritySnapshotLocker).LockAuthoritySnapshot(
+			workspace, err := sc.DefaultWorkspace(ctx)
+			if err != nil {
+				return err
+			}
+			sc, err = store.ConfineWorkspace(ctx, sc, workspace.ID)
+			if err != nil {
+				return err
+			}
+			err = sc.(store.AuthoritySnapshotLocker).LockAuthoritySnapshot(
 				ctx, []store.AuthorizationFactRef{ref},
 			)
 			if !errors.Is(err, store.ErrConflict) {
 				t.Fatalf("%s error = %v, want ErrConflict", name, err)
+			}
+			var stale *store.LockedLeasedVersionConflict
+			if got, want := errors.As(err, &stale), name == "stale version"; got != want ||
+				(got && !stale.Matches(ref)) {
+				t.Fatalf("%s leased-version subtype = %v, want %v", name, got, want)
 			}
 			return nil
 		}); err != nil {
@@ -669,15 +703,20 @@ func exerciseAuthorityLeaseFenceK2K3Order(
 	name string,
 ) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// The budget is for the K2/K3 fence ORDER, not for the fixture. The setup below
+	// provisions a tenant and then seeds an identity and an extension record through a
+	// Mutate; under -race on a contended runner that alone can spend a 10 s deadline, and
+	// the failure then lands on the handoff select rather than on the order under test.
+	// Same class and same remedy as 01f81b8e81, 4859cc43f3 and this file's own 346bce0c8a:
+	// setup on an unbounded context, the budget starts at the behaviour.
+	setupCtx := context.Background()
 	tenant := provisionTenant(t, st, "authority-order-"+name)
 	deadline := model.NewTimestamp(time.Now().UTC().Add(time.Hour))
 	var identity model.Identity
 	var claim model.Record
-	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := st.Mutate(setupCtx, tenant, func(sc store.Scope) error {
 		var err error
-		identity, err = sc.Identities().Create(ctx, model.Identity{
+		identity, err = sc.Identities().Create(setupCtx, model.Identity{
 			Name: "K2 K3 authority order", Kind: "user",
 			ExternalID: "human:authority-order:" + name,
 		})
@@ -688,7 +727,7 @@ func exerciseAuthorityLeaseFenceK2K3Order(
 		if err != nil {
 			return err
 		}
-		claim, err = repo.Create(ctx, model.Record{
+		claim, err = repo.Create(setupCtx, model.Record{
 			"sid": "ses_k2_k3_order", "holder": "holder-order", "fence": int64(11),
 			"claim_state": "active", "lease_expires_at": deadline.String(),
 		})
@@ -696,6 +735,9 @@ func exerciseAuthorityLeaseFenceK2K3Order(
 	}); err != nil {
 		t.Fatalf("seed %s authority order fixture: %v", name, err)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	readClaim := func() model.Record {
 		t.Helper()
@@ -1102,13 +1144,18 @@ func TestConfinedViewTransactionLockerDeniesWrite(t *testing.T) {
 	}
 }
 
-// TestPostgresTransactionLockerSerializesMatchingKeys exercises the production
-// advisory lock. A distinct key must proceed while the holder is open; the same
-// key must remain blocked until that transaction ends.
-func TestPostgresTransactionLockerSerializesMatchingKeys(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	st, err := Open(ctx, store.Config{
+// TestPostgresLegacyMutateSerializesBeforeTransactionKeys preserves the v8
+// contract: ordinary Mutate takes tenant L1 before the callback, so even a
+// distinct transaction key cannot enter while another same-tenant Mutate is
+// open.
+func TestPostgresLegacyMutateSerializesBeforeTransactionKeys(t *testing.T) {
+	// The fixture — an isolated database, an Open with the compiled migration plan and a
+	// tenant provision — runs on an unbounded context; the 10 s budget below is for the
+	// serialization race only. Started above the fixture it measured the migrations, and on
+	// a contended runner the holder handoff reports `context deadline exceeded` instead of
+	// the contract under test (01f81b8e81 / 4859cc43f3 / 346bce0c8a, same class).
+	setupCtx := context.Background()
+	st, err := Open(setupCtx, store.Config{
 		Engine: store.EnginePostgres, DSN: isolatedPG(t).App, MaxConns: 4,
 	}, nil)
 	if err != nil {
@@ -1116,6 +1163,9 @@ func TestPostgresTransactionLockerSerializesMatchingKeys(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	tenant := provisionTenant(t, st, "transaction-locker-postgres")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	const heldKey = "sessions.work_lease:tenant:workspace:item"
 	holderReady := make(chan struct{})
@@ -1150,42 +1200,23 @@ func TestPostgresTransactionLockerSerializesMatchingKeys(t *testing.T) {
 		t.Fatalf("holder did not acquire lock: %v", ctx.Err())
 	}
 
+	distinctEntered := make(chan struct{})
 	distinctDone := make(chan error, 1)
 	go func() {
 		distinctDone <- st.Mutate(ctx, tenant, func(sc store.Scope) error {
+			close(distinctEntered)
 			return sc.(store.TransactionLocker).LockTransaction(ctx, heldKey+":other")
 		})
 	}()
 	select {
+	case <-distinctEntered:
+		release()
+		t.Fatal("legacy distinct-key callback entered before the tenant writer ended")
 	case err := <-distinctDone:
-		if err != nil {
-			t.Fatalf("distinct-key lock: %v", err)
-		}
-	case <-time.After(2 * time.Second):
 		release()
-		t.Fatal("distinct transaction lock key was blocked by the holder")
-	}
-
-	matchingAcquired := make(chan struct{})
-	matchingDone := make(chan error, 1)
-	go func() {
-		matchingDone <- st.Mutate(ctx, tenant, func(sc store.Scope) error {
-			if err := sc.(store.TransactionLocker).LockTransaction(ctx, heldKey); err != nil {
-				return err
-			}
-			close(matchingAcquired)
-			return nil
-		})
-	}()
-	select {
-	case <-matchingAcquired:
-		release()
-		t.Fatal("matching transaction lock acquired before the holder ended")
-	case err := <-matchingDone:
-		release()
-		t.Fatalf("matching transaction ended before holder release: %v", err)
+		t.Fatalf("legacy distinct-key transaction ended before holder release: %v", err)
 	case <-time.After(200 * time.Millisecond):
-		// Expected: the matching key remains blocked while the first transaction is open.
+		// Expected: L1 blocks callback entry before its distinct key matters.
 	}
 
 	release()
@@ -1193,17 +1224,193 @@ func TestPostgresTransactionLockerSerializesMatchingKeys(t *testing.T) {
 		t.Fatalf("holder transaction: %v", err)
 	}
 	select {
-	case <-matchingAcquired:
+	case <-distinctEntered:
 	case <-ctx.Done():
-		t.Fatalf("matching transaction stayed blocked after release: %v", ctx.Err())
+		t.Fatalf("legacy distinct-key callback stayed blocked after release: %v", ctx.Err())
 	}
 	select {
-	case err := <-matchingDone:
+	case err := <-distinctDone:
 		if err != nil {
-			t.Fatalf("matching transaction: %v", err)
+			t.Fatalf("legacy distinct-key transaction: %v", err)
 		}
 	case <-ctx.Done():
-		t.Fatalf("matching transaction did not commit after release: %v", ctx.Err())
+		t.Fatalf("legacy distinct-key transaction did not commit after release: %v", ctx.Err())
+	}
+}
+
+// TestPostgresSelectiveCoordinationSerializesMatchingKeys exercises the new
+// public selective path. Disjoint plans enter concurrently, matching plans wait
+// before callback entry, legacy authority work can overlap, and System mutation
+// remains excluded by L0.
+func TestPostgresSelectiveCoordinationSerializesMatchingKeys(t *testing.T) {
+	// Fixture on an unbounded context, budget on the behaviour: the isolated database, the
+	// Open with the compiled migration plan and the tenant provision are not what the 15 s
+	// deadline is sampling, and under -race on a contended runner they were spending it.
+	// Same class and remedy as 01f81b8e81 / 4859cc43f3 / 346bce0c8a.
+	setupCtx := context.Background()
+	st, err := Open(setupCtx, store.Config{
+		Engine: store.EnginePostgres, DSN: isolatedPG(t).App, MaxConns: 6,
+	}, nil)
+	if err != nil {
+		t.Fatalf("open PostgreSQL store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	tenant := provisionTenant(t, st, "selective-coordination-postgres")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	selective := st.(store.SelectiveMutator)
+	heldPlan, _ := store.NewTransactionLockPlan("sessions.work_lease:tenant:workspace:item")
+	distinctPlan, _ := store.NewTransactionLockPlan("sessions.work_lease:tenant:workspace:other")
+
+	holderReady := make(chan struct{})
+	releaseHolder := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseHolder) }) }
+	t.Cleanup(release)
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- selective.MutateCoordination(ctx, tenant, heldPlan, func(sc store.CoordinationMutationScope) error {
+			if _, ok := any(sc).(store.Scope); ok {
+				return errors.New("selective coordination scope widened to Scope")
+			}
+			if _, ok := any(sc).(store.TransactionLocker); ok {
+				return errors.New("selective coordination scope exposes dynamic locks")
+			}
+			close(holderReady)
+			select {
+			case <-releaseHolder:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		})
+	}()
+	select {
+	case <-holderReady:
+	case err := <-holderDone:
+		t.Fatalf("selective holder ended before entry: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+
+	distinctDone := make(chan error, 1)
+	go func() {
+		distinctDone <- selective.MutateCoordination(ctx, tenant, distinctPlan, func(store.CoordinationMutationScope) error {
+			return nil
+		})
+	}()
+	select {
+	case err := <-distinctDone:
+		if err != nil {
+			t.Fatalf("distinct selective plan: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		release()
+		t.Fatal("distinct selective plan was blocked by holder")
+	}
+
+	authorityEntered := make(chan struct{})
+	authorityDone := make(chan error, 1)
+	go func() {
+		authorityDone <- st.Mutate(ctx, tenant, func(store.Scope) error {
+			close(authorityEntered)
+			return nil
+		})
+	}()
+	select {
+	case <-authorityEntered:
+	case err := <-authorityDone:
+		release()
+		t.Fatalf("legacy authority transaction ended before callback entry: %v", err)
+	case <-time.After(2 * time.Second):
+		release()
+		t.Fatal("selective holder incorrectly held tenant L1")
+	}
+	if err := <-authorityDone; err != nil {
+		release()
+		t.Fatalf("legacy authority transaction: %v", err)
+	}
+
+	readDone := make(chan error, 1)
+	go func() { readDone <- st.System(ctx, func(store.SystemScope) error { return nil }) }()
+	select {
+	case err := <-readDone:
+		if err != nil {
+			t.Fatalf("System read: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		release()
+		t.Fatal("System read was blocked by selective L0")
+	}
+
+	cancelCtx, cancelWaiter := context.WithCancel(ctx)
+	cancelledDone := make(chan error, 1)
+	go func() {
+		cancelledDone <- selective.MutateCoordination(cancelCtx, tenant, heldPlan, func(store.CoordinationMutationScope) error {
+			return errors.New("cancelled matching callback entered")
+		})
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancelWaiter()
+	if err := <-cancelledDone; !errors.Is(err, context.Canceled) {
+		release()
+		t.Fatalf("cancelled matching waiter = %v, want context.Canceled", err)
+	}
+
+	matchingEntered := make(chan struct{})
+	matchingDone := make(chan error, 1)
+	go func() {
+		matchingDone <- selective.MutateCoordination(ctx, tenant, heldPlan, func(store.CoordinationMutationScope) error {
+			close(matchingEntered)
+			return nil
+		})
+	}()
+	select {
+	case <-matchingEntered:
+		release()
+		t.Fatal("matching selective callback entered before holder release")
+	case err := <-matchingDone:
+		release()
+		t.Fatalf("matching selective transaction ended before release: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	systemDone := make(chan error, 1)
+	go func() {
+		systemDone <- st.System(ctx, func(sys store.SystemScope) error {
+			_, err := sys.SetOrgRegion(ctx, tenant, "eu")
+			return err
+		})
+	}()
+	select {
+	case err := <-systemDone:
+		release()
+		t.Fatalf("System mutation crossed selective L0 before release: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	release()
+	if err := <-holderDone; err != nil {
+		t.Fatalf("selective holder: %v", err)
+	}
+	select {
+	case <-matchingEntered:
+	case <-ctx.Done():
+		t.Fatalf("matching callback stayed blocked: %v", ctx.Err())
+	}
+	if err := <-matchingDone; err != nil {
+		t.Fatalf("matching transaction after release: %v", err)
+	}
+	if err := <-systemDone; err != nil {
+		t.Fatalf("System mutation after release: %v", err)
+	}
+
+	// The cancelled waiter left no transaction/key residue.
+	if err := selective.MutateCoordination(ctx, tenant, heldPlan, func(store.CoordinationMutationScope) error {
+		return nil
+	}); err != nil {
+		t.Fatalf("same key after cancellation/release: %v", err)
 	}
 }
 
@@ -1214,9 +1421,12 @@ func TestPostgresTransactionLockerSerializesMatchingKeys(t *testing.T) {
 // insert must wait until the authority transaction ends; afterwards the same
 // snapshot is stale because the reference has become ambiguous.
 func TestPostgresAuthoritySnapshotBlocksIdentityPhantoms(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	st, err := Open(ctx, store.Config{
+	// The fixture — isolated database, Open with the compiled migration plan, tenant
+	// provision and the sponsor identity — runs unbounded. The 10 s budget starts at the
+	// phantom race below, which is what it is meant to bound; above the fixture it was
+	// being spent by the migrations (01f81b8e81 / 4859cc43f3 / 346bce0c8a, same class).
+	setupCtx := context.Background()
+	st, err := Open(setupCtx, store.Config{
 		Engine: store.EnginePostgres, DSN: isolatedPG(t).App, MaxConns: 4,
 	}, nil)
 	if err != nil {
@@ -1226,9 +1436,9 @@ func TestPostgresAuthoritySnapshotBlocksIdentityPhantoms(t *testing.T) {
 	tenant := provisionTenant(t, st, "authority-phantom-postgres")
 
 	var identity model.Identity
-	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := st.Mutate(setupCtx, tenant, func(sc store.Scope) error {
 		var err error
-		identity, err = sc.Identities().Create(ctx, model.Identity{
+		identity, err = sc.Identities().Create(setupCtx, model.Identity{
 			Name: "authority sponsor", Kind: "user", ExternalID: "human:authority-phantom",
 		})
 		return err
@@ -1238,6 +1448,9 @@ func TestPostgresAuthoritySnapshotBlocksIdentityPhantoms(t *testing.T) {
 	snapshot := []store.AuthorizationFactRef{{
 		Kind: "core.identity", ID: identity.ID, Version: identity.Version,
 	}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	holderReady := make(chan struct{})
 	releaseHolder := make(chan struct{})
@@ -1304,5 +1517,62 @@ func TestPostgresAuthoritySnapshotBlocksIdentityPhantoms(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatalf("inspect PostgreSQL ambiguous authority: %v", err)
+	}
+}
+
+func TestAuthoritySnapshotLockedLeasedVersionConflictContract(t *testing.T) {
+	t.Parallel()
+	deadline := model.NewTimestamp(time.Now().UTC().Add(time.Hour))
+	id := model.NewID()
+	makeRef := func(kind model.Kind, id model.ID, version int64, sid string, fence int64, expires model.Timestamp) store.AuthorizationFactRef {
+		t.Helper()
+		ref, err := store.NewLeaseFenceAuthorizationFactRef(kind, id, version, sid, fence, expires)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ref
+	}
+	ref := makeRef(authorityLeaseFactKind, id, 3, "private-session", 9, deadline)
+	err := store.NewLockedLeasedVersionConflict(ref)
+	var conflict *store.LockedLeasedVersionConflict
+	if err == nil || !errors.Is(err, store.ErrConflict) || !errors.As(err, &conflict) || !conflict.Matches(ref) {
+		t.Fatalf("valid constructor lost compatibility or identity: %v", err)
+	}
+	if err.Error() != store.ErrConflict.Error() {
+		t.Fatalf("error text discloses witness: %q", err)
+	}
+	mismatches := map[string]store.AuthorizationFactRef{
+		"kind":     makeRef("other.fact", id, 3, "private-session", 9, deadline),
+		"id":       makeRef(authorityLeaseFactKind, model.NewID(), 3, "private-session", 9, deadline),
+		"version":  makeRef(authorityLeaseFactKind, id, 4, "private-session", 9, deadline),
+		"sid":      makeRef(authorityLeaseFactKind, id, 3, "other-session", 9, deadline),
+		"fence":    makeRef(authorityLeaseFactKind, id, 3, "private-session", 10, deadline),
+		"deadline": makeRef(authorityLeaseFactKind, id, 3, "private-session", 9, model.NewTimestamp(deadline.Time().Add(time.Nanosecond))),
+		"empty":    {},
+		"unleased": {Kind: authorityLeaseFactKind, ID: id, Version: 3},
+	}
+	for name, other := range mismatches {
+		t.Run(name, func(t *testing.T) {
+			if conflict.Matches(other) {
+				t.Fatal("different witness matched")
+			}
+		})
+	}
+	invalidKind, invalidID, invalidVersion := ref, ref, ref
+	invalidKind.Kind, invalidID.ID, invalidVersion.Version = "", "", 0
+	for _, invalid := range []store.AuthorizationFactRef{{}, mismatches["unleased"], invalidKind, invalidID, invalidVersion} {
+		err := store.NewLockedLeasedVersionConflict(invalid)
+		var typed *store.LockedLeasedVersionConflict
+		if err == nil || !errors.Is(err, store.ErrConflict) || errors.As(err, &typed) || conflict.Matches(invalid) {
+			t.Fatalf("invalid constructor produced matching subtype: %v", err)
+		}
+	}
+	var nilConflict *store.LockedLeasedVersionConflict
+	var zeroConflict store.LockedLeasedVersionConflict
+	if nilConflict.Matches(ref) || zeroConflict.Matches(ref) || zeroConflict.Matches(store.AuthorizationFactRef{}) {
+		t.Fatal("nil/zero conflict matched")
+	}
+	if !errors.Is(fmt.Errorf("adapter: %w", err), store.ErrConflict) {
+		t.Fatal("wrapper lost ErrConflict")
 	}
 }

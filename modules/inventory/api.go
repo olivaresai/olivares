@@ -6,6 +6,7 @@ package inventory
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -40,6 +41,15 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/summary", permCatalogRead, m.handleSummary)
 	reg.Handle("GET", "/entities", permCatalogRead, m.handleListEntities)
 	reg.Handle("GET", "/entities/{kind}/{id}", permCatalogRead, m.handleGetEntity)
+	// The observation history is a collection SUBORDINATE to the (kind, id) pair,
+	// mounted with Handle rather than HandleEntity: the path id is the core entity
+	// id the catalog overlays, not the primary key of a stored inventory row, so
+	// there is no row for an entity route to read lineage from. It carries the same
+	// tenant-wide permission as the catalog it is a projection of (root ratified the
+	// reuse, 2026-09-08); no source permission is inferred, and a workspace-confined
+	// principal is refused the way it is on every inventory route, because these
+	// tables declare no workspace lineage.
+	reg.Handle("GET", "/entities/{kind}/{id}/observations", permCatalogRead, m.handleListEntityObservations)
 }
 
 // handleListEntities lists catalog entries, optionally filtered by kind and
@@ -115,6 +125,60 @@ func (m *Module) handleGetEntity(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleListEntityObservations lists the stored observation receipts that name one catalog
+// entity, one item per distinct receipt in ascending receipt order, in pages of at most 25
+// (?limit 1..25, ?cursor from the previous page): each item carries the receipt id, the event
+// type, the registration snapshot recorded at reception (historical, not the source's current
+// registration or health), the source-declared occurrence instant when declared, first and last
+// reception of the same retained facts, the equal-facts delivery count and whether a conflicting
+// redelivery is retained; names, references, labels, raw facts, hashes and event ids are
+// withheld, a missing catalog entry is 404, and an empty page does not prove no observation.
+//
+// It is the HTTP half of a two-part module: everything about selection, validation
+// and composition lives in listEntityObservations (provenance_read.go), so this
+// function only turns the request into a validated query and the reader's outcome
+// into a status. A page whose stored evidence cannot be proven consistent is a
+// generic 500 for the whole response — never a shorter list — and the cause goes
+// to the operator log, not to the client.
+func (m *Module) handleListEntityObservations(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	kind := chi.URLParam(r, "kind")
+	id, ok := canonicalNonzeroID(chi.URLParam(r, "id"))
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
+		return
+	}
+	q, err := parseObservationQuery(r.URL.Query())
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorBody(err.Error()))
+		return
+	}
+	out := listResponse[observationDTO]{Items: []observationDTO{}}
+	err = mc.Data.View(r.Context(), func(sc store.Scope) error {
+		page, err := listEntityObservations(r.Context(), sc, kind, id, q)
+		if err != nil {
+			return err
+		}
+		out.Items = append(out.Items, page.Items...)
+		out.Cursor, out.HasMore = page.Cursor, page.HasMore
+		return nil
+	})
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusOK, out)
+	case errors.Is(err, errObservationEntityAbsent):
+		writeJSON(w, http.StatusNotFound, errorBody("not found"))
+	case errors.Is(err, errObservationEvidence), errors.Is(err, errObservationProjectorUnavailable):
+		// The stored evidence, or the store's capability, is the problem — not the
+		// request. The client gets the generic sentence; the reason (receipt id and
+		// the invariant that failed, never facts or secrets) goes to the operator.
+		m.warnf("inventory: observation history refused", "tenant", mc.Tenant.String(),
+			"kind", kind, "entity_id", id.String(), "err", err.Error())
+		writeJSON(w, http.StatusInternalServerError, errorBody("internal error"))
+	default:
+		writeStoreError(w, err)
+	}
 }
 
 // handleSummary returns the estate overview: counts by entity kind and by signal

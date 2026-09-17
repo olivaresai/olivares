@@ -1,0 +1,144 @@
+# hot-race-costs.tsv — DECLARED SCHEDULING INPUTS for the partition in scripts/race-hot-tests.sh.
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Format: <entry point><TAB><milliseconds>. Comments start with '#'. Blank lines ignored.
+#
+# WHAT THESE NUMBERS ARE, AND WHAT THEY ARE NOT.
+# They are the per-test durations Go itself reported on ONE developer container on
+# 2026-09-13 — `go test -race -count=1 -timeout 25m -run "<the whole manifest>" -v .`,
+# 16 visible CPUs, GOMAXPROCS=4, SQLite, no Postgres service, whole selection 343.6s,
+# exit 0. The retained log is
+# assessments/engineering/r112-race-rest-cadence/evidence/local-hot-selection.log.
+#
+# The SAME selection exceeded 900s on ci-runner-8. So a number here is NOT a prediction of
+# remote wall time, NOT evidence about any runner, and NOT a performance claim. It is a
+# RELATIVE ORDERING used to divide the work deterministically. What a partition costs in CI
+# is a CI measurement, and `check-test-timeout-headroom.sh` is what reports it.
+#
+# An entry NOT named here is still owned, at the helper's DEFAULT_COST_MS. Ownership never
+# depends on this file. The opposite direction fails closed: a row naming an entry the live
+# manifest no longer has is STALE and the helper exits 1, because a stale row silently
+# unbalances every partition and nothing else would report it.
+#
+# A duration Go printed as 0.00s is recorded as 1 ms, not 0: it means 'under ten
+# milliseconds', not 'free', and the helper refuses a non-positive cost so that a zero can
+# never mean 'unknown' by accident.
+#
+# To refresh: each CI partition runs with `-v`, so its log carries the durations measured on
+# the machine that actually pays for them.
+TestAnchorIntentRequiresPersistedEvidence	19940
+TestAuthorizeBatchFreezesEnvelope	1
+TestAuthorizeFreezesEffectiveBytes	1
+TestAuthorizeFreezesGateRewrite	1
+TestAuthorizeFreezesNormalization	1
+TestAuthorizeModellessDenySemantics	1
+TestAuthorizeModellessRequestIs400	1
+TestBridgeCrossNodeTypedDelivery	330
+TestBridgeFailureDegradation	6450
+TestBridgeInjectGate	430
+TestBridgeModulePayloadDecoders	30
+TestBridgePerPublisherOrdering	130
+TestDRScheduleInterval	1
+TestDedicatedProxyOTelIsHashOnly	10
+TestEmptyTenantHintStillResolvesPerCredential	1
+TestEventingPumpIntervalEnv	1
+TestEventingPumpRunOncePassesAllBusinessTenants	24840
+TestInferenceProxyAbsentTenantDoesNotRefuse	1
+TestInferenceProxyContentFirewallBuilderRecordsEveryNilReturn	1
+TestInferenceProxyContentFirewallBuilderRecordsTheDeciderItServes	10
+TestInferenceProxyContentFirewallContractMatchesTheModuleStates	20
+TestInferenceProxyContentFirewallRecorderConcurrentRecordAndRead	1
+TestInferenceProxyContentFirewallRecorderKeepsTheFirstAttachment	1
+TestInferenceProxyContentFirewallStatusReportsTheProxyTheBuilderReturned	25920
+TestInferenceProxyContentFirewallStatusWithoutAProxyThroughTheEngineWrapper	25680
+TestInferenceProxyRefusesAPresentButInvalidTenant	1
+TestInferenceProxyRefusesTheConfiguredSystemTenant	1
+TestIntentHashBindsBothDigests	1
+TestKillSwitchMCPForwardAgentScope	31010
+TestKillSwitchPEPFailsClosedOnStateError	27660
+TestLicenseHolderConcurrentHotApplyNotLost	850
+TestLicenseHolderExpiryDegradation	1
+TestLicenseHolderHotApply	1
+TestLicenseHolderTermlessAndInvalid	1
+TestLicenseHolderTrialExpiresWithoutGrace	1
+TestLicenseHolderWithoutAttestedGraceStopsAtExpiry	1
+TestLoadWorkflowLimits	1
+TestNewDRSchedulePumpNilWithoutAPI	1
+TestNewEventingPumpDisableSemantics	1
+TestNewOrchCadencePumpDisableSemantics	1
+TestNewRetentionSweepLoopDisableSemantics	1
+TestOrchCadencePumpIntervalEnv	1
+TestOrchCadencePumpRunOncePassesAllBusinessTenants	25440
+TestOrchWorkflowPumpIntervalEnv	1
+TestOrchWorkflowPumpRunOncePassesAllBusinessTenants	25450
+TestProxyAuthorizeAlwaysEnforcesNoConstrainedObserveShadow	1
+TestProxyAuthorizeAuthFailDenies	1
+TestProxyAuthorizeAuthPlaneFaultFailsClosed	1
+TestProxyAuthorizeBatchAllAllowed	1
+TestProxyAuthorizeBatchCarriesGovernedRewrites	1
+TestProxyAuthorizeBatchCeilingDenyNamesEntryIndex	1
+TestProxyAuthorizeBatchEmptyRejected	1
+TestProxyAuthorizeBatchEmptyResolvesNoIdentity	1
+TestProxyAuthorizeBatchIdentityDenyIsBatchLevel	1
+TestProxyAuthorizeBatchKillSwitchDeniesWholeBatch	1
+TestProxyAuthorizeBatchOneDeniedEntryDeniesWholeBatch	1
+TestProxyAuthorizeBatchResolvesIdentityOnce	1
+TestProxyAuthorizeBudgetBlockAndThrottle	1
+TestProxyAuthorizeBudgetReadErrorFailsOPEN	1
+TestProxyAuthorizeCeilingsEnforceMaxTokensDenies402	1
+TestProxyAuthorizeCeilingsEnforceTaskBudget	1
+TestProxyAuthorizeCeilingsEnforceToolClampAndInjection	1
+TestProxyAuthorizeCeilingsObserveFindingAndForwardUnchanged	1
+TestProxyAuthorizeContextPolicyCeilingDenies413	1
+TestProxyAuthorizeContextPolicyForbidDenies403	1
+TestProxyAuthorizeContextPolicyReadErrorHonorsFailOpen	1
+TestProxyAuthorizeContextPolicyZeroCeilingPasses	1
+TestProxyAuthorizeDLPBlocksSecretPrompt	1
+TestProxyAuthorizeFailOpenDoesNotBypassDefiniteDeny	1
+TestProxyAuthorizeHappyPath	1
+TestProxyAuthorizeKillSwitchErrorFailsClosed	1
+TestProxyAuthorizeKillSwitchIgnoresFailOpen	1
+TestProxyAuthorizeKillSwitchStoppedOutranksEverything	1
+TestProxyAuthorizeMandatoryRecordingFailsClosedWithoutLedger	1
+TestProxyAuthorizeModelAccessDenies	1
+TestProxyAuthorizeModelAccessErrorFailOpenAllows	1
+TestProxyAuthorizeModelAccessErrorFailsClosed	1
+TestProxyAuthorizePolicyErrorFailsClosed	1
+TestProxyAuthorizeSpendLimitDenyAndFailOpen	1
+TestProxyAuthorizeUnresolvableTenantDenies	1
+TestProxyAuthorizeUnsetCeilingsLeavesRequestUntouched	1
+TestProxyBatchDLPDenyNeverReachesCountTokens	2980
+TestProxyCleanPromptStillSizes	3160
+TestProxyContentFirewallDenyClassSplit	1
+TestProxyDLPDenyNeverReachesCountTokens	2970
+TestProxyDefaultDLPBlocksPlaintextAndBase64Secrets	4260
+TestProxyDefaultResponseDLPBuffersAndBlocksSecret	4950
+TestProxyDenyCarriesGateSemantics	1
+TestProxyFinalizeBufferModeBlocksDeniedResponse	1
+TestProxyFinalizeFlagModeDoesNotBlock	1
+TestProxyFinalizeNilSessionIsSafe	1
+TestProxyFirewallDenyNeverReachesCountTokens	3100
+TestProxyHardCeilingDenyNeverReachesCountTokens	1
+TestProxyLedgerAnchorIsMinimalData	5110
+TestProxyReconcileCostStampsAuthenticatedActor	1
+TestProxyResidencyAllowsInRegion	3450
+TestProxyResidencyBlocksCrossRegion	4300
+TestProxySignedLedgerStoresFingerprintsNotInferenceContent	3320
+TestProxySizingFailureStaysNonBlocking	4250
+TestProxySizingMeasuresGovernedRequest	1
+TestProxyWindowDenyStillEnforced	4210
+TestRequestCeilingViolations	1
+TestResolveDelegatedIdentityCarriesAgentIdentity	4690
+TestResolveDelegatedIdentityFailureMapping	1
+TestResolveDelegatedIdentityHappyPathNamesSubject	5550
+TestResolveDelegatedIdentityPolicyPlaneUnreadable	5780
+TestResolveDelegatedIdentityReservedSchemeReason	5100
+TestResolveDelegatedIdentityRetriedPathSurfacesStoredDecision	4650
+TestResolveDelegatedIdentityTenantMismatchDeniesClosed	1
+TestResolvedIdentityConstructionAllowlist	920
+TestResolvedIdentitySealDerivesFromPrincipal	1
+TestRetentionSweepBusinessTenantsSkipsSystem	26120
+TestRetentionSweepIntervalEnv	1
+TestRunGatesRejectsUnsealedSnapshot	1
+TestStopDenyRecorderThrottles	29280

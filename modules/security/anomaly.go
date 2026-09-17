@@ -72,6 +72,11 @@ func (m *Module) onEvent(ctx context.Context, e event.Event) error {
 		// queue: connectors re-emit the posture each pass, and a state-deterministic
 		// DetailHash means an unchanged posture must not multiply in the view.
 		return m.ingestSafetyPosture(ctx, tenant, e.Source, f)
+	case f.Kind == "finops_budget_evaluation_incomplete" && f.Severity == sdkmodel.SeverityMedium &&
+		f.BudgetEvidence != nil && e.Source == sdkmodel.BudgetEvidenceProducer && e.SourceRegistration == nil:
+		// A diagnostic has no proven crossing. Keep its Medium severity and its
+		// bounded evidence, including invalid presence, outside the HIGH+ filter.
+		return m.ingestBudgetDiagnostic(ctx, tenant, e, f)
 	case f.Severity.AtLeast(sdkmodel.SeverityHigh):
 		// Persist other modules' HIGH+ findings into the security view so the
 		// console and forensics see cross-module high signals in one place. (The
@@ -81,13 +86,60 @@ func (m *Module) onEvent(ctx context.Context, e event.Event) error {
 				kind: findingKindAnomaly, severity: f.Severity, source: f.Kind,
 				subjectKind: f.SubjectKind, subjectRef: f.SubjectRef, title: f.Title,
 				detail: f.Kind + "|" + f.SubjectRef + "|" + f.DetailHash,
-				meta:   map[string]any{"origin": e.Source, "source_detail_hash": f.DetailHash},
+				meta:   budgetFindingMetadata(e, f),
 			})
 			return err
 		})
 	default:
 		return nil
 	}
+}
+
+// Structural validity is a projection property, not durable financial proof.
+// No connector-provided summary gains validity from a claimed Source string.
+func budgetFindingMetadata(e event.Event, f sdkmodel.FindingReport) map[string]any {
+	meta := map[string]any{"origin": e.Source, "source_detail_hash": f.DetailHash}
+	if f.BudgetEvidence == nil {
+		return meta // legacy metadata remains unchanged and uncertified
+	}
+	if e.Source != sdkmodel.BudgetEvidenceProducer || e.SourceRegistration != nil {
+		f.BudgetEvidence = &sdkmodel.BudgetAlertEvidenceSummary{}
+	}
+	delete(meta, "source_detail_hash")
+	if f.BudgetEvidenceValidity() == "structurally_valid" {
+		meta["source_detail_hash"] = f.DetailHash
+		meta["detail_hash"] = f.DetailHash
+	}
+	for key, value := range f.BudgetEvidenceFields() {
+		meta[key] = value
+	}
+	return meta
+}
+
+// Like the other low-severity carve-outs, dedup is bounded to the newest 256
+// rows in this family. It is not a new outbox or an exactly-once guarantee.
+func (m *Module) ingestBudgetDiagnostic(ctx context.Context, tenant model.TenantID, e event.Event, f sdkmodel.FindingReport) error {
+	detail := f.Kind + "|" + f.SubjectKind + "|" + f.SubjectRef + "|" + f.DetailHash
+	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		existing, _, err := sc.Findings().List(ctx, model.Query{
+			Filters: []model.Filter{{Column: "kind", Op: model.OpEq, Value: f.Kind}},
+			Sort:    []model.Sort{{Column: "occurred_at", Desc: true}}, Limit: 256,
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range existing {
+			if bytes.Equal(row.DetailHash, hashBytes(detail)) {
+				return nil
+			}
+		}
+		_, err = m.persistFinding(ctx, sc, finding{
+			kind: f.Kind, severity: f.Severity, source: e.Source,
+			subjectKind: f.SubjectKind, subjectRef: f.SubjectRef, title: f.Title,
+			detail: detail, meta: budgetFindingMetadata(e, f),
+		})
+		return err
+	})
 }
 
 // ANT2-14: the managed-agents HITL queue. The connectors translate a session

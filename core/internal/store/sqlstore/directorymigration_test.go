@@ -48,7 +48,7 @@ func TestCoreDirectoryV7SQLite(t *testing.T) {
 	})
 }
 
-func TestCoreMigrationPlanEndsWithTransactionalDirectoryV7(t *testing.T) {
+func TestCoreMigrationPlanPreservesTransactionalDirectoryV7(t *testing.T) {
 	t.Parallel()
 	dia, ok := dialect.New(store.EngineSQLite)
 	if !ok {
@@ -58,9 +58,14 @@ func TestCoreMigrationPlanEndsWithTransactionalDirectoryV7(t *testing.T) {
 	if len(migrations) == 0 {
 		t.Fatal("core migration plan is empty")
 	}
-	got := migrations[len(migrations)-1]
+	var got migrate.Migration
+	for _, migration := range migrations {
+		if migration.Version == coreDirectoryMigrationVersion {
+			got = migration
+		}
+	}
 	if got.Version != coreDirectoryMigrationVersion || got.Name != coreDirectoryMigrationName {
-		t.Fatalf("last core migration = v%d/%q, want v%d/%q",
+		t.Fatalf("core v7 migration = v%d/%q, want v%d/%q",
 			got.Version, got.Name, coreDirectoryMigrationVersion, coreDirectoryMigrationName)
 	}
 	if got.Exec == nil || got.NonTransactional || len(got.Stmts) != 0 {
@@ -134,25 +139,32 @@ func TestCoreDirectoryV7PostgresSurvivesTheInstalledEventFence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edge, ok, err := guardManifestEditionEdge(current)
-	if err != nil || !ok {
-		t.Fatalf("derive K2 predecessor: ok=%t err=%v", ok, err)
-	}
+	edition1 := k2EditionOneManifest(t, current)
 
-	// A K2 database has v2/v6 recorded, no directory relations, and a complete
-	// predecessor rollout. Remove v7 and its three additions before installing
-	// the event fence; after installation even their *_immutable trigger cascade
-	// must be impossible to drop.
+	// A K2 database has v2/v6 recorded, no User authority relation, no directory
+	// relations, no access-evidence relations and a complete predecessor rollout. Remove
+	// v10, v9, v8, v7 and their additions — newest first, so each intermediate state is
+	// one a deployment really stood on — before installing the event fence; after
+	// installation even their *_immutable trigger cascade must be impossible to drop.
+	dropUserAuthorityForHistoricalFixture(t, db, dia)
+	dropLineageForHistoricalFixture(t, db, dia)
 	dropDirectoryWriterGuardsForFixture(t, db, dia)
 	dropCoreDirectoryTables(t, db)
+	for _, table := range accessEvidenceRelationNames {
+		if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+			t.Fatalf("drop %s for the K2 fixture: %v", table, err)
+		}
+	}
 	wipeGuardLogForFixture(t, db, guardGateEventsTable, "")
 	wipeGuardLogForFixture(t, db, guardReceiptsTable, "")
 	wipeGuardLogForFixture(t, db, guardInventoryEventsTable, "")
-	seedGuardHistoricalEdition(t, db, dia, edge.From)
-	seedGuardPredecessorReady(t, db, dia, edge.From, guardPredecessorComplete)
-	if _, err := db.ExecContext(ctx,
-		"DELETE FROM "+coreTrackingTable+" WHERE version = $1", coreDirectoryMigrationVersion); err != nil {
-		t.Fatalf("restore K2 core tracking: %v", err)
+	seedGuardHistoricalEdition(t, db, dia, edition1)
+	seedGuardPredecessorReady(t, db, dia, edition1, guardPredecessorComplete)
+	for _, version := range []int{coreDirectoryMigrationVersion, coreAccessEvidenceMigrationVersion} {
+		if _, err := db.ExecContext(ctx,
+			"DELETE FROM "+coreTrackingTable+" WHERE version = $1", version); err != nil {
+			t.Fatalf("restore K2 core tracking (v%d): %v", version, err)
+		}
 	}
 	installEventFenceThroughSuperuser(t, pg.Superuser)
 
@@ -218,6 +230,49 @@ WHERE evtname IN ($1, $2) AND evtenabled = 'A'`,
 	}
 }
 
+// k2EditionOneManifest is the epoch-1 edition of a build's own base census.
+//
+// It replaces "the sole predecessor of the current manifest", which stopped being edition
+// 1 when the access-evidence editions arrived: a current core build is edition 5, whose
+// only compiled parent is edition 2. A K2 database is at edition 1, so the fixture names
+// that node explicitly instead of counting one step down from wherever the binary is.
+func k2EditionOneManifest(t *testing.T, current guardManifest) guardManifest {
+	t.Helper()
+	graph, err := guardEditionGraphFor(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, ok := graph.node(1)
+	if !ok {
+		t.Fatalf("edition 1 is not in the compiled graph of edition %d", current.CodeEpoch)
+	}
+	return node.Manifest
+}
+
+// k2EditionTwoManifest is the edition core v7 bridges a K2 database into.
+func k2EditionTwoManifest(t *testing.T, current guardManifest) guardManifest {
+	t.Helper()
+	graph, err := guardEditionGraphFor(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, ok := graph.node(2)
+	if !ok {
+		t.Fatalf("edition 2 is not in the compiled graph of edition %d", current.CodeEpoch)
+	}
+	return node.Manifest
+}
+
+// guardEditionGraphMustEdge resolves one compiled edge of a build's own graph.
+func guardEditionGraphMustEdge(t *testing.T, current guardManifest, from, to int64) (guardManifestEdge, error) {
+	t.Helper()
+	graph, err := guardEditionGraphFor(current)
+	if err != nil {
+		return guardManifestEdge{}, err
+	}
+	return graph.edge(from, to)
+}
+
 func TestCoreDirectoryV7ProductionReopenSQLite(t *testing.T) {
 	dia, ok := dialect.New(store.EngineSQLite)
 	if !ok {
@@ -257,22 +312,32 @@ func TestCoreDirectoryV7ProductionReopenSQLite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		edge, ok, err := guardManifestEditionEdge(current)
-		if err != nil || !ok {
-			t.Fatalf("derive K2 predecessor: ok=%t err=%v", ok, err)
-		}
+		edition1 := k2EditionOneManifest(t, current)
+		// Newest first: v10 back to the v9 predecessor it migrated, then v8, then v7.
+		dropUserAuthorityForHistoricalFixture(t, db, dia)
+		dropLineageForHistoricalFixture(t, db, dia)
 		dropDirectoryWriterGuardsForFixture(t, db, dia)
 		dropCoreDirectoryTables(t, db)
+		// A K2 source had no access-evidence relations and no v9 record either. The
+		// fixture removes BOTH, because leaving the tracking row behind would describe a
+		// database whose migration history claims an edition its objects do not carry —
+		// which the core-version preflight now refuses before any of this can be read.
+		for _, table := range accessEvidenceRelationNames {
+			if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS main."+table); err != nil {
+				t.Fatalf("drop %s for the K2 fixture: %v", table, err)
+			}
+		}
 		for _, table := range []string{
 			guardGateEventsTable, guardReceiptsTable, guardInventoryEventsTable,
 		} {
 			wipeSQLiteGuardLogForFixture(t, db, table)
 		}
-		seedGuardHistoricalEdition(t, db, dia, edge.From)
-		if _, err := db.ExecContext(ctx, dia.Rebind(
-			"DELETE FROM "+coreTrackingRelation(dia)+" WHERE version = ?"),
-			coreDirectoryMigrationVersion); err != nil {
-			t.Fatalf("restore K2 core tracking: %v", err)
+		seedGuardHistoricalEdition(t, db, dia, edition1)
+		for _, version := range []int{coreDirectoryMigrationVersion, coreAccessEvidenceMigrationVersion} {
+			if _, err := db.ExecContext(ctx, dia.Rebind(
+				"DELETE FROM "+coreTrackingRelation(dia)+" WHERE version = ?"), version); err != nil {
+				t.Fatalf("restore K2 core tracking (v%d): %v", version, err)
+			}
 		}
 
 		for attempt := 1; attempt <= 2; attempt++ {
@@ -1057,4 +1122,42 @@ func resetCoreDirectoryV7TestState(t *testing.T, db *sql.DB) {
 	if _, err := db.ExecContext(context.Background(), "DROP TABLE IF EXISTS "+coreTrackingTable); err != nil {
 		t.Fatalf("drop core tracker: %v", err)
 	}
+}
+
+// Reconstruct a real pre-v8 estate before the v7 upgrade test. Leaving v8's
+// tracking row while deleting v7 would represent corrupt history, not K2.
+func dropLineageForHistoricalFixture(t *testing.T, db *sql.DB, dia dialect.Dialect) {
+	t.Helper()
+	ctx := context.Background()
+	exec := func(q string) {
+		t.Helper()
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, o := range lineageGuardObjects(dia) {
+		if dia.Name() == store.EngineSQLite {
+			exec("DROP TRIGGER main." + o.name)
+		} else if o.body == "" {
+			exec("DROP TRIGGER " + o.name + " ON public." + o.table)
+		}
+	}
+	if dia.Name() == store.EnginePostgres {
+		for _, o := range lineageGuardObjects(dia) {
+			if o.body != "" {
+				args := ""
+				if o.arguments != "" {
+					args = "text"
+				}
+				exec("DROP FUNCTION public." + o.name + "(" + args + ")")
+			}
+		}
+	}
+	for _, table := range []string{lineageTouchedTable, lineageWriterTable, lineageControlTable, lineageSeededTable} {
+		exec("DROP TABLE " + directoryWriterRelation(dia, table))
+	}
+	for _, r := range lineageRelations {
+		exec("DROP TABLE " + directoryWriterRelation(dia, r.descriptor().Table))
+	}
+	exec(fmt.Sprintf("DELETE FROM %s WHERE version=%d", coreTrackingRelation(dia), coreLineageMigrationVersion))
 }

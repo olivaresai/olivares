@@ -22,7 +22,7 @@ var _ func(
 	context.Context,
 	DirectoryScopeRef,
 	auth.PrincipalRef,
-	DirectNoticeInboxQuery,
+	DirectNoticeInboxRequest,
 ) (DirectNoticeInboxPage, error) = (*Module).ListDirectNoticeInbox
 
 type directNoticeInboxEvidenceSource struct {
@@ -127,7 +127,7 @@ func TestDirectNoticeExactInboxClosesPageInOneMutation(t *testing.T) {
 	if len(page.Items) != 1 || !page.HasMore || opens != 1 ||
 		page.Items[0].Delivery.ID != fixture.published.DeliveryID ||
 		page.Items[0].Message.Content.Blocks[0].Text != "exact read canary" ||
-		page.NextAfterDeliverySeq != page.Items[0].Delivery.DeliverySeq {
+		page.nextAfter != page.Items[0].Delivery.DeliverySeq {
 		t.Fatalf("exact inbox page = %+v; opens=%d; second=%s", page, opens, second.DeliveryID)
 	}
 	if observer.views.Load() != 1 || observer.mutates.Load() != 1 ||
@@ -209,7 +209,7 @@ func TestDirectNoticeExactInboxFiltersDenyAndStopsOnUnknown(t *testing.T) {
 		)
 		if !errors.Is(err, ErrCommunicationEvidenceUnknown) ||
 			!reflect.DeepEqual(page, DirectNoticeInboxPage{}) || source.calls != 1 ||
-			observer.mutates.Load() != 0 || fixture.resolver.calls.Load() != 0 ||
+			observer.mutates.Load() != 0 || fixture.resolver.calls.Load() != 1 ||
 			fixture.closure.calls.Load() != 0 || fixture.legacy.calls.Load() != 0 {
 			t.Fatalf(
 				"unknown inbox = %+v, %v; calls/mutates/resolver/closure/legacy=%d/%d/%d/%d/%d",
@@ -241,7 +241,7 @@ func TestDirectNoticeExactInboxPublicBoundaryBindsBeforeReadinessAndStaysOff(t *
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	_, err := fixture.m.ListDirectNoticeInbox(
-		ctx, fixture.scope, fixture.readerRef, DirectNoticeInboxQuery{Limit: 1},
+		ctx, fixture.scope, fixture.readerRef, DirectNoticeInboxRequest{Limit: 1},
 	)
 	if !errors.Is(err, ErrCommunicationEvidenceUnknown) {
 		t.Fatalf("public exact inbox = %v", err)

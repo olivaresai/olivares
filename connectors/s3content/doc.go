@@ -13,7 +13,7 @@
 // content native shape (exported to a JSON file/directory) or reads live through
 // the S3-compatible XML API with SigV4-signed GET requests only. Credentials are
 // held in memory only; the object body is returned raw for the knowledge module
-// to redact (docs/SECURITY-HARDENING.md-4). Imports only the SDK + connector-internal helpers,
+// to redact (docs/SECURITY-HARDENING.md §3-4). Imports only the SDK + connector-internal helpers,
 // never /core.
 //
 // Live mode requires the read-only IAM permissions s3:ListBucket, s3:GetObject,

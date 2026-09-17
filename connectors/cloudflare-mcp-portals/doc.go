@@ -26,7 +26,7 @@
 //   - FindingReport (shadow_mcp, severity=High) per unmanaged server
 //   - FindingReport (health, severity=Medium) on API failure
 //
-// # Minimal data (docs/SECURITY-HARDENING.md-3)
+// # Minimal data (docs/SECURITY-HARDENING.md §2-3)
 //
 // Only structural inventory metadata is read: server names (public
 // identifiers), URLs (sanitized via redact.SanitizeURL), status, tool/prompt

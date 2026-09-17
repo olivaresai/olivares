@@ -19,6 +19,14 @@ export const AUTH_ROUTES = [
   '/console',
   '/capabilities',
   '/communications/protocol-bindings',
+  // K3 I1/I2/I3 — the five doors of the communications room (registry ids
+  // communications, communicationsInbox, communicationsHandoffs,
+  // communicationsNew, communicationsAdministration).
+  '/communications',
+  '/communications/inbox',
+  '/communications/handoffs',
+  '/communications/new',
+  '/communications/administration',
   '/permissions',
   '/identity',
   '/claude-policy',
@@ -31,6 +39,8 @@ export const AUTH_ROUTES = [
   '/killswitch',
   '/work',
   '/agentops',
+  '/provider-profiles',
+  '/provider-bindings',
   '/agent-artifacts',
   '/workspace-templates',
   '/eventing',
@@ -64,6 +74,16 @@ export const AUTH_ROUTES = [
   '/residency',
   '/tenants',
   '/settings',
+  // N1 — the nine area directory pages (features/navigation/area-directory.tsx).
+  '/areas/infrastructure',
+  '/areas/ai',
+  '/areas/data-context',
+  '/areas/work-communications',
+  '/areas/automation',
+  '/areas/security-identity',
+  '/areas/deployment',
+  '/areas/observation',
+  '/areas/system',
 ]
 
 // ⛔ `/accept-invite` FALTABA — añadida el 2026-08-18. El motor manda ese enlace por correo

@@ -1,0 +1,136 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# DIST-24-05. This is an installer/userland qualification, not a native-package
+# repository qualification. Linux uses five real container userlands; macOS uses
+# a hosted runner. A missing public-release network path returns the third answer
+# after a dry-run and never turns into a green content assertion.
+name: installer-matrix
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/installer-matrix.yml"
+      - "scripts/install*.sh"
+      - "scripts/*installer-matrix*.sh"
+      - "packaging/service/**"
+      - "cmd/olivares/**"
+      - "core/**"
+      - "go.work"
+      - "go.work.sum"
+      - "Taskfile.yml"
+      - "INSTALL.md"
+      - "docs/RELEASE-INSTALLER.md"
+      - "docs-site/src/content/docs/how-to/install-from-packages.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  linux-installer:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    # Honor a configured runner pool for the MAINTAINER DISPATCH only, and keep the hosted
+    # default everywhere else. The plain project convention — `vars.CI_RUNNER ||
+    # 'ubuntu-latest'`, which 32 other jobs in this tree use — is safe for a job whose only
+    # trigger is `workflow_dispatch`. This one also carries a
+    # `pull_request` trigger, and pr-ci.yml's standing contract is that a pull request from a
+    # fork runs UNTRUSTED code that "must never reach the self-hosted runners, which share a
+    # host with this project's own builds". Scoping the selector to the event keeps both
+    # properties: a dispatch a maintainer started may use the pool, a pull request may not.
+    # With CI_RUNNER unset the expression yields 'ubuntu-latest' on every event, so the
+    # public repository's placement is byte-for-byte what it was.
+    #
+    # The five container userlands below are unchanged, and so is the macOS leg: a Linux
+    # runner cannot qualify a macOS installer, and cross-compiling one would not be a native
+    # test. Routing THIS job does not move that one — see docs/RELEASE-INSTALLER.md.
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - family: debian
+            image: debian:stable-slim
+          - family: ubuntu
+            image: ubuntu:24.04
+          - family: fedora
+            image: fedora:latest
+          - family: opensuse-leap
+            image: opensuse/leap:latest
+          - family: alpine
+            image: alpine:latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert reviewed cosign bytes
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: build this commit's static candidate
+        timeout-minutes: 20
+        env:
+          CGO_ENABLED: "0"
+        run: go build -trimpath -o "$RUNNER_TEMP/olivares-matrix" ./cmd/olivares
+      - name: live installer — ${{ matrix.family }}
+        timeout-minutes: 30
+        run: >-
+          bash scripts/installer-matrix-ci.sh
+          --family "${{ matrix.family }}"
+          --image "${{ matrix.image }}"
+          --candidate "$RUNNER_TEMP/olivares-matrix"
+
+  macos-installer:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: macos-14
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert reviewed cosign bytes
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: build this commit's static candidate
+        timeout-minutes: 20
+        env:
+          CGO_ENABLED: "0"
+        run: go build -trimpath -o "$RUNNER_TEMP/olivares-matrix" ./cmd/olivares
+      - name: live installer — hosted macOS
+        timeout-minutes: 30
+        run: >-
+          bash scripts/installer-matrix-ci.sh
+          --family macos
+          --candidate "$RUNNER_TEMP/olivares-matrix"

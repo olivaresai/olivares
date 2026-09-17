@@ -42,7 +42,7 @@
 //     (a status note), NEVER a silent pass.
 //   - HistorySource cannot reconstruct an ordered timeline ⇒ replay is reported
 //     DEGRADED with zero steps, never fabricated.
-//   - SyntheticDataGenerator is a POST-v1 EXTENSION POINT (README.mdbis · §6): the
+//   - SyntheticDataGenerator is a POST-v1 EXTENSION POINT (README.md §2bis · §6): the
 //     module ships NO generator; the default produces ZERO samples and an explicit
 //     error. There is no route and no option that generates synthetic data.
 //

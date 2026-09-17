@@ -4,7 +4,7 @@
 
 package models
 
-// Module XXIII — own-model / fine-tuning governance (README.mdbis): inventories
+// Module XXIII — own-model / fine-tuning governance (README.md §2bis): inventories
 // and governs owned/fine-tuned models. By design it never trains models or holds weights.
 // The control plane GOVERNS and INVENTORIES an organization's own models — it is
 // not a training platform. So this models four governable entities and tracks

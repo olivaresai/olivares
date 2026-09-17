@@ -14,6 +14,12 @@ en direct, un état Claude Code dérivé, et une chronologie reconstructible. L�
 opérationnelle en direct** par session au-dessus du même flux d'observations — et ne montre
 que ce que ce flux porte honnêtement.
 
+v26.9.0 **lance** aussi les CLI officielles de fournisseur comme enfants
+détenus sous un [profil fournisseur](/how-to/operate-provider-sessions/). Ce
+chemin géré est le même module. Il ne remplace pas la surcouche et ne fusionne
+pas deux homes qui annoncent le même id de session fournisseur
+(`CHANGELOG.md` `[26.9.0]` B1/B2).
+
 ## Ce qu'il est
 
 Le module II est un module de couche Core piloté par le bus, frère de l'inventaire. Il
@@ -47,6 +53,40 @@ plus un flux SSE en direct ; chaque lecture exige la permission de lecture de se
 (un client ne reçoit que des instantanés pour son tenant autorisé) et **au mieux (best-effort)**
 (un client lent abandonne la trame intermédiaire et reçoit la suivante — l'ingestion ne bloque
 jamais).
+
+## Provider profiles and `live_ref`
+
+Un **profil fournisseur** est l’identité durable d’une instance fournisseur
+configurée sur un environnement d’exécution : pilote, environnement, et les
+`config_home` / `user_home` canoniques. Ce n’est pas un compte fournisseur
+authentifié. Enregistrer, renommer, désactiver/activer et retirer vivent sous
+`/v1/m/sessions/provider-profiles`. Les chemins n’apparaissent que sur la
+lecture admin `configuration`. Un lancement nomme `provider_profile_ref` ; le
+serveur résout les homes et persiste un instantané non secret sur le run avant
+le spawn (`CHANGELOG.md` `[26.9.0]` B1 ; `web/src/features/agentops/types.ts`).
+
+Une observation se plie dans la ligne live de son **canal**, calculé par le
+serveur à partir de l’enregistrement de source tamponné par l’hôte
+(`CHANGELOG.md` `[26.9.0]` B2) :
+
+| Channel | Meaning |
+|---|---|
+| `legacy` | no registration |
+| `observed` | a source dedicated to a profile by a binding approved at host admission for the exact applied revision |
+| `source` | a known registration with no verifiable profile |
+| `managed` | a run the plane launched; the only row carrying `canonical_sid` and `run_ref` |
+
+Chaque ligne live expose `live_ref` et `attribution`. Deux homes qui annoncent
+le même identifiant de session fournisseur sont deux lignes avec deux
+chronologies. Lisez une ligne avec `GET /v1/m/sessions/live/by-id/{live_ref}`
+(et sa requête timeline / stream / runs). Les routes d’id externe nues restent
+et sont **legacy** : elles répondent seulement pour la ligne legacy.
+
+Les pilotes sont enregistrés **par nœud** en épinglant un binaire officiel
+(`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` — voir
+[Configuration](/reference/configuration/)). Non défini, les profils de ce
+pilote restent observables et ne sont pas lançables. Étapes opérateur :
+[Exploiter une session de fournisseur](/how-to/operate-provider-sessions/).
 
 ## Ce qu'il consomme (et ce qu'il dérive)
 

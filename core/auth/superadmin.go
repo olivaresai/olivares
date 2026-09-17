@@ -63,6 +63,9 @@ var ErrLastSuperadmin = errors.New("auth: cannot disable the last active superad
 func (a *Authenticator) SetSuperadminActive(ctx context.Context, actor Principal, id model.ID, active bool) (model.User, error) {
 	var out model.User
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
+			return err
+		}
 		u, err := as.Users().Get(ctx, id)
 		if err != nil {
 			return err
@@ -158,6 +161,9 @@ func hasOtherActiveSuperadmin(ctx context.Context, as store.AuthScope, self mode
 // when DISABLING a global principal. It pages to completion (no silent truncation)
 // and is idempotent (already-revoked rows are skipped).
 func revokeAllUserCredentials(ctx context.Context, as store.AuthScope, actor Principal, id model.ID) error {
+	if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
+		return err
+	}
 	toks, err := drainList(ctx, as.Tokens().List, byEq("user_id", id.String(), 0))
 	if err != nil {
 		return err

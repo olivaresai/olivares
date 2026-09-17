@@ -7,6 +7,7 @@ package sessions
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -103,6 +104,193 @@ func cleanAuthorityEvidence() AuthorityEvidence {
 	return AuthorityEvidence{Verdict: VerdictClean, Code: "current", EvidenceRef: "fixture-current"}
 }
 
+// communicationReadProjection names one production struct that embeds a
+// durable communication entity only to present it: a response shape that is
+// never registered, migrated or stored. The inventory recognises a projection by
+// its EXACT shape — one anonymous embedding of the named durable entity plus
+// exactly the listed named fields, each with its type and JSON tag — and fails
+// closed on any other shape, so a projection cannot quietly become a second
+// entity, hide a new persistence field, or vanish from the census unnoticed.
+// This is not a second model manifest: it lists what is deliberately NOT a model.
+type communicationReadProjection struct {
+	of     string
+	fields []communicationReadProjectionField
+}
+
+type communicationReadProjectionField struct {
+	name, typeName, tag string
+}
+
+// communicationReadProjections is the closed set of recognised read projections.
+// ChannelCatalogItem is one visible Channel with the caller's own current local
+// access bits, kept flat in JSON by embedding Channel (communication_channel_catalog.go).
+// It has no descriptor of its own; the catalog index belongs to ChannelGrant.
+var communicationReadProjections = map[string]communicationReadProjection{
+	"ChannelCatalogItem": {
+		of: "Channel",
+		fields: []communicationReadProjectionField{
+			{name: "MyAccess", typeName: "ChannelCatalogAccess", tag: "`json:\"my_access\"`"},
+		},
+	},
+}
+
+// communicationCollectTypeSpecs adds every named type declared in file to types.
+func communicationCollectTypeSpecs(file *ast.File, types map[string]ast.Expr) {
+	for _, declaration := range file.Decls {
+		general, ok := declaration.(*ast.GenDecl)
+		if !ok || general.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range general.Specs {
+			typeSpec := spec.(*ast.TypeSpec)
+			types[typeSpec.Name.Name] = typeSpec.Type
+		}
+	}
+}
+
+// communicationDurableModelInventory classifies every named type in types by the
+// communication entity class it embeds, transitively: "mutable" for
+// MutableCommunicationEntity, "append_only" for AppendOnlyCommunicationEntity.
+// A struct embedding both classes is an error. Every declared read projection
+// must exist, must have exactly its declared shape, and must project a type that
+// is itself durable; only then is it reported under projected instead of durable.
+// No name, prefix or suffix is ever used to exclude a type.
+func communicationDurableModelInventory(
+	types map[string]ast.Expr,
+	projections map[string]communicationReadProjection,
+) (durable, projected map[string]string, err error) {
+	var classify func(string, map[string]bool) (string, error)
+	var classifyExpr func(ast.Expr, map[string]bool) (string, error)
+	classifyExpr = func(expression ast.Expr, visiting map[string]bool) (string, error) {
+		switch typed := expression.(type) {
+		case *ast.Ident:
+			return classify(typed.Name, visiting)
+		case *ast.StarExpr:
+			return classifyExpr(typed.X, visiting)
+		case *ast.ParenExpr:
+			return classifyExpr(typed.X, visiting)
+		default:
+			return "", nil
+		}
+	}
+	classify = func(name string, visiting map[string]bool) (string, error) {
+		if name == "MutableCommunicationEntity" {
+			return "mutable", nil
+		}
+		if name == "AppendOnlyCommunicationEntity" {
+			return "append_only", nil
+		}
+		if visiting[name] {
+			return "", nil
+		}
+		visiting[name] = true
+		defer delete(visiting, name)
+		expression, present := types[name]
+		if !present {
+			return "", nil
+		}
+		switch typed := expression.(type) {
+		case *ast.Ident, *ast.StarExpr, *ast.ParenExpr:
+			return classifyExpr(expression, visiting)
+		case *ast.StructType:
+			class := ""
+			for _, field := range typed.Fields.List {
+				if len(field.Names) != 0 {
+					continue
+				}
+				candidate, err := classifyExpr(field.Type, visiting)
+				if err != nil {
+					return "", err
+				}
+				if candidate != "" {
+					if class != "" && class != candidate {
+						return "", fmt.Errorf("%s embeds mixed communication entity classes", name)
+					}
+					class = candidate
+				}
+			}
+			return class, nil
+		default:
+			return "", nil
+		}
+	}
+	projected = make(map[string]string, len(projections))
+	for name, projection := range projections {
+		expression, present := types[name]
+		if !present {
+			return nil, nil, fmt.Errorf("declared read projection %s is not a production type", name)
+		}
+		structType, ok := expression.(*ast.StructType)
+		if !ok {
+			return nil, nil, fmt.Errorf("declared read projection %s is not a struct", name)
+		}
+		ofClass, err := classify(projection.of, map[string]bool{})
+		if err != nil {
+			return nil, nil, err
+		}
+		if ofClass == "" {
+			return nil, nil, fmt.Errorf("read projection %s projects %s, which is not a durable entity",
+				name, projection.of)
+		}
+		if got, want := len(structType.Fields.List), len(projection.fields)+1; got != want {
+			return nil, nil, fmt.Errorf("read projection %s has %d fields, want exactly %d", name, got, want)
+		}
+		embedded := 0
+		named := make(map[string]*ast.Field, len(projection.fields))
+		for _, field := range structType.Fields.List {
+			if len(field.Names) == 0 {
+				ident, ok := field.Type.(*ast.Ident)
+				if !ok || ident.Name != projection.of || field.Tag != nil {
+					return nil, nil, fmt.Errorf("read projection %s embeds something other than %s",
+						name, projection.of)
+				}
+				embedded++
+				continue
+			}
+			if len(field.Names) != 1 {
+				return nil, nil, fmt.Errorf("read projection %s declares a grouped field", name)
+			}
+			named[field.Names[0].Name] = field
+		}
+		if embedded != 1 {
+			return nil, nil, fmt.Errorf("read projection %s embeds %s %d times, want once", name, projection.of, embedded)
+		}
+		for _, want := range projection.fields {
+			field, ok := named[want.name]
+			if !ok {
+				return nil, nil, fmt.Errorf("read projection %s lacks field %s", name, want.name)
+			}
+			ident, ok := field.Type.(*ast.Ident)
+			if !ok || ident.Name != want.typeName {
+				return nil, nil, fmt.Errorf("read projection %s field %s is not of type %s",
+					name, want.name, want.typeName)
+			}
+			if field.Tag == nil || field.Tag.Value != want.tag {
+				return nil, nil, fmt.Errorf("read projection %s field %s does not carry tag %s",
+					name, want.name, want.tag)
+			}
+		}
+		projected[name] = projection.of
+	}
+	durable = make(map[string]string)
+	for name := range types {
+		if name == "MutableCommunicationEntity" || name == "AppendOnlyCommunicationEntity" {
+			continue
+		}
+		if _, isProjection := projected[name]; isProjection {
+			continue
+		}
+		class, err := classify(name, map[string]bool{})
+		if err != nil {
+			return nil, nil, err
+		}
+		if class != "" {
+			durable[name] = class
+		}
+	}
+	return durable, projected, nil
+}
+
 func TestCommunicationModelInventoryIsExactlyTwentySeven(t *testing.T) {
 	t.Parallel()
 
@@ -120,6 +308,9 @@ func TestCommunicationModelInventoryIsExactlyTwentySeven(t *testing.T) {
 		"ProtocolSubscriptionEvent": "append_only",
 		"storedProtocolBindingSpec": "mutable", "storedProtocolBinding": "mutable",
 	}
+	// The recognised read projections, and exactly these: a projection that
+	// disappears, or a new one that is not declared here, fails this test.
+	wantProjected := map[string]string{"ChannelCatalogItem": "Channel"}
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("cannot locate communication model test")
@@ -139,80 +330,17 @@ func TestCommunicationModelInventoryIsExactlyTwentySeven(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %s: %v", entry.Name(), err)
 		}
-		for _, declaration := range file.Decls {
-			general, ok := declaration.(*ast.GenDecl)
-			if !ok || general.Tok != token.TYPE {
-				continue
-			}
-			for _, spec := range general.Specs {
-				typeSpec := spec.(*ast.TypeSpec)
-				types[typeSpec.Name.Name] = typeSpec.Type
-			}
-		}
+		communicationCollectTypeSpecs(file, types)
 	}
-	var classify func(string, map[string]bool) string
-	var classifyExpr func(ast.Expr, map[string]bool) string
-	classifyExpr = func(expression ast.Expr, visiting map[string]bool) string {
-		switch typed := expression.(type) {
-		case *ast.Ident:
-			return classify(typed.Name, visiting)
-		case *ast.StarExpr:
-			return classifyExpr(typed.X, visiting)
-		case *ast.ParenExpr:
-			return classifyExpr(typed.X, visiting)
-		default:
-			return ""
-		}
-	}
-	classify = func(name string, visiting map[string]bool) string {
-		if name == "MutableCommunicationEntity" {
-			return "mutable"
-		}
-		if name == "AppendOnlyCommunicationEntity" {
-			return "append_only"
-		}
-		if visiting[name] {
-			return ""
-		}
-		visiting[name] = true
-		defer delete(visiting, name)
-		expression, present := types[name]
-		if !present {
-			return ""
-		}
-		switch typed := expression.(type) {
-		case *ast.Ident, *ast.StarExpr, *ast.ParenExpr:
-			return classifyExpr(expression, visiting)
-		case *ast.StructType:
-			class := ""
-			for _, field := range typed.Fields.List {
-				if len(field.Names) != 0 {
-					continue
-				}
-				candidate := classifyExpr(field.Type, visiting)
-				if candidate != "" {
-					if class != "" && class != candidate {
-						t.Fatalf("%s embeds mixed communication entity classes", name)
-					}
-					class = candidate
-				}
-			}
-			return class
-		default:
-			return ""
-		}
-	}
-	got := make(map[string]string)
-	for name := range types {
-		if name == "MutableCommunicationEntity" || name == "AppendOnlyCommunicationEntity" {
-			continue
-		}
-		if class := classify(name, map[string]bool{}); class != "" {
-			got[name] = class
-		}
+	got, projected, err := communicationDurableModelInventory(types, communicationReadProjections)
+	if err != nil {
+		t.Fatalf("durable communication model inventory: %v", err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("durable communication model inventory = %v, want exactly %v", got, want)
+	}
+	if !reflect.DeepEqual(projected, wantProjected) {
+		t.Fatalf("recognised read projections = %v, want exactly %v", projected, wantProjected)
 	}
 	mutable, appendOnly := 0, 0
 	for _, class := range got {
@@ -224,6 +352,162 @@ func TestCommunicationModelInventoryIsExactlyTwentySeven(t *testing.T) {
 	}
 	if mutable != 20 || appendOnly != 7 {
 		t.Fatalf("durable model classes = %d mutable/%d append-only, want 20/7", mutable, appendOnly)
+	}
+}
+
+// communicationSyntheticTypes parses one synthetic Go source and returns its
+// named types, so the inventory classifier can be exercised on shapes the
+// production package must never contain.
+func communicationSyntheticTypes(t *testing.T, source string) map[string]ast.Expr {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "synthetic.go", "package sessions\n"+source, 0)
+	if err != nil {
+		t.Fatalf("parse synthetic source: %v", err)
+	}
+	types := make(map[string]ast.Expr)
+	communicationCollectTypeSpecs(file, types)
+	return types
+}
+
+func TestCommunicationModelInventoryFailsClosedOnDeformedProjectionsAndNewEntities(t *testing.T) {
+	t.Parallel()
+
+	const roots = `
+type CommunicationEntity struct{ ID string }
+type MutableCommunicationEntity struct{ CommunicationEntity }
+type AppendOnlyCommunicationEntity struct{ CommunicationEntity }
+type Channel struct{ MutableCommunicationEntity }
+type Message struct{ MutableCommunicationEntity }
+type ChannelCatalogAccess struct{ Read, Write, Admin bool }
+`
+	const projection = "ChannelCatalogItem"
+	projections := map[string]communicationReadProjection{
+		projection: communicationReadProjections[projection],
+	}
+
+	// Positive control: the exact production shape is recognised as a
+	// projection of Channel and leaves the durable census untouched.
+	durable, projected, err := communicationDurableModelInventory(communicationSyntheticTypes(t, roots+`
+type ChannelCatalogItem struct {
+	Channel
+	MyAccess ChannelCatalogAccess `+"`json:\"my_access\"`"+`
+}
+`), projections)
+	if err != nil {
+		t.Fatalf("exact projection shape: %v", err)
+	}
+	if want := map[string]string{"Channel": "mutable", "Message": "mutable"}; !reflect.DeepEqual(durable, want) {
+		t.Fatalf("durable census with the exact projection = %v, want %v", durable, want)
+	}
+	if want := map[string]string{projection: "Channel"}; !reflect.DeepEqual(projected, want) {
+		t.Fatalf("recognised projections = %v, want %v", projected, want)
+	}
+
+	// Every deformation of the declared shape is an error naming the projection,
+	// never a silent exclusion and never a silent promotion to a durable entity.
+	for _, deformed := range []struct {
+		name, source string
+	}{
+		{"extra persistence field", `
+type ChannelCatalogItem struct {
+	Channel
+	MyAccess ChannelCatalogAccess ` + "`json:\"my_access\"`" + `
+	Hidden   string               ` + "`json:\"hidden\"`" + `
+}`},
+		{"projects another entity", `
+type ChannelCatalogItem struct {
+	Message
+	MyAccess ChannelCatalogAccess ` + "`json:\"my_access\"`" + `
+}`},
+		{"embeds a second entity", `
+type ChannelCatalogItem struct {
+	Channel
+	Message
+	MyAccess ChannelCatalogAccess ` + "`json:\"my_access\"`" + `
+}`},
+		{"renamed JSON field", `
+type ChannelCatalogItem struct {
+	Channel
+	MyAccess ChannelCatalogAccess ` + "`json:\"access\"`" + `
+}`},
+		{"untagged access field", `
+type ChannelCatalogItem struct {
+	Channel
+	MyAccess ChannelCatalogAccess
+}`},
+		{"retyped access field", `
+type ChannelCatalogItem struct {
+	Channel
+	MyAccess string ` + "`json:\"my_access\"`" + `
+}`},
+		{"missing access field", `
+type ChannelCatalogItem struct {
+	Channel
+}`},
+		{"embedded pointer instead of value", `
+type ChannelCatalogItem struct {
+	*Channel
+	MyAccess ChannelCatalogAccess ` + "`json:\"my_access\"`" + `
+}`},
+		{"not a struct", `
+type ChannelCatalogItem Channel`},
+		{"declared projection absent from the package", ``},
+	} {
+		_, _, err := communicationDurableModelInventory(communicationSyntheticTypes(t, roots+deformed.source), projections)
+		if err == nil || !strings.Contains(err.Error(), projection) {
+			t.Fatalf("%s: inventory error = %v, want an error naming %s", deformed.name, err, projection)
+		}
+	}
+
+	// A projection may only project a durable entity: declaring one over a plain
+	// value type is refused, so the table cannot be used to hide anything else.
+	_, _, err = communicationDurableModelInventory(communicationSyntheticTypes(t, roots+`
+type ChannelCatalogItem struct {
+	ChannelCatalogAccess
+	MyAccess ChannelCatalogAccess `+"`json:\"my_access\"`"+`
+}
+`), map[string]communicationReadProjection{projection: {
+		of:     "ChannelCatalogAccess",
+		fields: communicationReadProjections[projection].fields,
+	}})
+	if err == nil || !strings.Contains(err.Error(), "not a durable entity") {
+		t.Fatalf("projection of a non-entity: inventory error = %v, want refusal", err)
+	}
+
+	// A new entity is always counted, whatever its name looks like: nothing is
+	// filtered by an Item/Page/Response suffix, and the exact-match census in the
+	// inventory test is what turns such an addition into a review.
+	durable, _, err = communicationDurableModelInventory(communicationSyntheticTypes(t, roots+`
+type ChannelCatalogItem struct {
+	Channel
+	MyAccess ChannelCatalogAccess `+"`json:\"my_access\"`"+`
+}
+type ChannelCatalogShadow struct{ MutableCommunicationEntity }
+type CatalogItem struct{ MutableCommunicationEntity }
+type CatalogPage struct{ AppendOnlyCommunicationEntity }
+type CatalogResponse struct{ ChannelCatalogItem }
+`), projections)
+	if err != nil {
+		t.Fatalf("new entities: %v", err)
+	}
+	for name, class := range map[string]string{
+		"ChannelCatalogShadow": "mutable", "CatalogItem": "mutable", "CatalogPage": "append_only",
+		"CatalogResponse": "mutable",
+	} {
+		if durable[name] != class {
+			t.Fatalf("new entity %s classified %q, want %q (census = %v)", name, durable[name], class, durable)
+		}
+	}
+
+	// Mixed classes remain an error, as before this refinement.
+	_, _, err = communicationDurableModelInventory(communicationSyntheticTypes(t, roots+`
+type Mixed struct {
+	MutableCommunicationEntity
+	AppendOnlyCommunicationEntity
+}
+`), nil)
+	if err == nil || !strings.Contains(err.Error(), "mixed") {
+		t.Fatalf("mixed entity classes: inventory error = %v, want refusal", err)
 	}
 }
 

@@ -14,11 +14,12 @@
 // isolates modules per file, so no other test's imports leak in. Delete
 // `import './i18n'` from assurance.tsx and every assertion below fails.
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
+import i18n, { LANGUAGE_CODES } from '@/lib/i18n'
 
 const { authState } = vi.hoisted(() => ({
   authState: {
@@ -51,11 +52,11 @@ describe('assurance step-up i18n', () => {
       screen.getByText('Step-up authentication required'),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Authenticate with security key' }),
+      screen.getByRole('button', { name: 'Authenticate with passkey' }),
     ).toBeInTheDocument()
     // The body interpolates three translated fragments; each must be real copy.
     expect(
-      screen.getByText(/requires AAL3 \(hardware, phishing-resistant\)/),
+      screen.getByText(/requires AAL3 \(phishing-resistant\)/),
     ).toBeInTheDocument()
     expect(
       screen.getByText(/Your session is AAL1 \(password\)/),
@@ -95,4 +96,66 @@ describe('assurance step-up i18n', () => {
       authState.principal = { aal: 1, amr: ['pwd'] }
     }
   })
+})
+
+// Reading registered resource keys does not import the feature's i18n registrar;
+// the self-registration counterfactual at the top of this file remains intact.
+describe('seven-locale enrollment copy', () => {
+  afterEach(async () => {
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+  })
+  for (const locale of LANGUAGE_CODES) {
+    it(`${locale} supplies all ceremony outcomes and renders its own action copy`, async () => {
+      const keys = [
+        'stepUpBody',
+        'authenticate',
+        'actions.console',
+        'enrollHint',
+        'passkeyName',
+        'enrollUnsupported',
+        'unenrolledInline',
+        'registered',
+        'registrationUnknown',
+        'registrationUnknownElsewhere',
+        'authenticationUnknown',
+        'needsAuthentication',
+        'checkSession',
+        'sessionExpired',
+        'verificationFailed',
+        'cancelled',
+        'cancelHint',
+      ]
+      for (const key of keys) {
+        const value = i18n.getResource(locale, 'identity', `assurance.${key}`)
+        expect(typeof value, `${locale}:${key}`).toBe('string')
+        expect(value.length).toBeGreaterThan(0)
+        if (locale !== 'en')
+          expect(value).not.toBe(
+            i18n.getResource('en', 'identity', `assurance.${key}`),
+          )
+      }
+      await act(async () => {
+        await i18n.changeLanguage(locale)
+      })
+      const { container } = wrap(
+        <StepUpPanel
+          action="console"
+          minAal={3}
+          currentAal={1}
+          allowEnrollment
+        />,
+      )
+      expect(
+        screen.getByRole('button', {
+          name: i18n.t('identity:assurance.authenticate'),
+        }),
+      ).toBeVisible()
+      expect(container.textContent).toContain(
+        i18n.t('identity:assurance.actions.console'),
+      )
+      expectNoRawI18nKeys(container)
+    })
+  }
 })

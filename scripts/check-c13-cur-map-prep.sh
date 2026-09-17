@@ -5,6 +5,14 @@
 #
 # C13-cur unique leftover unique vs #960 (original OPEN; map already
 # on origin/main). 0 CLEAN · 1 finding · 2 could not look.
+#
+# ⛔ THIS GATE PINNED THE OLD SOURCE AND THE COUNT 27 TWICE, AND BOTH PINS WERE WRONG BY 2026-09-03.
+# It required `map source == an internal design note (not shipped)` and `len(entries) == 27` and
+# `entry_count == 27` — while the canon sold 30 modules and the authority had moved to
+# an internal design note (not shipped) A gate that pins the count of a growing catalog does not detect drift; it
+# FORBIDS the catalog from growing, and reports the stale copy as clean until somebody edits the
+# gate. The count is gone rather than merely re-pinned: this file is a lote record, not a generated
+# projection, so any number kept here would be hand-maintained and would drift again.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }
@@ -48,6 +56,44 @@ if [ -n "$curated_out" ]; then
 fi
 command -v python3 >/dev/null || cannot "no python3"
 
+# ── the canonical rendering decides ──────────────────────────────────────────────────────────────
+#
+# It runs only when the inputs are present in this tree: in a curated public export the wrapper
+# answers NOT APPLICABLE (0) and the SCOPED branch above has already returned.
+ERR="$(mktemp "${TMPDIR:-/tmp}/c13cur.XXXXXX")" || cannot "cannot create a scratch file"
+trap 'rm -f "$ERR" "$ERR.out"' EXIT
+set +e
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "falta scripts/module-catalog-go.sh: sin el envoltorio del derivador no hay con qué comparar (un 127 no es un veredicto)"
+bash "$ROOT/scripts/module-catalog-go.sh" check >"$ERR.out" 2>"$ERR"
+rc=$?
+set -e
+# ⛔ UN rc DESCONOCIDO NO ES ÉXITO. Medido por el contraste `sol max`: con un binario inyectado que
+# devuelve 125 —o matado, que da 128+señal— estas ramas sólo miraban 1 y 2, así que «distinto de 1 y
+# 2» caía en la rama de derivación correcta y el gate anunciaba CLEAN. La tercera respuesta se
+# reclama por defecto: todo lo que no sea 0, 1 o 2 es «no pude mirar».
+case "$rc" in
+0 | 1 | 2) ;;
+*)
+	say "check-c13-cur-map-prep: COULD NOT LOOK — la derivación salió con un código que su contrato no define ($rc):" >&2
+	cat "$ERR" >&2 || true
+	exit 2
+	;;
+esac
+if [ "$rc" -eq 2 ]; then
+	say "check-c13-cur-map-prep: COULD NOT LOOK — the canon derivation did not run:" >&2
+	cat "$ERR" >&2 || true
+	exit 2
+fi
+if [ "$rc" -eq 1 ]; then
+	say "check-c13-cur-map-prep: FAIL — a projection differs from the canon derivation:" >&2
+	cat "$ERR" >&2 || true
+	exit 1
+fi
+DERIVED=1
+if grep -qx 'MODULE-CATALOG-NOT-APPLICABLE' "$ERR.out" 2>/dev/null; then
+	DERIVED=0
+fi
+
 grep -F -q 'Unique leftover unique vs `#960`' "$DOC" \
   || fail "prepare doc lost uniqueness vs #960"
 grep -F -q 'Unique leftover unique vs `hub-comercio/c13-cur`' "$DOC" \
@@ -79,29 +125,53 @@ try:
 except Exception as e:
     cannot(f"inputs not readable: {e}")
 
-if mp.get("source") != "design/VOCABULARIO-MODULOS-2026-08-08.md":
-    fail("map source drifted")
+import re
+
+if mp.get("schema") != "module-slug-package/v2":
+    fail("the map is %r, not the generated module-slug-package/v2" % mp.get("schema"))
+if mp.get("source") != "design/PRICING-CANON.md":
+    fail("the map's source is %r; the authority is the pricing canon" % mp.get("source"))
+if not re.fullmatch(r"[0-9a-f]{64}", mp.get("canon_sha256") or ""):
+    fail("the map carries no 64-hex canon_sha256")
 entries = mp.get("entries")
-if not isinstance(entries, list) or len(entries) != 27:
-    fail("entry_count drifted (want 27, got %r)" % (len(entries) if isinstance(entries, list) else entries,))
-if data.get("schema") != "c13-cur-map-prep/v1":
-    fail("unknown schema %r" % data.get("schema"))
+if not isinstance(entries, list) or not entries:
+    fail("the map has no rows; a map that resolves nothing is not published")
+for row in entries:
+    for field in ("slug", "pack", "package"):
+        if not row.get(field):
+            fail("row %r is missing %s" % (row, field))
+
+if data.get("schema") != "c13-cur-map-prep/v2":
+    fail("unknown schema %r (v1 pinned entry_count and is retired)" % data.get("schema"))
+if data.get("source") != "design/PRICING-CANON.md":
+    fail("the prep record still names a source that is not the canon: %r" % data.get("source"))
 if data.get("map_published") is not True:
     fail("map_published must stay true")
-if data.get("entry_count") != 27:
-    fail("json entry_count drifted")
+if "entry_count" in data:
+    fail("entry_count is back in the prep record; a count kept outside the generator is a pin that "
+         "will drift, which is exactly what this repair removed")
 if data.get("remainder_applied") is not False:
     fail("remainder_applied must stay false")
 if data.get("overlay_remeasured_in_this_gate") is not False:
     fail("overlay remasure leaked into this hub-safe gate")
-hub = data.get("hub") or ""
-if len(hub) != 40 or any(c not in "0123456789abcdef" for c in hub):
-    fail("hub is not 40-hex")
+ev = data.get("evidence")
+if not isinstance(ev, dict):
+    fail("the evidence block is missing; the lote's hand-measured object id lives there")
+hub = ev.get("hub") or ""
+if not re.fullmatch(r"[0-9a-f]{40}", hub):
+    fail("evidence.hub is not 40-hex")
 for k in ("u_f", "u_d"):
-    if data.get(k) != "UNKNOWN":
-        fail("%s must stay UNKNOWN" % k)
-print("json-ok")
+    if ev.get(k) != "UNKNOWN":
+        fail("%s must stay UNKNOWN until somebody measures it" % k)
+
+# PRINTED, never compared.
+print("json-ok — observed %d rows (an observation; no literal is compared)" % len(entries))
 PY
 
-say "check-c13-cur-map-prep: CLEAN — map already on origin/main; #960 not copied; overlay remasure not in this gate."
+if [ "$DERIVED" -eq 1 ]; then
+	say "check-c13-cur-map-prep: CLEAN — the map is the canon derivation; #960 not copied; no count pinned; overlay remasure not in this gate."
+else
+	# 0, but it SAYS what it could not compare: a scoped verdict is not a CLEAN one.
+	say "check-c13-cur-map-prep: SCOPED — the canon derivation is NOT APPLICABLE in this tree (commercial/commerce-lint absent); only the structural checks ran."
+fi
 exit 0

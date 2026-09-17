@@ -18,7 +18,7 @@
 // pattern. The finding is tied to the service account's NHI so it converges with
 // the directory roster by name.
 //
-// Minimal data (docs/SECURITY-HARDENING.md-3): the connector reads event METADATA only — event
+// Minimal data (docs/SECURITY-HARDENING.md §2-3): the connector reads event METADATA only — event
 // id, the service principal, the requesting account, the ticket encryption type,
 // the source address. It NEVER reads, stores or transmits a TGT, a service
 // ticket, a password hash or a keytab. The free-text detail is hashed (redact.Hash)

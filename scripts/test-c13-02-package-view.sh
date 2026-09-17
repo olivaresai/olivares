@@ -25,7 +25,23 @@ stage() {
 	cp "$ROOT/design/C13-02-PACKAGE-VIEW-2026-08-20.md" "$TMP/tree/design/"
 	cp "$ROOT/commercial/module-slug-package.json" "$TMP/tree/commercial/"
 	cp "$ROOT/commercial/module-package-slugs.json" "$TMP/tree/commercial/"
+	# ⛔ Y EL DERIVADOR, que es quien decide desde que este gate le pregunta. Sin él el gate contesta
+	# —con razón— «falta el envoltorio: un 127 no es un veredicto», y los casos medirían la ausencia
+	# de una herramienta en vez de la guarda. Lo cazó el propio banco al ponerse rojo entero.
+	cp "$ROOT/scripts/module-catalog-go.sh" "$TMP/tree/scripts/"
+	chmod +x "$TMP/tree/scripts/module-catalog-go.sh"
+	mkdir -p "$TMP/tree/commercial/license-worker/src/catalog" "$TMP/tree/commercial/license-worker/contracts"
+	cp "$ROOT/design/PRICING-CANON.md" "$TMP/tree/design/"
+	cp "$ROOT/commercial/license-worker/src/catalog/module-slug-package.json" \
+		"$TMP/tree/commercial/license-worker/src/catalog/"
+	cp -r "$ROOT/commercial/commerce-lint" "$TMP/tree/commercial/"
 }
+
+export GOWORK=off
+MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/pv-bin.XXXXXX")"
+( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
+	echo "test-c13-02-package-view: NO PUDE MIRAR — el derivador no construye" >&2; exit 2; }
+export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
 
 run() {
 	local rc=0
@@ -82,14 +98,14 @@ import json, sys
 from pathlib import Path
 p = Path(sys.argv[1])
 d = json.loads(p.read_text())
-d["bijective"] = True
+d["observed_bijective"] = True
 p.write_text(json.dumps(d))
 PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: bijective true is FAIL"
+	ok "firing: observed_bijective true is FAIL"
 else
-	bad "bijective flag should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+	bad "observed_bijective flag should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
 stage

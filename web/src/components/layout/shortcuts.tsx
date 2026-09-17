@@ -12,7 +12,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Kbd } from '@/components/ui/kbd'
-import { useAuth } from '@/lib/auth/context'
+import { useViewAccess } from '@/features/navigation/authorization'
 import { FEATURE_VIEWS } from '@/features/registry'
 
 /** How long a leader sequence stays armed after pressing `g`. */
@@ -66,15 +66,16 @@ function modalIsOpen(): boolean {
 export function GlobalShortcuts() {
   const { t } = useTranslation(['common', 'nav'])
   const navigate = useNavigate()
-  const { can } = useAuth()
+  // The SAME projection the sidebar, palette and directories use. G1-B adds no
+  // administration shortcut: NAV_SHORTCUTS is unchanged, and this only stops the existing
+  // entries from resolving through a predicate the others no longer share.
+  const { navigable } = useViewAccess()
   const [helpOpen, setHelpOpen] = useState(false)
   const armedUntil = useRef(0)
 
   const visible = NAV_SHORTCUTS.filter(({ featureId }) => {
     const view = FEATURE_VIEWS.find((v) => v.id === featureId)
-    return (
-      !!view && !view.hideInNav && (!view.permission || can(view.permission))
-    )
+    return !!view && !view.hideInNav && navigable(view)
   })
 
   useEffect(() => {

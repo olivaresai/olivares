@@ -97,6 +97,124 @@ export interface RunDTO {
   approval_ref?: string
   /** A privileged launch (drove the HITL + mandatory recording floor). */
   critical: boolean
+
+  // Provider-profile facts (B1/B2), persisted at launch. References only — the
+  // homes live on the profile's authorized configuration read, never here. All
+  // absent for a legacy run, which is never assigned a profile after the fact.
+  provider_profile_ref?: string
+  provider_driver?: string
+  provider_environment_ref?: string
+  /** The provider conversation this run owns, under a DRIVER-NEUTRAL name (Codex
+   * `thread.id`, Grok ACP `sessionId`, Claude's init `session_id`). It is the same
+   * value `claude_session_id` carries; that field stays for the clients already
+   * shipped against it, and this is what a non-Claude consumer should read. */
+  provider_conversation_id?: string
+  /** The AUTHORIZED authentication source this run was launched under. An
+   * authorization, never a credential. */
+  provider_auth_source?:
+    'provider_account_home' | 'managed_injection' | (string & {})
+  /** The readiness the PROVIDER itself reported, separate from process,
+   * conversation and turn state. A home path is not proof of an account. */
+  provider_auth_state?: 'unknown' | 'required' | 'ready' | (string & {})
+  /** The opaque id of the plane's MANAGED live row for this run, present once the
+   * bridge proved the run owns its provider id. A profiled run is joined to its
+   * session by THIS, never by the bare `claude_session_id` two homes may share. */
+  live_ref?: string
+}
+
+/** One provider profile (GET /provider-profiles): the durable identity of ONE
+ * configured provider instance on ONE execution environment. Configuration and
+ * storage identity — never an authenticated provider account. No path here: the
+ * homes are on the admin-only configuration read. */
+export interface ProviderProfileDTO {
+  profile_ref: string
+  driver: string
+  environment_ref: string
+  display_name?: string
+  state: 'active' | 'disabled' | 'retired' | (string & {})
+  /** Belongs to THIS node's execution environment; a foreign one is shown as such
+   * and never launched here. */
+  local_environment: boolean
+  /** Legacy enablement flag, preserved with its exact meaning: local, active, a
+   * driver this runtime has REGISTERED, and — for a driver that needs one — an
+   * authorized authentication source. It is not a launch guarantee and is not
+   * the source of the requirements panel; that is GET …/launch-readiness. */
+  operable: boolean
+  /** The AUTHORIZED authentication source: `provider_account_home` uses the saved
+   * login inside the profile's own homes, `managed_injection` mints a
+   * provider-compatible credential through that driver's governed adapter. They
+   * are distinct authorizations with no fallback; absent authorizes neither. */
+  auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
+  created_at?: string
+  updated_at?: string
+  retired_at?: string
+}
+
+/** The AUTHORIZED configuration read of one profile (GET
+ * /provider-profiles/{ref}/configuration, `sessions:profile:admin`): the canonical
+ * homes AS STORED, resolved by the execution environment that owns them. This is the
+ * only read that carries a path, it is fetched on demand and never on render, and it
+ * still carries no credential value. */
+export interface ProviderProfileConfigurationDTO {
+  profile_ref: string
+  driver: string
+  environment_ref: string
+  config_home: string
+  user_home: string
+  state: 'active' | 'disabled' | 'retired' | (string & {})
+}
+
+/** POST /provider-profiles body. The homes are EXISTING directories on THIS node's
+ * execution environment: the server resolves and validates them (absolute, symlinks
+ * resolved, existing, a directory) and never creates, installs or logs anything in.
+ * `environment_ref` may be omitted (this node) or must equal it; a profile for another
+ * environment is created on that environment. No credential travels here. */
+export interface CreateProfileRequest {
+  driver: string
+  config_home: string
+  user_home: string
+  display_name?: string
+  environment_ref?: string
+}
+
+/** PATCH /provider-profiles/{ref} body — the ONLY post-creation mutation: a label
+ * and/or an active↔disabled transition. Retirement is irreversible and has its own
+ * admin route (POST …/retire); driver, environment and homes are identity and are not
+ * here. */
+export interface PatchProfileRequest {
+  display_name?: string
+  state?: 'active' | 'disabled'
+}
+
+/** One source→profile binding (GET /provider-source-bindings): ONE configured source,
+ * at ONE applied revision, on ONE execution environment, dedicated to ONE profile.
+ * Identity is the source's persistent id + applied revision — never its editable
+ * name (`source_name` is an informational snapshot taken at bind time). Rows are
+ * immutable except for revocation. */
+export interface ProviderBindingDTO {
+  binding_ref: string
+  source_id: string
+  source_revision: number
+  source_name?: string
+  environment_ref: string
+  selector_key: string
+  profile_ref: string
+  driver: string
+  state: 'active' | 'revoked' | (string & {})
+  bound_at: string
+  revoked_at?: string
+}
+
+/** POST /provider-source-bindings body. `source_id` is the roster row's persistent id
+ * and `source_revision` the EXACT revision this node applied, both read from the
+ * source roster (`/v1/console/sources`: `id`, `applied_revision`) — a client never
+ * derives either from a name or a stored version. Creating a binding additionally
+ * requires administering the source (deployment-wide `system:admin`), which the
+ * engine checks through its composition port. */
+export interface CreateBindingRequest {
+  source_id: string
+  source_revision: number
+  profile_ref: string
 }
 
 /** One lifecycle-ledger event (GET /runs/{ref}/events), seq-ordered. The PayloadHash
@@ -131,6 +249,11 @@ export interface CreateRunRequest {
    * opens this console. The restrictions themselves are never sent from here: only the
    * template id is, which is why a client cannot post itself an empty allowlist. */
   template_id?: string
+  /** The provider profile to launch under (B2). Only the REFERENCE leaves the
+   * browser: the server resolves and validates the profile's homes, persists the
+   * snapshot on the run before the spawn and refuses a disabled, retired, foreign or
+   * non-operable profile. Absent ⇒ the legacy launch under the runner's own home. */
+  provider_profile_ref?: string
 }
 
 /** A registered workspace (host root a session works in). No file bytes or secrets. */
@@ -223,10 +346,21 @@ export interface AttachLag {
   next_seq: number
 }
 
+/** Typed I/O-absence on an attach `notice`. Additive and stable; the English
+ * `detail` is not the discriminator. Unknown values must not stop reconnect. */
+export type AttachIOUnavailable = 'not_live_on_node' | 'remote_control'
+
+export function isAttachIOUnavailable(
+  value: unknown,
+): value is AttachIOUnavailable {
+  return value === 'not_live_on_node' || value === 'remote_control'
+}
+
 /** A lifecycle notice frame (event: `notice`), e.g. a remote-control "I/O not bridged"
- * sentinel or a state change. */
+ * sentinel or a state change. `io_unavailable` is absent on legacy notices. */
 export interface AttachNotice {
   type: string
   state?: string
   detail?: string
+  io_unavailable?: string
 }

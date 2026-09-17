@@ -101,9 +101,8 @@ func validateDirectNoticeAckIdentityPreflight(
 	resolution := identity.Resolution
 	closure := identity.Closure
 	if identity.Scope != normalized.scope || identity.Principal != normalized.principal ||
-		identity.Recipient != (RecipientRef{
-			Kind: RecipientUser, Ref: normalized.principal.UserID.String(),
-		}) || ValidateCommunicationPrincipalForScope(identity.Principal, identity.Scope) != nil ||
+		!communicationPrincipalMatchesRecipient(normalized.principal, identity.Recipient) ||
+		ValidateCommunicationPrincipalForScope(identity.Principal, identity.Scope) != nil ||
 		ValidatePrincipalResolution(resolution) != nil ||
 		resolution.Outcome != PrincipalResolved || resolution.Scope != identity.Scope ||
 		resolution.Principal != identity.Principal || resolution.Recipient == nil ||
@@ -321,7 +320,10 @@ func lockDirectNoticeAckAuthoritySnapshot(
 		freshUntil: preflight.core.FreshUntil,
 		bindingID:  preflight.bindingID,
 	}).narrowTo(localWindow)
-	if err != nil || len(tx.claimAuthorityFacts) != 0 ||
+	if err != nil || !communicationClaimsEqualSnapshot(
+		communicationClaimsForPrincipal(preflight.identity.Principal),
+		CommunicationClaimAuthoritySnapshot{facts: tx.claimAuthorityFacts},
+	) ||
 		tx.requestBindingID != expectedRequest.bindingID ||
 		!equalDirectNoticeAuthorityFacts(tx.requestAuthorityFacts, expectedRequest.facts) ||
 		!tx.requestObservedAt.Equal(expectedRequest.observedAt) ||
@@ -480,13 +482,13 @@ func lockDirectNoticeAckState(
 			"DirectNotice Ack locked Message is malformed", err,
 		)
 	}
-	if !directNoticeAckHistoricalStorageCarrier(channel, message) {
+	if !directNoticeAckProtectedCarrier(channel, message) {
 		return directNoticeAckLockedState{}, directNoticeReadUnknown(
-			"DirectNotice Ack supports only historical storage-protected carriers", nil,
+			"DirectNotice Ack carrier protection is inconsistent", nil,
 		)
 	}
-	audienceRecords, err := lockDirectNoticeRecordSet(
-		ctx, tx, messageAudienceKind,
+	audienceRecords, err := observeAppendOnlyRecordSet(
+		ctx, tx, messageAudienceKind, publishedMessageSetFence(messageID),
 		[]model.Filter{{Column: colCommMessageID, Op: model.OpEq, Value: messageID.String()}},
 		64,
 	)
@@ -505,7 +507,9 @@ func lockDirectNoticeAckState(
 		}
 		audiences = append(audiences, audience)
 	}
-	contributionRecords, err := lockDirectNoticeContributionSet(ctx, tx, audiences)
+	contributionRecords, err := observeAppendOnlyContributionSet(
+		ctx, tx, publishedMessageSetFence(messageID), audiences,
+	)
 	if err != nil {
 		return directNoticeAckLockedState{}, directNoticeReadUnknown(
 			"DirectNotice Ack audience contribution set is unavailable", err,
@@ -548,8 +552,10 @@ func lockDirectNoticeAckState(
 		}
 		tombstone = &witness
 	}
-	ackRecords, err := lockDirectNoticeRecordSet(
-		ctx, tx, messageAckKind,
+	// The Ack set is live evidence fenced by the target Delivery's row lock,
+	// taken above with the Message's Delivery set, not by publication.
+	ackRecords, err := observeAppendOnlyRecordSet(
+		ctx, tx, messageAckKind, lockedDeliverySetFence(targetDelivery.ID),
 		[]model.Filter{{Column: colCommDeliveryID, Op: model.OpEq, Value: normalized.deliveryID.String()}},
 		1,
 	)
@@ -589,19 +595,31 @@ func lockDirectNoticeAckState(
 // generation. Sensitivity changes may advance a still-storage Channel, while
 // the irreversible storage->application_sealed transition must place every
 // historical plain generation strictly before the current one.
+func directNoticeAckProtectedCarrier(channel Channel, message Message) bool {
+	if message.Payload.ProtectionGeneration < 1 || channel.ProtectionGeneration < 1 {
+		return false
+	}
+	if message.Payload.Encoding == PayloadSealedV1 {
+		return channel.ContentProtection == ContentProtectionApplicationSealed &&
+			message.Payload.ProtectionGeneration <= channel.ProtectionGeneration
+	}
+	if message.Payload.Encoding != PayloadPlainJSON {
+		return false
+	}
+	return (channel.ContentProtection == ContentProtectionStorage &&
+		message.Payload.ProtectionGeneration <= channel.ProtectionGeneration) ||
+		(channel.ContentProtection == ContentProtectionApplicationSealed &&
+			message.Payload.ProtectionGeneration < channel.ProtectionGeneration)
+}
+
+// directNoticeAckHistoricalStorageCarrier retains the focused compatibility
+// predicate used by older tests; the live Ack path now accepts sealed carriers
+// through directNoticeAckProtectedCarrier as well.
 func directNoticeAckHistoricalStorageCarrier(channel Channel, message Message) bool {
-	if message.Payload.Encoding != PayloadPlainJSON ||
-		message.Payload.ProtectionGeneration < 1 || channel.ProtectionGeneration < 1 {
+	if message.Payload.Encoding != PayloadPlainJSON {
 		return false
 	}
-	switch channel.ContentProtection {
-	case ContentProtectionStorage:
-		return message.Payload.ProtectionGeneration <= channel.ProtectionGeneration
-	case ContentProtectionApplicationSealed:
-		return message.Payload.ProtectionGeneration < channel.ProtectionGeneration
-	default:
-		return false
-	}
+	return directNoticeAckProtectedCarrier(channel, message)
 }
 
 func exactDirectNoticeAckCarrierGraph(
@@ -797,7 +815,8 @@ func directNoticeAckAuthorityEvidence(
 			"DirectNotice Ack carrier gate has no verdict", nil,
 		)
 	}
-	if len(decision.RequiredClaims) != 0 ||
+	if !communicationClaimsEqualSnapshot(decision.RequiredClaims,
+		CommunicationClaimAuthoritySnapshot{facts: tx.claimAuthorityFacts}) ||
 		len(decision.SurvivingContributionIDs) != 1 ||
 		decision.SurvivingContributionIDs[0] != locked.contributions[0].ID ||
 		!equalDirectNoticeAuthorityFacts(preflight.Facts, decision.Facts) {
@@ -882,7 +901,10 @@ func applyDirectNoticeDeliveryAck(
 	if delivery.Version != preflight.normalized.expectedVersion {
 		return DirectNoticeDeliveryAckResult{}, errDirectNoticeAckVersionMismatch
 	}
-	actor := CommunicationActorRef{Kind: ActorUser, Ref: preflight.normalized.principal.UserID.String()}
+	actor, err := communicationActorForRecipient(readerPreflight.Recipient)
+	if err != nil {
+		return DirectNoticeDeliveryAckResult{}, err
+	}
 	plan, err := PlanMessageAck(
 		delivery, preflight.ids.Ack, actor, nil, &evidence, nil, tx.now.Time(),
 	)
@@ -961,8 +983,9 @@ func applyDirectNoticeDeliveryAck(
 	if err != nil {
 		return DirectNoticeDeliveryAckResult{}, err
 	}
+	_, auditKind := communicationAuditActor(actor)
 	audit, err := tx.appendAudit(ctx, model.AuditDraft{
-		Actor: directNoticeActor(preflight.normalized.principal), ActorKind: model.ActorUser,
+		Actor: directNoticeActor(preflight.normalized.principal), ActorKind: auditKind,
 		Action: directNoticeAckAuditAction, TargetKind: communicationCommandKind,
 		TargetID: preflight.ids.Command, PayloadHash: append([]byte(nil), planHash...),
 		Meta: map[string]any{
@@ -1463,8 +1486,8 @@ func persistDirectNoticeDeliveryAck(
 		colWorkWorkspaceID: preflight.normalized.scope.WorkspaceID.String(),
 		colEventID:         preflight.ids.Event.String(), colEventAggregateKind: string(aggregate.kind),
 		colEventAggregateID: aggregate.id.String(), colEventSeq: aggregate.nextSeq,
-		colEventType: communicationMessageAcknowledged, colEventActorKind: string(ActorUser),
-		colEventActorRef:   preflight.normalized.principal.UserID.String(),
+		colEventType: communicationMessageAcknowledged, colEventActorKind: string(plan.Ack.Actor.Kind),
+		colEventActorRef:   plan.Ack.Actor.Ref,
 		colEventOccurredAt: tx.now.String(), colEventPayload: string(eventPayload),
 		colEventPayloadHash: hashBytes(eventPayload),
 		colEventCommandID:   preflight.ids.Command.String(),
@@ -1620,7 +1643,6 @@ func directNoticeAckResultFromReceipt(
 	if err != nil || ack.ID != result.AckID || ack.DeliveryID != result.DeliveryID ||
 		ack.TenantID != normalized.scope.TenantID ||
 		ack.WorkspaceID != normalized.scope.WorkspaceID ||
-		ack.Actor != (CommunicationActorRef{Kind: ActorUser, Ref: normalized.principal.UserID.String()}) ||
 		ack.OnBehalfOf != nil || ack.Note != nil || !ack.CreatedAt.Equal(receipt.CompletedAt) ||
 		!ack.AcknowledgedAt.Equal(receipt.CompletedAt) {
 		return DirectNoticeDeliveryAckResult{}, communicationError(
@@ -1642,7 +1664,8 @@ func directNoticeAckResultFromReceipt(
 	if err != nil || delivery.ID != result.DeliveryID || delivery.MessageID != result.MessageID ||
 		delivery.TenantID != normalized.scope.TenantID ||
 		delivery.WorkspaceID != normalized.scope.WorkspaceID ||
-		delivery.Recipient != (RecipientRef{Kind: RecipientUser, Ref: normalized.principal.UserID.String()}) ||
+		!directNoticeAckTargetsRecipient(ack, delivery.Recipient) ||
+		!communicationPrincipalMatchesRecipient(normalized.principal, delivery.Recipient) ||
 		delivery.Version < result.Version || delivery.State != result.State ||
 		(!ack.Late && delivery.UpdatedAt.Before(receipt.CompletedAt)) {
 		return DirectNoticeDeliveryAckResult{}, communicationError(
@@ -1713,8 +1736,8 @@ func directNoticeAckResultFromReceipt(
 		event.String(colEventAggregateKind) != string(aggregateKind) ||
 		event.String(colEventAggregateID) != aggregateID.String() ||
 		event.Int(colEventSeq) < 1 || event.String(colEventType) != communicationMessageAcknowledged ||
-		event.String(colEventActorKind) != string(ActorUser) ||
-		event.String(colEventActorRef) != normalized.principal.UserID.String() ||
+		event.String(colEventActorKind) != string(ack.Actor.Kind) ||
+		event.String(colEventActorRef) != ack.Actor.Ref ||
 		event.String(colEventCommandID) != receipt.CommandID.String() ||
 		event.Int(colEventAuditSeq) != receipt.AuditSeq ||
 		!bytes.Equal(event.Bytes(colEventAuditHash), receipt.AuditHash) ||
@@ -1891,7 +1914,8 @@ func verifyDirectNoticeAckAuditAnchor(
 	if err != nil || !found || event.Seq != receipt.AuditSeq ||
 		event.TenantID != normalized.scope.TenantID ||
 		event.Actor != directNoticeActor(normalized.principal) ||
-		event.ActorKind != model.ActorUser || event.Action != directNoticeAckAuditAction ||
+		event.ActorKind != communicationAuditKindForPrincipal(normalized.principal) ||
+		event.Action != directNoticeAckAuditAction ||
 		event.TargetKind != communicationCommandKind || event.TargetID != receipt.CommandID ||
 		!bytes.Equal(event.PayloadHash, receipt.PlanHash) ||
 		!bytes.Equal(event.Hash, receipt.AuditHash) ||

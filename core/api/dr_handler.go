@@ -656,12 +656,12 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 		return
 	}
 
-	if err := dr.WriteBundle(f, dr.BundleInput{
+	if err := dr.WriteAuthenticatedBundle(f, dr.BundleInput{
 		Manifest:     manifest,
 		KEK:          cipher.Params(),
 		SnapshotPath: snapshotPath,
 		SealedKeys:   sealedKeys,
-	}); err != nil {
+	}, cipher); err != nil {
 		_ = f.Close()
 		_ = os.Remove(bundlePath)
 		fail(fmt.Errorf("write bundle: %w", err))
@@ -1065,6 +1065,23 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 		s.log.Error("dr: restore failed", "job", jobID, "err", err)
 	}
 
+	// THE LOCAL RESTORE GUARD, TAKEN BEFORE THE FIRST BYTE IS READ AND HELD TO THE END.
+	//
+	// This handler's critical section is not one write: it overwrites every signing key
+	// in the data directory one file at a time and only then replaces the store. A guard
+	// checked at the top and released would leave that section open to a concurrent boot
+	// — which mints keys — or to a second restore, either of which produces an
+	// installation whose custody and whose data came from different generations.
+	//
+	// It is exclusive and it REFUSES rather than queues: a queued destructive operation
+	// is one the user was told had not started.
+	guard, gerr := acquireConsoleRestoreGuard(svc.cfg)
+	if gerr != nil {
+		fail(gerr)
+		return
+	}
+	defer guard.release()
+
 	update("extracting", 10)
 
 	tmpDir, err := os.MkdirTemp("", "dr-restore-*")
@@ -1083,6 +1100,10 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 	_ = f.Close()
 	if err != nil {
 		fail(fmt.Errorf("extract bundle: %w", err))
+		return
+	}
+	if err := dr.CheckImportCompatibility(manifest, s.version); err != nil {
+		fail(err)
 		return
 	}
 
@@ -1104,6 +1125,10 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 	cipher, err := dr.OpenCipher([]byte(passphrase), kdfParams)
 	if err != nil {
 		fail(fmt.Errorf("open cipher (wrong passphrase?): %w", err))
+		return
+	}
+	if err := dr.VerifyBundleIntegrity(tmpDir, manifest, kdfParams, cipher, false); err != nil {
+		fail(fmt.Errorf("verify bundle authentication: %w", err))
 		return
 	}
 

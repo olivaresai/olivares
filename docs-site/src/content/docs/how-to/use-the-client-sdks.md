@@ -19,10 +19,11 @@ serves and the [API reference](/reference/api/) renders:
 
 :::note[Distribution status]
 The SDKs live in the product repository under `clients/` and are versioned
-with it. Publication to the public registries (pkg.go.dev, Maven Central, PyPI,
-npm) happens with the public release — until then, consume them from the repo
+with it. This page does not assert that the v26.9.0 clients are on
+pkg.go.dev, Maven Central, PyPI or npm. Consume them from the repo
 (Go module path above, `mvn -f clients/java install`, `pip install ./clients/python`,
-`npm install ./clients/typescript`).
+`npm install ./clients/typescript`) unless you have verified a registry
+package for this version yourself.
 :::
 
 All four share one design. A hand-written core implements the contractual

@@ -28,12 +28,16 @@
 // requires an AAL3 step-up».
 //
 // Esta celda NO conduce cada pantalla —eso lo hacen las suites de cada tab—: fija el invariante
-// TEXTUAL que las cinco comparten, porque el defecto es de FORMA y reaparece en cuanto alguien
+// de FORMA (AST local) que las cinco comparten, porque el defecto reaparece en cuanto alguien
 // escribe otra mutación a mano detrás del mismo pre-gate.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import {
+  formatInspection,
+  inspectCeremonySource,
+} from './step-up-ceremony-guard'
 
 const AQUI = dirname(fileURLToPath(import.meta.url))
 const SALUD = join(AQUI, '..', 'health')
@@ -113,90 +117,57 @@ describe('las escrituras gateadas por AAL3 ofrecen la ceremonia, no un rojo', ()
   })
 
   it('y CADA rama de ceremonia delega o pinta — no vale que lo haga otra del mismo fichero', () => {
-    // ⛔ ESTA CELDA MIRABA EL FICHERO Y UN MUTANTE SOBREVIVIÓ. Preguntaba «¿hay algún `report(`
-    //    o `usePrivilegedMutation` en el fichero?», y `connectors-tab` tiene un
-    //    `usePrivilegedMutation` en la mutación de AL LADO: cambiar el `report(err, …)` del
-    //    `test` por un `toast.error` propio la dejaba verde. Es el mismo defecto que ya corregí
-    //    dos veces en esta campaña —contar FICHEROS en vez de DECISIONES— y esta vez lo cazó mi
-    //    propio mutante, no el contraste.
-    //
-    //    Dos formas legítimas que la primera versión no distinguía, y las dos están en el árbol:
-    //      · uso NEGADO (`!e.isStepUpRequired`): es el predicado de ROL, no una rama de ceremonia;
-    //      · booleano DERIVADO (`const necesitaCeremonia = …`): la ceremonia se pinta más abajo,
-    //        donde se usa el nombre, así que ninguna ventana de líneas puede verla.
-    const VENTANA = 3
-    const HACE_ALGO = /report\(|<StepUpRequiredState/
-
-    // ⛔ EL ÁMBITO SE MIDE POR LLAVES, NO POR UN NÚMERO DE LÍNEAS — y esto lo rompió el
-    //    FORMATEADOR, no un cambio de conducta. `prettier` partió
-    //    `report(err, guardarReanudacion(...))` en cuatro renglones y empujó el `return` fuera de
-    //    una ventana de 3, así que la guarda acusó a `connectors-tab:692` de «delega y NO sale»
-    //    con el `return` intacto dos líneas más abajo. Es la tercera vez en esta campaña que una
-    //    ventana por LÍNEAS me miente, y ahora hay un trinquete que va a reformatear el árbol en
-    //    tandas: una guarda que dependa del ancho de línea es una guarda que caduca sola.
-    const bloqueDesde = (ls: string[], desde: number): string => {
-      let prof = 0
-      const trozo: string[] = []
-      for (let k = desde; k < Math.min(ls.length, desde + 60); k++) {
-        const l = ls[k] ?? ''
-        trozo.push(l)
-        prof += (l.match(/\{/g) ?? []).length - (l.match(/\}/g) ?? []).length
-        if (k > desde && prof <= 0) break
-      }
-      return trozo.join('\n')
-    }
-
+    // Positive isStepUpRequired accesses are classified by AST: an imperative
+    // catch/onError must call report and return in that branch; a mutation.error
+    // predicate must mount StepUpRequiredState on its true arm; a pure classifier
+    // must bind each call and paint StepUpRequiredState when the result is stepUp.
     for (const [nombre, ruta] of SUJETOS) {
-      const lineas = leer(ruta)
-      const ramas = lineas
-        .map((l, i) => [l, i] as const)
-        .filter(([l]) =>
-          l
-            .replace(/![\s\w.]*isStepUpRequired/g, '')
-            .includes('isStepUpRequired'),
-        )
+      const insp = inspectCeremonySource(nombre, readFileSync(ruta, 'utf8'))
       expect(
-        ramas.length,
-        `${nombre} no tiene ninguna rama de ceremonia sin negar`,
+        insp.references.length,
+        `${nombre} has no positive isStepUpRequired access`,
       ).toBeGreaterThan(0)
-
-      for (const [linea, i] of ramas) {
-        const ventana = bloqueDesde(lineas, i)
-        // ⛔ DELEGAR NO BASTA: HAY QUE SALIR. Mutante nombrado por el contraste y REPRODUCIDO
-        //    antes de arreglar nada: quitando el `return` que sigue a `report(...)` en
-        //    connectors-tab, la guarda seguía viendo `report(` junto a `isStepUpRequired` y daba
-        //    verde, mientras el control caía al `toast.error` de abajo — es decir, la ceremonia
-        //    se abría Y se pintaba el rojo. Reportar y seguir es el defecto que esta campaña
-        //    persigue, sólo que escrito en dos líneas en vez de una.
-        //
-        //    La rama JSX (`<StepUpRequiredState`) no lleva `return`: es un brazo de ternario y
-        //    la exclusión se la da el propio operador `?:`. Por eso el requisito sólo se exige
-        //    al camino imperativo.
-        if (/report\(/.test(ventana) && !/\breturn\b/.test(ventana)) {
-          expect(
-            false,
-            `${nombre}:${i + 1} delega la ceremonia y NO sale — el control cae al error de abajo`,
-          ).toBe(true)
-        }
-        if (HACE_ALGO.test(ventana)) continue
-
-        const decl =
-          linea.match(/const\s+(\w+)\s*=/) ??
-          lineas[i - 1]?.match(/const\s+(\w+)\s*=/)
-        const nombreVar = decl?.[1]
-        const usado =
-          nombreVar !== undefined &&
-          lineas.some(
-            (l, j) =>
-              j > i &&
-              l.includes(nombreVar) &&
-              HACE_ALGO.test(lineas.slice(j, j + 1 + VENTANA).join('\n')),
-          )
-        expect(
-          usado,
-          `${nombre}:${i + 1} reconoce la ceremonia y no hace nada con ella`,
-        ).toBe(true)
-      }
+      expect(insp.failures, formatInspection(insp)).toEqual([])
     }
+  })
+})
+
+// Preserve the G3 controls against both live readers using the shared AST guard.
+describe('read-classification discovery controls', () => {
+  const source = readFileSync(join(AQUI, 'connectors-tab.tsx'), 'utf8')
+  const inspectClassifier = (text: string) =>
+    inspectCeremonySource('connectors-tab.tsx', text).references.filter(
+      (reference) => reference.kind === 'classifier',
+    )
+
+  it('follows the live classifier to both independently rendered readers', () => {
+    const references = inspectClassifier(source)
+    expect(references).toHaveLength(1)
+    expect(references[0]?.ok).toBe(true)
+  })
+
+  it.each(['catalogAdmission', 'rosterAdmission'])(
+    'rejects a dropped %s ceremony arm',
+    (reader) => {
+      const changed = source.replace(
+        `${reader} === 'stepUp'`,
+        `${reader} === 'forbidden'`,
+      )
+      expect(changed).not.toBe(source)
+      const references = inspectClassifier(changed)
+      expect(references).toHaveLength(1)
+      expect(references[0]?.ok).toBe(false)
+    },
+  )
+
+  it('does not accept an unused classifier return as handling', () => {
+    const changed = source.replaceAll(
+      '= readAdmission(',
+      '= ignoredClassification(',
+    )
+    expect(changed).not.toBe(source)
+    const references = inspectClassifier(changed)
+    expect(references).toHaveLength(1)
+    expect(references[0]?.ok).toBe(false)
   })
 })

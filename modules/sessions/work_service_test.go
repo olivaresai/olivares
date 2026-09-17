@@ -43,6 +43,12 @@ func (allowWorkIdentity) LockAgentWorkAuthority(
 	return nil
 }
 
+func (allowWorkIdentity) ValidateAgentWorkAuthorityInScope(
+	context.Context, store.Scope, WorkAgentAuthoritySnapshot,
+) error {
+	return nil
+}
+
 type blockingWorkAuthority struct {
 	allowWorkIdentity
 	entered chan struct{}

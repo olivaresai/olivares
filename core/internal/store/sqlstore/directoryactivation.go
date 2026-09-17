@@ -48,7 +48,7 @@ type directoryActivationAuthority struct {
 
 type directoryActivationWitnesses struct {
 	// app is nil only when ownerTx is the application pool's own transaction.
-	// admin is nil only on SQLite.
+	// admin is nil on SQLite or when PostgreSQL uses the closed inventory routine.
 	app   *sql.Tx
 	admin *sql.Tx
 }
@@ -72,10 +72,15 @@ func (w directoryActivationWitnesses) appAuthority(
 }
 
 type directoryActivationAttempt struct {
-	before  store.DirectoryStatus
-	after   store.DirectoryStatus
-	changed bool
-	state   directoryWriterControlState
+	before          store.DirectoryStatus
+	after           store.DirectoryStatus
+	changed         bool
+	state           directoryWriterControlState
+	prestate        directoryWriterControlState
+	inventory       BusinessDirectoryInventory
+	users           userAuthorityCoverage
+	beforeInventory BusinessDirectoryInventory
+	beforeUsers     userAuthorityCoverage
 }
 
 type directoryActivationCommitError struct{ cause error }
@@ -132,8 +137,7 @@ func ActivateDirectoryWriter(
 		verified, verifyErr := verifyCommittedDirectoryActivation(
 			ctx, s, authority, expectedGeneration,
 		)
-		if verifyErr != nil || verified.state.Mode != directoryWriterEnforced ||
-			verified.state.ExpectedGeneration != expectedGeneration+1 {
+		if verifyErr != nil || !directoryActivationTargetMatches(attempt, verified) {
 			return attempt.before, verified.after, false, fmt.Errorf(
 				"%w: activation commit succeeded but a fresh locked postcondition could not be established: mode=%q generation=%d err=%v",
 				ErrDirectoryWriterActivationIndeterminate, verified.state.Mode,
@@ -167,14 +171,12 @@ func ActivateDirectoryWriter(
 		)
 	}
 	switch {
-	case reconciled.state.Mode == directoryWriterEnforced &&
-		reconciled.state.ExpectedGeneration == expectedGeneration+1:
+	case directoryActivationTargetMatches(attempt, reconciled):
 		return attempt.before, reconciled.after, true, nil
-	case reconciled.state.Mode == directoryWriterStaged &&
-		reconciled.state.ExpectedGeneration == expectedGeneration:
+	case directoryActivationPrestateMatches(attempt, reconciled):
 		return reconciled.before, reconciled.after, false, fmt.Errorf(
-			"directory writer activation did not commit; fresh locked state remains staged generation %d: %w",
-			expectedGeneration, commitErr.cause,
+			"directory writer activation did not commit; fresh locked state remains %s generation %d protocol %s: %w",
+			reconciled.state.Mode, expectedGeneration, reconciled.state.CoverageProtocol, commitErr.cause,
 		)
 	default:
 		return attempt.before, reconciled.after, false, fmt.Errorf(
@@ -286,12 +288,14 @@ func openDirectoryActivationAuthority(
 	}
 
 	if strings.TrimSpace(cfg.AdminDSN) == "" || s.adminDB == nil || s.adminDB == s.db {
-		if out.closeOwner {
-			_ = out.ownerDB.Close()
+		present, err := verifyPostgresDirectoryInventory(ctx, s.db, out.roles)
+		if err != nil || !present {
+			if out.closeOwner {
+				_ = out.ownerDB.Close()
+			}
+			return directoryActivationAuthority{}, directoryUnavailable("activation requires attested closed inventory without AdminDSN", err)
 		}
-		return directoryActivationAuthority{}, fmt.Errorf(
-			"sqlstore: directory activation on PostgreSQL requires the boot-attested separate AdminDSN",
-		)
+		return out, nil
 	}
 	adminPosture, err := s.dia.ConnRolePosture(ctx, s.adminDB)
 	if err != nil {
@@ -387,6 +391,14 @@ func openDirectoryActivationWitnesses(
 		}
 	}
 
+	if authority.adminRole == "" {
+		present, err := verifyPostgresDirectoryInventory(ctx, out.appAuthority(ownerTx), authority.roles)
+		if err != nil || !present {
+			out.close()
+			return directoryActivationWitnesses{}, directoryUnavailable("pinned activation inventory is unavailable", err)
+		}
+		return out, nil
+	}
 	out.admin, err = s.adminDB.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 		ReadOnly:  true,
@@ -460,157 +472,6 @@ func verifyDirectoryActivationWriterPosture(
 		)
 	}
 	return nil
-}
-
-func runDirectoryActivation(
-	ctx context.Context,
-	s *sqlStore,
-	authority directoryActivationAuthority,
-	expectedGeneration int64,
-	mutate bool,
-) (directoryActivationAttempt, error) {
-	var out directoryActivationAttempt
-	err := withMigrationLock(ctx, authority.ownerDB, s.dia, func(mdb dialect.Execer) error {
-		tx, err := mdb.BeginTx(ctx, directoryWriterTxOptions(s.dia))
-		if err != nil {
-			return fmt.Errorf("sqlstore: directory activation begin: %w", err)
-		}
-		defer tx.Rollback() //nolint:errcheck // no-op after commit
-
-		state, err := acquireDirectoryWriter(ctx, tx, s.dia)
-		if err != nil {
-			return fmt.Errorf("sqlstore: directory activation acquire writer: %w", err)
-		}
-		out.state = state
-		presentationTenant, err := captureDirectoryActivationPresentation(ctx, tx, s.dia)
-		if err != nil {
-			return err
-		}
-
-		if err := lockDirectoryActivationSources(ctx, tx, s.dia); err != nil {
-			return err
-		}
-		witnesses, err := openDirectoryActivationWitnesses(ctx, tx, s, authority)
-		if err != nil {
-			return err
-		}
-		defer witnesses.close()
-		if err := verifyDirectoryActivationDatabaseIdentity(
-			ctx, tx, witnesses,
-		); err != nil {
-			return err
-		}
-		if err := verifyCoreDirectoryRelationsExact(ctx, tx, s.dia, coreDescriptors()); err != nil {
-			return fmt.Errorf("sqlstore: directory activation exact directory baseline: %w", err)
-		}
-		if err := verifyDirectoryWriterGuardsExact(
-			ctx, tx, witnesses.appAuthority(tx), s.dia,
-			authority.hardened, authority.roles,
-		); err != nil {
-			return err
-		}
-		if s.dia.Name() == store.EnginePostgres {
-			hardened, err := resolveGuardMetadataPosture(ctx, tx, s.dia, authority.roles)
-			if err != nil {
-				return fmt.Errorf("sqlstore: directory activation role topology: %w", err)
-			}
-			if hardened != authority.hardened {
-				return fmt.Errorf(
-					"sqlstore: directory activation role posture changed since boot: hardened=%t want=%t",
-					hardened, authority.hardened,
-				)
-			}
-			if err := verifyPostgresDirectoryActivationAdminReadOnly(
-				ctx, tx, authority.adminRole,
-			); err != nil {
-				return err
-			}
-		}
-
-		if err := verifyDirectoryActivationCoverage(ctx, tx, witnesses.admin, s); err != nil {
-			return err
-		}
-		if err := restoreDirectoryActivationPresentation(
-			ctx, tx, s.dia, presentationTenant,
-		); err != nil {
-			return err
-		}
-		out.before = directoryActivationStatus(s, state)
-		out.after = out.before
-
-		switch state.Mode {
-		case directoryWriterEnforced:
-			if state.ExpectedGeneration != expectedGeneration &&
-				state.ExpectedGeneration != expectedGeneration+1 {
-				return fmt.Errorf(
-					"%w: directory writer is already enforced at generation %d; expected verify-only %d or retry result %d",
-					store.ErrConflict, state.ExpectedGeneration,
-					expectedGeneration, expectedGeneration+1,
-				)
-			}
-			return nil
-		case directoryWriterStaged:
-			if state.ExpectedGeneration != expectedGeneration {
-				return fmt.Errorf(
-					"%w: directory writer staged generation is %d, expected %d",
-					store.ErrConflict, state.ExpectedGeneration, expectedGeneration,
-				)
-			}
-			if !mutate {
-				return nil
-			}
-		default:
-			return fmt.Errorf("sqlstore: directory activation invalid control mode %q", state.Mode)
-		}
-
-		query := s.dia.Rebind("UPDATE " +
-			directoryWriterRelation(s.dia, dialect.DirectoryWriterControlTable) +
-			" SET mode = ?, expected_generation = expected_generation + 1" +
-			" WHERE control_key = ? AND mode = ? AND expected_generation = ?" +
-			" AND expected_generation < ?")
-		result, err := tx.ExecContext(
-			ctx, query,
-			string(directoryWriterEnforced), directoryWriterLockKey,
-			string(directoryWriterStaged), expectedGeneration, int64(math.MaxInt64),
-		)
-		if err != nil {
-			return fmt.Errorf("sqlstore: directory activation CAS: %w", err)
-		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("sqlstore: directory activation CAS rows affected: %w", err)
-		}
-		if rows != 1 {
-			return fmt.Errorf(
-				"%w: directory writer activation CAS affected %d rows, want exactly one",
-				store.ErrConflict, rows,
-			)
-		}
-		afterState, err := readDirectoryWriterControlState(ctx, tx, s.dia)
-		if err != nil {
-			return fmt.Errorf("sqlstore: directory activation CAS read-back: %w", err)
-		}
-		if afterState.Mode != directoryWriterEnforced ||
-			afterState.ExpectedGeneration != expectedGeneration+1 {
-			return fmt.Errorf(
-				"sqlstore: directory activation CAS read-back is mode=%q generation=%d, want enforced/%d",
-				afterState.Mode, afterState.ExpectedGeneration, expectedGeneration+1,
-			)
-		}
-		out.state, out.after, out.changed = afterState, directoryActivationStatus(s, afterState), true
-
-		if directoryActivationCommitTestHook != nil {
-			if err := directoryActivationCommitTestHook(tx); err != nil {
-				return &directoryActivationCommitError{cause: err}
-			}
-			return nil
-		}
-		if err := tx.Commit(); err != nil {
-			return &directoryActivationCommitError{cause: err}
-		}
-		return nil
-	})
-	return out, err
 }
 
 // captureDirectoryActivationPresentation runs before coverage performs its
@@ -747,7 +608,10 @@ func lockDirectoryActivationSources(
 	if dia.Name() != store.EnginePostgres {
 		return nil
 	}
-	tables := append([]string(nil), directoryWriterSourceTables...)
+	// Stabilize the consumed mutable inventory, not the broader ACL attestation
+	// list. Append-only tombstones are not read by this ceremony; SHARE on them
+	// would require UPDATE, deliberately revoked even from a single-role owner.
+	tables := append([]string{directoryEpochDescriptor.Table}, directoryWriterSourceTables...)
 	sort.Strings(tables)
 	for _, table := range tables {
 		if _, err := tx.ExecContext(ctx,
@@ -759,121 +623,12 @@ func lockDirectoryActivationSources(
 	return nil
 }
 
-func verifyDirectoryActivationCoverage(
-	ctx context.Context,
-	ownerTx *sql.Tx,
-	adminTx *sql.Tx,
-	s *sqlStore,
-) error {
-	queryer := directoryTenantEnumerator(ownerTx)
-	if s.dia.Name() == store.EnginePostgres {
-		if adminTx == nil {
-			return directoryUnavailable("authoritative PostgreSQL enumeration requires AdminDSN", nil)
-		}
-		queryer = adminTx
-	}
-
-	tenants, err := enumerateDirectoryTenants(ctx, queryer, s.dia)
-	if err != nil {
-		return directoryUnavailable("enumerate authoritative organizations", err)
-	}
-	epochs, err := enumerateDirectoryActivationEpochs(ctx, queryer, s.dia)
-	if err != nil {
-		return directoryUnavailable("enumerate authoritative epochs", err)
-	}
-	missing, orphan := compareDirectoryActivationCoverage(tenants, epochs)
-	if len(missing) != 0 || len(orphan) != 0 {
-		return directoryUnavailable(
-			fmt.Sprintf("organization/epoch coverage mismatch missing=%v orphan=%v", missing, orphan),
-			nil,
-		)
-	}
-	for _, tenant := range tenants {
-		if err := bindDirectoryTenant(ctx, ownerTx, s.dia, tenant); err != nil {
-			return directoryUnavailable("bind owner to covered tenant "+tenant.String(), err)
-		}
-		epoch, found, err := readDirectoryEpochRow(ctx, ownerTx, s.dia, tenant)
-		if err != nil {
-			return directoryUnavailable("read covered tenant epoch "+tenant.String(), err)
-		}
-		if !found || epoch.Version != epochs[tenant] {
-			return directoryUnavailable(
-				fmt.Sprintf("owner epoch for tenant %s found=%t version=%d authoritative=%d",
-					tenant, found, epoch.Version, epochs[tenant]),
-				nil,
-			)
-		}
-	}
-	return nil
-}
-
-func enumerateDirectoryActivationEpochs(
-	ctx context.Context,
-	q directoryTenantEnumerator,
-	dia dialect.Dialect,
-) (map[model.TenantID]int64, error) {
-	rows, err := q.QueryContext(ctx,
-		"SELECT id, tenant_id, version FROM "+
-			directoryWriterRelation(dia, directoryEpochDescriptor.Table)+
-			" ORDER BY tenant_id, id",
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make(map[model.TenantID]int64)
-	for rows.Next() {
-		var rawID, rawTenant string
-		var version int64
-		if err := rows.Scan(&rawID, &rawTenant, &version); err != nil {
-			return nil, err
-		}
-		tenant := model.TenantID(rawTenant)
-		epoch := model.DirectoryEpoch{BaseFields: model.BaseFields{
-			ID: model.ID(rawID), TenantID: tenant, Version: version,
-		}}
-		if err := epoch.Validate(); err != nil {
-			return nil, fmt.Errorf("epoch %q/%q version %d is invalid: %w",
-				rawID, rawTenant, version, err)
-		}
-		if _, duplicate := out[tenant]; duplicate {
-			return nil, fmt.Errorf("epoch tenant %s appears more than once", tenant)
-		}
-		out[tenant] = version
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func compareDirectoryActivationCoverage(
-	tenants []model.TenantID,
-	epochs map[model.TenantID]int64,
-) (missing, orphan []string) {
-	want := make(map[model.TenantID]struct{}, len(tenants))
-	for _, tenant := range tenants {
-		want[tenant] = struct{}{}
-		if _, ok := epochs[tenant]; !ok {
-			missing = append(missing, tenant.String())
-		}
-	}
-	for tenant := range epochs {
-		if _, ok := want[tenant]; !ok {
-			orphan = append(orphan, tenant.String())
-		}
-	}
-	sort.Strings(missing)
-	sort.Strings(orphan)
-	return missing, orphan
-}
-
 func verifyDirectoryActivationDatabaseIdentity(
 	ctx context.Context,
 	ownerTx *sql.Tx,
 	witnesses directoryActivationWitnesses,
 ) error {
-	if witnesses.admin == nil {
+	if witnesses.admin == nil && witnesses.app == nil {
 		return nil
 	}
 	key, err := randomDirectoryActivationLockKey()
@@ -899,7 +654,10 @@ func verifyDirectoryActivationDatabaseIdentity(
 			return err
 		}
 	}
-	return probeDirectoryActivationDatabase(ctx, witnesses.admin, database, key, "admin")
+	if witnesses.admin != nil {
+		return probeDirectoryActivationDatabase(ctx, witnesses.admin, database, key, "admin")
+	}
+	return nil
 }
 
 func randomDirectoryActivationLockKey() (int64, error) {
@@ -910,6 +668,43 @@ func randomDirectoryActivationLockKey() (int64, error) {
 	return int64(binary.BigEndian.Uint64(raw[:])), nil
 }
 
+// advisoryLockWitnessFacts is what ONE witness transaction answers to the
+// same-server challenge: which database it reached, and whether it managed to
+// ACQUIRE the lock the holder is already holding.
+//
+// Acquiring it is the negative result. Advisory locks are cluster-scoped and
+// session-held, so a witness that takes a key another live session holds has
+// thereby proved it is talking to a DIFFERENT server. That is the whole
+// mechanism, and it is a fact about the two live sessions rather than about any
+// value they report about themselves — which is why it outranks a system
+// identifier (a physical replica carries its primary's) and a postmaster start
+// time (a coincidence away from useless).
+type advisoryLockWitnessFacts struct {
+	Database string
+	Acquired bool
+}
+
+// askAdvisoryLockWitness runs the challenge on one witness transaction. It is
+// FACTORED rather than duplicated: the DR pre-flight has to establish the same
+// prerequisite before it writes anything, and two copies of a security predicate
+// are two things that can drift. Callers render their own message from these
+// facts — the engine's wording is part of its contract and is asserted by tests,
+// and an operator running `dr restore` needs a different sentence.
+func askAdvisoryLockWitness(ctx context.Context, tx *sql.Tx, key int64, label string) (advisoryLockWitnessFacts, error) {
+	var facts advisoryLockWitnessFacts
+	if err := tx.QueryRowContext(ctx,
+		"SELECT pg_catalog.current_database()",
+	).Scan(&facts.Database); err != nil {
+		return facts, fmt.Errorf("sqlstore: directory activation %s database identity: %w", label, err)
+	}
+	if err := tx.QueryRowContext(ctx,
+		"SELECT pg_catalog.pg_try_advisory_xact_lock($1)", key,
+	).Scan(&facts.Acquired); err != nil {
+		return facts, fmt.Errorf("sqlstore: directory activation %s identity challenge: %w", label, err)
+	}
+	return facts, nil
+}
+
 func probeDirectoryActivationDatabase(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -917,22 +712,14 @@ func probeDirectoryActivationDatabase(
 	key int64,
 	label string,
 ) error {
-	var database string
-	if err := tx.QueryRowContext(ctx,
-		"SELECT pg_catalog.current_database()",
-	).Scan(&database); err != nil {
-		return fmt.Errorf("sqlstore: directory activation %s database identity: %w", label, err)
+	facts, err := askAdvisoryLockWitness(ctx, tx, key, label)
+	if err != nil {
+		return err
 	}
-	var acquired bool
-	if err := tx.QueryRowContext(ctx,
-		"SELECT pg_catalog.pg_try_advisory_xact_lock($1)", key,
-	).Scan(&acquired); err != nil {
-		return fmt.Errorf("sqlstore: directory activation %s identity challenge: %w", label, err)
-	}
-	if database != wantDatabase || acquired {
+	if facts.Database != wantDatabase || facts.Acquired {
 		return fmt.Errorf(
 			"sqlstore: directory activation %s DSN does not address the owner database: database=%q want=%q challenge_acquired=%t",
-			label, database, wantDatabase, acquired,
+			label, facts.Database, wantDatabase, facts.Acquired,
 		)
 	}
 	return nil

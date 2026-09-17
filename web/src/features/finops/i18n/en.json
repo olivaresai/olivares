@@ -359,10 +359,32 @@
     "title": "Model rate catalogue",
     "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
     "unit": "micro-USD per 1M tokens (integer)",
+    "unitNote": "Input and output rates are in {{unit}}.",
+    "validityNote": "Dates show the validity each entry declares. This list does not show which entry priced a particular charge.",
     "empty": "No rates in the catalogue",
-    "inOut": "in {{in}} · out {{out}}",
-    "until": "until {{at}}",
-    "current": "current",
+    "emptyHint": "No list prices are recorded for this organization.",
+    "model": "Model",
+    "provider": "Provider",
+    "inputRate": "Input rate",
+    "outputRate": "Output rate",
+    "effectiveFrom": "Effective from",
+    "effectiveUntil": "Effective until",
+    "noEndDate": "No end date",
+    "invalid": {
+      "title": "Rate catalogue unavailable",
+      "description": "The response could not be read as a rate catalogue, so no rates are shown. Retrying repeats the same read and changes nothing.",
+      "reason": {
+        "envelope": "The response does not contain a readable list of rate entries.",
+        "entry": "Entry {{n}} is not a rate record.",
+        "missing": "Entry {{n}} is missing {{field}}.",
+        "empty": "Entry {{n}} has an empty {{field}}.",
+        "type": "Entry {{n}} has {{field}} of the wrong type.",
+        "negative": "Entry {{n}} has a negative {{field}}.",
+        "notInteger": "Entry {{n}} has {{field}} that is not a whole number.",
+        "unsafe": "Entry {{n}} has {{field}} too large to show exactly.",
+        "timestamp": "Entry {{n}} has {{field}} that is not an RFC 3339 timestamp."
+      }
+    },
     "truncated": "Loaded {{n}} rates; there are more",
     "truncatedHint": "There are more model rates than shown; this page is ordered by effective date, most recent first. Absence here does not establish absence from the catalog: costing and comparison resolve the effective rate from the catalog, independently of this page."
   },
@@ -455,5 +477,21 @@
     "riskDescription": "Subjects burning spend without satisfied outcomes.",
     "riskEmpty": "No subject is burning spend without outcomes",
     "satisfiedOf": "{{satisfied}} of {{outcomes}} satisfied"
+  },
+  "evidence": {
+    "atLeast": "At least {{amount}}",
+    "original": "Originally reported: {{amount}}",
+    "unknown": "Amount unknown",
+    "exact": "Exact amount",
+    "lower_bound": "Lower bound; total incomplete",
+    "historical": "Historical figure; unverified",
+    "unavailable": "Unavailable",
+    "barUnavailable": "Consumption bar unavailable: no exact monetary basis.",
+    "forecast": "Forecast (not certified): {{amount}}",
+    "cause": "Cause",
+    "reference": "Alert reference",
+    "digest": "Recorded evidence digest",
+    "lookup": "Look up",
+    "clear": "Clear"
   }
 }

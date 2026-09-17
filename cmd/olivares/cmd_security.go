@@ -73,8 +73,11 @@ answer there would be an artifact of comparing against version zero, not a measu
 		Example: "  olivares security check --feed advisories.json --product-version 26.7.0",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// The caller's own invocation is wrong, so it is a usage error — the
+			// same code the tree already returns for a missing required flag. The
+			// sentence is unchanged.
 			if strings.TrimSpace(feedPath) == "" {
-				return fmt.Errorf("olivares security check: --feed <advisories.json> is required")
+				return exitcode.New(exitcode.Usage, fmt.Errorf("olivares security check: --feed <advisories.json> is required"))
 			}
 			if strings.TrimSpace(sigPath) == "" {
 				sigPath = feedPath + ".sig"

@@ -16,7 +16,7 @@
 //     secret — none of the reported actions mutates the item — so Mode is
 //     always ModeRead.
 //
-// Read-only and minimal-data (docs/SECURITY-HARDENING.md-3). The Events Reporting API is
+// Read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3). The Events Reporting API is
 // POST-based by design (the cursor rides the request body), so the shared
 // GET-only httpx client cannot carry the feed; this package therefore has a
 // small local POST helper over the same injectable Doer. The POST bodies carry

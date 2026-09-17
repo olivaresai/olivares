@@ -185,6 +185,10 @@ func (sys *systemScope) retireUser(
 	ctx context.Context,
 	req UserRetirementRequest,
 ) (_ model.UserTombstone, retErr error) {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return model.UserTombstone{}, err
+	}
+
 	defer func() { sys.poison(retErr) }()
 	if !sys.s.elector.active() {
 		return model.UserTombstone{}, store.ErrNotLeader
@@ -206,13 +210,14 @@ func (sys *systemScope) retireUser(
 	// DropTenant take the same writer lock, so this estate is stable until commit.
 	queryer := directoryTenantEnumerator(sys.tx)
 	var adminTx *sql.Tx
-	if sys.s.dia.Name() == store.EnginePostgres {
-		if sys.s.adminDB == nil || sys.s.adminDB == sys.s.db {
-			return model.UserTombstone{}, fmt.Errorf(
-				"%w: RetireUser requires AdminDSN to enumerate every real tenant",
-				store.ErrEnumerationNotAuthoritative,
-			)
+	closedRoutine := sys.s.dia.Name() == store.EnginePostgres && (sys.s.adminDB == nil || sys.s.adminDB == sys.s.db)
+	if closedRoutine {
+		present, err := verifyPostgresDirectoryInventory(ctx, sys.tx, sys.s.directoryGuardRoles)
+		if err != nil || !present {
+			return model.UserTombstone{}, directoryUnavailable("retirement closed inventory is unavailable", err)
 		}
+	}
+	if sys.s.dia.Name() == store.EnginePostgres && !closedRoutine {
 		adminTx, err = sys.s.adminDB.BeginTx(ctx, &sql.TxOptions{
 			Isolation: sql.LevelRepeatableRead,
 			ReadOnly:  true,
@@ -258,12 +263,11 @@ func (sys *systemScope) retireUser(
 		}
 		queryer = adminTx
 	}
-	tenants, err := enumerateDirectoryTenants(ctx, queryer, sys.s.dia)
+	inventory, err := readDirectoryInventory(ctx, queryer, sys.s.dia, closedRoutine, false)
 	if err != nil {
-		return model.UserTombstone{}, directoryUnavailable(
-			"enumerate every tenant for user retirement", err,
-		)
+		return model.UserTombstone{}, directoryUnavailable("enumerate every tenant for user retirement", err)
 	}
+	tenants := inventory.BusinessTenants
 	if err := sys.bindFor(ctx, model.SystemTenantID); err != nil {
 		return model.UserTombstone{}, err
 	}
@@ -304,8 +308,26 @@ func (sys *systemScope) retireUser(
 		return model.UserTombstone{}, directoryUnavailable("decode retiring user", err)
 	}
 
+	tracker := newDirectoryWriteTracker(sys.tx, sys.s.dia, model.SystemTenantID)
+	tracker.locked, tracker.control = true, writer
+	if err := tracker.bumpUserAuthorities(ctx, req.UserID); err != nil {
+		return model.UserTombstone{}, err
+	}
+	affected, err := sys.userRetirementAffectedTenants(ctx, req.UserID)
+	if err != nil {
+		return model.UserTombstone{}, err
+	}
+	for tenant := range affected {
+		if _, exists := inventory.Epochs[tenant]; !exists {
+			return model.UserTombstone{}, directoryUnavailable("retiring User authority names a tenant outside the complete inventory", nil)
+		}
+	}
 	resulting := make(map[model.TenantID]int64, len(tenants))
 	for _, tenant := range tenants {
+		if writer.CoverageProtocol == coverageProtocolTarget && !affected[tenant] {
+			resulting[tenant] = inventory.Epochs[tenant]
+			continue
+		}
 		epoch, err := sys.bumpRetirementEpoch(ctx, tenant)
 		if err != nil {
 			return model.UserTombstone{}, err
@@ -423,6 +445,10 @@ func (sys *systemScope) retireDirectoryPrincipal(
 	ctx context.Context,
 	req DirectoryPrincipalRetirementRequest,
 ) (_ DirectoryPrincipalRetirementResult, retErr error) {
+	if err := sys.beginLineageMutation(ctx); err != nil {
+		return DirectoryPrincipalRetirementResult{}, err
+	}
+
 	defer func() { sys.poison(retErr) }()
 	if !sys.s.elector.active() {
 		return DirectoryPrincipalRetirementResult{}, store.ErrNotLeader

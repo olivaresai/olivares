@@ -1,0 +1,54 @@
+{
+  /* The browser harness: every Playwright suite, its fixtures/harness modules and
+   * the Playwright configs, type-checked with their REAL imports (the product
+   * sources they reach through `../src` and `@/`) and never emitted. Until this
+   * project existed, `tsc -b` covered `src` and `vite.config.ts` only, so a type
+   * error in a spec was invisible until a browser run paid for it (K3 I2, item 5.5).
+   * `tsc -b` reaches it through the references in tsconfig.json, which is the same
+   * path `pnpm run typecheck`, `task check:web` and the CI `web` job already take. */
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "target": "es2023",
+    /* Specs run under Node, but `page.evaluate` callbacks and the K3 transport
+     * witness (e2e-communications/transport/entry.ts) run in the browser. */
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    /* `node` for the runner; `vite/client` because product sources are re-checked
+     * here and must see the same ambient types they see in tsconfig.app.json.
+     * NOT `vitest/globals`: a spec that forgets to import `test`/`expect` from
+     * `@playwright/test` must fail here, not at runtime. */
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode, mirrored from tsconfig.app.json. `allowImportingTsExtensions`
+     * is what e2e-visual/at-run.ts (run with `node --experimental-strip-types`)
+     * needs for its `./x.ts` imports; `verbatimModuleSyntax` is what keeps those
+     * type-only imports erasable there and in Playwright's own transform. */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "resolveJsonModule": true,
+
+    /* Same alias as the app and vite.config.ts; the transport witness imports
+     * `@/features/communications/*` and `@/lib/api/client`. */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* Type-checking — identical to the app: a spec is not held to a lower bar. */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  /* Every `e2e*` directory (e2e, e2e-communications, e2e-intel, e2e-visual and any
+   * suite added beside them) plus every Playwright config. JSON reports under
+   * e2e-visual/__at__ and the `.mjs` build/probe scripts are not TypeScript and are
+   * not matched. */
+  "include": ["e2e*/**/*", "playwright*.config.ts"]
+}

@@ -43,17 +43,43 @@ func main() {
 }
 
 func runMain() int {
-	// ExecuteC (not Execute) so the resolved command is available below: it is
-	// the only way to classify the two failures cobra reports past every hook.
-	cmd, err := newRootCmd().ExecuteC()
+	// ExecuteC (not Execute) so the resolved command is available to the
+	// classifier: it is the only way to classify the failures cobra reports
+	// past every hook, and the rejected invocations it reports as success.
+	code, printable := classifyOutcome(newRootCmd().ExecuteC())
+	if printable != nil {
+		// SilenceErrors (set on the root) stops cobra from printing, so surface
+		// the message here — otherwise every command failure exits 1 with NO
+		// explanation (e.g. the release-build `license sign` hint would never
+		// reach the operator).
+		fmt.Fprintln(os.Stderr, "Error:", printable)
+	}
+	return code
+}
+
+// classifyOutcome turns the (command, error) pair ExecuteC returns into the
+// process exit code and the message to print, if any — a nil message meaning
+// print nothing.
+//
+// It is a named function and not runMain's tail because one class of defect is
+// invisible from the error alone: cobra answers `<group> <typo> --help` with a
+// NIL error (unknownSubcommandAfterHelp), so no error-shaped witness can ever
+// see it. A test drives classifyOutcome(root.ExecuteC()) and observes exactly
+// what the process would do.
+func classifyOutcome(cmd *cobra.Command, err error) (int, error) {
 	if err == nil {
-		return exitcode.OK
+		// cobra's help and version short-circuits return BEFORE ValidateArgs,
+		// so a group never got to refuse what the caller typed. Ask it now,
+		// through its own validator. Nothing to refuse: the run succeeded.
+		if err = unknownSubcommandAfterHelp(cmd); err == nil {
+			return exitcode.OK, nil
+		}
 	}
 	// `security check` signals "this version is affected" as a non-zero exit with
 	// its report already on stdout; it is not a failure to explain, so exit
 	// quietly (Degraded) rather than print an empty "Error:" line.
 	if errors.Is(err, errAffected) {
-		return exitcode.Degraded
+		return exitcode.Degraded, nil
 	}
 	code := exitcode.From(err)
 	// A missing required flag, or a violated flag group, is a USAGE error — but
@@ -72,13 +98,9 @@ func runMain() int {
 	// A silent coded error already printed its report (e.g. `status` on a
 	// degraded engine) — the wrapper exists only for the exit code.
 	if exitcode.Silent(err) {
-		return code
+		return code, nil
 	}
-	// SilenceErrors (set on the root) stops cobra from printing, so surface the
-	// message here — otherwise every command failure exits 1 with NO explanation
-	// (e.g. the release-build `license sign` hint would never reach the operator).
-	fmt.Fprintln(os.Stderr, "Error:", err)
-	return code
+	return code, err
 }
 
 func newRootCmd() *cobra.Command {
@@ -91,7 +113,8 @@ func newRootCmd() *cobra.Command {
 			"Exit codes:\n" +
 			"  0  success\n" +
 			"  1  generic error\n" +
-			"  2  usage error (unknown flag or bad arguments)\n" +
+			"  2  usage error (unknown flag or bad arguments); `doctor` and `readyz`\n" +
+			"     also use 2 when a required local check cannot be measured\n" +
 			"  3  authentication/authorization rejected\n" +
 			"  4  entity not found\n" +
 			"  5  conflict with current state\n" +
@@ -131,7 +154,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newQuickstartCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newWorkCmd(), newCodexCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newCapabilitiesCmd())
+	root.AddCommand(newQuickstartCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newWorkCmd(), newCodexCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newCapabilitiesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
 	// same word. Their shared transport is cmd_observeplane.go.
@@ -189,12 +212,12 @@ var commandGroups = map[string]string{
 	"compliance": "govern",
 	"models":     "govern", "inference-proxy": "govern",
 	// Observe.
-	"status": "observe", "audit": "observe", "version": "observe", "openapi": "observe",
+	"status": "observe", "readyz": "observe", "doctor": "observe", "audit": "observe", "version": "observe", "openapi": "observe",
 	"finops": "observe",
 	// Security.
 	"security": "security", "findings": "security", "threatintel": "security", "dr": "security",
 	// Release.
-	"upgrade": "release",
+	"upgrade": "release", "uninstall": "release",
 	// The agent-execution plane (C09 lot 3). Split by what an operator is doing:
 	// deploying and orchestrating an agent is operating it; recording, voice
 	// policy and the Claude-managed surfaces are governing it; and red-teaming it

@@ -60,7 +60,15 @@ export function WorkspaceSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="base" className="max-w-[14rem] gap-1.5">
+        {/* `min-w-0 shrink`: the topbar truncates this label rather than letting it
+            push the theme/account controls off the bar; the full name stays the
+            accessible name and is offered as a tooltip. */}
+        <Button
+          variant="ghost"
+          size="base"
+          className="min-w-24 max-w-[14rem] shrink gap-1.5"
+          title={label}
+        >
           <Layers className="size-4 text-muted-foreground" />
           <span className="truncate">{label}</span>
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />

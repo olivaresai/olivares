@@ -63,6 +63,14 @@ import {
   type FutureBreakdown,
   type FutureDimension,
 } from './schema'
+import {
+  alertAmount,
+  budgetAmount,
+  budgetPercent,
+  decimalMicro,
+  formatEvidenceMoney,
+  type PresentedAmount,
+} from './evidence'
 import type {
   Alert,
   AllocationAgent,
@@ -454,19 +462,53 @@ function Stat({
 
 // --- budget card -------------------------------------------------------------
 
+export function EvidenceAmount({ amount }: { amount: PresentedAmount }) {
+  const { t, i18n } = useTranslation('finops')
+  const money = formatEvidenceMoney(amount.value, i18n.language)
+  const label =
+    amount.class === 'lower_bound'
+      ? t('evidence.atLeast', { amount: money })
+      : amount.class === 'historical'
+        ? t('evidence.original', { amount: money ?? t('evidence.unavailable') })
+        : amount.class === 'exact' && money
+          ? money
+          : t('evidence.unknown')
+  return (
+    <span data-amount-class={amount.class}>
+      {label}
+      <span className="block text-xs font-normal text-muted-foreground">
+        {t(`evidence.${amount.class}`)}
+        {amount.cause && amount.cause !== 'legacy_unversioned'
+          ? ` · ${t('evidence.cause')}: ${amount.cause}`
+          : ''}
+      </span>
+    </span>
+  )
+}
+
 export function BudgetCard({
   status,
   actions,
 }: {
   status: BudgetStatus
-  /** Optional right-aligned action slot (edit/delete) rendered by the container
-   * when the principal can write budgets. */
   actions?: ReactNode
 }) {
-  const { t } = useTranslation('finops')
-  const atRisk = status.over || status.projected_pct >= 100
+  const { t, i18n } = useTranslation('finops')
+  const amount = budgetAmount(status)
+  const pct = budgetPercent(status)
+  const over =
+    amount.class !== 'unknown' && status.amount?.over_limit?.result === 'proven'
+  const limit = formatEvidenceMoney(
+    status.amount?.over_limit?.target_micro_usd,
+    i18n.language,
+  )
+  const remaining =
+    amount.class === 'exact'
+      ? formatEvidenceMoney(status.amount?.remaining_micro_usd, i18n.language)
+      : null
+  const reserved = status.amount?.components?.static_reservation
   return (
-    <SectionCard className={atRisk ? 'border-warning-line' : undefined}>
+    <SectionCard className={over ? 'border-warning-line' : undefined}>
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -476,10 +518,8 @@ export function BudgetCard({
               </span>
               {!status.enabled ? (
                 <Badge variant="neutral">{t('budgets.disabled')}</Badge>
-              ) : status.over ? (
+              ) : over ? (
                 <Badge variant="danger">{t('budgets.over')}</Badge>
-              ) : status.projected_pct >= 100 ? (
-                <Badge variant="warning">{t('budgets.onTrackToExceed')}</Badge>
               ) : null}
             </div>
             <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
@@ -502,10 +542,10 @@ export function BudgetCard({
           <div className="flex items-start gap-2">
             <div className="text-right">
               <div className="font-mono text-sm tabular-nums text-foreground">
-                {formatMicroUsd(status.spend_micro_usd)}
+                <EvidenceAmount amount={amount} />
               </div>
               <div className="text-xs text-muted-foreground">
-                / {formatMicroUsd(status.limit_micro_usd)}
+                / {limit ?? t('evidence.unavailable')}
               </div>
             </div>
             {actions ? (
@@ -513,15 +553,32 @@ export function BudgetCard({
             ) : null}
           </div>
         </div>
-        <ConsumptionBar
-          consumedPct={status.consumed_pct}
-          projectedPct={status.projected_pct}
-          over={status.over}
-        />
-        {status.reserved_micro_usd && status.reserved_micro_usd > 0 ? (
+        {pct !== null ? (
+          <ConsumptionBar consumedPct={pct} over={over} />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {t('evidence.barUnavailable')}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {t('evidence.forecast', {
+            amount: Number.isSafeInteger(status.projected_micro_usd)
+              ? formatEvidenceMoney(
+                  String(status.projected_micro_usd),
+                  i18n.language,
+                )
+              : t('evidence.unavailable'),
+          })}
+        </p>
+        {reserved?.state === 'known' &&
+        decimalMicro(reserved.value_micro_usd) &&
+        BigInt(reserved.value_micro_usd) > 0n ? (
           <p className="text-xs text-muted-foreground">
             {t('budgets.reservedHint', {
-              amount: formatMicroUsd(status.reserved_micro_usd),
+              amount: formatEvidenceMoney(
+                reserved.value_micro_usd,
+                i18n.language,
+              ),
             })}
           </p>
         ) : null}
@@ -529,7 +586,7 @@ export function BudgetCard({
           <span>
             {t('budgets.remaining')}:{' '}
             <span className="font-mono text-foreground">
-              {formatMicroUsd(status.remaining_micro_usd)}
+              {remaining ?? t('evidence.unavailable')}
             </span>
           </span>
           {status.truncated ? (
@@ -541,9 +598,13 @@ export function BudgetCard({
   )
 }
 
-// --- alerts ------------------------------------------------------------------
-
-export function AlertsTable({ alerts }: { alerts: Alert[] }) {
+export function AlertsTable({
+  alerts,
+  tenant,
+}: {
+  alerts: Alert[]
+  tenant?: string | null
+}) {
   const { t, i18n } = useTranslation('finops')
   const columns = useMemo<TableColumn<Alert>[]>(
     () => [
@@ -581,9 +642,23 @@ export function AlertsTable({ alerts }: { alerts: Alert[] }) {
         header: t('alerts.columns.spend'),
         cell: ({ row }) => (
           <span className="font-mono text-xs tabular-nums text-muted-foreground">
-            {formatMicroUsd(row.original.spend_micro_usd)} /{' '}
-            {formatMicroUsd(row.original.limit_micro_usd)}
+            <EvidenceAmount amount={alertAmount(row.original, tenant)} />
           </span>
+        ),
+      },
+      {
+        accessorKey: 'id',
+        header: t('evidence.reference'),
+        cell: ({ row }) => (
+          <div className="max-w-64 break-all font-mono text-xs">
+            <span>{row.original.id}</span>
+            {row.original.amount_evidence?.evidence_hash ? (
+              <details>
+                <summary>{t('evidence.digest')}</summary>
+                {row.original.amount_evidence.evidence_hash}
+              </details>
+            ) : null}
+          </div>
         ),
       },
       {
@@ -592,7 +667,7 @@ export function AlertsTable({ alerts }: { alerts: Alert[] }) {
         cell: ({ row }) => <SeverityBadge severity={row.original.severity} />,
       },
     ],
-    [t, i18n.language],
+    [t, i18n.language, tenant],
   )
   return (
     <DataTable<Alert>

@@ -181,6 +181,11 @@ export interface RequestOptions {
   /** Content-Type for a `rawBody` request (default application/octet-stream). */
   contentType?: string
   signal?: AbortSignal
+  /** Authenticated observation with no global session effects: never renew before
+   * dispatch, refresh/replay a 401, or call onUnauthorized. Headers and API errors
+   * remain normal. Its signal is checked across response/body awaits as well as
+   * passed to fetch. Omit for every existing consumer's unchanged behavior. */
+  sessionEffects?: 'none'
   /** Anonymous requests (login, setup, server-info, health) attach no
    * Authorization / tenant headers and never trigger the 401 hook. */
   anonymous?: boolean
@@ -200,6 +205,29 @@ export interface RequestOptions {
    * them: whose token this is stays a decision of this module.
    */
   headers?: Record<string, string>
+  /**
+   * DISPATCH GUARD — opt-in, per request (ROOT-DECISION 2026-09-06 for the K3 console,
+   * PLAN §2 «precondición de transporte»). Called SYNCHRONOUSLY immediately before
+   * EVERY fetch this request makes — the first send, after the preventive refresh
+   * above has been awaited, and the single 401 replay, after its own refresh — with
+   * the headers already composed. It is the last word before bytes leave.
+   *
+   * Why a guard here and not only at the caller: between a caller's decision to send
+   * and the actual `fetch` this client may `await refreshOnce()`, and the replay
+   * happens after `await fetch`, `await res.text()` and another refresh. A mutation
+   * queued by React Query is resumed on its own schedule too. In every one of those
+   * gaps the session, tenant or workspace stores may have moved, and the request
+   * would leave with the CURRENT token for an intention confirmed under the previous
+   * authority. Only a check at this point sees every gap (measured: independent
+   * review of d8c5ad3e9e, one POST with the rotated credential before React's
+   * cleanup aborted the signal).
+   *
+   * The guard THROWS to refuse. The throw propagates unchanged — never wrapped in
+   * NetworkError or ApiError — and no request is made. It receives nothing and must
+   * read nothing from this client: it compares the caller's captured context with the
+   * caller's own live stores. Requests without a guard behave exactly as before.
+   */
+  dispatchGuard?: () => void
 }
 
 /**
@@ -296,6 +324,8 @@ export async function apiFetchWithMeta<T>(
   opts: RequestOptions = {},
   reintentoTrasRefresco = false,
 ): Promise<{ status: number; data: T; headers: Headers }> {
+  const isolated = opts.sessionEffects === 'none'
+  if (isolated) opts.signal?.throwIfAborted()
   // ⛔ EL INQUILINO SE FIJA AL ENTRAR, ANTES DE CUALQUIER `await`.
   //
   //    Hasta aquí se leía abajo, junto al token, y eso es TARDE. Una misma petición lógica tiene
@@ -361,6 +391,7 @@ export async function apiFetchWithMeta<T>(
   //    vuelo único con el camino del 401, así que cinco peticiones a la vez renuevan una vez.
   if (
     !opts.anonymous &&
+    !isolated &&
     !reintentoTrasRefresco &&
     !esLaRutaDeRenovacion(path) &&
     caducaPronto()
@@ -374,6 +405,13 @@ export async function apiFetchWithMeta<T>(
     const tenant = opts.tenant !== undefined ? opts.tenant : config.getTenant()
     if (tenant) headers.set('X-Olivares-Tenant', tenant)
   }
+
+  // ⛔ THE DISPATCH GUARD RUNS HERE AND NOWHERE EARLIER: after every await above (the
+  //    preventive refresh) and after the headers are composed, immediately before the
+  //    fetch. The 401 replay re-enters this function with the same `opts`, so it runs
+  //    again before that fetch too. Outside the try: its throw is the caller's typed
+  //    refusal, not a transport failure, and must not become a NetworkError.
+  opts.dispatchGuard?.()
 
   let res: Response
   try {
@@ -392,17 +430,22 @@ export async function apiFetchWithMeta<T>(
       credentials: 'same-origin',
     })
   } catch (cause) {
+    if (isolated) opts.signal?.throwIfAborted()
     if (cause instanceof DOMException && cause.name === 'AbortError')
       throw cause
     throw new NetworkError('The control plane is unreachable.', cause)
   }
 
+  // A transport can settle just as its owner retires. Fetch cancellation alone
+  // cannot police a response already received, or the later body-reading await.
+  if (isolated) opts.signal?.throwIfAborted()
   const requestId = res.headers.get('X-Request-ID') ?? undefined
 
   // Parse the body once (JSON when present); tolerate empty/non-JSON bodies.
   let parsed: unknown = undefined
   if (res.status !== 204) {
     const text = await res.text()
+    if (isolated) opts.signal?.throwIfAborted()
     if (text) {
       try {
         parsed = JSON.parse(text)
@@ -431,7 +474,7 @@ export async function apiFetchWithMeta<T>(
     // EXPIRED is recoverable and REVOKED is not, so the credential is rotated once and
     // the request replayed; only if that fails does the app clear the session and route
     // to login. Anonymous 401s (e.g. bad login) still surface for inline handling.
-    if (err.isUnauthenticated && !opts.anonymous) {
+    if (err.isUnauthenticated && !opts.anonymous && !isolated) {
       if (
         puedeReintentar(path, opts, reintentoTrasRefresco) &&
         (await refreshOnce())

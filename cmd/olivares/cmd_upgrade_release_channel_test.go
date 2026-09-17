@@ -237,8 +237,15 @@ func TestUpgradeFromGitHubReleases(t *testing.T) {
 		if err == nil {
 			t.Fatal("asking for an unpublished channel must fail")
 		}
-		if !strings.Contains(err.Error(), "security-manifest.json") {
-			t.Fatalf("the refusal must name the asset it looked for, got: %v", err)
+		wantAsset := "/olivaresai/olivares/releases/latest/download/security-manifest.json"
+		if !f.sawPath(wantAsset) {
+			t.Fatalf("the request must address %s; the server saw %q", wantAsset, f.seen())
+		}
+		if strings.Contains(err.Error(), "security-manifest.json") {
+			t.Fatalf("the operator error must not echo the asset path, got: %v", err)
+		}
+		if !isHTTPStatus(err, http.StatusNotFound) {
+			t.Fatalf("typed 404 lost: %v", err)
 		}
 		if !strings.Contains(err.Error(), "is NOT a fallback to stable") {
 			t.Fatalf("the refusal must say the channel does not fall back to stable, got: %v", err)

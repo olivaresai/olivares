@@ -101,8 +101,8 @@
     "envAllow": "ホスト環境変数を転送（名前）",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "通過させるホスト環境変数の名前の許可リスト（値は決して送信されません）。",
-    "submit": "作成して起動",
-    "submitting": "起動中…",
+    "submit": "起動を依頼",
+    "submitting": "依頼中…",
     "criticalWarning": "これは特権起動です（ツールごとのプロンプトが無効になります）。二者による承認が必要で、記録されます。承認されるまで保留中のままになる場合があります。",
     "classifiedWarning": "機密ワークスペースの読み書きマウントは特権起動です（承認＋記録）。",
     "success": "セッションを起動しました",
@@ -110,7 +110,13 @@
     "templateNone": "テンプレートなし",
     "templateHint": "エンジンは起動ゲートの前にテンプレートの条件を上記の項目に統合し、セッションのプロセス自体に書き込みます。このコンソールを使わない呼び出しにも制限が適用されます。",
     "templateUnenforceable": "このテンプレートには、この起動では強制できない条件が含まれています。条件なしで起動せず、起動を拒否します:",
-    "templateOverrides_other": "テンプレートが指定内容のうち {{count}} 件を上書きします:"
+    "templateOverrides_other": "テンプレートが指定内容のうち {{count}} 件を上書きします:",
+    "profile": "プロバイダープロファイル",
+    "profileNone": "プロファイルを選択",
+    "profileHint": "このセッションのプロバイダープロファイルを選んでください。プロファイルは必須です。ローカル要件はテンプレートのプレビュー後に、現在の選択について確認します。",
+    "profileNotOperable": "この環境では有効ではありません",
+    "profilesNotRead": "プロバイダープロファイルを読み取れませんでした。プロファイルなしでも起動できます。",
+    "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME、GROK_HOME はプロファイルが所有します。いずれかを転送する起動はここで拒否されます。その他の名前は引き続きサーバー側の検証を受けます。"
   },
   "detail": {
     "live": "ライブ",
@@ -137,11 +143,17 @@
     "started": "開始日時",
     "lastActivity": "最終アクティビティ",
     "stopped": "停止日時",
-    "none": "なし"
+    "none": "なし",
+    "providerProfile": "プロバイダープロファイル",
+    "providerDriver": "ドライバー",
+    "providerEnvironment": "実行環境",
+    "liveRef": "ライブ行"
   },
   "live": {
     "inputPlaceholder": "NDJSON 行を stdin に送信…",
     "inputAria": "セッション入力行",
+    "textPlaceholder": "セッションにメッセージを送信…",
+    "textAria": "セッションのメッセージ",
     "send": "送信",
     "noOutput": "まだ出力はありません。",
     "waiting": "出力を待機中…",
@@ -149,10 +161,20 @@
     "lag": "{{count}} 個のフレームがドロップされました（バッファオーバーフロー）。以下の出力はギャップの後から再開します。",
     "remoteControl": "これは remote-control セッションです。I/O は Anthropic のクラウドへ中継され、ここにはブリッジされません。Olivares はライフサイクルのみを管理します。",
     "notLive": "このセッションはライブではありません（現在は {{state}}）。I/O にアタッチするには再開してください。",
+    "ioUnavailableNotLiveOnNode": "このノードにブリッジされた I/O はありません。",
+    "ioUnavailableRemoteControl": "このセッションの I/O はここではブリッジされません（remote-control）。",
+    "retryAttach": "アタッチを再試行",
     "autoscroll": "自動スクロール",
     "clear": "表示をクリア",
     "inputNotAllowed": "入力は、セッションの実行中のみ受け付けられます。",
-    "inputSent": "送信済み"
+    "inputSent": "送信済み",
+    "interrupt": "ターンを中断",
+    "interruptHint": "実行中のターンを中断し、セッションは開いたままにします。",
+    "interrupted": "ターンを中断しました。セッションは引き続き使用できます。",
+    "interruptFailed": "ターンを中断できませんでした。",
+    "interruptFenceUnavailable": "中断する前に実行を更新して、現在の作業世代を取得してください。",
+    "interruptUnknown": "中断の結果を確認できませんでした。再試行する前にセッションを確認してください。",
+    "interruptWorkConflict": "現在の作業状態では、このセッションを中断できません。実行を更新して状態を確認してください。"
   },
   "gov": {
     "title": "ガバナンス態勢",
@@ -301,5 +323,387 @@
   "forbidden": {
     "title": "アクセスなし",
     "description": "Claude Code セッションを操作する権限がありません。"
+  },
+  "profiles": {
+    "title": "プロバイダープロファイル",
+    "subtitle": "1 つの実行環境上に構成された 1 つのプロバイダーインスタンスの永続的な識別情報です。どのドライバーが提供し、起動されたセッションがどの設定ホームで実行されるかを表します。プロファイルは既存のホームを登録するだけで、何もインストールせず、どこにもログインしません。",
+    "register": "プロファイルを登録",
+    "search": "プロファイルを検索…",
+    "allStates": "すべての状態",
+    "cols": {
+      "name": "プロファイル",
+      "driver": "ドライバー",
+      "environment": "実行環境",
+      "state": "状態",
+      "launch": "ここで有効",
+      "created": "作成日時"
+    },
+    "state": {
+      "active": "有効",
+      "disabled": "無効",
+      "retired": "廃止"
+    },
+    "environment": {
+      "local": "このノード",
+      "foreign": "別の環境",
+      "foreignHint": "このプロファイルは別の実行環境に属しています。その旨が表示され、このノードから起動されることはありません。"
+    },
+    "operable": {
+      "yes": "この環境で有効",
+      "no": "この環境では有効ではありません",
+      "noHint": "従来の有効化フラグです。プロファイルが非アクティブ、別環境、またはドライバー未登録です。起動の判定ではありません。"
+    },
+    "empty": {
+      "title": "プロバイダープロファイルはありません",
+      "registerHint": "上の「{{control}}」を使って、このノード上の既存のプロバイダーインストールの設定ホームを登録してください。登録後、セッションは安定した識別情報のもとで起動・帰属されます。",
+      "noWrite": "既存のプロバイダーインストールの設定ホームを登録するには sessions:profile:write が必要ですが、ロールに含まれていません。"
+    },
+    "filteredEmpty": {
+      "title": "この状態に一致するプロファイルはありません",
+      "description": "状態が「{{state}}」のプロファイルのみを表示しています。すべての状態を表示すると、このフィルターが解除されます。",
+      "clear": "すべての状態を表示"
+    },
+    "noRead": "プロバイダープロファイルは表示されません。ロールに sessions:profile:read が含まれていません。",
+    "listTruncation": {
+      "label": "{{n}} 件のプロファイルを読み込みました。さらにあります",
+      "hint": "ここで選択できるのは読み込まれたプロファイルのみです。このページ以降に表示されていないプロファイルが存在する可能性があります。"
+    },
+    "actions": {
+      "details": "詳細",
+      "rename": "名前を変更",
+      "disable": "無効にする",
+      "enable": "有効にする",
+      "retire": "廃止",
+      "reveal": "設定を表示",
+      "hide": "設定を隠す",
+      "bind": "ソースをバインド",
+      "revoke": "取り消し"
+    },
+    "create": {
+      "title": "プロバイダープロファイルを登録",
+      "description": "この実行環境上の既存のプロバイダーインストールのホームを登録します。サーバーは各パスをこのノード上で検証します（絶対パス、シンボリックリンク解決済み、存在するディレクトリ）。何も作成・インストール・ログインせず、認証情報は送信されません。",
+      "driver": "ドライバー",
+      "driverPlaceholder": "claude",
+      "driverHint": "小文字のドライバーキー（英字、数字、- _ .）。このノードでプロファイルを起動できるかは登録後にサーバーが報告します。名前で決まるものではありません。",
+      "configHome": "設定ホーム",
+      "configHomePlaceholder": "/home/agent/.claude-work",
+      "configHomeHint": "プロバイダーの設定ディレクトリの絶対パス（Claude Code の場合は CLAUDE_CONFIG_DIR）。このノード上で検証され、存在しないディレクトリは拒否されます。作成されることはありません。",
+      "userHome": "ユーザーホーム",
+      "userHomePlaceholder": "/home/agent",
+      "userHomeHint": "起動されたセッションが HOME として実行される絶対パス。このノード上で検証されます。",
+      "displayName": "表示名",
+      "displayNamePlaceholder": "ラベル（任意）",
+      "environmentKnown": "このノードの実行環境 {{env}} に登録され、そこでパスが検証されます。別の環境向けのプロファイルはその環境から登録します。",
+      "environmentUnknown": "このノードの実行環境に登録され、そこでパスが検証されます。別の環境向けのプロファイルはその環境から登録します。",
+      "submit": "登録",
+      "submitting": "登録中…",
+      "success": "プロバイダープロファイルを登録しました"
+    },
+    "rename": {
+      "title": "プロファイル名を変更",
+      "description": "ラベルは変更できますが、識別情報（ドライバー、環境、ホーム）は変わりません。",
+      "label": "表示名",
+      "submit": "名前を変更",
+      "submitting": "変更中…",
+      "success": "プロファイル名を変更しました"
+    },
+    "disable": {
+      "success": "プロファイルを無効にしました",
+      "hint": "無効なプロファイルは新しい起動、再開、バインドを拒否します。すでに管理しているセッションは実行を続けます。元に戻せます。"
+    },
+    "enable": {
+      "success": "プロファイルを有効にしました"
+    },
+    "retire": {
+      "title": "プロファイルを廃止",
+      "description": "廃止は取り消せません。このプロファイル ID は以後何も受け付けず（名前の変更も不可）、履歴はそのまま残ります。ホームは新しいプロファイル ID のために解放されます。",
+      "confirm": "廃止",
+      "success": "プロファイルを廃止しました"
+    },
+    "details": {
+      "ref": "参照",
+      "driver": "ドライバー",
+      "environment": "実行環境",
+      "state": "状態",
+      "launch": "ここで有効",
+      "created": "作成日時",
+      "updated": "更新日時",
+      "retiredAt": "廃止日時",
+      "loadFailed": "このプロファイルを読み取れませんでした。"
+    },
+    "configuration": {
+      "title": "設定",
+      "hint": "保存されたホームは管理者のみが読み取れ、要求したときにのみ取得され、一覧には表示されません。認証情報の値が返されることはありません。",
+      "configHome": "設定ホーム",
+      "userHome": "ユーザーホーム",
+      "validatedOn": "実行環境 {{env}} が検証して保存したパスです。",
+      "loading": "設定を読み取り中…",
+      "failed": "設定を読み取れませんでした。"
+    },
+    "bindings": {
+      "title": "ソースバインディング",
+      "subtitle": "構成済みソースを、このノードが適用した正確なリビジョンで 1 つのプロファイルに専用化し、そのソースが観測するセッションをプロファイルに帰属させます。識別情報はソースの永続 ID とリビジョンであり、名前ではありません。",
+      "cols": {
+        "source": "ソース",
+        "revision": "適用リビジョン",
+        "profile": "プロファイル",
+        "environment": "実行環境",
+        "state": "状態",
+        "bound": "バインド日時"
+      },
+      "state": {
+        "active": "有効",
+        "revoked": "取り消し済み"
+      },
+      "empty": {
+        "title": "ソースバインディングはありません",
+        "description": "構成済みソースをプロファイルにバインドすると、そのソースが観測するセッションが帰属します。"
+      },
+      "noRead": "ソースバインディングは表示されません。ロールに sessions:profile-binding:read が含まれていません。",
+      "notBindable": "バインドできるのは、この実行環境の有効なプロファイルのみです。",
+      "revoke": {
+        "title": "バインディングを取り消し",
+        "description": "このバインディングのもとで既に帰属したセッションは来歴を保持します。以後このソース経由の観測はプロファイルに帰属しなくなります。元に戻せません。新しいバインディングは新しい行になります。",
+        "confirm": "取り消し",
+        "success": "バインディングを取り消しました"
+      },
+      "create": {
+        "title": "ソースをプロファイルにバインド",
+        "description": "エンジンは、このノードが適用したリビジョンでソースの永続 ID をバインドします。どちらもソース一覧から読み取られ、手入力や名前からの導出は行われません。",
+        "profile": "プロファイル",
+        "profileNone": "プロファイルを選択",
+        "profileNotBindable": "ここではバインド不可",
+        "profileHint": "バインドできるのは、この実行環境の有効なプロファイルのみです。",
+        "profilesNotRead": "プロファイルを読み取れなかったため、選択できません。",
+        "source": "ソース",
+        "sourceNone": "ソースを選択",
+        "sourceNotApplied": "このノードでは未適用",
+        "sourceHint": "デプロイメントのソース一覧と、このノードが適用したリビジョンです。このノードが適用していないソースはここではバインドできません。",
+        "needsSourceAdmin": "ソースのバインドには、デプロイメント全体のソース管理権限（システム管理者）も必要です。このアカウントはソース一覧を読み取れないため、ここでソースを選択できません。",
+        "rosterFailed": "ソース一覧を読み取れませんでした。",
+        "rosterEmpty": "このデプロイメントにはソースが構成されていません。",
+        "revision": "リビジョン {{n}}",
+        "submit": "バインド",
+        "submitting": "バインド中…",
+        "success": "ソースをプロファイルにバインドしました"
+      },
+      "details": {
+        "open": "バインディング {{ref}} の詳細",
+        "title": "バインディングの詳細",
+        "description": "選択したテナントの現在のバインディング詳細です。変更を確認するには更新してください。",
+        "loading": "エンジンからバインディングを読み取っています…",
+        "forbidden": "エンジンはたった今、このアカウントへのこのバインディングの提供を拒否しました（アクティブなテナントでの sessions:profile-binding:read）。これはキャッシュではなく、エンジンが今判断した結果です。内容は何も表示されません。",
+        "missing": "エンジンには現在、アクティブなテナントにこの参照のバインディングがありません。一覧の読み取り後に削除された可能性があります。現在の行を確認するには一覧を更新してください。",
+        "error": "バインディングを読み取れませんでした: {{message}}",
+        "ended": "権限、テナント、またはセッションが変わったため、読み取りを終了しました。現在の権限で読み直すには、もう一度「詳細」を開いてください。",
+        "readAt": "{{at}} にエンジンから読み取りました。",
+        "ref": "参照",
+        "source": "ソース",
+        "sourceId": "ソース ID",
+        "revision": "適用リビジョン",
+        "profile": "プロファイル",
+        "driver": "ドライバー",
+        "environment": "実行環境",
+        "selector": "セレクター",
+        "state": "状態",
+        "bound": "バインド日時",
+        "revoked": "取り消し日時",
+        "refresh": "更新",
+        "retry": "再試行",
+        "close": "閉じる"
+      }
+    },
+    "view": {
+      "profilesTitle": "プロバイダープロファイル",
+      "bindingsTitle": "ソースバインディング",
+      "tabProfiles": "プロファイル",
+      "tabBindings": "バインディング",
+      "openProfiles": "プロバイダープロファイルのページを開く",
+      "openBindings": "ソースバインディングのページを開く",
+      "crossHint": "プロファイルとバインディングにはそれぞれ専用ページもあり、それぞれ固有の読み取り権限で入ります。"
+    },
+    "authority": {
+      "lost": "現在の権限ではこの操作は許可されなくなりました。何も送信されていません。",
+      "confirmationClosed": "必要な権限がなくなったため、確認ダイアログを閉じました。"
+    },
+    "roster": {
+      "loading": "ソース一覧を読み取り中…",
+      "forbidden": "デプロイメントはこのアカウントへのソース一覧の提供を拒否したため、ここからソースをバインドできません。バインドにはバインディング書き込みに加えてデプロイメント全体のソース管理権限が必要です。これはキャッシュではなく、エンジンがたった今判断した結果です。",
+      "error": "ソース一覧を読み取れませんでした: {{message}}",
+      "ended": "権限、テナント、またはセッションが変わったため、一覧の読み取りを終了しました。現在の権限で読み直すには、もう一度バインドを開いてください。",
+      "loadMoreProfiles": "さらにプロファイルを読み込む",
+      "loadedProfiles": "{{n}} 件の有効なプロファイルを読み込みました。さらにあります。",
+      "loadingProfiles": "プロファイルを読み込み中…"
+    }
+  },
+  "readiness": {
+    "title": "ローカル起動要件",
+    "loading": "選択したプロファイルのローカル要件を確認しています…",
+    "unavailable": "要件を読めませんでした。これは起動の判定ではありません。",
+    "forbidden": "このロールではプロファイルの要件を読めません (sessions:profile:read)。",
+    "notFound": "現在のテナントではこのプロファイルを利用できません。以前の結果は破棄しました。",
+    "unauthenticated": "セッションはもう認証されていません。以前の結果は破棄しました。",
+    "conflict": "検査中にプロファイルが変わりました。観測結果は破棄しました。",
+    "reread": "要件を再読み込み",
+    "rereading": "読み込み中…",
+    "request": "起動を依頼",
+    "requesting": "依頼中…",
+    "requestHintReady": "起動の依頼は認可・発行・プロセス開始の検査をすべて通ります。プロバイダーにログイン済みである証明にはなりません。",
+    "requestHintUnknown": "検査は完了していません。起動は依頼できます。サーバーがすべてを再検証します。これは ready ではありません。",
+    "requestBlocked": "起動依頼は出せません。この選択は実行不能だと分かっています。",
+    "noWrite": "要件は見られますが、起動の依頼には sessions:run:write が必要です。",
+    "waitingPreview": "有効なトランスポートの要件を読む前に、テンプレートのプレビューを待っています。",
+    "providerAuth": "プロバイダーへのログインはここでは観測しません。有効なホームや実行ファイルは認証済みアカウントではありません。",
+    "launchAuth": "起動の認可は送信時に決まり、sessions:run:write が必要です。",
+    "remoteControl": "ライフサイクルのみ。会話の入出力はプロバイダー側に残り、ブリッジされたターンコンソールはありません。",
+    "managedInjectionUnused": "このトランスポートは選択したマネージド注入を適用しません。推論資格情報を発行せず、アカウント認証も証明しません。",
+    "codexProtocol": "Codex app-server プロトコル。入力はテキストのターンであり、Claude の NDJSON ではありません。",
+    "grokProtocol": "Grok ACP プロトコル。入力はテキストのターンであり、Claude の NDJSON ではありません。",
+    "opencodeProtocol": "OpenCode ACP プロトコル。入力はテキストのターンであり、Claude の NDJSON ではありません。",
+    "remaining": "送信時に判断される項目",
+    "transport": "トランスポート",
+    "isolation": "隔離",
+    "failedInline": "起動依頼は拒否されました。選択内容はそのままです。",
+    "state": {
+      "ready": "ローカル要件を確認済み",
+      "not_configured": "設定が不足",
+      "unsupported": "この環境では未対応",
+      "unknown": "確認できませんでした"
+    },
+    "checkState": {
+      "ready": "確認済み",
+      "not_configured": "未設定",
+      "unsupported": "未対応",
+      "unknown": "確認不可",
+      "not_applicable": "対象外"
+    },
+    "check": {
+      "profile": "プロファイル",
+      "local_environment": "このノード",
+      "driver": "ドライバー",
+      "runner": "Runner",
+      "program": "プログラム",
+      "homes": "Homes",
+      "auth_source": "認証ソース",
+      "credential_source": "資格情報の配線",
+      "runtime_credentials": "ランタイム資格情報"
+    },
+    "code": {
+      "profile_active": "プロファイルはアクティブです。",
+      "profile_disabled": "プロファイルは無効です。有効化には sessions:profile:write が必要です。退役したプロファイルは再有効化できません。",
+      "profile_retired": "プロファイルは退役済みで、新しい起動には使えません。",
+      "environment_local": "このプロファイルはこのノードに属します。",
+      "other_environment": "このプロファイルは別の実行環境に属します。ローカルのプロファイルを選ぶか、それを管理する環境を使ってください。自動的な遠隔実行はありません。",
+      "environment_unavailable": "このプロファイルを管理する実行環境は、ここでは利用できません。",
+      "driver_operable": "このランタイムにドライバーのパスが登録されています。",
+      "driver_not_registered": "このドライバーはこのランタイムに登録されていません。Codex では OLIVARES_SESSION_RUNTIME_CODEX_BIN を、Grok では OLIVARES_SESSION_RUNTIME_GROK_BIN を設定してください。",
+      "transport_unsupported": "このトランスポートは、選択したドライバーの契約ではありません。",
+      "runner_ready": "セッション Runner を検査できます。",
+      "runner_not_configured": "セッション Runner はこのランタイムに構成されていません。",
+      "isolation_unsupported": "ネイティブ Runner はこの隔離を提供できません。native のままにするか、要求された封じ込めを実証する Runner を使ってください。",
+      "runner_inspection_unavailable": "配線済みの Runner は起動せずに検査できません。インストール欠如ではありません。",
+      "program_present": "解決されたプログラムは存在し、この識別情報で実行可能です。",
+      "program_missing": "解決されたプログラムがありません。既存の手順で公式 CLI を構成してください。Claude では OLIVARES_SESSION_RUNTIME_CLAUDE_BIN を指定する場合があります。この読み取りでは何もインストールしません。",
+      "program_not_executable": "解決されたプログラムは、この識別情報では実行できません。",
+      "homes_resolved": "登録された Homes はディレクトリとして解決されます。",
+      "home_unavailable": "登録された Home が利用できません。管理権限があればプロファイル構成を確認してください。パスは通常の閲覧者には表示されません。",
+      "home_changed": "登録された Home は、保存されていたディレクトリではなくなっています。",
+      "auth_source_account_home": "認可されたソースは、プロファイル自身の account-home です。",
+      "auth_source_managed_injection": "認可されたソースは、このドライバーのマネージド注入です。",
+      "auth_source_legacy_claude": "認可されたソースは、Claude 資格情報の歴史的なパスです。",
+      "auth_source_required": "このドライバーには明示的な認証ソースが必要です。account-home またはマネージド注入です。その選択はプロファイル上で行い、この検査からは行いません。",
+      "managed_injection_not_applied_for_transport": "マネージド注入が選択されていますが、このトランスポートはそれを適用しません。",
+      "claude_credential_source_configured": "Claude の推論資格情報ソースは配線済みです。",
+      "claude_credential_source_not_configured": "Claude の推論資格情報ソースは配線されていません。OLIVARES_SESSION_RUNTIME_WIF または OLIVARES_SESSION_RUNTIME_TOKEN_FILE を構成してください。名前のみであり、値は扱いません。",
+      "provider_credential_adapter_configured": "このドライバーの資格情報アダプターは配線済みです。",
+      "provider_credential_adapter_not_configured": "このドライバーのガバナンス対象資格情報アダプターは配線されていません。別プロバイダーの bearer を流用したり、account-home にフォールバックしたりしないでください。",
+      "credential_source_not_injected": "この組み合わせでは推論資格情報を注入しません。",
+      "runtime_credentials_wired": "work/K3 のランタイム資格情報は配線済みです。",
+      "runtime_credentials_not_requested": "この構成は work/K3 のランタイム資格情報を要求しません。",
+      "runtime_credential_wiring_incomplete": "work/K3 のランタイム資格情報の配線が不完全です。オペレーターがその構成を確認します。この読み取りは商用資格情報を要求しません。",
+      "runtime_readiness_unavailable": "work/K3 のランタイム readiness を観測できませんでした。",
+      "inspection_unavailable": "この要件を検査できませんでした。再読み込みするか、環境の確認を依頼してください。不確実は「未インストール」ではありません。",
+      "not_checked_in_this_environment": "プロファイルが別環境に属するため、このノードではこの要件を確認していません。それは「Homes がない」ではありません。"
+    },
+    "remediation": {
+      "review_profile": "プロファイルを確認するか、別のものを登録してください。",
+      "select_local_profile": "このノードのローカルプロファイルを選択してください。",
+      "configure_execution_environment": "このプロファイルを管理する環境を使ってください。",
+      "configure_provider_driver": "このランタイムにプロバイダーのドライバーを構成してください。",
+      "configure_session_runner": "セッション Runner を構成してください。",
+      "configure_provider_program": "このランタイムに公式プロバイダー CLI を構成してください。",
+      "review_profile_homes": "管理用の構成読み取りで、保存済み Homes を確認してください。",
+      "authorize_auth_source": "プロファイルで account-home またはマネージド注入を認可してください (sessions:profile:write)。",
+      "configure_claude_credential_source": "OLIVARES_SESSION_RUNTIME_WIF または OLIVARES_SESSION_RUNTIME_TOKEN_FILE を配線してください。",
+      "configure_provider_credential_adapter": "このドライバーのガバナンス対象資格情報アダプターを配線してください。",
+      "review_runtime_credential_composition": "work/K3 のランタイム資格情報の構成を確認してください。",
+      "select_supported_selection": "このランタイムが実証するトランスポートと隔離を選んでください。",
+      "retry_inspection": "要件を再読み込みしてください。"
+    },
+    "remainingCheck": {
+      "workspace_and_template_validation": "ワークスペースとテンプレートの検証",
+      "current_launch_authorization": "現在の起動認可",
+      "claim_admission": "claim の受付",
+      "credential_mint_when_required": "必要な場合の資格情報の mint",
+      "process_start": "プロセス起動",
+      "provider_authentication_and_protocol": "プロバイダー認証とプロトコル"
+    },
+    "protocol": {
+      "claude_stream_json": "Claude stream-json",
+      "claude_remote_control": "Claude remote-control",
+      "codex_app_server": "Codex app-server",
+      "grok_acp": "Grok ACP",
+      "opencode_acp": "OpenCode ACP",
+      "unknown": "不明なプロトコル"
+    }
+  },
+  "hostTools": {
+    "title": "サービスホスト上の公式 CLI 候補",
+    "loading": "サービス環境で公式 CLI 候補を観測しています…",
+    "refresh": "再観測",
+    "refreshing": "観測中…",
+    "advisory": "参考情報のみです。この観測は準備状況を変更せず、起動を有効にせず、ツールのインストール、固定、登録も行いません。",
+    "environment": "プロファイル環境: {{environment}} · 応答元: {{answering}}",
+    "noIdentity": "永続的な環境 ID を持たないノード",
+    "observedAt": "観測日時 {{time}}（UTC）",
+    "summary": "設定された検索場所で観測された候補: {{total}}",
+    "groupCount": "候補: {{total}}",
+    "groupsLabel": "観測された候補グループ",
+    "mismatch": "応答は別のプロファイルバージョン、ドライバー、または環境のものだったため破棄しました。",
+    "conflict": "観測中にプロファイルが変更されました。観測結果は破棄されました。",
+    "unavailable": "ホストツールの観測結果を読み取れませんでした。ツールに関する結論ではありません。",
+    "forbidden": "あなたのロールでは、このプロファイルのホストツール観測を読み取れません（sessions:profile:read）。",
+    "notFound": "このプロファイルは現在のテナントでは利用できません。以前の観測結果は破棄されました。",
+    "unauthenticated": "セッションは認証されていません。以前の観測結果は破棄されました。",
+    "state": {
+      "none_observed": "設定された検索場所で候補は観測されませんでした。ホスト上の他の場所にツールが存在しないことを証明するものではありません。",
+      "unsupported_driver": "このドライバーではホストツールの観測はまだ利用できません。プロファイル設定からプログラムを構成してください。",
+      "unknown": "サービスはこの観測を完了できませんでした。これは不確実性であり、ツールが存在しないという結論ではありません。",
+      "not_checked_in_this_environment": "未確認: 応答したサービスに環境 ID がないか、このプロファイルの環境ではありません。"
+    },
+    "origin": {
+      "managed": "管理対象のインストール場所",
+      "vendor-default": "ベンダー既定の場所",
+      "path": "サービスの PATH",
+      "named": "名前付きプログラムの場所",
+      "unknown": "不明な場所"
+    },
+    "match": {
+      "registered": "登録済み",
+      "manifest-corroborated": "管理マニフェストで裏付け済み",
+      "unregistered-observed": "観測済み・未登録",
+      "unverified": "署名未検証",
+      "damaged": "破損したインストール",
+      "unknown": "検証状態不明"
+    },
+    "executable": {
+      "true": "実行可能",
+      "false": "実行不可"
+    },
+    "configured": {
+      "same": "設定済みプログラムと同じファイル",
+      "different": "設定済みプログラムではない",
+      "unknown": "設定済みプログラムとの比較は不明"
+    }
   }
 }

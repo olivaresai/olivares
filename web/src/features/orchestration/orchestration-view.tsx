@@ -12,7 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Plus, Workflow } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
@@ -41,7 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
-import { useCommandStore } from '@/stores/command'
+import { usePendingCommandAction } from '@/features/navigation/command-actions'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { RevisionsSheet } from '@/features/shared/revisions-sheet'
 import {
@@ -147,6 +147,25 @@ export function OrchestrationView() {
   const { activeTenant, can } = useAuth()
   // The graph read is privileged; mirror the server gate to keep the tab honest.
   const canGraph = can('orchestration:graph:read')
+  const canWrite = can('orchestration:schedule:write')
+  // TAB AND CREATE STATE LIVE HERE, in the component that is mounted for the whole visit.
+  // The verb's form is inside the Schedules tab, which is not the default one and which
+  // `TabsContent` does not mount until it is shown, so an explicit palette selection
+  // selects that tab and opens the form. Ordinary navigation still lands on the graph.
+  const [tab, setTab] = useState('graph')
+  const [createOpen, setCreateOpen] = useState(false)
+  usePendingCommandAction('orchestration', 'createSchedule', () => {
+    setTab('schedules')
+    setCreateOpen(true)
+  })
+  // ⛔ A REVOCATION CLOSES THE CREATE DIALOG, IT DOES NOT HIDE IT. Adjusted during render,
+  //    so the form does not mount for the commit in between and cannot reopen itself when
+  //    the grant returns.
+  const [writeSeen, setWriteSeen] = useState(canWrite)
+  if (writeSeen !== canWrite) {
+    setWriteSeen(canWrite)
+    if (!canWrite) setCreateOpen(false)
+  }
 
   return (
     <IntelPage
@@ -155,7 +174,7 @@ export function OrchestrationView() {
       description={t('description')}
       notices={<SelfAuditNotice />}
     >
-      <Tabs defaultValue="graph">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="graph">{t('tabs.graph')}</TabsTrigger>
           <TabsTrigger value="flows">{t('tabs.flows')}</TabsTrigger>
@@ -171,7 +190,11 @@ export function OrchestrationView() {
         </TabsContent>
 
         <TabsContent value="schedules" className="flex flex-col gap-4">
-          <SchedulesTab tenant={activeTenant} />
+          <SchedulesTab
+            tenant={activeTenant}
+            createOpen={createOpen}
+            setCreateOpen={setCreateOpen}
+          />
         </TabsContent>
       </Tabs>
     </IntelPage>
@@ -279,20 +302,19 @@ function FlowsTab({ tenant }: { tenant: string | null }) {
 
 // --- schedules tab ------------------------------------------------------------
 
-function SchedulesTab({ tenant }: { tenant: string | null }) {
+function SchedulesTab({
+  tenant,
+  createOpen,
+  setCreateOpen,
+}: {
+  tenant: string | null
+  /** Create-dialog state, owned by the view root so a palette verb can reach it. */
+  createOpen: boolean
+  setCreateOpen: (open: boolean) => void
+}) {
   const { t } = useTranslation(['orchestration', 'common'])
   const { can } = useAuth()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
-  // ⌘K palette action: "new schedule" navigated here — consume once.
-  useEffect(() => {
-    if (
-      useCommandStore.getState().consumeAction('orchestration') ===
-      'createSchedule'
-    ) {
-      setCreateOpen(true)
-    }
-  }, [])
   const [editSchedule, setEditSchedule] = useState<ScheduleDTO | null>(null)
   const [statusChange, setStatusChange] = useState<{
     schedule: ScheduleDTO
@@ -309,6 +331,14 @@ function SchedulesTab({ tenant }: { tenant: string | null }) {
   const canRead = can('orchestration:schedule:read')
   const canWrite = can('orchestration:schedule:write')
   const canFire = can('orchestration:schedule:admin')
+  // The edit dialog's half of the revocation rule; the create dialog's lives at the view
+  // root with its state. Adjusted during render so the form cannot mount unauthorized and
+  // cannot reopen itself when the grant returns.
+  const [writeSeen, setWriteSeen] = useState(canWrite)
+  if (writeSeen !== canWrite) {
+    setWriteSeen(canWrite)
+    if (!canWrite) setEditSchedule(null)
+  }
 
   const schedulesQ = useQuery({
     queryKey: orchestrationKeys.schedules(tenant),

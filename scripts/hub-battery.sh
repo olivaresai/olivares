@@ -106,12 +106,112 @@ fi
 # `[a-z0-9][a-z0-9:_-]*` en vez de `[a-z0-9:_-]+` para que `task --list-all` no entre: el guion
 # medio esta en la clase, y sin anclar el primer caracter una bandera se leeria como nombre de
 # tarea. Un nombre de tarea inventado da «task: no encuentro» y la bateria lo contaria como rojo.
+# ⛔ LAS DOS FORMAS DE INVOCAR UNA PATA, y la segunda es un punto ciego que ya cazó a otros dos
+#    guiones el mismo dia. `VAR=1 task lint:x` es una invocacion legitima —la usan las patas
+#    advisory de observacion de red, y su propio verificador la EXIGE— pero un predicado anclado a
+#    `^[[:space:]]*task ` no la ve. Aqui costo un push entero: el gancho invocaba
+#    `OLIVARES_NETWORK_ADVISORY=1 task lint:hub-web-fidelity` y `... lint:session-numbers`, `listar()`
+#    no las derivaba, y el control de cobertura contesto «el hook invoca tarea(s) que NO he derivado»
+#    — un 2, «no he podido mirar», que es la respuesta CORRECTA a su propia ceguera.
+#    Mismo arreglo que en check-gate-parity.sh: el prefijo es una o mas asignaciones NOMBRE=valor.
 listar() {
 	awk -v a="$1" -v b="$2" 'NR>=a && NR<b' "$HOOK" \
-	  | command grep -oE '^[[:space:]]*task [a-z0-9][a-z0-9:_-]*([[:space:]]*\|\|[[:space:]]*true)?' \
-	  | sed -E 's/^[[:space:]]*task //' \
+	  | command grep -oE '^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*task [a-z0-9][a-z0-9:_-]*([[:space:]]*\|\|[[:space:]]*true)?' \
+	  | sed -E 's/^[[:space:]]*//; s/^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*//; s/^task //' \
 	  | sed -E 's/^([a-z0-9][a-z0-9:_-]*)[[:space:]]*\|\|[[:space:]]*true$/\1\tadvisory/; s/^([a-z0-9][a-z0-9:_-]*)$/\1\tblock/' \
 	  | sort -u
+}
+
+# Remove quoted prose and comments before the permissive coverage scan. The
+# direct derivation above remains intentionally narrow; this scanner is the
+# independent direction that notices a real but unsupported command position
+# such as `if task lint:x`. Command substitutions, including legacy backticks,
+# remain code because their bodies execute. Quote state crosses line boundaries,
+# while ordinary quoted `task ...` text does not become a fabricated invocation.
+extract_unquoted_task_names() {
+	awk '
+	function append_space() { code = code " " }
+	BEGIN { mode = "normal"; sub_depth = 0; in_backtick = 0 }
+	{
+		line = $0
+		code = ""
+		for (i = 1; i <= length(line); i++) {
+			c = substr(line, i, 1)
+			next_c = substr(line, i + 1, 1)
+			if (mode == "single") {
+				append_space()
+				if (c == "\047") mode = "normal"
+				continue
+			}
+			if (mode == "double") {
+				if (c == "\\") {
+					append_space()
+					if (i < length(line)) { append_space(); i++ }
+					continue
+				}
+				if (c == "\"") { append_space(); mode = "normal"; continue }
+				if (c == "`") {
+					append_space()
+					in_backtick = 1
+					backtick_resume = "double"
+					mode = "normal"
+					continue
+				}
+				if (c == "$" && next_c == "(") {
+					code = code " $("
+					i++
+					sub_depth++
+					resume_mode[sub_depth] = "double"
+					mode = "normal"
+					continue
+				}
+				append_space()
+				continue
+			}
+			if (c == "\\") {
+				code = code c
+				if (i < length(line)) { code = code next_c; i++ }
+				continue
+			}
+			if (c == "`") {
+				append_space()
+				if (in_backtick) {
+					in_backtick = 0
+					mode = backtick_resume
+				} else {
+					in_backtick = 1
+					backtick_resume = "normal"
+				}
+				continue
+			}
+			if (c == "\047") { append_space(); mode = "single"; continue }
+			if (c == "\"") { append_space(); mode = "double"; continue }
+			if (c == "#" && (i == 1 || substr(line, i - 1, 1) ~ /[[:space:];|&(){}]/)) break
+			if (c == "$" && next_c == "(") {
+				code = code " $("
+				i++
+				sub_depth++
+				resume_mode[sub_depth] = "normal"
+				continue
+			}
+			if (sub_depth > 0 && c == "(") {
+				sub_depth++
+				resume_mode[sub_depth] = "normal"
+			}
+			if (sub_depth > 0 && c == ")") {
+				mode = resume_mode[sub_depth]
+				delete resume_mode[sub_depth]
+				sub_depth--
+			}
+			code = code c
+		}
+		while (match(code, /(^|[[:space:];|&(){}])task[[:space:]]+[a-z0-9][a-z0-9:_-]*/)) {
+			token = substr(code, RSTART, RLENGTH)
+			sub(/^.*task[[:space:]]+/, "", token)
+			print token
+			code = substr(code, RSTART + RLENGTH)
+		}
+	}' "$1"
 }
 FAST="$(listar 1 "$CORTE")"
 HEAVY="$(listar "$CORTE" 999999)"
@@ -140,9 +240,7 @@ faltantes=""
 while IFS= read -r nombre; do
 	[ -n "$nombre" ] || continue
 	printf '%s\n%s\n' "$FAST" "$HEAVY" | cut -f1 | command grep -qxF "$nombre" || faltantes="${faltantes}${nombre} "
-done <<<"$(command grep -vE '^[[:space:]]*#' "$HOOK" 2>/dev/null |
-	command grep -oE '(^|[[:space:]])task [a-z0-9][a-z0-9:_-]*' |
-	sed -E 's/^[[:space:]]*task //' | sort -u)"
+done <<<"$(extract_unquoted_task_names "$HOOK" | sort -u)"
 if [ -n "$faltantes" ]; then
 	echo "hub-battery: ⛔ NO HE PODIDO MIRAR: el hook invoca tarea(s) que NO he derivado:" >&2
 	printf 'hub-battery:              %s\n' "$faltantes" >&2
@@ -173,8 +271,8 @@ done
 
 case "$MODO" in
   --selftest)
-    # El banco vive AQUI, no en un guion aparte, para que no haya dos implementaciones del
-    # discriminador que puedan derivar. Seis casos, tres de ellos en la direccion que NO dispara.
+    # The test bench lives here so a separate script cannot drift into a second parser.
+    # Six cases cover the timeout discriminator; five cover task-name extraction.
     # ⛔ UN FICHERO, NO UN DIRECTORIO, y la razon es un GATE. `check-git-env-isolation.sh` deriva
     #    su clase de emparejar `mktemp -d` con una invocacion de git: es un PROXY de «este guion
     #    construye un repositorio desechable». Este banco no construye ninguno —le basta un fichero
@@ -201,7 +299,36 @@ panic: test timed out after 150m0s'
     st_caso 'fallo corriente sin panico ⇒ ROJA' 1 '--- FAIL: TestBaz (0.02s)
 FAIL'
     st_caso 'la FRASE a media linea ⇒ ROJA (ejercita el ANCLA)' 1 'ok  x  0.1s  el banco imprime panic: test timed out after 5s como texto'
-    if [ "$st_fallos" -eq 0 ]; then echo "hub-battery --selftest: 6/6 casos"; exit 0
+    st_task_case() {
+      st_label="$1"; st_expected="$2"; st_fixture="$3"
+      printf '%s\n' "$st_fixture" > "$st_tmp"
+      st_actual="$(extract_unquoted_task_names "$st_tmp")"
+      if [ "$st_actual" = "$st_expected" ]; then printf '  ✅ %s\n' "$st_label"
+      else printf '  ⛔ %s: expected <%s>, got <%s>\n' "$st_label" "$st_expected" "$st_actual"; st_fallos=$((st_fallos + 1)); fi
+    }
+    st_task_case 'comments and quoted prose do not fabricate tasks' '' '# task lint:comment
+echo "pre-push: every task and every status are unaffected."
+printf "%s\\n" "task lint:double-quoted" '\''task lint:single-quoted'\''
+message="task lint:assignment"
+echo "multiline prose starts
+task lint:multiline-prose
+and ends here"'
+    st_task_case 'supported direct forms remain visible' 'lint:plain
+lint:indented
+lint:environment' 'task lint:plain
+  task lint:indented
+OLIVARES_PROBE=1 task lint:environment || true'
+    st_task_case 'unsupported executable forms remain visible to the fail-closed comparison' 'lint:conditional
+lint:wrapped
+lint:substitution' 'if task lint:conditional; then :; fi
+command task lint:wrapped
+echo "$(task lint:substitution)"'
+    st_task_case 'legacy backtick command substitution remains executable coverage' 'lint:backtick' 'echo "` task lint:backtick`"'
+    st_task_case 'nested command substitutions restore each quote state' 'lint:nested-hidden' 'echo "$(echo "$(echo x)" ; task lint:nested-hidden)"'
+    if [ "$st_fallos" -eq 0 ]; then
+      echo "hub-battery task derivation selftest: 5/5 cases"
+      echo "hub-battery --selftest: 6/6 casos"
+      exit 0
     else echo "hub-battery --selftest: ${st_fallos} fallo(s)"; exit 1; fi ;;
   --list)       printf 'FAST (%d)\n' "$n_fast"; printf '%s\n' "$FAST" | sed 's/^/  /'
                 printf 'HEAVY (%d)\n' "$n_heavy"; printf '%s\n' "$HEAVY" | sed 's/^/  /'; exit 0 ;;

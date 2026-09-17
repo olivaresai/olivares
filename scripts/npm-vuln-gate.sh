@@ -82,6 +82,21 @@ trap 'rm -rf "${tmp}"' EXIT
 
 echo "npm-vuln-gate: ${#LOCKFILES[@]} tracked lockfile(s); blocking severities: ${BLOCKING_SEVERITIES}"
 
+# Empty stdout is "could not look", never clean. GitHub-hosted runners have produced
+# that for docs-site (run 33866495506, 11 min then zero bytes). A single empty
+# attempt is not a finding and is not a pass: retry a bounded number of times, then
+# refuse with the attempt count named. Override in batteries; never lower the
+# refusal.
+ATTEMPTS="${NPM_VULN_AUDIT_ATTEMPTS:-3}"
+RETRY_SLEEP_S="${NPM_VULN_AUDIT_RETRY_SLEEP_S:-2}"
+case "${ATTEMPTS}" in
+	'' | *[!0-9]*) echo "npm-vuln-gate: NPM_VULN_AUDIT_ATTEMPTS is not a positive integer; refusing." >&2; exit 2 ;;
+esac
+[ "${ATTEMPTS}" -ge 1 ] || { echo "npm-vuln-gate: NPM_VULN_AUDIT_ATTEMPTS must be >= 1; refusing." >&2; exit 2; }
+case "${RETRY_SLEEP_S}" in
+	'' | *[!0-9]*) echo "npm-vuln-gate: NPM_VULN_AUDIT_RETRY_SLEEP_S is not a non-negative integer; refusing." >&2; exit 2 ;;
+esac
+
 i=0
 for lock in "${LOCKFILES[@]}"; do
 	dir="$(dirname "${lock}")"
@@ -95,11 +110,26 @@ for lock in "${LOCKFILES[@]}"; do
 	# `audit` exits NONZERO when it finds advisories, which is not an error — so the exit
 	# status cannot be the health check here. The stream's SHAPE is: valid JSON carrying a
 	# recognised advisory container. Anything else is "could not look".
-	( cd "${dir}" && timeout 300 "${tool}" audit --json ) >"${out}" 2>"${out}.err" || true
 	printf '%s\n' "${dir}" >"${out}.dir"
 	printf '%s\n' "${tool}" >"${out}.tool"
+	: >"${out}.err"
+	try=1
+	while [ "${try}" -le "${ATTEMPTS}" ]; do
+		: >"${out}"
+		audit_rc=0
+		( cd "${dir}" && timeout 300 "${tool}" audit --json ) >"${out}" 2>"${out}.err" || audit_rc=$?
+		if [ -s "${out}" ]; then
+			break
+		fi
+		echo "npm-vuln-gate: ${tool} audit in ${dir} produced NO output on attempt ${try}/${ATTEMPTS} (tool rc=${audit_rc})." >&2
+		if [ "${try}" -lt "${ATTEMPTS}" ]; then
+			echo "npm-vuln-gate: retrying after ${RETRY_SLEEP_S}s; empty stdout is not a clean scan." >&2
+			sleep "${RETRY_SLEEP_S}"
+		fi
+		try=$((try + 1))
+	done
 	if [ ! -s "${out}" ]; then
-		echo "npm-vuln-gate: ${tool} audit in ${dir} produced NO output; the gate certifies nothing." >&2
+		echo "npm-vuln-gate: ${tool} audit in ${dir} produced NO output after ${ATTEMPTS} attempt(s); the gate certifies nothing." >&2
 		sed 's/^/    /' "${out}.err" >&2 || true
 		exit 2
 	fi
@@ -111,7 +141,16 @@ tmp, allowf, today, blocking = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4
 
 # The dated allowlist, parsed without a YAML dependency — same controlled format as
 # .govulncheck-allow.yaml so one reader understands both.
-allow, cur = {}, None
+# ⛔ `reason` SE LEE Y SE EXIGE. Hasta el 2026-09-03 este lector parseaba SOLO `id:` y
+# `expires:`, asi que la razon era decorativa: la cabecera de .npm-vuln-allow.yaml la pide por
+# entrada y NADA la hacia cumplir — una excepcion sin justificar entraba igual, que es como una
+# allowlist deja de ser una decision y pasa a ser un cajon. `check-export-closure` ya exige 20
+# caracteres para su clase mas permisiva; aqui rige el mismo minimo y por el mismo motivo.
+#
+# El fichero usa escalares plegados (`reason: >-` con el texto en las lineas siguientes), asi
+# que el valor NO esta en la linea de la clave: se acumula hasta la siguiente clave conocida.
+MIN_REASON = 20
+allow, reasons, cur, in_reason = {}, {}, None, False
 if os.path.exists(allowf):
     for line in open(allowf):
         s = line.strip()
@@ -119,11 +158,24 @@ if os.path.exists(allowf):
             continue
         m = re.match(r'-?\s*id:\s*(\S+)', s)
         if m:
-            cur = m.group(1)
+            cur, in_reason = m.group(1), False
             continue
         m = re.match(r'expires:\s*(\S+)', s)
         if m and cur:
             allow[cur] = m.group(1).strip('"\'')
+            in_reason = False
+            continue
+        m = re.match(r'reason:\s*(.*)$', s)
+        if m and cur:
+            resto = m.group(1).strip()
+            # `>-`, `>`, `|`, `|-`… son el INDICADOR del bloque, no la razon.
+            if resto and resto not in ('>-', '>', '>+', '|', '|-', '|+'):
+                reasons[cur], in_reason = resto, False
+            else:
+                reasons[cur], in_reason = '', True
+            continue
+        if in_reason and cur:
+            reasons[cur] = (reasons.get(cur, '') + ' ' + s).strip()
 
 GHSA = re.compile(r'GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}')
 
@@ -189,6 +241,21 @@ for d in sorted(census):
     print(f"  {d:<34} " + (", ".join(f"{k}={v}" for k, v in sorted(c.items())) if c else "clean"))
 
 fail = False
+
+# ⛔ UNA EXCEPCION SIN RAZON NO ES UNA EXCEPCION. Se comprueba ANTES de honrar nada: una entrada
+# sin `reason`, o con una de menos de MIN_REASON caracteres, NO exime — y se dice por que, en vez
+# de dejar que el advisory salga luego como «not allowlisted», que manda a leer el sitio
+# equivocado. Se nombran TODAS de una pasada: arreglar de una en una cuesta una corrida por fila.
+sin_razon = sorted(g for g in allow if len((reasons.get(g) or '').strip()) < MIN_REASON)
+for g in sin_razon:
+    tiene = len((reasons.get(g) or '').strip())
+    print(f"npm-vuln-gate: BLOCKING — allowlist entry {g} carries no real reason "
+          f"({tiene} chars; the minimum is {MIN_REASON}). An exception nobody justified is a "
+          f"drawer, not a decision.")
+    fail = True
+for g in sin_razon:
+    allow.pop(g, None)
+
 blockers = sorted(g for g, s in seen.items() if s in blocking)
 for ghsa in blockers:
     exp = allow.get(ghsa)
@@ -202,10 +269,16 @@ for ghsa in blockers:
     else:
         print(f"npm-vuln-gate: {ghsa} temporarily accepted (allowlist expires {exp}).")
 
+# ⛔ AUSENTE DEL CENSO ⇒ SE BORRA, CADUCADA O NO. Hasta el 2026-09-03 esta nota exigia AMBAS
+# cosas (`not in seen` Y `exp < today`), asi que una entrada CURADA —el advisory ya no aparece
+# porque se subio la dependencia— se quedaba callada hasta su fecha, y en la practica para
+# siempre: nadie vuelve a mirar una linea que no se queja. La allowlist se llenaba de excepciones
+# para problemas que ya no existen, que es la forma silenciosa de que deje de significar algo.
 for ghsa, exp in sorted(allow.items()):
-    if ghsa not in seen and exp < today:
-        print(f"npm-vuln-gate: note — allowlist entry {ghsa} expired {exp} and is no longer "
-              f"present; remove it.")
+    if ghsa not in seen:
+        cad = f"expired {exp}" if exp < today else f"expires {exp}"
+        print(f"npm-vuln-gate: note — allowlist entry {ghsa} ({cad}) is no longer present in any "
+              f"workspace; remove it.")
 
 if not blockers:
     print(f"npm-vuln-gate: no {'/'.join(blocking)} advisories across {len(census)} workspaces.")

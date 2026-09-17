@@ -6,8 +6,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"testing"
 
@@ -249,49 +251,230 @@ func TestCommunicationGuardStoreWitnessRejectsDuplicateInventoryBeforeWrites(t *
 	}
 }
 
-func TestBootWiresCommunicationStoreWitnessButKeepsWP3OffSQLite(t *testing.T) {
-	t.Setenv(envCommunicationContentKeyringFile, "")
+// createCommunicationGuardTestTenant creates one business tenant through the
+// booted engine's System seam, which is the production path whose initializer
+// seeds the communication workspace guards atomically with the org.
+func createCommunicationGuardTestTenant(t *testing.T, eng *engine, slug string) model.TenantID {
+	t.Helper()
 	ctx := context.Background()
-	eng, err := boot(ctx, bootConfig{
-		DataDir: t.TempDir(), Engine: "sqlite", Version: "test", NoIngest: true,
-	})
-	if err != nil {
-		t.Fatalf("boot: %v", err)
-	}
-	t.Cleanup(func() { _ = eng.Close() })
-	if eng.sessionsMod == nil {
-		t.Fatal("boot did not construct sessions module")
-	}
-
-	readiness, err := eng.sessionsMod.EvaluateCommunicationReadiness(ctx)
-	if err != nil {
-		t.Fatalf("evaluate communication readiness: %v", err)
-	}
-	// The exact request-authority bundle became the PermissionsReady term in 34adc27bb.
-	// Boot wires that bundle deliberately; WP3 remains off because sealer, resolver and pump are
-	// still absent. Assert both halves so neither a missing binder nor an accidentally live gate
-	// can hide behind the other.
-	if !readiness.StoreReady || !readiness.Components.IssuerReady ||
-		!readiness.Components.PermissionsReady || readiness.Effective ||
-		readiness.Components.SealerReady ||
-		readiness.Components.ResolverReady || readiness.Components.PumpReady {
-		t.Fatalf("K3 readiness = %+v, want store, issuer and permissions ready with WP3 off", readiness)
-	}
-	if eng.sessionsMod.CommunicationSessionCredentialsEnabled() {
-		t.Fatal("WP2 store witness activated communication credentials")
-	}
-
 	var tenant model.TenantID
 	if err := eng.store.System(ctx, func(sys store.SystemScope) error {
-		org, err := sys.CreateOrg(ctx, model.Org{
-			Name: "Fresh K3", Slug: "fresh-k3", Status: model.StatusActive,
-		})
+		org, err := sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
 		tenant = org.TenantID
 		return err
 	}); err != nil {
-		t.Fatalf("create fresh tenant after attestation: %v", err)
+		t.Fatalf("create tenant %q: %v", slug, err)
 	}
-	if err := eng.sessionsMod.VerifyCommunicationGuards(ctx, tenant); err != nil {
-		t.Fatalf("fresh tenant initializer did not preserve attested invariant: %v", err)
+	return tenant
+}
+
+// bootCommunicationStoreProof asserts that boot bound the composite store
+// proof without any activation request and returns the proof it measured at
+// the promotion barrier.
+func bootCommunicationStoreProof(t *testing.T, phase string, eng *engine) communicationStoreProof {
+	t.Helper()
+	if eng.sessionsMod == nil {
+		t.Fatalf("%s: boot did not construct the sessions module", phase)
+	}
+	if eng.communicationComposition == nil || eng.communicationComposition.store == nil {
+		t.Fatalf("%s: boot did not bind the composite communication store proof", phase)
+	}
+	if eng.communicationComposition.activation.Requested ||
+		len(eng.communicationComposition.custodyBlockers()) != 0 {
+		t.Fatalf("%s: activation was not requested, yet the composition recorded %+v",
+			phase, eng.communicationComposition.activation)
+	}
+	return eng.communicationComposition.store.Proof()
+}
+
+// assertCommunicationWP3OffTerms asserts every K3 readiness term separately for
+// a boot with activation and custody unset. The store term is the only one that
+// changes between the staged and the enforced phase; the rest are fixed by the
+// composition contract (bindCommunicationComposition): issuer, resolver and the
+// request-authority bundle are bound on every boot, while credentials, the
+// sealer, the pump witness and the cursor keyring stay OFF because nothing
+// requested them. Each binder-level fact is also read directly from the
+// module and the engine so a missing binder or an accidental activation cannot
+// hide behind the projected Effective=false.
+func assertCommunicationWP3OffTerms(t *testing.T, phase string, eng *engine, wantStore bool) {
+	t.Helper()
+	ctx := context.Background()
+	readiness, err := eng.sessionsMod.EvaluateCommunicationReadiness(ctx)
+	if err != nil {
+		t.Fatalf("%s: evaluate communication readiness: %v", phase, err)
+	}
+	wantTerms := sessions.CommunicationReadinessComponents{
+		StoreReady: wantStore, IssuerReady: true, SealerReady: false,
+		ResolverReady: true, PermissionsReady: true, PumpReady: false,
+	}
+	if readiness.Components != wantTerms {
+		t.Fatalf("%s: K3 readiness terms = %+v, want %+v", phase, readiness.Components, wantTerms)
+	}
+	wantMissing := []sessions.CommunicationReadinessDependency{
+		sessions.CommunicationReadinessSealer, sessions.CommunicationReadinessPump,
+	}
+	if !wantStore {
+		wantMissing = append([]sessions.CommunicationReadinessDependency{sessions.CommunicationReadinessStore}, wantMissing...)
+	}
+	if readiness.StoreReady != wantStore || readiness.Effective || readiness.CompositionReady ||
+		readiness.Verdict != sessions.VerdictUnknown || readiness.Code != "communication_not_ready" ||
+		!slices.Equal(readiness.Missing, wantMissing) || len(readiness.Unavailable) != 0 {
+		t.Fatalf("%s: K3 readiness = %+v, want store=%t, WP3 off with missing=%v and nothing unavailable",
+			phase, readiness, wantStore, wantMissing)
+	}
+	if eng.sessionsMod.CommunicationSessionCredentialsEnabled() {
+		t.Fatalf("%s: communication credentials were enabled without an activation request", phase)
+	}
+	if eng.sessionsMod.CommunicationCursorTokenKeyringBound() {
+		t.Fatalf("%s: a cursor keyring is bound although none was configured", phase)
+	}
+	if !eng.sessionsMod.WorkOutboxClaimAuthorityBound() {
+		t.Fatalf("%s: the outbox claim authority is not bound on the module", phase)
+	}
+	if eng.communicationComposition.pumpWitness() != nil {
+		t.Fatalf("%s: a K3 pump witness was composed without an activation request", phase)
+	}
+	if eng.communicationPump == nil || eng.communicationPump.communication != nil ||
+		eng.communicationPump.authority == nil {
+		t.Fatalf("%s: the registered pump must carry the authority and no K3 witness", phase)
+	}
+	if verdict := eng.communicationPump.authority.current(ctx); verdict.allow || verdict.reason != "communication_pump_unbound" {
+		t.Fatalf("%s: outbox authority verdict = %+v, want the unbound K3 lane refused", phase, verdict)
+	}
+}
+
+// TestBootWiresCommunicationStoreWitnessButKeepsWP3OffSQLite proves the two
+// store phases boot actually declares on a fresh SQLite estate with activation
+// and every K3 custody setting unset:
+//
+//   - staged: a fresh estate starts with the directory writer control staged
+//     at generation 1, so the composite proof (communicationstoreproof.go)
+//     names exactly the two activation blockers and StoreReady is false, even
+//     though the guard estate ceremony and the schema proof already passed at
+//     the promotion barrier;
+//   - enforced: after the operator ceremony `olivares db
+//     activate-directory-writer` on the CLOSED store and a reopen, the same
+//     proof is ready with no blockers and StoreReady is true.
+//
+// WP3 stays OFF in both phases and is asserted term by term: the resolver and
+// the request-authority bundle are bound deliberately on every boot
+// (ea711842e5 composed K3 lot A; 34adc27bb made the bundle the PermissionsReady
+// term), while credentials, the sealer, the pump witness and the cursor keyring
+// stay unbound because nothing requested them. The fresh-tenant initializer
+// invariant is proved in both phases and the promotion proof of the enforced
+// phase covers the tenant created while staged.
+func TestBootWiresCommunicationStoreWitnessButKeepsWP3OffSQLite(t *testing.T) {
+	t.Setenv(envKeyWrap, "")
+	t.Setenv(envCommunicationActivation, "")
+	t.Setenv(envCommunicationContentKeyringFile, "")
+	t.Setenv(envCommunicationCursorKeyringFile, "")
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	// Phase 1: fresh estate, writer control staged at generation 1.
+	var eng *engine
+	t.Cleanup(func() {
+		if eng != nil {
+			_ = eng.Close()
+		}
+	})
+	eng = bootForComposition(t, dir)
+	proof := bootCommunicationStoreProof(t, "staged", eng)
+	wantStagedBlockers := []string{
+		"writer_control_not_enforced: mode=\"staged\" (run `olivares db activate-directory-writer` and reopen)",
+		"expected_generation_below_activation: 1",
+	}
+	// The VERY FIRST boot of a fresh estate opens the store before SYSTEM genesis.
+	// The directory status is a boot witness taken at that point, so even though
+	// promotion then provisions SYSTEM and the composite proof runs after it, the
+	// proof honestly reports the inventory coverage it could attest at boot:
+	// incomplete, awaiting the SYSTEM bootstrap, on top of the two activation
+	// blockers. Coverage becomes a fact of the NEXT boot; it is proved below.
+	wantFirstBootBlockers := []string{
+		wantStagedBlockers[0],
+		"directory_epoch_coverage_incomplete",
+		wantStagedBlockers[1],
+	}
+	if proof.Ready || !proof.Supported || proof.ControlMode != store.DirectoryControlStaged ||
+		proof.WriterPosture != store.DirectoryWriterSQLiteCapability || proof.ExpectedGeneration != 1 ||
+		proof.EpochCoverageComplete || !proof.GuardVerified || !proof.SchemaVerified || proof.TenantsProved != 0 ||
+		!slices.Equal(proof.Blockers, wantFirstBootBlockers) {
+		t.Fatalf("first-boot staged store proof = %+v, want guard and schema verified but unready with exactly %q",
+			proof, wantFirstBootBlockers)
+	}
+	assertCommunicationWP3OffTerms(t, "staged", eng, false)
+	// The initializer seeds the guards of a tenant created on the staged estate
+	// so the enforced, verify-only pass holds without a repair.
+	stagedTenant := createCommunicationGuardTestTenant(t, eng, "fresh-k3-staged")
+	if err := eng.sessionsMod.VerifyCommunicationGuards(ctx, stagedTenant); err != nil {
+		t.Fatalf("staged: fresh tenant initializer did not preserve the guard invariant: %v", err)
+	}
+	if err := eng.Close(); err != nil {
+		t.Fatalf("close first staged engine: %v", err)
+	}
+	eng = nil
+
+	// Phase 1b: the staged estate reopened after genesis. No ceremony has run, so
+	// the control is still staged at generation 1 — but the inventory is now
+	// complete and the composite proof names EXACTLY the two activation blockers,
+	// with the one staged-phase tenant proved. This is the assertion the previous
+	// revision made on the first boot; it holds from the second boot on.
+	eng = bootForComposition(t, dir)
+	proof = bootCommunicationStoreProof(t, "staged-reopened", eng)
+	if proof.Ready || !proof.Supported || proof.ControlMode != store.DirectoryControlStaged ||
+		proof.WriterPosture != store.DirectoryWriterSQLiteCapability || proof.ExpectedGeneration != 1 ||
+		!proof.EpochCoverageComplete || !proof.GuardVerified || !proof.SchemaVerified || proof.TenantsProved != 1 ||
+		!slices.Equal(proof.Blockers, wantStagedBlockers) {
+		t.Fatalf("reopened staged store proof = %+v, want coverage complete over the one tenant but unready with exactly %q",
+			proof, wantStagedBlockers)
+	}
+	assertCommunicationWP3OffTerms(t, "staged-reopened", eng, false)
+	if err := eng.sessionsMod.VerifyCommunicationGuards(ctx, stagedTenant); err != nil {
+		t.Fatalf("staged reopen: the staged-phase tenant no longer verifies: %v", err)
+	}
+	if err := eng.Close(); err != nil {
+		t.Fatalf("close staged engine: %v", err)
+	}
+	eng = nil
+
+	// The only production path from staged to enforced: the explicit ceremony
+	// on the stopped store. Its result is a boot witness, so the enforced
+	// control is observable only after a reopen.
+	out, err := runDB(t, "activate-directory-writer", "--data-dir", dir, "--expected-generation", "1",
+		"--actor", "boot-readiness-test", "--reason", "serve stopped for activation",
+		"--writers-upgraded", "--writers-drained", "--format", "json")
+	if err != nil {
+		t.Fatalf("activation ceremony: %v\n%s", err, out)
+	}
+	var ceremony directoryActivationResult
+	if err := json.Unmarshal([]byte(out), &ceremony); err != nil {
+		t.Fatalf("activation ceremony JSON: %v\n%s", err, out)
+	}
+	if !ceremony.Changed || !ceremony.ReopenRequired || ceremony.Error != "" ||
+		ceremony.Before.ControlMode != string(store.DirectoryControlStaged) || ceremony.Before.ExpectedGeneration != 1 ||
+		ceremony.After.ControlMode != string(store.DirectoryControlEnforced) || ceremony.After.ExpectedGeneration != 2 {
+		t.Fatalf("activation ceremony result = %+v, want staged 1 -> enforced 2 with reopen required", ceremony)
+	}
+
+	// Phase 2: reopen on the enforced control.
+	eng = bootForComposition(t, dir)
+	proof = bootCommunicationStoreProof(t, "enforced", eng)
+	if !proof.Ready || len(proof.Blockers) != 0 || !proof.Supported ||
+		proof.ControlMode != store.DirectoryControlEnforced || proof.ExpectedGeneration != 2 ||
+		proof.WriterPosture != store.DirectoryWriterSQLiteCapability || !proof.EpochCoverageComplete ||
+		!proof.GuardVerified || !proof.SchemaVerified || proof.TenantsProved != 1 {
+		t.Fatalf("enforced store proof = %+v, want ready over the one staged-phase tenant with no blockers", proof)
+	}
+	assertCommunicationWP3OffTerms(t, "enforced", eng, true)
+	// The attested phase: the store proof is established, and a tenant created
+	// now must still satisfy the enforced, verify-only pass through its
+	// initializer alone, while the tenant covered by the promotion proof keeps
+	// verifying.
+	enforcedTenant := createCommunicationGuardTestTenant(t, eng, "fresh-k3-enforced")
+	if err := eng.sessionsMod.VerifyCommunicationGuards(ctx, enforcedTenant); err != nil {
+		t.Fatalf("enforced: fresh tenant initializer did not preserve the attested invariant: %v", err)
+	}
+	if err := eng.sessionsMod.VerifyCommunicationGuards(ctx, stagedTenant); err != nil {
+		t.Fatalf("enforced: tenant covered by the promotion proof failed verification: %v", err)
 	}
 }

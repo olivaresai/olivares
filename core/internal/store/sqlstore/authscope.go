@@ -89,11 +89,8 @@ func (a *authScope) ReadDirectoryEpochFact(
 // interface — would not fail to compile against every caller, because a
 // Repository's method set is a superset; it would defeat the control silently.
 func (a *authScope) Users() store.MutableRepository[model.User] {
-	inner := newTypedRepo(a.ts.repo(userDescriptor), userCodec)
-	tracked := newDirectoryTrackedRepo(
-		inner, a.ts.directoryWriter, authUserDirectoryResolver(a.ts),
-	)
-	return newMutableDirectoryRepo(tracked)
+	inner := &typedRepo[model.User]{g: a.ts.repo(userDescriptor), codec: userCodec}
+	return &userAuthorityUsers{ts: a.ts, inner: inner}
 }
 
 func (a *authScope) Memberships() store.Repository[model.Membership] {

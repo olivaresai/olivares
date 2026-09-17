@@ -66,6 +66,11 @@ type auditLog struct {
 	// audit-first ordering before lockTenant so a later directory source write
 	// rejects before acquiring the inverse global lock.
 	directoryWriter *directoryWriteTracker
+	// origin and writeGuard are the custodial write gate (P2 / W1). The scope
+	// hands out ONE auditLog per transaction, so origin is a property of the
+	// CALL: withCustodyOrigin sets and restores it around a custodial append.
+	origin     writeOrigin
+	writeGuard func(scopeWriteOp, writeOrigin, model.Kind, model.ID) error
 }
 
 // relation pins every audit read/write to the engine schema. SQLite resolves
@@ -84,6 +89,9 @@ func (a *auditLog) relation(table string) string {
 func (a *auditLog) Append(ctx context.Context, d model.AuditDraft) (model.AuditEvent, error) {
 	if a.readOnly {
 		return model.AuditEvent{}, store.ErrReadOnly
+	}
+	if err := a.noteWrite(); err != nil {
+		return model.AuditEvent{}, err
 	}
 	if a.directoryWriter != nil {
 		a.directoryWriter.noteAudit()
@@ -504,6 +512,9 @@ func (a *auditLog) lockTenant(ctx context.Context) error {
 func (a *auditLog) LockAppends(ctx context.Context) error {
 	if a.readOnly {
 		return store.ErrReadOnly
+	}
+	if err := a.noteLock(); err != nil {
+		return err
 	}
 	// Same notice Append gives before its own lockTenant. This capability takes the
 	// SAME per-tenant audit lock, so without it the tracker never learns that audit

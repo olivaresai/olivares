@@ -29,6 +29,9 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open staged store: %v", err)
 	}
+	if err := raw.System(ctx, func(sys store.SystemScope) error { _, err := sys.EnsureSystemTenant(ctx); return err }); err != nil {
+		t.Fatal(err)
+	}
 	ss := raw.(*sqlStore)
 	tenant := provisionTenant(t, raw, "directory-activation")
 	legacyTarget := mustCreateAgent(t, raw, tenant, "before-activation")
@@ -38,7 +41,7 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 	if err != nil || !supported {
 		t.Fatalf("initial DirectoryStatus = %+v supported=%t err=%v", cached, supported, err)
 	}
-	if cached.Enabled || !cached.EpochCoverageComplete ||
+	if cached.Enabled || cached.EpochCoverageComplete || cached.InventoryUnavailableReason != "system_bootstrap_pending" ||
 		cached.ControlMode != store.DirectoryControlStaged ||
 		cached.WriterPosture != store.DirectoryWriterSQLiteCapability ||
 		cached.ExpectedGeneration != 1 {
@@ -49,7 +52,7 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ActivateDirectoryWriter: %v", err)
 	}
-	if !changed || before != cached || after.Enabled || !after.EpochCoverageComplete ||
+	if !changed || !before.EpochCoverageComplete || before.InventoryOrgCount != 2 || after.Enabled || !after.EpochCoverageComplete ||
 		after.ControlMode != store.DirectoryControlEnforced ||
 		after.WriterPosture != store.DirectoryWriterSQLiteCapability ||
 		after.ExpectedGeneration != 2 {
@@ -66,17 +69,19 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 	// durable cutover. The supported wrapper reads generation 2 from durable
 	// control and continues to write even though this process's boot witness is
 	// intentionally still staged/off.
-	if _, err := ss.db.ExecContext(ctx,
-		"UPDATE main.agents SET name = name WHERE id = ?", legacyTarget.ID.String(),
-	); err == nil || !strings.Contains(err.Error(), "directory writer generation required") {
+	// Participate in lineage only, so its guard cannot mask this independent
+	// directory cutover assertion. The raw DML still has no directory marker.
+	if err := raw.Mutate(ctx, tenant, func(sc store.Scope) error {
+		_, err := sc.(*tenantScope).tx.ExecContext(ctx, "UPDATE main.agents SET name=name WHERE id=?", legacyTarget.ID.String())
+		return err
+	}); err == nil || !strings.Contains(err.Error(), "directory writer generation required") {
 		t.Fatalf("raw old writer after activation error = %v", err)
 	}
 	mustCreateAgent(t, raw, tenant, "after-activation")
 	directoryActivationTestWantSQLiteMarkerBaseline(t, ss.db)
 
-	// The original precondition is an idempotent retry; the durable generation
-	// itself is also an explicit verify-only invocation. Neither advances again.
-	for name, expected := range map[string]int64{"retry": 1, "verify-only": 2} {
+	// Only the exact original predecessor is an idempotent target retry.
+	for name, expected := range map[string]int64{"retry": 1} {
 		t.Run(name, func(t *testing.T) {
 			gotBefore, gotAfter, gotChanged, err := ActivateDirectoryWriter(ctx, raw, cfg, expected)
 			if err != nil {
@@ -91,7 +96,7 @@ func TestDirectoryActivationSQLiteCutoverRetryAndReopen(t *testing.T) {
 			directoryActivationTestWantSQLitePresentation(t, ss.db, tenant.String(), "text", 1)
 		})
 	}
-	if _, _, _, err := ActivateDirectoryWriter(ctx, raw, cfg, 3); !errors.Is(err, store.ErrConflict) {
+	if _, _, _, err := ActivateDirectoryWriter(ctx, raw, cfg, 2); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("stale generation error = %v, want %v", err, store.ErrConflict)
 	}
 
@@ -166,7 +171,7 @@ func TestDirectoryActivationSQLiteAssertionsAreExactAndNeverHeal(t *testing.T) {
 	t.Run("durable marker contamination", func(t *testing.T) {
 		cfg, raw, ss := directoryActivationTestOpenSQLite(t)
 		if _, err := ss.db.ExecContext(ctx, `INSERT INTO main.directory_writer_marker
-(control_key, generation) VALUES (?, ?)`, dialect.DirectoryWriterControlKey, 1); err != nil {
+(control_key, generation, coverage_protocol) VALUES (?, ?, 'membership-union-v1')`, dialect.DirectoryWriterControlKey, 1); err != nil {
 			t.Fatalf("contaminate marker: %v", err)
 		}
 		if _, _, _, err := ActivateDirectoryWriter(ctx, raw, cfg, 1); err == nil {
@@ -187,7 +192,7 @@ func TestDirectoryActivationSQLiteAssertionsAreExactAndNeverHeal(t *testing.T) {
 			t.Fatalf("drop tombstone trigger: %v", err)
 		}
 		if _, _, _, err := ActivateDirectoryWriter(ctx, raw, cfg, 1); err == nil ||
-			!strings.Contains(err.Error(), "exact directory baseline") {
+			!strings.Contains(err.Error(), "core_directory_tombstone") {
 			t.Fatalf("activation with tombstone drift error = %v", err)
 		}
 		var count int
@@ -421,7 +426,7 @@ func TestDirectoryActivationSQLiteCommitBoundary(t *testing.T) {
 				return err
 			}
 			_, err := ss.db.ExecContext(ctx, `UPDATE main.directory_writer_control
-SET mode = 'staged', expected_generation = 1`)
+SET mode = 'staged', expected_generation = 1, coverage_protocol = 'membership-union-v1'`)
 			return err
 		}
 		_, after, changed, err := ActivateDirectoryWriter(ctx, raw, cfg, 1)
@@ -445,6 +450,9 @@ func directoryActivationTestOpenSQLite(
 	raw, err := Open(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatalf("Open activation store: %v", err)
+	}
+	if err := raw.System(context.Background(), func(sys store.SystemScope) error { _, err := sys.EnsureSystemTenant(context.Background()); return err }); err != nil {
+		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = raw.Close() })
 	return cfg, raw, raw.(*sqlStore)

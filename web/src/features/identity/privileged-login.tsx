@@ -12,7 +12,7 @@
 // session AAL drives the gate on the WIF/identity views.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fingerprint, IdCard, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useState, useRef, useEffect } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SectionCard, SelfAuditNotice } from '@/features/_intel'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +33,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
+import { useSessionStore } from '@/stores/session'
 import {
   useFailedActionReporter,
   usePrivilegedMutation,
@@ -46,13 +47,20 @@ import {
 } from './api'
 import type { WebAuthnCredentialItem } from './types'
 import { AAL, StepUpPanel, aalLabel, useAssurance } from './assurance'
-import { ContractPendingNotice, DeclaredSection } from './components'
+import {
+  AuthorityLink,
+  ContractPendingNotice,
+  DeclaredSection,
+} from './components'
 import { AuthorityReferences } from './references'
 import {
-  decodeCreationOptions,
-  encodeAttestation,
-  isWebAuthnSupported,
-} from './webauthn'
+  canEnrollPasskey,
+  enrollPasskey,
+  RegistrationOutcomeUnknown,
+} from './enroll-passkey'
+import { useStepUpOwner } from '@/stores/step-up'
+import { useResumeGuard } from '@/lib/hooks/use-resume-guard'
+import { isPivKnownUnconfigured, pivStatusQueryKey } from './piv-configuration'
 
 export function PrivilegedLoginTab() {
   return (
@@ -330,71 +338,54 @@ function RegisterPasskeyForm({
   const { t } = useTranslation(['identity', 'common'])
   const [name, setName] = useState('')
   const [pending, setPending] = useState(false)
-  // El reporte vive en un sitio (use-privileged-mutation.ts:25-32) y el reintento no puede salir
-  // de un diálogo ya cerrado (use-resume-guard.ts).
   const report = useFailedActionReporter('identity')
-  // ⛔ El reintento va a un store GLOBAL y el host vive junto a toda la aplicación, así que este
-  // diálogo puede desmontarse antes de que la ceremonia termine y el callback ejecutaría el
-  // registro de un formulario muerto. La guarda va EN LÍNEA a propósito: el hook compartido
-  // (`lib/hooks/use-resume-guard.ts`) nace en la rama de #784 y todavía no está en `main`;
-  // acoplar las dos ramas para ahorrar seis líneas sería peor que duplicarlas. Cuando #784
-  // aterrice, esto se colapsa en el hook.
-  const montado = useRef(true)
-  useEffect(() => {
-    montado.current = true
-    return () => {
-      montado.current = false
-    }
-  }, [])
-
+  const captureOwner = useStepUpOwner()
+  const guardResume = useResumeGuard()
+  const [failure, setFailure] = useState<
+    'unknown' | 'sessionExpired' | 'pending' | null
+  >(null)
   const valid = name.trim().length > 0
 
   async function handleRegister() {
     if (
-      !isWebAuthnSupported() ||
-      typeof navigator.credentials.create !== 'function'
-    ) {
+      pending ||
+      failure === 'unknown' ||
+      failure === 'sessionExpired' ||
+      !valid
+    )
+      return
+    if (!canEnrollPasskey()) {
       toast.error(t('login.passkeys.unsupported'))
       return
     }
+    const owner = captureOwner()
+    const attempt = owner.begin()
     setPending(true)
+    setFailure(null)
     try {
-      const options = await identityApi.webauthnRegisterOptions()
-      const credential = (await navigator.credentials.create({
-        publicKey: decodeCreationOptions(options.publicKey),
-      })) as PublicKeyCredential | null
-      if (!credential) {
-        toast.error(t('login.passkeys.registerFailed'))
-        setPending(false)
-        return
-      }
-      await identityApi.webauthnRegister(
-        encodeAttestation(credential),
-        name.trim(),
-      )
+      await enrollPasskey(name, attempt)
+      attempt.dispatchGuard()
       onRegistered()
     } catch (err) {
-      // ⛔ AQUÍ EL `catch` ERA PELADO —ni siquiera ligaba el error— y convertía CUALQUIER fallo
-      // en «registro fallido». Entre ellos, el único que tiene remedio: registrar una SEGUNDA
-      // credencial exige AAL3 y el motor lo dice por su código
-      // (`core/auth/webauthn.go:232-235` → `handlers_webauthn.go` → `core/api/errors.go:220-224`).
-      //
-      // La ironía era completa: tienes una passkey, intentas añadir la segunda, el motor te pide
-      // que confirmes CON LA QUE YA TIENES, y la consola contestaba «registro fallido» — el
-      // obstáculo sin la puerta, en la pantalla que existe justo para abrirla.
-      //
-      // Este emisor no pasa por `requireAAL3`, así que no salía en el censo de las 21 llamadas:
-      // lo levantó el contraste Codex `sol max` (H2) al refutar mi afirmación de que sólo había
-      // dos familias de emisores. Son cuatro.
+      if (!attempt.current()) return
+      // Additional credentials still require authentication with an existing factor.
+      // Resuming starts a NEW challenge, never resends the prior attestation.
       if (err instanceof ApiError && err.isStepUpRequired) {
-        report(err, () => {
-          if (montado.current) void handleRegister()
-        })
+        report(
+          err,
+          guardResume(() => void handleRegister()),
+          owner,
+        )
         return
       }
-      toast.error(t('login.passkeys.registerFailed'))
+      if (err instanceof RegistrationOutcomeUnknown) setFailure('unknown')
+      else if (err instanceof ApiError && err.isUnauthenticated)
+        setFailure('sessionExpired')
+      else if (isContractPending(err)) setFailure('pending')
+      else toast.error(t('login.passkeys.registerFailed'))
     } finally {
-      setPending(false)
+      if (attempt.current()) setPending(false)
+      attempt.retire()
     }
   }
 
@@ -406,6 +397,18 @@ function RegisterPasskeyForm({
       <p className="text-sm text-muted-foreground">
         {t('login.passkeys.registerHint')}
       </p>
+      {failure === 'pending' && (
+        <ContractPendingNotice what={t('assurance.seamWhat')} />
+      )}
+      {(failure === 'unknown' || failure === 'sessionExpired') && (
+        <p role="alert" className="text-sm text-warning">
+          {t(
+            failure === 'unknown'
+              ? 'assurance.registrationUnknownElsewhere'
+              : 'assurance.sessionExpired',
+          )}
+        </p>
+      )}
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">
@@ -425,7 +428,12 @@ function RegisterPasskeyForm({
         <Button
           variant="primary"
           onClick={() => void handleRegister()}
-          disabled={!valid || pending}
+          disabled={
+            !valid ||
+            pending ||
+            failure === 'unknown' ||
+            failure === 'sessionExpired'
+          }
         >
           {pending && <Spinner size="sm" aria-hidden />}
           {pending
@@ -500,19 +508,51 @@ function RenamePasskeyForm({
   )
 }
 
+/**
+ * THE OPERATOR'S SETUP GUIDE, not the engine's variable name.
+ *
+ * The unconfigured callout used to read "an operator enables it by setting
+ * OLIVARES_PIV_CONFIG (agency CA, cert-to-role map) on the engine" — an engine
+ * internal printed as the primary, and only, thing to do about a card that does
+ * not work. A console user who reads it cannot act on it, and an administrator
+ * who can does not learn it here first. The configuration surface belongs in the
+ * documentation, which already carries it; the callout says who has to act and
+ * points at where it is written.
+ *
+ * The page is the configuration reference, which documents the smart-card
+ * configuration surface, at the same documentation base the topbar help icon
+ * uses. It exists in this repository's docs tree as
+ * docs-site/src/content/docs/reference/configuration.md — this constant is not a
+ * new destination invented for the copy.
+ */
+const PIV_SETUP_GUIDE =
+  'https://docs.olivares.ai/reference/configuration/'
+
 function PivStatusSection() {
   const { t } = useTranslation(['identity', 'common'])
-  const { activeTenant } = useAuth()
+  const { activeTenant, principal } = useAuth()
+  const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
+  const knownUnconfigured = isPivKnownUnconfigured(principal)
   const q = useQuery({
-    queryKey: identityKeys.piv(activeTenant),
+    queryKey: pivStatusQueryKey(activeTenant, principal, credentialGeneration),
     queryFn: () => identityApi.pivStatus(),
     retry: false,
+    enabled: !knownUnconfigured,
   })
   // The explicit "PIV not configured on this deployment" state (the
-  // backend route is live; 501 piv_not_configured means OLIVARES_PIV_CONFIG is
-  // unset) — a real, known state, not the backend-pending seam. Same pattern
-  // as the federation view's ErrSSONotConfigured.
-  if (q.isError && isPivNotConfigured(q.error)) {
+  // backend route is live; 501 piv_not_configured means the smart-card
+  // configuration is unset) — a real, known state, not the backend-pending
+  // seam. Same pattern as the federation view's ErrSSONotConfigured. A
+  // known-false whoami field is the same card and must not paint cached
+  // presented status.
+  //
+  // THE PREDICATE IS UNCHANGED AND MUST STAY THAT WAY: only a known-false
+  // whoami field or a typed 501 reaches this card. A transport failure, a 401
+  // or any other error still falls through to DeclaredSection below, which
+  // reports it as the failed read it is. Telling an operator that PIV is "not
+  // configured" because a request did not arrive would be a worse answer than
+  // the one this correction replaces.
+  if (knownUnconfigured || (q.isError && isPivNotConfigured(q.error))) {
     return (
       <SectionCard
         title={t('login.pivTitle')}
@@ -520,6 +560,14 @@ function PivStatusSection() {
       >
         <p role="status" className="text-sm text-muted-foreground">
           {t('login.pivNotConfigured')}
+        </p>
+        <p className="mt-2 text-sm">
+          <AuthorityLink
+            href={PIV_SETUP_GUIDE}
+            className="font-sans text-sm break-normal"
+          >
+            {t('login.pivSetupGuide')}
+          </AuthorityLink>
         </p>
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           <IdCard className="size-3.5 shrink-0" aria-hidden />

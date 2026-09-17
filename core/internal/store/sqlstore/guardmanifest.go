@@ -54,10 +54,18 @@ const guardManifestFormat int64 = 1
 // a partial census is refused. Thus the constant is a maximum, not permission for a
 // core-only binary to claim an edition whose module relations it does not carry.
 //
+// Epochs 5, 6 and 7 add the four CORE access-evidence relations (DA) over each of those
+// three shapes. They are three editions rather than one because DA is core while DF and
+// DK are conditional on registered modules: an upgrade must reach the target that keeps
+// the module relations its source already had, and a single "epoch 5" would have made
+// every one of those a different census under one number. This is also why the editions
+// stopped being a chain — see guardeditiongraph.go.
+//
 // An increment is not, by itself, authority to move a database:
-// guardManifestEditionEdge derives the one exact predecessor for each known edge. Every
-// other older digest is refused.
-const guardCodeEpoch int64 = 4
+// guardManifestEditionEdges derives every exact compiled predecessor of an edition, and
+// each edge is a complete, nonempty, exactly-named delta between two manifests built
+// from the same base census. Every other older digest is refused.
+const guardCodeEpoch int64 = 7
 
 // The following constants are the complete relation delta authorized by the 1 -> 2 edge.
 //
@@ -508,46 +516,88 @@ func buildGuardManifest(tables []string) (guardManifest, error) {
 // guardManifestEpochForCensus keeps the core/module boundary explicit. Core-only and
 // pre-Slice-F registries remain epoch 2, the complete Slice-F census advances to epoch 3,
 // and the complete K5 protocol evidence census over that predecessor advances to epoch 4.
-// A partial delta, or a later delta without its predecessor, is refused before any
-// migration can record it.
+// The complete CORE access-evidence delta lifts each of those three to 5, 6 and 7
+// respectively. A partial delta, or a later delta without its predecessor, is refused
+// before any migration can record it.
+//
+// Note what this function deliberately does NOT decide: whether the D2 relations are
+// complete. A registry carrying one tombstone and not the other still reports the epoch
+// its other deltas imply, and requireCompleteGuardEdition is what refuses it. Splitting
+// the two keeps the refusal where the operator can read every missing relation at once,
+// and it is the behavior every caller has depended on since epoch 2.
 func guardManifestEpochForCensus(tables []string) (int64, error) {
-	epoch3Present := make(map[string]bool, len(guardEpoch3CommunicationTables))
-	epoch4Present := make(map[string]bool, len(guardEpoch4ProtocolTables))
+	present := map[guardEditionDelta]map[string]bool{}
+	for _, d := range guardEditionDeltaOrder {
+		present[d] = map[string]bool{}
+	}
 	for _, table := range tables {
-		if guardEpoch3Adds(table) {
-			epoch3Present[table] = true
-		}
-		if guardEpoch4Adds(table) {
-			epoch4Present[table] = true
+		if delta, ok := guardEditionDeltaOf(table); ok {
+			present[delta][table] = true
 		}
 	}
-	if len(epoch4Present) > 0 && len(epoch4Present) != len(guardEpoch4ProtocolTables) {
-		return 0, partialGuardEpochCensusError(4, epoch4Present, guardEpoch4ProtocolTables[:])
-	}
-	if len(epoch3Present) > 0 && len(epoch3Present) != len(guardEpoch3CommunicationTables) {
-		return 0, partialGuardEpochCensusError(3, epoch3Present, guardEpoch3CommunicationTables[:])
-	}
-	if len(epoch4Present) == len(guardEpoch4ProtocolTables) {
-		if len(epoch3Present) != len(guardEpoch3CommunicationTables) {
-			return 0, fmt.Errorf("sqlstore: guard edition 4 census is complete but its epoch-3 predecessor is absent; refusing to authorize a 2 -> 4 edge")
+	complete := map[guardEditionDelta]bool{}
+	// Newest delta first, so a census that is partial in more than one place names the
+	// one whose absence decides the edition.
+	for i := len(guardEditionDeltaOrder) - 1; i >= 0; i-- {
+		d := guardEditionDeltaOrder[i]
+		if d == guardDeltaDirectory {
+			// See the note above: D2 completeness is requireCompleteGuardEdition's.
+			complete[d] = len(present[d]) > 0
+			continue
 		}
-		return 4, nil
+		required := guardEditionDeltaTables(d)
+		switch {
+		case len(present[d]) == 0:
+		case len(present[d]) != len(required):
+			return 0, partialGuardEpochCensusError(d, present[d], required)
+		default:
+			complete[d] = true
+		}
 	}
-	if len(epoch3Present) == len(guardEpoch3CommunicationTables) {
-		return 3, nil
+	if complete[guardDeltaProtocol] && !complete[guardDeltaCommunication] {
+		return 0, fmt.Errorf("sqlstore: the %s census is complete but its %s predecessor is absent; refusing to authorize an edge that skips an edition",
+			guardDeltaProtocol, guardDeltaCommunication)
 	}
-	return 2, nil
+	membership := guardEditionMembership(0)
+	// D2 is always claimed: every compiled edition above the base carries it, and an
+	// edition that reached epoch 2 or later without it is refused by completeness
+	// rather than silently demoted to the base edition.
+	membership = membership.with(guardDeltaDirectory)
+	for _, d := range []guardEditionDelta{guardDeltaCommunication, guardDeltaProtocol, guardDeltaAccessEvidence} {
+		if complete[d] {
+			membership = membership.with(d)
+		}
+	}
+	epoch, ok := guardEditionEpochForMembership(membership)
+	if !ok {
+		return 0, fmt.Errorf("sqlstore: the closed census carries a combination of guard deltas no compiled edition declares (%s)",
+			guardEditionMembershipString(membership))
+	}
+	return epoch, nil
 }
 
-func partialGuardEpochCensusError(epoch int64, present map[string]bool, required []string) error {
+func guardEditionMembershipString(m guardEditionMembership) string {
+	var names []string
+	for _, d := range guardEditionDeltaOrder {
+		if m.has(d) {
+			names = append(names, d.String())
+		}
+	}
+	if len(names) == 0 {
+		return "base census only"
+	}
+	return strings.Join(names, "+")
+}
+
+func partialGuardEpochCensusError(delta guardEditionDelta, present map[string]bool, required []string) error {
 	missing := make([]string, 0, len(required)-len(present))
 	for _, table := range required {
 		if !present[table] {
 			missing = append(missing, table)
 		}
 	}
-	return fmt.Errorf("sqlstore: guard edition %d census is partial: found %d of %d append-only relations and is missing %v; refusing to record a same-epoch manifest that a complete module build would call drift",
-		epoch, len(present), len(required), missing)
+	return fmt.Errorf("sqlstore: the %s census is partial: found %d of %d append-only relations and is missing %v; refusing to record a same-epoch manifest that a complete build would call drift",
+		delta, len(present), len(required), missing)
 }
 
 // buildGuardManifestAtEpoch is the single constructor for current and historical
@@ -643,62 +693,6 @@ func (e guardManifestEdge) authorizes(format, epoch int64, digest [32]byte) bool
 	return format == e.From.Format && epoch == e.From.CodeEpoch && digest == e.From.CodeSHA256
 }
 
-// guardManifestEditionEdge derives the immediate predecessor from the CLOSED current
-// census by removing exactly the relations that current.CodeEpoch adds. This is
-// intentionally stricter than accepting "any smaller epoch": if any other registry entry
-// or canonical byte differs from the database that ran the predecessor, its digest does
-// not match From and there is no edge.
-func guardManifestEditionEdge(current guardManifest) (guardManifestEdge, bool, error) {
-	if current.Format != guardManifestFormat || current.CodeEpoch < 2 || current.CodeEpoch > guardCodeEpoch {
-		return guardManifestEdge{}, false, nil
-	}
-	if missing := missingGuardTablesForEpoch(current, current.CodeEpoch); len(missing) != 0 {
-		// An incomplete build has no edge at all. In particular, it must not be able
-		// to persist an epoch with an empty delta and later call the real additions
-		// same-epoch drift.
-		return guardManifestEdge{}, false, nil
-	}
-
-	predecessorTables := make([]string, 0, len(current.Specs))
-	additions := make([]guardSpec, 0, len(current.Specs))
-	for _, spec := range current.Specs {
-		if guardEpochAdds(current.CodeEpoch, spec.Key.Relation) {
-			additions = append(additions, spec)
-			continue
-		}
-		predecessorTables = append(predecessorTables, spec.Key.Relation)
-	}
-	predecessor, err := buildGuardManifestAtEpoch(predecessorTables, current.CodeEpoch-1)
-	if err != nil {
-		return guardManifestEdge{}, false, err
-	}
-	if err := requireCompleteGuardEdition(predecessor); err != nil {
-		return guardManifestEdge{}, false, fmt.Errorf(
-			"sqlstore: guard edition %d cannot derive its complete epoch-%d predecessor: %w",
-			current.CodeEpoch, predecessor.CodeEpoch, err)
-	}
-
-	// Carry-forward is byte identity, not merely key identity. Rebuilding from the same
-	// constructor should make this tautological; keeping the check here makes a future
-	// epoch-specific policy change fail at construction rather than silently authorizing
-	// a changed old entry.
-	for _, old := range predecessor.Specs {
-		now, ok := current.lookup(old.Key)
-		if !ok {
-			return guardManifestEdge{}, false, fmt.Errorf(
-				"sqlstore: guard edition %d drops predecessor entry %s without a retention transition",
-				current.CodeEpoch, old.Key)
-		}
-		if !guardSpecsByteIdentical(old, now) {
-			return guardManifestEdge{}, false, fmt.Errorf(
-				"sqlstore: guard edition %d changes predecessor entry %s instead of carrying it forward byte-identically",
-				current.CodeEpoch, old.Key)
-		}
-	}
-
-	return guardManifestEdge{From: predecessor, To: current, Additions: additions}, true, nil
-}
-
 func requireCompleteGuardCurrentEdition(current guardManifest) error {
 	if current.CodeEpoch < 2 || current.CodeEpoch > guardCodeEpoch {
 		return fmt.Errorf("sqlstore: guard edition %d is not a current edition known to this binary", current.CodeEpoch)
@@ -706,89 +700,50 @@ func requireCompleteGuardCurrentEdition(current guardManifest) error {
 	return requireCompleteGuardEdition(current)
 }
 
+// requireCompleteGuardEdition refuses a build that declares an edition without carrying
+// every relation that edition is made of.
+//
+// The completeness question is over the node's MEMBERSHIP, not over "every epoch up to
+// this one". With a chain those were the same sentence; with the DAG they are not, and
+// reading it the old way would demand the protocol delta of an epoch-6 build that never
+// had it.
 func requireCompleteGuardEdition(current guardManifest) error {
 	if current.CodeEpoch == 1 {
 		return nil
 	}
-	var missing []string
-	for epoch := int64(2); epoch <= current.CodeEpoch; epoch++ {
-		missing = append(missing, missingGuardTablesForEpoch(current, epoch)...)
+	if _, ok := guardEditionMembershipForEpoch(current.CodeEpoch); !ok {
+		return fmt.Errorf("sqlstore: guard epoch %d is not a compiled edition of this binary", current.CodeEpoch)
 	}
-	if len(missing) != 0 {
+	if missing := missingGuardTablesForEpoch(current, current.CodeEpoch); len(missing) != 0 {
 		return fmt.Errorf("sqlstore: guard edition %d is incomplete: the closed registry is missing required epoch-%d relations %v; refusing to bootstrap or open this edition because adding them later under the same epoch would be manifest drift",
 			current.CodeEpoch, current.CodeEpoch, missing)
 	}
-	if _, ok, err := guardManifestEditionEdge(current); err != nil {
+	edges, err := guardManifestEditionEdges(current)
+	if err != nil {
 		return err
-	} else if !ok {
+	}
+	if len(edges) == 0 {
 		return fmt.Errorf("sqlstore: guard edition %d has no complete compiled predecessor edge", current.CodeEpoch)
 	}
 	return nil
 }
 
+// missingGuardTablesForEpoch lists every relation an edition's membership requires and
+// the closed registry does not declare.
 func missingGuardTablesForEpoch(current guardManifest, epoch int64) []string {
-	var required []string
-	switch epoch {
-	case 2:
-		required = []string{
-			guardEpoch2DirectoryTombstoneTable,
-			guardEpoch2UserTombstoneTable,
-		}
-	case 3:
-		required = guardEpoch3CommunicationTables[:]
-	case 4:
-		required = guardEpoch4ProtocolTables[:]
-	default:
-		return nil
-	}
-	present := make(map[string]bool, len(required))
+	present := make(map[string]bool, len(current.Specs))
 	for _, spec := range current.Specs {
-		if guardEpochAdds(epoch, spec.Key.Relation) {
-			present[spec.Key.Relation] = true
-		}
+		present[spec.Key.Relation] = true
 	}
-	missing := make([]string, 0, len(required))
-	for _, table := range required {
-		if !present[table] {
-			missing = append(missing, table)
+	var missing []string
+	for _, delta := range guardEditionDeltasOfEpoch(epoch) {
+		for _, table := range guardEditionDeltaTables(delta) {
+			if !present[table] {
+				missing = append(missing, table)
+			}
 		}
 	}
 	return missing
-}
-
-func guardEpoch2Adds(table string) bool {
-	return table == guardEpoch2UserTombstoneTable || table == guardEpoch2DirectoryTombstoneTable
-}
-
-func guardEpoch3Adds(table string) bool {
-	for _, required := range guardEpoch3CommunicationTables {
-		if table == required {
-			return true
-		}
-	}
-	return false
-}
-
-func guardEpoch4Adds(table string) bool {
-	for _, required := range guardEpoch4ProtocolTables {
-		if table == required {
-			return true
-		}
-	}
-	return false
-}
-
-func guardEpochAdds(epoch int64, table string) bool {
-	switch epoch {
-	case 2:
-		return guardEpoch2Adds(table)
-	case 3:
-		return guardEpoch3Adds(table)
-	case 4:
-		return guardEpoch4Adds(table)
-	default:
-		return false
-	}
 }
 
 func guardSpecsByteIdentical(a, b guardSpec) bool {

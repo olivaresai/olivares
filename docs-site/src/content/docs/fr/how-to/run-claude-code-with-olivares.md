@@ -14,6 +14,9 @@ Pour le chemin *observation coopérative* (télémétrie OTLP → access map), v
 [Connecter Claude Code](/how-to/connect-claude-code/) ; pour le chemin *gouvernance* (hooks PreToolUse
 en tant que PEP), voir l'[exemple govern-claude-code](https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code).
 Cette page traite du **co-déploiement** : faire fonctionner les deux runtimes ensemble.
+Pour lancer Claude, Codex ou Grok sous un profil fournisseur une fois les
+runtimes présents, voir
+[Exploiter une session fournisseur](/how-to/operate-provider-sessions/).
 
 :::note[Comment la gouvernance atteint réellement la session]
 Une session est gouvernée parce que **le moteur possède les stdin/stdout de `claude`** — le
@@ -70,14 +73,14 @@ l'auto-update désactivé. Épinglez la base du moteur par digest et vérifiez-l
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.8.0 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 Apportez plutôt votre propre `claude` avec `--build-arg CLAUDE_INSTALL=byo` (l'image est livrée
@@ -86,7 +89,7 @@ sans `claude` ; montez le vôtre au runtime et définissez `OLIVARES_SESSION_RUN
 ### Démarrer
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.8.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -250,7 +253,7 @@ D'ici là, le défaut sécurisé est la co-localisation.
   credential émis.
 - **Chaîne d'approvisionnement vérifiée.** Le moteur est signé par cosign (vérifiez-le / épinglez par
   digest) ; `claude` s'installe depuis les dépôts signés d'Anthropic avec l'empreinte de clé épinglée.
-  L'installateur **refuse d'exécuter un moteur non vérifié** sauf si vous le désactivez explicitement.
+  L'installateur **refuse d'exécuter un moteur non vérifié**, sans contournement de vérification.
 - **Audit ancré.** Chaque transition de cycle de vie et chaque mutation de workspace est scellée dans
   le ledger signé et hash-chaîné par `PayloadHash` — les octets des fichiers et le contenu
   des frames ne sont jamais persistés.

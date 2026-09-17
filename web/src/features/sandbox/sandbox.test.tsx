@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  renderIntel,
-  screen,
-  userEvent,
-  waitFor,
-  within,
-} from '@/test/intel'
+import { renderIntel, screen, userEvent, waitFor, within } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import '@/features/_intel' // register the shared `intel` namespace for badges/notices
-import { ComparisonCard, OutputsList, RunsTable, ScenariosTable } from './components'
+import {
+  ComparisonCard,
+  OutputsList,
+  RunsTable,
+  ScenariosTable,
+} from './components'
 import {
   comparisonsFixture,
   outputsFixture,
@@ -220,9 +219,7 @@ describe('ScenariosTable — the step count is DERIVED from what the engine send
     // payload to one honest cell instead of a TypeError that unmounts the panel — it
     // has no fixture, so without this case the guard would be dead code that reads
     // like a defence.
-    const lying = [
-      { ...scenariosFixture[0], steps: null as unknown as [] },
-    ]
+    const lying = [{ ...scenariosFixture[0], steps: null as unknown as [] }]
     renderIntel(<ScenariosTable scenarios={lying} />)
     const row = screen
       .getByText('Checkout agent — happy path')
@@ -247,10 +244,7 @@ describe('Scenario authoring — the console calls what the engine already serve
       'Classify this refund request.',
     )
     await user.click(screen.getByRole('button', { name: 'Add mock' }))
-    await user.type(
-      screen.getByLabelText('Mock 1 resource'),
-      'policy.refunds',
-    )
+    await user.type(screen.getByLabelText('Mock 1 resource'), 'policy.refunds')
     await user.type(
       screen.getByLabelText('Mock 1 response'),
       'Refunds within 30 days are eligible.',
@@ -307,7 +301,9 @@ describe('Scenario authoring — the console calls what the engine already serve
     await user.click(screen.getByRole('button', { name: 'Create scenario' }))
 
     const refusal = await screen.findByRole('alert')
-    expect(refusal).toHaveTextContent('a scenario with this name already exists')
+    expect(refusal).toHaveTextContent(
+      'a scenario with this name already exists',
+    )
     // still open, with the typed name intact — the operator can rename and retry
     expect(screen.getByLabelText(/^Name/)).toHaveValue('Checkout agent')
     expect(api.scenarios).toHaveBeenCalledTimes(1)
@@ -328,7 +324,11 @@ describe('Scenario authoring — the console calls what the engine already serve
     // (modules/governance/grants.go:723-731). Asking the set alone would offer a
     // button whose 403 is guaranteed, not a race.
     await openScenariosTab(
-      ['sandbox:scenario:read', 'sandbox:scenario:write', 'sandbox:scenario:admin'],
+      [
+        'sandbox:scenario:read',
+        'sandbox:scenario:write',
+        'sandbox:scenario:admin',
+      ],
       'ws-payments',
     )
     expect(
@@ -466,6 +466,27 @@ describe('OutputsList — synthetic, mock-miss is a deterministic marker', () =>
       screen.getByText(/bounded synthetic outputs from the mock runner/i),
     ).toBeInTheDocument()
   })
+})
+
+it('replays one scoped instance and refuses an ambiguous legacy selector', async () => {
+  auth.perms = new Set(['sandbox:run:write'])
+  api.replay.mockResolvedValue({ id: 'replayed' })
+  const user = userEvent.setup()
+  renderIntel(<SandboxView />)
+  await user.click(
+    await screen.findByRole('button', { name: /Replay a session/i }),
+  )
+  const dialog = screen.getByRole('dialog')
+  const inputs = within(dialog).getAllByRole('textbox')
+  const live = '11111111-1111-4111-8111-111111111111'
+  await user.type(inputs[0], live)
+  await user.type(inputs[1], 'legacy')
+  expect(within(dialog).getByRole('button', { name: 'Replay' })).toBeDisabled()
+  await user.clear(inputs[1])
+  await user.click(within(dialog).getByRole('button', { name: 'Replay' }))
+  await waitFor(() =>
+    expect(api.replay).toHaveBeenCalledWith({ live_ref: live }),
+  )
 })
 
 describe('SandboxView — las tres acciones y sus dos niveles de permiso', () => {

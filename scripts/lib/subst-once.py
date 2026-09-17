@@ -50,7 +50,15 @@ def move_step(path: str, needle: str) -> None:
     rest = text[: m.start()] + text[m.end():]
     if not rest.endswith("\n"):
         rest += "\n"
-    open(path, "w", encoding="utf-8").write(rest + step)
+    # ⛔ AL FINAL DE SU PROPIO JOB, NO AL FINAL DEL FICHERO. Hasta el 2026-09-02 esto
+    # concatenaba al final del texto, y era CORRECTO POR ACCIDENTE: el job que se mutaba
+    # era el último del fichero. Al añadir un segundo job de apply (`apply-production`), el
+    # paso movido aterrizaba DENTRO del job siguiente — así que el mutante ya no probaba el
+    # orden: probaba la ausencia, y dos casos de la batería empezaron a nombrar otra guarda.
+    # Un mutante que se aplica en el sitio equivocado no falla ruidosamente: cambia de tema.
+    boundary = re.compile(r"^  [A-Za-z0-9_-]+:", re.M).search(rest, m.start())
+    cut = boundary.start() if boundary else len(rest)
+    open(path, "w", encoding="utf-8").write(rest[:cut] + step + rest[cut:])
 
 
 def main() -> None:

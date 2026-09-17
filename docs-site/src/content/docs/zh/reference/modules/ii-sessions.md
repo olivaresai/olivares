@@ -11,6 +11,10 @@ description: >-
 estate，而模块 II 则在同一条观测流之上为每个会话维护一个**实时运行叠加层**——并且只展示
 该流如实承载的内容。
 
+v26.9.0 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
+CLI **作为自有子进程启动**。该受管路径是同一模块。它不替代叠加层，也不合并两个
+宣布同一提供商会话 id 的主目录（`CHANGELOG.md` `[26.9.0]` B1/B2）。
+
 ## 它是什么
 
 模块 II 是一个由总线驱动的 Core 层模块，与清点同级。它维护一份按每个会话的外部引用作键的
@@ -34,6 +38,35 @@ estate，而模块 II 则在同一条观测流之上为每个会话维护一个*
 （实时列表、单个会话、按会话的时间线）外加一条实时 SSE 流；每次读取都需要会话读取权限，且
 **打开该流会被自动审计**。SSE 通道是严格**按租户隔离的**（一个客户端只接收其授权租户的快照），
 且是**尽力而为的**（慢速客户端会丢弃中间帧并获取下一帧——摄取从不阻塞）。
+
+## Provider profiles and `live_ref`
+
+**提供商配置文件**是某一执行环境上一个已配置提供商实例的持久身份：驱动程序、
+环境和规范的 `config_home` / `user_home`。它不是已认证的提供商账户。注册、
+重命名、停用/启用和退役位于 `/v1/m/sessions/provider-profiles`。路径只出现在
+管理员 `configuration` 读取上。启动会命名 `provider_profile_ref`；服务器解析
+homes，并在 spawn 前把非秘密快照持久化到该 run（`CHANGELOG.md` `[26.9.0]` B1；
+`web/src/features/agentops/types.ts`）。
+
+观测折叠进其 **channel** 的实时行，由服务器从主机盖章的源登记计算
+（`CHANGELOG.md` `[26.9.0]` B2）：
+
+| Channel | Meaning |
+|---|---|
+| `legacy` | no registration |
+| `observed` | a source dedicated to a profile by a binding approved at host admission for the exact applied revision |
+| `source` | a known registration with no verifiable profile |
+| `managed` | a run the plane launched; the only row carrying `canonical_sid` and `run_ref` |
+
+每一实时行公开 `live_ref` 和 `attribution`。两个宣告同一提供商会话 id 的
+home 是两行、两条时间线。用 `GET /v1/m/sessions/live/by-id/{live_ref}`
+（及其 timeline / stream / runs 查询）读取一行。裸外部 id 路由仍在，且是
+**legacy**：只回答 legacy 行。
+
+驱动程序通过固定官方二进制 **按节点** 注册（`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`、
+`_CODEX_BIN`、`_GROK_BIN` — 见 [配置](/reference/configuration/)）。未设置时，
+该驱动程序的配置文件仍可观察但不能启动。操作步骤：
+[运行提供商会话](/how-to/operate-provider-sessions/)。
 
 ## 它消费什么（以及它派生什么）
 

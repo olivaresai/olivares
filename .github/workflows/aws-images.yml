@@ -208,7 +208,7 @@ jobs:
           "$RUNNER_TEMP/bin/aws" --version
 
       - name: assume the sandbox role (OIDC → STS)
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -308,13 +308,51 @@ jobs:
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
+      # ⛔ LA TERCERA IMAGEN, Y ES DEDICADA A PROPOSITO. `cloud-roles` lleva un cliente de
+      # Postgres para la tarea de UN SOLO USO que provisiona los roles del plano de control.
+      # NO se mete `psql` en la imagen del runtime: la del plano de control corre en un
+      # servicio de larga duracion, y darle un cliente de base de datos deshace en la capa de
+      # la imagen la separacion de privilegios que `modules/compute` sostiene con un ROL
+      # propio — donde ningun gate de IAM la ve. Y ademas engorda el arranque de cada replica
+      # con lo que solo usa un paso que corre una vez.
+      #
+      # El contexto es `cloud/control-plane/deploy`: su Dockerfile copia el SQL y el lanzador
+      # desde ahi, y nada mas. Sin `--build-arg`: la imagen no compila nada.
+      - name: build and push the roles one-shot
+        id: roles
+        timeout-minutes: 15
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          ref="${REGISTRY}/${ECR_REPOSITORY}"
+          docker buildx build \
+            --file cloud/control-plane/deploy/Dockerfile.roles \
+            --tag "${ref}:roles-${GITHUB_SHA}" \
+            --provenance=false \
+            --metadata-file roles-metadata.json \
+            --push \
+            cloud/control-plane/deploy
+          digest="$(jq -r '."containerimage.digest" // empty' roles-metadata.json)"
+          # ⛔ FORMA EXACTA, no prefijo — misma razon que en las dos de arriba: `sha256:*`
+          # acepta `sha256:` vacio y `sha256:zz`, y lo que pase por ahi se FIRMA.
+          _hex="${digest#sha256:}"
+          case "${digest}:${#_hex}:${_hex}" in
+            sha256:*:64:*[!0-9a-f]*) echo "aws-images: roles digest is not 64 lowercase hex (got '${digest}')" >&2; exit 1 ;;
+            sha256:*:64:*) : ;;
+            *) echo "aws-images: buildx did not report a valid roles digest (got '${digest}')" >&2
+               exit 1 ;;
+          esac
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
       # Firma POR DIGEST y no por etiqueta: una etiqueta se puede repuntar, un digest no.
       # A través del lanzador y no de `cosign` a pelo — entre la aserción de arriba y esta
       # línea han corrido buildx, el login de registro y dos subidas, así que el firmante
       # re-autentica los bytes justo antes de firmar (`scripts/cosign-verified.sh`).
       #
       # ⛔ TRES COSAS QUE NO ESTABAN, Y LAS TRES SALEN DEL CONTRASTE `sol max` (E-01, ALTO).
-      # Este paso podía terminar EN VERDE dejando las dos imágenes SIN FIRMA publicada:
+      # Este paso podía terminar EN VERDE dejando las imágenes SIN FIRMA publicada:
       #
       #   1 · `--upload` vale true por defecto **sólo si el flag no es explícito**. cosign v2
       #       vincula `COSIGN_UPLOAD` al flag cuando falta, así que en un runner PERSISTENTE
@@ -328,12 +366,14 @@ jobs:
       # Y el resumen se escribe DESPUÉS, en su propio paso: un resumen que dice «both are
       # signed» antes de comprobarlo es exactamente el claim sin evidencia que el canon
       # prohíbe.
-      - name: cosign sign both images, then read the signatures back
+      - name: cosign sign the three images, then read the signatures back
         env:
           CP_REF: ${{ steps.cp.outputs.ref }}
           CP_DIGEST: ${{ steps.cp.outputs.digest }}
           ENGINE_REF: ${{ steps.engine.outputs.ref }}
           ENGINE_DIGEST: ${{ steps.engine.outputs.digest }}
+          ROLES_REF: ${{ steps.roles.outputs.ref }}
+          ROLES_DIGEST: ${{ steps.roles.outputs.digest }}
           CERT_OIDC_ISSUER: https://token.actions.githubusercontent.com
         run: |
           set -euo pipefail
@@ -352,6 +392,7 @@ jobs:
           CERT_IDENTITY_REGEXP="^https://github\.com/${repo_rx}/\.github/workflows/aws-images\.yml@refs/heads/.+$"
           bash scripts/cosign-verified.sh sign --yes --upload=true "${CP_REF}@${CP_DIGEST}"
           bash scripts/cosign-verified.sh sign --yes --upload=true "${ENGINE_REF}@${ENGINE_DIGEST}"
+          bash scripts/cosign-verified.sh sign --yes --upload=true "${ROLES_REF}@${ROLES_DIGEST}"
           bash scripts/cosign-verified.sh verify \
             --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
             --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
@@ -360,19 +401,25 @@ jobs:
             --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
             --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
             "${ENGINE_REF}@${ENGINE_DIGEST}" >/dev/null
+          bash scripts/cosign-verified.sh verify \
+            --certificate-identity-regexp "${CERT_IDENTITY_REGEXP}" \
+            --certificate-oidc-issuer "${CERT_OIDC_ISSUER}" \
+            "${ROLES_REF}@${ROLES_DIGEST}" >/dev/null
 
-      # Lo que esta corrida produce para la SIGUIENTE: las dos referencias por digest, tal
+      # Lo que esta corrida produce para la SIGUIENTE: las TRES referencias por digest, tal
       # cual se pegan en las entradas `image` y `engine_image` del dispatch de
       # `aws-terraform.yml`. En el resumen del job y no sólo en el log, porque un log se
       # rota y un resumen se enlaza.
-      # Sólo se llega aquí con las dos firmas publicadas Y leídas de vuelta: el paso
-      # anterior corre con `set -e` y las dos `verify` son las últimas en fallar.
+      # Sólo se llega aquí con las TRES firmas publicadas Y leídas de vuelta: el paso
+      # anterior corre con `set -e` y las tres `verify` son las últimas en fallar.
       - name: what to paste into the next apply
         env:
           CP_REF: ${{ steps.cp.outputs.ref }}
           CP_DIGEST: ${{ steps.cp.outputs.digest }}
           ENGINE_REF: ${{ steps.engine.outputs.ref }}
           ENGINE_DIGEST: ${{ steps.engine.outputs.digest }}
+          ROLES_REF: ${{ steps.roles.outputs.ref }}
+          ROLES_DIGEST: ${{ steps.roles.outputs.digest }}
         run: |
           set -euo pipefail
           {
@@ -382,7 +429,12 @@ jobs:
             echo '|---|---|'
             echo "| image | ${CP_REF}@${CP_DIGEST} |"
             echo "| engine_image | ${ENGINE_REF}@${ENGINE_DIGEST} |"
+            echo "| roles_task_image | ${ROLES_REF}@${ROLES_DIGEST} |"
             echo
-            echo "Both signatures were published AND read back with cosign verify against these"
-            echo "exact digests. Both tags are immutable, so re-running this commit is refused."
+            echo "All three signatures were published AND read back with cosign verify against"
+            echo "these exact digests. The tags are immutable, so re-running this commit is refused."
+            echo
+            echo "roles_task_image runs ONCE and is then retired: after \`aws ecs run-task\` has"
+            echo "provisioned the roles, re-apply with roles_task_image empty so its role, policy"
+            echo "and task definition go back to count 0."
           } >> "$GITHUB_STEP_SUMMARY"

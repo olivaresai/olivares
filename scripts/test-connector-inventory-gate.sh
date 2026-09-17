@@ -127,6 +127,26 @@ monta_doc "$BANCO/vacia.md" 2
 correr "$BANCO/vacia.md" "$BANCO/c"
 comprobar "tabla sin filas reconocibles es NO HE PODIDO MIRAR" 2 "$?"
 
+# ── LA PODA DE DEPENDENCIAS, en las DOS direcciones ───────────────────────────────────────────
+# Medido el 2026-09-01, con un push muerto a los 22 minutos: un worktree con las dependencias
+# instaladas tiene `connectors/backstage/node_modules/.pnpm/flatted@3.4.2/node_modules/flatted/
+# golang/pkg/flatted/flatted.go` — un `.go` DENTRO de un paquete npm. Sin la poda, backstage
+# «tenía Go», perdía su exención y el gate enrojecía un árbol correcto: el MISMO commit pasaba o
+# moría según si habías corrido `pnpm install`. Las dos direcciones, porque una poda que se pasa
+# de frenada esconde código Go de verdad y eso es peor que el fallo que cura.
+monta_dirs "$BANCO/c" alfa beta
+mkdir -p "$BANCO/c/solo-ts/node_modules/.pnpm/flatted@3.4.2/node_modules/flatted/golang/pkg/flatted"
+printf 'package flatted\n' >"$BANCO/c/solo-ts/node_modules/.pnpm/flatted@3.4.2/node_modules/flatted/golang/pkg/flatted/flatted.go"
+monta_doc "$BANCO/d.md" 3 alfa beta
+correr "$BANCO/d.md" "$BANCO/c"
+comprobar "un .go dentro de node_modules NO da Go al conector" 0 "$?"
+
+# Y el control que impide que la poda afloje el gate: el MISMO directorio, con un .go de verdad
+# fuera de node_modules, tiene que exigir su fila.
+printf 'package solots\n' >"$BANCO/c/solo-ts/real.go"
+correr "$BANCO/d.md" "$BANCO/c"
+comprobar "un .go REAL en ese mismo conector SÍ exige fila" 1 "$?"
+
 echo "test-connector-inventory-gate: $pasan pasan, $fallan fallan"
 [ "$fallan" -eq 0 ] || exit 1
 exit 0

@@ -184,6 +184,16 @@ del kernel fuera del control del agente; la fuente `ebpf` consume su exportació
 Siempre [`approximate`](#atribución-confianza) hasta que una identidad enlaza el
 proceso a un agente. Ver [eBPF/Tetragon](/es/how-to/connectors/ebpf-tetragon/).
 
+### live_ref
+
+Identidad asignada por el servidor de **una** fila de sesión viva. v26.9.0
+clavea la observación por `(ámbito de observación, id externo)` para que dos
+homes de proveedor que anuncian el mismo id de sesión sigan siendo dos filas.
+Las lecturas de consola y API que significan «esta fila» usan `live_ref`, no
+el id desnudo del proveedor. Las rutas de id externo desnudo son heredadas y
+responden solo la fila heredada (`CHANGELOG.md` `[26.9.0]` B2). Véase
+[Operación en vivo y sesiones](/reference/modules/ii-sessions/).
+
 ### Kill switch
 
 El stop de emergencia del estate (o por agente): una llamada de nivel admin mata toda
@@ -225,6 +235,16 @@ deliberadamente no JWTs, así que poseer una clave de firma nunca puede acuñar 
 La frontera de aislamiento. Toda lectura y escritura de módulo está acotada al tenant; en
 Postgres, la row-level security la respalda (el motor rehúsa correr como un
 rol que pudiera saltarse RLS).
+
+### Perfil de proveedor (provider profile)
+
+Identidad duradera de **una** instancia de proveedor configurada en **un**
+entorno de ejecución: controlador, entorno propietario y los `config_home` /
+`user_home` canónicos bajo los que corre un hijo lanzado. Identidad de
+configuración y almacenamiento, nunca una cuenta de proveedor autenticada.
+Los homes ya deben existir; el registro no instala ni inicia sesión. El
+lanzamiento nombra `provider_profile_ref`. Véase
+[Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
 
 ### Permitido frente a Observado
 

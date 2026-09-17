@@ -10,8 +10,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -30,13 +32,14 @@ import (
 func newMigrateCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "migrate",
-		Short: "Inspect the engine's schema-migration state (read-only)",
+		Short: "Inspect migration state or explicitly apply the PostgreSQL schema",
 		Example: "  olivares migrate status --data-dir /var/lib/olivares\n" +
 			"  olivares migrate manifest > schema-manifest.json",
 		Long: "Schema migrations apply automatically at boot in the online expand-contract model\n" +
 			"(an additive `expand` ships first; a destructive `contract` only a LATER release). This\n" +
-			"command shows what a database already carries, so you can verify an upgrade and judge\n" +
-			"rollback safety — without a SQL client. It opens a transient connection and applies nothing.\n" +
+			"group provides read-only inspection and explicit PostgreSQL schema application. `status`\n" +
+			"opens a transient connection and applies nothing; `manifest` prints the registered schema\n" +
+			"without connecting. `apply` changes the schema, then returns without serving or readiness.\n" +
 			"See the upgrade/rollback runbook: docs/UPGRADE-AND-ROLLBACK.md.",
 	}
 	addTextJSONFormatFlag(root)
@@ -68,8 +71,108 @@ func newMigrateCmd() *cobra.Command {
 			return err
 		}, result)
 	}
-	root.AddCommand(migrateStatusCmd(), manifest)
+	root.AddCommand(migrateStatusCmd(), migrateApplyCmd(), manifest)
 	return root
+}
+
+// migrateApplyCmd is the EXPLICIT first phase of migrate → GRANT → serve.
+//
+// It exists because of a refusal, and the refusal is the point. On PostgreSQL with a
+// separate owner role, boot now measures — before its first durable change — whether the
+// application role will hold the effective privileges it needs on the relations this
+// binary still has to CREATE. A deployment that provisions grants BY HAND has nothing to
+// measure there: the objects do not exist yet, and no grant can name them. The wrong
+// answer to that would be a `serve --skip-preflight`, which conflates "I authorize
+// schema commits" with "I authorize serving" and leaves the operator without an
+// observable boundary between migrating, granting and serving. This command is the
+// right one: it authorizes the schema, and only the schema.
+//
+// It deliberately does NOT accept --admin-dsn. This phase performs no cross-tenant read,
+// so an admin credential is not merely unused here — it must not be opened, and the
+// surest way to keep a credential closed is not to take it.
+func migrateApplyCmd() *cobra.Command {
+	var dsn, ownerDSN string
+	cmd := &cobra.Command{
+		Use:   "apply",
+		Short: "Apply the PostgreSQL schema and stop WITHOUT serving (migrate → grant → serve)",
+		Long: "Applies this binary's complete schema to a PostgreSQL database and returns before anything\n" +
+			"that would make the process able to serve: no runtime reconciliation, no leader election, no\n" +
+			"listeners. Use it when the application role's grants are provisioned BY HAND, so the boot-time\n" +
+			"privilege preflight has no future-object default privileges to measure.\n\n" +
+			"The order is: run this, then GRANT on the relations it has just created, then start the\n" +
+			"service. Success here means the schema was applied and the connections were closed. It does\n" +
+			"NOT mean the node is ready.\n\n" +
+			"PostgreSQL only: the owner/app split this phase separates does not exist on SQLite.\n" +
+			"See docs/UPGRADE-AND-ROLLBACK.md.",
+		Example: `  # Apply the schema with the least-privilege owner/app split
+  olivares migrate apply --dsn env:DATABASE_URL --owner-dsn env:OWNER_DSN
+
+  # Then grant on what it created, and only then serve
+  psql "$OWNER_DSN" -c 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO olivares_app'
+  olivares serve --engine postgres --dsn env:DATABASE_URL --owner-dsn env:OWNER_DSN`,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if strings.TrimSpace(dsn) == "" {
+				return fmt.Errorf("--dsn is required (accepts a file:/env: reference)")
+			}
+			resolvedDSN, err := resolveDSNRef(cmd.Context(), "--dsn", dsn, osGetenv)
+			if err != nil {
+				return err
+			}
+			resolvedOwner, err := resolveDSNRef(cmd.Context(), "--owner-dsn", ownerDSN, osGetenv)
+			if err != nil {
+				return err
+			}
+			// The SAME registrar boot uses, over the same module set. A partial one would
+			// apply a partial schema and call it complete, which is worse than not
+			// applying it at all: the next `serve` would then be the thing that creates
+			// the rest, after the operator had already granted.
+			registrar, err := bootSchemaRegistrar(slog.New(slog.NewTextHandler(io.Discard, nil)))
+			if err != nil {
+				return fmt.Errorf("prepare the schema registrar: %w", err)
+			}
+			if err := coreengine.ApplyMigrations(cmd.Context(), store.Config{
+				Engine:   store.EnginePostgres,
+				DSN:      resolvedDSN,
+				OwnerDSN: resolvedOwner,
+			}, registrar); err != nil {
+				return err
+			}
+			// The closing statement says exactly what happened and exactly what did not,
+			// because an operator reading "ok" after a MIGRATION is entitled to know
+			// whether the service is up. It is not.
+			return renderOut(cmd, func(out io.Writer) error {
+				_, err := fmt.Fprint(out,
+					"schema applied; the service is NOT open and this node is not ready.\n"+
+						"Next: grant the application role its effective privileges on the relations that now\n"+
+						"exist (SELECT/INSERT/UPDATE/DELETE as the deployment requires — see\n"+
+						"deploy/postgres/01-app-role.sql), then run `olivares serve`.\n")
+				return err
+			}, migrateApplyResult{
+				Engine:        string(store.EnginePostgres),
+				SchemaApplied: true,
+				Serving:       false,
+				Ready:         false,
+				NextStep:      "grant the application role its effective privileges on the relations that now exist, then run `olivares serve`",
+			})
+		},
+	}
+	cmd.Flags().StringVar(&dsn, "dsn", "", "PostgreSQL application-role DSN (accepts a file:/env: reference)")
+	cmd.Flags().StringVar(&ownerDSN, "owner-dsn", "", "PostgreSQL owner-role DSN that runs the DDL (accepts a file:/env: reference); leave empty for the single-role setup")
+	return cmd
+}
+
+// migrateApplyResult is the JSON form. Serving and Ready are stated as explicit false
+// rather than omitted: a machine consumer that sees only a success code would otherwise
+// have to infer readiness, and inferring it is the mistake this whole phase exists to
+// make impossible.
+type migrateApplyResult struct {
+	Engine        string `json:"engine"`
+	SchemaApplied bool   `json:"schema_applied"`
+	Serving       bool   `json:"serving"`
+	Ready         bool   `json:"ready"`
+	NextStep      string `json:"next_step"`
 }
 
 func migrateStatusCmd() *cobra.Command {

@@ -15,9 +15,9 @@ description: >-
 значения по умолчанию: никаких учётных данных по умолчанию, одноразовый токен
 настройки, TLS, включённый по умолчанию, и порт хоста, привязанный к loopback.
 
-:::note[Бета — релиз ещё не нарезан]
+:::note[Бета — 26.9.0 ещё не опубликован]
 Olivares AI находится в **бете**. Координаты образа ниже разрешаются только
-**после выхода первого релиза (CalVer `26.8.0`)**; до тех пор реестрам нечего
+**после выхода релиза `26.9.0`**; до тех пор реестрам нечего
 отдавать. Воспринимайте это как форму развёртывания, которую вы будете
 использовать, а не как гарантию готовности к продакшену.
 :::
@@ -32,7 +32,7 @@ Olivares AI находится в **бете**. Координаты образ�
 Основная загрузка контейнера — **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.8.0
+docker pull docker.io/olivaresai/olivares:26.9.0
 ```
 
 То же содержимое также публикуется в `ghcr.io/olivaresai/olivares` — идентичное
@@ -40,8 +40,8 @@ docker pull docker.io/olivaresai/olivares:26.8.0
 **анонимных** пулов; ghcr.io не ограничивает анонимные пулы публичных образов — поэтому
 `docker login` или координата ghcr.io и есть выход, если узел CI или большой парк упирается
 в лимит. Теги несут **без
-ведущего `v`**: `:26.8.0` закрепляет релиз, `:latest` плавает, а
-`:26.8.0-fips` / `:26.8.0-stig` — усиленные варианты. Базовый тег и `:latest`
+ведущего `v`**: `:26.9.0` закрепляет релиз, `:latest` плавает, а
+`:26.9.0-fips` / `:26.9.0-stig` — усиленные варианты. Базовый тег и `:latest`
 мультиархитектурные (`linux/amd64`, `linux/arm64`); `fips`/`stig` — только
 `amd64`.
 
@@ -52,7 +52,7 @@ Docker Hub через `cosign copy`, поэтому digest тот же:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.8.0")"
+DIGEST="$(crane digest "$IMAGE:26.9.0")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -89,7 +89,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 127.0.0.1:8443:8443 \
   -p 127.0.0.1:8444:8444 \
-  docker.io/olivaresai/olivares:26.8.0 \
+  docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -287,7 +287,7 @@ olivares.example.com {
 ```bash
 # 1. Back up first (see §4).
 # 2. Pull the new release and re-verify it (see §1):
-docker pull docker.io/olivaresai/olivares:26.8.1
+docker pull docker.io/olivaresai/olivares:26.9.1
 
 # docker run:
 docker stop olivares && docker rm olivares
@@ -303,7 +303,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. Закрепление по digest для продакшена
 
-Изменяемые теги (`:26.8.0`, `:latest`) — для оценки. В продакшене закрепляйте
+Изменяемые теги (`:26.9.0`, `:latest`) — для оценки. В продакшене закрепляйте
 **digest**, который вы проверили — digest неизменяем и есть ровно то, что вы
 утвердили:
 
@@ -317,9 +317,8 @@ docker run ... docker.io/olivaresai/olivares@sha256:<digest> serve ...
 OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
-Для масштабирования вширь и мультинодовых конфигураций используйте Helm-чарт —
-публикуемый как OCI-артефакт по адресу
-`oci://ghcr.io/olivaresai/charts/olivares`, подписанный cosign и закреплённый по
-digest образа. См. [Самостоятельный хостинг control plane](/ru/how-to/self-hosting/)
-для команды чарта и [Установку в air-gapped окружении](/ru/how-to/air-gap-install/)
+Для масштабирования вширь и мультинодовых конфигураций используйте чарт из
+`deploy/helm/olivares` и закрепляйте опубликованный образ по digest. Чарт ещё не
+является публичным OCI-артефактом. См. [Самостоятельный хостинг control plane](/ru/how-to/self-hosting/)
+для команды из исходников и [Установку в air-gapped окружении](/ru/how-to/air-gap-install/)
 для полностью отключённых площадок.

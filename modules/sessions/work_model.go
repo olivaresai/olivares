@@ -226,8 +226,13 @@ type WorkCommand struct {
 	leaseHolderResolved bool
 	// agentAuthority is a server-only tenant-wide eligibility snapshot. Its
 	// digest participates in plan hashing; the opaque token never does and is
-	// only handed back to the composition adapter inside Apply.
+	// only handed back to the composition adapter: read-validated inside the
+	// planning View, or locked inside Apply's Mutate.
 	agentAuthority WorkAgentAuthoritySnapshot
+	// authorityStamp is the detached server-owned identity of the WorkItem that
+	// agentAuthority was observed for. A later View or Mutate uses the snapshot
+	// only while its WorkItem still matches this stamp exactly.
+	authorityStamp workAuthorityItemStamp
 	// holderSIDProven records that preflightIdentity ESTABLISHED, against the
 	// authenticated principal, that this caller may act for HolderSID. It is
 	// unexported and server-set for the same reason participantResolved is: a
@@ -393,11 +398,14 @@ type WorkAgentAuthoritySnapshot struct {
 
 // WorkAgentEligibilityInScope is the optional transaction-bound identity seam
 // used immediately before a mutation consumes or renews agent authority.
-// ObserveAgentWorkAuthority reads the tenant-wide authority plane without
-// borrowing the request's workspace-confined data handle. LockAgentWorkAuthority
-// then pins that exact snapshot on the supplied WorkItem transaction without
-// returning tenant-wide rows. Returning a cached answer without locking its
-// fact versions does not satisfy this contract.
+// ObserveAgentWorkAuthority reads the tenant-wide authority plane in its own
+// read, without borrowing the request's workspace-confined data handle. The
+// kernel calls it only after its own WorkItem View has closed: SQLite serves
+// the core store over one connection, so an observation opened beside a live
+// View waits for that View forever. LockAgentWorkAuthority then pins that exact
+// snapshot on the supplied WorkItem transaction without returning tenant-wide
+// rows. Returning a cached answer without locking its fact versions does not
+// satisfy this contract.
 type WorkAgentEligibilityInScope interface {
 	ObserveAgentWorkAuthority(
 		context.Context, model.TenantID, model.ID, string, string,
@@ -405,6 +413,29 @@ type WorkAgentEligibilityInScope interface {
 	LockAgentWorkAuthority(
 		context.Context, store.Scope, WorkAgentAuthoritySnapshot,
 	) error
+}
+
+// WorkAgentAuthorityReadValidator is the optional read half of the same seam.
+// Plan and Validate call it inside their planning View after observing outside
+// it: it revalidates the snapshot's exact facts against that View without
+// locks, writes, repairs or tenant-wide rows, so the WorkItem and the authority
+// behind a plan hash belong to one read. A resolver that cannot answer must
+// leave it unimplemented so planning reports UNKNOWN rather than eligibility.
+type WorkAgentAuthorityReadValidator interface {
+	ValidateAgentWorkAuthorityInScope(
+		context.Context, store.Scope, WorkAgentAuthoritySnapshot,
+	) error
+}
+
+// workAuthorityItemStamp is the server-owned WorkItem identity an agent
+// authority observation was taken for. It holds scalar copies only, so nothing
+// read through the preliminary View (Scope or repository) outlives that View.
+type workAuthorityItemStamp struct {
+	itemID    model.ID
+	version   int64
+	workspace model.ID
+	ownerKind string
+	ownerRef  string
 }
 
 type WorkContentGuard interface {

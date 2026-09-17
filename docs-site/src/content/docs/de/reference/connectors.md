@@ -380,10 +380,12 @@ Seite des permitted-vs-observed-Diffs:
 | `spiffe` | SPIRE-Registration-Entries | nur Roster (No-op `Gather`) |
 
 Verdrahte `as_source: true` auf dem `identity`-Eintrag für einen einmaligen Permitted-Grant-Pass
-pro Boot, oder einen separaten `sources`-Eintrag mit `poll_seconds` für periodische Re-Scans —
-niemals beides für ein Kind (`okta`/`entra` teilen sich den einen `idp`-Connector, sodass nur eine
-idp-Familien-Instanz pro Prozess als Quelle registriert werden kann). Group-/Role-Memberships
-reisen nur im typed Roster-Snapshot, niemals als Kanten.
+pro Boot, oder einen separaten `sources`-Eintrag mit `poll_seconds` für periodische Re-Scans.
+Jeder Eintrag registriert sich unter **seinem eigenen `name`**, sodass mehrere Einträge eines
+Kinds nebeneinander laufen: `okta` und `entra` bedient der eine `idp`-Connector und sie bleiben
+zwei getrennte Quellen, jede mit eigener Konfiguration, eigenem Status und eigenem Lebenszyklus.
+Eindeutig sein muss der Name, nicht der Connector. Group-/Role-Memberships reisen nur im typed
+Roster-Snapshot, niemals als Kanten.
 
 ### Agent-Identity-Federation
 
@@ -409,7 +411,8 @@ Für die sieben Kinds mit einem re-pollbaren Gather (`entra-agent`, `agent365`, 
 `foundry-agents`, `google-agent`, `oasf`, `onepassword`) verdrahte die **Roster**-Hälfte als `identity`-Eintrag *ohne*
 `as_source` und die **Edges/Findings**-Hälfte als separaten `sources`-Eintrag mit
 `poll_seconds` — nicht beides via `as_source: true`, was den Scan nur einmal pro
-Boot ausführt (und eine doppelte Registrierung desselben Kinds wird abgelehnt).
+Boot ausführt. (Zwei Einträge eines Kinds sind nicht länger das Hindernis: jeder registriert sich
+unter seinem eigenen `name`. Der Grund ist die Kadenz — ein Durchlauf pro Boot ist kein Re-Scan.)
 
 Vom Registry deklarierte **Owner/Sponsor** landen während des Roster-Syncs auf den NHI-Lifecycle-
 Records (dieselbe Semantik wie `PUT /nhi/{ref}/ownership`), und ein vom Registry behaupteter

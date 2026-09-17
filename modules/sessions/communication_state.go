@@ -204,7 +204,8 @@ func (v ReadOutcome) Valid() bool { return oneOf(v, ReadAllow, ReadDeny, ReadUnk
 
 func (v CommunicationOperation) Valid() bool {
 	return oneOf(v, CommunicationRead, CommunicationDeliveryWrite, CommunicationDeliveryAdmin,
-		CommunicationDecisionRequestWrite, CommunicationMessageSend, CommunicationHandoffResponse)
+		CommunicationDecisionRequestWrite, CommunicationMessageSend, CommunicationHandoffResponse,
+		CommunicationChannelWrite, CommunicationChannelAdmin)
 }
 
 func (v PrincipalResolutionOutcome) Valid() bool {
@@ -2218,9 +2219,10 @@ type CommunicationGuardAdvancePlan struct {
 	AllocatedSeq []int64            `json:"allocated_seq"`
 }
 
-// PlanCommunicationGuardAdvance allocates one contiguous delivery sequence
-// range while advancing DB time monotonically. Apply must CAS Before.Version
-// and persist After in the same mutation as every row using AllocatedSeq.
+// PlanCommunicationGuardAdvance allocates one contiguous delivery or route
+// sequence range while advancing DB time monotonically. Apply must CAS
+// Before.Version and persist After in the same mutation as every row using
+// AllocatedSeq.
 func PlanCommunicationGuardAdvance(
 	before CommunicationGuard,
 	count int64,
@@ -2229,7 +2231,7 @@ func PlanCommunicationGuardAdvance(
 	if err := ValidateCommunicationGuard(before); err != nil {
 		return CommunicationGuardAdvancePlan{}, err
 	}
-	if before.Kind != CommunicationGuardDeliverySequence || count < 1 ||
+	if !before.Kind.Valid() || count < 1 ||
 		dbNow.IsZero() || dbNow.Before(before.LastDBTime) || dbNow.Before(before.UpdatedAt) ||
 		before.NextSeq > math.MaxInt64-count {
 		return CommunicationGuardAdvancePlan{}, communicationError(ErrInvalidCommunicationTransition,
@@ -3145,6 +3147,31 @@ func CanonicalHandoffContextHash(handoff Handoff) ([]byte, error) {
 	return digest[:], nil
 }
 
+// handoffAcceptFenceOK is the accepted-Handoff lease-effect rule, written once
+// and used by every Go caller so it cannot drift from itself. An accept that
+// found an execution generation MUST invalidate it and advance the fence. An
+// accept whose offer was sealed against the item's one vacant generation
+// (offered == 0, the schema-certified "never held" witness) MUST NOT invent one.
+//
+// It is strictly tighter than a relaxation: for offered == 0 it forbids every
+// resulting >= 1, i.e. exactly the "mint a fence out of a vacant generation"
+// move. For offered >= 1 it is the historical rule unchanged. Negative inputs
+// are refused here as well as by the envelope validation that runs before it, so
+// no caller can present this helper as accepting one.
+//
+// Its SQL twin lives in the sessions_work_handoff_guard triggers
+// (sqlite/0096, sqlite/0097, postgres/0024); the module keeps a durable control
+// that writes the same pairs through both engines.
+func handoffAcceptFenceOK(offered, resulting int64) bool {
+	if offered < 0 || resulting < 0 {
+		return false
+	}
+	if offered == 0 {
+		return resulting == 0
+	}
+	return resulting > offered
+}
+
 // ValidateHandoff makes the lease-sensitive effects state-dependent. An offer
 // never carries a resulting fence; only accepted can carry the Ack and new
 // fence produced by the wider K2 atomic transaction.
@@ -3188,8 +3215,7 @@ func ValidateHandoff(handoff Handoff) error {
 	case HandoffAccepted:
 		if times != 1 || handoff.AcceptedAt == nil || !handoff.AcceptedAt.Before(handoff.AckDeadline) ||
 			!validCanonicalCommunicationID(handoff.AckID) ||
-			handoff.ResultingLeaseFence < 1 ||
-			handoff.ResultingLeaseFence <= handoff.OfferedLeaseFence ||
+			!handoffAcceptFenceOK(handoff.OfferedLeaseFence, handoff.ResultingLeaseFence) ||
 			handoff.TerminalCode != "" || handoff.TerminalReason != nil {
 			return communicationError(ErrInvalidCommunicationModel, "accepted Handoff lacks atomic lease effects")
 		}
@@ -3245,7 +3271,7 @@ func PlanHandoffTransition(
 	plan := HandoffTransitionPlan{Before: before}
 	if transition == HandoffAccept {
 		if !dbNow.Before(before.AckDeadline) || !validCanonicalCommunicationID(ackID) ||
-			resultingLeaseFence < 1 || resultingLeaseFence <= before.OfferedLeaseFence ||
+			!handoffAcceptFenceOK(before.OfferedLeaseFence, resultingLeaseFence) ||
 			terminalCode != "" || terminalReason != nil {
 			return HandoffTransitionPlan{}, communicationError(ErrInvalidCommunicationModel,
 				"accept Handoff requires exact Ack and monotonic lease fence")
@@ -3254,7 +3280,10 @@ func PlanHandoffTransition(
 		after.AcceptedAt = &dbNow
 		after.ResultingLeaseFence = resultingLeaseFence
 		plan.CreatesAck = true
-		plan.ChangesLease = true
+		// An accept sealed against the item's vacant generation ends no execution
+		// authority, so it changes no lease row. Reporting otherwise would name an
+		// effect this transaction deliberately does not perform.
+		plan.ChangesLease = resultingLeaseFence > 0
 	} else {
 		if ackID != "" || resultingLeaseFence != 0 || !boundedToken(terminalCode, 128) ||
 			terminalReason == nil {
@@ -5536,10 +5565,7 @@ func CanonicalAuthorizationFacts(facts []store.AuthorizationFactRef) ([]store.Au
 	}
 	canonical := append([]store.AuthorizationFactRef(nil), facts...)
 	for _, fact := range canonical {
-		if !oneOf(fact.Kind, model.Kind("core.identity"), model.Kind("core.agent"),
-			model.Kind("core.membership"), model.Kind("core.user_group_member"),
-			model.Kind("core.agent_group_member"), model.DirectoryEpochKind,
-			model.AuthorizationEpochKind, model.Kind("governance.nhi_lifecycle")) ||
+		if !communicationAuthorizationFactKind(fact.Kind) ||
 			!validCanonicalCommunicationID(fact.ID) || fact.Version < 1 {
 			return nil, communicationError(ErrInvalidCommunicationModel, "invalid authorization fact")
 		}
@@ -5556,6 +5582,36 @@ func CanonicalAuthorizationFacts(facts []store.AuthorizationFactRef) ([]store.Au
 		}
 	}
 	return canonical, nil
+}
+
+// communicationAuthorizationFactKind is the closed set of authorization facts a
+// K3 request may pin to its transaction. It is closed by construction, not by
+// prefix: every name is either spelled out here or derived by
+// model.IsLineageEpochKind from core/model's own closed relation inventory, so
+// an arbitrary "core.<anything>" — including a plausible
+// "core.membership_lineage_epoch" that names no relation — is still rejected.
+//
+// The lineage epochs belong here because core/governance ALREADY produces them.
+// ScopedEvidence reads every consulted lineage relation through
+// lineageEvidenceScope and binds its Cedar/scoped-grant decision to the exact
+// generation it observed; core/auth keeps those facts in AuthorizationEvidence,
+// and the store registers each one as an authorization fact with its own lock
+// order and owner lock routine. Omitting them here did not make K3 stricter: it
+// made the consumer reject a correct producer, so an ordinary channel
+// administration turned into UNKNOWN (503) the moment any policy went live —
+// and the later lineage-aware validator, which does know these kinds, was never
+// reached. Everything a lineage fact must additionally satisfy (tenant-keyed ID,
+// no leased witness, generation still current under the row lock) is enforced by
+// validateCommunicationAuthorityFacts and by LockAuthoritySnapshot, exactly as
+// it is for the two epochs that were already listed.
+func communicationAuthorizationFactKind(kind model.Kind) bool {
+	if model.IsLineageEpochKind(kind) {
+		return true
+	}
+	return oneOf(kind, model.Kind("core.identity"), model.Kind("core.agent"),
+		model.Kind("core.membership"), model.Kind("core.user_group_member"),
+		model.Kind("core.agent_group_member"), model.DirectoryEpochKind,
+		model.AuthorizationEpochKind, model.Kind("governance.nhi_lifecycle"))
 }
 
 func canonicalAuthorizationFactUnion(
@@ -6373,7 +6429,7 @@ func (v CursorDeliveryVisibility) Valid() bool {
 
 // CursorCarrierClass identifies an immutable carrier graph rather than a
 // mutable Message projection. C2 deliberately has one class: the exact
-// personal User DirectNotice graph used by the private inbox read slice.
+// personal DirectNotice graph for a user, agent or communication session.
 type CursorCarrierClass string
 
 const (
@@ -7033,10 +7089,16 @@ func cursorDirectNoticeCarrierMatches(
 	if delivery.Required {
 		requiredDeliveryCount = 1
 	}
+	wantAudienceKind, kindErr := recipientAudienceKind(delivery.Recipient)
+	sessionCauseValid := contributionHasNoSessionCause(current.Contributions)
+	if delivery.Recipient.Kind == RecipientSession && len(current.Contributions) == 1 {
+		sessionCauseValid = current.Contributions[0].ObservedSessionSID == delivery.Recipient.Ref &&
+			current.Contributions[0].ObservedClaimFence >= 1
+	}
 	if carrierSet.DeliveryCount != 1 ||
 		entry.ReadEvidence.CarrierState.RequiredDeliveryCount != requiredDeliveryCount ||
 		len(current.Audiences) != 1 ||
-		len(current.Contributions) != 1 {
+		len(current.Contributions) != 1 || kindErr != nil || !sessionCauseValid {
 		return false, nil
 	}
 	audience := current.Audiences[0]
@@ -7044,14 +7106,11 @@ func cursorDirectNoticeCarrierMatches(
 	if message.Kind != MessageNotice || message.WorkItemID != "" || message.ThreadID != message.ID ||
 		message.ReplyToID != "" || message.SupersedesID != "" || message.OriginEventID != "" ||
 		message.AutomationDepth != 0 || len(message.LabelsJSON) != 0 || len(message.LabelsHash) != 0 ||
-		message.ExpiresAt != nil || message.Payload.Encoding != PayloadPlainJSON ||
-		len(message.Payload.PlainJSON) == 0 || message.Payload.Sealed != nil ||
-		message.Payload.SealKeyVersion != "" || message.Payload.DigestKeyVersion != "" ||
-		message.Sender.Kind != ActorUser || delivery.ExpiresAt != nil ||
+		message.ExpiresAt != nil || message.Sender.Kind == ActorSystem || delivery.ExpiresAt != nil ||
 		len(delivery.RouteReasons) != 1 || delivery.RouteReasons[0] != RouteReason("direct") ||
-		delivery.Recipient != input.Cursor.Reader || delivery.Recipient.Kind != RecipientUser ||
+		delivery.Recipient != input.Cursor.Reader ||
 		audience.MessageID != message.ID || audience.Ordinal != 1 || audience.RouteRuleID != "" ||
-		audience.Selector.Kind != AudienceUser || audience.Selector.Ref != delivery.Recipient.Ref ||
+		audience.Selector.Kind != wantAudienceKind || audience.Selector.Ref != delivery.Recipient.Ref ||
 		audience.Selector.Required != delivery.Required ||
 		audience.Selector.WakePolicy != delivery.WakePolicy || audience.ResolvedCount != 1 ||
 		contribution.MessageAudienceID != audience.ID ||
@@ -7061,8 +7120,7 @@ func cursorDirectNoticeCarrierMatches(
 		len(contribution.RouteReasons) != 1 || contribution.RouteReasons[0] != RouteReason("direct") ||
 		contribution.CausalKind != CausalDirect || contribution.CausalRef != delivery.Recipient.Ref ||
 		contribution.CausalFactKind != "" || contribution.CausalFactID != "" ||
-		contribution.CausalFactVersion != 0 || contribution.ObservedSessionSID != "" ||
-		contribution.ObservedClaimFence != 0 || contribution.OriginalSubscriber != nil ||
+		contribution.CausalFactVersion != 0 || contribution.OriginalSubscriber != nil ||
 		contribution.SubscriptionID != "" || contribution.SubscriptionGeneration != 0 ||
 		contribution.RouteRuleID != "" || contribution.RouteRuleGeneration != 0 {
 		return false, nil
@@ -7082,6 +7140,11 @@ func cursorDirectNoticeCarrierMatches(
 			"cursor DirectNotice Delivery diverges from its audience fold")
 	}
 	return true, nil
+}
+
+func contributionHasNoSessionCause(contributions []MessageAudienceRecipient) bool {
+	return len(contributions) == 1 && contributions[0].ObservedSessionSID == "" &&
+		contributions[0].ObservedClaimFence == 0
 }
 
 func cursorUndeliverableWitnessMatches(
@@ -7226,12 +7289,6 @@ func classifyCursorScanEntry(
 			}, nil
 		}
 	}
-	if len(decision.RequiredClaims) != 0 {
-		return cursorScanAssessment{
-			Visibility: CursorDeliveryEvidenceUnknown,
-			Reason:     "direct_notice_claim_authority_unsupported",
-		}, nil
-	}
 	facts = append(facts, decision.Facts...)
 	fence := CursorChannelFence{
 		ChannelID: entry.ReadEvidence.ChannelID, ACLRevision: entry.ReadEvidence.ChannelACLRevision,
@@ -7325,11 +7382,11 @@ func unknownInitialCursorPlan(input InitialInboxCursorAdvanceInput, code string)
 }
 
 func validateDirectNoticeCursorIdentity(cursor InboxCursor, filter CursorFilter) error {
-	if cursor.Reader.Kind != RecipientUser || cursor.MailboxKind != MailboxPersonal ||
+	if cursor.Reader.Validate() != nil || cursor.MailboxKind != MailboxPersonal ||
 		cursor.MailboxRef != cursor.Reader.Ref || filter.CarrierClass != CursorCarrierDirectNoticeV1 ||
 		filter.MailboxKind != MailboxPersonal {
 		return communicationError(ErrInvalidCommunicationModel,
-			"C2 requires the fixed personal User DirectNotice cursor identity")
+			"C2 requires a fixed personal DirectNotice cursor identity")
 	}
 	return nil
 }
@@ -7364,7 +7421,7 @@ func PlanInitialInboxCursorAdvance(
 		return CursorAdvancePlan{}, err
 	}
 	if !validCanonicalCommunicationID(input.CursorID) || input.Reader.Validate() != nil ||
-		input.Reader.Kind != RecipientUser || input.MailboxKind != MailboxPersonal ||
+		input.MailboxKind != MailboxPersonal ||
 		input.MailboxRef != input.Reader.Ref || input.DBNow.IsZero() || input.RequestedSeq < 0 {
 		return CursorAdvancePlan{}, communicationError(ErrInvalidCommunicationModel,
 			"invalid virtual-v0 cursor input")
@@ -7442,9 +7499,6 @@ func planInboxCursorAdvance(
 	if input.Principal.Outcome != PrincipalResolved {
 		return unknownCursorPlan(input, "cursor_principal_unresolved"), nil
 	}
-	if input.Principal.Principal.SessionID != "" {
-		return unknownCursorPlan(input, "direct_notice_claim_authority_unsupported"), nil
-	}
 	if input.Principal.Recipient == nil || input.Principal.Recipient.Recipient != input.Cursor.Reader {
 		return CursorAdvancePlan{}, communicationError(ErrInvalidCommunicationModel,
 			"cursor reader does not match resolved principal")
@@ -7494,7 +7548,7 @@ func planInboxCursorAdvance(
 		Kind: model.DirectoryEpochKind, ID: model.ID(input.Scope.TenantID),
 		Version: input.Principal.Recipient.DirectoryEpoch,
 	}}
-	claims := make([]CommunicationClaimRef, 0)
+	claims := communicationClaimsForPrincipal(input.Principal.Principal)
 	fenceByChannel := make(map[model.ID]CursorChannelFence)
 	expire := make([]MessageDeliveryExpiryPlan, 0)
 	evidenceUnknown := false
@@ -7630,9 +7684,6 @@ func planInboxCursorAdvance(
 		return unknownCursorPlan(input, "cursor_authority_facts_unavailable"), nil
 	}
 	claims = canonicalCommunicationClaims(claims)
-	if len(claims) != 0 {
-		return unknownCursorPlan(input, "direct_notice_claim_authority_unsupported"), nil
-	}
 	fences := make([]CursorChannelFence, 0, len(fenceByChannel))
 	for _, fence := range fenceByChannel {
 		fences = append(fences, fence)
@@ -7663,7 +7714,7 @@ func planInboxCursorAdvance(
 		Before: before, After: after, Verdict: VerdictClean, Code: code,
 		CreateCursor: initial, Changed: changed, PriorSeq: input.Cursor.LastSeenSeq,
 		RequestedSeq: input.RequestedSeq, EffectiveSeq: effective, Expire: expire,
-		Create: create, Resolve: resolve, Facts: facts, RequiredClaims: nil, ChannelFences: fences,
+		Create: create, Resolve: resolve, Facts: facts, RequiredClaims: claims, ChannelFences: fences,
 	}, nil
 }
 

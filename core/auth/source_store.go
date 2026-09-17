@@ -186,6 +186,33 @@ func (s *SourceStore) Get(ctx context.Context, scope model.TenantID, name string
 	return s.load(ctx, scope, strings.TrimSpace(name))
 }
 
+// GetByID returns the definition with this PERSISTENT id, ok=false if none. It
+// exists for the consumers that must bind to a row's identity rather than its
+// editable name (the session plane's source→profile bindings, B1): a rename keeps
+// the id, a delete-and-recreate under the same name does not. The returned Config
+// carries secret REFERENCES, never values.
+func (s *SourceStore) GetByID(ctx context.Context, id model.ID) (model.SourceDef, bool, error) {
+	if id.IsZero() {
+		return model.SourceDef{}, false, nil
+	}
+	var (
+		out model.SourceDef
+		ok  bool
+	)
+	err := s.st.AuthView(ctx, func(as store.AuthScope) error {
+		def, err := as.Sources().Get(ctx, id)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		out, ok = def, true
+		return nil
+	})
+	return out, ok, err
+}
+
 // List returns every source definition in a scope, sorted by name.
 func (s *SourceStore) List(ctx context.Context, scope model.TenantID) ([]model.SourceDef, error) {
 	var rows []model.SourceDef

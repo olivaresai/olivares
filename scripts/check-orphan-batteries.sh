@@ -38,7 +38,16 @@ BATS=$(git ls-files 'scripts/test-*.sh' 2>/dev/null | sort)
 N=$(printf '%s\n' "$BATS" | wc -l)
 
 # 2 · lo que el gancho invoca, expandido por el GRAFO (deps incluidas)
-PATAS=$(grep -oE '^[[:space:]]*task ([A-Za-z][A-Za-z0-9:_.-]*)' "$GANCHO" | awk '{print $2}' | sort -u)
+# ⛔ LAS DOS FORMAS DE INVOCAR UNA PATA, y aqui enseñar el prefijo NO afloja el detector — que es
+#    la diferencia con el caso del bucle que este mismo lote arregla al otro lado. `VAR=1 task
+#    lint:x` es una invocacion LITERAL y sin ambigüedad: se sabe exactamente que tarea corre. Un
+#    `bash "scripts/$g"` no lo es, y por eso alli la cura fue hacer el codigo visible y NO enseñar
+#    al gate a resolver variables. Medido el 2026-09-02: con el ancla estrecha, convertir
+#    `task lint:session-numbers` a su forma advisory dejaba `test-session-numbers.sh` como huerfana
+#    ESTANDO el gancho invocandola, y mato un push en la pata 736 a los 48 minutos.
+#    Quinto guion de la casa con esta ceguera.
+PATAS=$(grep -oE '^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+)*task ([A-Za-z][A-Za-z0-9:_.-]*)' "$GANCHO" \
+  | sed -E 's/^[[:space:]]*//; s/^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+)*//; s/^task //' | sort -u)
 [ -n "$PATAS" ] || { echo "check-orphan-batteries: NO HE PODIDO MIRAR: el gancho no invoca ninguna tarea." >&2; exit 2; }
 ALCANZ=$(mktemp "${TMPDIR:-/tmp}/orb.XXXXXX") || exit 2
 trap 'rm -f "$ALCANZ"' EXIT

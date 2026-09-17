@@ -15,27 +15,53 @@
     "body": "{{what}} es un contrato declarado: el endpoint del backend aún no está activo, así que no hay nada que mostrar. Este panel se rellenará en cuanto llegue; nunca fabrica datos."
   },
   "assurance": {
+    "address": {
+      "addressTitle": "Las passkeys no están disponibles en esta dirección.",
+      "ipBody": "Una parte confiante de passkey tiene que ser un nombre de dominio que el verificador de este despliegue acepte, y una dirección IP no lo es. Accede a esta consola por un nombre de host para registrar o usar una passkey.",
+      "nameBody": "Una parte confiante de passkey tiene que ser un nombre de dominio que el verificador de este despliegue acepte, y este nombre de host no lo es: necesita un punto y solo letras ASCII, dígitos y guiones.",
+      "insecureTitle": "Esta página no es un contexto seguro.",
+      "insecureBody": "Los navegadores ejecutan la API de passkeys solo en un contexto seguro, así que aquí no se puede registrar ni usar ninguna passkey. Accede a esta consola por HTTPS, o en el host local.",
+      "unsupportedTitle": "Este navegador no admite passkeys.",
+      "unsupportedBody": "Este navegador no expone ninguna API WebAuthn, así que aquí no se puede registrar ni usar una passkey. Usa un navegador compatible con passkeys, o una tarjeta PIV/CAC presentada.",
+      "sameDevice": "En este dispositivo, la misma consola también responde en:"
+    },
     "stepUpTitle": "Se requiere reautenticación reforzada",
-    "stepUpBody": "{{action}} requiere {{required}}. Tu sesión es {{current}}. Autentícate con una llave de seguridad por hardware para continuar.",
-    "authenticate": "Autenticar con llave de seguridad",
+    "stepUpBody": "{{action}} requiere {{required}}. Tu sesión es {{current}}. Usa una passkey de tu dispositivo o una llave de seguridad para continuar.",
+    "authenticate": "Autenticar con passkey",
     "authenticatePiv": "Autenticar con tarjeta PIV/CAC",
     "authenticating": "Esperando a tu autenticador…",
     "seamWhat": "La ceremonia de acceso privilegiado (reautenticación WebAuthn)",
     "unsupported": "Este navegador no admite WebAuthn. Para las acciones privilegiadas se necesita una plataforma que admita autenticadores resistentes al phishing.",
     "failed": "La reautenticación no se completó. La acción sigue denegada.",
+    "relyingPartyUnusable": "Las passkeys no están disponibles en este despliegue: el motor no tiene una parte confiante utilizable para la dirección en la que se sirve la consola. Un operador debe configurar un dominio de parte confiante válido —un nombre de host con punto, o localhost cuando proceda—, acceder a la consola en ese origen seguro declarado y reiniciar el motor tras el cambio. Reintentar en otra dirección no lo repara por sí solo.",
     "actions": {
       "wif": "Ver el grafo de Workload Identity Federation",
       "identity": "Gestionar identidad",
       "nhiLifecycleRotate": "Rotar una credencial de identidad no humana",
       "nhiLifecycleFinalize": "Finalizar la baja de una identidad no humana",
-      "generic": "Esta acción"
+      "generic": "Esta acción",
+      "console": "Gestionar conectores"
     },
     "aal": {
       "aal1": "AAL1 (contraseña)",
       "aal2": "AAL2 (multifactor)",
-      "aal3": "AAL3 (hardware, resistente al phishing)"
+      "aal3": "AAL3 (resistente al phishing)"
     },
-    "unenrolled": "Tu cuenta aún no tiene ninguna passkey registrada. Registra primero una llave de seguridad hardware en la pestaña de Login privilegiado y reintenta el step-up."
+    "unenrolled": "Tu cuenta aún no tiene ninguna passkey registrada. Registra una passkey de tu dispositivo o una llave de seguridad en la pestaña de acceso privilegiado y después autentícate.",
+    "unenrolledInline": "Tu cuenta aún no tiene ninguna passkey registrada. Registra una aquí o usa una tarjeta PIV/CAC presentada.",
+    "enrollHint": "Registra tu primera passkey en este dispositivo o en una llave de seguridad. El registro por sí solo no autentica la sesión ni completa la acción pendiente.",
+    "passkeyName": "Nombre de la passkey",
+    "enrollUnsupported": "Este navegador no puede registrar una passkey. Usa un navegador compatible o una tarjeta PIV/CAC presentada.",
+    "registered": "Passkey registrada. Autentícate para verificar esta sesión; después revisa y completa la acción pendiente.",
+    "registrationUnknown": "No se pudo confirmar el registro. La passkey puede haberse guardado. Pulsa Autenticar para comprobarlo; el registro no se reenviará automáticamente.",
+    "authenticationUnknown": "No se pudo confirmar la autenticación. La sesión puede estar ya elevada. Comprueba la sesión antes de reintentarlo.",
+    "needsAuthentication": "Debes autenticar esta sesión con una passkey existente antes de registrar otra. Pulsa Autenticar.",
+    "checkSession": "Comprobar sesión",
+    "sessionExpired": "La sesión ha sido rechazada. Cierra esta acción y vuelve a iniciar sesión antes de reintentarlo.",
+    "verificationFailed": "No se pudo verificar la sesión para esta acción. La autenticación puede haberse completado; la acción no ha continuado.",
+    "cancelled": "La operación con la passkey se ha cancelado o ha agotado el tiempo. Puedes iniciar otro intento. La acción no ha continuado.",
+    "cancelHint": "Al cerrar se cancela esta acción. Un registro o una autenticación ya enviados pueden completarse.",
+    "registrationUnknownElsewhere": "No se pudo confirmar el registro. Es posible que la clave de acceso se haya guardado. Cierra este diálogo y revisa tus claves de acceso antes de iniciar otro registro."
   },
   "references": {
     "note": "Estándares que este panel refleja. El panel observa y verifica; no afirma estar certificado.",
@@ -532,7 +558,8 @@
     "pivRole": "Rol mapeado",
     "pivOcsp": "OCSP",
     "pivNote": "La verificación de la cadena y de OCSP las realiza el backend; el panel refleja el resultado.",
-    "pivNotConfigured": "PIV/CAC no está configurado en este despliegue. Un operador lo habilita definiendo OLIVARES_PIV_CONFIG (CA de la agencia, mapeo cert-to-role) en el engine.",
+    "pivNotConfigured": "El inicio de sesión con tarjeta PIV/CAC no está configurado en este despliegue, así que aquí no se puede usar ninguna tarjeta. Un administrador debe configurarlo en el engine para que quede disponible.",
+    "pivSetupGuide": "Guía del operador: configurar el inicio de sesión PIV/CAC",
     "ocsp": {
       "good": "Correcto",
       "revoked": "Revocado",

@@ -9,6 +9,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -26,6 +28,7 @@ import (
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/reporting"
+	"github.com/olivaresai/olivares/modules/sessioncockpit"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 )
@@ -84,6 +87,25 @@ func newGroupMapper() auth.GroupMapper {
 func newLoginPolicy(_ func(string) string, _ *auth.FederationService, _ *slog.Logger) auth.LoginPolicy {
 	return nil
 }
+
+// loginEnforcementComponentLinked reports whether THIS artifact links the login-enforcement
+// component. The default (AGPL) build never does, so it is a constant false here.
+//
+// It sits beside newLoginPolicy and carries the same build constraint on purpose: the two
+// answers must come from the same build, and a capability predicate that could resolve in a
+// build whose factory did not would be a lie no test would catch. Every build resolves
+// exactly one implementation; there is no default, so a missing one is a compile error
+// rather than a silent false.
+//
+// The false it emits is what the accepted R5 classifier reads, and it is not inert: on a
+// deployment whose store already RECORDS the login-enforcement component AND that carries a
+// configured global/default demand, an artifact answering false refuses startup before the
+// election and refuses promotion under the capability lock. BOTH halves are required, so
+// pristine Community staging — a configured posture with no capability history — still
+// starts, and the explicit host recovery switch stays independent of this predicate: an
+// explicit falsey OLIVARES_LOGIN_ENFORCEMENT classifies DisabledByOperator whether the
+// component is linked or not.
+func loginEnforcementComponentLinked() bool { return false }
 
 // newSeatPolicy wires the community seat policy in the default (AGPL) build. Since
 // B10 that policy reports UNLIMITED active accounts (auth.CommunitySeatLimit = 0):
@@ -231,6 +253,44 @@ func enterpriseArchiveSink(_ string, _ auditArchiveConfig, _ *slog.Logger) (audi
 // enterprise/wormretention add-on, linked only under -tags enterprise. The open export/verify
 // subcommands are unchanged (no rug-pull). Build with -tags enterprise to add it.
 func enterpriseArchiveCommands() []*cobra.Command { return nil }
+
+// editionModuleRegistrars returns the API modules THIS EDITION mounts under the
+// /v1/m/session-cockpit namespace (V269 / docs/contracts/COCKPIT-07-edition-cut.md §4).
+//
+// In the default (AGPL) build that is the AGPL availability PLACEHOLDER and nothing
+// else: one route, GET /availability, answering 501 session_cockpit_unavailable. The
+// commercial engine — inventory, the mTLS agent listener, input sessions, the recorder
+// and the CA — lives in enterprise/sessioncockpit* and links only under
+// `enterprise && addon_ids`, so this file references none of it and the open artifact
+// never carries those bytes.
+//
+// It returns a SLICE and appends, rather than a single module or a boolean, for the
+// same reason enterpriseRootCommands does: the caller composes without a build tag, and
+// a build that mounts nothing returns an empty slice instead of needing a nil check at
+// every call site.
+//
+// ⛔ EXACTLY ONE MODULE OWNS THE NAMESPACE. Returning both the placeholder and the real
+// engine would fail at mount (the engine validates namespaces), which is the loud
+// failure we want rather than two modules racing for the same subtree.
+func editionModuleRegistrars(_ EditionConfig) []api.Module {
+	return []api.Module{sessioncockpit.NewPlaceholder()}
+}
+
+// editionAgentServers wires NO auxiliary listener in the default (AGPL) build: the
+// session cockpit's mTLS agent link is commercial and links only under
+// `enterprise && addon_ids` (docs/contracts/COCKPIT-03-agent-protocol.md §3). An empty
+// slice makes serveEditionAuxServers a no-op, so the open binary opens no extra port and
+// references nothing from enterprise/.
+func editionAgentServers() []editionAuxServer { return nil }
+
+// editionWebFS returns the console bundle THIS EDITION serves. The default build serves
+// the AGPL bundle unchanged (core/internal/webui), so this returns base untouched — the
+// public dist keeps exactly the path it has always had.
+//
+// The commercial build swaps in a bundle that also carries the cockpit's terminal; that
+// swap is a SEPARATE dist embedded by the overlay, never a chunk fetched at runtime, so
+// an artifact without the add-on does not contain those bytes at all.
+func editionWebFS(base fs.FS) fs.FS { return base }
 
 // enterpriseRootCommands adds NO top-level commands in the default (AGPL) build:
 // the activation pack (`olivares enterprise enable/disable/status/promote <preset>`)
@@ -506,4 +566,9 @@ func newEnterpriseReportSource(_ func(string) string, _ *compliance.Module, _ *g
 // the contract; S3 is the motor.
 func newManagedSCIM() any {
 	return nil
+}
+
+// The open edition has no private read resources to bind or close.
+func editionBindModuleDependencies(context.Context, EditionConfig, []api.Module, EditionDependencies, *slog.Logger) ([]io.Closer, error) {
+	return nil, nil
 }

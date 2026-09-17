@@ -5,7 +5,7 @@
 // LDAP v3 directory. It discovers users, service/computer accounts and groups,
 // and the membership edges between them, and exposes them as an
 // identitysource.Graph to module VI (governance). It is read-only and
-// minimal-data (docs/SECURITY-HARDENING.md-3): it performs only LDAP searches with a fixed, safe
+// minimal-data (docs/SECURITY-HARDENING.md §2-3): it performs only LDAP searches with a fixed, safe
 // attribute allowlist that NEVER includes a password attribute (userPassword,
 // unicodePwd, …); it binds with the operator's own read-only service account,
 // whose credential is held in memory and never persisted or logged; and it
@@ -44,7 +44,7 @@ const Name = "olivares.ldap"
 // safeAttributes is the fixed allowlist of attributes the connector requests. It
 // is deliberately closed and contains NO credential attribute: a directory read
 // must never pull userPassword, unicodePwd, ntPwdHistory or the like. Reviewers
-// and tests assert this set never grows to include a secret (docs/SECURITY-HARDENING.md-3).
+// and tests assert this set never grows to include a secret (docs/SECURITY-HARDENING.md §2-3).
 var safeAttributes = []string{
 	"objectClass",
 	"cn",

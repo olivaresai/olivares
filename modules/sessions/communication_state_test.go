@@ -1175,7 +1175,7 @@ func TestInitialInboxCursorAdvanceCreatesV1FromExactAbsence(t *testing.T) {
 	}
 }
 
-func TestCursorRequiredClaimsRemainUnsupported(t *testing.T) {
+func TestCursorCarriesSessionClaimIntoAtomicApply(t *testing.T) {
 	t.Parallel()
 
 	scope := communicationStateTestScope()
@@ -1197,10 +1197,11 @@ func TestCursorRequiredClaimsRemainUnsupported(t *testing.T) {
 			t, cursor, cursor.LastSeenSeq, nil, dbNow,
 		),
 	})
-	if err != nil || plan.Verdict != VerdictUnknown ||
-		plan.Code != "direct_notice_claim_authority_unsupported" || plan.Changed ||
-		!reflect.DeepEqual(plan.After, cursor) {
-		t.Fatalf("unsupported session Claim produced cursor effects: %#v, %v", plan, err)
+	wantClaim := CommunicationClaimRef{SessionSID: sid, Fence: principal.SessionFence}
+	if err != nil || plan.Verdict != VerdictClean || plan.Code != "cursor_unchanged" ||
+		plan.Changed || !reflect.DeepEqual(plan.After, cursor) ||
+		!reflect.DeepEqual(plan.RequiredClaims, []CommunicationClaimRef{wantClaim}) {
+		t.Fatalf("session Claim was not carried into cursor apply: %#v, %v", plan, err)
 	}
 }
 
@@ -1541,6 +1542,10 @@ func TestCursorGenericCarrierConstituentUnknownDoesNotBecomeForeign(t *testing.T
 	planFor := func(audienceVerdict AssessmentVerdict) (CursorAdvancePlan, ProtectedReadDecision) {
 		t.Helper()
 		message := communicationStateTestMessage(t, scope, AckPolicyNone, 0, communicationTestNow)
+		// Agent senders are real DirectNotice principals in K3. Keep this fixture
+		// generic by giving it an explicit non-DirectNotice carrier kind instead
+		// of relying on the sender kind as an accidental discriminator.
+		message.Kind = MessageAnnouncement
 		message.Sender = CommunicationActorRef{Kind: ActorAgent, Ref: model.NewID().String()}
 		delivery := communicationStateTestDelivery(message, reader, 1, false)
 		evidence := communicationStateTestCursorReadEvidence(scope, &message, delivery, principal, dbNow)
@@ -1646,8 +1651,11 @@ func TestCursorDirectNoticeCarrierClassIsExact(t *testing.T) {
 			message.ExpiresAt = &expiresAt
 			delivery.ExpiresAt = &expiresAt
 		}},
-		{name: "sealed payload", policy: AckPolicyNone, mutateCarrier: func(message *Message, _ *MessageDelivery) {
+		{name: "sealed payload", policy: AckPolicyNone, wantBarrier: true, mutateCarrier: func(message *Message, _ *MessageDelivery) {
 			message.Payload = communicationStateTestSealedPayload(PayloadSlotMessage, 3)
+		}},
+		{name: "agent sender", policy: AckPolicyNone, wantBarrier: true, mutateCarrier: func(message *Message, _ *MessageDelivery) {
+			message.Sender = CommunicationActorRef{Kind: ActorAgent, Ref: model.NewID().String()}
 		}},
 		{name: "multiple route reasons", policy: AckPolicyNone,
 			mutateCarrier: func(_ *Message, delivery *MessageDelivery) {

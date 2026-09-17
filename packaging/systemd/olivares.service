@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# systemd unit for a bare-metal install (shipped by the .deb/.rpm/.apk packages and
-# by scripts/install.sh). Secure defaults from docs/SECURITY-HARDENING.md: loopback-only listeners and a
+# systemd unit for a bare-metal install (shipped by the .deb/.rpm packages and
+# by scripts/install.sh). The .apk ships an OpenRC unit instead. Secure defaults from docs/SECURITY-HARDENING.md: loopback-only listeners and a
 # self-signed cert generated in the data dir on first boot. Front it with your reverse
 # proxy, or widen the listen address via OLIVARES_EXTRA_ARGS in /etc/olivares/olivares.env.
 [Unit]

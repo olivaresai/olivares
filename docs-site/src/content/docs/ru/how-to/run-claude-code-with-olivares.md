@@ -14,6 +14,9 @@ description: "Совместно разверните control plane Olivares и 
 [Подключение Claude Code](/how-to/connect-claude-code/); про путь *регулирования* (хуки
 PreToolUse как PEP) см. [пример govern-claude-code](https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code).
 Эта страница — про **совместное развёртывание**: про совместный запуск двух сред выполнения.
+Чтобы запустить Claude, Codex или Grok под профилем провайдера, когда среды
+уже есть, см.
+[Управлять сеансом провайдера](/how-to/operate-provider-sessions/).
 
 :::note[Как управление на самом деле достигает сессии]
 Сессия управляема, потому что **движок владеет stdin/stdout процесса `claude`** — это безголовый
@@ -70,14 +73,14 @@ posture базовому compose, плюс дирижируемая среда �
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.8.0 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 Используйте свой собственный `claude` через `--build-arg CLAUDE_INSTALL=byo` (образ поставляется
@@ -86,7 +89,7 @@ docker build -f Dockerfile.agentops \
 ### Запуск
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.8.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -250,7 +253,7 @@ olivares agent session stop   <run-ref>
   учётный данные.
 - **Проверенная цепочка поставок.** Движок подписан cosign (проверьте его / закрепите по digest);
   `claude` устанавливается из подписанных репозиториев Anthropic с закреплённым отпечатком ключа.
-  Установщик **отказывается запускать непроверенный движок**, если вы явно не откажетесь от проверки.
+  Установщик **отказывается запускать непроверенный движок**, без обхода проверки.
 - **Закреплённый аудит.** Каждый переход жизненного цикла и каждая мутация рабочей области
   запечатываются в hash-chained, подписанный журнал через `PayloadHash` — байты файлов и содержимое
   кадров никогда не сохраняются.

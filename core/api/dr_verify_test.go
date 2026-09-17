@@ -87,7 +87,7 @@ func buildTestBundleWithPassphrase(t *testing.T, passphrase string) (bundlePath 
 		t.Fatal(err)
 	}
 	m, err := dr.BuildManifest(ctx, st, signer.PublicKey(), cpv, dr.BuildOptions{
-		EngineKind: "sqlite", Version: "test",
+		EngineKind: "sqlite", Version: "26.9.0",
 		Store:    dr.StoreSnapshot{Method: dr.MethodVacuumInto, File: "store/olivares.db", SizeBytes: size, SHA256: sum},
 		Keys:     []dr.KeyRef{{File: "keys/audit-signing.key.enc", Name: "audit-signing.key", Role: dr.RoleAudit, PubSHA256: dr.PubFingerprint(signer.PublicKey())}},
 		TipMatch: dr.TipExact, Now: time.Now(), Notes: "test",
@@ -111,10 +111,10 @@ func buildTestBundleWithPassphrase(t *testing.T, passphrase string) (bundlePath 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := dr.WriteBundle(bf, dr.BundleInput{
+	if err := dr.WriteAuthenticatedBundle(bf, dr.BundleInput{
 		Manifest: m, KEK: cipher.Params(), SnapshotPath: snap,
 		SealedKeys: map[string][]byte{"keys/audit-signing.key.enc": sealed},
-	}); err != nil {
+	}, cipher); err != nil {
 		t.Fatal(err)
 	}
 	_ = bf.Close()

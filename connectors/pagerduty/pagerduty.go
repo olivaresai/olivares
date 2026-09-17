@@ -8,7 +8,7 @@
 // info) and carrying the notification's non-sensitive Title, Body, Tenant and
 // Fields as the event payload and custom_details.
 //
-// It is minimal-data (docs/SECURITY-HARDENING.md-3): it forwards only the displayable
+// It is minimal-data (docs/SECURITY-HARDENING.md §2-3): it forwards only the displayable
 // Notification fields, never a secret. The integration's routing (integration)
 // key is the single operator credential — it is declared as a Secret config
 // field, held in memory only, sent as a JSON body field to PagerDuty, and is

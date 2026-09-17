@@ -7,7 +7,7 @@
 // PII-in-filename scan), enforces operator-declared batch policy (allowed models,
 // line limits, allowed creators), and signals upload retention expiry (TTL-based).
 //
-// READ-ONLY AND MINIMAL-DATA (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared
+// READ-ONLY AND MINIMAL-DATA (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared
 // GET-only modelprovider client. The connector never reads batch request payloads,
 // file content, or secrets — only inventory metadata (ids, status, counts, sizes,
 // timestamps). It never creates, cancels, or deletes batches or files.

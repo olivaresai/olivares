@@ -234,6 +234,7 @@ public abstract class ClientCore {
         if (t != null && !t.isEmpty()) {
             rb.header("X-Olivares-Tenant", t);
         }
+        options.headers.forEach(rb::setHeader);
 
         HttpResponse<InputStream> resp;
         try {

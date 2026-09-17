@@ -611,24 +611,38 @@ func flagTable(flags []dumpFlag) string {
 
 // ── the published region ───────────────────────────────────────────────────────────────
 
-func splitRegion(page string) (before, after string, err error) {
+func splitRegion(page string) (before, region, after string, err error) {
+	nBegin := strings.Count(page, beginMarker)
+	nEnd := strings.Count(page, endMarker)
+	if nBegin == 0 || nEnd == 0 {
+		return "", "", "", cannot("the published page has lost its %s / %s markers "+
+			"(begin=%d end=%d), so the generated region could not be located; a page without "+
+			"them is not a page without drift", beginMarker, endMarker, nBegin, nEnd)
+	}
+	if nBegin != 1 || nEnd != 1 {
+		return "", "", "", cannot("the published page has ambiguous generated markers "+
+			"(%d begin, %d end); a region that cannot be uniquely located is not in sync",
+			nBegin, nEnd)
+	}
 	i := strings.Index(page, beginMarker)
 	j := strings.Index(page, endMarker)
-	if i < 0 || j < 0 || j < i {
-		return "", "", cannot("the published page has lost its %s / %s markers, so the generated "+
-			"region could not be located; a page without them is not a page without drift",
-			beginMarker, endMarker)
+	if j < i {
+		return "", "", "", cannot("the published page has its end marker before its begin " +
+			"marker, so the generated region could not be located")
 	}
-	return page[:i], page[j+len(endMarker)+1:], nil
+	end := j + len(endMarker)
+	if end < len(page) && page[end] == '\n' {
+		end++
+	}
+	return page[:i], page[i:end], page[end:], nil
 }
 
 func publishedRegion(page string) string {
-	i := strings.Index(page, beginMarker)
-	j := strings.Index(page, endMarker)
-	if i < 0 || j < 0 || j < i {
+	_, region, _, err := splitRegion(page)
+	if err != nil {
 		return ""
 	}
-	return page[i : j+len(endMarker)+1]
+	return region
 }
 
 // describeDrift turns "these two strings differ" into the names of what moved.

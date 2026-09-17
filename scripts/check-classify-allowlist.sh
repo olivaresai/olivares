@@ -4,8 +4,6 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md.
 #
 # check-classify-allowlist.sh — guarda la ÚNICA lista que puede apagar mainline-ci en silencio: el
-# `case` del job `classify` que declara un push "journal-only" y con eso SALTA los nueve jobs
-# gateados. Un job saltado NO se pone rojo: desaparece del cuadro.
 #
 # ⛔ LA PREGUNTA CORRECTA COSTÓ TRES INTENTOS, y los tres errores están aquí porque son el valor.
 #
@@ -180,7 +178,9 @@ comprobar() {
 
 if [ "${1:-}" = "--self-test" ]; then
 	fallos=0
-	ok() { printf '  ok    %-56s %s\n' "$1" "$2"; }
+	# Count successful cases rather than maintaining a fixed total.
+	pasan=0
+	ok() { printf '  ok    %-56s %s\n' "$1" "$2"; pasan=$((pasan + 1)); }
 	mal() { printf '  FAIL  %-56s %s\n' "$1" "$2"; fallos=$((fallos + 1)); }
 
 	if grep -qx 'ESTADO-PROYECTO.md' <<<"$(derivar_lista "$WF")"; then
@@ -212,20 +212,58 @@ if [ "${1:-}" = "--self-test" ]; then
 	else mal "el árbol de hoy sale LIMPIO" "rc=$rc — acusa a un árbol sano"; fi
 
 	tmp="$(mktemp -d "${TMPDIR:-/tmp}/cca.XXXXXX")" || morir2 "sin directorio temporal"
-	sed 's#sessions/\* | design/audits/\*#sessions/* | design/* | design/audits/*#' "$WF" > "$tmp/mut.yml"
+	# Anchor mutations to two adjacent patterns retained by the workflow.
+	ancla='design/audits/\* | docs/ai-context/\*'
+	sed "s#$ancla#design/* | design/audits/* | docs/ai-context/*#" "$WF" > "$tmp/mut.yml"
 	if grep -q 'design/\* |' "$tmp/mut.yml"; then
 		rc=0; salida="$(comprobar "$tmp/mut.yml" 2>&1)" || rc=$?
 		if [ "$rc" -eq 1 ] && grep -q 'canon_test.go' <<<"$salida"; then
 			ok "MUTANTE design/* sale SUCIO por PRICING-CANON" "rc=1, nombra canon_test.go"
 		else mal "MUTANTE design/* sale SUCIO por PRICING-CANON" "rc=$rc y/o no nombra canon_test.go"; fi
 	else mal "el mutante se inyectó" "sed no cambió nada"; fi
+
+	# A restored session exemption must expose the actual scanner reader.
+	sed "s#$ancla#sessions/* | design/audits/* | docs/ai-context/*#" "$WF" > "$tmp/mut-sessions.yml"
+	if grep -q 'sessions/\* |' "$tmp/mut-sessions.yml"; then
+		rc=0; salida="$(comprobar "$tmp/mut-sessions.yml" 2>&1)" || rc=$?
+		if [ "$rc" -eq 1 ] && grep -q 'scripts/check-secrets.sh' <<<"$salida"; then
+			ok "MUTANTE que REPONE sessions/* sale SUCIO" "rc=1, nombra scripts/check-secrets.sh"
+		else mal "MUTANTE que REPONE sessions/* sale SUCIO" "rc=$rc y/o no nombra scripts/check-secrets.sh"; fi
+	else mal "el mutante de sessions/* se inyectó" "sed no cambió nada"; fi
+	# The secret scanner's module fixture is not a read of the root journal. Use
+	# the actual producer and actual CI/hook/task wiring, then add a real journal
+	# read in THAT SAME test script: no test-script exemption may swallow it.
+	fixture="$tmp/readers"
+	mkdir -p "$fixture/scripts" "$fixture/.github/workflows" "$fixture/.githooks" "$fixture/sessions" || morir2 "sin fixture de lectores"
+	cp "$ROOT/scripts/test-check-secrets.sh" "$fixture/scripts/" || morir2 "sin productor de fixture"
+	cp "$WF" "$fixture/.github/workflows/mainline-ci.yml" || morir2 "sin workflow de fixture"
+	cp "$ROOT/$HOOK" "$fixture/.githooks/pre-push" || morir2 "sin hook de fixture"
+	cp "$ROOT/$TASKS" "$fixture/Taskfile.yml" || morir2 "sin tareas de fixture"
+	git -C "$fixture" init -q -b main || morir2 "no pude aislar el fixture de lectores"
+	git -C "$fixture" add -- scripts/test-check-secrets.sh .github/workflows/mainline-ci.yml .githooks/pre-push Taskfile.yml || morir2 "no pude registrar el fixture de lectores"
+	rc=0; salida="$(cd "$fixture" && ROOT="$fixture" comprobar .github/workflows/mainline-ci.yml 2>&1)" || rc=$?
+	if [ "$rc" -eq 0 ]; then ok "sin sessions/* en la lista, el productor real no levanta nada" "rc=0, misma CI"
+	else mal "sin sessions/* en la lista, el productor real no levanta nada" "rc=$rc"; fi
+	printf '%s\n' 'classify journal sentinel' > "$fixture/sessions/causal-reader.md"
+	# export-closure: fixture sessions/causal-reader.md — created above in the private fixture; ROOT is rebound below.
+	reader='cat "$ROOT/sessions/causal-reader.md"'
+	[ "$(ROOT="$fixture" bash -c "$reader")" = 'classify journal sentinel' ] || morir2 "el control no lee el diario de fixture"
+	printf '%s\n' "$reader" >> "$fixture/scripts/test-check-secrets.sh"
+	sed "s#$ancla#sessions/* | design/audits/* | docs/ai-context/*#" "$WF" \
+		> "$fixture/.github/workflows/mainline-ci.yml" || morir2 "no pude reponer la exención en el fixture"
+	grep -q 'sessions/\* |' "$fixture/.github/workflows/mainline-ci.yml" \
+		|| morir2 "el fixture no repuso sessions/* en su case: el ancla del sed ha derivado"
+	rc=0; salida="$(cd "$fixture" && ROOT="$fixture" comprobar .github/workflows/mainline-ci.yml 2>&1)" || rc=$?
+	if [ "$rc" -eq 1 ] && grep -q 'scripts/test-check-secrets.sh' <<<"$salida"; then
+		ok "con la exención REPUESTA, leer el diario REAL sigue SUCIO" "rc=1, lector nombrado"
+	else mal "con la exención REPUESTA, leer el diario REAL sigue SUCIO" "rc=$rc o lector no nombrado"; fi
 	rm -rf "$tmp"
 
 	rc=0; comprobar "/no/existe.yml" >/dev/null 2>&1 || rc=$?
 	if [ "$rc" -eq 2 ]; then ok "un workflow ilegible es 'no he podido mirar'" "rc=2"
 	else mal "un workflow ilegible es 'no he podido mirar'" "rc=$rc"; fi
 
-	echo "check-classify-allowlist --self-test: $((9 - fallos)) pasan, $fallos fallan"
+	echo "check-classify-allowlist --self-test: $pasan pasan, $fallos fallan"
 	[ "$fallos" -eq 0 ] || exit 1
 	exit 0
 fi

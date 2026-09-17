@@ -12,6 +12,13 @@ empfangen. Dies ist nicht der xAI-API-Connector: Er fragt keine entfernten Model
 kein Provider-Secret. Präventive Tool-Kontrolle verwendet `olivares grok-hook` und einen separaten
 lokalen PEP.
 
+Diese Seite ist der **Konnektor- und PEP-Hook-Pfad**. Sie startet die offizielle
+Grok-CLI nicht als gesteuertes Kind. Dieser Betriebspfad ist
+[Eine Anbieter-Session betreiben](/how-to/operate-provider-sessions/)
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` plus ein Anbieterprofil;
+`CHANGELOG.md` `[26.9.0]`). Kompatibilität mit einem authentifizierten
+offiziellen Grok-Konto wird dort nicht behauptet.
+
 ## Grok Build hinzufügen
 
 ### Voraussetzungen

@@ -361,10 +361,32 @@
     "title": "Catálogo de tarifas de modelo",
     "description": "Precios de lista usados para ESTIMAR el coste cuando el proveedor no reporta un importe. No es lo que te facturaron.",
     "unit": "micro-USD por 1M de tokens (entero)",
+    "unitNote": "Las tarifas de entrada y salida están en {{unit}}.",
+    "validityNote": "Las fechas muestran la vigencia que declara cada entrada. Esta lista no indica qué entrada se usó para un cargo concreto.",
     "empty": "No hay tarifas en el catálogo",
-    "inOut": "entrada {{in}} · salida {{out}}",
-    "until": "hasta {{at}}",
-    "current": "vigente",
+    "emptyHint": "No hay precios de lista registrados para esta organización.",
+    "model": "Modelo",
+    "provider": "Proveedor",
+    "inputRate": "Tarifa de entrada",
+    "outputRate": "Tarifa de salida",
+    "effectiveFrom": "Inicio de vigencia",
+    "effectiveUntil": "Fin de vigencia",
+    "noEndDate": "Sin fecha de fin",
+    "invalid": {
+      "title": "Catálogo de tarifas no disponible",
+      "description": "La respuesta no se pudo leer como catálogo de tarifas, así que no se muestra ninguna tarifa. Reintentar repite la misma lectura y no cambia nada.",
+      "reason": {
+        "envelope": "La respuesta no contiene una lista legible de tarifas.",
+        "entry": "La entrada {{n}} no es un registro de tarifa.",
+        "missing": "A la entrada {{n}} le falta el campo {{field}}.",
+        "empty": "En la entrada {{n}}, el campo {{field}} está vacío.",
+        "type": "En la entrada {{n}}, el campo {{field}} tiene un tipo incorrecto.",
+        "negative": "En la entrada {{n}}, el campo {{field}} es negativo.",
+        "notInteger": "En la entrada {{n}}, el campo {{field}} no es un número entero.",
+        "unsafe": "En la entrada {{n}}, el campo {{field}} es demasiado grande para mostrarlo con exactitud.",
+        "timestamp": "En la entrada {{n}}, el campo {{field}} no es una marca de tiempo RFC 3339."
+      }
+    },
     "truncated": "Cargadas {{n}} tarifas; hay más",
     "truncatedHint": "Hay más tarifas de modelo de las que se ven; esta página va ordenada por fecha de entrada en vigor, de la más reciente a la más antigua. Que algo falte aquí no demuestra que falte del catálogo: el cálculo de coste y la comparación resuelven la tarifa vigente contra el catálogo, con independencia de esta página."
   },
@@ -457,5 +479,21 @@
     "riskDescription": "Sujetos que queman gasto sin resultados satisfechos.",
     "riskEmpty": "Ningún sujeto quema gasto sin resultados",
     "satisfiedOf": "{{satisfied}} de {{outcomes}} satisfechos"
+  },
+  "evidence": {
+    "atLeast": "Al menos {{amount}}",
+    "original": "Registrado originalmente: {{amount}}",
+    "unknown": "Importe desconocido",
+    "exact": "Importe exacto",
+    "lower_bound": "Cota inferior; total incompleto",
+    "historical": "Cifra histórica; no verificada",
+    "unavailable": "No disponible",
+    "barUnavailable": "Barra no disponible: falta una base monetaria exacta.",
+    "forecast": "Proyección (no certificada): {{amount}}",
+    "cause": "Causa",
+    "reference": "Referencia de alerta",
+    "digest": "Digest de la evidencia registrada",
+    "lookup": "Consultar",
+    "clear": "Limpiar"
   }
 }

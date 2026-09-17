@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -26,7 +27,66 @@ var ErrCoreSchemaVersionAhead = errors.New("sqlstore: the database records a cor
 // coreSupportedMigrationVersion is the single boot authority for the newest
 // core migration this binary understands. Individual migration constants stay
 // immutable when a later migration is appended; only this alias advances.
-const coreSupportedMigrationVersion = coreDirectoryMigrationVersion
+//
+// It advances to v10 with durable User authority and its writer protocol. A
+// recorded v10 is ahead of max-v7/v8/v9 binaries even if later marked reverted;
+// the preflight still precedes all boot DDL.
+//
+// It advances to v11 with the controlled evidence-operation 'refused' state
+// transition. A v10 binary opening a v11 database therefore stops here, before
+// its six-word state reconciler could narrow the widened CHECK.
+//
+// It advances to v13 with the login capability control relation. v12 stays reserved
+// and unregistered, so the compiled plan is 1..11 then 13 and the preflight refuses any
+// recorded version the plan does not contain (ErrCoreSchemaVersionUnrecognized).
+const coreSupportedMigrationVersion = coreLoginCapabilityMigrationVersion
+
+// ErrCoreSchemaVersionUnrecognized is returned before any boot DDL when the database
+// records a version at or below the supported ceiling that this binary's compiled plan
+// does not contain, such as a foreign version-12 row below ceiling 13.
+var ErrCoreSchemaVersionUnrecognized = errors.New("sqlstore: the database records a core schema version this binary's compiled plan does not contain")
+
+// compiledCoreMigrationVersions derives the allowed set from the same pure plan
+// constructor the boot applies; it builds migration values and executes nothing.
+func compiledCoreMigrationVersions(dia dialect.Dialect) map[int64]struct{} {
+	plan := buildCoreMigrationPlan(dia, nil, nil, nil, guardEditionGraph{}, accessEvidenceBootPlan{}, evidenceStateCalibration{})
+	out := make(map[int64]struct{}, len(plan))
+	for _, m := range plan {
+		out[int64(m.Version)] = struct{}{}
+	}
+	return out
+}
+
+// compiledCoreMigrationVersionOrder is the compiled plan's versions in ascending order
+// (1..11 then 13). A legitimate tracked history is an ordered prefix of it.
+func compiledCoreMigrationVersionOrder(dia dialect.Dialect) []int64 {
+	set := compiledCoreMigrationVersions(dia)
+	out := make([]int64, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// CompiledCoreMigrationVersions is the compiled core plan's versions for engine, in
+// ascending order. It is the read-only export of compiledCoreMigrationVersionOrder for the
+// separate `olivares` module (through core/engine): derived from the same pure plan
+// constructor the preflight uses, building migration values and executing nothing, so it is
+// not a second registry (ROOT-CONSTRUCTION-R5-1 §2). The result is the plan, not an integer
+// range: v12 is reserved and unregistered.
+func CompiledCoreMigrationVersions(engine store.Engine) ([]int, error) {
+	dia, ok := dialect.New(engine)
+	if !ok {
+		return nil, fmt.Errorf("sqlstore: unsupported engine %q", engine)
+	}
+	order := compiledCoreMigrationVersionOrder(dia)
+	out := make([]int, len(order))
+	for i, v := range order {
+		out[i] = int(v)
+	}
+	return out, nil
+}
 
 // preflightCoreMigrationVersion is the read-only, pre-DDL half of core migration
 // compatibility. It must remain the first operation in Open's migration-lock
@@ -88,6 +148,12 @@ func preflightCoreMigrationVersion(
 	if maxVersion > int64(maxSupported) {
 		return fmt.Errorf("%w: database=%d binary=%d",
 			ErrCoreSchemaVersionAhead, maxVersion, maxSupported)
+	}
+	compiled := compiledCoreMigrationVersions(dia)
+	for version := range versions {
+		if _, ok := compiled[version]; !ok {
+			return fmt.Errorf("%w: database records v%d", ErrCoreSchemaVersionUnrecognized, version)
+		}
 	}
 	if maxVersion < int64(coreDirectoryMigrationVersion) {
 		return nil

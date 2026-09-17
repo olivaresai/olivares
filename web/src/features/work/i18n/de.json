@@ -263,5 +263,9 @@
       "label": "Konnte nicht nachsehen",
       "help": "Die Engine konnte die Beobachtung NICHT abschließen. Das ist weder ein Bestanden noch ein leeres Ergebnis — die Antwort ist unbekannt."
     }
+  },
+  "handoff": {
+    "offer": "Übergabe anbieten",
+    "offerHint": "Bieten Sie die Verantwortung für dieses Element einer empfangenden Partei über einen Kanal an. Die Inhaberschaft wechselt erst mit deren Annahme."
   }
 }

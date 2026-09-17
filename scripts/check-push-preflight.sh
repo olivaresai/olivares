@@ -210,7 +210,7 @@ tmpdir_ejecuta() { # 0 si TMPDIR puede EJECUTAR un binario; 1 si no, con el reme
 	return 1
 }
 
-bundle_al_dia() { # <worktree> -> 0 al día | 1 obsoleto | (dice y deja pasar si no puede mirar)
+bundle_al_dia() { # <worktree> -> 0 al día | 1 obsoleto | 2 no puede mirar
 	# ⛔ LA TERCERA FORMA DE MORIR CON EL GATE CASI PAGADO, y la que más cara sale porque el
 	#    mensaje final culpa a «un gate» sin decir cuál. Cazada en vivo el 2026-08-26:
 	#
@@ -228,8 +228,8 @@ bundle_al_dia() { # <worktree> -> 0 al día | 1 obsoleto | (dice y deja pasar si
 	# TMPDIR está montado noexec, PATH se lo saltaría en silencio y el test mediría el `task` real.
 	cmd="${OLIVARES_PREFLIGHT_BUNDLE_CMD:-task lint:web-bundle-freshness}"
 	if [ "${OLIVARES_PREFLIGHT_BUNDLE_CMD:-}" = "" ] && ! command -v task >/dev/null 2>&1; then
-		echo "check-push-preflight: no encuentro 'task' — NO he comprobado si el bundle está al día." >&2
-		return 0
+		echo "check-push-preflight: NO HE PODIDO MIRAR: no encuentro 'task'; el bundle no se comprobó." >&2
+		return 2
 	fi
 	( cd "$wt" 2>/dev/null && eval "$cmd" ) >/dev/null 2>&1; rc=$?
 	if [ "$rc" -eq 0 ]; then
@@ -245,7 +245,7 @@ bundle_al_dia() { # <worktree> -> 0 al día | 1 obsoleto | (dice y deja pasar si
 }
 
 preflight() { # preflight <worktree> -> 0 limpio | 1 sucio o TMPDIR inservible | 2 no he podido mirar
-	local wt="$1" estado sucio dist
+	local wt="$1" estado sucio dist bundle_rc
 	cleanup_stale_tmp || return $?
 	[ -n "$wt" ] || { echo "check-push-preflight: NO HE PODIDO MIRAR: sin worktree" >&2; return 2; }
 	[ -d "$wt" ] || { echo "check-push-preflight: NO HE PODIDO MIRAR: '$wt' no es un directorio" >&2; return 2; }
@@ -259,7 +259,9 @@ preflight() { # preflight <worktree> -> 0 limpio | 1 sucio o TMPDIR inservible |
 	if [ "${sucio:-0}" -eq 0 ]; then
 		echo "check-push-preflight: árbol LIMPIO — el gate no lo rechazará por residuo."
 		tmpdir_ejecuta || return 1
-		bundle_al_dia "$wt" || return 1
+		bundle_al_dia "$wt"
+		bundle_rc=$?
+		[ "$bundle_rc" -eq 0 ] || return "$bundle_rc"
 		return 0
 	fi
 	echo "check-push-preflight: ⛔ NO ARRANQUES: $sucio entrada(s) sin commitear en '$wt'."
@@ -395,8 +397,15 @@ selftest() {
 	[ "$rc" = 0 ] && [ -d "$OLIVARES_PREFLIGHT_TMP_ROOT/tmp.YOUNG00001" ] || {
 		echo "selftest CASO 13 (TMP joven) no fue preservado: rc=$rc: $out"; fails=$((fails+1)); }
 
+	# CASO 14 — sin `task` no hay veredicto sobre el bundle: es 2, nunca el 0 que autoriza el push.
+	# PATH vacío es una sonda hermética: `command` y `echo` son builtins y esta rama no ejecuta nada.
+	mkdir -p "$base/no-tools"
+	out=$(PATH="$base/no-tools" OLIVARES_PREFLIGHT_BUNDLE_CMD= bundle_al_dia "$base/limpio" 2>&1); rc=$?
+	[ "$rc" = 2 ] || { echo "selftest CASO 14 (sin task) esperaba 2, dio $rc: $out"; fails=$((fails+1)); }
+	case "$out" in *"NO HE PODIDO MIRAR"*) ;; *) echo "selftest CASO 14: no distingue ausencia de herramienta"; fails=$((fails+1)) ;; esac
+
 	if [ "$fails" -eq 0 ]; then
-		echo "check-push-preflight --selftest: 13/13 (limpio · sucio-sin-bundle · bundle-con-remedio · no-es-repo · ruta-inexistente · TMPDIR-ejecuta · TMPDIR-sin-escritura · TMPDIR-noexec · bundle-al-dia · bundle-obsoleto-con-remedio · TMP-viejo-muerto · TMP-viejo-vivo · TMP-joven)"
+		echo "check-push-preflight --selftest: 14/14 (incluye TMPDIR noexec, limpieza con guarda viva, bundle obsoleto y task ausente)"
 		return 0
 	fi
 	echo "check-push-preflight --selftest: $fails caso(s) en rojo"

@@ -45,6 +45,9 @@ func newDirectoryRetirementPostgresHarness(
 		MaxConns: 12,
 	}
 	raw := retirementOpenPostgres(t, cfg)
+	// Same precondition as the SQLite harness: the split-owner activation proves the
+	// complete inventory, and SYSTEM genesis precedes every tenant in a real boot.
+	retirementEnsureSystemTenant(t, raw)
 	return directoryRetirementPostgresHarness{
 		pg: pg, cfg: cfg, raw: raw, sql: raw.(*sqlStore),
 	}
@@ -419,6 +422,7 @@ func TestDirectoryRetirementPostgresSplitOwnerPrincipalMatrixAndReopen(t *testin
 
 	beforeUserA := directoryWriterTestEpoch(t, h.raw, tenantA).Version
 	beforeUserB := directoryWriterTestEpoch(t, h.raw, tenantB).Version
+	beforeUserH := F2AUserAuthorityVersionForTest(t, h.raw, victim.user.ID)
 	userReq := retirementPostgresUserRequest(victim.user)
 	userTombstone, err := RetireUser(ctx, h.raw, userReq)
 	if err != nil {
@@ -431,9 +435,14 @@ func TestDirectoryRetirementPostgresSplitOwnerPrincipalMatrixAndReopen(t *testin
 		len(userTombstone.ResultingEpochs) != 2 {
 		t.Fatalf("PostgreSQL User retirement evidence = %+v", userTombstone)
 	}
+	if got := F2AUserAuthorityVersionForTest(t, h.raw, victim.user.ID); got != beforeUserH+1 {
+		t.Fatalf("PostgreSQL User authority = %d, want %d", got, beforeUserH+1)
+	}
+	// Target protocol: membership cleanup bumps tenant A. Tenant B is inventoried
+	// but structurally unaffected, so G is carried unchanged. Both receipts remain.
 	for tenant, want := range map[model.TenantID]int64{
 		tenantA: beforeUserA + 1,
-		tenantB: beforeUserB + 1,
+		tenantB: beforeUserB,
 	} {
 		got, carried := userTombstone.ResultingEpochs.EpochFor(tenant)
 		if !carried || got != want {
@@ -519,8 +528,11 @@ func TestDirectoryRetirementPostgresSplitOwnerPrincipalMatrixAndReopen(t *testin
 	if got := directoryWriterTestEpoch(t, reopened, tenantA).Version; got != beforeUserA+1 {
 		t.Fatalf("reopened replay changed tenant A epoch to %d, want %d", got, beforeUserA+1)
 	}
-	if got := directoryWriterTestEpoch(t, reopened, tenantB).Version; got != beforeUserB+1 {
-		t.Fatalf("reopened replay changed tenant B epoch to %d, want %d", got, beforeUserB+1)
+	if got := directoryWriterTestEpoch(t, reopened, tenantB).Version; got != beforeUserB {
+		t.Fatalf("reopened replay changed tenant B epoch to %d, want unchanged %d", got, beforeUserB)
+	}
+	if got := F2AUserAuthorityVersionForTest(t, reopened, victim.user.ID); got != beforeUserH+1 {
+		t.Fatalf("reopened replay changed User authority to %d, want %d", got, beforeUserH+1)
 	}
 }
 
@@ -852,6 +864,11 @@ func TestRetireUserPostgresSplitOwnerRLSReplayRejectsResidualAuthority(t *testin
 	var residual model.AuthSession
 	if err := h.raw.AuthMutate(ctx, func(auth store.AuthScope) error {
 		raw := auth.(*authScope).ts
+		// enforce() left expected_generation=2 / user-authority-v1. Present that
+		// independently known proof; do not copy the live control-row protocol.
+		if err := armDirectoryWriterCoverage(ctx, raw.tx, raw.s.dia, 2, false); err != nil {
+			return err
+		}
 		var createErr error
 		residual, createErr = newTypedRepo(
 			raw.repo(authSessionDescriptor), authSessionCodec,
@@ -880,12 +897,18 @@ func TestRetireUserPostgresSplitOwnerRLSReplayRejectsResidualAuthority(t *testin
 
 func TestRetireUserPostgresSplitOwnerGlobalInterleavings(t *testing.T) {
 	t.Run("retirement wins and stale authority writer is refused", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
+		// The harness is an isolated PostgreSQL database plus an Open with the compiled
+		// migration plan, and the tenant, the user and the enforcement follow it. None of
+		// that is what the 20 s budget measures: the budget is for the retirement/authority
+		// interleaving below. Started above the harness it was spent by the fixture under
+		// -race on a contended runner, which is the class of 01f81b8e81, 4859cc43f3 and
+		// 346bce0c8a — a timeout at the wait instead of a verdict on the race.
 		h := newDirectoryRetirementPostgresHarness(t)
 		provisionTenant(t, h.raw, "retirement-pg-global-retire-first")
 		user := retirementCreateUser(t, h.raw, "retirement-pg-global-retire-first")
 		h.enforce(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
 		auditReached := make(chan struct{})
 		releaseRetirement := make(chan struct{})
 		directoryRetirementAfterAuditTestHook = func(*model.AuditEvent) {
@@ -951,12 +974,15 @@ func TestRetireUserPostgresSplitOwnerGlobalInterleavings(t *testing.T) {
 	})
 
 	t.Run("membership wins and retirement removes committed authority", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
+		// Same class as the sibling subtest above: the harness (isolated database + Open with
+		// the compiled migration plan), the tenant, the user and the enforcement are fixture,
+		// and the 20 s budget is for the membership/retirement interleaving only.
 		h := newDirectoryRetirementPostgresHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-pg-global-writer-first")
 		user := retirementCreateUser(t, h.raw, "retirement-pg-global-writer-first")
 		h.enforce(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
 		beforeEpoch := directoryWriterTestEpoch(t, h.raw, tenant).Version
 		writerLocked := make(chan struct{})
 		releaseWriter := make(chan struct{})

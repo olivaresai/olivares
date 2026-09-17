@@ -1,0 +1,57 @@
+{
+  "a_disabled": {
+    "sources": [
+      {
+        "config": {
+          "config_path": "/home/ana/.grok/config.toml"
+        },
+        "enabled": false,
+        "kind": "grok",
+        "name": "grok-home-a",
+        "source_mode": "export",
+        "status": "disabled",
+        "tenant": "acme"
+      },
+      {
+        "component": "olivares.grok",
+        "config": {
+          "config_path": "/home/ana/.grok-b/config.toml"
+        },
+        "enabled": true,
+        "kind": "grok",
+        "name": "grok-home-b",
+        "source_mode": "export",
+        "status": "running",
+        "tenant": "acme"
+      }
+    ]
+  },
+  "both_running": {
+    "sources": [
+      {
+        "component": "olivares.grok",
+        "config": {
+          "config_path": "/home/ana/.grok/config.toml"
+        },
+        "enabled": true,
+        "kind": "grok",
+        "name": "grok-home-a",
+        "source_mode": "export",
+        "status": "running",
+        "tenant": "acme"
+      },
+      {
+        "component": "olivares.grok",
+        "config": {
+          "config_path": "/home/ana/.grok-b/config.toml"
+        },
+        "enabled": true,
+        "kind": "grok",
+        "name": "grok-home-b",
+        "source_mode": "export",
+        "status": "running",
+        "tenant": "acme"
+      }
+    ]
+  }
+}

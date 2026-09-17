@@ -38,14 +38,21 @@ import (
 //
 // CREDENTIALS: the short-lived, environment-attested credential is injected into the
 // child process ENVIRONMENT (never argv — `ps`-visible secrets are forbidden,
-// docs/SECURITY-HARDENING.md), under the operator-configured variable names. The child env is built
-// from an explicit allowlist; no ambient long-lived cloud key is inherited.
+// docs/SECURITY-HARDENING.md), under the operator-configured variable names. The child env is built from
+// an explicit list of NAMES, so nothing crosses merely because this process happens to
+// hold it. What the list may legitimately carry includes an ordinary third-party
+// credential: naming AWS_SECRET_ACCESS_KEY for a terraform provider is the intended
+// use, not a leak. What it may never carry is a variable of this control plane's OWN
+// trust domain (controlPlaneEnvPrefix) — see childEnv and ValidatePassthrough.
 type TofuBackend struct {
 	cfg    TofuConfig
 	runner cmdRunner
 }
 
-// TofuConfig configures the declarative backend (operator-provisioned, no secrets).
+// TofuConfig configures the declarative backend. Fields are operator-provisioned
+// names and paths, not secret values. Explicit third-party credential passthrough
+// is supported: PassthroughEnv copies named parent variables, which may include
+// ordinary credentials such as AWS_SECRET_ACCESS_KEY.
 type TofuConfig struct {
 	// Binary is the executable: "tofu" (default) or "terraform".
 	Binary string
@@ -58,8 +65,16 @@ type TofuConfig struct {
 	// least one is required for a write op (else there is no attested credential to
 	// act with) unless AllowAmbientCreds is set.
 	CredentialEnv []string
-	// PassthroughEnv lists non-secret env vars copied from the parent to the child
-	// (e.g. "HOME", "PATH" is always included). Keeps the child env explicit.
+	// PassthroughEnv lists the env variable NAMES copied from the parent to the child
+	// (PATH and HOME always are). Keeps the child env explicit.
+	//
+	// It is NOT limited to non-secret values, and saying so would mislead in the
+	// expensive direction: handing a third-party credential to the tool that needs it
+	// — AWS_SECRET_ACCESS_KEY for a terraform provider — is the ordinary, intended use,
+	// and a reader who trusted "non-secret" would delete the entry a real deployment
+	// depends on. The one family that never crosses is this control plane's own
+	// (controlPlaneEnvPrefix): childEnv drops those silently and ValidatePassthrough
+	// refuses them where an operator can still fix the list.
 	PassthroughEnv []string
 	// AllowAmbientCreds, when true, permits running without injecting a minted token
 	// (the workspace's backend uses its own ambient identity, e.g. an IRSA pod role).
@@ -273,12 +288,94 @@ func (t *TofuBackend) requireRemoteState(dir string) error {
 	}
 }
 
+// controlPlaneEnvPrefix names the control plane's OWN trust domain. Handing a variable
+// under it to a child is never legitimate — not even for the operator who owns both —
+// because the child is third-party code and the value is this engine's own secret. It is
+// the ONLY family refused here: passing cloud credentials to terraform is the ordinary use
+// of passthrough, and a rule that swallowed those would read as "more secure" while
+// breaking a real deployment (TestChildEnvKeepsThirdPartyCredentials is that control).
+//
+// Bounding what a CONSOLE may write is a different problem with a different shape: against
+// a host's unbounded set of secrets a deny-list can never be complete, so that end takes an
+// allow-list. This one is an invariant, not a governance list.
+//
+// It is enforced HERE, in the engine, and not in whatever form supplied the list: a rule
+// that only the form enforces is bypassed by every other caller — API, CLI, seed, a
+// composition test. Today the list can only come from the operator's boot file, so this is
+// not yet an escalation; it becomes one the day a console lets a tenant admin write it,
+// which is the feature this precondition exists for.
+const controlPlaneEnvPrefix = "OLIVARES_"
+
+// PassthroughRejection is one refused name, for a caller that has to tell a human. It carries
+// the NAME and a machine code; it never carries the variable's value, and there is nothing to
+// carry — validation reads names, never the environment.
+type PassthroughRejection struct {
+	Name   string `json:"name"`
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
+}
+
+// RejectionControlPlaneDomain is the only code today. It is a constant rather than a literal
+// so a caller switching on it breaks visibly if the set ever grows.
+const RejectionControlPlaneDomain = "control-plane-domain"
+
+// ValidatePassthrough is the LOUD half of this invariant, and it exists because the engine's
+// half is deliberately silent.
+//
+// childEnv skips a refused name without a word: it has no logger, it runs once per deploy, and
+// failing there would turn an old operator config into a broken deploy in flight. But a silent
+// skip ALONE misleads — the operator would believe the variable travels. So the pair is: refuse
+// LOUDLY where someone is watching and the change is cheap (config load; no implemented
+// console caller), and drop SILENTLY in the engine where nothing can be done about it. Each
+// half alone is a different defect: only the door leaves every other caller unguarded, only
+// the backstop lies by omission.
+//
+// It is exported so writing-end callers use this predicate WITHOUT re-deriving the rule —
+// one predicate, no drift.
+//
+// Caller census in THIS tree: TWO callers — childEnv here (engine), and the composition
+// root's deploy-executor config load (cmd/olivares, refusedPassthrough), which refuses the
+// boot. There is no implemented console caller. A console that lets a tenant admin write
+// the list would call this rather than re-derive it; that feature is not in this tree.
+func ValidatePassthrough(names []string) []PassthroughRejection {
+	var out []PassthroughRejection
+	for _, n := range names {
+		if deniedPassthrough(n) {
+			out = append(out, PassthroughRejection{
+				Name:   n,
+				Code:   RejectionControlPlaneDomain,
+				Reason: "names a variable of the control plane's own trust domain, which is never handed to a child process",
+			})
+		}
+	}
+	return out
+}
+
+// deniedPassthrough reports whether a passthrough NAME belongs to the control plane's own
+// domain. The comparison is by prefix and case-insensitive: equality would let
+// OLIVARES_MASTER_KEY_2 through, and a case-sensitive test would let a near-miss decide.
+func deniedPassthrough(name string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(name)), controlPlaneEnvPrefix)
+}
+
 // childEnv builds the explicit child environment: PATH/HOME, the operator's
-// passthrough allowlist, and the short-lived credential injected into the
-// configured variable names. No ambient long-lived secret is inherited.
+// passthrough allowlist, and the short-lived credential injected into the configured
+// variable names. Nothing is inherited implicitly — a parent variable crosses only
+// because the operator NAMED it, which is how an ordinary third-party credential
+// legitimately reaches the tool — and a name in this control plane's own domain is
+// dropped even then.
 func (t *TofuBackend) childEnv(cred Credential) ([]string, error) {
 	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "TF_IN_AUTOMATION=1"}
 	for _, k := range t.cfg.PassthroughEnv {
+		if deniedPassthrough(k) {
+			// Silent by design, and only because a LOUD layer exists at the writing end
+			// (config load). There is no implemented console caller. This is the backstop: it
+			// cannot fail a running deploy and it cannot depend on a logger this type does not
+			// have. On its own a silent skip would mislead — the operator would believe the
+			// variable travels — so the two layers are a pair, and each alone is a different
+			// defect.
+			continue
+		}
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
 		}

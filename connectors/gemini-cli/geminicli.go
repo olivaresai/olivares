@@ -13,7 +13,7 @@
 // API (generativelanguage.googleapis.com, model catalog + cost). THIS connector reads the
 // gemini-cli AGENT's configuration; the two never overlap.
 //
-// What it does (read-only, local-filesystem, minimal-data — docs/SECURITY-HARDENING.md-3):
+// What it does (read-only, local-filesystem, minimal-data — docs/SECURITY-HARDENING.md §0-3):
 //   - reads the settings.json precedence layers (system-defaults < user < workspace <
 //     SYSTEM override — VERIFIED merge order) and resolves the EFFECTIVE value of each
 //     governable control plus the scope that won it;

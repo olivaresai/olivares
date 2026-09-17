@@ -10,7 +10,8 @@
 // routes (`/v1/m/<namespace>/…`), and its own query keys (see query.ts). This file
 // owns only the engine-core endpoints (auth, identity, tenants, and the
 // representative agents/access/audit surfaces) that the foundation itself uses.
-import { http } from './client'
+import { http, type RequestOptions, type TenantRequestOptions } from './client'
+import type { paths } from './openapi.gen'
 import type {
   AcceptInviteRequest,
   AcceptInviteResponse,
@@ -84,8 +85,57 @@ export const authApi = {
   refresh: () => http.post<LoginResponse>('/v1/auth/refresh'),
   logout: () => http.post<void>('/v1/auth/logout'),
   /** The calling principal and its tenant grants. */
-  whoami: () => http.get<Whoami>('/v1/auth/whoami'),
+  whoami: (
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard' | 'sessionEffects'>,
+  ) => http.get<Whoami>('/v1/auth/whoami', opts),
+  /**
+   * Project the CALLING credential's authority over registered operations.
+   *
+   * The request and response types come from the GENERATED contract
+   * (`paths['/v1/auth/capabilities']['post']`), never from a hand-written DTO: the
+   * shape of this wire is owned by the OpenAPI document and its generator, and a
+   * second local declaration is how a console starts believing a field the engine
+   * stopped sending.
+   *
+   * ⛔ A GENERATED TYPE IS NOT A RUNTIME CHECK, and this wrapper deliberately does
+   *    not pretend otherwise: `T` here is an assertion about JSON that has already
+   *    been parsed, so it cannot reject a body that disagrees with it. Admitting a
+   *    permit from this response is `lib/auth/capabilities.ts`'s job, and it
+   *    validates the envelope, the cardinality, the id/kind and the state/code pair
+   *    against the actual value before anything is enabled.
+   *
+   * The tenant is EXPLICIT rather than ambient: a capability question is asked about
+   * one credential in one tenant, and the caller captured that tenant when it built
+   * the question. `signal` and `dispatchGuard` are passed through to the shared
+   * client so a preflight can be cancelled and can refuse at the transport seam.
+   */
+  capabilities: (
+    req: CapabilityQuestionsRequest,
+    opts: TenantRequestOptions &
+      Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) => http.post<CapabilityResults>('/v1/auth/capabilities', req, opts),
 }
+
+/* ── the generated capability contract, named once for its consumers ──────────── */
+
+type AuthCapabilitiesOperation = paths['/v1/auth/capabilities']['post']
+
+/** The closed request body of `POST /v1/auth/capabilities` (schema 2). */
+export type CapabilityQuestionsRequest =
+  AuthCapabilitiesOperation['requestBody']['content']['application/json']
+
+/** The closed 200 body of `POST /v1/auth/capabilities` (schema 2). */
+export type CapabilityResults =
+  AuthCapabilitiesOperation['responses'][200]['content']['application/json']
+
+/** One typed question about ONE registered operation or collection. */
+export type CapabilityQuestion = CapabilityQuestionsRequest['questions'][number]
+
+/** One independent answer, correlated with its question by `id`. */
+export type CapabilityResult = CapabilityResults['results'][number]
+
+/** The declared identification inputs of an entity operation. */
+export type CapabilitySelectors = NonNullable<CapabilityQuestion['selectors']>
 
 /** Identity & access management (core/api/handlers_core.go). */
 // ⛔ EL TECHO DE LA CAPA COMPARTIDA. Estas llamadas las estrena cualquier feature, asi que un

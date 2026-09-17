@@ -58,13 +58,85 @@ type Event struct {
 	// it to a model.TenantID; it is a string here so the SDK stays free of engine
 	// id types.
 	Tenant string
-	// Source is the name of the component (connector/module) that emitted it.
+	// Source names the INGESTION INSTANCE that emitted the event.
+	//
+	// For a source the engine registered under an explicit name — the roster row's
+	// name the operator wrote — that name is what appears here, so two sources of
+	// one connector kind ("grok-home-a", "grok-home-b") are told apart. A source
+	// registered without one, and a module publishing its own events, still carry
+	// the component's Descriptor name, which is what they always carried.
+	//
+	// CONSUMER NOTE, because this changed for CONFIGURED sources: an exporter or
+	// filter that matched a connector descriptor (e.g. "olivares.grok") to select a
+	// configured source's events now has to match the source's name, or read the
+	// connector identity from the runtime/roster inspection surface, where it is
+	// still reported. Events written before the change keep the value they were
+	// written with; they are never rewritten or relabelled with a modern name.
+	//
+	// It is an ingestion label and NOTHING MORE: it does not identify a provider,
+	// an engine, a process, a config home or a user, and it must not be treated as
+	// authority for any of them. A remotely pushed observation carries the
+	// collector's own value here, and only the TENANT is authenticated on that
+	// path. (Distinct from model.EdgeObservation.Source, which is the class of
+	// SIGNAL — otlp, hook, audit log — a different dimension entirely.)
 	Source string
+	// SourceRegistration is the HOST-stamped snapshot of the CONFIGURED source
+	// registration this event arrived through: the durable roster row's persistent
+	// id, the revision the runtime actually opened, and the execution environment
+	// that applied it. The host stamps it from what it registered, never from the
+	// observation, a label, the connector or a remote collector's envelope — a
+	// pushed observation (Runtime.Ingest) always arrives with it nil. nil means
+	// legacy/unattributed: a name-less registration, a file-configured collector
+	// source, a module publishing its own events, or a frame from a peer that did
+	// not carry one; a decoder never invents one.
+	//
+	// It says WHICH configured source delivered the fact. It says nothing about
+	// whether an id inside the payload belongs to a process the plane launched:
+	// process ownership is proven by the runtime that created the process, not by
+	// the channel an observation used (provider-session-identity-lot §3).
+	SourceRegistration *SourceRegistration
 	// Time is when the underlying fact occurred (the connector's clock).
 	Time time.Time
 	// Payload is the fact. For the first-party Types it is a model.Observation;
 	// a module-defined Type may carry any value (JSON-encoded on the wire).
 	Payload any
+}
+
+// SourceRegistration is the immutable registration snapshot the host stamps on
+// an event (see Event.SourceRegistration). The three source identity fields are
+// required; a partially filled identity is refused. BindingRef is an optional
+// per-observation decision, never a required identity field.
+type SourceRegistration struct {
+	// BindingRef is the approved durable binding decision stamped by the host
+	// for this observation before enqueueing. Empty means no approved binding;
+	// replay must not resolve it against a newly created or current binding.
+	BindingRef string
+	// SourceID is the persistent id of the source's durable roster row. Its
+	// editable name is deliberately NOT here: delete-and-recreate under one name
+	// is another row, and a snapshot that named the row would resolve old events
+	// against a modern definition.
+	SourceID string
+	// SourceRevision is the roster row's version the runtime SUCCESSFULLY opened,
+	// not the latest version the table holds. A rotation whose Open failed leaves
+	// the previous revision running and stamped.
+	SourceRevision int64
+	// EnvironmentRef is the persistent local execution environment that applied
+	// the registration.
+	EnvironmentRef string
+}
+
+// Valid reports whether every component of the snapshot is present.
+func (r SourceRegistration) Valid() bool {
+	return r.SourceID != "" && r.SourceRevision >= 1 && r.EnvironmentRef != ""
+}
+
+// Clone returns an independent copy, or nil for nil.
+func (r *SourceRegistration) Clone() *SourceRegistration {
+	if r == nil {
+		return nil
+	}
+	c := *r
+	return &c
 }
 
 // TypeForObservation returns the first-party event Type that wraps o. It is the

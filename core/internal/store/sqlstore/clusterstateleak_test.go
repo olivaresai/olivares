@@ -6,6 +6,7 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -56,6 +57,8 @@ type clusterStateFingerprint struct {
 	// Databases are the scratch databases this package's fixtures create. A leaked database
 	// holds a leaked role's dependencies, so counting only roles reports half the leak.
 	Databases []string
+	// MaintenanceDatacl preserves the exact catalog representation, including NULL as empty.
+	MaintenanceDatacl string
 }
 
 // fixturePrefixes are the names this package's fixtures create. A role that does not match
@@ -66,77 +69,87 @@ type clusterStateFingerprint struct {
 // NOINHERIT chain. A snapshot that does not cover a name cannot report its leak.
 var fixturePrefixes = []string{
 	"olv_evfence_", "olv_app_", "olv_to_", "olv_",
-	"esc_app_", "esc_tgt_", "legacy_fn_", "e_", "olivares_app_mid",
+	"esc_app_", "esc_tgt_", "legacy_fn_", "e_", "olivares_app_mid", "ra2p1_",
 }
 
+// Both snapshot callers use this reader so filtering and completeness agree.
 func snapshotClusterState(t *testing.T, db *sql.DB) clusterStateFingerprint {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	var fp clusterStateFingerprint
-	rows, err := db.QueryContext(ctx, `SELECT rolname FROM pg_roles ORDER BY 1`)
+	fp, err := readClusterSnapshot(ctx, db)
 	if err != nil {
-		t.Fatalf("snapshot roles: %v", err)
+		t.Fatalf("cluster snapshot incomplete: %s", roleLabSQLState(err))
 	}
-	defer rows.Close()
+	return fp
+}
+
+func clusterFixtureOwned(name string) bool { return !pgtest.ForeignFixtureObject(name) }
+
+func clusterFixtureRole(name string) bool {
+	if !clusterFixtureOwned(name) {
+		return false
+	}
+	for _, prefix := range fixturePrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func clusterSnapshotNames(ctx context.Context, db *sql.DB, query string, include func(string) bool) (names []string, err error) {
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			t.Fatalf("scan role: %v", err)
+			return nil, err
 		}
-		// A pgtest-generated object belonging to ANOTHER test process is not this
-		// package's to account for: `go test ./a/... ./b/...` runs packages
-		// concurrently against one server, so a sibling package's live role would
-		// otherwise appear inside this window and be reported as our leak.
-		// Names without a process tag stay fully accounted for.
-		if pgtest.ForeignFixtureObject(name) {
-			continue
-		}
-		for _, p := range fixturePrefixes {
-			if strings.HasPrefix(name, p) {
-				fp.Roles = append(fp.Roles, name)
-				break
-			}
+		if include(name) {
+			names = append(names, name)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		t.Fatalf("snapshot roles: %v", err)
+		return nil, err
 	}
-	sort.Strings(fp.Roles)
+	sort.Strings(names)
+	return names, nil
+}
 
-	// The shared application role's posture. A missing row is not a failure: not every
-	// cluster provisions it under that name.
+func readClusterSnapshot(ctx context.Context, db *sql.DB) (clusterStateFingerprint, error) {
+	var fp clusterStateFingerprint
+	var err error
+	fp.Roles, err = clusterSnapshotNames(ctx, db,
+		`SELECT rolname FROM pg_roles ORDER BY 1`, clusterFixtureRole)
+	if err != nil {
+		return clusterStateFingerprint{}, err
+	}
+	fp.Databases, err = clusterSnapshotNames(ctx, db,
+		`SELECT datname FROM pg_database WHERE datname LIKE 'olv\_%' OR datname LIKE 'e2e%' OR datname LIKE 'ra2p1\_%' ORDER BY 1`,
+		clusterFixtureOwned)
+	if err != nil {
+		return clusterStateFingerprint{}, err
+	}
 	if err := db.QueryRowContext(ctx,
 		`SELECT COALESCE((SELECT rolinherit FROM pg_roles WHERE rolname = 'olivares_app'), true)`).
 		Scan(&fp.AppRoleInherits); err != nil {
-		t.Fatalf("snapshot the application role's posture: %v", err)
+		return clusterStateFingerprint{}, err
 	}
 	if err := db.QueryRowContext(ctx,
 		`SELECT pg_catalog.has_table_privilege('public', 'pg_catalog.pg_roles', 'SELECT')`).
 		Scan(&fp.PublicCanReadPgRoles); err != nil {
-		t.Fatalf("snapshot the pg_roles grant: %v", err)
+		return clusterStateFingerprint{}, err
 	}
-	drows, err := db.QueryContext(ctx,
-		`SELECT datname FROM pg_database WHERE datname LIKE 'olv\_%' OR datname LIKE 'e2e%' ORDER BY 1`)
-	if err != nil {
-		t.Fatalf("snapshot databases: %v", err)
+	if err := db.QueryRowContext(ctx,
+		`SELECT COALESCE(datacl::text, '') FROM pg_catalog.pg_database WHERE datname = pg_catalog.current_database()`).
+		Scan(&fp.MaintenanceDatacl); err != nil {
+		return clusterStateFingerprint{}, err
 	}
-	defer drows.Close()
-	for drows.Next() {
-		var name string
-		if err := drows.Scan(&name); err != nil {
-			t.Fatalf("scan database: %v", err)
-		}
-		if pgtest.ForeignFixtureObject(name) {
-			continue // another test process's scratch database (see above)
-		}
-		fp.Databases = append(fp.Databases, name)
-	}
-	if err := drows.Err(); err != nil {
-		t.Fatalf("snapshot databases: %v", err)
-	}
-	return fp
+	return fp, nil
 }
 
 // TestTheSuiteLeavesTheClusterAsItFoundIt is the assertion, and it is written as a test with
@@ -159,7 +172,11 @@ func TestTheSuiteLeavesTheClusterAsItFoundIt(t *testing.T) {
 	}
 	// Registered FIRST so LIFO closes it LAST — the very ordering whose absence caused the
 	// leaks this test exists to catch.
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close snapshot pool: %s", roleLabSQLState(err))
+		}
+	})
 
 	before := snapshotClusterState(t, db)
 	t.Logf("CLUSTER_STATE|before|fixture_roles=%d|app_inherits=%v|public_reads_pg_roles=%v",
@@ -167,23 +184,8 @@ func TestTheSuiteLeavesTheClusterAsItFoundIt(t *testing.T) {
 
 	t.Cleanup(func() {
 		after := snapshotClusterState(t, db)
-		if leaked := added(before.Roles, after.Roles); len(leaked) > 0 {
-			t.Errorf("the suite LEAKED %d cluster-scoped role(s): %v. Roles are global to the "+
-				"server, so a fixture that creates one and does not remove it changes what every "+
-				"later test — and every other lane sharing this cluster — measures. That is not "+
-				"untidiness: this session published a false product defect because a leaked role "+
-				"contaminated both an experiment and the control used to exonerate it",
-				len(leaked), leaked)
-		}
-		if after.AppRoleInherits != before.AppRoleInherits {
-			t.Errorf("the shared application role's INHERIT posture changed from %v to %v. This is "+
-				"the exact attribute a fixture in this package altered and failed to restore",
-				before.AppRoleInherits, after.AppRoleInherits)
-		}
-		if after.PublicCanReadPgRoles != before.PublicCanReadPgRoles {
-			t.Errorf("PUBLIC's SELECT on pg_roles changed from %v to %v; a catalog-hardened fixture "+
-				"did not put it back, and every later boot reads a posture it did not choose",
-				before.PublicCanReadPgRoles, after.PublicCanReadPgRoles)
+		for _, problem := range clusterStateProblems(before, after) {
+			t.Errorf("CLUSTER_STATE|%s", problem)
 		}
 		t.Logf("CLUSTER_STATE|after|fixture_roles=%d|app_inherits=%v|public_reads_pg_roles=%v",
 			len(after.Roles), after.AppRoleInherits, after.PublicCanReadPgRoles)
@@ -220,17 +222,34 @@ func added(before, after []string) []string {
 // It stays silent when no superuser DSN is configured: this package runs on SQLite alone in that
 // case and there is no cluster to account for.
 func TestMain(m *testing.M) {
-	before, ok := rawClusterSnapshot()
+	required := strings.TrimSpace(os.Getenv(pgtest.EnvSuperuserDSN)) != ""
+	before, beforeOK := rawClusterSnapshot()
 	code := m.Run()
-	if !ok {
+	if !required {
 		os.Exit(code)
 	}
-	after, ok := rawClusterSnapshot()
-	if !ok {
-		fmt.Fprintln(os.Stderr, "CLUSTER_STATE|could not re-read the cluster after the suite; a leak "+
-			"cannot be ruled out and this is reported rather than assumed clean")
-		os.Exit(code)
+	after, afterOK := rawClusterSnapshot()
+	var problems []string
+	if !beforeOK || !afterOK {
+		fmt.Fprintf(os.Stderr, "CLUSTER_STATE|required snapshot incomplete: before=%v after=%v; cluster cleanliness unknown\n", beforeOK, afterOK)
+	} else {
+		problems = clusterStateProblems(before, after)
+		for _, problem := range problems {
+			fmt.Fprintf(os.Stderr, "CLUSTER_STATE|%s\n", problem)
+		}
 	}
+	os.Exit(clusterGateExitCode(code, required, beforeOK, afterOK, problems))
+}
+
+func clusterGateExitCode(code int, required, beforeOK, afterOK bool, problems []string) int {
+	if code == 0 && required && (!beforeOK || !afterOK || len(problems) > 0) {
+		return 1
+	}
+	return code
+}
+
+// Both comparison callers share the exact representation check, not ACL equivalence.
+func clusterStateProblems(before, after clusterStateFingerprint) []string {
 	var problems []string
 	if leaked := added(before.Roles, after.Roles); len(leaked) > 0 {
 		problems = append(problems, fmt.Sprintf("LEAKED %d cluster-scoped role(s): %v", len(leaked), leaked))
@@ -246,80 +265,35 @@ func TestMain(m *testing.M) {
 		problems = append(problems, fmt.Sprintf("PUBLIC's SELECT on pg_roles changed %v -> %v",
 			before.PublicCanReadPgRoles, after.PublicCanReadPgRoles))
 	}
-	if len(problems) > 0 {
-		fmt.Fprintf(os.Stderr, "\nCLUSTER_STATE|THE SUITE DID NOT LEAVE THE CLUSTER AS IT FOUND IT\n")
-		for _, p := range problems {
-			fmt.Fprintf(os.Stderr, "  - %s\n", p)
-		}
-		fmt.Fprintln(os.Stderr, "  Cluster-scoped state is shared by every later test and every other lane "+
-			"on this server. This session published a false product defect because a leaked role "+
-			"contaminated an experiment AND the control used to exonerate it.")
-		if code == 0 {
-			code = 1
-		}
+	if before.MaintenanceDatacl != after.MaintenanceDatacl {
+		problems = append(problems, "maintenance database datacl representation changed")
 	}
-	os.Exit(code)
+	return problems
 }
 
-// rawClusterSnapshot is snapshotClusterState without a *testing.T, for TestMain. It reports
-// false when there is no server to look at, and never kills the run for that.
-func rawClusterSnapshot() (clusterStateFingerprint, bool) {
+// No DSN means no required snapshot. A configured but unreadable snapshot is failure.
+func rawClusterSnapshot() (fp clusterStateFingerprint, ok bool) {
 	dsn := strings.TrimSpace(os.Getenv(pgtest.EnvSuperuserDSN))
 	if dsn == "" {
 		return clusterStateFingerprint{}, false
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "CLUSTER_STATE|open snapshot pool: %s\n", roleLabSQLState(err))
 		return clusterStateFingerprint{}, false
 	}
-	defer func() { _ = db.Close() }()
+	defer func() {
+		if err := db.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "CLUSTER_STATE|close snapshot pool: %s\n", roleLabSQLState(err))
+			ok = false
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	var fp clusterStateFingerprint
-	rows, err := db.QueryContext(ctx, `SELECT rolname FROM pg_roles ORDER BY 1`)
+	fp, err = readClusterSnapshot(ctx, db)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "CLUSTER_STATE|read snapshot: %s\n", roleLabSQLState(err))
 		return clusterStateFingerprint{}, false
 	}
-	for rows.Next() {
-		var name string
-		if rows.Scan(&name) != nil {
-			_ = rows.Close()
-			return clusterStateFingerprint{}, false
-		}
-		for _, p := range fixturePrefixes {
-			if strings.HasPrefix(name, p) {
-				fp.Roles = append(fp.Roles, name)
-				break
-			}
-		}
-	}
-	_ = rows.Close()
-	drows, err := db.QueryContext(ctx,
-		`SELECT datname FROM pg_database WHERE datname LIKE 'olv\_%' OR datname LIKE 'e2e%' ORDER BY 1`)
-	if err != nil {
-		return clusterStateFingerprint{}, false
-	}
-	for drows.Next() {
-		var name string
-		if drows.Scan(&name) != nil {
-			_ = drows.Close()
-			return clusterStateFingerprint{}, false
-		}
-		fp.Databases = append(fp.Databases, name)
-	}
-	_ = drows.Close()
-	if db.QueryRowContext(ctx,
-		`SELECT COALESCE((SELECT rolinherit FROM pg_roles WHERE rolname = 'olivares_app'), true)`).
-		Scan(&fp.AppRoleInherits) != nil {
-		return clusterStateFingerprint{}, false
-	}
-	if db.QueryRowContext(ctx,
-		`SELECT pg_catalog.has_table_privilege('public', 'pg_catalog.pg_roles', 'SELECT')`).
-		Scan(&fp.PublicCanReadPgRoles) != nil {
-		return clusterStateFingerprint{}, false
-	}
-	sort.Strings(fp.Roles)
-	sort.Strings(fp.Databases)
 	return fp, true
 }

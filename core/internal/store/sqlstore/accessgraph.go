@@ -141,9 +141,15 @@ func (r *accessEdgeRepo) Upsert(ctx context.Context, e model.AccessEdge) (model.
 		return model.AccessEdge{}, err
 	}
 	now := r.g.clock.Now()
+	id := model.NewID()
 	baseToRecord(enc, model.BaseFields{
-		ID: model.NewID(), TenantID: r.g.tenant, CreatedAt: now, UpdatedAt: now, Version: 1,
+		ID: id, TenantID: r.g.tenant, CreatedAt: now, UpdatedAt: now, Version: 1,
 	}, false)
+	// The upsert is one hand-built statement rather than a genericRepo write, so
+	// it reports itself to the custodial write gate here.
+	if err := r.g.noteWrite(id); err != nil {
+		return model.AccessEdge{}, err
+	}
 
 	cols := accessEdgeDescriptor.AllColumns()
 	args := make([]any, len(cols))

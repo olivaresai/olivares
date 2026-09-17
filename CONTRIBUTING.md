@@ -30,8 +30,7 @@ locally exactly as in CI. Run `task` with no arguments to list every available t
 
 ### The gate
 
-Before opening a pull request, run the **green gate** — the same subset
-[`mainline-ci`](.github/workflows/mainline-ci.yml) enforces:
+Before submitting a pull request for acceptance, run these local checks:
 
 ```sh
 task lint:spdx lint:boundary   # SPDX headers + the Apache/AGPL license boundary
@@ -39,12 +38,21 @@ task build:go                  # compile every workspace module
 task test                      # the race-enabled Go test suite
 ```
 
+`task test` covers Go, including the applicable private-module legs; web tests run
+separately with `task test:web`. For web changes, also run `task check:web web:check`.
+[`mainline-ci`](.github/workflows/mainline-ci.yml) uses `test:functional` plus
+`test:race-hot` and additional checks; it does not run the identical local command
+set. The slow root-package race tail has separate `race-full` qualification. Read
+the workflow's jobs and steps for the exact candidate; these commands do not claim
+that every required check has run or passed.
+
 > ### ⛔ Touched anything under `web/`? Run `task build:web` and COMMIT `core/internal/webui/dist`.
 >
 > The console bundle is `go:embed`-ed into the binary, so a stale `dist` means a release build ships
 > a console that does not match the sources every gate measured. CI catches it — `web:check` fails
 > with *«the committed console bundle is STALE vs web/ sources»*, and `web` is a **required**
-> context, so it blocks — but it catches it **after** your change has already reached `main`.
+> context. Check it before merge on the candidate; a check after merge is evidence
+> for that later commit, not a substitute for the candidate's check.
 >
 > **This paragraph exists because the duty was written NOWHERE a contributor reads.** Measured
 > 2026-08-17: no contributor-facing document mentioned `task build:web` at all — the single mention
@@ -58,7 +66,7 @@ task test                      # the race-enabled Go test suite
 `task lint:prepush-refclass` without executing any gate:
 
 - `refs/heads/main` and `refs/tags/*` — the fast lints **and** the full gate
-  (`test:license-worker`, `build:cloud`, `test:cloud:norace`, `check:web`, `tokens:check`, `lint:format-ratchet`, `lint:guide-docs`, `lint:raw-palette`, `test:web`, `web:check`, `build:go`, `test`, `sdk:check`),
+  (`test:license-worker`, `build:cloud`, `test:cloud:norace`, `check:web`, `tokens:check`, `lint:format-ratchet`, `lint:guide-docs`, `lint:cockpit-strings`, `lint:cockpit-strings:selftest`, `lint:raw-palette`, `test:web`, `web:check`, `build:go`, `test`, `sdk:check`),
   under the same host-wide mutex this repository already had. The split changed *who* takes
   that lock — every lane on the box used to; now only pushes classified `full` do: main,
   tags, and any deny-closed promotion (unknown namespace, malformed line) — and nothing
@@ -73,10 +81,12 @@ task test                      # the race-enabled Go test suite
 - Anything it cannot parse, or a namespace it does not recognise — the full gate. Not
   knowing what something is costs more than a feature branch, never less.
 
-So on a feature branch the hook does **not** compile or test your work: run `task test` (and
-`check:web` / `web:check` / `sdk:check`) yourself, or scope `-race` to the packages your diff
-touches and say so in the PR. The sanctioned bypass is `git push --no-verify`, declared in
-the PR.
+On a feature branch the hook does **not** run the full build/test gate: run `task test`
+and the applicable web/SDK checks, or document the scope of a focused `-race` run for
+branch review. The integrator still requires the complete applicable candidate checks.
+A draft PR can preserve work with failures or checks not yet run; it is not acceptance
+for integration. Use the normal hooks and merge checks: declaring `--no-verify` or an
+admin bypass does not satisfy missing checks.
 
 **Without `task` on `PATH` the hook refuses the push** — a gate that cannot run has not
 cleared anything. There is exactly **one named exception, the pure-deletion push**: when
@@ -227,15 +237,17 @@ governing Claude Code tool-calls, OpenTelemetry GenAI ingest, and scaffolding a 
 
 ## Branching and commits
 
-- **External contributors** open a pull request from a branch or fork — do not push to `main` directly — so the CLA/DCO and review flow below applies. `mainline-ci` runs the green gate on every pull request and push to `main`, and it must be green to merge.
-
-  > **Correction 2026-08-15.** `mainline-ci` is `on: workflow_dispatch` and nothing else
-  > (`.github/workflows/mainline-ci.yml:94-95`). It does **not** start on a pull request or on a
-  > push to `main` — the integrator dispatches it per branch, by hand. Every required check on
-  > `main` is a job of that workflow, so a pull request has no verdict at all until somebody
-  > dispatches a run for its branch; with `strict` also on, a `main` that moves invalidates the
-  > run and it must be dispatched again. The sentence above is left in place: it is what this
-  > guide promised, and this is the record of it being false.
+- **External contributors** open a pull request from a branch or fork — do not push to
+  `main` directly — so the CLA/DCO and review flow below applies.
+- **CI before integration:** [`mainline-ci`](.github/workflows/mainline-ci.yml) has
+  `workflow_dispatch` and push to `main`, subject to its journal-path exclusions;
+  it has no pull-request trigger. The integrator dispatches it on the merge candidate
+  and requires all applicable jobs and substantive steps to pass on its exact SHA,
+  including checks beyond the repository's required contexts. A changed candidate
+  needs its own verdict; verify the merge tree and post-merge CI separately.
+  [`pr-ci`](.github/workflows/pr-ci.yml) provides a smaller automatic PR regime for
+  the public repository or the configured preprod profile. Its repository guards
+  can skip the private-dev jobs; skipped or absent checks are not passes.
 - **Conventional Commits**, in English: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, etc. Commit messages are linted by the `commit-msg` hook locally and by CI.
 - Keep pull requests focused; describe what changed and why, and link the issue.
 - **Write commit bodies with `git commit -F -` and a QUOTED heredoc, never `-m`.** A body containing

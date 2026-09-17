@@ -33,12 +33,17 @@
     "home": "Overview",
     "onboarding": "Setup wizard",
     "inventory": "Inventory",
-    "sessions": "Sessions",
+    "sessions": "Observe sessions",
     "accessMap": "Access map",
     "health": "Health & SLA",
     "capabilities": "MCP & skills",
     "protocolBindings": "Protocol bindings",
-    "console": "Control console",
+    "communications": "Communications",
+    "communicationsInbox": "Communications inbox",
+    "communicationsNew": "New channel",
+    "communicationsAdministration": "Channel administration",
+    "communicationsHandoffs": "Handoffs",
+    "console": "Administration",
     "permissions": "Permissions",
     "identity": "Identity & NHI",
     "claudePolicy": "Claude Code governance",
@@ -48,7 +53,7 @@
     "catalog": "Catalog",
     "killswitch": "Kill switch",
     "work": "Work",
-    "agentops": "Claude Code",
+    "agentops": "Operate sessions",
     "agentArtifacts": "Agent Artifacts",
     "models": "Models",
     "modelOps": "Model Operations",
@@ -84,7 +89,9 @@
     "reporting": "Reports",
     "postureExport": "Posture export",
     "automations": "Automations",
-    "agentcoreExport": "AgentCore export"
+    "agentcoreExport": "AgentCore export",
+    "providerProfiles": "Provider profiles",
+    "providerBindings": "Source bindings"
   },
   "workspace": {
     "switch": "Switch workspace",
@@ -99,12 +106,17 @@
     "home": "Estate overview and health at a glance",
     "onboarding": "Step-by-step deployment configuration",
     "inventory": "Discover and catalog every agent, MCP and model",
-    "sessions": "Live agent operation and timelines",
+    "sessions": "Observe live and discovered sessions with their timelines; shares its screen with Operate sessions",
     "accessMap": "What each agent reads and writes (R/RW)",
     "health": "Agent and MCP uptime and SLAs",
     "capabilities": "Govern MCP servers, skills and tools",
     "protocolBindings": "Compose and reconcile governed A2A and MCP bindings",
-    "console": "Onboard users, connect SSO/IdP, and shape workspaces and agent-groups.",
+    "communications": "Channels, direct notices and the personal inbox of the selected workspace",
+    "communicationsInbox": "Your exact mailbox: deliveries addressed to you, opened fresh and acknowledged explicitly",
+    "communicationsNew": "Create a channel with explicit initial grants",
+    "communicationsAdministration": "Administer channels: configuration and grant history, each act under the channel's current ETag",
+    "communicationsHandoffs": "Offers of work responsibility addressed to you: read the context and accept or reject",
+    "console": "Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's licence",
     "permissions": "Identity, roles and approvals",
     "identity": "SSO, SCIM, the NHI roster and the WIF graph",
     "claudePolicy": "Managed policy, hooks, MCP, sandbox and policy-as-code",
@@ -113,7 +125,7 @@
     "catalog": "Curated, approved agents and capabilities",
     "killswitch": "Emergency stop, dual-control recovery and guardian containment",
     "work": "The durable cross-session backlog: items, dependencies, acceptance and decisions",
-    "agentops": "Create, attach to and govern Claude Code sessions — no SSH",
+    "agentops": "Create, attach to and govern Claude Code sessions — no SSH; shares its screen with Observe sessions",
     "agentArtifacts": "Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM",
     "models": "Models, routing and provider keys",
     "modelOps": "Owned models, admission and deployments",
@@ -129,8 +141,8 @@
     "redteam": "Adversarial testing of your agents",
     "dashboards": "Executive KPIs and reporting",
     "observability": "Ingestion health by standard and trace drill-down",
-    "platforms": "Deploy surfaces, compliance matrix and per-platform model lifecycle",
-    "rateLimits": "Anthropic rate-limit inventory (read-only)",
+    "platforms": "Provider platform surfaces, compliance matrix and per-platform model lifecycle — reference, not your servers",
+    "rateLimits": "Anthropic rate-limit inventory and its availability (read-only reference)",
     "attestation": "Release attestation — SLSA, SBOM, VEX and Scorecard",
     "apiPlayground": "Interactively explore and test the control-plane API",
     "audit": "Tamper-evident evidence ledger",
@@ -142,7 +154,16 @@
     "alerting": "Route findings to destinations and inspect deliveries",
     "reporting": "Generate and download governance reports",
     "postureExport": "Export ground-truth posture for a control tower",
-    "automations": "All three automation rails and their trigger catalog"
+    "automations": "All three automation rails and their trigger catalog",
+    "providerProfiles": "Register and administer the provider homes sessions launch under, and read their configuration on demand",
+    "providerBindings": "Dedicate configured sources, at the revision this node applied, to provider profiles",
+    "routinePolicies": "Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code routines",
+    "agentcoreExport": "Plan, review and apply the projection of this tenant's governance rules onto AWS AgentCore as Cedar policies; planning writes nothing",
+    "workspace-templates": "Reusable snapshots of hooks, settings, connectors and policies for workspace sessions",
+    "eventing": "Outbound webhook subscriptions, the captured event log, deliveries and the dead-letter queue",
+    "team-costs": "Cost attribution by team: sessions, tokens and spend, with a daily trend and a per-project and per-model breakdown",
+    "backups": "Encrypted disaster-recovery snapshots of the control plane: create, schedule, download and restore",
+    "logs": "The live engine log stream, with level and module filters, search and pause"
   },
   "commandActions": {
     "eventing": {
@@ -154,5 +175,122 @@
     "orchestration": {
       "createSchedule": "New schedule"
     }
+  },
+  "aliases": {
+    "sessions": "Sessions",
+    "agentops": "Claude Code · agentops · Claude Code operate portal",
+    "console": "Control console · Tenant administration"
+  },
+  "areas": {
+    "infrastructure": {
+      "label": "Infrastructure",
+      "question": "What resources and workspaces do I have?",
+      "sections": {
+        "estate": "Inventory and workspaces"
+      }
+    },
+    "ai": {
+      "label": "AI",
+      "question": "What sessions, profiles and models do I observe or manage?",
+      "sections": {
+        "sessions": "Sessions",
+        "environments": "Profiles and environments",
+        "models": "Models",
+        "execution": "Specialized execution",
+        "provider-reference": "Provider reference"
+      }
+    },
+    "data-context": {
+      "label": "Data & context",
+      "question": "What knowledge, capabilities and artifacts do I connect or reuse?",
+      "sections": {
+        "capabilities": "Capabilities",
+        "knowledge": "Knowledge",
+        "artifacts": "Artifacts"
+      }
+    },
+    "work-communications": {
+      "label": "Work & communications",
+      "question": "What work do I coordinate, and how does it communicate?",
+      "sections": {
+        "work": "Work",
+        "communications": "Communications"
+      }
+    },
+    "automation": {
+      "label": "Automation",
+      "question": "What flows, events and notifications do I automate?",
+      "sections": {
+        "workflows": "Flows and orchestration",
+        "events": "Events and notifications"
+      }
+    },
+    "security-identity": {
+      "label": "Security & identity",
+      "question": "Who has access, under which rules, and how do I protect the environment?",
+      "sections": {
+        "access": "Identity and access",
+        "policy": "Policies",
+        "defense": "Protection and response",
+        "boundaries": "Governance boundaries"
+      }
+    },
+    "deployment": {
+      "label": "Deployment",
+      "question": "How do I prepare and control a deployment?",
+      "sections": {
+        "deployments": "Deployments"
+      }
+    },
+    "observation": {
+      "label": "Observability & evidence",
+      "question": "What is happening, what does it cost, and what can I prove?",
+      "sections": {
+        "operations": "Status and activity",
+        "cost-adoption": "Costs and adoption",
+        "audit-recordings": "Audit and recordings",
+        "evaluation-evidence": "Evaluation and evidence"
+      }
+    },
+    "system": {
+      "label": "System & settings",
+      "question": "How do I administer the organization, the installation and my preferences?",
+      "sections": {
+        "administration": "Administration",
+        "maintenance": "Installation and maintenance",
+        "development": "Developer tools",
+        "preferences": "Personal preferences"
+      }
+    }
+  },
+  "directory": {
+    "areas": "Areas",
+    "expand": "Show {{area}} modules",
+    "collapse": "Hide {{area}} modules",
+    "expandAll": "Expand all areas",
+    "collapseAll": "Collapse all areas",
+    "modulesOf": "{{area}} modules",
+    "empty": "No entries in this area are available to you",
+    "emptyHint": "Entries appear here when your role in the current organization grants access to a module of this area.",
+    "backHome": "Go to Overview",
+    "area": "Area"
+  },
+  "personal": {
+    "favorites": "Favorites",
+    "add": "Add {{name}} to favorites",
+    "remove": "Remove {{name}} from favorites",
+    "viewAll": "View all ({{count}})",
+    "manage": "Manage favorites",
+    "empty": "Star a module to keep it here.",
+    "scope": "Saved in this browser for your account and organization.",
+    "temporary": "Favorites stay in memory for now.",
+    "clear": "Clear favorites",
+    "recents": "Recent",
+    "recentManage": "Manage recent modules",
+    "recentViewAll": "View recent ({{count}})",
+    "recentEmpty": "Modules you open appear here.",
+    "recentScope": "Opened in this tab. Cleared on reload, sign-out or account and organization changes.",
+    "recentRemove": "Remove {{name}} from recent modules",
+    "recentClear": "Clear recent modules"
   }
 }

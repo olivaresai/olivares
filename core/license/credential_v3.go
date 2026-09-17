@@ -690,6 +690,11 @@ func parseUTC(field, s string) (time.Time, error) {
 // both hold a valid signature. The standard decoder cannot see it, so the token stream is
 // walked here.
 func rejectDuplicateKeys(payload []byte) error {
+	return rejectDuplicateKeysIn(payload, "v3 payload")
+}
+
+// rejectDuplicateKeysIn is rejectDuplicateKeys for any strict document; noun names it in errors.
+func rejectDuplicateKeysIn(payload []byte, noun string) error {
 	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.UseNumber()
 
@@ -723,7 +728,7 @@ func rejectDuplicateKeys(payload []byte) error {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("license: v3 payload is not valid JSON: %w", err)
+			return fmt.Errorf("license: %s is not valid JSON: %w", noun, err)
 		}
 
 		if d, ok := tok.(json.Delim); ok {
@@ -747,10 +752,10 @@ func rejectDuplicateKeys(payload []byte) error {
 		if n := len(stack); n > 0 && stack[n-1].isObject && stack[n-1].wantKey {
 			key, ok := tok.(string)
 			if !ok {
-				return fmt.Errorf("license: v3 payload has a non-string object key %v", tok)
+				return fmt.Errorf("license: %s has a non-string object key %v", noun, tok)
 			}
 			if _, dup := stack[n-1].seen[key]; dup {
-				return fmt.Errorf("license: v3 payload names %q twice in one object; a signed blob with two values for one field is ambiguous", key)
+				return fmt.Errorf("license: %s names %q twice in one object; a signed blob with two values for one field is ambiguous", noun, key)
 			}
 			stack[n-1].seen[key] = struct{}{}
 			stack[n-1].wantKey = false
@@ -761,7 +766,7 @@ func rejectDuplicateKeys(payload []byte) error {
 			// Canonical integers only (v8 :633-634): no exponent, no fraction. A number the
 			// issuer wrote as 1e0 and a verifier re-encodes as 1 breaks byte reproducibility.
 			if s := num.String(); strings.ContainsAny(s, ".eE") {
-				return fmt.Errorf("license: v3 payload carries the non-canonical number %s; integers only", s)
+				return fmt.Errorf("license: %s carries the non-canonical number %s; integers only", noun, s)
 			}
 		}
 		valueSeen()

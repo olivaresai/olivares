@@ -90,7 +90,7 @@ Olivares AI 不是单一用途的工具。它是一个**模块化平台**，承�
 
 ### 抵达图谱
 
-查看访问图（access graph）是一个**特权操作**：限定于租户范围，对编辑者（editor）角色及以上可用（绝不对最低的查看者角色开放），且**每一次读取都被审计**。该图谱的路由——图与漂移结果——不属于稳定核心契约；它们发布在独立的 **beta** [模块路由参考](/reference/api-beta/)中（服务于 `/openapi.beta.json`），其字段级形状则存在于类型化的 Go 与 TypeScript 接口中。许可对比观测的结果在引擎的 `drift` 路由（`/v1/m/accessmap/drift`）暴露；不存在单独的 `diff` 端点。稳定核心 REST 面包含 53 条路径，它们由产品自身的 OpenAPI 3.1 契约渲染，并记录在 [API 参考](/reference/api/)中。完整模块清单请参阅[模块目录](/zh/reference/modules/overview/)。
+查看访问图（access graph）是一个**特权操作**：限定于租户范围，对编辑者（editor）角色及以上可用（绝不对最低的查看者角色开放），且**每一次读取都被审计**。该图谱的路由——图与漂移结果——不属于稳定核心契约；它们发布在独立的 **beta** [模块路由参考](/reference/api-beta/)中（服务于 `/openapi.beta.json`），其字段级形状则存在于类型化的 Go 与 TypeScript 接口中。许可对比观测的结果在引擎的 `drift` 路由（`/v1/m/accessmap/drift`）暴露；不存在单独的 `diff` 端点。稳定核心 REST 面包含 54 条路径，它们由产品自身的 OpenAPI 3.1 契约渲染，并记录在 [API 参考](/reference/api/)中。完整模块清单请参阅[模块目录](/zh/reference/modules/overview/)。
 
 ## 部署拓扑
 

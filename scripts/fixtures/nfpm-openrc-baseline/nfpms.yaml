@@ -1,0 +1,32 @@
+# FIXTURE, not a product config: the pre-OpenRC nfpms block, reduced to what
+# scripts/test-nfpm-openrc.sh reads. ONE systemd unit, unscoped, for all three
+# formats; no /etc/init.d/olivares; no package-init stamp; no apk scripts.
+# See README.md in this directory. Deliberately wrong — do not correct it.
+nfpms:
+  - id: olivares-nfpm
+    package_name: olivares
+    ids: [olivares]
+    vendor: Olivares.AI
+    homepage: https://olivares.ai
+    maintainer: Olivares.AI <enterprise@olivares.ai>
+    description: Baseline witness for test-nfpm-openrc — ships systemd to every format.
+    license: AGPL-3.0-only
+    formats: [deb, rpm, apk]
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/olivares/LICENSE
+      - src: packaging/systemd/olivares.service
+        dst: /usr/lib/systemd/system/olivares.service
+      - src: packaging/olivares.env.example
+        dst: /etc/olivares/olivares.env
+        type: "config|noreplace"
+      - dst: /var/lib/olivares
+        type: dir
+        file_info:
+          mode: 0750
+    scripts:
+      postinstall: packaging/nfpm/postinstall.sh
+      preremove: packaging/nfpm/preremove.sh

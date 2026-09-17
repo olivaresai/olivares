@@ -31,6 +31,33 @@ func coreDescriptors() []model.EntityDescriptor {
 		// existing database gets the table via reconcileColumns, a fresh one via v2.
 		evidenceOpDescriptor,
 	}
+	// The v26.9 access-evidence relations: policy artifacts, authority
+	// transitions, observed action stages and authorization decisions, kept
+	// SEPARATE from each other and from the AccessEdge projection. Appended for
+	// the same reason as the journal above — a fresh database creates them in v2,
+	// an existing one gets each created whole (guards and indexes included) by
+	// reconcileColumns — so no relation that already exists is altered.
+	//
+	// ⚠ MEASURED, 2026-09-06, and unresolved at the time of writing: these are
+	// APPEND-ONLY relations, so registering them changes the append-only census
+	// (registry.appendOnlyTables()) and therefore the guard manifest's code_sha256,
+	// from which every bootstrap receipt already recorded in a database derives its
+	// rollout id. A database created by a build WITHOUT these four relations then
+	// refuses to open with "this binary declares no authorized transition from the
+	// guard edition the database records" (reproduced on SQLite; it is also why
+	// TestK2GoldenCoreOnlySQLiteUpgradesAndReopens is red).
+	//
+	// Epochs 3 and 4 added append-only relations by declaring an edition edge whose
+	// predecessor removes exactly that delta. That does not extend to these: epochs
+	// 3 and 4 are MODULE deltas absent from a core-only census, while these are core
+	// and present in every build — and requireCompleteGuardEdition demands the delta
+	// of every epoch up to the current one, so a core-only build could never reach a
+	// new epoch above them. Admitting an empty delta is explicitly refused by
+	// guardManifestEditionEdge. The edition model needs a mandatory CORE delta above
+	// conditional module deltas, which is an architecture decision, not a
+	// silent catalog registration. Core v9 admits the four relations through
+	// named access-evidence edition edges.
+	ds = append(ds, accessEvidenceDescriptors()...)
 	// K3's fenced directory: one mutable tenant epoch and two append-only,
 	// retained retirement-evidence tables. Their engine-owned operations are
 	// deliberately separate from the ordinary typed repositories.
@@ -39,6 +66,8 @@ func coreDescriptors() []model.EntityDescriptor {
 	// of directoryDescriptors avoids claiming that directory-v7's specialized
 	// guard receipt covers a relation it was never designed to attest.
 	ds = append(ds, authorizationEpochDescriptor)
+	ds = append(ds, lineageDescriptors()...)
+	ds = append(ds, userAuthorityDescriptor)
 	// The FASE X scoping entities (workspace, agent_group,
 	// agent_group_member) are tenant-resident core entities.
 	ds = append(ds, scopingDescriptors()...)

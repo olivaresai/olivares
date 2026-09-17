@@ -57,6 +57,41 @@ olivares status --server https://127.0.0.1:8443 \
 エンジンは意図的にパディングなしの base64 を出力します（ログ上で引用符が付かず、
 コピー＆ペーストで壊れないため）が、curl はパディング付きの形式を要求します。
 
+## ホストインストールの診断
+
+生成 CLI リファレンスは `olivares doctor` を次のように記述します: diagnose this host
+installation without printing secrets
+（[CLI](/reference/cli/#command-olivares-doctor)）。フラグは `--data-dir`, `--mode` (`auto` \| `user` \| `system`), `--init` (`auto` \| `systemd` \| `openrc` \| `launchd`), `--config`, `--unit`, `--binary`, `--server`, `--timeout`, `--ca-cert`, `--audit-tenant`, `--check-updates` です。
+この表を追加のヘルプ文として扱わないでください。それが生成コマンドです。
+
+### `agentops-layout` check
+
+`olivares doctor` は `agentops-layout` という検査を報告します
+（`CHANGELOG.md` `[26.9.0]`、`cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`）。
+サブコマンドではありません。所有マニフェストが記録するネイティブ AgentOps
+レイアウトを測ります: 管理 drop-in はその mode で存在し、記録された claude
+`HOME`、トークンディレクトリ、ワークスペースを名付ける必要があります。runtime env は
+設定 mode 付きで存在する必要があります（値は読まれません）。ワークスペースは
+ディレクトリでなければなりません（`docs/RELEASE-INSTALLER.md`）。
+
+検査が返すステータス:
+
+| Status | When |
+|---|---|
+| `not_applicable` | no readable manifest; malformed manifest; or the manifest records no AgentOps files (`dropin`, `runtime-env`, `workspace_dir` all empty) |
+| `fail` | drop-in does not reference a recorded token (`$dataDir/claude-home`, `$dataDir/run`, or `workspace_dir`); workspace path is absent or is not a directory |
+| `unknown` | drop-in or workspace is not readable |
+| `pass` | drop-in, runtime-env (values not read) and workspace directory agree with the record |
+
+マニフェストが AgentOps ファイルを少なくとも 1 つ記録するまで Required は false
+です。その後検査は required です。エンジンが印刷する修復文字列には
+`rerun install-agentops.sh; the managed drop-in and the recorded layout disagree`
+と `recreate the recorded workspace or rerun install-agentops.sh with OLIVARES_WORKSPACE_DIR`
+が含まれます。
+
+テキストも `-o json` もキー名とパスを含み、設定値は含みません
+（`docs/RELEASE-INSTALLER.md`）。
+
 ## ソースと access map
 
 ### map が空である
@@ -98,17 +133,41 @@ map が空である場合、たいていは設定が読み込まれなかった�
 
 ### `/readyz` が 503 を返す
 
-ボディを読んでください — 2 つのケースを区別します:
+ボディを読んでください。503 は ready ではなく、成功でもありません。`/livez` が
+200 のままなのはプロセスが生きていることだけを意味し、`/pod-readyz` が 200 の
+ままなのは pod の健全性（ストア到達）だけを意味します。リーダーシップ検査も
+初回起動の能力プローブもありません。どちらも、`/readyz` をコンテナの
+`readinessProbe` として配線するデフォルト Helm chart やフラットマニフェストの
+ロールアウトを解除しません。
 
 - `{"status":"unavailable","store":"down"}` — ストアに到達できません。SQLite の場合:
   ディスク満杯、PVC の問題、ファイルパーミッション。Postgres の場合: 到達性と認証情報。
   **liveness は意図的に通り続ける** ため (プロセスは生きている)、ストア障害で
   再起動ループに陥るものはありません。ストアを修正した後も詰まったままなら、
   pod/サービスを手動で再起動してください。
-- `{"status":"standby","leader":false,…}` — HA standby が正直に応答しています。
+- `{"status":"standby","store":"up","leader":false}` — HA standby が正直に応答しています。
   エラーではありません: Service はリーダーへルーティングし、standby は設計どおり drain
   します。**すべての** レプリカが standby を報告する場合、リーダー選出が詰まっています —
   Postgres の advisory-lock 接続を確認してください。
+- `{"status":"setup_blocked","store":"up","leader":true,"setup_required":true,"code":"cross_tenant_admin_pool_not_configured"}`
+  — PostgreSQL の初回起動が組織を権威ある形で列挙できません。
+  `NOSUPERUSER BYPASSRLS` の管理ロールと `--admin-dsn` をプロビジョニングしてください
+  （[Kubernetes 上の Postgres](/ja/tutorials/getting-started/kubernetes/#2-postgres-マルチテナント)）。
+  ボディには固定の対処が入ります。その前提が直るまで、デフォルトの readiness
+  プローブは pod を Not Ready のままにします。これを隠すためにプローブを
+  差し替えてはいけません。
+- `{"status":"setup_unavailable","store":"up","leader":true,"code":"setup_state_unavailable"}`
+  — このノードはインストールがセットアップ済みかを観測できませんでした。
+  値が未知のため `setup_required` は **省略** されます。これは既知の空インストール
+  ではありません。
+- `{"status":"setup_unavailable","store":"up","leader":true,"setup_required":true,"code":"setup_probe_unavailable"}`
+  — インストールは未セットアップと分かっていますが、初回起動の能力プローブが
+  管理プール拒否以外の理由で失敗しました。タイムアウトは空のエステートの証拠では
+  ありません。
+
+200 `{"status":"ok",…,"setup_required":true}` は別の観測です: 初回セットアップを
+試せます。`POST /v1/setup` は権限検査を繰り返します。その 200 は可用性予算を
+消費しません。これらの 503 は消費します。
 
 ### pod が死んだのに何も引き継がれない
 

@@ -213,7 +213,6 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
   },
   sessions: {
     live: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    timeline: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
   tenants: {
     list: 'linea base 2026-08-28; sin clasificar drena/recorta',

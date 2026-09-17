@@ -78,7 +78,7 @@ tasks:
 
   build:repro:
     desc: >-
-      Reproducible/verifiable build (docs/08 §7). Same source + same inputs →
+      Reproducible/verifiable build (docs/SECURITY-HARDENING.md). Same source + same inputs →
       byte-identical binary: CGO off, -trimpath, build id stripped, embedded date
       pinned to the commit timestamp. This is the flag set GoReleaser uses. To
       reproduce a RELEASE artifact and compare SHA-256, set the PUBLISHED
@@ -282,8 +282,11 @@ tasks:
       - go build -tags release -ldflags "-X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=$OLIVARES_LICENSE_PUBKEY -X github.com/olivaresai/olivares/core/release.artifactVerifyKeyB64=$OLIVARES_OTA_PUBKEY" ./core/license/... ./core/release/... ./cmd/olivares/...
 
   test:key-domains:
-    desc: Prove license and OTA anchors cannot verify each other's signed objects.
+    desc: >-
+      Prove license and OTA anchors cannot verify each other's signed objects,
+      then restore ignored first-party connector build inputs to PLACEHOLDER only.
     cmds:
+      - bash scripts/test-key-domain-cleanup.sh
       - bash scripts/test-key-domain-separation.sh
 
   test:archive-gate:
@@ -357,16 +360,20 @@ tasks:
       races it, so nothing is permanently unraced. Cloud races here (once).
       Composed of the sub-legs below so CI can run/report them as separate
       steps (the workspace leg alone exceeds 45 min on a 2-vCPU runner); running
-      this composite locally is unchanged and still covers every module.
+      this composite locally is unchanged and still covers every module. ./core is
+      its own sub-leg since 2026-09-11 (see test:race-hot:core); the workspace leg's
+      skip list is a COMPLEMENT, so a module added to go.work is picked up there
+      automatically and no package can fall between the two.
     cmds:
       - task: test:race-hot:workspace
+      - task: test:race-hot:core
       - task: test:race-hot:modules
       - task: test:race-hot:root
       - task: test:race-hot:hot
       - task: test:cloud
 
   test:race-hot:workspace:
-    desc: -race over every workspace module EXCEPT cmd/olivares's root and ./modules (sub-leg).
+    desc: -race over every workspace module EXCEPT cmd/olivares's root, ./modules and ./core (sub-leg).
     # ⛔ 20m → 45m el 2026-08-19, MEDIDO en las dos puntas. En CI tres paquetes murieron a
     # **1200,4 s exactos** —el limite, no una duracion—: core/api, core/auth y
     # core/internal/store/sqlstore. En el gate pesado sobre arbol ANCLADO esos mismos tardan
@@ -402,7 +409,24 @@ tasks:
     # la cifra siguiente sale de ESE dato — y entonces la pregunta ya no es el reloj, es por que un
     # paquete de 7 min en arbol anclado (410/415/298 s, medido arriba) tarda 45 en el runner.
     cmds:
-      - bash scripts/with-pg-env.sh env GO_WORK_EACH_SKIP=cmd/olivares,modules bash scripts/go-work-each.sh go test -race -count=1 -timeout 60m ./...
+      - bash scripts/with-pg-env.sh env GO_WORK_EACH_SKIP=cmd/olivares,modules,core bash scripts/go-work-each.sh go test -race -count=1 -timeout 30m ./...
+
+  # Run 34545731818 reached the per-binary 60m deadline in three core packages.
+  # Earlier local timings motivate 90m per binary and 180m for this separate leg.
+  # These estimates do not rule out regressions or guarantee total runtime.
+  test:race-hot:core:
+    desc: -race over the ./core module alone, ONE package binary at a time (sub-leg — CI runs it as its own job, race-core). sqlstore is split by entry point across the same four jobs when the selector pair is set; without a selector this is still `./...`.
+    cmds:
+      - bash scripts/with-pg-env.sh bash scripts/core-race-partition.sh go test -race -count=1 -p 1 -timeout 90m
+
+  test:race-hot:sessions:
+    desc: -race over modules/sessions alone, split by entry point (sub-leg — CI runs it as its own job, race-sessions).
+    # R111-SR1. modules/sessions was still active after 149 of a 210-minute step in job
+    # 103686207033 with no failure: one package that does not fit one runner. With no selector
+    # this runs the COMPLETE package, exactly as the ./modules sweep does; the CI job sets the
+    # pair and each leg runs an anchored subset. The 150m per-binary cap is unchanged.
+    cmds:
+      - bash scripts/with-pg-env.sh bash scripts/sessions-race-partition.sh go test -race -count=1 -timeout 150m
 
   test:race-hot:modules:
     desc: -race over the ./modules module alone (sub-leg — CI runs it as its own job, race-modules).
@@ -494,15 +518,162 @@ tasks:
       #    Ése es el arreglo, y es del carril del KERNEL. Subir el tope ya se probó tres veces
       #    (20m → 45m → 90m) y cada vez compró semanas, que es justo lo que
       #    `scripts/check-test-timeout-headroom.sh` existe para dejar de pagar a ciegas.
-      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'
+      #
+      # 2026-09-11 — the ceiling was reached, and the answer here is not a bigger number.
+      #    Job 103097824594 of run 34545731818 (ci-runner-2) died on the 210-minute step ceiling
+      #    with 28 packages reported green (governance 6291.626s, finops 5283.827s, compliance
+      #    4415.238s), `modules/sessions` still alive and five packages that never reported.
+      #    Those 28 sum 31545 s of package wall inside 12600 s of step wall — average concurrency
+      #    2.5. The leg ran five binaries wide: `GOFLAGS='-p=5'` in the job's own `go env` dump,
+      #    and `with-pg-env.sh` only narrows `-p` when GOFLAGS is empty, so its notice appears
+      #    zero times in the log. That width is also why all 28 results printed in one burst at
+      #    02:34:52: `go test` buffers package output above width 1 and releases it in argv order.
+      #
+      #    The clock that bit is the step's, so what changes is the work, not the budget. The argv
+      #    now goes through scripts/modules-race-partition.sh, which runs it over `./...` when no
+      #    selector is set — byte for byte what this line ran before — and over one partition of
+      #    the same `go list` inventory when OLIVARES_MODULES_RACE_PARTITION/…_PARTITIONS are both
+      #    set. CI sets them from a four-way matrix and gets `-v -p 1`, so each partition names the
+      #    test it is running; `task test:race-hot:modules` on a developer's box still races every
+      #    package with the recipe below unchanged. `task lint:modules-race-partition` proves the
+      #    partitions are a partition: every discovered package owned exactly once, new ones
+      #    included.
+      #
+      #    The three clocks are unchanged, and their relationship is the one this file already
+      #    documents: per binary 150m (Go's own, and the only one that can print where it hung) <
+      #    step 210m < job 240m. They are not re-derived here, because nothing has completed this
+      #    leg and there is no measurement to derive them from; the first run that finishes is
+      #    where the real numbers come from.
+      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m
 
   test:race-hot:root:
     desc: -race over cmd/olivares's cheap subpackages (sub-leg).
     cmds:
       - bash scripts/with-pg-env.sh bash -c 'cd cmd/olivares && go test -race -count=1 -timeout 10m ./exitcode/... ./firstparty/... ./seed/...'
 
+  lint:hot-race-partition:
+    desc: "Self-test of the hot-manifest partition: inventory union, cost census, selector refusals, CI wiring (no test is run)."
+    # It runs scripts/race-hot-tests.sh's inspection modes and its refusals against fixture
+    # censuses, and reads the recipe and the CI job rather than re-stating them. It never starts
+    # a `go test`, which is why it is cheap enough to live in the fast-lint carril.
+    cmds:
+      # Exercise the same inherited selector pair as CI, including local pre-push.
+      # The battery owns each fixture's state; the production job keeps its pair.
+      - OLIVARES_HOT_RACE_PARTITION=2 OLIVARES_HOT_RACE_PARTITIONS=4 bash scripts/test-hot-race-partition.sh
+
+  test:race-hot:hot:build:
+    desc: "SPLIT SUB-LEG (CI): bounded CACHE PRECOMPILATION of the root's race-instrumented hot tests into the shared Go cache. Requires RACE_HOT_BIN for its build output; use test:race-hot:hot locally."
+    # WHAT THIS IS FOR, PRECISELY. It compiles this package's dependency closure under -race so the
+    # expensive work is already in the SHARED GOCACHE/GOMODCACHE when the run step starts.
+    # RACE_HOT_BIN names where the build output goes; the run step does NOT execute that file, it
+    # runs ordinary `go test` and benefits from the warm cache.
+    #
+    # ⚠ AND THE LIMIT, MEASURED ON Go 1.26.6: `go test -c` sets OmitDebug=false for the generated
+    # test main, while an ordinary `go test` run uses true, so the two do not share that final
+    # artifact. Dependency and package cache warming is real; a compile and link can still run in
+    # the run step. This leg is not sold as "no compile, no link".
+    # ⛔ SEPARADO DEL RUN EL 2026-09-12, Y LA RAZON ES UN RELOJ QUE NO EMPEZABA.
+    #
+    #   `go test -timeout 15m` cuenta desde que ARRANCA EL BINARIO, no desde que se invoca
+    #   `go test`: la compilacion queda FUERA de ese tope y DENTRO del tope del paso. Con los
+    #   dos juntos en un paso de 20 min, una compilacion fria larga se come el presupuesto y
+    #   la accion mata el paso ANTES de que el reloj de Go empiece — asi que Go nunca emite su
+    #   `panic: test timed out after 15m0s` ni el inventario de la prueba en curso, y el job
+    #   publica un rojo que no dice nada.
+    #
+    #   LO QUE EL RECIBO ACOTA, Y NADA MAS (corrida 34678296981 / job 103512048329): el paso
+    #   arranca 06:57:03Z, imprime su ultima linea 06:57:15Z (descarga de modulos) y muere
+    #   07:17:16Z. Para que Go no imprimiese su panico de 15 min, el binario tuvo que arrancar
+    #   DESPUES de las 07:02:16Z — o sea que compilacion + descarga paso de 5 min 13 s, O NO
+    #   TERMINO. El recibo no distingue cual y NO establece cuando acabo la compilacion.
+    #
+    #   Medido en este arbol (fuente identica 6b3d2707ef, 16 nucleos):
+    #       enumeracion del manifiesto        0,02 s
+    #       compilacion -race EN FRIO       123,9 s   (binario de 203 MB)
+    #       compilacion -race en caliente     0,4 s
+    #       EJECUCION de las 115 pruebas    298,9 s = 4 min 59 s, exit 0 — EN LOCAL
+    #
+    #   Con la contencion >=3x que este Taskfile ya documenta, esos 4 min 59 s locales podrian
+    #   acercarse o pasar de 15 min en el runner. Si pasan, la division sigue sirviendo —Go entra
+    #   en panico y NOMBRA la prueba— y el job sigue rojo. No se vende como verde.
+    #
+    # ⛔ NO SE INVOCA SUELTA A MANO: es la mitad de `test:race-hot:hot`, que es el punto de entrada
+    #   local, y CI la llama con RACE_HOT_BIN explicito en `runner.temp`. No se marca `internal`
+    #   PORQUE CI TIENE QUE PODER LLAMARLA —esa es justamente la division que repara el fallo—, asi
+    #   que el contrato lo impone `requires`: sin ruta explicita la tarea se niega, en vez de
+    #   escribir en un defecto implicito.
+    #
+    # ⛔ RACE_HOT_BIN ES OBLIGATORIO Y NO TIENE DEFECTO IMPLICITO. El defecto anterior
+    #   (`./race-hot.test`) dejaba 203 MB SIN IGNORAR dentro de cmd/olivares, que es justo lo que
+    #   `check-push-preflight.sh` (arbol sucio) y `check-tree-untouched.sh` refusan, y dos
+    #   invocaciones locales en paralelo chocaban en esa unica ruta.
+    requires:
+      vars: [RACE_HOT_BIN]
+    cmds:
+      # Wrapped like every other canonical `go test` entry point. Compiling does not open a
+      # connection, but scripts/test-pg-test-env.sh scans the CALL SITES and is fail-closed:
+      # a new `go test` line must use the wrapper or earn a reviewed exemption. This leg has
+      # no such premise -- it compiles the ROOT package, whose hot tests are exactly the
+      # Postgres-backed ones the run leg then executes -- so it takes the wrapper instead of
+      # an exemption. Each step independently establishes its PostgreSQL posture through the wrapper.
+      - bash scripts/with-pg-env.sh bash -c 'cd cmd/olivares && go test -race -c -o "$0" .' "{{.RACE_HOT_BIN}}"
+
   test:race-hot:hot:
     desc: -race over the root's hot tests from the fail-closed manifest (sub-leg).
+    # THE LOCAL ENTRY POINT, and it is deliberately NOT the composition of the two CI sub-legs.
+    # Restored to its exact 6b3d2707 form on 2026-09-12.
+    #
+    # The split exists for CI's clocks, not for this command. `go test -timeout 15m` starts its
+    # clock when the test BINARY starts, so a cold race compile sits outside Go's budget and
+    # inside the step's; CI therefore runs test:race-hot:hot:build as a SEPARATE step first, to
+    # precompile the dependency closure into the shared Go cache under its own 25-minute ceiling,
+    # and then runs THIS task under a 20-minute ceiling in the same 150-minute job. Both stages
+    # share CI's GOCACHE/GOMODCACHE and Go toolchain, so the second starts warm.
+    #
+    # It is the SAME command either way, locally and in CI: ordinary `go test` under the canonical
+    # Postgres wrapper. The executable the wrapper runs stays statically namable, which is what
+    # keeps this leg verifiable instead of UNVERIFIED, and Go's 15-minute clock begins at binary
+    # execution in both places.
+    #
+    # Composing the sub-legs locally required naming a shared binary, which meant `mktemp` for
+    # uniqueness and a `trap` to remove it. Those two words are a shell dialect that
+    # cmd/olivares/tools/checkpgwiring does not model, so it answered UNVERIFIED for this target
+    # and the whole CI-wiring battery cascaded from it. The local command never needed an
+    # explicit shared temporary binary: `go test` manages its own. Keeping this form removes the
+    # requirement instead of widening the checker.
+    #
+    # Same tests either way: same anchored manifest regex, same -race, same -count=1, same
+    # 15-minute timeout, and the same 115 measured tests.
+    #
+    # ⛔ R112/HR1, 2026-09-13 — THIS RECIPE IS UNCHANGED, AND CI NOW RUNS IT FOUR TIMES. Job 103739990067 of run 34763378851 died at
+    # `panic: test timed out after 15m0s` naming a test that had been running 1m23s; the
+    # diagnosis (assessments/engineering/r112-race-rest-cadence/REPORT.md) measured the alarm
+    # dump and the binary's internal timestamps and found no goroutine blocked a minute, every
+    # live goroutine descended from the running test, and about eight full estate boots at
+    # 67-80s each already spent two thirds of the BINARY budget. The panic names the entry in
+    # flight; the selection as a whole spends the budget. CI therefore runs FOUR anchored,
+    # cost-balanced partitions of this same manifest, each on its own runner with its own
+    # budget, by setting OLIVARES_HOT_RACE_PARTITION/…_PARTITIONS in the job env. The command
+    # below does not mention them and does not have to: the selection is decided inside
+    # scripts/race-hot-tests.sh, which is where the manifest has always been decided.
+    #
+    # NOTHING HERE IS RELAXED: the 15-minute per-binary cap, -race and -count=1 are unchanged,
+    # no test is removed, skipped or reordered, and every entry still runs exactly once.
+    #
+    # And the LOCAL invocation is unchanged, byte for byte: with NEITHER selector set — which is
+    # every developer shell — scripts/race-hot-tests.sh prints exactly the regex it always
+    # printed, so this command still runs the complete 115-entry selection. That byte-identity
+    # is a control in scripts/test-hot-race-partition.sh, not a claim in this comment.
+    #
+    # THE SHAPE DID NOT MOVE, and the first draft's did, which is worth recording. A separate
+    # `hot-race-partition.sh` in the wrapper's argv — the reviewed an internal design note (not shipped) shape —
+    # could not work here, because such a helper would have had to shell back into THIS file to
+    # get the manifest, and cmd/olivares/tools/checkpgwiring forbids a reviewed helper handing
+    # work to another `.sh` and refuses a walk nested deeper than it reads. Measured on
+    # 2026-09-13: that draft turned 66 fixtures of scripts/test-pg-test-env.sh red. The premises
+    # are the point of that gate, so the design moved instead of the gate — and the result needs
+    # no new registry entry, no new command for the checker to classify, and still no mktemp and
+    # no trap.
     cmds:
       - RUN_REGEX="$(bash scripts/race-hot-tests.sh)" && bash scripts/with-pg-env.sh bash -c 'cd cmd/olivares && go test -race -count=1 -timeout 15m -run "$0" .' "$RUN_REGEX"
 
@@ -774,12 +945,24 @@ tasks:
       - pnpm --dir web run at:gate
 
   e2e:web:
-    desc: Playwright e2e smoke (setup→login→shell) against the embedded binary.
+    desc: >-
+      Playwright e2e smoke (setup→login→shell) against the embedded binary.
+      ⛔ RECONSTRUYE EL BUNDLE COMMITEADO. `web/vite.config` fija
+      `outDir: ../core/internal/webui/dist` con `emptyOutDir: true`, así que esto VACÍA y reescribe
+      `core/internal/webui/dist` — 69 borrados + 69 sin trackear, medido el 2026-08-26. NO lo corras
+      en un worktree con trabajo vivo: el residuo se lo come el siguiente push, que muere en
+      `check-conflict-markers` con UNVERIFIED y parece culpa de tu rama.
     cmds:
       - bash scripts/web-e2e.sh
 
   e2e:web:demo:
-    desc: Playwright against the REAL binary seeded with the demo estate (R/RW graph renders from live data).
+    desc: >-
+      Playwright against the REAL binary seeded with the demo estate (R/RW graph renders from live data).
+      ⛔ RECONSTRUYE EL BUNDLE COMMITEADO. `web/vite.config` fija
+      `outDir: ../core/internal/webui/dist` con `emptyOutDir: true`, así que esto VACÍA y reescribe
+      `core/internal/webui/dist` — 69 borrados + 69 sin trackear, medido el 2026-08-26. NO lo corras
+      en un worktree con trabajo vivo: el residuo se lo come el siguiente push, que muere en
+      `check-conflict-markers` con UNVERIFIED y parece culpa de tu rama.
     cmds:
       - bash scripts/web-e2e-demo.sh
 
@@ -963,6 +1146,16 @@ tasks:
       DECLARADO, el shell del job frente al del paso, cero bloques -> 2, YAML ilegible -> 2.
     cmds:
       - bash scripts/test-run-block-syntax.sh
+
+  lint:workflows:
+    desc: >-
+      Complete local workflow syntax aggregate: actionlint (with the repository-pinned
+      shellcheck on PATH) validates YAML/actions/expressions, then run-block-syntax parses
+      each bash/sh body after neutralizing GitHub expressions. Neither mechanism is
+      represented as covering the other's blind spot.
+    cmds:
+      - task: lint:actions
+      - task: lint:run-block-syntax
   lint:conflict-markers:
     desc: >-
       Refuse a tree that still carries merge conflict markers. Written 2026-08-15 after a
@@ -1018,7 +1211,11 @@ tasks:
       An empty or shrunken walk is UNVERIFIED + exit 2, never green. While the canon is
       UNDECIDED (the choice is the owner's) this prints the divergence census and exits 0 —
       the lint:commerce report-mode precedent; the moment a version is written it enforces.
-      Red-fixture battery runs first.
+      Red-fixture battery runs first, and it classifies the tree with scripts/hub-leg.sh
+      --classify: in the hub it proves the census and the docs curation are READ from the
+      export script; in a stamped public export, where that script is absent by design, it
+      proves the fallback census is the tree itself, walks to the shipped pins, and that no
+      curated-out directory ships. An unknown tree is refused, not skipped.
     cmds:
       - sh scripts/check-release-version.sh --selftest
       - sh scripts/check-release-version.sh
@@ -1089,6 +1286,7 @@ tasks:
       unavailable — `PATH=/usr/bin:/bin bash scripts/check-boundary.sh` printed
       "Boundary check OK" after inspecting zero packages.
     cmds:
+      - bash scripts/test-check-boundary.sh
       - bash scripts/check-boundary.sh
       - bash scripts/test-gates-failclosed.sh fast
 
@@ -1128,6 +1326,16 @@ tasks:
       # before the first signature is produced.
       - bash scripts/with-cosign-guard.sh bash scripts/check-cosign-contract.sh
 
+  lint:ensure-shellcheck:selftest:
+    desc: >-
+      Hermetic battery of the destination chooser in scripts/ensure-shellcheck.sh: the pinned
+      shellcheck installs where the EXECUTION environment allows (OLIVARES_BIN_DIR, RUNNER_TEMP,
+      this container's /workspace/.olivares-bin, the user cache, TMPDIR), never a fixed path of one
+      machine. Measured 2026-09-16: `lint:actions` answered rc 2 on the VM runner and on
+      GitHub-hosted runners because /workspace could not be created there.
+    cmds:
+      - bash scripts/test-ensure-shellcheck.sh
+
   lint:actions:
     desc: >-
       Validate every GitHub Actions workflow with actionlint (pinned), plus the
@@ -1152,8 +1360,15 @@ tasks:
         wf=(.github/workflows/*.yml .github/workflows/*.yaml);
         if [ ${#wf[@]} -eq 0 ]; then
         echo "lint:actions: no workflow files found — refusing to report clean" >&2; exit 2; fi;
+        SC="$(bash scripts/ensure-shellcheck.sh)" || { echo "lint:actions: sin shellcheck anclado, actionlint SALTA sus reglas de shell y saldria 0 — could not look ≠ clean" >&2; exit 2; };
+        PATH="$(dirname "$SC"):$PATH"; export PATH;
         go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 "${wf[@]}"'
       - bash scripts/check-workflow-node-setup.sh
+      - bash scripts/test-docs-site-deploy-target.sh
+      # External observations must preserve the check's 0/1/2 contract: an observed finding may
+      # block, but a runner that cannot reach the subject cannot grade the tree red. This static
+      # closure and its mutants cover mainline, pre-push and the docs deploy workflow.
+      - task: lint:network-observation
       # NOTE on placement: in mainline-ci `task lint:actions` runs inside the
       # control-plane job — the job that DIES at "Initialize containers" when a
       # host-port bind fails, i.e. the CI copy of this gate can never witness the
@@ -1356,6 +1571,34 @@ tasks:
     cmds:
       - bash scripts/check-session-record.sh
 
+  lint:cockpit-strings:
+    desc: >-
+      A community (or any non-`ids`) artifact carries the five session-cockpit literals of
+      scripts/community-session-cockpit-strings.allow and no trace of the commercial engine — no
+      private route, no proto name, no xterm chunk, no enterprise/sessioncockpit symbol. It is an
+      ALLOWLIST and not a denylist because the placeholder MUST be there: such a build answers 501
+      session_cockpit_unavailable, so "no cockpit string may appear" is false by construction, and a
+      denylist of names is defeated by a rename. Its comparison is RESIDUE, not equality, because Go
+      packs its string table contiguously and a real binary returns runs like
+      `failedsession-cockpit:availability:readreflect:`. It says what its discovery reaches: it reads
+      LITERALS, never linkage — the cut itself is measured by the overlay's test-addon-set-cut.sh (by
+      package path) and check-wireproof.sh (by SKU). Three answers: 0 / 1 / 2.
+    cmds:
+      - bash scripts/check-community-cockpit-strings.sh
+
+  lint:cockpit-strings:selftest:
+    desc: >-
+      The battery for lint:cockpit-strings: synthetic cases plus TWO real ones that build the
+      community binary, check it green, then append a private route literal to a COPY and require red.
+      The count is deliberately not written here — an earlier version said "nine" and the battery grew
+      to fourteen the same day, so a reader calibrated against a stale number.
+      Every red case is checked by its MESSAGE as well as its rc, because a red case that only compares
+      rc passes without ever reaching its guard — measured here twice, once when a residue rewrite
+      turned the private-route case into a false NEGATIVE, and once when the decoy's own prose carried
+      the word whose absence it was testing.
+    cmds:
+      - bash scripts/hub-leg.sh lint:cockpit-strings:selftest scripts/test-check-community-cockpit-strings.sh
+
   lint:session-record:selftest:
     desc: >-
       The battery for lint:session-record: eight cases over REAL throwaway repositories, each red case
@@ -1378,12 +1621,13 @@ tasks:
 
   lint:push-preflight:selftest:
     desc: >-
-      Trece casos de scripts/check-push-preflight.sh, el guion que mira el árbol ANTES de arrancar
+      Catorce casos de scripts/check-push-preflight.sh, el guion que mira el árbol ANTES de arrancar
       un push en vez de descubrirlo al final. Existe por una medida del 2026-08-26: un push murió a
       1h48 porque un gate reconstruyó core/internal/webui/dist mientras lo comprobaba, y el residuo
       seguía en su worktree horas después, así que el re-push habría muerto igual. La comprobación
       cuesta un segundo. El selftest lleva control positivo (un árbol limpio DEBE dar 0, o un guion
-      que siempre dijera «sucio» pasaría) y dos casos de «no he podido mirar», que nunca son limpio.
+      que siempre dijera «sucio» pasaría) y tres casos de «no he podido mirar», que nunca son limpio;
+      el tercero demuestra que `task` ausente no se convierte en un preflight verde.
       No se re-invoca por "$0": ese modo de fallo convierte un TMPDIR noexec en «todo en rojo».
       Tres casos adicionales demuestran que la poda TMP retira sólo raíces viejas y muertas, preserva
       una vieja usada como cwd por un proceso vivo y también preserva cualquier raíz todavía joven.
@@ -1460,6 +1704,30 @@ tasks:
     cmds:
       - bash scripts/test-race-groups.sh
 
+  lint:race-full-services-parity:
+    desc: >-
+      race-full's race-workspace must export every OLIVARES_TEST_POSTGRES_* variable that a
+      mainline-ci race job exports. Exists because the two sibling workflows' Postgres service
+      inventories diverged: mainline-ci race-core/race-sessions provision postgres_other and
+      export OLIVARES_TEST_POSTGRES_OTHER_DSN; race-full did not. Measured: race-full run
+      35147072374, job race-workspace (heavy-stores#a), TestDRDestinationUnrelatedCluster
+      t.Fatal "a second owned real cluster is required". Fixture battery plus the real tree.
+    cmds:
+      - bash scripts/test-race-full-services-parity.sh
+
+  lint:modules-race-partition:
+    desc: >-
+      Verify complete, disjoint ownership of the modules, core and sqlstore-entry race
+      inventories, selector bounds, and CI matrix wiring. Synthetic inventories and causal
+      controls run in both the fast pre-push lane and race-modules CI before the PostgreSQL
+      race tests.
+    cmds:
+      - bash scripts/test-modules-race-partition.sh
+      - bash scripts/test-core-race-partition.sh
+      - bash scripts/test-sqlstore-race-entry-partition.sh
+      # Keep CI's ambient-selector regression in the local feedback loop too.
+      - OLIVARES_SESSIONS_RACE_PARTITION=2 OLIVARES_SESSIONS_RACE_PARTITIONS=4 bash scripts/test-sessions-race-partition.sh
+
   lint:hub-web-fidelity:
     desc: >-
       INT-05: runs the web repo's hub-fidelity RE-DERIVATION, which until now ran nowhere
@@ -1469,7 +1737,12 @@ tasks:
       the same reason lint:brand-parity lives here. Cost of nobody running it, measured 2026-08-14:
       six fidelity checks red and the evaluator-facing OpenAPI spec 151 lines behind. ~2s.
     cmds:
-      - bash scripts/hub-leg.sh lint:hub-web-fidelity scripts/check-hub-web-fidelity.sh
+      - |
+        if [ "${OLIVARES_NETWORK_ADVISORY:-0}" = "1" ]; then
+          bash scripts/run-network-observation.sh published-web-origin -- bash scripts/hub-leg.sh lint:hub-web-fidelity scripts/check-hub-web-fidelity.sh
+        else
+          bash scripts/hub-leg.sh lint:hub-web-fidelity scripts/check-hub-web-fidelity.sh
+        fi
 
   lint:docsite-versions:
     desc: >-
@@ -1875,15 +2148,79 @@ tasks:
       a release that did not declare one; and the WORKSPACE-INTEGRITY guards that refuse to
       let a step consume a checkout that no longer matches its commit — run as the workflow's
       own extracted `run:` blocks, because a git that CANNOT ANSWER must be a red release and
-      not a silent skip. Hermetic: stub binaries, no network, no
-      registry, nothing signed.
+      not a silent skip; and (QA07) the PUBLICATION FINALIZER, which is the only supported way
+      a stable release stops being a draft. The finalizer battery builds a test CLI with
+      a throwaway Ed25519 trust anchor and verifies real test-manifest signatures.
+      GitHub, cosign and SLSA calls use recording adapters; the battery performs no
+      network, registry or publication effects. Each execution reports its own case
+      count and duration. Adapter results do not establish real cosign or SLSA verification.
     cmds:
+      # ⛔ UN TMPDIR PROPIO PARA TODA LA PATA: ejecutable, ÚNICO por corrida y FUERA del
+      #    árbol de trabajo. No es higiene: es la exposición que hacía intermitente a
+      #    sig-guard.
+      #
+      #    SIETE de estos guiones sondean si $TMPDIR permite execve —corren binarios
+      #    stub— y, si no, caen a `mktemp -d "$ROOT/.tmpexec.XXXXXX"`, o sea DENTRO del
+      #    worktree (test-release-security-sig-guard.sh:64-73 y las otras seis). El `/tmp`
+      #    de este contenedor ES noexec, así que el fallback es el camino NORMAL aquí, y
+      #    la evidencia de cada caso acaba viviendo en un árbol que otras patas del mismo
+      #    push recorren, copian y limpian.
+      #
+      #    Medido: la batería a mano da 16/0 y DENTRO DEL HOOK 11/5 — mismo contenido,
+      #    distinto entorno. Y 35 corridas de banco (serie, parejas concurrentes, con y
+      #    sin fallback, con contención sobre el .git compartido) salieron 35/35 limpias:
+      #    lo que las distingue no es la concurrencia, es DÓNDE vive el temporal.
+      #
+      #    La pata deja de heredar la decisión de quien la lanzó. Y si la base tampoco
+      #    permite execve, REHÚSA con 2 en vez de caer al árbol en silencio: un fallback
+      #    que nadie declara es cómo se llega aquí.
+      - cmd: |
+          base="${OLIVARES_LEG_TMP_BASE:-$(dirname '{{.ROOT_DIR}}')/.olivares-legtmp}"
+          mkdir -p "$base" || { echo "lint:release-mechanics: NO HE PODIDO MIRAR: no puedo crear $base" >&2; exit 2; }
+          TMPDIR="$(mktemp -d "$base/release-mechanics.XXXXXX")" || { echo "lint:release-mechanics: NO HE PODIDO MIRAR: mktemp falló en $base" >&2; exit 2; }
+          export TMPDIR
+          trap 'rm -rf "$TMPDIR"' EXIT
+          printf '#!/bin/sh\nexit 0\n' >"$TMPDIR/.probe" && chmod +x "$TMPDIR/.probe"
+          if ! "$TMPDIR/.probe" >/dev/null 2>&1; then
+            echo "lint:release-mechanics: NO HE PODIDO MIRAR: $base tampoco permite execve." >&2
+            echo "  Estas baterías ejecutan binarios stub. Fija OLIVARES_LEG_TMP_BASE a un" >&2
+            echo "  directorio ejecutable FUERA del árbol de trabajo y repite." >&2
+            exit 2
+          fi
+          rm -f "$TMPDIR/.probe"
+          # ⛔ OCHO LÍNEAS EN VEZ DE UN `for`, Y NO ES ESTILO. `check-orphan-batteries.sh` sigue
+          #    la invocación de cada batería por su NOMBRE LITERAL; con `bash "scripts/$g"` los ocho
+          #    nombres viven en la lista del bucle y el gate no los alcanza, así que las declaraba
+          #    HUÉRFANAS —«un banco que nadie corre no corta»— **estando las ocho ejecutándose**.
+          #    Medido el 2026-09-02: `main` 42/42 en verde y este árbol 53/43 en rojo, con el gancho
+          #    idéntico y las mismas 254 tareas alcanzables. El detector tenía razón en su premisa y
+          #    se equivocaba en el hecho, que es la peor forma de rojo: manda a buscar un defecto que
+          #    no existe.
+          #
+          #    La cura es hacer el código visible al detector, NO aflojar el detector: un gate que
+          #    aprende a seguir variables deja de poder distinguir una batería ejecutada de una
+          #    nombrada. El `TMPDIR` compartido —que es lo que este bloque existe para dar— se
+          #    conserva entero: siguen corriendo dentro del mismo `cmd`, con el mismo entorno.
+          bash scripts/test-private-leg.sh || exit $?
+          bash scripts/test-release-ota-channel.sh || exit $?
+          bash scripts/test-release-workspace-e2e.sh || exit $?
+          bash scripts/test-release-security-producer.sh || exit $?
+          bash scripts/test-release-security-sig-guard.sh || exit $?
+          bash scripts/test-release-finalize-stable.sh || exit $?
+          bash scripts/test-release-preflight.sh || exit $?
+          bash scripts/test-resolve-bare-manifest-digest.sh || exit $?
+          bash scripts/test-cosign-verified-mode.sh || exit $?
       - bash scripts/test-private-leg.sh
       - bash scripts/test-release-ota-channel.sh
       - bash scripts/test-release-workspace-e2e.sh
       - bash scripts/test-release-security-producer.sh
       - bash scripts/test-release-security-sig-guard.sh
       - bash scripts/test-release-preflight.sh
+      # hub-leg: los dos leen `.github/workflows/release-rehearsal.yml`, que el export excluye, así
+      # que el guión no viaja. Envueltos, el árbol publicado dice POR QUÉ no mide en vez de morir
+      # en un 127 sobre un fichero que no tiene.
+      - bash scripts/hub-leg.sh lint:release-publish-destinations scripts/check-release-publish-destinations.sh
+      - bash scripts/hub-leg.sh lint:release-publish-destinations scripts/test-release-publish-destinations.sh
       - bash scripts/test-resolve-bare-manifest-digest.sh
       - bash scripts/test-cosign-verified-mode.sh
       # R1 contrast additions: format-preserving digest-asserted latest* aliasing
@@ -1892,6 +2229,76 @@ tasks:
       - bash scripts/test-alias-image-digest.sh
       - bash scripts/test-release-wiring.sh
       - bash scripts/test-verify-release-summary.sh
+      # DIST-24-01: deterministic distribution inventory, including source-drift
+      # and remote-surface claim mutants. The task already runs in CI and pre-push.
+      - bash scripts/test-release-index.sh
+      # DIST-24-03: the published installer is a pinned, signed-checksum-covered
+      # release asset; the convenience bootstrap names its HTTPS trust boundary,
+      # pins in non-interactive use and cannot bypass cosign or invoke implicit sudo.
+      - bash scripts/test-release-installer.sh
+      # DIST-24-04: the signed archive's systemd/OpenRC/launchd adapters remain
+      # opt-in and validate before init mutation; doctor reports local truth as
+      # text/JSON with the explicit 0 healthy, 1 defect, 2 unmeasurable contract.
+      - bash scripts/test-service-install.sh
+      # Native co-deployment: full POSIX entrypoint with inert command ports and
+      # /etc mapped into a fixture. Verify base-unit ordering, explicit start, clean
+      # sudo environment forwarding, failures and temporary cleanup; no host mutation.
+      - bash scripts/test-agentops-install.sh
+
+  lint:installer-matrix:
+    desc: >-
+      DIST-24-05 static contract: the dedicated pull-request/dispatch workflow carries
+      Debian stable, Ubuntu LTS, Fedora, openSUSE Leap, Alpine and hosted macOS; every live
+      leg checks the public signed release plus this commit's service/doctor candidate.
+      This leg checks the workflow, shared predicates, docs and hook/CI cables without
+      needing Docker, macOS, network access or a build.
+    cmds:
+      - bash scripts/check-installer-matrix.sh
+
+  lint:installer-matrix:selftest:
+    desc: >-
+      DIST-24-05 hermetic fixtures: the first four mutant pairs execute install.sh with
+      deterministic release/cosign doubles; shared assertions cover the trusted OTA
+      comparison and unsupported-distro third answer. Each named mutant has a positive
+      control, and the script states which live properties remain CI-only.
+    cmds:
+      - bash scripts/test-installer-matrix.sh
+
+  lint:package-repos:
+    desc: >-
+      DIST-24-06 phase-1 static contract: deterministic apt, rpm-md and APK producers
+      require a dedicated repository-key descriptor; the dispatch-only public/preprod
+      workflow emits TEST-ONLY evidence and never publishes; native-client commands,
+      documentation honesty, hook/mainline wiring and pinned shellcheck remain present.
+    cmds:
+      - bash scripts/check-package-repositories.sh
+
+  lint:package-repos:selftest:
+    desc: >-
+      DIST-24-06 hermetic producer/verifier battery: six structurally valid native
+      package fixtures, repeat-render determinism, stable/security isolation and four
+      named mutants with positive controls (wrong key, changed package, crossed channel,
+      and absent real key returning rc 2 without unsigned output).
+    cmds:
+      - bash scripts/test-package-repositories.sh
+
+  lint:package-publish:
+    desc: >-
+      DIST-24-06 phase-2 static contract: the production dispatch is protected by the
+      packages-publish environment and exact reviewer, materializes only the tracked key
+      identity, pins wrangler, stages and rereads R2 bytes, requires three native-client
+      witnesses, and promotes signed discovery roots last with rollback.
+    cmds:
+      - bash scripts/check-package-publish.sh
+
+  lint:package-publish:selftest:
+    desc: >-
+      DIST-24-06 phase-2 hermetic R2 double: dry-run writes nothing, staged bytes remain
+      outside stable, missing evidence keeps every canonical index absent, partial write and
+      ambiguous-read failures roll back, immutable collisions refuse overwrite, positive
+      promotion writes content before roots, and the real wrong-key mutant remains red.
+    cmds:
+      - bash scripts/test-package-publish.sh
 
   lint:pg-env:
     desc: >-
@@ -1900,9 +2307,16 @@ tasks:
       and no server it exits 0 and says loudly which coverage it lacks; under
       OLIVARES_GATE_STRICT_PG=1 an unreachable server is a hard failure. Also asserts that
       every -race leg discovered in the workflow has a digest-pinned postgres service and
-      runs through with-pg-env.sh.
+      runs through with-pg-env.sh. The offline provisioner battery verifies ephemeral
+      port resolution, role setup command failures and the shared CI service contract.
     cmds:
+      - task: lint:pg-env:provision
       - bash scripts/test-pg-test-env.sh
+
+  lint:pg-env:provision:
+    desc: Offline fixtures for CI Postgres port resolution and role provisioning; no server or apt.
+    cmds:
+      - bash scripts/test-ci-postgres-service.sh
 
   lint:status-ref:
     desc: >-
@@ -1924,16 +2338,129 @@ tasks:
 
   lint:channel-parity:
     desc: >-
-      The release channels live in TWO languages and must say the same thing:
-      core/release/manifest.go:50 and commercial/license-worker/src/download/manifests.ts:15.
-      Nothing compiles both, so this is the only place the drift can be seen. Measured
-      2026-08-19: Go and TS agreed while the enterprise artifact publisher carried an
-      INVERTED copy — it accepted beta and edge, which the gate does not serve, and rejected
-      lts, which it does, so the LTS line could not be published at all. Order does not
-      matter; membership does. Three answers, 0/1/2.
+      Static release-channel vocabulary parity between Go and TypeScript. Published
+      byte/version parity is the explicit --tag/--bundle or --real mode; network is
+      forbidden in this fast leg. Three answers, 0/1/2.
     cmds:
       - bash scripts/hub-leg.sh lint:channel-parity scripts/check-channel-parity.sh
-      - bash scripts/hub-leg.sh lint:channel-parity scripts/check-channel-parity.sh --selftest
+
+  lint:channel-parity:selftest:
+    desc: >-
+      DIST-24-07 hermetic release-channel matrix. Reads OTA, native apt/rpm/apk
+      indexes, Homebrew, both OCI registries and Helm evidence. Its positive fixture
+      is complete; digest drift and OTA-ahead mutants return 1, while an absent
+      channel returns 2 and names it. Also retains the five-case Go/TS battery.
+    cmds:
+      # Literal owner: check-orphan-batteries follows Taskfile commands, not a
+      # shell dispatch hidden inside check-channel-parity.sh --selftest.
+      - bash scripts/hub-leg.sh lint:channel-parity:selftest scripts/test-channel-parity.sh
+
+  lint:repo-credential-contract:
+    desc: >-
+      DIST-24-08 static enterprise-repository credential contract. Validates decoded
+      short-lived token claims against the Worker's live set allowlist, the OpenAPI
+      deny-closed/404 surface, 0600 host format, URL credential hygiene and hook/CI
+      wiring. Hub-only and network-free; it does not claim the phase-2 host is live.
+    cmds:
+      - bash scripts/hub-leg.sh lint:repo-credential-contract scripts/check-repo-credential-contract.sh
+
+  lint:repo-credential-contract:selftest:
+    desc: >-
+      DIST-24-08 hermetic battery with positive controls and three required mutants:
+      expired access token, token presented to another commercial set, and a
+      credential embedded in a documentation/config URL. Uses decoded fixtures only,
+      never a real signer, bearer or endpoint.
+    cmds:
+      # Keep the battery's owner visible to the orphan-battery census.
+      - bash scripts/hub-leg.sh lint:repo-credential-contract:selftest scripts/test-repo-credential-contract.sh
+
+  lint:compose-ready:
+    desc: >-
+      DIST-24-12 static contract for the in-binary numeric-loopback readiness probe,
+      hardened reference Compose healthcheck, fresh-volume ownership, dispatch-only
+      Docker qualification and current-versus-unmeasured documentation labels. The
+      dispatch job must use explicit self-hosted Linux x64 labels, install the pinned
+      Task before its first task step, and supply every variable its layered Compose
+      files require. On the shared daemon both projects and the image tag must be owned
+      by repository, run and attempt, both stacks and cleanups must end with the CI-only
+      no-ports layer and refuse published ports before up, and only the exact owned tag
+      may be removed. No Docker daemon, network or build is used by this leg.
+    cmds:
+      - bash scripts/check-compose-ready.sh
+
+  lint:compose-ready:selftest:
+    desc: >-
+      DIST-24-12 hermetic local HTTP/TLS fixture battery. It tests 200, 503, 404,
+      redirect and invalid-origin outcomes, then rewrites the real status predicate
+      to always true and requires TestCheckRejectsReadyzDown to fail. Scratch views of
+      the tree then restore, one at a time, a missing admin password, a missing Task
+      install, a hosted runner fallback, an owner that ignores repository, run or
+      attempt, a fixed project, crossed cleanup ownership, a missing no-ports layer on
+      either leg or cleanup, a plain ports list, a late effective-config check and a
+      forced, swallowed or pruning image cleanup; the wiring contract must reject each
+      and accept the unmutated view. JSON and environment fixtures exercise the runtime
+      owner, Compose version and effective-config refusals. No Docker or network is used.
+    cmds:
+      - bash scripts/test-compose-ready.sh
+
+  lint:compose-postgres-bootstrap:
+    desc: >-
+      Static contract for the FRESH Postgres Compose bootstrap: the sample wires a
+      SECOND distinct pool (--admin-dsn) with its own credential, the administrative
+      role is NOSUPERUSER BYPASSRLS and read-only with no membership either way, the
+      application role keeps NOSUPERUSER NOBYPASSRLS, and the bootstrap SQL never
+      DROPs or ALTERs an existing principal. Its grants are cross-checked against the
+      product's own RenderProvisionSQL. No Docker, network or Postgres server.
+    cmds:
+      - bash scripts/check-compose-postgres-bootstrap.sh
+
+  lint:compose-postgres-bootstrap:selftest:
+    desc: >-
+      Hermetic mutation battery for the leg above: an unmutated control first, then
+      fifteen real defects — the sample losing --admin-dsn, a reused credential,
+      --allow-privileged-db-role, a NOBYPASSRLS admin role, DROP/ALTER of an existing
+      principal, a membership grant, a write grant, the lost default SELECT, the
+      initdb hook skipping the admin file, and the app role gaining BYPASSRLS.
+    cmds:
+      - bash scripts/test-compose-postgres-bootstrap.sh
+
+  lint:uninstall-contract:
+    desc: >-
+      DIST-24-16 static contract: uninstall plan/preserve/purge consumes a strict
+      ownership manifest bounded by the release-index install_layout; package hooks
+      preserve custody; DR exports carry a KEK-authenticated per-file inventory and
+      newer-engine imports refuse before mutation. Also checks docs and hook/CI parity.
+    cmds:
+      - bash scripts/check-uninstall-contract.sh
+
+  lint:package-tools:selftest:
+    desc: >-
+      Offline bsdtar bootstrap battery using fixture packages and a real ELF loader.
+      Requires Linux amd64, glibc and dpkg-deb; missing prerequisites fail, never skip.
+    cmds:
+      - bash scripts/test-ensure-bsdtar.sh
+
+  lint:uninstall-contract:selftest:
+    desc: >-
+      DIST-24-16 hermetic round-trip and source-mutant battery: seeded estate export,
+      purge, reinstall, authenticated import, continuity verification and doctor green;
+      unconfirmed purge, outside-index path, ignored digest and preserve-deletes-data
+      mutants must each turn their named witness red. Also builds fixture
+      .deb/.rpm/.apk from the real nfpms contents and refuses the baseline APK
+      that shipped a systemd unit instead of OpenRC.
+    cmds:
+      - bash scripts/test-uninstall-migration.sh
+      - bash scripts/test-nfpm-openrc.sh
+
+  lint:nfpm-apk-postinstall-runtime:
+    desc: >-
+      Control-plane runtime witness: execute the extracted APK .post-install inside a
+      digest-pinned Alpine container (--network none, unprivileged) at the hook's real
+      paths. P1 fresh OpenRC, P2 planted upgrade stamp, N1 assignment-after-call mutant.
+      Recording stubs do not prove a daemon started. Docker or image absence is exit 2,
+      never a skip. SOLO-CI: docker is on the measured runner and absent on workstations.
+    cmds:
+      - bash scripts/nfpm-apk-postinstall-runtime.sh
 
   lint:tree-untouched:
     desc: >-
@@ -1994,6 +2521,48 @@ tasks:
     cmds:
       - bash scripts/check-test-timeout-headroom.sh --fetch {{.CLI_ARGS}}
 
+  lint:test-budget-placement:
+    desc: >-
+      Refuse a SHORT test budget that starts before the fixture it is not measuring: a
+      `context.WithTimeout`/`WithDeadline` of 20 s or less in a `_test.go` with an `Open(`,
+      `isolatedPG…`, `…FreshTarget`, `provisionTenant…`, `drOpenSuper`, `chatTransport`,
+      `chatPrepared` or `new…Harness` between it and the first `select`/receive. That shape
+      failed a required CI leg three times in one week with `context deadline exceeded` and
+      NO data race, each time on a different test (01f81b8e81, 4859cc43f3, 346bce0c8a) — the
+      fixture spends the wall clock and the failure lands on the handoff instead of on the
+      behaviour. It resolves package constants (`core/audit` writes its budgets that way) and
+      COUNTS the budgets it cannot read on its verdict line, so its green is bounded by what
+      it read; `--unreadable` lists them. MEASURED COST: 0.78 s median of three runs over
+      2357 `_test.go` files (2026-09-16 12:35Z, load1 1.8; the same measurement at load1 3.8
+      was 1.04 s — a cost without its load is not comparable with anything), no network, no
+      `go test`. An empty discovery, a tree `find` cannot finish listing, a `sort` that fails
+      mid-write, an unreadable root, or a file awk cannot open answers COULD NOT LOOK (2) —
+      never CLEAN.
+    cmds:
+      - bash scripts/check-test-budget-placement.sh
+
+  lint:test-budget-placement:selftest:
+    desc: >-
+      Battery of lint:test-budget-placement. Forty-three rows over throwaway trees, with the
+      positive control first and the three HISTORICAL regressions carried as rows: the
+      pre-fix bodies of the three tests the class was measured on must be red and their
+      shipped remedies green. FOURTEEN mutants accredit the fourteen properties a naive
+      implementation drops — ORDER, THRESHOLD, COMMENT immunity, STRING immunity (a fixture
+      head inside a `t.Fatalf` must not go red in the fast lane), send-vs-receive, the
+      millisecond divisor, the bare `time.Unit`, package-constant resolution, the DISCOVERY
+      GUARD, DISCOVERY's own status in BOTH its statements (a directory `find` cannot descend,
+      and a `sort` that dies after a PARTIAL write — the second graded against a truncated list,
+      because an EMPTY one is already caught by the discovery guard and a mutant against it
+      would prove nothing), the READER's own failure (awk's status), the modelprovider fixture
+      heads this series itself moved a budget below, and METHOD-NAME extraction, the last graded
+      on the OUTPUT because its mutant does not move the exit code. The reviewed exemption is
+      exercised against the SHIPPED table, with no environment override. Three rows build their
+      precondition with `chmod 000`, which denies nothing to uid 0: under root they report
+      SKIPPED and are counted, never silently green.
+      MEASURED COST: 0.90 s median of three runs (2026-09-16 12:35Z, load1 1.8).
+    cmds:
+      - bash scripts/test-check-test-budget-placement.sh
+
   lint:hub-battery:
     desc: >-
       Self-test of scripts/hub-battery.sh's verdict discriminator. The battery is the integrator's
@@ -2052,6 +2621,18 @@ tasks:
       being clean, and a NEGATIVE CONTROL so the battery cannot be measuring its own fixture.
     cmds:
       - bash scripts/test-ci-step-guard.sh
+
+  lint:ci-a11y-gate-wrap:selftest:
+    desc: >-
+      Battery for the a11y job's wrapper (HUB-VITRINA, run 33926027726): the wrapper died when
+      the log did NOT carry the defect line, because `grep -oE ... | head -1` under
+      `bash -e -o pipefail` fails on no match. A control that dies when there is no defect --
+      the same shape as `printf | grep -q` returning 141 on success. Five cases, and the one
+      that makes it worth having is the MUTANT: remove the guard and the same clean log turns
+      red. Also pins the other direction (a product red still crosses the wrapper), so the cure
+      cannot be "swallow everything".
+    cmds:
+      - bash scripts/test-ci-a11y-gate-wrap.sh
 
   lint:test-hook-parallelism:
     desc: >-
@@ -2159,21 +2740,50 @@ tasks:
 
   lint:classify-paths-parity:
     desc: >-
-      Las dos listas de rutas de bitacora de `mainline-ci.yml` —`paths-ignore` del disparador y el
-      `case` de `classify`— tienen que decir LO MISMO. Lo exige el propio workflow en su comentario
-      («the two move together or this fires again on a prose commit») y hasta hoy nadie lo
-      comprobaba: `docs/ai-context/**` entro en una y no en la otra el 2026-08-23 y estuvo una
-      semana asi, creando corridas que se saltaban las 41 patas gateadas y no median nada.
+      Mainline-ci trigger coverage: every main push must be eligible (no push
+      `paths`/`paths-ignore`), classify must remain inspectable for code-job
+      exemptions, and the secrets job must not depend on classify. Trigger and
+      classifier lists are not required to match.
     cmds:
       - bash scripts/check-classify-paths-parity.sh
 
   lint:classify-paths-parity:selftest:
     desc: >-
-      Bateria de check-classify-paths-parity.sh — 17 casillas, con el fixture de sangria desplazada
-      que prueba la tolerancia al reformateo (sin el, un mutante de sangria fija no mataba ninguna
-      fila) y los dos mutantes juzgados por su mensaje.
+      Causal coverage, unknown-shape and mutation battery for
+      check-classify-paths-parity.sh. Mutants use an owned copied
+      checker/helper layout. Negated path patterns are unknown, not silent
+      misses. Exact main is found even if an unsupported positive glob precedes it.
     cmds:
       - bash scripts/test-classify-paths-parity.sh
+  lint:fabricated-paths:
+    desc: >-
+      Que el restregado del export NO invente una ruta. Retirar una referencia interna de DENTRO
+      de una ruta la EMPALMA en vez de retirarla, y el arbol publico acaba con un puntero BIEN
+      FORMADO a un fichero que no esta: una ficha de contrato con un ID de sesion DENTRO del
+      nombre sale EMPALMADA, apuntando a un fichero que nunca existio. (El ejemplo literal vive en
+      la cabecera del guion, que el export SI restriega; aqui seria un VALOR y se publicaria — lo
+      marco `lint:export` sobre esta misma descripcion.) Una referencia retirada la ignora un lector; una FABRICADA la
+      persigue. Ninguna pata existente la ve — ni el cierre ni el gate de fugas comprueban que una
+      ruta citada EXISTA, y por eso `export:check` daba CLEAN con cuarenta dentro. Se cerro a mano
+      cuatro veces en un dia y volvio tres, la ultima fabricada por la propia cura del reapunte:
+      una clase cerrada sin gate permanente vuelve.
+      COSTE, con sus condiciones porque sin ellas no compara con nada: 82 s en caja tranquila
+      (load1 1,79, estrangulamiento 0 %) y 189-258 s en esta caja al 58 %. Mi primera cifra
+      publicada —53 s— iba SIN condiciones y era la de una caja que no volvio a repetirse.
+    cmds:
+      - bash scripts/hub-leg.sh lint:fabricated-paths scripts/check-fabricated-paths.sh
+
+  lint:fabricated-paths:selftest:
+    desc: >-
+      Bateria de lint:fabricated-paths, con su control positivo: una cita con la referencia DENTRO
+      de la ruta tiene que poner el gate ROJO y NOMBRARLA, y una cita cuyo destino SI existe no
+      puede disparar. La asercion no fija el empalme exacto —al escribirla supuse uno y el
+      restregador produce otro—: fija que nombre el fichero y la ruta.
+      COSTE: 263 s en caja tranquila (0 % estrangulada) y 926 s con un goreleaser encima (64 %).
+      3,5x la MISMA bateria sobre el MISMO arbol, solo por la carga.
+    cmds:
+      - bash scripts/hub-leg.sh lint:fabricated-paths:selftest scripts/test-fabricated-paths.sh
+
   lint:orphan-batteries:
     desc: >-
       Censo con LINEA BASE de baterias que NADIE ejecuta. Nace de una medida: el 2026-08-30
@@ -2222,6 +2832,55 @@ tasks:
     cmds:
       - bash scripts/test-purge-scratch.sh
 
+  lint:export-identity:selftest:
+    desc: >-
+      Prove the PRIVATE-IDENTITY denylist of scripts/export-public.sh: the rule that decides
+      whether a personal mail address reaches a PUBLIC repository. Its failure mode is silent
+      and one-way — a gate that stops seeing an address prints CLEAN, indistinguishable from a
+      tree that has none, and nobody stages a leak by hand to find out. The battery landed on
+      2026-08-29 after the R1 dry-run export found a personal address shipping in a comment in
+      .githooks/pre-push while lint:export said CLEAN. It was written and then nothing ran it.
+    cmds:
+      - bash scripts/hub-leg.sh lint:export-identity:selftest scripts/test-export-identity-class.sh
+
+  lint:baseline-shrink:selftest:
+    desc: >-
+      Prove the META-GATE — the one that protects against SILENCING other gates. Its job is that a
+      commit removing entries from a ratchet baseline has also touched something of what it removes,
+      because a commit that ONLY deletes lines is indistinguishable from switching a gate off. Its
+      own header carries the incident (2026-08-18: one file, 40 lines fewer, ZERO translations
+      touched; main went red on files nobody had edited, costing five lanes their day). It was a
+      live hook leg with no test of its own — battery included, five of its six rows accredited by
+      mutation and the sixth labelled in place as NOT accredited.
+    cmds:
+      - bash scripts/hub-leg.sh lint:baseline-shrink:selftest scripts/test-check-baseline-shrink.sh
+
+  lint:cra-pack:selftest:
+    desc: >-
+      Prove the EU CRA readiness-pack guard, a live hook leg that had no test of its own. Eleven
+      hermetic cases over throwaway packs via CRA_PACK_ROOT, with a positive control first. Two
+      properties matter most and both are accredited by mutation: a re-verification between 180 and
+      400 days WARNS and does not fail (turning that warn into a fail blocks five lanes over a
+      document that is still valid), and a host without GNU `date -d` yields PARTIAL rc=2 — never 0,
+      never 1 — because the freshness was not checked and that is neither a defect nor a green.
+    cmds:
+      - bash scripts/hub-leg.sh lint:cra-pack:selftest scripts/test-check-cra-pack.sh
+
+  lint:guard-bash:
+    desc: >-
+      Prove the PreToolUse guard that cuts the command-line mistakes this box measures wrong:
+      an unquoted `for` over a variable (zsh does not word-split, so the loop runs ONCE over the
+      whole string), a /dev/tcp probe (zsh does not implement it, so the probe always says
+      "closed"), pkill (this project kills by PID after identifying the process in /proc), a
+      pathless `git add -A`/`git add .` in a SHARED clone, and a `comm` over lists sorted with
+      `sort -n` (comm needs LEXICOGRAPHIC order; with numbers the two orders differ). Fourteen
+      cases including the declared fail-open posture without jq and the visible `# guard:ok`
+      escape. The guard runs in bash, so the battery calibrates in bash: the first version was
+      calibrated in the interactive shell — another grep — and produced a defect that did not
+      exist.
+    cmds:
+      - bash scripts/test-guard-bash.sh
+
   lint:prepush-treesnap:
     desc: >-
       Prove the pre-push tree-snapshot block leaves nothing behind in TMPDIR. Its mktemp used to
@@ -2234,6 +2893,25 @@ tasks:
       as a mutant that does not leak.
     cmds:
       - bash scripts/test-prepush-treesnap.sh
+
+  lint:catalog-dodo-discount:
+    desc: >-
+      Prove the instrument that writes a discount rule into a DODO_CATALOG block. It exists
+      because that catalogue is a JSON document escaped inside a JSON string inside a JSONC
+      file: editing it by hand means counting backslashes on the line that decides what a
+      customer is charged, and getting it wrong is SILENT — the file still parses, the worker
+      still boots, and a rule authorises something nobody wrote. The bench runs against a COPY
+      carrying the real src/, so the worker's OWN catalogue parser is the gate, and no rule is
+      left behind in a tree someone then pushes. Seven no-fires: a 100 % rule (a free purchase
+      is a different kind of consideration, not another percentage), a rule with no cycle limit
+      (the provider's default is FOR EVER, so a "free month" becomes a free subscription that
+      is invisible until the second charge), 0bp, a SANDBOX product in the PRODUCTION catalogue,
+      no product at all, an invented env, and the proof that --check wrote nothing in ANY of the
+      seven — without which the rest proves nothing. Then the scope and the way back: one
+      written line with the sandbox block untouched, the rule read back through the worker's
+      parser rather than a regex, idempotence, and --remove restoring the file byte for byte.
+    cmds:
+      - bash scripts/test-catalog-dodo-discount.sh
 
   lint:prepush-refclass:
     desc: >-
@@ -2402,7 +3080,12 @@ tasks:
       # curated. The wrapper answers NOT APPLICABLE in a proven export and REFUSES
       # anywhere else, which is the point: it will not guess which tree it is in.
       - bash scripts/hub-leg.sh lint:session-numbers scripts/test-session-numbers.sh
-      - bash scripts/hub-leg.sh lint:session-numbers scripts/check-session-numbers.sh
+      - |
+        if [ "${OLIVARES_NETWORK_ADVISORY:-0}" = "1" ]; then
+          bash scripts/run-network-observation.sh session-number-origin -- bash scripts/hub-leg.sh lint:session-numbers scripts/check-session-numbers.sh
+        else
+          bash scripts/hub-leg.sh lint:session-numbers scripts/check-session-numbers.sh
+        fi
 
   e2e:request-id-live:
     desc: >-
@@ -3737,6 +4420,28 @@ tasks:
       constant).
     cmds:
       - bash scripts/test-community-updates-prep.sh
+  lint:business-chain:selftest:
+    desc: >-
+      Battery for scripts/verify-business-chain.sh, the walker that measures the
+      pay-to-update chain WITH THE CLIENT rather than with a probe that imitates it. Hermetic
+      (no network, no deployed environment, no real binary): a faithful fake client is driven
+      over the walker's own local channel, and each case breaks exactly one thing in it. SEVEN
+      mutants that must die — five of the client (verifies nothing; ACCEPTS A CHANNEL WITH NO
+      .sig, the exact v26.8.0 shape that was live in production while every other leg was
+      green; ignores which key signed; refuses even a valid channel; and one that only lies
+      against a LIVE endpoint, `live-accepts-anything`, which must die on
+      channel-live/unkeyed-rc0-is-a-finding and leave the hermetic leg untouched), one of
+      the enterprise leg (upgrades with no licence), and one of an adversarial DOWNLOAD GATE
+      that keeps serving bytes to a REVOKED credential — with the positive control without which
+      all seven would pass for a walker that always cries wolf. Then the third answer (no binary, no leg
+      matched, no --binary at all are rc=2, never a green) and the two that pin the loud skip:
+      an offline run must say PARTIAL and must NAME the live leg it did not measure. That last
+      pair is the point: check-community-updates-prep.sh has had a live half since d18c078f9
+      and nobody ever set OLIVARES_CFG06_LIVE, so an offline green read as "the channel is
+      fine" while the client could not verify it at all.
+    cmds:
+      - bash scripts/test-verify-business-chain.sh
+
   lint:ver-02-cut-hold:
     desc: >-
       VER-02 — per-set cut 16/16 NOT_RUN. Unique leftover unique vs
@@ -3903,7 +4608,33 @@ tasks:
       C04 — mutantes HCL anidados/cross-file/logs, no-fire de formato,
       invariantes ALB/NLB/workflow y parser ausente LOOK 2.
     cmds:
+      - task: lint:c04-aws-estate:compiled-modcache
       - bash scripts/test-aws-estate.sh
+
+  lint:c04-aws-estate:compiled-modcache:
+    desc: >-
+      C04 — regresion acotada del arranque compilado: GOPROXY=off sobre
+      una cache vacia es NOT MEASURED, el selftest compiled-only no
+      acredita casos runtime, y el padre reporta el rc exacto del hijo
+      (no el 0 de `if !`). No corre los mutantes HCL estaticos.
+    cmds:
+      - bash scripts/test-aws-estate-compiled-modcache.sh
+
+  lint:roles-oneshot:
+    desc: >-
+      CLOUD-06 — el lanzador de la imagen `cloud-roles` no puede terminar bien sin haber
+      creado los roles. Para ANTES de conectar si falta una credencial, nombrandola, en vez
+      de conectarse como superusuario y recibir del servidor un error que no dice que falta;
+      y comprueba DESPUES que los roles existan. Corre SIN docker y SIN Postgres:
+      lo que verifica es control de flujo —que NO invoque psql cuando falta una credencial y
+      que compruebe el resultado cuando si lo invoca—, con un `psql` simulado que registra
+      sus argumentos. ~1s.
+      Su sujeto vive en `cloud/control-plane`, que NO viaja al export: por eso va por
+      private-leg.sh, que en el arbol publico contesta NOT APPLICABLE en vez de «COULD NOT
+      LOOK» rc 2 (hook-only-legs del espejo hospedado, 2026-09-16); en el hub ejecuta la
+      bateria tal cual y propaga su codigo.
+    cmds:
+      - bash scripts/private-leg.sh lint:roles-oneshot cloud/control-plane bash {{.ROOT_DIR}}/scripts/test-roles-oneshot.sh
   lint:eco-11-reserve-funded:
     desc: >-
       ECO-11 — RESERVE-FUNDED package presented, not decided.
@@ -4090,26 +4821,37 @@ tasks:
       - bash scripts/test-c13-02-worker-map.sh
   lint:c13-01-iso42001-catalog:
     desc: >-
-      C13-01 — iso42001 still missing from the activation catalog.
-      Live check needs OLIVARES_ENT_DIR. Does not restack overlay
+      C13-01 — the HISTORICAL record of the 2026-08-20 catalog HOLD
+      (overlay bada7f7f), preserved: flags, exact pins and its doc.
+      Reads NO overlay clone and does not attest current main —
+      iso42001 was catalogued by daa083e5 and today's facts are
+      lint:overlay-live-facts. Does not restack overlay
       #72/#79/#1302.
     cmds:
       - bash scripts/check-c13-01-iso42001-catalog.sh
 
   lint:c13-01-iso42001-catalog:selftest:
-    desc: C13-01 — mutants plant iso42001 in the overlay catalog.
+    desc: >-
+      C13-01 — mutants drift the record: flags, pins, lote, the doc's
+      claims, the adjudication. Non-firing: a catalog that ALREADY
+      lists iso42001 does not move a historical verdict.
     cmds:
       - bash scripts/test-c13-01-iso42001-catalog.sh
   lint:c13-01-iso42001-remeasure:
     desc: >-
-      C13-01 — iso42001 still off overlay-main catalog. Live check
-      needs OLIVARES_ENT_DIR (LOOK without it). Does not restack
-      overlay #72/#95.
+      C13-01 — the HISTORICAL record of the 2026-08-20 re-measure
+      (overlay bada7f7f, u_f/u_d UNKNOWN), preserved, plus this
+      repository's own sold slug map. Reads NO overlay clone and does
+      not attest current main (see lint:overlay-live-facts). Does not
+      restack overlay #72/#95.
     cmds:
       - bash scripts/check-c13-01-iso42001-remeasure.sh
 
   lint:c13-01-iso42001-remeasure:selftest:
-    desc: C13-01 — mutants plant iso42001 in the overlay catalog.
+    desc: >-
+      C13-01 — mutants drift the record: flags, pins, schema, the sold
+      map, the doc, the adjudication. Non-firing: an Enterprise
+      checkout with the row changes nothing.
     cmds:
       - bash scripts/test-c13-01-iso42001-remeasure.sh
   lint:eco-sales-lanes-closed:
@@ -5195,6 +5937,80 @@ tasks:
     cmds:
       - bash scripts/hub-leg.sh lint:remeasure-overlay-actas:selftest scripts/test-remeasure-overlay-actas.sh
 
+  lint:overlay-measurement:selftest:
+    desc: >-
+      a repository gate-B — the battery for the LT1 measurement Module, its seven
+      adapters and its collection caller. Reproduces the measured problem first
+      (an actual same-tree child, identical tree object, which the pre-LT1
+      comparison refuses), then the cure with the historical records byte-identical,
+      then the refusals: stale/wrong-act/wrong-generation seal, missing baseline,
+      current or public object, forged baseline pin/behind/ahead, non-descendant
+      identical-content main, a moved fixed PR identity, changed semantic
+      predicates, source or seal moving during one invocation, failed result
+      publication, static-only versus required-current, an injected GIT_DIR, an
+      unregistered check id, and the seven-reader classifier membership. Needs
+      OLIVARES_ENT_DIR: its fixtures BORROW that clone's object store through
+      objects/info/alternates and copy no repository. Hub-only.
+    cmds:
+      - bash scripts/hub-leg.sh lint:overlay-measurement:selftest scripts/test-overlay-measurement.sh
+
+  lint:overlay-observations:
+    desc: >-
+      LT1 — the hook's collection leg: retain THIS act's terminal overlay observations and
+      their SHA256 manifest, after the seven current readers and before the push can leave
+      the hook. Zero arguments on purpose — the destination resolves without any user setup:
+      OLIVARES_PUBLICATION_EVIDENCE_DIR when a controller sets it (Root's next publisher
+      points it inside the immutable attempt directory), otherwise this repository's own
+      absolute Git COMMON directory plus /olivares-publication-evidence, which is outside
+      every working tree and is not scratch. Each act gets its own child directory and the
+      full retained manifest path is printed. A missing required observation, a static-only
+      record where a current one is required, a record from another act, an unnamed
+      repository pair, or a failed write all refuse: a publication measured by nothing is
+      not a measured publication. Hub-only: its whole subject is the private overlay
+      pairing, so hub-leg.sh says NOT APPLICABLE and exits 0 in a stamped public export.
+    cmds:
+      - bash scripts/hub-leg.sh lint:overlay-observations scripts/collect-overlay-observations.sh
+
+  overlay:collect-observations:
+    desc: >-
+      LT1 — collect the terminal per-invocation observations the measurement Module
+      wrote for THIS act into a retained publication-evidence directory, with their
+      SHA256 manifest. This replaces the durable trace the acta diff used to carry:
+      after LT1 those bytes are deliberately frozen, and SDD06 §1.1 still requires
+      Source and Composition on every evidence record. Refuses a missing required
+      check, a static-only record where a current measurement is required, a record
+      from another act or naming another repository pair, and a failed write.
+      The directory it writes is a retained DELIVERY dependency, not cleanup scratch.
+      Usage: `task overlay:collect-observations -- --into <retained-evidence-dir>`; with no
+      argument it resolves the same default destination as lint:overlay-observations.
+    cmds:
+      - bash scripts/hub-leg.sh overlay:collect-observations scripts/collect-overlay-observations.sh {{.CLI_ARGS}}
+
+  lint:overlay-live-facts:
+    desc: >-
+      THE single live contract for the three overlay facts the
+      2026-08-20 actas froze as absences. Reads the SEALED overlay
+      `origin/main` as raw Git objects (`--no-replace-objects`) —
+      never the index, the working tree or another branch's HEAD —
+      and the public slug map at the Community commit that main
+      DECLARES. Needs OLIVARES_ENT_DIR and this act's freshness seal;
+      without either it LOOKs (2), never CLEAN. It does not close the
+      panel, a release or any certification. See
+      design/OVERLAY-FACT-GATES-ADJUDICATION-2026-09-05.md.
+    cmds:
+      - task: lint:overlay-measurement:selftest
+      - bash scripts/hub-leg.sh lint:overlay-live-facts scripts/check-overlay-live-facts.sh
+
+  lint:overlay-live-facts:selftest:
+    desc: >-
+      Mutants on a hermetic overlay fixture judged by go/ast: the five
+      token-census false CLEANs, unknown readable structure per body,
+      comment/gofmt no-fire, plus catalog/durable/legal-hold/cut. Official
+      sealer, ordinary commits, local remote. Reader/object/seal failures
+      are 2.
+    cmds:
+      - bash scripts/hub-leg.sh lint:overlay-live-facts:selftest scripts/test-overlay-live-facts.sh
+
   lint:c03-01-overlay-main-term:
     desc: >-
       C03-01 — the lote is NOT EXECUTED; the acta records that
@@ -5300,14 +6116,20 @@ tasks:
 
   lint:c03-06-needs-decision:
     desc: >-
-      C03-06 — EvaluateOverride stays NO-GATE; durableLicensed
-      still unscoped. HOLD on narrowing. Does not restack overlay
+      C03-06 — the HISTORICAL record of the 2026-08-20 observation
+      (overlay bada7f7f), preserved: flags, exact pins and its doc.
+      Reads NO overlay clone and does not attest current main — the
+      durableLicensed half was superseded by daa083e5 and today's
+      facts are lint:overlay-live-facts. Does not restack overlay
       EntitlementFunc DRAFTs.
     cmds:
       - bash scripts/check-c03-06-needs-decision.sh
 
   lint:c03-06-needs-decision:selftest:
-    desc: C03-06 — mutants gate EvaluateOverride or scope durableLicensed.
+    desc: >-
+      C03-06 — mutants drift the record: flags, pins, lote, the doc's
+      claims, the adjudication. Non-firing: an Enterprise checkout
+      that ALREADY has the capability changes nothing.
     cmds:
       - bash scripts/test-c03-06-needs-decision.sh
 
@@ -5350,12 +6172,16 @@ tasks:
     desc: >-
       INT-12 — ent#58 no se aterriza tal cual. El pin 762215684 iría hacia
       atrás respecto del gitlink ya en overlay main, y AllowsAdditionalActiveIdP
-      ya vive ahí.
+      ya vive ahí. Un runner sin overlay usa el opt-in explícito
+      OLIVARES_INT12_ALLOW_NO_OVERLAY=1; una ruta explícita inválida siempre es
+      COULD NOT LOOK.
     cmds:
       - bash scripts/check-int-12-no-land.sh
 
   lint:int-12-no-land:selftest:
-    desc: INT-12 — mutantes land-as-is, premisa de compilación, pin = hub main.
+    desc: >-
+      INT-12 — overlay comprobado, ausencia opt-in, cannot-look y mutantes de
+      land-as-is, premisa de compilación y pin.
     cmds:
       - bash scripts/test-int-12-no-land.sh
   lint:c13-07-holds:
@@ -5539,7 +6365,12 @@ tasks:
       the remote OR an entry under refs/archive/, so abandoned work can be preserved without
       minting branches that look live.
     cmds:
-      - bash scripts/hub-leg.sh lint:unpublished-work scripts/check-unpublished-work.sh
+      - |
+        if [ "${OLIVARES_NETWORK_ADVISORY:-0}" = "1" ]; then
+          bash scripts/run-network-observation.sh --all-advisory unpublished-work -- bash scripts/hub-leg.sh lint:unpublished-work scripts/check-unpublished-work.sh
+        else
+          bash scripts/hub-leg.sh lint:unpublished-work scripts/check-unpublished-work.sh
+        fi
 
   lint:overlay-seal:
     desc: >-
@@ -5559,6 +6390,97 @@ tasks:
       each moving only its own dimension, and the positive.
     cmds:
       - bash scripts/test-overlay-seal.sh
+
+  lint:disk-residue:selftest:
+    desc: >-
+      La bateria de `scripts/check-disk-residue.sh`, y NO es su `--selftest`: cubre los casos 9-16
+      que el contraste `gpt-5.6-sol` max del 2026-09-02 reprodujo como defectos del vigia, entre
+      ellos los DOS mutantes que sobrevivieron a la version original —anular el peso de un
+      directorio y devolver una atribucion ficticia—. La mitad que decide es la que NO dispara: un
+      vigia que acusa a un gate en curso hace que el carril deje de correrlo, y eso es peor que no
+      tenerlo. Llego con el arreglo del vigia SIN NINGUNA llamada: su tarea era `disk:residue`, que
+      es de operaciones y el gancho no alcanza, asi que `lint:orphan-batteries` la conto como
+      huerfana (47 frente a 46 en la linea base). Un banco que nadie corre no corta, y su verde se
+      lee como cobertura.
+      El 12-bis lo anadio la corrida 33965105298 (2026-09-05): el caso 12 montaba su ilegibilidad
+      con `chmod 000`, que NO niega a un lector con CAP_DAC_OVERRIDE — y el servicio de estos
+      runners corre como root—, asi que el vigia leyo los 25 directorios y dijo SOSPECHA con razon.
+      Hoy el 12 monta una condicion que ningun privilegio salta y el 12-bis afirma algo en cada una
+      de las dos ramas del DAC, en vez de saltarse la que no le toca.
+      Los bloques 17-27 llegaron el 2026-09-05 con la correccion del CENSO DE PRIMER NIVEL, que es
+      un defecto de PRODUCCION y no del banco: el censo llevaba un solo booleano `mirado`, asi que
+      una raiz sana borraba el fallo de otra y el listado parcial de un `find` fallido se analizaba
+      como completo — rc 0 CLEAN despues de omitir una raiz que se pidio. Cubren la tabla de
+      aceptacion del brief de la revision independiente `gpt-5.6-sol`, y su mecanismo determinista
+      es un `find` de laboratorio que emite y falla, inyectado por PATH SOLO en la bateria: el
+      guion de produccion no tiene ninguna variable para sustituir su `find`, ni debe tenerla.
+    cmds:
+      - bash scripts/test-disk-residue.sh
+
+  disk:residue:
+    desc: >-
+      Point at families of temporaries that DESERVE THEIR OWNER'S ATTENTION, by looking at what was
+      left behind rather than at the code. Its subject is the BOX (the TMPDIRs), not the repository,
+      so it is deliberately not a pre-push leg: passing over a clean tree says nothing about a dirty
+      box. Each lane runs it when closing. The verdict is SUSPECT and not "leak", and that is not
+      caution but what the predicate measures: an earlier version of this claimed "no false positives
+      by construction" and a gpt-5.6-sol max contrast REFUTED IT BY EXECUTION on 2026-09-02
+      (design/CONTRASTE-DISK-RESIDUE-2026-09-02-CODEX.md), reproducing both directions — it accused a
+      live producer that held no descriptor at the sampling instant, it accused 120 entries that had
+      already been DELETED while claiming they were still there, and it absolved 119 orphans because
+      ONE sibling was alive. Its verdict was NO-LAND and it was right. Now: roots canonicalised and
+      deduplicated, TWO /proc snapshots unioned, /proc/PID/exe censused, a live path covering the
+      entry that CONTAINS it, the live ENTRY excluded rather than its whole family, existence
+      revalidated at decision time, bytes deduplicated by (st_dev, st_ino), and anything unreadable
+      degraded to the third answer instead of being counted as zero. What is NOT solved is stated
+      rather than hidden: without a record of gate activity (PID plus temp root) or an age window,
+      cardinality and size cannot be categorical. Two thresholds because they are two axes, both
+      calibrated on this box: 319 files at 844 MiB, 425 files at 3,9 MiB (a size-only threshold
+      misses it) and one 2678 MiB cache directory (a count-only threshold would accuse it).
+      CONSUMER LIMIT, measured: Go Task flattens exit 1 and exit 2 to 201, so whoever needs to tell a
+      finding from "I could not look" must invoke scripts/check-disk-residue.sh directly.
+    cmds:
+      - bash scripts/check-disk-residue.sh
+      - bash scripts/check-disk-residue.sh --selftest
+
+  lint:lane-preflight:
+    desc: >-
+      What the LANE'S ENVIRONMENT must satisfy, checked at second 1 instead of minute 45. Measured
+      2026-09-02/03 (GAT-117, GAT-176): FOUR pushes to `main` died and NOT ONE was the tree. 45 min
+      to reach the first heavy leg and get exit 3 CANNOT LOOK because a fresh worktree had no
+      `commercial/license-worker/node_modules` — the cure was `npm ci`, three seconds; 14/1 on
+      `lint:mid-operation` because TMPDIR sat inside the worktree, whose subject is "answer 2 when
+      outside a git repository"; and 240 MINUTES to die in `modules/sessions` with SQLSTATE 0A000,
+      because this box's cluster was initialised SQL_ASCII and two tests create `provider = icu`
+      collations, which only exist in UTF8 databases. Three classes, one family, all visible in a
+      second. The Postgres half checks `template1` — the template a `CREATE DATABASE` without an
+      explicit TEMPLATE inherits, which is exactly what `core/internal/pgtest` does — and NOT the
+      DSN's own database. It stays SILENT when no server is reachable, because then the tests
+      self-skip and over-blocking costs pushes just as under-blocking costs reds. It does NOT force
+      the encoding in `dbsetup.go`: censused before writing it, production emits ONLY built-in
+      collations (`pg_catalog."C"`, `COLLATE BINARY`) and validates UTF-8 at its own boundary in 33
+      production sites, so a customer on SQL_ASCII does not break — the undeclared precondition is
+      the BENCH'S, not the product's.
+    cmds:
+      - bash scripts/check-lane-preflight.sh
+
+  lint:lane-preflight:selftest:
+    desc: >-
+      The battery for `scripts/check-lane-preflight.sh`, on DECOYS and never the live environment:
+      its red properties are "TMPDIR inside a repository", "TMPDIR noexec", "missing node_modules"
+      and "non-UTF8 template", and testing them against the real worktree would mean breaking it.
+      The Postgres cases DO use the real server when it is there, pointing a narrow seam
+      (`OLIVARES_PREFLIGHT_TEMPLATE_DB`) at decoy databases this battery creates and drops: what is
+      injected is WHO gets asked — the query, the psql path and the decision stay the production
+      ones. Without that seam the only red case would require re-initialising the box's cluster, and
+      a guard that can only be exercised green is not a guard that has been tested. Mutation-checked
+      2026-09-03: softening the `!= UTF8` decision kills three cases, over-blocking when no server is
+      reachable kills two, and deleting only the cure's RESTORE step kills exactly one. That last
+      one exists because the first witness was the bare word `datistemplate`, which the cure carries
+      TWICE, so removing one line SURVIVED — a witness that is a substring of something else checks
+      the prose, not the property.
+    cmds:
+      - bash scripts/test-lane-preflight.sh
 
   lint:disk-headroom:
     desc: >-
@@ -5587,7 +6509,7 @@ tasks:
       license-worker sources and passed tsc, 223 unit tests, lint:spdx and the whole fast lane.
       Real binaries are skipped by a DECLARED extension list plus anything .gitattributes marks
       `binary`, and the verdict PRINTS both counts — a check that will not say what it skipped
-      is the fail-open shape docs/08 §7 forbids. Incompleteness of that list is safe by
+      is the fail-open shape docs/SECURITY-HARDENING.md forbids. Incompleteness of that list is safe by
       construction: a new binary format goes RED and names the file (loud, one line of config),
       never quiet on a text file. Three answers: 0 clean, 1 dirty (named, with byte offset and
       line), 2 could not look. 0.7s over 10118 tracked files.
@@ -5852,6 +6774,7 @@ tasks:
       # conduce un fixture de test/ y una bateria del hub, y en el arbol publico solo podria
       # dar 127.
       - bash scripts/hub-leg.sh lint:git-env:selftest scripts/test-probe-git-env-exec.sh
+      - bash scripts/hub-leg.sh lint:git-env:selftest scripts/test-probe-no-construye.sh
 
   lint:git-env:
     desc: >-
@@ -5903,6 +6826,27 @@ tasks:
       under TMPDIR, no gate and no remote touched.
     cmds:
       - bash scripts/test-commit-msg-closing.sh
+
+  lint:commit-msg-scope:
+    desc: >-
+      Prove the SCOPE half of the `commit-msg` guard, and the reason it exists. That hook has
+      TWO judges: it runs `commitlint` when `node_modules/.bin/commitlint` is present and falls
+      back to a regex when it is not — so the same message passes or fails depending on WHICH
+      DIRECTORY you commit from, and the hub clone has no node_modules. The footprint is in
+      `main`: re-measured 2026-08-30 over 4000 commits, of 123 distinct scopes the strict judge
+      rejected FOURTEEN, and eight commits of 2026-08-27 landed through the permissive one.
+      The fix relaxes commitlint to `lower-case` rather than tightening the fallback, and that
+      direction is measured, not preferred: `kebab-case` does not admit digits glued to letters,
+      so it rejects `i18n`, `a11y`, `c05`, `e2e` and `cfg05` — good, used names. Running
+      commitlint (not reading it) over the 123 real scopes: kebab-case accepts 109, lower-case
+      accepts 123. Tightening the fallback instead would leave the two judges disagreeing on
+      those fourteen; that route was tried on 2026-08-30 and the measurement refuted it.
+      The two judges still differ on `_`, `.` and SPACE, where the fallback is DELIBERATELY the
+      stricter one, and this battery says so instead of pretending they match. It opens with a
+      POSITIVE CONTROL because a silent tool that never ran reads exactly like an accept, and
+      it kills a mutant: against the untightened fallback three rows go red.
+    cmds:
+      - bash scripts/test-commit-msg-scope.sh
 
   lint:json-decoders:
     desc: >-
@@ -6110,6 +7054,134 @@ tasks:
       HEAD. The export-without-git case keeps GITHUB_SHA set and must still use the disk fallback.
     cmds:
       - bash scripts/hub-leg.sh lint:migration-contiguity:selftest scripts/test-check-migration-contiguity.sh
+
+  lint:publisher-contract:
+    desc: >-
+      El contrato del publicador tiene que ser lo que su generador produce HOY de sus fuentes,
+      byte a byte. Nace de REL-109-bis: `scripts/publish-enterprise-artifacts.sh` leia sus TRES
+      autoridades —`RELEASE_SHAPE`, `CHANNELS` y `ALLOWED_SET_SLUGS`— de ficheros `.ts` bajo
+      `commercial/`, que NO VIAJA ni al export ni al overlay, asi que tras el re-apunte de D-06
+      el publicador moria con tres «NO HE PODIDO MIRAR» y el 28.º se quedaba sin publicar. Ahora
+      lee un JSON generado que si viaja — y un JSON generado es una COPIA. Esta pata es su
+      comparador: regenera y exige identidad byte a byte, sin normalizar y sin comparar solo los
+      campos «importantes», porque el publicador lee el fichero entero. La casa ya pago esta
+      clase: la clave del manifiesto vivio copiada en tres sitios, se movio en uno, y los otros
+      dos siguieron de acuerdo ENTRE ELLOS mientras el comprador recibia 404. Sin
+      `commercial/` la pata CLASIFICA el arbol antes de decidir: en un export su ausencia es correcta
+      y se salta diciendolo, pero en un hub es un checkout incompleto y sale rojo — leerlo siempre
+      como «export» hacia que callase justo cuando hacia falta. Mide ademas EL COMMIT QUE EL PUSH
+      ENVIA (los tips de `OLIVARES_PUSH_REFS_FILE`), no los bytes sucios del worktree, que fallaba
+      en las dos direcciones. Y no solo regenera: EJECUTA al consumidor —deriva del propio
+      publicador que claves lee y exige que el contrato las traiga—, porque un comparador que solo
+      mira al productor no vigila un contrato, vigila un fichero.
+    cmds:
+      - bash scripts/check-publisher-contract.sh
+
+  lint:publisher-contract:selftest:
+    desc: >-
+      Bateria de `check-publisher-contract.sh`. Existe porque esa pata nacio con un VERDE CIEGO
+      dentro —comparaba el contrato consigo misma, asi que un generador roto que saliera 0 sin
+      escribir daba CLEAN— y porque el contraste `sol max` del 2026-09-02 encontro tres huecos mas
+      que TAMBIEN salian verdes: el gate no ejecutaba nunca al consumidor (F-01), leia «no esta
+      commercial/» como «esto es el export» sin clasificar el arbol (F-04) y comparaba por
+      sustitucion de comandos, que se come los saltos finales, mientras anunciaba «byte a byte»
+      (F-07). Un gate cuyo modo de fallo es decir que todo esta bien necesita un testigo por cada
+      SILENCIO, no por cada rojo: cada caso cita el hallazgo que lo puso, y dos mutantes comprueban
+      que las guardas que los cierran no son decorativas — uno de ellos, ademas, empezo mintiendo
+      porque la bateria corria el guion de verdad en vez de la copia mutada.
+    cmds:
+      - bash scripts/hub-leg.sh lint:publisher-contract:selftest scripts/test-check-publisher-contract.sh
+  lint:aws-iam-phase2:selftest:
+    desc: >-
+      Bateria de `aws-iam-phase2.sh`, y SOLO la eleccion de estate: corre contra un `aws` FALSO y no
+      toca AWS. La herramienta decide como se estrecha el rol de IAM con el que se aplica el estate,
+      y hasta hoy no la corria NADIE — cero invocaciones en el Taskfile, en el gancho y en el CI.
+      Los casos asiertan EL ROL QUE SE CONSULTO, leido de la linea de orden del `aws` falso, y no el
+      codigo de salida: el fallo que esto cierra es un rc correcto sobre el sujeto equivocado, que
+      es lo que pasa cuando una variable de estate no la lee nadie y el rol esta fijo. El mutante le
+      quita a `production` su fila de la tabla y el caso (2) deja de distinguir.
+    cmds:
+      - bash scripts/hub-leg.sh lint:aws-iam-phase2:selftest scripts/test-aws-iam-phase2.sh
+
+  lint:export-closure:selftest:
+    desc: >-
+      Bateria de `check-export-closure.sh`, y en concreto de QUE CLASES DE DECLARACION HONRA CADA
+      LECTOR. El gate tiene cuatro —`hub-only`, `absent-by-design`, `fixture` y `never-exists`— y
+      DOS lectores: `scan_script` y `scan_workflow`. Los dos REGISTRAN todas, asi que el resumen
+      —global— lista la declaracion como «declared fixture: …»; pero hasta el 2026-09-02
+      `scan_workflow` CONSULTABA solo `hub-only`, o sea que dentro de un workflow las otras se
+      recogian y se ignoraban. El autor escribia la declaracion correcta, el gate la listaba, y no
+      hacia nada — «la guarda estaba y no guardaba», y el resumen no lo delataba porque mide el
+      REGISTRO y no el CONSUMO. Este banco monta su propio arbol de laboratorio y existe para que la
+      proxima clase no pueda nacer muda en un lector: cada caso positivo lleva su control negativo
+      al lado, porque el primer intento fue un verde ciego (la ruta de prueba no casaba `TOPS` y no
+      llegaba a detectarse como referencia).
+    cmds:
+      - bash scripts/hub-leg.sh lint:export-closure:selftest scripts/test-check-export-closure.sh
+
+  lint:ci-int12-step:selftest:
+    desc: >-
+      Bateria del PASO de CI `leg-int-12`: extrae su `run:` del workflow y lo ejerce contra un `task`
+      FALSO, bajo el MISMO shell que usa GitHub (`bash --noprofile --norc -e -o pipefail`). No
+      construye nada. Nace de la corrida 33685919433, donde ese paso salio con `exit code 2` y CERO
+      lineas: ni la salida del gate, ni ninguno de sus tres `::notice`, ni el `::error` del `else`.
+      La causa no era el gate — era que bajo `-e` una ASIGNACION cuya sustitucion de comandos falla
+      aborta el shell EN ESA LINEA, asi que las ramas escritas para decir QUE MITAD se midio no
+      corrian nunca y el diagnostico se perdia justo cuando hacia falta. El log solo mostraba el ECO
+      del guion, que se lee como si el `::error` se hubiera emitido. Un paso de CI es codigo, y era
+      el unico codigo del carril sin banco.
+    cmds:
+      - bash scripts/hub-leg.sh lint:ci-int12-step:selftest scripts/test-ci-int12-step.sh
+
+  lint:pre-verify-tanda:selftest:
+    desc: >-
+      Bateria de `scripts/pre-verify-tanda.sh`, la herramienta que corre sobre un arbol dado las
+      patas que un push a RAMA no ejecuta —el carril pesado y las solo-CI— y las nombra TODAS. El
+      gancho es branch-aware, asi que un lote puede ir verde toda la tarde y morir a los 25-75
+      minutos en la primera pata pesada, con el mutex cogido; esto paga ese descubrimiento antes y
+      en frio. La lista sale de `check-gate-parity.sh --print-heavy/--print-ci-only` DEL ARBOL QUE
+      SE MIDE, nunca de una lista escrita a mano. El caso que manda es el del mutante: una version
+      que se pare en la primera roja SIGUE saliendo 1 y SIGUE nombrando una pata —se ve igual de
+      bien— y convierte una tarde en una cola de descubrimientos de uno en uno; por eso el mutante
+      no comprueba el rc sino CUANTAS nombra.
+    cmds:
+      - bash scripts/hub-leg.sh lint:pre-verify-tanda:selftest scripts/test-pre-verify-tanda.sh
+
+  lint:refs-file-readers:selftest:
+    desc: >-
+      Bancos de los DOS sujetos que leen `OLIVARES_PUSH_REFS_FILE` —la variable que el gancho
+      exporta— y no tenian ninguno: `check-unpublished-work.sh` y `check-web-bundle-freshness.sh`.
+      Salieron de censar `scripts/check-*.sh` por «¿lee alguna de las siete que el gancho exporta?»:
+      seis sujetos, cuatro con banco (los cuatro ya neutralizan el entorno) y estos dos a pelo. En
+      los dos el uso es DELIBERADO y correcto —la variable dice que se esta publicando, y con eso
+      uno decide que no es trabajo sin publicar y el otro que rango mirar—, asi que lo que fijan los
+      bancos es el DIFERENCIAL limpio/gancho: un caso obligatorio que exige que los dos pases den
+      distinto. Sin el, una regresion que dejara de leer el fichero pasaria en verde, porque el gate
+      seguiria contestando — sobre otro sujeto. Cada banco lleva su mutante, que quita esa lectura.
+      Corren sobre clones de laboratorio: `check-unpublished-work.sh` hace `git fetch --all` y no
+      puede tocar el clon compartido.
+    cmds:
+      - bash scripts/hub-leg.sh lint:refs-file-readers:selftest scripts/test-check-unpublished-work.sh
+      - bash scripts/hub-leg.sh lint:refs-file-readers:selftest scripts/test-check-web-bundle-freshness.sh
+
+  lint:scan-box-secrets:selftest:
+    desc: >-
+      La bateria de `scripts/scan-box-secrets.sh`, y SOLO la bateria. El GUION lee el disco de
+      UNA caja —volcados de fallo del navegador, cores, restos de TMPDIR— asi que no se gatea:
+      dos cajas darian veredictos distintos sobre el mismo commit, que es la clase de control
+      irreproducible que esta casa ya pago. Se corre como monitor por caja. Esta bateria, en
+      cambio, fabrica su propio arbol y es determinista, asi que si corta. Doce casos sobre tres
+      propiedades que el 2026-09-01 fueron todas necesarias: (1) el informe NUNCA imprime un
+      valor —un informe de fugas que cita el secreto es otra copia del secreto, y en un sitio que
+      la gente pega en chats—; (2) SIEMPRE dice que miro, cada raiz con su veredicto, porque un
+      «0 hallazgos» sin la lista de lo escaneado es indistinguible de «no mire»; y (3) cada
+      hallazgo lleva la etiqueta sha256 truncada de su VALOR, que nacio de un error medido:
+      sin ella publique «23 ficheros con el token» y eran DOS tokens distintos bajo el mismo
+      nombre, y eso cambia QUE HAY QUE ROTAR. Cuatro mutantes, cada uno mata exactamente su
+      caso; el de la etiqueta la deriva de la LONGITUD en vez del valor, que es el defecto
+      exacto que costo aquel error.
+    cmds:
+      - bash scripts/test-scan-box-secrets.sh
 
   lint:migrations:coverage:
     desc: >-
@@ -6456,6 +7528,17 @@ tasks:
       # copy of this Taskfile answers NOT APPLICABLE instead of dying at 127. ~4s.
       - task: lint:export-license:selftest
       - task: lint:export-tmpdir-noexec:selftest
+      # And leg 4's ALLOW LIST, for the same reason its two siblings are here: this is the
+      # target the hook and mainline-ci call by name, so this is where an exception that
+      # grants more than it says turns red. ~5s: it builds the checker and drives it over
+      # fixture trees, no export.
+      - task: lint:export-allow-span:selftest
+      # And leg 2's OPERATOR-SOURCE-CITATION distinction, for the same reason the three above
+      # are here. A file-level exemption cannot tell a valid citation of exported operator
+      # source from the obsolete CLI identity it shares a word with, and the 2026-09-12 push
+      # stopped on exactly that. The rule now decides per occurrence, which can fail in both
+      # directions, so both are pinned here. ~1s: pure fixture trees, no export.
+      - task: lint:export-operator-citation:selftest
       # Through hub-leg.sh, not directly: this Taskfile ships to the public export
       # VERBATIM, but export-public.sh is curated OUT of it (SCRIPTS_BLOCK). Invoked
       # directly, the published copy of this target died at exit 127 with the shell's own
@@ -6546,6 +7629,30 @@ tasks:
     cmds:
       - bash scripts/hub-leg.sh lint:export-license scripts/check-export-license.sh
 
+  lint:export-operator-citation:selftest:
+    desc: >-
+      Prove leg 2's OPERATOR-SOURCE-CITATION distinction in BOTH directions — 18 cases. The
+      operator CRD keeps a name the CLI retired, because a Kubernetes kind is versioned API
+      surface, so leg 2 exempted anything under operator/. That exemption was FILE-LEVEL, and a
+      file-level answer cannot tell a valid citation of exported operator source from the
+      retired identity: two claim documents citing that source by its real path read as a leak
+      and stopped the 2026-09-12 push. Root ratified an EXACT condition — an exact reference to
+      an operator source path THAT EXISTS IN THE EXPORTED TREE is source evidence — and then
+      measured three ways the first implementation broke it, each pinned here by name: a
+      prefixed path accepted for lack of a left boundary, a `..` segment naming a file OUTSIDE
+      the permitted subtree, and a global strip that let one valid occurrence excuse an
+      identical invalid twin on the same line. The catching half is the larger one, because
+      that is where the rule would be turned off: a retired command beside a valid citation on
+      one line, dot and empty segments, a symlink escaping the subtree, a path that does not
+      ship, a near-miss suffix, a bare mention in prose and a stale image tag. Unsupported
+      scanner input and a missing path-resolution tool must answer 2, never a clean absence.
+      The battery extracts both functions from export-public.sh rather than restating them and
+      exits 2 when the extraction fails — "I could not look" is not "it passes". HUB-ONLY: its
+      fixtures must spell the retired identity, so the script is curated out of the public tree
+      by SCRIPTS_BLOCK rather than exempted from the scanner.
+    cmds:
+      - bash scripts/hub-leg.sh lint:export-operator-citation:selftest scripts/test-export-operator-citation.sh
+
   lint:export-license:selftest:
     desc: >-
       Prove lint:export-license by MUTATION, in both directions — 32 cases, and the
@@ -6581,6 +7688,23 @@ tasks:
     cmds:
       # export-closure: hub-only scripts/test-export-tmpdir-noexec.sh — guarded by scripts/hub-leg.sh
       - bash scripts/hub-leg.sh lint:export-tmpdir-noexec:selftest scripts/test-export-tmpdir-noexec.sh
+
+  lint:export-allow-span:selftest:
+    desc: >-
+      The export allow-list's EXACT-LITERAL-SPAN records, through the real compiled checker and
+      BOTH of its scanners. It exists because the first form of the AgentOps exception said
+      "exact" and granted whole-line, suffix-keyed amnesty: an independent review drove the real
+      -check -raw detector over fixtures on 2026-09-06 and found a second, unrelated session-id
+      token later in the same value, another assignment on the same line, and the same line in a
+      nested elsewhere/ copy all coming back green. Every case here is a hit the checker reports
+      unaided — the control of detection runs first — and the assertion is about which ones the
+      record silences. This description carries no ref-shaped token on purpose: the Taskfile
+      ships verbatim and a desc is a VALUE, which leg 4 reads and the comment scrub never does.
+      Also holds the fail-closed format (an unknown or malformed record REFUSES, exit 2, instead
+      of being skipped into a green) and the pre-existing legacy records, unchanged.
+    cmds:
+      # export-closure: hub-only scripts/test-export-allow-span.sh — guarded by scripts/hub-leg.sh
+      - bash scripts/hub-leg.sh lint:export-allow-span:selftest scripts/test-export-allow-span.sh
 
   lint:gate-parity:
     desc: >-
@@ -6766,10 +7890,16 @@ tasks:
       - bash scripts/build-decision-index.sh --self-test
 
   lint:docs-honesty:
-    desc: C3/C6 supply-chain wording + the OTLP format-token and OCSF/Security-Lake guards.
+    desc: C3/C6 supply-chain/install wording + the OTLP format-token and OCSF/Security-Lake guards.
     cmds:
       # Pure POSIX sh, no network; runs in mainline CI and the local pre-push gate.
       - sh scripts/check-docs-honesty.sh
+      # DIST-24-02: publication state is not inferred from the mere existence of a
+      # producer. Cross the dated state witness with the real producer and all current
+      # install prose; run the mutation battery first so a checker that cannot turn red
+      # never gets to vouch for the tree. This task is already in CI and pre-push.
+      - bash scripts/test-install-docs.sh
+      - bash scripts/check-install-docs.sh
       # Occurrence-aware guard for the export-token remap (bash + grep only); its
       # embedded self-test proves the patterns still catch the known stale families.
       # El self-test primero, como sus hermanos: prueba la guarda anti-vacuidad en las DOS
@@ -6894,6 +8024,80 @@ tasks:
       same verdict; only the lane changes.
     cmds:
       - bash scripts/check-raw-palette.sh
+
+  lint:lot-heads:selftest:
+    desc: >-
+      Batería de `scripts/check-lot-heads.sh`. Existía sin ninguna tarea que la invocara, y
+      `lint:orphan-batteries` la cazó al integrarla: «un banco que nadie corre no corta, y su verde
+      se lee como cobertura». Cablearla no adivina la intención de su autor —la tarea de una batería
+      es correrla—; lo que NO se hace aquí es inventar el sitio del GATE en el gancho, que sí es una
+      decisión de quien lo escribió.
+    cmds:
+      # hub-leg: su sujeto `check-lot-heads.sh` está curado FUERA del export, así que la batería
+      # también lo está. Envuelta, el árbol publicado dice POR QUÉ no mide en vez de morir en un
+      # 127 sobre un fichero que no tiene.
+      - bash scripts/hub-leg.sh lint:lot-heads:selftest scripts/test-lot-heads.sh
+
+  lint:prep-gate-pins:selftest:
+    desc: >-
+      Batería de `scripts/report-prep-gate-pins.sh` — la herramienta que dice qué PRs abiertas
+      enrojecería un prep gate. Misma historia que la de arriba: llegó sin tarea y el detector de
+      huérfanas la nombró. Es un INFORME, no un gate, así que su batería se corre y el informe se
+      invoca a mano cuando el integrador lo necesita.
+    cmds:
+      - bash scripts/test-report-prep-gate-pins.sh
+
+  lint:rescue-backlog:
+    desc: >-
+      GAT-138 — un rescate no deja de estar pendiente por estar publicado. `check-unpublished-work`
+      cuenta con `--not --remotes`, así que publicar en `refs/heads/rescate/*` BORRA el trabajo de
+      ese censo sin meterlo en `main`. Lo levantó un carril al publicar el suyo, y no era un riesgo de
+      diseño: medido el 2026-09-02, **16 refs con 87 parches sin integrar**, algunos del 2 de
+      agosto. El predicado es `git cherry` (patch-id) y NO `merge-base --is-ancestor`: un rescate se
+      integra rebasado, los SHA cambian, y con `is-ancestor` el censo diría PENDIENTE para siempre
+      incluso después de integrarlo — un control que grita cuando el trabajo ya está dentro se
+      desactiva solo.
+      ⛔ NO va en el gancho a propósito: cuesta 4-25 s por ref (137 s sobre 14 refs, medido) y su
+      sujeto son los refs del remoto, no el árbol que se empuja. Es un censo periódico, no una pata
+      de push; meterla en el carril cobraría dos minutos a cada carril por algo que no depende de
+      su cambio.
+    cmds:
+      - bash scripts/check-rescue-backlog.sh
+
+  lint:rescue-backlog:selftest:
+    desc: >-
+      Batería de check-rescue-backlog.sh — once casillas sobre repositorios señuelo, nunca los refs
+      vivos: contra `refs/rescate/*` de verdad sería verde el día que alguien integre un rescate y
+      roja al siguiente sin que nadie tocara el gate. Lleva el control positivo que este gate
+      necesita más que ninguno —mismo parche, OTRO SHA— y, dentro de él, **la comprobación de su
+      propia premisa**: sin `cherry-pick -x`, el commit copiado sale con el MISMO SHA (mismo árbol,
+      mensaje, autor y segundo) y el caso deja de discriminar. Medido: con esa versión el mutante
+      que cambia `git cherry` por `is-ancestor` SOBREVIVÍA con 10/0.
+    cmds:
+      - bash scripts/test-rescue-backlog.sh
+
+  lint:fast-lane-ceiling:
+    desc: >-
+      GAT-106 — un carril rápido no arranca si la caja ya corre el techo. La fila #112-sexies fijó
+      tres concurrentes y NO tenía mecanismo: el 2026-09-01 había CUATRO pushes en vuelo, todos
+      posteriores a la fila, y el único carril en cola era el que la leía. Una regla que cada uno
+      se aplica leyendo un fichero penaliza a quien la lee y no frena a quien no. Censo de DOS
+      etapas (`comm` == task y sólo entonces `cmdline`, porque `pgrep -f` se cuenta a sí mismo:
+      9 frente a 5 reales), unidad = carril y no proceso, y exclusión del propio por prefijo CON
+      barra. Sujeto externo: pasa sobre un árbol vacío. ~0s.
+    cmds:
+      - bash scripts/check-fast-lane-ceiling.sh
+
+  lint:fast-lane-ceiling:selftest:
+    desc: >-
+      Batería de check-fast-lane-ceiling.sh — 12 casillas sobre un /proc SEÑUELO, nunca los
+      procesos vivos: contra el /proc real la batería sería verde a las 3:00 y roja a las 3:01 sin
+      que nadie tocara nada. Lleva los mutantes que el gate existe para cortar (el censo que se
+      cuenta a sí mismo, el techo 0, la auto-coincidencia de la shell censadora) y los dos que la
+      propia batería me obligó a añadir: un subdirectorio del mismo carril NO es un carril aparte,
+      y un carril cuyo nombre empieza por el mío SÍ cuenta. ~1s.
+    cmds:
+      - bash scripts/test-fast-lane-ceiling.sh
 
   lint:format-ratchet:
     desc: >
@@ -7024,6 +8228,37 @@ tasks:
       - bash scripts/test-ci-history-depth.sh
   lint:addon-sets:
     desc: >-
+      Verify the commercial add-on program and the public source it also covers.
+      The dispatcher uses the existing tree classifier: a verified public export
+      runs the applicable subsequence; other trees run the complete private sequence.
+      Failure in any applicable check fails the task.
+    cmds:
+      - >-
+        bash scripts/edition-split-gate.sh lint:addon-sets
+        "the pricing canon and the commercial programme derived from it
+        (design/PRICING-CANON.md, commercial/, cloud/control-plane)"
+        lint:addon-sets:public lint:addon-sets:legs
+
+  lint:addon-sets:public:
+    desc: >-
+      Verify the eight public entries in their original order, including both
+      documentation floors and the repeated AWS estate check. The complete private
+      sequence contains these entries too. This task is selected only by the dispatcher.
+    cmds:
+      - bash scripts/check-c03-grants-seam.sh
+      - bash scripts/check-json-decoders.sh
+      - OLIVARES_CONFIG_DOC_FLOOR=${OLIVARES_CONFIG_DOC_FLOOR:-53} bash scripts/check-config-coverage.sh
+      - OLIVARES_CLI_DOC_FLOOR=${OLIVARES_CLI_DOC_FLOOR:-321} bash scripts/check-cli-coverage.sh
+      - bash scripts/check-caep-inbound.sh
+      - bash scripts/check-aws-estate.sh
+      - bash scripts/check-c03-02-sign-features.sh
+      - bash scripts/check-aws-estate.sh
+
+  lint:addon-sets:legs:
+    desc: >-
+      Run the complete private sequence with its original commands, arguments,
+      order and exit codes. Public checks remain included in this sequence.
+
       Derive the four self-hosted business add-on sets from design/PRICING-CANON.md, which is the
       source the entitlement design names (DISENO-ENTITLEMENT-POR-MODULO 2.1) and NOT the
       activation catalogue, which is cumulative by tier and lacks compliance-packs entirely. The
@@ -7303,6 +8538,15 @@ tasks:
       - bash scripts/test-c05-both-pdt-remeasure.sh
       - bash scripts/test-c03-05-roster-accumulate.sh
       - bash scripts/test-c02-r2-key-from-token.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-overlay-live-facts.sh
+      # The exact-candidate facts battery: the fixture and evaluator of the line above. Source
+      # facts, not an authority gate; the wiring bench below holds this leg's exact form.
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-overlay-candidate-facts.sh
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-overlay-gate-wiring.sh
+      # The scoped verdict lint:addon-sets takes in the public export, proved by mutation.
+      # It belongs in THIS battery and not beside the leg it grades: the leg is the thing
+      # under test, and in the published tree it does not run at all.
+      - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-addon-sets-scope.sh
       - bash scripts/hub-leg.sh lint:addon-sets-gate scripts/test-c02-70-no-land-snapshot.sh
       - bash scripts/test-c02-18-oci-no-latest.sh
       - bash scripts/test-c02-13-pack-source.sh
@@ -7356,6 +8600,7 @@ tasks:
       - bash scripts/test-eco-18-false-closures.sh
       - bash scripts/test-eco-11-reserve-funded.sh
       - bash scripts/test-0022-exit1-remeasure-20260820.sh
+      - task: lint:c04-aws-estate:compiled-modcache
       - bash scripts/test-aws-estate.sh
       - bash scripts/test-c0022-exit1-remeasure.sh
       - bash scripts/test-c02-producer-r2-from-grants.sh
@@ -7548,6 +8793,65 @@ tasks:
       RELEVO10 follows RELEVO9) and both verdicts name the file they read.
     cmds:
       - bash scripts/hub-leg.sh lint:brief-effort:selftest scripts/test-brief-effort.sh
+
+  lint:token-template-form:
+    desc: >-
+      Every `token:` field in .goreleaser.yaml must use the LITERAL dot-Env form.
+      GoReleaser's validator for those fields refuses the `index` spelling even though Go's
+      template engine treats the two as identical — and it validates ONLY in the publish phase.
+      That is why nothing caught it: `--snapshot` skips publish, so neither release witness
+      exercises it, and no release attempt had ever reached that far. On 2026-09-01 the v26.8.0
+      release died there at the very end, in `homebrew cask`, with the four docker images built,
+      the binaries, the packages, the SBOMs and the SIGNED checksums already uploaded — every piece
+      of work done and thrown away by the shape of one template. Measured that same day:
+      `goreleaser check` returns rc 0 on BOTH the cured and the broken config, so the tool's own
+      validator cannot be the gate. The subject is the FIELD, not the function: `index .Env` stays
+      legitimate everywhere else, and the config's own `skip_upload` uses it. Corpus DERIVED from
+      the file. Three answers — CLEAN / REJECTED FORM naming file and line / COULD NOT LOOK.
+    cmds:
+      - task: lint:token-template-form:selftest
+      - bash scripts/check-token-template-form.sh
+
+  lint:token-template-form:selftest:
+    desc: >-
+      Prove the gate above by MUTATION in both directions, 8 cases. The catching half uses the REAL
+      shape that killed the release. The half that matters as much is the NOT-catching one: case 3
+      puts `index .Env` OUTSIDE a token field and demands green, because a gate that flagged the
+      function instead of the field would send people to un-fix correct code. Two cases assert that
+      COULD NOT LOOK is rc 2 and never 0.
+    cmds:
+      - bash scripts/test-token-template-form.sh
+
+  lint:docker-context-sufficiency:
+    desc: >-
+      Can every `dockers:` entry actually BUILD in the context GoReleaser gives it? GoReleaser does
+      not hand a Dockerfile the repository: it builds a temp dir with the binaries of the referenced
+      `ids:` plus `extra_files`, and nothing else. On 2026-09-01 the v26.8.0 release became the FIRST
+      in this project's history to reach the docker build and died there — Dockerfile.fips and
+      Dockerfile.stig were source builds (`COPY . .`, go.work, web/) wired to `dockers:` entries, so
+      two of the four images had been unbuildable since the day they were wired. Nothing said so
+      because NOT ONE check in this repository asserted anything about the `dockers:` entries: the
+      defect did not slip past a gate, it walked through a gap where no gate was. Reachability is
+      computed PER ENTRY with that entry's own `--build-arg`s, because BuildKit prunes the stages
+      the target does not reach and the same file therefore answers differently for different args —
+      which is what lets one Dockerfile serve both `docker build .` and GoReleaser. Corpus DERIVED
+      from .goreleaser.yaml, never a typed list. Three answers — CLEAN / CANNOT BUILD naming entry,
+      stage and path / COULD NOT LOOK (no config, missing Dockerfile, unparseable), never a silent
+      green. ~0.1s: it reads YAML and Dockerfiles and never runs docker.
+    cmds:
+      # ITS BATTERY RUNS FIRST, like the leg below and for the same reason.
+      - task: lint:docker-context-sufficiency:selftest
+      - bash scripts/check-docker-context-sufficiency.sh
+
+  lint:docker-context-sufficiency:selftest:
+    desc: >-
+      Prove the gate above by MUTATION in both directions, 8 cases. The catching half uses the REAL
+      Dockerfile.fips shape as it stood on 2026-09-01 — if that case ever goes green the gate has
+      stopped seeing the defect it was written for. The half that matters most is case 3: the dual
+      file WITHOUT its build-arg must go RED, which is what proves case 2's green comes from the ARG
+      and not from the shape of the file. Two cases assert COULD NOT LOOK is rc 2 and never 1.
+    cmds:
+      - bash scripts/test-docker-context-sufficiency.sh
 
   lint:unreachable-build-guards:
     desc: >-
@@ -7764,6 +9068,21 @@ tasks:
     cmds:
       - bash scripts/check-docs-site-live.sh
 
+  lint:network-observation:
+    desc: >-
+      Prove that network/IP-dependent observations distinguish a real finding from a runner that
+      could not look. The wrapper preserves rc=1 by default, turns rc=2 into a timed advisory, and
+      keeps unexpected codes red; the already non-blocking unpublished-work census opts explicitly
+      into all-advisory mode. Hermetic batteries kill both advisory arms, remove the docs WAF
+      header, and replace each of the five wrapped gate call sites with its old direct form.
+    cmds:
+      # hub-leg: su sujeto es el gancho y tres patas que el export QUITA, así que fuera del hub no
+      # hay nada que comprobar. Envuelto, lo dice; sin envolver, muere en 127.
+      - bash scripts/hub-leg.sh lint:network-observation scripts/check-network-observation-wiring.sh
+      - bash scripts/hub-leg.sh lint:network-observation scripts/check-network-observation-wiring.sh --selftest
+      - bash scripts/test-run-network-observation.sh
+      - bash scripts/test-docs-site-live-network.sh
+
   compliance:catalog:
     desc: >-
       Regenerate compliance.catalog.json — the public compliance control catalog and capability
@@ -7845,9 +9164,9 @@ tasks:
     desc: Fail if the committed OpenAPI snapshots (stable + beta) or generated web client are stale.
     deps: [web:codegen]
     cmds:
-      # web:codegen runs openapi:dump (both snapshots) then the web client codegen,
-      # which consumes only the STABLE openapi.json — the beta document feeds the
-      # SDKs and the docs-site, not the web app, so the web client stays unchanged.
+      # web:codegen runs openapi:dump (both snapshots), then builds a collision-checked
+      # in-memory-equivalent union for the generated web types. The served stable and
+      # beta documents remain separate; the web transport can type either surface.
       - git diff --exit-code -- web/openapi/openapi.json web/openapi/openapi.beta.json web/src/lib/api/openapi.gen.ts || { echo "OpenAPI snapshot/client is stale; run 'task web:codegen' and commit"; exit 1; }
 
   proto:breaking:
@@ -8045,13 +9364,14 @@ tasks:
       - bash scripts/test-web-e2e-boot.sh
 
   lint:secrets:
-    desc: Secret scanning over the history (gitleaks, docs/08 §7). Blocking in CI. Names what it finds.
+    desc: Secret scanning over the history (gitleaks, docs/SECURITY-HARDENING.md). Blocking in CI. Names what it finds.
     cmds:
       - bash scripts/check-secrets.sh
 
   lint:secrets-gate:
-    desc: Regression battery for the secrets gate itself — clean / dirty / could-not-look, and reachability.
+    desc: Fixture-setup refusal, then the secrets-gate regression battery — clean / dirty / could-not-look, and reachability.
     cmds:
+      - bash scripts/test-check-secrets-setup.sh
       - bash scripts/test-check-secrets.sh
 
   sbom:
@@ -8090,7 +9410,7 @@ tasks:
         echo "Record findings in design/audits/<date>-adversarial-security-campaign.md"
 
   image:
-    desc: Build the hardened distroless container image from source (docs/08 §7).
+    desc: Build the hardened distroless container image from source (docs/SECURITY-HARDENING.md).
     cmds:
       - |
         docker build \
@@ -8184,6 +9504,16 @@ tasks:
         COSIGN_MODE=key PUBLISH_HOMEBREW=false \
           goreleaser check
 
+  release:channel-parity:
+    desc: >-
+      D-06 remote release-channel parity. Run after immutable surfaces exist and
+      before a draft is published or a channel head is promoted. Reads each remote
+      surface for the tag; the underlying script emits rc 1 for measured drift and
+      rc 2 for an absent/unreadable channel (go-task reports either as a task failure).
+      Usage: task release:channel-parity -- --tag vX.Y.Z --real.
+    cmds:
+      - bash scripts/hub-leg.sh release:channel-parity scripts/check-channel-parity.sh {{.CLI_ARGS}}
+
   release:snapshot:
     desc: >-
       Local dry-run release — build + SBOM + checksums into dist/, NO publish/sign.
@@ -8241,7 +9571,9 @@ tasks:
           este no.
       Por eso alli la via es UNA: `task release:smoke -- <binario sellado>` — el de la
       corrida de release, o uno compilado con `-X main.commit` y `-X main.date`
-      explicitos tomados de `release-commit.txt`. Detalle y testigos: runbook §7.0.
+      explicitos tomados de `release-commit.txt`. Después, D-06 exige
+      `bash scripts/check-channel-parity.sh --tag vX.Y.Z --real` antes de publicar
+      el draft o mover el canal. Detalle y testigos: runbook §7.0.
     cmds:
       - bash scripts/release-smoke.sh {{.CLI_ARGS}}
 

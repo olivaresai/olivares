@@ -23,7 +23,10 @@ const (
 	NotFound = 4
 	// Conflict — the request contradicts current state (409).
 	Conflict = 5
-	// Server — the control plane failed or was unreachable (5xx, transport).
+	// Server — a required control plane, service, or store failed or could not
+	// be accessed. `db check --strict` also uses this code when connection or
+	// authentication failure prevents a role verdict. Resolve the reported
+	// dependency failure before retrying; a proven role refusal uses code 1.
 	Server = 6
 	// Degraded — the command succeeded but reports a degraded condition
 	// (`status` when the engine is not fully ok; `security check` on an

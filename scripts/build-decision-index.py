@@ -248,6 +248,24 @@ def parse_frontmatter(path: str, raw: bytes) -> dict[str, str] | None:
         raise Unverified(f"{path}: front-matter opens with '---' and never closes; UNVERIFIED")
     block = text[4:end + 1]
 
+    # ⛔ ABRIR CON `---` NO CONVIERTE UN DOCUMENTO EN UNA DECISION, y confundirlo puso `main` en
+    # rojo el 2026-09-04: un documento historico que usa `---` como SEPARADOR 69 veces abre con uno
+    # en la linea 1, y este parser exigia `clave: valor` hasta el siguiente, fallando en un `###`.
+    # La distincion que separa los dos casos sin debilitar NADA: un bloque que no contiene NI UNA
+    # clave del esquema no es front-matter de decision — es prosa que empieza por una raya.
+    # Medido sobre origin/main: de los 3 `design/*.md` que abren con `---`, DOS traen claves de
+    # decision y UNO ninguna. Y el caso 9 de la bateria («a typo'd key is REFUSED, not ignored»)
+    # sigue intacto: ese documento SI tiene claves validas junto a la errata, asi que entra aqui y
+    # se rechaza igual. Lo que se salta es el documento sin ninguna clave, que nunca fue una
+    # decision y cuyo unico pecado es su primera linea.
+    if not any(
+        (not l.strip().startswith("#"))
+        and ":" in l
+        and l.partition(":")[0].strip() in ALLOWED
+        for l in block.splitlines()
+    ):
+        return None
+
     fields: dict[str, str] = {}
     for lineno, line in enumerate(block.splitlines(), start=2):
         if not line.strip():

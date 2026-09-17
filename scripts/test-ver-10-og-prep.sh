@@ -60,7 +60,16 @@ python3 - "$TMP/tree/design/VER-10-OG-WEB-2026-08-20.md" <<'PY'
 import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
-t = t.replace("measured-og-png: 137", "measured-og-png: 137\nmeasured-og-per-page: 14")
+# ⛔ ANCLA EN EL PREFIJO, NO EN EL VALOR, Y ASEVERA QUE EL MUTANTE SE APLICO.
+# Hasta el 2026-09-01 esto anclaba en "measured-og-png: 137" a fuego. Cuando la cifra
+# se movio legitimamente a 138 (la carta OG del anuncio de v26.8.0), la sustitucion dejo
+# de casar, el mutante NO SE APLICO — y el caso fallo diciendo "14 OG/page stayed CLEAN",
+# que se lee como "el gate no mata al mutante" cuando lo que pasaba es que no habia mutante.
+# Un mutante no aplicado se lee identico a un superviviente, asi que se comprueba.
+import re
+t2, n = re.subn(r"(measured-og-png: \d+)", r"\1\nmeasured-og-per-page: 14", t, count=1)
+assert n == 1, "el mutante NO se pudo aplicar: no hay linea measured-og-png"
+t = t2
 open(p, "w", encoding="utf-8").write(t)
 PY
 run

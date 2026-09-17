@@ -6,6 +6,10 @@
 // presentation, so a fixed node/edge/row set produces a stable, screenshot-able
 // render of every view (including the access-map R/RW graph — the marketing asset)
 // without depending on a populated engine. Served via Playwright route mocks.
+import type {
+  EgressCompatReport,
+  EgressPolicyStatus,
+} from '../src/features/eventing/types'
 
 export const serverInfo = {
   version: '0.1.0-dev',
@@ -1011,22 +1015,6 @@ export const observabilityIngestionHealth = {
   engine_scope: true,
   sources: [],
 }
-const adoptionTotals = {
-  sessions: 0,
-  lines_added: 0,
-  lines_removed: 0,
-  lines_net: 0,
-  commits: 0,
-  pull_requests: 0,
-  active_time_ms: 0,
-  tools_accepted: 0,
-  tools_rejected: 0,
-  acceptance_rate: null,
-  input_tokens: 0,
-  output_tokens: 0,
-  tokens: 0,
-}
-const adoptionLens = { totals: adoptionTotals, by_model: [], by_tool: [] }
 export const orchestrationGraph = {
   nodes: [],
   edges: [],
@@ -2551,4 +2539,4 @@ export const eventingEgressCompat = {
   unparsed: 0,
   authorities: [],
   still_needed: 0,
-} satisfies EgressCompatReportDTO
+} satisfies EgressCompatReport

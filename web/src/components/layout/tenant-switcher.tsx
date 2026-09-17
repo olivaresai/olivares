@@ -67,8 +67,11 @@ export function TenantSwitcher() {
   // A single, fixed membership is a label, not a control.
   if (!isSuperadmin && options.length <= 1) {
     return (
-      <span className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground">
-        <Building2 className="size-4" />
+      <span
+        className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground"
+        title={activeLabel}
+      >
+        <Building2 className="size-4 shrink-0" />
         <span className="max-w-[12rem] truncate">{activeLabel}</span>
       </span>
     )
@@ -77,7 +80,15 @@ export function TenantSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="base" className="max-w-[14rem] gap-1.5">
+        {/* `min-w-0 shrink` so the topbar can truncate this label instead of
+            overflowing the bar at 1024/390 px; the full name stays the accessible
+            name and is offered as a tooltip. */}
+        <Button
+          variant="ghost"
+          size="base"
+          className="min-w-24 max-w-[14rem] shrink gap-1.5"
+          title={activeLabel}
+        >
           <Building2 className="size-4 text-muted-foreground" />
           <span className="truncate">{activeLabel}</span>
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />

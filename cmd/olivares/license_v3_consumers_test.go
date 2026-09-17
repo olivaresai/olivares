@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -43,8 +44,27 @@ func signTestCredentialV3(t *testing.T) string {
 	if len(priv) != ed25519.PrivateKeySize {
 		t.Skip("this build embeds no dev key")
 	}
+	payload = withDevKeyID(t, payload)
 	enc := base64.RawURLEncoding
 	return enc.EncodeToString(payload) + "." + enc.EncodeToString(ed25519.Sign(priv, payload))
+}
+
+// withDevKeyID replaces the vector's configured `key_id` label with the KID derived from the dev
+// key that signs it. The product consumers verify through the license trust keyring, which
+// requires the signed key_id to name the key whose signature verified (connect-v1 §6) — exactly
+// what the Worker issues, since its key_id is derived from its signing key. Only that one value
+// changes; every other byte of the frozen wire stays as the issuer wrote it.
+func withDevKeyID(t *testing.T, payload []byte) []byte {
+	t.Helper()
+	kid, err := license.KeyID(license.DefaultPublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const label = `"key_id":"issuer-2026-08"`
+	if bytes.Count(payload, []byte(label)) != 1 {
+		t.Fatalf("the fixture no longer carries exactly one %s; update withDevKeyID with the vector", label)
+	}
+	return bytes.Replace(payload, []byte(label), []byte(`"key_id":"`+kid+`"`), 1)
 }
 
 // The vector's base line runs in `term` to 2026-08-31; its add-on's lease ended 2026-08-10. Both
@@ -297,6 +317,7 @@ func signNonExpiringCredentialV3(t *testing.T) string {
 		`{"grant_id":"gr_base","order_line_id":"ol_base","product_id":"pdt_business","kind":"base",` +
 		`"cadence":"year","paid_through":"2099-01-01T00:00:00Z","expires_at":"2099-01-01T00:00:00Z",` +
 		`"issuance_phase":"term","guarantee_deadline":null,"promotion_hold_deadline":null,"lease_until":null}]}`)
+	payload = withDevKeyID(t, payload)
 	enc := base64.RawURLEncoding
 	return enc.EncodeToString(payload) + "." + enc.EncodeToString(ed25519.Sign(priv, payload))
 }

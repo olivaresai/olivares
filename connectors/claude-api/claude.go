@@ -10,7 +10,7 @@
 // vision/PDF, structured outputs, citations), and API-key/workspace inventory
 // metadata — to module X.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): it performs only GETs, never
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §0-3): it performs only GETs, never
 // persists or logs the admin credential, and carries token counts, cost,
 // capabilities and inventory METADATA — never prompts, completions, or key values
 // (the Admin API returns only a masked key hint, never the secret). It imports

@@ -1,0 +1,579 @@
+{
+  "schemaVersion": "public-claims/v1",
+  "measuredAt": "2026-08-09",
+  "measurement": {
+    "auditReportTitle": "Public claims truth matrix (adversarial), 2026-08-09",
+    "auditReportSha256": "505b6ef556459edf71210284b8b67c7e3705742440a46a0f8611a6abf10e00e8",
+    "auditor": "Codex gpt-5.6-sol",
+    "refs": {
+      "hub": "d363a51b5b68512a7024ed14b920be9afb210d4b",
+      "web": "a48fac48d396c775a3383967ecfa47a7cf6ae524",
+      "enterprise": "64cfaa1e59c83438d4923dabf1061e32da377bed"
+    }
+  },
+  "jobs": [
+    {
+      "id": "claim-sessions-work",
+      "implemented": false,
+      "mustProve": "Current fields, conditional goal, ordered timeline, absent task/progress semantics."
+    },
+    {
+      "id": "claim-agent-coordination",
+      "implemented": false,
+      "mustProve": "Provenanced topology, coverage gaps, bounded workflow, separate schedule."
+    },
+    {
+      "id": "claim-sandbox-agent-isolation",
+      "implemented": false,
+      "mustProve": "Mock runner, configured backend attestation, ordered-replay precondition."
+    },
+    {
+      "id": "claim-model-routing-providers",
+      "implemented": false,
+      "mustProve": "Candidate order, fallback, deny-closed execution, exact provider/version matrix."
+    },
+    {
+      "id": "claim-managed-settings-fleet",
+      "implemented": false,
+      "mustProve": "Signed pull plus real host before/after state for every promoted delivery path."
+    },
+    {
+      "id": "claim-roadmap-bindings",
+      "implemented": false,
+      "mustProve": "Canonical/rendered set equality and accepted evidence for every Built alias."
+    }
+  ],
+  "evidenceFormat": {
+    "required": [
+      "claimId",
+      "refs.hub",
+      "refs.web",
+      "environment",
+      "route",
+      "tests",
+      "verdict",
+      "mutant.applied",
+      "mutant.compiledOrParsed",
+      "mutant.killed",
+      "nonTrigger",
+      "sha256"
+    ],
+    "note": "No artifact carrying every required field at the exact refs means the claim cannot be accepted. Its absence does not block publishing the claim honestly as implemented_unaccepted."
+  },
+  "claims": [
+    {
+      "id": "sessions-live-operations",
+      "auditRef": "C1",
+      "title": "Live operations and sessions",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB modules/sessions",
+        "publication": "WEB /product"
+      },
+      "boundedProposition": "See observed current action, model, tokens, cost and timeline. A goal appears only when reported; task and progress tracking are not yet promoted.",
+      "conditions": [
+        "The session schema records current action, model, tokens, cost and event/timeline data.",
+        "A goal is present only when the source reports it."
+      ],
+      "unpromoted": [
+        "Task tracking: no canonical WorkItem type is declared anywhere in modules, core, sdk, web or cmd/olivares at the measured ref.",
+        "Computed progress: no task-derived progress invariant exists, so progress cannot be claimed.",
+        "Handoff: no canonical Handoff type is declared at the measured ref."
+      ],
+      "controlRoutes": [
+        "modules/sessions/schema.go:26-44",
+        "modules/sessions/schema.go:114-133",
+        "modules/sessions/doc.go:25-30",
+        "web/src/features/sessions/types.ts:5-12",
+        "web/src/features/sessions/types.ts:30-50",
+        "web/src/features/sessions/session-detail.tsx:101-145"
+      ],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/product",
+          "localeKey": "product.themes[0].modules[1].body",
+          "anchor": { "field": "roman", "value": "II" }
+        }
+      ],
+      "acceptance": {
+        "job": "claim-sessions-work",
+        "tests": ["modules/sessions/live_test.go:120-166"],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "modules/sessions/live_test.go is a component test of ingestion and observable state; it does not bind the public sentence, its route, its conditions, exact refs, a mutant or retained evidence."
+      ]
+    },
+    {
+      "id": "agent-coordination",
+      "auditRef": "C2",
+      "title": "Agent communication and orchestration",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB modules/orchestration",
+        "publication": "WEB /product"
+      },
+      "boundedProposition": "Visualise observed Claude Task, MCP and A2A delegation topology with explicit coverage gaps. Governed schedules and bounded workflows are separate controls.",
+      "conditions": [
+        "Coverage is an explicit DTO field, not an implicit promise.",
+        "Workflow graph verbs are bounded and enumerated.",
+        "Delegation topology is observed, not governed end to end."
+      ],
+      "unpromoted": [
+        "End-to-end governed coordination: no canonical cross-session Task/Handoff/Ack state machine exists at the measured ref.",
+        "A single workflow tying delegation, completion and acknowledgement: schedules, workflows and topology are separate mechanisms."
+      ],
+      "controlRoutes": [
+        "modules/orchestration/api.go:28-41",
+        "modules/orchestration/dto.go:11-16",
+        "modules/orchestration/workflow_graph.go:15-42",
+        "web/src/features/orchestration/orchestration-view.tsx:189-220",
+        "web/src/features/orchestration/components.tsx:173-239"
+      ],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/product",
+          "localeKey": "product.themes[1].modules[1].body",
+          "anchor": { "field": "roman", "value": "IV" }
+        }
+      ],
+      "acceptance": {
+        "job": "claim-agent-coordination",
+        "tests": [
+          "modules/orchestration/orchestration_test.go:36-90",
+          "modules/orchestration/orchestration_test.go:96-112"
+        ],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "Graph tests prove nodes, edges and coverage behaviour; they do not bind the public sentence to a route, conditions, exact refs, a mutant or retained evidence."
+      ]
+    },
+    {
+      "id": "simulation-sandbox",
+      "auditRef": "C3",
+      "title": "Simulation sandbox",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB modules/sandbox, core/runtime/sandboxrt",
+        "publication": "WEB /product"
+      },
+      "boundedProposition": "Run operator-authored mock scenarios in an isolated ephemeral runner. Configured gVisor/Firecracker backends attest OS isolation; ordered replay requires ordered history. Real agent execution and synthetic generation are unpromoted.",
+      "conditions": [
+        "Default behaviour is operator-authored mock scenario execution.",
+        "OS isolation exists only when the OS runner is configured in composition.",
+        "Ordered replay depends on an ordered history source."
+      ],
+      "unpromoted": [
+        "Real-agent execution: no proved real-agent run at the measured ref.",
+        "Synthetic data generation: no generator was traced.",
+        "Scenario lifecycle in the UI: the console client exposes run/replay/compare but no create/archive.",
+        "Non-production network/credential proof."
+      ],
+      "controlRoutes": [
+        "modules/sandbox/doc.go:5-53",
+        "modules/sandbox/ports.go:40-76",
+        "modules/sandbox/ports.go:90-125",
+        "modules/sandbox/sandbox.go:159-183",
+        "cmd/olivares/wire.go:406-431",
+        "core/runtime/sandboxrt/engine.go:106-132",
+        "core/runtime/sandboxrt/engine.go:176-249",
+        "web/src/features/sandbox/sandbox-view.tsx:43-150",
+        "web/src/features/sandbox/api.ts:24-45"
+      ],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/product",
+          "localeKey": "product.themes[2].modules[2].body",
+          "anchor": { "field": "roman", "value": "XVII" }
+        }
+      ],
+      "acceptance": {
+        "job": "claim-sandbox-agent-isolation",
+        "tests": [
+          "modules/sandbox/sandbox_test.go:20-46",
+          "modules/sandbox/sandbox_test.go:146-188",
+          "modules/sandbox/sandbox_test.go:249-266"
+        ],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No backend attestation is recorded, so promoted gVisor/Firecracker isolation has no evidence artifact at any ref."
+      ]
+    },
+    {
+      "id": "model-routing-providers",
+      "auditRef": "C4",
+      "title": "Models, providers and routing",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB modules/models, connectors/modelrouter",
+        "publication": "WEB /product"
+      },
+      "boundedProposition": "Define cost, latency, capability or pinned policies and resolve an ordered fallback chain. /execute is deny-closed unless a Claude Messages-compatible credential or gateway is configured; local/provider-wide actuation and secret custody are unpromoted.",
+      "conditions": [
+        "Policy resolution produces an ordered candidate chain.",
+        "/execute is a separate deny-closed path and stays closed without a configured actuator.",
+        "The only composed actuator is Claude Messages-compatible."
+      ],
+      "unpromoted": [
+        "Universal hosted/local execution: origin/main has zero cmd/olivares imports or composition cases for connectors/openai, connectors/gemini, Ollama or vLLM.",
+        "Centralised key custody: provider key fields are references, not demonstrated central custody.",
+        "Execution from the console: the console client resolves and tests policies but has no execute call."
+      ],
+      "controlRoutes": [
+        "modules/models/api.go:91-114",
+        "modules/models/routing.go:114-180",
+        "modules/models/execute.go:22-29",
+        "modules/models/execute.go:114-120",
+        "modules/models/execute.go:264-292",
+        "modules/models/keys.go:19-39",
+        "connectors/modelrouter/router.go:15-31",
+        "connectors/modelrouter/router.go:63-93",
+        "connectors/modelrouter/router.go:108-180",
+        "cmd/olivares/wire.go:687-711",
+        "cmd/olivares/modelsactuate.go:20-36",
+        "cmd/olivares/modelsactuate.go:47-90",
+        "cmd/olivares/modelsactuate.go:111-126",
+        "web/src/features/models/api.ts:47-67"
+      ],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/product",
+          "localeKey": "product.themes[3].modules[0].body",
+          "anchor": { "field": "roman", "value": "X" }
+        }
+      ],
+      "acceptance": {
+        "job": "claim-model-routing-providers",
+        "tests": [
+          "connectors/modelrouter/router_test.go:33",
+          "modules/models/api_test.go:208",
+          "modules/models/execute_ratelimits_test.go:124-166"
+        ],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No provider matrix exists: every provider named by broader copy, including each local runtime, needs an executed row before promotion."
+      ]
+    },
+    {
+      "id": "managed-settings-delivery",
+      "auditRef": "C5",
+      "title": "Managed-settings delivery",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB modules/governance, cmd/olivares",
+        "publication": "WEB /why-enterprise",
+        "externalApplication": "Host or fleet administrator"
+      },
+      "boundedProposition": "Render managed settings locally or expose a signed artifact/configured gateway document for authenticated pull. Per-host application and fleet rollout are external and attested, never assumed.",
+      "conditions": [
+        "The managed-settings connector declares a modeling-only boundary.",
+        "The CLI renders settings locally and labels that operation local.",
+        "The Apps gateway serves one configured document."
+      ],
+      "unpromoted": [
+        "Fleet rollout and rollback: the truth model states agent pull and MDM rollout are outside v1.",
+        "Per-host application: the enterprise fleet seam distributes intent and attestation; it does not prove the endpoint applied the settings."
+      ],
+      "controlRoutes": [
+        "connectors/managedsettings/delivery.go:8-13",
+        "cmd/olivares/cmd_managedsettings.go:17-35",
+        "cmd/olivares/cmd_managedsettings.go:102-110",
+        "cmd/olivares/cmd_agent.go:157-168",
+        "modules/governance/claudepolicy.go:65-72",
+        "modules/governance/claudepolicy.go:167-168",
+        "modules/governance/claudepolicy.go:343-429",
+        "modules/governance/claudepolicy_truth.go:27-44",
+        "modules/governance/claudepolicy_truth.go:495-585",
+        "modules/governance/claudepolicy_truth.go:587-619",
+        "cmd/olivares/appsgateway.go:117-158",
+        "cmd/olivares/appsgateway.go:323-352"
+      ],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/why-enterprise",
+          "localeKey": "why-enterprise.open.items[3]"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-managed-settings-fleet",
+        "tests": [
+          "modules/governance/s160_test.go:68-102",
+          "modules/governance/s160_test.go:166-212",
+          "cmd/olivares/appsgateway_test.go:174-240"
+        ],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "Tests prove signed artifact behaviour, not host application. Until a real MDM/Kubernetes/host adapter is exercised, copy must name pull and render, never rollout."
+      ]
+    },
+    {
+      "id": "roadmap-access-map-inventory",
+      "auditRef": "C6",
+      "title": "Read/write access inventory",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB (claim owner unassigned at the measured ref)",
+        "publication": "WEB /roadmap"
+      },
+      "boundedProposition": "Roadmap row published without an acceptance binding; implementation exists but its control, job and evidence were not measured.",
+      "conditions": [],
+      "unpromoted": [
+        "Built: the row has no typed owner, control route, claim job, test or evidence artifact at the measured ref."
+      ],
+      "controlRoutes": [],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/roadmap",
+          "localeKey": "roadmap.items.access-map-inventory.description",
+          "roadmapItemId": "access-map-inventory"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-roadmap-bindings",
+        "tests": [],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No control route measured. The audit scoped C6 to the absence of bindings, not to a per-row control census; widening it by eye is forbidden."
+      ]
+    },
+    {
+      "id": "roadmap-claude-code-governance",
+      "auditRef": "C6",
+      "title": "Claude Code session governance",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB (claim owner unassigned at the measured ref)",
+        "publication": "WEB /roadmap"
+      },
+      "boundedProposition": "Roadmap row published without an acceptance binding; implementation exists but its control, job and evidence were not measured.",
+      "conditions": [],
+      "unpromoted": [
+        "Built: the row has no typed owner, control route, claim job, test or evidence artifact at the measured ref."
+      ],
+      "controlRoutes": [],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/roadmap",
+          "localeKey": "roadmap.items.claude-code-governance.description",
+          "roadmapItemId": "claude-code-governance"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-roadmap-bindings",
+        "tests": [],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No control route measured. This row plausibly overlaps managed-settings-delivery (C5), but the audit does not state that composition and this session does not invent it."
+      ]
+    },
+    {
+      "id": "roadmap-mcp-governance",
+      "auditRef": "C6",
+      "title": "MCP catalog and governance",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB (claim owner unassigned at the measured ref)",
+        "publication": "WEB /roadmap"
+      },
+      "boundedProposition": "Roadmap row published without an acceptance binding; implementation exists but its control, job and evidence were not measured.",
+      "conditions": [],
+      "unpromoted": [
+        "Built: the row has no typed owner, control route, claim job, test or evidence artifact at the measured ref."
+      ],
+      "controlRoutes": [],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/roadmap",
+          "localeKey": "roadmap.items.mcp-governance.description",
+          "roadmapItemId": "mcp-governance"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-roadmap-bindings",
+        "tests": [],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No control route measured. The audit scoped C6 to the absence of bindings, not to a per-row control census; widening it by eye is forbidden."
+      ]
+    },
+    {
+      "id": "roadmap-finops-cost-controls",
+      "auditRef": "C6",
+      "title": "FinOps controls that can act",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB (claim owner unassigned at the measured ref)",
+        "publication": "WEB /roadmap"
+      },
+      "boundedProposition": "Roadmap row published without an acceptance binding; implementation exists but its control, job and evidence were not measured.",
+      "conditions": [],
+      "unpromoted": [
+        "Built: the row has no typed owner, control route, claim job, test or evidence artifact at the measured ref."
+      ],
+      "controlRoutes": [],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/roadmap",
+          "localeKey": "roadmap.items.finops-cost-controls.description",
+          "roadmapItemId": "finops-cost-controls"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-roadmap-bindings",
+        "tests": [],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No control route measured. The audit scoped C6 to the absence of bindings, not to a per-row control census; widening it by eye is forbidden."
+      ]
+    },
+    {
+      "id": "roadmap-compliance-evidence",
+      "auditRef": "C6",
+      "title": "Compliance evidence mapping",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB (claim owner unassigned at the measured ref)",
+        "publication": "WEB /roadmap"
+      },
+      "boundedProposition": "Roadmap row published without an acceptance binding; implementation exists but its control, job and evidence were not measured.",
+      "conditions": [],
+      "unpromoted": [
+        "Built: the row has no typed owner, control route, claim job, test or evidence artifact at the measured ref."
+      ],
+      "controlRoutes": [],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/roadmap",
+          "localeKey": "roadmap.items.compliance-evidence.description",
+          "roadmapItemId": "compliance-evidence"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-roadmap-bindings",
+        "tests": [],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No control route measured. The audit scoped C6 to the absence of bindings, not to a per-row control census; widening it by eye is forbidden."
+      ]
+    },
+    {
+      "id": "roadmap-kill-switch",
+      "auditRef": "C6",
+      "title": "Kill-switch deny gate with dual control",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB (claim owner unassigned at the measured ref)",
+        "publication": "WEB /roadmap"
+      },
+      "boundedProposition": "Roadmap row published without an acceptance binding; implementation exists but its control, job and evidence were not measured.",
+      "conditions": [],
+      "unpromoted": [
+        "Built: the row has no typed owner, control route, claim job, test or evidence artifact at the measured ref."
+      ],
+      "controlRoutes": [],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/roadmap",
+          "localeKey": "roadmap.items.kill-switch.description",
+          "roadmapItemId": "kill-switch"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-roadmap-bindings",
+        "tests": [],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No control route measured. The audit scoped C6 to the absence of bindings, not to a per-row control census; widening it by eye is forbidden."
+      ]
+    },
+    {
+      "id": "roadmap-self-hosted",
+      "auditRef": "C6",
+      "title": "Self-hosted control plane",
+      "state": "implemented_unaccepted",
+      "components": [],
+      "owner": {
+        "implementation": "HUB (claim owner unassigned at the measured ref)",
+        "publication": "WEB /roadmap"
+      },
+      "boundedProposition": "Roadmap row published without an acceptance binding; implementation exists but its control, job and evidence were not measured.",
+      "conditions": [],
+      "unpromoted": [
+        "Built: the row has no typed owner, control route, claim job, test or evidence artifact at the measured ref."
+      ],
+      "controlRoutes": [],
+      "surfaces": [
+        {
+          "repo": "web",
+          "route": "/roadmap",
+          "localeKey": "roadmap.items.self-hosted.description",
+          "roadmapItemId": "self-hosted"
+        }
+      ],
+      "acceptance": {
+        "job": "claim-roadmap-bindings",
+        "tests": [],
+        "testsAreAcceptance": false,
+        "evidence": null,
+        "mutation": null
+      },
+      "gaps": [
+        "No control route measured. The audit scoped C6 to the absence of bindings, not to a per-row control census; widening it by eye is forbidden."
+      ]
+    }
+  ]
+}

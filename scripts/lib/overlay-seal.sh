@@ -8,9 +8,8 @@
 # clave) y EMPUJA por HTTPS —, y los checkers compararon contra el ref viejo y dijeron CLEAN. No
 # fallo ningun gate: todos midieron bien contra un ref que llevaba un merge de retraso.
 #
-# LA FORMA, decidida por r4 el 2026-08-30 sobre el censo de esta sesion: UN fetch por ACTO, no uno
-# por checker. Medido: un fetch cuesta 2 307 ms, y los SIETE gobernados haciendo el suyo son ~16 s
-# por corrida y siete llamadas de red por push desde cada carril. Con el sello es UN fetch.
+# Los lectores comparten un fetch por lote. El gancho renueva antes de addon-sets si llega
+# a ese segundo lote; la corrida conserva su nonce y el límite de edad sigue siendo 900s.
 #
 #   escribe:  scripts/fetch-overlay-seal.sh   (la pata barata del gancho, junto a los registros)
 #   leen:     los SIETE checkers que resuelven `origin/main` del clon hermano

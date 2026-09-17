@@ -23,7 +23,9 @@ import (
 //     handle an oracle for ids in other workspaces;
 //   - Create/Update/Delete verify BEFORE delegating, and refuse rather than
 //     silently rewriting the workspace of an incoming row: rewriting would hide
-//     a handler bug behind a correct-looking result.
+//     a handler bug behind a correct-looking result. Update also requires the
+//     stored row's lineage to belong to the confined workspace; incoming-only
+//     checks cannot stop a same-tenant caller from relabeling a foreign id.
 
 // confinedRepo confines a typed core repository whose entity carries a workspace
 // id field.
@@ -32,6 +34,7 @@ type confinedRepo[T any] struct {
 	b           workspaceBoundary
 	spec        model.WorkspaceLineageSpec
 	workspaceOf func(T) model.ID
+	idOf        func(T) model.ID
 }
 
 func (r confinedRepo[T]) List(ctx context.Context, q model.Query) ([]T, model.Page, error) {
@@ -76,8 +79,14 @@ func (r confinedRepo[T]) Create(ctx context.Context, v T) (T, error) {
 }
 
 func (r confinedRepo[T]) Update(ctx context.Context, v T) (T, error) {
+	var zero T
+	if r.idOf == nil {
+		return zero, deniedWrite("workspace-confined update is missing an identity extractor")
+	}
+	if _, err := r.Get(ctx, r.idOf(v)); err != nil {
+		return zero, err
+	}
 	if err := r.checkIncoming(v); err != nil {
-		var zero T
 		return zero, err
 	}
 	return r.raw.Update(ctx, v)
@@ -350,6 +359,29 @@ func (r deniedRepo[T]) Update(ctx context.Context, v T) (T, error) {
 }
 func (r deniedRepo[T]) Delete(ctx context.Context, id model.ID) error { return denied(r.what) }
 
+// deniedPolicyRepo is the confined Policy repository. It refuses the ordinary
+// CRUD exactly as before AND refuses the optional state capability, so a caller
+// that asserts for PolicyStateWriter gets the workspace-lineage denial instead
+// of an assertion failure it could mistake for "this store is too old".
+//
+// It is a policy-specific type rather than two more methods on deniedRepo[T]
+// because the generic type backs every other denied entity: widening it would
+// make each of them satisfy a policy capability they have nothing to do with.
+// Satisfying the interface is not support — both methods always refuse.
+type deniedPolicyRepo struct{ deniedRepo[model.Policy] }
+
+var _ PolicyStateWriter = deniedPolicyRepo{}
+
+func (r deniedPolicyRepo) GetPolicyState(context.Context, model.ID) (PolicyState, error) {
+	return PolicyState{}, denied(r.what)
+}
+
+func (r deniedPolicyRepo) SetPolicyEnabled(
+	context.Context, model.ID, string, int64, bool,
+) (PolicyState, error) {
+	return PolicyState{}, denied(r.what)
+}
+
 // deniedAccessEdgeRepo refuses the differential access graph: an edge joins two
 // nodes that need not share a workspace, so no row predicate is total.
 type deniedAccessEdgeRepo struct{ deniedRepo[model.AccessEdge] }
@@ -505,6 +537,55 @@ func (deniedEvidenceOps) Settle(ctx context.Context, s EvidenceSettlement) (Evid
 	return EvidenceSettleResult{}, denied("the evidence operation journal")
 }
 
+// deniedAccessEvidence refuses the tenant-wide access-evidence store to a
+// workspace-confined caller.
+//
+// It is refused WHOLE rather than filtered, and that is the honest answer
+// instead of the convenient one. These relations declare no workspace lineage
+// because they genuinely have none: a policy artifact belongs to an authority,
+// a decision belongs to an enforcement point, and an observation's question may
+// name a workspace as a demonstrated binding without the RECORD being scoped to
+// it. Filtering on that recorded reference would hand a confined caller a page
+// that looks complete and silently is not — the failure mode this decorator
+// exists to prevent — so the accessor denies instead.
+type deniedAccessEvidence struct{}
+
+const deniedAccessEvidenceWhat = "the access-evidence store"
+
+func (deniedAccessEvidence) RetainPolicyArtifact(ctx context.Context, in PolicyArtifactAppend) (AccessEvidenceWrite[model.PolicyArtifact], error) {
+	return AccessEvidenceWrite[model.PolicyArtifact]{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) AppendAuthorityTransition(ctx context.Context, in AuthorityTransitionAppend) (AccessEvidenceWrite[model.AuthorityTransition], error) {
+	return AccessEvidenceWrite[model.AuthorityTransition]{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) AppendActionObservation(ctx context.Context, in ActionObservationAppend) (AccessEvidenceWrite[model.ActionObservation], error) {
+	return AccessEvidenceWrite[model.ActionObservation]{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) AppendAuthorizationDecision(ctx context.Context, in AuthorizationDecisionAppend) (AccessEvidenceWrite[model.AuthorizationDecision], error) {
+	return AccessEvidenceWrite[model.AuthorizationDecision]{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) PolicyArtifact(ctx context.Context, id model.ID) (model.PolicyArtifact, error) {
+	return model.PolicyArtifact{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) AuthorityTransition(ctx context.Context, id model.ID) (model.AuthorityTransition, error) {
+	return model.AuthorityTransition{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) ActionObservation(ctx context.Context, id model.ID) (model.ActionObservation, error) {
+	return model.ActionObservation{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) AuthorizationDecision(ctx context.Context, id model.ID) (model.AuthorizationDecision, error) {
+	return model.AuthorizationDecision{}, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) AuthorityTransitionsFor(ctx context.Context, subjectRef string) ([]model.AuthorityTransition, error) {
+	return nil, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) ActionObservationsForQuestion(ctx context.Context, questionDigest string) ([]model.ActionObservation, error) {
+	return nil, denied(deniedAccessEvidenceWhat)
+}
+func (deniedAccessEvidence) DecisionCompleteness(ctx context.Context, id model.ID) (model.AccessEvidenceCompleteness, error) {
+	return model.AccessEvidenceCompleteness{}, denied(deniedAccessEvidenceWhat)
+}
+
 // confinedGenericRepo confines a MODULE entity through its declared lineage. It
 // is the same semantics as the typed decorator, reading the lineage value out of
 // the model.Record instead of a struct field.
@@ -581,7 +662,7 @@ func (r confinedGenericRepo) CreateWithID(
 }
 
 func (r confinedGenericRepo) Update(ctx context.Context, rec model.Record) (model.Record, error) {
-	if err := r.checkIncoming(rec); err != nil {
+	if err := r.checkStoredAndIncoming(ctx, rec); err != nil {
 		return nil, err
 	}
 	return r.raw.Update(ctx, rec)
@@ -590,6 +671,86 @@ func (r confinedGenericRepo) Update(ctx context.Context, rec model.Record) (mode
 type confinedTransactionStampedGenericRepo struct {
 	confinedGenericRepo
 	stamped TransactionStampedGenericRepo
+}
+
+// projectDistinct is the one confinement rule for DistinctProjector: the
+// declared workspace lineage predicate is forced into the projection's common
+// filters (replacing any caller-supplied predicate on that column, exactly like
+// forceQuery does for List) before the raw capability runs the statement. A
+// projection can therefore never enumerate values that belong to rows outside
+// the confined workspace.
+func (r confinedGenericRepo) projectDistinct(
+	ctx context.Context,
+	projector DistinctProjector,
+	p DistinctProjection,
+) (DistinctPage, error) {
+	forced := forceQuery(model.Query{Filters: p.Filters}, r.b.filterFor(r.spec))
+	p.Filters = forced.Filters
+	return projector.ProjectDistinct(ctx, p)
+}
+
+// The four DistinctProjector-preserving wrappers below exist only when the raw
+// repository exposes the capability, for the same reason confinedRowLockingGenericRepo
+// exists: a confined repository must be assertable as exactly the capabilities
+// its raw repository has, never as one that can only fail later.
+type confinedDistinctProjectingGenericRepo struct {
+	confinedGenericRepo
+	projector DistinctProjector
+}
+
+type confinedDistinctProjectingRowLockingGenericRepo struct {
+	confinedRowLockingGenericRepo
+	projector DistinctProjector
+}
+
+type confinedDistinctProjectingTransactionStampedGenericRepo struct {
+	confinedTransactionStampedGenericRepo
+	projector DistinctProjector
+}
+
+type confinedDistinctProjectingTransactionStampedRowLockingGenericRepo struct {
+	confinedTransactionStampedRowLockingGenericRepo
+	projector DistinctProjector
+}
+
+var (
+	_ DistinctProjector             = confinedDistinctProjectingGenericRepo{}
+	_ GenericRepo                   = confinedDistinctProjectingGenericRepo{}
+	_ DistinctProjector             = confinedDistinctProjectingRowLockingGenericRepo{}
+	_ RowLocker[model.Record]       = confinedDistinctProjectingRowLockingGenericRepo{}
+	_ DistinctProjector             = confinedDistinctProjectingTransactionStampedGenericRepo{}
+	_ TransactionStampedGenericRepo = confinedDistinctProjectingTransactionStampedGenericRepo{}
+	_ DistinctProjector             = confinedDistinctProjectingTransactionStampedRowLockingGenericRepo{}
+	_ TransactionStampedGenericRepo = confinedDistinctProjectingTransactionStampedRowLockingGenericRepo{}
+	_ RowLocker[model.Record]       = confinedDistinctProjectingTransactionStampedRowLockingGenericRepo{}
+)
+
+func (r confinedDistinctProjectingGenericRepo) ProjectDistinct(
+	ctx context.Context,
+	p DistinctProjection,
+) (DistinctPage, error) {
+	return r.projectDistinct(ctx, r.projector, p)
+}
+
+func (r confinedDistinctProjectingRowLockingGenericRepo) ProjectDistinct(
+	ctx context.Context,
+	p DistinctProjection,
+) (DistinctPage, error) {
+	return r.projectDistinct(ctx, r.projector, p)
+}
+
+func (r confinedDistinctProjectingTransactionStampedGenericRepo) ProjectDistinct(
+	ctx context.Context,
+	p DistinctProjection,
+) (DistinctPage, error) {
+	return r.projectDistinct(ctx, r.projector, p)
+}
+
+func (r confinedDistinctProjectingTransactionStampedRowLockingGenericRepo) ProjectDistinct(
+	ctx context.Context,
+	p DistinctProjection,
+) (DistinctPage, error) {
+	return r.projectDistinct(ctx, r.projector, p)
 }
 
 type confinedTransactionStampedRowLockingGenericRepo struct {
@@ -638,7 +799,7 @@ func (r confinedTransactionStampedGenericRepo) UpdateAtTransactionTime(
 	ctx context.Context,
 	rec model.Record,
 ) (model.Record, error) {
-	if err := r.checkIncoming(rec); err != nil {
+	if err := r.checkStoredAndIncoming(ctx, rec); err != nil {
 		return nil, err
 	}
 	return r.stamped.UpdateAtTransactionTime(ctx, rec)
@@ -660,4 +821,21 @@ func (r confinedGenericRepo) checkIncoming(rec model.Record) error {
 		return deniedWrite("a row belonging to another workspace cannot be written")
 	}
 	return nil
+}
+
+// checkStoredAndIncoming requires both the stored row and the proposed record
+// to belong to the confined workspace before any generic update delegate runs.
+// Get uses this decorator in the same tenant transaction. A foreign stored row
+// is ErrNotFound, so the caller must not invoke the raw writer.
+//
+// genericRepo.updateAt predicates id, tenant_id and version and always increments
+// version, so a concurrent stored-lineage change cannot commit under the version
+// just observed. PostgreSQL Mutate is READ COMMITTED and serializes same-tenant
+// writers with an advisory transaction lock; SQLite Mutate inserts the lineage
+// writer row before the callback and therefore already holds the single writer.
+func (r confinedGenericRepo) checkStoredAndIncoming(ctx context.Context, rec model.Record) error {
+	if _, err := r.Get(ctx, model.ID(rec.String(model.ColID))); err != nil {
+		return err
+	}
+	return r.checkIncoming(rec)
 }

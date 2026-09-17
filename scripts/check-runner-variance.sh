@@ -15,6 +15,8 @@
 # Veredictos: 0 = tabla impresa · 2 = NO HE PODIDO MIRAR (nunca 0 por silencio).
 # Nunca sale 1: no es un gate, no hay nada que rehusar.
 set -u
+# Duration table uses awk %f; pin C so the decimal point does not follow the host.
+export LC_ALL=C
 [ -n "${OLIVARES_RV_DEBUG:-}" ] && set -x
 
 # ⛔ EL REPOSITORIO NO SE FIJA EN EL CODIGO, Y SE RESUELVE TARDE. El valor por defecto era el slug
@@ -29,12 +31,13 @@ set -u
 # explicita, `GITHUB_REPOSITORY` (existe en toda corrida de Actions) y el remoto del directorio. Si
 # ninguna contesta NO se adivina: 2 «no he podido mirar», la tercera respuesta de siempre.
 REPO=""
+# Resolve once into $REPO. A self-call here has no base case.
 repo_slug() {
-	[ -n "$(repo_slug)" ] && { printf '%s' "$(repo_slug)"; return 0; }
+	[ -n "$REPO" ] && { printf '%s' "$REPO"; return 0; }
 	REPO="${OLIVARES_RV_REPO:-${GITHUB_REPOSITORY:-}}"
-	[ -n "$(repo_slug)" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || REPO=""
-	[ -n "$(repo_slug)" ] || { echo "runner-variance: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_RV_REPO)" >&2; exit 2; }
-	printf '%s' "$(repo_slug)"
+	[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || REPO=""
+	[ -n "$REPO" ] || { echo "runner-variance: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_RV_REPO)" >&2; exit 2; }
+	printf '%s' "$REPO"
 }
 N="${OLIVARES_RV_RUNS:-14}"
 PAQ="${OLIVARES_RV_PKGS:-modules/governance core/api core/auth core/internal/store/sqlstore}"
@@ -48,39 +51,53 @@ MODO="${OLIVARES_RV_MODE:-pkg}"
 # Medido el 2026-08-30: entre mi commit (14:50Z) y su lectura (15:25Z) entro `33310902759` y el
 # universo paso de 18 utiles a 19. Con `OLIVARES_RV_UNTIL` el universo queda FIJO y citable.
 HASTA="${OLIVARES_RV_UNTIL:-}"
-JOBS_RE="${OLIVARES_RV_JOBNAMES:-race-rest race-modules}"
+JOBS_RE="${OLIVARES_RV_JOBNAMES:-race-rest race-modules race-core}"
 
 command -v jq >/dev/null 2>&1 || { echo "runner-variance: NO HE PODIDO MIRAR: sin jq" >&2; exit 2; }
+
+# Name match: exact declared name, or GitHub's matrix label "<name> (<leg>)".
+# Prefix-only matching is not a match. Names are jq --args, not interpolated.
+[ -n "$JOBS_RE" ] || { echo "runner-variance: NO HE PODIDO MIRAR: OLIVARES_RV_JOBNAMES vacio" >&2; exit 2; }
+# One line, space/tab-separated. read does not glob; a later newline ends the list.
+IFS=$' \t' read -r -a JOB_NAMES <<< "${JOBS_RE}"
+[ "${#JOB_NAMES[@]}" -gt 0 ] || { echo "runner-variance: NO HE PODIDO MIRAR: OLIVARES_RV_JOBNAMES vacio" >&2; exit 2; }
+JQ_WANTED='def matrix_leg(j): startswith(j + " ("); def wanted: . as $n | any($ARGS.positional[]; . as $j | ($n == $j) or ($n | matrix_leg($j)));'
+
+# `--filter <file>` applies that selector to an API-shaped payload. The
+# OLIVARES_RV_JOBS fixture feeds the census directly and never exercises it.
+if [ "${1:-}" = "--filter" ]; then
+  [ -r "${2:-}" ] || { echo "runner-variance: NO HE PODIDO MIRAR: --filter necesita un fichero legible" >&2; exit 2; }
+  jq --args -r "${JQ_WANTED}[.jobs[]|select(.name|wanted)|.name][]" -- "${JOB_NAMES[@]}" < "$2" \
+    || { echo "runner-variance: NO HE PODIDO MIRAR: jq fallo al filtrar" >&2; exit 2; }
+  exit 0
+fi
 
 if [ -n "${OLIVARES_RV_JOBS:-}" ]; then
   [ -r "$OLIVARES_RV_JOBS" ] || { echo "runner-variance: NO HE PODIDO MIRAR: fixture de jobs ilegible" >&2; exit 2; }
   J=$(cat "$OLIVARES_RV_JOBS")
 else
   command -v gh >/dev/null 2>&1 || { echo "runner-variance: NO HE PODIDO MIRAR: sin gh y sin fixture" >&2; exit 2; }
-  FILTRO='.workflow_runs[].id'
+  # Command substitution is a subshell: repo_slug's exit 2 does not stop this script
+  # (set -u, not -e) unless it is propagated before any runs/jobs API call.
+  slug=$(repo_slug) || exit 2
+  [ -n "$slug" ] || { echo "runner-variance: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_RV_REPO)" >&2; exit 2; }
   if [ -n "$HASTA" ]; then
     date -u -d "$HASTA" +%s >/dev/null 2>&1 \
       || { echo "runner-variance: NO HE PODIDO MIRAR: OLIVARES_RV_UNTIL='${HASTA}' no es una fecha que date entienda." >&2; exit 2; }
-    FILTRO=".workflow_runs[]|select(.created_at < \"${HASTA}\")|.id"
   fi
-  IDS=$(gh api "repos/$(repo_slug)/actions/workflows/mainline-ci.yml/runs?per_page=${N}" --jq "$FILTRO" 2>/dev/null) \
+  runs_json=$(gh api "repos/${slug}/actions/workflows/mainline-ci.yml/runs?per_page=${N}" 2>/dev/null) \
     || { echo "runner-variance: NO HE PODIDO MIRAR: la API no devolvio las corridas" >&2; exit 2; }
-  [ -n "$IDS" ] || { echo "runner-variance: NO HE PODIDO MIRAR: cero corridas en $(repo_slug)" >&2; exit 2; }
-  # gh api --jq NO acepta `--args` (es de jq, no de gh): el filtro se construye aqui.
-  SEL=""
-  while IFS= read -r jn; do
-    [ -n "$jn" ] || continue
-    [ -n "$SEL" ] && SEL="$SEL or "
-    SEL="${SEL}.name==\"${jn}\""
-  done <<EOF
-$(printf '%s\n' ${JOBS_RE})
-EOF
-  [ -n "$SEL" ] || { echo "runner-variance: NO HE PODIDO MIRAR: OLIVARES_RV_JOBNAMES vacio" >&2; exit 2; }
+  IDS=$(printf '%s' "$runs_json" | jq -r --arg hasta "$HASTA" \
+    'if $hasta == "" then .workflow_runs[].id else .workflow_runs[]|select(.created_at < $hasta)|.id end') \
+    || { echo "runner-variance: NO HE PODIDO MIRAR: la API no devolvio las corridas" >&2; exit 2; }
+  [ -n "$IDS" ] || { echo "runner-variance: NO HE PODIDO MIRAR: cero corridas en ${slug}" >&2; exit 2; }
   J='{"jobs":[]}'
   while IFS= read -r id; do
     [ -n "$id" ] || continue
-    p=$(gh api "repos/$(repo_slug)/actions/runs/${id}/jobs?per_page=100" \
-         --jq "[.jobs[]|select((${SEL}) and .status==\"completed\")|{run:\"${id}\",job:.name,id:.id,runner:(.runner_name // \"?\"),ini:.started_at,fin:.completed_at,conc:(.conclusion // \"?\"),rojo:([.steps[]?|select(.conclusion==\"failure\")|((.completed_at|fromdateiso8601)-(.started_at|fromdateiso8601))]|first // 0)}]" 2>/dev/null) || continue
+    jobs_json=$(gh api "repos/${slug}/actions/runs/${id}/jobs?per_page=100" 2>/dev/null) || continue
+    p=$(printf '%s' "$jobs_json" | jq --args --arg run "$id" -c \
+      "${JQ_WANTED}[.jobs[]|select((.name|wanted) and .status==\"completed\")|{run:\$run,job:.name,id:.id,runner:(.runner_name // \"?\"),ini:.started_at,fin:.completed_at,conc:(.conclusion // \"?\"),rojo:([.steps[]?|select(.conclusion==\"failure\")|((.completed_at|fromdateiso8601)-(.started_at|fromdateiso8601))]|first // 0)}]" \
+      -- "${JOB_NAMES[@]}") || continue
     J=$(printf '%s' "$J" | jq --argjson p "$p" '.jobs += $p') \
       || { echo "runner-variance: NO HE PODIDO MIRAR: jq fallo al acumular" >&2; exit 2; }
   done <<EOF
@@ -120,7 +137,11 @@ while IFS=$'\t' read -r run job jid runner; do
     [ -r "$OLIVARES_RV_LOGDIR/$run-$job.log" ] || continue
     cp "$OLIVARES_RV_LOGDIR/$run-$job.log" "$log"
   else
-    gh run view --repo "$(repo_slug)" --job "$jid" --log > "$log" 2>/dev/null || continue
+    if [ -z "${slug:-}" ]; then
+      slug=$(repo_slug) || exit 2
+      [ -n "$slug" ] || { echo "runner-variance: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_RV_REPO)" >&2; exit 2; }
+    fi
+    gh run view --repo "$slug" --job "$jid" --log > "$log" 2>/dev/null || continue
   fi
   # LA LINEA DE `go test` LLEVA TABS PROPIOS: el paquete cae en el CUARTO campo del log, no en el
   # tercero. Leer `[2]` da CERO coincidencias con entrada no vacia — medido, y se escribe igual que

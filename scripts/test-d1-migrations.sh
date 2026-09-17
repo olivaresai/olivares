@@ -282,5 +282,47 @@ else
 	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d want rc=2\n' "a MISSING directory is COULD NOT LOOK" "$rc"
 fi
 
+# ⛔ LA TERCERA RESPUESTA. En el arbol PUBLICADO `commercial/` se cura fuera entero, asi que
+# el sujeto por defecto no esta AUSENTE POR ERROR: la pata no tiene sujeto y nunca lo tendra.
+# Un rc=2 es correcto como «no he mirado» y es RUIDO como veredicto — en el CI publico tumba
+# el job por una ausencia deliberada. Los tres casos van juntos: el verde solo significa algo
+# si el mutante que cambia la clasificacion devuelve el 2, y si apuntar la pata a otro sitio
+# lo sigue devolviendo tambien.
+PUB="$(mkdir_d)"
+mkdir -p "$PUB/scripts"
+cp "$HERE/hub-leg.sh" "$PUB/scripts/hub-leg.sh"
+cp "$SUT" "$PUB/scripts/check-d1-migrations.sh"
+bash "$HERE/hub-leg.sh" --marker-signature > "$PUB/PUBLIC-EXPORT.md"
+( cd "$PUB" && git init -q . && git config user.email t@t && git config user.name t )
+
+out=$( cd "$PUB" && bash scripts/check-d1-migrations.sh 2>&1 ); rc=$?
+if [ "$rc" -eq 0 ] && grep -q 'SCOPED' <<<"$out"; then
+	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "export publico: SCOPED rc 0, no un 2" "$rc"
+else
+	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d\n' "export publico: SCOPED rc 0, no un 2" "$rc"
+	printf '     %s\n' "$out"
+fi
+
+# MUTANTE: el MISMO arbol deja de ser publico en cuanto aparece un camino hub-only. Si el rc
+# siguiera en 0, la excepcion seria un comodin en vez de una respuesta acotada.
+mkdir -p "$PUB/design"
+out=$( cd "$PUB" && bash scripts/check-d1-migrations.sh 2>&1 ); rc=$?
+if [ "$rc" -eq 2 ]; then
+	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "mutante clasificador->hub: vuelve el 2" "$rc"
+else
+	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d want rc=2\n' "mutante clasificador->hub: vuelve el 2" "$rc"
+	printf '     %s\n' "$out"
+fi
+rmdir "$PUB/design"
+
+# Y la excepcion es SOLO para el sujeto POR DEFECTO, tambien dentro del export.
+out=$( cd "$PUB" && bash scripts/check-d1-migrations.sh --dir no-existe 2>&1 ); rc=$?
+if [ "$rc" -eq 2 ]; then
+	PASS=$((PASS + 1)); printf 'ok   %-60s rc=%d\n' "en el export, un --dir ajeno sigue dando 2" "$rc"
+else
+	FAIL=$((FAIL + 1)); printf 'FAIL %-60s got rc=%d want rc=2\n' "en el export, un --dir ajeno sigue dando 2" "$rc"
+	printf '     %s\n' "$out"
+fi
+
 printf '\ncheck-d1-migrations: %d passed, %d failed, %ds wall\n' "$PASS" "$FAIL" "$((SECONDS - START))"
 [ "$FAIL" -eq 0 ] || exit 1

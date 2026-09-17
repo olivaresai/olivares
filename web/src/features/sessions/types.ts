@@ -23,6 +23,21 @@
 export type CcState =
   'active' | 'idle' | 'ended' | 'silent_evasion' | (string & {})
 
+/**
+ * Which CHANNEL a live row was folded from — computed by the server, never from a
+ * payload label (modules/sessions/live_scope.go):
+ *  - `legacy`   no stamped source registration (a legacy connector, a pushed
+ *               collector observation, an old event). Never assigned a profile.
+ *  - `observed` a registered source dedicated to a provider profile by an active
+ *               binding at the exact applied revision.
+ *  - `source`   a registered source with no verifiable profile: known channel,
+ *               unattributed instance.
+ *  - `managed`  the plane's own bridge, for a run it launched — the ONLY
+ *               attribution that carries `canonical_sid` and `run_ref`.
+ */
+export type Attribution =
+  'legacy' | 'observed' | 'source' | 'managed' | (string & {})
+
 /** One live session snapshot (GET /live, /live/{ref}, and the /stream frames). */
 export interface LiveDTO {
   session_ref: string
@@ -63,9 +78,31 @@ export interface LiveDTO {
    * engine folds the WEAKEST value seen. ABSENT when unknown — and a blank badge tells
    * the truth where "enforced" by default would not. */
   posture?: 'enforced' | 'observed' | (string & {})
+
+  // B2 — the row's identity beyond its external id. Two homes of one provider can
+  // announce the SAME session id for two different sessions, so `session_ref` is no
+  // longer a key: `live_ref` is the row's own opaque id, and every new reader
+  // (detail, timeline, SSE, the runs lookup) navigates by it. References and labels
+  // only — never a path.
+  /** The opaque, unambiguous reference of THIS row. */
+  live_ref: string
+  attribution: Attribution
+  /** The provider profile the row is attributed to (observed/managed rows). */
+  provider_profile_ref?: string
+  /** The profile's driver ("claude", "codex"), fixed by the profile — a payload label
+   * cannot move it. */
+  provider?: string
+  environment_ref?: string
+  /** The source→profile binding an observed row was attributed under. */
+  source_binding_ref?: string
+  /** Present ONLY on a managed row: the canonical session the bridge proved, and the
+   * run that owns it. An observed row that copies a run's id carries neither. */
+  canonical_sid?: string
+  run_ref?: string
 }
 
-/** One reconstructible timeline entry (GET /live/{ref}/timeline), chronological. */
+/** One reconstructible timeline entry (GET /live/by-id/{live_ref}/timeline, or the
+ * LEGACY GET /live/{ref}/timeline), chronological. */
 export interface TimelineDTO {
   at: string
   /** The entry class: a tool call, an MCP call, a cost event, or a finding. */

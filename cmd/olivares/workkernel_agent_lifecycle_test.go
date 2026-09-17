@@ -14,6 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 type workAgentLifecycleStub struct {
@@ -229,6 +230,17 @@ func TestWiredResolverRealLifecycleSnapshotSurvivesWorkspaceConfinement(t *testi
 	}
 
 	resolver := workIdentityResolver{st: st, agentLifecycle: gov}
+	// validateConfined is the Plan/Validate half of the seam: the same opaque
+	// snapshot, read-validated through the request's confined View.
+	validateConfined := func(snapshot sessions.WorkAgentAuthoritySnapshot) error {
+		return st.View(ctx, tenant, func(raw store.Scope) error {
+			confined, err := store.ConfineWorkspace(ctx, raw, workspace)
+			if err != nil {
+				return err
+			}
+			return resolver.ValidateAgentWorkAuthorityInScope(ctx, confined, snapshot)
+		})
+	}
 	snapshot, err := resolver.ObserveAgentWorkAuthority(
 		ctx, tenant, workspace, ownerID.String(), ownerExternal,
 	)
@@ -245,6 +257,27 @@ func TestWiredResolverRealLifecycleSnapshotSurvivesWorkspaceConfinement(t *testi
 		return resolver.LockAgentWorkAuthority(ctx, confined, tampered)
 	}); !errors.Is(err, store.ErrRowLockUnavailable) {
 		t.Fatalf("tampered authority digest err = %v, want deny-closed", err)
+	}
+	if err := validateConfined(tampered); !errors.Is(err, store.ErrRowLockUnavailable) {
+		t.Fatalf("read-validate tampered authority digest err = %v, want deny-closed", err)
+	}
+	forgedToken := snapshot
+	forgedToken.Token = []store.AuthorizationFactRef{}
+	if err := validateConfined(forgedToken); !errors.Is(err, store.ErrRowLockUnavailable) {
+		t.Fatalf("read-validate foreign token err = %v, want deny-closed", err)
+	}
+	if err := validateConfined(snapshot); err != nil {
+		t.Fatalf("read-validate real lifecycle snapshot through confined View: %v", err)
+	}
+	// The read validator is not a lock: a write transaction cannot use it.
+	if err := st.Mutate(ctx, tenant, func(raw store.Scope) error {
+		confined, err := store.ConfineWorkspace(ctx, raw, workspace)
+		if err != nil {
+			return err
+		}
+		return resolver.ValidateAgentWorkAuthorityInScope(ctx, confined, snapshot)
+	}); err == nil {
+		t.Fatal("read validator accepted a mutation transaction")
 	}
 	if err := st.Mutate(ctx, tenant, func(raw store.Scope) error {
 		confined, err := store.ConfineWorkspace(ctx, raw, workspace)
@@ -278,6 +311,9 @@ func TestWiredResolverRealLifecycleSnapshotSurvivesWorkspaceConfinement(t *testi
 		return resolver.LockAgentWorkAuthority(ctx, confined, snapshot)
 	}); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("stale authenticated owner mapping err = %v, want ErrConflict", err)
+	}
+	if err := validateConfined(snapshot); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("read-validate stale authenticated owner mapping err = %v, want ErrConflict", err)
 	}
 	rotated, err := resolver.ObserveAgentWorkAuthority(
 		ctx, tenant, workspace, ownerID.String(), ownerExternal,
@@ -328,6 +364,9 @@ func TestWiredResolverRealLifecycleSnapshotSurvivesWorkspaceConfinement(t *testi
 	}); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("ambiguous sponsor after Observe err = %v, want ErrConflict", err)
 	}
+	if err := validateConfined(snapshot); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("read-validate ambiguous sponsor after Observe err = %v, want ErrConflict", err)
+	}
 	if result, err := coreengine.ActivateDirectoryWriter(
 		ctx, st, cfg, coreengine.DirectoryWriterActivationRequest{
 			ExpectedGeneration: 1,
@@ -357,6 +396,50 @@ func TestWiredResolverRealLifecycleSnapshotSurvivesWorkspaceConfinement(t *testi
 		return resolver.LockAgentWorkAuthority(ctx, confined, snapshot)
 	}); err != nil {
 		t.Fatalf("unique sponsor no-fire after duplicate removal: %v", err)
+	}
+	if err := validateConfined(snapshot); err != nil {
+		t.Fatalf("read-validate unique sponsor no-fire after duplicate removal: %v", err)
+	}
+
+	// A sponsor revision that keeps it an enabled human still changes the exact
+	// fact version, so both halves refuse the old snapshot and a fresh one reads.
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		sponsors, _, err := sc.Identities().List(ctx, model.Query{Filters: []model.Filter{{
+			Column: "external_id", Op: model.OpEq, Value: sponsorExternal,
+		}}, Limit: 2})
+		if err != nil {
+			return err
+		}
+		if len(sponsors) != 1 {
+			return errors.New("unique sponsor not found")
+		}
+		sponsor := sponsors[0]
+		sponsor.Name = "authority sponsor revised"
+		_, err = sc.Identities().Update(ctx, sponsor)
+		return err
+	}); err != nil {
+		t.Fatalf("revise authority sponsor: %v", err)
+	}
+	if err := validateConfined(snapshot); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("read-validate revised sponsor err = %v, want ErrConflict", err)
+	}
+	if err := st.Mutate(ctx, tenant, func(raw store.Scope) error {
+		confined, err := store.ConfineWorkspace(ctx, raw, workspace)
+		if err != nil {
+			return err
+		}
+		return resolver.LockAgentWorkAuthority(ctx, confined, snapshot)
+	}); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("lock revised sponsor err = %v, want ErrConflict", err)
+	}
+	snapshot, err = resolver.ObserveAgentWorkAuthority(
+		ctx, tenant, workspace, ownerID.String(), ownerExternal,
+	)
+	if err != nil || !snapshot.Eligible {
+		t.Fatalf("refresh revised sponsor snapshot = %#v, %v", snapshot, err)
+	}
+	if err := validateConfined(snapshot); err != nil {
+		t.Fatalf("read-validate refreshed sponsor snapshot: %v", err)
 	}
 
 	// FIRE: changing the real governance row after observation invalidates the
@@ -390,6 +473,9 @@ func TestWiredResolverRealLifecycleSnapshotSurvivesWorkspaceConfinement(t *testi
 		return resolver.LockAgentWorkAuthority(ctx, confined, snapshot)
 	}); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("stale real lifecycle snapshot err = %v, want ErrConflict", err)
+	}
+	if err := validateConfined(snapshot); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("read-validate stale real lifecycle snapshot err = %v, want ErrConflict", err)
 	}
 	fresh, err := resolver.ObserveAgentWorkAuthority(
 		ctx, tenant, workspace, ownerID.String(), ownerExternal,

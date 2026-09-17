@@ -269,6 +269,9 @@ type directNoticeFixture struct {
 	ref        auth.PrincipalRef
 	source     *communicationAuthoritySourceRecorder
 	authUser   auth.Principal
+	// skipOperationClockReanchor keeps the bootstrap/setup clock for a
+	// constructor-local negative control. Ordinary fixtures leave it false.
+	skipOperationClockReanchor bool
 }
 
 type directNoticeAuthorityTrace struct {
@@ -450,6 +453,30 @@ func (s *directNoticeFinalExpiryScope) ReadDirectoryTombstone(
 	ref store.DirectoryPrincipalRef,
 ) (store.DirectoryTombstoneWitness, bool, error) {
 	return s.directory.ReadDirectoryTombstone(ctx, ref)
+}
+
+// installFinalTransactionTimeOnExistingClockSeam wraps ModuleData with the
+// existing directNoticeFinalExpiryData Mutate seam. The counter starts at 2 so
+// the first observation returns `final` after still calling the real
+// TransactionClock. Restore immediately after the negative call; successful
+// writes must use the original ModuleData.
+func installFinalTransactionTimeOnExistingClockSeam(
+	t *testing.T,
+	m *Module,
+	final time.Time,
+) (*directNoticeFinalExpiryData, func()) {
+	t.Helper()
+	if m == nil {
+		t.Fatal("controlled transaction-time seam requires a module")
+	}
+	base := m.data
+	clock := &directNoticeFinalExpiryData{
+		inner: base,
+		final: model.NewTimestamp(final),
+	}
+	clock.calls.Store(2)
+	m.data = clock
+	return clock, func() { m.data = base }
 }
 
 func (d *directNoticeDataTrace) View(
@@ -693,6 +720,86 @@ func (r directNoticeReplayRepository) List(
 	return rows, model.Page{}, nil
 }
 
+func observeCommunicationOperationClock(t *testing.T, m *Module, scope DirectoryScopeRef) time.Time {
+	t.Helper()
+	if m == nil {
+		t.Fatal("operation clock observation requires a module")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	observedAt, err := m.observeChannelCatalogDatabaseTime(ctx, scope)
+	if err != nil {
+		t.Fatalf("observe operation transaction clock: %v", err)
+	}
+	return observedAt.UTC()
+}
+
+type directNoticeSetupClock struct {
+	extraAnchorAge time.Duration
+	skipReanchor   bool
+}
+
+func bindTestClockToHistoricalObservation(t *testing.T, clock *testClock, engineNow time.Time) time.Time {
+	t.Helper()
+	if clock == nil {
+		t.Fatal("operation clock bind requires the fixture test clock")
+	}
+	historical := engineNow.UTC().Add(-time.Minute)
+	if historical.Before(clock.get()) {
+		t.Fatalf("historical operation now %s is behind fixture clock %s: a reanchor must "+
+			"never move the fixture clock backwards", historical, clock.get())
+	}
+	clock.set(historical)
+	return historical
+}
+
+func (f *directNoticeFixture) bindHistoricalOperationClock(t *testing.T, historical time.Time) {
+	t.Helper()
+	f.now = historical
+	if f.closure != nil {
+		f.closure.now = historical
+	}
+	if f.authorizer != nil {
+		f.authorizer.now = historical
+	}
+	if f.source != nil {
+		f.source.evidence.ObservedAt = historical
+		f.source.evidence.FreshUntil = historical.Add(5 * time.Minute)
+	}
+	if resolver, ok := f.m.communicationDirectoryResolver.(*directNoticeReadDirectoryResolver); ok {
+		resolver.now = historical
+	}
+	switch closure := f.m.communicationGrantClosure.(type) {
+	case *directNoticeReadClosureResolver:
+		closure.now = historical
+	case *directNoticeGrantClosureResolver:
+		closure.now = historical
+	}
+}
+
+// reanchorOperationClock samples store.TransactionClock after expensive
+// setup and rebinds fixture.now, the test clock, operation authorizer/closure
+// and request evidence to that fresh sample minus one minute, keeping the
+// original five-minute evidence width. It does not rewrite already-committed
+// rows or published deadlines.
+func (f *directNoticeFixture) reanchorOperationClock(t *testing.T) time.Time {
+	t.Helper()
+	if f == nil {
+		t.Fatal("operation clock reanchor requires a fixture")
+	}
+	if f.skipOperationClockReanchor {
+		return f.now
+	}
+	clock, ok := f.m.clock.(*testClock)
+	if !ok {
+		t.Fatalf("fixture clock is %T, not the test clock this reanchor moves", f.m.clock)
+	}
+	engineNow := observeCommunicationOperationClock(t, f.m, f.scope)
+	historical := bindTestClockToHistoricalObservation(t, clock, engineNow)
+	f.bindHistoricalOperationClock(t, historical)
+	return historical
+}
+
 func newDirectNoticeFixture(t *testing.T) directNoticeFixture {
 	return newDirectNoticeFixtureWithOptions(t, AckPolicyNone, 0)
 }
@@ -721,10 +828,18 @@ func newDirectNoticeFixtureWithGrantOptions(
 
 func newDirectNoticeExactAuthorityFixture(t *testing.T) directNoticeFixture {
 	t.Helper()
-	return newDirectNoticeFixtureForBackend(t, communicationSchemaBackend{
+	return newDirectNoticeExactAuthorityFixtureWithClock(t, directNoticeSetupClock{})
+}
+
+func newDirectNoticeExactAuthorityFixtureWithClock(
+	t *testing.T,
+	setup directNoticeSetupClock,
+) directNoticeFixture {
+	t.Helper()
+	return newDirectNoticeFixtureForBackendWithClock(t, communicationSchemaBackend{
 		name: "sqlite-direct-notice-authority", engineName: store.EngineSQLite,
 		dsn: filepath.Join(t.TempDir(), "direct-notice-authority.db"),
-	}, AckPolicyNone, 0, true, true, true)
+	}, AckPolicyNone, 0, true, true, true, setup)
 }
 
 func newDirectNoticeFixtureForBackend(
@@ -737,8 +852,28 @@ func newDirectNoticeFixtureForBackend(
 	exactAuthority bool,
 ) directNoticeFixture {
 	t.Helper()
+	return newDirectNoticeFixtureForBackendWithClock(
+		t, backend, ackPolicy, routeGuardAhead, senderCanWrite, recipientCanRead, exactAuthority,
+		directNoticeSetupClock{},
+	)
+}
+
+func newDirectNoticeFixtureForBackendWithClock(
+	t *testing.T,
+	backend communicationSchemaBackend,
+	ackPolicy AckPolicy,
+	routeGuardAhead int64,
+	senderCanWrite bool,
+	recipientCanRead bool,
+	exactAuthority bool,
+	setup directNoticeSetupClock,
+) directNoticeFixture {
+	t.Helper()
+	if setup.extraAnchorAge < 0 {
+		t.Fatalf("setup anchor age %s must not be negative", setup.extraAnchorAge)
+	}
 	ctx := context.Background()
-	now := time.Now().UTC().Add(-time.Minute)
+	now := time.Now().UTC().Add(-time.Minute).Add(-setup.extraAnchorAge)
 	clock := &testClock{now: now}
 	fixture := communicationOpenFixtureWithClock(t, backend, clock)
 	fixture.m.clock = clock
@@ -793,6 +928,11 @@ func newDirectNoticeFixtureForBackend(
 			t.Fatal("authenticated direct notice sender has no opaque ref")
 		}
 		authUser = resolvedSender
+	}
+
+	if !setup.skipReanchor {
+		engineNow := observeCommunicationOperationClock(t, fixture.m, scope)
+		now = bindTestClockToHistoricalObservation(t, clock, engineNow)
 	}
 
 	channelID := model.NewID()
@@ -965,6 +1105,7 @@ func newDirectNoticeFixtureForBackend(
 		sender: sender, recipient: recipient, epoch: epoch,
 		attestor: attestor, closure: closure, authorizer: authorizer,
 		authr: authr, ref: ref, source: authoritySource, authUser: authUser,
+		skipOperationClockReanchor: setup.skipReanchor,
 	}
 }
 
@@ -1708,7 +1849,7 @@ func TestDirectNoticePublishRequiresUserBackedPrincipalShapeBeforeCommunicationR
 	}
 }
 
-func TestPublishDirectNoticeExactRejectsNonUserShapesWithoutCommunicationReads(t *testing.T) {
+func TestPublishDirectNoticeExactNonUserRequiresCurrentDirectoryAndClaim(t *testing.T) {
 	t.Parallel()
 
 	t.Run("communication_session", func(t *testing.T) {
@@ -1745,8 +1886,8 @@ func TestPublishDirectNoticeExactRejectsNonUserShapesWithoutCommunicationReads(t
 			ctx, fixture.scope, ref,
 			fixture.command(model.NewID(), "unsupported communication session"),
 		)
-		if !errors.Is(err, ErrCommunicationForbidden) ||
-			counting.viewCalls != 0 || counting.mutateCalls != 0 ||
+		if !errors.Is(err, ErrCommunicationEvidenceUnknown) ||
+			counting.viewCalls != 1 || counting.mutateCalls != 0 ||
 			fixture.authorizer.calls.Load() != 0 || fixture.source.calls != 1 {
 			t.Fatalf("communication-session publish = %v calls view/mutate/legacy/source %d/%d/%d/%d",
 				err, counting.viewCalls, counting.mutateCalls,
@@ -1781,7 +1922,7 @@ func TestPublishDirectNoticeExactRejectsNonUserShapesWithoutCommunicationReads(t
 		_, err = fixture.m.publishDirectNoticeWithAuthority(
 			ctx, fixture.scope, ref, fixture.command(model.NewID(), "unsupported agent"),
 		)
-		if !errors.Is(err, ErrCommunicationForbidden) ||
+		if !errors.Is(err, ErrCommunicationEvidenceUnknown) ||
 			counting.viewCalls != 0 || counting.mutateCalls != 0 ||
 			fixture.authorizer.calls.Load() != 0 || fixture.source.calls != 1 || resolver.calls != 1 {
 			t.Fatalf("agent publish = %v calls view/mutate/legacy/source/resolver %d/%d/%d/%d/%d",
@@ -1960,7 +2101,7 @@ func TestDirectNoticePublishAuthorityPreflightCommitmentCoversEveryField(t *test
 	}
 
 	wantExported := []string{
-		"Command", "Scope", "Principal", "Sender", "Channel", "IDs", "Payload",
+		"Command", "Scope", "Principal", "Sender", "SenderResolution", "Channel", "IDs", "Payload",
 		"AudienceRequest", "AudienceAttestation", "Snapshot", "GrantClosure",
 		"RecipientGrantClosure", "CoreWitness", "ActorFingerprint", "IdempotencyHash",
 		"RequestDigest",
@@ -2000,6 +2141,11 @@ func TestDirectNoticePublishAuthorityPreflightCommitmentCoversEveryField(t *test
 		}},
 		{field: "Sender", mutate: func(candidate *directNoticePublishPreflight) {
 			candidate.Sender.Ref = model.NewID().String()
+		}},
+		{field: "SenderResolution", mutate: func(candidate *directNoticePublishPreflight) {
+			candidate.SenderResolution = &PrincipalResolution{
+				Outcome: PrincipalUnknown, Code: "commitment_mutation",
+			}
 		}},
 		{field: "Channel", mutate: func(candidate *directNoticePublishPreflight) {
 			candidate.Channel.Description += " commitment mutation"
@@ -2893,6 +3039,7 @@ func TestPublishDirectNoticeLocksOnlyCurrentGrantAndLabelRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed historical Channel rows: %v", err)
 	}
+	fixture.reanchorOperationClock(t)
 	principal := CommunicationPrincipal{UserID: fixture.sender}
 	cmd, actor, idem, request, err := normalizeDirectNoticePublishCommand(
 		fixture.scope, principal, fixture.command(model.NewID(), "historical rows"),
@@ -3382,22 +3529,6 @@ func TestDirectNoticeReplayRejectsCrossSliceAndTemporalAnchors(t *testing.T) {
 			}
 			rows[workEventKind][0][colEventPayload] = string(raw)
 			rows[workEventKind][0][colEventPayloadHash] = hashBytes(raw)
-		}},
-		{name: "sealed message", mutate: func(_ *CommunicationCommandReceipt, rows map[model.Kind][]model.Record) {
-			message, decodeErr := messageFromRecord(rows[messageKind][0], 0)
-			if decodeErr != nil {
-				t.Fatalf("decode message for sealed replay mutant: %v", decodeErr)
-			}
-			message.Payload.Encoding = PayloadSealedV1
-			message.Payload.PlainJSON = nil
-			message.Payload.Sealed = &SealedPayload{Ciphertext: []byte("ciphertext"), KeyVersion: "seal-v1"}
-			message.Payload.SealKeyVersion = "seal-v1"
-			message.Payload.DigestKeyVersion = "digest-v1"
-			record, encodeErr := messageToRecord(message, 0)
-			if encodeErr != nil {
-				t.Fatalf("encode sealed replay mutant: %v", encodeErr)
-			}
-			rows[messageKind][0] = record
 		}},
 		{name: "receipt time", mutate: func(receipt *CommunicationCommandReceipt, _ map[model.Kind][]model.Record) {
 			receipt.CompletedAt = receipt.CompletedAt.Add(time.Second)

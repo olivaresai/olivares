@@ -18,11 +18,12 @@ und das die [API-Referenz](/reference/api/) rendert:
 | TypeScript | `@olivaresai/client` | globales `fetch` (Node ≥ 20, Deno, Browser) |
 
 :::note[Distributionsstatus]
-Die SDKs liegen im Produkt-Repository unter `clients/` und werden mit ihm versioniert. Die
-Veröffentlichung in die öffentlichen Registries (pkg.go.dev, Maven Central, PyPI, npm)
-erfolgt mit dem öffentlichen Release — bis dahin beziehen Sie sie aus dem Repo
+Die SDKs liegen im Produkt-Repository unter `clients/` und werden mit ihm versioniert.
+Diese Seite behauptet nicht, dass die v26.9.0-Clients auf pkg.go.dev, Maven Central,
+PyPI oder npm liegen. Beziehen Sie sie aus dem Repo
 (Go-Modulpfad oben, `mvn -f clients/java install`, `pip install ./clients/python`,
-`npm install ./clients/typescript`).
+`npm install ./clients/typescript`), sofern Sie ein Registry-Paket für diese
+Version nicht selbst verifiziert haben.
 :::
 
 Alle vier teilen ein Design. Ein handgeschriebener Kern implementiert das vertragliche

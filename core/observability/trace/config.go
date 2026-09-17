@@ -61,8 +61,10 @@ type Config struct {
 	// Enabled turns on the recording TracerProvider/MeterProvider and the OTLP
 	// exporters. It is true when OLIVARES_OTEL_ENABLED is truthy OR an endpoint is set.
 	Enabled bool
-	// Endpoint is the OTLP collector endpoint (host:port for gRPC; a URL or host:port
-	// for HTTP). Empty disables export (no-op mode).
+	// Endpoint is the OTLP collector endpoint, host:port or a URL, shared by traces and
+	// metrics. For http/protobuf, a URL whose path is empty or "/" is a base URL: traces go
+	// to /v1/traces and metrics to /v1/metrics. A URL with any other path is used unchanged
+	// for both signals. Empty disables export (no-op mode).
 	Endpoint string
 	// Protocol is grpc or http/protobuf.
 	Protocol Protocol

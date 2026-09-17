@@ -16,7 +16,7 @@
 // "Careful adoption of agentic AI services" (2026-05-01): "Replace static,
 // long-lived secrets with ephemeral credentials".
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): the OAuth2 client-credentials
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): the OAuth2 client-credentials
 // token POST is the only non-GET call, every Graph call is a GET through the
 // shared httpx client, and the connector pulls identity METADATA only — object
 // ids, display names, account status, blueprint linkage, ownership refs and

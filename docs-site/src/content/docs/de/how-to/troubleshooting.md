@@ -61,6 +61,42 @@ abschließende `=`-Padding: die Engine gibt absichtlich base64 ohne Padding aus,
 damit der Wert im Log unquotiert erscheint und ein Copy-Paste übersteht — curl
 verlangt jedoch die gepaddete Form.
 
+## Diagnose der Host-Installation
+
+Die generierte CLI-Referenz beschreibt `olivares doctor` so: diagnose this host
+installation without printing secrets
+([CLI](/reference/cli/#command-olivares-doctor)). Flags umfassen `--data-dir`, `--mode` (`auto` \| `user` \| `system`), `--init` (`auto` \| `systemd` \| `openrc` \| `launchd`), `--config`, `--unit`, `--binary`, `--server`, `--timeout`, `--ca-cert`, `--audit-tenant`, `--check-updates`.
+Behandeln Sie diese Tabelle nicht als extra Hilfetext; sie ist dieser
+generierte Befehl.
+
+### `agentops-layout` check
+
+`olivares doctor` berichtet eine Prüfung namens `agentops-layout`
+(`CHANGELOG.md` `[26.9.0]`; `cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`).
+Es ist kein Unterbefehl. Sie misst das native AgentOps-Layout, das das
+Ownership-Manifest aufzeichnet: das verwaltete Drop-in muss mit seinem Mode
+existieren und das aufgezeichnete claude `HOME`, Token-Verzeichnis und Workspace
+nennen; die Runtime-Env muss mit einem Config-Mode existieren (Werte werden nie
+gelesen); der Workspace muss ein Verzeichnis sein (`docs/RELEASE-INSTALLER.md`).
+
+Statuswerte, die die Prüfung zurückgibt:
+
+| Status | When |
+|---|---|
+| `not_applicable` | no readable manifest; malformed manifest; or the manifest records no AgentOps files (`dropin`, `runtime-env`, `workspace_dir` all empty) |
+| `fail` | drop-in does not reference a recorded token (`$dataDir/claude-home`, `$dataDir/run`, or `workspace_dir`); workspace path is absent or is not a directory |
+| `unknown` | drop-in or workspace is not readable |
+| `pass` | drop-in, runtime-env (values not read) and workspace directory agree with the record |
+
+Required ist false, bis das Manifest mindestens eine AgentOps-Datei aufzeichnet;
+dann ist die Prüfung required. Remediation-Strings, die die Engine druckt,
+umfassen
+`rerun install-agentops.sh; the managed drop-in and the recorded layout disagree`
+und `recreate the recorded workspace or rerun install-agentops.sh with OLIVARES_WORKSPACE_DIR`.
+
+Text und `-o json` enthalten Schlüsselnamen und Pfade, aber niemals
+Konfigurationswerte (`docs/RELEASE-INSTALLER.md`).
+
 ## Quellen und die access map
 
 ### Die Karte ist leer
@@ -103,17 +139,43 @@ die Sie beabsichtigen.
 
 ### `/readyz` gibt 503 zurück
 
-Lesen Sie den Body — er unterscheidet die beiden Fälle:
+Lesen Sie den Body. Ein 503 ist nicht ready und kein Erfolg. Dass `/livez`
+weiter 200 liefert, bedeutet nur, dass der Prozess läuft; dass `/pod-readyz`
+weiter 200 liefert, bedeutet nur Pod-Gesundheit (Store erreichbar) ohne
+Leadership-Prüfung und ohne First-Boot-Fähigkeitssonde. Keines von beiden
+entblockt das Standard-Helm-Chart oder das Flat-Manifest, die `/readyz` als
+Container-`readinessProbe` verdrahten.
 
 - `{"status":"unavailable","store":"down"}` — der Store ist nicht erreichbar. Bei
   SQLite: Festplatte voll, PVC-Probleme, Dateiberechtigungen. Bei Postgres:
   Erreichbarkeit und Anmeldedaten. **Liveness besteht bewusst weiter** (der Prozess
   lebt), sodass bei einem Store-Ausfall nichts in eine Restart-Schleife gerät; starten
   Sie Pod/Service nach Behebung des Stores manuell neu, falls er festgefahren bleibt.
-- `{"status":"standby","leader":false,…}` — ein HA-Standby, der ehrlich antwortet. Kein
+- `{"status":"standby","store":"up","leader":false}` — ein HA-Standby, der ehrlich antwortet. Kein
   Fehler: der Service routet zum Leader; Standbys drainen by design. Wenn **alle**
   Replikas Standby melden, ist die Leader-Wahl festgefahren — prüfen Sie die
   Konnektivität der Postgres-Advisory-Locks.
+- `{"status":"setup_blocked","store":"up","leader":true,"setup_required":true,"code":"cross_tenant_admin_pool_not_configured"}`
+  — der PostgreSQL-Erststart kann Organisationen nicht autoritativ enumerieren.
+  Provisionieren Sie die administrative Rolle `NOSUPERUSER BYPASSRLS` und
+  `--admin-dsn` ([Postgres auf Kubernetes](/de/tutorials/getting-started/kubernetes/#2-postgres-mandantenfähig)).
+  Der Body trägt ein festes Remedy. Bis diese Voraussetzung korrigiert ist,
+  hält die Standard-Readiness-Sonde den Pod Not Ready. Binden Sie die Sonde
+  nicht um, um das zu verbergen.
+- `{"status":"setup_unavailable","store":"up","leader":true,"code":"setup_state_unavailable"}`
+  — dieser Knoten konnte nicht beobachten, ob die Installation eingerichtet
+  ist. `setup_required` wird **weggelassen**, weil sein Wert unbekannt ist.
+  Das ist keine bekannte leere Installation.
+- `{"status":"setup_unavailable","store":"up","leader":true,"setup_required":true,"code":"setup_probe_unavailable"}`
+  — die Installation ist bekanntermaßen nicht eingerichtet, aber die
+  First-Boot-Fähigkeitssonde ist aus einem anderen Grund als der
+  Administrative-Pool-Verweigerung fehlgeschlagen. Ein Timeout ist kein
+  Beleg für einen leeren Bestand.
+
+Ein 200 `{"status":"ok",…,"setup_required":true}` ist eine andere Beobachtung:
+das First-Boot-Setup kann versucht werden. `POST /v1/setup` wiederholt
+weiterhin seine Autoritätsprüfungen. Dieses 200 verbraucht kein
+Verfügbarkeitsbudget; diese 503 schon.
 
 ### Der Pod ist gestorben und nichts hat übernommen
 

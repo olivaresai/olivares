@@ -12,6 +12,13 @@ des traces OTLP. Ce n'est pas le connecteur de l'API xAI : il n'interroge aucun 
 ne nécessite aucun secret du fournisseur. Le contrôle préventif des outils utilise
 `olivares grok-hook` et un PEP local distinct.
 
+Cette page est le chemin **connecteur et hook PEP**. Elle ne lance pas la CLI
+officielle Grok comme enfant gouverné. Ce chemin d’exploitation est
+[Exploiter une session fournisseur](/how-to/operate-provider-sessions/)
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` plus un profil fournisseur ;
+`CHANGELOG.md` `[26.9.0]`). La compatibilité avec un compte Grok officiel
+authentifié n’y est pas affirmée.
+
 ## Ajouter Grok Build
 
 ### Prérequis

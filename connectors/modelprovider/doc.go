@@ -24,7 +24,7 @@
 //     it a typed Go contract holds the connector inside the /connectors+/sdk
 //     license boundary without touching the frozen S02 wire contract.
 //
-// Security posture (docs/SECURITY-HARDENING.md-3): every connector built on this package is
+// Security posture (docs/SECURITY-HARDENING.md §0-3): every connector built on this package is
 // read-only over the provider API, persists no secrets, and is minimal-data — it
 // carries token counts, cost, capabilities and inventory METADATA, never prompts,
 // completions, or API-key values. Admin/usage APIs do not return key values; this

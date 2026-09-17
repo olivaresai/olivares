@@ -49,9 +49,17 @@ const ADMIN_TRANSITIONS = ['item.fail', 'item.archive'] as const
 export function ItemDetailSheet({
   itemId,
   onOpenChange,
+  onOffer,
 }: {
   itemId: string | null
   onOpenChange: (open: boolean) => void
+  /**
+   * K3 I3 — hand this item to the communications-owned offer host mounted by the
+   * parent. The sheet passes an ID and NOTHING ELSE: its cached snapshot is what the
+   * operator is looking at, not authority for a precondition, and the host re-reads
+   * the item itself before anything can be confirmed.
+   */
+  onOffer?: (itemId: string) => void
 }) {
   const { t } = useTranslation('work')
   const { activeTenant } = useAuth()
@@ -121,6 +129,7 @@ export function ItemDetailSheet({
                     item={snapshot.item}
                     etag={etag}
                     onIntent={setIntent}
+                    onOffer={onOffer}
                   />
                 </TabsContent>
                 <TabsContent value="acceptance">
@@ -173,16 +182,27 @@ function OverviewTab({
   item,
   etag,
   onIntent,
+  onOffer,
 }: {
   item: WorkItem
   etag: string | null
   onIntent: (i: WorkIntent) => void
+  onOffer?: (itemId: string) => void
 }) {
   const { t } = useTranslation('work')
   const etiquetaDuenno = useOwnerLabel()
   const { activeTenant, can } = useAuth()
   const canWrite = can('sessions:work:write')
   const canAdmin = can('sessions:work:admin')
+  /**
+   * The offer is not a WorkItem transition and does not borrow its gate. The other
+   * controls on this row run `POST /work-items/{id}/…` under `sessions:work:write`;
+   * offering a handoff runs `POST /v1/m/sessions/handoffs` under
+   * `sessions:message-send:write`, and the engine checks item ownership and channel
+   * authority itself. Nesting this control in the `canWrite` block would hide it
+   * from a principal who may send on a channel but not transition the item.
+   */
+  const canOffer = can('sessions:message-send:write')
 
   return (
     <div className="flex flex-col gap-4 py-4">
@@ -224,6 +244,22 @@ function OverviewTab({
         <dt className="text-muted-foreground">{t('detail.etag')}</dt>
         <dd className="font-mono text-xs">{etag ?? '—'}</dd>
       </dl>
+
+      {onOffer && canOffer ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOffer(item.id)}
+            data-slot="work-offer-handoff"
+          >
+            {t('handoff.offer')}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {t('handoff.offerHint')}
+          </span>
+        </div>
+      ) : null}
 
       {canWrite ? (
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
@@ -432,13 +468,13 @@ function DependenciesTab({ itemId }: { itemId: string }) {
             </p>
           ) : (
             <>
-            <ul className="flex flex-col divide-y divide-border">
-              {page.items.map((d) => (
-                <li key={d.id} className="py-2 font-mono text-xs">
-                  {d.depends_on_id}
-                </li>
-              ))}
-            </ul>
+              <ul className="flex flex-col divide-y divide-border">
+                {page.items.map((d) => (
+                  <li key={d.id} className="py-2 font-mono text-xs">
+                    {d.depends_on_id}
+                  </li>
+                ))}
+              </ul>
               {/* Keyset: `queryLimit` sirve CIEN por omision y rechaza 400 por encima de 200
                   (modules/sessions/work_api.go:798-807), asi que no hay techo que complete la
                   lista. La cifra es la CARGADA, no el limite pedido. */}
@@ -632,19 +668,19 @@ function EventsTab({ itemId }: { itemId: string }) {
             <p className="text-sm text-muted-foreground">{t('events.none')}</p>
           ) : (
             <>
-            <ul className="flex flex-col divide-y divide-border">
-              {page.items.map((e) => (
-                <li
-                  key={e.id}
-                  className="flex items-center justify-between gap-3 py-2"
-                >
-                  <code className="font-mono text-xs">{e.type}</code>
-                  <span className="text-xs text-muted-foreground">
-                    #{e.seq} · {e.occurred_at}
-                  </span>
-                </li>
-              ))}
-            </ul>
+              <ul className="flex flex-col divide-y divide-border">
+                {page.items.map((e) => (
+                  <li
+                    key={e.id}
+                    className="flex items-center justify-between gap-3 py-2"
+                  >
+                    <code className="font-mono text-xs">{e.type}</code>
+                    <span className="text-xs text-muted-foreground">
+                      #{e.seq} · {e.occurred_at}
+                    </span>
+                  </li>
+                ))}
+              </ul>
               {/* ⚠ Este llamante pasa `limit: 100`, que es EXACTAMENTE el valor por omision del
                   motor: no protege de nada. Subirlo a 200 —el maximo que `queryLimit` acepta antes
                   de responder 400— es otro cambio; lo honesto AHORA es que la pantalla lo diga. */}

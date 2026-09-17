@@ -229,3 +229,142 @@ func sortedStrings(value any) []string {
 	sort.Strings(out)
 	return out
 }
+
+func TestFinopsEvidenceReadContracts(t *testing.T) {
+	for _, pattern := range []string{"/alerts", "/budgets/{id}/status"} {
+		t.Run(pattern, func(t *testing.T) {
+			route := moduleRoute{ns: "finops", method: http.MethodGet, pattern: pattern, perm: "finops:budget:read"}
+			op := moduleOperation(route)
+			if op["x-required-permission"] != "finops:budget:read" {
+				t.Fatalf("permission=%v", op["x-required-permission"])
+			}
+			responses := mustMap(t, op["responses"], "responses")
+			for _, code := range []string{"200", "400", "401", "403", "404", "500"} {
+				if responses[code] == nil {
+					t.Errorf("missing %s", code)
+				}
+			}
+			schema := mustMap(t, mustMap(t, mustMap(t, responses["200"], "200")["content"], "content")["application/json"], "media")["schema"].(map[string]any)
+			props := mustMap(t, schema["properties"], "properties")
+			if pattern == "/alerts" {
+				if props["cursor"] == nil || props["has_more"] == nil {
+					t.Fatal("pagination disappeared")
+				}
+				item := props["items"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+				for _, field := range []string{"id", "legacy_value_kind", "amount_evidence"} {
+					if item[field] == nil {
+						t.Errorf("missing alert %s", field)
+					}
+				}
+				evidence := item["amount_evidence"].(map[string]any)["properties"].(map[string]any)
+				env := evidence["envelope"].(map[string]any)["properties"].(map[string]any)
+				value := env["amount"].(map[string]any)["properties"].(map[string]any)["value_micro_usd"].(map[string]any)
+				if !reflect.DeepEqual(value["type"], oaEnum("string", "null")) {
+					t.Fatalf("money=%v", value)
+				}
+				if len(moduleRouteParameters(route)) != 4 {
+					t.Fatal("filter/cursor parameters missing")
+				}
+			} else {
+				amount := props["amount"].(map[string]any)["properties"].(map[string]any)
+				for _, field := range []string{"effective_micro_usd", "remaining_micro_usd", "components", "thresholds", "over_limit", "legacy_fields", "forecast_certified"} {
+					if amount[field] == nil {
+						t.Errorf("missing amount %s", field)
+					}
+				}
+				if amount["forecast_certified"].(map[string]any)["const"] != false {
+					t.Fatal("forecast certified")
+				}
+			}
+		})
+	}
+	if finopsEvidenceReadRoute(moduleRoute{ns: "models", method: "GET", pattern: "/alerts"}) {
+		t.Fatal("namespace leak")
+	}
+}
+
+// TestFinopsStatementExportPublishesCSV pins the 200 of the chargeback statement
+// export to what the handler actually writes.
+//
+// ⛔ THE DEFECT THIS CLOSES. modules/finops/statements.go handleExportStatement sets
+// `Content-Type: text/csv; charset=utf-8` and writes rows with encoding/csv on its ONLY
+// success path, but the document published a JSON object for that 200. The four
+// generated SDKs believed the document and tried to JSON-decode a CSV body, so a
+// perfectly valid 200 was unusable from every generated client. The console and the CLI
+// escaped only because neither reads the generated operation.
+//
+// `text/csv` is the media-type KEY; the `; charset=utf-8` parameter belongs to the
+// concrete HTTP header, not to the OpenAPI content map.
+func TestFinopsStatementExportPublishesCSV(t *testing.T) {
+	t.Parallel()
+
+	route := moduleRoute{ns: "finops", method: http.MethodGet, pattern: "/statements/{id}/export", perm: "finops:spend:read"}
+	responses := mustMap(t, moduleOperation(route)["responses"], "responses")
+
+	ok := mustMap(t, responses["200"], "200")
+	content := mustMap(t, ok["content"], "200.content")
+	if got := sortedMapKeys(content); !reflect.DeepEqual(got, []string{"text/csv"}) {
+		t.Fatalf("200 content types = %v, want [text/csv] exactly", got)
+	}
+	schema := mustMap(t, mustMap(t, content["text/csv"], "200.content[text/csv]")["schema"], "200 schema")
+	if got := schema["type"]; got != "string" {
+		t.Errorf("200 schema.type = %#v, want string", got)
+	}
+
+	// The errors stay JSON: only the success body is CSV (statements.go uses
+	// writeJSON/writeStoreError on every error branch).
+	for _, code := range []string{"400", "401", "403", "404", "409", "429"} {
+		errContent := mustMap(t, mustMap(t, responses[code], code)["content"], code+".content")
+		if got := sortedMapKeys(errContent); !reflect.DeepEqual(got, []string{"application/json"}) {
+			t.Errorf("%s content types = %v, want [application/json]", code, got)
+		}
+	}
+}
+
+// TestModuleRouteRawContentTypeIsExactNotBySuffix kills the cheap fix. Classifying by
+// the trailing "export" segment would pass the test above and be wrong: this tree has
+// fifteen routes whose last segment is "export" and only TWO are always CSV. The rest
+// answer the JSON envelope by default and switch format only on an opt-in query
+// parameter, so a suffix rule would publish CSV for every one of them and break the
+// generated clients in the opposite direction.
+func TestModuleRouteRawContentTypeIsExactNotBySuffix(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		ns, method, pattern string
+		want                string // "" means: not raw, the JSON envelope
+	}{
+		// The two always-CSV FinOps exports, by exact tuple.
+		{ns: "finops", method: http.MethodGet, pattern: "/spend/export", want: "text/csv"},
+		{ns: "finops", method: http.MethodGet, pattern: "/statements/{id}/export", want: "text/csv"},
+
+		// Same namespace, same resource, NOT the export: the detail read stays JSON.
+		{ns: "finops", method: http.MethodGet, pattern: "/statements/{id}"},
+		{ns: "finops", method: http.MethodGet, pattern: "/statements"},
+
+		// Routes that END in "export" and are JSON by default (format is opt-in).
+		{ns: "compliance", method: http.MethodGet, pattern: "/evidence/{id}/export"},
+		{ns: "compliance", method: http.MethodGet, pattern: "/dora/register/{id}/export"},
+		{ns: "observability", method: http.MethodGet, pattern: "/traces/{id}/export"},
+		{ns: "knowledge", method: http.MethodGet, pattern: "/memory/export"},
+		{ns: "security", method: http.MethodGet, pattern: "/findings/export"},
+		{ns: "recording", method: http.MethodGet, pattern: "/sessions/{id}/export"},
+
+		// The tuple is exact in all four fields: another namespace with the same
+		// pattern, or another method on the same path, is not this route.
+		{ns: "reporting", method: http.MethodGet, pattern: "/statements/{id}/export"},
+		{ns: "finops", method: http.MethodPost, pattern: "/statements/{id}/export"},
+	} {
+		route := moduleRoute{ns: tc.ns, method: tc.method, pattern: tc.pattern}
+		ct, raw := moduleRouteRawContentType(route)
+		if tc.want == "" {
+			if raw || ct != "" {
+				t.Errorf("%s /v1/m/%s%s: raw=(%q,%t), want the JSON envelope", tc.method, tc.ns, tc.pattern, ct, raw)
+			}
+			continue
+		}
+		if !raw || ct != tc.want {
+			t.Errorf("%s /v1/m/%s%s: raw=(%q,%t), want (%q,true)", tc.method, tc.ns, tc.pattern, ct, raw, tc.want)
+		}
+	}
+}

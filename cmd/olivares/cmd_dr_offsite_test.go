@@ -191,6 +191,13 @@ func offsiteKeys(m *mockOffsite) []string {
 // it replaces a LIVE data dir, verifies continuity, and leaves the previous state as
 // *.pre-restore-<ts>.
 func TestDRRestoreInPlace(t *testing.T) {
+	// Sella la version del binario: el manifiesto de DR la toma de `version`, que en un binario
+	// de test vale "dev", y `dr.CheckImportCompatibility` rechaza una version productora no
+	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
+	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
+	prevVersion := version
+	version = "26.9.0"
+	t.Cleanup(func() { version = prevVersion })
 	dir := t.TempDir()
 	seedDataDir(t, dir)
 	pf := filepath.Join(t.TempDir(), "pass")

@@ -12,6 +12,40 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// H covers the global User/session cut. G still covers each structural
+// membership/group removal and every tenant-bound token in the existing
+// retirement cascade, including descendants with another direct subject.
+func (sys *systemScope) userRetirementAffectedTenants(ctx context.Context, userID model.ID) (map[model.TenantID]bool, error) {
+	ts := &tenantScope{s: sys.s, tx: sys.tx, tenant: model.SystemTenantID}
+	tenants, err := authUserDirectoryTenants(ctx, ts, userID)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := sys.userRetirementTokenClosure(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		query := sys.s.dia.Rebind("SELECT COALESCE(CAST(bound_tenant_id AS TEXT),'') FROM " + directoryWriterRelation(sys.s.dia, apiTokenDescriptor.Table) + " WHERE id=? AND tenant_id=?")
+		var tenant string
+		if err := sys.tx.QueryRowContext(ctx, query, id.String(), model.SystemTenantID.String()).Scan(&tenant); err != nil {
+			return nil, err
+		}
+		if tenant != "" {
+			tenants = append(tenants, model.TenantID(tenant))
+		}
+	}
+	tenants, err = canonicalDirectoryTenants(tenants)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[model.TenantID]bool, len(tenants))
+	for _, tenant := range tenants {
+		out[tenant] = true
+	}
+	return out, nil
+}
+
 // lockUserRetirementAuthorityTables closes the PostgreSQL raw-writer edge in
 // addition to AuthMutate's cooperative global-lock entry. The latter is what
 // prevents an issuer from validating a User before retirement and inserting a

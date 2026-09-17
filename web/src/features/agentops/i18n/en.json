@@ -101,8 +101,8 @@
     "envAllow": "Forward host env (names)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Allowlist of host env var NAMES to pass through (values are never sent).",
-    "submit": "Create & launch",
-    "submitting": "Launching…",
+    "submit": "Request launch",
+    "submitting": "Requesting…",
     "criticalWarning": "This is a privileged launch (it removes the per-tool prompt). It requires a two-person approval and is recorded — it may stay pending until approved.",
     "classifiedWarning": "A read-write mount of a classified workspace is a privileged launch (approval + recording).",
     "success": "Session launched",
@@ -111,7 +111,13 @@
     "templateHint": "The engine merges the template's terms over the fields above before the launch gates, and writes them into the session's own process — so the restriction holds for a caller that never opens this console.",
     "templateUnenforceable": "This template declares terms this launch cannot enforce, so the launch is refused rather than started without them:",
     "templateOverrides_one": "The template overrides {{count}} of your choices:",
-    "templateOverrides_other": "The template overrides {{count}} of your choices:"
+    "templateOverrides_other": "The template overrides {{count}} of your choices:",
+    "profile": "Provider profile",
+    "profileNone": "Select a profile",
+    "profileHint": "Select the provider profile for this session. A profile is required. Local requirements are checked for the current selection after the template preview.",
+    "profileNotOperable": "not enabled in this environment",
+    "profilesNotRead": "Provider profiles could not be read; the launch can still go ahead without one.",
+    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME and GROK_HOME belong to the profile: a launch that forwards any of them is refused here. Other names are still subject to the server's own validation."
   },
   "detail": {
     "live": "Live",
@@ -138,11 +144,17 @@
     "started": "Started",
     "lastActivity": "Last activity",
     "stopped": "Stopped",
-    "none": "None"
+    "none": "None",
+    "providerProfile": "Provider profile",
+    "providerDriver": "Driver",
+    "providerEnvironment": "Execution environment",
+    "liveRef": "Live row"
   },
   "live": {
     "inputPlaceholder": "Send an NDJSON line to stdin…",
     "inputAria": "Session input line",
+    "textPlaceholder": "Send a message to the session…",
+    "textAria": "Session message",
     "send": "Send",
     "noOutput": "No output yet.",
     "waiting": "Waiting for output…",
@@ -150,10 +162,20 @@
     "lag": "{{count}} frame(s) dropped (buffer overflow) — output below resumes after the gap.",
     "remoteControl": "This is a remote-control session: its I/O is relayed to Anthropic’s cloud and is not bridged here. Olivares manages the lifecycle only.",
     "notLive": "This session is not live (it is {{state}}). Resume it to attach to its I/O.",
+    "ioUnavailableNotLiveOnNode": "No bridged I/O on this node.",
+    "ioUnavailableRemoteControl": "This session's I/O is not bridged here (remote-control).",
+    "retryAttach": "Retry attach",
     "autoscroll": "Auto-scroll",
     "clear": "Clear view",
     "inputNotAllowed": "Input is only accepted while the session is running.",
-    "inputSent": "Sent"
+    "inputSent": "Sent",
+    "interrupt": "Interrupt turn",
+    "interruptHint": "Cancel the active turn and keep this session open.",
+    "interrupted": "Turn interrupted. The session remains open.",
+    "interruptFailed": "Could not interrupt the turn.",
+    "interruptFenceUnavailable": "Refresh the run to obtain its current work generation before interrupting.",
+    "interruptUnknown": "The interruption outcome is unknown. Check the session before trying again.",
+    "interruptWorkConflict": "The session cannot accept this interruption in its current work state. Refresh the run to check its status."
   },
   "gov": {
     "title": "Governance posture",
@@ -302,5 +324,387 @@
   "forbidden": {
     "title": "No access",
     "description": "You don’t have permission to operate Claude Code sessions."
+  },
+  "profiles": {
+    "title": "Provider profiles",
+    "subtitle": "The durable identity of one configured provider instance on one execution environment: which driver serves it and the configuration home a launched session runs under. A profile registers homes that already exist — it installs nothing and logs nothing in.",
+    "register": "Register profile",
+    "search": "Search profiles…",
+    "allStates": "All states",
+    "cols": {
+      "name": "Profile",
+      "driver": "Driver",
+      "environment": "Execution environment",
+      "state": "State",
+      "launch": "Enabled here",
+      "created": "Created"
+    },
+    "state": {
+      "active": "Active",
+      "disabled": "Disabled",
+      "retired": "Retired"
+    },
+    "environment": {
+      "local": "this node",
+      "foreign": "another environment",
+      "foreignHint": "This profile belongs to another execution environment. It is shown as such and is never launched from this node."
+    },
+    "operable": {
+      "yes": "Enabled in this environment",
+      "no": "Not enabled in this environment",
+      "noHint": "Legacy enablement: the profile is not active, belongs to another environment, or its driver is not registered here. It is not a launch verdict."
+    },
+    "empty": {
+      "title": "No provider profiles",
+      "registerHint": "Use “{{control}}” above to register the configuration home of an existing provider installation on this node; sessions then launch and are attributed under a stable identity.",
+      "noWrite": "Registering the configuration home of an existing provider installation needs sessions:profile:write, which your role does not include."
+    },
+    "filteredEmpty": {
+      "title": "No profiles match this state",
+      "description": "Only profiles in the state “{{state}}” are listed. Show all states to remove this filter.",
+      "clear": "Show all states"
+    },
+    "noRead": "Provider profiles are not shown: your role does not include sessions:profile:read.",
+    "listTruncation": {
+      "label": "Loaded {{n}} profiles; there are more",
+      "hint": "Only the loaded profiles can be selected here. A profile not shown may exist beyond this page."
+    },
+    "actions": {
+      "details": "Details",
+      "rename": "Rename",
+      "disable": "Disable",
+      "enable": "Enable",
+      "retire": "Retire",
+      "reveal": "Reveal configuration",
+      "hide": "Hide configuration",
+      "bind": "Bind source",
+      "revoke": "Revoke"
+    },
+    "create": {
+      "title": "Register a provider profile",
+      "description": "Registers the homes of an existing provider installation on this execution environment. The server validates each path on this node — absolute, symlinks resolved, existing and a directory. Nothing is created, installed or logged in, and no credential is sent.",
+      "driver": "Driver",
+      "driverPlaceholder": "claude",
+      "driverHint": "Lowercase driver key (letters, digits, - _ .). Whether this node can launch the profile is reported by the server after registration; it is not decided by the name.",
+      "configHome": "Configuration home",
+      "configHomePlaceholder": "/home/agent/.claude-work",
+      "configHomeHint": "Absolute path of the provider’s configuration directory (for Claude Code, its CLAUDE_CONFIG_DIR). Validated on this node; a missing directory is refused, never created.",
+      "userHome": "User home",
+      "userHomePlaceholder": "/home/agent",
+      "userHomeHint": "Absolute path the launched session runs under as HOME. Validated on this node.",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "A label (optional)",
+      "environmentKnown": "Registered on this node’s execution environment {{env}}, which validates the paths. A profile for another environment is registered from that environment.",
+      "environmentUnknown": "Registered on this node’s execution environment, which validates the paths. A profile for another environment is registered from that environment.",
+      "submit": "Register",
+      "submitting": "Registering…",
+      "success": "Provider profile registered"
+    },
+    "rename": {
+      "title": "Rename profile",
+      "description": "The label may change; the identity — driver, environment and homes — does not.",
+      "label": "Display name",
+      "submit": "Rename",
+      "submitting": "Renaming…",
+      "success": "Profile renamed"
+    },
+    "disable": {
+      "success": "Profile disabled",
+      "hint": "A disabled profile refuses new launches, resumes and bindings; a session it already governs keeps running. Reversible."
+    },
+    "enable": {
+      "success": "Profile enabled"
+    },
+    "retire": {
+      "title": "Retire profile",
+      "description": "Retirement is irreversible: this profile id accepts nothing afterwards — not even a rename — and its history stays as it was. The home becomes free for a new profile id.",
+      "confirm": "Retire",
+      "success": "Profile retired"
+    },
+    "details": {
+      "ref": "Reference",
+      "driver": "Driver",
+      "environment": "Execution environment",
+      "state": "State",
+      "launch": "Enabled here",
+      "created": "Created",
+      "updated": "Updated",
+      "retiredAt": "Retired",
+      "loadFailed": "This profile could not be read."
+    },
+    "configuration": {
+      "title": "Configuration",
+      "hint": "The stored homes are an admin-only read, fetched only when you ask and never shown in the list. No credential value is ever returned.",
+      "configHome": "Configuration home",
+      "userHome": "User home",
+      "validatedOn": "Paths as validated and stored by execution environment {{env}}.",
+      "loading": "Reading configuration…",
+      "failed": "The configuration could not be read."
+    },
+    "bindings": {
+      "title": "Source bindings",
+      "subtitle": "Dedicates one configured source, at the exact revision this node applied, to one profile, so the sessions that source observes are attributed to it. The identity is the source’s persistent id and revision — never its name.",
+      "cols": {
+        "source": "Source",
+        "revision": "Applied revision",
+        "profile": "Profile",
+        "environment": "Execution environment",
+        "state": "State",
+        "bound": "Bound"
+      },
+      "state": {
+        "active": "Active",
+        "revoked": "Revoked"
+      },
+      "empty": {
+        "title": "No source bindings",
+        "description": "Bind a configured source to a profile to attribute the sessions it observes."
+      },
+      "noRead": "Source bindings are not shown: your role does not include sessions:profile-binding:read.",
+      "notBindable": "Only an active profile of this execution environment can take a binding.",
+      "revoke": {
+        "title": "Revoke binding",
+        "description": "Sessions already attributed under this binding keep their provenance; later observations through this source are no longer attributed to the profile. This cannot be undone — a new binding is a new row.",
+        "confirm": "Revoke",
+        "success": "Binding revoked"
+      },
+      "create": {
+        "title": "Bind a source to a profile",
+        "description": "The engine binds the source’s persistent id at the revision this node applied. Both are read from the source roster — never typed, never derived from a name.",
+        "profile": "Profile",
+        "profileNone": "Select a profile",
+        "profileNotBindable": "not bindable here",
+        "profileHint": "Only an active profile of this execution environment can take a binding.",
+        "profilesNotRead": "Profiles could not be read, so none can be selected.",
+        "source": "Source",
+        "sourceNone": "Select a source",
+        "sourceNotApplied": "not applied on this node",
+        "sourceHint": "Sources of the deployment roster, with the revision this node applied. A source this node has not applied cannot be bound here.",
+        "needsSourceAdmin": "Binding a source also requires deployment-wide source administration (system admin). Your account cannot read the source roster, so no source can be selected here.",
+        "rosterFailed": "The source roster could not be read.",
+        "rosterEmpty": "No sources are configured on this deployment.",
+        "revision": "revision {{n}}",
+        "submit": "Bind",
+        "submitting": "Binding…",
+        "success": "Source bound to profile"
+      },
+      "details": {
+        "open": "Details of binding {{ref}}",
+        "title": "Binding details",
+        "description": "Current binding details for the selected tenant. Refresh to check for changes.",
+        "loading": "Reading the binding from the engine…",
+        "forbidden": "The engine refused this binding to your account just now (sessions:profile-binding:read on the active tenant); the engine decided this now, not a cached answer. Nothing of it is shown.",
+        "missing": "The engine holds no binding with this reference for the active tenant right now. It may have been removed since the list was read; refresh the list to see the current rows.",
+        "error": "The binding could not be read: {{message}}",
+        "ended": "The read ended because your permission, tenant or session changed. Open Details again to read under the current authority.",
+        "readAt": "Read from the engine at {{at}}.",
+        "ref": "Reference",
+        "source": "Source",
+        "sourceId": "Source id",
+        "revision": "Applied revision",
+        "profile": "Profile",
+        "driver": "Driver",
+        "environment": "Execution environment",
+        "selector": "Selector",
+        "state": "State",
+        "bound": "Bound",
+        "revoked": "Revoked",
+        "refresh": "Refresh",
+        "retry": "Retry",
+        "close": "Close"
+      }
+    },
+    "view": {
+      "profilesTitle": "Provider profiles",
+      "bindingsTitle": "Source bindings",
+      "tabProfiles": "Profiles",
+      "tabBindings": "Bindings",
+      "openProfiles": "Open the provider profiles page",
+      "openBindings": "Open the source bindings page",
+      "crossHint": "Profiles and bindings also have their own pages, each entered with its own read permission."
+    },
+    "authority": {
+      "lost": "This action is no longer permitted with your current permissions; nothing was sent.",
+      "confirmationClosed": "The confirmation was closed because the permission it needed is gone."
+    },
+    "roster": {
+      "loading": "Reading the source roster…",
+      "forbidden": "The deployment refused the source roster to your account, so no source can be bound from here. Binding needs deployment-wide source administration in addition to profile-binding write; the engine decided this just now, not a cached answer.",
+      "error": "The source roster could not be read: {{message}}",
+      "ended": "The roster read ended because your permission, tenant or session changed. Open Bind again to read it under the current authority.",
+      "loadMoreProfiles": "Load more profiles",
+      "loadedProfiles": "Loaded {{n}} active profiles; there are more.",
+      "loadingProfiles": "Loading profiles…"
+    }
+  },
+  "readiness": {
+    "title": "Local launch requirements",
+    "loading": "Checking the selected profile’s local requirements…",
+    "unavailable": "Requirements could not be read. This is not a launch decision.",
+    "forbidden": "Your role cannot read this profile’s requirements (sessions:profile:read).",
+    "notFound": "This profile is not available in the current tenant. Previous results were discarded.",
+    "unauthenticated": "The session is no longer authenticated. Previous results were discarded.",
+    "conflict": "The profile changed during inspection. The observation was discarded.",
+    "reread": "Read requirements again",
+    "rereading": "Reading…",
+    "request": "Request launch",
+    "requesting": "Requesting…",
+    "requestHintReady": "Requesting a launch still runs every authorization, mint and process check. This is not proof the provider is signed in.",
+    "requestHintUnknown": "Inspection is incomplete. You may still request a launch; the server will re-validate everything. This is not a ready verdict.",
+    "requestBlocked": "A launch request is not offered: this selection is known to be inviable.",
+    "noWrite": "You can see these requirements, but requesting a launch needs sessions:run:write.",
+    "waitingPreview": "Waiting for the template preview before reading requirements for the effective transport.",
+    "providerAuth": "Provider sign-in is not observed here. A valid home or binary is not an authenticated account.",
+    "launchAuth": "Launch authorization is decided when you submit, and needs sessions:run:write.",
+    "remoteControl": "Lifecycle only — conversation I/O stays with the provider; there is no bridged turn console.",
+    "managedInjectionUnused": "This transport does not apply the selected managed injection. It does not mint an inference credential and does not prove account authentication.",
+    "codexProtocol": "Codex app-server protocol; input is a turn of text, not Claude NDJSON.",
+    "grokProtocol": "Grok ACP protocol; input is a turn of text, not Claude NDJSON.",
+    "opencodeProtocol": "OpenCode ACP protocol; input is a turn of text, not Claude NDJSON.",
+    "remaining": "Still decided on submit",
+    "transport": "Transport",
+    "isolation": "Isolation",
+    "failedInline": "The launch request was refused. Your choices are unchanged.",
+    "state": {
+      "ready": "Local requirements checked",
+      "not_configured": "Missing configuration",
+      "unsupported": "Not supported in this environment",
+      "unknown": "Could not be checked"
+    },
+    "checkState": {
+      "ready": "checked",
+      "not_configured": "not configured",
+      "unsupported": "unsupported",
+      "unknown": "could not check",
+      "not_applicable": "does not apply"
+    },
+    "check": {
+      "profile": "Profile",
+      "local_environment": "This node",
+      "driver": "Driver",
+      "runner": "Runner",
+      "program": "Program",
+      "homes": "Homes",
+      "auth_source": "Authentication source",
+      "credential_source": "Credential wiring",
+      "runtime_credentials": "Runtime credentials"
+    },
+    "code": {
+      "profile_active": "The profile is active.",
+      "profile_disabled": "The profile is disabled. Enable requires sessions:profile:write; a retired profile cannot be reactivated.",
+      "profile_retired": "The profile is retired and cannot be used for a new launch.",
+      "environment_local": "This profile belongs to this node.",
+      "other_environment": "This profile belongs to another execution environment. Select a local profile or use the environment that administers it. There is no automatic remote execution.",
+      "environment_unavailable": "The execution environment that administers this profile is not available here.",
+      "driver_operable": "A driver path is registered on this runtime.",
+      "driver_not_registered": "This driver is not registered on this runtime. For Codex set OLIVARES_SESSION_RUNTIME_CODEX_BIN; for Grok set OLIVARES_SESSION_RUNTIME_GROK_BIN.",
+      "transport_unsupported": "This transport is not a contract of the selected driver.",
+      "runner_ready": "The session runner can be inspected.",
+      "runner_not_configured": "The session runner is not configured on this runtime.",
+      "isolation_unsupported": "The native runner cannot provide this isolation. Keep native, or use a runner that demonstrates the requested containment.",
+      "runner_inspection_unavailable": "The wired runner cannot be inspected without launching. That is not a missing installation.",
+      "program_present": "The resolved program is present and executable for this identity.",
+      "program_missing": "The resolved program is not present. Configure the official CLI through the existing procedure; for Claude that may name OLIVARES_SESSION_RUNTIME_CLAUDE_BIN. Nothing is installed from this read.",
+      "program_not_executable": "The resolved program is not executable for this identity.",
+      "homes_resolved": "Registered homes resolve as directories.",
+      "home_unavailable": "A registered home is not available. Review the profile configuration if you have admin permission. Paths are not shown to an ordinary reader.",
+      "home_changed": "A registered home is no longer the directory that was stored.",
+      "auth_source_account_home": "The authorized source is the profile’s own account home.",
+      "auth_source_managed_injection": "The authorized source is managed injection for this driver.",
+      "auth_source_legacy_claude": "The authorized source is the historical Claude credential path.",
+      "auth_source_required": "This driver needs an explicit authentication source: account-home or managed injection. That choice is made on the profile, not from this inspection.",
+      "managed_injection_not_applied_for_transport": "Managed injection is selected, but this transport does not apply it.",
+      "claude_credential_source_configured": "The Claude inference credential source is wired.",
+      "claude_credential_source_not_configured": "The Claude inference credential source is not wired. Configure OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE. Names only, never values.",
+      "provider_credential_adapter_configured": "This driver’s credential adapter is wired.",
+      "provider_credential_adapter_not_configured": "This driver’s governed credential adapter is not wired. Do not reuse another provider’s bearer or fall back to account-home.",
+      "credential_source_not_injected": "This combination does not inject an inference credential.",
+      "runtime_credentials_wired": "Work and K3 runtime credentials are wired.",
+      "runtime_credentials_not_requested": "This composition does not request work/K3 runtime credentials.",
+      "runtime_credential_wiring_incomplete": "Work/K3 runtime credential wiring is incomplete. An operator reviews that composition; this read does not request commercial credentials.",
+      "runtime_readiness_unavailable": "Work/K3 runtime readiness could not be observed.",
+      "inspection_unavailable": "This requirement could not be inspected. Retry the read or ask for an environment review. Uncertainty is not “not installed”.",
+      "not_checked_in_this_environment": "This requirement was not checked on this node because the profile belongs elsewhere. That is not “homes missing”."
+    },
+    "remediation": {
+      "review_profile": "Review the profile, or register another.",
+      "select_local_profile": "Select a profile local to this node.",
+      "configure_execution_environment": "Use the environment that administers this profile.",
+      "configure_provider_driver": "Configure the provider driver on this runtime.",
+      "configure_session_runner": "Configure the session runner.",
+      "configure_provider_program": "Configure the official provider CLI on this runtime.",
+      "review_profile_homes": "Review the stored homes through the admin configuration read.",
+      "authorize_auth_source": "Authorize account-home or managed injection on the profile (sessions:profile:write).",
+      "configure_claude_credential_source": "Wire OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
+      "configure_provider_credential_adapter": "Wire this driver’s governed credential adapter.",
+      "review_runtime_credential_composition": "Review the work/K3 runtime credential composition.",
+      "select_supported_selection": "Choose a transport and isolation this runtime demonstrates.",
+      "retry_inspection": "Read the requirements again."
+    },
+    "remainingCheck": {
+      "workspace_and_template_validation": "Workspace and template validation",
+      "current_launch_authorization": "Current launch authorization",
+      "claim_admission": "Claim admission",
+      "credential_mint_when_required": "Credential mint when required",
+      "process_start": "Process start",
+      "provider_authentication_and_protocol": "Provider authentication and protocol"
+    },
+    "protocol": {
+      "claude_stream_json": "Claude stream-json",
+      "claude_remote_control": "Claude remote-control",
+      "codex_app_server": "Codex app-server",
+      "grok_acp": "Grok ACP",
+      "opencode_acp": "OpenCode ACP",
+      "unknown": "Unknown protocol"
+    }
+  },
+  "hostTools": {
+    "title": "Official CLI candidates on the service host",
+    "loading": "Observing official CLI candidates in the service environment…",
+    "refresh": "Observe again",
+    "refreshing": "Observing…",
+    "advisory": "Advisory only. This observation does not change readiness, enable a launch, or install, pin or register a tool.",
+    "environment": "Profile environment: {{environment}} · Answered by: {{answering}}",
+    "noIdentity": "a node without a persistent environment identity",
+    "observedAt": "Observed at {{time}} (UTC)",
+    "summary": "Candidates observed in the configured search locations: {{total}}",
+    "groupCount": "Candidates: {{total}}",
+    "groupsLabel": "Observed candidate groups",
+    "mismatch": "The answer belonged to another profile version, driver or environment and was discarded.",
+    "conflict": "The profile changed during observation. The observation was discarded.",
+    "unavailable": "Host tool observation could not be read. This is not a finding about the tool.",
+    "forbidden": "Your role cannot read this profile’s host tool observation (sessions:profile:read).",
+    "notFound": "This profile is not available in the current tenant. Previous observations were discarded.",
+    "unauthenticated": "The session is no longer authenticated. Previous observations were discarded.",
+    "state": {
+      "none_observed": "No candidate was observed in the configured search locations. This does not prove the tool is absent elsewhere on the host.",
+      "unsupported_driver": "Host tool observation is not available for this driver yet. Configure the program through the profile settings.",
+      "unknown": "The service could not complete this observation. This is uncertainty, not a finding that the tool is missing.",
+      "not_checked_in_this_environment": "Not checked: the service that answered has no environment identity or is not this profile’s environment."
+    },
+    "origin": {
+      "managed": "Managed installation location",
+      "vendor-default": "Vendor default location",
+      "path": "Service PATH",
+      "named": "Named program location",
+      "unknown": "Unknown location"
+    },
+    "match": {
+      "registered": "Registered",
+      "manifest-corroborated": "Corroborated by a managed manifest",
+      "unregistered-observed": "Observed, not registered",
+      "unverified": "Signature not verified",
+      "damaged": "Damaged installation",
+      "unknown": "Verification status unknown"
+    },
+    "executable": {
+      "true": "Executable",
+      "false": "Not executable"
+    },
+    "configured": {
+      "same": "Same file as the configured program",
+      "different": "Not the configured program",
+      "unknown": "Comparison with the configured program is unknown"
+    }
   }
 }

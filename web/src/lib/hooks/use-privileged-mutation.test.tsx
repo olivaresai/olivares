@@ -3,10 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/errors'
-import { useStepUpStore } from '@/stores/step-up'
+import { createStepUpOwner, useStepUpStore } from '@/stores/step-up'
 import { useTenantStore } from '@/stores/tenant'
 import { usePrivilegedMutation } from './use-privileged-mutation'
 
@@ -56,6 +56,45 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['servers', 't1'] })
     expect(onDone).toHaveBeenCalledWith(2, 1)
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('keeps feature variables and stable public mutate functions across the execution envelope', async () => {
+    const qc = new QueryClient()
+    const onSuccess = vi.fn()
+    const onSettled = vi.fn()
+    const input = { name: 'current-action' }
+    const { result, rerender } = renderHook(
+      () =>
+        usePrivilegedMutation({
+          mutationFn: async (vars: typeof input) => vars.name,
+          successMessage: 'Saved',
+        }),
+      { wrapper: makeWrapper(qc) },
+    )
+    const mutate = result.current.mutate
+    const mutateAsync = result.current.mutateAsync
+    rerender()
+    expect(result.current.mutate).toBe(mutate)
+    expect(result.current.mutateAsync).toBe(mutateAsync)
+    await act(async () => {
+      expect(
+        await result.current.mutateAsync(input, { onSuccess, onSettled }),
+      ).toBe('current-action')
+    })
+    await waitFor(() => expect(result.current.variables).toBe(input))
+    expect(onSuccess).toHaveBeenCalledWith(
+      'current-action',
+      input,
+      expect.objectContaining({ resumed: false }),
+      expect.objectContaining({ client: qc }),
+    )
+    expect(onSettled).toHaveBeenCalledWith(
+      'current-action',
+      null,
+      input,
+      expect.objectContaining({ resumed: false }),
+      expect.objectContaining({ client: qc }),
+    )
   })
 
   it('treats a 403 as a calm "not authorized" warning, not an error', async () => {
@@ -191,10 +230,13 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
       expect(useStepUpStore.getState().request).not.toBeNull(),
     )
     // El operador cambia de organización MIENTRAS la ceremonia está abierta.
+    const capturedRetry = useStepUpStore.getState().request?.retry
     useTenantStore.setState({ activeTenant: 'org-B' })
-    useStepUpStore.getState().request?.retry?.()
+    useTenantStore.setState({ activeTenant: 'org-A' })
+    capturedRetry?.()
 
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledOnce())
+    // Retirement is sticky and removes the stale modal; the captured thunk has no authority.
+    expect(useStepUpStore.getState().request).toBeNull()
     // Cota: la primera llamada SÍ ocurrió (o sea, el caso llegó a la ceremonia) …
     expect(mutationFn.mock.calls[0][0]).toBe(7)
     // … y no hubo segunda.
@@ -252,7 +294,6 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
     )
     const first = useStepUpStore.getState().request
     expect(first?.retry).toBeDefined()
-    useStepUpStore.setState({ request: null })
     first?.retry?.()
 
     // Second refusal: the ceremony opens again (the operator is told), but the
@@ -290,7 +331,6 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
       expect(useStepUpStore.getState().request?.retry).toBeDefined(),
     )
     const first = useStepUpStore.getState().request
-    useStepUpStore.setState({ request: null })
     first?.retry?.()
     await waitFor(() =>
       expect(useStepUpStore.getState().request).not.toBeNull(),
@@ -322,7 +362,9 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
     )
 
     // A ceremony from some OTHER action is already on screen.
-    useStepUpStore.setState({ request: { action: 'other' } })
+    useStepUpStore
+      .getState()
+      .require({ action: 'other', owner: createStepUpOwner(qc) })
 
     result.current.mutate(undefined)
 

@@ -1,0 +1,199 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# DIST-24-12 manual qualification on the existing self-hosted Linux x64 runner pool.
+# The explicit labels leave no GitHub-hosted fallback. It builds this checkout locally
+# and exercises the reference Compose files; it never logs into a registry or
+# publishes bytes.
+#
+# The runner's Docker daemon is shared with other runs, workflows and repositories. Both
+# Compose projects (with their volumes and networks) and the local image tag are owned by
+# this repository, run and attempt; a CI-only final layer removes every published host
+# port; cleanup removes only those owned resources. The concurrency group below only
+# supersedes runs of the same ref in this repository; it isolates nothing on the host.
+name: compose-ready
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-ready-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  qualify-compose-ready:
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    runs-on: [self-hosted, linux, x64, "${{ vars.CI_RUNNER || 'self-hosted' }}"]
+    timeout-minutes: 75
+    # The owned identities, spelled once. Every step that touches Docker validates them with
+    # `check-compose-ready.sh owner` first. Build metadata stays the source commit.
+    env:
+      READY_POSITIVE_PROJECT: olivares-ready-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}-positive
+      READY_NEGATIVE_PROJECT: olivares-ready-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}-negative
+      OLIVARES_IMAGE: olivares-compose-ready:${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: true
+          cache-dependency-path: go.work.sum
+
+      # A self-hosted runner is not assumed to ship Task. GOBIN is explicit because a
+      # persistent runner's service environment can carry its own GOBIN, which would
+      # place the binary outside this job's PATH without failing the install.
+      - name: install go-task (pinned)
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          export GOBIN="$RUNNER_TEMP/gopath/bin"
+          echo "GOBIN=$GOBIN" >> "$GITHUB_ENV"
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          export PATH="$GOBIN:$PATH"
+          go install github.com/go-task/task/v3/cmd/task@v3.51.1
+          command -v task || { echo "::error::go install reported OK and task is not on PATH"; exit 1; }
+
+      - name: hermetic readiness contract and always-yes mutant
+        timeout-minutes: 3
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          task lint:compose-ready
+          task lint:compose-ready:selftest
+
+      - name: build this checkout locally (never publish)
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          source_epoch="$(git show -s --format=%ct HEAD)"
+          docker build \
+            --build-arg VERSION=compose-ready-ci \
+            --build-arg COMMIT="${GITHUB_SHA}" \
+            --build-arg SOURCE_DATE_EPOCH="$source_epoch" \
+            --tag "$OLIVARES_IMAGE" .
+
+      - name: reference SQLite Compose reaches healthy
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          files=(
+            -f deploy/compose/docker-compose.yml
+            -f deploy/compose/docker-compose.ready-no-ports.ci.yml
+          )
+          compose_version="$(docker compose version --short)"
+          bash scripts/check-compose-ready.sh compose-version "$compose_version"
+          config="$RUNNER_TEMP/$READY_POSITIVE_PROJECT.config.json"
+          docker compose -p "$READY_POSITIVE_PROJECT" "${files[@]}" config --format json >"$config"
+          bash scripts/check-compose-ready.sh effective-config "$config" "$READY_POSITIVE_PROJECT" "$OLIVARES_IMAGE" \
+            olivares
+          docker compose -p "$READY_POSITIVE_PROJECT" "${files[@]}" \
+            up --wait --wait-timeout 120
+          cid="$(docker compose -p "$READY_POSITIVE_PROJECT" "${files[@]}" ps -q olivares)"
+          test -n "$cid"
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$cid")" = healthy
+
+      - name: remove positive fixture
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          docker compose -p "$READY_POSITIVE_PROJECT" \
+            -f deploy/compose/docker-compose.yml \
+            -f deploy/compose/docker-compose.ready-no-ports.ci.yml \
+            down --volumes --remove-orphans
+
+      - name: running Postgres standby makes compose wait return one
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        env:
+          POSTGRES_SUPERUSER_PASSWORD: compose-ready-fixture-superuser
+          OLIVARES_DB_PASSWORD: compose-ready-fixture-app
+          OLIVARES_ADMIN_PASSWORD: compose-ready-fixture-admin
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          files=(
+            -f deploy/compose/docker-compose.yml
+            -f deploy/compose/docker-compose.postgres.yml
+            -f deploy/compose/docker-compose.standby-not-ready.ci.yml
+            -f deploy/compose/docker-compose.ready-no-ports.ci.yml
+          )
+          compose_version="$(docker compose version --short)"
+          bash scripts/check-compose-ready.sh compose-version "$compose_version"
+          config="$RUNNER_TEMP/$READY_NEGATIVE_PROJECT.config.json"
+          docker compose -p "$READY_NEGATIVE_PROJECT" "${files[@]}" config --format json >"$config"
+          bash scripts/check-compose-ready.sh effective-config "$config" "$READY_NEGATIVE_PROJECT" "$OLIVARES_IMAGE" \
+            olivares olivares-standby postgres
+          set +e
+          docker compose -p "$READY_NEGATIVE_PROJECT" "${files[@]}" \
+            up --wait --wait-timeout 90
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo "expected compose up --wait rc=1 for a running /readyz=503 standby; got rc=$rc" >&2
+            exit 1
+          fi
+          cid="$(docker compose -p "$READY_NEGATIVE_PROJECT" "${files[@]}" ps -q olivares-standby)"
+          test -n "$cid"
+          test "$(docker inspect --format '{{.State.Running}}' "$cid")" = true
+          test "$(docker inspect --format '{{.State.Health.Status}}' "$cid")" = unhealthy
+          docker inspect --format '{{range .State.Health.Log}}{{.Output}}{{end}}' "$cid" \
+            | grep -F 'HTTP 503'
+
+      - name: remove negative fixture
+        if: ${{ always() }}
+        env:
+          POSTGRES_SUPERUSER_PASSWORD: compose-ready-fixture-superuser
+          OLIVARES_DB_PASSWORD: compose-ready-fixture-app
+          OLIVARES_ADMIN_PASSWORD: compose-ready-fixture-admin
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          docker compose -p "$READY_NEGATIVE_PROJECT" \
+            -f deploy/compose/docker-compose.yml \
+            -f deploy/compose/docker-compose.postgres.yml \
+            -f deploy/compose/docker-compose.standby-not-ready.ci.yml \
+            -f deploy/compose/docker-compose.ready-no-ports.ci.yml \
+            down --volumes --remove-orphans
+
+      # Only this run's exact local tag, after both owned projects are down. The tag names this
+      # repository, run and attempt, so an equal-source run elsewhere on the daemon keeps its own
+      # image. No force, no prune, no image ID: a tag still in use fails here and stays a
+      # failure, and an image that was never built is reported instead of removed.
+      - name: remove this run's image tag
+        if: ${{ always() }}
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          if ! listed="$(docker image ls --filter "reference=$OLIVARES_IMAGE" --format '{{.Repository}}:{{.Tag}}')"; then
+            echo "::error::could not inspect local image $OLIVARES_IMAGE" >&2
+            exit 1
+          fi
+          if ! grep -qxF -- "$OLIVARES_IMAGE" <<<"$listed"; then
+            echo "image $OLIVARES_IMAGE was never built or is already absent; nothing to remove"
+            exit 0
+          fi
+          docker image rm "$OLIVARES_IMAGE"
+          if ! remaining="$(docker image ls --filter "reference=$OLIVARES_IMAGE" --format '{{.Repository}}:{{.Tag}}')"; then
+            echo "::error::could not re-inspect local image $OLIVARES_IMAGE after removal" >&2
+            exit 1
+          fi
+          if grep -qxF -- "$OLIVARES_IMAGE" <<<"$remaining"; then
+            echo "::error::image tag $OLIVARES_IMAGE is still present after removal" >&2
+            exit 1
+          fi

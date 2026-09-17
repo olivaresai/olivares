@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -123,7 +124,7 @@ func TestInsecureBindGuardIsWiredIntoTheBootPath(t *testing.T) {
 		grpcListen: "127.0.0.1:8444",
 		dataDir:    dataDir,
 	}
-	announce := func(context.Context, io.Writer, *engine) error {
+	announce := func(context.Context, io.Writer, *engine, consoleAddress) error {
 		t.Fatal("announce ran, so the engine had already booted before the bind guard")
 		return nil
 	}
@@ -158,24 +159,31 @@ func TestInsecureBindGuardIsWiredIntoTheBootPath(t *testing.T) {
 // TestServeHTTPRefusesAPlaintextPublicBind closes what the Codex contrast found
 // (F-01, 2026-08-06) and what the guard above could not see on its own.
 //
-// insecureBindGuard reads --listen and --grpc-listen. It has no input for the SIX
+// insecureBindGuard reads --listen and --grpc-listen. It has no input for the
 // auxiliary listeners — HITL, voice webhook, agent gateway, Claude-hook PEP,
-// Codex PEP, inference proxy — whose addresses come from operator config files,
-// not flags (e.g. agentGatewayConfig.Listen, mcpgateway.go). They are served with
-// the same global opts.insecure switch, so loopback primaries let the guard
+// Codex PEP, Grok PEP, inference proxy — whose addresses come from operator config
+// files, not flags (e.g. agentGatewayConfig.Listen, mcpgateway.go). They are served
+// with the same global opts.insecure switch, so loopback primaries let the guard
 // return nil while `"listen":"0.0.0.0:8446"` in a gateway config served plain
-// HTTP off-host. Adding a seventh address to the guard's argument list would fix
-// today's six and silently miss the eighth listener someone adds next year.
+// HTTP off-host.
 //
-// So the refusal lives at the choke point those listeners go through. Note the
-// BOUND, which an earlier version of this comment overstated and cmd_serve.go now
-// states properly: serveHTTP is not where EVERY listener in the process is born.
-// serveGRPC creates its own (covered by the flag-level guard), and in-process
-// source connectors create theirs outside both guards.
+// So the refusal lives at the choke point every HTTP listener goes through. Since
+// B1 that choke point is plaintextBindRefusal, which runEngine consults for every
+// HTTP listener BEFORE any serve listener is acquired. Note the BOUND, which
+// serve_listeners.go states properly: the gRPC listener is covered by the flag-level
+// guard, and in-process source connectors create theirs outside both guards.
+//
+// Retargeted for B1: the refusal used to arrive asynchronously from inside a
+// serveHTTP goroutine; it is now synchronous, so this drives runEngine with a
+// provisioned auxiliary on a wildcard address and observes the socket.
 func TestServeHTTPRefusesAPlaintextPublicBind(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	const publicAddr = "0.0.0.0:19999"
 	const probeAddr = "127.0.0.1:19999" // the same socket, dialed
+
+	if err := plaintextBindRefusal(publicAddr, true, false); err == nil ||
+		!strings.Contains(err.Error(), publicAddr) || !strings.Contains(err.Error(), "--insecure-allow-public-bind") {
+		t.Fatalf("the refusal must name the address and the escape hatch, got: %v", err)
+	}
 
 	// Prove the port is FREE first. The closing assertion reads an open socket as
 	// "serveHTTP bound before refusing", and an unrelated process already on this
@@ -193,37 +201,60 @@ func TestServeHTTPRefusesAPlaintextPublicBind(t *testing.T) {
 		t.Fatalf("%s is already in use, so this fixture cannot attribute a bind to serveHTTP — this is a broken FIXTURE, not a product defect, but it fails closed on purpose: free the port and re-run", probeAddr)
 	}
 
-	errCh := make(chan error, 1)
-	srv := &http.Server{Addr: publicAddr, Handler: http.NotFoundHandler(), ReadHeaderTimeout: time.Second}
-	// In a goroutine with a deadline, NOT inline: a serveHTTP that fails to refuse
+	// A provisioned auxiliary (the HITL receiver) on the wildcard address, loopback
+	// primaries, --insecure without the public-bind opt-in. The signing secret is a
+	// fixture value, not a credential.
+	cfg := filepath.Join(t.TempDir(), "hitl.json")
+	if err := os.WriteFile(cfg, []byte(`{"listen":"`+publicAddr+`","providers":[{"name":"insecure-bind","kind":"webhook","signing_secret":"insecure-bind-fixture-not-a-credential"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OLIVARES_HITL_CONFIG", cfg)
+	opts := serveOptions{
+		insecure: true, listen: bindAnnounceFreeAddr(t), grpcListen: bindAnnounceFreeAddr(t),
+		dataDir: t.TempDir(), engine: "sqlite",
+	}
+	announced := false
+	announce := func(context.Context, io.Writer, *engine, consoleAddress) error {
+		announced = true
+		return nil
+	}
+	// In a goroutine with a deadline, NOT inline: a runEngine that fails to refuse
 	// goes on to serve and never returns, and a mutation test whose mutant HANGS
 	// reports a goroutine dump after the framework's ten-minute panic instead of
-	// saying what broke. Measured while writing this — the first version of this
-	// test did exactly that.
-	t.Cleanup(func() { _ = srv.Close() })
-	go serveHTTP(srv, publicAddr, true /*insecure*/, false /*allowPublic*/, false, logger, errCh)
+	// saying what broke.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- runEngine(ctx, io.Discard, opts, announce) }()
 
 	select {
-	case err := <-errCh:
+	case err := <-done:
 		if err == nil {
-			t.Fatal("serveHTTP reported nil for a refused bind")
+			t.Fatal("runEngine reported nil for a refused plaintext auxiliary bind")
 		}
 		if !strings.Contains(err.Error(), publicAddr) || !strings.Contains(err.Error(), "--insecure-allow-public-bind") {
 			t.Fatalf("the refusal must name the address and the escape hatch, got: %v", err)
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("an auxiliary listener bound plaintext off-host without a word — this is the bypass the primary-address guard cannot see")
+	case <-time.After(bindAnnounceRunBound):
+		cancel()
+		<-done
+		t.Fatal("an auxiliary listener was not refused plaintext off-host — this is the bypass the primary-address guard cannot see")
+	}
+	if announced {
+		t.Error("the announcement ran before the plaintext refusal")
 	}
 
 	// Nothing may be listening: refusing after binding is not refusing.
 	if c, derr := net.DialTimeout("tcp", probeAddr, time.Second); derr == nil {
 		_ = c.Close()
-		t.Fatal("the port is open, so serveHTTP bound the socket before refusing")
+		t.Fatal("the port is open, so the auxiliary socket was bound before refusing")
 	}
+	requireBindAnnounceRebindable(t, "plaintext refusal", opts.listen, opts.grpcListen)
 }
 
 // TestServeHTTPServesTheAllowedPostures is the other direction: the choke-point
-// refusal must not break the postures the guard deliberately allows.
+// refusal must not break the postures the guard deliberately allows, and the adapter
+// serves a real request over the acquired listener.
 func TestServeHTTPServesTheAllowedPostures(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cases := []struct {
@@ -236,17 +267,35 @@ func TestServeHTTPServesTheAllowedPostures(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			if err := plaintextBindRefusal(c.addr, c.insecure, c.allowed); err != nil {
+				t.Fatalf("a supported posture was refused: %v", err)
+			}
+			owned, err := acquireServeListeners(context.Background(), bindServeListener,
+				[]serveListenerSpec{{addr: c.addr, http: true}}, false, logger)
+			if err != nil {
+				t.Fatalf("acquire %s: %v", c.addr, err)
+			}
+			lis := owned.listeners[0]
+			_, port, _ := net.SplitHostPort(lis.Addr().String())
 			errCh := make(chan error, 1)
 			srv := &http.Server{Addr: c.addr, Handler: http.NotFoundHandler(), ReadHeaderTimeout: time.Second}
-			go serveHTTP(srv, c.addr, c.insecure, c.allowed, false, logger, errCh)
-			t.Cleanup(func() { _ = srv.Close() })
-			select {
-			case err := <-errCh:
-				if err != nil && !errors.Is(err, http.ErrServerClosed) {
-					t.Fatalf("a supported posture was refused: %v", err)
+			go serveHTTP(srv, lis, c.insecure, logger, errCh)
+			t.Cleanup(func() {
+				_ = srv.Close()
+				if err := <-errCh; !errors.Is(err, http.ErrServerClosed) {
+					t.Errorf("serveHTTP returned %v after Close, want http.ErrServerClosed", err)
 				}
-			case <-time.After(500 * time.Millisecond):
-				// Still serving, which is the pass condition here.
+				if err := owned.closeAll(); err != nil {
+					t.Errorf("owner close: %v", err)
+				}
+			})
+			resp, err := (&http.Client{Timeout: 5 * time.Second}).Get("http://127.0.0.1:" + port + "/")
+			if err != nil {
+				t.Fatalf("a supported posture did not serve: %v", err)
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("served status %d, want the fixture handler's 404", resp.StatusCode)
 			}
 		})
 	}

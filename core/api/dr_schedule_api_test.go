@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/dr"
 	"github.com/olivaresai/olivares/core/internal/store/sqlstore"
 	"github.com/olivaresai/olivares/core/model"
@@ -42,13 +41,40 @@ func openDRStore(t *testing.T, dir string) store.Store {
 	return st
 }
 
+func writeDRMetadataBundle(t *testing.T, f *os.File, manifest *dr.Manifest) error {
+	t.Helper()
+	cipher, err := dr.NewRawKeyCipher(make([]byte, 32))
+	if err != nil {
+		return err
+	}
+	return dr.WriteAuthenticatedBundle(f, dr.BundleInput{
+		Manifest: manifest,
+		KEK:      cipher.Params(),
+	}, cipher)
+}
+
 // newDRHarness builds a harness whose API server has the DR surface over the
 // given store/dir (and optionally an unattended-backup passphrase file).
-func newDRHarness(t *testing.T, dir string, st store.Store, passFile string) *harness {
+func newDRHarness(
+	t *testing.T,
+	dir string,
+	st store.Store,
+	passFile string,
+	observeOpen ...harnessStoreOpener,
+) *harness {
 	t.Helper()
-	return newHarnessOpts(t, func(o *api.Options) {
-		o.Store = st
-		o.Authenticator = auth.NewAuthenticator(st, nil)
+	if st == nil {
+		t.Fatal("newDRHarness requires a prepared store")
+	}
+	if len(observeOpen) > 1 {
+		t.Fatal("newDRHarness accepts at most one store-open observer")
+	}
+	var open harnessStoreOpener
+	if len(observeOpen) == 1 {
+		open = observeOpen[0]
+	}
+	return newHarnessOptsFromStoreSource(t, harnessStoreSource{borrowed: st, open: open}, func(o *api.Options) {
+		o.Version = "26.9.0"
 		o.DR = &api.DRConfig{DataDir: dir, EngineKind: "sqlite", PassphraseFile: passFile}
 	})
 }
@@ -196,12 +222,12 @@ func TestDRScheduledBackupRunsAndAppliesRetention(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = dr.WriteBundle(f, dr.BundleInput{Manifest: &dr.Manifest{
+		err = writeDRMetadataBundle(t, f, &dr.Manifest{
 			Format:     dr.ManifestFormat,
 			CreatedAt:  createdAt.Format(time.RFC3339),
 			EngineKind: "sqlite",
 			Store:      dr.StoreSnapshot{Method: dr.MethodPITR, File: "external"},
-		}})
+		})
 		if closeErr := f.Close(); err == nil {
 			err = closeErr
 		}

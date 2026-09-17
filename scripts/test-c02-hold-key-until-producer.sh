@@ -11,6 +11,8 @@ _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/c02hold.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
+# Fixture observations belong to the staged tree, never the parent publication.
+unset OLIVARES_OVERLAY_OBS_DIR
 pass=0
 fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
@@ -26,6 +28,15 @@ stage() {
 	# un fallo de montaje creyendo medir su sujeto. Lo caza el contraste sol max (A-03).
 	mkdir -p "$TMP/tree/scripts/lib"
 	cp "$ROOT/scripts/lib/overlay-seal.sh" "$TMP/tree/scripts/lib/"
+	# ⛔ Y DESDE LT1, LA LIB DE MEDICION Y SU IMPLEMENTACION, POR LA MISMA RAZON EXACTA que la
+	# linea de arriba documenta: el guion en escena hace `source` de
+	# scripts/lib/overlay-measurement.sh, que a su vez carga scripts/lib/git-env.sh antes de su
+	# primer git e invoca scripts/overlay-measure.py. Sin las tres, el sujeto muere en el
+	# `source` y esta bateria mediria un fallo de MONTAJE creyendo medir su sujeto — que es el
+	# defecto que el contraste sol max (A-03) nombro para el sello.
+	cp "$ROOT/scripts/lib/overlay-measurement.sh" "$TMP/tree/scripts/lib/"
+	cp "$ROOT/scripts/lib/git-env.sh" "$TMP/tree/scripts/lib/"
+	cp "$ROOT/scripts/overlay-measure.py" "$TMP/tree/scripts/"
 	cp "$CHECK" "$TMP/tree/scripts/check-c02-hold-key-until-producer.sh"
 	chmod +x "$TMP/tree/scripts/check-c02-hold-key-until-producer.sh"
 	cp "$ROOT/design/c02-hold-key-until-producer.json" "$TMP/tree/design/"
@@ -167,7 +178,7 @@ else
 	bad "missing JSON should LOOK 2 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
-if OLIVARES_ROOT="$ROOT" OLIVARES_ENT_DIR="" bash "$CHECK" >/dev/null 2>"$TMP/err"; then
+if OLIVARES_OVERLAY_OBS_DIR="$TMP/root-probe-1-observations" OLIVARES_ROOT="$ROOT" OLIVARES_ENT_DIR="" bash "$CHECK" >/dev/null 2>"$TMP/err"; then
 	ok "no-fire: live checkout stays CLEAN"
 else
 	bad "no-fire live went RED ($(cat "$TMP/err"))"

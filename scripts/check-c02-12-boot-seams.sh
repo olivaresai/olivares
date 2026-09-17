@@ -45,12 +45,36 @@ if data.get("invariant_closed") is not False:
     raise SystemExit("invariant_closed must stay false")
 if data.get("executed") is not False:
     raise SystemExit("executed must stay false")
-if data.get("constructors") != 46:
-    raise SystemExit("constructors must stay 46")
+# 46 -> 49 on 2026-09-02: the cockpit's three edition seams landed in this same
+# file. The literal is duplicated here ON PURPOSE — the JSON could be edited alone — so
+# moving it is two deliberate edits, which is what a pin is for. Everything else about
+# the audit is unchanged; see the note in the JSON for why hub_sha did not move.
+# 49 -> 50 on 2026-09-06 (boot-seam-census): editionBindModuleDependencies, the fourth
+# edition seam (fec619aeb8), returning (nil, nil) in the open build. Since that move the
+# count is also DECOMPOSED below — the audited 46 plus the named post-audit seams — so a
+# raised literal that names nothing fails on the arithmetic, not only on this line.
+# 50 -> 51 on 2026-09-13 (r109-boot-seam-census): loginEnforcementComponentLinked, the
+# ratified R5 login-capability predicate (1e041bdbb8). It is a build-tag-resolved bool, not
+# a dependency constructor, so it carries no error tuple and no boot-abort path; it is
+# pinned by NAME below like every other post-audit seam.
+if data.get("constructors") != 51:
+    raise SystemExit("constructors must stay 51")
+if data.get("audited_constructors") != 46:
+    raise SystemExit("audited_constructors must stay 46 (the 2026-08-20 remeasure)")
+post = data.get("post_audit_constructors")
+if (not isinstance(post, list) or not post
+        or any(not isinstance(n, str) or not n for n in post)
+        or len(set(post)) != len(post)):
+    raise SystemExit("post_audit_constructors must be a non-empty list of distinct names")
+if data["audited_constructors"] + len(post) != data["constructors"]:
+    raise SystemExit("constructors %d != audited %d + %d post-audit seams"
+                     % (data["constructors"], data["audited_constructors"], len(post)))
 if data.get("backlog_claimed") != 44:
     raise SystemExit("backlog_claimed must stay 44 (the stale figure)")
 if data.get("boot_aborting") != ["newDurableBus"]:
     raise SystemExit("boot_aborting must stay [newDurableBus]")
+if set(post) & set(data["boot_aborting"]):
+    raise SystemExit("a post-audit seam cannot be listed as boot-aborting")
 if data.get("boot_aborting_count") != 1:
     raise SystemExit("boot_aborting_count must stay 1")
 if data.get("fmt_errorf_count") != 1:
@@ -89,10 +113,19 @@ if "(caepTransmitter, error)" not in caep:
     raise SystemExit("newCAEPTransmitter lost its error tuple")
 if "return nil, nil" not in caep:
     raise SystemExit("newCAEPTransmitter lost the nil, nil return")
+# Each post-audit seam is pinned by NAME, not only by the count: a constructor that
+# replaced one of them would keep the count and still be an unaccounted seam. And it is
+# read BEFORE the newDurableBus body so that the one pinned abort migrating into a
+# post-audit seam (file-level fmt.Errorf count unchanged) is named as what it is.
+for name in post:
+    if name not in funcs:
+        raise SystemExit("wire lost %s" % name)
+    if "fmt.Errorf" in body(wire, name):
+        raise SystemExit("%s must not abort boot (fmt.Errorf in a post-audit seam)" % name)
 durable = body(wire, "newDurableBus")
 if "return nil, fmt.Errorf" not in durable:
     raise SystemExit("newDurableBus lost the boot-aborting error return")
 PY
 
-say "check-c02-12-boot-seams: CLEAN — 46 constructors; newDurableBus still aborts boot; invariant open."
+say "check-c02-12-boot-seams: CLEAN — 51 constructors (46 audited + 5 named post-audit seams); newDurableBus still aborts boot; invariant open."
 exit 0

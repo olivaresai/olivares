@@ -112,6 +112,23 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'olivares')\gexec
 -- -- Then: olivares serve --engine postgres \
 -- --   --owner-dsn "postgres://olivares_owner:…@db/olivares?sslmode=verify-full" \
 -- --   --dsn       "postgres://olivares_app:…@db/olivares?sslmode=verify-full"
+--
+-- THE TWO ALTER DEFAULT PRIVILEGES LINES ABOVE ARE WHAT MAKES AN UPGRADE WORK, not just
+-- the first boot. In the split the owner creates every new relation, so a release that
+-- adds one needs the app role to reach an object that did not exist when you granted.
+-- Boot now MEASURES that before its first durable change and refuses the upgrade if the
+-- answer is no (ErrPostgresUpgradePrivilegePreflight), leaving the schema untouched —
+-- previously the migration committed and the deployment failed with 42501 afterwards,
+-- which rolling the binary back does not undo.
+--
+-- Effective privilege is what counts: a direct grant, a group role or PUBLIC all pass.
+-- These default-privilege rows are the convenient route, not a requirement. If you
+-- provision grants BY HAND instead, use the explicit phase so the grant can name objects
+-- that exist:
+--   olivares migrate apply --dsn … --owner-dsn …   # applies schema, does NOT serve
+--   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO olivares_app;
+--   olivares serve …
+-- See docs/UPGRADE-AND-ROLLBACK.md §3.1.
 
 -- pgvector (optional, 2026-07-30): the knowledge/RAG vector index defaults to the
 -- pgvector backend when configured. The extension is NOT trusted, so the app role
@@ -130,3 +147,18 @@ BEGIN
 	END IF;
 END
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Core v10 directory inventory without AdminDSN is a POST-MIGRATION operation.
+-- After product tables exist, use the separately attested installation command:
+--   olivares db init --install-directory-inventory --database olivares \
+--     --app-role olivares_app --owner-role olivares_owner \
+--     --superuser-dsn env:DBA_DSN
+-- It owns a closed no-input routine through the fixed NOLOGIN inventory role,
+-- grants only SELECT on five org/G columns plus public USAGE, and app EXECUTE.
+-- No app/owner membership in that role is allowed, including indirect paths.
+-- Existing objects are verified, never overwritten to hide drift. Do not replace
+-- these column grants with SELECT ON ALL TABLES. Effective manual grants are
+-- supported; future-object default ACLs are not the inventory proof.
+-- See docs/DIRECTORY-USER-AUTHORITY.md for staged/enforced legacy migration,
+-- noAdmin ordering, mandatory drain assertions, exact retry and reopen.

@@ -151,6 +151,70 @@ check "sin repo + GITHUB_SHA: repliegue a disco y lo DICE" "export sin git" $?
 [ "$rc" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR' "$WORK/err"
 check "un directorio ausente da 2, no 0" "tercera respuesta" $?
 
+# ⛔ LA TERCERA RESPUESTA, Y SUS DOS MITADES. En el export publicado el modulo entero se
+# cura fuera, asi que la pata no tiene sujeto y NUNCA lo tendra: rc=2 alli es ruido y tumba
+# el job del CI publico. Los dos casos van juntos a proposito — el verde solo significa algo
+# si el mutante que cambia la clasificacion vuelve a poner el rc=2.
+publico="$WORK/exportado"
+mkdir -p "$publico/scripts"
+cp "$ROOT/scripts/hub-leg.sh" "$publico/scripts/hub-leg.sh"
+bash "$ROOT/scripts/hub-leg.sh" --marker-signature > "$publico/PUBLIC-EXPORT.md"
+cp "$SCRIPT" "$publico/scripts/check-migration-contiguity.sh"
+( cd "$publico" && git init -q . && git config user.email t@t && git config user.name t )
+
+( cd "$publico" && bash scripts/check-migration-contiguity.sh ) >"$WORK/out" 2>"$WORK/err"; rc=$?
+[ "$rc" -eq 0 ] && grep -q 'SCOPED' "$WORK/out"
+check "export publico sin el modulo: SCOPED rc 0, no un 2 que tumba el job" "tercera respuesta" $?
+
+# MUTANTE: el MISMO arbol deja de ser publico en cuanto aparece un camino hub-only. Si el
+# rc siguiera siendo 0 aqui, la excepcion seria un comodin y no una respuesta acotada.
+mkdir -p "$publico/design"
+( cd "$publico" && bash scripts/check-migration-contiguity.sh ) >"$WORK/out" 2>"$WORK/err"; rc=$?
+[ "$rc" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR' "$WORK/err"
+check "mutante clasificador->hub: vuelve el 2" "tercera respuesta" $?
+rmdir "$publico/design"
+
+# Y la excepcion es SOLO para el sujeto POR DEFECTO: apuntar la pata a otro sitio en el
+# mismo arbol publico sigue siendo un 2, porque ahi el error es de quien la apunto.
+( cd "$publico" && env OLIVARES_MIGRATION_DIRS=no-existe bash scripts/check-migration-contiguity.sh ) \
+	>"$WORK/out" 2>"$WORK/err"; rc=$?
+[ "$rc" -eq 2 ]
+check "en el export, un sujeto NO por defecto sigue dando 2" "tercera respuesta" $?
+
+# A partial, failed Git read must preserve diagnostics and refuse classification.
+falso_git="$WORK/bin"
+mkdir -p "$falso_git"
+cat > "$falso_git/git" <<'FAKE'
+#!/usr/bin/env bash
+# Only the tree listing fails; other Git operations retain their actual behavior.
+if [ "${1:-}" = "ls-tree" ]; then
+	printf '001_x.up.sql
+003_x.up.sql
+'
+	printf 'synthetic tree read failure\n' >&2
+	exit 128
+fi
+exec /usr/bin/env -u PATH_FAKE "$OLIVARES_REAL_GIT" "$@"
+FAKE
+chmod +x "$falso_git/git"
+OLIVARES_REAL_GIT="$(command -v git)"
+export OLIVARES_REAL_GIT
+
+( cd "$repo" && env OLIVARES_MIGRATION_DIRS=m GITHUB_SHA="$(cd "$repo" && command git rev-parse HEAD)" 	PATH="$falso_git:$PATH" bash "$GATE" ) >"$WORK/out" 2>"$WORK/err"; rc=$?
+[ "$rc" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR' "$WORK/err" && grep -q 'ls-tree' "$WORK/err" \
+	&& grep -q 'synthetic tree read failure' "$WORK/err"
+check "ls-tree parcial y con error: rc 2 NO HE PODIDO MIRAR" "lectura parcial" $?
+
+# A read failure must not recommend renumbering a migration.
+! grep -q 'HUECOS' "$WORK/out" && ! grep -q 'HUECOS' "$WORK/err" \
+	&& ! grep -qi 'renumera' "$WORK/out" && ! grep -qi 'renumera' "$WORK/err"
+check "una lectura parcial NUNCA imprime HUECOS ni manda renumerar" "lectura parcial" $?
+
+# The complete listing of the same tree still passes.
+( cd "$repo" && env OLIVARES_MIGRATION_DIRS=m GITHUB_SHA="$(cd "$repo" && command git rev-parse HEAD)" 	bash "$GATE" ) >"$WORK/out" 2>"$WORK/err"; rc=$?
+[ "$rc" -eq 0 ] && grep -q 'CONTIGUO' "$WORK/out"
+check "lectura completa del mismo arbol: sigue CONTIGUO rc 0" "lectura parcial" $?
+
 echo ""
 echo "check-migration-contiguity battery: $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

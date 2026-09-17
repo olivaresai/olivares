@@ -51,5 +51,16 @@
     "setPassword": "You will choose your own password; the administrator who invited you will never see it.",
     "ignore": "If you were not expecting this, do not use the link and speak to the administrator who invited you. The account already exists; ignoring this message only leaves its password unset.",
     "textIntro": "Use this invitation link to set up your Olivares AI account:"
+  },
+  "portalInvite": {
+    "subject": "You have been invited to an organization on Olivares AI",
+    "preheader": "Accept this invitation to join {{ORG_NAME}} in the Olivares AI customer portal.",
+    "heading": "Join {{ORG_NAME}}",
+    "intro": "{{INVITER}} has invited you to join {{ORG_NAME}} in the Olivares AI customer portal as {{ROLE}}.",
+    "cta": "Accept the invitation",
+    "expiry": "This invitation can be used once and expires on {{EXPIRES_AT}}.",
+    "howYouSignIn": "You sign in with a single-use link sent to this address, and you must accept from the address this invitation was sent to.",
+    "ignore": "If you were not expecting this, do not use the link and speak to whoever invited you. Ignoring this message leaves nothing behind and grants nobody anything.",
+    "textIntro": "{{INVITER}} has invited you to join {{ORG_NAME}} in the Olivares AI customer portal as {{ROLE}}. Use this link:"
   }
 }

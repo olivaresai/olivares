@@ -69,6 +69,7 @@
   "notices": {
     "truncated": "Datos parciales",
     "truncatedHint": "Este agregado alcanzó el tope de escaneo — es parcial, no un total exacto.",
+    "truncatedBrief": "tope de escaneo alcanzado",
     "selfAudited": "Lectura privilegiada — registrada en el ledger de auditoría.",
     "seam": "Aún sin cablear",
     "seamBody": "Contrato declarado — {{what}} aún no está conectado al backend, así que esto muestra la forma declarada, no datos en vivo.",
@@ -76,7 +77,8 @@
     "declared": "Referencia declarada",
     "noConnector": "Sin conector — ausente, no cero.",
     "listTruncated": "Cargadas {{n}} filas; hay más",
-    "listTruncatedHint": "El motor devolvió una página, no el conjunto entero. El total NO se puede inferir de las filas cargadas, y pueden existir filas que no se muestran."
+    "listTruncatedHint": "El motor devolvió una página, no el conjunto entero. El total NO se puede inferir de las filas cargadas, y pueden existir filas que no se muestran.",
+    "listTruncatedBrief": "una página cargada; hay más"
   },
   "badges": {
     "signed": "Firmado",

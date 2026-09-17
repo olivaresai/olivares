@@ -24,6 +24,161 @@ type Document struct {
 	StabilityPolicy string // info.x-stability-policy
 	SpecHash        string // sha256 hex of the snapshot bytes
 	Operations      []Operation
+
+	// Built exclusively from the canonical schemas on marked operations. All four
+	// emitters consume this one model so their DTOs cannot drift apart.
+	sessionsCommunicationSchemas *sessionsCommunicationSchemaCatalog
+
+	// componentSchemas is #/components/schemas, retained so a typed family may name
+	// its contract by $ref instead of repeating it inside the operation.
+	componentSchemas map[string]json.RawMessage
+}
+
+// typedSDKFamilies is the closed set of x-olivares-sdk-family values that receive
+// generated DTOs. It is a set rather than one constant so a second family can be added
+// without loosening the fail-closed check on unknown values.
+var typedSDKFamilies = map[string]bool{
+	sessionsCommunicationFamily: true,
+	authCapabilitiesFamily:      true,
+}
+
+// componentSchemaPrefix is the only $ref shape this generator resolves.
+const componentSchemaPrefix = "#/components/schemas/"
+
+// maxSchemaRefDepth bounds $ref following. A document whose refs form a cycle is a
+// broken document, and the generator says so instead of recursing until it dies.
+const maxSchemaRefDepth = 16
+
+// maxSchemaNestingDepth bounds how deep the catalog may walk a schema's OBJECT
+// structure, independently of how many $ref hops each level takes.
+//
+// ⛔ IT IS A SECOND BOUND ON A SECOND AXIS, and the two are not interchangeable. The ref
+// trail below stops a graph that comes BACK to a component it is already inside; this
+// stops a walk that simply goes too deep. A document could in principle nest inline
+// objects far enough to exhaust the stack without ever repeating a component name, and a
+// generator that only counted hops would still die there.
+const maxSchemaNestingDepth = 64
+
+// schemaRefTrail is the set of components the catalog is CURRENTLY INSIDE, plus the
+// nesting depth of the walk. One value is threaded through the whole traversal.
+//
+// ⛔ IT IS A STACK, NOT A VISITED SET, AND THAT IS THE WHOLE DESIGN. A visited set would
+// reject the second, perfectly ordinary reference to a component that two fields happen
+// to share — the published contract does exactly that, and rejecting it would break
+// generation of a correct document. What is not allowed is re-entering a component while
+// still expanding it, because that is a cycle and nothing else.
+type schemaRefTrail struct {
+	active map[string]bool
+	order  []string
+	depth  int
+}
+
+func newSchemaRefTrail() *schemaRefTrail {
+	return &schemaRefTrail{active: map[string]bool{}}
+}
+
+// enter marks a component as being expanded and reports the error when it already was.
+func (t *schemaRefTrail) enter(name string) error {
+	if t.active[name] {
+		return fmt.Errorf(
+			"schema component %q references itself through %s: recursive schemas are not supported",
+			name, strings.Join(append(append([]string(nil), t.order...), name), " -> "),
+		)
+	}
+	t.active[name] = true
+	t.order = append(t.order, name)
+	return nil
+}
+
+func (t *schemaRefTrail) leave(name string) {
+	delete(t.active, name)
+	for index := len(t.order) - 1; index >= 0; index-- {
+		if t.order[index] == name {
+			t.order = append(t.order[:index], t.order[index+1:]...)
+			return
+		}
+	}
+}
+
+// descend increments the nesting depth, refusing a walk past the bound.
+func (t *schemaRefTrail) descend(location string) error {
+	if t.depth >= maxSchemaNestingDepth {
+		return fmt.Errorf("%s: schema nesting exceeds %d levels", location, maxSchemaNestingDepth)
+	}
+	t.depth++
+	return nil
+}
+
+func (t *schemaRefTrail) ascend() { t.depth-- }
+
+// resolveSchema follows a top-level $ref into #/components/schemas, so a typed family's
+// operation may point at the SAME schema the published components section carries.
+//
+// It resolves only the top level; nested $ref inside properties and items is resolved by
+// the catalog as it walks them, because that is where the surrounding type context —
+// which object a field belongs to — is known.
+//
+// ⛔ IT FAILS CLOSED ON EVERY UNRESOLVABLE CASE. An unknown component, a foreign
+// document, or a ref chain deeper than the bound is an error, never a silent fallback to
+// the untyped emitters: a DTO that quietly disappears from four SDKs with exit 0 is the
+// failure mode this whole generator is written to refuse.
+func (d *Document) resolveSchema(raw json.RawMessage) (json.RawMessage, error) {
+	resolved, _, err := d.resolveSchemaTrail(raw, newSchemaRefTrail())
+	return resolved, err
+}
+
+// resolveSchemaTrail dereferences a schema and reports WHICH components it passed
+// through, so the caller can hold them open for as long as it walks their children.
+//
+// ⛔ IT REPORTS THE NAMES INSTEAD OF MARKING THEM ITSELF, and that asymmetry is the fix
+// for the defect this exists to close. A component must count as "being expanded" for
+// the whole time its CHILDREN are being walked, and that walk happens in the caller,
+// after this function has returned. Marking and unmarking here would open and close the
+// window before the recursion that needs it — which is precisely how a property
+// pointing back at its own ancestor slipped past the old hop counter and ran until the
+// stack was gone.
+func (d *Document) resolveSchemaTrail(
+	raw json.RawMessage, trail *schemaRefTrail,
+) (json.RawMessage, []string, error) {
+	var followed []string
+	for depth := 0; depth <= maxSchemaRefDepth; depth++ {
+		if len(bytes.TrimSpace(raw)) == 0 {
+			return raw, followed, nil
+		}
+		var probe struct {
+			Ref string `json:"$ref"`
+		}
+		if err := json.Unmarshal(raw, &probe); err != nil || probe.Ref == "" {
+			return raw, followed, nil
+		}
+		if !strings.HasPrefix(probe.Ref, componentSchemaPrefix) {
+			return nil, nil, fmt.Errorf("unsupported schema reference %q", probe.Ref)
+		}
+		name := strings.TrimPrefix(probe.Ref, componentSchemaPrefix)
+		target, ok := d.componentSchemas[name]
+		if !ok {
+			return nil, nil, fmt.Errorf("schema reference %q names no component", probe.Ref)
+		}
+		// A component reached while it is still being expanded — by its own property,
+		// by a chain, or mutually through another component — is a cycle.
+		if trail.active[name] {
+			return nil, nil, fmt.Errorf(
+				"schema component %q references itself through %s: recursive schemas are not supported",
+				name, strings.Join(append(append([]string(nil), trail.order...), name), " -> "),
+			)
+		}
+		for _, seen := range followed {
+			if seen == name {
+				return nil, nil, fmt.Errorf(
+					"schema reference %q revisits %q within one chain: recursive schemas are not supported",
+					probe.Ref, name,
+				)
+			}
+		}
+		followed = append(followed, name)
+		raw = target
+	}
+	return nil, nil, fmt.Errorf("schema reference chain exceeds %d hops", maxSchemaRefDepth)
 }
 
 // Operation is one published method+path.
@@ -43,6 +198,17 @@ type Operation struct {
 	RequestContentType     string   // the one declared media type, when the contract has exactly one
 	RawBody                bool     // 200 is NOT application/json → raw-returning operation
 	RawReqBody             bool     // opaque or non-JSON requestBody → raw bytes are sent
+	SDKFamily              string
+	Parameters             []OperationParameter
+	RequestSchema          json.RawMessage
+	ResponseSchema         json.RawMessage
+}
+
+type OperationParameter struct {
+	Name     string
+	In       string
+	Required bool
+	Type     string
 }
 
 // bodyRequiredInSignature preserves the stable SDK's historically optional
@@ -69,8 +235,19 @@ type rawOp struct {
 	XSunsetAt               string          `json:"x-sunset-at"`
 	XMigrationGuide         string          `json:"x-migration-guide"`
 	XRequestBodyDisposition json.RawMessage `json:"x-olivares-request-body-disposition"`
-	Responses               map[string]struct {
-		Content map[string]json.RawMessage `json:"content"`
+	XSDKFamily              string          `json:"x-olivares-sdk-family"`
+	Parameters              []struct {
+		Name     string `json:"name"`
+		In       string `json:"in"`
+		Required bool   `json:"required"`
+		Schema   struct {
+			Type string `json:"type"`
+		} `json:"schema"`
+	} `json:"parameters"`
+	Responses map[string]struct {
+		Content map[string]struct {
+			Schema json.RawMessage `json:"schema"`
+		} `json:"content"`
 	} `json:"responses"`
 	RequestBody rawRequestBody `json:"requestBody"`
 }
@@ -107,6 +284,45 @@ func (o rawOp) isRawBody() bool {
 	}
 	_, hasJSON := ok200.Content["application/json"]
 	return !hasJSON
+}
+
+func (o rawOp) successSchema() json.RawMessage {
+	for _, status := range []string{"200", "201"} {
+		if response, ok := o.Responses[status]; ok {
+			if media, ok := response.Content["application/json"]; ok {
+				return append(json.RawMessage(nil), media.Schema...)
+			}
+		}
+	}
+	return nil
+}
+
+func (o rawOp) jsonRequestSchema() json.RawMessage {
+	media, ok := o.RequestBody.Content["application/json"]
+	if !ok {
+		return nil
+	}
+	var content struct {
+		Schema json.RawMessage `json:"schema"`
+	}
+	if json.Unmarshal(media, &content) != nil {
+		return nil
+	}
+	return append(json.RawMessage(nil), content.Schema...)
+}
+
+func validateTypedFamilySchema(method, path, label string, raw json.RawMessage) error {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return fmt.Errorf("%s %s: %s schema is required for the typed SDK family", method, path, label)
+	}
+	var schema struct {
+		Type       string                     `json:"type"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil || schema.Type != "object" || len(schema.Properties) == 0 {
+		return fmt.Errorf("%s %s: %s schema must be a concrete object with properties", method, path, label)
+	}
+	return nil
 }
 
 // isRawReqBody reports whether the requestBody declares a non-JSON content type
@@ -321,7 +537,10 @@ func loadWithPolicy(path string, requireRequestBodyDispositions bool) (*Document
 			Version          string `json:"version"`
 			XStabilityPolicy string `json:"x-stability-policy"`
 		} `json:"info"`
-		Paths map[string]map[string]json.RawMessage `json:"paths"`
+		Paths      map[string]map[string]json.RawMessage `json:"paths"`
+		Components struct {
+			Schemas map[string]json.RawMessage `json:"schemas"`
+		} `json:"components"`
 	}
 	if err := json.Unmarshal(raw, &spec); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -331,9 +550,10 @@ func loadWithPolicy(path string, requireRequestBodyDispositions bool) (*Document
 	}
 
 	doc := &Document{
-		APIVersion:      spec.Info.Version,
-		StabilityPolicy: spec.Info.XStabilityPolicy,
-		SpecHash:        hex.EncodeToString(sum[:]),
+		APIVersion:       spec.Info.Version,
+		StabilityPolicy:  spec.Info.XStabilityPolicy,
+		SpecHash:         hex.EncodeToString(sum[:]),
+		componentSchemas: spec.Components.Schemas,
 	}
 	paths := make([]string, 0, len(spec.Paths))
 	for p := range spec.Paths {
@@ -404,6 +624,45 @@ func loadWithPolicy(path string, requireRequestBodyDispositions bool) (*Document
 				RequestContentType:     requestContentType,
 				RawBody:                op.isRawBody(),
 				RawReqBody:             disposition == "opaque-body" || op.isRawReqBody(),
+				SDKFamily:              op.XSDKFamily,
+				RequestSchema:          op.jsonRequestSchema(),
+				ResponseSchema:         op.successSchema(),
+			}
+			for _, parameter := range op.Parameters {
+				if parameter.In == "path" || parameter.Name == "X-Olivares-Tenant" {
+					continue
+				}
+				o.Parameters = append(o.Parameters, OperationParameter{
+					Name: parameter.Name, In: parameter.In,
+					Required: parameter.Required, Type: parameter.Schema.Type,
+				})
+			}
+			if o.SDKFamily != "" {
+				if !typedSDKFamilies[o.SDKFamily] {
+					return nil, fmt.Errorf("%s %s: unsupported x-olivares-sdk-family %q", o.Method, o.Path, o.SDKFamily)
+				}
+				// ⛔ A TYPED FAMILY'S OPERATION SCHEMAS ARE DEREFERENCED HERE, and only
+				// here. The catalog below demands a concrete object with properties, so
+				// an operation that names its contract by $ref — which is how a schema
+				// SHARED with the published components is written — would otherwise be
+				// rejected as "not a concrete object" and silently fall back to the
+				// untyped emitters. Resolving is what lets one schema serve both the
+				// components section and the typed SDKs instead of being written twice.
+				var refErr error
+				if o.RequestSchema, refErr = doc.resolveSchema(o.RequestSchema); refErr != nil {
+					return nil, fmt.Errorf("%s %s request: %w", o.Method, o.Path, refErr)
+				}
+				if o.ResponseSchema, refErr = doc.resolveSchema(o.ResponseSchema); refErr != nil {
+					return nil, fmt.Errorf("%s %s success response: %w", o.Method, o.Path, refErr)
+				}
+				if o.HasBody {
+					if err := validateTypedFamilySchema(o.Method, o.Path, "request", o.RequestSchema); err != nil {
+						return nil, err
+					}
+				}
+				if err := validateTypedFamilySchema(o.Method, o.Path, "success response", o.ResponseSchema); err != nil {
+					return nil, err
+				}
 			}
 			// Raw-response emitters dispatch to doRaw, which intentionally has no
 			// request-body slot. A POST with no declared request body is therefore
@@ -426,6 +685,11 @@ func loadWithPolicy(path string, requireRequestBodyDispositions bool) (*Document
 			doc.Operations = append(doc.Operations, o)
 		}
 	}
+	catalog, err := buildSessionsCommunicationSchemas(doc)
+	if err != nil {
+		return nil, err
+	}
+	doc.sessionsCommunicationSchemas = catalog
 	return doc, nil
 }
 

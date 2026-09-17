@@ -180,6 +180,8 @@
     "baseline": "Variante base",
     "candidate": "Variante candidata",
     "replayHint": "Re-ejecuta una sesión histórica de forma determinista contra mocks. Si la línea temporal no se puede reconstruir, la repetición vuelve DEGRADADA con cero pasos: eso no es una sesión que no hizo nada, es una línea temporal que no se pudo reconstruir.",
-    "compareHint": "Una comparación es EVIDENCIA DE DECISIÓN pre/post-despliegue y se guarda append-only; por eso exige el nivel admin y no el de simplemente ejecutar."
+    "compareHint": "Una comparación es EVIDENCIA DE DECISIÓN pre/post-despliegue y se guarda append-only; por eso exige el nivel admin y no el de simplemente ejecutar.",
+    "liveRef": "Referencia de instancia de sesión",
+    "legacySessionRef": "Referencia de sesión heredada (alternativa)"
   }
 }

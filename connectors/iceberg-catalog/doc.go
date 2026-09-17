@@ -25,7 +25,7 @@
 // log). The connector never opens a connection to the catalog, never calls the
 // REST API, never vends or mutates anything: it is a read-only file reader.
 //
-// # Security posture (docs/SECURITY-HARDENING.md-3)
+// # Security posture (docs/SECURITY-HARDENING.md §2-3)
 //
 //   - Read-first: the only I/O is reading the operator-exported snapshot file.
 //     The connector never connects to or mutates the catalog or its storage.

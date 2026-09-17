@@ -254,7 +254,7 @@ func collectSchemaManifest() (*schemaManifest, error) {
 	catalogPriv := ed25519.NewKeyFromSeed(fixedSeed(1))
 	policyPriv := ed25519.NewKeyFromSeed(fixedSeed(2))
 
-	set, err := buildModules(signer, catalogPriv, policyPriv, nil, nil, sourcesConfig{}, log)
+	set, err := buildModules(signer, catalogPriv, policyPriv, nil, nil, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		return nil, fmt.Errorf("schema manifest: load module operator config: %w", err)
 	}

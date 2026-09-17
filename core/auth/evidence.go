@@ -78,6 +78,16 @@ type AuthorizationEvidence struct {
 	Facts          []store.AuthorizationFactRef
 	ObservedAt     time.Time
 	FreshUntil     time.Time
+	// ScopedEffect is the grant/forbid/abstain the scoped engine contributed to THIS
+	// evaluation.
+	//
+	// ⛔ IT IS REPORTED HERE BECAUSE THE ALTERNATIVE WAS ASKING THE ENGINE TWICE.
+	// AuthorizeRoute needed the effect for its witness and obtained it with a second call,
+	// after this one had already run - so policy, grants or directory facts could change
+	// between the two, and a witness could attest an effect that had no part in the
+	// decision it accompanies. The evaluation that produced the outcome is the only one
+	// entitled to describe itself.
+	ScopedEffect Effect
 }
 
 // ScopedEvidenceDecision is the opt-in, typed companion to ScopedDecision.
@@ -142,6 +152,15 @@ var (
 // malformed contribution becomes UNKNOWN locally rather than fabricating an
 // allow or erasing an independently established denial.
 func (az *Authorizer) AuthorizeEvidence(ctx context.Context, req Request) AuthorizationEvidence {
+	return az.authorizeEvidence(ctx, req, nil)
+}
+
+type readEvidenceContributions struct {
+	scoped scopedEvidenceContribution
+	policy policyEvidenceContribution
+}
+
+func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consulted *readEvidenceContributions) AuthorizationEvidence {
 	if az == nil {
 		return unknownAuthorizationEvidence("authorizer_unavailable")
 	}
@@ -158,6 +177,9 @@ func (az *Authorizer) AuthorizeEvidence(ctx context.Context, req Request) Author
 			checkForbidNotEvaluated,
 			nil,
 			evidenceWindow{},
+			// The scoped engine was never consulted: the credential ceiling denied before
+			// any evaluation, so abstain is the truth and not a default.
+			EffectAbstain,
 		)
 	}
 
@@ -166,12 +188,33 @@ func (az *Authorizer) AuthorizeEvidence(ctx context.Context, req Request) Author
 	// the other producer's question.
 	scoped := az.scopedEvidence(ctx, cloneEvidenceRequest(baseRequest))
 	policy := az.policyEvidence(ctx, cloneEvidenceRequest(baseRequest))
+	if consulted != nil {
+		consulted.scoped, consulted.policy = scoped, policy
+	}
 
 	corePermission := CheckEvidence{Verdict: CheckUnknown, Code: "core_permission_unavailable"}
 	switch {
 	case restricted && restrictionAllows:
 		corePermission = CheckEvidence{Verdict: CheckClean, Code: "credential_ceiling_permitted"}
-	case az.rbacAllows(baseRequest):
+	// ⛔ THE ROUTE'S METADATA NARROWS THE RBAC TERM HERE TOO, AND ITS ABSENCE WAS THE DEFECT.
+	// This read az.rbacAllows(baseRequest) alone, while Authorize computes the same term as
+	// Route.rbacPermitted(req, rbacAllows(req)) (authorizer.go). So RequireScopedGrant and
+	// RBACMinimumRole were declared at registration, sealed against loosening, and bound into
+	// the witness's QuestionDigest — and then ignored by the ONE evaluation a governed route
+	// runs, because AuthorizeRoute and DecideRouteRead both decide through this function. A
+	// route that said "breadth of role is not enough here" admitted breadth of role, and the
+	// witness it minted recorded the allow as rbac_permitted, so the audit trail agreed.
+	//
+	// It is the SAME helper and not a copy of its rule: two copies of an authorization term
+	// derive, and the one that derives is the one fewer people read.
+	//
+	// Both arms only ever REMOVE the term, so this cannot admit anyone Authorize denies; and
+	// it sits AFTER the credential-ceiling arm exactly as Authorize applies the metadata only
+	// under `if !restricted`, because a purpose ceiling IS that principal's base authorization
+	// and a route flag was never about it. Falling through does not deny by itself either: the
+	// arms below still let a positive scoped grant carry the request, which is what keeps a
+	// principal authorized by policy on its path.
+	case baseRequest.Route.rbacPermitted(baseRequest, az.rbacAllows(baseRequest)):
 		corePermission = CheckEvidence{Verdict: CheckClean, Code: "rbac_permitted"}
 	case !scoped.known:
 		// A legacy/unavailable scoped engine might have supplied the positive grant
@@ -418,8 +461,7 @@ func normalizePolicyEvidence(
 
 func validEvidenceFactsForTenant(facts []store.AuthorizationFactRef, tenant model.TenantID) bool {
 	for _, fact := range facts {
-		switch fact.Kind {
-		case model.DirectoryEpochKind, model.AuthorizationEpochKind:
+		if fact.Kind == model.DirectoryEpochKind || fact.Kind == model.AuthorizationEpochKind || model.IsLineageEpochKind(fact.Kind) {
 			if fact.ID != model.ID(tenant) {
 				return false
 			}
@@ -449,6 +491,18 @@ func principalAuthorizationEvidence(
 	return evidence.directoryEpoch, window, true
 }
 
+func principalCompleteAuthorizationEvidence(principal Principal, tenant model.TenantID) (store.AuthoritySnapshotBundle, evidenceWindow, bool) {
+	fact, window, ok := principalAuthorizationEvidence(principal, tenant)
+	if !ok {
+		return store.AuthoritySnapshotBundle{}, evidenceWindow{}, false
+	}
+	bundle := store.AuthoritySnapshotBundle{Facts: []store.AuthorizationFactRef{fact}}
+	if principal.evidence.authorityMode == principalHumanAuthority {
+		bundle.UserAuthorities = []store.UserAuthorityFactRef{principal.evidence.userAuthority}
+	}
+	return bundle, window, true
+}
+
 func foldAuthorizationEvidence(
 	corePermission CheckEvidence,
 	scoped scopedEvidenceContribution,
@@ -468,11 +522,13 @@ func foldAuthorizationEvidence(
 	case EvidenceUnknown:
 		return finalizeAuthorizationEvidence(
 			corePermission, resourceGuard, forbidAbsence, nil, evidenceWindow{},
+			scoped.decision.Effect,
 		)
 	case EvidenceDeny:
 		facts, window := denialEvidenceProof(corePermission, scoped, policy)
 		return finalizeAuthorizationEvidence(
 			corePermission, resourceGuard, forbidAbsence, facts, window,
+			scoped.decision.Effect,
 		)
 	case EvidenceAllow:
 		facts, ok := canonicalEvidenceFacts(
@@ -490,6 +546,7 @@ func foldAuthorizationEvidence(
 		}
 		return finalizeAuthorizationEvidence(
 			corePermission, resourceGuard, forbidAbsence, facts, window,
+			scoped.decision.Effect,
 		)
 	default:
 		return unknownAuthorizationEvidence("authorization_outcome_invalid")
@@ -657,6 +714,7 @@ func finalizeAuthorizationEvidence(
 	forbidAbsence CheckEvidence,
 	facts []store.AuthorizationFactRef,
 	window evidenceWindow,
+	scopedEffect Effect,
 ) AuthorizationEvidence {
 	return AuthorizationEvidence{
 		Outcome:        combineEvidenceOutcome(corePermission, resourceGuard, forbidAbsence),
@@ -666,6 +724,7 @@ func finalizeAuthorizationEvidence(
 		Facts:          facts,
 		ObservedAt:     window.observedAt,
 		FreshUntil:     window.freshUntil,
+		ScopedEffect:   scopedEffect,
 	}
 }
 
@@ -787,7 +846,7 @@ func validEvidenceFact(fact store.AuthorizationFactRef) bool {
 	if err != nil || parsed != fact.ID {
 		return false
 	}
-	if fact.Kind == model.DirectoryEpochKind || fact.Kind == model.AuthorizationEpochKind {
+	if fact.Kind == model.DirectoryEpochKind || fact.Kind == model.AuthorizationEpochKind || model.IsLineageEpochKind(fact.Kind) {
 		plain := store.AuthorizationFactRef{
 			Kind: fact.Kind, ID: fact.ID, Version: fact.Version,
 		}

@@ -25,7 +25,7 @@
 //     HOSTED API catalog; Model Vault deployments are governed by the operator's own
 //     infrastructure governance, not this connector.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared GET-only
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared GET-only
 // modelprovider client; it carries model identifiers and capabilities only — never
 // prompts, completions, or key values. It imports only the SDK and the Apache
 // modelprovider contract, never the engine.

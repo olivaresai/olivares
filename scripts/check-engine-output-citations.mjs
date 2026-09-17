@@ -183,6 +183,48 @@ const MIN_QUOTED_LENGTH = 40
 // everywhere — it is terminal output, not prose).
 const CITATIONS = [
   {
+    id: 'quickstart-banner-tls-warning',
+    emitted: '     (HTTPS with a self-signed certificate on first boot — your browser will',
+    source: 'cmd/olivares/cmd_quickstart.go',
+    cited: ['how-to/first-hour.md'],
+    why:
+      'The quickstart banner has its OWN copy of this sentence (:158), separate from the serve ' +
+      'banner already registered as first-boot-banner-transport. Two sources, two entries: ' +
+      'registering one would leave the other free to drift.',
+  },
+  {
+    id: 'quickstart-banner-tls-warning-tail',
+    emitted: '      warn once; that is expected for a local install.)',
+    source: 'cmd/olivares/cmd_quickstart.go',
+    cited: ['how-to/first-hour.md'],
+    why:
+      'The second line of the same paragraph, and a SEPARATE string literal (:159). Anchored ' +
+      'apart because the gate flags it apart: an entry spanning both would hide which half moved.',
+  },
+  {
+    id: 'quickstart-banner-setup-token',
+    emitted: '  2. Complete setup with this one-time token (shown once, single-use):',
+    source: 'cmd/olivares/cmd_quickstart.go',
+    cited: ['how-to/first-hour.md'],
+    why:
+      'The line the reader is told to look for to obtain the token (:160). This is the family ' +
+      'that produced the 60-occurrence sweep: the documented way of finding the token drifted ' +
+      'from the banner and every page printed everything except the token.',
+  },
+  {
+    id: 'session-runtime-no-credential-source',
+    emitted:
+      'session runtime: no inference credential source configured; stream-json launches are ' +
+      'deny-closed',
+    source: 'cmd/olivares/sessionruntime.go',
+    cited: ['how-to/first-hour.md'],
+    why:
+      'A LOG line, not a banner (:75), quoted as the symptom of an unwired credential source. ' +
+      'Deny-closed is the behaviour a reader is being taught to recognise, so a reword here ' +
+      'without sweeping the page teaches the wrong symptom.',
+  },
+
+  {
     id: 'tls-selfsigned-first-boot',
     emitted:
       'generated a self-signed TLS certificate; clients must trust it, or pin it with ' +
@@ -201,16 +243,75 @@ const CITATIONS = [
     cited: ['how-to/troubleshooting.md'],
     why: 'Quoted beside the TLS line in the same fence; the page is about what these warnings mean.',
   },
+  // The passkey-address paragraph the banner prints when the console's address
+  // cannot be a WebAuthn relying party. FOUR entries and not one, because the
+  // paragraph is not one literal: the class of host and the localhost alternative
+  // are interpolated, and the gate compares LINE BY LINE. Registering the whole
+  // rendered paragraph would anchor to nothing; registering each placeholder-free
+  // line anchors every part that can drift on its own.
+  //
+  // The interpolated lines are deliberately NOT registered and do not need to be:
+  // "  https://localhost:8443" is below MIN_QUOTED_LENGTH, and the tail of the
+  // second line ("an IP address is not one.") is covered because check 3 asks
+  // whether a fence line CONTAINS an engine line, and this entry is that line.
+  {
+    id: 'first-boot-banner-passkey-address',
+    emitted: 'Passkeys will not work at that address:',
+    source: 'cmd/olivares/consoleaddr.go',
+    cited: ['how-to/self-hosting.md', 'tutorials/getting-started/single-node.mdx'],
+    why:
+      'The banner now explains, before the operator clicks, why a passkey will be refused at the ' +
+      'address on screen. The browser refuses it and the engine never sees the attempt, so this ' +
+      'sentence is the only place the reason is ever stated — a reword that left the pages behind ' +
+      'would leave them quoting an explanation the product no longer gives.',
+  },
+  {
+    id: 'first-boot-banner-passkey-address-reason',
+    emitted: 'a browser will not run a passkey ceremony at an IP address. Reach the',
+    source: 'cmd/olivares/consoleaddr.go',
+    cited: ['how-to/self-hosting.md', 'tutorials/getting-started/single-node.mdx'],
+    why:
+      'The second line of that paragraph and a SEPARATE literal, because the class of host that ' +
+      'fails is chosen by the resolved plan and by WHICH rule refuses the host. Re-anchored twice ' +
+      'after independent review: the sentence gave one reason for three different defects, and for ' +
+      'a dotted-but-invalid name it named a missing dot the name already had.',
+  },
+  {
+    id: 'first-boot-banner-passkey-localhost-offer',
+    emitted: 'On this machine the same console also answers at',
+    source: 'cmd/olivares/consoleaddr.go',
+    cited: ['how-to/self-hosting.md', 'tutorials/getting-started/single-node.mdx'],
+    why:
+      'The same-device way out, offered only from a loopback address AND only when the resolved ' +
+      'authentication plan derives the relying party per request. The URL on the next line is built ' +
+      'from the served port and is not registerable; this line is what tells the reader the offer ' +
+      'is about THIS machine and not about reachability from anywhere else.',
+  },
+  {
+    id: 'first-boot-banner-passkey-localhost-offer-tail',
+    emitted: 'and at that address the relying party is derived from the name, which the',
+    source: 'cmd/olivares/consoleaddr.go',
+    cited: ['how-to/self-hosting.md', 'tutorials/getting-started/single-node.mdx'],
+    why:
+      'The clause that says WHY the alternative works here, and it now says why instead of ' +
+      'promising a completion: the relying party is derived from the name. The old wording ' +
+      '("a name a browser will complete a ceremony against") was printed for deployments where no ' +
+      'ceremony could succeed at all, which is the defect an independent review measured.',
+  },
   {
     id: 'first-boot-banner-transport',
     emitted:
       'The console serves HTTPS with a self-signed certificate on first boot — your\n' +
-      'browser will warn once; that is expected. ',
+      'browser will warn once; that is expected.',
     source: 'cmd/olivares/cmd_serve.go',
     cited: ['how-to/self-hosting.md', 'tutorials/getting-started/single-node.mdx'],
     why:
       'The banner interpolates this paragraph, and it is the one that changes under --insecure. ' +
-      'Anchored separately because it is a separate string in the source.',
+      'Anchored separately because it is a separate string in the source. It USED TO end in a ' +
+      'trailing space — the joiner that runs it into the token paragraph — so every page had to ' +
+      'carry an invisible trailing space to stay anchored, and the moment the address advice ' +
+      'broke the line there, fourteen pages went red over a character nobody can see. The joiner ' +
+      'lives in the code that joins now; the quotation is the sentence.',
   },
   {
     id: 'ingest-wired-source',
@@ -344,10 +445,13 @@ const CITATIONS = [
 //    Es la segunda exención que esa retirada dejó huérfana — la otra fue `waivers.tsv:39` de
 //    commerce-lint. Quien retire una superficie hereda las exenciones que la citaban.
 const NON_ENGINE_IDENTIFIERS = new Map([
+  ['addon_airs', 'private add-on build constraint; it is not a Community engine output identifier'],
+  ['addon_reg', 'private add-on build constraint; it is not a Community engine output identifier'],
   ['get_v1_agents', 'generated method name in the Python SDK, which is not a Go tree'],
   ['olivares_client', 'constructor name in the Python SDK, which is not a Go tree'],
   ['on_deprecation', 'a policy value in the API-stability contract prose, not an emitted identifier'],
   ['owner_group', 'a PostgreSQL role name in the operator-side setup, owned by Postgres, not by us'],
+  ['require_pin_approval', 'JSON configuration field of the private Enterprise tool-pin store, outside the Community Go corpus'],
   // The Terraform provider composes every resource type name at RUNTIME —
   // `resp.TypeName = req.ProviderTypeName + "_agent"` with ProviderTypeName "olivares"
   // (terraform-provider-olivares/internal/provider/*.go). The full name therefore exists

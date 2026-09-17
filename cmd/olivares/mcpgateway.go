@@ -126,9 +126,53 @@ type mcpGatewayConfig struct {
 	// NextRevisionHeaders controls the MCP 2026-07-28 L7 header gate
 	// (Mcp-Method/Mcp-Name deny-closed before body parse). Default OFF at the
 	// operator-config level for backward-compat; set to true to enable (maps to
-	// DisableNextRevisionHeaders:false on the RS). Omit for new deployments that
-	// speak 2026-07-28 — the RS layer defaults ON.
+	// DisableNextRevisionHeaders:false on the RS).
+	//
+	// OMITTING IT KEEPS LEGACY IN THIS COMPOSITION. The previous sentence here
+	// said to omit it for deployments that speak 2026-07-28 "because the RS layer
+	// defaults ON", which is true of the connector in isolation and false of this
+	// gateway: the builder always passes DisableNextRevisionHeaders as the
+	// NEGATION of this field, so an omitted field arrives as
+	// DisableNextRevisionHeaders:true and the RS resolves LEGACY. true selects
+	// dual; the full pair is the RevisionMode table below.
 	NextRevisionHeaders bool `json:"next_revision_headers"`
+	// RevisionMode (D07-1) states this gateway's MCP revision posture EXPLICITLY,
+	// with exactly the values connectors/mcp already implements: "legacy", "dual"
+	// or "rc-strict". It is OPTIONAL and moves no default. The whole resolution
+	// table, because the PAIR is what an operator actually reads:
+	//
+	//	revision_mode absent  + next_revision_headers absent or false → legacy
+	//	revision_mode absent  + next_revision_headers true            → dual
+	//	revision_mode present + (bool absent)                         → that mode
+	//	revision_mode present + bool agreeing with its header posture → that mode
+	//	revision_mode present + bool contradicting it                 → REFUSED
+	//
+	// A present mode must be one of the three; unknown, empty, whitespace-only or
+	// null refuses to mount and names the accepted values. "legacy" means the
+	// 2026-07-28 header gate is OFF, "dual" and "rc-strict" mean it is ON, so an
+	// EXPLICITLY supplied next_revision_headers must agree — and an ABSENT boolean
+	// contradicts nothing, which is the whole reason the decode records presence.
+	//
+	// What this field is NOT: a compatibility, conformance or interoperability
+	// claim. It selects the posture the Resource Server enforces; nothing here has
+	// been exercised against any counterparty.
+	RevisionMode string `json:"revision_mode"`
+	// revisionModePresent and nextRevisionHeadersPresent record whether the
+	// operator document carried each key AT ALL. Absence is not "false": the
+	// contradiction rule above can only be honest if an omitted
+	// next_revision_headers is distinguishable from an explicit false, and a
+	// revision_mode that is present but empty must be refused rather than read as
+	// "not configured". UnmarshalJSON is their only writer; a Go composition
+	// literal supplies neither, which is exactly the state "not explicitly
+	// supplied" and leaves every existing fixture resolving as it always did.
+	revisionModePresent        bool
+	nextRevisionHeadersPresent bool
+	// ambiguousRevisionControls records a revision control the operator document
+	// supplied MORE THAN ONCE, in any mix of capitalizations, together with the
+	// spellings it used so the refusal can quote the document back. UnmarshalJSON
+	// is its only writer; a Go composition literal leaves it empty, which is the
+	// state "no document stated anything twice".
+	ambiguousRevisionControls []mcpRevisionControl
 	// Retrieval enables the in-process governed retrieval upstream: the
 	// knowledge module's RAG pipeline exposed as MCP tools (search_kb,
 	// fetch_document, list_kbs). When enabled the retrieval tools are merged into
@@ -145,6 +189,332 @@ type mcpGatewayConfig struct {
 	// cursor/event ledger. Omit it to leave the streaming method unavailable
 	// (503) while preserving ordinary synchronous MCP forwarding.
 	DurableSubscriptions *mcpDurableSubscriptionsConfig `json:"durable_subscriptions"`
+}
+
+// The two operator controls whose PRESENCE this composition must read as exactly
+// as their VALUE. They are the only member names scanned by name below; every
+// other field keeps the decoder's ordinary treatment.
+const (
+	mcpRevisionModeKey        = "revision_mode"
+	mcpNextRevisionHeadersKey = "next_revision_headers"
+)
+
+// jsonNullLiteral is the only value both controls treat specially, in opposite
+// directions (see UnmarshalJSON).
+const jsonNullLiteral = "null"
+
+// mcpRevisionControl collects every appearance of ONE revision control in a
+// single operator document, in the order the document wrote them: the spellings
+// exactly as typed (a refusal quotes them back, so an operator can find the
+// duplicate) and the raw value of each.
+type mcpRevisionControl struct {
+	name      string
+	spellings []string
+	values    []json.RawMessage
+}
+
+// scanMCPRevisionControls walks the document's top-level members ONCE and
+// attributes each to a revision control with strings.EqualFold — the same rule
+// encoding/json applies to field names, whose own fold is documented as
+// "foldName(x) == foldName(y) is identical to bytes.EqualFold(x, y)". Matching
+// the decoder's rule is the point: a control this scan attributes is exactly the
+// one the struct decode would have written, so presence can never describe a
+// different member than the value does.
+//
+// It reads values only for those two controls, rejects no member it does not
+// know, and imposes no strictness on the rest of the document.
+func scanMCPRevisionControls(data []byte) ([]mcpRevisionControl, error) {
+	controls := []mcpRevisionControl{{name: mcpRevisionModeKey}, {name: mcpNextRevisionHeadersKey}}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if delim, ok := tok.(json.Delim); !ok || delim != '{' {
+		// Not an object (a bare null reaches the pointer, not this method): there
+		// are no member names to attribute, and the alias decode above has already
+		// accepted or rejected the document on its own terms.
+		return controls, nil
+	}
+	for dec.More() {
+		nameToken, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		name, ok := nameToken.(string)
+		if !ok {
+			return nil, fmt.Errorf("mcp gateway config: unexpected JSON member name %v", nameToken)
+		}
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return nil, err
+		}
+		for i := range controls {
+			if strings.EqualFold(name, controls[i].name) {
+				controls[i].spellings = append(controls[i].spellings, name)
+				controls[i].values = append(controls[i].values, value)
+			}
+		}
+	}
+	return controls, nil
+}
+
+// UnmarshalJSON decodes the operator document exactly as the standard decoder
+// always did — the alias type drops this method, so no field changes type,
+// validation or strictness — and additionally reads the two revision controls
+// from the document's OWN member names. That presence is the structural fact
+// D07-1 needs: without it, "next_revision_headers explicitly set to false" and
+// "the operator never mentioned it" are the same value, and the contradiction
+// rule cannot be stated, let alone tested.
+//
+// R1 (independent review, 2026-09-08) — PRESENCE AND VALUE COME FROM THE SAME
+// OCCURRENCE. This method used to read the value through the struct alias, where
+// encoding/json matches member names WITHOUT distinguishing case, and the
+// presence through a map lookup of two lowercase names. The two readings
+// disagreed on every noncanonical spelling, and the disagreement was not
+// cosmetic: "REVISION_MODE":null decoded to an empty mode whose presence was
+// invisible and therefore resolved LEGACY instead of being refused, and
+// "NEXT_REVISION_HEADERS":false contradicted an explicit rc-strict without the
+// contradiction rule ever seeing the boolean. The scan above applies the
+// decoder's own matching rule, and the two fields are RE-DERIVED from what it
+// found rather than inherited from the alias, which is what makes disagreement
+// impossible instead of merely unlikely.
+//
+// A control supplied MORE THAN ONCE is AMBIGUOUS and refuses to mount — including
+// two spellings that differ only in case, which are one member name to the
+// decoder. The refusal is recorded here and raised in
+// resolveMCPGatewayRevisionMode, so it lands where every other revision refusal
+// lands (the MCP composition, deny-closed) while the document itself still
+// decodes for the blocks this correction does not touch. An ambiguous control
+// leaves NO value behind: "last one wins" would publish one of two stated intents
+// as the operator's choice, and the two old readings did not even agree on which
+// one, since the struct kept the last NON-null value while the map kept the last
+// RAW one.
+//
+// A JSON null is treated differently for the two fields, on purpose:
+//
+//   - "next_revision_headers": null decodes to false and resolves legacy TODAY.
+//     Turning it into a startup refusal would change behaviour for an existing
+//     field, which this cut may not do, so a SINGLE null is recorded as NOT
+//     supplied — in any capitalization.
+//   - "revision_mode": null is a new field's explicit non-value, and root's rule
+//     rejects it with the empty and whitespace-only cases.
+//
+// Only these two controls are read this way. Unknown members remain accepted,
+// and no other field's decoding, type checking or strictness changes.
+func (c *mcpGatewayConfig) UnmarshalJSON(data []byte) error {
+	type alias mcpGatewayConfig
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = mcpGatewayConfig(decoded)
+	controls, err := scanMCPRevisionControls(data)
+	if err != nil {
+		return err
+	}
+	// Both controls start from nothing and are set ONLY from their own
+	// occurrence: one source for presence, null and value.
+	c.RevisionMode, c.revisionModePresent = "", false
+	c.NextRevisionHeaders, c.nextRevisionHeadersPresent = false, false
+	c.ambiguousRevisionControls = nil
+	for _, control := range controls {
+		switch {
+		case len(control.values) == 0:
+			continue
+		case len(control.values) > 1:
+			c.ambiguousRevisionControls = append(c.ambiguousRevisionControls, control)
+			continue
+		}
+		raw := bytes.TrimSpace(control.values[0])
+		isNull := string(raw) == jsonNullLiteral
+		switch control.name {
+		case mcpRevisionModeKey:
+			// Present even when null: an explicit non-value must be refused, not
+			// read back as "not configured".
+			c.revisionModePresent = true
+			if isNull {
+				continue
+			}
+			if err := json.Unmarshal(raw, &c.RevisionMode); err != nil {
+				return err
+			}
+		case mcpNextRevisionHeadersKey:
+			if isNull {
+				continue // one null keeps this existing field's absent semantics
+			}
+			if err := json.Unmarshal(raw, &c.NextRevisionHeaders); err != nil {
+				return err
+			}
+			c.nextRevisionHeadersPresent = true
+		}
+	}
+	return nil
+}
+
+// mcpRevisionControlAmbiguity refuses a document that supplied either revision
+// control more than once, naming the control, how many times, and the spellings
+// it used. It is a COMPOSITION refusal rather than a JSON parse error on purpose:
+// a duplicated MCP control takes the MCP surface down deny-closed and decides
+// nothing about the other blocks the same operator document provisions.
+func mcpRevisionControlAmbiguity(cfg *mcpGatewayConfig) error {
+	if len(cfg.ambiguousRevisionControls) == 0 {
+		return nil
+	}
+	stated := make([]string, 0, len(cfg.ambiguousRevisionControls))
+	for _, control := range cfg.ambiguousRevisionControls {
+		quoted := make([]string, 0, len(control.spellings))
+		for _, spelling := range control.spellings {
+			quoted = append(quoted, strconv.Quote(spelling))
+		}
+		stated = append(stated, fmt.Sprintf("%s is supplied %d times (as %s)",
+			control.name, len(control.spellings), strings.Join(quoted, ", ")))
+	}
+	return fmt.Errorf(
+		"mcp gateway config: %s; JSON member names are matched without distinguishing case, so which value the operator meant is ambiguous — supply each control exactly once",
+		strings.Join(stated, " and "))
+}
+
+// The explicit gateway revision modes. They MUST be the same three strings
+// connectors/mcp implements (rsconfig.go:402-404, unexported there); a divergence
+// fails closed rather than silently, because the value this file validates is
+// handed to the connector, whose own resolver rejects anything it does not know.
+const (
+	mcpGatewayRevisionModeLegacy   = "legacy"
+	mcpGatewayRevisionModeDual     = "dual"
+	mcpGatewayRevisionModeRCStrict = "rc-strict"
+)
+
+// mcpGatewayRevisionModes lists the accepted values in the order every refusal
+// names them.
+var mcpGatewayRevisionModes = []string{
+	mcpGatewayRevisionModeLegacy, mcpGatewayRevisionModeDual, mcpGatewayRevisionModeRCStrict,
+}
+
+// mcpRevisionModeHeaderPosture reports whether a mode runs the 2026-07-28 L7
+// header gate. It is the ONLY thing that makes the two operator fields
+// comparable: next_revision_headers has always meant "that gate is on".
+func mcpRevisionModeHeaderPosture(mode string) (headersOn, known bool) {
+	switch mode {
+	case mcpGatewayRevisionModeLegacy:
+		return false, true
+	case mcpGatewayRevisionModeDual, mcpGatewayRevisionModeRCStrict:
+		return true, true
+	default:
+		return false, false
+	}
+}
+
+// resolveMCPGatewayRevisionMode validates the operator's revision pair and returns
+// the EXPLICIT mode to hand to connectors/mcp, or "" when the operator stated
+// none.
+//
+// "" is not a default invented here: it is precisely the value that leaves
+// resolveResourceServerRevisionMode (connectors/mcp/rsconfig.go:438-452) resolving
+// from DisableNextRevisionHeaders exactly as it did before this field existed.
+// There is no second resolver in this file and no second protocol implementation —
+// only the validation the composition owes an operator BEFORE its surface serves,
+// which the connector cannot perform because the contradictory pair is a gateway
+// config shape the connector never sees.
+func resolveMCPGatewayRevisionMode(cfg *mcpGatewayConfig) (string, error) {
+	// R1: a control the document stated twice is refused BEFORE anything reads
+	// its value — there is no value to read that would not be a guess.
+	if err := mcpRevisionControlAmbiguity(cfg); err != nil {
+		return "", err
+	}
+	accepted := strings.Join(mcpGatewayRevisionModes, ", ")
+	if !cfg.revisionModePresent && cfg.RevisionMode == "" {
+		return "", nil // absent: the connector resolves from next_revision_headers, unchanged
+	}
+	mode := strings.TrimSpace(cfg.RevisionMode)
+	if mode == "" {
+		return "", fmt.Errorf(
+			"mcp gateway config: revision_mode is present but empty; omit the field to keep the next_revision_headers resolution, or set one of: %s",
+			accepted)
+	}
+	headersOn, known := mcpRevisionModeHeaderPosture(mode)
+	if !known {
+		return "", fmt.Errorf("mcp gateway config: unknown revision_mode %q (accepted: %s)", mode, accepted)
+	}
+	if cfg.nextRevisionHeadersPresent && cfg.NextRevisionHeaders != headersOn {
+		return "", fmt.Errorf(
+			"mcp gateway config: revision_mode %q and next_revision_headers %t contradict each other; %q requires next_revision_headers %t, so set it to %t or omit it",
+			mode, cfg.NextRevisionHeaders, mode, headersOn, headersOn)
+	}
+	return mode, nil
+}
+
+// mcpGatewayEffectiveConfig is the secret-free read-back of what this gateway was
+// CONFIGURED with, emitted once per mounted Resource Server. Every field is a fact
+// the composition can state about itself: the revision mode the Resource Server
+// resolved, which operator field selected it, and whether each durable seam was
+// WIRED.
+//
+// None of it is a readiness, conformance or interoperability claim. A wired seam
+// has not been exercised, an absent seam is a configuration fact and not a
+// failure, and no counterparty has been contacted to produce any of these values.
+type mcpGatewayEffectiveConfig struct {
+	revisionMode         string
+	revisionModeSource   string
+	upstream             string
+	subscriptionUpstream string
+	subscriptionLedger   string
+	durableTaskStore     string
+}
+
+// mcpRevisionModeSource names the operator field that selected the mode.
+func mcpRevisionModeSource(cfg *mcpGatewayConfig, explicit string) string {
+	switch {
+	case explicit != "":
+		return "revision_mode"
+	case cfg.nextRevisionHeadersPresent || cfg.NextRevisionHeaders:
+		return "next_revision_headers"
+	default:
+		return "default"
+	}
+}
+
+// mcpSeamState renders a seam as CONFIGURED or ABSENT — never as ready, healthy
+// or available, none of which this process has measured.
+func mcpSeamState(wired bool) string {
+	if wired {
+		return "configured"
+	}
+	return "absent"
+}
+
+// mcpUpstreamKind reduces the upstream descriptor to its KIND. The descriptor
+// carries the configured URL and a URL can carry userinfo credentials, so the
+// read-back names the kind and never the address.
+func mcpUpstreamKind(descriptor string) string {
+	switch {
+	case descriptor == "":
+		return "absent"
+	case strings.HasPrefix(descriptor, "in-process:"):
+		return descriptor // this form is a fixed label, with no address in it
+	case strings.HasPrefix(descriptor, "https-forward:"):
+		return "https-forward"
+	default:
+		return "configured"
+	}
+}
+
+// logMCPGatewayEffectiveConfig emits the read-back on the existing startup log
+// path, once, at Info. The message says what the record is and what it is not,
+// because a line listing wired seams is exactly the shape a reader mistakes for a
+// health check.
+func logMCPGatewayEffectiveConfig(log *slog.Logger, e mcpGatewayEffectiveConfig) {
+	if log == nil {
+		return
+	}
+	log.Info("mcp gateway: effective configuration read-back (CONFIGURED posture only — not a readiness, conformance or interoperability claim; no seam below has been exercised)",
+		"revision_mode", e.revisionMode,
+		"revision_mode_source", e.revisionModeSource,
+		"upstream", e.upstream,
+		"subscription_upstream", e.subscriptionUpstream,
+		"subscription_ledger", e.subscriptionLedger,
+		"durable_task_store", e.durableTaskStore,
+	)
 }
 
 // mcpRetrievalConfig enables the in-process governed retrieval MCP surface.
@@ -354,6 +724,15 @@ func buildMCPResourceServerWithDurableTaskStore(
 	log *slog.Logger,
 	durableTaskStore mcpc.DurableTaskStore,
 ) (*mcpc.ResourceServer, model.TenantID, error) {
+	// D07-1: validate the operator's revision pair FIRST, before anything is
+	// constructed. An unknown, empty or self-contradictory pair refuses to mount,
+	// which is how this composition already refuses malformed provisioning: the
+	// caller logs PROVISIONED BUT NOT MOUNTED and never builds a listener for it.
+	revisionMode, err := resolveMCPGatewayRevisionMode(cfg)
+	if err != nil {
+		return nil, "", err
+	}
+
 	// merge retrieval tool policies into the operator-declared toolset when
 	// the in-process governed retrieval surface is enabled.
 	tools := append([]mcpc.ToolPolicy(nil), cfg.Tools...)
@@ -520,6 +899,13 @@ func buildMCPResourceServerWithDurableTaskStore(
 		RenderInspector:       ri,
 		ElicitationMediator:   em,
 
+		// D07-1: the validated EXPLICIT mode, or "" when the operator stated none.
+		// The legacy knob below is passed exactly as before on purpose — the
+		// connector's resolver consults it only while RevisionMode is empty
+		// (rsconfig.go:438-452), so the absent-mode path stays identical to the
+		// composition that shipped, and the explicit path reaches the same single
+		// resolver instead of a second one.
+		RevisionMode:               revisionMode,
 		DisableNextRevisionHeaders: !cfg.NextRevisionHeaders,
 	})
 	if err != nil {
@@ -537,6 +923,20 @@ func buildMCPResourceServerWithDurableTaskStore(
 			return nil, "", fmt.Errorf("mcp gateway: wire protocol binding reconcile adapter: %w", err)
 		}
 	}
+	// D07-1: the read-back is emitted LAST, once every seam is wired, so it only
+	// ever describes a Resource Server this function is about to return. Emitting
+	// it earlier would publish an effective configuration for a composition that
+	// then failed to mount, which is the exact shape of a misleading startup line.
+	logMCPGatewayEffectiveConfig(log, mcpGatewayEffectiveConfig{
+		// The RESOLVED mode is read back from the Resource Server that was built,
+		// not predicted here: it is the value that server enforces.
+		revisionMode:         rs.RevisionMode(),
+		revisionModeSource:   mcpRevisionModeSource(cfg, revisionMode),
+		upstream:             mcpUpstreamKind(upstreamDescriptor),
+		subscriptionUpstream: mcpSeamState(subscriptionUpstream != nil),
+		subscriptionLedger:   mcpSeamState(subscriptionLedger != nil),
+		durableTaskStore:     mcpSeamState(durableTasks != nil),
+	})
 	return rs, rsTenant, nil
 }
 

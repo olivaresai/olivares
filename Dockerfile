@@ -49,18 +49,15 @@ RUN cd web && pnpm run build
 FROM golang:1.26.6-bookworm AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
-# Download modules first (cached) — copy the workspace manifests for every module.
-COPY go.work go.work.sum ./
-COPY core/go.mod core/go.sum ./core/
-COPY cmd/olivares/go.mod cmd/olivares/go.sum ./cmd/olivares/
-COPY connectors/go.mod connectors/go.sum ./connectors/
-COPY modules/go.mod modules/go.sum ./modules/
-COPY sdk/go.mod sdk/go.sum ./sdk/
-COPY sdk/plugin/go.mod sdk/plugin/go.sum ./sdk/plugin/
-COPY terraform-provider-olivares/go.mod terraform-provider-olivares/go.sum ./terraform-provider-olivares/
-RUN go mod download
-# Bring in the full source, then the freshly built web bundle from the web stage.
+# The full source comes in BEFORE `go mod download`. The go command reads go.work
+# first and fails when a module it lists has no go.mod in this stage, so the stage
+# loads the go.work the context really carries (the curated export ships a trimmed
+# one) rather than a separate hand-kept list of module manifests.
+# Accepted cache consequence: a change anywhere in the context also invalidates the
+# module-download layer, not only the layers after it.
 COPY . .
+RUN go mod download
+# Then the freshly built web bundle from the web stage, over the copied placeholder.
 COPY --from=web /src/core/internal/webui/dist/ ./core/internal/webui/dist/
 ARG VERSION=dev
 ARG COMMIT=none
@@ -89,6 +86,14 @@ LABEL org.opencontainers.image.title="olivares" \
       org.opencontainers.image.source="https://github.com/olivaresai/olivares" \
       org.opencontainers.image.vendor="Olivares.AI"
 COPY --from=build /out/olivares /usr/local/bin/olivares
+# Seed the named-volume mountpoint with the runtime uid and a private mode. On a
+# fresh Docker volume the engine otherwise receives a root-owned directory and
+# the non-root process cannot create its SQLite/TLS/audit state.
+COPY --chown=65532:65532 --chmod=0700 packaging/container/data-dir/ /var/lib/olivares/
+# The shipped backup service (deploy/compose/docker-compose.backup.yml) runs as this
+# image's user and writes bundles to the `olivares-backups` named volume at /backups.
+# Seed that mountpoint the same way, or a fresh volume is root-owned and unwritable.
+COPY --chown=65532:65532 --chmod=0700 packaging/container/data-dir/ /backups/
 # The licence travels INSIDE the image. Until 2026-08-04 it did not: the OCI images
 # carried an org.opencontainers.image.licenses LABEL and no licence TEXT, so the main
 # distribution path handed an operator an AGPL binary with neither the grant that lets

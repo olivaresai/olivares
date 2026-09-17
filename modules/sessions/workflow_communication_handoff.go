@@ -252,7 +252,7 @@ func (m *Module) applyWorkflowHandoffAggregate(
 				return err
 			}
 			exact, err = applyLockedHandoffOffer(
-				ctx, tx, repositories, reader, normalized, ids, prepared, carrierLocked, work,
+				ctx, tx, repositories, reader, normalized, ids, prepared, carrierLocked, work, false,
 			)
 			return err
 		},

@@ -228,7 +228,49 @@ func (r *scopeResolver) readScope(ctx context.Context, sc store.Scope, req auth.
 		if !s.AgentID.IsZero() {
 			extra["agent"] = cedar.String(s.AgentID.String())
 		}
-		return []cedar.EntityUID{wsUID}, extra, nil
+		// A Session inherits its owning agent's groups — but ONLY when the route asks
+		// for it, and ONLY for groups in the session's own workspace.
+		//
+		// ⛔ THE FIRST VERSION OF THIS DID IT UNCONDITIONALLY AND THAT WAS A REAL,
+		// GLOBAL WIDENING. The adversarial contrast refuted the comment that used to
+		// stand here ("a correction and not a widening") with a differential test, and
+		// it was right on both counts:
+		//
+		//  1. this resolver is wired ONCE for the whole engine (cmd/olivares/boot.go),
+		//     and is consumed by AuthZEN per row and by access-review as well as by
+		//     request authorization. A parent added here is added for every caller,
+		//     not for the cockpit;
+		//  2. an AgentGroup hangs off its OWN workspace, and the membership API only
+		//     checks that both ids exist — so an agent in workspace A can belong to a
+		//     group in workspace B. Unconditionally, a permit scoped to workspace B
+		//     then reached a Session that lives in A. Measured: Scoped=EffectGrant and
+		//     Authorizer Allow=true for exactly that shape.
+		//
+		// Both halves are closed here rather than documented:
+		//
+		//  · OPT-IN. Without Route.SessionInheritsAgentGroups the parents are exactly
+		//    what they were before this change, so every existing route decides
+		//    bit-for-bit as before and no deployment's authorization moves;
+		//  · SAME WORKSPACE. Even opted in, a group outside the session's workspace is
+		//    not a parent. A department that genuinely spans workspaces is a decision
+		//    to raise, not one to inherit by accident from a membership row.
+		//
+		// What it still buys is what it was for: the department forbid-unless of
+		// docs/contracts/COCKPIT-02-authz.md §6 reaches a session run by an agent in
+		// that department. Without SOME form of this, that rule matches no session at
+		// all and denies every principal, confined or not.
+		//
+		// The lineage still comes from the STORED row (s.AgentID), never from the
+		// caller, so it cannot be forged — the property is untouched.
+		parents := []cedar.EntityUID{wsUID}
+		if req.Route.SessionInheritsAgentGroups && !s.AgentID.IsZero() {
+			groups, err := r.agentGroupParentsInWorkspace(ctx, sc, s.AgentID, s.WorkspaceID, em)
+			if err != nil {
+				return nil, nil, err
+			}
+			parents = append(parents, groups...)
+		}
+		return parents, extra, nil
 	case "resource":
 		res, err := sc.Resources().Get(ctx, id)
 		if errors.Is(err, store.ErrNotFound) {
@@ -437,6 +479,57 @@ func (r *scopeResolver) agentGroupParents(ctx context.Context, sc store.Scope, a
 	return parents, nil
 }
 
+// agentGroupParentsInWorkspace is agentGroupParents narrowed to the groups that live in
+// `ws`, the workspace of the row being authorized.
+//
+// It exists because a group's workspace and its members' workspaces are INDEPENDENT: the
+// membership API checks only that both ids exist, so an agent in one workspace can be a
+// member of a group in another. For an AGENT that asymmetry is pre-existing and outside
+// this change; for a SESSION it would have been introduced by it, and it was measured
+// producing a cross-workspace allow. A zero `ws` means the tenant's default workspace and
+// matches groups with a zero workspace, which is the same resolution workspaceUID uses.
+func (r *scopeResolver) agentGroupParentsInWorkspace(
+	ctx context.Context, sc store.Scope, agentID, ws model.ID, em cedar.EntityMap,
+) ([]cedar.EntityUID, error) {
+	members, err := drainList[model.AgentGroupMember](ctx, sc.AgentGroupMembers(), model.Query{
+		Filters: []model.Filter{eq("agent_id", agentID.String())}, Limit: listCap,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(members) == 0 {
+		return nil, nil
+	}
+	groups, err := drainList[model.AgentGroup](ctx, sc.AgentGroups(), model.Query{Limit: listCap})
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[model.ID]model.AgentGroup, len(groups))
+	for _, g := range groups {
+		byID[g.ID] = g
+	}
+	var parents []cedar.EntityUID
+	for _, m := range members {
+		g, ok := byID[m.GroupID]
+		if !ok {
+			continue // a dangling membership is skipped, as elsewhere in this file
+		}
+		if g.WorkspaceID != ws {
+			continue // the confinement this function exists for
+		}
+		gUID := cedar.NewEntityUID(cedarTypeAgentGroup, cedar.String(g.Slug))
+		if _, seen := em[gUID]; !seen {
+			wsUID, err := r.workspaceUID(ctx, sc, g.WorkspaceID, em)
+			if err != nil {
+				return nil, err
+			}
+			em[gUID] = cedar.Entity{UID: gUID, Parents: cedar.NewEntityUIDSet(wsUID)}
+		}
+		parents = append(parents, gUID)
+	}
+	return parents, nil
+}
+
 // resourceTreeParents builds the folder-ancestor chain for a resource from its
 // materialized path ("/<root>/…/<self>") and returns the resource's direct parents:
 // its immediate parent folder and its own workspace (the workspace is also reachable
@@ -521,8 +614,21 @@ func scopedContext(req auth.Request, now time.Time) cedar.Record {
 	})
 }
 
-// actionUID is the Cedar action entity for a permission.
+// actionUID is the Cedar action entity for a request.
+//
+// It is the route's REGISTERED Action ID when it declares one, and the permission
+// otherwise (V269 / COCKPIT-02 §5). The indirection exists because the permission
+// parser is a grammar whose last segment must be read, write or admin
+// (core/auth/permission.go), so an action like `shell:open` cannot be spelled inside it
+// without breaking that grammar for every other module. The route names its action;
+// the module cannot, because the value is declared where the route is registered.
+//
+// Empty is the state of every route in the tree today, and for it this is byte-for-byte
+// the previous behaviour.
 func actionUID(req auth.Request) cedar.EntityUID {
+	if a := req.Route.CedarAction; a != "" {
+		return cedar.NewEntityUID(cedarTypeAction, cedar.String(a))
+	}
 	return cedar.NewEntityUID(cedarTypeAction, cedar.String(string(req.Permission)))
 }
 
@@ -580,6 +686,19 @@ type scopedEngine struct {
 	resolver *scopeResolver
 	now      func() time.Time
 	log      *slog.Logger // nil-safe; logs scoped grants/forbids and per-policy eval errors
+	// loadTenant is the C3-L1 private, read-only durable load used by the typed
+	// evidence paths when a tenant has no usable runtime state (a tenant created
+	// after this process started). New binds it to Module.reloadTenantGrants before
+	// serving, the same happens-before edge as resolver/now/log. It is deliberately
+	// NOT reloadGrantsFn, whose purpose is to force the deferred-activation branch
+	// for authoring tests, and never ReloadActivePDP, which can write freshness.
+	// Nil ⇒ no lazy load: an engine built directly by a test keeps the exact
+	// previous behavior.
+	loadTenant func(context.Context, model.TenantID) error
+	// admission owns operational bookkeeping for those loads only (exact in-flight
+	// ownership plus the bounded completed-failure cooldown). It holds no authority
+	// and its mutex is never held with mu. See evidence_runtime_load.go.
+	admission *evidenceLoadAdmission
 }
 
 var (
@@ -1306,16 +1425,46 @@ func (e *scopedEngine) logEffect(req auth.Request, effect string) {
 	)
 }
 
+// cedarScopedEvalErrorCode is the FIXED reason code carried by the single bounded
+// warning logDiagErrors emits when Cedar reports evaluation errors on the SCOPED grant
+// path (CD2). It is the stable, greppable operator signal — "this tenant's authored
+// policy could not be evaluated on this request" — and it is content-free by
+// construction: it never varies with the policy, the diagnostic or the request. It is
+// deliberately distinct from cedar.go's cedarEvalErrorCode so an operator can tell the
+// two engines apart without either code carrying policy-derived content.
+const cedarScopedEvalErrorCode = "cedar_scoped_evaluation_error"
+
 // logDiagErrors surfaces per-policy EVALUATION errors (a rule that touched an
 // attribute Cedar could not resolve) — Cedar skips such a rule silently, which for a
 // security control is dangerous to do without a signal (an author must guard attribute
 // access with `has`). An errored FORBID additionally fails CLOSED at the call site
 // (hasErroredForbid, F-06); an errored permit stays dropped (it could only have
 // widened), so a single unpopulated attribute never denies the whole tenant.
+//
+// The signal is CONTAINED (CD2): at most ONE warning per call — one for a Scoped
+// evaluation, one for a restrict-view Evaluate — carrying the unchanged fixed product
+// message, the fixed reason code and the integer total of SDK evaluation errors.
+// Nothing else: no PolicyID, no SDK message, no policy source, no mapped question
+// value, and no hash of any of them.
+//
+// The SDK diagnostic is not safe to forward. cedar-go quotes the operator's own policy
+// text and the offending entity, so an owner attribute this engine never populates
+// yields a message of the form: Principal::"<cred-id>" does not have the attribute
+// owner. That is an authored attribute name AND a request identifier in one string.
+// Emitting it put both into whatever logger boot happened to inject, and injecting a
+// logger is not a reviewed permission to disclose either.
+//
+// This is the DIAGNOSTIC channel, and it is deliberately narrower than the audit trail:
+// logEffect above still records tenant/principal/permission/resource for a grant or a
+// forbid, because an authorization DECISION is exactly what that trail exists to carry.
+//
+// The count is of SDK EVALUATION ERRORS. It is not a count of matched forbids and it
+// says nothing about the effect the caller returns: an errored forbid is warned about
+// and fails closed, an errored permit is warned about and stays dropped.
 func (e *scopedEngine) logDiagErrors(diag cedar.Diagnostic) {
-	if len(diag.Errors) > 0 && e.log != nil {
+	if n := len(diag.Errors); n > 0 && e.log != nil {
 		e.log.Warn("cedar scoped-grant evaluation error (guard attribute access with `has`)",
-			"errors", len(diag.Errors), "first", diag.Errors[0].PolicyID, "message", diag.Errors[0].Message)
+			"reason", cedarScopedEvalErrorCode, "errors", n)
 	}
 }
 

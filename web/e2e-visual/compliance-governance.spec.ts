@@ -16,8 +16,6 @@
 // keeps this spec from colliding with other lanes editing fixtures.ts.
 import { expect, test, type Page } from '@playwright/test'
 
-const BASE = '**/v1/m/compliance'
-
 const ACTIVE_HOLD = {
   id: 'lh-1',
   matter_ref: 'CASE-42',

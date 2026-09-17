@@ -89,26 +89,22 @@ func (m *Module) planWithData(ctx context.Context, data workData, tenant model.T
 	if err != nil {
 		return Plan{}, classifyWorkStoreError(err)
 	}
+	if err := refuseJoinedAgentWorkAuthority(ctx, data, tenant, principal, cmd); err != nil {
+		return Plan{}, classifyWorkStoreError(err)
+	}
 	if err := m.preflightContent(ctx, tenant, cmd); err != nil {
 		return Plan{}, err
 	}
 	if err := m.preflightIdentity(ctx, data, tenant, principal, &cmd); err != nil {
 		return Plan{}, err
 	}
+	if err := m.prepareAgentWorkAuthority(ctx, data, tenant, principal, &cmd); err != nil {
+		return Plan{}, classifyWorkStoreError(err)
+	}
 	var plan Plan
 	err = data.View(ctx, func(sc store.Scope) error {
 		if cmd.Command != "item.create" {
-			items, err := sc.Ext(workItemKind)
-			if err != nil {
-				return err
-			}
-			item, err := items.Get(ctx, cmd.WorkItemID)
-			if err != nil {
-				return err
-			}
-			if err := m.observeAgentWorkAuthority(
-				ctx, tenant, cmd.WorkspaceID, principal, &cmd, item,
-			); err != nil {
+			if err := m.validateAgentWorkAuthorityInView(ctx, sc, principal, cmd); err != nil {
 				return err
 			}
 		}
@@ -558,20 +554,171 @@ func (m *Module) revalidateAgentWorkOwnerInScope(
 	return nil
 }
 
+// refuseJoinedAgentWorkAuthority refuses a new command that needs agent
+// authority while it runs inside a joined protocol replay transaction. That
+// parent transaction stays open for the whole callback, and every resolver
+// answer (identity preflight, then authority observation) is its own store
+// read beside it; on SQLite that read waits for the connection the parent
+// holds. No lawful observation exists for such a call, so it is refused from
+// the joined, confined WorkItem read itself, before any resolver-bearing
+// preflight. Outside a joined transaction it reads nothing. Exact durable
+// replay is answered before this guard; internal and authority-reducing
+// commands keep their exclusion through workCommandNeedsAgentAuthority.
+func refuseJoinedAgentWorkAuthority(
+	ctx context.Context,
+	data workData,
+	tenant model.TenantID,
+	principal WorkPrincipal,
+	cmd WorkCommand,
+) error {
+	if cmd.Command == "item.create" {
+		return nil
+	}
+	if _, joined := protocolReplayScopeFromContext(ctx, tenant); !joined {
+		return nil
+	}
+	needsAuthority := false
+	if err := data.View(ctx, func(sc store.Scope) error {
+		items, err := sc.Ext(workItemKind)
+		if err != nil {
+			return err
+		}
+		item, err := items.Get(ctx, cmd.WorkItemID)
+		if err != nil {
+			return err
+		}
+		needsAuthority = workCommandNeedsAgentAuthority(cmd, item, principal)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if needsAuthority {
+		return unknown("evidence_unavailable", nil)
+	}
+	return nil
+}
+
+// prepareAgentWorkAuthority reads the WorkItem through the caller's own data
+// handle, closes that View and only then observes tenant-wide agent authority.
+// The observation opens its own store read; SQLite serves the core store over
+// one connection, so observing inside the WorkItem View waits for the
+// connection that View holds and can never progress. Only a detached stamp of
+// the item leaves the View. The observation authorizes nothing by itself: the
+// caller's later View validates it and Apply's Mutate locks it, both against a
+// WorkItem that must still match the stamp.
+func (m *Module) prepareAgentWorkAuthority(
+	ctx context.Context,
+	data workData,
+	tenant model.TenantID,
+	principal WorkPrincipal,
+	cmd *WorkCommand,
+) error {
+	cmd.agentAuthority = WorkAgentAuthoritySnapshot{}
+	cmd.authorityStamp = workAuthorityItemStamp{}
+	if cmd.Command == "item.create" {
+		return nil
+	}
+	needsAuthority := false
+	if err := data.View(ctx, func(sc store.Scope) error {
+		items, err := sc.Ext(workItemKind)
+		if err != nil {
+			return err
+		}
+		item, err := items.Get(ctx, cmd.WorkItemID)
+		if err != nil {
+			return err
+		}
+		cmd.authorityStamp = workAuthorityStampOf(item)
+		needsAuthority = workCommandNeedsAgentAuthority(*cmd, item, principal)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if !needsAuthority {
+		return nil
+	}
+	if _, joined := protocolReplayScopeFromContext(ctx, tenant); joined {
+		// A joined protocol replay transaction stays open after the callback
+		// above returns. Observing now would open a second store read beside it,
+		// and no lawful observation exists yet for this call.
+		return unknown("evidence_unavailable", nil)
+	}
+	return m.observeAgentWorkAuthority(
+		ctx, tenant, cmd.WorkspaceID, principal, cmd, cmd.authorityStamp.ownerRef,
+	)
+}
+
+func workAuthorityStampOf(item model.Record) workAuthorityItemStamp {
+	return workAuthorityItemStamp{
+		itemID:    recordID(item),
+		version:   item.Int(model.ColVersion),
+		workspace: model.ID(item.String(colWorkWorkspaceID)),
+		ownerKind: item.String(colWorkOwnerKind),
+		ownerRef:  item.String(colWorkOwnerRef),
+	}
+}
+
+// agentWorkAuthorityStampCurrent reports whether the WorkItem read inside the
+// caller's View or Mutate is the one the detached observation describes. The
+// binding is required whenever that item needs agent authority now or a
+// snapshot was observed for the earlier read, so an old owner's or generation's
+// snapshot never authorizes a different item state.
+func agentWorkAuthorityStampCurrent(cmd WorkCommand, principal WorkPrincipal, item model.Record) bool {
+	if cmd.agentAuthority.Token == nil && !workCommandNeedsAgentAuthority(cmd, item, principal) {
+		return true
+	}
+	return cmd.authorityStamp == workAuthorityStampOf(item)
+}
+
+// validateAgentWorkAuthorityInView rereads the confined WorkItem inside the
+// planning View, requires the detached stamp to still describe it and validates
+// the observed facts through that same View. It never opens another store read.
+func (m *Module) validateAgentWorkAuthorityInView(
+	ctx context.Context,
+	sc store.Scope,
+	principal WorkPrincipal,
+	cmd WorkCommand,
+) error {
+	items, err := sc.Ext(workItemKind)
+	if err != nil {
+		return err
+	}
+	item, err := items.Get(ctx, cmd.WorkItemID)
+	if err != nil {
+		return err
+	}
+	if !agentWorkAuthorityStampCurrent(cmd, principal, item) {
+		return broken(http.StatusPreconditionFailed, "plan_changed")
+	}
+	if cmd.agentAuthority.Token == nil {
+		if workCommandNeedsAgentAuthority(cmd, item, principal) {
+			return unknown("evidence_unavailable", nil)
+		}
+		return nil
+	}
+	validator, ok := m.workIdentity.(WorkAgentAuthorityReadValidator)
+	if !ok {
+		return unknown("evidence_unavailable", nil)
+	}
+	if err := validator.ValidateAgentWorkAuthorityInScope(ctx, sc, cmd.agentAuthority); err != nil {
+		if errors.Is(err, store.ErrConflict) || errors.Is(err, store.ErrNotFound) {
+			return broken(http.StatusPreconditionFailed, "plan_changed")
+		}
+		return unknown("evidence_unavailable", err)
+	}
+	return nil
+}
+
+// observeAgentWorkAuthority must be called with no WorkItem View or Mutate
+// open; prepareAgentWorkAuthority is its only caller.
 func (m *Module) observeAgentWorkAuthority(
 	ctx context.Context,
 	tenant model.TenantID,
 	workspace model.ID,
 	principal WorkPrincipal,
 	cmd *WorkCommand,
-	item model.Record,
+	ownerRef string,
 ) error {
-	if cmd == nil || cmd.internal || item.String(colWorkOwnerKind) != "agent" {
-		return nil
-	}
-	if !workCommandNeedsAgentAuthority(*cmd, item, principal) {
-		return nil
-	}
 	checker, ok := m.workIdentity.(WorkAgentEligibilityInScope)
 	if !ok {
 		return unknown("evidence_unavailable", store.ErrRowLockUnavailable)
@@ -581,7 +728,7 @@ func (m *Module) observeAgentWorkAuthority(
 		authenticatedAgentRef = principal.ActorRef
 	}
 	snapshot, err := checker.ObserveAgentWorkAuthority(
-		ctx, tenant, workspace, item.String(colWorkOwnerRef), authenticatedAgentRef,
+		ctx, tenant, workspace, ownerRef, authenticatedAgentRef,
 	)
 	if err != nil {
 		return unknown("evidence_unavailable", err)
@@ -1537,28 +1684,17 @@ func (m *Module) applyWithData(
 		}
 		return replay, nil
 	}
+	if err := refuseJoinedAgentWorkAuthority(ctx, data, tenant, principal, cmd); err != nil {
+		return CommandResult{}, classifyWorkStoreError(err)
+	}
 	if err := m.preflightContent(ctx, tenant, cmd); err != nil {
 		return CommandResult{}, err
 	}
 	if err := m.preflightIdentity(ctx, data, tenant, principal, &cmd); err != nil {
 		return CommandResult{}, err
 	}
-	if cmd.Command != "item.create" {
-		if err := data.View(ctx, func(sc store.Scope) error {
-			items, err := sc.Ext(workItemKind)
-			if err != nil {
-				return err
-			}
-			item, err := items.Get(ctx, cmd.WorkItemID)
-			if err != nil {
-				return err
-			}
-			return m.observeAgentWorkAuthority(
-				ctx, tenant, cmd.WorkspaceID, principal, &cmd, item,
-			)
-		}); err != nil {
-			return CommandResult{}, classifyWorkStoreError(err)
-		}
+	if err := m.prepareAgentWorkAuthority(ctx, data, tenant, principal, &cmd); err != nil {
+		return CommandResult{}, classifyWorkStoreError(err)
 	}
 	var postCommitRefusal error
 	cmd.postCommitRefusal = &postCommitRefusal
@@ -1629,6 +1765,16 @@ func (m *Module) applyWithData(
 				}
 				if versioned.Int(model.ColVersion) != cmd.ExpectedVersion {
 					return broken(http.StatusPreconditionFailed, "version_mismatch")
+				}
+				// The agent authority snapshot was observed for the WorkItem read
+				// before this transaction. A caller may supply an ExpectedVersion
+				// that only became current afterwards, so a matching version alone
+				// does not prove the snapshot describes this item and owner.
+				if !agentWorkAuthorityStampCurrent(cmd, principal, versioned) {
+					if cmd.ExpectedPlanHash != "" {
+						return broken(http.StatusPreconditionFailed, "plan_changed")
+					}
+					return broken(http.StatusUnprocessableEntity, "owner_ineligible")
 				}
 				// Agent identity/lifecycle rows are in the global authority-fact
 				// order before sessions.claim. Keep K2 in that same order so a K3
@@ -1752,6 +1898,8 @@ func (m *Module) applyWithData(
 		// the caller's workspace confinement for this opportunistic delivery.
 		// A request-confined nudge may retry, but the tenant-wide leader pump owns
 		// the tenth attempt because dead-lettering also creates a tenant Finding.
+		// The nudge runs under the module's mandatory outbox authority like every
+		// other drain: a held K3 event in this workspace stays held here too.
 		_ = m.drainWorkOutboxWithData(ctx, data, tenant, nudgeLimit, false)
 	}
 	if refusal := workCommandResultRefusal(result); refusal != nil {

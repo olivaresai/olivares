@@ -72,6 +72,35 @@ func TestSuspendedTenantIsNotServed(t *testing.T) {
 	if ranMutate {
 		t.Fatal("Mutate ran the caller's work for a suspended tenant")
 	}
+
+	selective, ok := guarded.(store.SelectiveMutator)
+	if !ok {
+		t.Fatal("suspension guard swallowed SelectiveMutator")
+	}
+	plan, err := store.NewTransactionLockPlan("suspension:selective")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranCoordination := false
+	err = selective.MutateCoordination(ctx, tenant, plan, func(store.CoordinationMutationScope) error {
+		ranCoordination = true
+		return nil
+	})
+	if !errors.Is(err, store.ErrTenantSuspended) || ranCoordination {
+		t.Fatalf("suspended selective coordination = %v ran=%t", err, ranCoordination)
+	}
+	evidencePlan, err := store.NewEvidenceOperationPlan("suspension-selective-op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranEvidence := false
+	err = selective.MutateEvidenceOperation(ctx, tenant, evidencePlan, func(store.EvidenceOperationMutationScope) error {
+		ranEvidence = true
+		return nil
+	})
+	if !errors.Is(err, store.ErrTenantSuspended) || ranEvidence {
+		t.Fatalf("suspended selective evidence = %v ran=%t", err, ranEvidence)
+	}
 }
 
 // TestSuspensionDestroysNothing proves the difference between this operation and

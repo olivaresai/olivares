@@ -14,7 +14,13 @@
 # isolated in its own job so its (long, wall-clock-bound) run — or its timeout —
 # can never mask race results for core/modules/connectors/sdk/operator/cloud.
 # Both jobs provision the same real Postgres as mainline-ci so the HA/failover/
-# RLS tests are raced BY EXECUTION, not self-skipped.
+# RLS tests are raced BY EXECUTION, not self-skipped. race-workspace also owns
+# services.postgres_other and exports OLIVARES_TEST_POSTGRES_OTHER_DSN: the
+# sqlstore TestDRDestinationUnrelatedCluster needs two unrelated servers (two
+# databases on one share system_identifier). Until this service existed the test
+# could only t.Fatal "a second owned real cluster is required" — race-full run
+# 35147072374, job race-workspace (heavy-stores#a). race-root does not: nothing
+# under cmd/olivares reads that variable.
 #
 # Cadence: weekly. workflow_dispatch is the on-demand lever for high-risk PRs
 # (enforcement/bus/proxy rewrites). Cron fires off minute 0 — GitHub
@@ -49,7 +55,37 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - name: Prepare Go caches when the runner environment is unusable
+        # setup-go runs go env itself, so cache fallback must precede it.
+        # Keep persistent runner caches when the existing environment is usable.
+        run: |
+          relocate=""
+          if [ -z "${HOME:-}" ] || [ ! -w "${HOME:-/nonexistent}" ]; then
+            relocate="unusable home"
+          fi
+          case "${GOPATH:-}" in
+            "" | /* ) : ;;
+            * ) relocate="relative GOPATH" ;;
+          esac
+          if [ -z "$relocate" ]; then
+            for cache_dir in "$HOME/go" "$HOME/.cache"; do
+              [ -e "$cache_dir" ] || continue
+              [ -w "$cache_dir" ] || relocate="unwritable default cache directory"
+            done
+          fi
+          if [ -z "$relocate" ]; then
+            echo "Keeping the usable runner Go cache environment"
+            exit 0
+          fi
+          echo "Preparing Go caches under RUNNER_TEMP: $relocate"
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
           cache: ${{ runner.environment == 'github-hosted' }}
@@ -87,7 +123,7 @@ jobs:
         group: ${{ fromJSON(needs.setup.outputs.groups) }}
     name: race-workspace (${{ matrix.group }})
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 60
+    timeout-minutes: 100  # > the 80-min step ceiling plus the unguarded steps (lint:ci-timeout-arithmetic); re-measured 2026-09-16
     services:
       postgres:
         # pgvector/pgvector = the official postgres image + the compiled vector
@@ -117,6 +153,33 @@ jobs:
           --memory-swap=1536m
           --cpus=2
           --pids-limit=512
+      # SECOND, job-owned cluster for TestDRDestinationUnrelatedCluster
+      # (core/internal/store/sqlstore/drdestinationauthority_pg_test.go:185). That test needs
+      # TWO UNRELATED clusters: it re-points pgtest's superuser DSN at this one to build its B
+      # fixture and then asserts the two pg_control_system() system_identifiers DIFFER. Two
+      # databases on ONE server share a system_identifier, so a second database would NOT
+      # satisfy it -- and the test says so by failing, which is the guard, not a formality.
+      # Until this service existed the test could only ever t.Fatal with "a second owned real
+      # cluster is required": race-full run 35147072374 did exactly that, at line 187.
+      #
+      # Same pinned image and the same BARE container port as the primary, so Docker picks a
+      # free ephemeral host port here too; the resolver refuses if it is empty, out of range,
+      # or EQUAL to the primary's. Isolated CI test resource, never a production destination.
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
     env:
       # The four OLIVARES_TEST_*_DSN CANNOT live here: they depend on the ephemeral
       # host port, and the `job` context is not available in jobs.<id>.env
@@ -132,6 +195,7 @@ jobs:
         env:
           # `job` is only available in steps.env/steps.run/steps.with.
           PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
         run: |
           set -euo pipefail
           case "${PGPORT_HOST:-}" in
@@ -149,6 +213,22 @@ jobs:
             echo "::error::docker published Postgres on ${PGPORT_HOST}, outside this host's ephemeral range ${LOPORT}-${HIPORT}; refusing to continue" >&2
             exit 1
           fi
+          # The SECOND cluster, present only in the jobs that run the unrelated-cluster test.
+          case "${PGPORT_OTHER:-}" in
+            '' | *[!0-9]*)
+              echo "::error::mapped host port for services.postgres_other:5432 is empty or non-numeric (got '${PGPORT_OTHER:-}')" >&2
+              exit 1 ;;
+          esac
+          if [ "$PGPORT_OTHER" -lt "$LOPORT" ] || [ "$PGPORT_OTHER" -gt "$HIPORT" ]; then
+            echo "::error::docker published the SECOND Postgres on ${PGPORT_OTHER}, outside this host's ephemeral range ${LOPORT}-${HIPORT}; refusing to continue" >&2
+            exit 1
+          fi
+          # Equal ports would mean ONE server behind two names; the test would then fail on the
+          # system_identifier comparison with a confusing message. Die here, where it is nameable.
+          if [ "$PGPORT_OTHER" = "$PGPORT_HOST" ]; then
+            echo "::error::both Postgres services resolved to host port ${PGPORT_HOST}; they must be two distinct servers" >&2
+            exit 1
+          fi
           {
             echo "PGHOSTPORT=127.0.0.1:${PGPORT_HOST}"
             # app = NOSUPERUSER NOBYPASSRLS owner of olivares (FORCE-RLS genuinely
@@ -159,6 +239,11 @@ jobs:
             echo "OLIVARES_TEST_POSTGRES_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
             echo "OLIVARES_TEST_POSTGRES_ADMIN_DSN=postgres://olivares_admin:adminpw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
             echo "OLIVARES_TEST_POSTGRES_SUPERUSER_DSN=postgres://postgres:postgres@127.0.0.1:${PGPORT_HOST}/postgres?sslmode=disable"
+            # The SECOND cluster, for TestDRDestinationUnrelatedCluster only. Maintenance DSN
+            # targets /postgres for the same reason the primary superuser DSN does: pgtest
+            # CREATEs and DROPs databases through it. The primary least-privilege app/admin
+            # fixtures above are untouched -- this ADDS a cluster, it does not re-point one.
+            echo "OLIVARES_TEST_POSTGRES_OTHER_DSN=postgres://postgres:postgres@127.0.0.1:${PGPORT_OTHER}/postgres?sslmode=disable"
             # This job HAS a Postgres service, so an unreachable server here is a broken
             # job — not an absence to skip past. `pgtest.Available` only learns that from the
             # RUN (core/internal/pgtest/pgtest.go:88-96): without this line the reachability
@@ -171,11 +256,41 @@ jobs:
             # may call pgvector the self-host default only while this stays wired.
             echo "OLIVARES_TEST_VECTOR_DSN=postgres://olivares_app:apppw@127.0.0.1:${PGPORT_HOST}/olivares?sslmode=disable"
           } >> "$GITHUB_ENV"
-          echo "resolved Postgres host port: ${PGPORT_HOST} (ephemeral range ${LOPORT}-${HIPORT})"
+          echo "resolved Postgres host port: ${PGPORT_HOST} (ephemeral range ${LOPORT}-${HIPORT}); second cluster ${PGPORT_OTHER}"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - name: Prepare Go caches when the runner environment is unusable
+        # setup-go runs go env itself, so cache fallback must precede it.
+        # Keep persistent runner caches when the existing environment is usable.
+        run: |
+          relocate=""
+          if [ -z "${HOME:-}" ] || [ ! -w "${HOME:-/nonexistent}" ]; then
+            relocate="unusable home"
+          fi
+          case "${GOPATH:-}" in
+            "" | /* ) : ;;
+            * ) relocate="relative GOPATH" ;;
+          esac
+          if [ -z "$relocate" ]; then
+            for cache_dir in "$HOME/go" "$HOME/.cache"; do
+              [ -e "$cache_dir" ] || continue
+              [ -w "$cache_dir" ] || relocate="unwritable default cache directory"
+            done
+          fi
+          if [ -z "$relocate" ]; then
+            echo "Keeping the usable runner Go cache environment"
+            exit 0
+          fi
+          echo "Preparing Go caches under RUNNER_TEMP: $relocate"
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
           cache: ${{ runner.environment == 'github-hosted' }}
@@ -232,13 +347,13 @@ jobs:
           psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
             "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: race this group
-        # ⛔ 45 de techo con `-timeout 35m` de Go DENTRO. Los dos números viven en
+        # ⛔ 80 de techo con `-timeout 70m` de Go DENTRO (re-medido el 2026-09-16 en runners hospedados de 4 vCPU: 10 de 20 turnos agotaron el reloj de 35; ver measured_run_2026_09_16 en race-groups.json). Los dos números viven en
         # scripts/race-groups.json y el banco comprueba que el de Go es el menor: el
         # reloj de `-timeout` arranca DESPUÉS de compilar con -race, así que igualarlo
         # al techo del paso garantiza que gane el techo y que el volcado de goroutines
         # —lo único que dice DÓNDE colgó— no llegue a imprimirse. Es exactamente como
         # murió race-root a los 152 min, mudo.
-        timeout-minutes: 45
+        timeout-minutes: 80
         # `-json` + `tee`: el fichero es el que sube el paso siguiente. `pipefail` porque sin
         # el, el rc de la tuberia es el del awk y un FAIL se publicaria verde.
         run: |
@@ -307,7 +422,7 @@ jobs:
         shard: ${{ fromJSON(needs.setup.outputs.root_shards) }}
     name: race-root (${{ matrix.shard }})
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 60
+    timeout-minutes: 100  # > the 80-min step ceiling plus the unguarded steps (lint:ci-timeout-arithmetic); re-measured 2026-09-16
     services:
       postgres:
         # pgvector/pgvector = the official postgres image + the compiled vector
@@ -395,7 +510,37 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - name: Prepare Go caches when the runner environment is unusable
+        # setup-go runs go env itself, so cache fallback must precede it.
+        # Keep persistent runner caches when the existing environment is usable.
+        run: |
+          relocate=""
+          if [ -z "${HOME:-}" ] || [ ! -w "${HOME:-/nonexistent}" ]; then
+            relocate="unusable home"
+          fi
+          case "${GOPATH:-}" in
+            "" | /* ) : ;;
+            * ) relocate="relative GOPATH" ;;
+          esac
+          if [ -z "$relocate" ]; then
+            for cache_dir in "$HOME/go" "$HOME/.cache"; do
+              [ -e "$cache_dir" ] || continue
+              [ -w "$cache_dir" ] || relocate="unwritable default cache directory"
+            done
+          fi
+          if [ -z "$relocate" ]; then
+            echo "Keeping the usable runner Go cache environment"
+            exit 0
+          fi
+          echo "Preparing Go caches under RUNNER_TEMP: $relocate"
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
           cache: ${{ runner.environment == 'github-hosted' }}
@@ -422,7 +567,7 @@ jobs:
           psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
             "CREATE EXTENSION IF NOT EXISTS vector;"
       - name: race this root shard
-        # ⛔ EL TECHO Y EL `-timeout` SALEN DE LA SPEC (45 / 35), no se teclean aqui, y la
+        # ⛔ EL TECHO Y EL `-timeout` SALEN DE LA SPEC (80 / 70, re-medidos el 2026-09-16), no se teclean aqui, y la
         # formula es la MISMA que la de los grupos: el reloj de `-timeout` de Go arranca
         # DESPUES de compilar con -race, asi que igualarlo al techo del paso garantiza que
         # gane el techo y que el volcado de goroutines —lo unico que dice DONDE colgo— no
@@ -431,7 +576,7 @@ jobs:
         #
         # `-json` para que el paso no muera mudo, `pipefail` porque sin el el rc de la
         # tuberia es el del awk —que siempre sale 0— y un FAIL se publicaria verde.
-        timeout-minutes: 45
+        timeout-minutes: 80
         run: |
           set -euo pipefail
           bash scripts/race-groups.sh root-run "${{ matrix.shard }}" \

@@ -50,7 +50,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.
@@ -70,6 +80,46 @@ curl -fsS -X POST https://localhost:8443/v1/auth/login \
 ```
 
 数据目录保存着 SQLite 数据库、审计签名密钥和 TLS 材料 — 请备份并妥善保护它。
+
+### 自定义数据目录（`layout: custom`）
+
+默认原生布局是 `/var/lib/olivares`。签名的服务适配器（`install.sh --data-dir`、
+`scripts/install-service.sh`）按 **形状** 接受 **自定义** 数据目录，而不是按
+允许列表。所有权清单记录 `"layout": "custom"`（`CHANGELOG.md` `[26.9.0]`
+Added；`INSTALL.md`）。
+
+SDD 04 §6：每个可配置字段声明 owner、schema、accepted sources 和 validator。
+此处适配器拥有专用目录；操作者拥有父目录。以下是适配器自己的拒绝字符串
+（`scripts/install-service.sh`）：
+
+| Condition | What the adapter prints and exits 1 |
+|---|---|
+| Path is not `/*/*` (a top-level directory) | `custom data directory must be a dedicated directory at least two levels deep (for example /srv/olivares), not a top-level directory: $data_dir` |
+| The data directory would contain the binary, config or unit | `custom data directory $data_dir must not contain the installed path $path` |
+| Any path component is a symbolic link | `path component is a symbolic link ($prefix -> …); pass the resolved path instead of provisioning through a link: $1` |
+| Parent of a new custom directory does not exist | `parent of the custom data directory does not exist; create it with the intended owner first: $(dirname -- "$data_target")` |
+| Existing system directory mode is not 0700 or 0750 | `existing system data directory mode is $data_mode; require 0700 or 0750` |
+| Path is under `/dev`, `/proc` or `/sys` | `data directory $data_dir is under an API file system (/dev, /proc, /sys): those hold kernel and device interfaces rather than durable state…; choose a real directory` |
+| Path under `/tmp` or `/var/tmp` on systemd older than 235 | `data directory $data_dir is under /tmp or /var/tmp and this host runs systemd $running: creating a BindPaths= destination inside the private /tmp needs systemd 235 or later…` |
+| A BindPaths= path contains `:` | `$2 $1 contains ':' and this location can only be reached with BindPaths=, whose value uses ':' to separate source from destination; choose a path without it` |
+
+`install-agentops.sh` 对 `OLIVARES_DATA_DIR` 使用同一条两级规则：
+`OLIVARES_DATA_DIR must name a dedicated directory at least two levels deep
+(for example /srv/olivares), not a top-level directory`。它尊重 `OLIVARES_DATA_DIR` 和显式选择的
+`OLIVARES_WORKSPACE_DIR`。
+
+`/home`、`/root` 或 `/run/user` 下的路径以 `ProtectHome=tmpfs` 和仅针对该目录的
+`BindPaths=` 呈现。`/tmp` 或 `/var/tmp` 下的路径保留 `PrivateTmp=true`，并只为
+该目录获得 `BindPaths=`（`scripts/install-service.sh` 中的 `sandbox_access`）。
+
+仅当其索引路径上的 unit 用该目录执行引擎，或 preserve 已在服务配置旁留下卸载
+证人时，`olivares uninstall` 才接受该自定义目录。用 `olivares doctor` 诊断记录的
+AgentOps 布局 — 见
+[故障排查](/how-to/troubleshooting/#agentops-layout-check)。
+
+软件包安装的默认仍是 `/var/lib/olivares`。见
+[从软件包安装](/how-to/install-from-packages/)。macOS 见
+[使用 Homebrew 安装](/how-to/install-from-homebrew/)。
 
 ## 选项 2 — Docker Compose（单节点，SQLite）
 
@@ -99,27 +149,27 @@ docker compose -f deploy/compose/docker-compose.yml \
 
 ## 选项 3 — Kubernetes（Helm）
 
-经过签名的 Helm chart 将控制平面（control plane）部署为一个 **核心 StatefulSet**
+`deploy/helm/olivares` 中的 Helm chart 将控制平面（control plane）部署为一个 **核心 StatefulSet**
 （单写入者；其数据目录保存审计签名密钥和 TLS 材料），并且，对于分布式拓扑，还部署一个
-**采集器 DaemonSet（collectors DaemonSet）**，它通过 **gRPC + mTLS** 将观测数据推送给核心。在发布时，chart 会发布到 OCI registry 并经
-cosign 签名，因此你可以在安装时验证并按 digest 固定。（首个发布目前仍是 **草稿**：在切出 `chart-v*` 标签之前，registry 路径为空，因此下面的命令是你在发布后将会使用的路径。）
+**采集器 DaemonSet（collectors DaemonSet）**，它通过 **gRPC + mTLS** 将观测数据推送给核心。
+引擎 v26.9.0 release 不会将 chart 发布到 OCI registry；独立的 `chart-v*` tag 尚未运行该 workflow。
+请从 checkout 安装经过审查的源 chart，并按 digest 固定已发布的容器镜像。
 
 ```bash
 helm install olivares \
-  oci://ghcr.io/olivaresai/charts/olivares \
-  --version <chart-version> \
+  deploy/helm/olivares \
   --set image.repository=docker.io/olivaresai/olivares \
   --set image.digest=<sha256-digest>
 ```
 
-> 已发布的 chart 是**在 OCI manifest 上用 cosign 签名**的，而非 GPG 签名：发布流水线不产出 `.prov`
-> 层，因此 `helm --verify` 无法校验它。请使用 `cosign verify` 针对
-> `release-chart.yml@refs/tags/chart-v*` 身份进行验证 —— 见 `deploy/helm/README.md`。
+> 未来发布 chart 时，`release-chart.yml` 会用 cosign 签署 OCI manifest，且不产生 GPG
+> `.prov` layer。届时须按 digest 单独验证；当前源安装不会被描述成已签名的 OCI 下载。
+> 参见 `deploy/helm/README.md`。
 
 chart 会从 Docker Hub（`docker.io/olivaresai/olivares`）拉取容器镜像；同一镜像也位于
 `ghcr.io/olivaresai/olivares`，按 digest 完全相同；如果 Docker Hub 的**匿名**拉取限速造成困扰，
-可将 `image.repository` 指向那里（ghcr.io 对公共镜像不限速）。**chart** 产物本身则留在
-`oci://ghcr.io/olivaresai/charts/olivares`。
+可将 `image.repository` 指向那里（ghcr.io 对公共镜像不限速）。在独立发布之前，chart 来自
+`deploy/helm/olivares`。
 
 始终 **按 digest** 部署，绝不使用可变的标签。对于完全断网的集群，请先镜像该 bundle — 参阅 [气隙安装](/how-to/air-gap-install/)。
 

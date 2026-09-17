@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -48,6 +49,11 @@ const (
 // session-origin edges carry live operation; an edge whose origin is an
 // agent/identity/mcp-server belongs to inventory, not to a live session.
 func (m *Module) onEdge(ctx context.Context, tenantRef string, edge sdkmodel.EdgeObservation) error {
+	return m.foldEdge(ctx, tenantRef, nil, edge)
+}
+
+// foldEdge is onEdge with the host-stamped registration (nil = legacy channel).
+func (m *Module) foldEdge(ctx context.Context, tenantRef string, reg *event.SourceRegistration, edge sdkmodel.EdgeObservation) error {
 	if edge.OriginKind != "session" || edge.OriginRef == "" {
 		return nil
 	}
@@ -60,7 +66,11 @@ func (m *Module) onEdge(ctx context.Context, tenantRef string, edge sdkmodel.Edg
 
 	var snap *liveSnapshot
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		rec, err := m.upsertLive(ctx, sc, ref, at, func(rec model.Record, _ bool) {
+		scope, err := m.scopeForRegistration(ctx, sc, reg)
+		if err != nil {
+			return err
+		}
+		rec, err := m.upsertLiveScoped(ctx, sc, ref, scope, at, func(rec model.Record, _ bool) {
 			rec[colEventCount] = rec.Int(colEventCount) + 1
 			advanceLast(rec, at)
 			if edge.ToolRef != "" {
@@ -79,7 +89,12 @@ func (m *Module) onEdge(ctx context.Context, tenantRef string, edge sdkmodel.Edg
 			// The posture takes the WEAKEST value seen: a session with one merely
 			// observed action is not an enforced session, and rounding it up would be
 			// the overstatement this column exists to prevent.
-			if v := edge.Labels[labelEngine]; v != "" {
+			//
+			// B2: a PROFILE fixes the driver. On an observed row the engine is the
+			// binding's driver and a contradicting payload label does not move it.
+			if scope.profileID != "" {
+				rec[colEngine] = scope.provider
+			} else if v := edge.Labels[labelEngine]; v != "" {
 				rec[colEngine] = v
 			}
 			if v := edge.Labels[labelPosture]; v != "" {
@@ -102,7 +117,7 @@ func (m *Module) onEdge(ctx context.Context, tenantRef string, edge sdkmodel.Edg
 		if edge.ResourceKind == "mcp.server" {
 			tlKind = tlMCP
 		}
-		if err := m.appendTimeline(ctx, sc, ref, at, tlKind, edge.ToolRef, edge.ResourceRef, string(edge.Mode), string(edge.Source), edgeTitle(edge)); err != nil {
+		if err := m.appendTimelineScoped(ctx, sc, ref, rec, scope, at, tlKind, edge.ToolRef, edge.ResourceRef, string(edge.Mode), string(edge.Source), edgeTitle(edge)); err != nil {
 			return err
 		}
 		s := m.snapshot(rec, tenant)
@@ -119,6 +134,11 @@ func (m *Module) onEdge(ctx context.Context, tenantRef string, edge sdkmodel.Edg
 // totals are the LIVE figure only; the canonical CostRecord/FinOps ledger is
 // module XI. A cost sample with no session reference is not live operation.
 func (m *Module) onCost(ctx context.Context, tenantRef string, cost sdkmodel.CostSample) error {
+	return m.foldCost(ctx, tenantRef, nil, cost)
+}
+
+// foldCost is onCost with the host-stamped registration (nil = legacy channel).
+func (m *Module) foldCost(ctx context.Context, tenantRef string, reg *event.SourceRegistration, cost sdkmodel.CostSample) error {
 	if cost.SessionRef == "" {
 		return nil
 	}
@@ -130,7 +150,11 @@ func (m *Module) onCost(ctx context.Context, tenantRef string, cost sdkmodel.Cos
 
 	var snap *liveSnapshot
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		rec, err := m.upsertLive(ctx, sc, cost.SessionRef, at, func(rec model.Record, _ bool) {
+		scope, err := m.scopeForRegistration(ctx, sc, reg)
+		if err != nil {
+			return err
+		}
+		rec, err := m.upsertLiveScoped(ctx, sc, cost.SessionRef, scope, at, func(rec model.Record, _ bool) {
 			rec[colInputTokens] = rec.Int(colInputTokens) + cost.InputTokens
 			rec[colOutputTokens] = rec.Int(colOutputTokens) + cost.OutputTokens
 			rec[colCostMicroUSD] = rec.Int(colCostMicroUSD) + cost.CostMicroUSD
@@ -143,7 +167,7 @@ func (m *Module) onCost(ctx context.Context, tenantRef string, cost sdkmodel.Cos
 			return err
 		}
 		title := fmt.Sprintf("%d in / %d out tokens", cost.InputTokens, cost.OutputTokens)
-		if err := m.appendTimeline(ctx, sc, cost.SessionRef, at, tlCost, "", "", "", "cost", title); err != nil {
+		if err := m.appendTimelineScoped(ctx, sc, cost.SessionRef, rec, scope, at, tlCost, "", "", "", "cost", title); err != nil {
 			return err
 		}
 		s := m.snapshot(rec, tenant)
@@ -160,6 +184,11 @@ func (m *Module) onCost(ctx context.Context, tenantRef string, cost sdkmodel.Cos
 // anti-evasion finding (the connector's discrepancy signal) marks the
 // session's Claude Code state silent-evasion; a health finding is timelined.
 func (m *Module) onFinding(ctx context.Context, tenantRef string, f sdkmodel.FindingReport) error {
+	return m.foldFinding(ctx, tenantRef, nil, f)
+}
+
+// foldFinding is onFinding with the host-stamped registration (nil = legacy channel).
+func (m *Module) foldFinding(ctx context.Context, tenantRef string, reg *event.SourceRegistration, f sdkmodel.FindingReport) error {
 	if f.SubjectKind != "session" || f.SubjectRef == "" {
 		return nil
 	}
@@ -171,7 +200,11 @@ func (m *Module) onFinding(ctx context.Context, tenantRef string, f sdkmodel.Fin
 
 	var snap *liveSnapshot
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		rec, err := m.upsertLive(ctx, sc, f.SubjectRef, at, func(rec model.Record, _ bool) {
+		scope, err := m.scopeForRegistration(ctx, sc, reg)
+		if err != nil {
+			return err
+		}
+		rec, err := m.upsertLiveScoped(ctx, sc, f.SubjectRef, scope, at, func(rec model.Record, _ bool) {
 			if f.Kind == "anti_evasion" {
 				rec[colEvasionAt] = model.NewTimestamp(at).String()
 			}
@@ -188,7 +221,7 @@ func (m *Module) onFinding(ctx context.Context, tenantRef string, f sdkmodel.Fin
 		if err != nil {
 			return err
 		}
-		if err := m.appendTimeline(ctx, sc, f.SubjectRef, at, tlFinding, "", "", "", f.Kind, f.Title); err != nil {
+		if err := m.appendTimelineScoped(ctx, sc, f.SubjectRef, rec, scope, at, tlFinding, "", "", "", f.Kind, f.Title); err != nil {
 			return err
 		}
 		s := m.snapshot(rec, tenant)
@@ -206,11 +239,20 @@ func (m *Module) onFinding(ctx context.Context, tenantRef string, f sdkmodel.Fin
 // subscriber goroutine and backed by the (tenant_id, session_ref) unique index
 // across restarts.
 func (m *Module) upsertLive(ctx context.Context, sc store.Scope, ref string, at time.Time, apply func(rec model.Record, isNew bool)) (model.Record, error) {
+	return m.upsertLiveScoped(ctx, sc, ref, liveScope{}, at, apply)
+}
+
+// upsertLiveScoped is upsertLive keyed by (scope, external id) — the B2 identity
+// of a live row, enforced across restarts by the (tenant_id,
+// COALESCE(observation_scope,'legacy'), session_ref) unique index. A new row is
+// stamped with its scope; an existing row keeps the scope it was born with.
+func (m *Module) upsertLiveScoped(ctx context.Context, sc store.Scope, ref string, scope liveScope, at time.Time, apply func(rec model.Record, isNew bool)) (model.Record, error) {
 	repo, err := sc.Ext(liveKind)
 	if err != nil {
 		return nil, err
 	}
-	existing, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colSessionRef, ref)}, Limit: 1})
+	filters := liveKeyFilters(ref, scope.scope)
+	existing, _, err := repo.List(ctx, model.Query{Filters: filters, Limit: 1})
 	if err != nil {
 		return nil, err
 	}
@@ -230,6 +272,7 @@ func (m *Module) upsertLive(ctx context.Context, sc store.Scope, ref string, at 
 		colFirstEventAt: atTS,
 		colLastEventAt:  atTS,
 	}
+	applyScopeColumns(rec, scope)
 	apply(rec, true)
 	created, err := repo.Create(ctx, rec)
 	if err == nil {
@@ -237,7 +280,7 @@ func (m *Module) upsertLive(ctx context.Context, sc store.Scope, ref string, at 
 	}
 	// A redelivered/raced create can hit the unique index; re-read and update.
 	if errors.Is(err, store.ErrConflict) {
-		again, _, lerr := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colSessionRef, ref)}, Limit: 1})
+		again, _, lerr := repo.List(ctx, model.Query{Filters: filters, Limit: 1})
 		if lerr != nil {
 			return nil, lerr
 		}
@@ -254,6 +297,15 @@ func (m *Module) upsertLive(ctx context.Context, sc store.Scope, ref string, at 
 // ordered by their time-ordered id (ingestion order), so the timeline is
 // keyset-paginated chronologically.
 func (m *Module) appendTimeline(ctx context.Context, sc store.Scope, ref string, at time.Time, kind, toolRef, resourceRef, mode, source, title string) error {
+	return m.appendTimelineScoped(ctx, sc, ref, nil, liveScope{}, at, kind, toolRef, resourceRef, mode, source, title)
+}
+
+// appendTimelineScoped is appendTimeline that, for a SCOPED row, writes the exact
+// live row id (live_ref) and the binding it was attributed under in the same
+// mutation as the fold. Legacy rows keep session_ref alone, so the bare
+// external-id timeline stays exactly the legacy events and a scoped row's timeline
+// is selected by its id.
+func (m *Module) appendTimelineScoped(ctx context.Context, sc store.Scope, ref string, live model.Record, scope liveScope, at time.Time, kind, toolRef, resourceRef, mode, source, title string) error {
 	repo, err := sc.Ext(timelineKind)
 	if err != nil {
 		return err
@@ -268,6 +320,10 @@ func (m *Module) appendTimeline(ctx context.Context, sc store.Scope, ref string,
 	setIf(rec, colTLMode, mode)
 	setIf(rec, colTLSource, source)
 	setIf(rec, colTLTitle, title)
+	if !scope.legacy() && live != nil {
+		setIf(rec, colTLLiveRef, live.String(model.ColID))
+		setIf(rec, colTLBindingRef, scope.bindingRef)
+	}
 	_, err = repo.Create(ctx, rec)
 	return err
 }

@@ -26,17 +26,10 @@ sowie der eigenen Schutzmechanismen des Charts). Das Chart erfordert
 **Kubernetes ≥ 1.25**.
 
 <Aside type="caution" title="Veröffentlichungsstatus des Charts — ehrlich">
-Zum Release wird das Chart in einer OCI-Registry veröffentlicht und mit cosign
-signiert, sodass Sie es bei der Installation verifizieren und Images per Digest
-pinnen können. Das Chart zieht das Container-Image von Docker Hub
-(`docker.io/olivaresai/olivares`; ebenfalls unter `ghcr.io/olivaresai/olivares`, per Digest
-identisch); das **Chart**-Artefakt selbst liegt unter
-`oci://ghcr.io/olivaresai/charts/olivares`. Das erste Release ist noch ein
-**Entwurf**: Bis ein `chart-v*`-Tag erstellt wird, ist der Registry-Pfad **leer**.
-Installieren Sie bis dahin aus dem Repository-Checkout (das Chart selbst ist
-vollständig und unten gerendert); sobald es veröffentlicht ist, wechseln Sie zu
-`oci://ghcr.io/olivaresai/charts/olivares` und
-[verifizieren, was Sie heruntergeladen haben](/how-to/verify-a-release/).
+Das Engine-Release v26.9.0 ist öffentlich; das Chart hat jedoch einen eigenen
+Release-Zyklus und noch keine `chart-v*`-Veröffentlichung. Installieren Sie die
+geprüfte Quelle aus `deploy/helm/olivares`, wie unten gezeigt, und pinnen Sie das
+Image per Digest. Ein später veröffentlichtes Chart ist separat zu verifizieren.
 </Aside>
 
 ## 1. Die Standardinstallation (Single Node, SQLite)
@@ -118,12 +111,48 @@ helm install olivares deploy/helm/olivares \
 ```
 
 Der `admin-dsn`-Schlüssel enthält eine dedizierte
-`NOSUPERUSER BYPASSRLS`-Rolle. Er ist **nur dann** optional, **wenn Sie niemals
-Backups aktivieren**: Er ist es, der die mandantenübergreifenden Systemlesevorgänge
-vollständig macht (die Org-Liste, die mandantenübergreifende Abdeckung), und die
-Aktivierung von `backup` **erfordert** ihn — siehe
-[§4](#4-geplante-verschlüsselte-backups). Ihn jetzt anzulegen bedeutet, dass der
-spätere Backup-Schritt eine Änderung von einer einzigen Zeile ist.
+`NOSUPERUSER BYPASSRLS`-Rolle, und unter Postgres brauchen Sie ihn **ab dem
+ersten Start** — nicht nur für Backups. Die Anwendungsrolle oben bleibt
+`NOSUPERUSER NOBYPASSRLS`, sodass ein mandantenübergreifender Lesevorgang
+darüber durch Row-Level Security auf den freigegebenen Mandanten beschränkt
+ist und niemals als der gesamte Bestand gelesen werden kann; die Engine
+lehnt einen solchen Lesevorgang ab, statt eine kurze Liste zurückzugeben.
+Das Erst-Setup in [§1](#1-die-standardinstallation-single-node-sqlite) ist
+einer dieser Lesevorgänge — `POST /v1/setup` erzeugt die erste Organisation
+—, daher antwortet es ohne diesen Schlüssel mit
+`501 cross_tenant_admin_pool_not_configured`. `GET /readyz` antwortet dann
+`503` mit `status=setup_blocked`, demselben Code und einem festen Remedy im
+Body. Dieser 503 ist kein Erfolg: er ist die Beobachtung, dass Setup noch
+nicht laufen kann, und `POST /v1/setup` prüft seine eigene Autorität erneut.
+
+Das mitgelieferte Flat-Manifest und der Standard-Helm-Pfad verdrahten
+`/readyz` als Container-`readinessProbe`. Eine nicht gebootstrapte
+PostgreSQL-Installation ohne diese autoritative Enumeration bleibt daher
+Not Ready, bis die Voraussetzung korrigiert ist, was ein Rollout **verkeilen
+kann** (ein nie-Ready-Pod erfüllt die StatefulSet-Update-Barriere nie).
+`/livez` bleibt 200 — nur der Prozess, der Pod wird nicht neu gestartet.
+`/pod-readyz` bleibt ebenfalls 200: das ist die separat konfigurierte
+HA-Pod-Health-Sonde (Store erreichbar, keine Leadership-Prüfung und keine
+First-Boot-Fähigkeitssonde), verwendet mit einer eigenen
+Writer-Routing-Anordnung, damit ein gesunder Standby Ready sein kann,
+während `/readyz` Nicht-Schreiber weiterhin draint. Ein 200 von `/livez` oder `/pod-readyz`
+bedeutet **nicht**, dass das Standard-Rollout entblockt ist. Zielen Sie die
+Standard-Readiness-Sonde nicht um, um ein fehlgeschlagenes Setup zu
+verbergen.
+
+Wenn der Setup-Zustand nicht beobachtet werden kann, antwortet `/readyz`
+`503` mit `status=setup_unavailable` und `code=setup_state_unavailable` und
+**lässt** `setup_required` **weg**, weil dieser Boolean unbekannt ist. Das
+ist etwas anderes als eine bekannte leere Installation
+(`setup_required=true`).
+
+Eine Installation, die **bereits** eingerichtet ist, bedient weiter ohne den
+Schlüssel: was sie nicht tun kann, ist autoritative mandantenübergreifende
+Arbeit — die Org-Liste, die mandantenübergreifende Abdeckung und `backup`,
+das ihn ERFORDERT (siehe [§4](#4-geplante-verschlüsselte-backups)).
+Provisionieren Sie die Rolle mit
+`olivares db init --admin-role olivares_admin …` (siehe
+`deploy/postgres/README.md`) und zeigen Sie `--admin-dsn` darauf.
 
 ## 3. Active-Passive-HA
 

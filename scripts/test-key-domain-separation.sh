@@ -9,10 +9,99 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BINS="$ROOT/cmd/olivares/firstparty/bins"
+cleanup_probe=0
+
+if [ "$#" -gt 0 ]; then
+  if [ "$#" -ne 2 ] || [ "$1" != "--selftest-cleanup" ]; then
+    echo "usage: $0 [--selftest-cleanup <bins-dir>]" >&2
+    exit 2
+  fi
+  if ! cleanup_probe_base="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)"; then
+    echo "FATAL: cleanup self-test TMPDIR is unavailable: ${TMPDIR:-/tmp}" >&2
+    exit 2
+  fi
+  if [ "$cleanup_probe_base" = / ]; then
+    echo "FATAL: cleanup self-test refuses a filesystem-root TMPDIR" >&2
+    exit 2
+  fi
+  if ! BINS="$(cd "$2" 2>/dev/null && pwd -P)"; then
+    echo "FATAL: cleanup self-test bins directory is unavailable: $2" >&2
+    exit 2
+  fi
+  if [ "$BINS" = "$cleanup_probe_base" ]; then
+    echo "FATAL: cleanup self-test bins cannot be TMPDIR itself: $BINS" >&2
+    exit 2
+  fi
+  case "$BINS/" in
+    "$cleanup_probe_base"/*) ;;
+    *) echo "FATAL: cleanup self-test bins must be below TMPDIR: $BINS" >&2; exit 2 ;;
+  esac
+  cleanup_probe=1
+fi
+
+[ -d "$BINS" ] || { echo "FATAL: first-party bins directory is missing: $BINS" >&2; exit 2; }
+if [ "$cleanup_probe" -eq 1 ] \
+    && { [ ! -f "$BINS/PLACEHOLDER" ] || [ ! -f "$BINS/.olivares-key-domain-cleanup-selftest" ]; }; then
+  echo "FATAL: cleanup self-test directory lacks its PLACEHOLDER or safety marker: $BINS" >&2
+  exit 2
+fi
+
+WORK=""
+
+restore_firstparty_bins() {
+  # build:release populates these ignored files before this test in CI. They are
+  # inputs to the release-tag builds below, but not repository content, so never
+  # let them contaminate the next command run from this worktree.
+  find "$BINS" -type f ! -name PLACEHOLDER -delete
+}
+
+cleanup() {
+  local rc=$?
+  trap - EXIT
+  if ! restore_firstparty_bins; then
+    echo "FATAL: could not restore first-party bins: $BINS" >&2
+    [ "$rc" -ne 0 ] || rc=1
+  fi
+  if [ -n "$WORK" ] && ! rm -rf "$WORK"; then
+    echo "FATAL: could not remove key-domain scratch: $WORK" >&2
+    [ "$rc" -ne 0 ] || rc=1
+  fi
+  exit "$rc"
+}
+
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/olivares-key-domains.XXXXXX")"
-cleanup() { rm -rf "$WORK"; }
-trap cleanup EXIT HUP INT TERM
+
+if [ "$cleanup_probe" -eq 1 ]; then
+  : > "$BINS/KEY-DOMAIN-CLEANUP-PROBE"
+  exit 0
+fi
+
 cd "$ROOT"
+
+# ⛔ LA PRECONDICION SE COMPRUEBA, NO SE ESCRIBE EN UN COMENTARIO. Doce lineas mas arriba dice
+# «build:release populates these ignored files before this test in CI», y eso era todo lo que la
+# sostenia. Medido sobre la corrida 33926027726: el job `hook-only-legs` adopto esta bateria SIN
+# ese paso, y lo que se vio a los seis minutos fue
+#
+#     cmd/olivares/firstparty/embed_binaries_release.go:18:21: pattern bins/claude-source: no matching files found
+#
+# — un error de `go:embed` que no nombra la causa ni el remedio, y que se lee como codigo roto.
+# El fichero es un GUARDA a proposito (`all:bins` solo casaria PLACEHOLDER y dejaria salir una
+# release con cero conectores), asi que su ausencia es una precondicion ausente, no un defecto:
+# la respuesta correcta es NO HE PODIDO MIRAR, diciendo que falta y como se consigue.
+if [ ! -e "$BINS/claude-source" ]; then
+	echo "test-key-domain-separation: ⛔ NO HE PODIDO MIRAR: falta $BINS/claude-source" >&2
+	echo "                 Las compilaciones de abajo llevan \`-tags release\`, y ese fichero es una" >&2
+	echo "                 guarda de compilacion: sin el, \`go build\` muere en el \`go:embed\` sin decir" >&2
+	echo "                 por que. Lo puebla \`task build:release\` (scripts/build-connectors.sh)." >&2
+	exit 2
+fi
 
 go run ./cmd/olivares license keygen \
   --out-private "$WORK/license.key" --out-public "$WORK/license.pub" >/dev/null

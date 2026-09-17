@@ -63,7 +63,18 @@ type ManagedRunRef struct {
 // It does not expose the HTTP handler or the runtime's in-memory Process.
 type RuntimeControl interface {
 	LaunchForWork(context.Context, model.TenantID, WorkLaunchSpec) (ManagedRunRef, error)
+	// InputForWork writes one RAW NDJSON line: the Claude stream-json contract.
 	InputForWork(context.Context, model.TenantID, string, int64, []byte) error
+	// TextForWork writes one TURN as text: the contract of a run driven by an owned
+	// provider protocol, which refuses raw frames. The two are separate methods
+	// because they are separate contracts — deciding between them by inspecting the
+	// bytes is exactly the reinterpretation this port exists to avoid.
+	TextForWork(context.Context, model.TenantID, string, int64, string) error
+	// InterruptForWork cancels the ACTIVE provider turn and leaves the owned
+	// process usable for the next input. It is the non-terminal control of the
+	// fenced plane and never degrades into StopForWork: a caller that wanted the
+	// process ended has to say so.
+	InterruptForWork(context.Context, model.TenantID, string, int64) error
 	StopForWork(context.Context, model.TenantID, string, int64, string) error
 }
 

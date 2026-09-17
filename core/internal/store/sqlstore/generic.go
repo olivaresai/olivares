@@ -48,6 +48,17 @@ type genericRepo struct {
 	// explicit store.TransactionStampedGenericRepo methods consume it; ordinary
 	// GenericRepo writes retain their established application-clock behavior.
 	transactionStamp func() (model.Timestamp, bool)
+	poison           func(error)
+	// origin and writeGuard are the custodial write gate (P2 / W1). writeGuard
+	// is non-nil only on a repository a tenant Scope issued; origin is ordinary
+	// unless the scope built this repository for the engine's own authority
+	// touch or for a bound custodial handle. See custodial_write_gate.go.
+	origin     writeOrigin
+	writeGuard func(scopeWriteOp, writeOrigin, model.Kind, model.ID) error
+	// scanTargets, when non-nil, supplies the Scan destinations for get and List
+	// in place of a scanState's own. Only policy snapshot reads install it, on a
+	// value copy; the zero value keeps the established typed targets.
+	scanTargets func(*scanState) []any
 }
 
 var _ store.TransactionStampedGenericRepo = (*genericRepo)(nil)
@@ -125,6 +136,9 @@ func (r *genericRepo) insertWithIDAt(
 	if r.readOnly {
 		return nil, store.ErrReadOnly
 	}
+	if err := r.noteWrite(id); err != nil {
+		return nil, err
+	}
 	out := make(model.Record, len(in)+6)
 	for _, f := range r.desc.Fields {
 		out[f.Name] = redactField(f, in[f.Name])
@@ -189,6 +203,9 @@ func (r *genericRepo) Lock(ctx context.Context, id model.ID) (model.Record, erro
 	if r.readOnly {
 		return nil, store.ErrReadOnly
 	}
+	if err := r.noteLock(id); err != nil {
+		return nil, err
+	}
 	if r.dia.Name() == store.EngineSQLite {
 		// database/sql starts SQLite transactions deferred. A read alone would not
 		// yet own the engine's single writer slot, so another process could update
@@ -227,13 +244,21 @@ func (r *genericRepo) get(ctx context.Context, id model.ID, lock bool) (model.Re
 		return nil, err
 	}
 	row := r.tx.QueryRowContext(ctx, r.dia.Rebind(q), id.String(), r.tenant.String())
-	if err := row.Scan(st.dests...); err != nil {
+	if err := row.Scan(r.scanDests(st)...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrNotFound
 		}
 		return nil, err
 	}
 	return st.record(), nil
+}
+
+// scanDests returns the destinations one get or List row scans into.
+func (r *genericRepo) scanDests(st *scanState) []any {
+	if r.scanTargets == nil {
+		return st.dests
+	}
+	return r.scanTargets(st)
 }
 
 func rowLockSuffix(engine store.Engine) string {
@@ -301,7 +326,7 @@ func (r *genericRepo) List(ctx context.Context, q model.Query) ([]model.Record, 
 		if err != nil {
 			return nil, model.Page{}, err
 		}
-		if err := rows.Scan(st.dests...); err != nil {
+		if err := rows.Scan(r.scanDests(st)...); err != nil {
 			return nil, model.Page{}, err
 		}
 		out = append(out, st.record())
@@ -320,6 +345,150 @@ func (r *genericRepo) List(ctx context.Context, q model.Query) ([]model.Record, 
 	}
 	return out, page, nil
 }
+
+// distinctProjectionStatement is one rendered projection: dialect-neutral text
+// with "?" placeholders, its bound values in order, and the number of
+// alternative arms it unions (0 when the projection carries no alternative
+// group and is the single common arm).
+type distinctProjectionStatement struct {
+	text string
+	args []any
+	arms int
+}
+
+// renderDistinctProjection renders store.DistinctProjection as ONE
+// parameterized statement.
+//
+// Without alternatives it is one arm: the distinct, ascending values of the
+// declared column under the tenant predicate, the soft-delete predicate, the
+// caller's ANDed filters and the optional exclusive keyset anchor, reading
+// limit+1 values.
+//
+// With alternatives every alternative becomes its own arm carrying ALL of the
+// common predicates plus the alternative's own ANDed filters, ordered and capped
+// at limit+1 on its own; the arms are unioned (which deduplicates), ordered by
+// the column and capped at limit+1 again. The union of the arms' first limit+1
+// values contains the first limit+1 values of the ORed predicate — a value among
+// the global first limit+1 is preceded by fewer than limit+1 values of any
+// alternative that carries it — so the page and its lookahead are identical to
+// the single ORed statement. What differs is the plan: each arm keeps its
+// alternative's equality columns as leading index bounds, so the rows examined
+// scale with the arms and the page instead of with every row of the confinement
+// that fails the alternatives (measured on PostgreSQL, where one ORed group over
+// several subjects dropped the subject bound and scanned the whole workspace
+// range).
+//
+// It shares filterFragment with List, so every column name is validated against
+// the descriptor and every value is bound; the only rendered identifiers are the
+// declared column, the relation and the arm aliases.
+func (r *genericRepo) renderDistinctProjection(
+	p store.DistinctProjection,
+) (distinctProjectionStatement, error) {
+	if err := p.Validate(); err != nil {
+		return distinctProjectionStatement{}, err
+	}
+	if _, ok := r.desc.KindOfColumn(p.Column); !ok {
+		return distinctProjectionStatement{}, fmt.Errorf(
+			"%w: unknown projection column %q", store.ErrUnknownEntity, p.Column,
+		)
+	}
+	common := []string{"tenant_id = ?"}
+	commonArgs := []any{r.tenant.String()}
+	if r.desc.SoftDelete {
+		common = append(common, "deleted_at IS NULL")
+	}
+	common = append(common, p.Column+" IS NOT NULL")
+	for _, f := range p.Filters {
+		frag, val, err := r.filterFragment(f)
+		if err != nil {
+			return distinctProjectionStatement{}, err
+		}
+		common = append(common, frag)
+		if f.Op != model.OpIsNull && f.Op != model.OpNotNull {
+			commonArgs = append(commonArgs, val)
+		}
+	}
+	if p.After != "" {
+		common = append(common, p.Column+" > ?")
+		commonArgs = append(commonArgs, p.After)
+	}
+	limit := p.Limit + 1
+	arm := func(extra []string) string {
+		where := append(append([]string(nil), common...), extra...)
+		return fmt.Sprintf("SELECT DISTINCT %s FROM %s WHERE %s ORDER BY %s ASC LIMIT %d",
+			p.Column, r.relation(), strings.Join(where, " AND "), p.Column, limit)
+	}
+	if len(p.AnyOf) == 0 {
+		return distinctProjectionStatement{text: arm(nil), args: commonArgs}, nil
+	}
+	members := make([]string, 0, len(p.AnyOf))
+	args := make([]any, 0, p.BoundValues())
+	for index, alternative := range p.AnyOf {
+		parts := make([]string, 0, len(alternative))
+		args = append(args, commonArgs...)
+		for _, f := range alternative {
+			frag, val, err := r.filterFragment(f)
+			if err != nil {
+				return distinctProjectionStatement{}, err
+			}
+			parts = append(parts, frag)
+			if f.Op != model.OpIsNull && f.Op != model.OpNotNull {
+				args = append(args, val)
+			}
+		}
+		members = append(members, fmt.Sprintf("SELECT %s FROM (%s) AS a%d", p.Column, arm(parts), index))
+	}
+	text := fmt.Sprintf("%s ORDER BY %s ASC LIMIT %d", strings.Join(members, " UNION "), p.Column, limit)
+	if len(args) > store.DistinctProjectionMaxBoundValues {
+		// Validate already counted this with the same arithmetic; the render-time
+		// check keeps the ceiling deny-closed against any future divergence.
+		return distinctProjectionStatement{}, fmt.Errorf(
+			"%w: %d bound values exceed %d", store.ErrInvalidProjection, len(args),
+			store.DistinctProjectionMaxBoundValues,
+		)
+	}
+	return distinctProjectionStatement{text: text, args: args, arms: len(p.AnyOf)}, nil
+}
+
+// ProjectDistinct answers store.DistinctProjector by executing the statement
+// renderDistinctProjection renders: one statement per call, never one per
+// value or per alternative. It reads limit+1 values to report HasMore and
+// never projects NULL.
+func (r *genericRepo) ProjectDistinct(
+	ctx context.Context,
+	p store.DistinctProjection,
+) (store.DistinctPage, error) {
+	statement, err := r.renderDistinctProjection(p)
+	if err != nil {
+		return store.DistinctPage{}, err
+	}
+	r.guard(statement.text)
+
+	rows, err := r.tx.QueryContext(ctx, r.dia.Rebind(statement.text), statement.args...)
+	if err != nil {
+		return store.DistinctPage{}, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return store.DistinctPage{}, err
+		}
+		out = append(out, value)
+	}
+	if err := rows.Err(); err != nil {
+		return store.DistinctPage{}, err
+	}
+	page := store.DistinctPage{Values: out}
+	if len(out) > p.Limit {
+		page.Values = out[:p.Limit]
+		page.HasMore = true
+	}
+	return page, nil
+}
+
+var _ store.DistinctProjector = (*genericRepo)(nil)
 
 // Update modifies a row, enforcing optimistic concurrency. The record must
 // carry id and version.
@@ -356,6 +525,9 @@ func (r *genericRepo) updateAt(
 	version := in.Int(model.ColVersion)
 	if id.IsZero() {
 		return nil, store.ErrNotFound
+	}
+	if err := r.noteWrite(id); err != nil {
+		return nil, err
 	}
 	set := make([]string, 0, len(r.desc.Fields)+2)
 	args := make([]any, 0, len(r.desc.Fields)+5)
@@ -398,6 +570,9 @@ func (r *genericRepo) Delete(ctx context.Context, id model.ID) error {
 	}
 	if r.desc.AppendOnly {
 		return store.ErrAppendOnly
+	}
+	if err := r.noteWrite(id); err != nil {
+		return err
 	}
 	var q string
 	var args []any
@@ -472,6 +647,12 @@ func (r *genericRepo) filterFragment(f model.Filter) (string, any, error) {
 			frag += " OR " + f.Column + " = ''"
 		}
 		return frag + ")", f.Value, nil
+	}
+	// OpUnsetOrGt renders "IS NULL OR > ?": an optional deadline that is absent
+	// ("never") or still ahead of the bound instant. Like OpEqOrUnset it stays in
+	// SQL so Limit, HasMore and keyset anchors keep their meaning.
+	if f.Op == model.OpUnsetOrGt {
+		return "(" + f.Column + " IS NULL OR " + f.Column + " > ?)", f.Value, nil
 	}
 	if f.Op == model.OpIsNull {
 		return f.Column + " IS NULL", nil, nil

@@ -184,8 +184,19 @@ func postgresCoreDirectoryProbeDescriptor(
 		"core_directory_epoch":     "olv_k3p_epoch",
 		"core_directory_tombstone": "olv_k3p_dt",
 		"core_user_tombstone":      "olv_k3p_ut",
+		"core_user_authority":      "olv_h_user",
 	}
 	probeName, ok := probeNames[desc.Table]
+	if model.IsLineageEpochKind(desc.Kind) {
+		probeName, ok = "olv_lp_"+desc.Table, true
+	}
+	// The four access-evidence relations reuse this same probe rather than growing a
+	// second catalog comparator. Their probe names are derived rather than tabulated
+	// because they are four names of one family; the longest of them is 31 bytes and its
+	// longest derived index name is 53, both inside PostgreSQL's 63-byte identifier limit.
+	if delta, isDelta := guardEditionDeltaOf(desc.Table); isDelta && delta == guardDeltaAccessEvidence {
+		probeName, ok = "olv_aep_"+desc.Table, true
+	}
 	if !ok {
 		return model.EntityDescriptor{}, fmt.Errorf("no PostgreSQL contract probe name for %q", desc.Table)
 	}

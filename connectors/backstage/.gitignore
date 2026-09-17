@@ -1,0 +1,8 @@
+# El directorio de dependencias de este paquete, ignorado igual que en sus dos hijos
+# (plugin-backend/.gitignore:1 y plugin-frontend/.gitignore:1) y que en `web` y
+# `clients/typescript` desde el .gitignore raiz.
+#
+# ⛔ Faltaba, y no era inocuo: medidos 519 MB sin seguir el 2026-09-01 al instalar aqui para
+# subir `browserslist`. Cualquier `git add -A` en esta zona los habria commiteado — la clase
+# que el propio CLAUDE.md documenta con los 51 ficheros de `console-walk-out/`.
+node_modules/

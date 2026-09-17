@@ -646,6 +646,47 @@ func TestRetryUnitVerifiesThePoststateUnderTheLock(t *testing.T) {
 	}
 }
 
+// migrationRetryWaitForSlowCommit waits until the armed COMMIT is actually sleeping inside
+// the server, which is the observable form of "now is the moment to sever the socket".
+//
+// ⛔ IT REPLACES A `time.Sleep(700 * time.Millisecond)` inside a 2 s window, and the sleep
+// could only ever be wrong in the direction that measures NOTHING: cut too early and the
+// commit had not started, cut too late and it had already been acknowledged — and in both
+// cases the test still passes, because what it asserts afterwards is a premise about
+// durability, not about the cut. A green that proves nothing is the failure mode this
+// repository keeps paying for, and a fixed sleep inside a fixed window is how it is bought.
+//
+// `armSlowCommit` installs a deferred constraint trigger whose body is `pg_sleep`, so the
+// fact is exact: a backend on this database in wait_event 'PgSleep'. The probe goes through
+// the untouched side pool, never through the connection under test.
+//
+// It does NOT fail when the fact is not observed inside the bound — the assertions still
+// decide the verdict — but it SAYS so, because "cut after observing the commit" and "cut
+// blind because the probe failed" take the same wall time and must not take the same
+// silence.
+func migrationRetryWaitForSlowCommit(t *testing.T, side *sql.DB) {
+	t.Helper()
+	started := time.Now()
+	deadline := started.Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		var sleeping int
+		if err := side.QueryRowContext(context.Background(),
+			`SELECT count(*) FROM pg_catalog.pg_stat_activity
+			 WHERE datname = current_database() AND wait_event = 'PgSleep'`).Scan(&sleeping); err != nil {
+			t.Logf("CUT BLIND: the probe for the sleeping COMMIT failed after %s: %v",
+				time.Since(started), err)
+			return
+		}
+		if sleeping > 0 {
+			t.Logf("the COMMIT was observed sleeping inside the server after %s", time.Since(started))
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Logf("CUT BLIND: the COMMIT was never observed sleeping within %s; the assertions below "+
+		"still decide the verdict", time.Since(started))
+}
+
 // armSlowCommit makes the next COMMIT on this database take about d, without aborting
 // it, so a client-side socket close can land while the server is still working.
 //
@@ -787,10 +828,16 @@ func TestRetryUnitWireCutNeverDuplicatesAndNeverClaimsSuccess(t *testing.T) {
 	// would block until the COMMIT finished and close a socket whose transaction had
 	// already been acknowledged, which is exactly how this seam measured nothing.
 	sock := captureClientSocket(t, conn)
+	severed := make(chan struct{})
 	go func() {
-		time.Sleep(700 * time.Millisecond)
+		defer close(severed)
+		migrationRetryWaitForSlowCommit(t, side)
 		_ = sock.Close() //nolint:errcheck // the assertions below report the real outcome
 	}()
+	// The severing goroutine must be finished before this test function returns, or its
+	// t.Logf would land after the test completed and panic. This costs nothing in the
+	// normal path: the run below cannot return until the socket is closed.
+	defer func() { <-severed }()
 
 	b := newLockBudget(30*time.Second, time.Now, sleepCtx, jitterFloat)
 	runErr := u.run(ctx, conn, b)

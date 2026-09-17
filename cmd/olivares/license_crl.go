@@ -6,7 +6,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,19 +58,97 @@ type crlObservations struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-const crlFileName = "license-crl.json"
+const (
+	crlFileName = "license-crl.json"
+	// crlLockFileName is the permanent transaction lock beside the store (CR1 §3). It carries no
+	// bytes of its own and is never unlinked.
+	crlLockFileName = "license-crl.lock"
+	// crlStagingPattern names each invocation's own staging file. The historical fixed name
+	// "license-crl.json.tmp" is deliberately NOT reused: two recorders shared it and published
+	// each other's bytes, and a file left at that name is unrelated material this code never touches.
+	crlStagingPattern = "license-crl-staging-*"
+)
 
 func crlFilePath(dataDir string) string { return filepath.Join(dataDir, crlFileName) }
+
+// The recorder's stable failure categories. Callers and tests match them with errors.Is; the
+// surrounding text names the path and the cause.
+var (
+	errCRLStoreBusy       = errors.New("the license CRL store is locked by another recorder")
+	errCRLLockUnsupported = errors.New("the license CRL store lock is not supported on this platform")
+	errCRLLockUnavailable = errors.New("the license CRL store lock could not be taken")
+	errCRLLockUnsafe      = errors.New("the license CRL store lock path is not a regular file this recorder may use")
+	// errCRLNotPublished: the failure happened before the rename; the previous store bytes stand.
+	errCRLNotPublished = errors.New("the license CRL observation was NOT published; the previous store is unchanged")
+	// errCRLPublishedUnconfirmed: the rename happened, so the new store IS current, but the
+	// directory sync or close that makes it durable did not confirm.
+	errCRLPublishedUnconfirmed = errors.New("the license CRL observation WAS published, but its durability was not confirmed")
+	errCRLLeaseCleanup         = errors.New("releasing the license CRL store lock reported an error")
+)
+
+// crlStoreLease is one invocation's held CRL transaction lock. Only the recorder that took it
+// closes it, once.
+type crlStoreLease struct {
+	f    *os.File
+	path string
+}
+
+// crlPersistOps is the narrow private seam over the calls whose failure a real filesystem
+// cannot produce on demand. Production uses defaultCRLPersistOps; a test passes its own copy
+// to recordCRLObservationsWith, so nothing global is ever swapped.
+type crlPersistOps struct {
+	write     func(f *os.File, b []byte) (int, error)
+	syncFile  func(f *os.File) error
+	closeFile func(f *os.File) error
+	rename    func(oldpath, newpath string) error
+	syncDir   func(d *os.File) error
+	closeDir  func(d *os.File) error
+	closeLock func(f *os.File) error
+}
+
+func defaultCRLPersistOps() crlPersistOps {
+	return crlPersistOps{
+		write:     (*os.File).Write,
+		syncFile:  (*os.File).Sync,
+		closeFile: (*os.File).Close,
+		rename:    os.Rename,
+		syncDir:   (*os.File).Sync,
+		closeDir:  (*os.File).Close,
+		closeLock: (*os.File).Close,
+	}
+}
 
 // recordCRLObservations merges a VERIFIED manifest's CRL into the data-dir store.
 // Callers pass a manifest whose signature already verified — this function must
 // never be reachable from unverified bytes. A manifest with no CRL clears the
 // store content (nothing is revoked on this channel anymore) but the write still
 // happens, so the file's updated_at honestly reflects the latest observation.
+//
+// The whole read → compare → merge → publish → directory sync runs under the data
+// directory's CRL lease (CR1). Without it two recorders read the same prior state and
+// the later rename silently discarded the other's observation — including an older
+// manifest landing after a newer one. A busy lease is an error, never a wait.
 func recordCRLObservations(dataDir string, m release.Manifest, now time.Time) error {
+	return recordCRLObservationsWith(dataDir, m, now, defaultCRLPersistOps())
+}
+
+func recordCRLObservationsWith(dataDir string, m release.Manifest, now time.Time, ops crlPersistOps) (err error) {
 	if dataDir == "" {
 		return nil // no data dir in play (e.g. bare verify runs) — nothing to record
 	}
+	// EnsureDataDir: the CRL observation store lives beside the signing keys, so
+	// the directory carries its own VCS exclusion. It runs before the lease
+	// because the lock file lives in that directory.
+	if err := secure.EnsureDataDir(dataDir); err != nil {
+		return err
+	}
+	lease, err := acquireCRLStoreLock(dataDir, ops)
+	if err != nil {
+		return err
+	}
+	published := false
+	defer func() { err = releaseCRLStoreLock(lease, ops, err, published) }()
+
 	prev, _, err := loadCRLObservations(dataDir)
 	if err != nil {
 		// A corrupt store must NOT be silently reset: starting fresh would restart
@@ -122,30 +203,108 @@ func recordCRLObservations(dataDir string, m release.Manifest, now time.Time) er
 		keep(fmt.Sprintf("epoch:%d", next.LicenseKeyEpoch))
 	}
 
-	// EnsureDataDir: the CRL observation store lives beside the signing keys, so
-	// the directory carries its own VCS exclusion.
-	if err := secure.EnsureDataDir(dataDir); err != nil {
-		return err
-	}
 	b, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return err
 	}
-	// Atomic write (temp + rename in the same dir): serve reads this file per-call
-	// (crlViewFromDataDir) concurrently with an `upgrade` process writing it, so a
-	// truncating in-place write could hand the reader a torn file. os.Rename is
-	// atomic on one filesystem; a torn read is thus impossible, and a crash mid-write
-	// leaves the previous good file intact (M3).
+	published, err = publishCRLObservations(dataDir, append(b, '\n'), ops)
+	return err
+}
+
+// publishCRLObservations writes content to this invocation's own staging file and renames it
+// over the store. serve reads the store per call (crlViewFromDataDir) without the lease, so
+// the store is only ever replaced whole: a reader sees the previous or the new snapshot.
+//
+// published reports whether the rename happened, and the error says which side of it failed:
+//   - before the rename (errCRLNotPublished): the previous store bytes stand and only THIS
+//     invocation's staging name is removed;
+//   - after it (errCRLPublishedUnconfirmed): the new store is current and is left in place —
+//     nothing is restored or deleted — but the directory sync that makes the rename durable
+//     did not confirm.
+//
+// Each descriptor is closed exactly once, and a cleanup failure is joined after the primary
+// cause. An injected or real fsync success here is not a power-loss qualification.
+func publishCRLObservations(dataDir string, content []byte, ops crlPersistOps) (published bool, err error) {
 	final := crlFilePath(dataDir)
-	tmp := final + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
-		return err
+	f, err := os.CreateTemp(dataDir, crlStagingPattern)
+	if err != nil {
+		return false, fmt.Errorf("%w: create a staging file in %s: %w", errCRLNotPublished, dataDir, err)
 	}
-	if err := os.Rename(tmp, final); err != nil {
-		_ = os.Remove(tmp)
-		return err
+	staging := f.Name()
+	closeAttempted := false
+	fail := func(step string, cause error) (bool, error) {
+		errs := []error{fmt.Errorf("%w: %s %s: %w", errCRLNotPublished, step, staging, cause)}
+		if !closeAttempted {
+			closeAttempted = true
+			if cerr := ops.closeFile(f); cerr != nil {
+				errs = append(errs, fmt.Errorf("close staging file %s: %w", staging, cerr))
+			}
+		}
+		if rerr := os.Remove(staging); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("remove staging file %s: %w", staging, rerr))
+		}
+		return false, errors.Join(errs...)
 	}
-	return nil
+
+	if err := f.Chmod(0o600); err != nil {
+		return fail("set mode 0600 on", err)
+	}
+	n, err := ops.write(f, content)
+	if err == nil && n != len(content) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		return fail("write", err)
+	}
+	if err := ops.syncFile(f); err != nil {
+		return fail("sync", err)
+	}
+	closeAttempted = true
+	if err := ops.closeFile(f); err != nil {
+		return fail("close", err)
+	}
+	if err := ops.rename(staging, final); err != nil {
+		return fail("rename", err)
+	}
+
+	d, err := os.Open(dataDir)
+	if err != nil {
+		return true, fmt.Errorf("%w: %s now holds this observation, but opening %s to sync the rename failed: %w",
+			errCRLPublishedUnconfirmed, final, dataDir, err)
+	}
+	serr := ops.syncDir(d)
+	cerr := ops.closeDir(d)
+	switch {
+	case serr != nil:
+		primary := fmt.Errorf("%w: %s now holds this observation, but syncing directory %s failed: %w",
+			errCRLPublishedUnconfirmed, final, dataDir, serr)
+		if cerr != nil {
+			return true, errors.Join(primary, fmt.Errorf("close directory %s: %w", dataDir, cerr))
+		}
+		return true, primary
+	case cerr != nil:
+		return true, fmt.Errorf("%w: %s now holds this observation and directory %s synced, but closing it failed: %w",
+			errCRLPublishedUnconfirmed, final, dataDir, cerr)
+	}
+	return true, nil
+}
+
+// releaseCRLStoreLock closes the lease once. A close failure never replaces the transaction's
+// own answer: it is joined after a primary error, and after a confirmed publication it is a
+// lease-cleanup diagnostic that still says the observation was published.
+func releaseCRLStoreLock(lease *crlStoreLease, ops crlPersistOps, primary error, published bool) error {
+	cerr := ops.closeLock(lease.f)
+	switch {
+	case cerr == nil:
+		return primary
+	case primary != nil:
+		return errors.Join(primary, fmt.Errorf("%w %s: %w", errCRLLeaseCleanup, lease.path, cerr))
+	case published:
+		return fmt.Errorf("the license CRL observation was published and its durability confirmed, but %w %s: %w",
+			errCRLLeaseCleanup, lease.path, cerr)
+	default:
+		return fmt.Errorf("no license CRL change was needed, but %w %s: %w", errCRLLeaseCleanup, lease.path, cerr)
+	}
 }
 
 // loadCRLObservations reads the store. ok=false (with nil error) when this
@@ -216,11 +375,15 @@ func describeCRLForLicense(dataDir string, m release.Manifest, now time.Time) []
 	if err != nil || src.Blob == "" {
 		return lines
 	}
-	pub := license.DefaultPublicKey()
-	if len(pub) == 0 {
+	kr, err := licenseKeyringForDataDir(dataDir)
+	if err != nil {
+		return append(lines, fmt.Sprintf(
+			"the license trust could NOT be established, so this CRL was not evaluated against the installed license (%v)", err))
+	}
+	if kr.Len() == 0 {
 		return lines
 	}
-	lic, err := license.VerifyEnvelope(src.Blob, pub)
+	lic, err := kr.Verify(src.Blob, now)
 	if err != nil {
 		// THREE answers, never two. Returning the CRL summary unchanged here made "the installed
 		// license is not revoked" and "I could not read the installed license" look identical to

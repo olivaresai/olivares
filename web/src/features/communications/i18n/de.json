@@ -1,0 +1,957 @@
+{
+  "doors": {
+    "catalog": {
+      "title": "Kommunikation",
+      "description": "Kanäle des gewählten Workspace, die dieser Principal jetzt lesen darf, die darüber gesendeten direkten Mitteilungen und der persönliche Posteingang. Jedes Lesen und jede Handlung entscheidet die Engine unter ihrer eigenen Berechtigung."
+    },
+    "inbox": {
+      "title": "Kommunikations-Posteingang",
+      "description": "Das exakte persönliche Postfach dieses Principals im gewählten Workspace: an ihn adressierte Zustellungen, frisch geöffnet und nur durch eine ausdrückliche Handlung bestätigt."
+    },
+    "new": {
+      "title": "Neuer Kanal",
+      "description": "Legt einen Kanal mit ausdrücklichen Anfangsberechtigungen an. Nichts wird stillschweigend gewährt, und die Quittung der Handlung ist keine dauerhafte Liste derer, die ihn später lesen dürfen."
+    },
+    "administration": {
+      "title": "Kanalverwaltung",
+      "description": "Die Kanäle, die dieser Principal im ausgewählten Workspace verwalten darf: Konfiguration und Berechtigungsverlauf, jeder Akt unter dem aktuellen ETag des Kanals bestätigt. Die Verwaltung erfordert die Berechtigung channel:admin und ein gültiges lokales Admin-Bit; sie erfordert und gewährt kein Recht, den Inhalt des Kanals zu lesen."
+    },
+    "handoffs": {
+      "title": "Übergaben",
+      "description": "An dieses Principal gerichtete Angebote zur Übernahme von Arbeitsverantwortung im ausgewählten Workspace. Die Liste enthält den Angebotsinhalt nicht; beim Öffnen wird der geschützte Kontext frisch gelesen, und Annehmen oder Ablehnen ist eine ausdrückliche Handlung, über die die Engine entscheidet."
+    }
+  },
+  "tabs": {
+    "channels": "Kanäle",
+    "inbox": "Posteingang",
+    "create": "Neuer Kanal",
+    "administration": "Verwaltung",
+    "handoffs": "Übergaben"
+  },
+  "workspace": {
+    "requiredTitle": "Workspace auswählen",
+    "requiredBody": "Kommunikation erfordert einen ausdrücklichen Workspace. Wählen Sie einen im Workspace-Umschalter: Die Konsole wählt nie einen für Sie und stellt keine Anfrage, bis einer ausgewählt ist.",
+    "scope": "Workspace-Bereich"
+  },
+  "actions": {
+    "refresh": "Aktualisieren",
+    "loadMore": "Mehr laden",
+    "newChannel": "Neuer Kanal",
+    "open": "Öffnen",
+    "openMessage": "Nachricht öffnen",
+    "sendNotice": "Mitteilung senden",
+    "compose": "Verfassen",
+    "confirm": "Bestätigen und senden",
+    "ack": "Bestätigen",
+    "confirmAck": "Empfangsbestätigung bestätigen",
+    "reread": "Neu lesen",
+    "retrySameKey": "Mit demselben Schlüssel wiederholen",
+    "discardAndEdit": "Diese Absicht verwerfen und bearbeiten",
+    "checkCatalog": "Katalog prüfen",
+    "addGrant": "Berechtigung hinzufügen",
+    "addMe": "Mein Konto als Subjekt hinzufügen",
+    "removeGrant": "Berechtigung entfernen",
+    "addBlock": "Block hinzufügen",
+    "removeBlock": "Block entfernen",
+    "useMe": "Mein Konto verwenden",
+    "create": "Kanal anlegen",
+    "creating": "Wird angelegt…",
+    "sending": "Wird gesendet…",
+    "acking": "Wird bestätigt…",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "back": "Zurück zur Bearbeitung",
+    "pageSize": "Seitengröße",
+    "administer": "Verwalten",
+    "advancing": "Wird vorgerückt…",
+    "applyFilter": "Filter anwenden",
+    "applying": "Wird angewendet…",
+    "confirmArchive": "Bestätigen und archivieren",
+    "confirmChanges": "Änderungen bestätigen",
+    "confirmGrant": "Berechtigung bestätigen",
+    "confirmRevoke": "Widerruf bestätigen",
+    "confirmSeen": "Bestätigen: bis hier als gesehen markieren",
+    "discardIntent": "Diese Absicht verwerfen",
+    "grantSuccessor": "Nachfolger gewähren (getrennter Akt)",
+    "leaveUndetermined": "Unbestimmt lassen",
+    "markSeen": "Bis hier als gesehen markieren",
+    "openBarrierDelivery": "Barriere-Zustellung öffnen",
+    "refreshInbox": "Posteingang aktualisieren",
+    "rereadAndEdit": "Neu lesen und erneut bearbeiten",
+    "rereadHistory": "Verlauf neu lesen",
+    "rereadToVerify": "Zur Prüfung neu lesen",
+    "revert": "Änderungen verwerfen",
+    "reviewChanges": "Änderungen prüfen",
+    "reviewGrant": "Berechtigung prüfen",
+    "revokeGeneration": "Diese Generation widerrufen",
+    "revokeThenGrant": "Widerrufen, dann Nachfolger gewähren",
+    "dismiss": "Schließen und verwerfen"
+  },
+  "catalog": {
+    "title": "Sichtbare Kanäle",
+    "description": "Nur die aktiven Kanäle, die dieser Principal jetzt lesen darf, mit seinen eigenen aktuellen lokalen Bits. Eine Seite ist keine Suche über den ganzen Katalog: Laden Sie mehr, um an der Fortsetzung des Servers weiterzumachen.",
+    "emptyTitle": "Keine sichtbaren Kanäle",
+    "emptyBody": "Dieser Principal hat in diesem Workspace keinen Kanal, den er lesen darf, oder es existiert noch keiner. Eine Leseberechtigung und die Berechtigung channel:read lassen einen hier erscheinen.",
+    "truncated": "Über diese Seite hinaus existieren weitere Kanäle",
+    "truncatedHint": "Der Server hat weitere sichtbare Kanäle gemeldet. Laden Sie mehr, um an seiner Fortsetzung weiterzumachen.",
+    "columns": {
+      "name": "Name",
+      "slug": "Slug",
+      "kind": "Art",
+      "state": "Zustand",
+      "protection": "Schutz",
+      "access": "Ihr lokaler Zugriff",
+      "updated": "Aktualisiert"
+    },
+    "openById": "Kanal per ID öffnen",
+    "openByIdHint": "Ein per ID geöffneter Kanal wird frisch mit seinem ETag gelesen; dieses Lesen meldet Ihre lokalen Bits nicht."
+  },
+  "access": {
+    "label": "Ihr lokaler Zugriff",
+    "read": "lesen",
+    "write": "schreiben",
+    "admin": "admin",
+    "none": "keine lokalen Bits",
+    "unknown": "von diesem Lesen nicht gemeldet",
+    "hint": "Lokale Bits sind die eigenen Berechtigungen des Kanals für diesen Principal. Zusätzlich ist eine Core-Berechtigung nötig, und die Engine entscheidet jede Handlung in dem Moment, in dem sie angefragt wird."
+  },
+  "kind": {
+    "coordination": "Koordination",
+    "work": "Arbeit",
+    "incident": "Vorfall",
+    "announcement": "Ankündigung",
+    "private": "Privat"
+  },
+  "sensitivity": {
+    "internal": "Intern",
+    "restricted": "Eingeschränkt"
+  },
+  "protection": {
+    "storage": "Speicher",
+    "application_sealed": "Anwendungsversiegelt"
+  },
+  "ackPolicy": {
+    "none": "Keine",
+    "each_required": "Jede erforderlich",
+    "quorum": "Quorum"
+  },
+  "wake": {
+    "none": "Keine",
+    "primary": "Primär",
+    "all": "Alle",
+    "inherit": "Erben"
+  },
+  "channel": {
+    "title": "Kanal",
+    "description": "Frisch von der Engine mit seinem ETag gelesen. Dieses Lesen enthält weder Berechtigungen noch lokale Bits.",
+    "fields": {
+      "id": "Kanal-ID",
+      "slug": "Slug",
+      "name": "Name",
+      "descriptionField": "Beschreibung",
+      "kind": "Art",
+      "state": "Zustand",
+      "sensitivity": "Sensibilität",
+      "protection": "Inhaltsschutz",
+      "protectionGeneration": "Schutzgeneration",
+      "ackPolicy": "Standard-Bestätigungsrichtlinie",
+      "ackTimeout": "Standard-Bestätigungsfrist (ms)",
+      "wake": "Standard-Wecken",
+      "retention": "Referenz der Aufbewahrungsrichtlinie",
+      "maxFanout": "Maximales Fanout",
+      "maxAutomationDepth": "Maximale Automatisierungstiefe",
+      "aclRevision": "ACL-Revision",
+      "routeRevision": "Routen-Revision",
+      "subscriptionRevision": "Abonnement-Revision",
+      "version": "Version",
+      "etag": "ETag",
+      "created": "Erstellt",
+      "updated": "Aktualisiert",
+      "workspace": "Workspace",
+      "tenant": "Mandant"
+    },
+    "sendHint": {
+      "canWrite": "Ihr lokales Schreib-Bit ist auf dieser Katalogseite aktuell und Sie halten die Sendeberechtigung. Die Engine entscheidet beim Senden erneut.",
+      "noWrite": "Diese Katalogseite meldet kein lokales Schreib-Bit für Sie. Die Engine würde ein Senden ablehnen; Verfassen wird nicht angeboten.",
+      "unknown": "Dieses Lesen meldet Ihre lokalen Bits nicht. Sie halten die Sendeberechtigung; die Engine entscheidet die lokale Autorität beim Senden.",
+      "noPermission": "Sie halten die Berechtigung zum Senden von Nachrichten nicht, daher wird Verfassen nicht angeboten."
+    }
+  },
+  "create": {
+    "title": "Kanal anlegen",
+    "description": "Jedes Feld des Vertrags ist verfügbar. Anfangsberechtigungen sind ausdrücklich: Fügen Sie jedes Subjekt hinzu und setzen Sie jedes beabsichtigte Bit. Nichts wird in Ihrem Namen hinzugefügt.",
+    "fields": {
+      "slug": "Slug",
+      "slugHint": "Kleinbuchstaben, Ziffern und Bindestriche; eindeutig im Workspace.",
+      "name": "Name",
+      "descriptionField": "Beschreibung",
+      "kind": "Art",
+      "sensitivity": "Sensibilität",
+      "protection": "Inhaltsschutz",
+      "protectionHint": "Anwendungsversiegelter Inhalt ist nach dem Schreiben unumkehrbar.",
+      "ackPolicy": "Standard-Bestätigungsrichtlinie",
+      "ackTimeout": "Standard-Bestätigungsfrist (ms)",
+      "wake": "Standard-Wecken",
+      "retention": "Referenz der Aufbewahrungsrichtlinie",
+      "maxFanout": "Maximales Fanout",
+      "maxAutomationDepth": "Maximale Automatisierungstiefe",
+      "grants": "Anfangsberechtigungen",
+      "grantsHint": "Mindestens eine Berechtigung mit mindestens einem Bit. Eine Berechtigung ist ein Subjekt und seine drei unabhängigen Bits. Ihr eigenes Konto ist ein Subjekt wie jedes andere."
+    },
+    "grant": {
+      "subject": "Subjekt",
+      "read": "Lesen",
+      "write": "Schreiben",
+      "admin": "Admin",
+      "expiresAt": "Läuft ab am",
+      "expiresHint": "Optional. Leer lassen für eine Berechtigung ohne Ablauf."
+    },
+    "validation": {
+      "slug": "Der Slug muss aus Kleinbuchstaben, Ziffern und Bindestrichen bestehen und mit einem Buchstaben oder einer Ziffer beginnen.",
+      "name": "Ein Name ist erforderlich.",
+      "grants": "Mindestens eine Anfangsberechtigung ist erforderlich.",
+      "grantRef": "Jede Berechtigung braucht eine Subjektreferenz.",
+      "grantBits": "Jede Berechtigung braucht mindestens ein Bit.",
+      "number": "Muss eine ganze Zahl von null oder mehr sein.",
+      "fanout": "Muss eine ganze Zahl von eins oder mehr sein."
+    },
+    "noReadHint": "Sie halten channel:write ohne channel:read. Sie können mit ausdrücklichen Berechtigungen anlegen; der Katalog zeigt Ihnen das Ergebnis nicht, und diese Quittung ändert das nicht.",
+    "result": {
+      "title": "Kanal angelegt",
+      "body": "Dies ist die Quittung der Handlung. Die Berechtigungen unten sind das, was jetzt aufgezeichnet wurde; sie sind keine dauerhafte Liste derer, die den Kanal später lesen dürfen. Die Sichtbarkeit entscheidet der Katalog bei jedem Lesen.",
+      "grants": "Aufgezeichnete Berechtigungen",
+      "noGrants": "Es wurde keine Berechtigungszeile zurückgegeben.",
+      "auditSeq": "Audit-Sequenz",
+      "etag": "ETag"
+    },
+    "unknown": {
+      "title": "Ergebnis unbekannt",
+      "body": "Die Anfrage kann angewendet worden sein oder nicht: Der Transport ist fehlgeschlagen, bevor eine Antwort ankam. Diese Route hat keinen Idempotenzschlüssel, daher wiederholt die Konsole nicht von sich aus. Prüfen Sie den Katalog auf den Slug „{{slug}}“, bevor Sie erneut anlegen. Ihn dort nicht zu sehen beweist nicht, dass er nicht angelegt wurde, wenn Ihnen der Lesezugriff fehlt."
+    }
+  },
+  "subject": {
+    "kind": "Art",
+    "ref": "Referenz",
+    "kinds": {
+      "user": "Benutzer",
+      "user_group": "Benutzergruppe",
+      "agent": "Agent",
+      "agent_group": "Agentengruppe",
+      "session": "Sitzung"
+    },
+    "pickUser": "Benutzer wählen",
+    "pickAgent": "Agent wählen",
+    "manualRef": "Referenz (ID)",
+    "userRefHint": "Die kanonische Benutzer-ID. Ein Benutzer im Verzeichnis ist dadurch kein berechtigter Empfänger dieses Kanals: Die Engine entscheidet beim Senden.",
+    "agentRefHint": "Die Identitäts-ID des Agenten, nicht seine Zeilen-ID oder externe ID.",
+    "sessionRefHint": "Eine kanonische Sitzungs-ID. Diese Konsole hat noch kein Sitzungsverzeichnis; geben Sie die ID aus ihrer Autoritätsquelle ein.",
+    "groupRefHint": "Die Gruppen-ID.",
+    "noDirectory": "Das Verzeichnis wird Ihnen nicht angeboten (Leseberechtigung fehlt). Geben Sie eine Referenz direkt ein.",
+    "noIdentity": "nicht adressierbar — keine Identität",
+    "truncated": "Die Verzeichnisseite ist unvollständig: Es existieren mehr Zeilen als geladen.",
+    "loading": "Verzeichnis wird geladen…",
+    "me": "ich"
+  },
+  "compose": {
+    "title": "Direkte Mitteilung senden",
+    "description": "Eine Mitteilung an einen Benutzer, Agenten oder eine Sitzung im Kanal „{{channel}}“. Der Inhalt besteht aus typisierten Blöcken; die Engine prüft beim Senden die aktuelle Berechtigung und Eignung des Empfängers.",
+    "recipient": "Empfänger",
+    "subjectField": "Betreff",
+    "blocks": "Inhaltsblöcke",
+    "block": {
+      "type": "Typ",
+      "format": "Format",
+      "text": "Text",
+      "code": "Code",
+      "referenceKind": "Referenzart",
+      "referenceRef": "Referenz",
+      "referenceHash": "Referenz-Hash",
+      "referenceHint": "Eine Referenz ist Information für den Leser. Aus ihr wird nichts abgerufen oder ausgeführt.",
+      "codeHint": "Ein Token, höchstens 128 Zeichen. Ein Statusblock trägt nichts anderes.",
+      "markdownHint": "Markdown wird wie geschrieben gespeichert und als Text angezeigt; rohe HTML-Tags lehnt die Engine ab."
+    },
+    "urgency": "Dringlichkeit",
+    "availableAt": "Verfügbar ab",
+    "availableAtHint": "Optionale verzögerte Verfügbarkeit in Ihrer Ortszeit. Leer lassen, um jetzt zu veröffentlichen.",
+    "validation": {
+      "recipient": "Eine Empfängerreferenz ist erforderlich.",
+      "subject": "Ein Betreff ist erforderlich.",
+      "blocks": "Mindestens ein Block ist erforderlich.",
+      "text": "Ein Textblock braucht Text.",
+      "reference": "Ein Referenzblock braucht eine Art und eine Referenz.",
+      "code": "Ein Statusblock braucht einen Code: ein einzelnes Token mit höchstens 128 Zeichen, ohne Leerzeichen.",
+      "availableAt": "Die Verfügbarkeitszeit konnte nicht als Datum gelesen werden.",
+      "markdownHtml": "Ein Markdown-Block darf kein rohes HTML-Tag enthalten.",
+      "subjectLength": "Der Betreff darf höchstens 256 Bytes lang sein."
+    },
+    "confirm": {
+      "title": "Absicht bestätigen",
+      "body": "Diese Absicht ist jetzt unveränderlich. Ihr Schlüssel bindet Inhalt und Ziel; eine Wiederholung nach einem uneindeutigen Ergebnis sendet genau dies erneut, und Bearbeiten beginnt eine neue Absicht.",
+      "key": "Idempotenzschlüssel",
+      "channel": "Kanal",
+      "recipient": "Empfänger",
+      "subject": "Betreff",
+      "blocksCount": "Blöcke",
+      "urgency": "Dringlichkeit",
+      "availableAt": "Verfügbar ab"
+    },
+    "result": {
+      "appliedTitle": "Mitteilung veröffentlicht",
+      "appliedBody": "Die Engine hat die Nachricht und ihre Zustellung jetzt erstellt.",
+      "replayedTitle": "Bereits veröffentlicht",
+      "replayedBody": "Die Engine hat aus ihrem Idempotenzregister geantwortet: Genau diese Absicht war bereits angewendet. Nichts wurde ein zweites Mal gesendet.",
+      "ambiguousTitle": "Ergebnis unbekannt",
+      "ambiguousBody": "Der Transport ist fehlgeschlagen, bevor eine Antwort ankam; die Mitteilung kann veröffentlicht worden sein oder nicht. Eine Wiederholung sendet denselben Schlüssel und Inhalt erneut: Die Engine wendet sie genau einmal an oder wiederholt das frühere Ergebnis.",
+      "refusedTitle": "Senden abgelehnt",
+      "refusedBody": "Die Engine hat diese Mitteilung nicht veröffentlicht. Der Grund ist der des Servers; das Verzeichnis hat keine Eignung versprochen."
+    }
+  },
+  "urgency": {
+    "normal": "Normal",
+    "high": "Hoch",
+    "critical": "Kritisch",
+    "": "Standard"
+  },
+  "blockType": {
+    "text": "Text",
+    "reference": "Referenz",
+    "status": "Status",
+    "action_ref": "Aktionsreferenz"
+  },
+  "format": {
+    "plain": "Einfach",
+    "markdown": "Markdown",
+    "": "Standard"
+  },
+  "inbox": {
+    "title": "Persönlicher Posteingang",
+    "description": "Zustellungen an diesen Principal in diesem Workspace, wie die Engine sie jetzt autorisiert. Das Lesen einer Seite bestätigt nichts und bewegt keinen Cursor.",
+    "emptyTitle": "Keine Zustellungen",
+    "emptyBody": "Derzeit ist in diesem Workspace nichts an diesen Principal Adressiertes sichtbar.",
+    "truncated": "Über diese Seite hinaus existieren weitere Zustellungen",
+    "truncatedHint": "Der Server hat weitere sichtbare Zustellungen gemeldet. Laden Sie mehr, um an seiner Fortsetzung weiterzumachen.",
+    "columns": {
+      "subject": "Betreff",
+      "sender": "Absender",
+      "urgency": "Dringlichkeit",
+      "state": "Zustellungszustand",
+      "available": "Verfügbar",
+      "ackDue": "Bestätigung fällig",
+      "acknowledged": "Bestätigt",
+      "delivery": "Zustellung"
+    }
+  },
+  "delivery": {
+    "title": "Zustellung",
+    "description": "Frisch für diesen Principal gelesen. Bestätigen ist eine ausdrückliche Handlung mit der gerade gelesenen Version.",
+    "fields": {
+      "id": "Zustellungs-ID",
+      "messageId": "Nachrichten-ID",
+      "recipient": "Empfänger",
+      "state": "Zustand",
+      "required": "Erforderlich",
+      "seq": "Zustellungssequenz",
+      "version": "Version",
+      "available": "Verfügbar ab",
+      "firstSeen": "Zuerst gesehen am",
+      "ackDue": "Bestätigung fällig am",
+      "expires": "Läuft ab am",
+      "acknowledged": "Bestätigt am"
+    },
+    "ack": {
+      "title": "Diese Zustellung bestätigen",
+      "body": "Die Handlung sendet If-Match {{etag}} — die gelesene Version — und einen eigenen Schlüssel. Hat sich die Zustellung inzwischen geändert, antwortet die Engine mit 412 und Sie lesen neu, bevor Sie erneut bestätigen; die Konsole ersetzt die Version nie.",
+      "key": "Idempotenzschlüssel",
+      "ifMatch": "If-Match",
+      "appliedTitle": "Bestätigt",
+      "appliedBody": "Die Engine hat die Bestätigung aufgezeichnet.",
+      "replayedTitle": "Bereits bestätigt",
+      "replayedBody": "Die Engine hat die Quittung einer früheren identischen Bestätigung wiederholt.",
+      "late": "Verspätete Bestätigung: nach der Frist aufgezeichnet. Sie zählt nicht als wirksame Erfüllung.",
+      "conflictTitle": "Die Zustellung hat sich seit dem Lesen geändert",
+      "conflictBody": "Die Engine hat die Bestätigung abgelehnt: die gelesene Version ist nicht mehr aktuell, oder die Zustellung ist bereits bestätigt. Lesen Sie die Zustellung erneut und bestätigen Sie nur, wenn es noch zutrifft. Es wurde nichts erneut gesendet.",
+      "ambiguousTitle": "Ergebnis unbekannt",
+      "ambiguousBody": "Der Transport ist fehlgeschlagen, bevor eine Antwort ankam. Eine Wiederholung sendet denselben Schlüssel und dasselbe If-Match erneut; die Engine wendet sie genau einmal an, wiederholt sie oder lehnt sie mit der aktuellen Version ab.",
+      "refusedTitle": "Bestätigung abgelehnt",
+      "noPermission": "Sie halten die Schreibberechtigung für Zustellungen nicht, daher wird Bestätigen nicht angeboten."
+    },
+    "openMessageHint": "Öffnet die Nachricht mit einem eigenen Lesen unter der Berechtigung zum Lesen von Nachrichten.",
+    "noMessageRead": "Sie halten die Berechtigung zum Lesen von Nachrichten nicht; die Nachricht wird hier nur so gezeigt, wie diese Zustellung sie trägt."
+  },
+  "message": {
+    "title": "Nachricht",
+    "description": "Frisch unter der Berechtigung zum Lesen von Nachrichten gelesen, nach den exakten Trägerprüfungen der Engine.",
+    "fields": {
+      "id": "Nachrichten-ID",
+      "channel": "Kanal",
+      "thread": "Thread",
+      "state": "Zustand",
+      "sender": "Absender",
+      "urgency": "Dringlichkeit",
+      "ackPolicy": "Bestätigungsrichtlinie",
+      "ackQuorum": "Bestätigungsquorum",
+      "available": "Verfügbar ab",
+      "published": "Veröffentlicht am",
+      "ackDue": "Bestätigung fällig am",
+      "expires": "Läuft ab am",
+      "terminal": "Terminal am",
+      "terminalCode": "Terminalcode",
+      "version": "Version"
+    }
+  },
+  "content": {
+    "title": "Inhalt",
+    "inert": "Als Text angezeigt. Referenzen und Aktionsreferenzen sind nur Information: Die Konsole ruft sie nie ab, folgt ihnen nicht und führt sie nicht aus.",
+    "markdownAsText": "Markdown, als Text angezeigt",
+    "reference": "Referenz",
+    "action": "Aktionsreferenz",
+    "status": "Status",
+    "hash": "Hash",
+    "empty": "(leer)"
+  },
+  "fulfillment": {
+    "title": "Erfüllung",
+    "state": "Zustand",
+    "required": "Erforderlich",
+    "acknowledged": "Bestätigt",
+    "viable": "Möglich",
+    "unmet": "Unerfüllt",
+    "quorum": "Quorum"
+  },
+  "receipt": {
+    "title": "Quittung",
+    "commandId": "Befehls-ID",
+    "messageId": "Nachrichten-ID",
+    "deliveryId": "Zustellungs-ID",
+    "ackId": "Bestätigungs-ID",
+    "eventId": "Ereignis-ID",
+    "auditSeq": "Audit-Sequenz",
+    "version": "Version",
+    "etag": "ETag",
+    "state": "Zustand",
+    "verdict": "Urteil",
+    "code": "Code",
+    "deliveryCount": "Zustellungen",
+    "requiredCount": "Erforderlich",
+    "payloadDigest": "Nutzlast-Digest",
+    "planHash": "Plan-Hash",
+    "audienceHash": "Zielgruppen-Hash",
+    "late": "Verspätet"
+  },
+  "failure": {
+    "forbidden": "Die Engine hat dies für den aktuellen Principal abgelehnt.",
+    "step_up": "Ihre Rolle erlaubt dies, aber die Sitzung muss zuerst erhöht werden.",
+    "not_found": "Nicht gefunden oder für diesen Principal nicht sichtbar.",
+    "unavailable": "Die Engine konnte nicht nachsehen: Aktuelle Autoritäts-, Verwahrungs- oder Speichernachweise sind nicht verfügbar. Das ist weder ein leeres Ergebnis noch eine Ablehnung.",
+    "version_mismatch": "Die gelesene Version ist nicht mehr aktuell.",
+    "version_required": "Die Engine hat eine Versionsvorbedingung verlangt, die die Konsole nicht gesendet hat.",
+    "plan_changed": "Die Veröffentlichung würde den gebundenen Plan nicht reproduzieren.",
+    "terminal": "Das Ziel befindet sich in einem Endzustand; die Handlung kann nicht angewendet werden.",
+    "invalid": "Die Engine hat die Anfrage als fehlerhaft abgelehnt.",
+    "rate_limited": "Ratenbegrenzt. Warten Sie, bevor Sie erneut anfragen.",
+    "ambiguous": "Der Transport ist fehlgeschlagen, bevor eine Antwort ankam.",
+    "aborted": "Von der Konsole abgebrochen, weil sich die Autorität geändert hat.",
+    "other": "Die Anfrage ist fehlgeschlagen.",
+    "code": "Code",
+    "status": "Status",
+    "requestId": "Anfrage-ID",
+    "message": "Servermeldung",
+    "conflict": "Die Zeile hat sich seit dem Lesen geändert, oder der Vorgang gilt für sie nicht mehr. Vor einer neuen Entscheidung erneut lesen.",
+    "snapshot_changed": "Der Kanal hat sich zwischen zwei Seiten dieser Auflistung geändert."
+  },
+  "authority": {
+    "lost": "Die Berechtigung für diese Handlung wird nicht mehr gehalten; nichts wurde gesendet.",
+    "confirmationClosed": "Eine ausstehende Bestätigung wurde geschlossen, weil die zugrunde liegende Berechtigung verloren ging.",
+    "notAddressable": "Dieser Principal hat für diese Art keine Verzeichnisreferenz und kann nicht adressiert werden."
+  },
+  "states": {
+    "loading": "Wird geladen…",
+    "reading": "Wird gelesen…"
+  },
+  "administration": {
+    "title": "Verwaltbare Kanäle",
+    "description": "Kanäle, die dieser Principal jetzt verwalten darf: Core-channel:admin und ein gültiges lokales Admin-Bit, bei jedem Lesen von der Engine entschieden. Archivierte Kanäle bleiben gelistet und einsehbar. Dies ist nicht der Lesekatalog: ein lokales Lese-Bit wird weder verlangt noch unterstellt.",
+    "stateFilter": "Gespeicherter Zustand",
+    "states": {
+      "all": "Alle Zustände",
+      "active": "Nur aktive",
+      "archived": "Nur archivierte"
+    },
+    "columns": {
+      "name": "Name",
+      "slug": "Slug",
+      "kind": "Art",
+      "state": "Zustand",
+      "sensitivity": "Sensibilität",
+      "protection": "Schutz",
+      "etag": "ETag",
+      "updated": "Aktualisiert"
+    },
+    "openById": "Kanal per ID verwalten",
+    "openByIdHint": "Das Blatt wird über den Berechtigungsverlauf unter channel:admin gelesen; es nutzt nie die Kanallese der Lesestufe.",
+    "emptyTitle": "Keine verwaltbaren Kanäle",
+    "emptyBody": "Kein Kanal dieses Workspace gewährt diesem Principal ein gültiges Admin-Bit, oder keiner entspricht dem gewählten gespeicherten Zustand. Eine lokale Admin-Berechtigung und die Berechtigung channel:admin lassen einen hier erscheinen.",
+    "truncated": "Jenseits dieser Seite existieren weitere verwaltbare Kanäle",
+    "truncatedHint": "Der Server hat weitere verwaltbare Kanäle gemeldet. Laden Sie mehr, um von seiner Fortsetzung aus weiterzugehen."
+  },
+  "channelState": {
+    "active": "Aktiv",
+    "archived": "Archiviert"
+  },
+  "grantState": {
+    "active": "Aktiv",
+    "revoked": "Widerrufen",
+    "expired": "Abgelaufen"
+  },
+  "admin": {
+    "title": "Kanalverwaltung",
+    "description": "Frisch über den Berechtigungsverlauf mit dem Vorbedingungs-ETag des Kanals gelesen; kein Inhalt wird geöffnet.",
+    "observedAt": "Beobachtet um",
+    "tabs": {
+      "config": "Konfiguration",
+      "grants": "Berechtigungen"
+    },
+    "readFailedTitle": "Das administrative Lesen ist fehlgeschlagen",
+    "readFailedBody": "Nichts zuvor für diesen Kanal Gezeigtes wird behalten: Auf dem Bildschirm muss stehen, was die Engine jetzt autorisiert. Lesen Sie neu, wenn die Ursache behoben ist."
+  },
+  "config": {
+    "immutable": "Slug, Art, Tenant, Workspace und die Generationszähler sind hier informativ und unveränderlich; die Engine lehnt eine Änderung ab, die sie überschreitet.",
+    "advanced": "Erweiterte Optionen",
+    "archivedNote": "Dieser Kanal ist archiviert. Sein Zustand kann nicht zu aktiv zurückkehren; seine Konfiguration kann weiterhin bearbeitet werden.",
+    "stateHint": "Archivieren ist unumkehrbar: Ein archivierter Kanal wird nie wieder aktiv.",
+    "stateLocked": "Archiviert. Die Engine lehnt jede Zustandsänderung an einem archivierten Kanal ab.",
+    "sensitivityHint": "Eingeschränkt erfordert anwendungsversiegelten Inhalt und kann nicht auf intern zurückgestuft werden.",
+    "protectionHint": "Anwendungsversiegelter Schutz kann nicht auf Speicherung zurückgestuft werden.",
+    "ackHint": "Die Ack-Richtlinie „keine“ erfordert ein Timeout von null; jede andere Richtlinie ein positives Timeout.",
+    "wakeHint": "Ein Kanalstandard kann nicht „erben“ sein; dieser Wert gehört zu Nachrichten.",
+    "validation": {
+      "name": "Der Name muss 1 bis 256 Bytes lang sein.",
+      "description": "Die Beschreibung darf höchstens 4096 Bytes lang sein.",
+      "fanout": "Max. Fanout muss eine ganze Zahl von mindestens eins sein.",
+      "depth": "Max. Automatisierungstiefe muss eine ganze Zahl von mindestens null sein.",
+      "timeout": "Das Ack-Timeout muss eine ganze Zahl in Millisekunden sein.",
+      "ackTimeout": "Die Ack-Richtlinie „keine“ braucht ein Timeout von 0; jede andere ein positives Timeout.",
+      "restrictedSealed": "Ein eingeschränkter Kanal muss anwendungsversiegelt sein.",
+      "sensitivityLowered": "Die Sensibilität kann nicht von eingeschränkt auf intern gesenkt werden.",
+      "protectionLowered": "Der Inhaltsschutz kann nicht von anwendungsversiegelt auf Speicherung gesenkt werden.",
+      "archivedState": "Ein archivierter Kanal kann nicht zu aktiv zurückkehren.",
+      "nothingChanged": "Nichts geändert: Es gibt kein Feld zu senden."
+    },
+    "fieldNames": {
+      "name": "Name",
+      "description": "Beschreibung",
+      "state": "Zustand",
+      "sensitivity": "Sensibilität",
+      "content_protection": "Inhaltsschutz",
+      "default_ack_policy": "Standard-Ack-Richtlinie",
+      "default_ack_timeout_ms": "Standard-Ack-Timeout (ms)",
+      "default_wake": "Standard-Wake",
+      "retention_policy_ref": "Referenz der Aufbewahrungsrichtlinie",
+      "max_fanout": "Max. Fanout",
+      "max_automation_depth": "Max. Automatisierungstiefe"
+    },
+    "confirm": {
+      "title": "Konfigurationsänderung bestätigen",
+      "body": "Nur die Felder unten werden gesendet, mit If-Match {{etag}} — dem ETag der Lesung auf dem Bildschirm. Hat sich der Kanal inzwischen geändert, lehnt die Engine ab und Sie lesen neu, bevor Sie erneut bestätigen; die Konsole ersetzt den ETag nie.",
+      "archiving": "Dies archiviert den Kanal. Archivieren ist unumkehrbar: Er kehrt nicht zu aktiv zurück.",
+      "ifMatch": "If-Match"
+    },
+    "appliedTitle": "Konfiguration angewendet",
+    "appliedBody": "Die Engine hat die Änderung festgeschrieben. Das Blatt liest den Kanal neu; der nächste Akt nutzt den ETag dieser Lesung.",
+    "conflictTitle": "Der Kanal hat sich seit Ihrer Lesung geändert",
+    "conflictBody": "Die Engine hat die Änderung abgelehnt: Ihre Vorbedingung passt nicht mehr zum aktuellen Kanal. Nichts wurde erneut gesendet. Lesen Sie neu, prüfen Sie Ihre Änderungen gegen die aktuellen Werte und bestätigen Sie nur erneut, wenn sie noch zutreffen.",
+    "unknownTitle": "Ergebnis noch zu prüfen",
+    "unknownBody": "Der Transport ist ausgefallen, bevor eine Antwort ankam; die Änderung kann angewendet worden sein oder nicht. Diese Route hat keinen Idempotenzschlüssel und die Konsole sendet nicht erneut. Lesen Sie den Kanal neu: Die aktuellen Werte sagen, ob sie angewendet wurde; eine Übereinstimmung beweist für sich nicht, welcher Versuch sie angewendet hat.",
+    "refusedTitle": "Konfiguration abgelehnt",
+    "noPermission": "Sie besitzen die Berechtigung channel:admin nicht, daher werden keine Konfigurationsänderungen angeboten.",
+    "rebased": "Der Kanal hat sich während Ihrer Bearbeitung geändert. Nicht von Ihnen berührte Felder wurden aus dieser Lesung aktualisiert ({{fields}}); Ihre eigenen Änderungen bleiben erhalten und nur sie werden gesendet. Prüfen Sie die Änderungen erneut, um gegen die neue Version zu bestätigen.",
+    "versionMoved": "Der Kanal hat sich geändert. Ihre Änderungen bleiben erhalten; prüfen Sie sie erneut, bevor Sie bestätigen."
+  },
+  "grants": {
+    "filters": {
+      "title": "Filter des Berechtigungsverlaufs",
+      "state": "Gespeicherter Zustand",
+      "stateHint": "Wählt den gespeicherten Zustand. Eine aktive Zeile nach ihrem Ablauf ist hier weiterhin „aktiv“ und liest sich im Beobachtungszeitpunkt „abgelaufen“.",
+      "subjectKind": "Subjektart",
+      "subjectRef": "Subjektreferenz",
+      "subjectHint": "Art und Referenz reisen zusammen: beide oder keine. Gruppen werden nicht aufgelöst.",
+      "anySubject": "Beliebiges Subjekt",
+      "applied": "Gefiltert auf Subjekt {{kind}} {{ref}}."
+    },
+    "columns": {
+      "subject": "Subjekt",
+      "bits": "Bits",
+      "generation": "Generation",
+      "stored": "Gespeicherter Zustand",
+      "temporal": "Bei Beobachtung",
+      "expires": "Läuft ab",
+      "grantedBy": "Gewährt von",
+      "created": "Erstellt"
+    },
+    "truncated": "Jenseits dieser Seite existieren weitere Generationen",
+    "truncatedHint": "Der Server hat weitere Generationen gemeldet. Laden Sie mehr, um von seiner Fortsetzung aus weiterzugehen; eine Kanaländerung zwischen Seiten startet die Auflistung neu.",
+    "emptyTitle": "Keine Generationen",
+    "emptyBody": "Keine gespeicherte Berechtigungsgeneration entspricht dem gewählten Zustand und Subjekt. Eine neue Berechtigung fügt eine hinzu.",
+    "temporalHint": "„Gespeicherter Zustand“ ist, was die Engine persistiert hat; „bei Beobachtung“ ist, ob die Zeile im beobachteten Zeitpunkt in Kraft war. Ein verstrichener Ablauf wird gemeldet, nicht materialisiert: Er widerruft die Zeile nicht, und ein Nachfolger für dieses Subjekt erfordert weiterhin zuerst einen ausdrücklichen Widerruf.",
+    "snapshotChanged": "Der Kanal hat sich zwischen zwei Seiten dieses Verlaufs geändert, daher wurden alle bisher gelesenen Seiten verworfen und die Auflistung von vorn neu gestartet ({{count}} Mal neu gestartet).",
+    "detail": {
+      "title": "Detail der Generation",
+      "id": "Berechtigungs-ID",
+      "supersedes": "Ersetzt",
+      "revokedBy": "Widerrufen von",
+      "version": "Zeilenversion",
+      "updated": "Aktualisiert",
+      "expiredActive": "Diese Zeile ist als aktiv gespeichert, aber ihr Ablauf ist im Beobachtungszeitpunkt verstrichen. Die Engine hat sie nicht widerrufen: Ein Nachfolger für dieses Subjekt erfordert den ausdrücklichen Widerruf dieser Generation.",
+      "notActive": "Diese Generation ist nicht als aktiv gespeichert; hier gibt es nichts zu widerrufen. Eine neue Berechtigung für ihr Subjekt erfordert, dass keine aktive Generation besteht."
+    },
+    "form": {
+      "title": "Neue Berechtigungsgeneration",
+      "hint": "Ein Subjekt, drei unabhängige Bits, ein optionaler Ablauf. Eine Verzeichniszeile ist ein Kandidat, kein berechtigtes Subjekt: Die Engine entscheidet beim Akt, und eine erfasste Generation verspricht keinen wirksamen Zugriff."
+    },
+    "validation": {
+      "expiry": "Der Ablauf konnte nicht als Datum gelesen werden.",
+      "expiryPast": "Der Ablauf muss in der Zukunft liegen."
+    },
+    "confirm": {
+      "title": "Berechtigung bestätigen",
+      "body": "Dies sendet genau die Generation unten mit dem If-Match der Lesung auf dem Bildschirm. Die Engine lehnt sie ab, wenn das Subjekt bereits eine aktive Generation hält oder sich der Kanal inzwischen geändert hat; dann lesen Sie neu und bestätigen erneut. Nichts wird von selbst wiederholt.",
+      "successorOf": "Nachfolger der widerrufenen Generation {{id}}. Es ist ein getrennter Akt: Der Widerruf oben ist bereits festgeschrieben."
+    },
+    "appliedTitle": "Berechtigung erfasst",
+    "appliedBody": "Die Engine hat diese Generation jetzt erfasst. Das ist kein Versprechen, dass das Subjekt handeln kann: Die Engine entscheidet jeden Akt in dem Moment, in dem er angefragt wird.",
+    "conflictTitle": "Der Kanal hat sich seit Ihrer Lesung geändert",
+    "conflictBody": "Die Engine hat den Akt abgelehnt: Seine Vorbedingung passt nicht mehr zum aktuellen Kanal, oder die Zielgeneration ist nicht mehr die, die Sie gesehen haben. Nichts wurde erneut gesendet. Lesen Sie den Verlauf neu und bestätigen Sie nur erneut, wenn der Akt noch zutrifft.",
+    "unknownTitle": "Ergebnis noch zu prüfen",
+    "unknownBody": "Der Transport ist ausgefallen, bevor eine Antwort ankam. Der Akt kann angewendet worden sein oder nicht, und diese Route hat keinen Idempotenzschlüssel: Die Konsole sendet nicht erneut. Lesen Sie den Verlauf neu und entscheiden Sie; eine passende Zeile zeigt den aktuellen Zustand, nicht welcher Versuch ihn erzeugt hat.",
+    "unknownAct": "Akt",
+    "unknownGrant": "Gewähren (POST …/grants)",
+    "unknownRevoke": "Widerrufen (POST …/revoke)",
+    "refusedTitle": "Berechtigung abgelehnt",
+    "revoke": {
+      "title": "Genau diese Generation widerrufen",
+      "body": "Dies widerruft die gezeigte Generation anhand ihrer ID mit dem If-Match der Lesung auf dem Bildschirm. Ihr Verlauf bleibt erhalten. Ein Nachfolger für das Subjekt ist ein getrennter Akt nach erneutem Lesen.",
+      "bodyThenGrant": "Erster von zwei Akten: die gezeigte Generation widerrufen. Nachdem die Antwort der Engine gelesen wurde, wird Ihnen eine getrennte Bestätigung für eine Nachfolgegeneration angeboten; nichts wird automatisch verkettet.",
+      "ownAdminWarning": "Diese Generation ist eine Admin-Berechtigung für Ihr eigenes Konto. Sie könnte Ihren administrativen Zugriff auf diesen Kanal tragen; die Konsole berechnet nicht Ihre gesamte Autorität, und die Engine entscheidet Ihre nächste Anfrage.",
+      "appliedTitle": "Generation widerrufen",
+      "appliedBody": "Die Engine hat den Widerruf jetzt erfasst. Ihr Verlauf bleibt unter dem Zustand „widerrufen“ lesbar.",
+      "refusedTitle": "Widerruf abgelehnt"
+    },
+    "stateFilters": {
+      "active": "Aktiv (gespeichert)",
+      "revoked": "Widerrufen (gespeichert)",
+      "expired": "Abgelaufen (gespeichert)",
+      "all": "Alle (gespeichert)"
+    }
+  },
+  "cursor": {
+    "title": "Bis hier als gesehen markieren",
+    "description": "Rückt Ihren persönlichen Gesehen-Cursor bis zur letzten Zustellung einer Posteingangsseite vor. Es bestätigt nichts und ändert keine Zustellung.",
+    "section": {
+      "title": "Gesehen-Cursor",
+      "hint": "Jede geladene Seite kann bis zu ihrer letzten Zustellung als gesehen markiert werden. Das Ziel ist das eigene der Seite, von der Engine für genau diese Zustellung geprägt; der lokale Filter der Tabelle muss leer sein, damit der Umfang eindeutig ist.",
+      "page": "Seite {{page}} · {{count}} Zustellungen",
+      "upTo": "bis"
+    },
+    "reasons": {
+      "noPermission": "Erfordert die Berechtigung delivery:write.",
+      "noRecipient": "Diese Sitzung ist keine Benutzeridentität; der persönliche Cursor gehört zu einem Benutzerpostfach.",
+      "filtered": "Leeren Sie zuerst den Tabellenfilter: Das Cursorziel ist die Serverseite, nicht die gefilterten Zeilen.",
+      "emptyPage": "Diese Seite hat keine Zustellungen zum Markieren.",
+      "otherRecipient": "Die letzte Zustellung dieser Seite ist nicht an Ihre Benutzeridentität adressiert."
+    },
+    "fields": {
+      "scope": "Umfang",
+      "scopeValue": "Seite {{page}} der geladenen Kette ({{count}} Zustellungen)",
+      "workspace": "Workspace",
+      "recipient": "Empfänger",
+      "lastSubject": "Letzter Betreff",
+      "lastDelivery": "Letzte Zustellung",
+      "lastSeq": "Zustellsequenz",
+      "cursorVersion": "Cursorversion",
+      "cursorId": "Cursor-ID",
+      "replayed": "Wiederholt",
+      "lastSeenSeq": "Zuletzt gesehene Sequenz",
+      "barrierDelivery": "Barriere-Zustellung",
+      "barrierReason": "Grund der Barriere",
+      "barrierSince": "Barriere seit"
+    },
+    "preparing": "Vorbereitung: Die Engine wird nach dem Cursorziel dieser Seite gefragt…",
+    "prepareFailedTitle": "Das Cursorziel konnte nicht vorbereitet werden",
+    "prepareFailedBody": "Nichts wurde vorgerückt. Aktualisieren Sie den Posteingang und bereiten Sie erneut von einer aktuellen Seite vor.",
+    "confirm": {
+      "title": "Vorrücken bestätigen",
+      "body": "Dies sendet das vorbereitete Ziel und die Zustellung oben mit dem If-Match der gelesenen Cursorversion und einem eigenen Schlüssel. Nur das Bestätigen rückt etwas vor. Eine Wiederholung nach einem mehrdeutigen Ergebnis sendet genau dies erneut."
+    },
+    "conflictTitle": "Der Cursor hat sich seit der Vorbereitung geändert",
+    "conflictBody": "Die Engine hat das Vorrücken abgelehnt: Die Cursorversion oder das Ziel sind nicht mehr aktuell. Nichts wurde erneut gesendet. Aktualisieren Sie den Posteingang und bereiten Sie erneut von einer aktuellen Seite vor.",
+    "ambiguousTitle": "Ergebnis unbekannt",
+    "ambiguousBody": "Der Transport ist ausgefallen, bevor eine Antwort ankam. Eine Wiederholung sendet dasselbe Ziel, dasselbe If-Match und denselben Schlüssel; die Engine wendet es einmal an, wiederholt es oder lehnt es mit ihrer aktuellen Version ab. Unbestimmt lassen hält das vorherige Ergebnis unbekannt.",
+    "refusedTitle": "Vorrücken abgelehnt",
+    "refusedBody": "Die Engine hat den Cursor nicht vorgerückt. Aktualisieren Sie den Posteingang, bevor Sie erneut vorbereiten.",
+    "result": {
+      "appliedTitle": "Cursor vorgerückt",
+      "appliedBody": "Die Engine hat das Vorrücken festgeschrieben und die Position unten zurückgegeben. Der Posteingang wird vom dauerhaften Cursor aus neu gelesen.",
+      "replayedTitle": "Bereits vorgerückt",
+      "replayedBody": "Die Engine hat das Ergebnis eines identischen früheren Befehls wiederholt. Nichts wurde zweimal angewendet.",
+      "barrierTitle": "Vorrücken durch eine Barriere begrenzt",
+      "barrierBody": "Die Engine hat bei der Zustellung unten aus dem genannten Grund angehalten; der Cursor hat das Ziel nicht erreicht. Das ist kein vollständiges Vorrücken.",
+      "barrierHint": "Öffnen Sie die Barriere-Zustellung mit einer frischen Lesung. Sie aufzulösen rückt für sich nichts vor: Posteingang aktualisieren, ein neues Ziel vorbereiten und erneut bestätigen.",
+      "notAck": "Ein Gesehen-Cursor ist keine Bestätigung und ändert weder den Zustand noch die Erstgesehen-Marke einer Zustellung."
+    }
+  },
+  "capability": {
+    "actInterrupted": "Eine Bestätigung wurde geschlossen, während ihre Handlung bereits gesendet wurde: Diese Konsole hat keine aktuelle Antwort für diese Handlung. Es wurde nichts entschieden und nichts verweigert; ob die Handlung die Engine erreicht hat, wird hier nicht festgestellt.",
+    "checking": "Zugriff wird geprüft…",
+    "confirmationClosed": "Eine ausstehende Bestätigung wurde geschlossen: Diese Konsole hat keine aktuelle Antwort für diese Handlung. Es wurde nichts entschieden, nichts verweigert und nichts gesendet.",
+    "globalAccountBody": "Verwende ein Mitgliedskonto dieser Organisation, um diese Ansicht zu öffnen. Globale Konten können den Zugriff auf diese Ansicht nicht prüfen.",
+    "globalAccountTitle": "Mit einem Mitgliedskonto anmelden",
+    "notConfirmed": "Es wurde nichts gesendet: Die Autorisierung für diese Handlung konnte gerade nicht bestätigt werden.",
+    "retrying": "Wird alle paar Sekunden erneut geprüft.",
+    "unavailableBody": "Diese Konsole hat keine aktuelle Antwort für diese Aktion. Es wurde nichts entschieden und nichts verweigert.",
+    "unavailableTitle": "Der Zugriff konnte nicht ermittelt werden",
+    "undisclosedBody": "Die Engine hat für diese Aktion hier keine Antwort veröffentlicht. Das ist keine Aussage über Ihre Rolle, über die Existenz des Ziels oder über die Verfügbarkeit des Dienstes.",
+    "undisclosedTitle": "Diese Entscheidung wird nicht offengelegt"
+  },
+  "continuity": {
+    "interrupted": "Der Zugriff konnte einen Moment lang nicht bestätigt werden, daher wurde die ausstehende Bestätigung geschlossen. Ihre Änderungen bleiben erhalten und es wurde nichts gesendet; prüfen Sie sie erneut, bevor Sie bestätigen.",
+    "interruptedSend": "Der Zugriff konnte nicht bestätigt werden, während die Änderung gesendet wurde, daher wurde die Bestätigung geschlossen. Ihre Änderungen bleiben erhalten und es wurde nichts erneut gesendet; ob die Änderung die Engine erreicht hat, ist hier nicht festgestellt — lesen Sie erneut, um es zu überprüfen."
+  },
+  "handoff": {
+    "state": {
+      "offered": "Angeboten",
+      "accepted": "Angenommen",
+      "rejected": "Abgelehnt",
+      "withdrawn": "Zurückgezogen",
+      "expired": "Abgelaufen"
+    },
+    "context": {
+      "current": "Jetzt beantwortbar",
+      "stale": "Nicht mehr aktuell",
+      "terminal": "Bereits abgeschlossen"
+    },
+    "actions": {
+      "accept": "Verantwortung übernehmen",
+      "reject": "Übergabe ablehnen"
+    },
+    "retained": {
+      "submitting": "Eine Übergabeoperation ist unterwegs.",
+      "uncertain": "Eine Übergabeoperation hat kein bestätigtes Ergebnis.",
+      "confirmed": "Die Angebotsquittung ist weiterhin verfügbar.",
+      "responseConfirmed": "Die Antwortquittung ist weiterhin verfügbar.",
+      "reopen": "Operation anzeigen"
+    },
+    "lost": {
+      "title": "Anmeldedaten haben sich geändert",
+      "body": "Die Übermittlung wurde gestoppt; das Ergebnis ist nicht bestätigt. Lesen Sie den aktuellen Zustand, bevor Sie erneut handeln.",
+      "notSent": "Die Übermittlung hat nicht begonnen, dieser Befehl wurde also nicht gesendet. Lesen Sie den aktuellen Zustand, bevor Sie erneut handeln.",
+      "latestNotSent": "Der letzte Versuch hat nicht begonnen und wurde nicht gesendet. Der frühere Versuch ist eine eigene Tatsache. Lesen Sie den aktuellen Zustand, bevor Sie erneut handeln."
+    },
+    "uncertain": {
+      "title": "Das Ergebnis ist unbekannt",
+      "body": "Die Anfrage kann angewendet worden sein oder auch nicht. Eine Zeitüberschreitung ist kein Rollback. Ein erneuter Versuch sendet dieselbe Operation unter demselben Schlüssel, damit die Engine antworten kann, dass sie bereits angewendet wurde, statt sie zweimal anzuwenden.",
+      "discard": "Lokale Verfolgung beenden",
+      "priorTransmission": "Ein früherer Versuch wurde übermittelt und sein Ergebnis nie bestätigt. Spätere Antworten beschreiben die Anfrage, die sie zurückgegeben hat, nicht jene."
+    },
+    "references": {
+      "hint": "Art und Referenz sind erforderlich, der Hash ist optional. Referenzen sind Beschriftungen, die die empfangende Seite liest — hier wird nichts abgerufen, verfolgt oder geöffnet.",
+      "kind": "Art",
+      "ref": "Referenz",
+      "hash": "Hash",
+      "add": "Referenz hinzufügen",
+      "remove": "Referenz entfernen"
+    },
+    "offer": {
+      "title": "Übergabe anbieten",
+      "description": "Bieten Sie die Verantwortung für dieses Arbeitselement einer empfangenden Partei über einen Kanal an. Das Anlegen des Angebots überträgt die Inhaberschaft NICHT: das tut nur eine angenommene Antwort.",
+      "readRefusedTitle": "Das Arbeitselement konnte nicht gelesen werden",
+      "itemTitle": "Arbeitselement",
+      "item": "Arbeitselement",
+      "itemId": "ID des Arbeitselements",
+      "itemStatus": "Status",
+      "currentOwner": "Aktuelle Inhaberschaft",
+      "ownerEpoch": "Inhaber-Epoche",
+      "itemWorkspace": "Workspace des Elements",
+      "precondition": "Vorbedingung (If-Match)",
+      "itemMismatch": "Der Lesevorgang lieferte ein anderes Arbeitselement als das angeforderte. Unter diesem Lesevorgang kann nichts angeboten werden.",
+      "workspaceMismatchTitle": "Wählen Sie den Workspace des Elements",
+      "workspaceMismatchBody": "Dieses Element gehört zum Workspace {{itemWorkspace}}, ausgewählt ist {{selected}}. Wählen Sie im Umschalter den Workspace des Elements, um es anzubieten; die Konsole wählt niemals einen für Sie aus.",
+      "workspaceNone": "Es ist kein ausdrücklicher Workspace ausgewählt. Ein Angebot ist auf einen Workspace beschränkt, wählen Sie also im Umschalter den des Elements; die Konsole wählt niemals einen für Sie aus.",
+      "noPrecondition": "Der Lesevorgang des Arbeitselements enthielt kein ETag, also gibt es keine Vorbedingung zum Senden. Lesen Sie das Element erneut; eine Version wird hier nicht in einen Validator verwandelt.",
+      "noPermission": "Eine Übergabe anzubieten erfordert sessions:message-send:write. Die Engine prüft zusätzlich die Inhaberschaft des Elements und die Kanalautorität.",
+      "channel": "Kanal",
+      "channelHint": "Die kanonische Kanal-ID, über die der Träger veröffentlicht wird. Sie kann immer eingegeben werden.",
+      "channelPick": "Kanal auswählen",
+      "channelNoDirectory": "Mit dieser Berechtigung ist der Kanalkatalog nicht lesbar, daher wird die Kanal-ID direkt eingegeben. Ein gelisteter Kanal wäre ohnehin nur ein Kandidat, niemals eine Entscheidung über die Berechtigung.",
+      "recipient": "Empfangende Partei",
+      "summary": "Zusammenfassung",
+      "nextAction": "Nächster Schritt",
+      "risk": "Risiko",
+      "riskHint": "Optional.",
+      "artifacts": "Artefaktreferenzen",
+      "deadline": "Antwortfrist",
+      "deadlineHint": "Ein absoluter Zeitpunkt, eingegeben in Ihrer eigenen Zeitzone. Das Feld ist absichtlich leer: Die Konsole wählt keine Zusage für Sie und verlängert sie niemals.",
+      "deadlineReview": "{{zone}} lokal, gesendet als {{utc}}. Die Serveruhr entscheidet und kann die Frist weiterhin ablehnen.",
+      "review": "Angebot prüfen",
+      "confirm": "Bestätigen und anbieten",
+      "confirmTitle": "Vor dem Anbieten prüfen",
+      "confirmBody": "Ab hier sind Schlüssel, Rumpf, Ziel und Vorbedingung eingefroren. Ein erneuter Versuch nach einem unbekannten Ergebnis sendet genau dieses Objekt.",
+      "key": "Idempotenzschlüssel",
+      "submitting": "Wird angeboten…",
+      "conflictTitle": "Das Angebot wurde nicht angewendet",
+      "conflictBody": "Das Element hat sich seit dem Lesen verändert, oder der Befehl gilt nicht mehr. Diese Antwort sagt nicht, welches von beidem. Lesen Sie das Element erneut und prüfen Sie ein neues Angebot; die Vorbedingung wird niemals ersetzt und erneut gesendet.",
+      "refusedTitle": "Das Angebot wurde abgelehnt",
+      "createdTitle": "Angebot angelegt",
+      "replayedTitle": "Angebot war bereits angewendet (Wiederholung)",
+      "pendingBody": "Die Inhaberschaft wurde NICHT übertragen. Die Antwort der empfangenden Partei steht aus.",
+      "startOver": "Neues Angebot beginnen",
+      "serverFinal": "Die Engine ist der letzte Validator: Sie kann dieses Angebot weiterhin wegen Berechtigung, Autorität oder Grenzwerten ablehnen, und ihre Antwort wird unverändert angezeigt.",
+      "validation": {
+        "channel": "Ein Kanal ist erforderlich.",
+        "channelFormat": "Die Kanal-ID muss eine kanonische UUID sein.",
+        "recipient": "Eine Empfängerreferenz ist erforderlich.",
+        "recipientLength": "Die Empfängerreferenz ist länger als 1024 Bytes.",
+        "summary": "Eine Zusammenfassung ist erforderlich.",
+        "summaryLength": "Die Zusammenfassung ist länger als 32 KiB.",
+        "nextAction": "Ein nächster Schritt ist erforderlich.",
+        "nextActionLength": "Der nächste Schritt ist länger als 32 KiB.",
+        "riskLength": "Die Risikonotiz ist länger als 32 KiB.",
+        "references": "Jede Referenz braucht eine Art und eine Referenz von 1 bis 512 Bytes, bereits getrimmt und ohne Zeilenumbrüche.",
+        "referencesMax": "Höchstens 64 Artefaktreferenzen.",
+        "deadline": {
+          "empty": "Eine Antwortfrist ist erforderlich.",
+          "unreadable": "Die Antwortfrist kann nicht als Zeitpunkt gelesen werden.",
+          "past": "Die Antwortfrist muss nach der aktuellen Zeit liegen."
+        }
+      },
+      "targetRefusedTitle": "Schließen Sie zuerst das laufende Angebot ab",
+      "targetRefusedBody": "Ein früheres Angebot wurde gesendet und ist nicht aufgelöst. Lösen Sie es auf oder beenden Sie die lokale Verfolgung, und beginnen Sie dann das neue.",
+      "conflictTitleLatest": "Dieser Versuch wurde nicht angewendet",
+      "conflictBodyLatest": "Das Element hat sich seit dem Lesen verändert, oder der Befehl gilt nicht mehr. Diese Antwort betrifft die soeben zurückgekehrte Anfrage. Lesen Sie das Element erneut und prüfen Sie ein neues Angebot aus seinem aktuellen Zustand.",
+      "refusedTitleLatest": "Dieser Versuch wurde abgelehnt"
+    },
+    "inbox": {
+      "title": "An Sie gerichtete Übergaben",
+      "description": "Seite für Seite über die Fortsetzung des Servers. Diese Sammlung enthält keine Inhalte: Zusammenfassung, nächster Schritt und Risiko eines Angebots sind nur durch Öffnen lesbar.",
+      "filter": "Zustand",
+      "truncated": "Über diese Seite hinaus gibt es weitere Angebote",
+      "truncatedHint": "Die Engine meldet, dass sie in derselben Transaktion ein weiteres Angebot autorisiert hat. Das ist keine Gesamtzahl und keine Zählung verborgener Zeilen.",
+      "emptyTitle": "Keine Übergaben im Zustand „{{state}}“ in diesem Workspace",
+      "emptyBody": "Das ist ein leeres autorisiertes Ergebnis, keine Ablehnung und kein gescheiterter Blick.",
+      "unavailableTitle": "Übergabeinformationen können nicht überprüft werden",
+      "unavailableBody": "Übergabeinformationen können derzeit nicht geladen werden. Wiederholen Sie den Vorgang, oder wenden Sie sich an einen Administrator, wenn das Problem bestehen bleibt.",
+      "accountGuidanceTitle": "Für persönliche Übergaben ist ein Mitgliedskonto erforderlich",
+      "accountGuidanceBody": "Sie sind als globaler Administrator angemeldet. Melden Sie sich mit einem Mitgliedskonto dieser Organisation an, um die an Sie gerichteten Angebote zu sehen.",
+      "accountGuidanceHint": "Verwenden Sie das Konto, das das Angebot erhalten hat.",
+      "contentFree": "Zeilen zeigen nur Identität, Zustand und Zeiten. Öffnen Sie eine Zeile, um ihren geschützten Kontext unter dessen eigenem autorisierten Lesevorgang zu lesen.",
+      "elapsed": "Zeitfenster abgelaufen",
+      "elapsedHint": "Das Antwortfenster ist zum Beobachtungszeitpunkt der Engine verstrichen. Die Zeile kann weiterhin als angeboten gespeichert sein: Dieser Lesevorgang führt niemals den Reaper aus, das ist also kein Beweis, dass ein Ablauf verzeichnet wurde.",
+      "columns": {
+        "workItem": "Arbeitselement",
+        "from": "Absender",
+        "to": "Empfangende Partei",
+        "state": "Zustand",
+        "deadline": "Frist",
+        "observed": "Beobachtet",
+        "delivery": "Träger-Zustellung"
+      }
+    },
+    "detail": {
+      "title": "Übergabeangebot",
+      "description": "Der geschützte Kontext eines Angebots, frisch über seine Träger-Zustellung gelesen. Er wird nach dem Schließen dieses Panels nicht aufbewahrt.",
+      "contextTitle": "Angebotskontext",
+      "summary": "Zusammenfassung",
+      "nextAction": "Nächster Schritt",
+      "risk": "Risiko",
+      "artifacts": "Artefaktreferenzen",
+      "artifactsInert": "Referenzen werden als Text angezeigt. Hier wird nichts abgerufen, verfolgt oder geöffnet.",
+      "adminTitle": "Quittungsfelder",
+      "workItem": "Arbeitselement",
+      "handoffId": "Übergabe-ID",
+      "from": "Absender",
+      "to": "Empfangende Partei",
+      "deadline": "Antwortfrist",
+      "created": "Erstellt",
+      "observed": "Beobachtet",
+      "precondition": "Übergabe-ETag (If-Match)",
+      "preconditionHint": "Eine Antwort ist an das obige Übergabe-ETag gebunden, niemals an die daneben stehende Version der Träger-Zustellung.",
+      "carrierDelivery": "Träger-Zustellung",
+      "carrierVersion": "Version der Träger-Zustellung",
+      "channel": "Kanal",
+      "terminalTitle": "Von der Engine verzeichneter Grund",
+      "deadlineElapsed": "Zeitfenster abgelaufen",
+      "notCurrent": {
+        "stale": "Dieses Angebot ist nicht mehr aktuell",
+        "terminal": "Dieses Angebot ist bereits abgeschlossen"
+      },
+      "notCurrentBody": "Die Engine meldet, dass jetzt nicht geantwortet werden kann, daher wird kein Antwortelement angeboten. Lesen Sie erneut, um den aktuellen Zustand zu sehen.",
+      "noRespondPermission": "Antworten erfordert sessions:handoff-response:write."
+    },
+    "respond": {
+      "acceptTitle": "Verantwortung übernehmen",
+      "rejectTitle": "Übergabe ablehnen",
+      "acceptDescription": "Die Annahme überträgt die Inhaberschaft des Arbeitselements an die unten genannte empfangende Partei und legt eine Bestätigung an. Sie startet KEINE Sitzung und erwirbt KEIN Ausführungs-Lease.",
+      "rejectDescription": "Eine Ablehnung erfordert einen Grundcode. Die Inhaberschaft wechselt nicht.",
+      "reasonCode": "Grundcode",
+      "reasonCodeHint": "Diese vier sind Voreinstellungen der Konsole, nicht die Liste der Engine. Die Engine führt ein offenes Vokabular, daher steht ein eigener Code zur Verfügung.",
+      "reasonCodeEmpty": "Grund auswählen",
+      "customCode": "Eigener Grundcode",
+      "customCodeHint": "Ein Kleinbuchstaben-Token von höchstens 128 Bytes: Buchstaben, Ziffern, Punkt, Bindestrich und Unterstrich, beginnend mit einem Buchstaben oder einer Ziffer.",
+      "reasonText": "Erläuterung",
+      "reasonTextHint": "Optional, bis zu 32 KiB.",
+      "reasonReferences": "Referenzen zum Grund",
+      "reasons": {
+        "not_available": "Nicht verfügbar",
+        "outside_scope": "Außerhalb meines Bereichs",
+        "needs_information": "Weitere Angaben nötig",
+        "other": "Sonstiges",
+        "custom": "Eigener Code…"
+      },
+      "review": "Antwort prüfen",
+      "confirmTitle": "Vor dem Antworten prüfen",
+      "confirmAcceptBody": "Die Bestätigung überträgt die Inhaberschaft dieses Arbeitselements an die oben genannte empfangende Partei. Schlüssel, Rumpf und Vorbedingung sind ab hier eingefroren.",
+      "confirmRejectBody": "Die Bestätigung verzeichnet diese Ablehnung. Die Inhaberschaft wechselt nicht. Schlüssel, Rumpf und Vorbedingung sind ab hier eingefroren.",
+      "confirmAccept": "Annahme bestätigen",
+      "confirmReject": "Ablehnung bestätigen",
+      "transition": "Antwort",
+      "submitting": "Antwort wird gesendet…",
+      "conflictTitle": "Die Antwort wurde nicht angewendet",
+      "conflictBody": "Das Angebot hat sich seit dem Lesen verändert, oder der Befehl gilt nicht mehr. Diese Antwort sagt nicht, welches von beidem. Lesen Sie das Angebot erneut und prüfen Sie eine neue Antwort; die Vorbedingung wird niemals ersetzt und erneut gesendet.",
+      "refusedTitle": "Die Antwort wurde abgelehnt",
+      "acceptedTitle": "Verantwortung übernommen",
+      "rejectedTitle": "Übergabe abgelehnt",
+      "replayedTitle": "Antwort war bereits angewendet (Wiederholung)",
+      "acceptedBody": "Die Inhaberschaft des Arbeitselements wechselte und die Inhaber-Epoche wurde erhöht.",
+      "rejectedBody": "Die Ablehnung wurde verzeichnet. Die Inhaberschaft wechselte nicht.",
+      "validation": {
+        "code": "Ein Grundcode ist erforderlich.",
+        "codeLength": "Der Grundcode ist länger als 128 Bytes.",
+        "codeShape": "Der Grundcode muss ein Kleinbuchstaben-Token sein: Buchstaben, Ziffern, Punkt, Bindestrich und Unterstrich, beginnend mit einem Buchstaben oder einer Ziffer.",
+        "textLength": "Die Erläuterung ist länger als 32 KiB.",
+        "references": "Jede Referenz braucht eine Art und eine Referenz von 1 bis 512 Bytes, bereits getrimmt und ohne Zeilenumbrüche.",
+        "referencesMax": "Höchstens 64 Referenzen zum Grund."
+      },
+      "targetRefusedTitle": "Schließen Sie zuerst die laufende Antwort ab",
+      "targetRefusedBody": "Eine frühere Antwort wurde gesendet und ist nicht aufgelöst. Lösen Sie sie auf oder beenden Sie die lokale Verfolgung, und beginnen Sie dann die neue.",
+      "startNew": "Neue Antwort beginnen",
+      "conflictTitleLatest": "Dieser Versuch wurde nicht angewendet",
+      "conflictBodyLatest": "Das Angebot hat sich seit dem Lesen verändert, oder der Befehl gilt nicht mehr. Diese Antwort betrifft die soeben zurückgekehrte Anfrage. Lesen Sie das Angebot erneut und prüfen Sie eine neue Antwort aus seinem aktuellen Zustand.",
+      "refusedTitleLatest": "Dieser Versuch wurde abgelehnt"
+    },
+    "receipt": {
+      "handoffId": "Übergabe-ID",
+      "deliveryId": "Träger-Zustellung",
+      "ownerEpoch": "Inhaber-Epoche",
+      "leaseFence": "Resultierende Lease-Schranke",
+      "status": "HTTP {{status}}",
+      "noLease": "Die Antwort enthielt keine Lease-Schranke. Die Verantwortung wechselte; es wurde kein Ausführungs-Lease erworben und es läuft keine Sitzung.",
+      "notCurrentOwnership": "Dies sind die Werte, die diese Quittung gemeldet hat. Die aktuelle Inhaberschaft steht im Arbeitselement."
+    },
+    "tracking": {
+      "limits": "Das Ausblenden dieses Panels behält die lokale Verfolgung. Die Verfolgung zu beenden oder diesen Kontext zu verlassen kann einen bereits gesendeten Befehl weder abbrechen noch zurückrollen, ein vollständiges Neuladen beendet diesen lokalen Beobachter, und eine Befehlsstatus-Abfrage gibt es hier nicht.",
+      "pendingHide": "Sie können dieses Panel ausblenden, während der Befehl läuft; die Verfolgung geht hier weiter und das Ergebnis ändert sich nicht. Die Verfolgung zu beenden oder diesen Kontext zu verlassen kann einen bereits gesendeten Befehl weder abbrechen noch zurückrollen.",
+      "ended": "Die lokale Verfolgung endete, weil sich der Zugriff auf diesen Kontext geändert hat. Das Ergebnis der Engine ist hier nicht festgestellt.",
+      "endedAfterSend": "Ein Befehl war bereits gesendet worden. Das Ende der lokalen Verfolgung hat ihn weder abgebrochen noch zurückgerollt.",
+      "stoppedAfterSend": "Sie haben die Verfolgung eines Befehls beendet, der möglicherweise bereits gesendet wurde. Das bricht ihn weder ab noch rollt es ihn zurück, und sein Ergebnis ist hier nicht festgestellt. Lesen Sie den aktuellen Zustand, bevor Sie erneut handeln."
+    }
+  }
+}

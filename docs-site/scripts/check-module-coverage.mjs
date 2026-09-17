@@ -57,6 +57,7 @@ const DIR_TO_SLUG = {
   'sandbox': 'xvii-sandbox',
   'security': 'ix-security',
   'sessions': 'ii-sessions',
+  'sessioncockpit': 'session-cockpit', // edition availability descriptor; not a 30-catalog row
   'siemforward': 'siemforward', // SIEM/ITSM forwarder — its own page (Compliance & evidence)
   'sourcescope': 'sourcescope', // Source & credential scoping — its own page (Govern & enforce)
   'voice': 'xvi-voice',

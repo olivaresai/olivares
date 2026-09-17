@@ -59,6 +59,43 @@ With `curl --pinnedpubkey sha256//…` add the trailing `=` padding: the engine
 prints unpadded base64 on purpose, so the value renders unquoted in the log and
 survives a copy-paste, but curl requires the padded form.
 
+## Host install diagnostic
+
+The generated CLI reference describes `olivares doctor` as: diagnose this host
+installation without printing secrets
+([CLI](/reference/cli/#command-olivares-doctor)). Flags include `--data-dir`,
+`--mode` (`auto` \| `user` \| `system`), `--init` (`auto` \| `systemd` \|
+`openrc` \| `launchd`), `--config`, `--unit`, `--binary`, `--server`,
+`--timeout`, `--ca-cert`, `--audit-tenant`, `--check-updates`. Do not treat
+this table as extra help text; it is that generated command.
+
+### `agentops-layout` check
+
+`olivares doctor` reports a check named `agentops-layout` (`CHANGELOG.md`
+`[26.9.0]`; `cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`). It is not a
+subcommand. It measures the native AgentOps layout the ownership manifest
+records: the managed drop-in must exist with its mode and must name the
+recorded claude `HOME`, token dir and workspace; the runtime env must exist
+with a config mode (values are never read); the workspace must be a directory
+(`docs/RELEASE-INSTALLER.md`).
+
+Statuses the check returns:
+
+| Status | When |
+|---|---|
+| `not_applicable` | no readable manifest; malformed manifest; or the manifest records no AgentOps files (`dropin`, `runtime-env`, `workspace_dir` all empty) |
+| `fail` | drop-in does not reference a recorded token (`$dataDir/claude-home`, `$dataDir/run`, or `workspace_dir`); workspace path is absent or is not a directory |
+| `unknown` | drop-in or workspace is not readable |
+| `pass` | drop-in, runtime-env (values not read) and workspace directory agree with the record |
+
+Required is false until the manifest records at least one AgentOps file; then
+the check is required. Remediation strings the engine prints include
+`rerun install-agentops.sh; the managed drop-in and the recorded layout disagree`
+and `recreate the recorded workspace or rerun install-agentops.sh with OLIVARES_WORKSPACE_DIR`.
+
+Both text and `-o json` contain key names and paths but never configuration
+values (`docs/RELEASE-INSTALLER.md`).
+
 ## Sources and the access map
 
 ### The map is empty
@@ -101,17 +138,41 @@ intend.
 
 ### `/readyz` returns 503
 
-Read the body — it distinguishes the two cases:
+Read the body. A 503 is not ready and is not success. `/livez` staying 200
+only means the process is up; `/pod-readyz` staying 200 only means pod health
+(store reachable) without a leadership check or a first-boot capability
+probe. Neither unblocks the default Helm chart or the flat manifest, which
+wire `/readyz` as the container `readinessProbe`.
 
 - `{"status":"unavailable","store":"down"}` — the store is unreachable. On
   SQLite: disk full, PVC problems, file permissions. On Postgres:
   reachability and credentials. **Liveness deliberately keeps passing** (the
   process is alive), so nothing restart-loops on a store outage; restart the
   pod/service manually after fixing the store if it stays wedged.
-- `{"status":"standby","leader":false,…}` — an HA standby answering
+- `{"status":"standby","store":"up","leader":false}` — an HA standby answering
   honestly. Not an error: the Service routes to the leader; standbys drain
   by design. If **all** replicas report standby, the leader election is
   stuck — check Postgres advisory-lock connectivity.
+- `{"status":"setup_blocked","store":"up","leader":true,"setup_required":true,"code":"cross_tenant_admin_pool_not_configured"}`
+  — PostgreSQL first boot cannot enumerate organizations authoritatively.
+  Provision the `NOSUPERUSER BYPASSRLS` administrative role and `--admin-dsn`
+  ([Postgres on Kubernetes](/tutorials/getting-started/kubernetes/#2-postgres-multi-tenant)).
+  The body carries a fixed remedy. Until that prerequisite is corrected, the
+  default readiness probe keeps the pod Not Ready. Do not retarget the probe
+  to conceal this.
+- `{"status":"setup_unavailable","store":"up","leader":true,"code":"setup_state_unavailable"}`
+  — this node could not observe whether the install is set up. `setup_required`
+  is **omitted** because its value is unknown. That is not a known empty
+  install.
+- `{"status":"setup_unavailable","store":"up","leader":true,"setup_required":true,"code":"setup_probe_unavailable"}`
+  — the install is known not set up, but the first-boot capability probe
+  failed for a reason other than the administrative-pool refusal. A timeout
+  is not evidence of an empty estate.
+
+A 200 `{"status":"ok",…,"setup_required":true}` is a different observation:
+first-boot setup can be attempted. `POST /v1/setup` still repeats its
+authority checks. That 200 does not consume availability budget; these 503s
+do.
 
 ### The pod died and nothing took over
 

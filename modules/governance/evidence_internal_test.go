@@ -136,6 +136,10 @@ func (s typedEvidenceScope) ReadAuthorizationEpoch(ctx context.Context) (store.A
 	return reader.ReadAuthorizationEpoch(ctx)
 }
 
+func (s typedEvidenceScope) ReadLineageEpoch(ctx context.Context, kind model.Kind) (store.AuthorizationFactRef, error) {
+	return store.ReadLineageFact(ctx, s.Scope, kind)
+}
+
 func (s typedEvidenceScope) Policies() store.Repository[model.Policy] {
 	if s.policies != nil {
 		return s.policies
@@ -1511,8 +1515,8 @@ func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 			resource: auth.ResourceAttrs{Kind: "agent"}, wantEffect: auth.EffectAbstain, wantGuard: auth.CheckClean,
 		},
 		{
-			name: "missing tree entity read is unknown after lineage lookup", permission: "agent:read",
-			resource: auth.ResourceAttrs{Kind: "agent", ID: model.NewID().String()}, wantEffect: auth.EffectAbstain, wantGuard: auth.CheckUnknown,
+			name: "missing tree entity read is covered by its relation generation", permission: "agent:read",
+			resource: auth.ResourceAttrs{Kind: "agent", ID: model.NewID().String()}, wantEffect: auth.EffectAbstain, wantGuard: auth.CheckClean,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1530,11 +1534,15 @@ func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 			if tc.wantGuard != auth.CheckBroken && decision.ForbidAbsence.Verdict != auth.CheckClean {
 				t.Fatalf("scoped evidence clean/abstain forbid check = %#v, want CLEAN", decision.ForbidAbsence)
 			}
-			assertTypedScopedWitness(t, decision, fact, typedEvidenceNow, deadline)
+			if tc.resource.ID == "" {
+				assertTypedScopedWitness(t, decision, fact, typedEvidenceNow, deadline)
+			} else {
+				assertScopedLineageKinds(t, decision, fact, "core.agent")
+			}
 		})
 	}
 
-	t.Run("tree lookup same workspace is unknown; mismatch is broken", func(t *testing.T) {
+	t.Run("tree lookup same workspace is clean; mismatch is broken", func(t *testing.T) {
 		var own, foreign model.Agent
 		if err := f.st.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
 			var err error
@@ -1552,7 +1560,7 @@ func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 			id   model.ID
 			want auth.CheckVerdict
 		}{
-			{name: "same", id: own.ID, want: auth.CheckUnknown},
+			{name: "same", id: own.ID, want: auth.CheckClean},
 			{name: "foreign", id: foreign.ID, want: auth.CheckBroken},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
@@ -1613,7 +1621,7 @@ func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 				id   model.ID
 				want auth.CheckVerdict
 			}{
-				{name: "same workspace", id: workspace, want: auth.CheckUnknown},
+				{name: "same workspace", id: workspace, want: auth.CheckClean},
 				{name: "foreign workspace", id: model.NewID(), want: auth.CheckBroken},
 			} {
 				t.Run(kind.name+" "+target.name, func(t *testing.T) {
@@ -1658,16 +1666,16 @@ func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 		}
 	})
 
-	t.Run("declared own workspace with Cedar set reads lineage and cannot grant", func(t *testing.T) {
+	t.Run("declared own workspace with Cedar set is generation covered", func(t *testing.T) {
 		lineageData := f.data(typedEvidenceNow, nil)
 		lineageEngine, _ := typedEvidenceScopedEngine(t, f, lineageData, `permit(principal, action, resource);`, 0, FreshnessRecord{})
 		req := typedEvidenceRequest(f.tenant)
 		req.Principal = principal
 		req.Resource = auth.ResourceAttrs{Kind: "agent", WorkspaceID: workspace}
 		decision, err := lineageEngine.ScopedEvidence(typedEvidenceContext(t, deadline), req)
-		if err != nil || decision.Effect != auth.EffectAbstain || decision.ResourceGuard.Verdict != auth.CheckUnknown ||
+		if err != nil || decision.Effect != auth.EffectGrant || decision.ResourceGuard.Verdict != auth.CheckClean ||
 			decision.ForbidAbsence.Verdict != auth.CheckClean {
-			t.Fatalf("declared-own Cedar scope = %#v, %v; want ABSTAIN/UNKNOWN/CLEAN", decision, err)
+			t.Fatalf("declared-own Cedar scope = %#v, %v; want GRANT/CLEAN/CLEAN", decision, err)
 		}
 		if lineageData.views != 1 {
 			t.Fatalf("declared-own Cedar scope opened %d Views, want one", lineageData.views)
@@ -1695,8 +1703,8 @@ func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 				wantEffect: auth.EffectAbstain, wantForbid: auth.CheckClean,
 			},
 			{
-				name: "permit degrades to abstain", source: `permit(principal, action, resource);`,
-				wantEffect: auth.EffectAbstain, wantForbid: auth.CheckClean,
+				name: "permit grants with complete lineage", source: `permit(principal, action, resource);`,
+				wantEffect: auth.EffectGrant, wantForbid: auth.CheckClean,
 			},
 			{
 				name: "explicit forbid dominates", source: `forbid(principal, action, resource);`,
@@ -1708,9 +1716,9 @@ func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 				req := typedEvidenceRequest(f.tenant)
 				req.Resource = auth.ResourceAttrs{Kind: "agent", ID: agent.ID.String()}
 				decision, err := lineageEngine.ScopedEvidence(typedEvidenceContext(t, deadline), req)
-				if err != nil || decision.Effect != tc.wantEffect || decision.ResourceGuard.Verdict != auth.CheckUnknown ||
+				if err != nil || decision.Effect != tc.wantEffect || decision.ResourceGuard.Verdict != auth.CheckClean ||
 					decision.ForbidAbsence.Verdict != tc.wantForbid {
-					t.Fatalf("lineage %s = %#v, %v; want effect:%v unknown guard forbid:%v", tc.name, decision, err, tc.wantEffect, tc.wantForbid)
+					t.Fatalf("lineage %s = %#v, %v; want effect:%v clean guard forbid:%v", tc.name, decision, err, tc.wantEffect, tc.wantForbid)
 				}
 			})
 		}

@@ -216,15 +216,15 @@ jobs:
           set -euo pipefail
           # shellcheck disable=SC2016,SC2046 # The regex and newline-separated package list are passed to go unchanged.
           go test -count=1 -run '^$(none)$' $(grep -v '^#' ci/pg-majors-packages.txt | sed 's|^|github.com/olivaresai/olivares/|') >/dev/null
+      - name: verify the per-pass process environment
+        run: go test -p=2 -count=1 -timeout=2m ./cmd/olivares/tools/pgmajorsenvtest
       - name: run the packages against each of the four majors
         id: passes
+        shell: bash
         timeout-minutes: 100
         run: |
-          # NO set -e and NO || true: every pass runs to completion,
-          # its exit status is recorded, and the evaluation step decides. An
-          # abort-on-first-red would report "pg-majors failed" having measured
-          # 1 of 4; a swallow-all would go green reading only the last exit.
-          set -uo pipefail
+          # Record every test result without disabling fail-fast for setup or ledger writes.
+          set -euo pipefail
           pkgs=$(grep -v '^#' ci/pg-majors-packages.txt | sed 's|^|github.com/olivaresai/olivares/|')
           : > pg-majors-exits.txt
           # The matrix tests (guardmajormatrix_pg_test.go) walk ALL FOUR majors
@@ -242,21 +242,23 @@ jobs:
           for m in 15 16 17 18; do
             port=$(eval "echo \${PGPORT_$m}")
             echo "== pass pg$m (host port $port) =="
-            env \
+            # This job provisions PostgreSQL, so an unreachable server must fail the pass.
+            # Keep the DSNs and strict flags on the same env invocation as go test.
+            # shellcheck disable=SC2086 # $pkgs is the newline-separated package list for go test.
+            if env \
               OLIVARES_TEST_POSTGRES_DSN="postgres://olivares_app:apppw@127.0.0.1:${port}/olivares?sslmode=disable" \
               OLIVARES_TEST_POSTGRES_ADMIN_DSN="postgres://olivares_admin:adminpw@127.0.0.1:${port}/olivares?sslmode=disable" \
               OLIVARES_TEST_POSTGRES_SUPERUSER_DSN="postgres://postgres:postgres@127.0.0.1:${port}/postgres?sslmode=disable" \
               OLIVARES_TEST_VECTOR_DSN="postgres://olivares_app:apppw@127.0.0.1:${port}/olivares?sslmode=disable" \
-              # Este job PROVISIONA el servidor, así que aquí un Postgres inalcanzable es un job
-              # roto, no una ausencia que saltar. `pgtest.Available` sólo lo sabe si el RUN lo
-              # declara (core/internal/pgtest/pgtest.go:88-96); sin esto la sonda contesta `false`
-              # y la pata entera desaparece EN SILENCIO — justo el fallo que la sonda vino a cerrar.
-              # shellcheck disable=SC2086 # $pkgs is the newline-separated package list for go test.
               OLIVARES_TEST_POSTGRES_REQUIRED=1 \
               OLIVARES_TEST_PG_EXPECT_MAJOR="$m" \
               OLIVARES_TEST_POSTGRES_MAJOR_DSNS="$MAJOR_DSNS" \
-              go test -json -count=1 -timeout 45m $pkgs > "gotest-$m.json" 2>&1
-            echo "$m $?" >> pg-majors-exits.txt
+              go test -json -count=1 -timeout 45m $pkgs > "gotest-$m.json" 2>&1; then
+              pass_rc=0
+            else
+              pass_rc=$?
+            fi
+            echo "$m $pass_rc" >> pg-majors-exits.txt
           done
           cat pg-majors-exits.txt
       - name: self-test the evaluator, then evaluate — receipts, floors, zero skips

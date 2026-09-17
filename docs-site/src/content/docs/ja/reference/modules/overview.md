@@ -132,6 +132,20 @@ opt-in かつ loopback デフォルト。live-ingest は env ゲート。posture
 すべてがそこで構築され、`rt.AddModule` を介して登録されている（2026-08-01、
 main @ f632f03f で検証）。
 
+## エディションの可用性継ぎ目（30 モジュールには数えられない）
+
+上のカタログは、合成ルートが製品モジュールとして構築する **30 個のモジュール**
+である。それとは別に、Community は `session-cockpit` API 名前空間の下に可用性
+ディスクリプタを登録する。それら 30 のひとつではない。
+
+- [セッションコックピット（可用性）](/ja/reference/modules/session-cockpit/) —
+  Community ではハンドラなし。`/v1/m/session-cockpit` は**欠如による 404** を
+  返す。この成果物に対話型コックピットはない。ライブセッション、AgentOps、
+  公式 CLI ライフサイクルはオープン製品に残る ——
+  [ライブ運用とセッション](/ja/reference/modules/ii-sessions/) および
+  [Olivares で Claude Code を実行する](/ja/how-to/run-claude-code-with-olivares/)
+  を参照。
+
 ## プラットフォームとコアのケイパビリティ（30 モジュールには数えられない）
 
 これらは実在し、出荷済みのケイパビリティであるが、**エンジン／コア／Web のケイパビリティ**

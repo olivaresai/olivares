@@ -218,32 +218,52 @@ func costFromPB(o *pb.CostSample) model.CostSample {
 
 func findingToPB(o model.FindingReport) *pb.FindingReport {
 	return &pb.FindingReport{
-		Kind:        o.Kind,
-		Severity:    string(o.Severity),
-		SubjectKind: o.SubjectKind,
-		SubjectRef:  o.SubjectRef,
-		Title:       o.Title,
-		DetailHash:  o.DetailHash,
-		OccurredAt:  tsToPB(o.OccurredAt),
-		OwaspLlm:    o.OWASPLLM,
-		OwaspAsi:    o.OWASPASI,
-		Atlas:       o.ATLAS,
+		Kind:           o.Kind,
+		Severity:       string(o.Severity),
+		SubjectKind:    o.SubjectKind,
+		SubjectRef:     o.SubjectRef,
+		Title:          o.Title,
+		DetailHash:     o.DetailHash,
+		OccurredAt:     tsToPB(o.OccurredAt),
+		OwaspLlm:       o.OWASPLLM,
+		OwaspAsi:       o.OWASPASI,
+		Atlas:          o.ATLAS,
+		BudgetEvidence: budgetEvidenceToPB(o.BudgetEvidence),
 	}
 }
 
 func findingFromPB(o *pb.FindingReport) model.FindingReport {
 	return model.FindingReport{
-		Kind:        o.GetKind(),
-		Severity:    model.Severity(o.GetSeverity()),
-		SubjectKind: o.GetSubjectKind(),
-		SubjectRef:  o.GetSubjectRef(),
-		Title:       o.GetTitle(),
-		DetailHash:  o.GetDetailHash(),
-		OccurredAt:  tsFromPB(o.GetOccurredAt()),
-		OWASPLLM:    stringsFromPB(o.GetOwaspLlm()),
-		OWASPASI:    stringsFromPB(o.GetOwaspAsi()),
-		ATLAS:       stringsFromPB(o.GetAtlas()),
+		Kind:           o.GetKind(),
+		Severity:       model.Severity(o.GetSeverity()),
+		SubjectKind:    o.GetSubjectKind(),
+		SubjectRef:     o.GetSubjectRef(),
+		Title:          o.GetTitle(),
+		DetailHash:     o.GetDetailHash(),
+		OccurredAt:     tsFromPB(o.GetOccurredAt()),
+		OWASPLLM:       stringsFromPB(o.GetOwaspLlm()),
+		OWASPASI:       stringsFromPB(o.GetOwaspAsi()),
+		ATLAS:          stringsFromPB(o.GetAtlas()),
+		BudgetEvidence: budgetEvidenceFromPB(o.GetBudgetEvidence()),
 	}
+}
+
+// Conversion is lossless for present invalid/future summaries. Validation is a
+// separate consumer decision; turning a refusal into nil would enable legacy.
+func budgetEvidenceToPB(b *model.BudgetAlertEvidenceSummary) *pb.BudgetAlertEvidenceSummary {
+	if b == nil {
+		return nil
+	}
+	return &pb.BudgetAlertEvidenceSummary{SchemaVersion: b.SchemaVersion, AlertId: b.AlertID,
+		AmountClass: b.AmountClass, Crossing: b.Crossing, Causes: append([]string(nil), b.Causes...), DigestVersion: b.DigestVersion}
+}
+
+func budgetEvidenceFromPB(b *pb.BudgetAlertEvidenceSummary) *model.BudgetAlertEvidenceSummary {
+	if b == nil {
+		return nil
+	}
+	return &model.BudgetAlertEvidenceSummary{SchemaVersion: b.GetSchemaVersion(), AlertID: b.GetAlertId(),
+		AmountClass: b.GetAmountClass(), Crossing: b.GetCrossing(), Causes: append([]string(nil), b.GetCauses()...), DigestVersion: b.GetDigestVersion()}
 }
 
 func metricToPB(o model.MetricSample) *pb.MetricSample {

@@ -61,7 +61,16 @@ CHANGED="$(git diff --name-only "$BASE"...HEAD 2>/dev/null || true)"
 #    `**Carril:**` y era CIEGA a `Carril:` sin negritas, asi que dio por «no declaradas» cuatro
 #    fichas que SI lo declaraban — y estuve a punto de estamparles mi carril encima. Un gate que
 #    solo acepta una forma fabrica ese error en cada carril que lo lea.
-NUEVAS="$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- 'sessions/S*.md' 2>/dev/null || true)"
+#
+# Two pathspecs. In a git pathspec `*` matches across `/`, so `an internal design note (not shipped)*.md`
+# matches  and `an internal design note (not shipped)`. It misses
+# `an internal design note (not shipped)` because the character after `/` must be `S`, and
+# `status` starts with lowercase `s`. `sessions/**/S*.md` requires at least one
+# intermediate directory of any name, so it matches `Status/S1.md`,
+# `status/S2.md`, and deeper paths such as `status/deep/S3.md`. The globs overlap
+# when a subdirectory starts with `S`; replacing one with the other drops either
+# top-level or lowercase-nested records. Both stay.
+NUEVAS="$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- 'sessions/S*.md' 'sessions/**/S*.md' 2>/dev/null || true)"
 sin_carril=""
 while IFS= read -r f; do
 	[ -n "$f" ] || continue

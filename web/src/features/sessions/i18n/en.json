@@ -24,7 +24,8 @@
     "duration": "Duration",
     "lastSeen": "Last seen",
     "provenance": "Origin",
-    "control": "Control"
+    "control": "Control",
+    "instance": "Instance"
   },
   "state": {
     "active": "Active",
@@ -93,7 +94,8 @@
   "allSources": "All sources",
   "tabs": {
     "sessions": "Sessions",
-    "workspaces": "Workspaces"
+    "workspaces": "Workspaces",
+    "profiles": "Provider profiles"
   },
   "partial": {
     "noLiveRead": "Observed sessions are not shown: your role does not include sessions:live:read. The launched ones below are the part that could be read, not the whole picture.",
@@ -173,7 +175,31 @@
     "noObservationYet": "Nothing observed for this session yet — no telemetry has reached the plane under this reference.",
     "actionFailed": "The action could not be completed.",
     "activeRun": "acting on",
-    "pickRun": "Several runs drive this session. Pick one to attach, govern or stop it."
+    "pickRun": "Several runs drive this session. Pick one to attach, govern or stop it.",
+    "attributionTitle": "Attribution",
+    "attribution": {
+      "legacy": "Legacy",
+      "observed": "Observed via source",
+      "source": "Known source",
+      "managed": "Managed by Olivares"
+    },
+    "attributionExplain": {
+      "legacy": "Folded from a channel with no registered source: a legacy connector, a pushed collector observation or an old event. It is never assigned a provider instance after the fact.",
+      "observed": "Arrived through a source dedicated to this provider profile. That says which configured source delivered it — not that the id inside belongs to a process Olivares launched.",
+      "source": "Arrived through a registered source that is not dedicated to any profile: the channel is known, the provider instance is not.",
+      "managed": "Written by Olivares' own bridge for a session it launched: the only row that carries a proven canonical session and run."
+    },
+    "liveRef": "Row reference",
+    "profile": "Provider profile",
+    "provider": "Provider",
+    "environment": "Execution environment",
+    "binding": "Source binding",
+    "canonicalSid": "Canonical session",
+    "related": {
+      "title": "Also observed through bound sources",
+      "explain": "These rows share this run's profile and provider session id but arrived through a source, not through the process Olivares holds. They are shown beside the run, never merged into it.",
+      "open": "Open"
+    }
   },
   "facet": {
     "observed": "Observed: {{state}}",

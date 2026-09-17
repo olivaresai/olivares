@@ -19,18 +19,25 @@ hub) under `src/content/docs/`.
 ```bash
 npm install
 npm run dev      # local preview (also runs the ADR sync first)
-npm run build    # static site -> dist/  (ADR sync + astro build + Pagefind)
-npm test         # spec-lint + build + anti-drift + link-check
+npm run build    # static site -> dist/  (astro build + Pagefind, then the post-build steps)
+npm test         # spec-lint + build + anti-drift + link-check + response policy
 ```
+
+`npm run build` is four steps, and the order is load-bearing: `astro build`, then
+`apply-font-display`, then `seal-csp`, then `check-response-policy`. The two middle steps
+both rewrite `dist/`, and the policy is sealed **after** the font rewrite because that
+rewrite edits the very inline `<style>` blocks the policy hashes. See
+[Browser response policy](#browser-response-policy).
 
 `npm test` runs:
 
 - `spec:openapi` — validates the product's OpenAPI 3.1 contract (`@readme/openapi-parser`).
 - `spec:asyncapi` — validates the AsyncAPI 3.0 event-bus spec (`@asyncapi/parser`).
-- `build` — ADR sync, then `astro build` (Pagefind search index + sitemap).
+- `build` — `astro build` (Pagefind search index + sitemap) plus the three post-build steps.
 - `test:drift` — proves the API reference renders from the real spec (no copy).
 - `test:modules` — proves every module dir has a linked reference page (no catalog orphans).
 - `test:links` — fails on any broken internal link across the built site.
+- `test:policy:selftest` / `test:policy` — proves the response-policy gate can fail, then runs it.
 
 ## Release build (publishing is separate and owner-gated)
 
@@ -76,14 +83,49 @@ question against the running site.
   enforced in CI by `../scripts/check-docs-parity.mjs` (strict — a missing page
   fails the build); untranslated pages fall back to English automatically.
 
+## Browser response policy
+
+What a browser is told when it loads this site lives in two places, because neither can
+carry the other:
+
+| | |
+|---|---|
+| [`public/_headers`](./public/_headers) | Real response headers, applied by the static-assets Worker that serves `dist/`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a CSP carrying **only** `frame-ancestors 'none'` — the one directive browsers ignore in a `<meta>`. It also keeps the pre-existing RFC 9116 content type for `/.well-known/security.txt`, and that rule is deliberately **first**: the runtime sets a header from the first matching rule and appends later ones. |
+| [`astro.config.mjs`](./astro.config.mjs) `security.csp` | The rest of the policy, as a per-page `<meta>`: `default-src 'none'` with every resource type this site actually uses named explicitly, and SHA-256 hashes for each page's inline scripts and styles. It cannot move into `_headers`: Astro emits the meta mid-`<head>` (a meta policy does not govern what the parser already read) and `apply-font-display` rewrites the inline `<style>` blocks after Astro hashed them, so the shipped style hashes are per-page. The JSON-LD block is a data block (`type="application/ld+json"`), not a script; it is not why the hash set is per-page. |
+
+`script-src` carries no `'unsafe-inline'` and no `'unsafe-eval'`, on any page.
+`style-src-attr 'unsafe-inline'` **is** granted, and it is a measured concession rather than
+a default: Expressive Code/Shiki colour code tokens with inline `style` attributes, ~200 per
+page, and hashing a style *attribute* additionally requires `'unsafe-hashes'`. It is scoped to
+the attribute directive; `style-src` for elements stays hash-only.
+
+Astro's native CSP generates the meta, and two post-build steps make it true of the bytes
+that ship:
+
+- [`scripts/seal-csp.mjs`](./scripts/seal-csp.mjs) recomputes both hash sets from the final
+  files and moves the meta to the front of `<head>`. Astro emits it mid-head — after
+  Starlight's custom `Head` — where it governs nothing that came before it. The sealer never
+  *creates* a policy: if Astro did not emit one, it fails.
+- [`scripts/check-response-policy.mjs`](./scripts/check-response-policy.mjs) is the gate. It
+  re-derives everything itself and fails on a missing policy, an uncovered or edited inline
+  script, a policy that arrives too late, a widened `script-src`, a duplicated CSP directive,
+  a later `_headers` rule that sets or unsets a required name, or a missing/altered
+  `dist/_headers`. `npm run test:policy:selftest` proves it can fail, against fixtures that
+  each break exactly one rule.
+
+Building and testing this tree never deploys anything: these files describe what the Worker
+**would** serve, verified locally with `wrangler dev`. Only a deploy makes it true of
+`docs.olivares.ai`.
+
 ## Versioning
 
 Versioning is provided by the [`starlight-versions`](https://starlight-versions.vercel.app/)
 plugin and is **active**. The only archived version is honestly labelled as a
 **dated docs snapshot**, not a product release: slug `2026-06`, label
-**"2026-06 (pre-1.0 preview)"**. The planned first public release is `v26.8.0`,
-but until that release is cut the current tree remains **Latest** rather than a
-fabricated release archive.
+**"2026-06 (pre-1.0 preview)"**. The first public CalVer cut was `v26.8.0`.
+The current canon is `v26.9.0` (`RELEASE-VERSION`). The docs tree remains
+**Latest** until a maintainer cuts a dated snapshot; do not fabricate a
+release archive.
 
 How it works here:
 
@@ -120,7 +162,7 @@ What is true today, measured:
 | Worker | `olivares-docs`, a static-assets Worker; config in [`wrangler.jsonc`](./wrangler.jsonc) |
 | Live at | `https://docs.olivares.ai` — a **zone route** onto that Worker. The hostname's DNS is still carried by a custom domain on the marketing Worker; `wrangler.jsonc` documents the pending migration and why its order matters |
 | Build artifact | `.github/workflows/docs-site-artifact.yml` — dispatch-only, uploads `dist/`, **deploys nothing** |
-| Deploy | `.github/workflows/docs-site-deploy.yml` — dispatch-only, requires typing `PUBLISH`, and **refuses with a named secret** if `CLOUDFLARE_API_TOKEN` is absent (it is, in this repository, today) |
+| Deploy | `.github/workflows/docs-site-deploy.yml` — dispatch-only, requires typing `PUBLISH`, selects its target from a fixed `github.repository_id` table (`docs.olivares.ai` from the development hub and the public repository, `docs-preprod.olivaresai.dev` via `wrangler.preprod.jsonc` from the preprod repository; any other repository refuses), and **refuses with a named secret** if `CLOUDFLARE_API_TOKEN` is absent (it is, in this repository, today) |
 | Staleness | `bash ../scripts/check-docs-site-live.sh` — compares the live site against what this tree promises. `0` up to date · `1` stale or broken · `2` could not look |
 
 Publishing is still owner-gated and still deliberate: there is no push trigger, and the

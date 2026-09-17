@@ -35,11 +35,25 @@
     "costCaption": "en el rango seleccionado",
     "usage": "Agentes activos",
     "usageCaption": "{{live}} en vivo · {{entities}} rastreados",
+    "sourceRestricted": "{{source}} — restringido para tu rol",
+    "sourceUnavailable": "{{source}} — no se pudo cargar",
+    "sourcePendingPaused": "{{source}} — consulta en pausa, esperando para reanudar",
+    "sourcePendingIdle": "{{source}} — consulta no iniciada",
+    "partialWhy": "¿Por qué datos parciales?",
     "risk": "Riesgo abierto",
     "riskCaption": "{{count}} críticos/altos",
     "silentEvasion": "{{count}} en evasión silenciosa",
     "compliance": "Cobertura de controles",
     "complianceCaption": "{{gap}} brechas · {{unmapped}} sin mapear"
+  },
+  "availability": {
+    "restricted": "{{source}}: restringido para tu rol.",
+    "unavailable": "{{source}}: no se pudo cargar.",
+    "pendingPaused": "{{source}}: consulta en pausa, esperando para reanudar.",
+    "pendingIdle": "{{source}}: consulta no iniciada.",
+    "loading": "{{source}}: cargando.",
+    "partial": "{{source}}: cifras disponibles, datos parciales.",
+    "current": "{{source}}: cifras disponibles."
   },
   "cost": {
     "title": "Coste",

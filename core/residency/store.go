@@ -36,7 +36,16 @@ func Guard(inner store.Store, reg *Registry, log *slog.Logger) store.Store {
 	// (reproduced against a built binary). The decorator must expose the
 	// capability when — and only when — the wrapped store really has it, so the
 	// composition root's own deny-closed check stays triggerable.
-	if _, ok := inner.(store.RolloutStater); ok {
+	_, hasRollout := inner.(store.RolloutStater)
+	_, hasSelective := inner.(store.SelectiveMutator)
+	switch {
+	case hasRollout && hasSelective:
+		return &guardStoreWithRolloutSelective{
+			guardStoreWithSelective: &guardStoreWithSelective{guardStore: g},
+		}
+	case hasSelective:
+		return &guardStoreWithSelective{guardStore: g}
+	case hasRollout:
 		return &guardStoreWithRollout{guardStore: g}
 	}
 	return g
@@ -131,19 +140,30 @@ func (g *guardStore) passThrough(tenant model.TenantID) bool {
 // ErrNotFound and is denied closed — never run as if it had no data.
 func (g *guardStore) wrap(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) func(store.Scope) error {
 	return func(sc store.Scope) error {
-		org, err := sc.Org(ctx)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return g.deny(tenant, "", fmt.Sprintf("tenant %s is not resident in region %q", tenant, g.reg.home))
-			}
+		if err := g.check(ctx, tenant, sc); err != nil {
 			return err
-		}
-		if !g.reg.Serves(org.DataRegion) {
-			return g.deny(tenant, org.DataRegion,
-				fmt.Sprintf("tenant %s is pinned to region %q, not served by region %q", tenant, org.DataRegion, g.reg.home))
 		}
 		return fn(sc)
 	}
+}
+
+type tenantOrgReader interface {
+	Org(context.Context) (model.Org, error)
+}
+
+func (g *guardStore) check(ctx context.Context, tenant model.TenantID, sc tenantOrgReader) error {
+	org, err := sc.Org(ctx)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return g.deny(tenant, "", fmt.Sprintf("tenant %s is not resident in region %q", tenant, g.reg.home))
+		}
+		return err
+	}
+	if !g.reg.Serves(org.DataRegion) {
+		return g.deny(tenant, org.DataRegion,
+			fmt.Sprintf("tenant %s is pinned to region %q, not served by region %q", tenant, org.DataRegion, g.reg.home))
+	}
+	return nil
 }
 
 // deny logs the cross-region attempt (a security-relevant event) and returns the
@@ -218,6 +238,66 @@ func (g *guardStoreWithRollout) RolloutHistory(ctx context.Context, key string) 
 }
 
 func (g *guardStoreWithRollout) SetRolloutMode(ctx context.Context, t store.RolloutTransition) (store.RolloutState, error) {
+	return g.inner.(store.RolloutStater).SetRolloutMode(ctx, t)
+}
+
+// guardStoreWithSelective preserves the optional narrow mutation capability and
+// applies residency inside the same L0-held transaction. Planned coordination
+// keys have already been acquired by the inner store; no user callback or
+// repository effect has run yet.
+type guardStoreWithSelective struct {
+	*guardStore
+}
+
+func (g *guardStoreWithSelective) MutateCoordination(
+	ctx context.Context,
+	tenant model.TenantID,
+	plan store.TransactionLockPlan,
+	fn func(store.CoordinationMutationScope) error,
+) error {
+	selective := g.inner.(store.SelectiveMutator)
+	if g.passThrough(tenant) {
+		return selective.MutateCoordination(ctx, tenant, plan, fn)
+	}
+	return selective.MutateCoordination(ctx, tenant, plan, func(sc store.CoordinationMutationScope) error {
+		if err := g.check(ctx, tenant, sc); err != nil {
+			return err
+		}
+		return fn(sc)
+	})
+}
+
+func (g *guardStoreWithSelective) MutateEvidenceOperation(
+	ctx context.Context,
+	tenant model.TenantID,
+	plan store.EvidenceOperationPlan,
+	fn func(store.EvidenceOperationMutationScope) error,
+) error {
+	selective := g.inner.(store.SelectiveMutator)
+	if g.passThrough(tenant) {
+		return selective.MutateEvidenceOperation(ctx, tenant, plan, fn)
+	}
+	return selective.MutateEvidenceOperation(ctx, tenant, plan, func(sc store.EvidenceOperationMutationScope) error {
+		if err := g.check(ctx, tenant, sc); err != nil {
+			return err
+		}
+		return fn(sc)
+	})
+}
+
+type guardStoreWithRolloutSelective struct {
+	*guardStoreWithSelective
+}
+
+func (g *guardStoreWithRolloutSelective) RolloutState(ctx context.Context, key string) (store.RolloutState, error) {
+	return g.inner.(store.RolloutStater).RolloutState(ctx, key)
+}
+
+func (g *guardStoreWithRolloutSelective) RolloutHistory(ctx context.Context, key string) ([]store.RolloutTransitionRecord, error) {
+	return g.inner.(store.RolloutStater).RolloutHistory(ctx, key)
+}
+
+func (g *guardStoreWithRolloutSelective) SetRolloutMode(ctx context.Context, t store.RolloutTransition) (store.RolloutState, error) {
 	return g.inner.(store.RolloutStater).SetRolloutMode(ctx, t)
 }
 

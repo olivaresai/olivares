@@ -29,6 +29,20 @@ An edge observation carries only identifiers and a read/write classification —
 
 A connector imports the connector SDK and nothing else from the product. It never imports `/core` (the AGPL engine). That boundary is enforced in CI, and it is what lets connectors ship under Apache-2.0 and lets third parties build their own without copyleft friction. The same connector binary runs in-process or out-of-process over gRPC identically. See [Open core and licensing](/explanation/open-core-and-licensing/) for the full boundary.
 
+Several sources of the **same** connector kind can be registered and run at
+once (`CHANGELOG.md` `[26.9.0]` Fixed). The runtime used to key every source
+by the connector's Descriptor name, so a second roster row of a kind was
+persisted and listed — and refused by the engine. Sources are now registered
+under the operator's own name (the roster row's `name`), with the connector
+descriptor kept beside it. `grok-home-a` and `grok-home-b` open with their
+own configuration and credential references, run their own connector instance
+and process, and rotate, fail and stop independently. `sources plan` /
+`validate` no longer announce the one-instance-per-connector restriction the
+engine has stopped applying. Two identity entries served by one connector
+(`okta` and `entra` share `idp`) with `as_source: true` now wire both. This
+does not by itself separate two provider sessions or config homes end to end
+— that is [Operate a provider session](/how-to/operate-provider-sessions/).
+
 ## Provenance and confidence: why the source matters
 
 Every edge records **which source produced it** and a **confidence** level, and the product shows both rather than collapsing them. A `pg_audit` READ and an `mcp_annotation` hint are not the same evidence and are never treated as the same.

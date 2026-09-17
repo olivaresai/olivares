@@ -1,0 +1,186 @@
+{
+  "schema": "olivares.ai/tool-install/plan/v2",
+  "selection": {
+    "driver": "codex",
+    "channel": "exact",
+    "requested_version": "0.153.4",
+    "version": "0.153.4",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+      "libc": "musl"
+    },
+    "vendor_platform": "x86_64-unknown-linux-musl",
+    "source": {
+      "kind": "official",
+      "pointer": {
+        "state": "present",
+        "url": "https://example.invalid/channels/0.153.4"
+      },
+      "checksums": {
+        "state": "present",
+        "url": "https://example.invalid/codex-package_SHA256SUMS"
+      },
+      "package": {
+        "state": "present",
+        "url": "https://example.invalid/codex-package-x86_64-unknown-linux-musl.tar.gz"
+      },
+      "proofs": [
+        {
+          "role": "bwrap",
+          "url": "https://example.invalid/bwrap.sigstore"
+        },
+        {
+          "role": "codex",
+          "url": "https://example.invalid/codex.sigstore"
+        },
+        {
+          "role": "codex-code-mode-host",
+          "url": "https://example.invalid/codex-code-mode-host.sigstore"
+        }
+      ],
+      "allowed_origins": [
+        "https://example.invalid"
+      ],
+      "redirects": {
+        "max_hops": 0,
+        "allowed_origins": []
+      }
+    },
+    "fetched_object": {
+      "digest_state": "exact",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "size_state": "exact",
+      "size": 1024,
+      "max_size": 4096
+    },
+    "layout": {
+      "id": "codex-package-layout-v1",
+      "variant": "codex",
+      "entry_point": "bin/codex",
+      "resources_dir": "codex-resources",
+      "path_dir": "codex-path",
+      "members": [
+        {
+          "path": "bin",
+          "kind": "directory",
+          "role": "archive-only",
+          "final_mode": 493
+        },
+        {
+          "path": "bin/codex",
+          "kind": "regular",
+          "role": "signed-subject",
+          "final_mode": 493
+        },
+        {
+          "path": "bin/codex-code-mode-host",
+          "kind": "regular",
+          "role": "signed-subject",
+          "final_mode": 493
+        },
+        {
+          "path": "codex-package.json",
+          "kind": "regular",
+          "role": "metadata",
+          "final_mode": 420
+        },
+        {
+          "path": "codex-path",
+          "kind": "directory",
+          "role": "archive-only",
+          "final_mode": 493
+        },
+        {
+          "path": "codex-path/rg",
+          "kind": "regular",
+          "role": "archive-only",
+          "final_mode": 493
+        },
+        {
+          "path": "codex-resources",
+          "kind": "directory",
+          "role": "archive-only",
+          "final_mode": 493
+        },
+        {
+          "path": "codex-resources/bwrap",
+          "kind": "regular",
+          "role": "signed-subject",
+          "final_mode": 493
+        },
+        {
+          "path": "codex-resources/zsh",
+          "kind": "directory",
+          "role": "archive-only",
+          "final_mode": 493
+        },
+        {
+          "path": "codex-resources/zsh/bin",
+          "kind": "directory",
+          "role": "archive-only",
+          "final_mode": 493
+        },
+        {
+          "path": "codex-resources/zsh/bin/zsh",
+          "kind": "regular",
+          "role": "archive-only",
+          "final_mode": 493
+        }
+      ],
+      "limits": {
+        "max_compressed_bytes": 4096,
+        "max_expanded_bytes": 8192,
+        "max_members": 11,
+        "max_member_bytes": 4096
+      }
+    },
+    "required_subjects": [
+      {
+        "path": "bin/codex",
+        "expected_sha256": "2121212121212121212121212121212121212121212121212121212121212121",
+        "identity": "https://example.invalid/identity/codex",
+        "issuer": "https://example.invalid/issuer",
+        "proof_role": "codex"
+      },
+      {
+        "path": "bin/codex-code-mode-host",
+        "expected_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "identity": "https://example.invalid/identity/codex",
+        "issuer": "https://example.invalid/issuer",
+        "proof_role": "codex-code-mode-host"
+      },
+      {
+        "path": "codex-resources/bwrap",
+        "expected_sha256": "2323232323232323232323232323232323232323232323232323232323232323",
+        "identity": "https://example.invalid/identity/codex",
+        "issuer": "https://example.invalid/issuer",
+        "proof_role": "bwrap"
+      }
+    ],
+    "package_policy_id": "codex-mixed-v1",
+    "verification": {
+      "kind": "sigstore-cosign",
+      "cosign": {
+        "id": "cosign",
+        "version": "v3.1.3",
+        "executable_sha256": "3131313131313131313131313131313131313131313131313131313131313131",
+        "trusted_root_iteration": 10,
+        "trusted_root_sha256": "3232323232323232323232323232323232323232323232323232323232323232",
+        "mode": "offline",
+        "refresh_policy": "none",
+        "egress_policy": "none",
+        "bundle_format": "cosign-legacy-simple-signing",
+        "require_signature": true,
+        "require_rekor": true,
+        "require_sct": true
+      }
+    },
+    "destination": {
+      "root": "/tmp/root",
+      "release_dir": "/tmp/root/codex/0.153.4-x86_64-unknown-linux-musl",
+      "executable": "/tmp/root/codex/0.153.4-x86_64-unknown-linux-musl/bin/codex"
+    }
+  },
+  "digest": "5dc138b852e257aa59ddd4880434b7e981576ae4b144772e33788f96e1b525e3"
+}

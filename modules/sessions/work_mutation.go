@@ -409,17 +409,20 @@ func (m *Module) applyAcceptanceCommand(ctx context.Context, sc store.Scope, pri
 	input := cmd.Acceptance[0]
 	var criterion model.Record
 	if cmd.Command == "acceptance.add" {
-		rows, err := listAll(ctx, repo,
+		rows, listErr := listAll(ctx, repo,
 			model.Filter{Column: colWorkItemID, Op: model.OpEq, Value: item.String(model.ColID)},
 			model.Filter{Column: colAccKey, Op: model.OpEq, Value: input.Key},
 		)
-		if err != nil {
-			return nil, "", err
+		if listErr != nil {
+			return nil, "", listErr
 		}
 		if len(rows) != 0 {
 			return nil, "", broken(http.StatusConflict, "acceptance_duplicate")
 		}
 		criterion, err = repo.Create(ctx, acceptanceRecord(model.ID(item.String(colWorkWorkspaceID)), recordID(item), input))
+		if err != nil {
+			return nil, "", err
+		}
 		item[colWorkAcceptanceRevision] = item.Int(colWorkAcceptanceRevision) + 1
 	} else if cmd.Command == "acceptance.update" {
 		criterion, err = repo.Get(ctx, cmd.CriterionID)

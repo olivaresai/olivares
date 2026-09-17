@@ -11,6 +11,7 @@ import { http } from '@/lib/api'
 import {
   ensureFreshSession,
   notifyUnauthorized,
+  type RequestOptions,
   type TenantListOptions,
   type TenantRequestOptions,
 } from '@/lib/api/client'
@@ -326,6 +327,20 @@ export interface SourceRosterEntry {
   config?: Record<string, string>
   status: string
   source_mode?: SourceMode
+  /** The row's PERSISTENT id (B1): survives a rename, differs after delete-and-
+   * recreate. What a source→profile binding names as `source_id` — never `name`.
+   * Optional so an older engine reads as "no id", not as a lie. */
+  id?: string
+  /** The revision of this row THIS node's reconciler successfully applied — the exact
+   * `source_revision` a binding on this environment must name. Absent/zero when the
+   * node has not applied the row: nothing here can be bound to it, and the console
+   * must not guess a revision from the stored definition instead. */
+  applied_revision?: number
+  /** The Descriptor name of the connector currently serving this source — its TYPE
+   * identity, reported BESIDE `name`, never in place of it. Two sources of one kind
+   * share a `component` and differ in `name`. Absent until the source is wired (an
+   * out-of-process plugin self-describes only once launched). Read-only. */
+  component?: string
 }
 
 /** Create/update/test payload. Non-secret settings in `config`; secret-declared
@@ -1264,10 +1279,25 @@ export const consoleApi = {
   // descriptor-driven form; putConnector seals inline credentials + applies live.
   listConnectors: () =>
     http.get<{ connectors: ConnectorInfo[] }>('/v1/console/connectors'),
-  listSources: () =>
-    http.get<{ sources: SourceRosterEntry[] }>('/v1/console/sources'),
-  putConnector: (input: ConnectorOnboardInput) =>
-    http.put<SourceApplyResult>('/v1/console/connectors', input),
+  // The signal exists for the session plane's bind dialog, which reads the roster
+  // in an explicit cycle it can abort when the operator's authority changes.
+  listSources: (opts?: { signal?: AbortSignal }) =>
+    http.get<{ sources: SourceRosterEntry[] }>('/v1/console/sources', {
+      signal: opts?.signal,
+    }),
+  putConnector: (
+    input: ConnectorOnboardInput,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard' | 'sessionEffects'>,
+  ) =>
+    http.put<SourceApplyResult>(
+      '/v1/console/connectors',
+      input,
+      opts && {
+        signal: opts.signal,
+        dispatchGuard: opts.dispatchGuard,
+        sessionEffects: opts.sessionEffects,
+      },
+    ),
   testConnector: (input: ConnectorOnboardInput) =>
     http.post<{ ok: boolean }>('/v1/console/connectors/test', input),
   deleteConnector: (name: string) =>

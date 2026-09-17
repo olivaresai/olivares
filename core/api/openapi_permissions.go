@@ -18,6 +18,15 @@ package api
 // from tenant admins, which loses nothing of substance):
 //   - logout / refreshToken / whoami — any authenticated principal
 //     (handlers_auth.go); pure session plumbing.
+//   - authCapabilities — the SELF capability projection (handlers_capabilities.go).
+//     It gates on no permission BY DESIGN and not by omission: it has no subject
+//     input at all, so there is nothing for a permission to protect against, and
+//     requiring one would make the console unable to ask about the operator in
+//     front of it unless that operator already held a privileged read. Each
+//     question inside is decided by the FULL authorization of the operation it
+//     names, which is a different check per question and could not be one value
+//     here. The privileged, subject-resolving surface remains AuthZEN with its
+//     authz:read.
 //   - searchConsole — authorized per result kind inside the handler
 //     (search.go), not at the route.
 //
@@ -108,10 +117,11 @@ var corePermissions = map[string]string{
 // enforces that every secured operation is in exactly one of the two sets, so
 // a new core route cannot land unannotated by accident.
 var corePermissionExempt = map[string]bool{
-	"logout":        true,
-	"refreshToken":  true,
-	"whoami":        true,
-	"searchConsole": true,
+	"logout":           true,
+	"refreshToken":     true,
+	"whoami":           true,
+	"searchConsole":    true,
+	"authCapabilities": true,
 }
 
 // stampCorePermissions walks the built paths object and stamps

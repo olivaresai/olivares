@@ -58,9 +58,39 @@ var evidenceOpDescriptor = model.EntityDescriptor{
 	// reconcileEvidenceOpStateCheck (Postgres; SQLite cannot ALTER a CHECK and
 	// fails CLOSED — a withheld settlement refuses, the response is withheld
 	// anyway, and the operation stays claimed until the table is rebuilt).
-	Checks: []string{fmt.Sprintf("state IN ('%s','%s','%s','%s','%s','%s')",
+	//
+	// Core v11 widens it once more, to 'refused', through a controlled and
+	// verified transition on both engines (evidence_refused_migration.go).
+	Checks: []string{evidenceOpStateCheckExpr(evidenceOpStateWords7)},
+}
+
+// The three ordered vocabularies this binary's descriptor has emitted. v11
+// generates its only supported historical inputs from them: five words before
+// stage-7 'withheld', six words through core v10, and seven words from v11.
+var (
+	evidenceOpStateWords5 = []model.EvidenceOperationState{
 		model.EvidenceOpClaimed, model.EvidenceOpCompleted, model.EvidenceOpNotSent,
-		model.EvidenceOpUnknown, model.EvidenceOpBlocked, model.EvidenceOpWithheld)},
+		model.EvidenceOpUnknown, model.EvidenceOpBlocked,
+	}
+	evidenceOpStateWords6 = []model.EvidenceOperationState{
+		model.EvidenceOpClaimed, model.EvidenceOpCompleted, model.EvidenceOpNotSent,
+		model.EvidenceOpUnknown, model.EvidenceOpBlocked, model.EvidenceOpWithheld,
+	}
+	evidenceOpStateWords7 = []model.EvidenceOperationState{
+		model.EvidenceOpClaimed, model.EvidenceOpCompleted, model.EvidenceOpNotSent,
+		model.EvidenceOpUnknown, model.EvidenceOpBlocked, model.EvidenceOpWithheld,
+		model.EvidenceOpRefused,
+	}
+)
+
+// evidenceOpStateCheckExpr renders the lifecycle CHECK expression for one exact
+// ordered vocabulary, in the historical spelling state IN ('a','b',...).
+func evidenceOpStateCheckExpr(words []model.EvidenceOperationState) string {
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = "'" + string(w) + "'"
+	}
+	return "state IN (" + strings.Join(quoted, ",") + ")"
 }
 
 var evidenceOpCodec = model.Codec[model.EvidenceOperation]{
@@ -102,12 +132,16 @@ var evidenceOpCodec = model.Codec[model.EvidenceOperation]{
 // constraint, and the only enforcement point for the cross-column invariants a
 // portable CHECK does not cover:
 //
-//   - the state must be one of the six known values (a legacy pre-CHECK table
+//   - the state must be one of the seven known values (a legacy pre-CHECK table
 //     decodes through this same codec);
 //   - a 'claimed' row must carry NO outcome evidence ref (its settlement never
 //     happened);
 //   - a terminal row must carry one (a terminal state without its outcome
-//     anchor is a corrupt/forged settlement and must never replay as settled).
+//     anchor is a corrupt/forged settlement and must never replay as settled);
+//   - a 'refused' row must carry no claim, outcome, result or dispatch
+//     reference at all: nothing was claimed or dispatched, so any such value is
+//     a forged anchor. Its blank claim reference is what keeps every generic
+//     consumer deny-closed on a replay (sdk.ClassifyAnchor with no anchor).
 //
 // Violations wrap store.ErrEvidenceIntegrity so callers classify them exactly
 // like any other journal contradiction.
@@ -115,6 +149,11 @@ func validateEvidenceOpRow(op model.EvidenceOperation) error {
 	if !op.State.Valid() {
 		return fmt.Errorf("%w: operation %s row carries unknown state %q",
 			store.ErrEvidenceIntegrity, op.OperationID, op.State)
+	}
+	if op.State == model.EvidenceOpRefused &&
+		(op.ClaimEvidenceRef != "" || op.OutcomeEvidenceRef != "" || op.ResultDigest != "" || op.DispatchRef != "") {
+		return fmt.Errorf("%w: operation %s is refused but carries a claim, outcome, result or dispatch reference",
+			store.ErrEvidenceIntegrity, op.OperationID)
 	}
 	outcomeRef := strings.TrimSpace(op.OutcomeEvidenceRef)
 	if op.State == model.EvidenceOpClaimed && outcomeRef != "" {
@@ -131,12 +170,17 @@ func validateEvidenceOpRow(op model.EvidenceOperation) error {
 // evidenceOpsRepo implements store.EvidenceOperationRepo over the tenant-pinned
 // genericRepo and the scope's shared audit log (one chain head per transaction).
 type evidenceOpsRepo struct {
-	g     *genericRepo
-	audit *auditLog
+	g                  *genericRepo
+	audit              *auditLog
+	claimAfterMissHook func(context.Context, string) error
 }
 
-func newEvidenceOpsRepo(g *genericRepo, audit *auditLog) *evidenceOpsRepo {
-	return &evidenceOpsRepo{g: g, audit: audit}
+func newEvidenceOpsRepo(
+	g *genericRepo,
+	audit *auditLog,
+	claimAfterMissHook func(context.Context, string) error,
+) *evidenceOpsRepo {
+	return &evidenceOpsRepo{g: g, audit: audit, claimAfterMissHook: claimAfterMissHook}
 }
 
 // lookup reads the tenant's journal row for operationID, decoded. Read-side
@@ -215,6 +259,11 @@ func (r *evidenceOpsRepo) Claim(ctx context.Context, c store.EvidenceClaim) (sto
 		}
 		return store.EvidenceClaimResult{Op: prior}, nil // exact replay, Fresh=false
 	}
+	if r.claimAfterMissHook != nil {
+		if err := r.claimAfterMissHook(ctx, c.OperationID); err != nil {
+			return zero, err
+		}
+	}
 
 	ev, err := r.audit.Append(ctx, model.AuditDraft{
 		Actor:      c.Actor,
@@ -287,6 +336,13 @@ func (r *evidenceOpsRepo) Settle(ctx context.Context, s store.EvidenceSettlement
 	}
 	if op.EffectDigest != s.EffectDigest {
 		return zero, fmt.Errorf("%w: settle: operation %s", store.ErrEvidenceRebind, s.OperationID)
+	}
+	// A refused operation was never claimed and can never be settled. It is
+	// rejected here, before the re-settle comparison, so no requested state can
+	// be read as an idempotent replay of it.
+	if op.State == model.EvidenceOpRefused {
+		return zero, fmt.Errorf("%w: settle: operation %s was refused and cannot be settled",
+			store.ErrEvidenceIntegrity, s.OperationID)
 	}
 	if op.State != model.EvidenceOpClaimed {
 		if op.State == s.State && op.ResultDigest == s.ResultDigest && op.DispatchRef == s.DispatchRef {

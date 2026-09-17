@@ -101,8 +101,8 @@
     "envAllow": "Transférer l’env de l’hôte (noms)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Liste d’autorisation des NOMS de variables d’env de l’hôte à transmettre (les valeurs ne sont jamais envoyées).",
-    "submit": "Créer et lancer",
-    "submitting": "Lancement…",
+    "submit": "Demander le lancement",
+    "submitting": "Demande…",
     "criticalWarning": "Il s’agit d’un lancement privilégié (il supprime l’invite par outil). Il requiert une approbation à deux personnes et est enregistré — il peut rester en attente jusqu’à approbation.",
     "classifiedWarning": "Un montage en lecture-écriture d’un espace de travail classifié est un lancement privilégié (approbation + enregistrement).",
     "success": "Session lancée",
@@ -112,7 +112,13 @@
     "templateUnenforceable": "Ce modèle déclare des termes que ce lancement ne peut pas appliquer ; il est donc refusé plutôt que démarré sans eux :",
     "templateOverrides_one": "Le modèle remplace {{count}} de vos choix :",
     "templateOverrides_many": "Le modèle remplace {{count}} de vos choix :",
-    "templateOverrides_other": "Le modèle remplace {{count}} de vos choix :"
+    "templateOverrides_other": "Le modèle remplace {{count}} de vos choix :",
+    "profile": "Profil de fournisseur",
+    "profileNone": "Sélectionner un profil",
+    "profileHint": "Sélectionnez le profil fournisseur de cette session. Un profil est obligatoire. Les exigences locales sont lues pour la sélection actuelle après l’aperçu du modèle.",
+    "profileNotOperable": "non activé dans cet environnement",
+    "profilesNotRead": "Les profils de fournisseur n’ont pas pu être lus ; le lancement reste possible sans profil.",
+    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME et GROK_HOME appartiennent au profil : un lancement qui transmet l’une d’elles est refusé ici. Les autres noms restent soumis à la validation du serveur."
   },
   "detail": {
     "live": "En direct",
@@ -139,11 +145,17 @@
     "started": "Démarrée",
     "lastActivity": "Dernière activité",
     "stopped": "Arrêtée",
-    "none": "Aucun"
+    "none": "Aucun",
+    "providerProfile": "Profil de fournisseur",
+    "providerDriver": "Pilote",
+    "providerEnvironment": "Environnement d’exécution",
+    "liveRef": "Ligne en direct"
   },
   "live": {
     "inputPlaceholder": "Envoyer une ligne NDJSON sur stdin…",
     "inputAria": "Ligne d’entrée de session",
+    "textPlaceholder": "Envoyer un message à la session…",
+    "textAria": "Message de la session",
     "send": "Envoyer",
     "noOutput": "Aucune sortie pour l’instant.",
     "waiting": "En attente de sortie…",
@@ -151,10 +163,20 @@
     "lag": "{{count}} trame(s) perdue(s) (dépassement de tampon) — la sortie ci-dessous reprend après l’interruption.",
     "remoteControl": "Il s’agit d’une session remote-control : ses E/S sont relayées vers le cloud d’Anthropic et ne sont pas reliées ici. Olivares ne gère que le cycle de vie.",
     "notLive": "Cette session n’est pas en direct (elle est {{state}}). Reprenez-la pour vous attacher à ses E/S.",
+    "ioUnavailableNotLiveOnNode": "Aucune E/S pontée sur ce nœud.",
+    "ioUnavailableRemoteControl": "Les E/S de cette session ne sont pas pontées ici (remote-control).",
+    "retryAttach": "Réessayer l’attache",
     "autoscroll": "Défilement automatique",
     "clear": "Effacer la vue",
     "inputNotAllowed": "L’entrée n’est acceptée que lorsque la session est en cours.",
-    "inputSent": "Envoyé"
+    "inputSent": "Envoyé",
+    "interrupt": "Interrompre le tour",
+    "interruptHint": "Annuler le tour actif et garder cette session ouverte.",
+    "interrupted": "Tour interrompu. La session reste ouverte.",
+    "interruptFailed": "Impossible d’interrompre le tour.",
+    "interruptFenceUnavailable": "Actualisez l’exécution pour obtenir sa génération de travail actuelle avant de l’interrompre.",
+    "interruptUnknown": "Le résultat de l’interruption est inconnu. Vérifiez la session avant de réessayer.",
+    "interruptWorkConflict": "L’état de travail actuel de la session ne permet pas cette interruption. Actualisez l’exécution pour vérifier son état."
   },
   "gov": {
     "title": "Posture de gouvernance",
@@ -303,5 +325,387 @@
   "forbidden": {
     "title": "Aucun accès",
     "description": "Vous n’avez pas la permission d’opérer des sessions Claude Code."
+  },
+  "profiles": {
+    "title": "Profils de fournisseur",
+    "subtitle": "L’identité durable d’une instance de fournisseur configurée sur un environnement d’exécution : quel pilote la sert et sous quel répertoire de configuration s’exécute une session lancée. Un profil enregistre des répertoires qui existent déjà — il n’installe rien et ne se connecte à rien.",
+    "register": "Enregistrer un profil",
+    "search": "Rechercher des profils…",
+    "allStates": "Tous les états",
+    "cols": {
+      "name": "Profil",
+      "driver": "Pilote",
+      "environment": "Environnement d’exécution",
+      "state": "État",
+      "launch": "Activé ici",
+      "created": "Créé"
+    },
+    "state": {
+      "active": "Actif",
+      "disabled": "Désactivé",
+      "retired": "Retiré"
+    },
+    "environment": {
+      "local": "ce nœud",
+      "foreign": "autre environnement",
+      "foreignHint": "Ce profil appartient à un autre environnement d’exécution. Il est affiché comme tel et n’est jamais lancé depuis ce nœud."
+    },
+    "operable": {
+      "yes": "Activé dans cet environnement",
+      "no": "Non activé dans cet environnement",
+      "noHint": "Indicateur historique : le profil n’est pas actif, appartient à un autre environnement, ou son driver n’est pas enregistré ici. Ce n’est pas un verdict de lancement."
+    },
+    "empty": {
+      "title": "Aucun profil de fournisseur",
+      "registerHint": "Utilisez « {{control}} » ci-dessus pour enregistrer le répertoire de configuration d’une installation de fournisseur existante sur ce nœud ; les sessions sont ensuite lancées et attribuées sous une identité stable.",
+      "noWrite": "Enregistrer le répertoire de configuration d’une installation de fournisseur existante nécessite sessions:profile:write, que votre rôle n’inclut pas."
+    },
+    "filteredEmpty": {
+      "title": "Aucun profil ne correspond à cet état",
+      "description": "Seuls les profils dans l’état « {{state}} » sont listés. Affichez tous les états pour retirer ce filtre.",
+      "clear": "Afficher tous les états"
+    },
+    "noRead": "Les profils de fournisseur ne sont pas affichés : votre rôle n’inclut pas sessions:profile:read.",
+    "listTruncation": {
+      "label": "{{n}} profils chargés ; il y en a d’autres",
+      "hint": "Seuls les profils chargés peuvent être sélectionnés ici. Un profil non affiché peut exister au-delà de cette page."
+    },
+    "actions": {
+      "details": "Détails",
+      "rename": "Renommer",
+      "disable": "Désactiver",
+      "enable": "Activer",
+      "retire": "Retirer",
+      "reveal": "Afficher la configuration",
+      "hide": "Masquer la configuration",
+      "bind": "Lier une source",
+      "revoke": "Révoquer"
+    },
+    "create": {
+      "title": "Enregistrer un profil de fournisseur",
+      "description": "Enregistre les répertoires d’une installation de fournisseur existante sur cet environnement d’exécution. Le serveur valide chaque chemin sur ce nœud — absolu, liens symboliques résolus, existant et répertoire. Rien n’est créé, installé ni connecté, et aucun identifiant n’est envoyé.",
+      "driver": "Pilote",
+      "driverPlaceholder": "claude",
+      "driverHint": "Clé du pilote en minuscules (lettres, chiffres, - _ .). Si ce nœud peut lancer le profil, le serveur le signale après l’enregistrement ; le nom ne le décide pas.",
+      "configHome": "Répertoire de configuration",
+      "configHomePlaceholder": "/home/agent/.claude-work",
+      "configHomeHint": "Chemin absolu du répertoire de configuration du fournisseur (pour Claude Code, son CLAUDE_CONFIG_DIR). Validé sur ce nœud ; un répertoire manquant est refusé, jamais créé.",
+      "userHome": "Répertoire utilisateur",
+      "userHomePlaceholder": "/home/agent",
+      "userHomeHint": "Chemin absolu sous lequel la session lancée s’exécute comme HOME. Validé sur ce nœud.",
+      "displayName": "Nom affiché",
+      "displayNamePlaceholder": "Une étiquette (facultatif)",
+      "environmentKnown": "Enregistré sur l’environnement d’exécution de ce nœud, {{env}}, qui valide les chemins. Un profil pour un autre environnement s’enregistre depuis cet environnement.",
+      "environmentUnknown": "Enregistré sur l’environnement d’exécution de ce nœud, qui valide les chemins. Un profil pour un autre environnement s’enregistre depuis cet environnement.",
+      "submit": "Enregistrer",
+      "submitting": "Enregistrement…",
+      "success": "Profil de fournisseur enregistré"
+    },
+    "rename": {
+      "title": "Renommer le profil",
+      "description": "L’étiquette peut changer ; l’identité — pilote, environnement et répertoires — non.",
+      "label": "Nom affiché",
+      "submit": "Renommer",
+      "submitting": "Renommage…",
+      "success": "Profil renommé"
+    },
+    "disable": {
+      "success": "Profil désactivé",
+      "hint": "Un profil désactivé refuse les nouveaux lancements, reprises et liaisons ; une session qu’il gouverne déjà continue. Réversible."
+    },
+    "enable": {
+      "success": "Profil activé"
+    },
+    "retire": {
+      "title": "Retirer le profil",
+      "description": "Le retrait est irréversible : cet identifiant de profil n’accepte plus rien ensuite — pas même un renommage — et son historique reste tel quel. Le répertoire devient libre pour un nouvel identifiant de profil.",
+      "confirm": "Retirer",
+      "success": "Profil retiré"
+    },
+    "details": {
+      "ref": "Référence",
+      "driver": "Pilote",
+      "environment": "Environnement d’exécution",
+      "state": "État",
+      "launch": "Activé ici",
+      "created": "Créé",
+      "updated": "Mis à jour",
+      "retiredAt": "Retiré",
+      "loadFailed": "Ce profil n’a pas pu être lu."
+    },
+    "configuration": {
+      "title": "Configuration",
+      "hint": "Les répertoires stockés sont une lecture réservée aux administrateurs, obtenue uniquement à votre demande et jamais affichée dans la liste. Aucune valeur d’identifiant n’est jamais renvoyée.",
+      "configHome": "Répertoire de configuration",
+      "userHome": "Répertoire utilisateur",
+      "validatedOn": "Chemins tels que validés et stockés par l’environnement d’exécution {{env}}.",
+      "loading": "Lecture de la configuration…",
+      "failed": "La configuration n’a pas pu être lue."
+    },
+    "bindings": {
+      "title": "Liaisons de sources",
+      "subtitle": "Dédie une source configurée, à la révision exacte appliquée par ce nœud, à un profil, de sorte que les sessions observées par cette source lui soient attribuées. L’identité est l’identifiant persistant et la révision de la source — jamais son nom.",
+      "cols": {
+        "source": "Source",
+        "revision": "Révision appliquée",
+        "profile": "Profil",
+        "environment": "Environnement d’exécution",
+        "state": "État",
+        "bound": "Lié"
+      },
+      "state": {
+        "active": "Actif",
+        "revoked": "Révoqué"
+      },
+      "empty": {
+        "title": "Aucune liaison de source",
+        "description": "Liez une source configurée à un profil pour lui attribuer les sessions qu’elle observe."
+      },
+      "noRead": "Les liaisons de sources ne sont pas affichées : votre rôle n’inclut pas sessions:profile-binding:read.",
+      "notBindable": "Seul un profil actif de cet environnement d’exécution peut recevoir une liaison.",
+      "revoke": {
+        "title": "Révoquer la liaison",
+        "description": "Les sessions déjà attribuées sous cette liaison conservent leur provenance ; les observations ultérieures via cette source ne sont plus attribuées au profil. Cette action est irréversible — une nouvelle liaison est une nouvelle ligne.",
+        "confirm": "Révoquer",
+        "success": "Liaison révoquée"
+      },
+      "create": {
+        "title": "Lier une source à un profil",
+        "description": "Le moteur lie l’identifiant persistant de la source à la révision appliquée par ce nœud. Les deux sont lus depuis le registre des sources — jamais saisis, jamais dérivés d’un nom.",
+        "profile": "Profil",
+        "profileNone": "Sélectionner un profil",
+        "profileNotBindable": "non liable ici",
+        "profileHint": "Seul un profil actif de cet environnement d’exécution peut recevoir une liaison.",
+        "profilesNotRead": "Les profils n’ont pas pu être lus ; aucun ne peut donc être sélectionné.",
+        "source": "Source",
+        "sourceNone": "Sélectionner une source",
+        "sourceNotApplied": "non appliquée sur ce nœud",
+        "sourceHint": "Sources du registre du déploiement, avec la révision appliquée par ce nœud. Une source que ce nœud n’a pas appliquée ne peut pas être liée ici.",
+        "needsSourceAdmin": "Lier une source requiert aussi l’administration des sources à l’échelle du déploiement (administrateur système). Votre compte ne peut pas lire le registre des sources, aucune source ne peut donc être sélectionnée ici.",
+        "rosterFailed": "Le registre des sources n’a pas pu être lu.",
+        "rosterEmpty": "Aucune source n’est configurée sur ce déploiement.",
+        "revision": "révision {{n}}",
+        "submit": "Lier",
+        "submitting": "Liaison…",
+        "success": "Source liée au profil"
+      },
+      "details": {
+        "open": "Détails de la liaison {{ref}}",
+        "title": "Détails de la liaison",
+        "description": "Détails actuels de la liaison pour le tenant sélectionné. Actualisez pour vérifier les changements.",
+        "loading": "Lecture de la liaison depuis le moteur…",
+        "forbidden": "Le moteur vient de refuser cette liaison à votre compte (sessions:profile-binding:read sur le tenant actif) ; c’est le moteur qui vient d’en décider, pas une réponse en cache. Rien n’en est affiché.",
+        "missing": "Le moteur ne détient actuellement aucune liaison portant cette référence pour le tenant actif. Elle a peut-être été supprimée depuis la lecture de la liste ; actualisez la liste pour voir les lignes actuelles.",
+        "error": "La liaison n’a pas pu être lue : {{message}}",
+        "ended": "La lecture s’est terminée parce que votre permission, votre tenant ou votre session a changé. Rouvrez Détails pour la lire sous l’autorité actuelle.",
+        "readAt": "Lu depuis le moteur à {{at}}.",
+        "ref": "Référence",
+        "source": "Source",
+        "sourceId": "Id de la source",
+        "revision": "Révision appliquée",
+        "profile": "Profil",
+        "driver": "Pilote",
+        "environment": "Environnement d’exécution",
+        "selector": "Sélecteur",
+        "state": "État",
+        "bound": "Lié",
+        "revoked": "Révoqué",
+        "refresh": "Actualiser",
+        "retry": "Réessayer",
+        "close": "Fermer"
+      }
+    },
+    "view": {
+      "profilesTitle": "Profils de fournisseur",
+      "bindingsTitle": "Liaisons de sources",
+      "tabProfiles": "Profils",
+      "tabBindings": "Liaisons",
+      "openProfiles": "Ouvrir la page des profils de fournisseur",
+      "openBindings": "Ouvrir la page des liaisons de sources",
+      "crossHint": "Les profils et les liaisons ont aussi chacun leur page, ouverte avec leur propre permission de lecture."
+    },
+    "authority": {
+      "lost": "Cette action n’est plus permise avec vos permissions actuelles ; rien n’a été envoyé.",
+      "confirmationClosed": "La confirmation a été fermée car la permission qu’elle exigeait a disparu."
+    },
+    "roster": {
+      "loading": "Lecture du registre des sources…",
+      "forbidden": "Le déploiement a refusé le registre des sources à votre compte ; aucune source ne peut donc être liée d’ici. Lier exige l’administration des sources à l’échelle du déploiement en plus de l’écriture des liaisons ; c’est le moteur qui vient d’en décider, pas une réponse en cache.",
+      "error": "Le registre des sources n’a pas pu être lu : {{message}}",
+      "ended": "La lecture du registre s’est terminée parce que votre permission, votre tenant ou votre session a changé. Rouvrez Lier pour le lire sous l’autorité actuelle.",
+      "loadMoreProfiles": "Charger plus de profils",
+      "loadedProfiles": "{{n}} profils actifs chargés ; il y en a d’autres.",
+      "loadingProfiles": "Chargement des profils…"
+    }
+  },
+  "readiness": {
+    "title": "Exigences locales de lancement",
+    "loading": "Vérification des exigences locales du profil sélectionné…",
+    "unavailable": "Les exigences n’ont pas pu être lues. Ce n’est pas une décision de lancement.",
+    "forbidden": "Votre rôle ne peut pas lire les exigences de ce profil (sessions:profile:read).",
+    "notFound": "Ce profil n’est pas disponible dans le tenant actuel. Le résultat précédent a été écarté.",
+    "unauthenticated": "La session n’est plus authentifiée. Le résultat précédent a été écarté.",
+    "conflict": "Le profil a changé pendant l’inspection. L’observation a été écartée.",
+    "reread": "Relire les exigences",
+    "rereading": "Lecture…",
+    "request": "Demander le lancement",
+    "requesting": "Demande…",
+    "requestHintReady": "Demander un lancement exécute encore l’autorisation, le mint et le démarrage. Ce n’est pas une preuve que le fournisseur est connecté.",
+    "requestHintUnknown": "La vérification est incomplète. Vous pouvez quand même demander le lancement ; le serveur revalidera tout. Ce n’est pas un verdict « prêt ».",
+    "requestBlocked": "Aucune demande de lancement n’est proposée : cette sélection est connue comme non viable.",
+    "noWrite": "Vous pouvez voir ces exigences, mais demander un lancement nécessite sessions:run:write.",
+    "waitingPreview": "En attente de l’aperçu du modèle avant de lire les exigences du transport effectif.",
+    "providerAuth": "La connexion au fournisseur n’est pas observée ici. Un home ou un binaire valides ne sont pas un compte authentifié.",
+    "launchAuth": "L’autorisation de lancement se décide à l’envoi et nécessite sessions:run:write.",
+    "remoteControl": "Cycle de vie uniquement — la conversation reste chez le fournisseur ; il n’y a pas de console de tours bridgée.",
+    "managedInjectionUnused": "Ce transport n’applique pas l’injection gérée sélectionnée. Il ne crée pas de jeton d’inférence et n’atteste pas l’authentification du compte.",
+    "codexProtocol": "Protocole app-server Codex ; l’entrée est un tour de texte, pas du NDJSON Claude.",
+    "grokProtocol": "Protocole ACP Grok ; l’entrée est un tour de texte, pas du NDJSON Claude.",
+    "opencodeProtocol": "Protocole ACP OpenCode ; l’entrée est un tour de texte, pas du NDJSON Claude.",
+    "remaining": "Encore décidé à l’envoi",
+    "transport": "Transport",
+    "isolation": "Isolation",
+    "failedInline": "La demande de lancement a été refusée. Vos choix sont conservés.",
+    "state": {
+      "ready": "Exigences locales vérifiées",
+      "not_configured": "Configuration manquante",
+      "unsupported": "Non pris en charge dans cet environnement",
+      "unknown": "Impossible à vérifier"
+    },
+    "checkState": {
+      "ready": "vérifié",
+      "not_configured": "non configuré",
+      "unsupported": "non pris en charge",
+      "unknown": "impossible à vérifier",
+      "not_applicable": "sans objet"
+    },
+    "check": {
+      "profile": "Profil",
+      "local_environment": "Ce nœud",
+      "driver": "Pilote",
+      "runner": "Runner",
+      "program": "Programme",
+      "homes": "Homes",
+      "auth_source": "Source d’authentification",
+      "credential_source": "Câblage de credencial",
+      "runtime_credentials": "Identifiants d’exécution"
+    },
+    "code": {
+      "profile_active": "Le profil est actif.",
+      "profile_disabled": "Le profil est désactivé. L’activation exige sessions:profile:write ; un profil retiré ne peut pas être réactivé.",
+      "profile_retired": "Le profil est retiré et ne peut pas servir à un nouveau lancement.",
+      "environment_local": "Ce profil appartient à ce nœud.",
+      "other_environment": "Ce profil appartient à un autre environnement d’exécution. Choisissez un profil local ou utilisez l’environnement qui l’administre. Il n’y a pas d’exécution distante automatique.",
+      "environment_unavailable": "L’environnement d’exécution qui administre ce profil n’est pas disponible ici.",
+      "driver_operable": "Un chemin de pilote est enregistré sur ce runtime.",
+      "driver_not_registered": "Ce pilote n’est pas enregistré sur ce runtime. Pour Codex, définissez OLIVARES_SESSION_RUNTIME_CODEX_BIN ; pour Grok, OLIVARES_SESSION_RUNTIME_GROK_BIN.",
+      "transport_unsupported": "Ce transport n’est pas un contrat du pilote sélectionné.",
+      "runner_ready": "Le runner de session peut être inspecté.",
+      "runner_not_configured": "Le runner de session n’est pas configuré sur ce runtime.",
+      "isolation_unsupported": "Le runner natif ne peut pas offrir cet isolement. Conservez native, ou utilisez un runner qui démontre le confinement demandé.",
+      "runner_inspection_unavailable": "Le runner câblé ne peut pas être inspecté sans lancer. Ce n’est pas une installation manquante.",
+      "program_present": "Le programme résolu est présent et exécutable pour cette identité.",
+      "program_missing": "Le programme résolu n’est pas présent. Configurez le CLI officiel selon la procédure existante ; pour Claude, cela peut nommer OLIVARES_SESSION_RUNTIME_CLAUDE_BIN. Cette lecture n’installe rien.",
+      "program_not_executable": "Le programme résolu n’est pas exécutable pour cette identité.",
+      "homes_resolved": "Les homes enregistrés se résolvent comme des répertoires.",
+      "home_unavailable": "Un home enregistré n’est pas disponible. Examinez la configuration du profil si vous avez le droit d’administration. Les chemins ne sont pas montrés à un lecteur ordinaire.",
+      "home_changed": "Un home enregistré n’est plus le répertoire qui avait été stocké.",
+      "auth_source_account_home": "La source autorisée est l’account-home du profil lui-même.",
+      "auth_source_managed_injection": "La source autorisée est l’injection gérée pour ce pilote.",
+      "auth_source_legacy_claude": "La source autorisée est le chemin historique de credencial Claude.",
+      "auth_source_required": "Ce pilote exige une source d’authentification explicite : account-home ou injection gérée. Ce choix se fait sur le profil, pas depuis cette inspection.",
+      "managed_injection_not_applied_for_transport": "L’injection gérée est sélectionnée, mais ce transport ne l’applique pas.",
+      "claude_credential_source_configured": "La source de credencial d’inférence Claude est câblée.",
+      "claude_credential_source_not_configured": "La source de credencial d’inférence Claude n’est pas câblée. Configurez OLIVARES_SESSION_RUNTIME_WIF ou OLIVARES_SESSION_RUNTIME_TOKEN_FILE. Uniquement des noms, jamais des valeurs.",
+      "provider_credential_adapter_configured": "L’adaptateur de credencial de ce pilote est câblé.",
+      "provider_credential_adapter_not_configured": "L’adaptateur de credencial gouverné de ce pilote n’est pas câblé. Ne réutilisez pas le bearer d’un autre fournisseur et ne retombez pas sur account-home.",
+      "credential_source_not_injected": "Cette combinaison n’injecte pas de credencial d’inférence.",
+      "runtime_credentials_wired": "Les identifiants de runtime work/K3 sont câblés.",
+      "runtime_credentials_not_requested": "Cette composition ne demande pas d’identifiants de runtime work/K3.",
+      "runtime_credential_wiring_incomplete": "Le câblage des identifiants de runtime work/K3 est incomplet. Un opérateur examine cette composition ; cette lecture ne demande pas d’identifiants commerciaux.",
+      "runtime_readiness_unavailable": "La readiness de runtime work/K3 n’a pas pu être observée.",
+      "inspection_unavailable": "Cette exigence n’a pas pu être inspectée. Relisez ou demandez une revue de l’environnement. L’incertitude n’est pas « non installé ».",
+      "not_checked_in_this_environment": "Cette exigence n’a pas été vérifiée sur ce nœud parce que le profil appartient ailleurs. Ce n’est pas « homes manquants »."
+    },
+    "remediation": {
+      "review_profile": "Examinez le profil, ou enregistrez-en un autre.",
+      "select_local_profile": "Sélectionnez un profil local à ce nœud.",
+      "configure_execution_environment": "Utilisez l’environnement qui administre ce profil.",
+      "configure_provider_driver": "Configurez le pilote du fournisseur sur ce runtime.",
+      "configure_session_runner": "Configurez le runner de session.",
+      "configure_provider_program": "Configurez le CLI officiel du fournisseur sur ce runtime.",
+      "review_profile_homes": "Examinez les homes stockés via la lecture de configuration d’administration.",
+      "authorize_auth_source": "Autorisez account-home ou l’injection gérée sur le profil (sessions:profile:write).",
+      "configure_claude_credential_source": "Câblez OLIVARES_SESSION_RUNTIME_WIF ou OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
+      "configure_provider_credential_adapter": "Câblez l’adaptateur de credencial gouverné de ce pilote.",
+      "review_runtime_credential_composition": "Examinez la composition des identifiants de runtime work/K3.",
+      "select_supported_selection": "Choisissez un transport et un isolement que ce runtime démontre.",
+      "retry_inspection": "Relisez les exigences."
+    },
+    "remainingCheck": {
+      "workspace_and_template_validation": "Validation de l’espace de travail et du modèle",
+      "current_launch_authorization": "Autorisation de lancement actuelle",
+      "claim_admission": "Admission de la claim",
+      "credential_mint_when_required": "Mint de credencial si requis",
+      "process_start": "Démarrage du processus",
+      "provider_authentication_and_protocol": "Authentification et protocole du fournisseur"
+    },
+    "protocol": {
+      "claude_stream_json": "Claude stream-json",
+      "claude_remote_control": "Claude remote-control",
+      "codex_app_server": "Codex app-server",
+      "grok_acp": "Grok ACP",
+      "opencode_acp": "OpenCode ACP",
+      "unknown": "Protocole inconnu"
+    }
+  },
+  "hostTools": {
+    "title": "Candidats de CLI officielle sur l’hôte du service",
+    "loading": "Observation des candidats de CLI officielle dans l’environnement du service…",
+    "refresh": "Observer à nouveau",
+    "refreshing": "Observation…",
+    "advisory": "À titre indicatif uniquement. Cette observation ne modifie pas la préparation, n’autorise aucun lancement et n’installe, n’épingle ni n’enregistre aucun outil.",
+    "environment": "Environnement du profil : {{environment}} · Réponse de : {{answering}}",
+    "noIdentity": "un nœud sans identité d’environnement persistante",
+    "observedAt": "Observé le {{time}} (UTC)",
+    "summary": "Candidats observés dans les emplacements de recherche configurés : {{total}}",
+    "groupCount": "Candidats : {{total}}",
+    "groupsLabel": "Groupes de candidats observés",
+    "mismatch": "La réponse concernait une autre version du profil, un autre pilote ou un autre environnement et a été écartée.",
+    "conflict": "Le profil a changé pendant l’observation. L’observation a été écartée.",
+    "unavailable": "L’observation des outils de l’hôte n’a pas pu être lue. Ce n’est pas un constat sur l’outil.",
+    "forbidden": "Votre rôle ne peut pas lire l’observation des outils de l’hôte de ce profil (sessions:profile:read).",
+    "notFound": "Ce profil n’est pas disponible dans le tenant actuel. Les observations précédentes ont été écartées.",
+    "unauthenticated": "La session n’est plus authentifiée. Les observations précédentes ont été écartées.",
+    "state": {
+      "none_observed": "Aucun candidat n’a été observé dans les emplacements de recherche configurés. Cela ne prouve pas que l’outil soit absent ailleurs sur l’hôte.",
+      "unsupported_driver": "L’observation des outils de l’hôte n’est pas encore disponible pour ce pilote. Configurez le programme dans les paramètres du profil.",
+      "unknown": "Le service n’a pas pu terminer cette observation. Il s’agit d’une incertitude, pas d’un constat d’absence de l’outil.",
+      "not_checked_in_this_environment": "Non vérifié : le service qui a répondu n’a pas d’identité d’environnement ou n’est pas l’environnement de ce profil."
+    },
+    "origin": {
+      "managed": "Emplacement d’installation géré",
+      "vendor-default": "Emplacement par défaut de l’éditeur",
+      "path": "PATH du service",
+      "named": "Emplacement de programme nommé",
+      "unknown": "Emplacement inconnu"
+    },
+    "match": {
+      "registered": "Enregistré",
+      "manifest-corroborated": "Corroboré par un manifeste géré",
+      "unregistered-observed": "Observé, non enregistré",
+      "unverified": "Signature non vérifiée",
+      "damaged": "Installation endommagée",
+      "unknown": "État de vérification inconnu"
+    },
+    "executable": {
+      "true": "Exécutable",
+      "false": "Non exécutable"
+    },
+    "configured": {
+      "same": "Même fichier que le programme configuré",
+      "different": "Pas le programme configuré",
+      "unknown": "Comparaison avec le programme configuré inconnue"
+    }
   }
 }

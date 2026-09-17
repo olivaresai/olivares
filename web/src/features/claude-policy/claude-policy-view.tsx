@@ -91,6 +91,10 @@ export default function ClaudePolicyView() {
     void navigate({
       search: (prev: Record<string, unknown>) => ({ ...prev, tab: value }),
       replace: true,
+      // A tab change is not a page change: keep the router's scroll restoration out of
+      // it, or it writes a stale cached scrollLeft back onto the tab strip after render
+      // (see console-view.tsx, measured 2026-09-06).
+      resetScroll: false,
     } as never)
   }
 

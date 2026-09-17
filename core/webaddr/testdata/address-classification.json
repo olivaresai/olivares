@@ -1,0 +1,156 @@
+[
+  {
+    "host": "panel.example.com",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": true
+  },
+  {
+    "host": "panel.example.com.",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": true
+  },
+  {
+    "host": "xn--bcher-kva.example",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": true
+  },
+  {
+    "host": "localhost",
+    "kind": "domain",
+    "ip": false,
+    "loopback": true,
+    "relyingParty": true
+  },
+  {
+    "host": "localhost.",
+    "kind": "domain",
+    "ip": false,
+    "loopback": true,
+    "relyingParty": true
+  },
+  {
+    "host": "foo.localhost",
+    "kind": "domain",
+    "ip": false,
+    "loopback": true,
+    "relyingParty": true
+  },
+  {
+    "host": "foo.localhost.",
+    "kind": "domain",
+    "ip": false,
+    "loopback": true,
+    "relyingParty": true
+  },
+  {
+    "host": "my_host.example.com",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "-lead.example",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "trail-.example",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "olivares",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "olivares.",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": true
+  },
+  {
+    "host": "example..",
+    "kind": "domain",
+    "ip": false,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "127.0.0.1",
+    "kind": "ipv4",
+    "ip": true,
+    "loopback": true,
+    "relyingParty": false
+  },
+  {
+    "host": "127.1.1.1",
+    "kind": "ipv4",
+    "ip": true,
+    "loopback": true,
+    "relyingParty": false
+  },
+  {
+    "host": "192.168.1.10",
+    "kind": "ipv4",
+    "ip": true,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "10.0.0.7",
+    "kind": "ipv4",
+    "ip": true,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "0.0.0.0",
+    "kind": "ipv4",
+    "ip": true,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "::1",
+    "kind": "ipv6",
+    "ip": true,
+    "loopback": true,
+    "relyingParty": false
+  },
+  {
+    "host": "::",
+    "kind": "ipv6",
+    "ip": true,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "2001:db8::1",
+    "kind": "ipv6",
+    "ip": true,
+    "loopback": false,
+    "relyingParty": false
+  },
+  {
+    "host": "::ffff:7f00:1",
+    "kind": "ipv6",
+    "ip": true,
+    "loopback": true,
+    "relyingParty": false
+  }
+]

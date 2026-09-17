@@ -1,0 +1,84 @@
+{
+  "schema": "olivares.ai/tool-install/plan/v2",
+  "selection": {
+    "driver": "grok",
+    "channel": "exact",
+    "requested_version": "1.0.13",
+    "version": "1.0.13",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+      "libc": ""
+    },
+    "vendor_platform": "linux-x86_64",
+    "source": {
+      "kind": "official",
+      "pointer": {
+        "state": "present",
+        "url": "https://example.invalid/cli/1.0.13"
+      },
+      "checksums": {
+        "state": "absent",
+        "url": ""
+      },
+      "package": {
+        "state": "present",
+        "url": "https://example.invalid/cli/grok-1.0.13-linux-x86_64"
+      },
+      "proofs": [],
+      "allowed_origins": [
+        "https://example.invalid"
+      ],
+      "redirects": {
+        "max_hops": 0,
+        "allowed_origins": []
+      }
+    },
+    "fetched_object": {
+      "digest_state": "unknown",
+      "sha256": "",
+      "size_state": "bounded",
+      "size": 0,
+      "max_size": 4096
+    },
+    "layout": {
+      "id": "grok-bin-v1",
+      "variant": "grok",
+      "entry_point": "bin/grok",
+      "resources_dir": "",
+      "path_dir": "",
+      "members": [
+        {
+          "path": "bin",
+          "kind": "directory",
+          "role": "archive-only",
+          "final_mode": 493
+        },
+        {
+          "path": "bin/grok",
+          "kind": "regular",
+          "role": "archive-only",
+          "final_mode": 493
+        }
+      ],
+      "limits": {
+        "max_compressed_bytes": 4096,
+        "max_expanded_bytes": 8192,
+        "max_members": 2,
+        "max_member_bytes": 4096
+      }
+    },
+    "required_subjects": [],
+    "package_policy_id": "origin-only-v1",
+    "verification": {
+      "kind": "none-origin-only",
+      "cosign": null
+    },
+    "destination": {
+      "root": "/tmp/root",
+      "release_dir": "/tmp/root/grok/1.0.13-linux-x86_64",
+      "executable": "/tmp/root/grok/1.0.13-linux-x86_64/bin/grok"
+    }
+  },
+  "digest": "19871bf99277eba310d6e697527d5cddb53917ab77e18c2f4eff82edcd80b4cd"
+}

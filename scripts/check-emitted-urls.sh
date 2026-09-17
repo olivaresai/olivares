@@ -169,9 +169,27 @@ MAX_RECORD_AGE_DAYS=45
 #       (.github/ISSUE_TEMPLATE/{config,docs_issue}.yml, which now route to SUPPORT.md); the row
 #       exists for the launch copy that names Discussions as the community home.
 #
+#   public-release-v26.9.0-pending
+#       The README's high-assurance path names the release page of the version this tree cuts
+#       (README.md, "release page"). That page exists only after the PUBLIC ACT publishes the
+#       v26.9.0 release: pushing the export does not create it, and neither does the tag on the
+#       preprod repository. Measured 404 on 2026-09-16 while the cut sat on the hub. It is its own
+#       owner, not `public-repo-empty-release-blocker`, for the same reason Discussions is: a true
+#       status must carry its true reason, and this one resolves at release time, by the act.
+#
 #   drill-fixture-not-a-location
 #       A security-DRILL advisory id in cmd/olivares/fixtures/. It identifies a rehearsal, is not
 #       meant to resolve, and is recorded rather than waived so nobody later reads its 404 as rot.
+#
+#   sigstore-certificate-identity-not-a-location
+#       The GitHub workflow URI is the exact certificate subject that cosign verifies. It is an
+#       identity, not an HTTP release page; its literal tag template answered 404 in five of five
+#       probes on 2026-09-02 and must remain exact for the signature policy.
+#
+#   package-repository-awaits-authorized-publish
+#       The canonical package origin exists in DNS but answered 404 in five of five probes on
+#       2026-09-02. F2 prepares the guarded publisher; only the separately authorized publication
+#       act can populate the bucket and make this endpoint answer.
 #
 # ⚠⚠ AND RE-PROBING EN MASSE ALMOST DESTROYED THAT DECISION (2026-08-18). Regenerating the whole
 # record from one `--probe` run overwrote the docs.* lines with `000` — «I could not reach it» —
@@ -193,13 +211,20 @@ MAX_RECORD_AGE_DAYS=45
 # devuelve NXDOMAIN— y el veredicto ya no depende de esta caja: el nombre no está publicado. El
 # detalle, en `docs-subdomain-withdrawn` arriba. What this gate guarantees meanwhile is that the number
 # cannot quietly grow and the record cannot quietly rot.
+# 2026-09-17 · README rewrite (docs/readme-clarity-20260916): the thirteen olivares.ai section URLs it
+# links, the releases index and the v26.9.0 tag page were measured with --probe from this box (five
+# attempts each). The tag page is 404 on the public repository until the v26.9.0 release is published
+# there (dev cut only, PR #2504); the README emitted it since that cut without a record line.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-08-27
 https://docs.olivares.ai 200 2026-08-23
 https://docs.olivares.ai/cli 404 2026-08-28 docs-site-deploy-lag
 https://docs.olivares.ai/reference/api-stability/ 200 2026-08-28
+https://docs.olivares.ai/reference/configuration/ 200 2026-09-11
 https://github.com/olivaresai/olivares 200 2026-08-18
 https://github.com/olivaresai/olivares.git 200 2026-08-18
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-02 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/blob/main/CODE_OF_CONDUCT.md 404 2026-08-18 public-repo-empty-release-blocker
+https://github.com/olivaresai/olivares/releases/tag/v26.9.0 404 2026-09-16 public-release-v26.9.0-pending
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 404 2026-08-27 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/INSTALL.md#operate-claude-code-co-deployment 404 2026-08-18 public-repo-empty-release-blocker
@@ -209,7 +234,9 @@ https://github.com/olivaresai/olivares/blob/main/docs-site/src/content/docs/star
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 404 2026-08-18 public-repo-empty-release-blocker
 https://github.com/olivaresai/olivares/discussions 404 2026-08-27 discussions-not-enabled-maintainer-act
+https://github.com/olivaresai/olivares/releases 200 2026-09-17
 https://github.com/olivaresai/olivares/releases/tag/v26.8.0 404 2026-08-31 public-repo-empty-release-blocker
+https://github.com/olivaresai/olivares/releases/tag/v26.9.0 404 2026-09-17 public-release-not-yet-published
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-08-18 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-08-18
 https://licenses.olivares.ai 200 2026-08-18
@@ -222,7 +249,22 @@ https://olivares.ai/docs/reference/api-stability 404 2026-08-28 apex-serves-no-d
 https://olivares.ai/favicon.svg 200 2026-08-18
 https://olivares.ai/ns/oscal 404 2026-08-18 namespace-identifier-not-a-location
 https://olivares.ai/pricing 200 2026-08-26
+https://olivares.ai/product 200 2026-09-17
+https://olivares.ai/solutions 200 2026-09-17
+https://olivares.ai/how-it-works 200 2026-09-17
+https://olivares.ai/architecture 200 2026-09-17
+https://olivares.ai/security 200 2026-09-17
+https://olivares.ai/trust 200 2026-09-17
+https://olivares.ai/compare 200 2026-09-17
+https://olivares.ai/demo 200 2026-09-17
+https://olivares.ai/changelog 200 2026-09-17
+https://olivares.ai/olivares/install.sh 200 2026-09-17
+https://olivares.ai/brand 200 2026-09-17
+https://olivares.ai/press 200 2026-09-17
+https://olivares.ai/status 200 2026-09-17
+https://olivares.ai/roadmap 200 2026-09-17
 https://olivares.ai/updates 404 2026-08-18 release-blocker-no-producer-no-server
+https://packages.olivares.ai 404 2026-09-02 package-repository-awaits-authorized-publish
 https://raw.githubusercontent.com/olivaresai/olivares/main/docs-site/src/content/docs/start/honesty-and-limits.md 404 2026-08-31 public-repo-empty-release-blocker
 https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh 404 2026-08-18 public-repo-empty-release-blocker
 https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh 404 2026-08-18 public-repo-empty-release-blocker"

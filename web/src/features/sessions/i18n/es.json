@@ -24,7 +24,8 @@
     "duration": "Duración",
     "lastSeen": "Visto por última vez",
     "provenance": "Origen",
-    "control": "Control"
+    "control": "Control",
+    "instance": "Instancia"
   },
   "state": {
     "active": "Activa",
@@ -93,7 +94,8 @@
   "allSources": "Todos los orígenes",
   "tabs": {
     "sessions": "Sesiones",
-    "workspaces": "Espacios de trabajo"
+    "workspaces": "Espacios de trabajo",
+    "profiles": "Perfiles de proveedor"
   },
   "partial": {
     "noLiveRead": "No se muestran las sesiones observadas: tu rol no incluye sessions:live:read. Las lanzadas de abajo son la parte que se ha podido leer, no el cuadro completo.",
@@ -173,7 +175,31 @@
     "noObservationYet": "Todavía no se ha observado nada de esta sesión: no ha llegado telemetría al plano con esta referencia.",
     "actionFailed": "No se ha podido completar la acción.",
     "activeRun": "en uso",
-    "pickRun": "Varias ejecuciones gobiernan esta sesión. Elige una para conectarte a ella, gobernarla o pararla."
+    "pickRun": "Varias ejecuciones gobiernan esta sesión. Elige una para conectarte a ella, gobernarla o pararla.",
+    "attributionTitle": "Atribución",
+    "attribution": {
+      "legacy": "Legado",
+      "observed": "Observada por fuente",
+      "source": "Fuente conocida",
+      "managed": "Gestionada por Olivares"
+    },
+    "attributionExplain": {
+      "legacy": "Plegada desde un canal sin fuente registrada: un conector antiguo, una observación enviada por un colector o un evento antiguo. Nunca se le asigna una instancia de proveedor a posteriori.",
+      "observed": "Llegó a través de una fuente dedicada a este perfil de proveedor. Eso dice qué fuente configurada la entregó, no que el id que contiene pertenezca a un proceso lanzado por Olivares.",
+      "source": "Llegó a través de una fuente registrada que no está dedicada a ningún perfil: el canal se conoce, la instancia de proveedor no.",
+      "managed": "Escrita por el propio puente de Olivares para una sesión que lanzó: la única fila que lleva una sesión canónica y una ejecución probadas."
+    },
+    "liveRef": "Referencia de fila",
+    "profile": "Perfil de proveedor",
+    "provider": "Proveedor",
+    "environment": "Entorno de ejecución",
+    "binding": "Vínculo de fuente",
+    "canonicalSid": "Sesión canónica",
+    "related": {
+      "title": "Observada también a través de fuentes vinculadas",
+      "explain": "Estas filas comparten el perfil y el id de sesión del proveedor de esta ejecución, pero llegaron a través de una fuente, no del proceso que Olivares controla. Se muestran junto a la ejecución, nunca fusionadas con ella.",
+      "open": "Abrir"
+    }
   },
   "facet": {
     "observed": "Observada: {{state}}",

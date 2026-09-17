@@ -538,8 +538,82 @@ func TestFinOpsEndToEnd(t *testing.T) {
 	if r.code != http.StatusOK {
 		t.Fatalf("alerts = %d %s", r.code, r.raw)
 	}
-	if items, _ := r.body["items"].([]any); len(items) != 1 {
-		t.Errorf("alerts = %d, want 1 (50%% crossing)", len(items))
+	items, _ := r.body["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("alerts = %d, want 1 (50%% crossing)", len(items))
+	}
+
+	// A4.2: the alert carries its own id, its financial evidence and the digest of
+	// that evidence, and the historical number beside them is CLASSIFIED rather than
+	// presented as bare truth.
+	alert, _ := items[0].(map[string]any)
+	alertID, _ := alert["id"].(string)
+	if alertID == "" {
+		t.Fatalf("alert has no id: %v", alert)
+	}
+	if kind, _ := alert["legacy_value_kind"].(string); kind != "exact" {
+		t.Errorf("legacy_value_kind = %v, want exact for a fully established amount", alert["legacy_value_kind"])
+	}
+	evidence, _ := alert["amount_evidence"].(map[string]any)
+	if state, _ := evidence["state"].(string); state != "valid" {
+		t.Fatalf("evidence state = %v, want valid: %v", evidence["state"], evidence)
+	}
+	envelope, _ := evidence["envelope"].(map[string]any)
+	amount, _ := envelope["amount"].(map[string]any)
+	if class, _ := amount["class"].(string); class != "exact" {
+		t.Errorf("amount class = %v, want exact", amount["class"])
+	}
+	if value, _ := amount["value_micro_usd"].(string); value != "600" {
+		t.Errorf("amount value = %v, want the canonical decimal string \"600\"", amount["value_micro_usd"])
+	}
+	decision, _ := envelope["decision"].(map[string]any)
+	if result, _ := decision["result"].(string); result != "proven" {
+		t.Errorf("decision = %v, want proven", decision["result"])
+	}
+
+	// Retrieval BY ID under the same permission and tenant returns that one row.
+	r = h.do("GET", "/v1/m/finops/alerts?alert_id="+alertID, viewer, nil, tenantHdr(tenant))
+	if r.code != http.StatusOK {
+		t.Fatalf("alerts by id = %d %s", r.code, r.raw)
+	}
+	if byID, _ := r.body["items"].([]any); len(byID) != 1 {
+		t.Errorf("alerts by id = %d items, want 1", len(byID))
+	}
+
+	// A malformed reference is refused at the boundary, not turned into a wider read.
+	if r := h.do("GET", "/v1/m/finops/alerts?alert_id=not-a-uuid", viewer, nil, tenantHdr(tenant)); r.code != http.StatusBadRequest {
+		t.Errorf("malformed alert_id = %d, want 400", r.code)
+	}
+	// A well-formed id that is not this tenant's simply matches nothing: a reference
+	// is not an authorization and never leaks another tenant's row.
+	if r := h.do("GET", "/v1/m/finops/alerts?alert_id="+model.NewID().String(), viewer, nil, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Errorf("unknown alert_id = %d, want 200", r.code)
+	} else if unknown, _ := r.body["items"].([]any); len(unknown) != 0 {
+		t.Errorf("unknown alert_id returned %d items, want none", len(unknown))
+	}
+	// The same reference from OUTSIDE the tenant is refused at the boundary: holding
+	// an id grants nothing, and the row is never reached.
+	otherTenant := h.createOrg(admin, "globex-alerts")
+	if r := h.do("GET", "/v1/m/finops/alerts?alert_id="+alertID, viewer, nil, tenantHdr(otherTenant)); r.code != http.StatusForbidden {
+		t.Errorf("cross-tenant alert_id = %d, want 403", r.code)
+	}
+	// A4.2 CORRECTION. The 403 above is an AUTHORIZATION refusal — the caller has no
+	// membership in that tenant, so the repository is never reached and the check says
+	// nothing about row isolation. This caller is a legitimate viewer OF THE OTHER
+	// TENANT, with the same permission, whose request does reach the repository: it
+	// must come back 200 with nothing, because the row belongs to somebody else.
+	neighbourViewer := h.roleToken(admin, otherTenant, "neighbour@globex.io", "viewer")
+	r = h.do("GET", "/v1/m/finops/alerts?alert_id="+alertID, neighbourViewer, nil, tenantHdr(otherTenant))
+	if r.code != http.StatusOK {
+		t.Fatalf("authorized neighbour alert_id = %d %s, want 200", r.code, r.raw)
+	}
+	if items, _ := r.body["items"].([]any); len(items) != 0 {
+		t.Errorf("an authorized neighbour read %d of another tenant's alerts", len(items))
+	}
+	if r := h.do("GET", "/v1/m/finops/alerts", neighbourViewer, nil, tenantHdr(otherTenant)); r.code != http.StatusOK {
+		t.Fatalf("authorized neighbour list = %d %s, want 200", r.code, r.raw)
+	} else if items, _ := r.body["items"].([]any); len(items) != 0 {
+		t.Errorf("an authorized neighbour listed %d of another tenant's alerts", len(items))
 	}
 
 	// Recommendations are served (at least the honest cache disclosure).

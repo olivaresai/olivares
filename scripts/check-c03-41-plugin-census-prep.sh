@@ -28,6 +28,16 @@ BACKLOG="${OLIVARES_C0341P_BACKLOG:-design/BACKLOG-COMPLETITUD-2026-08-16.md}"
 [ -r "$BACKLOG" ] || cannot "missing $BACKLOG"
 command -v python3 >/dev/null || cannot "no python3"
 
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+  || cannot "$ROOT is not a git worktree"
+index_bins="$(git ls-files -- "$BINS")" \
+  || cannot "could not read first-party bins from the git index"
+expected_bin="$BINS/PLACEHOLDER"
+if [ "$index_bins" != "$expected_bin" ]; then
+  shown="${index_bins//$'\n'/, }"
+  fail "firstparty bins in git index are ${shown:-<empty>}; want $expected_bin only"
+fi
+
 grep -F -q 'Unique leftover unique vs `check-c03-41-plugin-census.sh`' "$DOC" \
   || fail "prepare doc lost uniqueness vs overlay-remeasuring census check"
 grep -q 'NOT EXECUTED' "$DOC" || fail "prepare doc lost NOT EXECUTED"
@@ -39,10 +49,9 @@ fi
 grep -q 'C03-41' "$BACKLOG" || fail "backlog lost the C03-41 row"
 grep -q 'SOURCE-connector' "$EMBED" \
   || fail "firstparty embed.go lost SOURCE-connector scope"
-[ -f "$BINS/PLACEHOLDER" ] || fail "firstparty bins lost PLACEHOLDER"
 
-python3 - "$JSON" "$BINS" <<'PY' || exit $?
-import json, os, sys
+python3 - "$JSON" <<'PY' || exit $?
+import json, sys
 
 def fail(msg):
     print(f"check-c03-41-plugin-census-prep: FAIL — {msg}", file=sys.stderr)
@@ -54,7 +63,6 @@ def cannot(msg):
 
 try:
     data = json.load(open(sys.argv[1], encoding="utf-8"))
-    names = sorted(os.listdir(sys.argv[2]))
 except Exception as e:
     cannot(f"inputs not readable: {e}")
 
@@ -92,8 +100,6 @@ if data["in_process_remainder"] != (
     data["enterprise_packages"] - data["source_connector_impls"] - data["output_connector_impls"]
 ):
     fail("remainder is not packages minus the two plugin interfaces")
-if names != ["PLACEHOLDER"]:
-    fail("bins/ on disk is %r, want PLACEHOLDER only" % names)
 sha = data.get("overlay_main_sha") or ""
 if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
     fail("overlay_main_sha is not 40-hex")

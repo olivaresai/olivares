@@ -70,6 +70,20 @@ type moduleRoute struct {
 	method  string
 	pattern string // module-relative chi pattern, e.g. "/spend" or "/{id}"
 	perm    auth.Permission
+	// governed says the route came through HandlePolicy/HandleSealed. It is RECORDED and not
+	// derived: a governed route may carry zero metadata, so deriving it would make emptying a
+	// route's policy a silent downgrade.
+	governed bool
+	// meta is the policy the governed door was given.
+	//
+	// ⛔ SE GUARDA ENTERA, Y ANTES SE TIRABA. El registrador conservaba el BIT de gobernanza y
+	// descartaba la metadata, así que el inventario sabía que una ruta era gobernada y no CON QUÉ:
+	// ni su acción, ni su suelo de AAL, ni si exige grant. Con eso, ni el documento publicado puede
+	// describir la superficie que se monta, ni el arranque puede comprobar que la acción sea del
+	// módulo — que es justo la comprobación que este replay hace ahora.
+	meta RouteMetadata
+	// cedarAction is meta's action, kept flat because that is what the boot check compares.
+	cedarAction string
 }
 
 // recordingRegistrar is a RouteRegistrar that RECORDS routes instead of mounting
@@ -93,6 +107,76 @@ func (r recordingRegistrar) Handle(method, pattern string, perm auth.Permission,
 // not change the request or the response.
 func (r recordingRegistrar) HandleEntity(method, pattern string, perm auth.Permission, _ EntityRef, h ModuleHandler) {
 	r.Handle(method, pattern, perm, h)
+}
+
+// HandleNoStore and HandleEntityNoStore record a route that declared response
+// headers EXACTLY as their plain counterparts do, because the declaration changes
+// what the server SENDS, not which routes exist or what they accept. Their
+// presence is what the registrar's own rule demands: an optional capability found
+// by assertion puts the burden on every registrar that answers, and a registrar
+// that stayed silent would drop these routes from the published document.
+//
+// The header itself is published by the operation's response contract
+// (openapi_sessions_communication_contracts.go), where it belongs: this registrar
+// records registrations, not response shapes.
+func (r recordingRegistrar) HandleNoStore(
+	method, pattern string, perm auth.Permission, h ModuleHandler,
+) {
+	r.Handle(method, pattern, perm, h)
+}
+
+func (r recordingRegistrar) HandleEntityNoStore(
+	method, pattern string, perm auth.Permission, ref EntityRef, h ModuleHandler,
+) {
+	r.HandleEntity(method, pattern, perm, ref, h)
+}
+
+// HandlePolicy records a governed route, and its ABSENCE was a defect with two faces.
+//
+// ⛔ THE GOVERNED DOOR IS AN OPTIONAL CAPABILITY FOUND BY TYPE ASSERTION, and this registrar did
+// not carry it. A module that asks for it here either panics mid-inventory — measured: the first
+// module in the tree to use the governed door panicked this registrar in
+// checkRoutePermsDeclared — or, obeying HandlePolicy's own rule that a module MUST NOT fall back
+// to Handle for a governed route, withholds the route entirely. Either way the published document
+// describes a surface that is not the mounted one, and it does so SILENTLY.
+//
+// ⇒ THE GENERAL SHAPE, worth more than this fix: AN OPTIONAL CAPABILITY FOUND BY ASSERTION PUTS
+// THE BURDEN ON EVERY REGISTRAR THAT ANSWERS. The pattern is right for letting a MODULE ask; each
+// registrar must then implement it or the routes that use it vanish from whatever it exists for.
+func (r recordingRegistrar) HandlePolicy(
+	method, pattern string, perm auth.Permission, meta RouteMetadata, _ ModuleHandler,
+) {
+	*r.out = append(*r.out, moduleRoute{
+		ns: r.ns, method: strings.ToUpper(method), pattern: pattern, perm: perm,
+		governed: true, meta: meta, cedarAction: meta.CedarAction,
+	})
+}
+
+// HandleSealed records a sealed route, and its absence would have been the same defect one door
+// along: a module that reaches for the sealed door on this registrar finds nothing, and either
+// panics mid-inventory or — obeying the rule that it must not fall back — withholds the route.
+// Every registrar implements every door, or the routes that use the missing one vanish from
+// whatever that registrar exists for.
+func (r recordingRegistrar) HandleSealed(
+	method, pattern string, perm auth.Permission, sealed SealedRoute, h ModuleHandler,
+) {
+	r.HandlePolicy(method, pattern, perm, sealed.Metadata(), h)
+}
+
+// WithCollectionScope records nothing new and returns the same recorder, because the
+// declaration changes what the server DECIDES — which workspace the authorization
+// resource carries — and not which routes exist, what they accept or what they return.
+// The published document is unchanged by it.
+//
+// ⛔ IT IS IMPLEMENTED HERE FOR THE REASON WRITTEN ABOVE HandlePolicy, AND THE FIRST RUN
+// OF THE PROBE MODULE PROVED IT AGAIN: an optional capability found by type assertion
+// puts the burden on EVERY registrar that answers. A module that asks this recorder for
+// the capability and finds it absent either panics mid-inventory or withholds the route,
+// and then the published document describes a surface that is not the mounted one. In
+// tree, modules/sessions falls back safely (it loses a scoped grant, never a guard); a
+// module that chose to panic instead found this door missing, which is how it was caught.
+func (r recordingRegistrar) WithCollectionScope(CollectionScopeRef) RouteRegistrar {
+	return r
 }
 
 // collectModuleRoutes runs every module's APIRoutes against a recording registrar
@@ -125,10 +209,19 @@ func moduleSpecPath(r moduleRoute) string {
 // moduleRouteRawContentType reports the 200 content type of a module route that
 // does NOT return JSON, so the document declares it raw. Verified against the
 // handlers: the SSE streams (every route whose last path segment is
-// "stream" or "attach") and the one always-CSV export. Every other module route —
-// including the format-switched routes that DEFAULT to JSON (compliance evidence
-// export, /dora and the model-card render: ?format=csv|oscal|md is opt-in) —
-// returns the generic JSON envelope.
+// "stream" or "attach") and the TWO always-CSV FinOps exports. Every other module
+// route — including the format-switched routes that DEFAULT to JSON (compliance
+// evidence export, /dora and the model-card render: ?format=csv|oscal|md is
+// opt-in) — returns the generic JSON envelope.
+//
+// ⛔ THE CSV EXPORTS ARE MATCHED BY EXACT TUPLE — namespace, method AND whole
+// pattern — NEVER by the trailing "export" segment. Fifteen module routes end in
+// "export" and only these two are always CSV; the rest answer the JSON envelope
+// unless a ?format query asks otherwise. A suffix rule would fix this defect by
+// committing it thirteen more times, in the opposite direction, and the generated
+// clients would decode CSV where the server sends JSON.
+// openapi_finops_contracts_test.go TestModuleRouteRawContentTypeIsExactNotBySuffix
+// pins both halves.
 func moduleRouteRawContentType(r moduleRoute) (string, bool) {
 	if r.ns == "sessions" && r.method == http.MethodGet && r.pattern == "/work-stream" {
 		return "text/event-stream", true
@@ -139,6 +232,13 @@ func moduleRouteRawContentType(r moduleRoute) (string, bool) {
 	}
 	if r.ns == "finops" && r.method == http.MethodGet && r.pattern == "/spend/export" {
 		// modules/finops/focus.go: the FOCUS export is always CSV on 200.
+		return "text/csv", true
+	}
+	if r.ns == "finops" && r.method == http.MethodGet && r.pattern == "/statements/{id}/export" {
+		// modules/finops/statements.go handleExportStatement: the ONLY success path
+		// sets "text/csv; charset=utf-8" and writes rows with encoding/csv. The
+		// charset parameter belongs to the HTTP header; "text/csv" is the media-type
+		// key the document publishes. Every error branch stays writeJSON.
 		return "text/csv", true
 	}
 	return "", false
@@ -198,6 +298,24 @@ func oaBearer() []any { return []any{oaObj("bearerAuth", []any{})} }
 // envelope plus a 200 that is JSON (the default) or the raw content type the route
 // actually returns (SSE / export).
 func moduleResponses(r moduleRoute) map[string]any {
+	if sessionsLaunchReadinessRoute(r) {
+		// A typed contract, not the generic envelope: this route's whole value is
+		// that a console can render causes and pending checks without re-deriving
+		// the server's state machine, and it can only do that if the states, codes
+		// and remediations are published as closed enums.
+		return sessionsLaunchReadinessResponses()
+	}
+	if sessionsHostToolsRoute(r) {
+		// Same reason as the readiness sibling above: the value of this read is its
+		// closed state and group vocabulary, and the generic envelope publishes none
+		// of it. It declares NO query parameters, so it adds no branch to
+		// moduleRouteParameters - the ordinary path ref from the module registration
+		// is the whole parameter set, and a non-empty query string is a 400.
+		return sessionsHostToolsResponses()
+	}
+	if responses, ok := sessionsCommunicationResponses(r); ok {
+		return responses
+	}
 	resp := oaObj(
 		"400", oaJSONResp("bad request"),
 		"401", oaJSONResp("unauthenticated"),
@@ -235,7 +353,130 @@ func moduleResponses(r moduleRoute) map[string]any {
 	} else {
 		resp["200"] = oaJSONResp("OK")
 	}
+	// ⛔ THE THREE RUN CONTROLS ARE PUBLISHED LAST, AND THEY OVERRIDE.
+	//
+	// The generic set above assumes every module operation succeeds with 200 and
+	// answers with an unspecified object. For input/interrupt/stop both halves were
+	// measurably false, and an independent review read the published document
+	// against the handlers to prove it: input answers 202 on BOTH of its success
+	// paths while the contract advertised only 200, and all three can answer 503
+	// with a WorkError UNKNOWN — reproduced over real HTTP, SQLite and an owned
+	// child by removing one member of the four-column K2 authority stamp — while
+	// none of them published 503, because moduleResponses only adds it for the
+	// routes sessionsWorkRoute recognizes and that list is the work PLANE, not
+	// /runs/*.
+	//
+	// A drift-clean generator cannot notice either: openapi:check and sdk:check
+	// compare the artifact to the generator, and both agreed on the same wrong
+	// answer. What notices is a test that drives the real handler and compares what
+	// came back to what this function published — see the sessions module's
+	// run-control contract test.
+	if sessionsRunControlRoute(r) {
+		resp["503"] = oaWorkUnknownResp()
+		switch r.pattern {
+		case "/runs/{ref}/input":
+			// 202, and the 200 is DELETED rather than kept beside it: leaving both
+			// would publish a success this handler cannot produce, which is the same
+			// defect one size smaller.
+			delete(resp, "200")
+			resp["202"] = oaObj(
+				"description", "the input was accepted for the owned child; delivery is not confirmed by this response",
+				"content", oaObj("application/json", oaObj("schema", oaRunInputAcceptedSchema())),
+			)
+		case "/runs/{ref}/interrupt", "/runs/{ref}/stop":
+			resp["200"] = oaObj(
+				"description", "the run resource after the control was applied",
+				"content", oaObj("application/json", oaObj("schema", oaRunResourceSchema())),
+			)
+		}
+	}
+	if finopsEvidenceReadRoute(r) {
+		resp["200"] = finopsEvidenceResponse(r)
+		resp["500"] = oaJSONResp("store or evaluation failure")
+	}
+	if inventoryObservationHistoryRoute(r) {
+		resp["200"] = inventoryObservationPageResponse()
+		resp["500"] = oaJSONResp("stored observation evidence failed an integrity invariant, or the member repository cannot project distinct receipts; the body is the generic error and the reason goes to the operator log, never to the client")
+	}
+	if inferenceProxyContentFirewallRoute(r) {
+		resp["200"] = inferenceProxyContentFirewallResponse()
+	}
 	return resp
+}
+
+// sessionsRunControlRoute is the three OPERATE controls that reach an owned child
+// and can therefore answer with the fenced work plane's uncertainty verdict. It is
+// deliberately an explicit list rather than a prefix over /runs: the read routes,
+// attach, resume, cleanup and delete do not share this response contract.
+func sessionsRunControlRoute(r moduleRoute) bool {
+	if r.ns != "sessions" || r.method != http.MethodPost {
+		return false
+	}
+	switch r.pattern {
+	case "/runs/{ref}/input", "/runs/{ref}/interrupt", "/runs/{ref}/stop":
+		return true
+	}
+	return false
+}
+
+// oaRunInputAcceptedSchema is the exact body POST /runs/{ref}/input returns on
+// success. It is closed because the handler writes this one key and nothing else.
+func oaRunInputAcceptedSchema() map[string]any {
+	return oaObj(
+		"type", "object", "additionalProperties", false,
+		"required", oaEnum("accepted"),
+		"properties", oaObj("accepted", oaObj(
+			"type", "boolean",
+			"description", "Always true; a non-2xx status is the only way this operation reports refusal.",
+		)),
+	)
+}
+
+// oaRunResourceSchema is the run interrupt and stop answer with. It names the two
+// fields a caller must be able to rely on and stays OPEN on purpose: the run
+// resource carries further non-sensitive lifecycle facts, and freezing today's
+// field list here would publish a contract that is wrong the next time one is
+// added — the failure mode this whole section exists to remove.
+func oaRunResourceSchema() map[string]any {
+	return oaObj(
+		"type", "object", "additionalProperties", true,
+		"required", oaEnum("run_ref", "state"),
+		"properties", oaObj(
+			"run_ref", oaObj("type", "string", "description", "The operated session's stable reference."),
+			"state", oaObj("type", "string", "description", "The run's derived lifecycle state after the control."),
+		),
+	)
+}
+
+// oaWorkUnknownResp is the fenced control plane's third answer, published with
+// its real shape rather than as an unspecified object: the effect may or may not
+// have crossed to the child, and a caller that cannot tell that apart from a
+// refusal has been told nothing useful.
+func oaWorkUnknownResp() map[string]any {
+	envelope := oaObj(
+		"type", "object", "additionalProperties", true,
+		"required", oaEnum("verdict", "code", "error"),
+		"properties", oaObj(
+			"verdict", oaObj("type", "string", "enum", oaEnum("NO_HE_PODIDO_MIRAR"),
+				"description", "The uncertain verdict: the outcome could not be observed."),
+			"code", oaObj("type", "string",
+				"description", "The durable outcome name, e.g. work_input_ambiguous or evidence_unavailable."),
+			"error", oaObj(
+				"type", "object", "additionalProperties", true,
+				"required", oaEnum("code", "message"),
+				"properties", oaObj(
+					"code", oaObj("type", "string"),
+					"message", oaObj("type", "string"),
+				),
+			),
+			"evidence_ref", oaObj("type", "string",
+				"description", "Present when the refusal names the field or evidence it could not resolve."),
+		),
+	)
+	return oaObj(
+		"description", "the outcome is UNKNOWN: required authority, evidence or store could not be observed, and any external effect may or may not have crossed",
+		"content", oaObj("application/json", oaObj("schema", envelope)),
+	)
 }
 
 // moduleOperation builds one OpenAPI operation for a module route. The summary is
@@ -254,6 +495,9 @@ func moduleOperation(r moduleRoute) map[string]any {
 	if r.perm != "" {
 		o["x-required-permission"] = string(r.perm)
 	}
+	if sessionsCommunicationRoute(r) {
+		o["x-olivares-sdk-family"] = sessionsCommunicationSDKFamily
+	}
 	if moduleRouteIsMutation(r) {
 		o[moduleRequestBodyDispositionExtension] = string(moduleRequestBodyDispositionFor(r))
 	}
@@ -266,11 +510,16 @@ func moduleOperation(r moduleRoute) map[string]any {
 	params := []any{oaTenantParam()}
 	for _, p := range pathParamNames(r.pattern) {
 		schema := oaObj("type", "string")
+		description := "Path parameter " + p + "."
 		if p == "id" && sessionsProtocolBindingRoute(r) {
 			schema = oaProtocolBindingIDSchema()
 		}
+		if p == "id" && inventoryObservationHistoryRoute(r) {
+			schema = oaInventoryCanonicalIDSchema("Canonical lowercase nonzero UUID.")
+			description = "The catalog entity's core id as a canonical lowercase nonzero UUID; any other spelling is 400 before a row is read. The exact (kind, id) pair must exist in the tenant's catalog, or the answer is 404."
+		}
 		params = append(params, oaObj("name", p, "in", "path", "required", true,
-			"description", "Path parameter "+p+".", "schema", schema))
+			"description", description, "schema", schema))
 	}
 	params = append(params, moduleRouteParameters(r)...)
 	o["parameters"] = params
@@ -426,6 +675,18 @@ func protocolBindingListParameters() []any {
 // controls are uniform across every work mutation and are required for a
 // generated client to invoke validate, plan and apply correctly.
 func moduleRouteParameters(r moduleRoute) []any {
+	if inventoryObservationHistoryRoute(r) {
+		return inventoryObservationParameters()
+	}
+	if finopsEvidenceReadRoute(r) && r.pattern == "/alerts" {
+		return finopsAlertParameters()
+	}
+	if sessionsLaunchReadinessRoute(r) {
+		return sessionsLaunchReadinessParameters()
+	}
+	if params, ok := sessionsCommunicationParameters(r); ok {
+		return params
+	}
 	if sessionsProtocolBindingReconcile(r) {
 		mode := oaParam("mode", "query",
 			"Mandatory reconciliation phase. validate and plan are local and observational; test reads the peer without a local write; apply revalidates and commits the observation.",
@@ -526,6 +787,151 @@ func sessionsWorkPlanHashDescription(r moduleRoute) string {
 		return "SHA-256 plan hash required when mode=apply; apply must reproduce it."
 	}
 	return "Optional SHA-256 plan hash that apply must reproduce."
+}
+
+// --- inventory: the entity observation history (D08-C3) ------------------------
+//
+// GET /v1/m/inventory/entities/{kind}/{id}/observations is the first inventory
+// route published with a CLOSED contract instead of the generic envelope. The
+// handler (modules/inventory/api.go handleListEntityObservations) and its reader
+// (modules/inventory/provenance_read.go) already enforce every shape below; what
+// was missing was the document saying so, and an independent review measured the
+// cost: the beta document carried the route with no limit or cursor parameter, a
+// 200 of {type: object} and no 500, so the generated web client typed the query
+// as `never` and the page as `Record<string, never>`. A doc comment on the
+// handler is not a contract a generator can consume.
+//
+// The bounds here (1..25, default 25) mirror observationPageDefault and
+// observationPageMax in the inventory reader, which this package cannot import
+// (the dependency runs the other way). openapi_inventory_contracts_test.go pins
+// them: a change to the reader's bound is a change here, in the same commit.
+
+// inventoryObservationHistoryRoute recognizes EXACTLY the observation history
+// route of the inventory module — namespace, method and the whole pattern, never
+// a prefix. The catalog list (/entities), the detail route (/entities/{kind}/{id})
+// and any other module's route of the same shape keep the generic envelope.
+func inventoryObservationHistoryRoute(r moduleRoute) bool {
+	return r.ns == "inventory" && r.method == http.MethodGet &&
+		r.pattern == "/entities/{kind}/{id}/observations"
+}
+
+// inventoryCanonicalIDPattern is the exact text the inventory reader accepts for
+// an entity id, a receipt id and the page cursor: the lowercase hyphenated form
+// the store writes (model.ID.String). Braces, upper case, the URN prefix and the
+// 32-hex form parse elsewhere but are refused there, as request data (400) and
+// as stored data (evidence corruption). The all-zero value matches this pattern
+// and is refused too: OpenAPI has no exclusion keyword every generator honors,
+// so that half is stated in the descriptions.
+const inventoryCanonicalIDPattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+func oaInventoryCanonicalIDSchema(description string) map[string]any {
+	return oaObj("type", "string", "format", "uuid", "pattern", inventoryCanonicalIDPattern,
+		"description", description)
+}
+
+// inventoryObservationParameters is the page request the handler parses
+// (parseObservationQuery): each parameter at most once, limit in canonical decimal
+// within 1..25 (25 when absent), cursor a canonical nonzero receipt id. OpenAPI
+// cannot say "at most once" about a query parameter, so the 400 for a repeated
+// value is stated in the descriptions rather than left to discovery.
+func inventoryObservationParameters() []any {
+	return []any{
+		oaParam("limit", "query",
+			"Page size in distinct receipts, 1 through 25; 25 when absent. Canonical decimal only and at most once: a repeated, empty, non-decimal or out-of-range value is 400.",
+			false, oaObj("type", "integer", "minimum", 1, "maximum", 25, "default", 25)),
+		oaParam("cursor", "query",
+			"Exclusive keyset anchor, at most once: the cursor returned with the previous page, which is the receipt id of its last item; the page starts strictly after it in ascending receipt-id order. A canonical lowercase nonzero UUID; any other form, an empty value or a repeated cursor is 400.",
+			false, oaInventoryCanonicalIDSchema("Canonical lowercase nonzero receipt id.")),
+	}
+}
+
+// inventoryObservationPageResponse is the 200 of the observation history: the
+// engine-wide list envelope (listresponse.go) carrying this route's item schema,
+// closed at every level. cursor is present only when has_more is true.
+func inventoryObservationPageResponse() map[string]any {
+	schema := oaObj(
+		"type", "object", "additionalProperties", false,
+		"required", oaEnum("items", "has_more"),
+		"properties", oaObj(
+			"items", oaObj("type", "array", "maxItems", 25, "items", inventoryObservationItemSchema(),
+				"description", "One item per distinct receipt that names the entity, ascending by receipt id. Empty when the tenant stores no receipt for the entity, which does not prove it was never observed."),
+			"cursor", oaInventoryCanonicalIDSchema("The receipt id of the last item, present only when has_more is true; pass it as ?cursor to continue strictly after it."),
+			"has_more", oaObj("type", "boolean",
+				"description", "True when at least one more distinct matching receipt id exists past this page. It certifies nothing about that receipt's integrity: the page that composes it decides, and a lookahead is not a certificate."),
+		),
+	)
+	return oaObj(
+		"description", "One page of the entity's observation history. Every receipt on the page was validated against the writer's own encoding before any item was published: the page is whole, or it is refused with 500.",
+		"content", oaObj("application/json", oaObj("schema", schema)),
+	)
+}
+
+// inventoryObservationItemSchema is observationDTO (modules/inventory/dto.go)
+// field by field: a closed allowlist, so nothing reaches the wire that is not
+// named here. Absent on purpose — and asserted absent by the contract test — are
+// the event id, receipt key, facts hash and raw facts, the member's name,
+// reference, signal, host and native reference, the source label and binding
+// reference, the edge and cost payloads, and anything about the source's current
+// roster state, health, owner, grants or coverage.
+func inventoryObservationItemSchema() map[string]any {
+	instant := func(description string) map[string]any {
+		return oaObj("type", "string", "format", "date-time", "description", description)
+	}
+	return oaObj(
+		"type", "object", "additionalProperties", false,
+		"required", oaEnum("receipt_id", "event_type", "registration", "first_received_at", "last_received_at", "deliveries", "conflicting_redelivery"),
+		"properties", oaObj(
+			"receipt_id", oaInventoryCanonicalIDSchema("The platform receipt id. One item per receipt: a receipt whose members name this entity twice is still one item."),
+			"event_type", oaObj("type", "string", "enum", oaEnum("edge.observed", "cost.sampled"),
+				"description", "The first-party observation type the receipt recorded."),
+			"registration", inventoryObservationRegistrationSchema(),
+			"source_occurred_at", instant("The instant the SOURCE declared for the fact, taken from the validated member that names this entity; the same claim that feeds the catalog entry's occurred_at. Omitted when the source declared none."),
+			"first_received_at", instant("This platform's reception clock for the original delivery of the retained facts."),
+			"last_received_at", instant("This platform's reception clock for the last delivery that carried facts equal to the retained ones. A conflicting redelivery has its own counters and is not folded in."),
+			"deliveries", oaObj("type", "integer", "format", "int64", "minimum", 1,
+				"description", "Deliveries of the receipt with equal facts: the original plus exact replays. Not distinct activity, and conflicting variants are excluded."),
+			"conflicting_redelivery", oaObj("type", "boolean",
+				"description", "Whether at least one redelivery of this receipt carried DIFFERENT facts and was retained separately. A boolean by design: the conflicting facts, their count and their times are not published."),
+		),
+	)
+}
+
+// inventoryObservationRegistrationSchema is observationRegistrationDTO as the
+// three shapes it actually takes, each closed: the components exist ONLY for
+// registered_snapshot, where the recorded snapshot was complete. An incomplete
+// snapshot is published as invalid with no components (a partial identity is
+// never presented as one), and unattributed records that none was stamped.
+func inventoryObservationRegistrationSchema() map[string]any {
+	state := func(value, description string) map[string]any {
+		return oaObj("type", "string", "const", value, "description", description)
+	}
+	registered := oaObj(
+		"type", "object", "additionalProperties", false,
+		"required", oaEnum("registration_state", "source_id", "source_revision", "environment_ref"),
+		"properties", oaObj(
+			"registration_state", state("registered_snapshot", "The receipt recorded a complete registration snapshot when it was received."),
+			"source_id", oaObj("type", "string", "minLength", 1,
+				"description", "Persistent id of the roster row the snapshot named. A historical identifier, not a grant to read that row."),
+			"source_revision", oaObj("type", "integer", "format", "int64", "minimum", 1,
+				"description", "The roster revision the snapshot says was applied when the observation was produced; not the roster's current revision."),
+			"environment_ref", oaObj("type", "string", "minLength", 1,
+				"description", "The persistent local execution environment the snapshot recorded; not a host and not a workspace."),
+		),
+	)
+	unattributed := oaObj(
+		"type", "object", "additionalProperties", false,
+		"required", oaEnum("registration_state"),
+		"properties", oaObj("registration_state", state("unattributed", "No registration snapshot was stamped on the observation.")),
+	)
+	invalid := oaObj(
+		"type", "object", "additionalProperties", false,
+		"required", oaEnum("registration_state"),
+		"properties", oaObj("registration_state", state("invalid", "A snapshot was stamped but it was incomplete; its partial components are not published.")),
+	)
+	return oaObj(
+		"description", "The registration snapshot copied into the receipt when it was received: what the producer's registration looked like THEN. It is historical, not an attestation that the source is registered, healthy or readable now.",
+		"oneOf", []any{registered, unattributed, invalid},
+	)
 }
 
 func protocolBindingSpecInputSchema() map[string]any {
@@ -741,11 +1147,22 @@ func moduleRequestBody(r moduleRoute) (map[string]any, bool) {
 		case "/runs/{ref}/input":
 			schema = oaObj(
 				"type", "object",
-				"description", "One run input. Omit work_lease_fence for legacy non-work runs; a positive value selects fenced WorkItem control.",
+				"description", "One run input. line/message are RAW frames for a Claude stream-json child; text is a turn for a session driven by an owned provider protocol, which refuses a raw frame. Send one form, never both. Omit work_lease_fence for legacy non-work runs; a positive value selects fenced WorkItem control and is accepted with either form, so a work-bound driver run is spoken to through the same fence as its other controls.",
 				"additionalProperties", false,
 				"properties", oaObj(
 					"line", oaObj("type", "string", "minLength", 1),
 					"message", oaObj("type", "object", "additionalProperties", true),
+					"text", oaObj("type", "string", "minLength", 1),
+					"work_lease_fence", oaObj("type", "integer", "format", "int64", "minimum", 1),
+				),
+			)
+		case "/runs/{ref}/interrupt":
+			required = false
+			schema = oaObj(
+				"type", "object",
+				"description", "Optional fenced turn interruption. An empty body preserves legacy non-work run behavior; a positive work_lease_fence selects the same fenced WorkItem control plane this run's input and stop use. It cancels the active provider turn only: the owned process, its conversation and the run stay usable for the next input, and it never falls back to stop.",
+				"additionalProperties", false,
+				"properties", oaObj(
 					"work_lease_fence", oaObj("type", "integer", "format", "int64", "minimum", 1),
 				),
 			)

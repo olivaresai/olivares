@@ -2,8 +2,7 @@
 title: Verify what you downloaded
 description: >-
   Verify a release's signature, SLSA provenance, SBOM and OpenVEX attestations
-  before you run it — online (keyless) or fully offline (key-based). Never pipe
-  an installer straight into a shell.
+  before you run it. Never pipe an installer straight into a shell.
 ---
 
 A control plane is a security product, so the first thing you should do with a
@@ -26,7 +25,8 @@ only then run them. The steps below are how.
 | `*.sbom.sigstore.json` | SBOM (SPDX) as a signed in-toto attestation |
 | `*.vex.sigstore.json` | OpenVEX as a signed in-toto attestation |
 | `*.intoto.jsonl` | SLSA Build L3 provenance |
-| container image + Helm chart | published to a registry at release, pinned by digest |
+| container image | published to GHCR and Docker Hub, pinned and verified by digest |
+| Helm chart source | install from `deploy/helm/olivares`; no public OCI chart exists yet |
 
 ## The one-command path
 
@@ -35,22 +35,27 @@ verifies the signature over `checksums.txt`, re-computes every artifact's SHA-25
 then verifies the SBOM, OpenVEX and SLSA attestations.
 
 ```bash
-# Default: keyless (Sigstore). Needs network access to the transparency log (Rekor).
+# Default: keyless (Sigstore). Needs Rekor and Sigstore trusted-root material.
 scripts/verify-release.sh
 
-# Key-based (air-gap friendly): verify against the project's public key.
-scripts/verify-release.sh --key cosign.pub
-
-# Fully offline: no Rekor / no transparency-log network at all.
-scripts/verify-release.sh --key cosign.pub --offline
-
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.8.0
+scripts/verify-release.sh --source-tag v26.9.0
+
+# Key-based: only for files signed with a private key you control.
+# Releases are signed keyless and do not publish a public key.
+scripts/verify-release.sh --key /path/to/your-cosign.pub
 ```
 
-With `--offline` (or whenever a key is supplied) the script adds
-`--insecure-ignore-tlog` to every cosign call, so no Sigstore/Rekor network is used —
-this is the path for disconnected environments.
+`--key` checks signatures against a public key instead of the release workflow's identity, and
+ignores the transparency log. It proves that the files were signed with the matching private
+key, not that the project published them. Get that public key from its owner through a channel
+separate from the files you verify.
+
+`--offline` removes only the Rekor lookup from the cosign calls; it does not make verification
+network-free. Keyless verification still needs Sigstore trusted-root material, which cosign
+fetches unless it is already cached, and the script has no `--trusted-root` option. The SBOM
+and OpenVEX bundle checks need a trusted root even with `--key`, and the SLSA step runs
+`slsa-verifier` without an offline option.
 
 ## What it checks, step by step
 
@@ -125,9 +130,12 @@ Always deploy the image **by digest** (`@sha256:…`), never by a mutable tag.
 
 ## In an air-gapped environment
 
-If you cannot reach the network at all, use the **air-gap bundle**, which carries a
-public key and verifies everything offline (no Rekor). See
-[Install in an air-gapped environment](/how-to/air-gap-install/).
+An operator builds the **air-gap bundle** with a cosign key they control, and the bundle
+carries the matching `cosign.pub`. Its scripts check the Helm chart and the saved images
+against that key without Rekor; an image passes only if it carries a signature made with that
+key. A key read from the bundle it verifies does not authenticate that bundle: before you trust
+the bundle, compare its key with a copy that the key owner gave you through a separate channel.
+See [Install in an air-gapped environment](/how-to/air-gap-install/).
 
 :::note[Honest note on attestation availability]
 Verification is only as complete as the attestations a given release actually

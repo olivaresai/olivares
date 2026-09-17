@@ -4,6 +4,14 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
 set -euo pipefail
+
+_olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+	echo "FATAL: cannot source $_olivares_git_env (git-env isolation)" >&2
+	exit 2
+}
+unset _olivares_git_env
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK="$ROOT/scripts/check-c03-41-plugin-census-prep.sh"
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
@@ -25,6 +33,12 @@ stage() {
   cp "$ROOT/cmd/olivares/firstparty/bins/PLACEHOLDER" "$TMP/tree/cmd/olivares/firstparty/bins/"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-c03-41-plugin-census-prep.sh"
+  cat >"$TMP/tree/.gitignore" <<'EOF'
+/cmd/olivares/firstparty/bins/*
+!/cmd/olivares/firstparty/bins/PLACEHOLDER
+EOF
+  git -C "$TMP/tree" init -q
+  git -C "$TMP/tree" add -- .
 }
 run() {
   local rc=0
@@ -87,6 +101,35 @@ rm -f "$TMP/tree/design/c03-41-plugin-census-prep-2026-08-20.json"
 run
 if [ "$(cat "$TMP/rc")" = 2 ]; then ok "missing JSON is COULD NOT LOOK"
 else bad "missing JSON rc=$(cat "$TMP/rc") want 2 ($(cat "$TMP/err"))"; fi
+
+stage
+touch "$TMP/tree/cmd/olivares/firstparty/bins/kafka-source"
+run
+if [ "$(cat "$TMP/rc")" = 0 ]; then
+  ok "no-fire: ignored build artifacts on disk do not change the HOLD census"
+else
+  bad "ignored disk artifact should stay CLEAN ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+stage
+git -C "$TMP/tree" rm -q -f --cached -- cmd/olivares/firstparty/bins/PLACEHOLDER
+run
+if [ "$(cat "$TMP/rc")" = 1 ]; then
+  ok "mutant (PLACEHOLDER absent from the git index) is killed"
+else
+  bad "indexed PLACEHOLDER deletion stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"
+fi
+
+stage
+touch "$TMP/tree/cmd/olivares/firstparty/bins/kafka-source"
+git -C "$TMP/tree" add -f -- cmd/olivares/firstparty/bins/kafka-source
+rm -f "$TMP/tree/cmd/olivares/firstparty/bins/kafka-source"
+run
+if [ "$(cat "$TMP/rc")" = 1 ]; then
+  ok "mutant (extra bin in the git index but absent on disk) is killed"
+else
+  bad "indexed extra bin stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"
+fi
 
 stage
 run

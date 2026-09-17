@@ -25,16 +25,20 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
 - **Die Ersteinrichtung ist credential-frei.** Eine frische Installation hat
   **keine Standard-Credentials**; die Engine gibt beim ersten Boot ein einmaliges,
   nur einmal verwendbares Setup-Token aus.
+- **Offizielle Codex- und Grok-CLIs sind Session-Treiber, wenn sie gepinnt sind.**
+  `OLIVARES_SESSION_RUNTIME_CODEX_BIN` oder `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  zu setzen registriert diesen Treiber auf dem Knoten. Ungesetzt bleiben Profile
+  dieses Treibers beobachtbar und sind nicht startbar. Starts laufen über ein
+  [Anbieterprofil](/how-to/operate-provider-sessions/).
+  `CHANGELOG.md` `[26.9.0]` behauptet **keine** Kompatibilität mit einem
+  authentifizierten offiziellen Grok-Konto.
 - **Die REST-API und das Audit-Ledger sind real.** Die [API-Referenz](/reference/api/)
   wird aus dem eigenen OpenAPI-3.1-Vertrag des Produkts gerendert. Das Audit-Ledger
   ist append-only und hash-chained mit Ed25519-signierten Checkpoints und kann in
   mehreren SIEM-Formaten exportiert werden.
 - **Releases sind signiert und offline verifizierbar.** Signatur, SLSA-Provenienz,
   SBOM und OpenVEX lassen sich allesamt [ohne Netzwerkzugang verifizieren](/de/how-to/verify-a-release/),
-  und das Produkt liefert ein [Air-Gap-Bundle](/de/how-to/air-gap-install/). **Es gibt
-  noch kein getaggtes Release**, dies beschreibt also, was ein Release enthalten wird,
-  kein Artefakt, das Sie heute herunterladen und verifizieren können — derselbe
-  Vorbehalt, den `SECURITY.md` nennt.
+  und das Produkt liefert ein [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **v26.9.0**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
 
 ## Open Core — was offen ist vs. Enterprise
 
@@ -149,7 +153,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   vermittelte Frontier-Modelle können das nicht.
 - **Modul-Routen sind ein separater, Beta-Vertrag.** Die Modul-Endpunkte (zum
   Beispiel der Access-Map-Graph und der Drift) sind nicht Teil des stabilen
-  53-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
+  54-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
   die [Modul-Routen-Referenz](/reference/api-beta/) (ausgeliefert unter
   `/openapi.beta.json`). Beta bedeutet, dass sich die Formen mit Vorankündigung
   ändern können, und der Detailgrad auf Feldebene lebt weiterhin in den typisierten

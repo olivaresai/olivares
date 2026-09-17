@@ -20,7 +20,8 @@
 // it off the stream-json init frame).
 
 import type { RunDTO, RunState, Transport } from '@/features/agentops/types'
-import type { LiveDTO } from './types'
+import type { Attribution, LiveDTO } from './types'
+import type { SessionTarget } from './session-target'
 
 /** Where the session came from — a fact ABOUT THE SESSION, not a menu section.
  *  - `launched`   Olivares started this process; at least one run links to it.
@@ -58,11 +59,20 @@ export type CapabilityId =
 
 /** One session, however it reached us. */
 export interface UnifiedSession {
-  /** Stable row identity. `sess:<ref>` when a session id is known (observed, or
-   * announced by a run), else `run:<ref>` — so two runs on ONE session are one row. */
+  /** Stable row identity. `live:<live_ref>` for a profile-scoped live row (B2 —
+   * two homes may announce one id, so the row's own id is the key); `sess:<ref>`
+   * for a LEGACY row or a legacy run's session; else `run:<ref>` — so two runs on
+   * ONE session are one row. */
   key: string
   /** The observed session reference, when the plane knows one. */
   sessionRef?: string
+  /** B2: the exact live row this session IS (absent for a run-only row whose managed
+   * row has not been proven yet). */
+  liveRef?: string
+  /** B2: which channel the live row was folded from (absent without a row). */
+  attribution?: Attribution
+  /** B2: the provider profile the row, or the run, is attributed to. */
+  profileRef?: string
   /** Every run that drives this session, newest first. Length > 1 is a real state
    * (a resume, or a second launch against the same Claude session), so this is a
    * list rather than a winner picked by the console. */
@@ -274,9 +284,49 @@ function activityOf(live: LiveDTO | undefined, runs: RunDTO[]): number {
  * and would have folded a Claude run onto a Codex session that happened to share it.
  */
 export function runMatchesObserved(run: RunDTO, live: LiveDTO): boolean {
+  // B2: a PROFILED run is joined to its session by the row the plane PROVED — the
+  // managed row whose id the run carries — and by nothing else. A legacy run never
+  // joins a profile-scoped row: two homes may announce the very id it captured.
+  if (run.provider_profile_ref || isScopedRow(live)) {
+    return (
+      !!run.live_ref &&
+      run.live_ref === live.live_ref &&
+      live.attribution === 'managed'
+    )
+  }
   if (!run.claude_session_id) return false
   if (run.claude_session_id !== live.session_ref) return false
   return !live.engine || live.engine === 'claude'
+}
+
+/** A row folded under a profile, a known source or the plane's bridge — anything
+ * but the legacy channel. Its identity is its `live_ref`, never its external id. */
+export function isScopedRow(live: LiveDTO): boolean {
+  return !!live.attribution && live.attribution !== 'legacy'
+}
+
+/** The row key of a live row: the row's own id when scoped, the bare external id
+ * (the legacy join key) otherwise. */
+export function liveRowKey(live: LiveDTO): string {
+  return isScopedRow(live)
+    ? `live:${live.live_ref}`
+    : `sess:${live.session_ref}`
+}
+
+/**
+ * What the card should open on for a row: a scoped row by its `live_ref` (the only
+ * unambiguous name it has), a legacy row by its bare id, and a run-only row by its
+ * run — a profiled run then resolves its own managed row from the engine.
+ */
+export function sessionTarget(s: UnifiedSession): SessionTarget {
+  if (s.liveRef && (s.live ? isScopedRow(s.live) : true)) {
+    return { liveRef: s.liveRef }
+  }
+  const run = primaryRun(s.runs)
+  if (s.sessionRef && !(run?.provider_profile_ref && !s.live)) {
+    return { sessionRef: s.sessionRef }
+  }
+  return { runRef: run?.run_ref }
 }
 
 /**
@@ -294,10 +344,13 @@ export function mergeSessions(
   const rows = new Map<string, UnifiedSession>()
 
   for (const l of live) {
-    const key = `sess:${l.session_ref}`
+    const key = liveRowKey(l)
     rows.set(key, {
       key,
       sessionRef: l.session_ref,
+      liveRef: l.live_ref || undefined,
+      attribution: l.attribution,
+      profileRef: l.provider_profile_ref || undefined,
       runs: [],
       live: l,
       provenance: 'discovered',
@@ -308,7 +361,16 @@ export function mergeSessions(
 
   for (const run of runs) {
     const sid = run.claude_session_id
-    const key = sid ? `sess:${sid}` : `run:${run.run_ref}`
+    // B2: a profiled run's only join is the managed row the plane proved for it
+    // (`run.live_ref`). A legacy run joins the LEGACY row of its bare id, as before.
+    const profiled = !!run.provider_profile_ref
+    const key = profiled
+      ? run.live_ref
+        ? `live:${run.live_ref}`
+        : `run:${run.run_ref}`
+      : sid
+        ? `sess:${sid}`
+        : `run:${run.run_ref}`
     const existing = rows.get(key)
     // An observed row that declares a DIFFERENT engine is not this run's session, so
     // the run keeps its own row rather than being folded onto a stranger.
@@ -317,6 +379,8 @@ export function mergeSessions(
       rows.set(own, {
         key: own,
         sessionRef: undefined,
+        liveRef: profiled ? run.live_ref || undefined : undefined,
+        profileRef: run.provider_profile_ref || undefined,
         runs: [run],
         provenance: 'launched',
         control: 'observe',
@@ -326,11 +390,17 @@ export function mergeSessions(
     }
     if (existing) {
       existing.runs.push(run)
+      if (!existing.profileRef && run.provider_profile_ref)
+        existing.profileRef = run.provider_profile_ref
       continue
     }
     rows.set(key, {
       key,
+      // A profiled run's captured id is scoped to its profile: it is shown, but it
+      // is not a key anything else may join on.
       sessionRef: sid || undefined,
+      liveRef: profiled ? run.live_ref || undefined : undefined,
+      profileRef: run.provider_profile_ref || undefined,
       runs: [run],
       provenance: 'launched',
       control: 'observe',
@@ -368,6 +438,8 @@ export function sessionSearchKey(s: UnifiedSession): string {
   return [
     sessionLabel(s),
     s.sessionRef ?? '',
+    s.liveRef ?? '',
+    s.profileRef ?? '',
     ...s.runs.map((r) => r.run_ref),
     ...s.runs.map((r) => r.name ?? ''),
   ]

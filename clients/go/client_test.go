@@ -361,3 +361,46 @@ func TestNewRejectsBadEndpoint(t *testing.T) {
 		}
 	}
 }
+
+// statementExportCSV is a faithful answer from GET /v1/m/finops/statements/{id}/export:
+// the handler's nine columns and one line. The 9007199254740993 is 2^53+1 — it is the
+// oracle, not filler. Any consumer that routed this value through a JSON number and an
+// IEEE double would hand back 9007199254740992.
+const statementExportCSV = "cost_center_code,cost_center_name,model,provider,agent,input_tokens,output_tokens,cost_micro_usd,sample_count\n" +
+	"ENG-01,Engineering,claude-opus-5,anthropic,,100,50,9007199254740993,1\n"
+
+// TestStatementExportOperationConsumesCSV drives the GENERATED operation against a
+// server that answers what the real handler answers.
+//
+// ⛔ THE DEFECT THIS CLOSES. While the document declared this 200 an application/json
+// object, the generator emitted `map[string]any` + c.do, so this exact response died in
+// json.Unmarshal with bad_response — a valid 200 that no generated Go client could read.
+// The test is on the OPERATION, not on doRaw: the transport seam was always correct, and
+// exercising it directly would have stayed green through the whole defect.
+func TestStatementExportOperationConsumesCSV(t *testing.T) {
+	var got *http.Request
+	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Clone(context.Background())
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="chargeback_ENG-01_2026-06-01.csv"`)
+		_, _ = io.WriteString(w, statementExportCSV)
+	}))
+
+	body, err := c.GetV1MFinopsStatementsByIDExport(context.Background(), "01a084d5-988c-7e46-b396-5cff04bf2793")
+	if err != nil {
+		t.Fatalf("generated statement export operation failed on a valid CSV 200: %v", err)
+	}
+	if string(body) != statementExportCSV {
+		t.Errorf("body = %q, want the CSV byte-for-byte", body)
+	}
+	if !strings.Contains(string(body), "9007199254740993") {
+		t.Errorf("the exact micro-USD integer did not survive: %q", body)
+	}
+	if got.URL.Path != "/v1/m/finops/statements/01a084d5-988c-7e46-b396-5cff04bf2793/export" {
+		t.Errorf("path = %q, want the id interpolated into the export route", got.URL.Path)
+	}
+	// A CSV-only route must not demand JSON: the server does not negotiate.
+	if accept := got.Header.Get("Accept"); accept == "application/json" {
+		t.Errorf("Accept = %q, want no JSON demand on a raw operation", accept)
+	}
+}

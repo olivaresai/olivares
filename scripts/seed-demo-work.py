@@ -746,6 +746,98 @@ def sembrar_politica(base, token, tenant):
     return 0
 
 
+# ── IDENTIDAD DE UN PERFIL DE PROVEEDOR ───────────────────────────────────────────────────────
+# A provider profile is identified by what cannot change on it — driver, execution environment,
+# canonical config_home and user_home — never by `display_name`, which is presentation an
+# operator may rename or reuse. After a 409 on create, the seeder therefore walks EVERY page of
+# the tenant's active profiles, keeps the candidates the server reports as local and operable,
+# and confirms each one through the authorized configuration read. Exactly one exact identity
+# is the profile; zero or several is red before any run exists.
+PROFILE_DRIVER = "claude"
+PROFILE_LIST_PAGE = 100
+
+
+def perfil_lanzable_ahora(base, token, tenant, profile_ref):
+    """Re-read the profile and require the facts the launch needs, as of now."""
+    code, leido = pedir(base, token, tenant, "GET",
+                        "/v1/m/sessions/provider-profiles/"
+                        + urllib.parse.quote(profile_ref, safe=""))
+    if code != 200 or leido.get("profile_ref") not in (None, profile_ref):
+        print("ERROR: el perfil %s no se pudo releer: %s %s" % (profile_ref, code, leido),
+              file=sys.stderr)
+        return False
+    if (leido.get("driver") != PROFILE_DRIVER or leido.get("state") != "active"
+            or leido.get("local_environment") is not True or leido.get("operable") is not True):
+        print("ERROR: el perfil %s no es lanzable en este nodo ahora mismo: %s"
+              % (profile_ref, leido), file=sys.stderr)
+        return False
+    return True
+
+
+def resolver_perfil_por_identidad(base, token, tenant, config_home, user_home):
+    """Return the ONE active, local, operable profile whose immutable identity is exactly
+    (claude, this environment, config_home, user_home), or None after printing why."""
+    candidatos = []
+    cursor = None
+    vistas = 0
+    while True:
+        ruta = "/v1/m/sessions/provider-profiles?state=active&limit=%d" % PROFILE_LIST_PAGE
+        if cursor:
+            ruta += "&" + urllib.parse.urlencode({"cursor": cursor})
+        code, pagina = pedir(base, token, tenant, "GET", ruta)
+        if code != 200:
+            print("ERROR: no se pudo listar los perfiles activos (%s) %s" % (code, pagina),
+                  file=sys.stderr)
+            return None
+        vistas += 1
+        for item in (pagina.get("items") or []):
+            if (item.get("driver") == PROFILE_DRIVER and item.get("state") == "active"
+                    and item.get("local_environment") is True
+                    and item.get("operable") is True and item.get("profile_ref")):
+                candidatos.append(item["profile_ref"])
+        cursor = pagina.get("cursor") if pagina.get("has_more") else None
+        if not cursor:
+            break
+        if vistas > 1000:
+            print("ERROR: la lista de perfiles no termina (has_more sin fin)", file=sys.stderr)
+            return None
+
+    exactos = []
+    for ref in candidatos:
+        escapado = urllib.parse.quote(ref, safe="")
+        # The authorized configuration read is the only surface that carries the homes; it
+        # must answer for THIS ref, now, or the candidate cannot be confirmed.
+        code, conf = pedir(base, token, tenant, "GET",
+                           "/v1/m/sessions/provider-profiles/%s/configuration" % escapado)
+        if code != 200:
+            print("   perfil %s: configuracion no autorizada o no legible (%s); descartado"
+                  % (ref, code), file=sys.stderr)
+            continue
+        code, detalle = pedir(base, token, tenant, "GET",
+                              "/v1/m/sessions/provider-profiles/%s" % escapado)
+        if code != 200:
+            continue
+        if (conf.get("profile_ref") == ref and conf.get("driver") == PROFILE_DRIVER
+                and detalle.get("driver") == PROFILE_DRIVER
+                and conf.get("environment_ref") and detalle.get("environment_ref")
+                and conf.get("environment_ref") == detalle.get("environment_ref")
+                and detalle.get("local_environment") is True
+                and conf.get("config_home") == config_home
+                and conf.get("user_home") == user_home):
+            exactos.append(ref)
+
+    if len(exactos) == 1:
+        return exactos[0]
+    if not exactos:
+        print("ERROR: ningun perfil activo de este entorno tiene exactamente estas homes "
+              "(%d candidato(s) en %d pagina(s)); no se lanza con una identidad no verificada"
+              % (len(candidatos), vistas), file=sys.stderr)
+    else:
+        print("ERROR: %d perfiles reclaman la misma identidad (%s); ambiguedad, no se lanza"
+              % (len(exactos), ", ".join(exactos)), file=sys.stderr)
+    return None
+
+
 # ── WORKSPACE DE SESION + RUN OPERADO ───────────────────────────────────────────────────────────
 # The engine seed creates observed sessions and authz workspaces, but neither sessions.workspace
 # host roots nor sessions.run lifecycle rows. They are deliberately different models despite the
@@ -800,6 +892,42 @@ def sembrar_workspace_y_run(base, token, tenant, root):
               % (code, sorted(n for n in names if n), files), file=sys.stderr)
         return 1
 
+    # B2: a launch names the provider PROFILE it runs under — once profiled launches are
+    # enabled the engine refuses one without it. The demo home is a real, existing directory
+    # inside the demo workspace root (the engine validates the paths on this host and creates
+    # nothing); registering it installs nothing and logs nothing in. The launch below and the
+    # /provider-profiles and /provider-bindings captures both photograph this profile.
+    home_root = os.path.join(root, ".olivares-provider-home")
+    config_home = os.path.join(home_root, "config")
+    user_home = os.path.join(home_root, "user")
+    os.makedirs(config_home, exist_ok=True)
+    os.makedirs(user_home, exist_ok=True)
+    profile_name = "acme-platform Claude home"
+    code, created_profile = pedir(base, token, tenant, "POST",
+                                  "/v1/m/sessions/provider-profiles", {
+        "driver": "claude",
+        "config_home": config_home,
+        "user_home": user_home,
+        "display_name": profile_name,
+    })
+    profile_ref = created_profile.get("profile_ref") if code in (200, 201) else None
+    if not profile_ref and code == 409:
+        # An earlier seed of this estate already owns the home. The profile IS the identity
+        # of that home (driver + environment + canonical homes), so it is resolved by that
+        # identity — never by its label, which anyone may rename or reuse.
+        profile_ref = resolver_perfil_por_identidad(
+            base, token, tenant,
+            os.path.realpath(config_home), os.path.realpath(user_home))
+        if not profile_ref:
+            return 1
+    if not profile_ref:
+        print("ERROR: provider profile -> %s %s" % (code, created_profile), file=sys.stderr)
+        return 1
+    # Re-read IMMEDIATELY before the launch: the identity may be right and the profile
+    # still not launchable here (disabled, retired, foreign, driver not operated).
+    if not perfil_lanzable_ahora(base, token, tenant, profile_ref):
+        return 1
+
     # remote-control avoids inventing an inference credential. The capture engine points its real
     # procRunner at scripts/demo-agent.sh, so this still exercises admission, process lifecycle,
     # provider-session binding and the ledger without touching a real Claude account.
@@ -812,6 +940,7 @@ def sembrar_workspace_y_run(base, token, tenant, root):
         "workspace_ref": workspace_ref,
         "isolation": "native",
         "env_allow": [],
+        "provider_profile_ref": profile_ref,
     })
     if code not in (200, 201):
         print("ERROR: run -> %s %s" % (code, created_run), file=sys.stderr)
@@ -826,36 +955,41 @@ def sembrar_workspace_y_run(base, token, tenant, root):
     read_run = {}
     # The create response proves the process started, not that its asynchronous init frame was
     # parsed and joined. Poll that stronger fact before declaring the estate photographable.
+    # A PROFILED run is joined to its session by the MANAGED row the bridge proved (live_ref),
+    # never by the bare external id two homes may share (B2), so that is the fact polled here.
     for _ in range(50):
         code, read_run = pedir(base, token, tenant, "GET",
                                "/v1/m/sessions/runs/" + escaped_run)
         if (code == 200 and read_run.get("state") in ("running", "idle") and
-                read_run.get("claude_session_id") == DEMO_LIVE_SESSION):
+                read_run.get("claude_session_id") == DEMO_LIVE_SESSION and
+                read_run.get("live_ref")):
             break
         time.sleep(0.1)
     else:
         print("ERROR: el run no quedo vivo y unido a %s: code=%s run=%s"
               % (DEMO_LIVE_SESSION, code, read_run), file=sys.stderr)
         return 1
+    live_ref = read_run["live_ref"]
 
-    query = urllib.parse.urlencode({"claude_session_id": DEMO_LIVE_SESSION, "limit": 200})
+    query = urllib.parse.urlencode({"live_ref": live_ref, "limit": 200})
     code, joined = pedir(base, token, tenant, "GET", "/v1/m/sessions/runs?" + query)
     refs = {item.get("run_ref") for item in (joined.get("items") or [])}
     if code != 200 or run_ref not in refs:
-        print("ERROR: la consulta de procedencia no devuelve el run %s (%s) %s"
+        print("ERROR: la consulta de procedencia por live_ref no devuelve el run %s (%s) %s"
               % (run_ref, code, joined), file=sys.stderr)
         return 1
 
-    code, live = pedir(base, token, tenant, "GET", "/v1/m/sessions/live?limit=200")
-    live_refs = {item.get("session_ref") for item in (live.get("items") or [])}
-    if code != 200 or DEMO_LIVE_SESSION not in live_refs:
-        print("ERROR: la mitad observada %s no aparece en /live (%s) %s"
-              % (DEMO_LIVE_SESSION, code, live), file=sys.stderr)
+    code, live = pedir(base, token, tenant, "GET",
+                       "/v1/m/sessions/live/by-id/" + urllib.parse.quote(live_ref, safe=""))
+    if code != 200 or live.get("session_ref") != DEMO_LIVE_SESSION:
+        print("ERROR: la fila gestionada %s no aparece en /live/by-id (%s) %s"
+              % (live_ref, code, live), file=sys.stderr)
         return 1
 
-    print("agentops sembrado y RELEIDO: workspace %s ro con Browse files · run %s %s · "
-          "origen Launched unido a %s"
-          % (workspace_ref, run_ref, read_run.get("state"), DEMO_LIVE_SESSION))
+    print("agentops sembrado y RELEIDO: workspace %s ro con Browse files · perfil %s · run %s %s · "
+          "origen Launched unido a %s por la fila %s"
+          % (workspace_ref, profile_ref, run_ref, read_run.get("state"), DEMO_LIVE_SESSION,
+             live_ref))
     return 0
 
 

@@ -573,6 +573,20 @@ func (m *Module) handleListAlerts(w http.ResponseWriter, r *http.Request, mc api
 	if bid := r.URL.Query().Get("budget_id"); bid != "" {
 		q.Filters = append(q.Filters, eq(colBudgetID, bid))
 	}
+	// A4.2: retrieve one alert's evidence BY ITS OWN ID, through the same permission,
+	// the same tenant scope and the same paginated envelope as the list. The id is
+	// validated with the engine's own parser, so a malformed reference is a 400 here
+	// rather than an unfiltered read; another tenant's id simply matches nothing,
+	// because the repository is bound to the caller's tenant. Holding a reference
+	// grants nothing on its own.
+	if aid := r.URL.Query().Get("alert_id"); aid != "" {
+		id, err := model.ParseID(aid)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorBody("invalid alert_id"))
+			return
+		}
+		q.Filters = append(q.Filters, eq(model.ColID, id.String()))
+	}
 	out := listResponse[alertDTO]{Items: []alertDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(budgetAlertKind)
@@ -584,7 +598,7 @@ func (m *Module) handleListAlerts(w http.ResponseWriter, r *http.Request, mc api
 			return err
 		}
 		for _, rec := range recs {
-			out.Items = append(out.Items, toAlertDTO(rec))
+			out.Items = append(out.Items, toAlertDTO(rec, sc.Tenant()))
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil

@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -18,8 +19,13 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// The estate below is driven only through supported product paths: ordinary
+// Open, the DBA inventory installation command seam and the maintenance
+// ceremony. No control row or epoch is rewound by raw SQL; the only DBA acts
+// are the ones a real operator performs on the closed routine (install, drift
+// it, drop it, reinstall it).
 func TestDirectoryEpochPostgresSplitOwnerNoAdminStatusAndHeal(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
 	pg := isolatedPGSplit(t)
 	fixed := model.NewTimestamp(time.Date(2001, time.February, 3, 4, 5, 6, 0, time.UTC))
@@ -28,15 +34,22 @@ func TestDirectoryEpochPostgresSplitOwnerNoAdminStatusAndHeal(t *testing.T) {
 		AdminDSN: pg.Admin, MaxConns: 1,
 		Clock: transactionClockFixedAppClock{now: fixed},
 	}
+	noAdmin := full
+	noAdmin.AdminDSN = ""
 	st, err := Open(ctx, full, nil)
 	if err != nil {
 		t.Fatalf("open split-owner directory store: %v", err)
 	}
+	// Fresh estate, first boot, before SYSTEM genesis: the pinned AdminDSN snapshot
+	// proves an empty inventory and the status says so instead of claiming coverage.
 	directoryEpochTestWantStatus(t, st, store.DirectoryStatus{
-		EpochCoverageComplete: true,
-		ControlMode:           store.DirectoryControlStaged,
-		WriterPosture:         store.DirectoryWriterSplitOwner,
-		ExpectedGeneration:    1,
+		EpochCoverageComplete:      false,
+		ControlMode:                store.DirectoryControlStaged,
+		WriterPosture:              store.DirectoryWriterSplitOwner,
+		ExpectedGeneration:         1,
+		CoverageProtocol:           coverageProtocolLegacy,
+		InventoryAuthority:         "admin_dsn",
+		InventoryUnavailableReason: "system_bootstrap_pending",
 	})
 	beforeCreate := time.Now().UTC().Add(-time.Second)
 	tenant := provisionTenant(t, st, "directory-pg-split")
@@ -64,73 +77,321 @@ func TestDirectoryEpochPostgresSplitOwnerNoAdminStatusAndHeal(t *testing.T) {
 		t.Fatalf("seeded PostgreSQL DB time=%s err=%v outside [%s,%s]",
 			seeded.createdAt, err, beforeCreate, afterCreate)
 	}
-	directoryEpochTestDeletePostgresRow(t, app, tenant)
-
-	owner, err := sql.Open("pgx", pg.Owner)
-	if err != nil {
-		t.Fatalf("open raw owner pool: %v", err)
+	stagedLegacy := directoryWriterControlState{
+		Mode: directoryWriterStaged, ExpectedGeneration: 1, CoverageProtocol: coverageProtocolLegacy,
 	}
-	defer owner.Close() //nolint:errcheck
-	if _, err := owner.ExecContext(ctx, `UPDATE public.directory_writer_control
-SET mode = 'enforced', expected_generation = 7`); err != nil {
-		t.Fatalf("activate test writer control: %v", err)
-	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, stagedLegacy, seeded)
 
-	noAdmin := full
-	noAdmin.AdminDSN = ""
+	// Staged legacy, no AdminDSN, no closed routine: the ordinary Open still takes
+	// the writer transaction and the global lock, and publishes an explicitly
+	// incomplete witness. The reason is the missing routine, never an attested
+	// empty estate, and the counts stay zero because nothing was enumerated.
 	incomplete, err := Open(ctx, noAdmin, nil)
 	if err != nil {
-		t.Fatalf("no-admin split-owner boot: %v", err)
+		t.Fatalf("staged no-admin split-owner boot without routine: %v", err)
 	}
 	directoryEpochTestWantStatus(t, incomplete, store.DirectoryStatus{
-		EpochCoverageComplete: false,
-		ControlMode:           store.DirectoryControlEnforced,
-		WriterPosture:         store.DirectoryWriterSplitOwner,
-		ExpectedGeneration:    7,
+		EpochCoverageComplete:      false,
+		ControlMode:                store.DirectoryControlStaged,
+		WriterPosture:              store.DirectoryWriterSplitOwner,
+		ExpectedGeneration:         1,
+		CoverageProtocol:           coverageProtocolLegacy,
+		InventoryUnavailableReason: "closed_routine_missing",
 	})
-	if _, found := directoryEpochTestReadPostgresRow(t, app, tenant); found {
-		t.Fatal("no-admin boot mutated missing epoch despite incomplete coverage")
-	}
 	if err := incomplete.Close(); err != nil {
 		t.Fatalf("close incomplete boot: %v", err)
 	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, stagedLegacy, seeded)
 
-	beforeHeal := time.Now().UTC().Add(-time.Second)
-	healed, err := Open(ctx, full, nil)
+	// The incomplete witness is produced UNDER the global writer lock, not by an
+	// early read outside the reconcile transaction: while a foreign session holds
+	// that lock the same staged no-admin Open is measurably blocked on it and
+	// publishes nothing until the holder lets go.
+	super, err := sql.Open("pgx", pg.Superuser)
 	if err != nil {
-		t.Fatalf("authoritative healing boot: %v", err)
+		t.Fatalf("open raw superuser pool: %v", err)
 	}
-	afterHeal := time.Now().UTC().Add(time.Second)
-	directoryEpochTestWantStatus(t, healed, store.DirectoryStatus{
-		EpochCoverageComplete: true,
-		ControlMode:           store.DirectoryControlEnforced,
-		WriterPosture:         store.DirectoryWriterSplitOwner,
-		ExpectedGeneration:    7,
+	defer super.Close() //nolint:errcheck
+	holder, err := app.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin foreign writer lock holder: %v", err)
+	}
+	defer holder.Rollback() //nolint:errcheck // release even if the lock/barrier assertion fails
+	if _, err := holder.ExecContext(ctx,
+		`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 0))`,
+		directoryWriterLockKey); err != nil {
+		t.Fatalf("hold foreign writer lock: %v", err)
+	}
+	blocked := make(chan error, 1)
+	go func() {
+		st, err := Open(ctx, noAdmin, nil)
+		if err != nil {
+			blocked <- err
+			return
+		}
+		got, supported, err := st.(store.DirectoryStatuser).DirectoryStatus(ctx)
+		if closeErr := st.Close(); err == nil {
+			err = closeErr
+		}
+		if want := (store.DirectoryStatus{
+			ControlMode: store.DirectoryControlStaged, WriterPosture: store.DirectoryWriterSplitOwner,
+			ExpectedGeneration: 1, CoverageProtocol: coverageProtocolLegacy, InventoryUnavailableReason: "closed_routine_missing",
+		}); err == nil && (!supported || got != want) {
+			err = fmt.Errorf("status after the lock was released = %+v supported=%t, want %+v", got, supported, want)
+		}
+		blocked <- err
+	}()
+	waitForBlockedBackend(t, ctx, super, pg.Database)
+	select {
+	case err := <-blocked:
+		t.Fatalf("staged no-admin Open published while the writer lock was held: %v", err)
+	default:
+	}
+	if err := holder.Rollback(); err != nil {
+		t.Fatalf("release foreign writer lock: %v", err)
+	}
+	if err := <-blocked; err != nil {
+		t.Fatalf("staged no-admin Open after the lock was released: %v", err)
+	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, stagedLegacy, seeded)
+
+	// Maintenance never accepts the missing routine as an inventory authority,
+	// even from the staged legacy prestate where the ordinary Open tolerates it.
+	directoryEpochTestWantNoAdminRefusal(t, "staged maintenance without routine",
+		func() error {
+			_, _, changed, err := OpenDirectoryWriterMaintenance(ctx, noAdmin, nil, 1)
+			if err == nil {
+				return fmt.Errorf("maintenance returned no error, changed=%t", changed)
+			}
+			return err
+		}, "closed directory inventory routine is required")
+	directoryEpochTestWantPostgresEstate(t, app, tenant, stagedLegacy, seeded)
+
+	// The supported DBA installation is the only positive path to the authority.
+	install := func(label string) {
+		t.Helper()
+		result, err := ProvisionPostgres(ctx, pg.Superuser, directoryEpochTestInventorySpec(t, app), true)
+		if err != nil || !result.DirectoryInventoryInstalled {
+			t.Fatalf("%s: install closed inventory routine: installed=%t err=%v",
+				label, result.DirectoryInventoryInstalled, err)
+		}
+	}
+	install("first installation")
+
+	// A malformed authority is a refusal in its own right: EXECUTE leaked to
+	// PUBLIC is drift, not absence, so the staged boot does not fall back to the
+	// incomplete witness, and the installation command refuses to paper over it.
+	if _, err := super.ExecContext(ctx,
+		"GRANT EXECUTE ON FUNCTION public.olivares_directory_inventory_v1() TO PUBLIC"); err != nil {
+		t.Fatalf("drift closed inventory routine ACL: %v", err)
+	}
+	directoryEpochTestWantNoAdminRefusal(t, "staged boot with drifted routine",
+		func() error {
+			candidate, err := Open(ctx, noAdmin, nil)
+			if candidate != nil {
+				_ = candidate.Close()
+			}
+			return err
+		},
+		"authority function olivares_directory_inventory_v1 signature/owner/ACL is not closed")
+	if result, err := ProvisionPostgres(ctx, pg.Superuser, directoryEpochTestInventorySpec(t, app), true); err == nil || result.DirectoryInventoryInstalled {
+		t.Fatalf("reinstallation over drift: installed=%t err=%v", result.DirectoryInventoryInstalled, err)
+	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, stagedLegacy, seeded)
+	if _, err := super.ExecContext(ctx, "DROP FUNCTION public.olivares_directory_inventory_v1()"); err != nil {
+		t.Fatalf("drop drifted routine: %v", err)
+	}
+	install("reinstallation after the drifted routine was dropped")
+
+	// Closed routine present: the same staged legacy boot now proves the complete
+	// inventory (SYSTEM plus the one business organization and its epoch) without
+	// an AdminDSN, and the existing epoch is left exactly as it was seeded.
+	covered, err := Open(ctx, noAdmin, nil)
+	if err != nil {
+		t.Fatalf("staged no-admin boot with routine: %v", err)
+	}
+	directoryEpochTestWantStatus(t, covered, store.DirectoryStatus{
+		EpochCoverageComplete:         true,
+		ControlMode:                   store.DirectoryControlStaged,
+		WriterPosture:                 store.DirectoryWriterSplitOwner,
+		ExpectedGeneration:            1,
+		CoverageProtocol:              coverageProtocolLegacy,
+		UserAuthorityCoverageComplete: true,
+		InventoryAuthority:            "closed_routine",
+		InventoryOrgCount:             2,
+		InventoryBusinessOrgCount:     1,
+		InventoryEpochCount:           1,
 	})
-	if err := healed.Close(); err != nil {
-		t.Fatalf("close healing boot: %v", err)
+	if err := covered.Close(); err != nil {
+		t.Fatalf("close covered boot: %v", err)
 	}
-	healedRow, found := directoryEpochTestReadPostgresRow(t, app, tenant)
-	if !found || healedRow.version != 1 || healedRow.createdAt == fixed.String() {
-		t.Fatalf("healed PostgreSQL epoch = %+v found=%t", healedRow, found)
-	}
-	healedTime, err := model.ParseTimestamp(healedRow.createdAt)
-	if err != nil || healedTime.Time().Before(beforeHeal) || healedTime.Time().After(afterHeal) {
-		t.Fatalf("healed PostgreSQL DB time=%s err=%v outside [%s,%s]",
-			healedRow.createdAt, err, beforeHeal, afterHeal)
-	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, stagedLegacy, seeded)
 
-	idempotent, err := Open(ctx, full, nil)
+	// The ratified maintenance cutover through the closed routine: G bumps
+	// exactly once on the database clock and the control becomes the target.
+	beforeCutover := time.Now().UTC().Add(-time.Second)
+	before, after, changed, err := OpenDirectoryWriterMaintenance(ctx, noAdmin, nil, 1)
 	if err != nil {
-		t.Fatalf("second authoritative PostgreSQL boot: %v", err)
+		t.Fatalf("no-admin maintenance cutover: %v", err)
 	}
-	if err := idempotent.Close(); err != nil {
-		t.Fatalf("close idempotent PostgreSQL boot: %v", err)
+	afterCutover := time.Now().UTC().Add(time.Second)
+	wantAfter := store.DirectoryStatus{
+		EpochCoverageComplete:         true,
+		ControlMode:                   store.DirectoryControlEnforced,
+		WriterPosture:                 store.DirectoryWriterSplitOwner,
+		ExpectedGeneration:            2,
+		CoverageProtocol:              coverageProtocolTarget,
+		UserAuthorityCoverageComplete: true,
+		InventoryAuthority:            "closed_routine",
+		InventoryOrgCount:             2,
+		InventoryBusinessOrgCount:     1,
+		InventoryEpochCount:           1,
 	}
-	if got, found := directoryEpochTestReadPostgresRow(t, app, tenant); !found || got != healedRow {
-		t.Fatalf("second PostgreSQL boot rewrote epoch: got=%+v found=%t want=%+v",
-			got, found, healedRow)
+	if !changed || before.CoverageProtocol != coverageProtocolLegacy || before.ControlMode != store.DirectoryControlStaged || after != wantAfter {
+		t.Fatalf("cutover before=%+v after=%+v changed=%t want after=%+v", before, after, changed, wantAfter)
 	}
+	enforcedTarget := directoryWriterControlState{
+		Mode: directoryWriterEnforced, ExpectedGeneration: 2, CoverageProtocol: coverageProtocolTarget,
+	}
+	bumped, found := directoryEpochTestReadPostgresRow(t, app, tenant)
+	if !found || bumped.version != 2 || bumped.createdAt != seeded.createdAt ||
+		bumped.updatedAt == seeded.updatedAt || bumped.updatedAt == fixed.String() {
+		t.Fatalf("cutover epoch = %+v found=%t, want version 2 on the database clock over seeded %+v",
+			bumped, found, seeded)
+	}
+	bumpedTime, err := model.ParseTimestamp(bumped.updatedAt)
+	if err != nil || bumpedTime.Time().Before(beforeCutover) || bumpedTime.Time().After(afterCutover) {
+		t.Fatalf("cutover PostgreSQL DB time=%s err=%v outside [%s,%s]",
+			bumped.updatedAt, err, beforeCutover, afterCutover)
+	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, enforcedTarget, bumped)
+
+	reopened, err := Open(ctx, noAdmin, nil)
+	if err != nil {
+		t.Fatalf("no-admin target reopen: %v", err)
+	}
+	directoryEpochTestWantStatus(t, reopened, wantAfter)
+	if err := reopened.Close(); err != nil {
+		t.Fatalf("close target reopen: %v", err)
+	}
+	// The same durable estate read through the AdminDSN authority agrees on
+	// everything except the authority name.
+	wantAdmin := wantAfter
+	wantAdmin.InventoryAuthority = "admin_dsn"
+	adminReopened, err := Open(ctx, full, nil)
+	if err != nil {
+		t.Fatalf("admin target reopen: %v", err)
+	}
+	directoryEpochTestWantStatus(t, adminReopened, wantAdmin)
+	if err := adminReopened.Close(); err != nil {
+		t.Fatalf("close admin target reopen: %v", err)
+	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, enforcedTarget, bumped)
+
+	// Enforced target without the routine: neither the ordinary boot nor the
+	// exact maintenance retry treats the missing authority as readiness, and
+	// neither touches the durable estate.
+	if _, err := super.ExecContext(ctx, "DROP FUNCTION public.olivares_directory_inventory_v1()"); err != nil {
+		t.Fatalf("drop routine from the enforced estate: %v", err)
+	}
+	directoryEpochTestWantNoAdminRefusal(t, "enforced boot without routine",
+		func() error {
+			candidate, err := Open(ctx, noAdmin, nil)
+			if candidate != nil {
+				_ = candidate.Close()
+			}
+			return err
+		},
+		"closed directory inventory routine is required")
+	directoryEpochTestWantNoAdminRefusal(t, "enforced maintenance retry without routine",
+		func() error {
+			_, _, changed, err := OpenDirectoryWriterMaintenance(ctx, noAdmin, nil, 1)
+			if err == nil {
+				return fmt.Errorf("maintenance retry succeeded with changed=%t", changed)
+			}
+			return err
+		}, "closed directory inventory routine is required")
+	directoryEpochTestWantPostgresEstate(t, app, tenant, enforcedTarget, bumped)
+
+	// Reinstalling the routine is the only heal, and it is idempotent: the
+	// retry writes nothing and the reopened witness is the cutover's.
+	install("reinstallation on the enforced target")
+	_, retry, changed, err := OpenDirectoryWriterMaintenance(ctx, noAdmin, nil, 1)
+	if err != nil || changed || retry != wantAfter {
+		t.Fatalf("exact retry=%+v changed=%t err=%v", retry, changed, err)
+	}
+	healed, err := Open(ctx, noAdmin, nil)
+	if err != nil {
+		t.Fatalf("healed no-admin reopen: %v", err)
+	}
+	directoryEpochTestWantStatus(t, healed, wantAfter)
+	if err := healed.Close(); err != nil {
+		t.Fatalf("close healed reopen: %v", err)
+	}
+	directoryEpochTestWantPostgresEstate(t, app, tenant, enforcedTarget, bumped)
+}
+
+// directoryEpochTestWantNoAdminRefusal proves a refusal is the typed directory
+// sentinel with the named reason, not an unrelated failure that happens to be red.
+func directoryEpochTestWantNoAdminRefusal(t *testing.T, label string, run func() error, reason string) {
+	t.Helper()
+	err := run()
+	if !errors.Is(err, store.ErrDirectoryUnavailable) || !strings.Contains(err.Error(), reason) {
+		t.Fatalf("%s: err = %v, want ErrDirectoryUnavailable with %q", label, err, reason)
+	}
+	t.Logf("NOADMIN_REFUSED|%s|%v", label, err)
+}
+
+// directoryEpochTestWantPostgresEstate compares the durable directory estate
+// after a boot, refusal or ceremony: the control singleton, the one business
+// epoch row and the absence of any User authority row, all read through the
+// application role. The v10 shape is the schema cut; any runtime H, G, mode or
+// generation change shows up here.
+func directoryEpochTestWantPostgresEstate(t *testing.T, db *sql.DB, tenant model.TenantID, control directoryWriterControlState, epoch directoryEpochTestRow) {
+	t.Helper()
+	ctx := context.Background()
+	dia, _ := dialect.New(store.EnginePostgres)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin durable estate read: %v", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+	state, err := readDirectoryWriterControlState(ctx, tx, dia)
+	if err != nil || state != control {
+		t.Fatalf("durable control = %+v err=%v, want %+v", state, err, control)
+	}
+	if err := bindDirectoryTenant(ctx, tx, dia, model.SystemTenantID); err != nil {
+		t.Fatalf("bind SYSTEM for durable estate read: %v", err)
+	}
+	coverage, err := readUserAuthorityCoverage(ctx, tx, dia)
+	if err != nil || len(coverage.Rows) != 0 || len(coverage.Users) != 0 || len(coverage.Missing) != 0 {
+		t.Fatalf("durable H coverage rows=%d users=%d missing=%d err=%v, want none",
+			len(coverage.Rows), len(coverage.Users), len(coverage.Missing), err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("end durable estate read: %v", err)
+	}
+	if got, found := directoryEpochTestReadPostgresRow(t, db, tenant); !found || got != epoch {
+		t.Fatalf("durable epoch = %+v found=%t, want %+v", got, found, epoch)
+	}
+}
+
+// directoryEpochTestInventorySpec resolves the installation spec from the
+// live database the way the DBA command does: the application role is the
+// connecting role and the schema owner is whoever owns public.orgs.
+func directoryEpochTestInventorySpec(t *testing.T, app *sql.DB) store.PgProvisionSpec {
+	t.Helper()
+	var database, appRole, owner string
+	if err := app.QueryRowContext(context.Background(), `SELECT current_database(), current_user,
+ (SELECT r.rolname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+  JOIN pg_catalog.pg_roles r ON r.oid=c.relowner WHERE n.nspname='public' AND c.relname='orgs')`).
+		Scan(&database, &appRole, &owner); err != nil {
+		t.Fatalf("resolve inventory installation roles: %v", err)
+	}
+	if appRole == owner {
+		t.Fatalf("split-owner fixture resolved app=%q owner=%q", appRole, owner)
+	}
+	return store.PgProvisionSpec{Database: database, App: store.PgRole{Name: appRole}, Owner: store.PgRole{Name: owner}, InstallDirectoryInventory: true}
 }
 
 func TestDirectoryEpochPostgresMaxOneRejectsInheritedGeneration(t *testing.T) {
@@ -144,11 +405,16 @@ func TestDirectoryEpochPostgresMaxOneRejectsInheritedGeneration(t *testing.T) {
 		t.Fatalf("open single-role MaxConns=1 store: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
+	// A single-role estate with no AdminDSN and no closed inventory routine cannot
+	// enumerate anything: the staged-legacy status names the missing routine as
+	// the reason and claims no authority, no counts and no coverage.
 	directoryEpochTestWantStatus(t, st, store.DirectoryStatus{
-		EpochCoverageComplete: false,
-		ControlMode:           store.DirectoryControlStaged,
-		WriterPosture:         store.DirectoryWriterSingleRoleCapability,
-		ExpectedGeneration:    1,
+		EpochCoverageComplete:      false,
+		ControlMode:                store.DirectoryControlStaged,
+		WriterPosture:              store.DirectoryWriterSingleRoleCapability,
+		ExpectedGeneration:         1,
+		CoverageProtocol:           coverageProtocolLegacy,
+		InventoryUnavailableReason: "closed_routine_missing",
 	})
 	tenant := provisionTenant(t, st, "directory-pg-guc")
 	ss := st.(*sqlStore)
@@ -180,6 +446,15 @@ pg_catalog.set_config('app.directory_writer_generation', '1', false)`
 	if inherited != "1" {
 		t.Fatalf("refusal unexpectedly hid session contaminant %q", inherited)
 	}
+	// The control row is still membership-union-v1: this fixture never ran the
+	// ceremony. Present that independently known protocol with the inherited
+	// generation; do not copy a live control-row string through a normal writer.
+	if _, err := ss.db.ExecContext(ctx,
+		"SELECT pg_catalog.set_config($1, $2, false)",
+		directoryCoverageProtocolGUC, coverageProtocolLegacy,
+	); err != nil {
+		t.Fatalf("present fixture coverage protocol: %v", err)
+	}
 	result, err := ss.db.ExecContext(ctx, `UPDATE public.orgs
 SET status = 'suspended' WHERE id = $1 AND tenant_id = $2`,
 		tenant.String(), tenant.String())
@@ -196,7 +471,8 @@ SET status = 'active' WHERE id = $1 AND tenant_id = $2`,
 	}
 	if _, err := ss.db.ExecContext(ctx, `SELECT
 pg_catalog.set_config('app.tenant_id', '', false),
-pg_catalog.set_config('app.directory_writer_generation', '', false)`); err != nil {
+pg_catalog.set_config('app.directory_writer_generation', '', false),
+pg_catalog.set_config('app.directory_coverage_protocol', '', false)`); err != nil {
 		t.Fatalf("clear session contamination: %v", err)
 	}
 
@@ -238,10 +514,15 @@ COALESCE(pg_catalog.current_setting('app.directory_writer_generation', true), ''
 }
 
 func TestDirectoryEpochPostgresLockOrderInterleavings(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	// The fixture — an isolated database, an Open with the compiled migration plan, a tenant
+	// provision, a seeded identity and the held epoch delete — runs on an unbounded context.
+	// The 15 s budget starts at the reader race below, which is the only thing it is meant
+	// to bound; above the fixture it was measuring the migrations, and on a contended runner
+	// under -race the wait reported `context deadline exceeded`. Same class and same remedy
+	// as 01f81b8e81, 4859cc43f3 and 346bce0c8a.
+	setupCtx := context.Background()
 	pg := isolatedPG(t)
-	st, err := Open(ctx, store.Config{
+	st, err := Open(setupCtx, store.Config{
 		Engine: store.EnginePostgres, DSN: pg.App, MaxConns: 4,
 	}, nil)
 	if err != nil {
@@ -254,9 +535,9 @@ func TestDirectoryEpochPostgresLockOrderInterleavings(t *testing.T) {
 	// RowExclusive(identity) remains immediately available rather than cycling.
 	tenant := provisionTenant(t, st, "directory-lock-epoch")
 	var identity model.Identity
-	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := st.Mutate(setupCtx, tenant, func(sc store.Scope) error {
 		var err error
-		identity, err = sc.Identities().Create(ctx, model.Identity{
+		identity, err = sc.Identities().Create(setupCtx, model.Identity{
 			Name: "epoch lock identity", Kind: "service", ExternalID: "lock:epoch",
 		})
 		return err
@@ -269,18 +550,21 @@ func TestDirectoryEpochPostgresLockOrderInterleavings(t *testing.T) {
 		t.Fatalf("open raw lock-order pool: %v", err)
 	}
 	defer raw.Close() //nolint:errcheck
-	holder, err := raw.BeginTx(ctx, nil)
+	holder, err := raw.BeginTx(setupCtx, nil)
 	if err != nil {
 		t.Fatalf("begin epoch holder: %v", err)
 	}
 	pgDia, _ := dialect.New(store.EnginePostgres)
-	if err := bindDirectoryTenant(ctx, holder, pgDia, tenant); err != nil {
+	if err := bindDirectoryTenant(setupCtx, holder, pgDia, tenant); err != nil {
 		t.Fatalf("bind epoch holder: %v", err)
 	}
-	if _, err := holder.ExecContext(ctx,
+	if _, err := holder.ExecContext(setupCtx,
 		"DELETE FROM public.core_directory_epoch WHERE tenant_id = $1", tenant.String()); err != nil {
 		t.Fatalf("hold epoch delete: %v", err)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	readerStarted := make(chan struct{})
 	readerDone := make(chan error, 1)
 	go func() {
@@ -364,10 +648,12 @@ func TestDirectoryEpochPostgresLockOrderInterleavings(t *testing.T) {
 		t.Fatalf("DropTenant did not reach Identity checkpoint: %v", ctx.Err())
 	}
 	k2Started := make(chan struct{})
+	k2CallbackEntered := make(chan struct{})
 	k2Done := make(chan error, 1)
 	go func() {
+		close(k2Started)
 		k2Done <- st.Mutate(ctx, k2Tenant, func(sc store.Scope) error {
-			close(k2Started)
+			close(k2CallbackEntered)
 			return sc.(store.AuthoritySnapshotLocker).LockAuthoritySnapshot(ctx,
 				[]store.AuthorizationFactRef{
 					{Kind: identityDescriptor.Kind, ID: k2Identity.ID, Version: k2Identity.Version},
@@ -378,7 +664,9 @@ func TestDirectoryEpochPostgresLockOrderInterleavings(t *testing.T) {
 	<-k2Started
 	select {
 	case err := <-k2Done:
-		t.Fatalf("K2 snapshot crossed Drop's Identity lock: %v", err)
+		t.Fatalf("K2 snapshot crossed Drop's authority exclusion: %v", err)
+	case <-k2CallbackEntered:
+		t.Fatal("Mutate callback entered while System held lineage exclusion")
 	case <-time.After(200 * time.Millisecond):
 	}
 	close(releaseDrop)

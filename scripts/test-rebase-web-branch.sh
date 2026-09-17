@@ -346,5 +346,155 @@ else
     PASA=$((PASA+1))
 fi
 
+# ⛔ PRECEDENCIA DE `--desde` SOBRE EL ESTADO, EN REPOSITORIOS DESECHABLES.
+#    Las tres celdas de arriba miden rc contra el arbol desde el que se invoca el banco.
+#    Estas miden el DEFECTO que esas no pueden: el mismo `--desde` malformado tenia que
+#    salir 2 en feature, en main, con HEAD desprendido y con un rebase ya abierto, y no
+#    podia tocar HEAD / indice / worktree / estado de rebase ni traer origin/main.
+#    Senuelos: `git init` + `git clone` propios, con GIT_CONFIG_GLOBAL/SYSTEM a /dev/null.
+#    Nunca `git worktree add` sobre el producto. El SUT es $SUT (el guion real).
+estado_trabajo() { # <repo>
+  local d="$1" gd
+  # --absolute-git-dir: `rev-parse --git-dir` can be `.git` relative to this banco,
+  # and then rebase-merge would leer el repositorio PRODUCTO, no el senuelo.
+  gd=$(g -C "$d" rev-parse --absolute-git-dir 2>/dev/null) || { printf 'NOGIT\n'; return; }
+  printf 'HEAD=%s\n' "$(g -C "$d" rev-parse --verify -q HEAD 2>/dev/null || echo none)"
+  printf 'SYM=%s\n' "$(g -C "$d" symbolic-ref -q HEAD 2>/dev/null || echo detached)"
+  printf 'LS=%s\n' "$(g -C "$d" ls-files -s | cksum)"
+  printf 'UNMERGED=%s\n' "$(g -C "$d" ls-files -u | cksum)"
+  printf 'PORCELAIN=%s\n' "$(g -C "$d" status --porcelain=v1 | cksum)"
+  printf 'DIFF=%s\n' "$(g -C "$d" diff 2>/dev/null | cksum)"
+  printf 'CACHED=%s\n' "$(g -C "$d" diff --cached 2>/dev/null | cksum)"
+  printf 'RM=%s\n' "$( [ -d "$gd/rebase-merge" ] && echo yes || echo no )"
+  printf 'RA=%s\n' "$( [ -d "$gd/rebase-apply" ] && echo yes || echo no )"
+  if [ -d "$gd/rebase-merge" ]; then
+    printf 'HEADNAME=%s\n' "$(cat "$gd/rebase-merge/head-name" 2>/dev/null)"
+    printf 'ONTO=%s\n' "$(cat "$gd/rebase-merge/onto" 2>/dev/null)"
+    printf 'MSGNUM=%s\n' "$(cat "$gd/rebase-merge/msgnum" 2>/dev/null)"
+    printf 'END=%s\n' "$(cat "$gd/rebase-merge/end" 2>/dev/null)"
+    printf 'STOPPED=%s\n' "$(cat "$gd/rebase-merge/stopped-sha" 2>/dev/null)"
+  fi
+  if [ -d "$gd/rebase-apply" ]; then
+    printf 'APPLYHEAD=%s\n' "$(cat "$gd/rebase-apply/head-name" 2>/dev/null)"
+  fi
+}
+estado_remoto() { # <repo> — mueve si el SUT hace fetch
+  local d="$1"
+  printf 'ORIGIN_MAIN=%s\n' "$(g -C "$d" rev-parse origin/main 2>/dev/null || echo none)"
+  printf 'FETCH_HEAD=%s\n' "$(g -C "$d" rev-parse --verify -q FETCH_HEAD 2>/dev/null || echo none)"
+}
+correr_sut() { # <repo> [args...] -> stdout+stderr del SUT; rc en $?
+  local d="$1"
+  shift
+  ( cd "$d" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+      GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
+      bash "$SUT" "$@" 2>&1 )
+}
+afirmar_inmutado() { # <antes_trabajo> <antes_remoto> <repo> <nombre>
+  local antes_t="$1" antes_r="$2" d="$3" nom="$4" despues_t despues_r
+  despues_t=$(estado_trabajo "$d")
+  despues_r=$(estado_remoto "$d")
+  if [ "$antes_t" = "$despues_t" ] && [ "$antes_r" = "$despues_r" ]; then
+    printf 'ok     %-58s\n' "$nom"; PASA=$((PASA+1))
+  else
+    printf 'FALLO  %-58s el SUT muto HEAD/indice/worktree/rebase o trajo origin\n' "$nom"
+    FALLA=$((FALLA+1))
+  fi
+}
+
+# feature + rev inexistente => 2, sin mutar ni fetch
+t=$(senuelo "core/api/desde-feature.go")
+if [ -n "$t" ]; then
+  antes_t=$(estado_trabajo "$t"); antes_r=$(estado_remoto "$t")
+  out=$( correr_sut "$t" --desde no-existe-este-rev ); rc=$?
+  juzgar 2 "$rc" '--desde inexistente en feature es 2' "$out" 'no resuelve a un commit'
+  afirmar_inmutado "$antes_t" "$antes_r" "$t" 'y en feature no muta ni trae origin'
+else
+  printf 'FALLO  %-58s no he podido montar el senuelo\n' '--desde inexistente en feature'; FALLA=$((FALLA+1))
+fi
+
+# main + rev inexistente => 2 (antes salia 1 «no main»), sin mutar
+t=$(senuelo "core/api/desde-main.go")
+if [ -n "$t" ]; then
+  g -C "$t" checkout -q main
+  antes_t=$(estado_trabajo "$t"); antes_r=$(estado_remoto "$t")
+  out=$( correr_sut "$t" --desde no-existe-este-rev ); rc=$?
+  juzgar 2 "$rc" '--desde inexistente en main es 2' "$out" 'no resuelve a un commit'
+  afirmar_inmutado "$antes_t" "$antes_r" "$t" 'y en main no muta ni trae origin'
+else
+  printf 'FALLO  %-58s no he podido montar el senuelo\n' '--desde inexistente en main'; FALLA=$((FALLA+1))
+fi
+
+# HEAD desprendido + rev inexistente => 2 (antes salia 1 «desprendido»), sin mutar
+t=$(senuelo "core/api/desde-detach.go")
+if [ -n "$t" ]; then
+  g -C "$t" checkout -q --detach
+  antes_t=$(estado_trabajo "$t"); antes_r=$(estado_remoto "$t")
+  out=$( correr_sut "$t" --desde no-existe-este-rev ); rc=$?
+  juzgar 2 "$rc" '--desde inexistente con HEAD desprendido es 2' "$out" 'no resuelve a un commit'
+  afirmar_inmutado "$antes_t" "$antes_r" "$t" 'y desprendido no muta ni trae origin'
+else
+  printf 'FALLO  %-58s no he podido montar el senuelo\n' '--desde inexistente desprendido'; FALLA=$((FALLA+1))
+fi
+
+# rebase ya abierto + rev inexistente => 2, y el rebase sigue exactamente igual
+t=$(senuelo "core/api/desde-rebase.go")
+if [ -n "$t" ]; then
+  g -C "$t" fetch -q origin main
+  ( cd "$t" && g rebase origin/main >/dev/null 2>&1 ) || true
+  gd=$(g -C "$t" rev-parse --absolute-git-dir)
+  if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ]; then
+    antes_t=$(estado_trabajo "$t"); antes_r=$(estado_remoto "$t")
+    out=$( correr_sut "$t" --desde no-existe-este-rev ); rc=$?
+    juzgar 2 "$rc" '--desde inexistente con rebase abierto es 2' "$out" 'no resuelve a un commit'
+    afirmar_inmutado "$antes_t" "$antes_r" "$t" 'y el rebase abierto no se toca'
+  else
+    printf 'FALLO  %-58s no he podido dejar un rebase abierto\n' '--desde inexistente con rebase abierto'
+    FALLA=$((FALLA+1))
+  fi
+else
+  printf 'FALLO  %-58s no he podido montar el senuelo\n' '--desde inexistente con rebase abierto'; FALLA=$((FALLA+1))
+fi
+
+# commit que EXISTE y no es ancestro: sigue siendo 1 (hallazgo), no 2
+t=$(senuelo "core/api/desde-ajeno.go")
+if [ -n "$t" ]; then
+  ( cd "$t" || exit 1
+    g checkout -q -b tmp/ajeno main
+    printf 'ajeno\n' > ajeno.txt
+    g add ajeno.txt
+    g commit -qm ajeno ) >/dev/null 2>&1
+  AJENO_FIX=$(g -C "$t" rev-parse HEAD)
+  g -C "$t" checkout -q feature/x
+  antes_t=$(estado_trabajo "$t")
+  out=$( correr_sut "$t" --desde "$AJENO_FIX" ); rc=$?
+  juzgar 1 "$rc" '--desde <rev que no es ancestro> se NIEGA (fixture)' "$out" 'no es ancestro'
+  despues_t=$(estado_trabajo "$t")
+  if [ "$antes_t" = "$despues_t" ]; then
+    printf 'ok     %-58s\n' 'no ancestro: HEAD/indice/worktree/rebase intactos'; PASA=$((PASA+1))
+  else
+    printf 'FALLO  %-58s muto el trabajo al rehusar\n' 'no ancestro: HEAD/indice/worktree/rebase intactos'
+    FALLA=$((FALLA+1))
+  fi
+else
+  printf 'FALLO  %-58s no he podido montar el senuelo\n' '--desde no ancestro fixture'; FALLA=$((FALLA+1))
+fi
+
+# ancestro valido: misma negativa de choque de FUENTE que sin --desde (comportamiento vigente)
+t=$(senuelo "core/api/desde-ancestro.go")
+if [ -n "$t" ]; then
+  ANC=$(g -C "$t" rev-parse --verify -q 'HEAD^')
+  if [ -n "$ANC" ]; then
+    out=$( correr_sut "$t" --desde "$ANC" ); rc=$?
+    juzgar 1 "$rc" '--desde <ancestro> sigue chocando en FUENTE' "$out" 'core/api/desde-ancestro.go'
+    juzgar 1 "$rc" '--desde <ancestro> deja el rebase ABIERTO' "$out" 'EL REBASE QUEDA ABIERTO'
+    juzgar 1 "$rc" '--desde <ancestro> anuncia el salto' "$out" 'saltando todo hasta'
+  else
+    printf 'FALLO  %-58s no he podido fijar el ancestro\n' '--desde ancestro fixture'; FALLA=$((FALLA+1))
+  fi
+else
+  printf 'FALLO  %-58s no he podido montar el senuelo\n' '--desde ancestro fixture'; FALLA=$((FALLA+1))
+fi
+
 printf 'test-rebase-web-branch: %s pasan, %s fallan\n' "$PASA" "$FALLA"
 [ "$FALLA" -eq 0 ]

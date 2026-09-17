@@ -35,11 +35,25 @@
     "costCaption": "за выбранный диапазон",
     "usage": "Активные агенты",
     "usageCaption": "{{live}} в работе · {{entities}} отслеживается",
+    "sourceRestricted": "{{source}} — недоступно для вашей роли",
+    "sourceUnavailable": "{{source}} — не удалось загрузить",
+    "sourcePendingPaused": "{{source}} — запрос приостановлен, ожидание возобновления",
+    "sourcePendingIdle": "{{source}} — запрос не запущен",
+    "partialWhy": "Почему данные частичные?",
     "risk": "Открытый риск",
     "riskCaption": "{{count}} критичных/высоких",
     "silentEvasion": "{{count}} скрытого обхода",
     "compliance": "Охват контролей",
     "complianceCaption": "{{gap}} пробелов · {{unmapped}} без сопоставления"
+  },
+  "availability": {
+    "restricted": "{{source}}: недоступно для вашей роли.",
+    "unavailable": "{{source}}: не удалось загрузить.",
+    "pendingPaused": "{{source}}: запрос приостановлен, ожидание возобновления.",
+    "pendingIdle": "{{source}}: запрос не запущен.",
+    "loading": "{{source}}: загрузка.",
+    "partial": "{{source}}: показатели доступны, данные частичные.",
+    "current": "{{source}}: показатели доступны."
   },
   "cost": {
     "title": "Стоимость",

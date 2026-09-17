@@ -148,7 +148,7 @@ func startIPv6RealServer(t *testing.T, httpListen, grpcListen string) *ipv6RealS
 
 	baseURL := "https://" + net.JoinHostPort("::1", fmt.Sprintf("%d", httpPort))
 	var announce bytes.Buffer
-	if err := announceSetup(context.Background(), &announce, eng, baseURL, false); err != nil {
+	if err := announceSetup(context.Background(), &announce, eng, declaredConsoleAddress(t, baseURL, false), false); err != nil {
 		_ = eng.Close()
 		_ = httpLis.Close()
 		_ = grpcLis.Close()

@@ -229,8 +229,10 @@ type ProxyAuditEvent struct {
 	Model          string
 	Streamed       bool
 	UpstreamStatus int
-	ReqBytes       int64
-	RespBytes      int64
+	// ReqBytes is the inbound body length the handler already measured (ReadAll).
+	// It is not the forwarded size: request rewriting may send different octets.
+	ReqBytes  int64
+	RespBytes int64
 }
 
 // MessagesProxy is the inline /v1/messages enforcement endpoint. It owns the wire
@@ -299,7 +301,7 @@ func (p *MessagesProxy) serveMessages(w http.ResponseWriter, r *http.Request) {
 		// The governed surface is mounted without a decider: refuse rather than forward.
 		// Unreachable in production wiring (the composition root mounts WITH a decider), but
 		// it makes the deny-closed contract total.
-		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: "governed enforcement not wired", Model: req.Model})
+		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: "governed enforcement not wired", Model: req.Model, ReqBytes: reqBytes})
 		p.writeError(w, http.StatusServiceUnavailable, "api_error", "governed enforcement is not wired (deny-closed)")
 		return
 	}
@@ -310,7 +312,7 @@ func (p *MessagesProxy) serveMessages(w http.ResponseWriter, r *http.Request) {
 		if status == 0 {
 			status = http.StatusForbidden
 		}
-		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: dec.Reason, Model: req.Model})
+		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: dec.Reason, Model: req.Model, ReqBytes: reqBytes})
 		p.writeDecisionError(w, status, dec.ErrorType, firstNonEmpty(dec.Reason, "request denied by Olivares governance policy"), dec.Headers)
 		return
 	}
@@ -363,7 +365,7 @@ func (p *MessagesProxy) serveBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if p.decider == nil {
-		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: "governed enforcement not wired"})
+		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: "governed enforcement not wired", ReqBytes: reqBytes})
 		p.writeError(w, http.StatusServiceUnavailable, "api_error", "governed enforcement is not wired (deny-closed)")
 		return
 	}
@@ -374,7 +376,7 @@ func (p *MessagesProxy) serveBatch(w http.ResponseWriter, r *http.Request) {
 		if status == 0 {
 			status = http.StatusForbidden
 		}
-		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: dec.Reason})
+		p.audit(r.Context(), ProxyAuditEvent{Decision: "deny", Reason: dec.Reason, ReqBytes: reqBytes})
 		p.writeDecisionError(w, status, dec.ErrorType, firstNonEmpty(dec.Reason, "batch denied by Olivares governance policy"), dec.Headers)
 		return
 	}
@@ -420,7 +422,7 @@ func (p *MessagesProxy) relayBatchUpstreamError(w http.ResponseWriter, r *http.R
 	p.finalizeBatch(r.Context(), dec, ProxyBatchForwardResult{
 		ReqSHA: reqSHA, ReqBytes: reqBytes, Entries: entries, EffectiveSHA: effSHA, UpstreamStatus: status, UpstreamErr: true,
 	})
-	p.audit(r.Context(), ProxyAuditEvent{Decision: "upstream-error", Reason: "batch upstream error", UpstreamStatus: status})
+	p.audit(r.Context(), ProxyAuditEvent{Decision: "upstream-error", Reason: "batch upstream error", UpstreamStatus: status, ReqBytes: reqBytes})
 	if apiErr != nil && strings.TrimSpace(apiErr.Body) != "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
@@ -481,7 +483,7 @@ func (p *MessagesProxy) forwardBlocking(w http.ResponseWriter, r *http.Request, 
 		RespSHA: respSHA[:], RespBytes: int64(len(out)), UpstreamStatus: http.StatusOK,
 	})
 	if verdict.Block {
-		p.audit(r.Context(), ProxyAuditEvent{Decision: "blocked-response", Reason: verdict.Reason, Model: resp.Model, RespBytes: int64(len(out))})
+		p.audit(r.Context(), ProxyAuditEvent{Decision: "blocked-response", Reason: verdict.Reason, Model: resp.Model, ReqBytes: reqBytes, RespBytes: int64(len(out))})
 		status := verdict.Status
 		if status == 0 {
 			status = http.StatusForbidden
@@ -489,7 +491,7 @@ func (p *MessagesProxy) forwardBlocking(w http.ResponseWriter, r *http.Request, 
 		p.writeError(w, status, verdict.ErrorType, firstNonEmpty(verdict.Reason, "response withheld by Olivares DLP policy"))
 		return
 	}
-	p.audit(r.Context(), ProxyAuditEvent{Decision: "allow", Model: resp.Model, RespBytes: int64(len(out)), UpstreamStatus: http.StatusOK})
+	p.audit(r.Context(), ProxyAuditEvent{Decision: "allow", Model: resp.Model, UpstreamStatus: http.StatusOK, ReqBytes: reqBytes, RespBytes: int64(len(out))})
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(out)
@@ -529,7 +531,7 @@ func (p *MessagesProxy) forwardStream(w http.ResponseWriter, r *http.Request, de
 		}
 		resp, effSHA, err := p.forwardMessage(r.Context(), dec, true, onEvent)
 		if errors.Is(err, errResponseBufferCeiling) {
-			p.audit(r.Context(), ProxyAuditEvent{Decision: "blocked-response", Reason: responseBufferCeilingReason, Model: resp.Model, Streamed: true, RespBytes: respBytes})
+			p.audit(r.Context(), ProxyAuditEvent{Decision: "blocked-response", Reason: responseBufferCeilingReason, Model: resp.Model, Streamed: true, ReqBytes: reqBytes, RespBytes: respBytes})
 			p.writeError(w, http.StatusForbidden, "permission_error", responseBufferCeilingReason)
 			return
 		}
@@ -543,7 +545,7 @@ func (p *MessagesProxy) forwardStream(w http.ResponseWriter, r *http.Request, de
 			RespSHA: sum, RespBytes: respBytes, Streamed: true, UpstreamStatus: http.StatusOK,
 		})
 		if verdict.Block {
-			p.audit(r.Context(), ProxyAuditEvent{Decision: "blocked-response", Reason: verdict.Reason, Model: resp.Model, Streamed: true, RespBytes: respBytes})
+			p.audit(r.Context(), ProxyAuditEvent{Decision: "blocked-response", Reason: verdict.Reason, Model: resp.Model, Streamed: true, ReqBytes: reqBytes, RespBytes: respBytes})
 			status := verdict.Status
 			if status == 0 {
 				status = http.StatusForbidden
@@ -551,7 +553,7 @@ func (p *MessagesProxy) forwardStream(w http.ResponseWriter, r *http.Request, de
 			p.writeError(w, status, verdict.ErrorType, firstNonEmpty(verdict.Reason, "response withheld by Olivares DLP policy"))
 			return
 		}
-		p.audit(r.Context(), ProxyAuditEvent{Decision: "allow", Model: resp.Model, Streamed: true, RespBytes: respBytes, UpstreamStatus: http.StatusOK})
+		p.audit(r.Context(), ProxyAuditEvent{Decision: "allow", Model: resp.Model, Streamed: true, UpstreamStatus: http.StatusOK, ReqBytes: reqBytes, RespBytes: respBytes})
 		p.beginSSE(w)
 		_, _ = w.Write(buf.Bytes())
 		flush(w)
@@ -583,7 +585,7 @@ func (p *MessagesProxy) forwardStream(w http.ResponseWriter, r *http.Request, de
 		// error event; we cannot change the status now.
 		writeSSEError(w, err)
 		flush(w)
-		p.audit(r.Context(), ProxyAuditEvent{Decision: "upstream-error", Reason: "stream error", Streamed: true, RespBytes: respBytes})
+		p.audit(r.Context(), ProxyAuditEvent{Decision: "upstream-error", Reason: "stream error", Streamed: true, ReqBytes: reqBytes, RespBytes: respBytes})
 		// Still record the (partial) outcome for the ledger.
 		sum := hash.Sum(nil)
 		_ = p.finalize(r.Context(), dec, ProxyForwardResult{
@@ -599,7 +601,7 @@ func (p *MessagesProxy) forwardStream(w http.ResponseWriter, r *http.Request, de
 		Response: resp, ReqSHA: reqSHA, ReqBytes: reqBytes, EffectiveSHA: effSHA, RespSHA: sum, RespBytes: respBytes,
 		Streamed: true, UpstreamStatus: http.StatusOK,
 	})
-	p.audit(r.Context(), ProxyAuditEvent{Decision: "allow", Model: resp.Model, Streamed: true, RespBytes: respBytes, UpstreamStatus: http.StatusOK})
+	p.audit(r.Context(), ProxyAuditEvent{Decision: "allow", Model: resp.Model, Streamed: true, UpstreamStatus: http.StatusOK, ReqBytes: reqBytes, RespBytes: respBytes})
 }
 
 // relayUpstreamError relays an upstream/transport error to the caller faithfully (the
@@ -618,7 +620,7 @@ func (p *MessagesProxy) relayUpstreamError(w http.ResponseWriter, r *http.Reques
 		ReqSHA: reqSHA, ReqBytes: reqBytes, EffectiveSHA: effSHA, RespSHA: bodySHA[:], Streamed: streamed,
 		UpstreamStatus: status, UpstreamErr: true,
 	})
-	p.audit(r.Context(), ProxyAuditEvent{Decision: "upstream-error", Reason: "upstream error", Streamed: streamed, UpstreamStatus: status})
+	p.audit(r.Context(), ProxyAuditEvent{Decision: "upstream-error", Reason: "upstream error", Streamed: streamed, UpstreamStatus: status, ReqBytes: reqBytes})
 	if apiErr != nil && strings.TrimSpace(apiErr.Body) != "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)

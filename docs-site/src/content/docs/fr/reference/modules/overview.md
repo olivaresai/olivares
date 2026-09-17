@@ -142,6 +142,21 @@ la racine de composition (`cmd/olivares/wire.go`) : les 30 modules y sont
 construits et enregistrés via `rt.AddModule` (vérifié le 2026-08-01,
 main @ f632f03f).
 
+## Couture de disponibilité d'édition (non comptée parmi les 30 modules)
+
+Le catalogue ci-dessus, ce sont les **30 modules** que la racine de composition
+construit comme modules produit. Séparément, Community enregistre un
+descripteur de disponibilité sous l'espace de noms API `session-cockpit`. Ce
+n'est pas l'un de ces 30.
+
+- [Cockpit de sessions (disponibilité)](/fr/reference/modules/session-cockpit/) —
+  zéro gestionnaire dans Community ; `/v1/m/session-cockpit` renvoie **404 par
+  absence**. Pas de cockpit interactif dans cet artefact. Les sessions en
+  direct, AgentOps et le cycle de vie des CLI officielles restent dans le
+  produit ouvert —
+  [Exploitation en direct et sessions](/fr/reference/modules/ii-sessions/) et
+  [Exécuter Claude Code avec Olivares](/fr/how-to/run-claude-code-with-olivares/).
+
 ## Capacités plateforme et cœur (non comptées parmi les 30 modules)
 
 Ce sont des capacités réelles et livrées, mais ce sont des **capacités

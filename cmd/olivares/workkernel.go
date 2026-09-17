@@ -358,6 +358,25 @@ func (r workIdentityResolver) LockAgentWorkAuthority(
 	return locker.LockAuthoritySnapshot(ctx, token.facts)
 }
 
+// ValidateAgentWorkAuthorityInScope is the read half of LockAgentWorkAuthority.
+// Plan and Validate call it inside their own, possibly workspace-confined, View
+// after ObserveAgentWorkAuthority ran outside it. It accepts the same private
+// token and recomputed digest, then revalidates only those exact facts through
+// the caller's transaction: it opens no Store read, returns no tenant-wide rows
+// and repairs nothing. An unrecognized token is unavailable, never allowed.
+func (r workIdentityResolver) ValidateAgentWorkAuthorityInScope(
+	ctx context.Context,
+	sc store.Scope,
+	snapshot sessions.WorkAgentAuthoritySnapshot,
+) error {
+	token, ok := snapshot.Token.(workAgentAuthorityToken)
+	if !ok || !snapshot.Eligible || len(token.facts) == 0 ||
+		snapshot.Digest != workAuthorityDigest(token.facts) {
+		return store.ErrRowLockUnavailable
+	}
+	return store.ValidateReadAuthority(ctx, sc, token.facts)
+}
+
 func (r workIdentityResolver) resolveSession(ctx context.Context, tenant model.TenantID, workspace model.ID, ref string) (sessions.Participant, error) {
 	if r.sessions == nil {
 		// Deny-closed, and it names itself: an unwired plane is "I could not look",

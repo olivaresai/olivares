@@ -12,6 +12,12 @@ prüft die bereitgestellte System-Policy. Schließlich leitet `olivares codex-ho
 Tool-Entscheidungen an den lokalen PEP weiter. Eine über ein persönliches ChatGPT-Abonnement
 authentifizierte Session gewährt für sich allein keinen Zugriff auf die Enterprise-APIs.
 
+Diese Seite ist der **Konnektor- und PEP-Hook-Pfad**. Sie startet die offizielle
+Codex-CLI nicht als gesteuertes Kind. Dieser Betriebspfad ist
+[Eine Anbieter-Session betreiben](/how-to/operate-provider-sessions/)
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` plus ein Anbieterprofil;
+`CHANGELOG.md` `[26.9.0]`).
+
 ## Codex hinzufügen
 
 ### Voraussetzungen

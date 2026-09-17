@@ -25,7 +25,7 @@ import (
 //
 //	modules/models/api.go:82-197              67 routes  GET 32 POST 15 PUT 11 DELETE 9
 //	modules/finops/api.go:52-113              42 routes  GET 27 POST  8 PUT  3 DELETE 4
-//	modules/inferenceproxy/…:135-140           6 routes  GET  2 POST  1 PUT  2 DELETE 1
+//	modules/inferenceproxy/…:APIRoutes         7 routes  GET  3 POST  1 PUT  2 DELETE 1
 //
 // The table below is the CLI's answer to that census. The constants are checked
 // per module and per verb by TestModelstackTableMatchesTheMeasuredCensus, and the
@@ -41,7 +41,7 @@ import (
 const (
 	modelsRouteCount         = 67
 	finopsRouteCount         = 42
-	inferenceProxyRouteCount = 6
+	inferenceProxyRouteCount = 7
 	modelstackRouteCount     = modelsRouteCount + finopsRouteCount + inferenceProxyRouteCount
 )
 
@@ -210,6 +210,7 @@ func modelstackRoutes() []modelstackRoute {
 		// --- inference proxy (6) ---
 		get(p, pb+"/config", "inference-proxy", "config", "get"),
 		put(p, pb+"/config", "inference-proxy", "config", "set", "--data", "{}"),
+		get(p, pb+"/content-firewall", "inference-proxy", "firewall", "status"),
 		post(p, pb+"/device/approve", "inference-proxy", "device", "approve", "--user-code", "ABCD-EFGH", "--yes"),
 		get(p, pb+"/dlp/rules", "inference-proxy", "dlp", "ls"),
 		put(p, pb+"/dlp/rules", "inference-proxy", "dlp", "set", "--data", "{}"),
@@ -276,7 +277,7 @@ func newModelstackStub(t *testing.T, rec *modelstackStub) *httptest.Server {
 
 // TestEveryCensusedRouteHasACommandThatReachesIt is the PERMIT half of the
 // contrafactual, done on the wire rather than on the exit code: for each of the
-// 115 routes the census measured, one CLI invocation produces EXACTLY that
+// 116 routes the census measured, one CLI invocation produces EXACTLY that
 // method and path, exactly once.
 //
 // "Exactly once" is part of the claim. A command that made a second, unasked-for
@@ -345,7 +346,7 @@ func TestModelstackTableMatchesTheMeasuredCensus(t *testing.T) {
 	}{
 		{"models", counts{get: 32, post: 15, put: 11, del: 9}},
 		{"finops", counts{get: 27, post: 8, put: 3, del: 4}},
-		{"inferenceproxy", counts{get: 2, post: 1, put: 2, del: 1}},
+		{"inferenceproxy", counts{get: 3, post: 1, put: 2, del: 1}},
 	} {
 		got, ok := byModule[want.module]
 		if !ok {

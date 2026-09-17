@@ -24,7 +24,8 @@
     "duration": "时长",
     "lastSeen": "最后活动",
     "provenance": "来源",
-    "control": "可控程度"
+    "control": "可控程度",
+    "instance": "实例"
   },
   "state": {
     "active": "活跃",
@@ -93,7 +94,8 @@
   "allSources": "全部来源",
   "tabs": {
     "sessions": "会话",
-    "workspaces": "工作区"
+    "workspaces": "工作区",
+    "profiles": "提供商配置文件"
   },
   "partial": {
     "noLiveRead": "未显示被观察的会话：你的角色不包含 sessions:live:read。下面这些已启动的会话只是能读到的部分，不是全貌。",
@@ -173,7 +175,31 @@
     "noObservationYet": "尚未观察到该会话的任何数据——没有以该引用到达本平面的遥测。",
     "actionFailed": "操作未能完成。",
     "activeRun": "当前操作",
-    "pickRun": "有多个运行在驱动该会话。选择其中一个来接入、治理或停止它。"
+    "pickRun": "有多个运行在驱动该会话。选择其中一个来接入、治理或停止它。",
+    "attributionTitle": "归属",
+    "attribution": {
+      "legacy": "旧通道",
+      "observed": "经来源观测",
+      "source": "已知来源",
+      "managed": "由 Olivares 管理"
+    },
+    "attributionExplain": {
+      "legacy": "来自没有已注册来源的通道：旧连接器、采集器推送的观测或旧事件。事后绝不会为其指派提供商实例。",
+      "observed": "通过专属于该提供商配置档案的来源到达。这只说明是哪个已配置来源投递了它，并不说明其中的 ID 属于 Olivares 启动的进程。",
+      "source": "通过未专属于任何配置档案的已注册来源到达：通道已知，提供商实例未知。",
+      "managed": "由 Olivares 自身的桥接为其启动的会话写入：唯一带有已证明的规范会话和运行的行。"
+    },
+    "liveRef": "行引用",
+    "profile": "提供商配置档案",
+    "provider": "提供商",
+    "environment": "执行环境",
+    "binding": "来源绑定",
+    "canonicalSid": "规范会话",
+    "related": {
+      "title": "也通过已绑定来源观测到",
+      "explain": "这些行与此运行共享配置档案和提供商会话 ID，但它们经由来源到达，而非 Olivares 持有的进程。它们显示在运行旁边，绝不与其合并。",
+      "open": "打开"
+    }
   },
   "facet": {
     "observed": "观察态：{{state}}",

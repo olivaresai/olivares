@@ -6,15 +6,47 @@
 #   docker compose -f deploy/compose/docker-compose.yml \
 #                  -f deploy/compose/docker-compose.postgres.yml up -d
 #
-# It brings up a Postgres, provisions the least-privilege olivares_app role +
-# olivares database on first init (the canonical deploy/postgres/01-app-role.sql,
-# run with the app password by initdb/10-app-role.sh), and points the engine at
-# that NON-superuser role so the FORCE-RLS tenant backstop is real (docs/SECURITY-HARDENING.md —
-# the engine REFUSES to start against a superuser/BYPASSRLS role).
+# It brings up a Postgres and provisions TWO DISTINCT, DELIBERATELY UNEQUAL principals
+# on first init (the canonical deploy/postgres/01-app-role.sql + 02-admin-role.sql,
+# run by initdb/10-app-role.sh):
 #
-# Provide POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env (see
-# .env.example). The DSN is passed to the engine as an argument — for a hardened
-# production deployment prefer the Helm chart with a DSN Secret + sslmode=verify-full.
+#   olivares_app    NOSUPERUSER NOBYPASSRLS — owns the olivares database and serves
+#                   ALL traffic, so the FORCE-RLS tenant backstop is real
+#                   (docs/SECURITY-HARDENING.md; the engine REFUSES to start against a
+#                   superuser/BYPASSRLS role). Its append-only protections are unchanged.
+#   olivares_admin  NOSUPERUSER BYPASSRLS, READ-ONLY — the cross-tenant System read
+#                   pool behind --admin-dsn. Not a convenience: POST /v1/setup resolves
+#                   the FIRST organization through an authoritative cross-tenant read
+#                   that the RLS-scoped app role cannot perform, so without this pool a
+#                   fresh Postgres install answers 501
+#                   cross_tenant_admin_pool_not_configured and /readyz answers 503
+#                   setup_blocked — it can never be set up. The role holds only CONNECT,
+#                   schema USAGE and SELECT: no write privilege on any engine relation and
+#                   none on schema public. (PostgreSQL's own PUBLIC default leaves it TEMP
+#                   on the database, so it can create temporary objects in its own session;
+#                   the product's provisioner behaves identically.)
+#
+# The two credentials MUST differ from each other and from the superuser password.
+# There is no membership between the roles in either direction.
+#
+# Provide POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD and
+# OLIVARES_ADMIN_PASSWORD in .env. Each `${VAR:?}` below fails the `docker compose`
+# invocation by name if one is missing, so a half-configured stack never starts.
+#
+# ⛔ URI-SAFE PASSWORDS ONLY. Both DSNs below interpolate the password into a
+# `postgres://user:password@host/db` URI, so a password containing @ : / ? # [ ] %
+# or a space is parsed as URI structure: the engine then fails to connect or
+# connects somewhere unintended. Use A-Z a-z 0-9 . _ ~ - only. This is a
+# RESTRICTION OF THIS DEMO, not arbitrary-password support — README.md
+# ("Passwords") states it, and a deployment needing the full character set uses the
+# Helm chart, which passes a DSN Secret instead of interpolating a URI.
+# For a hardened production deployment prefer that chart + sslmode=verify-full.
+#
+# ⛔ A RETAINED pg-data VOLUME DOES NOT RE-RUN initdb. If this stack was first started
+# before the admin role existed, editing these files changes nothing on that volume:
+# provision the role explicitly, then restart the engine. The exact two commands, which
+# preserve all data, are in README.md ("Adding the administrative read role to an
+# existing volume"). Never delete the volume to force a re-init.
 services:
   olivares:
     command:
@@ -25,6 +57,10 @@ services:
       - --checkpoint-interval=1h
       - --engine=postgres
       - --dsn=postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD in .env}@postgres:5432/olivares?sslmode=disable
+      # The cross-tenant System read pool. Required for FIRST SETUP on Postgres, and
+      # afterwards for the org list, multi-tenant checkpoint coverage and DR backup.
+      # Distinct role, distinct credential: NOSUPERUSER BYPASSRLS and read-only.
+      - --admin-dsn=postgres://olivares_admin:${OLIVARES_ADMIN_PASSWORD:?set OLIVARES_ADMIN_PASSWORD in .env}@postgres:5432/olivares?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,10 +71,18 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
       # Consumed by the initdb hook to set the olivares_app role's password.
       OLIVARES_DB_PASSWORD: ${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD in .env}
+      # Consumed by the initdb hook to set the olivares_admin role's password. It stays
+      # in the container's environment so the retained-volume provisioning command in
+      # README.md can read it there instead of putting a credential on a command line.
+      OLIVARES_ADMIN_PASSWORD: ${OLIVARES_ADMIN_PASSWORD:?set OLIVARES_ADMIN_PASSWORD in .env}
     volumes:
       - pg-data:/var/lib/postgresql/data
-      # The canonical role SQL (read-only) + the initdb hook that runs it with -v app_password.
+      # The canonical role SQL (read-only) + the initdb hook that runs both files with
+      # -v app_password / -v admin_password. The SQL stays mounted for the lifetime of
+      # the container, not only during initdb, which is what makes the retained-volume
+      # provisioning path in README.md a single command against the shipped file.
       - ../postgres/01-app-role.sql:/sql/01-app-role.sql:ro
+      - ../postgres/02-admin-role.sql:/sql/02-admin-role.sql:ro
       - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # Direct exec (no shell dependency); pg_isready ships in the image.

@@ -19,10 +19,20 @@
 // 301 KB — the Cyrillic, Greek and Vietnamese cuts of all three families — to render latin text.
 // Without it the browser honours each face's unicode-range and fetches only what the page needs.
 //
-// CLS stays at 0 either way, because the thing that fixes it is `optimizedFallbacks` (capsize
-// metric-matched fallback faces), not the preload. All four measured on a COLD cache over
-// /start/quickstart/ at 1440x900 — LCP is a single sample on a loaded machine and is the noisy
-// column; CLS and the byte counts are structural:
+// ⛔ LA FRASE QUE SEGUIA AQUI ERA FALSA EN PRODUCCION Y SE CORRIGE (2026-09-01). Decia:
+// «CLS stays at 0 either way, because the thing that fixes it is optimizedFallbacks». La tabla de
+// abajo es real, pero se tomo EN LOCAL con las fuentes llegando a ~275 ms — o sea ANTES del
+// pintado, que es el unico regimen en el que el salto no puede ocurrir. Detras del CDN llegan
+// DESPUES, y el mismo diseno da **CLS 0,1552 reproducible** en /start/quickstart/.
+//
+// `optimizedFallbacks` esta puesto y NO basta. Lo que lo arregla, medido en cuatro rutas con el
+// regimen fijado, es `display: 'optional'` en las tres familias (`astro.config.mjs`, con la tabla
+// del experimento). El `preload` que esta nota descarta sigue descartado, y ahora por DOS motivos:
+// los 301 KB de mas que ya media, y que **tampoco arregla el CLS**.
+//
+// La tabla original se conserva entera porque es una medicion honesta de lo que midio; lo que
+// caduco es la conclusion, no el dato. Todas sobre cache FRIA en /start/quickstart/ a 1440x900 —
+// LCP es una sola muestra en una maquina cargada y es la columna ruidosa:
 //
 //   origin/main, no fonts at all ............. CLS 0       0 woff2            LCP 448 ms
 //   fontsource CSS imported directly ......... CLS 0.2943  3 woff2 · 106 KB   LCP 248 ms
@@ -33,9 +43,143 @@
 // at ~275 ms. 19 @font-face are declared and 3 are fetched: unicode-range doing its job.
 import Default from '@astrojs/starlight/components/Head.astro'
 import { Font } from 'astro:assets'
+import { ARCHIVED_SLUGS, LOCALES, OG_CLASS_CARDS, PUBLISHED_LOCALES } from '../site-locales.mjs'
+
+// Las raices de locale (`/es/`, `/ja/`…) son 'home' tambien: no llevan miga.
+const DOCS_LOCALE_ROOTS = new Set(PUBLISHED_LOCALES.map((l) => `/${l}/`))
+
+// ⛔ EL ARCHIVO NO COMPITE CON LA VERSION VIVA. Anadido el 2026-09-01.
+//
+// `starlight-versions` publica un snapshot fechado (`/2026-06/`) y lo publica COMO SI FUERA
+// contenido nuevo: cada pagina archivada se declara canonica de si misma, no lleva `noindex` y
+// entra en el sitemap. Medido el 2026-09-01 sobre el sitemap servido: de las 2.156 URLs del sitio,
+// **553 cuelgan de `/2026-06/`**, con una similitud de texto mediana de 0,958 frente a su
+// homologa viva. Es decir: enviamos nosotros mismos a indexar 553 casi-duplicados de nuestro
+// propio contenido, en la propiedad que menos autoridad tiene de las dos.
+//
+// ⛔ Y HAY UN SEGUNDO DEFECTO, PEOR QUE LA DUPLICACION: el plugin replica el snapshot INGLES bajo
+// los seis locales traducidos. Medido en produccion sobre `/es/2026-06/reference/configuration/`:
+// `<html lang="es">`, `hreflang="es"`, y un cuerpo con **0,99 de similitud con el ingles**. Son
+// **474 URLs** (79 paginas x 6 locales) declarando un idioma que no sirven.
+//
+// SE ELIGE `noindex, follow` Y NO UN CANONICAL A LA VERSION VIVA, y la eleccion tiene razon
+// medida: la similitud NO es uniforme —mediana 0,958, pero **0,113 en `reference/cli` y 0,382 en
+// `reference/configuration`**—, asi que un canonical masivo afirmaria una equivalencia que en las
+// paginas mas grandes es falsa. `noindex` dice lo que de verdad queremos decir: el snapshot sigue
+// disponible para quien lo necesite, y no compite en Search. El `follow` conserva el valor de sus
+// enlaces hacia la version viva.
+//
+// ⛔ Y NO SE BLOQUEA EN `robots.txt`, a proposito: un rastreador que no puede DESCARGAR la pagina
+// no puede leer su `noindex`. Ese error exacto ya se pago en el sitio principal —cuatro URLs
+// indexadas sin contenido, con la serie subiendo— y esta escrito en su propio `robots.txt`.
+const path = Astro.url.pathname
+const isArchived = ARCHIVED_SLUGS.some(
+  (slug) => path.startsWith(`/${slug}/`) || path.includes(`/${slug}/`),
+)
+
+// ⛔ DATOS ESTRUCTURADOS: este sitio no emitia NINGUNO. Anadido el 2026-09-01.
+//
+// Medido antes de escribirlo: **cero** bloques `application/ld+json` en la home y en las paginas
+// profundas, sobre las 2.156 URLs que publica. El sitio principal, en cambio, emite un grafo
+// cuidado con su propia puerta sobre el artefacto. ⇒ Para un motor, **las dos propiedades no son
+// la misma organizacion**: nada aqui decia de quien es esto.
+//
+// LO QUE SE EMITE, Y LO QUE NO — las dos mitades son decisiones, no descuidos:
+//
+//   ✅ `WebSite` propio de docs.olivares.ai, cuyo `publisher` REFERENCIA la Organization del sitio
+//      principal por su `@id` estable. Es lo que ata las dos propiedades sin inventar nada.
+//   ⛔ NO se republica una `Organization` aqui. Dos nodos con datos distintos para la misma
+//      entidad es peor que uno solo: el sitio principal ya la publica, con su gate verificandola
+//      sobre el artefacto, y una segunda copia envejeceria por separado.
+//   ⛔ NO se emite `TechArticle`. Es schema.org valido, pero Google **no documenta ningun
+//      resultado enriquecido** para ese tipo: emitirlo no compra nada y prometerlo seria un claim
+//      sin fuente.
+//   ✅ `BreadcrumbList`, que SI tiene funcion documentada.
+//
+// ⚠ Y LA MIGA TIENE SOLO DOS ESLABONES A PROPOSITO. Lo natural seria
+// `Inicio > how-to > troubleshooting`, pero **`/how-to/`, `/start/`, `/tutorials/` y
+// `/reference/modules/` responden 404 hoy** aunque cuelguen 41, 5, 5 y 36 paginas de ellos. Una
+// miga que enlaza un 404 es peor que una miga corta: promete una jerarquia navegable que no
+// existe. Los eslabones intermedios entran cuando existan esos indices, no antes.
+// ⛔ TARJETA SOCIAL POR CLASE, no por pagina — y no por comodidad, sino porque es lo que se
+// sostiene. Medido: hoy las 2.156 paginas comparten UNA sola imagen. Generar una por pagina son
+// 2.157 PNG y exige traer aqui la maquinaria de marca del repo web (plantilla SVG parametrica,
+// fuentes embebidas en base64, Playwright), que este sitio no tiene como dependencia.
+//
+// Por CLASE de Diataxis son SEIS imagenes y capturan casi todo el valor: quien comparte un enlace
+// ve «guia practica» o «referencia» en vez de la misma tarjeta generica. Es lo que el contraste
+// adversarial propuso, y ademas es honesto — una tarjeta que anuncia la clase no promete nada que
+// la pagina no cumpla.
+//
+// ⚠ EL REPARTO ES EL MISMO QUE CON EL PUENTE: aqui va el CABLEADO; **las imagenes las produce el
+// carril de marca**, que es quien tiene la plantilla y decide como se ve. Por eso esto NO referencia
+// ficheros que no existen: si el PNG de la clase no esta en `public/og/`, se usa la tarjeta general
+// de siempre. El dia que aterricen, se encienden solas y sin tocar este fichero.
+const OG_CLASES = /** @type {const} */ ([
+  ['/start/', 'start'],
+  ['/tutorials/', 'tutorials'],
+  ['/how-to/', 'how-to'],
+  ['/reference/', 'reference'],
+  ['/explanation/', 'explanation'],
+])
+/** Ruta -> clase, ignorando el prefijo de locale y el de version archivada. */
+function claseDe(pathname) {
+  let p = pathname
+  for (const l of PUBLISHED_LOCALES) if (p.startsWith(`/${l}/`)) { p = p.slice(l.length + 1); break }
+  for (const v of ARCHIVED_SLUGS) if (p.startsWith(`/${v}/`)) { p = p.slice(v.length + 1); break }
+  for (const [prefijo, clase] of OG_CLASES) if (p.startsWith(prefijo)) return clase
+  return null
+}
+
+const route = Astro.locals.starlightRoute
+const SITE = 'https://docs.olivares.ai'
+const APEX_ORG = 'https://olivares.ai/#org'
+const pageTitle = route?.entry?.data?.title
+const isHome = path === '/' || DOCS_LOCALE_ROOTS.has(path)
+
+const graph: Record<string, unknown>[] = [
+  {
+    '@type': 'WebSite',
+    '@id': `${SITE}/#website`,
+    url: `${SITE}/`,
+    name: 'Olivares AI docs',
+    // Los siete locales que este sitio publica de verdad — no los trece del sitio principal.
+    inLanguage: Object.values(LOCALES).map((l) => l.lang),
+    publisher: { '@id': APEX_ORG },
+  },
+]
+if (!isHome && pageTitle) {
+  graph.push({
+    '@type': 'BreadcrumbList',
+    '@id': `${SITE}${path}#breadcrumb`,
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Olivares AI docs', item: `${SITE}/` },
+      { '@type': 'ListItem', position: 2, name: pageTitle, item: `${SITE}${path}` },
+    ],
+  })
+}
+const jsonLd = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph })
+
+// ⛔ LA PRIMERA VERSION DE ESTO SONDEABA EL DISCO Y NO FUNCIONABA. Probaba
+// `existsSync(new URL('../../public/og/…', import.meta.url))`, y con el PNG presente la tarjeta de
+// clase NO salia: en un componente compilado `import.meta.url` no apunta a la fuente. Fallaba en
+// SILENCIO y hacia lo correcto por accidente —la reserva—, que es la peor forma de estar roto.
+//
+// La declaracion vive en `site-locales.mjs`, que es el modulo unico que ya comparten la puerta y la
+// configuracion. Ver alli el porque y como se anade una clase.
+const CARDS = new Set(OG_CLASS_CARDS)
+const clase = claseDe(path)
+const ogClase = clase && CARDS.has(clase) ? `${SITE}/og/${clase}.png` : null
 ---
 
 <Default><slot /></Default>
+{isArchived && <meta name="robots" content="noindex, follow" />}
+{/* El archivo va `noindex`: no se le pone grafo, que seria pedir que se lea lo que se excluye. */}
+{!isArchived && <script type="application/ld+json" set:html={jsonLd} />}
+{/* Sustituye a la tarjeta general SOLO donde exista la de la clase. Las etiquetas repetidas de OG
+    las resuelve el consumidor quedandose con la ULTIMA, y esta va despues del <Default>. */}
+{ogClase && <meta property="og:image" content={ogClase} />}
+{ogClase && <meta name="twitter:image" content={ogClase} />}
 <Font cssVariable="--olv-font-sans" />
 <Font cssVariable="--olv-font-mono" />
 <Font cssVariable="--olv-font-display" />

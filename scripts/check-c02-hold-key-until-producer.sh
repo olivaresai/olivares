@@ -81,56 +81,96 @@ if data["overlay_main_sha"] == data["pr75_sha"]:
     raise SystemExit("overlay main and PR 75 cannot share an object id")
 PY
 
+# ⛔ LT1 · EL SUJETO VIVO YA NO ES `origin/main`. Ver la cabecera de la misma reforma en
+# `scripts/check-c02-70-no-land-snapshot.sh`: el acta se conserva INMUTABLE, el Modulo
+# (`scripts/lib/overlay-measurement.sh`) valida su identidad y sus distancias contra los
+# objetos VIEJOS que ella nombra, captura el 40-hex del main ACTUAL sellado, exige historia
+# descendiente y `behind` no decreciente, y publica la observacion terminal. Los predicados
+# semanticos de abajo son los de siempre y ahora se miden sobre el SHA capturado.
+#
+# ⚠ `$OLIVARES_ENT_DIR` se resuelve AQUI, en codigo, para que el clasificador de actas siga
+# viendo esta acta como VIVA (`check-overlay-actas-class.sh:56`).
 ENT="${OLIVARES_ENT_DIR:-}"
+. "$ROOT/scripts/lib/overlay-measurement.sh" || cannot "cannot load scripts/lib/overlay-measurement.sh"
+
 if [ -z "$ENT" ]; then
+	olivares_overlay_measure_open c02-hold-key-until-producer "$JSON" static-only \
+		|| cannot "$OLIVARES_OVERLAY_MEASUREMENT_WHY"
+	_frc=0
+	olivares_overlay_measure_finish 0 "static-only: schema and shape verified, overlay not read" || _frc=$?
+	case "$_frc" in
+	2) cannot "$OLIVARES_OVERLAY_FINAL_WHY" ;;
+	1) fail "$OLIVARES_OVERLAY_FINAL_WHY" ;;
+	esac
 	say "check-c02-hold-key-until-producer: NOTICE — live overlay remasure skipped"
 	say "check-c02-hold-key-until-producer: CLEAN — HOLD; hub 4-arg on main; producer off overlay main."
 	exit 0
 fi
 
 if [ -d "$ENT" ] && git -C "$ENT" rev-parse --git-dir >/dev/null 2>&1; then
-	# ⛔ a repository gate · LA FRESCURA SE EXIGE, NO SE SUPONE. El 2026-08-29 este mismo bloque comparo
-	# contra un `origin/main` con un merge de retraso y dijo CLEAN: el clon TRAE por SSH (falla EN
-	# SILENCIO sin clave) y EMPUJA por HTTPS. Un ref congelado no es un veredicto. El sello lo
-	# escribe UNA pata por acto (`scripts/fetch-overlay-seal.sh`), y aqui se exige que sea de ESTE
-	# acto y que describa ESTE clon; si no, se sale 2 — «no he podido mirar» —, nunca 0.
-	. "$ROOT/scripts/lib/overlay-seal.sh" || cannot "cannot load scripts/lib/overlay-seal.sh"
-	overlay_seal_require "$ENT" || cannot "$OVERLAY_SEAL_WHY"
-	python3 - "$ENT" "$JSON" <<'PY' || fail "live overlay remasure diverged from the pin"
+	# a repository gate: la frescura la exige el Modulo antes de capturar nada. Un ref congelado no es
+	# un veredicto — el clon TRAE por SSH (falla EN SILENCIO sin clave) y EMPUJA por HTTPS.
+	_mrc=0
+	olivares_overlay_measure_open c02-hold-key-until-producer "$JSON" current "$ENT" || _mrc=$?
+	if [ "$_mrc" = 2 ]; then
+		cannot "$OLIVARES_OVERLAY_MEASUREMENT_WHY"
+	elif [ "$_mrc" != 0 ]; then
+		fail "$OLIVARES_OVERLAY_MEASUREMENT_WHY"
+	fi
+
+	# ⛔ LAS TRES RESPUESTAS VIAJAN POR CODIGO DE SALIDA. Este bloque era
+	# `python3 - … <<PY … PY || fail`, asi que un `.goreleaser.yaml` ilegible y un eje de set
+	# en el directorio de blobs salian los DOS 1. Un «no he podido mirar» contado como
+	# hallazgo hace que `remeasure-overlay-actas.sh` intente curar con una re-medida algo que
+	# no es un numero rancio. Ahora: objeto ilegible = 2, contradiccion demostrada = 1.
+	_live_err="$(mktemp "${TMPDIR:-/tmp}/c02hold.live.XXXXXX")"
+	_live_rc=0
+	python3 - "$ENT" "$JSON" "$OLIVARES_OVERLAY_CURRENT_SHA" 2>"$_live_err" <<'PY' || _live_rc=$?
 import json, subprocess, sys
 
-ent, path = sys.argv[1], sys.argv[2]
+ent, path, main = sys.argv[1], sys.argv[2], sys.argv[3]
 data = json.load(open(path, encoding="utf-8"))
-ref75 = "origin/hub-comercio/c02-producer-by-set"
+
+
+def fail(msg):
+    print(msg, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def look(msg):
+    print(msg, file=sys.stderr)
+    raise SystemExit(2)
+
 
 def git(*args):
-    p = subprocess.run(["git", "-C", ent, *args], capture_output=True, text=True)
+    p = subprocess.run(
+        ["git", "--no-replace-objects", "-C", ent, *args], capture_output=True, text=True
+    )
     return p.returncode, p.stdout, p.stderr
 
-rc, out, _ = git("rev-parse", "origin/main")
+
+rc, out, err = git("show", "%s:.goreleaser.yaml" % main)
 if rc != 0:
-    raise SystemExit("could not resolve overlay origin/main")
-if out.strip() != data["overlay_main_sha"]:
-    raise SystemExit("live overlay main %s != pinned %s" % (out.strip(), data["overlay_main_sha"]))
-rc, out, _ = git("rev-parse", ref75)
-if rc != 0:
-    raise SystemExit("could not resolve overlay PR 75")
-if out.strip() != data["pr75_sha"]:
-    raise SystemExit("live PR 75 %s != pinned %s" % (out.strip(), data["pr75_sha"]))
-rc, out, _ = git("rev-list", "--count", "%s..origin/main" % ref75)
-if rc != 0:
-    raise SystemExit("could not count PR 75 behind overlay main")
-behind = int((out or "0").strip() or "0")
-if behind != data["pr75_behind_overlay_main"]:
-    raise SystemExit("live PR 75 behind %d != pinned %d" % (behind, data["pr75_behind_overlay_main"]))
-rc, out, _ = git("show", "origin/main:.goreleaser.yaml")
-if rc != 0:
-    raise SystemExit("could not read overlay goreleaser")
+    look("could not read the overlay goreleaser at %s: %s"
+         % (main[:9], (err or "").strip()[:160] or "missing path"))
 if 'directory: "enterprise/{{ .Version }}"' not in out:
-    raise SystemExit("overlay main blobs directory is no longer the monolith prefix")
+    fail("overlay main blobs directory is no longer the monolith prefix")
 if "enterprise/{{ .Version }}/{{" in out:
-    raise SystemExit("overlay main goreleaser now has a set axis in the blobs directory")
+    fail("overlay main goreleaser now has a set axis in the blobs directory")
+print("c02-hold: overlay main %s still ships the monolith blobs prefix" % main[:9])
 PY
+	cat "$_live_err" >&2
+	rm -f "$_live_err"
+	# El cierre corre SIEMPRE, y el veredicto lo decide UNA traduccion contratada del Modulo:
+	# una custodia perdida manda sobre un hallazgo del lector (y conserva los dos hechos), y un
+	# cierre que devuelve 1 se queda en 1. Las siete patas usan la misma.
+	_frc=0
+	olivares_overlay_measure_finish "$_live_rc" \
+		"the captured current overlay main contradicts the C02 HOLD remasure: producer off main; blobs directory is the monolith prefix" || _frc=$?
+	case "$_frc" in
+	2) cannot "$OLIVARES_OVERLAY_FINAL_WHY" ;;
+	1) fail "$OLIVARES_OVERLAY_FINAL_WHY" ;;
+	esac
 else
 	cannot "OLIVARES_ENT_DIR does not resolve to a git repo"
 fi

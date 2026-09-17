@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
+import { PasskeyAddressNotice } from '@/features/identity/passkey-address'
 
 const schema = z.object({
   email: z.string().email(),
@@ -120,13 +121,14 @@ export function LoginPage() {
       {/*surface the public status page (it needs no session) so an operator
        * facing a login failure can tell an outage from a credential problem. */}
       <p className="text-center text-xs text-muted-foreground">
-        <Link
-          to="/status-page"
-          className="underline-offset-2 hover:underline"
-        >
+        <Link to="/status-page" className="underline-offset-2 hover:underline">
           {t('login.statusPage')}
         </Link>
       </p>
+      {/* Signing in is where a privileged operator next meets a step-up prompt,
+       *  and a passkey refused by the browser produces no server-side trace at
+       *  all. Renders nothing at an address where passkeys work. */}
+      <PasskeyAddressNotice />
     </AuthShell>
   )
 }

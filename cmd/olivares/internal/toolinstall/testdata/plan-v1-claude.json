@@ -1,0 +1,46 @@
+{
+  "schema": "olivares.ai/tool-install/plan/v1",
+  "driver": "claude",
+  "channel": "exact",
+  "requested_version": "2.1.261",
+  "version": "2.1.261",
+  "platform": {
+    "os": "linux",
+    "arch": "amd64",
+    "libc": "glibc"
+  },
+  "vendor_platform": "linux-x64",
+  "source": {
+    "kind": "official",
+    "base_url": "https://example.invalid",
+    "manifest_url": "https://example.invalid/manifest.json",
+    "signature_url": "https://example.invalid/manifest.json.sig",
+    "artifact_url": "https://example.invalid/claude"
+  },
+  "artifact": {
+    "name": "claude",
+    "sha256": "aa",
+    "size": 1
+  },
+  "provenance": {
+    "class": "publisher-signed",
+    "verifier": "",
+    "key_fingerprint": "F",
+    "signing_key_fingerprint": "",
+    "signature_created": "0001-01-01T00:00:00Z",
+    "manifest_sha256": "m",
+    "signature_sha256": "",
+    "key_sha256": "k"
+  },
+  "destination": {
+    "root": "/tmp/root",
+    "release_dir": "/tmp/root/claude/v",
+    "executable": "/tmp/root/claude/v/bin/claude"
+  },
+  "verified": [
+    "manifest_signature",
+    "manifest_version",
+    "artifact_selection"
+  ],
+  "digest": "7dc9ee1f1d1603bf2d0ff5e02fe1fb0b08bc6fc5b6293795256bcf0275b5fb9d"
+}

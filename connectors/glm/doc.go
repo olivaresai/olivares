@@ -23,7 +23,7 @@
 // admin, key or organization API. Cost is therefore metered around the inference path
 // through the exported Meter helper from declared list pricing, never pulled by Gather.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every provider call is a GET via the
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every provider call is a GET via the
 // shared GET-only modelprovider client. The connector carries model ids, capabilities,
 // declared prices and entitlement posture only — never prompts, completions or key
 // values. It imports only the connector SDK, connectors/modelprovider and the internal

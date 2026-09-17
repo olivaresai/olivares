@@ -3,12 +3,18 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import {
   type ColumnDef,
+  type RowData,
   type SortingState,
+  columnFilteringFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
+  createFilteredRowModel,
+  createSortedRowModel,
   flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
+  globalFilteringFeature,
+  rowSortingFeature,
+  tableFeatures,
+  useTable,
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, ArrowUp, ChevronsUpDown, Search } from 'lucide-react'
@@ -32,15 +38,20 @@ import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ApiError, NetworkError } from '@/lib/api/errors'
-import { usePreferencesStore } from '@/stores/preferences'
+import { ApiError, NetworkError, isEvidenceUnavailable } from '@/lib/api/errors'
+import { DENSITY_ROW, usePreferencesStore } from '@/stores/preferences'
 
 /**
  * DataTable — THE reusable tabular primitive the catalog views build on,
  * so they never reinvent sorting, density, sticky headers, or the loading / empty /
  * error / forbidden states. Sorting + global filter run client-side over the loaded
  * page; server cursor pagination is surfaced via `hasMore`/`onLoadMore`. Density
- * follows the global preference.
+ * follows the global preference: `DENSITY_ROW` (stores/preferences.ts) gives the ONE
+ * row height that header, body rows, skeleton rows, the virtualizer's estimate and
+ * the sticky-header scroll padding all use, and the outer element carries
+ * `data-density` so a caller, a test or a browser probe can read which one applies.
+ * Changing the preference re-measures every virtualized row at once (`measure()`)
+ * instead of leaving off-screen rows on the old estimate.
  *
  * Scale (ADM-CORE-07): rows are ROW-VIRTUALIZED with TanStack Virtual once the
  * loaded page exceeds `virtualizeThreshold` — an enterprise estate (tens/hundreds
@@ -66,6 +77,24 @@ import { usePreferencesStore } from '@/stores/preferences'
  *    librería no cuesta un fichero: cuesta 56. Es exactamente lo que mide el PR #844 (v8 → v9), y su
  *    coste no lo causa v9 — lo causa **una abstracción que faltaba**.
  *
+ * ✅ RE-MEDIDO el 2026-09-01, y la cifra de arriba YA NO DESCRIBE EL ÁRBOL — se deja con su fecha
+ *    porque era cierta, no porque siga siéndolo. Hoy: **UN solo fichero importa de
+ *    `@tanstack/react-table` (éste) y 57 toman `TableColumn` de aquí.** La indirección se adoptó.
+ *
+ *    Se corrige aquí porque esta cifra **se usa para dimensionar la migración** y hoy la
+ *    sobreestima 56×: leyéndola tal cual se concluye «cuesta 56 ficheros» cuando cuesta UNO. Pasó
+ *    al medir el PR #2217 (v9.2.3) el 2026-09-01, y la corrección la ordena el propio canon —
+ *    una cifra en prosa envejece en silencio.
+ *
+ * ⚠ Que el radio sea un fichero NO hace la migración trivial, y conviene decirlo junto a la buena
+ *    noticia: el SKILL oficial viaja DENTRO del paquete
+ *    (`node_modules/@tanstack/react-table/skills/migrate-v8-to-v9/SKILL.md`) y en v9 desaparece
+ *    `useReactTable`, los row models pasan a ser *features*, hay que enhebrar `TFeatures`, el
+ *    pinning pasa de `left`/`right` a `start`/`end`, y los métodos viven en PROTOTIPOS — o sea que
+ *    destructuring y spread sobre row/cell/column dejan de funcionar. Medido sobre `main` con sólo
+ *    ese bump: **914 errores, 820 de ellos TS18046** («is of type 'unknown'»), que es la firma de
+ *    `TData` cayendo en la ranura de `TFeatures`.
+ *
  *    En v9 la firma pasa de `ColumnDef<TData>` a **`ColumnDef<TFeatures, TData, TValue>`**
  *    (verificado en el SKILL de migración oficial de TanStack). Con este alias, ese tercer argumento
  *    se absorbe **aquí y en ningún otro sitio**: las pantallas escriben `TableColumn<Fila>` y no se
@@ -75,11 +104,57 @@ import { usePreferencesStore } from '@/stores/preferences'
  *   pero deja al lector de una pantalla creyendo que toca la librería — que es la ambigüedad que
  *   causó el acoplamiento. Un nombre propio hace visible la indirección.
  */
-export type TableColumn<TData, TValue = unknown> = ColumnDef<TData, TValue>
+/**
+ * ⛔ EL REGISTRO DE FEATURES — en v9 sustituye a los `get*RowModel()` que se pasaban por opción.
+ *
+ * Se declara UNA VEZ, a nivel de módulo, porque `TableColumn` lo necesita en su primer parámetro
+ * de tipo y porque `tableFeatures()` no depende de nada del render. Las tres que van aquí son
+ * exactamente las que esta tabla usa, ni una más: el SKILL del proveedor recomienda features
+ * explícitas como estado final y desaconseja `stockFeatures`, que las trae todas.
+ *
+ * ⚠ `columnFilteringFeature` es prerequisito de `createFilteredRowModel()` y va DECLARADA ANTES
+ * que su slot, como pide el SKILL. Y el filtrado se registra SIEMPRE, aunque `searchable` sea
+ * false: en v8 el row model se pasaba condicionalmente en cada render, pero en v9 el registro es
+ * de módulo. No cambia el comportamiento —sin `globalFilter` en el estado no filtra nada— y evita
+ * un registro que dependa de una prop, que es justo lo que v9 saca del render.
+ */
+const features = tableFeatures({
+  rowSortingFeature,
+  columnFilteringFeature,
+  globalFilteringFeature,
+  // ⚠ Estas dos NO son opcionales aquí, y en v8 no había que pedirlas: los METODOS vienen de la
+  // feature que los declara. Sin `columnVisibilityFeature` no existe `row.getVisibleCells()`, que
+  // es como esta tabla recorre las celdas; sin `columnSizingFeature` no existe `header.getSize()`,
+  // del que dependen los anchos. El compilador las pidió por su nombre — no se adivinaron.
+  columnVisibilityFeature,
+  columnSizingFeature,
+  sortedRowModel: createSortedRowModel(),
+  filteredRowModel: createFilteredRowModel(),
+})
 
-export interface DataTableProps<TData> {
+/**
+ * ⛔ LA RESTRICCIÓN TAMBIÉN SE ABSORBE AQUÍ, y por la misma razón que el tercer parámetro.
+ *
+ * v9 exige que el dato de fila sea un registro o un array (`RowData`), así que todo consumidor
+ * genérico necesita acotar su propio parámetro. Si cada pantalla importara `RowData` de
+ * `@tanstack/react-table` para hacerlo, habríamos vuelto a acoplar 57 ficheros a la librería —
+ * justo lo que esta indirección existe para impedir, y lo que hizo que la migración v8→v9
+ * costara 56 ficheros en el diseño anterior.
+ *
+ * Se re-exporta con nombre propio, igual que `TableColumn`: un consumidor escribe
+ * `<TRow extends TableRowData>` y no se entera de qué librería hay debajo.
+ */
+export type TableRowData = RowData
+
+export type TableColumn<TData extends RowData, TValue = unknown> = ColumnDef<
+  typeof features,
+  TData,
+  TValue
+>
+
+export interface DataTableProps<TData extends RowData> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous accessor columns
-  columns: ColumnDef<TData, any>[]
+  columns: ColumnDef<typeof features, TData, any>[]
   data: TData[]
   isLoading?: boolean
   /** An error from the query (ApiError / NetworkError / unknown). The engine sends TWO
@@ -91,6 +166,10 @@ export interface DataTableProps<TData> {
   /** Re-runs the refused read. It is also the ceremony's way out, so a table that can
    * take a 403 of assurance should pass it — all 45 that pass `error` today do. */
   onRetry?: () => void
+  /** Caller copy for typed `evidence_unavailable` (unknown, not an unexpected 5xx).
+   * A 503 without that code still uses the generic server error. */
+  unavailableTitle?: string
+  unavailableDescription?: string
   /** REQUIRED: what this table means when it holds NO ROWS AT ALL. There is no
    * default, deliberately — the previous one ("No results") was not a decision made
    * once, it was the ABSENCE of a decision inherited by 69 surfaces across 36 files,
@@ -113,7 +192,8 @@ export interface DataTableProps<TData> {
   selectable?: boolean
   selectedIds?: Set<string>
   onSelectedIdsChange?: (ids: Set<string>) => void
-  onRowClick?: (row: TData) => void
+  /** Optional launcher is the node that activated the row. `(row) => …` callers keep working. */
+  onRowClick?: (row: TData, launcher?: HTMLElement) => void
   searchable?: boolean
   searchPlaceholder?: string
   /** Observe free-text changes when the owning view also applies a server-side
@@ -142,12 +222,34 @@ export interface DataTableProps<TData> {
 const PAGE_JUMP = 10
 const EMPTY_SELECTED_IDS = new Set<string>()
 
-export function DataTable<TData>({
+/** Click: focusable cell of the row that received the event; otherwise that same row. */
+function clickRowLauncher(event: {
+  target: EventTarget | null
+  currentTarget: HTMLElement
+}): HTMLElement {
+  const row = event.currentTarget
+  const origin = event.target
+  if (origin instanceof Element) {
+    const cell = origin.closest('td[role="gridcell"]')
+    if (cell instanceof HTMLElement && row.contains(cell)) return cell
+  }
+  return row
+}
+
+function keyboardRowLauncher(event: {
+  target: EventTarget | null
+}): HTMLElement | undefined {
+  return event.target instanceof HTMLElement ? event.target : undefined
+}
+
+export function DataTable<TData extends RowData>({
   columns,
   data,
   isLoading = false,
   error,
   onRetry,
+  unavailableTitle,
+  unavailableDescription,
   empty,
   getRowId,
   selectable = false,
@@ -175,6 +277,7 @@ export function DataTable<TData>({
   const [globalFilter, setGlobalFilter] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const gridId = useId()
+  const stateId = `${gridId}-state`
   const controlledSelectedIds = selectedIds ?? EMPTY_SELECTED_IDS
 
   const toggleRowSelection = useCallback(
@@ -187,7 +290,7 @@ export function DataTable<TData>({
     [controlledSelectedIds, onSelectedIdsChange],
   )
 
-  const selectionColumn = useMemo<ColumnDef<TData>>(
+  const selectionColumn = useMemo<ColumnDef<typeof features, TData>>(
     () => ({
       id: '__selection',
       size: 40,
@@ -243,22 +346,38 @@ export function DataTable<TData>({
     [columns, selectable, selectionColumn],
   )
 
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data,
     columns: tableColumns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     getRowId,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: searchable ? getFilteredRowModel() : undefined,
   })
 
-  const rowH = density === 'compact' ? 'h-7' : 'h-8'
-  const estRowPx = density === 'compact' ? 29 : 33
+  const rowH = DENSITY_ROW[density].className
+  const estRowPx = DENSITY_ROW[density].px
   const rows = table.getRowModel().rows
   const colCount = table.getAllLeafColumns().length
+  const headerRowCount = table.getHeaderGroups().length
+
+  // Resolve one status block outside the table, preserving loading/error precedence.
+  const statusNode: ReactElement | null = isLoading ? null : error ? (
+    <TableError
+      error={error}
+      onRetry={onRetry}
+      unavailableTitle={unavailableTitle}
+      unavailableDescription={unavailableDescription}
+    />
+  ) : rows.length === 0 ? (
+    // Distinguish an empty data set from existing rows hidden by a filter.
+    data.length === 0 ? (
+      empty
+    ) : (
+      <EmptyState title={t('states.noResults')} />
+    )
+  ) : null
 
   const enableVirtual =
     (virtualized ?? rows.length > virtualizeThreshold) &&
@@ -271,6 +390,9 @@ export function DataTable<TData>({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => estRowPx,
+    // The sticky header is one row tall, so a keyboard `scrollToIndex` lands the
+    // target row BELOW it instead of under it (WCAG 2.4.11), in either density.
+    scrollPaddingStart: sticky ? estRowPx : 0,
     overscan: 14,
     initialRect: { width: 0, height: 640 },
     measureElement:
@@ -278,6 +400,11 @@ export function DataTable<TData>({
         ? (el) => el?.getBoundingClientRect().height
         : undefined,
   })
+  // A density change resizes every row; drop the cached measurements so rows that
+  // are not in the window right now are re-estimated with the new height too.
+  useEffect(() => {
+    virtualizer.measure()
+  }, [density, virtualizer])
   const virtualItems = enableVirtual ? virtualizer.getVirtualItems() : []
   const padTop = virtualItems.length ? virtualItems[0].start : 0
   const padBottom = virtualItems.length
@@ -321,16 +448,58 @@ export function DataTable<TData>({
   }, [rows.length, colCount])
 
   // Focus the active cell after it (and any just-scrolled virtual row) commits.
+  //
+  // ⛔ THE VIRTUALIZER'S OFFSET IS AN ESTIMATE, THE FOCUS RING IS NOT. Measured in the
+  // browser (console-ui-layout-density, 2026-09-06, audit ledger with 201 rows, rows
+  // 39–47 px, sticky header): after three PageDown jumps `scrollToIndex` left the active
+  // row 1 px BELOW the scroll region on the baseline (focus entirely obscured, WCAG
+  // 2.4.11) and 8 px inside it here — rows that were never rendered are positioned by
+  // the estimate, and a collapsed-border table adds a fraction of a pixel per row, so
+  // the offset drifts by a row's worth over thirty rows. Estimates place the window;
+  // the cell's REAL box decides whether it is visible. After focusing, the cell is
+  // measured against the table's own scroll region (below the sticky header's real
+  // height) and only that region is moved — never `scrollIntoView`, which would also
+  // drag `main`.
+  const keepActiveCellVisible = useCallback(
+    (cell: HTMLElement) => {
+      const scroller = scrollRef.current
+      if (!scroller || !enableVirtual) return
+      const sr = scroller.getBoundingClientRect()
+      const cr = cell.getBoundingClientRect()
+      if (sr.height === 0 || cr.height === 0) return
+      const headerH = sticky
+        ? (scroller.querySelector('thead th')?.getBoundingClientRect().height ??
+          0)
+        : 0
+      if (cr.bottom > sr.bottom) {
+        scroller.scrollTop += cr.bottom - sr.bottom
+      } else if (cr.top < sr.top + headerH) {
+        scroller.scrollTop -= sr.top + headerH - cr.top
+      }
+    },
+    [enableVirtual, sticky],
+  )
   useEffect(() => {
     if (!nav || !active) return
     if (enableVirtual) virtualizer.scrollToIndex(active.r, { align: 'auto' })
+    let second = 0
     const id = requestAnimationFrame(() => {
-      document.getElementById(cellId(active.r, active.c))?.focus()
+      const cell = document.getElementById(cellId(active.r, active.c))
+      cell?.focus()
+      if (cell) keepActiveCellVisible(cell)
+      // The virtualizer re-aligns once more after measuring the row it just rendered
+      // (a zero-delay timer); check the real box again after that pass.
+      second = requestAnimationFrame(() => {
+        if (cell) keepActiveCellVisible(cell)
+      })
     })
-    return () => cancelAnimationFrame(id)
+    return () => {
+      cancelAnimationFrame(id)
+      cancelAnimationFrame(second)
+    }
     // virtualizer identity is stable across renders for the same instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, nav, enableVirtual, cellId])
+  }, [active, nav, enableVirtual, cellId, keepActiveCellVisible])
 
   const NAV_KEYS = [
     'ArrowDown',
@@ -480,7 +649,7 @@ export function DataTable<TData>({
       case 'Enter':
         if (onRowClick) {
           e.preventDefault()
-          onRowClick(rows[cur.r].original)
+          onRowClick(rows[cur.r].original, keyboardRowLauncher(e))
         }
         return
       case ' ':
@@ -488,7 +657,7 @@ export function DataTable<TData>({
         if (selectable && cur.c === 0) {
           toggleRowSelection(rows[cur.r].id)
         } else if (onRowClick) {
-          onRowClick(rows[cur.r].original)
+          onRowClick(rows[cur.r].original, keyboardRowLauncher(e))
         }
         return
       default:
@@ -511,7 +680,11 @@ export function DataTable<TData>({
         'border-b border-border transition-colors last:border-0 hover:bg-muted',
         clickable && 'cursor-pointer',
       )}
-      onClick={clickable ? () => onRowClick(row.original) : undefined}
+      onClick={
+        onRowClick
+          ? (event) => onRowClick(row.original, clickRowLauncher(event))
+          : undefined
+      }
     >
       {row.getVisibleCells().map((cell, c) => {
         const isActive = nav && active?.r === dataRowIndex && active?.c === c
@@ -540,7 +713,11 @@ export function DataTable<TData>({
   const gridTabIndex = nav ? (active ? -1 : 0) : undefined
 
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
+    <div
+      data-slot="data-table"
+      data-density={density}
+      className={cn('flex flex-col gap-3', className)}
+    >
       {(searchable || toolbar) && (
         <div className="flex items-center gap-2">
           {searchable && (
@@ -569,8 +746,9 @@ export function DataTable<TData>({
           className={cn(
             enableVirtual ? 'overflow-auto' : 'overflow-x-auto',
             // WCAG 2.4.11 Focus Not Obscured: reserve the sticky-header height so a
-            // focused cell scrolled to the top is not hidden under it (CSS C43).
-            sticky && 'scroll-pt-10',
+            // focused cell scrolled to the top is not hidden under it (CSS C43). The
+            // header is one row tall, so the padding follows the density.
+            sticky && (density === 'compact' ? 'scroll-pt-8' : 'scroll-pt-10'),
           )}
           style={
             enableVirtual
@@ -598,14 +776,16 @@ export function DataTable<TData>({
             role={nav ? 'grid' : undefined}
             aria-label={nav ? (label ?? t('table.label')) : undefined}
             aria-busy={isLoading || undefined}
-            // Con `error` el cuerpo es un ESTADO, no filas: anunciar el recuento de las
-            // filas conservadas describe una rejilla que el lector no puede recorrer.
-            // Son DOS: la cabecera y la fila del estado. Puse 1 y el contraste lo midió
-            // contra el árbol accesible de verdad —Testing Library y Chromium cuentan dos
-            // nodos `row`—, así que 1 era otra cifra falsa, sólo que en la otra dirección.
+            // Only header rows remain in the grid while a status block is shown.
             aria-rowcount={
-              error ? 2 : rows.length > 0 ? rows.length + 1 : undefined
+              statusNode
+                ? headerRowCount
+                : rows.length > 0
+                  ? rows.length + 1
+                  : undefined
             }
+            // Link the visible status without adding a live-region role.
+            aria-describedby={statusNode ? stateId : undefined}
             aria-colcount={nav ? colCount : undefined}
             tabIndex={gridTabIndex}
             onKeyDown={nav ? onGridKeyDown : undefined}
@@ -636,7 +816,8 @@ export function DataTable<TData>({
                                 : undefined
                         }
                         className={cn(
-                          'bg-muted px-3 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase',
+                          'bg-muted px-3 text-left align-middle text-xs font-medium tracking-wide text-muted-foreground uppercase',
+                          rowH,
                           sticky && 'sticky top-0 z-10',
                         )}
                         style={{
@@ -693,34 +874,7 @@ export function DataTable<TData>({
             <tbody role={nav ? 'rowgroup' : undefined}>
               {isLoading ? (
                 <SkeletonRows rows={6} cols={colCount} rowH={rowH} />
-              ) : error ? (
-                <tr>
-                  <td colSpan={colCount} className="p-0">
-                    <TableError error={error} onRetry={onRetry} />
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={colCount} className="p-0">
-                    {/* TWO causes reach zero rows and they are NOT the same screen.
-                        `data` is what the caller loaded; `rows` is what survives
-                        filtering. `data.length > 0` with zero rows therefore means
-                        something filtered them out — today only the global search box
-                        can (no production column declares a `filterFn` and nothing
-                        calls `setFilterValue`), but a column filter would land in this
-                        same arm and the generic copy stays true for it, which is why
-                        the branch tests `data.length` rather than the search text.
-                        Painting the caller's "nothing here yet" copy here would
-                        announce an empty estate over records that DO exist: a poor
-                        string swapped for a false one. */}
-                    {data.length === 0 ? (
-                      empty
-                    ) : (
-                      <EmptyState title={t('states.noResults')} />
-                    )}
-                  </td>
-                </tr>
-              ) : enableVirtual ? (
+              ) : statusNode ? null : enableVirtual ? (
                 <>
                   {padTop > 0 && (
                     <tr aria-hidden style={{ height: padTop }}>
@@ -741,6 +895,17 @@ export function DataTable<TData>({
               )}
             </tbody>
           </table>
+
+          {/* Keep status content within the scrollport at either horizontal extreme. */}
+          {statusNode ? (
+            <div
+              id={stateId}
+              data-slot="data-table-state"
+              className="sticky start-0"
+            >
+              {statusNode}
+            </div>
+          ) : null}
         </div>
 
         {hasMore && onLoadMore && (
@@ -787,9 +952,13 @@ function SkeletonRows({
 function TableError({
   error,
   onRetry,
+  unavailableTitle,
+  unavailableDescription,
 }: {
   error: unknown
   onRetry?: () => void
+  unavailableTitle?: string
+  unavailableDescription?: string
 }) {
   const { t } = useTranslation('errors')
   // ⛔ ASEGURAMIENTO ANTES QUE ROL, y aquí importa más que en ningún otro sitio: esta tabla
@@ -809,6 +978,19 @@ function TableError({
       <ForbiddenState
         title={t('forbidden.title')}
         description={t('forbidden.description')}
+      />
+    )
+  }
+  // Typed unknown: the engine could not look. Bound to the code, never to 503.
+  if (isEvidenceUnavailable(error)) {
+    return (
+      <ErrorState
+        title={unavailableTitle ?? t('evidenceUnavailable.title')}
+        description={
+          unavailableDescription ?? t('evidenceUnavailable.description')
+        }
+        retry={onRetry}
+        requestId={error.requestId}
       />
     )
   }

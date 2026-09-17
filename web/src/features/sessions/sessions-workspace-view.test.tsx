@@ -19,6 +19,9 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 
 // The SSE stream is a live connection; the list under test is the merge, not the wire.
@@ -32,6 +35,9 @@ vi.mock('@/features/shared', async () => {
 
 // The heavy operate panels are proven by their own tests; mounting them here would
 // drag CodeMirror and the attach EventSource into a table test.
+vi.mock('@/features/agentops/profiles-panel', () => ({
+  ProfilesPanel: () => <div>profiles-panel</div>,
+}))
 vi.mock('@/features/agentops/workspaces-panel', () => ({
   WorkspacesPanel: () => <div>workspaces-panel</div>,
 }))
@@ -42,38 +48,31 @@ vi.mock('./session-card', () => ({
   SessionCard: ({
     target,
   }: {
-    target: { sessionRef?: string; runRef?: string } | null
+    target: { sessionRef?: string; runRef?: string; liveRef?: string } | null
   }) =>
     target ? (
       <div data-testid="card">
-        card:{target.sessionRef ?? ''}|{target.runRef ?? ''}
+        card:{target.sessionRef ?? ''}|{target.runRef ?? ''}|
+        {target.liveRef ?? ''}
       </div>
     ) : null,
 }))
 
-vi.mock('./api', () => ({
+// ⛔ ONLY THE API FUNCTIONS ARE DOUBLED; THE KEY FACTORIES ARE THE REAL ONES.
+//    They used to be hand-written here, and a hand-written key factory is a copy that
+//    stops being the thing it stands for the day production adds a key: the doubles said
+//    `['s', t, 'live', …]` while the view had moved on, so this file could only ever
+//    prove that the view agreed with the copy. `importOriginal` keeps `sessionsKeys` /
+//    `agentOpsKeys` real, which is also what the boundary partition needs — the view's
+//    cache scope is built by those factories.
+vi.mock('./api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./api')>()),
   sessionsApi: { live: vi.fn(), liveOne: vi.fn(), timeline: vi.fn() },
-  sessionsKeys: {
-    all: (t: string | null) => ['s', t],
-    live: (t: string | null, p?: unknown) => ['s', t, 'live', p ?? null],
-    liveOne: (t: string | null, ref: string) => ['s', t, 'one', ref],
-    timeline: (t: string | null, ref: string, p?: unknown) => [
-      's',
-      t,
-      'tl',
-      ref,
-      p ?? null,
-    ],
-  },
 }))
 
-vi.mock('@/features/agentops/api', () => ({
+vi.mock('@/features/agentops/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/agentops/api')>()),
   agentOpsApi: { listRuns: vi.fn(), getRun: vi.fn() },
-  agentOpsKeys: {
-    all: (t: string | null) => ['a', t],
-    runs: (t: string | null, p?: unknown) => ['a', t, 'runs', p ?? null],
-    run: (t: string | null, r: string) => ['a', t, 'run', r],
-  },
 }))
 
 import { agentOpsApi } from '@/features/agentops/api'
@@ -82,6 +81,8 @@ import { SessionsWorkspaceView } from './sessions-workspace-view'
 
 const observed: LiveDTO = {
   session_ref: 'sess-found',
+  live_ref: 'lr-found',
+  attribution: 'legacy',
   cc_state: 'active',
   current_action: 'reading appdb',
   model_ref: 'claude-opus-4-8',
@@ -95,7 +96,11 @@ const observed: LiveDTO = {
   duration_seconds: 300,
 }
 
-const launchedLive: LiveDTO = { ...observed, session_ref: 'sess-ours' }
+const launchedLive: LiveDTO = {
+  ...observed,
+  session_ref: 'sess-ours',
+  live_ref: 'lr-ours',
+}
 
 const launchedRun: RunDTO = {
   run_ref: 'run-1',
@@ -329,6 +334,21 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
     expect(await screen.findByText('nightly-indexer')).toBeInTheDocument()
   })
 
+  it('offers the provider-profile plane only to a principal who can read profiles', async () => {
+    perms.add('sessions:profile:read')
+    renderView()
+    expect(
+      await screen.findByRole('tab', { name: 'Provider profiles' }),
+    ).toBeInTheDocument()
+    perms.delete('sessions:profile:read')
+    renderView()
+    await waitFor(() =>
+      expect(
+        screen.queryAllByRole('tab', { name: 'Provider profiles' }),
+      ).toHaveLength(1),
+    )
+  })
+
   it('offers the workspace plane only to a principal who can read runs', async () => {
     renderView()
     expect(
@@ -354,5 +374,102 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
     expect(
       await screen.findAllByRole('button', { name: /New session/i }),
     ).not.toHaveLength(0)
+  })
+})
+
+// B2 — two homes of one provider may announce ONE session id. The list keys rows by
+// their own live_ref, joins a profiled run only to the row the plane proved for it,
+// and opens a scoped row by live_ref.
+describe('SessionsWorkspaceView — B2: two homes, one provider session id', () => {
+  const managedA: LiveDTO = {
+    ...observed,
+    session_ref: 'sess-dup',
+    live_ref: 'lr-a',
+    attribution: 'managed',
+    provider_profile_ref: 'ppf_a',
+    provider: 'claude',
+    canonical_sid: 'osn_a',
+    run_ref: 'run-a',
+  }
+  const managedB: LiveDTO = {
+    ...managedA,
+    live_ref: 'lr-b',
+    provider_profile_ref: 'ppf_b',
+    canonical_sid: 'osn_b',
+    run_ref: 'run-b',
+    cost_micro_usd: 1000,
+  }
+  const runA: RunDTO = {
+    ...launchedRun,
+    run_ref: 'run-a',
+    name: 'home-a',
+    claude_session_id: 'sess-dup',
+    provider_profile_ref: 'ppf_a',
+    provider_driver: 'claude',
+    live_ref: 'lr-a',
+  }
+  const runB: RunDTO = {
+    ...runA,
+    run_ref: 'run-b',
+    name: 'home-b',
+    provider_profile_ref: 'ppf_b',
+    live_ref: 'lr-b',
+  }
+
+  it('keeps two rows sharing a provider session id, each joined to ITS run', async () => {
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [managedA, managedB],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [runA, runB],
+      has_more: false,
+    })
+    renderView()
+    const a = await rowFor('home-a')
+    const b = await rowFor('home-b')
+    expect(screen.getAllByRole('row')).toHaveLength(3) // header + 2 sessions
+    expect(within(a).getByText('ppf_a')).toBeInTheDocument()
+    expect(within(b).getByText('ppf_b')).toBeInTheDocument()
+    expect(within(a).getByText('Managed by Olivares')).toBeInTheDocument()
+    expect(within(a).getByText('Launched')).toBeInTheDocument()
+    expect(within(b).getByText('$0.001')).toBeInTheDocument()
+    expect(within(a).getByText('$0.042')).toBeInTheDocument()
+  })
+
+  it('opens the card by live_ref for a scoped row', async () => {
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [managedA, managedB],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [runA, runB],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    renderView()
+    await user.click(await rowFor('home-b'))
+    expect(await screen.findByTestId('card')).toHaveTextContent('|lr-b')
+  })
+
+  it('never folds a profiled run onto a legacy row that shares its id', async () => {
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [{ ...observed, session_ref: 'sess-dup', live_ref: 'lr-legacy' }],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [runA],
+      has_more: false,
+    })
+    renderView()
+    const own = await rowFor('home-a')
+    // 'sess-dup' is the legacy row's label AND the profiled row's secondary id line,
+    // so the legacy row is the one whose title is the bare id.
+    const legacy = (await screen.findAllByText('sess-dup'))
+      .map((el) => el.closest('tr') as HTMLElement)
+      .find((tr) => tr !== own) as HTMLElement
+    expect(screen.getAllByRole('row')).toHaveLength(3)
+    expect(within(legacy).getByText('Discovered')).toBeInTheDocument()
+    expect(within(own).getByText('Launched')).toBeInTheDocument()
   })
 })

@@ -92,5 +92,25 @@
     "denied": "Código de dispositivo {{code}} denegado",
     "notFound": "No hay ninguna solicitud pendiente para ese código de usuario.",
     "expired": "Esa solicitud ha caducado o ya se usó."
+  },
+  "firewall": {
+    "title": "Inspector de Messages",
+    "intro": "Si este proceso del plano de control arrancó con el inspector de contenido acoplado al proxy de Messages.",
+    "refresh": "Volver a comprobar",
+    "limit": "Esto es lo que registró el proceso que responde al arrancar. No informa de si el proxy es alcanzable ahora, de qué política está cargada, ni de si se inspeccionó alguna petición concreta.",
+    "states": {
+      "unobserved": "Sin dato",
+      "pep_not_composed": "Proxy no arrancado",
+      "inspector_absent": "Inspector no acoplado",
+      "inspector_attached": "Inspector acoplado",
+      "unreadable": "No se ha podido leer"
+    },
+    "statesHint": {
+      "unobserved": "Este proceso no registró un estado de acoplamiento. No se afirma nada en ningún sentido.",
+      "pep_not_composed": "El proxy de Messages no arrancó en este proceso, así que ningún inspector pudo acoplarse a él.",
+      "inspector_absent": "El proxy arrancó sin inspector de contenido acoplado.",
+      "inspector_attached": "Se acopló un inspector al arrancar. Puede ser el respaldo restrictivo que se instala cuando no se puede leer la configuración, así que esto no significa que el contenido se esté inspeccionando según lo configurado.",
+      "unreadable": "La respuesta no coincide con ningún estado que esta consola reconozca. No se afirma nada sobre el inspector."
+    }
   }
 }

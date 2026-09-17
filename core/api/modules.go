@@ -33,6 +33,23 @@ type Module interface {
 	Permissions() []auth.Permission
 }
 
+// ActionDeclarer is implemented by a module that mounts governed routes, so the engine can check
+// that a route's Cedar action is one its OWN module declared.
+//
+// ⛔ IT IS NOT A METHOD ON Module, AND THAT IS NOT CONVENIENCE. Adding one there breaks all 33
+// modules and every test double for a capability none of them wants today; the repository already
+// documents this idiom for optional capabilities (Searcher, core/store's EpochFencer, the governed
+// door itself). A module with no governed routes implements nothing and pays nothing.
+//
+// ⛔ AND OWNERSHIP IS REGISTERED RATHER THAN SPELLED, because an action cannot carry it. A
+// permission is "<ns>:<resource>:<verb>", so "only its own" is a string check. An action is
+// "<resource>:<verb>" — `session:stop`, `agent:read` — and a mandatory namespace prefix would
+// rename every one of them and break the Cedar policies that already cite them by name.
+type ActionDeclarer interface {
+	// Actions declares the Cedar Action IDs this module's governed routes may name.
+	Actions() []auth.CedarAction
+}
+
 // RouteRegistrar mounts a module's routes. Each route is mounted at
 // /v1/m/<namespace>/<pattern> by construction — a module cannot mount outside its
 // own subtree — and is wrapped so the handler runs only after tenant resolution
@@ -51,6 +68,52 @@ type RouteRegistrar interface {
 	HandleEntity(method, pattern string, perm auth.Permission, ref EntityRef, handler ModuleHandler)
 }
 
+// CollectionScopeRef is a module's DECLARATION that ONE collection route is scoped to
+// a single workspace named by a request selector, and that the engine must corroborate
+// that selector against the stored workspace row BEFORE it authorizes the route.
+//
+// ⛔ WHY THE ENGINE AND NOT THE HANDLER, which is where this check has always lived.
+// A collection route is authorized with auth.ResourceFor(perm) — no id, no workspace —
+// and modules/governance/grants.go resolve() short-circuits on exactly that shape, so
+// no `when { resource in Workspace::"…" }` can ever match. A workspace-scoped grant is
+// therefore invisible to every collection route in the product, and the handler
+// resolving the workspace AFTERWARDS cannot repair it: by then the decision is made.
+// Seeding the CORROBORATED workspace into the authorization resource is what lets a
+// scoped grant reach the exact collection it was granted for.
+//
+// ⛔ AND IT IS SAFE ONLY BECAUSE THE HANDLER STILL FILTERS TO THAT WORKSPACE. The value
+// is caller-NAMED, so on a non-tree kind it IS the authorization scope (see
+// auth.ResourceAttrs.WorkspaceID). Corroboration proves the workspace exists, is active,
+// belongs to this tenant and does not cross the caller's confinement; what makes the
+// grant honest is that the route then returns only rows of that workspace. A route that
+// does not filter that way must not declare this.
+type CollectionScopeRef struct {
+	// WorkspaceQueryParam is the query parameter carrying the workspace id. Exactly
+	// one canonical occurrence is required: absent, repeated or non-canonical is a
+	// client error decided from the request alone, with no row read.
+	WorkspaceQueryParam string
+}
+
+// CollectionScopeRouteRegistrar is the OPTIONAL capability a module asserts to declare
+// a corroborated workspace scope for the COLLECTION routes it mounts next.
+//
+// ⛔ IT IS AN OPTIONAL CAPABILITY ON THE CONCRETE REGISTRARS, this repository's
+// documented idiom (NoStoreRouteRegistrar, HandlePolicy, core/store's EpochFencer).
+// Adding it to RouteRegistrar would break every implementer and test double for
+// something three routes in one module want today.
+//
+// ⛔ AND A MODULE THAT FINDS IT ABSENT LOSES ONLY THE SCOPED GRANT, NEVER A GUARD. The
+// returned registrar mounts the identical route with the identical admission; without
+// the capability the route authorizes at collection level exactly as it always did,
+// which is the direction that grants LESS. That is why falling back is safe here and
+// is NOT safe for HandlePolicy, which would drop the AAL floor and the row lineage.
+type CollectionScopeRouteRegistrar interface {
+	// WithCollectionScope returns a registrar whose COLLECTION routes carry scope.
+	// Entity routes mounted through it are unaffected: they resolve their workspace
+	// from the stored row, and a caller-named selector must never compete with that.
+	WithCollectionScope(scope CollectionScopeRef) RouteRegistrar
+}
+
 // EntityRef is a module's DECLARATION of how one route's entity maps onto the
 // scope tree. Nothing here is inferred: a column called "workspace_ref" means a
 // cost-attribution dimension in one module and the declaring principal's workspace in
@@ -60,6 +123,19 @@ type RouteRegistrar interface {
 type EntityRef struct {
 	// Kind is the store entity kind the route acts on ("<ns>.<entity>").
 	Kind model.Kind
+	// CoreKind declares a CORE entity kind instead of Kind, for a route whose
+	// authorization resource is an engine-owned row (V269 / COCKPIT-02 §3). It is
+	// MUTUALLY EXCLUSIVE with Kind: a route authorizes against ONE row, and
+	// declaring both is refused when the route is mounted, not when it is called.
+	//
+	// It exists because Scope.Ext refuses the `core` namespace on purpose — a module
+	// holding a Scope must not read engine-owned entities generically — so a module
+	// cannot reach a core row the way it reaches its own. With CoreKind set, the
+	// ENGINE reads the row with its own typed accessor through
+	// CoreEntityAuthorizationResolver and the module receives five facts: id, tenant,
+	// workspace, agent and existence. No repository and no column choice cross the
+	// seam. See coreentity.go.
+	CoreKind CoreKind
 	// IDParam is the URL path parameter carrying the entity id (e.g. "id"). Exactly
 	// one of IDParam and BodyIDField must be set.
 	IDParam string
@@ -108,6 +184,13 @@ type ModuleContext struct {
 	// this request. Collection routes carry the permission-derived kind with no ID;
 	// entity routes additionally carry the target ID and its STORED workspace.
 	Resource auth.ResourceAttrs
+	// Authorization is the witness that permitted THIS request, for a route registered
+	// through the governed door. It is the zero value for the ungoverned doors.
+	//
+	// It retains the evaluated question, fact versions and time window. Consumers must
+	// validate the complete witness and current authority where required; PolicyVersion
+	// is only a legacy maximum of independent fact versions, not a shared policy epoch.
+	Authorization auth.RouteAuthorizationWitness
 	// Data is PINNED to Tenant: a route handler can only ever touch the single
 	// tenant the request was authorized for — it cannot pass another tenant id.
 	Data ScopedData

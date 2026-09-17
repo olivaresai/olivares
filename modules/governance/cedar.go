@@ -38,11 +38,18 @@ const (
 	cedarTypeResource  = "Resource"
 )
 
+// cedarEvalErrorCode is the FIXED reason code carried by the single bounded warning
+// Evaluate emits when Cedar reports evaluation errors (CD1). It is the stable,
+// greppable operator signal — "a configured policy could not be evaluated on this
+// request" — and it is content-free by construction: it never varies with the policy,
+// the diagnostic or the request.
+const cedarEvalErrorCode = "cedar_evaluation_error"
+
 // CedarEvaluator is an auth.PolicyEvaluator backed by an embedded Cedar policy set.
 type CedarEvaluator struct {
 	policies *cedar.PolicySet
 	now      func() time.Time
-	log      *slog.Logger // optional; logs per-policy evaluation errors (nil-safe)
+	log      *slog.Logger // optional; logs a bounded evaluation-error signal (nil-safe)
 }
 
 var _ auth.PolicyEvaluator = (*CedarEvaluator)(nil)
@@ -50,8 +57,10 @@ var _ auth.PolicyEvaluator = (*CedarEvaluator)(nil)
 // NewCedarEvaluator compiles the operator's Cedar source (a set of `forbid` rules)
 // under the implicit base permit. A syntactically invalid policy fails here (so a
 // broken policy is caught at load, not silently ignored on the hot path). logger
-// (nil-safe) surfaces per-request policy EVALUATION errors — e.g. a forbid that
-// accesses an attribute Cedar cannot resolve — which Cedar otherwise skips silently.
+// (nil-safe) surfaces the OCCURRENCE and COUNT of per-request policy EVALUATION errors
+// — e.g. a forbid that accesses an attribute Cedar cannot resolve — which Cedar
+// otherwise skips silently. It never receives the SDK diagnostic itself (CD1: see
+// Evaluate); an injected logger is not a reviewed channel for policy-derived content.
 func NewCedarEvaluator(policySrc string, logger *slog.Logger) (*CedarEvaluator, error) {
 	src := cedarBasePermit + policySrc
 	ps, err := cedar.NewPolicySetFromBytes("governance.cedar", []byte(src))
@@ -104,10 +113,24 @@ func (c *CedarEvaluator) Evaluate(_ context.Context, req auth.Request) (auth.Dec
 	decision, diag := cedar.Authorize(c.policies, entities, creq)
 	// A policy that ERRORS during evaluation is skipped by Cedar (not a Deny). For a
 	// security control that is dangerous to do silently — a forbid that errors would
-	// fail to restrict with no signal — so surface it.
-	if len(diag.Errors) > 0 && c.log != nil {
+	// fail to restrict with no signal — so surface it, but CONTAINED (CD1): at most ONE
+	// warning per call, carrying the fixed product message, the fixed reason code and the
+	// integer total of SDK evaluation errors. Nothing else — no PolicyID, no SDK message,
+	// no mapped question values, no hash of either.
+	//
+	// The SDK diagnostic is not safe to forward: it quotes the operator's own policy text
+	// and the offending entity, so `resource.owner` on Resource::"a-1" yields
+	// ``Resource::"a-1"` does not have the attribute `owner``. Emitting it put operator
+	// attribute names, policy-derived content and request identifiers into whatever
+	// logger a caller happened to inject, and injecting a logger is not a reviewed
+	// permission to disclose them.
+	//
+	// The count is of SDK EVALUATION ERRORS. It is not a count of matched forbids and it
+	// says nothing about the Decision returned below: an errored permit is warned about
+	// and still allowed, an errored forbid is warned about and denied.
+	if n := len(diag.Errors); n > 0 && c.log != nil {
 		c.log.Warn("cedar policy evaluation error (guard attribute access with `has`)",
-			"errors", len(diag.Errors), "first", diag.Errors[0].PolicyID, "message", diag.Errors[0].Message)
+			"reason", cedarEvalErrorCode, "errors", n)
 	}
 	// F-06: fail CLOSED when a FORBID rule errored. Cedar dropped it silently, so
 	// the restriction would otherwise evaporate (fail-open on a deny rule). A forbid we

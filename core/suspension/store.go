@@ -118,7 +118,16 @@ func Guard(inner store.Store, log *slog.Logger) store.Store {
 	//
 	// AuditSpoolStatuser needs no such split: its signature carries its own
 	// "supported" bool, so forwarding false is a truthful answer.
-	if _, ok := inner.(store.RolloutStater); ok {
+	_, hasRollout := inner.(store.RolloutStater)
+	_, hasSelective := inner.(store.SelectiveMutator)
+	switch {
+	case hasRollout && hasSelective:
+		return &guardStoreWithRolloutSelective{
+			guardStoreWithSelective: &guardStoreWithSelective{guardStore: g},
+		}
+	case hasSelective:
+		return &guardStoreWithSelective{guardStore: g}
+	case hasRollout:
 		return &guardStoreWithRollout{guardStore: g}
 	}
 	return g
@@ -247,36 +256,42 @@ func (g *guardStore) passThrough(tenant model.TenantID) bool {
 // honest answer is "not served". An absent org can never mean "in service".
 func (g *guardStore) wrap(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) func(store.Scope) error {
 	return func(sc store.Scope) error {
-		org, err := sc.Org(ctx)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				// Deny-closed, but do NOT call it a suspension. A tenant that never
-				// existed — a typo'd id, or one hard-deleted after the grace period —
-				// would otherwise be told "your service is suspended", which a console
-				// renders as a billing problem for an account that is not there.
-				// The work still does not run; only the answer is honest.
-				if g.log != nil {
-					g.log.Warn("suspension: refused work for a tenant with no organization on this instance",
-						"tenant", tenant.String())
-				}
-				return fmt.Errorf("%w: tenant %s has no organization on this instance", store.ErrNotFound, tenant)
-			}
+		if err := g.check(ctx, tenant, sc); err != nil {
 			return err
 		}
-		switch org.Status {
-		case model.StatusActive:
-		case model.StatusSuspended:
-			return g.deny(tenant, store.ErrTenantSuspended, string(org.Status),
-				fmt.Sprintf("tenant %s is not in service (status %q); service was withdrawn without deleting its data and can be restored", tenant, org.Status))
-		default:
-			// Deny-closed all the same — an unrecognized state is never "in service" —
-			// but do NOT call it a suspension. No commercial decision was recorded for
-			// this tenant, and saying one was sends the operator to look for a billing
-			// problem instead of at the row that is actually wrong.
-			return g.deny(tenant, store.ErrTenantNotInService, string(org.Status),
-				fmt.Sprintf("tenant %s is not in service: its organization row carries status %q, which is neither %q nor %q. No suspension was recorded for it — this row is inconsistent and needs an operator, not a billing decision", tenant, org.Status, model.StatusActive, model.StatusSuspended))
-		}
 		return fn(sc)
+	}
+}
+
+type tenantOrgReader interface {
+	Org(context.Context) (model.Org, error)
+}
+
+func (g *guardStore) check(ctx context.Context, tenant model.TenantID, sc tenantOrgReader) error {
+	org, err := sc.Org(ctx)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// Deny-closed, but do NOT call it a suspension. A tenant that never
+			// existed — a typo'd id, or one hard-deleted after the grace period —
+			// would otherwise be told "your service is suspended", which a console
+			// renders as a billing problem for an account that is not there.
+			if g.log != nil {
+				g.log.Warn("suspension: refused work for a tenant with no organization on this instance",
+					"tenant", tenant.String())
+			}
+			return fmt.Errorf("%w: tenant %s has no organization on this instance", store.ErrNotFound, tenant)
+		}
+		return err
+	}
+	switch org.Status {
+	case model.StatusActive:
+		return nil
+	case model.StatusSuspended:
+		return g.deny(tenant, store.ErrTenantSuspended, string(org.Status),
+			fmt.Sprintf("tenant %s is not in service (status %q); service was withdrawn without deleting its data and can be restored", tenant, org.Status))
+	default:
+		return g.deny(tenant, store.ErrTenantNotInService, string(org.Status),
+			fmt.Sprintf("tenant %s is not in service: its organization row carries status %q, which is neither %q nor %q. No suspension was recorded for it — this row is inconsistent and needs an operator, not a billing decision", tenant, org.Status, model.StatusActive, model.StatusSuspended))
 	}
 }
 
@@ -361,6 +376,65 @@ func (g *guardStoreWithRollout) RolloutHistory(ctx context.Context, key string) 
 }
 
 func (g *guardStoreWithRollout) SetRolloutMode(ctx context.Context, t store.RolloutTransition) (store.RolloutState, error) {
+	return g.inner.(store.RolloutStater).SetRolloutMode(ctx, t)
+}
+
+// guardStoreWithSelective preserves the optional narrow mutation capability and
+// evaluates service state after the inner L0/key admission but before any user
+// callback or evidence repository effect.
+type guardStoreWithSelective struct {
+	*guardStore
+}
+
+func (g *guardStoreWithSelective) MutateCoordination(
+	ctx context.Context,
+	tenant model.TenantID,
+	plan store.TransactionLockPlan,
+	fn func(store.CoordinationMutationScope) error,
+) error {
+	selective := g.inner.(store.SelectiveMutator)
+	if g.passThrough(tenant) {
+		return selective.MutateCoordination(ctx, tenant, plan, fn)
+	}
+	return selective.MutateCoordination(ctx, tenant, plan, func(sc store.CoordinationMutationScope) error {
+		if err := g.check(ctx, tenant, sc); err != nil {
+			return err
+		}
+		return fn(sc)
+	})
+}
+
+func (g *guardStoreWithSelective) MutateEvidenceOperation(
+	ctx context.Context,
+	tenant model.TenantID,
+	plan store.EvidenceOperationPlan,
+	fn func(store.EvidenceOperationMutationScope) error,
+) error {
+	selective := g.inner.(store.SelectiveMutator)
+	if g.passThrough(tenant) {
+		return selective.MutateEvidenceOperation(ctx, tenant, plan, fn)
+	}
+	return selective.MutateEvidenceOperation(ctx, tenant, plan, func(sc store.EvidenceOperationMutationScope) error {
+		if err := g.check(ctx, tenant, sc); err != nil {
+			return err
+		}
+		return fn(sc)
+	})
+}
+
+type guardStoreWithRolloutSelective struct {
+	*guardStoreWithSelective
+}
+
+func (g *guardStoreWithRolloutSelective) RolloutState(ctx context.Context, key string) (store.RolloutState, error) {
+	return g.inner.(store.RolloutStater).RolloutState(ctx, key)
+}
+
+func (g *guardStoreWithRolloutSelective) RolloutHistory(ctx context.Context, key string) ([]store.RolloutTransitionRecord, error) {
+	return g.inner.(store.RolloutStater).RolloutHistory(ctx, key)
+}
+
+func (g *guardStoreWithRolloutSelective) SetRolloutMode(ctx context.Context, t store.RolloutTransition) (store.RolloutState, error) {
 	return g.inner.(store.RolloutStater).SetRolloutMode(ctx, t)
 }
 

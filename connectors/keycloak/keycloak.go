@@ -32,7 +32,7 @@
 // object-prefix (alpha_/bravo_), but its OAuth2 JWT-bearer service-account token
 // mint is a documented seam (the connector accepts a pre-obtained bearer instead).
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): every directory call is a GET
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): every directory call is a GET
 // against the provider's API (the shared httpx client is GET-only by construction),
 // and the only non-GET is the single OAuth2 token POST (keycloak/pingone). It pulls
 // identity METADATA only — ids, usernames, display names, email, enabled state,

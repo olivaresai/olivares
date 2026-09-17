@@ -356,13 +356,18 @@ func (c sourceCheck) refusedAt(stage string) bool {
 //     checkInlineSecrets `set` calls);
 //  3. what the RECONCILER would refuse later, and this is the part that only
 //     existed after the write: an unknown kind, a connector that is not embedded
-//     in this build, an external plugin that fails admission, and a connector
-//     identity another enabled source already owns.
+//     in this build, and an external plugin that fails admission.
 //
-// roster is the rest of the persisted roster (the identity check needs it); trust
-// is the deployment's connector-trust policy (nil is itself a refusal for an
-// external plugin, deny-closed).
-func checkSourceOffline(def model.SourceDef, roster []model.SourceDef, trust *connectorTrustSpec) sourceCheck {
+// It no longer refuses a row because another enabled source runs the same
+// CONNECTOR. Sources are registered under their own names, so two rows of one kind
+// are two sources; the name is what must be unique, and the store already enforces
+// that (UNIQUE (tenant_id, scope, name)). Announcing a restriction the engine does
+// not apply would be the same defect in the other direction.
+//
+// trust is the deployment's connector-trust policy (nil is itself a refusal for an
+// external plugin, deny-closed). It no longer needs the rest of the roster: a
+// definition is refused for what it is, not for which sibling shares its kind.
+func checkSourceOffline(def model.SourceDef, trust *connectorTrustSpec) sourceCheck {
 	var c sourceCheck
 	// What the STORE refuses: `set` never gets past these, so nothing is persisted.
 	if err := auth.ValidateSourceDef(def); err != nil {
@@ -382,16 +387,18 @@ func checkSourceOffline(def model.SourceDef, roster []model.SourceDef, trust *co
 			c.Problems = append(c.Problems, sourceProblem{At: problemAtApply, Message: "external connector plugin refused (deny-closed): " + refusal})
 		}
 		c.NotChecked = append(c.NotChecked,
-			"the connector identity of an external plugin is only known once the binary is launched, so a collision with another source cannot be ruled out here (`olivares sources test` launches it)",
 			"this host does not hold an external plugin's descriptor, so it cannot know which of its config fields are secret: the plan masks only what the STORE would refuse, and any other value is printed as written")
 	case strings.TrimSpace(def.Kind) == "":
 		// Already reported by ValidateSourceDef ("either a kind OR a plugin"); saying
 		// it twice in different words would read as two problems.
 	default:
-		for _, msg := range checkSourceKind(def, roster) {
+		for _, msg := range checkSourceKind(def) {
 			c.Problems = append(c.Problems, sourceProblem{At: problemAtApply, Message: msg})
 		}
 		if _, isPlugin := pluginBinaryForKind[def.Kind]; isPlugin {
+			// Unchanged wording on purpose: this is an honest "not checked", not the
+			// unique-descriptor restriction this lot removed, and it is quoted verbatim
+			// in the published how-to transcripts.
 			c.NotChecked = append(c.NotChecked, fmt.Sprintf("the %q connector runs out-of-process, so its connector identity is only known once the binary is launched (`olivares sources test` launches it)", def.Kind))
 		}
 	}
@@ -406,10 +413,15 @@ func checkSourceOffline(def model.SourceDef, roster []model.SourceDef, trust *co
 	return c
 }
 
-// checkSourceKind answers the two questions the store never asks: can this build
-// run this kind at all, and is another enabled source already using the connector
-// identity this one would claim.
-func checkSourceKind(def model.SourceDef, roster []model.SourceDef) []string {
+// checkSourceKind answers the question the store never asks: can this build run
+// this kind at all.
+//
+// It deliberately does NOT refuse a row because a sibling runs the same connector.
+// That refusal used to be here and in the reconciler, and it was wrong in both:
+// the engine registers each source under its OWN name, so "grok-home-a" and
+// "grok-home-b" are two live sources of one kind. The preview and the apply agree
+// again — which is the only property that makes a preview worth having.
+func checkSourceKind(def model.SourceDef) []string {
 	var problems []string
 	if bin, isPlugin := pluginBinaryForKind[def.Kind]; isPlugin {
 		// Same sentence the reconciler uses when it refuses the apply
@@ -419,24 +431,8 @@ func checkSourceKind(def model.SourceDef, roster []model.SourceDef) []string {
 		}
 		return problems
 	}
-	conn, ok := buildInProcSource(def.Kind)
-	if !ok {
+	if _, ok := buildInProcSource(def.Kind); !ok {
 		return append(problems, fmt.Sprintf("unknown or unsupported source kind %q", def.Kind))
-	}
-	if !def.Enabled {
-		// A disabled source is never wired, so it can collide with nothing.
-		return problems
-	}
-	identity := conn.Descriptor().Name
-	for _, other := range roster {
-		if other.Name == def.Name || !other.Enabled || other.Plugin != nil {
-			continue
-		}
-		oconn, ook := buildInProcSource(other.Kind)
-		if !ook || oconn.Descriptor().Name != identity {
-			continue
-		}
-		problems = append(problems, fmt.Sprintf("connector identity %q is already used by source %q (only one instance per connector identity)", identity, other.Name))
 	}
 	return problems
 }
@@ -563,16 +559,11 @@ func sourcesPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			roster, err := eng.sourceStore.List(cmd.Context(), auth.GlobalSourceScope)
-			if err != nil {
-				return err
-			}
-
 			rep := sourcePlanReport{
 				Name:    e.name,
 				Exists:  found,
 				Changes: diffSourceDefs(existing, found, def),
-				Check:   checkSourceOffline(def, roster, eng.sourceReconciler.trust),
+				Check:   checkSourceOffline(def, eng.sourceReconciler.trust),
 			}
 			rep.LiveEffect = planLiveEffect(existing, found, def, rep.Check)
 			switch {
@@ -670,8 +661,11 @@ func sourcesValidateCmd() *cobra.Command {
 		Long: "validate answers one question: is this configuration internally consistent and admissible?\n" +
 			"It runs the store's own rules (name, tenant, a kind XOR a plugin, credential fields that\n" +
 			"must hold references), the descriptor-aware inline-secret guard, and the checks that used to\n" +
-			"speak only AFTER a write — is the kind known, is it embedded in this build, does the external\n" +
-			"plugin pass admission, does another enabled source already own that connector identity.\n\n" +
+			"speak only AFTER a write — is the kind known, is it embedded in this build, and does an\n" +
+			"external plugin pass admission.\n\n" +
+			"It does NOT refuse a row because a sibling runs the same connector: sources are registered\n" +
+			"under their own names, so several sources of one kind run side by side. The NAME is what\n" +
+			"must be unique, and the store enforces that on the write.\n\n" +
 			"It never dials the source. Whether it actually answers is `sources test`, and the\n" +
 			"split is deliberate: a validate that needs the network is a validate people skip.\n\n" +
 			"With --name it validates that row as it stands, or as your flags would leave it. With no\n" +
@@ -724,10 +718,10 @@ func sourcesValidateCmd() *cobra.Command {
 				if derr != nil {
 					return derr
 				}
-				reports = append(reports, sourceValidateReport{Name: e.name, Check: checkSourceOffline(def, roster, trust)})
+				reports = append(reports, sourceValidateReport{Name: e.name, Check: checkSourceOffline(def, trust)})
 			} else {
 				for _, row := range roster {
-					reports = append(reports, sourceValidateReport{Name: row.Name, Check: checkSourceOffline(row, roster, trust)})
+					reports = append(reports, sourceValidateReport{Name: row.Name, Check: checkSourceOffline(row, trust)})
 				}
 			}
 
@@ -818,12 +812,7 @@ func sourcesTestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			roster, err := eng.sourceStore.List(cmd.Context(), auth.GlobalSourceScope)
-			if err != nil {
-				return err
-			}
-
-			rep := sourceTestReport{Name: e.name, Kind: sourceKindLabel(def), Check: checkSourceOffline(def, roster, eng.sourceReconciler.trust)}
+			rep := sourceTestReport{Name: e.name, Kind: sourceKindLabel(def), Check: checkSourceOffline(def, eng.sourceReconciler.trust)}
 			if !rep.Check.Valid {
 				rep.Reason = "the definition would be refused before anything is dialed — see the problems above"
 				if rerr := renderOut(cmd, func(out io.Writer) error { return writeSourceTest(out, rep) }, rep); rerr != nil {

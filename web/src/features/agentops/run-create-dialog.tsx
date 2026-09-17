@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,10 +26,23 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
-import { ApiError } from '@/lib/api/errors'
 import { templatesApi, templatesKeys } from '@/features/workspace-templates/api'
 import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from './api'
+import { profileOwnedEnvNames } from './provider-contract'
+import { useAuthBoundary } from './auth-boundary'
+import {
+  LaunchReadinessPanel,
+  useProfileLaunchReadiness,
+} from './launch-readiness-panel'
+import {
+  DEFAULT_READINESS_ISOLATION,
+  currentLaunchReadinessObservation,
+  effectiveLaunchTransport,
+  isProfileChangedError,
+  launchFailureMessage,
+  launchRequestPermission,
+} from './launch-readiness'
 import {
   CRITICAL_PERMISSION_MODES,
   EFFORT_LEVELS,
@@ -64,7 +77,9 @@ export function RunCreateDialog({
 }) {
   const { t } = useTranslation('agentops')
   const { activeTenant, can } = useAuth()
+  const boundary = useAuthBoundary()
   const qc = useQueryClient()
+  const canRunWrite = can('sessions:run:write')
 
   const [name, setName] = useState('')
   const [transport, setTransport] = useState<Transport>('stream-json')
@@ -77,11 +92,22 @@ export function RunCreateDialog({
   const [templateId, setTemplateId] = useState<string>(
     initialTemplateId ?? NONE,
   )
+  // B2 requires an explicit profile selection before creating a session.
+  const [profileRef, setProfileRef] = useState<string>(NONE)
 
-  // Follow the caller's pre-selection when the dialog is (re)opened from a template card.
-  useEffect(() => {
+  // Adjust the draft when the parent opens another template. This is a guarded
+  // update of this component during render, so no effect can overwrite a choice.
+  const [previousSelection, setPreviousSelection] = useState({
+    open,
+    initialTemplateId,
+  })
+  if (
+    previousSelection.open !== open ||
+    previousSelection.initialTemplateId !== initialTemplateId
+  ) {
+    setPreviousSelection({ open, initialTemplateId })
     if (open) setTemplateId(initialTemplateId ?? NONE)
-  }, [open, initialTemplateId])
+  }
 
   const canReadWs = can('sessions:workspace:read')
   const wsQuery = useQuery({
@@ -94,6 +120,41 @@ export function RunCreateDialog({
     [wsQuery.data],
   )
   const selectedWs = workspaces.find((w) => w.workspace_ref === workspaceRef)
+
+  // The profile picked here was learned under ONE authority boundary (principal,
+  // tenant, credential). When the boundary moves — a renewal rotates the credential
+  // under the same session id — that choice is forgotten with the list it came from;
+  // the read below restarts under the current boundary's own key. Guarded update of
+  // this component during render, like the template adjustment above.
+  const [seenBoundary, setSeenBoundary] = useState(boundary.key)
+  if (seenBoundary !== boundary.key) {
+    setSeenBoundary(boundary.key)
+    setProfileRef(NONE)
+  }
+
+  const canReadProfiles = can('sessions:profile:read')
+  const profilesQuery = useQuery({
+    queryKey: agentOpsKeys.profiles(activeTenant, boundary.epoch, {
+      state: 'active',
+    }),
+    // The signal is TanStack's: cancelling the previous boundary's scope aborts a
+    // read still in flight instead of letting its answer land late.
+    queryFn: ({ signal }) =>
+      agentOpsApi.listProfiles({ state: 'active', limit: 200 }, { signal }),
+    enabled: open && canReadProfiles,
+  })
+  const profiles = useMemo(
+    () => profilesQuery.data?.items ?? [],
+    [profilesQuery.data],
+  )
+  const selectedProfile = profiles.find((p) => p.profile_ref === profileRef)
+  // The server refuses an env_allow that names a variable the profile owns; say so
+  // before the 400 rather than after it. The list is the server's WHOLE owned family
+  // (providerHomeEnvName), not the current driver's two: the engine refuses another
+  // provider's home variable as well, so a Codex operator forwarding CODEX_HOME has to
+  // hear it here instead of from an avoidable 400. Ordinary names are untouched.
+  const profileEnvConflict =
+    profileRef !== NONE && profileOwnedEnvNames(envAllow).length > 0
 
   const canReadTemplates = can('sessions:template:read')
   const tplQuery = useQuery({
@@ -132,6 +193,33 @@ export function RunCreateDialog({
     enabled: open && templateId !== NONE && canReadTemplates,
   })
   const previewData = templateId === NONE ? undefined : preview.data
+  const previewReady =
+    templateId === NONE || preview.isSuccess || preview.isError
+  const effectiveTransport = effectiveLaunchTransport(
+    transport,
+    previewData?.merged?.transport,
+  )
+  const readinessQuery = useProfileLaunchReadiness({
+    enabled: open && profileRef !== NONE && previewReady,
+    profileRef: profileRef === NONE ? null : profileRef,
+    transport: effectiveTransport,
+    isolation: DEFAULT_READINESS_ISOLATION,
+    profileState: selectedProfile?.state,
+    authSource: selectedProfile?.auth_source,
+    updatedAt: selectedProfile?.updated_at,
+  })
+  const currentReadiness = currentLaunchReadinessObservation(readinessQuery, {
+    profileRef,
+    transport: effectiveTransport,
+    isolation: DEFAULT_READINESS_ISOLATION,
+  })
+  const requestPermission = launchRequestPermission(currentReadiness)
+  const readinessBlocksRequest =
+    profileRef === NONE ||
+    !previewReady ||
+    !currentReadiness ||
+    requestPermission === 'block' ||
+    requestPermission === 'none'
 
   // The warning has to describe the mode the session will actually run in. A template
   // with a tool allow-list pins dontAsk — a CRITICAL launch that needs human approval and
@@ -154,10 +242,14 @@ export function RunCreateDialog({
     setWorkspaceRef(NONE)
     setEnvAllow('')
     setTemplateId(NONE)
+    setProfileRef(NONE)
   }
 
   const create = useMutation({
     mutationFn: () => {
+      if (profileRef === NONE || !canRunWrite || readinessBlocksRequest) {
+        throw new Error(t('create.profileHint'))
+      }
       const body: CreateRunRequest = {
         name: name.trim(),
         transport,
@@ -171,19 +263,17 @@ export function RunCreateDialog({
           .map((s) => s.trim())
           .filter(Boolean),
         ...(templateId === NONE ? {} : { template_id: templateId }),
+        // Only the REFERENCE leaves the browser: the server resolves the homes.
+        ...(profileRef === NONE ? {} : { provider_profile_ref: profileRef }),
       }
       return agentOpsApi.createRun(body)
     },
+    retry: false,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
       toast.success(t('create.success'))
       reset()
       onOpenChange(false)
-    },
-    onError: (err) => {
-      // Surface the backend's honest message: budget cap (402/429) or a CRITICAL
-      // launch pending human approval (403 with the approval ref) — never a generic.
-      toast.error(err instanceof ApiError ? err.message : t('create.title'))
     },
   })
 
@@ -302,6 +392,40 @@ export function RunCreateDialog({
             </Select>
           </Field>
 
+          {canReadProfiles && (
+            <Field
+              label={t('create.profile')}
+              description={t('create.profileHint')}
+            >
+              <Select value={profileRef} onValueChange={setProfileRef}>
+                <SelectTrigger aria-label={t('create.profile')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE} disabled>
+                    {t('create.profileNone')}
+                  </SelectItem>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.profile_ref} value={p.profile_ref}>
+                      {p.display_name || p.profile_ref} · {p.driver}
+                      {!p.operable && ` — ${t('create.profileNotOperable')}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+          {(!canReadProfiles || profilesQuery.isError) && (
+            <p className="text-xs text-warning">
+              {t('create.profilesNotRead')}
+            </p>
+          )}
+          {selectedProfile && (
+            <p className="font-mono text-xs text-muted-foreground">
+              {selectedProfile.profile_ref} · {selectedProfile.environment_ref}
+            </p>
+          )}
+
           {canReadTemplates && (
             <div className="flex flex-col gap-2">
               <ListTruncationBadge
@@ -387,6 +511,48 @@ export function RunCreateDialog({
             />
           </Field>
 
+          {profileRef !== NONE && !previewReady && (
+            <p className="text-xs text-muted-foreground">
+              {t('readiness.waitingPreview')}
+            </p>
+          )}
+          {profileRef !== NONE && previewReady && (
+            <LaunchReadinessPanel
+              query={readinessQuery}
+              profileRef={profileRef}
+              transport={effectiveTransport}
+              isolation={DEFAULT_READINESS_ISOLATION}
+              compact
+            />
+          )}
+          {requestPermission === 'uncertain' && currentReadiness && (
+            <p className="text-xs text-muted-foreground">
+              {t('readiness.requestHintUnknown')}
+            </p>
+          )}
+          {requestPermission === 'permit' && currentReadiness && (
+            <p className="text-xs text-muted-foreground">
+              {t('readiness.requestHintReady')}
+            </p>
+          )}
+          {requestPermission === 'block' && currentReadiness && (
+            <p className="text-xs text-warning">
+              {t('readiness.requestBlocked')}
+            </p>
+          )}
+          {!canRunWrite && (
+            <p className="text-xs text-muted-foreground">
+              {t('readiness.noWrite')}
+            </p>
+          )}
+
+          {profileEnvConflict && (
+            <div className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <span>{t('create.profileEnvConflict')}</span>
+            </div>
+          )}
+
           <p className="text-xs text-muted-foreground">
             {t('create.isolationNativeOnly')}
           </p>
@@ -402,6 +568,32 @@ export function RunCreateDialog({
             </div>
           )}
 
+          {create.isError && (
+            <div
+              className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-soft px-2.5 py-2 text-xs text-danger"
+              role="alert"
+            >
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <div className="min-w-0">
+                <p>{t('readiness.failedInline')}</p>
+                <p className="mt-0.5 break-words">
+                  {launchFailureMessage(create.error, t('create.title'))}
+                </p>
+                {isProfileChangedError(create.error) && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => void readinessQuery.refetch()}
+                  >
+                    {t('readiness.reread')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
             <Button
               type="button"
@@ -414,7 +606,14 @@ export function RunCreateDialog({
             <Button
               type="submit"
               variant="primary"
-              disabled={create.isPending || previewData?.applied === false}
+              disabled={
+                create.isPending ||
+                previewData?.applied === false ||
+                profileEnvConflict ||
+                profileRef === NONE ||
+                !canRunWrite ||
+                readinessBlocksRequest
+              }
             >
               {create.isPending && <Spinner className="size-3.5" />}
               {create.isPending ? t('create.submitting') : t('create.submit')}

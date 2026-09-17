@@ -558,3 +558,332 @@ func TestProxyNoPromptLeaks(t *testing.T) {
 		t.Fatal("Finalize response leaked the prompt secret")
 	}
 }
+
+const inboundAuditCanary = "INBOUND-CANARY-REQ-BYTES"
+
+const inboundBlockingJSON = `{"model":"claude-opus-4-8","max_tokens":16,"messages":[{"role":"user","content":[{"type":"text","text":"` + inboundAuditCanary + `"}]}]}`
+
+const inboundStreamJSON = `{"model":"claude-opus-4-8","max_tokens":16,"stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"` + inboundAuditCanary + `"}]}]}`
+
+const inboundBlockingPrettyJSON = `{
+  "model": "claude-opus-4-8",
+  "max_tokens": 16,
+  "messages": [{"role":"user","content":[{"type":"text","text":"` + inboundAuditCanary + `"}]}]
+}`
+
+const upstreamErrorJSON = `{"type":"error","error":{"type":"api_error","message":"upstream failed"}}`
+
+// TestProxyAuditEventCarriesInboundReqBytes drives MessagesProxy plus its audit
+// callback: after the handler measures a nonempty inbound body, the operation
+// audit carries that exact count. It is inbound size, not forwarded size.
+func TestProxyAuditEventCarriesInboundReqBytes(t *testing.T) {
+	gov := MessageRequest{
+		Model: "claude-opus-4-8", MaxTokens: 16,
+		Messages: []Message{{Role: "user", Content: []ContentBlock{TextBlock("hi")}}},
+	}
+	prep, err := MarshalPrepared(gov)
+	if err != nil {
+		t.Fatalf("marshal prepared: %v", err)
+	}
+	if int64(len(prep.Body())) == int64(len(inboundBlockingPrettyJSON)) {
+		t.Fatal("prepared and inbound lengths match; rewrite proof needs them different")
+	}
+
+	t.Run("BlockingAllowPreparedRewrite", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 200, body: okMessageJSON, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{Allow: true, Request: gov, Prepared: prep}, batchDenyAt: -1}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundBlockingPrettyJSON, "k")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+		}
+		if !bytes.Equal(doer.gotBody, prep.Body()) {
+			t.Fatalf("upstream received %s, want frozen prepared bytes %s", doer.gotBody, prep.Body())
+		}
+		ev := requireInboundAudit(t, aud, inboundBlockingPrettyJSON, "allow", false)
+		if ev.UpstreamStatus != http.StatusOK {
+			t.Fatalf("audit UpstreamStatus = %d, want 200", ev.UpstreamStatus)
+		}
+		if ev.ReqBytes == int64(len(prep.Body())) {
+			t.Fatalf("ReqBytes matched forwarded prepared length %d; must stay inbound", ev.ReqBytes)
+		}
+		requireLedgerInbound(t, dec, inboundBlockingPrettyJSON, false, false)
+		wantDigest := prep.Digest()
+		if !bytes.Equal(dec.finalizeOut.EffectiveSHA, wantDigest[:]) {
+			t.Fatalf("ledger EffectiveSHA = %x, want prepared digest %x", dec.finalizeOut.EffectiveSHA, wantDigest[:])
+		}
+	})
+
+	t.Run("BlockingBlockedResponse", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 200, body: okMessageJSON, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{
+			decision: ProxyDecision{Allow: true},
+			verdict:  ProxyResponseVerdict{Block: true, Status: http.StatusForbidden, Reason: "response carries a secret"},
+		}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundBlockingJSON, "k")
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403; body=%s", w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "hello world") {
+			t.Fatalf("blocked response leaked model output: %s", w.Body.String())
+		}
+		ev := requireInboundAudit(t, aud, inboundBlockingJSON, "blocked-response", false)
+		if ev.Reason != "response carries a secret" {
+			t.Fatalf("audit Reason = %q, want the DLP reason", ev.Reason)
+		}
+		requireLedgerInbound(t, dec, inboundBlockingJSON, false, false)
+	})
+
+	t.Run("BlockingUpstreamError", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 429, body: `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{Allow: true, Request: gov, Prepared: prep}, batchDenyAt: -1}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundBlockingPrettyJSON, "k")
+		if w.Code != http.StatusTooManyRequests {
+			t.Fatalf("status = %d, want 429; body=%s", w.Code, w.Body.String())
+		}
+		ev := requireInboundAudit(t, aud, inboundBlockingPrettyJSON, "upstream-error", false)
+		if ev.Reason != "upstream error" || ev.UpstreamStatus != http.StatusTooManyRequests {
+			t.Fatalf("audit = %+v, want upstream-error/429", ev)
+		}
+		if ev.ReqBytes == int64(len(prep.Body())) {
+			t.Fatalf("ReqBytes matched forwarded prepared length %d; must stay inbound", ev.ReqBytes)
+		}
+		requireLedgerInbound(t, dec, inboundBlockingPrettyJSON, false, true)
+		wantDigest := prep.Digest()
+		if !bytes.Equal(dec.finalizeOut.EffectiveSHA, wantDigest[:]) {
+			t.Fatalf("ledger EffectiveSHA = %x, want prepared digest %x", dec.finalizeOut.EffectiveSHA, wantDigest[:])
+		}
+	})
+
+	t.Run("BufferedStreamAllow", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 200, body: okStreamSSE, contentType: "text/event-stream"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{Allow: true, BufferResponse: true}}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundStreamJSON, "k")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+		}
+		if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+			t.Fatalf("content-type = %q, want text/event-stream", ct)
+		}
+		if !strings.Contains(w.Body.String(), "hi there") {
+			t.Fatalf("buffered allow did not relay stream: %s", w.Body.String())
+		}
+		requireInboundAudit(t, aud, inboundStreamJSON, "allow", true)
+		requireLedgerInbound(t, dec, inboundStreamJSON, true, false)
+	})
+
+	t.Run("BufferedStreamBlockedResponse", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 200, body: okStreamSSE, contentType: "text/event-stream"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{
+			decision: ProxyDecision{Allow: true, BufferResponse: true},
+			verdict:  ProxyResponseVerdict{Block: true, Status: http.StatusForbidden, Reason: "dlp"},
+		}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundStreamJSON, "k")
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403; body=%s", w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "hi there") {
+			t.Fatalf("buffer-mode block leaked stream content: %s", w.Body.String())
+		}
+		ev := requireInboundAudit(t, aud, inboundStreamJSON, "blocked-response", true)
+		if ev.Reason != "dlp" {
+			t.Fatalf("audit Reason = %q, want dlp", ev.Reason)
+		}
+		requireLedgerInbound(t, dec, inboundStreamJSON, true, false)
+	})
+
+	t.Run("BufferedStreamCeiling", func(t *testing.T) {
+		const ceiling int64 = 256
+		doer := &proxyStubDoer{status: 200, body: okStreamSSE, contentType: "text/event-stream"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{
+			Allow: true, BufferResponse: true, MaxResponseBufferBytes: ceiling,
+		}}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundStreamJSON, "k")
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403; body=%s", w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "hi there") {
+			t.Fatalf("buffer ceiling leaked stream content: %s", w.Body.String())
+		}
+		ev := requireInboundAudit(t, aud, inboundStreamJSON, "blocked-response", true)
+		if ev.Reason != responseBufferCeilingReason {
+			t.Fatalf("audit Reason = %q, want ceiling reason", ev.Reason)
+		}
+		if ev.RespBytes <= 0 || ev.RespBytes > ceiling {
+			t.Fatalf("audit RespBytes = %d, want 1..%d", ev.RespBytes, ceiling)
+		}
+		if dec.finalized {
+			t.Fatal("ceiling path must not Finalize (pre-existing; observer-only fix)")
+		}
+	})
+
+	t.Run("BufferedStreamUpstreamError", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 500, body: upstreamErrorJSON, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{Allow: true, BufferResponse: true}}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundStreamJSON, "k")
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500; body=%s", w.Code, w.Body.String())
+		}
+		ev := requireInboundAudit(t, aud, inboundStreamJSON, "upstream-error", true)
+		if ev.Reason != "upstream error" || ev.UpstreamStatus != http.StatusInternalServerError {
+			t.Fatalf("audit = %+v, want upstream-error/500 streamed", ev)
+		}
+		requireLedgerInbound(t, dec, inboundStreamJSON, true, true)
+	})
+
+	t.Run("PassthroughStreamAllow", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 200, body: okStreamSSE, contentType: "text/event-stream"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{Allow: true}}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundStreamJSON, "k")
+		if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+			t.Fatalf("content-type = %q, want text/event-stream", ct)
+		}
+		if !strings.Contains(w.Body.String(), "hi there") {
+			t.Fatalf("passthrough did not relay stream: %s", w.Body.String())
+		}
+		requireInboundAudit(t, aud, inboundStreamJSON, "allow", true)
+		requireLedgerInbound(t, dec, inboundStreamJSON, true, false)
+		if dec.finalizeOut.RespBytes != int64(len(w.Body.Bytes())) {
+			t.Fatalf("ledger RespBytes = %d, want relayed %d", dec.finalizeOut.RespBytes, w.Body.Len())
+		}
+	})
+
+	t.Run("PassthroughStreamError", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 500, body: upstreamErrorJSON, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{Allow: true}}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundStreamJSON, "k")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200 (SSE headers already sent); body=%s", w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "event: error") {
+			t.Fatalf("passthrough stream error missing SSE error event: %s", w.Body.String())
+		}
+		ev := requireInboundAudit(t, aud, inboundStreamJSON, "upstream-error", true)
+		if ev.Reason != "stream error" {
+			t.Fatalf("audit Reason = %q, want stream error", ev.Reason)
+		}
+		requireLedgerInbound(t, dec, inboundStreamJSON, true, true)
+	})
+
+	t.Run("MessagesPolicyDeny", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 200, body: okMessageJSON, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{decision: ProxyDecision{Allow: false, Status: http.StatusForbidden, Reason: "model not granted"}}
+		p := newProxy(t, doer, dec, aud)
+		w := postMessages(t, p, inboundBlockingJSON, "k")
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403; body=%s", w.Code, w.Body.String())
+		}
+		if doer.calls != 0 {
+			t.Fatalf("upstream called %d times on a deny", doer.calls)
+		}
+		ev := requireInboundAudit(t, aud, inboundBlockingJSON, "deny", false)
+		if ev.Reason != "model not granted" {
+			t.Fatalf("audit Reason = %q, want model not granted", ev.Reason)
+		}
+		if dec.finalized {
+			t.Fatal("Finalize must not run on a pre-forward deny")
+		}
+	})
+
+	t.Run("BatchAllow", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 200, body: upstreamBatchJSON, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{batchDecision: ProxyBatchDecision{Allow: true}, batchDenyAt: -1}
+		p := newProxy(t, doer, dec, aud)
+		w := postBatch(t, p, twoEntryBatch, "k")
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+		}
+		requireInboundAudit(t, aud, twoEntryBatch, "allow", false)
+		if !dec.batchFinalized {
+			t.Fatal("FinalizeBatch must run on batch allow")
+		}
+		if dec.batchFinalizeOut.ReqBytes != int64(len(twoEntryBatch)) {
+			t.Fatalf("batch ledger ReqBytes = %d, want inbound %d", dec.batchFinalizeOut.ReqBytes, len(twoEntryBatch))
+		}
+	})
+
+	t.Run("BatchUpstreamError", func(t *testing.T) {
+		doer := &proxyStubDoer{status: 500, body: upstreamErrorJSON, contentType: "application/json"}
+		aud := &capAuditor{}
+		dec := &fakeDecider{batchDecision: ProxyBatchDecision{Allow: true}, batchDenyAt: -1}
+		p := newProxy(t, doer, dec, aud)
+		w := postBatch(t, p, twoEntryBatch, "k")
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500; body=%s", w.Code, w.Body.String())
+		}
+		ev := requireInboundAudit(t, aud, twoEntryBatch, "upstream-error", false)
+		if ev.Reason != "batch upstream error" || ev.UpstreamStatus != http.StatusInternalServerError {
+			t.Fatalf("audit = %+v, want batch upstream-error/500", ev)
+		}
+		if !dec.batchFinalized || !dec.batchFinalizeOut.UpstreamErr {
+			t.Fatalf("FinalizeBatch must record UpstreamErr; finalized=%v out=%+v", dec.batchFinalized, dec.batchFinalizeOut)
+		}
+		if dec.batchFinalizeOut.ReqBytes != int64(len(twoEntryBatch)) {
+			t.Fatalf("batch ledger ReqBytes = %d, want inbound %d", dec.batchFinalizeOut.ReqBytes, len(twoEntryBatch))
+		}
+	})
+}
+
+func requireInboundAudit(t *testing.T, aud *capAuditor, inbound, decision string, streamed bool) ProxyAuditEvent {
+	t.Helper()
+	want := int64(len(inbound))
+	if want == 0 {
+		t.Fatal("inbound fixture must be nonempty")
+	}
+	if len(aud.events) != 1 {
+		t.Fatalf("audit events = %d, want 1 (%+v)", len(aud.events), aud.events)
+	}
+	ev := aud.events[0]
+	if ev.ReqBytes != want {
+		t.Fatalf("audit ReqBytes = %d, want inbound %d", ev.ReqBytes, want)
+	}
+	if ev.Decision != decision {
+		t.Fatalf("audit Decision = %q, want %q", ev.Decision, decision)
+	}
+	if ev.Streamed != streamed {
+		t.Fatalf("audit Streamed = %v, want %v", ev.Streamed, streamed)
+	}
+	blob, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal audit event: %v", err)
+	}
+	if strings.Contains(inbound, inboundAuditCanary) && strings.Contains(string(blob), inboundAuditCanary) {
+		t.Fatalf("audit event leaked inbound payload: %s", blob)
+	}
+	return ev
+}
+
+func requireLedgerInbound(t *testing.T, dec *fakeDecider, inbound string, streamed, upstreamErr bool) {
+	t.Helper()
+	if !dec.finalized {
+		t.Fatal("Finalize must run")
+	}
+	if dec.finalizeOut.ReqBytes != int64(len(inbound)) {
+		t.Fatalf("ledger ReqBytes = %d, want inbound %d", dec.finalizeOut.ReqBytes, len(inbound))
+	}
+	if dec.finalizeOut.Streamed != streamed {
+		t.Fatalf("ledger Streamed = %v, want %v", dec.finalizeOut.Streamed, streamed)
+	}
+	if dec.finalizeOut.UpstreamErr != upstreamErr {
+		t.Fatalf("ledger UpstreamErr = %v, want %v", dec.finalizeOut.UpstreamErr, upstreamErr)
+	}
+}

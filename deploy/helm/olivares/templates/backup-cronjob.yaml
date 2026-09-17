@@ -125,6 +125,16 @@ spec:
                 {{- if eq .Values.core.engine "postgres" }}
                 - --dsn=$(OLIVARES_DSN)
                 - --admin-dsn=$(OLIVARES_ADMIN_DSN)
+                {{- if .Values.postgres.ownerDsnKey }}
+                # OWNER/APP SPLIT (postgres.ownerDsnKey). `dr backup` boots the
+                # engine to build the chain-tip manifest, and that boot runs the
+                # schema's DDL preflight — which the application role cannot do in
+                # the split, where it is denied CREATE on schema public by design.
+                # Without this the Job fails with a bare SQLSTATE 42501. Omit the
+                # key in the single-role posture: there the app role owns the
+                # schema and no second connection is wanted.
+                - --owner-dsn=$(OLIVARES_OWNER_DSN)
+                {{- end }}
                 - --snapshot-file=/work/dump.pgcustom
                 {{- end }}
                 - --out=/backups/olivares-dr-$(POD_NAME).drbundle
@@ -165,6 +175,13 @@ spec:
                     secretKeyRef:
                       name: {{ .Values.postgres.dsnSecret }}
                       key: {{ .Values.postgres.adminDsnKey }}
+                {{- if .Values.postgres.ownerDsnKey }}
+                - name: OLIVARES_OWNER_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgres.dsnSecret }}
+                      key: {{ .Values.postgres.ownerDsnKey }}
+                {{- end }}
                 {{- end }}
               securityContext:
                 {{- toYaml .Values.securityContext | nindent 16 }}

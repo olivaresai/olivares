@@ -80,8 +80,11 @@ import (
 // consoleAPIRe matches a typed client call. It accepts all three spellings the console
 // actually uses — a template literal, a SINGLE-QUOTED literal, or a path constant — and
 // the WithMeta/Raw wrapper verbs (web/src/lib/api/client.ts), because a call the parser
-// cannot see is a hole in exactly the class this test claims to close.
-var consoleAPIRe = regexp.MustCompile(`\bhttp\.(get|post|put|patch|delete)(?:WithMeta|Raw)?\s*(?:<[^(]*?>)?\s*\(\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*'|[A-Za-z_$][\w$]*)`)
+// cannot see is a hole in exactly the class this test claims to close. Whitespace,
+// including a newline, may sit between the http receiver and the member-access dot
+// so a wrapped call is discovered; comments, optional chaining and computed members
+// at that boundary are not.
+var consoleAPIRe = regexp.MustCompile(`\bhttp\s*\.(get|post|put|patch|delete)(?:WithMeta|Raw)?\s*(?:<[^(]*?>)?\s*\(\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*'|[A-Za-z_$][\w$]*)`)
 
 // consoleDirectAPIRe casa las llamadas DIRECTAS a apiFetch/apiFetchWithMeta cuya ruta es
 // literal. Son el escape deliberado de `http.*` para cuerpos de bytes sin serializar; por tanto,
@@ -1017,7 +1020,7 @@ func walkEveryRoute(t *testing.T) map[string]bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, log)
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -1646,6 +1649,14 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 	for _, c := range calls {
 		called[c.method+" "+c.path] = true
 	}
+	deferredTouched := map[string]bool{}
+	isDeferredOperatorSurface := func(key string) (string, bool) {
+		reason, ok := consoleDeferredOperatorSurface[key]
+		if ok {
+			deferredTouched[key] = true
+		}
+		return reason, ok
+	}
 
 	byNamespace := map[string][]string{}
 	// ⛔ HAY RUTAS QUE NO DEBEN TENER PANTALLA NUNCA, y contarlas como hueco no es un número
@@ -1681,6 +1692,10 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 		return "", false
 	}
 	for key := range routed {
+		if reason, ok := isDeferredOperatorSurface(key); ok && called[key] {
+			t.Errorf("%s has a resolved console call but remains declared as deferred (%s): remove the stale declaration",
+				key, reason)
+		}
 		if _, ok := esDeMaquina(key); ok && called[key] {
 			t.Errorf("%s está declarada de MÁQUINA y la consola SÍ la llama: o la clasificación "+
 				"está mal, o la consola llama a algo que no le toca", key)
@@ -1690,6 +1705,11 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 		if !maquinaTocada[pref] {
 			t.Errorf("el prefijo de máquina %q ya no casa ninguna ruta registrada: una declaración "+
 				"podrida esconde huecos reales", pref)
+		}
+	}
+	for key := range consoleDeferredOperatorSurface {
+		if !deferredTouched[key] {
+			t.Errorf("deferred console operation %q is no longer registered: remove or correct the stale declaration", key)
 		}
 	}
 
@@ -1708,9 +1728,13 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 		return key
 	}
 
-	uncovered, deMaquina, cubiertasPorFetch := 0, 0, 0
+	uncovered, deMaquina, diferidas, cubiertasPorFetch := 0, 0, 0, 0
 	for key := range routed {
 		if called[key] {
+			continue
+		}
+		if _, ok := isDeferredOperatorSurface(key); ok {
+			diferidas++
 			continue
 		}
 		if _, ok := esDeMaquina(key); ok {
@@ -1754,6 +1778,9 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 	}
 	if deMaquina > 0 {
 		t.Logf("%d ruta(s) declaradas DE MÁQUINA y descontadas: su cliente no es un operador", deMaquina)
+	}
+	if diferidas > 0 {
+		t.Logf("%d ruta(s) de operador REST/SDK diferidas de consola y declaradas individualmente", diferidas)
 	}
 	t.Logf("%d de %d ruta(s) registradas sin llamada de consola RESUELTA. El parser dejó %d sitio(s)"+
 		" de llamada SIN RESOLVER: cualquiera de esas rutas puede estar cubierta por uno de ellos, y"+
@@ -1818,6 +1845,34 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 // techo real baja de 39 a 37. Mutación testigo: retirar la llamada de importación lo devuelve a
 // 38 y este gate falla contra 37; por eso 37, y no el presupuesto anterior, es el trinquete.
 const consoleUncoveredBudget = 37
+
+// consoleDeferredOperatorSurface is an exact, falsifiable inventory rather than a budget
+// increase or a namespace suppression. K3 messaging deliberately delivers the authenticated
+// REST and generated SDK surfaces first; its bounded implementation brief requires the console
+// gap to remain named when it is not delivered in the same lot. Every entry must still be a live
+// route and must have no resolved console caller. Adding a caller or retiring a route turns this
+// declaration red until the stale entry is removed.
+var consoleDeferredOperatorSurface = map[string]string{
+	// The first console increment of K3 (I1, web/src/features/communications) delivered the
+	// EIGHT callers of the journey channel → notice → inbox → delivery/message → Ack; the second
+	// (I2, assessments/product/k3-console-i2/IMPLEMENTATION-BRIEF.md) delivered the SEVEN of
+	// channel administration and the personal seen cursor — the administrable catalog, the grant
+	// history, PATCH, grant, revoke, cursor token and cursor advance — so their entries left this
+	// map too.
+	//
+	// AND THE FOUR HANDOFF ENTRIES LEFT IT WITH I3
+	// (assessments/product/k3-i3-console-construction/CONSTRUCTION-3.md), which delivered their
+	// callers in web/src/features/communications/api.ts: `offerHandoff` (POST /handoffs),
+	// `respondToHandoff` (POST /handoffs/{}/responses), `getHandoffDetail`
+	// (GET /deliveries/{}/handoff) and `listHandoffInbox` (GET /inbox/handoffs). They are
+	// removed rather than left as documentation because this map is falsifiable in BOTH
+	// directions: the loop above turns a declared-but-called operation red, so a stale entry
+	// here would now be a failing test rather than a harmless note.
+	//
+	// The map is deliberately left EMPTY instead of deleted. It is the named, falsifiable
+	// inventory of console surface this repository defers on purpose, and the next increment
+	// that defers one needs somewhere to say so — with a reason, not a budget increase.
+}
 
 func TestDirectAPIFetchSurfaceMutation(t *testing.T) {
 	root := t.TempDir()

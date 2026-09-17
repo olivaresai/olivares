@@ -34,6 +34,10 @@ import type { IncidentDTO, StatusDTO } from '@/features/health/types'
 import type { InventorySummary } from '@/features/inventory/types'
 import type { LiveDTO } from '@/features/sessions/types'
 import type { ListResponse } from '@/lib/api/types'
+// The ONE rule for "this list is a page with rows beyond it" (`has_more === true`),
+// deep-imported the way the features that show the badge do. Writing the predicate
+// here again would be the thirteenth hand copy that module exists to end.
+import { listaRecortada } from '@/features/_intel/notices'
 
 // --- cost (FinOps + Models X) --------------------------------------------
 
@@ -117,35 +121,95 @@ export function deriveCost(
 
 // --- usage (Inventory + Sessions II) -------------------------------------
 
+/**
+ * TWO HALVES, EACH ANSWERING FOR ITSELF. The usage pillar is the only rollup that
+ * joins two sources a role may hold separately and that fail separately. Until
+ * 2026-09-08 a missing half was folded into the other: an absent live page became an
+ * empty list and "0 live", an absent inventory became "0 agents" — a denied read, a
+ * pending read and a failed read all printed the same figure as an estate with
+ * nothing in it. Root confirmed the defect after the tenant-wide correction landed.
+ *
+ * `null` on a half means THAT HALF WAS NOT ESTABLISHED: the caller had no current,
+ * permitted, successful answer to hand in. A present half with nothing in it — a
+ * summary with no `agent` kind, a live page with no rows — is a real zero and stays a
+ * number. The rollup does not know WHY a half is missing (that is the query's state,
+ * owned by the view that reads it); it only refuses to invent the number.
+ */
 export interface UsageKpi {
-  activeAgents: number
-  totalAgents: number
-  totalEntities: number
-  /** Live sessions by control-channel state (II). */
-  liveActive: number
-  liveIdle: number
+  /** Inventory half (summary). `null` when the summary was not established.*/
+  activeAgents: number | null
+  totalAgents: number | null
+  totalEntities: number | null
+  /** Live half (II), by control-channel state. `null` when the live page was not
+   *  established. */
+  liveActive: number | null
+  liveIdle: number | null
   /** Gone silent inside its cadence — a possible-evasion signal, surfaced not hidden. */
-  silentEvasion: number
-  liveTotal: number
+  silentEvasion: number | null
+  liveTotal: number | null
+  /** The inventory aggregate hit the scan ceiling — its figures are a floor. False
+   *  when that half is unknown: there is no figure to qualify. It describes Inventory
+   *  alone: it says nothing about the live half. */
   truncated: boolean
+  /** THE LIVE PAGE HAD ROWS BEYOND IT — `GET /v1/m/sessions/live` answers with ONE
+   *  most-recent page (the store reads limit+1 rows, default 100 and ceiling 1000, and
+   *  sets `has_more` when the extra row existed: core/internal/store/sqlstore/generic.go,
+   *  modules/sessions/api.go handleListLive), and every live figure above is counted
+   *  over that page. On such a page each of them is a FLOOR of the population, never
+   *  the population. Decided by the badge rule (`has_more === true`), so a transport
+   *  flag that is not the boolean does not read as a truncated page. False when the
+   *  live half is unknown — nothing to qualify — and false is NOT a completeness
+   *  claim: a page without `has_more` is what the contract returned, and this layer
+   *  adds no guarantee to it. It describes Sessions alone: Inventory's `truncated`
+   *  above is another source's marker, and neither borrows the other's. */
+  livePartial: boolean
+}
+
+/**
+ * THE ANSWER A ROLLUP MAY READ RIGHT NOW: the query's CURRENT successful data, and
+ * only while the role may read the source. Anything else is `undefined` — not an
+ * empty page — so the rollup marks the half unknown instead of counting nothing:
+ *
+ *  · not permitted: a query that was read before the permission went is disabled,
+ *    but TanStack keeps its last data on the object; showing it would expose rows the
+ *    role may no longer read, so the permission is checked here and not only in
+ *    `enabled`;
+ *  · pending: no answer yet;
+ *  · failed after a success: the query keeps the retired data beside `isError`; a
+ *    refusal or an outage must not keep painting a figure that is no longer current.
+ *
+ * It is a predicate over the query object the view already holds, not an
+ * availability layer: the view keeps deciding skeletons, hints and exclusions from
+ * the same object.
+ */
+export function currentAnswer<T>(
+  permitted: boolean,
+  query: { isSuccess: boolean; data: T | undefined },
+): T | undefined {
+  return permitted && query.isSuccess ? query.data : undefined
 }
 
 export function deriveUsage(
   inventory?: InventorySummary,
   live?: ListResponse<LiveDTO>,
-): UsageKpi | null {
-  if (!inventory && !live) return null
+): UsageKpi {
+  // A present summary with no `agent` kind is an estate with no agents: a real zero.
   const agent = inventory?.by_kind?.agent
-  const items = live?.items ?? []
+  const count = (state: string) =>
+    live ? live.items.filter((s) => s.cc_state === state).length : null
   return {
-    activeAgents: agent?.active ?? 0,
-    totalAgents: agent?.total ?? 0,
-    totalEntities: inventory?.total ?? 0,
-    liveActive: items.filter((s) => s.cc_state === 'active').length,
-    liveIdle: items.filter((s) => s.cc_state === 'idle').length,
-    silentEvasion: items.filter((s) => s.cc_state === 'silent_evasion').length,
-    liveTotal: items.length,
+    activeAgents: inventory ? (agent?.active ?? 0) : null,
+    totalAgents: inventory ? (agent?.total ?? 0) : null,
+    totalEntities: inventory ? inventory.total : null,
+    liveActive: count('active'),
+    liveIdle: count('idle'),
+    silentEvasion: count('silent_evasion'),
+    liveTotal: live ? live.items.length : null,
     truncated: !!inventory?.truncated,
+    // `live` is already the CURRENT successful answer or nothing (`currentAnswer`),
+    // so the rule's `!error` half is idle here; the `has_more === true` half is the one
+    // that decides, and it is the same one the list badges apply.
+    livePartial: listaRecortada({ data: live }),
   }
 }
 

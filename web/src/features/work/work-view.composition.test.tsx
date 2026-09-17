@@ -9,9 +9,39 @@ const api = vi.hoisted(() => ({
   listWorkItems: vi.fn(),
   getWorkItem: vi.fn(),
 }))
+const comms = vi.hoisted(() => ({ offerHandoff: vi.fn() }))
+// The offer host is real; only the transport under it is replaced, so this file
+// measures the ACTUAL composition WorkView → ItemDetailSheet → HandoffOfferHost.
+vi.mock('@/features/communications/api', async (orig) => {
+  const real = (await orig()) as Record<string, unknown>
+  return { ...real, ...comms }
+})
+vi.mock('@/components/ui/toaster', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  Toaster: () => null,
+}))
+vi.mock('@/stores/workspace', async (orig) => {
+  const real = (await orig()) as Record<string, unknown>
+  return real
+})
 
+const auth = vi.hoisted(() => ({
+  can: ((_p: string) => true) as (p: string) => boolean,
+}))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (p: string) => auth.can(p),
+    isSuperadmin: false,
+    principal: {
+      kind: 'user',
+      user_id: 'admin',
+      actor: 'user:admin',
+      display_name: 'Admin',
+      superadmin: false,
+      grants: [],
+    },
+  }),
 }))
 vi.mock('./stream', () => ({
   useWorkStream: () => ({ status: 'connected' as const }),
@@ -22,8 +52,10 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 import { WorkView } from './work-view'
+import { useWorkspaceStore } from '@/stores/workspace'
 import './i18n'
 import '@/features/_intel'
+import '@/features/communications/i18n'
 
 const item = {
   id: 'work-1',
@@ -53,10 +85,15 @@ const item = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  auth.can = () => true
   api.listWorkItems.mockResolvedValue({ items: [item], has_more: false })
   api.getWorkItem.mockResolvedValue({
     snapshot: { item, acceptance: [], dependencies: [] },
     etag: '"v3"',
+  })
+  useWorkspaceStore.setState({
+    activeWorkspace: 'workspace-1',
+    activeWorkspaceName: 'Billing',
   })
 })
 
@@ -98,5 +135,171 @@ describe('WorkView composition', () => {
       within(dialog).getByText('"v3"'),
       'Effect: the detail sheet must paint the ETag returned by the real item handler',
     ).toBeVisible()
+  })
+})
+
+/* ── K3 I3: the offer entry, mounted for real ─────────────────────────────────── */
+
+describe('WorkView composition — the handoff offer entry', () => {
+  it('mounts the communications-owned host beside the item sheet and re-reads the item FRESH for the offer', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    // One read for the sheet.
+    await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(1))
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    )
+
+    // A SECOND, INDEPENDENT READ. The sheet already has the item on screen; the
+    //    offer does not inherit that body as authority, so the adapter asks again
+    //    with the EXPLICIT captured tenant and the host's own abort signal.
+    await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(2))
+    expect(api.getWorkItem.mock.calls[1]).toEqual([
+      'work-1',
+      { tenant: 't1' },
+      expect.any(AbortSignal),
+    ])
+
+    const offer = await screen.findByRole('dialog', { name: 'Offer handoff' })
+    // The projection the adapter returns is what the offer screen shows.
+    expect(within(offer).getByText('"v3"')).toBeVisible()
+    expect(within(offer).getByText('user:admin')).toBeVisible()
+  })
+
+  it('the offer action is INDEPENDENT of the WorkItem transition permission', async () => {
+    // A principal who may send on a channel but may NOT transition work.
+    auth.can = (p: string) => p === 'sessions:message-send:write'
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    // The transition row is gone…
+    expect(screen.queryByRole('button', { name: 'Mark ready' })).toBeNull()
+    // …and the offer entry is still there, which is the whole assertion.
+    expect(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    ).toBeEnabled()
+  })
+
+  it('without message-send:write the offer entry is not offered, while the transitions remain', async () => {
+    auth.can = (p: string) => p !== 'sessions:message-send:write'
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    expect(screen.queryByRole('button', { name: 'Offer handoff' })).toBeNull()
+    // POSITIVE CONTROL: the neighbouring work permission is untouched.
+    expect(
+      await screen.findByRole('button', { name: 'Mark ready' }),
+    ).toBeEnabled()
+  })
+
+  it('reopening the SAME item is a NEW editor action: the host reads again rather than reusing the previous draft', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    await user.click(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    )
+    await screen.findByRole('dialog', { name: 'Offer handoff' })
+    await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(2))
+
+    // Close the offer panel and ask for the same item again.
+    await user.click(
+      within(
+        await screen.findByRole('dialog', { name: 'Offer handoff' }),
+      ).getByRole('button', { name: 'Close' }),
+    )
+    await user.click(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    )
+    await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(3))
+    expect(api.getWorkItem.mock.calls[2][0]).toBe('work-1')
+    expect(
+      await screen.findByRole('dialog', { name: 'Offer handoff' }),
+    ).toBeVisible()
+  })
+})
+
+describe('I3 correction — offer from the item sheet', () => {
+  it('returns focus to the item-sheet control that opened the offer dialog', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    const opener = await screen.findByRole('button', { name: 'Offer handoff' })
+    await user.click(opener)
+    await screen.findByRole('dialog', { name: 'Offer handoff' })
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Offer handoff' }),
+      ).toBeNull(),
+    )
+    // Settled focus, on the real opener inside the still-open item sheet.
+    await waitFor(() => expect(document.activeElement).toBe(opener), {
+      timeout: 1000,
+    })
+  })
+
+  it('reopening the same item is a new invocation with its own fresh read', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    await user.click(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    )
+    await screen.findByRole('dialog', { name: 'Offer handoff' })
+    await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(2))
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Offer handoff' }),
+      ).toBeNull(),
+    )
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    )
+    await screen.findByRole('dialog', { name: 'Offer handoff' })
+    // The validator a confirmation would bind comes from this read, not the last one.
+    await waitFor(() => expect(api.getWorkItem).toHaveBeenCalledTimes(3))
+  })
+
+  it('states the local tracking limits on the offer panel', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    await user.click(
+      await screen.findByRole('button', { name: 'Offer handoff' }),
+    )
+    await screen.findByRole('dialog', { name: 'Offer handoff' })
+    const limits = document.querySelector(
+      '[data-slot="handoff-offer-tracking-limits"]',
+    ) as HTMLElement
+    expect(limits).toHaveTextContent(/Hiding this panel keeps local tracking/i)
+    expect(limits).toHaveTextContent(
+      /cannot cancel or roll back a command already sent/i,
+    )
   })
 })

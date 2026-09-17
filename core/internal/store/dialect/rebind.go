@@ -5,6 +5,7 @@
 package dialect
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -16,31 +17,101 @@ import (
 // authors all SQL with '?' and never interpolates values, so this is the only
 // placeholder transformation needed.
 func rebindPositional(query string) string {
+	r := Rebinder{positional: true}
 	var b strings.Builder
 	b.Grow(len(query) + 8)
-	n := 0
-	inLiteral := false
-	for i := 0; i < len(query); i++ {
-		c := query[i]
+	r.Write(&b, query)
+	return b.String()
+}
+
+// Rebinder applies a dialect's placeholder rewrite to one statement written as
+// consecutive fragments. Len and Write advance the same quote-aware state, so a
+// caller can count the exact length of the rewritten statement without building
+// it, and then build exactly that statement. Writing a complete query as one
+// fragment produces what the dialect's Rebind returns. The zero value is the
+// identity rewrite. A Rebinder carries one statement's state; copy a fresh one
+// for each statement.
+type Rebinder struct {
+	positional   bool
+	placeholders uint64
+	inLiteral    bool
+	// quotePending marks a quote inside a literal whose meaning depends on the
+	// next byte: another quote is an escaped quote, anything else ends the literal.
+	quotePending bool
+}
+
+// NewRebinder returns the statement rebinder of the SQLite or PostgreSQL
+// dialect; ok is false for any other Dialect implementation.
+func NewRebinder(d Dialect) (Rebinder, bool) {
+	switch d.(type) {
+	case sqliteDialect, *sqliteDialect:
+		return Rebinder{}, true
+	case postgresDialect, *postgresDialect:
+		return Rebinder{positional: true}, true
+	}
+	return Rebinder{}, false
+}
+
+// Len returns the rewritten byte length of fragment and advances r exactly as
+// Write would. It allocates nothing. ok is false if the length overflows.
+func (r *Rebinder) Len(fragment string) (n uint64, ok bool) {
+	return r.scan(nil, fragment)
+}
+
+// Write appends the rewritten fragment to b and advances r.
+func (r *Rebinder) Write(b *strings.Builder, fragment string) {
+	r.scan(b, fragment)
+}
+
+// scan is the single placeholder interpretation behind Len, Write and Rebind.
+// With b == nil it only counts.
+func (r *Rebinder) scan(b *strings.Builder, fragment string) (uint64, bool) {
+	if !r.positional {
+		if b != nil {
+			b.WriteString(fragment)
+		}
+		return uint64(len(fragment)), true
+	}
+	n, ok := uint64(0), true
+	plain := 0 // start of the bytes copied unchanged since the last placeholder
+	for i := 0; i < len(fragment); i++ {
+		c := fragment[i]
+		if r.quotePending {
+			r.quotePending = false
+			if c == '\'' {
+				continue // an escaped quote keeps the literal open
+			}
+			r.inLiteral = false
+		}
 		switch {
 		case c == '\'':
-			// Toggle literal state; a doubled '' inside a literal is an escaped
-			// quote and stays inside the literal.
-			if inLiteral && i+1 < len(query) && query[i+1] == '\'' {
-				b.WriteByte(c)
-				b.WriteByte(query[i+1])
-				i++
-				continue
+			if r.inLiteral {
+				r.quotePending = true
+			} else {
+				r.inLiteral = true
 			}
-			inLiteral = !inLiteral
-			b.WriteByte(c)
-		case c == '?' && !inLiteral:
-			n++
-			b.WriteByte('$')
-			b.WriteString(strconv.Itoa(n))
-		default:
-			b.WriteByte(c)
+		case c == '?' && !r.inLiteral:
+			r.placeholders++
+			var buf [20]byte
+			digits := strconv.AppendUint(buf[:0], r.placeholders, 10)
+			if b != nil {
+				b.WriteString(fragment[plain:i])
+				b.WriteByte('$')
+				b.Write(digits)
+			}
+			n, ok = addLen(n, ok, uint64(i-plain)+1+uint64(len(digits)))
+			plain = i + 1
 		}
 	}
-	return b.String()
+	if b != nil {
+		b.WriteString(fragment[plain:])
+	}
+	return addLen(n, ok, uint64(len(fragment)-plain))
+}
+
+func addLen(n uint64, ok bool, k uint64) (uint64, bool) {
+	if !ok || n > math.MaxUint64-k {
+		return math.MaxUint64, false
+	}
+	return n + k, true
 }

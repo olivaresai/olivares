@@ -54,33 +54,58 @@ type liveDTO struct {
 	// telling the truth, and one that renders "enforced" by default is not.
 	Engine  string `json:"engine,omitempty"`
 	Posture string `json:"posture,omitempty"`
+
+	// B2 — the row's identity beyond its external id. LiveRef is the opaque,
+	// unambiguous reference of THIS row (the one new readers navigate by).
+	// Attribution says which channel the row was folded from: legacy (no stamped
+	// registration), observed (a source dedicated to a profile), source (a known
+	// registration with no verifiable profile) or managed (the plane's own bridge
+	// for a run it launched). CanonicalSID and RunRef are present ONLY on a managed
+	// row, because only the bridge can prove them; an observed row that copies a
+	// run's external id carries neither. References and labels only — no path.
+	LiveRef            string `json:"live_ref"`
+	Attribution        string `json:"attribution"`
+	ProviderProfileRef string `json:"provider_profile_ref,omitempty"`
+	Provider           string `json:"provider,omitempty"`
+	EnvironmentRef     string `json:"environment_ref,omitempty"`
+	SourceBindingRef   string `json:"source_binding_ref,omitempty"`
+	CanonicalSID       string `json:"canonical_sid,omitempty"`
+	RunRef             string `json:"run_ref,omitempty"`
 }
 
 // toLiveDTO projects a live record to its DTO, deriving the Claude Code state and
 // duration from the record at read time.
 func (m *Module) toLiveDTO(rec model.Record) liveDTO {
 	return liveDTO{
-		SessionRef:      rec.String(colSessionRef),
-		AgentRef:        rec.String(colAgentRef),
-		CCState:         m.deriveCC(rec),
-		Engine:          rec.String(colEngine),
-		Posture:         rec.String(colPosture),
-		CurrentAction:   rec.String(colCurrentTool),
-		CurrentResource: rec.String(colCurrentRes),
-		CurrentMode:     rec.String(colCurrentMode),
-		ModelRef:        rec.String(colModelRef),
-		InputTokens:     rec.Int(colInputTokens),
-		OutputTokens:    rec.Int(colOutputTokens),
-		CostMicroUSD:    rec.Int(colCostMicroUSD),
-		EventCount:      rec.Int(colEventCount),
-		ToolCallCount:   rec.Int(colToolCalls),
-		FirstEventAt:    rec.String(colFirstEventAt),
-		LastEventAt:     rec.String(colLastEventAt),
-		DurationSeconds: durationSeconds(rec.String(colFirstEventAt), rec.String(colLastEventAt)),
-		Goal:            rec.String(colGoal),
-		Summary:         rec.String(colSummary),
-		Unclaimed:       rec.String(colUnclaimedAt) != "",
-		UnclaimedAt:     rec.String(colUnclaimedAt),
+		SessionRef:         rec.String(colSessionRef),
+		AgentRef:           rec.String(colAgentRef),
+		CCState:            m.deriveCC(rec),
+		Engine:             rec.String(colEngine),
+		Posture:            rec.String(colPosture),
+		CurrentAction:      rec.String(colCurrentTool),
+		CurrentResource:    rec.String(colCurrentRes),
+		CurrentMode:        rec.String(colCurrentMode),
+		ModelRef:           rec.String(colModelRef),
+		InputTokens:        rec.Int(colInputTokens),
+		OutputTokens:       rec.Int(colOutputTokens),
+		CostMicroUSD:       rec.Int(colCostMicroUSD),
+		EventCount:         rec.Int(colEventCount),
+		ToolCallCount:      rec.Int(colToolCalls),
+		FirstEventAt:       rec.String(colFirstEventAt),
+		LastEventAt:        rec.String(colLastEventAt),
+		DurationSeconds:    durationSeconds(rec.String(colFirstEventAt), rec.String(colLastEventAt)),
+		Goal:               rec.String(colGoal),
+		Summary:            rec.String(colSummary),
+		Unclaimed:          rec.String(colUnclaimedAt) != "",
+		UnclaimedAt:        rec.String(colUnclaimedAt),
+		LiveRef:            rec.String(model.ColID),
+		Attribution:        attributionOf(rec.String(colObservationScope)),
+		ProviderProfileRef: rec.String(colLiveProfileID),
+		Provider:           rec.String(colLiveProvider),
+		EnvironmentRef:     rec.String(colLiveEnvRef),
+		SourceBindingRef:   rec.String(colLiveBindingRef),
+		CanonicalSID:       rec.String(colLiveCanonicalSID),
+		RunRef:             rec.String(colLiveRunRef),
 	}
 }
 

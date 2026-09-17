@@ -35,11 +35,25 @@
     "costCaption": "所选时间范围内",
     "usage": "活跃智能体",
     "usageCaption": "{{live}} 个在线 · {{entities}} 个已跟踪",
+    "sourceRestricted": "{{source}} — 您的角色无权查看",
+    "sourceUnavailable": "{{source}} — 无法加载",
+    "sourcePendingPaused": "{{source}} — 查询已暂停，等待恢复",
+    "sourcePendingIdle": "{{source}} — 查询未开始",
+    "partialWhy": "为何是部分数据？",
     "risk": "未处理风险",
     "riskCaption": "{{count}} 项严重/高危",
     "silentEvasion": "{{count}} 项静默规避",
     "compliance": "控制项覆盖率",
     "complianceCaption": "{{gap}} 项缺口 · {{unmapped}} 项未映射"
+  },
+  "availability": {
+    "restricted": "{{source}}：您的角色无权查看。",
+    "unavailable": "{{source}}：无法加载。",
+    "pendingPaused": "{{source}}：查询已暂停，等待恢复。",
+    "pendingIdle": "{{source}}：查询未开始。",
+    "loading": "{{source}}：加载中。",
+    "partial": "{{source}}：数据可用，为部分数据。",
+    "current": "{{source}}：数据可用。"
   },
   "cost": {
     "title": "成本",

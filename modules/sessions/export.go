@@ -40,11 +40,14 @@ const (
 // LiveSampleQuery bounds a SampleLive read: optional exact-match filters, a recency
 // window and a row cap, all in the module's own vocabulary.
 type LiveSampleQuery struct {
-	// SessionRef/AgentRef/ModelRef optionally narrow the sample by exact match
-	// ("" = any). SessionRef is the EXTERNAL reference (the live row's key).
+	// SessionRef is an explicitly legacy external-id selector. AgentRef/ModelRef
+	// optionally narrow by exact match ("" = any). An unfiltered sample includes
+	// scoped rows and always returns their LiveRef and attribution.
 	SessionRef string
-	AgentRef   string
-	ModelRef   string
+	// LiveRef narrows to exactly one row by its opaque id (B2).
+	LiveRef  string
+	AgentRef string
+	ModelRef string
 	// Window keeps only sessions whose last event is within now-Window (0 = no
 	// recency bound). It is the sampling-freshness knob: the composition root
 	// defaults it short so monitor samples stay recent.
@@ -57,7 +60,14 @@ type LiveSampleQuery struct {
 // attribution refs, live token/cost totals and the core findings attributed to it.
 // It carries SIGNALS only — never output text, which the platform never persists.
 type LiveSample struct {
-	SessionRef   string
+	// FindingsUnavailable means this row has no proven scoped finding attribution.
+	FindingsUnavailable bool
+	SessionRef          string
+	// LiveRef is the row's opaque id and Attribution its channel (B2:
+	// legacy|observed|source|managed). ProfileRef is set on observed/managed rows.
+	LiveRef      string
+	Attribution  string
+	ProfileRef   string
 	AgentRef     string
 	ModelRef     string
 	CCState      string // active | idle | ended | silent_evasion (derived at read time)
@@ -85,7 +95,14 @@ func (m *Module) SampleLive(ctx context.Context, tenant model.TenantID, q LiveSa
 	}
 	var filters []model.Filter
 	if q.SessionRef != "" {
-		filters = append(filters, eq(colSessionRef, q.SessionRef))
+		filters = append(filters, eq(colSessionRef, q.SessionRef), model.Filter{Column: colObservationScope, Op: model.OpIsNull})
+	}
+	if q.LiveRef != "" {
+		id, ok := parseLiveRef(q.LiveRef)
+		if !ok {
+			return []LiveSample{}, nil
+		}
+		filters = append(filters, model.Filter{Column: model.ColID, Op: model.OpEq, Value: id.String()})
 	}
 	if q.AgentRef != "" {
 		filters = append(filters, eq(colAgentRef, q.AgentRef))
@@ -117,6 +134,9 @@ func (m *Module) SampleLive(ctx context.Context, tenant model.TenantID, q LiveSa
 		for _, rec := range recs {
 			s := LiveSample{
 				SessionRef:   rec.String(colSessionRef),
+				LiveRef:      rec.String(model.ColID),
+				Attribution:  attributionOf(rec.String(colObservationScope)),
+				ProfileRef:   rec.String(colLiveProfileID),
 				AgentRef:     rec.String(colAgentRef),
 				ModelRef:     rec.String(colModelRef),
 				CCState:      m.deriveCC(rec),
@@ -127,11 +147,14 @@ func (m *Module) SampleLive(ctx context.Context, tenant model.TenantID, q LiveSa
 			if ts, terr := model.ParseTimestamp(rec.String(colLastEventAt)); terr == nil {
 				s.LastEventAt = ts.Time()
 			}
-			count, maxSev, ferr := sessionFindings(ctx, sc, s.SessionRef)
-			if ferr != nil {
-				return ferr
+			s.FindingsUnavailable = rec.String(colObservationScope) != ""
+			if !s.FindingsUnavailable {
+				count, maxSev, ferr := sessionFindings(ctx, sc, s.SessionRef)
+				if ferr != nil {
+					return ferr
+				}
+				s.Findings, s.MaxSeverity = count, maxSev
 			}
-			s.Findings, s.MaxSeverity = count, maxSev
 			out = append(out, s)
 		}
 		return nil
@@ -249,21 +272,43 @@ func (m *Module) TimelineByCredential(ctx context.Context, tenant model.TenantID
 			return nil
 		}
 
-		// Step 2: extract the claude_session_id which is the session_ref for
-		// the live/timeline tables.
-		sessionRef = runs[0].String(colClaudeSessionID)
-		if sessionRef == "" {
-			return nil
+		// Step 2: the timeline this run may be joined to.
+		//
+		// B2: a PROFILED run is joined ONLY through its managed live row — the row
+		// the bridge wrote by canonical sid in the transaction that proved the run
+		// owns its provider id — and that row's own timeline. A bare external-id
+		// join would read another home's session that happens to share the id. A
+		// legacy run keeps the legacy join: its claude_session_id against the
+		// legacy events (no live_ref) of that external id, never a scoped row's.
+		run := runs[0]
+		var filters []model.Filter
+		if run.String(colRunProfileID) != "" {
+			sid := run.String(colRunClaimSID)
+			if sid == "" {
+				return nil
+			}
+			managed, ok, merr := findManagedLive(ctx, sc, sid)
+			if merr != nil || !ok {
+				return merr
+			}
+			sessionRef = managed.String(colSessionRef)
+			filters = timelineFiltersFor(managed)
+		} else {
+			sessionRef = run.String(colClaudeSessionID)
+			if sessionRef == "" {
+				return nil
+			}
+			filters = legacyTimelineFilters(sessionRef)
 		}
 
-		// Step 3: read one logical page for that session_ref. A logical page may
+		// Step 3: read one logical page for that selection. A logical page may
 		// span several store pages when max exceeds the store's 1000-row clamp.
 		tlRepo, terr := sc.Ext(timelineKind)
 		if terr != nil {
 			return terr
 		}
 		q := model.Query{
-			Filters: []model.Filter{eq(colTLSessionRef, sessionRef)},
+			Filters: filters,
 			Cursor:  cursor,
 		}
 		for len(timeline) < max {
@@ -309,12 +354,49 @@ func (m *Module) TimelineByCredential(ctx context.Context, tenant model.TenantID
 // prefix is returned with truncated=true so the caller can refuse a partial replay
 // rather than silently re-execute a prefix. An unknown session yields an empty,
 // honest result — never an error, never fabricated steps.
+//
+// B2: by bare external id this reconstructs the LEGACY timeline only — the events
+// that carry no live_ref. A profile-scoped row's actions are reconstructed by its
+// live_ref (ReplayTimelineByLiveRef); mixing two homes' actions under one id
+// would be a replay of a session nobody ran.
 func (m *Module) ReplayTimeline(ctx context.Context, tenant model.TenantID, sessionRef string, max int) ([]ReplayEvent, bool, error) {
+	if sessionRef == "" {
+		return nil, false, nil
+	}
+	return m.replayTimeline(ctx, tenant, legacyTimelineFilters(sessionRef), max)
+}
+
+// ReplayTimelineByLiveRef reconstructs the action sequence of exactly ONE live
+// row by its opaque reference (B2), whichever channel it was observed through.
+func (m *Module) ReplayTimelineByLiveRef(ctx context.Context, tenant model.TenantID, liveRef string, max int) ([]ReplayEvent, bool, error) {
 	if m.data == nil {
 		return nil, false, errNoData
 	}
-	if sessionRef == "" {
+	id, ok := parseLiveRef(liveRef)
+	if !ok {
 		return nil, false, nil
+	}
+	var filters []model.Filter
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		rec, err := findLiveByID(ctx, sc, id)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		filters = timelineFiltersFor(rec)
+		return nil
+	})
+	if err != nil || filters == nil {
+		return nil, false, err
+	}
+	return m.replayTimeline(ctx, tenant, filters, max)
+}
+
+func (m *Module) replayTimeline(ctx context.Context, tenant model.TenantID, filters []model.Filter, max int) ([]ReplayEvent, bool, error) {
+	if m.data == nil {
+		return nil, false, errNoData
 	}
 	if max <= 0 {
 		max = defaultReplayMax
@@ -326,7 +408,7 @@ func (m *Module) ReplayTimeline(ctx context.Context, tenant model.TenantID, sess
 		if err != nil {
 			return err
 		}
-		q := model.Query{Filters: []model.Filter{eq(colTLSessionRef, sessionRef)}, Limit: sampleCap}
+		q := model.Query{Filters: filters, Limit: sampleCap}
 		for {
 			recs, page, err := repo.List(ctx, q)
 			if err != nil {

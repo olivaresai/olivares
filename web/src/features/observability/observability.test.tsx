@@ -323,6 +323,9 @@ vi.mock('@tanstack/react-router', () => ({
     return select({ location: { searchStr: window.location.search } })
   },
   useNavigate: () => navigate,
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 
 function setSearchStr(next: string) {

@@ -23,6 +23,7 @@ func drHarness(t *testing.T) (*harness, string) {
 	t.Helper()
 	dataDir := t.TempDir()
 	h := newHarnessOpts(t, func(o *api.Options) {
+		o.Version = "26.9.0"
 		o.DR = &api.DRConfig{DataDir: dataDir, EngineKind: "sqlite"}
 	})
 	// The service's default backup dir (newDRService): <DataDir>/backups.

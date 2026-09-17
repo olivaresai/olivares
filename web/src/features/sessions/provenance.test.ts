@@ -9,8 +9,10 @@ import {
   isResumableRun,
   mergeSessions,
   primaryRun,
+  runMatchesObserved,
   sessionLabel,
   sessionSearchKey,
+  sessionTarget,
   type Grants,
 } from './provenance'
 import type { LiveDTO } from './types'
@@ -18,6 +20,8 @@ import type { LiveDTO } from './types'
 function live(ref: string, over: Partial<LiveDTO> = {}): LiveDTO {
   return {
     session_ref: ref,
+    live_ref: `lr-${ref}`,
+    attribution: 'legacy',
     cc_state: 'active',
     input_tokens: 0,
     output_tokens: 0,
@@ -437,5 +441,138 @@ describe('sessionLabel / sessionSearchKey', () => {
       'sess-found',
     )
     expect(sessionLabel(mergeSessions([], [run('run-rc')])[0]!)).toBe('run-rc')
+  })
+})
+
+// B2 — two homes of one provider may announce ONE session id. A profile-scoped
+// row is keyed by its own live_ref; a profiled run joins only the managed row the
+// plane proved for it; a legacy run never joins a scoped row, and the reverse.
+describe('B2 — profile-scoped rows and profiled runs', () => {
+  const managedA = live('sess-dup', {
+    live_ref: 'lr-a',
+    attribution: 'managed',
+    provider_profile_ref: 'ppf_a',
+    provider: 'claude',
+    canonical_sid: 'osn_a',
+    run_ref: 'run-a',
+  })
+  const managedB = live('sess-dup', {
+    live_ref: 'lr-b',
+    attribution: 'managed',
+    provider_profile_ref: 'ppf_b',
+    provider: 'claude',
+    canonical_sid: 'osn_b',
+    run_ref: 'run-b',
+  })
+  const observedA = live('sess-dup', {
+    live_ref: 'lr-obs-a',
+    attribution: 'observed',
+    provider_profile_ref: 'ppf_a',
+    provider: 'claude',
+    source_binding_ref: 'psb_1',
+  })
+  const legacyDup = live('sess-dup', { live_ref: 'lr-legacy' })
+  const runA = run('run-a', {
+    claude_session_id: 'sess-dup',
+    provider_profile_ref: 'ppf_a',
+    provider_driver: 'claude',
+    live_ref: 'lr-a',
+  })
+  const runB = run('run-b', {
+    claude_session_id: 'sess-dup',
+    provider_profile_ref: 'ppf_b',
+    provider_driver: 'claude',
+    live_ref: 'lr-b',
+  })
+  const legacyRun = run('run-legacy', { claude_session_id: 'sess-dup' })
+
+  it('keeps two scoped rows sharing an id as two sessions, each with its proven run', () => {
+    const rows = mergeSessions([managedA, managedB], [runA, runB])
+    expect(rows.map((r) => r.key).sort()).toEqual(['live:lr-a', 'live:lr-b'])
+    const a = rows.find((r) => r.key === 'live:lr-a')!
+    const b = rows.find((r) => r.key === 'live:lr-b')!
+    expect(a.runs.map((r) => r.run_ref)).toEqual(['run-a'])
+    expect(b.runs.map((r) => r.run_ref)).toEqual(['run-b'])
+    expect(a.provenance).toBe('launched')
+    expect(a.control).toBe('full')
+    expect(a.liveRef).toBe('lr-a')
+    expect(a.profileRef).toBe('ppf_a')
+    expect(a.attribution).toBe('managed')
+  })
+
+  it('never folds a legacy run onto a scoped row that shares its id', () => {
+    const rows = mergeSessions([observedA], [legacyRun])
+    // The legacy run keeps the legacy key of its bare id (a row of its own, with no
+    // observed half); the scoped row stays a discovered row with no run.
+    expect(rows.map((r) => r.key).sort()).toEqual([
+      'live:lr-obs-a',
+      'sess:sess-dup',
+    ])
+    const obs = rows.find((r) => r.key === 'live:lr-obs-a')!
+    expect(obs.runs).toHaveLength(0)
+    expect(obs.provenance).toBe('discovered')
+    expect(obs.control).toBe('observe')
+    const own = rows.find((r) => r.key === 'sess:sess-dup')!
+    expect(own.runs.map((r) => r.run_ref)).toEqual(['run-legacy'])
+    expect(own.live).toBeUndefined()
+  })
+
+  it('never folds a profiled run onto the LEGACY row of its bare id', () => {
+    const rows = mergeSessions([legacyDup], [runA])
+    // The profiled run is keyed by the managed row the plane proved for it (not on
+    // this page); the legacy row that shares the bare id keeps no run.
+    expect(rows.map((r) => r.key).sort()).toEqual([
+      'live:lr-a',
+      'sess:sess-dup',
+    ])
+    const legacy = rows.find((r) => r.key === 'sess:sess-dup')!
+    expect(legacy.runs).toHaveLength(0)
+    expect(legacy.provenance).toBe('discovered')
+    const own = rows.find((r) => r.key === 'live:lr-a')!
+    expect(own.provenance).toBe('launched')
+    expect(own.live).toBeUndefined()
+    expect(own.liveRef).toBe('lr-a')
+    expect(own.profileRef).toBe('ppf_a')
+  })
+
+  it('an observed row of the same profile never borrows the managed run', () => {
+    const rows = mergeSessions([managedA, observedA], [runA])
+    const obs = rows.find((r) => r.key === 'live:lr-obs-a')!
+    expect(obs.runs).toHaveLength(0)
+    expect(rows.find((r) => r.key === 'live:lr-a')!.runs).toHaveLength(1)
+  })
+
+  it('runMatchesObserved demands the proven row for anything profiled or scoped', () => {
+    expect(runMatchesObserved(runA, managedA)).toBe(true)
+    expect(runMatchesObserved(runA, managedB)).toBe(false)
+    expect(runMatchesObserved(runA, observedA)).toBe(false)
+    expect(runMatchesObserved(runA, legacyDup)).toBe(false)
+    expect(runMatchesObserved(legacyRun, managedA)).toBe(false)
+    expect(runMatchesObserved(legacyRun, legacyDup)).toBe(true)
+  })
+
+  it('opens a scoped row by live_ref, a legacy row by its id, a run-only profiled row by its run', () => {
+    const rows = mergeSessions([managedA, legacyDup], [runB])
+    expect(sessionTarget(rows.find((r) => r.key === 'live:lr-a')!)).toEqual({
+      liveRef: 'lr-a',
+    })
+    expect(sessionTarget(rows.find((r) => r.key === 'sess:sess-dup')!)).toEqual(
+      { sessionRef: 'sess-dup' },
+    )
+    // run-b's managed row is not on this page: the card resolves it from the run.
+    expect(sessionTarget(rows.find((r) => r.key === 'live:lr-b')!)).toEqual({
+      liveRef: 'lr-b',
+    })
+    const unproven = mergeSessions(
+      [],
+      [run('run-c', { provider_profile_ref: 'ppf_c' })],
+    )[0]!
+    expect(sessionTarget(unproven)).toEqual({ runRef: 'run-c' })
+  })
+
+  it('is searchable by live_ref and profile', () => {
+    const s = mergeSessions([managedA], [runA])[0]!
+    expect(sessionSearchKey(s)).toContain('lr-a')
+    expect(sessionSearchKey(s)).toContain('ppf_a')
   })
 })

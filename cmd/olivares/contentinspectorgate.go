@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"strconv"
+	"time"
 
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/model"
@@ -39,40 +40,100 @@ type contentInspector interface {
 	Inspect(ctx context.Context, in claudeapi.ContentInspectionInput) claudeapi.ContentInspectionDecision
 }
 
-// runContentInspector inspects one direction's collected content, publishes the firewall's
-// findings + metering, opens an approval for a held detection, and returns the decision. A
-// nil inspector or empty content is a no-op (zero decision, Forward true). It is the single
-// entry point both Authorize (request) and Finalize (response) call.
-func (d *inferenceProxyDecider) runContentInspector(ctx context.Context, tenant model.TenantID, actor, direction, modelRef string, collected claudeapi.CollectedContent, actorRef string, unbindableAgent bool) claudeapi.ContentInspectionDecision {
-	if d.inspector == nil || len(collected.Channels) == 0 {
+// inspectionSubject is the ONLY thing that differs between two governed callers of the
+// same inspector: what the published observations are ABOUT. Messages names the Anthropic
+// inference surface; the D01-C2B governed Chat operation names its own execution subject
+// and its profile's provider and surface. Everything else — the input shape, the ordering,
+// the detail-hash preimage, the meter arithmetic, the approval behavior — is identical by
+// construction, because there is now one implementation of it.
+type inspectionSubject struct {
+	Kind        string
+	ProviderRef string
+	Surface     sdkmodel.Gateway
+}
+
+// contentInspectionService is the shared invocation seam. It is NOT a policy: it decides
+// nothing, it cannot turn a deny into an allow, and a nil inspector or empty content is a
+// no-op that returns the connector's clean-pass zero decision.
+//
+// ⛔ IT IS SHARED SO THE SECOND CALLER CANNOT DRIFT, NOT TO SAVE LINES. A Chat path that
+// re-implemented "inspect, publish findings, meter, open the held approval" would be one
+// forgotten step away from inspecting content and never recording that it did — and the
+// step most easily forgotten is the metering, which is the billable quantity. The
+// alternative that looks cheaper — faking a Messages request so the existing method could
+// be reused — would have put a synthetic MessageRequest through a path that authenticates
+// and normalizes real ones, which is a much worse trade than one struct.
+type contentInspectionService struct {
+	inspector contentInspector
+	publish   func(context.Context, model.TenantID, sdkmodel.Observation)
+	approve   func(context.Context, model.TenantID, string, string,
+		*claudeapi.ContentInspectionApprovalIntent)
+	clock func() time.Time
+}
+
+// Inspect runs one direction's collected content through the firewall, publishes its
+// findings and its metering, opens an approval for a held detection, and returns the
+// verdict unchanged. The ordering is the caller-visible contract: findings and meter are
+// emitted for EVERY verdict, including a deny, so a blocked request is still accounted.
+func (s contentInspectionService) Inspect(
+	ctx context.Context, subject inspectionSubject,
+	tenant model.TenantID, actor, actorRef string, unbindableAgent bool,
+	direction, modelRef string, content claudeapi.CollectedContent,
+) claudeapi.ContentInspectionDecision {
+	if s.inspector == nil || len(content.Channels) == 0 {
 		return claudeapi.ContentInspectionDecision{Forward: true}
 	}
-	dec := d.inspector.Inspect(ctx, claudeapi.ContentInspectionInput{
+	dec := s.inspector.Inspect(ctx, claudeapi.ContentInspectionInput{
 		Tenant: tenant.String(), ActorRef: actorRef, UnbindableAgent: unbindableAgent, Direction: direction,
-		Model: modelRef, Channels: collected.Channels, Unscanned: collected.Unscanned,
+		Model: modelRef, Channels: content.Channels, Unscanned: content.Unscanned,
 	})
-	d.publishInspectionFindings(ctx, tenant, modelRef, direction, dec.Findings)
-	d.emitInspectionMeter(ctx, tenant, modelRef, direction, dec.Meter)
+	s.publishInspectionFindings(ctx, subject, tenant, modelRef, direction, dec.Findings)
+	s.emitInspectionMeter(ctx, subject, tenant, modelRef, direction, dec.Meter)
 	if (direction == claudeapi.InspectDirectionRequest && !dec.Forward) ||
 		(direction == claudeapi.InspectDirectionResponse && dec.Block) {
-		d.openInspectionApproval(ctx, tenant, actor, direction, dec.ApprovalIntent)
+		if s.approve != nil {
+			s.approve(ctx, tenant, actor, direction, dec.ApprovalIntent)
+		}
 	}
 	return dec
 }
 
+// runContentInspector is the Messages wrapper, unchanged in signature and behavior: it
+// names the Anthropic inference subject, this proxy's configured surface and the existing
+// approval callback, and delegates. It is still the single entry point both Authorize
+// (request) and Finalize (response) call.
+func (d *inferenceProxyDecider) runContentInspector(ctx context.Context, tenant model.TenantID, actor, direction, modelRef string, collected claudeapi.CollectedContent, actorRef string, unbindableAgent bool) claudeapi.ContentInspectionDecision {
+	return d.contentInspection().Inspect(ctx,
+		inspectionSubject{Kind: "anthropic.inference", ProviderRef: "anthropic", Surface: d.surface},
+		tenant, actor, actorRef, unbindableAgent, direction, modelRef, collected)
+}
+
+// contentInspection binds this decider's inspector, bus and approval bridge into the
+// shared service. The method values are the decider's own, so a nil bus still no-ops
+// exactly as it did and the approval bridge is the same instance.
+func (d *inferenceProxyDecider) contentInspection() contentInspectionService {
+	return contentInspectionService{
+		inspector: d.inspector, publish: d.publish,
+		approve: d.openInspectionApproval, clock: d.clock,
+	}
+}
+
 // publishInspectionFindings turns the firewall's posture/forensic findings into bus
-// FindingReports. Minimal data: the decider hashes Detail into DetailHash; no prompt or
-// matched value is stored. A nil bus (d.publish) makes this a no-op.
-func (d *inferenceProxyDecider) publishInspectionFindings(ctx context.Context, tenant model.TenantID, modelRef, direction string, fs []claudeapi.ContentInspectionFinding) {
+// FindingReports. Minimal data: the service hashes Detail into DetailHash; no prompt or
+// matched value is stored. A nil bus (publish) makes this a no-op.
+func (s contentInspectionService) publishInspectionFindings(ctx context.Context, subject inspectionSubject, tenant model.TenantID, modelRef, direction string, fs []claudeapi.ContentInspectionFinding) {
+	if s.publish == nil {
+		return
+	}
 	for _, f := range fs {
-		d.publish(ctx, tenant, sdkmodel.FindingReport{
+		s.publish(ctx, tenant, sdkmodel.FindingReport{
 			Kind:        firstNonEmpty(f.Kind, "content_firewall"),
 			Severity:    inspectionSeverity(f.Severity),
-			SubjectKind: "anthropic.inference",
+			SubjectKind: subject.Kind,
 			SubjectRef:  firstNonEmpty(f.Detector, modelRef),
 			Title:       f.Title,
 			DetailHash:  hexSHA(modelRef + "|" + direction + "|" + f.Channel + "|" + f.Detail),
-			OccurredAt:  d.clock().UTC(),
+			OccurredAt:  s.clock().UTC(),
 			OWASPLLM:    f.OWASPLLM,
 			OWASPASI:    f.OWASPASI,
 		})
@@ -85,19 +146,24 @@ func (d *inferenceProxyDecider) publishInspectionFindings(ctx context.Context, t
 // the billing system downstream, NEVER fabricated here (the per-channel/per-byte volume rides
 // in the meter for a future pricing model). A zero-Inspections meter (nothing inspected) emits
 // nothing. nil bus ⇒ no-op.
-func (d *inferenceProxyDecider) emitInspectionMeter(ctx context.Context, tenant model.TenantID, modelRef, direction string, m claudeapi.ContentInspectionMeter) {
-	if m.Inspections <= 0 {
+//
+// ⛔ THIS UNPRICED METER IS NOT A FREE MODEL CALL. Its zero CostMicroUSD says the INSPECTION
+// add-on has no price applied here; it says nothing about what the model cost. Reading it as
+// a zero-cost inference sample would be exactly the fabricated monetary zero this slice
+// refuses to emit anywhere.
+func (s contentInspectionService) emitInspectionMeter(ctx context.Context, subject inspectionSubject, tenant model.TenantID, modelRef, direction string, m claudeapi.ContentInspectionMeter) {
+	if m.Inspections <= 0 || s.publish == nil {
 		return
 	}
-	d.publish(ctx, tenant, sdkmodel.CostSample{
-		ProviderRef:  "anthropic",
+	s.publish(ctx, tenant, sdkmodel.CostSample{
+		ProviderRef:  subject.ProviderRef,
 		ModelRef:     modelRef,
 		SessionRef:   "",
 		CostType:     "content_inspection",
 		CostMicroUSD: 0, // unpriced here; the metered unit is the sample count
-		Gateway:      d.surface,
+		Gateway:      subject.Surface,
 		Provenance:   sdkmodel.ProvenanceEstimated,
-		OccurredAt:   d.clock().UTC(),
+		OccurredAt:   s.clock().UTC(),
 		Labels: map[string]string{
 			"direction": direction,
 			"channels":  strconv.Itoa(m.Channels),

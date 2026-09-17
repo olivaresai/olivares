@@ -384,9 +384,26 @@ public final class Json {
             writeArray(sb, (Iterable<?>) v);
         } else if (v instanceof Object[]) {
             writeArray(sb, java.util.Arrays.asList((Object[]) v));
+        } else if (v.getClass().isRecord()) {
+            writeRecord(sb, v);
         } else {
             throw new JsonException("cannot serialize " + v.getClass().getName() + " to JSON");
         }
+    }
+
+    private static void writeRecord(StringBuilder sb, Object value) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        try {
+            for (java.lang.reflect.RecordComponent component : value.getClass().getRecordComponents()) {
+                Object field = component.getAccessor().invoke(value);
+                if (field != null) {
+                    fields.put(component.getName(), field);
+                }
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new JsonException("cannot serialize record " + value.getClass().getName());
+        }
+        writeObject(sb, fields);
     }
 
     private static void writeObject(StringBuilder sb, Map<?, ?> m) {

@@ -14,12 +14,30 @@
 # provisioned via 01-app-role.sql). Requires pg_restore AND the olivares binary
 # on PATH.
 #
+# IN THE OWNER/APP SPLIT, SET OLIVARES_OWNER_DSN. There the application role is
+# denied CREATE on schema public BY DESIGN (01-app-role.sql "OPTIONAL: the
+# owner/app SPLIT", `olivares db init --owner-role`), so as the app role
+# pg_restore cannot create the restored schema at all and the boot that verifies
+# the ledger cannot run its DDL preflight. With it set, the owner role is BOTH
+# the pg_restore target and the boot's DDL connection — which is also what makes
+# the restored tables owner-owned, and therefore reproduces the source estate's
+# append-only ACL posture instead of a different one. Leave it UNSET in the
+# single-role posture, where the app role owns the schema.
+#
+# Check both roles before restoring anything (read-only, boots nothing):
+#   olivares db check --dsn "$OLIVARES_DSN" --owner-dsn "$OLIVARES_OWNER_DSN" --strict
+#
+# `olivares dr restore` re-checks them itself and refuses BEFORE it installs the
+# bundle's signing keys or runs pg_restore, leaving the target and the data dir
+# unchanged.
+#
 # For a PITR recovery, recover Postgres from the basebackup + WAL FIRST (see
 # pitr-setup.md), then run this with the `--pitr-ref` companion bundle — it skips
 # pg_restore and only installs the keys + verifies the recovered store.
 #
 # Usage:
 #   OLIVARES_DSN=postgres://olivares_app:***@host:5432/olivares \
+#   OLIVARES_OWNER_DSN=postgres://olivares_owner:***@host:5432/olivares \
 #   OLIVARES_DATA_DIR=/var/lib/olivares \
 #   OLIVARES_DR_PASSPHRASE_FILE=/run/secrets/dr-pass \
 #   ./pg-restore.sh /backups/olivares-dr-20260609T000000Z.drbundle
@@ -47,10 +65,16 @@ IN="${1:?usage: pg-restore.sh <in.drbundle>}"
 # rebuilds the positional parameters, which is the portable way to carry an OPTIONAL
 # argument. IN was already captured above, so overwriting $1 here is safe. (Written with a
 # bash array first; `bash -n` accepted it and `sh -n` did not — the shebang decides.)
+set --
+# The owner role, when the deployment is the owner/app split. Appended the same
+# portable way and for the same reason as the admin DSN below; it is genuinely
+# optional, because the single-role posture has no owner to point at.
+if [ -n "${OLIVARES_OWNER_DSN:-}" ]; then
+  set -- "$@" --owner-dsn="$OLIVARES_OWNER_DSN"
+fi
 if [ -n "${OLIVARES_ADMIN_DSN:-}" ]; then
-  set -- --admin-dsn="$OLIVARES_ADMIN_DSN"
+  set -- "$@" --admin-dsn="$OLIVARES_ADMIN_DSN"
 else
-  set --
   echo "NOTE: OLIVARES_ADMIN_DSN is not set, so the extra-tenant check (foreign bundle / unclean" >&2
   echo "      target) CANNOT RUN and this restore will be reported NOT-OK for that reason alone." >&2
   echo "      Set it to the NOSUPERUSER BYPASSRLS role to get a complete verification." >&2

@@ -51,7 +51,7 @@ func newReleaseCmd() *cobra.Command {
 			"checksums.txt.\n\n" +
 			"Hidden because it is release-engineering tooling, not an operator surface: the\n" +
 			"signing half runs on the ceremony host, never on a serving node.",
-		Example: "  olivares release manifest --version 26.8.0 --dir ./dist\n" +
+		Example: "  olivares release manifest --version 26.9.0 --dir ./dist\n" +
 			"  olivares release verify-manifest --manifest stable-manifest.json\n" +
 			"  olivares release verify-channel-advance --candidate stable-manifest.json\n" +
 			"  olivares release sign-manifest --manifest stable-manifest.json --sign-key @prod-ota.key",
@@ -102,7 +102,7 @@ func newReleaseManifestCmd() *cobra.Command {
 			"and size, and writes a signed TUF-lite manifest for `olivares upgrade`. With --sign-key\n" +
 			"it also writes <out>.sig (Ed25519 over the exact manifest bytes); without it the manifest\n" +
 			"is left for the offline signing ceremony.",
-		Example: `  olivares release manifest --version 26.8.0 --dir ./dist \
+		Example: `  olivares release manifest --version 26.9.0 --dir ./dist \
     --channel stable --out ./dist/manifest.json --sign-key @release-private.key`,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
@@ -110,7 +110,7 @@ func newReleaseManifestCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&o.channel, "channel", release.ChannelStable, "channel: stable | security (lts is accepted by the validator, but no lts line is produced)")
-	f.StringVar(&o.version, "version", "", "release version (semver), e.g. 26.8.0 (required)")
+	f.StringVar(&o.version, "version", "", "release version (semver), e.g. 26.9.0 (required)")
 	f.StringVar(&o.dir, "dir", ".", "directory holding the release archives")
 	f.StringVar(&o.minVersion, "min-version", "", "minimum current version allowed to jump directly to this release")
 	f.StringArrayVar(&o.advisories, "advisory", nil, "advisory/CVE id fixed by this release (repeatable)")
@@ -549,7 +549,7 @@ func newReleaseVerifyManifestCmd() *cobra.Command {
 			"Run it BEFORE the off-box ceremony (no --sig) and REFUSE to sign on any failure.",
 		Example: "  # custodian, before signing (checksums.txt already cosign-verified)\n" +
 			"  olivares release verify-manifest --manifest stable-manifest.json \\\n" +
-			"    --checksums checksums.txt --dir . --expect-channel stable --expect-version 26.8.0",
+			"    --checksums checksums.txt --dir . --expect-channel stable --expect-version 26.9.0",
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE:         func(cmd *cobra.Command, _ []string) error { return runReleaseVerifyManifest(cmd, o) },

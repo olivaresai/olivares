@@ -411,6 +411,18 @@ const CANDIDATE_MARKS = [
 // Files that MENTION a mark without being a surface. Each needs a reason, and the
 // reason has to be that it cannot reach a customer's inbox.
 const NOT_A_SURFACE = [
+  {
+    path: 'commercial/license-worker/test/connect-paid-mixed-renewal-d1.test.ts',
+    why: 'A local paid-renewal journey replaces fetch with a Resend response stub and refuses every other destination; it defines no email layout and cannot deliver mail.',
+  },
+  {
+    path: 'commercial/license-worker/test/dodo-cancellation-lifecycle.test.ts',
+    why: 'A local Worker-router regression test intercepts the mail transport and rejects unexpected outbound hosts; it defines no email layout or live delivery.',
+  },
+  {
+    path: 'commercial/license-worker/test/customer-journey-d1.test.ts',
+    why: 'A local customer-journey test intercepts the email transport and checks the emitted result; it introduces no email layout or live delivery.',
+  },
   // The gate itself and its battery: they name the marks in order to find them.
   { path: 'scripts/check-email-brand.mjs', why: 'this gate' },
   // A SIBLING gate, and the same reason: check-portal-brand.mjs names api.resend.com and
@@ -466,6 +478,28 @@ const NOT_A_SURFACE = [
       'claim is that the confirmation code is ABSENT from the body, which is a property of the ' +
       'body, not a decision about how it looks.',
   },
+  // invitation battery, discovered by BOTH generated bundles at once — and that is
+  // precisely what it is there to check. It reads `src/email/templates.generated.ts` and
+  // `core/emailtemplate/templates.generated.json` in order to assert a BOUNDARY: the Worker's
+  // bundle carries `portalInvite` because the Worker sends it, and the engine's bundle must NOT,
+  // because the AGPL engine has no business holding a commercial portal's invitation copy. It also
+  // reads `email/templates.mjs` and the seven `email/copy/*.json` as TEXT, to assert that every
+  // locale declares the block and that none of them mentions a password — the portal has none, so
+  // a translation that invents one would be instructing customers to look for something that does
+  // not exist.
+  //
+  // It cannot reach an inbox: the file contains ZERO occurrences of `fetch`, of the mail endpoint,
+  // and of any transport at all (measured, not assumed), and its imports are node:test, node:fs,
+  // the D1 store, the SQLite double and the portal handler. It composes no body and decides
+  // nothing about how mail looks: every email-related claim in it is about what the pipeline
+  // ALREADY produced.
+  {
+    path: 'commercial/license-worker/test/s1320-portal-invitations.test.ts',
+    why:
+      'reads both generated bundles in order to assert the commercial/AGPL boundary between them, ' +
+      'and the locale copy in order to assert that no translation invents a password. No fetch, no ' +
+      'transport, no composed body: it observes what the pipeline produced and sends nothing.',
+  },
   {
     path: 'commercial/license-worker/test/email-portal-link.test.ts',
     why:
@@ -476,6 +510,10 @@ const NOT_A_SURFACE = [
       'values from the other runtime.',
   },
   { path: 'core/emailtemplate/emailtemplate_test.go', why: 'asserts the derived values' },
+  {
+    path: 'commercial/license-worker/test/h03-refund-portal-d1.test.ts',
+    why: 'The refunded-buyer portal journey (H-03, r116-commerce-prod-readiness) replaces globalThis.fetch with a stub that records the Resend call and throws on any other outbound host; it defines no email layout and cannot deliver mail. Same class as its two sibling journeys above. Declared here on 2026-09-17 when the M3 train exposed it as an undeclared candidate (control-plane step 31).',
+  },
 ]
 
 // Se rechaza al ARRANCAR, antes de mirar un solo fichero: un gate que no puede confiar en su

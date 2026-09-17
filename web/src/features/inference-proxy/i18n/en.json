@@ -92,5 +92,25 @@
     "denied": "Denied device code {{code}}",
     "notFound": "No pending request for that user code.",
     "expired": "That request has expired or was already used."
+  },
+  "firewall": {
+    "title": "Messages inspector",
+    "intro": "Whether this control-plane process started with the content inspector attached to the Messages proxy.",
+    "refresh": "Check again",
+    "limit": "This is what the responding process recorded when it started. It does not report whether the proxy is reachable now, which policy is loaded, or whether any individual request was inspected.",
+    "states": {
+      "unobserved": "Not reported",
+      "pep_not_composed": "Proxy not started",
+      "inspector_absent": "Inspector not attached",
+      "inspector_attached": "Inspector attached",
+      "unreadable": "Could not be read"
+    },
+    "statesHint": {
+      "unobserved": "This process did not record an attachment state. Nothing is claimed either way.",
+      "pep_not_composed": "The Messages proxy was not started in this process, so no inspector could attach to it.",
+      "inspector_absent": "The proxy started without a content inspector attached.",
+      "inspector_attached": "An inspector was attached at startup. It may be the restrictive fallback that is installed when the configuration cannot be read, so this does not mean content is being inspected as configured.",
+      "unreadable": "The answer did not match a state this console recognizes. Nothing is claimed about the inspector."
+    }
   }
 }

@@ -354,13 +354,35 @@
     "mtd": "本月"
   },
   "rates": {
-    "title": "Model rate catalogue",
-    "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
-    "unit": "micro-USD per 1M tokens (integer)",
-    "empty": "No rates in the catalogue",
-    "inOut": "in {{in}} · out {{out}}",
-    "until": "until {{at}}",
-    "current": "current",
+    "title": "模型费率目录",
+    "description": "当提供商未报告金额时，用于“估算”成本的标价。这不是实际计费金额。",
+    "unit": "每 100 万 token 的微美元（整数）",
+    "unitNote": "输入和输出费率的单位为{{unit}}。",
+    "validityNote": "日期显示每个条目声明的有效期。此列表不显示某笔费用使用了哪个条目。",
+    "empty": "目录中没有费率",
+    "emptyHint": "此组织未记录任何标价。",
+    "model": "模型",
+    "provider": "提供商",
+    "inputRate": "输入费率",
+    "outputRate": "输出费率",
+    "effectiveFrom": "生效时间",
+    "effectiveUntil": "失效时间",
+    "noEndDate": "无结束日期",
+    "invalid": {
+      "title": "费率目录不可用",
+      "description": "无法将响应读取为费率目录，因此未显示任何费率。重试只会重复同一次读取，不会更改任何内容。",
+      "reason": {
+        "envelope": "响应中没有可读取的费率条目列表。",
+        "entry": "第 {{n}} 个条目不是费率记录。",
+        "missing": "第 {{n}} 个条目缺少 {{field}}。",
+        "empty": "第 {{n}} 个条目的 {{field}} 为空。",
+        "type": "第 {{n}} 个条目的 {{field}} 类型不正确。",
+        "negative": "第 {{n}} 个条目的 {{field}} 为负数。",
+        "notInteger": "第 {{n}} 个条目的 {{field}} 不是整数。",
+        "unsafe": "第 {{n}} 个条目的 {{field}} 过大，无法精确显示。",
+        "timestamp": "第 {{n}} 个条目的 {{field}} 不是 RFC 3339 时间戳。"
+      }
+    },
     "truncated": "已加载 {{n}} 条费率；还有更多",
     "truncatedHint": "模型费率多于所显示的；本页按生效日期倒序排列。此处没有并不代表目录中没有：成本核算与对比会独立于本页从目录中解析当时有效的费率。"
   },
@@ -453,5 +475,21 @@
     "riskDescription": "消耗支出却没有达成成果的对象。",
     "riskEmpty": "没有对象在消耗支出却无成果",
     "satisfiedOf": "{{outcomes}} 项中已达成 {{satisfied}} 项"
+  },
+  "evidence": {
+    "atLeast": "至少 {{amount}}",
+    "original": "最初报告：{{amount}}",
+    "unknown": "金额未知",
+    "exact": "确切金额",
+    "lower_bound": "下限；总额尚不完整",
+    "historical": "历史数值；未经验证",
+    "unavailable": "不可用",
+    "barUnavailable": "缺少确切金额依据，无法显示用量条。",
+    "forecast": "预测（未认证）：{{amount}}",
+    "cause": "原因",
+    "reference": "警报引用",
+    "digest": "已记录证据的摘要",
+    "lookup": "查询",
+    "clear": "清除"
   }
 }

@@ -26,10 +26,54 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/core/supportbundle"
 	"github.com/olivaresai/olivares/core/updatecheck"
-	securitymodule "github.com/olivaresai/olivares/modules/security"
 )
 
 const wave2SeededSecret = "SEEDEDSECRETconsolewave2XYZ"
+
+// wave2RedactionMarker is what the support-bundle redaction double writes in place
+// of the seeded secret.
+const wave2RedactionMarker = "[redacted:wave2-seeded-secret]"
+
+// wave2TestRedact and wave2TestContainsSensitive are TEST DOUBLES for the two
+// api.Options support-bundle seams. They verify the handler contract against this
+// file's synthetic fixture only; they are not the production secret/PII catalog,
+// whose wiring cmd/olivares tests through the real composition root.
+//
+// Fixed-point property: wave2TestContainsSensitive(s) is true iff applying
+// wave2TestRedact would change s. The marker does not contain the seeded secret, so
+// redacted output is unchanged by a second redaction and passes the final guard.
+func wave2TestRedact(s string) (string, int) {
+	return strings.ReplaceAll(s, wave2SeededSecret, wave2RedactionMarker), strings.Count(s, wave2SeededSecret)
+}
+
+func wave2TestContainsSensitive(s string) bool {
+	redacted, _ := wave2TestRedact(s)
+	return redacted != s
+}
+
+// assertWave2RedactionFixedPoint checks the doubles' fixed-point property on inputs
+// shaped like the fixtures before a test relies on them.
+func assertWave2RedactionFixedPoint(t *testing.T) {
+	t.Helper()
+	for _, in := range []string{
+		"",
+		"no fixture here",
+		`{"message":"upstream failed token=[REDACTED:key-value-secret]"}`,
+		`{"attrs":{"password":"` + wave2SeededSecret + `"}}`,
+		wave2SeededSecret + wave2SeededSecret,
+	} {
+		redacted, count := wave2TestRedact(in)
+		if got, want := wave2TestContainsSensitive(in), redacted != in; got != want {
+			t.Fatalf("detector(%q) = %v, want %v (whether redaction changes the input)", in, got, want)
+		}
+		if (count > 0) != (redacted != in) {
+			t.Fatalf("redaction count %d disagrees with the change made to %q", count, in)
+		}
+		if again, _ := wave2TestRedact(redacted); again != redacted || wave2TestContainsSensitive(redacted) {
+			t.Fatalf("redacted output %q is not a fixed point", redacted)
+		}
+	}
+}
 
 func TestEffectiveConfigHTTPRedactsSecretsAndReportsViolations(t *testing.T) {
 	h := newHarnessOpts(t, func(o *api.Options) {
@@ -140,6 +184,7 @@ func TestUpdateCheckNowUnconfiguredAndFreshStatus(t *testing.T) {
 }
 
 func TestConsoleSupportBundleAAL3RedactionIntegrityAndAudit(t *testing.T) {
+	assertWave2RedactionFixedPoint(t)
 	broker := api.NewLogBroker(slog.NewTextHandler(io.Discard, nil), 16, nil)
 	slog.New(broker).Error(
 		"upstream failed token="+wave2SeededSecret,
@@ -154,8 +199,8 @@ func TestConsoleSupportBundleAAL3RedactionIntegrityAndAudit(t *testing.T) {
 				Redacted: true, Source: "env",
 			}}
 		}
-		o.SupportBundleRedact = securitymodule.RedactText
-		o.SupportBundleContainsSensitive = securitymodule.ContainsSecretOrPII
+		o.SupportBundleRedact = wave2TestRedact
+		o.SupportBundleContainsSensitive = wave2TestContainsSensitive
 	})
 	admin := h.adminLogin()
 
@@ -188,8 +233,8 @@ func TestConsoleSupportBundleAAL3RedactionIntegrityAndAudit(t *testing.T) {
 	if got := string(entries["config/effective.txt"]); !strings.Contains(got, "OLIVARES_CLAUDE_INFERENCE_KEY=<redacted>") {
 		t.Errorf("effective config section = %q", got)
 	}
-	if got := string(entries["logs/engine.log"]); !strings.Contains(got, "[redacted") {
-		t.Errorf("log section lacks canonical redaction: %q", got)
+	if got := string(entries["logs/engine.log"]); !strings.Contains(got, wave2RedactionMarker) {
+		t.Errorf("log section lacks the injected redaction: %q", got)
 	}
 	if got := string(entries["manifests/schema.json"]); !strings.Contains(got, "unavailable in the API layer") {
 		t.Errorf("schema skip note = %q", got)
@@ -250,9 +295,10 @@ func TestConsoleSupportBundleAAL3RedactionIntegrityAndAudit(t *testing.T) {
 }
 
 func TestConsoleSupportBundleWithoutLogBrokerCarriesSkipNote(t *testing.T) {
+	assertWave2RedactionFixedPoint(t)
 	h := newHarnessOpts(t, func(o *api.Options) {
-		o.SupportBundleRedact = securitymodule.RedactText
-		o.SupportBundleContainsSensitive = securitymodule.ContainsSecretOrPII
+		o.SupportBundleRedact = wave2TestRedact
+		o.SupportBundleContainsSensitive = wave2TestContainsSensitive
 	})
 	admin := h.adminLogin()
 	h.elevate(admin)

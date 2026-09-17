@@ -12,7 +12,7 @@
 // Cryptographic Algorithm, Cryptographic Length, State, Name). It NEVER issues Get
 // (which returns key material), Create, Register, Destroy, Revoke or any mutating
 // operation — those op codes are not even compiled in. The minimal-data rule
-// (docs/SECURITY-HARDENING.md-3) holds by construction: GetAttributes returns metadata, not the key.
+// (docs/SECURITY-HARDENING.md §2-3) holds by construction: GetAttributes returns metadata, not the key.
 //
 // What it produces:
 //   - Snapshot (inventory): the KMIP server as a secret_store NHI

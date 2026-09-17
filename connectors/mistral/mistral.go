@@ -43,7 +43,7 @@
 // inventory, and spend/rate limit posture. When only manage_inventory is on (no admin
 // key): the UNVERIFIED-OFFLINE workspace/key inventory + key-rotation posture.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared
 // GET-only modelprovider client (Bearer auth), so the connector CANNOT mutate Mistral;
 // it carries token COUNTS, money and inventory METADATA — never prompts, completions or
 // key values. It imports only the SDK and the Apache modelprovider contract, never the

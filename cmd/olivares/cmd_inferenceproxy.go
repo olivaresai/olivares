@@ -16,12 +16,13 @@ import (
 )
 
 // newInferenceProxyCmd wires the `inferenceproxy` module
-// (modules/inferenceproxy/inferenceproxy.go:135-140) to the CLI: the gateway
+// (modules/inferenceproxy/inferenceproxy.go APIRoutes) to the CLI: the gateway
 // that sits in front of the models `olivares models` governs.
 //
-// It is six routes, and every one of them is a governance surface: the gate
-// configuration that decides what the proxy enforces, the DLP rules it enforces
-// on egress, and the approval of a device grant.
+// It is seven routes. Six are governance surfaces: the gate configuration that
+// decides what the proxy enforces, the DLP rules it enforces on egress, and the
+// approval of a device grant. One reads the startup content-inspector attachment
+// of the Messages proxy.
 func newInferenceProxyCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
@@ -41,9 +42,40 @@ func newInferenceProxyCmd() *cobra.Command {
 	c := modelstackClient{flags: flags, base: inferenceProxyAPIBase, family: "inference-proxy"}
 	cmd.AddCommand(
 		newInferenceProxyConfigCmd(c),
+		newInferenceProxyFirewallCmd(c),
 		newInferenceProxyDLPCmd(c),
 		newInferenceProxyDeviceCmd(c),
 	)
+	return cmd
+}
+
+func newInferenceProxyFirewallCmd(c modelstackClient) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "firewall",
+		Short: "Read the Messages proxy's startup content-inspector attachment",
+		Long: "Read which content inspector this engine process attached to the inline Messages\n" +
+			"proxy at startup. The state describes composition only: it does not report whether\n" +
+			"the proxy listener is serving, whether a tenant policy loaded, or whether any request\n" +
+			"was inspected.",
+		Example: `  olivares inference-proxy firewall status`,
+		Args:    cobra.NoArgs,
+	}
+	cmd.AddCommand(newModelstackGetCmd(c, modelstackGetSpec{
+		Use:   "status",
+		Short: "Show the Messages proxy's startup content-inspector attachment state",
+		Long: "Show one startup state for the inline Messages proxy in this engine process:\n\n" +
+			"  unobserved          no attachment was recorded in this process\n" +
+			"  pep_not_composed    the Messages proxy was not built\n" +
+			"  inspector_absent    the Messages proxy was built without a content inspector\n" +
+			"  inspector_attached  the Messages proxy was built with a content inspector\n\n" +
+			"An attached inspector can be the deny-all fallback that an unreadable or invalid\n" +
+			"firewall configuration installs, so inspector_attached is not evidence of a working\n" +
+			"policy. No state reports listener health, policy load or per-request inspection.\n\n" +
+			"An engine without this route answers 404, which exits 4.",
+		Example: `  olivares inference-proxy firewall status
+  olivares inference-proxy firewall status -o json`,
+		Target: modelstackTarget{Collection: "/content-firewall"},
+	}))
 	return cmd
 }
 

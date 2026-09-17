@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The session-cockpit literals a community artifact may contain. NINE today; the
+# count is not the contract, the LIST is — see the block below for what moved it.
+# Contract: docs/contracts/COCKPIT-07-edition-cut.md §7 (design v3 §16.1.5).
+#
+# ⛔ WHY AN ALLOWLIST AND NOT A DENYLIST, which is the shape everyone reaches for
+# first. The community build MUST contain cockpit strings: it registers a
+# placeholder module that mounts one route and answers 501, so "no cockpit string
+# may appear" is false by construction — and a gate whose premise is false is a
+# gate somebody switches off. Finding 52 measured exactly that contradiction in an
+# earlier draft: the build had to contain them and the gate did not say which.
+#
+# A denylist of names is also defeated by a rename. This file enumerates what MAY
+# be present, so anything else is a finding by default: any full private route
+# under /v1/m/session-cockpit, any name from the agent proto, xterm, a provider
+# mark or a private web chunk.
+#
+# ⚠ ITS REACH, said plainly, because `strings` does not prove linkage — the
+# overlay's own scripts/test-addon-set-cut.sh says so. This file covers the TEXT
+# of the community artifact. The cut itself is measured by absence-by-package-path
+# (test-addon-set-cut.sh) and per-SKU (check-wireproof.sh). Three instruments, one
+# property; none of them alone.
+#
+# ⛔ IT IS NINE AND NOT THE FIVE THE DESIGN NAMED, and the three extra are recorded
+# here with what forced them rather than folded in quietly. v3 §16.1.5 wrote five —
+# namespace, route, permission, error code, message — before the placeholder had an
+# sdk.Descriptor. It has one because `scripts/check-schema-parity.sh` REFUSED the build
+# without it ("module \"session-cockpit\" does not satisfy sdk.Module"): the schema
+# manifest both editions are compared through is built from each registered module's
+# Descriptor. A Descriptor carries a Name, a Title and a Description, and all three are
+# product-visible strings OF THE AGPL PLACEHOLDER — exactly the class this file lists.
+#
+# This is the file working as designed, not an erosion of it: a new literal is added
+# WITH ITS REASON, which is what the gate's own repair message instructs. The contract
+# records the same in docs/contracts/COCKPIT-07-edition-cut.md §7.
+#
+# ⛔ AND THE NINTH IS NOT THE PLACEHOLDER'S AT ALL, which is why it gets its own note.
+# `session-cockpit:transcript:read` is a key of core/auth's privilegedReadPerms — the
+# explicit list that keeps a `:read` permission from falling through the module verb tier
+# to every viewer. That list lives in core and therefore compiles into EVERY build,
+# community included, where it is inert: no route in that artifact declares the
+# permission.
+#
+# It is listed rather than removed because removing it is the dangerous direction. The
+# entry exists precisely so that the day a build DOES carry the route, a viewer does not
+# already hold it; an entry present only in the commercial build would restore the
+# fall-through in exactly the artifact that matters. A permission NAME in a map is not a
+# capability, and the cut is about bytes of capability.
+#
+# ⛔ 2026-09-02: LA LISTA SE ENCOGE, y encoger es la direccion que hay que explicar.
+# Salen `availability` (el patron de ruta), `session_cockpit_unavailable` (UnavailableCode)
+# y «session cockpit is not included in this artifact» (UnavailableMessage) porque la ruta
+# `GET /availability` FUE RETIRADA del placeholder y esos tres literales existian solo para
+# ella. Motivo de la retirada: `lint:public-counts` exige que las rutas registradas por un
+# modulo IGUALEN las operaciones de `web/openapi/openapi.beta.json` —sin exencion, por
+# diseño— y ese documento es el PUBLICO: publicar ahi una operacion del cockpit meteria
+# nombres de producto en el arbol publico, que es justo lo que este fichero existe para
+# impedir. Ademas la v4 cierra el corte por AUSENCIA (sin add-on no hay handler, el router
+# da 404), asi que un 501 desde un placeholder AGPL no tiene futuro.
+#
+# Y hay una razon MECANICA para sacarlos, no solo de higiene: al morir el manejador nada
+# referencia ya esas constantes, y una constante sin referencias no tiene garantizado
+# llegar al binario. Este fichero exige que CADA literal listado APAREZCA; un literal
+# requerido que el artefacto no lleva pone el gate rojo igual que uno de mas.
+#
+# Format: one literal per line. Blank lines and #-comments ignored. The order is the
+# reading order of the placeholder: namespace, permission, and the three the Descriptor
+# adds, and last the core role-tier key.
+
+session-cockpit
+session-cockpit:availability:read
+olivares.session-cockpit
+Session cockpit (availability)
+Availability descriptor for the session cockpit. This artifact does not include the cockpit itself, and serves no route for it: a build without the add-on has no handler, so the router answers 404 by absence.
+session-cockpit:transcript:read

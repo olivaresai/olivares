@@ -153,6 +153,8 @@ func (allowAllBudget) Check(_ context.Context, _ model.TenantID, _ BudgetDims) (
 
 // SampleQuery bounds a monitor sample: an optional subject filter and a row cap.
 type SampleQuery struct {
+	// LiveRef selects one scoped observation; SessionRef remains a legacy subject.
+	LiveRef string
 	// SubjectKind/SubjectRef optionally narrow the sample (agent/model ref).
 	SubjectKind string
 	SubjectRef  string
@@ -165,16 +167,20 @@ type SampleQuery struct {
 // cost — NEVER the session's raw output text, which the platform never persists
 // (docs/SECURITY-HARDENING.md, contract §2.3).
 type SessionSample struct {
-	SessionRef   string
-	AgentRef     string
-	ModelRef     string
-	State        string
-	MaxSeverity  string
-	Findings     int
-	InputTokens  int64
-	OutputTokens int64
-	CostMicroUSD int64
-	OccurredAt   time.Time
+	LiveRef             string
+	Attribution         string
+	ProfileRef          string
+	FindingsUnavailable bool
+	SessionRef          string
+	AgentRef            string
+	ModelRef            string
+	State               string
+	MaxSeverity         string
+	Findings            int
+	InputTokens         int64
+	OutputTokens        int64
+	CostMicroUSD        int64
+	OccurredAt          time.Time
 }
 
 // SessionSource samples real sessions for the monitor. The default reads core

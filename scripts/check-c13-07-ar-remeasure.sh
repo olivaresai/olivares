@@ -39,9 +39,11 @@ command -v python3 >/dev/null || cannot "python3 is missing"
 command -v git >/dev/null || cannot "git is missing; cannot derive the remasure baseline"
 git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
 	|| cannot "$ROOT is not a Git worktree"
+# Report git's observed exit status; do not infer OOM or a signal from it.
+_ar_rc=0
 DERIVED_HUB="$(git -C "$ROOT" log --follow --diff-filter=A --format=%P -- \
-	design/c13-07-ar-holds-remeasure-2026-08-21.json)" \
-	|| cannot "cannot derive the introducing commit parent"
+	design/c13-07-ar-holds-remeasure-2026-08-21.json)" || _ar_rc=$?
+[ "$_ar_rc" -eq 0 ] || cannot "cannot derive the introducing commit parent: git exited $_ar_rc"
 [[ "$DERIVED_HUB" =~ ^[0-9a-f]{40}$ ]] \
 	|| cannot "derived baseline is not exactly one commit identity"
 

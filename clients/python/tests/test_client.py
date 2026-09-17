@@ -17,7 +17,47 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from olivares_client import APIError, API_VERSION, Client, DeprecationNotice  # noqa: E402
+import olivares_client  # noqa: E402
+from olivares_client import _operations  # noqa: E402
+from olivares_client import (  # noqa: E402
+    APIError,
+    API_VERSION,
+    AuthCapabilityQuestion,
+    AuthCapabilityQuestions,
+    AuthCapabilityResult,
+    AuthCapabilityResults,
+    AuthCapabilitySelectors,
+    Client,
+    DeprecationNotice,
+    SessionsCommunicationChannelCreateBody,
+    SessionsCommunicationHandoffOfferBody,
+    SessionsCommunicationMessageSendBody,
+    SessionsCommunicationPublishResult,
+)
+
+
+# STATEMENT_EXPORT_CSV is a faithful answer from
+# GET /v1/m/finops/statements/{id}/export: the handler's nine columns and one line.
+# 9007199254740993 is 2**53+1 — the oracle, not filler. A consumer that routed this
+# value through a JSON number and an IEEE double would return 9007199254740992.
+STATEMENT_EXPORT_CSV = (
+    "cost_center_code,cost_center_name,model,provider,agent,"
+    "input_tokens,output_tokens,cost_micro_usd,sample_count\n"
+    "ENG-01,Engineering,claude-opus-5,anthropic,,100,50,9007199254740993,1\n"
+)
+
+
+CAPABILITY_RESULTS_SCHEMA_2 = {
+    "schema_version": 2,
+    "results": [
+        {"id": "sheet", "kind": "operation", "state": "allowed", "code": "authorized",
+         "observed_at": "2026-09-07T10:00:00.250Z", "refresh_after_ms": 30000},
+        {"id": "held", "kind": "operation", "state": "undisclosed",
+         "code": "not_disclosed", "observed_at": "2026-09-07T10:00:00Z"},
+        {"id": "list", "kind": "surface", "state": "reachable", "code": "admitted",
+         "observed_at": "2026-09-07T10:00:00.100Z", "refresh_after_ms": 12000},
+    ],
+}
 
 
 class FakeControlPlane(BaseHTTPRequestHandler):
@@ -82,8 +122,22 @@ class FakeControlPlane(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif url.path.startswith("/v1/m/finops/statements/") and url.path.endswith("/export"):
+            # The chargeback statement export: always CSV on 200, never negotiated.
+            body = STATEMENT_EXPORT_CSV.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="chargeback_ENG-01_2026-06-01.csv"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif url.path == "/raw-request":
             self._json(200, {})
+        elif url.path == "/v1/auth/capabilities" and self.command == "POST":
+            # Schema 2 (docs/contracts/CAPABILITY-PROJECTION.md): one positive with its
+            # budget, one concealed non-verdict without one, one surface admission.
+            self._json(200, CAPABILITY_RESULTS_SCHEMA_2, headers=[("Cache-Control", "no-store")])
         elif url.path == "/v1/memberships" and self.command == "POST":
             self._json(400, {"error": {"code": "bad_request", "message": "nope"}})
         elif url.path == "/v1/users":
@@ -101,6 +155,42 @@ class FakeControlPlane(BaseHTTPRequestHandler):
 
 
 class ClientSmokeTest(unittest.TestCase):
+    def test_typed_communication_required_keys_match_published_contract(self):
+        self.assertEqual(
+            SessionsCommunicationChannelCreateBody.__required_keys__,
+            frozenset({"workspace_id", "slug", "name", "initial_grants"}),
+        )
+        self.assertEqual(
+            SessionsCommunicationMessageSendBody.__required_keys__,
+            frozenset({"channel_id", "recipient", "content"}),
+        )
+        self.assertEqual(
+            SessionsCommunicationHandoffOfferBody.__required_keys__,
+            frozenset({
+                "channel_id", "work_item_id", "recipient", "handoff",
+                "ack_deadline",
+            }),
+        )
+        self.assertTrue({
+            "delivery_count", "required_count", "ack_quorum",
+            "audience_hash", "payload_digest",
+        }.issubset(SessionsCommunicationPublishResult.__required_keys__))
+
+    def test_typed_communication_request_is_public(self):
+        body: SessionsCommunicationMessageSendBody = {
+            "channel_id": "00000000-0000-4000-8000-000000000001",
+            "recipient": {
+                "kind": "user",
+                "ref": "00000000-0000-4000-8000-000000000002",
+            },
+            "content": {
+                "subject": "scheduled",
+                "blocks": [{"type": "text", "text": "hello"}],
+            },
+            "available_at": "2026-09-06T03:00:00Z",
+        }
+        self.assertEqual(body["available_at"], "2026-09-06T03:00:00Z")
+
     @classmethod
     def setUpClass(cls):
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), FakeControlPlane)
@@ -206,6 +296,27 @@ class ClientSmokeTest(unittest.TestCase):
         _, _, headers = FakeControlPlane.requests[0]
         self.assertNotEqual(headers.get("Accept"), "application/json")
 
+    def test_statement_export_operation_consumes_csv(self):
+        """The GENERATED operation reads a CSV 200 as bytes.
+
+        While the document declared this 200 an application/json object, the emitted
+        method called ``self._do`` and ``_core`` demanded a JSON object, so this exact
+        response raised APIError(bad_response) — a valid 200 no generated Python client
+        could read. The assertion is on the operation, not on ``_do_raw``: the transport
+        seam was always right and would have stayed green through the whole defect.
+        """
+        out = self.client.get_v1_m_finops_statements_by_id_export(
+            "01a084d5-988c-7e46-b396-5cff04bf2793")
+        self.assertIsInstance(out, bytes)
+        self.assertEqual(out, STATEMENT_EXPORT_CSV.encode("utf-8"))
+        self.assertIn(b"9007199254740993", out)
+        method, path, headers = FakeControlPlane.requests[-1]
+        self.assertEqual(method, "GET")
+        self.assertEqual(
+            path, "/v1/m/finops/statements/01a084d5-988c-7e46-b396-5cff04bf2793/export")
+        # A CSV-only route must not demand JSON: the server does not negotiate.
+        self.assertNotEqual(headers.get("Accept"), "application/json")
+
     def test_raw_request_preserves_declared_content_type(self):
         self.client._do(
             "POST", "/raw-request", "/raw-request", body=b"{}\n",
@@ -268,6 +379,59 @@ class ClientSmokeTest(unittest.TestCase):
         self.assertEqual(len(notices), 1)
         self.assertEqual(notices[0].path, "/v1/tokens/tok_001")
 
+    def test_capability_projection_schema_2_round_trip(self):
+        # The generated DTOs are the only types used here; they are imported from the
+        # package root, and the request they build is the schema 2 wire contract.
+        workspace = "00000000-0000-4000-8000-000000000010"
+        questions: AuthCapabilityQuestions = {
+            "schema_version": 2,
+            "questions": [
+                AuthCapabilityQuestion(
+                    id="sheet", kind="operation",
+                    operation="GET /v1/m/sessions/channels/{id}/grants",
+                    workspace_id=workspace,
+                    selectors=AuthCapabilitySelectors(
+                        path={"id": "00000000-0000-4000-8000-000000000001"}),
+                ),
+                {"id": "held", "kind": "operation",
+                 "operation": "PATCH /v1/m/sessions/channels",
+                 "workspace_id": workspace,
+                 "selectors": {"body": {"channel_id": "00000000-0000-4000-8000-000000000002"}}},
+                {"id": "list", "kind": "surface",
+                 "operation": "GET /v1/m/sessions/channels", "workspace_id": workspace},
+            ],
+        }
+        out: AuthCapabilityResults = self.client.post_v1_auth_capabilities(questions)
+
+        method, path, headers = FakeControlPlane.requests[0]
+        self.assertEqual((method, path), ("POST", "/v1/auth/capabilities"))
+        self.assertEqual(headers["Content-Type"], "application/json")
+        wire = json.loads(FakeControlPlane.request_bodies[0])
+        self.assertEqual(wire["schema_version"], 2)
+        self.assertEqual(
+            [q["id"] for q in wire["questions"]], ["sheet", "held", "list"])
+        self.assertEqual(
+            wire["questions"][0]["selectors"],
+            {"path": {"id": "00000000-0000-4000-8000-000000000001"}})
+        self.assertNotIn("selectors", wire["questions"][2])
+        self.assertEqual(wire["questions"][1]["workspace_id"], workspace)
+
+        self.assertEqual(out["schema_version"], 2)
+        self.assertEqual(
+            [(r["id"], r["state"], r["code"]) for r in out["results"]],
+            [("sheet", "allowed", "authorized"),
+             ("held", "undisclosed", "not_disclosed"),
+             ("list", "reachable", "admitted")])
+        positive: AuthCapabilityResult = out["results"][0]
+        concealed: AuthCapabilityResult = out["results"][1]
+        self.assertEqual(positive["refresh_after_ms"], 30000)
+        self.assertEqual(positive["observed_at"], "2026-09-07T10:00:00.250Z")
+        # The non-verdict carries no budget at all: absent, not zero.
+        self.assertNotIn("refresh_after_ms", concealed)
+        self.assertEqual(concealed["observed_at"], "2026-09-07T10:00:00Z")
+        # Re-serializing the typed result reproduces the wire exactly.
+        self.assertEqual(json.loads(json.dumps(out)), CAPABILITY_RESULTS_SCHEMA_2)
+
     def test_retry_after_unicode_digit_does_not_raise(self):
         import io
         from email.message import Message
@@ -282,6 +446,86 @@ class ClientSmokeTest(unittest.TestCase):
                 HTTPError("http://x/", 429, "rl", headers, io.BytesIO(b""))
             )
             self.assertEqual(err._retry_after, 0.0)
+
+
+class PublicTypedSurface(unittest.TestCase):
+    """Every generated typed DTO must be importable the way this package documents.
+
+    The generated module is private, so a DTO that ``__init__`` does not re-export
+    cannot be named by a consumer at all. These checks ask the generated module which
+    typed DTOs it emitted and require each one to be public, so the two cannot drift.
+    """
+
+    @staticmethod
+    def _generated_dtos():
+        # A generated DTO is a public TypedDict in the generated module. The functional
+        # and split-totality helpers the emitter writes are underscore-prefixed and are
+        # deliberately not part of the public surface.
+        return {
+            name: value
+            for name, value in vars(_operations).items()
+            if not name.startswith("_")
+            and isinstance(value, type)
+            and hasattr(value, "__required_keys__")
+        }
+
+    def test_every_generated_dto_is_publicly_importable(self):
+        generated = self._generated_dtos()
+        self.assertGreater(len(generated), 25, "the generated DTO census looks empty")
+        unexported = sorted(n for n in generated if not hasattr(olivares_client, n))
+        self.assertEqual(
+            [], unexported, f"generated but not exported from olivares_client: {unexported}"
+        )
+        for name, value in sorted(generated.items()):
+            with self.subTest(dto=name):
+                self.assertIn(name, olivares_client.__all__, f"{name} missing from __all__")
+                # Identity, not just presence: the public name must BE the generated
+                # type, so an accidental shadowing copy cannot satisfy the export.
+                self.assertIs(getattr(olivares_client, name), value)
+
+    def test_wildcard_import_exposes_every_generated_dto(self):
+        # ``__all__`` is what ``from olivares_client import *`` honours, so the census
+        # above is repeated through the wildcard itself rather than trusted to the list.
+        namespace: dict[str, object] = {}
+        exec("from olivares_client import *", namespace)  # noqa:
+        generated = self._generated_dtos()
+        missing = sorted(n for n in generated if n not in namespace)
+        self.assertEqual([], missing, f"absent from a wildcard import: {missing}")
+        for name, value in generated.items():
+            with self.subTest(dto=name):
+                self.assertIs(namespace[name], value)
+
+    def test_both_typed_families_are_represented(self):
+        # Keeps the census from passing vacuously: if a family stopped being generated,
+        # "every generated DTO is exported" would be trivially true.
+        generated = self._generated_dtos()
+        for prefix in ("SessionsCommunication", "AuthCapability"):
+            with self.subTest(family=prefix):
+                self.assertTrue(
+                    any(name.startswith(prefix) for name in generated),
+                    f"no generated DTO of the {prefix} family",
+                )
+
+    def test_capability_dtos_carry_their_published_fields(self):
+        # An export that lost its shape would still satisfy the census above, so the
+        # published fields of one family are asserted directly.
+        self.assertEqual(
+            {"schema_version", "questions"},
+            set(olivares_client.AuthCapabilityQuestions.__required_keys__),
+        )
+        self.assertEqual(
+            {"schema_version", "results"},
+            set(olivares_client.AuthCapabilityResults.__required_keys__),
+        )
+        self.assertTrue(
+            {"id", "kind", "state", "code", "observed_at"}.issubset(
+                olivares_client.AuthCapabilityResult.__required_keys__
+            )
+        )
+        self.assertEqual(
+            {"path", "body"},
+            set(olivares_client.AuthCapabilitySelectors.__optional_keys__),
+        )
 
 
 if __name__ == "__main__":

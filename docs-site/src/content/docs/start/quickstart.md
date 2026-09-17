@@ -227,7 +227,7 @@ precisely because it pre-binds its agents.
 
 :::note[The endpoint shape]
 The Permitted-vs-Observed result is served at `/v1/m/accessmap/drift` (there is no
-`/diff`). The `/v1/m/accessmap/*` routes are not in the 53-path stable core contract;
+`/diff`). The `/v1/m/accessmap/*` routes are not in the 54-path stable core contract;
 they are published as a separate **beta** document — the
 [module-route reference](/reference/api-beta/). The [API reference](/reference/api/)
 documents the stable core surface.

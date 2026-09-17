@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,8 +29,15 @@ import (
 // operator who wires an external PDP accepts that it must be reachable (the embedded
 // Cedar engine is the always-available alternative).
 
-// maxOPABody caps the OPA response body.
+// maxOPABody caps the OPA response body. A complete body of exactly this size
+// remains valid; the evaluator reads one extra byte to prove the response ended.
 const maxOPABody = 1 << 20
+
+// Fixed OPA body errors. They do not wrap the reader error or the payload.
+var (
+	errOPABodyRead     = errors.New("governance: opa response body read failed")
+	errOPABodyTooLarge = errors.New("governance: opa response body too large")
+)
 
 // httpDoer is the minimal HTTP interface (satisfied by *http.Client).
 type httpDoer interface {
@@ -132,7 +140,13 @@ func (o *OPAEvaluator) Evaluate(ctx context.Context, req auth.Request) (auth.Dec
 		return auth.Decision{}, fmt.Errorf("governance: opa request: %w", err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxOPABody))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxOPABody+1))
+	if err != nil {
+		return auth.Decision{}, errOPABodyRead
+	}
+	if len(raw) > maxOPABody {
+		return auth.Decision{}, errOPABodyTooLarge
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return auth.Decision{}, fmt.Errorf("governance: opa http %d", resp.StatusCode)
 	}

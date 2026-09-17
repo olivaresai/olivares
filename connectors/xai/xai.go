@@ -33,7 +33,7 @@
 // endpoints (billed invoices), which is the authoritative money figure anyway, and
 // per-request token cost is metered around the inference path by the gateway/PEP, not here.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared GET-only
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared GET-only
 // modelprovider client (Bearer auth), so the connector CANNOT mutate xAI (creating /
 // rotating / deleting keys and setting limits are MUTATIONS, out of scope, HITL-gated); it
 // carries money, key/ACL inventory METADATA and the masked key hint — never prompts,

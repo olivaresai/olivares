@@ -4,102 +4,104 @@
 
 **言語:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · [Русский](./README.ru.md) · **日本語** · [Deutsch](./README.de.md) · [Français](./README.fr.md)
 
-**あなたが運用する AI を統合・管理・セキュアにする — 単一のセルフホスト型バイナリから。**
+**すでに使っている AI を実行し、統治する — 自分のインフラ上で、ひとつのグラウンドトゥルースとともに。**
 
-[インストール](#install) · [クイックスタート](#quickstart) · [サンプル](examples/) · [ドキュメント](#documentation) · [セキュリティ](#security) · [コントリビュート](CONTRIBUTING.md) · [olivares.ai](https://olivares.ai)
+[Olivares AI とは](#olivares-ai-とは) · [できること](#できること) · [インストール](#インストール) · [クイックスタート](#クイックスタート) · [コンソール](#コンソールの内部) · [エディション](#エディションと価格) · [ドキュメント](#ドキュメント) · [セキュリティ](#セキュリティ) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
+[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **ベータ版**、活発に開発中です。最初のタグ付きリリース **v26.8.0** は、署名済みアーカイブ、ネイティブパッケージ、コンテナイメージを提供します。API とモジュールサーフェスは 1.0 までに変更される可能性があります。今日動作するもの、オンデマンドのもの、設計段階のものは、[誠実さと限界](docs-site/src/content/docs/start/honesty-and-limits.md)に、また各モジュールについては[モジュールカタログ](docs-site/src/content/docs/reference/modules/overview.md)に記載されています。
+> **ベータ版**、活発に開発中です。**v26.9.0** は、署名済みアーカイブ、ネイティブパッケージ、コンテナイメージを提供します。今日動作するもの、オンデマンドのもの、設計段階のものは、[誠実さと限界](docs-site/src/content/docs/start/honesty-and-limits.md)に記載されています。
 
 ## Olivares AI とは
 
-現在運用しているのは estate です — コーディングエージェント、MCP サーバー、モデルエンドポイント、サービスアカウント、スケジュール済みジョブが、ひとつのシステムとして設計されていない複数のマシンに分散しています。Olivares AI は、それらをまとめる、コンソール内蔵の単一のセルフホスト型 Go バイナリです。AI には作業に必要なもの（コンテキスト、リソースへのアクセス、管理されたセッション）を与え、あなたには、何が稼働し、誰が起動し、何に到達し、いくらかかり、誰が同意したのかを把握するための権限、ポリシー、予算、証拠を与えます。
+今日の AI estate は、コーディングエージェント、MCP サーバー、モデルエンドポイント、サービスアカウント、スケジュールジョブであり、ひとつのシステムになったことのないマシンに散在しています。何が動いているか、誰が起動したか、何に到達したか、いくらかかったか、誰が同意したかを、ひとつの場所から言える人はいません。
 
-**設計から multi-provider。** Claude Code は最も深いレベルで統合されています — `PreToolUse`/`PostToolUse` フック、managed settings、コンソールからの起動と停止、subject ごとの model access — その傍らに Codex と Grok Build を first-class command surface として置き、gemini-cli、Cursor、opencode、goose、cline、OpenHands、OpenClaw、Hermes はそれぞれ独自のコネクタとして扱います。各コネクタは、強制できることと観測しかできないことを明示します。Ollama とその他のセルフホスト型エンドポイントは、ローカルコネクタを通じてインベントリ化され、このコネクタは設計上読み取り専用です。
+Olivares AI は、その estate をひとつにまとめる **コンソール込みのセルフホスト型 Go バイナリひとつ** です。AI が働くために必要なもの（コンテキスト、リソースへのアクセス、管理されたセッション）を与え、運用するための権限、ポリシー、予算、証拠をあなたに与えます。セルフホスト、必須テレメトリなし、エアギャップインストールに対応。
 
-**誰が運用するか。** あらゆる規模で同じビルドを使用します。ホームサーバー（1 つのバイナリ、SQLite、ループバックへのバインド）、クライアントごとにテナントを持ち、請求書が届く前に支出を拒否する予算を設定するフリーランサー、共有の作業項目、SSO、誰も手作業で組み立てる必要のない監査証跡を持つエンジニアリングチーム、Postgres の行レベルセキュリティ、HA、エアギャップインストール、WORM アーカイブを使用する規制対象のエンタープライズです。オープンビルドはプラットフォーム全体であり、商用アドオンはその上に加わる追加コードであって、オープンビルドから削除された機能では決してありません。SSO、HA、WORM、実際に拒否する予算は、初回起動時のデフォルトではなく、自らプロビジョニングするものです。
+Claude Code は最も深いレベルで統合されています（`PreToolUse`/`PostToolUse` フック、管理設定、コンソールからの起動と停止）。公式の Codex および Grok CLI は第一級のセッションドライバーです。gemini-cli、Cursor、opencode、goose、cline、OpenHands、OpenClaw、Hermes、および Ollama のようなセルフホストエンドポイントはコネクタであり、それぞれが強制できることと観察しかできないことを明示します。AGPL ビルドが製品の全体であり、内部から機能制限されることはありません。どのプランもユーザー数を数えません。
 
-必須のテレメトリはなく、デフォルトではコントロールプレーンからのエグレスもありません。あなたの境界を越えるのは、あなたがそのように設定したものだけです — あなたのモデル API への呼び出し、接続した SIEM／Webhook 出力、用意した場合の埋め込みプロバイダーです。コレクターはすでに運用しているシステムから読み取るため、障害が発生したコレクターが本番のデータパス上に置かれることはありません。
-
-<div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/04-environments-dark.svg">
-  <img src=".github/assets/04-environments-light.svg" width="840" alt="あらゆる規模で 1 つのバイナリ。ホームサーバーから規制対象のエンタープライズまで、どこで動作し、何に到達するか。">
-</picture>
-<sub>ホームラボから規制対象企業まで、同じオープンビルド。</sub>
-</div>
-
-## 何をするか
+## できること
 
 <div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png">
-  <img src="docs-site/public/console/access-map-light.png" width="840" alt="アクセスマップ: 各エージェントが estate 全体で何を読み書きするか。左に起点、右にリソース。">
-</picture>
-<sub><b>アクセスマップ</b> — 各エージェントが estate 全体で何を読み書きするか。読み取りと書き込みを色分け。</sub>
+<img src=".github/assets/motion-access-map.gif" width="840" alt="読み書きアクセスマップのモーション図: 左にエージェント・セッション・アイデンティティ、右に到達するリソース、読み取りは青、書き込みはオレンジ、許可されたことのない観察された書き込みがドリフト所見として旗付けされる。">
+<br><sub><b>アクセスマップ</b> — 各エージェントが estate 全体で何を読み書きするか。許可対観察。</sub>
 </div>
 
-- **可視化する。** 発見されたすべてのエージェント、セッション、モデル、MCP サーバー、ツール、アイデンティティのインベントリ。それぞれが実際に到達する対象を示す read/write **アクセスマップ**と Permitted-vs-Observed **ドリフト**ビュー、ライブセッション、オーケストレーショングラフ、ヘルス、SLA。見えないものは推測せず、`unknown` として示します。
-- **作業を実行する。** 所有権、依存関係、受け入れ条件、意思決定を持つ永続的な作業項目。囲い込みリースにより、2 つのエージェント — または 2 人 — が同じ作業を同時に保持することはできません。コンソールからセッションを起動、接続、停止し、A2A を介して認可済みのピアへ委譲します。シャドウモードと最終権限は構築されておらず、不在として明記されています。[ワークプレーン](docs-site/src/content/docs/explanation/work-plane.md)を参照してください。
-- **統治して強制する。** Cedar 認可エンジンと **4 つの deny-closed エンフォースメントポイント** — Claude Code フック、インライン `/v1/messages` 推論プロキシ、MCP `tools/call` ゲート、A2A 委譲ゲート — により、未認可のアクションはブロックされるか、2 人による承認のために保留されるか、フックでは実行前に書き換えられます。各ポイントは、テストが未設定時の経路を実行し、拒否されることをアサートしている場合にのみカウントされます。支出を拒否またはスロットルする予算、二重統制を備えた緊急昇格、fail closed する estate **キルスイッチ**も提供します。
-- **統治して供給する。** コンテンツソース（SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3、Azure AI Search、SAP OData、PostgreSQL、ルート配下に制限されたファイルシステム）をガバナンス下の検索へ取り込みます。標準でゼロエグレスの字句検索を使用し、埋め込みプロバイダーをプロビジョニングした場合はモデルベースの意味検索を使用します。検索時にはクリアランスが deny-closed で強制されます。
-- **証明する。** ハッシュチェーン化され、Ed25519 で署名された監査台帳。**26 のフレームワークカタログ**（EU AI Act、NIST AI RMF、ISO 42001、SOC 2、ISO 27001、GDPR…）にマッピングされた封印済みの証拠 — フレームワークカタログは自己評価によるコントロールファミリーであり、認証ではありません。SIEM/ITSM プッシュ（CEF/LEEF/syslog/OTLP/OCSF）。以下はデプロイごとに構成されます: 人間と非人間のアイデンティティ（WebAuthn/FIDO2、PIV/CAC、単一 IdP SSO、SCIM 照合、エージェントアイデンティティフェデレーション）、インラインガードレール、DLP、BYOK/CMEK 暗号化、検証済みの鍵破棄を伴う消去権。
+- **見る。** 発見されたすべてのエージェント、セッション、モデル、MCP サーバー、ツール、アイデンティティのインベントリ。読み書き **アクセスマップ** と Permitted-vs-Observed の **ドリフト** ビュー。ライブセッション、オーケストレーショングラフ、ヘルス、SLA。見えないものは推測せず、`unknown` として示します。
+- **作業を実行する。** 所有権、依存関係、受け入れ条件、意思決定を持つ永続的な作業項目。囲い込みリースにより、2 つのエージェントが同じ作業を同時に保持することはできません。Claude Code、Codex、Grok のセッションをコンソールから起動、接続、中断、停止。A2A を介して認可済みピアへ委譲します。
+- **統治して強制する。** Cedar 認可エンジンと **4つの deny-closed エンフォースメントポイント** — Claude Code フック、インライン `/v1/messages` 推論プロキシ、MCP `tools/call` ゲート、A2A 委譲ゲート — により、未認可のアクションは実行前にブロックされるか、2 人承認のために保留されるか、書き換えられます。支出を拒否またはスロットルする予算、二重統制の break-glass、fail closed する estate **kill-switch**。
+- **統治して供給する。** コンテンツソース（SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3、Azure AI Search、SAP OData、PostgreSQL、ルートに閉じ込められたファイルシステム）をガバナンス下の検索へ。検索時にクリアランスが deny-closed で強制されます。
+- **証明する。** ハッシュチェーン化され、Ed25519 で署名された監査台帳。**26 のフレームワークカタログ**（EU AI Act、NIST AI RMF、ISO 42001、SOC 2、ISO 27001、GDPR…）にマッピングされた封印済みの証拠 — 自己評価によるコントロールファミリーであり、認証ではありません。SIEM/ITSM プッシュ（CEF/LEEF/syslog/OTLP/OCSF）。WebAuthn/FIDO2、PIV/CAC、SSO、SCIM、BYOK/CMEK、検証済みの消去権。いずれもデプロイごとに構成されます。
 
-**30 のモジュール**、1 つのコンソール、**158 の統合** — コードから導出され、プッシュのたびに [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) で強制されるカウントです。統合とは Go コードを含むコネクタディレクトリを指し、そのうち 12 は共有ライブラリパッケージです。内訳は [`connectors/README.md`](connectors/README.md) に記載されています。各モジュールの成熟度は[モジュールカタログ](docs-site/src/content/docs/reference/modules/overview.md)、配線済みコネクタの忠実度階層は[コネクタリファレンス](docs-site/src/content/docs/reference/connectors.md)に記載されています。
+**30 のモジュール**、1 つのコンソール、**158 の統合** — コードから導出され、プッシュのたびに [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) で強制されるカウントです。内訳は [`connectors/README.md`](connectors/README.md)、各モジュールの成熟度は[モジュールカタログ](docs-site/src/content/docs/reference/modules/overview.md)にあります。
 
-<div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/03-agent-communication-dark.svg">
-  <img src=".github/assets/03-agent-communication-light.svg" width="840" alt="エージェントが連携する仕組み: 作業項目、囲い込みリース、スコープ付きメッセージからなる単一の永続的なワークプレーン。委譲はエンフォースメントゲートを通ります。未構築のシャドウモードと最終権限は破線で示されます。">
-</picture>
-<sub>エージェントは 1 つの永続的なワークプレーンを共有します。未構築のものは不在として描かれます。</sub>
-</div>
-
-## コンソールの内部
-
-| | |
-|---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="コンソールから作成、接続、統制される Claude Code セッション。"></picture><br><sub><b>Claude Code</b> — コンソールからセッションを作成、接続、統制。SSH は不要。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="作業: セッションをまたぐ、作業項目と意思決定の永続的なバックログ。"></picture><br><sub><b>作業</b> — セッションをまたぐ永続的なバックログ: 作業項目、所有権、受け入れ条件、意思決定。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/orchestration-dark.png"><img src="docs-site/public/console/orchestration-light.png" alt="オーケストレーションと A2A: 観測されたシグナルから導出されたエージェント間の委譲グラフ。"></picture><br><sub><b>オーケストレーション &amp; A2A</b> — 誰が誰に委譲するかを観測されたシグナルから導出。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/inventory-dark.png"><img src="docs-site/public/console/inventory-light.png" alt="インベントリ: estate 全体で発見されたすべてのエージェント、セッション、MCP サーバー、モデル、アイデンティティ。"></picture><br><sub><b>インベントリ</b> — 発見されたすべてのエージェント、セッション、MCP サーバー、モデル、アイデンティティ。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="最小権限ドリフト: アクセスマップ上に重ねた、予期しないアクセスと未使用の付与。"></picture><br><sub><b>最小権限ドリフト</b> — 観測されたが許可されていないアクセスと、未使用の付与。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="セキュリティとフォレンジック: ガードレールの検出結果、異常キュー、改ざん検知可能なフォレンジック。"></picture><br><sub><b>セキュリティとフォレンジック</b> — ガードレールの検出結果、異常、改ざん検知可能なフォレンジック。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/killswitch-dark.png"><img src="docs-site/public/console/killswitch-light.png" alt="キルスイッチ: 二重統制による復旧を備えた estate の緊急停止。"></picture><br><sub><b>キルスイッチ</b> — ワンクリックでガバナンス下のすべての作動面を停止。復旧には 2 つのアカウントが必要。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/session-viewer-dark.png"><img src="docs-site/public/console/session-viewer-light.png" alt="セッション録画ビューア: 1 つのタイムライン上のエージェント活動とガバナンス証拠。チェーン検証済み。"></picture><br><sub><b>セッション録画</b> — 1 つのタイムライン上のエージェント活動とガバナンス証拠。チェーン検証済み。</sub> |
-
-各静止画は、実行中のバイナリが提供するシード済みデモ estate のキャプチャです（`bash scripts/docs-captures.sh` で生の一式を再生成できます）。画面の完全な一覧は[コンソールリファレンス](docs-site/src/content/docs/reference/console.md)を参照してください。
-
-<a name="install"></a>
 ## インストール
 
-すべてのリリースは cosign 署名済みの信頼チェーンの下で提供され、アーティファクト種別ごとに検証されます。cosign 署名済みチェックサムマニフェストは、そこに列挙されたアーカイブ、パッケージ、アーカイブごとの SBOM をカバーします。アーカイブごとに in-toto attestation 付きの SPDX SBOM サイドカーがあり、コンテナイメージには cosign 署名とそのイメージ独自の SBOM attestation があり、セット全体には OpenVEX ステートメントと SLSA build provenance があります。セキュリティ製品ではサプライチェーンも信頼モデルの一部です。実行前に[検証してください](docs/RELEASE-VERIFICATION.md)。
+方法をひとつ選んでください。1 つのコマンドがインストールし、その後 `olivares quickstart` がコンソール URL と一次性のセットアップトークンを表示します。すべてのリリースは cosign 署名済みで、SLSA 来歴と SBOM を伴います。以下の各経路はインストール前に検証し、`scripts/verify-release.sh` は手動ダウンロードを検査します（cosign + SHA-256、[方法](INSTALL.md#verifying-a-release)）。エンジンは **デフォルトで安全** です。loopback バインド、初回起動時の HTTPS、デフォルト資格情報なし、初回起動時に印字される一次性セットアップトークン。
 
-**HTTPS の簡便な経路。** スクリプト本体は HTTPS 経由で届き、パイプ処理では事前検証されません。起動後は OS とアーキテクチャを検出し、`cosign` を必須とし、署名済みチェックサムマニフェストとアーカイブの SHA-256 を検証し、バイナリだけをインストールします。`sudo` は決して呼び出しません。シェルへパイプするときはバージョンを固定してください。
+**1 · コマンドひとつ、Linux と macOS** — 検証済みインストーラー。OS とアーキテクチャを検出し、署名済みチェックサムとアーカイブ SHA-256 を検証し、バイナリだけをインストールし、`sudo` は決して実行しません。
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh | sh -s -- --version v26.8.0
-olivares quickstart        # TLS on, loopback-only, no default credentials; prints the console URL + a one-time setup token
+curl -fsSL https://olivares.ai/olivares/install.sh | sh
+olivares quickstart        # prints the console URL and the one-time setup token
 ```
 
-**高保証の経路。** まずダウンロードし、検証してから実行します。アーカイブ、パッケージ、チェックサムマニフェストは[リリースページ](https://github.com/olivaresai/olivares/releases/tag/v26.8.0)にあり、[`scripts/verify-release.sh`](scripts/verify-release.sh) は存在するものを検証し、何をスキップしたかを明示します — デフォルトは keyless で、切断されたホストでは `--key … --offline` を使用します。[インストーラーの信頼コントラクト](docs/RELEASE-INSTALLER.md)には両方の経路が記載されています。オプトインのサービスアダプターを備えた署名済み・バージョン付きインストーラーは、その実装が入った後にカットされる最初のリリースから提供され、v26.8.0 はそれ以前です。
+ユーザーサービス（systemd ユーザーユニットまたは LaunchAgent）には `--user` を付けます。システムサービスには、特権シェルから検証済みスクリプトを `--system --start` で実行します。手でダウンロード、検証、実行したい場合は、手動バイナリ経路と OS ごとの行列: [`INSTALL.md`](INSTALL.md)。
 
-| 経路 | 入手できるもの |
-|---|---|
-| **Linux パッケージ** — `.deb`、`.rpm`、`.apk` | バイナリ、堅牢化された systemd ユニット、env ファイルの例、ログイン不可の `olivares` サービスユーザー。サービスは自動起動されません |
-| **コンテナ** — `docker.io/olivaresai/olivares:26.8.0` | distroless、非 root、`v` プレフィックスのないタグ。`ghcr.io/olivaresai/olivares` はダイジェストが同じイメージです。デフォルトイメージはマルチアーキテクチャ（amd64/arm64）で、`-fips` と `-stig` のバリアントは amd64 のみです |
-| **Homebrew** — `brew install olivaresai/tap/olivares` | macOS と Linux 向けのリリースバイナリ。署名済みチェックサムと照合され、Gatekeeper の隔離属性は解除されます。darwin ビルドはまだ Apple による公証を受けていません |
-| **Kubernetes** — [`deploy/helm/olivares`](deploy/helm/olivares) または [`deploy/manifests/install.yaml`](deploy/manifests/install.yaml) | ツリー内の Helm チャートソースと、フラットな Helm 不要のマニフェスト。チャートは**まだ OCI レジストリには公開されていません** |
-| **ソースから** — `task build`（Go 1.26+、[Task](https://taskfile.dev)、pnpm） | `./bin/olivares quickstart`、同じセキュアバイデフォルトの初回起動 |
+**2 · Docker** — マルチアーキ、distroless、非 root。ホストマッピングが loopback のみに保ちます。
 
-エンジンは**デフォルトでセキュア**です。ループバックにバインドし、初回起動時には自己署名証明書で HTTPS を提供し、デフォルト認証情報を持たず、単回使用のセットアップトークンを表示します。コンテナまたは Pod では、プロセスは自身のネットワーク上でリッスンし、ホストマッピングまたは Service によって非公開に保たれます。**Windows** はまだビルドされていません — Linux コンテナを実行するか、WSL2（[計画](INSTALL.md#windows)）を使用してください。OS ごとのマトリクスと本番セットアップは [`INSTALL.md`](INSTALL.md)、デプロイガイド（Compose、Kubernetes、エアギャップ）と[アップグレード](docs-site/src/content/docs/how-to/upgrade-and-rollback.md)は [`docs-site/`](docs-site/)を参照してください。
+```sh
+docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+  -v olivares-data:/var/lib/olivares \
+  docker.io/olivaresai/olivares \
+  serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
+```
 
-<a name="quickstart"></a>
+`ghcr.io/olivaresai/olivares` はダイジェストが同じイメージです。本番ではダイジェストでピン留めしてください。FIPS および STIG イメージバリアント: [`INSTALL.md`](INSTALL.md#docker)。
+
+**3 · Docker Compose** — 硬化されたスタック。SQLite シングルノード、オプションの Postgres とバックアップ。
+
+```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
+docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
+```
+
+**4 · Kubernetes** — ツリー内の Helm チャート、または Helm なしのフラットマニフェスト。チャートはまだ OCI レジストリに公開されていません。
+
+```sh
+helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
+# or, Helm-free
+kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
+```
+
+**5 · Linux パッケージ** — [リリースページ](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)の `.deb`、`.rpm`、`.apk`。バイナリ、サンプル env ファイル、ログインなしの `olivares` ユーザー、硬化されたユニット。サービスは自動では起動されません。
+
+```sh
+sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)
+sudo systemctl enable --now olivares           # OpenRC hosts: sudo rc-service olivares start
+```
+
+**6 · Homebrew** — macOS と Linux。署名済みチェックサムに対して検査されます。
+
+```sh
+brew install olivaresai/tap/olivares && olivares quickstart
+```
+
+**7 · ソースから** — Go 1.26+、[Task](https://taskfile.dev)、pnpm。
+
+```sh
+task build && ./bin/olivares quickstart
+```
+
+**Air-gapped**: 署名済みイメージ、チャート、検証材料をまとめ、`scripts/verify-release.sh --key … --offline` でオフライン検証します（[手順](docs-site/src/content/docs/how-to/air-gap-install.md)）。**Windows** はまだビルドされていません。Linux コンテナまたは WSL2 を実行してください（[計画](INSTALL.md#windows)）。アップグレードとロールバック: [手順](docs-site/src/content/docs/how-to/upgrade-and-rollback.md)。
+
 ## クイックスタート
-
-合成 estate を探索するか、実際の運用として起動します。どちらも同じバイナリを実行します。
 
 ```sh
 # a deterministic demo estate — loopback-only, no real data
@@ -110,54 +112,56 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 olivares quickstart
 ```
 
-デモシードは学習専用です（公開ソースツリーのパスワード）。実データには決して向けないでください。CI は `task smoke:quickstart` で同じ経路をたどり、アクセスマップとドリフトのカウント（20 nodes / 13 edges、8 unexpected accesses と 2 unused grants）をアサートするため、このページがコードから気づかれずにずれることはありません。[完全なクイックスタート](docs-site/src/content/docs/start/quickstart.md)では実際の pgAudit コネクタを接続し、本番インストールの各経路へリンクします。
+デモシードは学習専用です（ソースツリー上の公開パスワード）。実データに向けないでください。CI は `task smoke:quickstart` で同じ経路を歩き、アクセスマップとドリフトのカウントをアサートします（20 ノード / 13 エッジ、予期しないアクセス 8、未使用グラント 2）。[完全なクイックスタート](docs-site/src/content/docs/start/quickstart.md) は実際の pgAudit コネクタを配線します。
 
-## エディション
+## コンソールの内部
 
-<div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/05-editions-dark.svg">
-  <img src=".github/assets/05-editions-light.svg" width="840" alt="構成別のエディション: AGPL コアがプラットフォーム全体で、アドオンはその上に加わる追加コード、Cloud Standard はマネージドサービス。">
-</picture>
-<sub>構成別のエディション。パッケージングと価格はお問い合わせください。</sub>
-</div>
+| | |
+|---|---|
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="アクセスマップ: 各エージェントが estate 全体で何を読み書きするか。左に起点、右にリソース。"></picture><br><sub><b>アクセスマップ</b> — 左に起点、右にリソース、読み取りと書き込みを色分け。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="最小権限ドリフト: アクセスマップ上に重ねた予期しないアクセスと未使用グラント。"></picture><br><sub><b>最小権限ドリフト</b> — 観察されたが許可されていないもの、誰も使わないグラント。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="コンソールから作成、接続、統治される Claude Code セッション。"></picture><br><sub><b>セッション</b> — SSH なしで、コンソールからセッションを作成、接続、統治。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="作業: 作業項目と意思決定の、セッションをまたぐ永続バックログ。"></picture><br><sub><b>作業</b> — セッションをまたぐ永続バックログ: 項目、所有権、受け入れ、意思決定。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="セキュリティとフォレンジック: ガードレール所見、異常キュー、改ざん検知可能なフォレンジック。"></picture><br><sub><b>セキュリティとフォレンジック</b> — ガードレール所見、異常、改ざん検知可能なフォレンジック。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: モデル支出、トークン使用量、予算、ランレート予測。"></picture><br><sub><b>FinOps</b> — モデルとエージェント別の支出、拒否またはスロットルする予算、ランレート。</sub> |
 
-AGPL ビルドはプラットフォーム全体であり、内部から機能制限されることはありません。商用アドオンは追加コードであり、オープン製品から削除された機能ではありません。サブスクリプションは、署名済みモジュールパックをダウンロードするための認証情報です — 配布方式であり、すでにディスク上にあるコードをアンロックするキーではありません。セルフホスト型エンジンのユーザーアカウント数は無制限で、4 つの deny-closed エンフォースメントポイントはすべてオープンです。領域ごとのオープン、商用、計画中の能力マトリクスは [`LICENSING.md`](LICENSING.md) と[オープンコアとライセンス](docs-site/src/content/docs/explanation/open-core-and-licensing.md)を参照してください。
+各静止画は、実行中のバイナリが提供するシード済みデモ estate のキャプチャです。画面の全体図: [コンソールリファレンス](docs-site/src/content/docs/reference/console.md)。
+
+## エディションと価格
+
+AGPL ビルドはプラットフォームの全体であり、内部から機能制限されることはありません。商用 add-on は上に載せる加算コードであり、取り除かれた機能ではありません。サブスクリプションは、署名済みモジュールパックをダウンロードするための資格情報です。セルフホストエンジンのユーザーアカウントは無制限で、**4つの deny-closed エンフォースメントポイント** はすべてオープンです。
+
+| エディション | 対象 | 追加するもの |
+|---|---|---|
+| **Community** | 誰でも。無料、AGPL-3.0、ユーザー数無制限。 | 完全な製品、セルフホスト。コアにライセンスゲートはありません。 |
+| **Business** | 採用する組織。課金はデプロイ単位であり、シート単位ではありません。 | サービスとオプションのパックであり、コア機能ではありません。商用ライセンス、維持される署名済みリリースチャネル、営業時間のメールサポート、および 4 つのオプション add-on: **Regulated Operations**、**Compliance Packs**、**AI Runtime Security**、**Identity & Scale**（公式ツール向けセッションコックピットを含む）。4 つすべてを合わせたものが **Business Max** です。 |
+| **Cloud** | 同じプレーンを自分たちのために運用してほしいチーム。前払い、共有インフラ。 | 公開された上限付きのマネージドコントロールプレーン。Cloud のトライアルはありません。無料オプションはセルフホストの Community のままです。 |
+| **Enterprise** | 規制下、複数エンティティ、大規模 estate。 | 契約。メールで合意し、年次注文書で署名します。 |
+
+価格、add-on マトリクス、購入条件: [olivares.ai/pricing](https://olivares.ai/pricing)。オープン / 商用 / 計画中のマトリクス: [`LICENSING.md`](LICENSING.md)。
 
 ## アーキテクチャ
 
-<div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/02-architecture-dark.svg">
-  <img src=".github/assets/02-architecture-light.svg" width="840" alt="アーキテクチャ: エージェントサーフェス、監査ソース、MCP と A2A のピア、コンテンツソースを、コンソール、REST API、gRPC、CLI、Terraform プロバイダーを提供する単一のセルフホスト型バイナリへ収集。クラウドコントロールプレーン（構築済み・未デプロイ）とライセンスポータル（デプロイ済み・販売は無効）は別プレーン。">
-</picture>
-</div>
+ひとつの静的 Go バイナリがコンソールを埋め込み、4 つのサーフェスを公開します。REST API（主）、安定コアの焦点を絞った gRPC ミラー、`olivares` CLI、Terraform プロバイダー。コレクターはあなたのインフラ内で動作します。ストアは SQLite または行レベルセキュリティ付き Postgres で、ストア API で一度、Postgres でもう一度強制されます。全体像（ワークプレーンを含む）: [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 
-単一の静的 Go バイナリがコンソールを組み込み、文書化されたカバレッジを持つ 4 つのサーフェスを公開します。REST API（主要サーフェス）、安定したコアに絞った gRPC ミラー、`olivares` CLI、Terraform プロバイダーです。コレクターはあなたのインフラ内で 3 つのモードで動作します。ストアは SQLite または行レベルセキュリティを備えた Postgres で、ストア API で一度、Postgres でもう一度強制されます。ワークプレーンの各要素を含む詳細は [`ARCHITECTURE.md`](ARCHITECTURE.md)を参照してください。
-
-<a name="documentation"></a>
 ## ドキュメント
 
-[docs.olivares.ai](https://docs.olivares.ai) — テスト済みのインストールチュートリアル（単一ノード、Docker Compose、Kubernetes/Helm、エアギャップ）、実際のコンソールキャプチャを備えたコネクタガイド、クックブック（deny-closed ポリシー、予算、承認、キルスイッチ訓練、SIEM プッシュ）、API リファレンス、用語集。[Olivares AI とは](docs-site/src/content/docs/start/what-is-olivares-ai.md)と[誠実さと限界](docs-site/src/content/docs/start/honesty-and-limits.md)から始めてください。
+[docs.olivares.ai](https://docs.olivares.ai) — テスト済みインストールチュートリアル（シングルノード、Docker Compose、Kubernetes/Helm、エアギャップ）、実際のコンソールキャプチャ付きコネクタガイド、クックブック（deny-closed ポリシー、予算、承認、kill-switch 訓練、SIEM プッシュ）、API リファレンス、用語集。[Olivares AI とは](docs-site/src/content/docs/start/what-is-olivares-ai.md)から始めてください。サイト上: [製品](https://olivares.ai/product) · [ソリューション](https://olivares.ai/solutions) · [仕組み](https://olivares.ai/how-it-works) · [アーキテクチャ](https://olivares.ai/architecture) · [セキュリティ](https://olivares.ai/security) · [信頼](https://olivares.ai/trust) · [比較](https://olivares.ai/compare) · [デモ](https://olivares.ai/demo) · [changelog](https://olivares.ai/changelog) · [ステータス](https://olivares.ai/status) · [ロードマップ](https://olivares.ai/roadmap) · [ブランド](https://olivares.ai/brand) · [プレス](https://olivares.ai/press)。リリース: [GitHub](https://github.com/olivaresai/olivares/releases) · [`CHANGELOG.md`](CHANGELOG.md)。
 
-<a name="security"></a>
 ## セキュリティ
 
-脆弱性は [`SECURITY.md`](SECURITY.md) を通じて非公開で報告し、公開 issue には決して投稿しないでください。エンジンは read-first かつ minimal-data です。アクセスマップはペイロードではなくエッジを保存し、アクセスマップを開く操作も記録されます。アドバイザリーフローは [`docs/security-advisories.md`](docs/security-advisories.md)、サプライチェーンの証拠マップは [`docs/openssf-badge.md`](docs/openssf-badge.md)を参照してください。
+脆弱性は [`SECURITY.md`](SECURITY.md) を通じて非公開で報告してください。公開 issue にはしないでください。エンジンは読み取り優先で最小データです。アクセスマップはペイロードではなくエッジを保存し、開くことは記録される操作です。ライセンスの検証が私たちを呼び出すことはありません。AGPL コアはライセンス呼び出しを行いません。アドバイザリの流れ: [`docs/security-advisories.md`](docs/security-advisories.md)。サプライチェーンの証拠: [`docs/openssf-badge.md`](docs/openssf-badge.md)。
 
 ## コミュニティ
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md)（セットアップ、DCO/CLA、SPDX、コネクタ境界） · [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)（Contributor Covenant 2.1） · [`SUPPORT.md`](SUPPORT.md) · [`GOVERNANCE.md`](GOVERNANCE.md) · [`CHANGELOG.md`](CHANGELOG.md)（Keep a Changelog 1.1、CalVer `vYY.M.PATCH`）。
+[`CONTRIBUTING.md`](CONTRIBUTING.md)（セットアップ、DCO/CLA、SPDX、コネクタ境界） · [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [`SUPPORT.md`](SUPPORT.md) · [`GOVERNANCE.md`](GOVERNANCE.md) · [`CHANGELOG.md`](CHANGELOG.md)（Keep a Changelog、CalVer `vYY.M.PATCH`）。
 
 ## ライセンス
 
-`core/`、`modules/`、`web/` は **AGPL-3.0-only**、`sdk/`、`connectors/`、`clients/` は **Apache-2.0** であり、コネクタがエンジンをインポートすることはありません。商用アドオンは分離された任意のクローズドコードです — `-tags enterprise` でのみビルドされ、このリポジトリにもオープンバイナリにも決して含まれません。商用ライセンスについては `enterprise@olivares.ai` までお問い合わせください — [`LICENSING.md`](LICENSING.md)。コントリビューションには DCO sign-off（`git commit -s`）と [CLA](CLA.md) が必要です。
+`core/`、`modules/`、`web/` は **AGPL-3.0-only**、`sdk/`、`connectors/`、`clients/` は **Apache-2.0** であり、コネクタがエンジンを import することはありません。商用 add-on は別個、任意、クローズドです。`-tags enterprise` でのみビルドされ、このリポジトリには決して入りません。商用ライセンス: `enterprise@olivares.ai` — [`LICENSING.md`](LICENSING.md)。貢献には DCO サインオフ（`git commit -s`）と [CLA](CLA.md) が必要です。
 
-> **無保証・無責任。** 本ソフトウェアは**現状有姿**で提供され、**いかなる種類の保証もなく**、**データ損失、事業中断、逸失利益について一切の責任を負いません**。コントロールプレーンでは、これは形式的な文言ではありません。設定ミスにより、正当な作業がブロックされることも、まさに止めるつもりだったものが通過することもあります。AGPL-3.0-only §§15–16、Apache-2.0 §§7–8、および本プロジェクトの補足条項が適用されます — [`DISCLAIMER.md`](DISCLAIMER.md)。
+> **無保証、無責任。** ソフトウェアは **現状のまま** 提供され、**いかなる種類の保証もなく**、**データ損失、事業中断、逸失利益に対する責任もありません**。コントロールプレーンでは形式ではありません。設定ミスは正当な作業を止め、止めようとしたものちょうどを通すことがあります。AGPL-3.0-only §§15–16、Apache-2.0 §§7–8、および本プロジェクトの補足条項が適用されます — [`DISCLAIMER.md`](DISCLAIMER.md)。
 
 ## プロジェクトを支援する
 
-コアは無料であり、今後も無料のままです。すべてのリリースを署名・検証し、最新に保つには継続的な作業が必要です。Olivares AI が役に立つ場合は、GitHub Sponsors の [github.com/sponsors/olivaresai](https://github.com/sponsors/olivaresai) または [github.com/sponsors/fran-olivares](https://github.com/sponsors/fran-olivares) を通じて、あるいは Ko-fi で単発の支援ができます。スポンサーシップはサポート契約ではなく、優先対応を購入するものでもありません（[`SUPPORT.md`](SUPPORT.md)）。掲載を希望するスポンサーは [`SUPPORTERS.md`](SUPPORTERS.md) に記載されます。
+コアは無料であり、無料のままです。すべてのリリースを署名、検証、最新に保つことは継続的な作業です。GitHub Sponsors で支援してください — [github.com/sponsors/olivaresai](https://github.com/sponsors/olivaresai) または [github.com/sponsors/fran-olivares](https://github.com/sponsors/fran-olivares) — または Ko-fi で単発。スポンサーシップはサポート契約ではありません（[`SUPPORT.md`](SUPPORT.md)）。名前の掲載を希望するスポンサーは [`SUPPORTERS.md`](SUPPORTERS.md) に記載されます。
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z1R625SAD2)
 

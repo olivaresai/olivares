@@ -76,7 +76,7 @@ type HandoffOfferResult struct {
 	ETag       string       `json:"etag"`
 	State      HandoffState `json:"state"`
 	AuditSeq   int64        `json:"audit_seq"`
-	Replayed   bool         `json:"-"`
+	Replayed   bool         `json:"replayed"`
 }
 
 // HandoffResponseCommand is the target-authored accept/reject transition.
@@ -104,7 +104,7 @@ type HandoffResponseResult struct {
 	OwnerEpoch          int64        `json:"owner_epoch"`
 	ResultingLeaseFence int64        `json:"resulting_lease_fence,omitempty"`
 	AuditSeq            int64        `json:"audit_seq"`
-	Replayed            bool         `json:"-"`
+	Replayed            bool         `json:"replayed"`
 }
 
 // HandoffCancelCommand withdraws an offered Handoff on behalf of its current
@@ -308,18 +308,24 @@ func (m *Module) offerHandoffWithCurrentAuthority(
 			)
 		}
 	}
+	claims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, scope.TenantID, communicationClaimsForPrincipal(normalized.principal),
+	)
+	if err != nil {
+		return HandoffOfferResult{}, err
+	}
 	ids := newHandoffOfferIDs()
 	prepared, err := m.prepareHandoffOfferPayload(ctx, normalized, ids.Handoff)
 	if err != nil {
 		return HandoffOfferResult{}, err
 	}
 	return m.applyHandoffOffer(
-		ctx, question, bound, inspected, identity, window, normalized, ids, prepared,
+		ctx, question, bound, inspected, identity, window, claims, normalized, ids, prepared,
 	)
 }
 
-// RespondHandoff is the future target response boundary. K3 remains OFF until
-// its complete readiness conjunction becomes effective.
+// RespondHandoff is the target response boundary and remains gated by the
+// complete K3 readiness conjunction.
 func (m *Module) RespondHandoff(
 	ctx context.Context,
 	scope DirectoryScopeRef,
@@ -361,14 +367,28 @@ func (m *Module) respondHandoffWithCurrentAuthority(
 			)
 		}
 	}
+	claims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, scope.TenantID, communicationClaimsForPrincipal(normalized.principal),
+	)
+	if err != nil {
+		return HandoffResponseResult{}, err
+	}
 	prepared, err := m.prepareHandoffResponseContent(ctx, normalized)
 	if err != nil {
 		return HandoffResponseResult{}, err
 	}
-	return m.applyHandoffResponse(
-		ctx, question, bound, inspected, identity, window, normalized,
-		newHandoffResponseIDs(), prepared,
+	result, err := m.applyHandoffResponse(
+		ctx, question, bound, inspected, identity, window, claims, normalized,
+		newHandoffResponseIDs(), prepared, handoffResponseApply,
 	)
+	if err == nil {
+		return result, nil
+	}
+	stale, eligible := handoffResponseRecognitionFailure(err)
+	if !eligible {
+		return HandoffResponseResult{}, err
+	}
+	return m.recognizeHandoffResponse(ctx, ref, normalized, stale.fact, requireReadiness)
 }
 
 // CancelHandoff is the future owner-withdrawal boundary. It remains deny-closed
@@ -414,6 +434,12 @@ func (m *Module) cancelHandoffWithCurrentAuthority(
 			)
 		}
 	}
+	claims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, scope.TenantID, communicationClaimsForPrincipal(normalized.principal),
+	)
+	if err != nil {
+		return HandoffLifecycleResult{}, err
+	}
 	prepared, err := m.prepareHandoffTerminalContent(
 		ctx, normalized.scope, normalized.handoffID, normalized.command.Reason,
 	)
@@ -425,7 +451,7 @@ func (m *Module) cancelHandoffWithCurrentAuthority(
 		return HandoffLifecycleResult{}, err
 	}
 	return m.applyHandoffCancel(
-		ctx, question, bound, inspected, identity, window, normalized, ids, prepared,
+		ctx, question, bound, inspected, identity, window, claims, normalized, ids, prepared,
 	)
 }
 
@@ -521,18 +547,19 @@ func (m *Module) prepareHandoffOfferAuthority(
 				"handoff offer authority crossed its exact Channel request",
 			)
 	}
-	if err := requireDirectNoticeUserBackedPrincipal(inspected); err != nil {
-		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
-			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
-			handoffOfferNormalized{}, communicationAuthorityWindow{}, err
-	}
-	normalized, err := normalizeHandoffOfferCommand(scope, inspected.principal, cmd)
+	identity, err := m.preflightDirectNoticeReaderIdentity(ctx, scope, inspected.principal, nil)
 	if err != nil {
 		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
 			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
 			handoffOfferNormalized{}, communicationAuthorityWindow{}, err
 	}
-	identity, err := m.preflightDirectNoticeReaderIdentity(ctx, scope, inspected.principal, nil)
+	actor, err := communicationActorForRecipient(identity.Recipient)
+	if err != nil {
+		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
+			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
+			handoffOfferNormalized{}, communicationAuthorityWindow{}, err
+	}
+	normalized, err := normalizeHandoffOfferCommandForActor(scope, inspected.principal, actor, cmd)
 	if err != nil {
 		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
 			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
@@ -586,20 +613,21 @@ func (m *Module) prepareHandoffResponseAuthority(
 				"handoff response authority crossed its exact request",
 			)
 	}
-	if err := requireDirectNoticeUserBackedPrincipal(inspected); err != nil {
-		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
-			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
-			handoffResponseNormalized{}, communicationAuthorityWindow{}, err
-	}
-	normalized, err := normalizeHandoffResponseCommand(
-		scope, inspected.principal, handoffID, cmd,
-	)
+	identity, err := m.preflightDirectNoticeReaderIdentity(ctx, scope, inspected.principal, nil)
 	if err != nil {
 		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
 			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
 			handoffResponseNormalized{}, communicationAuthorityWindow{}, err
 	}
-	identity, err := m.preflightDirectNoticeReaderIdentity(ctx, scope, inspected.principal, nil)
+	actor, err := communicationActorForRecipient(identity.Recipient)
+	if err != nil {
+		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
+			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
+			handoffResponseNormalized{}, communicationAuthorityWindow{}, err
+	}
+	normalized, err := normalizeHandoffResponseCommandForActor(
+		scope, inspected.principal, actor, handoffID, cmd,
+	)
 	if err != nil {
 		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
 			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
@@ -653,20 +681,21 @@ func (m *Module) prepareHandoffCancelAuthority(
 				"Handoff cancel authority crossed its exact request",
 			)
 	}
-	if err := requireDirectNoticeUserBackedPrincipal(inspected); err != nil {
-		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
-			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
-			handoffCancelNormalized{}, communicationAuthorityWindow{}, err
-	}
-	normalized, err := normalizeHandoffCancelCommand(
-		scope, inspected.principal, handoffID, cmd,
-	)
+	identity, err := m.preflightDirectNoticeReaderIdentity(ctx, scope, inspected.principal, nil)
 	if err != nil {
 		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
 			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
 			handoffCancelNormalized{}, communicationAuthorityWindow{}, err
 	}
-	identity, err := m.preflightDirectNoticeReaderIdentity(ctx, scope, inspected.principal, nil)
+	actor, err := communicationActorForRecipient(identity.Recipient)
+	if err != nil {
+		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
+			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
+			handoffCancelNormalized{}, communicationAuthorityWindow{}, err
+	}
+	normalized, err := normalizeHandoffCancelCommandForActor(
+		scope, inspected.principal, actor, handoffID, cmd,
+	)
 	if err != nil {
 		return communicationAuthorityQuestion{}, communicationRequestAuthority{},
 			communicationRequestAuthorityInspection{}, directNoticeReaderIdentityPreflight{},
@@ -679,6 +708,26 @@ func (m *Module) prepareHandoffCancelAuthority(
 func normalizeHandoffOfferCommand(
 	scope DirectoryScopeRef,
 	principal CommunicationPrincipal,
+	cmd HandoffOfferCommand,
+) (handoffOfferNormalized, error) {
+	recipient, ok := CanonicalPrincipalRecipient(principal)
+	if !ok {
+		return handoffOfferNormalized{}, communicationError(
+			ErrCommunicationEvidenceUnknown,
+			"Handoff actor requires authoritative principal resolution",
+		)
+	}
+	actor, err := communicationActorForRecipient(recipient)
+	if err != nil {
+		return handoffOfferNormalized{}, err
+	}
+	return normalizeHandoffOfferCommandForActor(scope, principal, actor, cmd)
+}
+
+func normalizeHandoffOfferCommandForActor(
+	scope DirectoryScopeRef,
+	principal CommunicationPrincipal,
+	actor CommunicationActorRef,
 	cmd HandoffOfferCommand,
 ) (handoffOfferNormalized, error) {
 	if err := scope.Validate(); err != nil {
@@ -701,7 +750,6 @@ func normalizeHandoffOfferCommand(
 	if err != nil {
 		return handoffOfferNormalized{}, err
 	}
-	actor := CommunicationActorRef{Kind: ActorUser, Ref: principal.UserID.String()}
 	path := "/v1/m/sessions/handoffs"
 	identity, err := normalizeHandoffCommandIdentity(
 		scope, principal, actor, cmd.IdempotencyKey, cmd.IfMatch,
@@ -728,6 +776,27 @@ func normalizeHandoffOfferCommand(
 func normalizeHandoffResponseCommand(
 	scope DirectoryScopeRef,
 	principal CommunicationPrincipal,
+	handoffID model.ID,
+	cmd HandoffResponseCommand,
+) (handoffResponseNormalized, error) {
+	recipient, ok := CanonicalPrincipalRecipient(principal)
+	if !ok {
+		return handoffResponseNormalized{}, communicationError(
+			ErrCommunicationEvidenceUnknown,
+			"Handoff actor requires authoritative principal resolution",
+		)
+	}
+	actor, err := communicationActorForRecipient(recipient)
+	if err != nil {
+		return handoffResponseNormalized{}, err
+	}
+	return normalizeHandoffResponseCommandForActor(scope, principal, actor, handoffID, cmd)
+}
+
+func normalizeHandoffResponseCommandForActor(
+	scope DirectoryScopeRef,
+	principal CommunicationPrincipal,
+	actor CommunicationActorRef,
 	handoffID model.ID,
 	cmd HandoffResponseCommand,
 ) (handoffResponseNormalized, error) {
@@ -763,7 +832,6 @@ func normalizeHandoffResponseCommand(
 	if err != nil {
 		return handoffResponseNormalized{}, err
 	}
-	actor := CommunicationActorRef{Kind: ActorUser, Ref: principal.UserID.String()}
 	path := "/v1/m/sessions/handoffs/" + handoffID.String() + "/responses"
 	identity, err := normalizeHandoffCommandIdentity(
 		scope, principal, actor, cmd.IdempotencyKey, cmd.IfMatch,
@@ -792,6 +860,27 @@ func normalizeHandoffCancelCommand(
 	handoffID model.ID,
 	cmd HandoffCancelCommand,
 ) (handoffCancelNormalized, error) {
+	recipient, ok := CanonicalPrincipalRecipient(principal)
+	if !ok {
+		return handoffCancelNormalized{}, communicationError(
+			ErrCommunicationEvidenceUnknown,
+			"Handoff actor requires authoritative principal resolution",
+		)
+	}
+	actor, err := communicationActorForRecipient(recipient)
+	if err != nil {
+		return handoffCancelNormalized{}, err
+	}
+	return normalizeHandoffCancelCommandForActor(scope, principal, actor, handoffID, cmd)
+}
+
+func normalizeHandoffCancelCommandForActor(
+	scope DirectoryScopeRef,
+	principal CommunicationPrincipal,
+	actor CommunicationActorRef,
+	handoffID model.ID,
+	cmd HandoffCancelCommand,
+) (handoffCancelNormalized, error) {
 	if err := scope.Validate(); err != nil {
 		return handoffCancelNormalized{}, err
 	}
@@ -812,7 +901,6 @@ func normalizeHandoffCancelCommand(
 	if err != nil {
 		return handoffCancelNormalized{}, err
 	}
-	actor := CommunicationActorRef{Kind: ActorUser, Ref: principal.UserID.String()}
 	path := "/v1/m/sessions/handoffs/" + handoffID.String() + "/cancel"
 	identity, err := normalizeHandoffCommandIdentity(
 		scope, principal, actor, cmd.IdempotencyKey, cmd.IfMatch,
@@ -918,14 +1006,30 @@ func normalizeHandoffCommandIdentity(
 			ErrInvalidCommunicationModel, "Handoff idempotency key is invalid",
 		)
 	}
-	if actor.Validate() != nil || actor.Kind != ActorUser || actor.Ref != principal.UserID.String() {
+	if actor.Validate() != nil || !communicationActorMatchesPrincipalKind(actor, principal) {
 		return handoffCommandIdentity{}, communicationError(
-			ErrCommunicationForbidden, "Handoff requires a claim-free authenticated User",
+			ErrCommunicationForbidden, "Handoff actor does not match the authenticated principal",
 		)
 	}
 	return buildHandoffCommandIdentity(
 		scope, principal, actor, idempotencyKey, method, path, expectedVersion, request,
 	)
+}
+
+func communicationActorMatchesPrincipalKind(
+	actor CommunicationActorRef,
+	principal CommunicationPrincipal,
+) bool {
+	switch {
+	case principal.UserID != "":
+		return actor == (CommunicationActorRef{Kind: ActorUser, Ref: principal.UserID.String()})
+	case principal.SessionID != "":
+		return actor == (CommunicationActorRef{Kind: ActorSession, Ref: principal.SessionID})
+	case principal.AgentExternalID != "":
+		return actor.Kind == ActorAgent
+	default:
+		return false
+	}
 }
 
 func buildHandoffCommandIdentity(

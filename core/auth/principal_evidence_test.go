@@ -108,6 +108,15 @@ func (s *principalEvidenceScope) TransactionNow(context.Context) (model.Timestam
 	return s.hooks.now, s.hooks.clockErr
 }
 
+func (s *principalEvidenceScope) ReadUserAuthorityFact(ctx context.Context, id model.ID) (store.UserAuthorityFactRef, error) {
+	s.hooks.trace = append(s.hooks.trace, "user-authority")
+	reader, ok := s.AuthScope.(store.AuthUserAuthorityEvidenceScope)
+	if !ok {
+		return store.UserAuthorityFactRef{}, errors.New("underlying auth scope lacks User authority evidence")
+	}
+	return reader.ReadUserAuthorityFact(ctx, id)
+}
+
 func (s *principalEvidenceScope) Users() store.MutableRepository[model.User] {
 	return principalEvidenceTraceMutableRepo[model.User]{MutableRepository: s.AuthScope.Users(), hooks: s.hooks, name: "user"}
 }
@@ -323,9 +332,13 @@ type principalEvidenceFixture struct {
 }
 
 func newPrincipalEvidenceFixture(t *testing.T) *principalEvidenceFixture {
+	return newPrincipalEvidenceFixtureConfig(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true})
+}
+
+func newPrincipalEvidenceFixtureConfig(t *testing.T, cfg store.Config) *principalEvidenceFixture {
 	t.Helper()
 	ctx := context.Background()
-	raw, err := sqlstore.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, nil)
+	raw, err := sqlstore.Open(ctx, cfg, nil)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -797,7 +810,7 @@ func TestResolvePrincipalScopeRehydratesCurrentAuthorityInOneAuthView(t *testing
 		t.Fatalf("private provenance = %+v, want exact tenant/ref/epoch/DB window", resolved.evidence)
 	}
 	assertTraceExact(t, f.hooks.trace,
-		"directory-1", "session-get", "user-get", "membership-list", "group-member-list", "directory-2", "db-clock")
+		"directory-1", "session-get", "user-get", "membership-list", "group-member-list", "user-authority", "directory-2", "db-clock")
 	if len(f.hooks.membershipQueries) == 0 || len(f.hooks.membershipQueries[0].Filters) != 0 {
 		t.Fatalf("evidence membership query = %+v, want unfiltered self-validation", f.hooks.membershipQueries)
 	}
@@ -1625,6 +1638,66 @@ func TestResolvePrincipalScopeClipsContextCredentialAndElevatedAALWindows(t *tes
 	}
 	if !resolved.evidence.freshUntil.Equal(f.now.Add(2 * time.Minute)) {
 		t.Fatalf("caller-clipped window = %s, want %s", resolved.evidence.freshUntil, f.now.Add(2*time.Minute))
+	}
+}
+
+func TestResolvePrincipalScopeAcceptsOnlyCanonicalAgentOBOEvidence(t *testing.T) {
+	f := newPrincipalEvidenceFixture(t)
+	credential, err := NewCredential(PrefixToken)
+	if err != nil {
+		t.Fatalf("mint agent-OBO credential: %v", err)
+	}
+	agentRef := "agent:" + model.NewID().String()
+	var stored model.APIToken
+	if err := f.raw.AuthMutate(f.ctx, func(as store.AuthScope) error {
+		var createErr error
+		stored, createErr = as.Tokens().Create(f.ctx, model.APIToken{
+			Name: "canonical-agent-obo", UserID: f.user.ID,
+			Selector: credential.Selector, SecretHash: credential.SecretHash,
+			BoundTenantID: f.tenant, Role: RoleViewer,
+			Scope:    strings.Join(scopeForTier(verbTierForRole(RoleViewer)), " "),
+			AgentRef: agentRef,
+		})
+		return createErr
+	}); err != nil {
+		t.Fatalf("store canonical agent-OBO credential: %v", err)
+	}
+
+	authenticated, err := f.a.Authenticate(f.ctx, credential.Token)
+	if err != nil {
+		t.Fatalf("authenticate canonical agent-OBO credential: %v", err)
+	}
+	ref, ok := authenticated.Ref()
+	if !ok || ref.credentialID != stored.ID || authenticated.AgentIdentity != agentRef {
+		t.Fatalf("canonical agent-OBO authentication = %+v ref=%+v/%t", authenticated, ref, ok)
+	}
+	resolved, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), ref, f.tenant)
+	if err != nil {
+		t.Fatalf("resolve canonical agent-OBO credential: %v", err)
+	}
+	role, roleOK := resolved.RoleIn(f.tenant)
+	if resolved.AgentIdentity != agentRef || resolved.UserID != f.user.ID ||
+		!roleOK || role != RoleViewer {
+		t.Fatalf("resolved canonical agent-OBO authority = %+v", resolved)
+	}
+
+	if err := f.raw.AuthMutate(f.ctx, func(as store.AuthScope) error {
+		row, getErr := as.Tokens().Get(f.ctx, stored.ID)
+		if getErr != nil {
+			return getErr
+		}
+		row.Audience = "https://ambiguous.example.test"
+		_, updateErr := as.Tokens().Update(f.ctx, row)
+		return updateErr
+	}); err != nil {
+		t.Fatalf("cross agent-OBO audience binding: %v", err)
+	}
+	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), ref, f.tenant); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("stale agent-OBO ref after row change = %v, want ErrUnauthenticated", err)
+	}
+	ref.version++
+	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), ref, f.tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+		t.Fatalf("audience-bound agent-OBO authority = %v, want evidence unavailable", err)
 	}
 }
 

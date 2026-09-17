@@ -43,7 +43,7 @@ func TestUpgradeRefusesAManifestSignedForAnotherChannel(t *testing.T) {
 	f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
 	target := writeTarget(t, v1)
 
-	out, err := runUpgradeCmd(t, "--enterprise", "--token", "tkn", "--endpoint", f.server.URL,
+	out, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
 		"--pubkey", f.pubB64, "--data-dir", dataDir, "--target", target,
 		"--channel", release.ChannelSecurity,
 		"--os", "linux", "--arch", "amd64", "--yes")
@@ -82,7 +82,7 @@ func TestUpgradeStillAcceptsTheDefaultStableChannel(t *testing.T) {
 	target := writeTarget(t, v1)
 
 	// No --channel at all: the default is stable and the fixture serves stable.
-	if _, err := runUpgradeCmd(t, "--enterprise", "--token", "tkn", "--endpoint", f.server.URL,
+	if _, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
 		"--pubkey", f.pubB64, "--data-dir", dataDir, "--target", target,
 		"--os", "linux", "--arch", "amd64", "--yes"); err != nil {
 		t.Fatalf("the default channel was refused by the new binding: %v", err)

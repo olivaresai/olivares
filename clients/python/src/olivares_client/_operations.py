@@ -5,11 +5,488 @@ Transport, auth, the error envelope, pagination and deprecation signaling live
 in the hand-written core (:mod:`olivares_client._core`).
 """
 
+from __future__ import annotations
+
+from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "960c5c248903451d4cb9b947dc0ddba00be41ce4ca8b102de1274d5f85fa7265"
+SPEC_HASH = "e6a336e16f9f4afd020e87b93bef0bac01d3736d43fbd93ff67cf52f8510536a"
 STABILITY_POLICY = "https://olivares.ai/docs"
+
+class _AuthCapabilityQuestionRequired(TypedDict):
+    id: str
+    kind: str
+    operation: str
+
+class AuthCapabilityQuestion(_AuthCapabilityQuestionRequired, total=False):
+    selectors: AuthCapabilitySelectors
+    workspace_id: str
+
+class AuthCapabilityQuestions(TypedDict):
+    questions: list[AuthCapabilityQuestion]
+    schema_version: int
+
+class _AuthCapabilityResultRequired(TypedDict):
+    code: str
+    id: str
+    kind: str
+    observed_at: str
+    state: str
+
+class AuthCapabilityResult(_AuthCapabilityResultRequired, total=False):
+    refresh_after_ms: int
+
+class AuthCapabilityResults(TypedDict):
+    results: list[AuthCapabilityResult]
+    schema_version: int
+
+class AuthCapabilitySelectors(TypedDict, total=False):
+    body: dict[str, str]
+    path: dict[str, str]
+
+class SessionsCommunicationAckResult(TypedDict):
+    ack_id: str
+    audit_seq: int
+    command_id: str
+    delivery_id: str
+    etag: str
+    event_id: str
+    fulfillment: SessionsCommunicationFulfillment
+    late: bool
+    message_id: str
+    replayed: bool
+    state: str
+    version: int
+
+class _SessionsCommunicationChannelRequired(TypedDict):
+    acl_revision: int
+    content_protection: str
+    created_at: str
+    default_ack_policy: str
+    default_ack_timeout_ms: int
+    default_wake: str
+    id: str
+    kind: str
+    max_automation_depth: int
+    max_fanout: int
+    name: str
+    protection_generation: int
+    route_revision: int
+    sensitivity: str
+    slug: str
+    state: str
+    subscription_revision: int
+    tenant_id: str
+    updated_at: str
+    version: int
+    workspace_id: str
+
+class SessionsCommunicationChannel(_SessionsCommunicationChannelRequired, total=False):
+    description: str
+    retention_policy_ref: str
+
+class SessionsCommunicationChannelAccess(TypedDict):
+    admin: bool
+    read: bool
+    write: bool
+
+class SessionsCommunicationChannelAdministrationItem(TypedDict):
+    channel: SessionsCommunicationChannel
+    etag: str
+
+class _SessionsCommunicationChannelAdministrationPageRequired(TypedDict):
+    has_more: bool
+    items: list[SessionsCommunicationChannelAdministrationItem]
+
+class SessionsCommunicationChannelAdministrationPage(_SessionsCommunicationChannelAdministrationPageRequired, total=False):
+    continuation: str
+
+class _SessionsCommunicationChannelCatalogItemRequired(TypedDict):
+    acl_revision: int
+    content_protection: str
+    created_at: str
+    default_ack_policy: str
+    default_ack_timeout_ms: int
+    default_wake: str
+    id: str
+    kind: str
+    max_automation_depth: int
+    max_fanout: int
+    my_access: SessionsCommunicationChannelAccess
+    name: str
+    protection_generation: int
+    route_revision: int
+    sensitivity: str
+    slug: str
+    state: str
+    subscription_revision: int
+    tenant_id: str
+    updated_at: str
+    version: int
+    workspace_id: str
+
+class SessionsCommunicationChannelCatalogItem(_SessionsCommunicationChannelCatalogItemRequired, total=False):
+    description: str
+    retention_policy_ref: str
+
+class _SessionsCommunicationChannelCatalogPageRequired(TypedDict):
+    has_more: bool
+    items: list[SessionsCommunicationChannelCatalogItem]
+
+class SessionsCommunicationChannelCatalogPage(_SessionsCommunicationChannelCatalogPageRequired, total=False):
+    continuation: str
+
+class _SessionsCommunicationChannelCreateBodyRequired(TypedDict):
+    initial_grants: list[SessionsCommunicationChannelGrantInput]
+    name: str
+    slug: str
+    workspace_id: str
+
+class SessionsCommunicationChannelCreateBody(_SessionsCommunicationChannelCreateBodyRequired, total=False):
+    content_protection: str
+    default_ack_policy: str
+    default_ack_timeout_ms: int
+    default_wake: str
+    description: str
+    kind: str
+    max_automation_depth: int
+    max_fanout: int
+    retention_policy_ref: str
+    sensitivity: str
+
+class _SessionsCommunicationChannelGrantRequired(TypedDict):
+    can_admin: bool
+    can_read: bool
+    can_write: bool
+    channel_id: str
+    created_at: str
+    generation: int
+    granted_by: SessionsCommunicationRef
+    id: str
+    state: str
+    subject: SessionsCommunicationRef
+    tenant_id: str
+    updated_at: str
+    version: int
+    workspace_id: str
+
+class SessionsCommunicationChannelGrant(_SessionsCommunicationChannelGrantRequired, total=False):
+    expires_at: str | None
+    revoked_by: SessionsCommunicationRef | None
+    supersedes_id: str
+
+class SessionsCommunicationChannelGrantAdministrationItem(TypedDict):
+    grant: SessionsCommunicationChannelGrant
+    temporal_state: str
+
+class _SessionsCommunicationChannelGrantAdministrationPageRequired(TypedDict):
+    channel: SessionsCommunicationChannel
+    etag: str
+    has_more: bool
+    items: list[SessionsCommunicationChannelGrantAdministrationItem]
+    observed_at: str
+
+class SessionsCommunicationChannelGrantAdministrationPage(_SessionsCommunicationChannelGrantAdministrationPageRequired, total=False):
+    continuation: str
+
+class _SessionsCommunicationChannelGrantInputRequired(TypedDict):
+    can_admin: bool
+    can_read: bool
+    can_write: bool
+    subject: SessionsCommunicationRef
+
+class SessionsCommunicationChannelGrantInput(_SessionsCommunicationChannelGrantInputRequired, total=False):
+    expires_at: str | None
+
+class _SessionsCommunicationChannelMutationResultRequired(TypedDict):
+    audit_seq: int
+    channel: SessionsCommunicationChannel
+    etag: str
+
+class SessionsCommunicationChannelMutationResult(_SessionsCommunicationChannelMutationResultRequired, total=False):
+    grant: SessionsCommunicationChannelGrant | None
+    grants: list[SessionsCommunicationChannelGrant]
+
+class _SessionsCommunicationChannelUpdateBodyRequired(TypedDict):
+    channel_id: str
+
+class SessionsCommunicationChannelUpdateBody(_SessionsCommunicationChannelUpdateBodyRequired, total=False):
+    content_protection: str
+    default_ack_policy: str
+    default_ack_timeout_ms: int
+    default_wake: str
+    description: str
+    max_automation_depth: int
+    max_fanout: int
+    name: str
+    retention_policy_ref: str
+    sensitivity: str
+    state: str
+
+class _SessionsCommunicationContentBlockRequired(TypedDict):
+    type: str
+
+class SessionsCommunicationContentBlock(_SessionsCommunicationContentBlockRequired, total=False):
+    code: str
+    format: str
+    reference: SessionsCommunicationContentReference | None
+    text: str
+
+class _SessionsCommunicationContentReferenceRequired(TypedDict):
+    kind: str
+    ref: str
+
+class SessionsCommunicationContentReference(_SessionsCommunicationContentReferenceRequired, total=False):
+    hash: str
+
+class SessionsCommunicationCursorAdvanceBody(TypedDict):
+    cursor: str
+    delivery_id: str
+
+class SessionsCommunicationCursorAdvanceResult(TypedDict):
+    audit_seq: int
+    command_id: str
+    cursor_id: str
+    etag: str
+    projection: SessionsCommunicationCursorProjection
+    replayed: bool
+    version: int
+
+class SessionsCommunicationCursorProjection(TypedDict, total=False):
+    barrier_delivery_id: str
+    barrier_reason: str
+    barrier_since: str | None
+    last_seen_seq: int
+
+class _SessionsCommunicationCursorTokenResultRequired(TypedDict):
+    cursor: str
+    etag: str
+    version: int
+
+class SessionsCommunicationCursorTokenResult(_SessionsCommunicationCursorTokenResultRequired, total=False):
+    cursor_id: str
+
+class _SessionsCommunicationDeliveryViewRequired(TypedDict):
+    available_at: str
+    delivery_seq: int
+    id: str
+    message_id: str
+    recipient: SessionsCommunicationRef
+    required: bool
+    state: str
+    version: int
+
+class SessionsCommunicationDeliveryView(_SessionsCommunicationDeliveryViewRequired, total=False):
+    ack_due_at: str | None
+    acknowledged_at: str | None
+    expires_at: str | None
+    first_seen_at: str | None
+
+class _SessionsCommunicationFulfillmentRequired(TypedDict):
+    acknowledged: int
+    required: int
+    state: str
+    unmet: int
+    viable: int
+
+class SessionsCommunicationFulfillment(_SessionsCommunicationFulfillmentRequired, total=False):
+    quorum: int
+
+class _SessionsCommunicationHandoffContentRequired(TypedDict):
+    next_action: str
+    summary: str
+
+class SessionsCommunicationHandoffContent(_SessionsCommunicationHandoffContentRequired, total=False):
+    artifact_refs: list[SessionsCommunicationContentReference]
+    risk: str
+
+class _SessionsCommunicationHandoffOfferBodyRequired(TypedDict):
+    ack_deadline: str
+    channel_id: str
+    handoff: SessionsCommunicationHandoffContent
+    recipient: SessionsCommunicationRef
+    work_item_id: str
+
+class SessionsCommunicationHandoffOfferBody(_SessionsCommunicationHandoffOfferBodyRequired, total=False):
+    expected_owner_epoch: int
+
+class SessionsCommunicationHandoffOfferResult(TypedDict):
+    audit_seq: int
+    command_id: str
+    delivery_id: str
+    etag: str
+    event_id: str
+    handoff_id: str
+    message_id: str
+    replayed: bool
+    state: str
+    version: int
+    work_item_id: str
+
+class _SessionsCommunicationHandoffResponseBodyRequired(TypedDict):
+    transition: str
+
+class SessionsCommunicationHandoffResponseBody(_SessionsCommunicationHandoffResponseBodyRequired, total=False):
+    reason: SessionsCommunicationReason | None
+
+class _SessionsCommunicationHandoffResponseResultRequired(TypedDict):
+    audit_seq: int
+    command_id: str
+    delivery_id: str
+    etag: str
+    event_id: str
+    handoff_id: str
+    message_id: str
+    owner_epoch: int
+    replayed: bool
+    state: str
+    version: int
+    work_item_id: str
+
+class SessionsCommunicationHandoffResponseResult(_SessionsCommunicationHandoffResponseResultRequired, total=False):
+    ack_id: str
+    resulting_lease_fence: int
+
+class _SessionsCommunicationInboxPageRequired(TypedDict):
+    has_more: bool
+    items: list[SessionsCommunicationReadResult]
+
+class SessionsCommunicationInboxPage(_SessionsCommunicationInboxPageRequired, total=False):
+    continuation: str
+    cursor_target: str
+
+class SessionsCommunicationIncomingHandoffCarrier(TypedDict):
+    channel_id: str
+    delivery_id: str
+    delivery_version: int
+    message_id: str
+
+_SessionsCommunicationIncomingHandoffOfferRequired = TypedDict(
+    "_SessionsCommunicationIncomingHandoffOfferRequired",
+    {
+        "ack_deadline": "str",
+        "created_at": "str",
+        "etag": "str",
+        "from": "SessionsCommunicationRef",
+        "id": "str",
+        "state": "str",
+        "to": "SessionsCommunicationRef",
+        "version": "int",
+    },
+)
+
+_SessionsCommunicationIncomingHandoffOfferOptional = TypedDict(
+    "_SessionsCommunicationIncomingHandoffOfferOptional",
+    {
+        "terminal_at": "str | None",
+        "terminal_code": "str",
+    },
+    total=False,
+)
+
+class SessionsCommunicationIncomingHandoffOffer(_SessionsCommunicationIncomingHandoffOfferRequired, _SessionsCommunicationIncomingHandoffOfferOptional):
+    pass
+
+class _SessionsCommunicationIncomingHandoffPageRequired(TypedDict):
+    has_more: bool
+    items: list[SessionsCommunicationIncomingHandoffSummary]
+
+class SessionsCommunicationIncomingHandoffPage(_SessionsCommunicationIncomingHandoffPageRequired, total=False):
+    continuation: str
+
+class _SessionsCommunicationIncomingHandoffReadResultRequired(TypedDict):
+    carrier: SessionsCommunicationIncomingHandoffCarrier
+    content: SessionsCommunicationHandoffContent
+    deadline_elapsed: bool
+    handoff: SessionsCommunicationIncomingHandoffOffer
+    observed_at: str
+    offer_context: str
+    work_item: SessionsCommunicationIncomingHandoffWorkItem
+
+class SessionsCommunicationIncomingHandoffReadResult(_SessionsCommunicationIncomingHandoffReadResultRequired, total=False):
+    terminal_reason: SessionsCommunicationReason | None
+
+class SessionsCommunicationIncomingHandoffSummary(TypedDict):
+    carrier: SessionsCommunicationIncomingHandoffCarrier
+    deadline_elapsed: bool
+    handoff: SessionsCommunicationIncomingHandoffOffer
+    observed_at: str
+    work_item: SessionsCommunicationIncomingHandoffWorkItem
+
+class SessionsCommunicationIncomingHandoffWorkItem(TypedDict):
+    id: str
+    presentation: str
+
+class SessionsCommunicationMessageContent(TypedDict):
+    blocks: list[SessionsCommunicationContentBlock]
+    subject: str
+
+class _SessionsCommunicationMessageSendBodyRequired(TypedDict):
+    channel_id: str
+    content: SessionsCommunicationMessageContent
+    recipient: SessionsCommunicationRef
+
+class SessionsCommunicationMessageSendBody(_SessionsCommunicationMessageSendBodyRequired, total=False):
+    available_at: str
+    urgency: str
+
+class _SessionsCommunicationMessageViewRequired(TypedDict):
+    ack_policy: str
+    available_at: str
+    channel_id: str
+    content: SessionsCommunicationMessageContent
+    id: str
+    sender: SessionsCommunicationRef
+    state: str
+    thread_id: str
+    urgency: str
+    version: int
+
+class SessionsCommunicationMessageView(_SessionsCommunicationMessageViewRequired, total=False):
+    ack_due_at: str | None
+    ack_quorum: int
+    expires_at: str | None
+    published_at: str | None
+    terminal_at: str | None
+    terminal_code: str
+
+class SessionsCommunicationPublishResult(TypedDict):
+    ack_quorum: int
+    audience_hash: str
+    audit_seq: int
+    channel_id: str
+    code: str
+    command_id: str
+    delivery_count: int
+    delivery_id: str
+    event_id: str
+    fulfillment: SessionsCommunicationFulfillment
+    message_id: str
+    payload_digest: str
+    plan_hash: str
+    replayed: bool
+    required_count: int
+    state: str
+    verdict: str
+    version: int
+
+class SessionsCommunicationReadResult(TypedDict):
+    delivery: SessionsCommunicationDeliveryView
+    fulfillment: SessionsCommunicationFulfillment
+    message: SessionsCommunicationMessageView
+
+class _SessionsCommunicationReasonRequired(TypedDict):
+    code: str
+
+class SessionsCommunicationReason(_SessionsCommunicationReasonRequired, total=False):
+    references: list[SessionsCommunicationContentReference]
+    text: str
+
+class SessionsCommunicationRef(TypedDict):
+    kind: str
+    ref: str
+
 
 
 class OperationsMixin:
@@ -51,7 +528,7 @@ class OperationsMixin:
         return self._do("GET", "/pod-readyz", "/pod-readyz", query=query, tenant=tenant)
 
     def get_readyz(self, *, tenant=None, **query):
-        """GET /readyz — Readiness probe (store reachable AND this node is the active writer); 503 on a standby or when the store is down.
+        """GET /readyz — Readiness probe (store reachable AND this node is the active writer AND, before first setup, that setup read can run); 503 on standby, store down, unknown setup state, blocked first boot, or a failed setup probe.
 
         Stability: stable.
         """
@@ -140,6 +617,12 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("GET", "/v1/audit/verify", "/v1/audit/verify", query=query, tenant=tenant)
+
+    def post_v1_auth_capabilities(self, body: AuthCapabilityQuestions, *, tenant: str | None = None) -> AuthCapabilityResults:
+        """POST /v1/auth/capabilities — typed published communication contract."""
+        query = {}
+        headers = {}
+        return cast(AuthCapabilityResults, self._do_json_required("POST", "/v1/auth/capabilities", "/v1/auth/capabilities", body=body, query=query, headers=headers, tenant=tenant))
 
     def post_v1_auth_login(self, body=None, *, tenant=None, **query):
         """POST /v1/auth/login — Exchange email/password for a session token.
@@ -2211,7 +2694,7 @@ class OperationsMixin:
 
         Stability: beta.
         """
-        return self._do("GET", "/v1/m/finops/statements/{id}/export", "/v1/m/finops/statements/" + quote(str(id), safe="") + "/export", query=query, tenant=tenant)
+        return self._do_raw("GET", "/v1/m/finops/statements/{id}/export", "/v1/m/finops/statements/" + quote(str(id), safe="") + "/export", query=query, tenant=tenant)
 
     def get_v1_m_finops_value(self, *, tenant=None, **query):
         """GET /v1/m/finops/value — Serves the cost-per-outcome breakdown by ?dimension (agent|identity| session, default agent) over the standard since/until window.
@@ -2997,6 +3480,13 @@ class OperationsMixin:
         """
         return self._do_json_required("PUT", "/v1/m/inferenceproxy/config", "/v1/m/inferenceproxy/config", body=body, query=query, tenant=tenant)
 
+    def get_v1_m_inferenceproxy_content_firewall(self, *, tenant=None, **query):
+        """GET /v1/m/inferenceproxy/content-firewall — Reports the startup attachment state of the inline Messages proxy content inspector in this process, where an attached inspector can be the deny-all fallback; it does not report listener health, policy load or per-request inspection.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/inferenceproxy/content-firewall", "/v1/m/inferenceproxy/content-firewall", query=query, tenant=tenant)
+
     def post_v1_m_inferenceproxy_device_approve(self, body, *, tenant=None, **query):
         """POST /v1/m/inferenceproxy/device/approve — inferenceproxy module route (requires inferenceproxy:config:admin)
 
@@ -3038,6 +3528,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/inventory/entities/{kind}/{id}", "/v1/m/inventory/entities/" + quote(str(kind), safe="") + "/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def get_v1_m_inventory_entities_by_kind_by_id_observations(self, kind, id, *, tenant=None, **query):
+        """GET /v1/m/inventory/entities/{kind}/{id}/observations — Lists the stored observation receipts that name one catalog entity, one item per distinct receipt in ascending receipt order, in pages of at most 25 (?limit 1..25, ?cursor from the previous page): each item carries the receipt id, the event type, the registration snapshot recorded at reception (historical, not the source's current registration or health), the source-declared occurrence instant when declared, first and last reception of the same retained facts, the equal-facts delivery count and whether a conflicting redelivery is retained; names, references, labels, raw facts, hashes and event ids are withheld, a missing catalog entry is 404, and an empty page does not prove no observation.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/inventory/entities/{kind}/{id}/observations", "/v1/m/inventory/entities/" + quote(str(kind), safe="") + "/" + quote(str(id), safe="") + "/observations", query=query, tenant=tenant)
 
     def get_v1_m_inventory_summary(self, *, tenant=None, **query):
         """GET /v1/m/inventory/summary — Returns the estate overview: counts by entity kind and by signal source.
@@ -4677,6 +5174,80 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/security/safety-posture", "/v1/m/security/safety-posture", query=query, tenant=tenant)
 
+    def get_v1_m_sessions_channels(self, *, workspace_id: str, continuation: str | None = None, limit: int | None = None, tenant: str | None = None) -> SessionsCommunicationChannelCatalogPage:
+        """GET /v1/m/sessions/channels — typed published communication contract."""
+        query = {}
+        headers = {}
+        query["workspace_id"] = str(workspace_id)
+        if continuation is not None:
+            query["continuation"] = str(continuation)
+        if limit is not None:
+            query["limit"] = str(limit)
+        return cast(SessionsCommunicationChannelCatalogPage, self._do("GET", "/v1/m/sessions/channels", "/v1/m/sessions/channels", query=query, headers=headers, tenant=tenant))
+
+    def post_v1_m_sessions_channels(self, body: SessionsCommunicationChannelCreateBody, *, tenant: str | None = None) -> SessionsCommunicationChannelMutationResult:
+        """POST /v1/m/sessions/channels — typed published communication contract."""
+        query = {}
+        headers = {}
+        return cast(SessionsCommunicationChannelMutationResult, self._do_json_required("POST", "/v1/m/sessions/channels", "/v1/m/sessions/channels", body=body, query=query, headers=headers, tenant=tenant))
+
+    def patch_v1_m_sessions_channels(self, body: SessionsCommunicationChannelUpdateBody, *, if_match: str, tenant: str | None = None) -> SessionsCommunicationChannelMutationResult:
+        """PATCH /v1/m/sessions/channels — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        return cast(SessionsCommunicationChannelMutationResult, self._do_json_required("PATCH", "/v1/m/sessions/channels", "/v1/m/sessions/channels", body=body, query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_channels_administration(self, *, workspace_id: str, state: str | None = None, continuation: str | None = None, limit: int | None = None, tenant: str | None = None) -> SessionsCommunicationChannelAdministrationPage:
+        """GET /v1/m/sessions/channels/administration — typed published communication contract."""
+        query = {}
+        headers = {}
+        query["workspace_id"] = str(workspace_id)
+        if state is not None:
+            query["state"] = str(state)
+        if continuation is not None:
+            query["continuation"] = str(continuation)
+        if limit is not None:
+            query["limit"] = str(limit)
+        return cast(SessionsCommunicationChannelAdministrationPage, self._do("GET", "/v1/m/sessions/channels/administration", "/v1/m/sessions/channels/administration", query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_channels_by_id(self, id: str, *, tenant: str | None = None) -> SessionsCommunicationChannel:
+        """GET /v1/m/sessions/channels/{id} — typed published communication contract."""
+        query = {}
+        headers = {}
+        return cast(SessionsCommunicationChannel, self._do("GET", "/v1/m/sessions/channels/{id}", "/v1/m/sessions/channels/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_channels_by_id_grants(self, id: str, *, workspace_id: str, state: str | None = None, subject_kind: str | None = None, subject_ref: str | None = None, continuation: str | None = None, limit: int | None = None, tenant: str | None = None) -> SessionsCommunicationChannelGrantAdministrationPage:
+        """GET /v1/m/sessions/channels/{id}/grants — typed published communication contract."""
+        query = {}
+        headers = {}
+        query["workspace_id"] = str(workspace_id)
+        if state is not None:
+            query["state"] = str(state)
+        if subject_kind is not None:
+            query["subject_kind"] = str(subject_kind)
+        if subject_ref is not None:
+            query["subject_ref"] = str(subject_ref)
+        if continuation is not None:
+            query["continuation"] = str(continuation)
+        if limit is not None:
+            query["limit"] = str(limit)
+        return cast(SessionsCommunicationChannelGrantAdministrationPage, self._do("GET", "/v1/m/sessions/channels/{id}/grants", "/v1/m/sessions/channels/" + quote(str(id), safe="") + "/grants", query=query, headers=headers, tenant=tenant))
+
+    def post_v1_m_sessions_channels_by_id_grants(self, id: str, body: SessionsCommunicationChannelGrantInput, *, if_match: str, tenant: str | None = None) -> SessionsCommunicationChannelMutationResult:
+        """POST /v1/m/sessions/channels/{id}/grants — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        return cast(SessionsCommunicationChannelMutationResult, self._do_json_required("POST", "/v1/m/sessions/channels/{id}/grants", "/v1/m/sessions/channels/" + quote(str(id), safe="") + "/grants", body=body, query=query, headers=headers, tenant=tenant))
+
+    def post_v1_m_sessions_channels_by_id_grants_by_grant_id_revoke(self, id: str, grant_id: str, *, if_match: str, tenant: str | None = None) -> SessionsCommunicationChannelMutationResult:
+        """POST /v1/m/sessions/channels/{id}/grants/{grant_id}/revoke — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        return cast(SessionsCommunicationChannelMutationResult, self._do("POST", "/v1/m/sessions/channels/{id}/grants/{grant_id}/revoke", "/v1/m/sessions/channels/" + quote(str(id), safe="") + "/grants/" + quote(str(grant_id), safe="") + "/revoke", query=query, headers=headers, tenant=tenant))
+
     def get_v1_m_sessions_decisions(self, *, tenant=None, **query):
         """GET /v1/m/sessions/decisions — sessions module route (requires sessions:decision:read)
 
@@ -4705,6 +5276,82 @@ class OperationsMixin:
         """
         return self._do_json_required("POST", "/v1/m/sessions/decisions/{id}/revoke", "/v1/m/sessions/decisions/" + quote(str(id), safe="") + "/revoke", body=body, query=query, tenant=tenant)
 
+    def get_v1_m_sessions_deliveries_by_id(self, id: str, *, tenant: str | None = None) -> SessionsCommunicationReadResult:
+        """GET /v1/m/sessions/deliveries/{id} — typed published communication contract."""
+        query = {}
+        headers = {}
+        return cast(SessionsCommunicationReadResult, self._do("GET", "/v1/m/sessions/deliveries/{id}", "/v1/m/sessions/deliveries/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant))
+
+    def post_v1_m_sessions_deliveries_by_id_ack(self, id: str, *, if_match: str, idempotency_key: str, tenant: str | None = None) -> SessionsCommunicationAckResult:
+        """POST /v1/m/sessions/deliveries/{id}/ack — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        headers["Idempotency-Key"] = str(idempotency_key)
+        return cast(SessionsCommunicationAckResult, self._do("POST", "/v1/m/sessions/deliveries/{id}/ack", "/v1/m/sessions/deliveries/" + quote(str(id), safe="") + "/ack", query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_deliveries_by_id_handoff(self, id: str, *, tenant: str | None = None) -> SessionsCommunicationIncomingHandoffReadResult:
+        """GET /v1/m/sessions/deliveries/{id}/handoff — typed published communication contract."""
+        query = {}
+        headers = {}
+        return cast(SessionsCommunicationIncomingHandoffReadResult, self._do("GET", "/v1/m/sessions/deliveries/{id}/handoff", "/v1/m/sessions/deliveries/" + quote(str(id), safe="") + "/handoff", query=query, headers=headers, tenant=tenant))
+
+    def post_v1_m_sessions_handoffs(self, body: SessionsCommunicationHandoffOfferBody, *, if_match: str, idempotency_key: str, tenant: str | None = None) -> SessionsCommunicationHandoffOfferResult:
+        """POST /v1/m/sessions/handoffs — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        headers["Idempotency-Key"] = str(idempotency_key)
+        return cast(SessionsCommunicationHandoffOfferResult, self._do_json_required("POST", "/v1/m/sessions/handoffs", "/v1/m/sessions/handoffs", body=body, query=query, headers=headers, tenant=tenant))
+
+    def post_v1_m_sessions_handoffs_by_id_responses(self, id: str, body: SessionsCommunicationHandoffResponseBody, *, if_match: str, idempotency_key: str, tenant: str | None = None) -> SessionsCommunicationHandoffResponseResult:
+        """POST /v1/m/sessions/handoffs/{id}/responses — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        headers["Idempotency-Key"] = str(idempotency_key)
+        return cast(SessionsCommunicationHandoffResponseResult, self._do_json_required("POST", "/v1/m/sessions/handoffs/{id}/responses", "/v1/m/sessions/handoffs/" + quote(str(id), safe="") + "/responses", body=body, query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_inbox(self, *, workspace_id: str, continuation: str | None = None, limit: int | None = None, tenant: str | None = None) -> SessionsCommunicationInboxPage:
+        """GET /v1/m/sessions/inbox — typed published communication contract."""
+        query = {}
+        headers = {}
+        query["workspace_id"] = str(workspace_id)
+        if continuation is not None:
+            query["continuation"] = str(continuation)
+        if limit is not None:
+            query["limit"] = str(limit)
+        return cast(SessionsCommunicationInboxPage, self._do("GET", "/v1/m/sessions/inbox", "/v1/m/sessions/inbox", query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_inbox_cursors_personal_by_recipient(self, recipient: str, *, workspace_id: str, target: str, tenant: str | None = None) -> SessionsCommunicationCursorTokenResult:
+        """GET /v1/m/sessions/inbox/cursors/personal/{recipient} — typed published communication contract."""
+        query = {}
+        headers = {}
+        query["workspace_id"] = str(workspace_id)
+        query["target"] = str(target)
+        return cast(SessionsCommunicationCursorTokenResult, self._do("GET", "/v1/m/sessions/inbox/cursors/personal/{recipient}", "/v1/m/sessions/inbox/cursors/personal/" + quote(str(recipient), safe=""), query=query, headers=headers, tenant=tenant))
+
+    def put_v1_m_sessions_inbox_cursors_personal_by_recipient(self, recipient: str, body: SessionsCommunicationCursorAdvanceBody, *, if_match: str, idempotency_key: str, tenant: str | None = None) -> SessionsCommunicationCursorAdvanceResult:
+        """PUT /v1/m/sessions/inbox/cursors/personal/{recipient} — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["If-Match"] = str(if_match)
+        headers["Idempotency-Key"] = str(idempotency_key)
+        return cast(SessionsCommunicationCursorAdvanceResult, self._do_json_required("PUT", "/v1/m/sessions/inbox/cursors/personal/{recipient}", "/v1/m/sessions/inbox/cursors/personal/" + quote(str(recipient), safe=""), body=body, query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_inbox_handoffs(self, *, workspace_id: str, state: str | None = None, continuation: str | None = None, limit: int | None = None, tenant: str | None = None) -> SessionsCommunicationIncomingHandoffPage:
+        """GET /v1/m/sessions/inbox/handoffs — typed published communication contract."""
+        query = {}
+        headers = {}
+        query["workspace_id"] = str(workspace_id)
+        if state is not None:
+            query["state"] = str(state)
+        if continuation is not None:
+            query["continuation"] = str(continuation)
+        if limit is not None:
+            query["limit"] = str(limit)
+        return cast(SessionsCommunicationIncomingHandoffPage, self._do("GET", "/v1/m/sessions/inbox/handoffs", "/v1/m/sessions/inbox/handoffs", query=query, headers=headers, tenant=tenant))
+
     def get_v1_m_sessions_leases(self, *, tenant=None, **query):
         """GET /v1/m/sessions/leases — sessions module route (requires sessions:lease:read)
 
@@ -4719,19 +5366,48 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/sessions/live", "/v1/m/sessions/live", query=query, tenant=tenant)
 
+    def get_v1_m_sessions_live_by_id_by_live_ref(self, live_ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/live/by-id/{live_ref} — Returns the live operation of one session row by its opaque live_ref, whichever channel it was observed through.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/live/by-id/{live_ref}", "/v1/m/sessions/live/by-id/" + quote(str(live_ref), safe=""), query=query, tenant=tenant)
+
+    def get_v1_m_sessions_live_by_id_by_live_ref_timeline(self, live_ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/live/by-id/{live_ref}/timeline — Returns the timeline of exactly one session row by its live_ref: a scoped row by the events written with that reference, a legacy row by its legacy events.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/live/by-id/{live_ref}/timeline", "/v1/m/sessions/live/by-id/" + quote(str(live_ref), safe="") + "/timeline", query=query, tenant=tenant)
+
     def get_v1_m_sessions_live_by_ref(self, ref, *, tenant=None, **query):
-        """GET /v1/m/sessions/live/{ref} — Returns the full live operation of one session by its reference.
+        """GET /v1/m/sessions/live/{ref} — Returns the live operation of the LEGACY row of one session by its bare external reference; a profile-scoped row is never returned here — read it by its live_ref.
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/live/{ref}", "/v1/m/sessions/live/" + quote(str(ref), safe=""), query=query, tenant=tenant)
 
     def get_v1_m_sessions_live_by_ref_timeline(self, ref, *, tenant=None, **query):
-        """GET /v1/m/sessions/live/{ref}/timeline — Returns a session's reconstructable timeline in chronological (ingestion) order, keyset-paginated by the time-ordered row id.
+        """GET /v1/m/sessions/live/{ref}/timeline — Returns the LEGACY timeline of one session by its bare external reference — the events that carry no live_ref — in chronological (ingestion) order, keyset-paginated by the time-ordered row id.
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/live/{ref}/timeline", "/v1/m/sessions/live/" + quote(str(ref), safe="") + "/timeline", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_messages_send(self, body: SessionsCommunicationMessageSendBody, *, idempotency_key: str, if_plan_hash: str | None = None, tenant: str | None = None) -> SessionsCommunicationPublishResult:
+        """POST /v1/m/sessions/messages/send — typed published communication contract."""
+        query = {}
+        headers = {}
+        headers["Idempotency-Key"] = str(idempotency_key)
+        if if_plan_hash is not None:
+            headers["If-Plan-Hash"] = str(if_plan_hash)
+        return cast(SessionsCommunicationPublishResult, self._do_json_required("POST", "/v1/m/sessions/messages/send", "/v1/m/sessions/messages/send", body=body, query=query, headers=headers, tenant=tenant))
+
+    def get_v1_m_sessions_messages_by_id(self, id: str, *, tenant: str | None = None) -> SessionsCommunicationReadResult:
+        """GET /v1/m/sessions/messages/{id} — typed published communication contract."""
+        query = {}
+        headers = {}
+        return cast(SessionsCommunicationReadResult, self._do("GET", "/v1/m/sessions/messages/{id}", "/v1/m/sessions/messages/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant))
 
     def get_v1_m_sessions_protocol_binding_specs(self, *, tenant=None, **query):
         """GET /v1/m/sessions/protocol-binding-specs — Lists protocol binding spec generations in one workspace.
@@ -4789,6 +5465,90 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/m/sessions/protocol-bindings/{id}/reconcile", "/v1/m/sessions/protocol-bindings/" + quote(str(id), safe="") + "/reconcile", body=body, query=query, tenant=tenant)
 
+    def get_v1_m_sessions_provider_profiles(self, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-profiles — Lists the tenant's provider profiles as references and labels, never paths.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-profiles", "/v1/m/sessions/provider-profiles", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_profiles(self, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-profiles — Registers a provider profile for a configuration home on this node's execution environment; the homes are validated on the server and must already exist.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/provider-profiles", "/v1/m/sessions/provider-profiles", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_profiles_by_ref(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-profiles/{ref} — Returns one provider profile by its reference, without its paths.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-profiles/{ref}", "/v1/m/sessions/provider-profiles/" + quote(str(ref), safe=""), query=query, tenant=tenant)
+
+    def patch_v1_m_sessions_provider_profiles_by_ref(self, ref, body, *, tenant=None, **query):
+        """PATCH /v1/m/sessions/provider-profiles/{ref} — Renames a provider profile and/or moves it between active and disabled; driver, environment and homes are immutable and retirement has its own route.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PATCH", "/v1/m/sessions/provider-profiles/{ref}", "/v1/m/sessions/provider-profiles/" + quote(str(ref), safe=""), body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_profiles_by_ref_configuration(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-profiles/{ref}/configuration — Returns the stored canonical homes of one provider profile; this is the only read that exposes paths, and it never exposes a credential value.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-profiles/{ref}/configuration", "/v1/m/sessions/provider-profiles/" + quote(str(ref), safe="") + "/configuration", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_profiles_by_ref_host_tools(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-profiles/{ref}/host-tools — Reports the official provider CLI candidates this node observes for one provider profile, grouped into closed codes; it installs nothing, probes nothing and authorizes nothing.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-profiles/{ref}/host-tools", "/v1/m/sessions/provider-profiles/" + quote(str(ref), safe="") + "/host-tools", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_profiles_by_ref_launch_readiness(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-profiles/{ref}/launch-readiness — Reports the LOCAL launch requirements observed for one provider profile under one transport and isolation, with the checks this read cannot make left explicitly unknown; it starts nothing, mints nothing and authorizes nothing.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-profiles/{ref}/launch-readiness", "/v1/m/sessions/provider-profiles/" + quote(str(ref), safe="") + "/launch-readiness", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_profiles_by_ref_retire(self, ref, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-profiles/{ref}/retire — Retires a provider profile for good: the id stays, its history stays, and the home becomes free for a new profile id.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/sessions/provider-profiles/{ref}/retire", "/v1/m/sessions/provider-profiles/" + quote(str(ref), safe="") + "/retire", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_source_bindings(self, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-source-bindings — Lists the source-to-profile bindings of the tenant, optionally narrowed to one profile.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-source-bindings", "/v1/m/sessions/provider-source-bindings", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_source_bindings(self, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-source-bindings — Dedicates one configured source, at the exact revision this node has applied, to a provider profile; administering the source is checked through the composition port.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/provider-source-bindings", "/v1/m/sessions/provider-source-bindings", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_sessions_provider_source_bindings_by_ref(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-source-bindings/{ref} — Returns one source-to-profile binding by its reference.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-source-bindings/{ref}", "/v1/m/sessions/provider-source-bindings/" + quote(str(ref), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_source_bindings_by_ref_revoke(self, ref, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-source-bindings/{ref}/revoke — Revokes a source-to-profile binding; events already attributed under it keep their provenance and later observations through that source are no longer attributed to the profile.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/sessions/provider-source-bindings/{ref}/revoke", "/v1/m/sessions/provider-source-bindings/" + quote(str(ref), safe="") + "/revoke", query=query, tenant=tenant)
+
     def get_v1_m_sessions_runs(self, *, tenant=None, **query):
         """GET /v1/m/sessions/runs — sessions module route (requires sessions:run:read)
 
@@ -4844,6 +5604,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/input", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/input", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_interrupt(self, ref, body=None, *, tenant=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/interrupt — Cancels the active provider turn of a live session and keeps its owned process running; it is the non-terminal control, /stop remains the terminal one, and the optional body decides which control plane answers — absent, it is the legacy interrupt of a non-work run; with a positive work_lease_fence, it is the fenced control this work-bound run's input and stop already use.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/sessions/runs/{ref}/interrupt", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/interrupt", body=body, query=query, tenant=tenant)
 
     def post_v1_m_sessions_runs_by_ref_resume(self, ref, *, tenant=None, **query):
         """POST /v1/m/sessions/runs/{ref}/resume — sessions module route (requires sessions:run:write)

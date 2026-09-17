@@ -1,10 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
+import {
+  encabezadoDeDialogo,
+  encabezadoDelDialogoAbierto,
+  encabezadoDePagina,
+  esperarEncabezado,
+  exigirInstanteLimpio,
+  exigirMarcadores,
+} from './capture-target'
+import { esperarExportacionDePostura } from './posture-export-terminal'
 
 /**
  * — real console captures for the public docs ("what you'll see in the
@@ -68,6 +77,23 @@ const CLAVES_I18N: string[] = (() => {
 })()
 const DEMO_EMAIL = 'demo@olivares.local'
 const DEMO_PASSWORD = 'olivares-demo-estate'
+
+/**
+ * «El shell de la app montó su navegación» — el oráculo que cada toma espera tras el login.
+ *
+ * ⛔ Hasta N1 (2026-09-06) era el enlace lateral «Inventory». La barra lateral ya no es plana:
+ *    las hojas viven dentro de nueve ÁREAS plegadas (web/src/features/registry.tsx NAV_AREAS),
+ *    y al aterrizar en `/` ningún área está abierta, así que ese enlace no está visible y las
+ *    122 tomas morían a los 30 s (medido en la corrida de publicación de esta rama). Lo que
+ *    SIEMPRE se pinta para el superadmin de la demo es el enlace del área «Infrastructure»,
+ *    acotado al landmark de la barra lateral para que la portada `/areas/infrastructure` —cuyo
+ *    breadcrumb repite ese nombre como `role="link"`— no lo vuelva ambiguo (la misma clase de
+ *    ambigüedad que el `exact: true` de antes cerraba para «Inventory»).
+ */
+const navReady = (page: import('@playwright/test').Page) =>
+  page
+    .getByRole('complementary', { name: 'Primary' })
+    .getByRole('link', { name: 'Infrastructure', exact: true })
 
 // One entry per view the docs reference. `settle` gives slow views (graph
 // layout, charts) extra time after networkidle before the shot. `live` views
@@ -153,6 +179,106 @@ async function esperaTablasCargadas(page: import('@playwright/test').Page) {
   })
 }
 
+/**
+ * K3 I1 — the three doors of the communications room need an EXPLICIT workspace, like
+ * protocol-bindings above: with «All workspaces» selected the product paints «Select a
+ * workspace» and makes no K3 request, so the capture would be a notice, not the screen.
+ * Same mechanism as that entry, written once for the three: open the switcher, choose
+ * any concrete workspace. Its absence is SEEDING, and the error says so.
+ */
+async function eligeWorkspaceConcretoK3(page: import('@playwright/test').Page) {
+  const conmutador = page.getByRole('button', { name: 'All workspaces' })
+  try {
+    await conmutador.waitFor({ timeout: 8_000 })
+    await conmutador.click()
+  } catch {
+    throw new Error(
+      'docs-captures: no se pudo abrir el conmutador de workspaces para /communications*: el ' +
+        'producto solo lo monta con MAS DE UNO (workspace-switcher.tsx:44). Es SEMBRADO, no un ' +
+        'selector roto.',
+    )
+  }
+  const alguno = page
+    .getByRole('menuitem')
+    .filter({ hasNotText: 'All workspaces' })
+    .first()
+  try {
+    await alguno.waitFor({ timeout: 8_000 })
+  } catch {
+    throw new Error(
+      'docs-captures: el conmutador no ofrece ningun workspace concreto, asi que /communications* ' +
+        'solo puede enseñar «Select a workspace». Es SEMBRADO, no un selector roto.',
+    )
+  }
+  await alguno.click()
+}
+
+/**
+ * The ONE principal a docs capture uses besides the demo global superadmin, ratified by Root on
+ * 2026-09-11 for the communications-handoffs door only. K3 re-binds identity on every personal
+ * read and a global superadmin session cannot be scoped to a tenant, so that door answers 503
+ * evidence_unavailable to the demo login while a tenant editor reads it with 200 (measured on one
+ * activated engine: both principals, same workspace, same moment).
+ *
+ * The actor is provisioned the way the K3 browser journey provisions its members — POST /v1/users,
+ * then POST /v1/memberships, authenticated by the demo superadmin's own login — and then signs in
+ * through the ordinary login form. Nothing is forged, patched or impersonated. Its secret is random
+ * per run and lives only in this process: it never reaches a capture, the evidence, a log or Git.
+ * The evidence records the role, the tenant, the user id and the basis.
+ */
+async function provisionaEditorK3(page: import('@playwright/test').Page) {
+  const api = page.request
+  const entrada = await api.post('/v1/auth/login', {
+    data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+  })
+  expect(
+    entrada.status(),
+    'docs-captures: el superadmin demo no pudo entrar para provisionar el actor de handoffs',
+  ).toBe(200)
+  const admin = ((await entrada.json()) as { token: string }).token
+  const cabeceras = {
+    Authorization: `Bearer ${admin}`,
+    'X-Olivares-Tenant': demoTenant,
+    'Content-Type': 'application/json',
+  }
+  const email = `docs-capture-k3-editor-${randomBytes(6).toString('hex')}@olivares.local`
+  const clave = randomBytes(24).toString('base64url')
+  const creado = await api.post('/v1/users', {
+    headers: cabeceras,
+    data: JSON.stringify({ email, password: clave }),
+  })
+  expect(
+    creado.status(),
+    'docs-captures: POST /v1/users del actor editor',
+  ).toBe(201)
+  const usuario = ((await creado.json()) as { id: string }).id
+  const alta = await api.post('/v1/memberships', {
+    headers: cabeceras,
+    data: JSON.stringify({
+      user_id: usuario,
+      tenant: demoTenant,
+      role: 'editor',
+    }),
+  })
+  expect(
+    alta.status(),
+    'docs-captures: POST /v1/memberships del actor editor',
+  ).toBe(201)
+  return {
+    email,
+    clave,
+    procedencia: {
+      kind: 'tenant-member',
+      role: 'editor',
+      tenant: demoTenant,
+      user_id: usuario,
+      basis:
+        'provisioned through POST /v1/users and POST /v1/memberships with the demo superadmin ' +
+        'login, then signed in through the normal login form',
+    },
+  }
+}
+
 const VIEWS: {
   id: string
   path: string
@@ -167,9 +293,21 @@ const VIEWS: {
   //    typo —`despuess`— no falla, sale falsa la condicion, no se pincha nada y la captura se
   //    guarda con la pestaña POR DEFECTO mientras su `id` promete el estado interno. Lo caza
   //    `scripts/check-capture-view-keys.py`, que es lo que `tsc` haria si mirase esto.
-  despues?: (page: import('@playwright/test').Page) => Promise<void>
+  // What `despues` returns travels into the take's evidence as its witness (today only the
+  // handoffs door returns one); `undefined` adds nothing.
+  despues?: (
+    page: import('@playwright/test').Page,
+  ) => Promise<void | Record<string, unknown>>
+  // The principal this cell is photographed as when it is NOT the demo global superadmin. One
+  // value exists, ratified for communications-handoffs only; every other cell keeps the superadmin.
+  actor?: 'k3-tenant-editor'
   // Ver la excepcion documentada en `tomar`: sólo para tomas cuyo sujeto ES un diálogo.
   modal?: boolean
+  // La superficie que la toma acredita, cuando NO es el `<h1>` de la vista. Las entradas que no
+  // lo declaran la derivan de `heading`, que es el caso de las 79 paginas ordinarias.
+  objetivo?: (
+    page: import('@playwright/test').Page,
+  ) => import('@playwright/test').Locator
   // Recorte DECLARADO (ver `tomar`): el disparo sigue siendo 1440x1000 @2x y sólo se guarda
   // el rectángulo que esta función devuelve, que además queda escrito en la evidencia.
   recorte?: (
@@ -397,6 +535,167 @@ const VIEWS: {
       await alguno.click()
     },
   },
+  // K3 I1 — the three doors of the communications room. Each heading is the h1 of its
+  // door (features/communications/i18n/en.json `doors.*.title`), so a Forbidden page or
+  // the login screen cannot pass as the capture.
+  {
+    id: 'communications',
+    path: '/communications',
+    heading: /^Communications$/,
+    despues: eligeWorkspaceConcretoK3,
+  },
+  {
+    id: 'communications-inbox',
+    path: '/communications/inbox',
+    heading: /^Communications inbox$/,
+    despues: eligeWorkspaceConcretoK3,
+  },
+  {
+    id: 'communications-new',
+    path: '/communications/new',
+    heading: /^New channel$/,
+    despues: eligeWorkspaceConcretoK3,
+  },
+  // K3 I3 — the handoffs door (`doors.handoffs.title`). Its `despues` does the same
+  // workspace seeding as its neighbours AND then proves the Handoffs tab is the one
+  // selected: the five doors mount ONE room, so a capture named for this door with
+  // the catalog tab open would be a picture of another screen wearing this id.
+  {
+    id: 'communications-handoffs',
+    path: '/communications/handoffs',
+    heading: /^Handoffs$/,
+    actor: 'k3-tenant-editor',
+    despues: async (page) => {
+      // ⛔ POSITIVE WITNESS BEFORE ANY PIXEL. The door makes no K3 request until a concrete
+      //    workspace is chosen, so the wait is armed BEFORE choosing one and takes the FIRST
+      //    collection read: a 503 or a 403 is the verdict, not something to retry past. Missing,
+      //    unknown or denied evidence is not permission, and it is not an empty list either.
+      const lectura = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'GET' &&
+          new URL(r.url()).pathname === '/v1/m/sessions/inbox/handoffs',
+        { timeout: 20_000 },
+      )
+      await eligeWorkspaceConcretoK3(page)
+      const respuesta = await lectura.catch(() => {
+        throw new Error(
+          'docs-captures: /communications/handoffs no pidio su coleccion tras elegir workspace; ' +
+            'sin lectura no hay testigo y sin testigo no se fotografia.',
+        )
+      })
+      const pedido = new URL(respuesta.url())
+      const workspaceId = pedido.searchParams.get('workspace_id') ?? ''
+      if (respuesta.status() !== 200) {
+        throw new Error(
+          `docs-captures: GET /v1/m/sessions/inbox/handoffs contesto ${respuesta.status()} a este ` +
+            `actor (workspace ${workspaceId}). Ni un 503 ni un 403 son permiso ni lista vacia.`,
+        )
+      }
+      const cuerpo = (await respuesta.json()) as {
+        items?: unknown
+        has_more?: unknown
+      }
+      if (
+        !Array.isArray(cuerpo.items) ||
+        typeof cuerpo.has_more !== 'boolean'
+      ) {
+        throw new Error(
+          'docs-captures: la coleccion de handoffs contesto 200 sin la forma {items, has_more}.',
+        )
+      }
+      // The collection has to be the one for the workspace the reader SEES. The id comes from the
+      // read itself; its name is resolved with that same request's own headers, kept in memory.
+      const propias = await respuesta.request().allHeaders()
+      const espacios = await page.request.get('/v1/workspaces', {
+        headers: {
+          authorization: propias['authorization'] ?? '',
+          'x-olivares-tenant': propias['x-olivares-tenant'] ?? '',
+        },
+      })
+      expect(
+        espacios.status(),
+        'docs-captures: /v1/workspaces con el mismo actor, para nombrar el workspace leido',
+      ).toBe(200)
+      const lista = (await espacios.json()) as
+        | { id: string; name: string }[]
+        | { items?: { id: string; name: string }[] }
+      const todos = Array.isArray(lista) ? lista : (lista.items ?? [])
+      const nombre = todos.find((w) => w.id === workspaceId)?.name ?? ''
+      if (!nombre) {
+        throw new Error(
+          `docs-captures: el workspace ${workspaceId} de la lectura no existe para este actor.`,
+        )
+      }
+      await expect(
+        page.locator('main').getByText(nombre, { exact: true }).first(),
+        `docs-captures: la puerta no enseña el workspace ${nombre} para el que leyo su coleccion`,
+      ).toBeVisible()
+      const testigo = {
+        read: 'GET /v1/m/sessions/inbox/handoffs',
+        status: 200,
+        workspace_id: workspaceId,
+        workspace: nombre,
+        state: pedido.searchParams.get('state'),
+        limit: pedido.searchParams.get('limit'),
+        items: cuerpo.items.length,
+        has_more: cuerpo.has_more,
+      }
+      const pestanna = page.getByRole('tab', { name: 'Handoffs' })
+      try {
+        await pestanna.waitFor({ timeout: 8_000 })
+      } catch {
+        throw new Error(
+          'docs-captures: /communications/handoffs no monta la pestaña «Handoffs». Se ofrece ' +
+            'bajo sessions:delivery:read, asi que esto es SEMBRADO (el actor no tiene el permiso) ' +
+            'o la entrada del registro dejo de abrirla.',
+        )
+      }
+      const seleccionada = await pestanna.getAttribute('aria-selected')
+      if (seleccionada !== 'true') {
+        throw new Error(
+          'docs-captures: la puerta /communications/handoffs abrio otra pestaña ' +
+            `(aria-selected=${seleccionada}). La captura enseñaria otra pantalla con este id.`,
+        )
+      }
+      // The selected tab is not yet the loaded door. Measured 2026-09-11: without the K3
+      // activation ceremony the engine answers 503 to GET /v1/m/sessions/inbox/handoffs, the
+      // DataTable paints SkeletonRows while the query retries, and this cell still passed with
+      // the right heading and tab — `exigirInstanteLimpio` looks only for the crash boundary and
+      // role="progressbar". The capture has to show what the engine answered: the table is no
+      // longer busy, and it is not the error the retries end in.
+      try {
+        await esperaTablasCargadas(page)
+      } catch {
+        throw new Error(
+          'docs-captures: /communications/handoffs no termino de cargar (la tabla sigue aria-busy). ' +
+            'Si el motor contesta 503 a /v1/m/sessions/inbox/handoffs, K3 no esta activo y la ' +
+            'foto seria el esqueleto de la tabla.',
+        )
+      }
+      // By role, not by a selector string: Tailwind's source scan reads this file, and a bracketed
+      // selector ending in `:visible` is a class candidate. Measured on this change: that one
+      // string added a CSS rule and renamed every hashed chunk of the committed bundle.
+      // getByRole already skips hidden elements.
+      const errores = await page
+        .locator('[data-slot="data-table"]')
+        .getByRole('alert')
+        .count()
+      if (errores > 0) {
+        throw new Error(
+          'docs-captures: /communications/handoffs pinta un ERROR en su coleccion (role="alert"). ' +
+            'Con K3 sin activar el motor contesta 503: la captura enseñaria el fallo, no la puerta.',
+        )
+      }
+      return testigo
+    },
+  },
+  // K3 I2 — the administration door (`doors.administration.title`).
+  {
+    id: 'communications-administration',
+    path: '/communications/administration',
+    heading: /^Channel administration$/,
+    despues: eligeWorkspaceConcretoK3,
+  },
   // Las dos patas que el REGISTRO DE FEATURES no conoce y el censo sí. Estaban montadas y sin
   // captura desde siempre: la guarda de cobertura leía el registro (53 rutas) y el árbol monta 58.
   { id: 'settings', path: '/settings', heading: /^Settings$/ },
@@ -597,6 +896,49 @@ const VIEWS: {
   //      concreta la captura sería de un estado de error. Capturarla exige elegir un id del estate
   //      sembrado; queda declarada como no cubierta en vez de fingida.
   { id: 'home', path: '/', settle: 1000, heading: /^Overview$/ },
+  // N1 — the nine area directory pages. Each is a page of links generated from the
+  // registry; the h1 is the area's own nav label, which is the oracle here.
+  {
+    id: 'areas-infrastructure',
+    path: '/areas/infrastructure',
+    heading: /^Infrastructure$/,
+  },
+  { id: 'areas-ai', path: '/areas/ai', heading: /^AI$/ },
+  {
+    id: 'areas-data-context',
+    path: '/areas/data-context',
+    heading: /^Data & context$/,
+  },
+  {
+    id: 'areas-work-communications',
+    path: '/areas/work-communications',
+    heading: /^Work & communications$/,
+  },
+  {
+    id: 'areas-automation',
+    path: '/areas/automation',
+    heading: /^Automation$/,
+  },
+  {
+    id: 'areas-security-identity',
+    path: '/areas/security-identity',
+    heading: /^Security & identity$/,
+  },
+  {
+    id: 'areas-deployment',
+    path: '/areas/deployment',
+    heading: /^Deployment$/,
+  },
+  {
+    id: 'areas-observation',
+    path: '/areas/observation',
+    heading: /^Observability & evidence$/,
+  },
+  {
+    id: 'areas-system',
+    path: '/areas/system',
+    heading: /^System & settings$/,
+  },
   {
     id: 'onboarding',
     path: '/onboarding',
@@ -640,6 +982,20 @@ const VIEWS: {
     settle: 1000,
     live: true,
     heading: /^Claude Code$/,
+  },
+  // B1 provider-profile plane: the two doors of one administration view. Each takes
+  // the tab its entrance names, under its own h1.
+  {
+    id: 'provider-profiles',
+    path: '/provider-profiles',
+    settle: 1000,
+    heading: /^Provider profiles$/,
+  },
+  {
+    id: 'provider-bindings',
+    path: '/provider-bindings',
+    settle: 1000,
+    heading: /^Source bindings$/,
   },
   {
     id: 'agent-artifacts',
@@ -800,10 +1156,9 @@ const VIEWS: {
       }
       // El toast confirma que el export TERMINO. Esperar al toast y no a un plazo fijo es la
       // diferencia entre capturar el resultado y capturar el estado intermedio.
-      await page
-        .getByText(/Posture export(ed|  failed)/i)
-        .first()
-        .waitFor({ timeout: 15_000 })
+      // Y no vale cualquier toast: el helper separa exito, fallo y ausencia de terminal, y solo
+      // el exito deja seguir a la captura. Su banco esta en `posture-export-terminal.spec.ts`.
+      await esperarExportacionDePostura(page)
     },
   },
   {
@@ -991,6 +1346,10 @@ const VIEWS: {
     path: '/console?tab=connectors',
     settle: 800,
     modal: true,
+    // El dialogo lleva DOS h2: este, que es el DialogTitle, y el CardTitle del panel
+    // (`Step-up authentication required`). Se nombra el que etiqueta al dialogo.
+    objetivo: (page) =>
+      encabezadoDeDialogo(page, 'This action needs an elevated session'),
     despues: async (page) => {
       await page
         .getByRole('row', { name: /claude-code-prod/ })
@@ -1016,90 +1375,45 @@ async function tomar(
     id,
     theme,
     ruta,
-    heading,
+    objetivo,
+    marcadores,
     settle,
     live,
     recorte,
+    actor,
+    testigo,
   }: {
     id: string
     theme: string
     ruta: string
-    heading?: RegExp
+    // La superficie que esta toma acredita, elegida por la celda. Ver `capture-target.ts`.
+    objetivo: import('@playwright/test').Locator
+    // Estado que el encabezado no distingue: la pestaña seleccionada, el panel abierto.
+    marcadores?: import('@playwright/test').Locator[]
     settle?: number
     live?: boolean
     recorte?: (
       page: import('@playwright/test').Page,
     ) => Promise<{ x: number; y: number; width: number; height: number }>
+    // Non-secret provenance of the principal, when the cell is not the demo superadmin.
+    actor?: Record<string, unknown>
+    // What the cell's `despues` proved about the data it photographs (the HTTP 200 read).
+    testigo?: Record<string, unknown>
   },
 ) {
-  // ⛔ BAJO UN DIALOGO MODAL NO HAY NINGUN HEADING DE NIVEL 1, y eso tumbaba tres escenas del
-  //    guion de video. MEDIDO en el snapshot de accesibilidad del fallo, no deducido:
-  //
-  //        - dialog "acme-platform governed session":
-  //          - heading "acme-platform governed session" [level=2]
-  //
-  //    El fondo queda `aria-hidden` mientras el dialogo esta abierto, asi que el arbol se reduce al
-  //    dialogo y `getByRole('heading', { level: 1 })` no encuentra NADA. El h1 sigue en el DOM; lo
-  //    que desaparece es del arbol de ACCESIBILIDAD, que es contra el que consulta `getByRole`.
-  //
-  //    Se espera a que haya ALGUN encabezado y se prefiere el de nivel 1 si existe. El suelo no se
-  //    debilita: la pagina de error tiene su `<h1>` y sigue cayendo aqui — lo que se admite es que
-  //    una vista con modal se acredite por el encabezado del modal, que es justo lo que la escena
-  //    esta fotografiando.
-  const alguno = page.getByRole('heading').first()
-  await expect(alguno).toBeVisible({ timeout: 60_000 })
-  const nivel1 = page.getByRole('heading', { level: 1 }).first()
-  const h1 = (await nivel1.count()) > 0 ? nivel1 : alguno
-  const texto = ((await h1.textContent()) ?? '').trim()
-
-  // ⛔ EL SUELO QUE APLICA INCLUSO SIN ORÁCULO DECLARADO. La página de error tiene `<h1>` y por eso
-  //    `/executive` pasaba en verde con un «Page not found». Este harness fija `olivares.lang` a
-  //    `en` arriba, así que el literal es estable.
-  expect(
-    texto,
-    `${id}: la ruta ${ruta} sirvió la página de ERROR, no la vista`,
-  ).not.toMatch(/page not found/i)
-  if (heading) {
-    expect(
-      texto,
-      `${id}: el <h1> dice «${texto}» — el router no sirvió la vista pedida (${ruta})`,
-    ).toMatch(heading)
-  }
+  // El shell expone encabezados propios antes de que la ruta perezosa monte el suyo, asi que se
+  // espera al que la celda declara. Un dialogo modal oculta del arbol de accesibilidad el H1 del
+  // fondo, y por eso su superficie tambien se declara en vez de deducirse.
+  const texto = await esperarEncabezado(page, { id, ruta, objetivo })
+  if (marcadores) await exigirMarcadores(id, marcadores)
 
   if (!live) await page.waitForLoadState('networkidle')
   if (settle) await page.waitForTimeout(settle)
 
-  // ⛔ LA ÚLTIMA COMPROBACIÓN VA AQUÍ, JUSTO ANTES DE DISPARAR, y no arriba con el testigo del h1.
-  //    El `heading` se comprueba ANTES de `networkidle`, así que sólo dice «el router sirvió esta
-  //    vista»: el h1 se pinta antes de que lleguen los datos. Entre esa comprobación y la foto
-  //    pasan todas las peticiones — y una que conteste 4xx deja la página IDLE y con el error
-  //    boundary puesto. Idle no es cargado.
-  //
-  //    Estas dos aserciones son lo que separa «se guardó un PNG» de «se guardó la pantalla». Una
-  //    captura del esqueleto o del boundary pasa cualquier comprobación de existencia del fichero,
-  //    y estas imágenes van a superficies PÚBLICAS: una vez publicadas, el defecto lo ve el cliente.
-  // ⛔ AQUI `count()` ES LO CORRECTO, y la distincion importa porque barri su clase en las
-  //    precondiciones y alguien podria «arreglar» estas por simetria. Las de arriba exigian
-  //    PRESENCIA —«tiene que haber una fila `Launched`»— y ahi muestrear una vez puede acusar en
-  //    falso a una carga lenta: necesitan `waitFor`, que reintenta. Estas dos exigen AUSENCIA
-  //    —«no puede haber un boundary ni un spinner EN EL INSTANTE DE LA FOTO»— y reintentar seria
-  //    PEOR: le daria tiempo al indicador a desaparecer y la aserción dejaria de comprobar lo
-  //    unico que importa, que es el estado en ese instante.
-  //
-  //    ⇒ La sonda honesta no es «0 `count()`» sino «0 decisiones de PRESENCIA REQUERIDA por
-  //      `count()`». Lo afirme de mas al barrer la clase; queda acotado aqui.
-  const boundary = await page
-    .getByText('This view crashed', { exact: false })
-    .count()
-  expect(
-    boundary,
-    `${id}: la vista cayó al error boundary DESPUÉS de cargar — la captura mostraría el fallo`,
-  ).toBe(0)
-  const cargando = await page.locator('[role="progressbar"]:visible').count()
-  expect(
-    cargando,
-    `${id}: quedaba un indicador de carga visible al disparar — sube \`settle\` para esta vista`,
-  ).toBe(0)
+  // Va aqui, despues de `networkidle` y del settle: el encabezado solo dice que el router sirvio
+  // la vista, y entre esa espera y la foto pasan todas las peticiones. Una que conteste 4xx deja
+  // la pagina ociosa con el error boundary puesto — ociosa no es cargada.
+  await exigirInstanteLimpio(page, id)
 
   // ⚠ SE REGISTRA, NO SE FALLA. Una pantalla que sale vacía puede ser correcta —el estate sembrado
   //    no puebla todo— y puede ser un hueco de sembrado que la documentación pública enseña como si
@@ -1262,6 +1576,8 @@ async function tomar(
         // el recorte va DECLARADO en la evidencia: quien audite la imagen sabe que es un
         // trozo y de donde sale, sin tener que deducirlo del tamaño del PNG.
         recorte_declarado: clip ?? null,
+        ...(actor ? { actor } : {}),
+        ...(testigo ? { testigo_coleccion: testigo } : {}),
         sha256: sha,
       },
       null,
@@ -1317,6 +1633,19 @@ async function tomar(
 // here rather than discovered later in a diff.
 test.use({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 2 })
 
+// Una entrada declara su superficie con `objetivo`, o la deriva del `<h1>` que ya declaraba en
+// `heading`. Sin una de las dos no hay nada que acreditar y la celda no debe disparar.
+function objetivoDeLaVista(
+  page: import('@playwright/test').Page,
+  view: (typeof VIEWS)[number],
+): import('@playwright/test').Locator {
+  if (view.objetivo) return view.objetivo(page)
+  if (view.heading) return encabezadoDePagina(page, view.heading)
+  throw new Error(
+    `${view.id}: la entrada no declara ni \`heading\` ni \`objetivo\``,
+  )
+}
+
 test.describe('Docs captures over real seeded data', () => {
   test.skip(
     !demoTenant,
@@ -1361,15 +1690,26 @@ test.describe('Docs captures over real seeded data', () => {
         //    ESTRECHA la comprobacion: `.first()` habria hecho pasar el test dejando la ambiguedad
         //    dentro, que es apagar el oraculo para que no moleste. El oraculo dice «el shell de la
         //    app monto su navegacion», y con `exact` sigue diciendo eso y solo eso.
+        // communications-handoffs only (Root, 2026-09-11): K3 cannot scope a global superadmin
+        // session, so that door is read as a tenant editor provisioned through the public API.
+        const actor = view.actor ? await provisionaEditorK3(page) : undefined
         await page.goto('/login')
-        await page.locator('#email').fill(DEMO_EMAIL)
-        await page.locator('#password').fill(DEMO_PASSWORD)
+        await page.locator('#email').fill(actor ? actor.email : DEMO_EMAIL)
+        await page
+          .locator('#password')
+          .fill(actor ? actor.clave : DEMO_PASSWORD)
         await page.getByRole('button', { name: /^sign in$/i }).click()
-        await expect(
-          page.getByRole('link', { name: 'Inventory', exact: true }),
-        ).toBeVisible({
-          timeout: 60_000,
-        })
+        if (actor) {
+          // The K3 journey's own login oracle for its members: the form let this actor in. The
+          // superadmin's sidebar landmark is not a promise an editor's shell has to keep.
+          await page.waitForURL((u) => !u.pathname.startsWith('/login'), {
+            timeout: 60_000,
+          })
+        } else {
+          await expect(navReady(page)).toBeVisible({
+            timeout: 60_000,
+          })
+        }
 
         // El sembrado por ruta va DESPUÉS del login y ANTES de navegar: necesita la sesión, y lo
         // que prepara tiene que estar puesto cuando la vista monte.
@@ -1377,7 +1717,7 @@ test.describe('Docs captures over real seeded data', () => {
 
         await page.goto(view.path)
         // El estado que sólo existe con la vista ya montada.
-        if (view.despues) await view.despues(page)
+        const testigo = view.despues ? await view.despues(page) : undefined
 
         for (const theme of ['light', 'dark'] as const) {
           if (theme === 'dark') {
@@ -1441,10 +1781,12 @@ test.describe('Docs captures over real seeded data', () => {
             id: view.id,
             theme,
             ruta: view.path,
-            heading: view.heading,
+            objetivo: objetivoDeLaVista(page, view),
             settle: view.settle,
             live: view.live,
             recorte: view.recorte,
+            actor: actor?.procedencia,
+            testigo: testigo || undefined,
           })
         }
       })
@@ -1473,9 +1815,7 @@ test.describe('Docs captures over real seeded data', () => {
       await page.locator('#email').fill(DEMO_EMAIL)
       await page.locator('#password').fill(DEMO_PASSWORD)
       await page.getByRole('button', { name: /^sign in$/i }).click()
-      await expect(
-        page.getByRole('link', { name: 'Inventory', exact: true }),
-      ).toBeVisible({
+      await expect(navReady(page)).toBeVisible({
         timeout: 60_000,
       })
 
@@ -1484,13 +1824,17 @@ test.describe('Docs captures over real seeded data', () => {
         timeout: 60_000,
       })
       await page.getByRole('button', { name: /permitted vs observed/i }).click()
-      // Esta celda YA discriminaba su pantalla —el nodo del grafo y el encabezado del overlay son
-      // propios de ella—, así que `tomar` le añade el suelo del 404 y la evidencia.
-      await expect(page.getByRole('heading', { name: /drift/i })).toBeVisible()
+      // El sujeto es el panel, no la vista: su `aside` lleva el H2 que lo nombra mientras el H1
+      // de `/access-map` sigue visible detras.
       await tomar(page, {
         id: 'access-map-drift',
         theme,
         ruta: '/access-map (overlay drift)',
+        objetivo: page.getByRole('complementary').getByRole('heading', {
+          level: 2,
+          name: 'Least-privilege drift',
+          exact: true,
+        }),
         settle: 1500,
       })
     })
@@ -1524,21 +1868,23 @@ test.describe('Docs captures over real seeded data', () => {
         await page.locator('#email').fill(DEMO_EMAIL)
         await page.locator('#password').fill(DEMO_PASSWORD)
         await page.getByRole('button', { name: /^sign in$/i }).click()
-        await expect(
-          page.getByRole('link', { name: 'Inventory', exact: true }),
-        ).toBeVisible({
+        await expect(navReady(page)).toBeVisible({
           timeout: 60_000,
         })
 
         await page.goto('/console')
-        // ⚠ AQUÍ EL ORÁCULO NO ES EL `<h1>` Y NO DEBE SERLO: las dos pestañas viven en `/console`
-        //   y comparten encabezado, así que un `heading` no las distinguiría. Lo que discrimina es
-        //   este `click` — si el disparador de la pestaña no existe, la celda falla aquí.
         await page.getByRole('tab', { name: tab.trigger }).click()
+        // Las dos pestañas comparten el H1 de `/console`, asi que el encabezado acredita la vista
+        // y el marcador acredita CUAL de las dos quedo seleccionada. El `click` solo dice que se
+        // pincho algo.
         await tomar(page, {
           id: tab.id,
           theme,
           ruta: `/console (pestaña ${tab.id})`,
+          objetivo: encabezadoDePagina(page, 'Control console'),
+          marcadores: [
+            page.getByRole('tab', { name: tab.trigger, selected: true }),
+          ],
           settle: 1000,
         })
       })
@@ -1626,11 +1972,23 @@ test.describe('Docs captures over real seeded data', () => {
     //    olvido, asi que le pedia quietud a lo unico que el producto promete que se mueve.
     live?: boolean
     prepara: (page: import('@playwright/test').Page) => Promise<void>
+    // La superficie que la escena acredita. Los sheets la resuelven por `aria-labelledby`, que es
+    // asincrono, de ahi la promesa.
+    objetivo: (
+      page: import('@playwright/test').Page,
+    ) =>
+      | import('@playwright/test').Locator
+      | Promise<import('@playwright/test').Locator>
+    // Estado que el encabezado no distingue: la pestaña seleccionada dentro del sheet.
+    marcadores?: (
+      page: import('@playwright/test').Page,
+    ) => import('@playwright/test').Locator[]
   }[] = [
     {
       id: 'video-05-edge-honesty',
       escena: 5,
       ruta: '/access-map',
+      objetivo: (page) => encabezadoDePagina(page, 'Access map'),
       prepara: async (page) => {
         await page.goto('/access-map')
         // La arista es el sujeto: si no hay ninguna, el seed no trae grafo y la celda debe
@@ -1676,6 +2034,14 @@ test.describe('Docs captures over real seeded data', () => {
         await abreSesionOperada(page)
         await page.getByRole('tab', { name: /^live$/i }).click()
       },
+      // El titulo del sheet es dinamico (lleva el nombre de la sesion), asi que se resuelve por
+      // el `aria-labelledby` del dialogo en vez de por el orden de sus h2.
+      objetivo: (page) => encabezadoDelDialogoAbierto(page),
+      marcadores: (page) => [
+        page
+          .getByRole('dialog')
+          .getByRole('tab', { name: /^live$/i, selected: true }),
+      ],
     },
     {
       id: 'video-08-governance',
@@ -1687,6 +2053,14 @@ test.describe('Docs captures over real seeded data', () => {
         await abreSesionOperada(page)
         await page.getByRole('tab', { name: /^governance$/i }).click()
       },
+      // El titulo del sheet es dinamico (lleva el nombre de la sesion), asi que se resuelve por
+      // el `aria-labelledby` del dialogo en vez de por el orden de sus h2.
+      objetivo: (page) => encabezadoDelDialogoAbierto(page),
+      marcadores: (page) => [
+        page
+          .getByRole('dialog')
+          .getByRole('tab', { name: /^governance$/i, selected: true }),
+      ],
     },
     {
       id: 'video-10-workspace-browser',
@@ -1721,6 +2095,7 @@ test.describe('Docs captures over real seeded data', () => {
         }
         await abrir.click()
       },
+      objetivo: (page) => encabezadoDelDialogoAbierto(page),
     },
   ]
   for (const theme of ['light', 'dark'] as const) {
@@ -1764,15 +2139,15 @@ test.describe('Docs captures over real seeded data', () => {
         await page.locator('#email').fill(DEMO_EMAIL)
         await page.locator('#password').fill(DEMO_PASSWORD)
         await page.getByRole('button', { name: /^sign in$/i }).click()
-        await expect(
-          page.getByRole('link', { name: 'Inventory', exact: true }),
-        ).toBeVisible({ timeout: 60_000 })
+        await expect(navReady(page)).toBeVisible({ timeout: 60_000 })
 
         await escena.prepara(page)
         await tomar(page, {
           id: escena.id,
           theme,
           ruta: escena.ruta,
+          objetivo: await escena.objetivo(page),
+          marcadores: escena.marcadores?.(page),
           settle: 1200,
           live: escena.live,
         })
@@ -1826,7 +2201,7 @@ test.describe('Docs captures — las patas sin autenticar', () => {
           id: vista.id,
           theme,
           ruta: vista.path,
-          heading: vista.heading,
+          objetivo: encabezadoDePagina(page, vista.heading),
         })
       })
     }
@@ -1888,7 +2263,7 @@ test.describe('Docs captures — el asistente de primer arranque', () => {
         id: VISTA_SETUP.id,
         theme,
         ruta: VISTA_SETUP.path,
-        heading: VISTA_SETUP.heading,
+        objetivo: encabezadoDePagina(page, VISTA_SETUP.heading),
       })
     })
   }
@@ -1949,9 +2324,7 @@ test.describe('Docs captures — el visor de sesion (ruta parametrica)', () => {
       await page.locator('#email').fill(DEMO_EMAIL)
       await page.locator('#password').fill(DEMO_PASSWORD)
       await page.getByRole('button', { name: /^sign in$/i }).click()
-      await expect(
-        page.getByRole('link', { name: 'Inventory', exact: true }),
-      ).toBeVisible({
+      await expect(navReady(page)).toBeVisible({
         timeout: 60_000,
       })
 
@@ -1966,7 +2339,7 @@ test.describe('Docs captures — el visor de sesion (ruta parametrica)', () => {
         theme,
         ruta,
         settle: 1500,
-        heading: /^Session Recording Viewer$/,
+        objetivo: encabezadoDePagina(page, /^Session Recording Viewer$/),
       })
     })
   }

@@ -1,0 +1,48 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+// Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+
+package sqlstore
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"github.com/olivaresai/olivares/core/internal/store/dialect"
+	"github.com/olivaresai/olivares/core/store"
+	"testing"
+)
+
+func f2aHistoricalRender(t *testing.T, engine store.Engine) string {
+	t.Helper()
+	dia, _ := dialect.New(engine)
+	type entry struct {
+		Version                   int
+		Name                      string
+		Stmts                     []string
+		NonTransactional, HasExec bool
+	}
+	var plan []entry
+	for _, m := range buildCoreMigrations(dia, coreDescriptors(), nil, nil) {
+		if m.Version <= 9 {
+			plan = append(plan, entry{m.Version, m.Name, m.Stmts, m.NonTransactional, m.Exec != nil})
+		}
+	}
+	var lineage []string
+	for _, obj := range lineageGuardObjects(dia) {
+		lineage = append(lineage, obj.statement)
+	}
+	raw, err := json.Marshal(struct {
+		Plan               []entry
+		V7Control, Lineage []string
+	}{plan, dia.DirectoryWriterControlStmts(), lineage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(raw))
+}
+func TestF2AV9MigrationRender(t *testing.T) {
+	for _, engine := range store.SupportedEngines() {
+		t.Logf("FROZEN_V1_V9|%s|%s", engine, f2aHistoricalRender(t, engine))
+	}
+}

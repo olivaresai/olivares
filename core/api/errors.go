@@ -196,6 +196,14 @@ func statusFor(err error) (int, string) {
 		// allow-list (a deny-closed perimeter control over the login surface). 403 +
 		// distinct code; the body never reveals the allow-list (no recon oracle).
 		return http.StatusForbidden, "network_not_allowed"
+	case errors.Is(err, auth.ErrLoginEnforcementComponentAbsent):
+		// R5 (D13): the deployment recorded an enforcing build and has global/default login
+		// enforcement configured, and THIS build cannot enforce it, so a new session is
+		// refused deny-closed. It is a deployment state the operator changes (an enforcing
+		// build, a reduced posture, or host break-glass), never an edition or payment
+		// prompt: 503 with a stable code and no posture detail. Invalid credentials still
+		// answer 401 above, before any session is attempted.
+		return http.StatusServiceUnavailable, "login_enforcement_unavailable"
 	case errors.Is(err, auth.ErrLastSuperadmin):
 		// deny-closed against total lockout — disabling the last ACTIVE
 		// superadmin is refused. 409 (conflicts with the keep-one-active-superadmin
@@ -226,6 +234,17 @@ func statusFor(err error) (int, string) {
 		// Returning 404 would turn UNKNOWN into a false negative; returning 403 would
 		// confuse evidence loss with a clean authorization denial. Retry deny-closed.
 		return http.StatusServiceUnavailable, "entity_authorization_unavailable"
+	case errors.Is(err, auth.ErrRouteUndecided):
+		// ⛔ EL TERCER ESTADO DE LA REGLA 5, Y NO ES UNA DENEGACION. La decision de ruta no pudo
+		// establecerse con evidencia fresca: nadie dijo que no. Servirlo como 403 confundiria
+		// "no puedes" con "no pude mirar" — dos respuestas con remedios distintos — y servirlo
+		// como 404 lo convertiria en una afirmacion sobre la EXISTENCIA de la fila.
+		//
+		// ⛔ Y RESPONDE IGUAL CON CONCEAL Y SIN EL, a proposito. Si una ruta que oculta la
+		// existencia contestara distinto ante un undecided, ese mismo undecided seria un
+		// oraculo de existencia: bastaria con provocarlo para distinguir "no existe" de "no
+		// puedes verla". Por eso este caso va ANTES de cualquier lectura de fila.
+		return http.StatusServiceUnavailable, "route_decision_unavailable"
 	case errors.Is(err, auth.ErrStepUpRequired):
 		// the action demands a higher session assurance (AAL3). Distinct
 		// code so the console can route the operator to the step-up ceremony
@@ -237,6 +256,20 @@ func statusFor(err error) (int, string) {
 		return http.StatusForbidden, "webauthn_verification_failed"
 	case errors.Is(err, auth.ErrPIVVerification):
 		return http.StatusForbidden, "piv_verification_failed"
+	case errors.Is(err, auth.ErrWebAuthnRelyingParty):
+		// The ceremony could not even be CONSTRUCTED: the address this console was
+		// reached on cannot be a relying party, or the configured one was refused.
+		// It used to fall through to default: and answer 500 "internal error",
+		// which is the wrong shape twice — nothing internal is broken, and the
+		// operator has something concrete to change.
+		//
+		// It sits in the 503 band and not the 501 band on purpose: the capability
+		// is present in this build and is refused deny-closed by the deployment's
+		// own configuration. And it is deliberately NOT the answer to a failed
+		// ceremony: a bad signature, a replayed challenge or a declined prompt stay
+		// ErrWebAuthnVerification and 403, because answering 503 to those would
+		// tell a caller which half of their attempt was wrong.
+		return http.StatusServiceUnavailable, "webauthn_relying_party_unusable"
 	case errors.Is(err, auth.ErrPIVNotConfigured):
 		// the PIV/CAC route is not configured on this deployment. 501 is
 		// the honest-seam signal (the panel renders "backend pending").
@@ -350,6 +383,7 @@ var honestSeamMessage = map[string]string{
 	"sso_not_configured":               "SSO is not configured on this deployment.",
 	"sso_builder_unavailable":          "This build can store SSO configuration but has no provider builder to activate it.",
 	"sso_unavailable":                  "SSO is unavailable: no secret sealer is wired, so an SSO secret cannot be sealed or opened.",
+	"login_enforcement_unavailable":    "Login is unavailable: this deployment has login enforcement configured, and this build cannot enforce it.",
 	"secret_store_unavailable":         "The runtime secret store is not wired on this deployment.",
 	"source_roster_unavailable":        "The durable source roster is not wired on this deployment.",
 	"connector_onboarding_unavailable": "Connector onboarding is not wired on this deployment.",
@@ -360,8 +394,19 @@ var honestSeamMessage = map[string]string{
 	"recording_unavailable":            "Session recording is not wired on this deployment.",
 	"entity_authorization_unavailable": "Entity authorization evidence is temporarily unavailable.",
 	"piv_not_configured":               "Privileged login (PIV) is not configured on this deployment.",
-	"not_leader":                       "This node is not the leader; retry against the leader.",
-	"audit_spool_full":                 "The audit spool is full; the ledger is refusing writes deny-closed rather than dropping evidence.",
+	// The sentence an operator gets when a passkey ceremony cannot be constructed
+	// at the address they reached the console on. It names a remedy and stops
+	// there: it promises no log line (the old draft did, and the line it pointed
+	// at was never written), and it discloses neither the relying party that was
+	// refused nor where it came from, because this text is served to any caller.
+	//
+	// "the verifier this build ships" is exact and not hedging: a single-label
+	// name is refused by go-webauthn, not by the WebAuthn specification, and a
+	// sentence that blamed the standard would send an operator to the wrong
+	// document.
+	"webauthn_relying_party_unusable": "Passkeys cannot be used at the address this console was reached on. A passkey relying party has to be a domain name that the verifier this build ships accepts: an IP address is not one, and neither is a single-label name. Reach the console by a dotted host name, or by localhost, and start the engine with that address declared in --public-url (or OLIVARES_PUBLIC_URL).",
+	"not_leader":                      "This node is not the leader; retry against the leader.",
+	"audit_spool_full":                "The audit spool is full; the ledger is refusing writes deny-closed rather than dropping evidence.",
 	// the ONE sentence a first-boot operator needs. It names the remedy in
 	// full — which role, which command, which flag — because the alternative
 	// measured on 2026-08-08 was "internal error" on POST /v1/setup with the remedy

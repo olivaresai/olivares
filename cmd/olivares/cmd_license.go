@@ -39,7 +39,7 @@ func newLicenseCmd() *cobra.Command {
 			"  olivares license uninstall --data-dir /var/lib/olivares --yes\n" +
 			"  olivares license verify \"$LICENSE_BLOB\" --pubkey \"$LICENSE_PUBLIC_KEY\"",
 	}
-	root.AddCommand(licenseKeygenCmd(), licenseSignCmd(), licenseVerifyCmd(), licenseInstallCmd(), licenseUninstallCmd(), licenseStatusCmd())
+	root.AddCommand(licenseKeygenCmd(), licenseSignCmd(), licenseVerifyCmd(), licenseInstallCmd(), licenseUninstallCmd(), licenseStatusCmd(), licenseTrustCmd(), licenseConnectCmd())
 	return root
 }
 
@@ -54,7 +54,8 @@ func licenseInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install <file|->",
 		Short: "Install a license into the data dir (verify + persist; apply live with SIGHUP / runtime reload)",
-		Long: "install verifies a signed license against this build's embedded key and persists it to\n" +
+		Long: "install verifies a signed license against this deployment's license trust (the key embedded in this\n" +
+			"build plus <data-dir>/" + licenseTrustFileName + ", see `license trust`) and persists it to\n" +
 			"<data-dir>/" + licenseFileName + " (mode 0600) — the canonical at-rest license the engine reads by\n" +
 			"default. Pass a file path, or - to read the blob from stdin. It gates NO feature (docs/07 §9): in\n" +
 			"the community build it stores the attestation ready for an in-place swap to the enterprise binary;\n" +
@@ -76,22 +77,6 @@ func licenseInstallCmd() *cobra.Command {
 			if blob == "" {
 				return fmt.Errorf("the license is empty")
 			}
-			pub := license.DefaultPublicKey()
-			if pubB64 != "" {
-				p, perr := license.DecodePublicKey(pubB64)
-				if perr != nil {
-					return perr
-				}
-				pub = p
-			} else if len(pub) == 0 {
-				return fmt.Errorf("this build embeds no verification key (license-key=%s); pass --pubkey <base64-public-key> to verify before installing", license.KeyOrigin())
-			}
-			// Verify BEFORE persisting so a paste/format error is caught here, not at boot.
-			// A valid-but-expired blob installs fine (it just lifts nothing until renewed).
-			lic, verr := license.VerifyEnvelope(blob, pub)
-			if verr != nil {
-				return fmt.Errorf("refusing to install: the license does not verify against this build's key (%s): %w", license.KeyOrigin(), verr)
-			}
 			dir := dataDir
 			if dir == "" {
 				resolved, derr := defaultDataDir()
@@ -99,6 +84,20 @@ func licenseInstallCmd() *cobra.Command {
 					return derr
 				}
 				dir = resolved
+			}
+			kr, kerr := resolveLicenseKeyring(pubB64, dir)
+			if kerr != nil {
+				return fmt.Errorf("refusing to install: %w", withLicenseTrustAction(kerr))
+			}
+			if kr.Len() == 0 {
+				return fmt.Errorf("this build embeds no verification key (license-key=%s) and %s configures none; pass --pubkey <base64-public-key> or add one with `olivares license trust set`", license.KeyOrigin(), dir)
+			}
+			// Verify BEFORE persisting so a paste/format error or an untrusted signer is caught
+			// here, not at boot, and the installed license stays in place.
+			// A valid-but-expired blob installs fine (it just lifts nothing until renewed).
+			lic, verr := kr.Verify(blob, time.Now().UTC())
+			if verr != nil {
+				return fmt.Errorf("refusing to install: the license does not verify against this deployment's license trust (%s): %w", license.KeyOrigin(), withLicenseTrustAction(verr))
 			}
 			// REFUSE under a boot override unless forced. This used to persist
 			// the file and print a WARNING, which is the worst of the three options:
@@ -124,7 +123,7 @@ func licenseInstallCmd() *cobra.Command {
 			// existing license is a transition the operator cannot otherwise see, and
 			// "installed" printed over a license that was already there reads as a
 			// first install.
-			replaced := describeInstalledLicense(path, pub)
+			replaced := describeInstalledLicense(path, kr)
 			// writeKeyFile, not os.WriteFile: this command's own help promises mode
 			// 0600, and os.WriteFile applies its perm ONLY WHEN IT CREATES THE FILE —
 			// measured 2026-08-09 against the built binary, a target that already
@@ -151,6 +150,9 @@ func licenseInstallCmd() *cobra.Command {
 			if replaced != "" {
 				report["replaced"] = replaced
 			}
+			if trust := licenseTrustReport(lic); trust != nil {
+				report["trust"] = trust
+			}
 			if rerr := renderReportOut(cmd, report); rerr != nil {
 				return rerr
 			}
@@ -169,7 +171,7 @@ func licenseInstallCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "data directory to install into (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
-	cmd.Flags().StringVar(&pubB64, "pubkey", "", "base64 Ed25519 public key to verify against (default: embedded key)")
+	cmd.Flags().StringVar(&pubB64, "pubkey", "", "base64 Ed25519 public key to verify against instead of the data directory's license trust")
 	cmd.Flags().BoolVar(&force, "force", false,
 		"install even though a --license/OLIVARES_LICENSE* override OUTRANKS the data-dir file. Without it the install is REFUSED, "+
 			"because it would change nothing the engine reads; with it the file is staged and the warning says so")
@@ -182,7 +184,7 @@ func licenseInstallCmd() *cobra.Command {
 // something here and I could not read it" is information the operator needs
 // BEFORE it is overwritten, and refusing over it would block a renewal on a
 // corrupt predecessor — the one moment a renewal matters most.
-func describeInstalledLicense(path string, pub []byte) string {
+func describeInstalledLicense(path string, kr license.Keyring) string {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return "" // nothing installed: this is a first install, not a replacement
@@ -191,12 +193,12 @@ func describeInstalledLicense(path string, pub []byte) string {
 	if blob == "" {
 		return "an empty file"
 	}
-	if len(pub) == 0 {
+	if kr.Len() == 0 {
 		return "a license this build has no key to identify"
 	}
-	lic, verr := license.VerifyEnvelope(blob, pub)
+	lic, verr := kr.Verify(blob, time.Now().UTC())
 	if verr != nil {
-		return "a license that does not verify against this build's key"
+		return "a license that does not verify against this deployment's license trust"
 	}
 	// A v3 credential describes itself by its purchased LINES, not by a profile label, and the
 	// operator about to overwrite it deserves the count: "(3 lines, base paid through …)" says
@@ -267,7 +269,11 @@ func licenseUninstallCmd() *cobra.Command {
 					"so removing this file would leave that source still supplying a license — remove it there instead",
 					kind, detail, path)
 			}
-			describing := describeInstalledLicense(path, license.DefaultPublicKey())
+			kr, kerr := licenseKeyringForDataDir(dir)
+			if kerr != nil {
+				kr = license.Keyring{}
+			}
+			describing := describeInstalledLicense(path, kr)
 			if _, serr := os.Stat(path); errors.Is(serr, fs.ErrNotExist) {
 				return renderReportOut(cmd, map[string]any{"removed": false, "path": path, "note": "no license is installed here"})
 			}
@@ -314,7 +320,8 @@ func licenseStatusCmd() *cobra.Command {
 		Short: "Show the installed license and its status (offline; resolves --license > env > data-dir)",
 		Long: "status resolves the at-rest license by the same precedence the engine uses (explicit --license >\n" +
 			"OLIVARES_LICENSE_PATH > OLIVARES_LICENSE > <data-dir>/" + licenseFileName + "), verifies it offline\n" +
-			"against this build's key and prints its source, profile, grace and status as JSON. With\n" +
+			"against this deployment's license trust (see `license trust`) and prints its source, profile, grace,\n" +
+			"status and the trusted key that verified it as JSON. With\n" +
 			"--manifest it also evaluates the license CRL from an OTA-signed channel manifest;\n" +
 			"without one the CRL is honestly reported as unavailable. It reads no database — the LIVE\n" +
 			"status (with live active-user usage) is GET /v1/console/license or the console.",
@@ -334,14 +341,7 @@ func licenseStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pub := license.DefaultPublicKey()
-			if pubB64 != "" {
-				p, perr := license.DecodePublicKey(pubB64)
-				if perr != nil {
-					return perr
-				}
-				pub = p
-			}
+			kr, kerr := resolveLicenseKeyring(pubB64, dir)
 			result := map[string]any{"source": src.Kind}
 			if src.Path != "" {
 				result["source_path"] = src.Path
@@ -349,18 +349,28 @@ func licenseStatusCmd() *cobra.Command {
 			switch {
 			case src.Blob == "":
 				result["status"] = "none"
-			case len(pub) == 0:
+			case kerr != nil:
+				result["status"] = "invalid"
+				result["reason"] = kerr.Error()
+				result["action"] = licenseTrustAction(kerr)
+			case kr.Len() == 0:
 				result["status"] = "unknown"
-				result["note"] = fmt.Sprintf("this build embeds no verification key (license-key=%s); pass --pubkey to verify", license.KeyOrigin())
+				result["note"] = fmt.Sprintf("this build embeds no verification key (license-key=%s) and the data directory configures none; pass --pubkey or add one with `olivares license trust set`", license.KeyOrigin())
 			default:
-				lic, verr := license.VerifyEnvelope(src.Blob, pub)
+				lic, verr := kr.Verify(src.Blob, time.Now().UTC())
 				if verr != nil {
 					result["status"] = "invalid"
 					// WHY, not just THAT. "invalid" with no reason cannot tell a paste error
 					// from a wrong key from a container this binary is too old to read, and
 					// the operator's next step is different in all three.
 					result["reason"] = verr.Error()
+					if action := licenseTrustAction(verr); action != "" {
+						result["action"] = action
+					}
 				} else {
+					if trust := licenseTrustReport(lic); trust != nil {
+						result["trust"] = trust
+					}
 					rev, crlDesc, crlOK, lerr := loadRevocation(manifestPath, manifestSig, otaPub)
 					if lerr != nil {
 						return lerr
@@ -379,7 +389,7 @@ func licenseStatusCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "data directory holding the license (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().StringVar(&licPath, "license", "", "explicit license file path (highest precedence, like serve --license)")
-	cmd.Flags().StringVar(&pubB64, "pubkey", "", "base64 Ed25519 public key to verify against (default: embedded key)")
+	cmd.Flags().StringVar(&pubB64, "pubkey", "", "base64 Ed25519 public key to verify against instead of the data directory's license trust")
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "OTA channel manifest to read the license CRL from (its signature must verify)")
 	cmd.Flags().StringVar(&manifestSig, "manifest-sig", "", "detached manifest signature (default <manifest>.sig)")
 	cmd.Flags().StringVar(&otaPub, "ota-pubkey", "", "base64 or @file Ed25519 OTA key for the manifest (default: the key embedded in this build)")
@@ -575,26 +585,17 @@ func decodeDetachedSig(raw []byte) ([]byte, error) {
 	return sig, nil
 }
 
-// writeKeyFile writes sensitive bytes to path and GUARANTEES the mode it
-// promises. `what` names the artifact for the refusal messages — it guards key
-// material for `license keygen` and the installed license for `license install`,
-// and an operator reading "the wrong custody" deserves to know over what.
+// writeKeyFile writes data to path and verifies its requested permission bits.
+// The what parameter identifies the artifact in contextual error messages.
 //
-// os.WriteFile applies its perm argument ONLY WHEN IT CREATES THE FILE
-// (O_WRONLY|O_CREATE|O_TRUNC): an existing path is truncated and keeps whatever mode it
-// already had. Measured 2026-08-06 with a probe rather than read off the documentation —
-// a target created 0644 still read 0644 after a 0600 write, with the private key material
-// now in it. For the one artifact that mints licenses, that is the whole custody promise
-// failing silently while the command exits 0.
+// Without force, the function creates path exclusively, applies mode to the new
+// descriptor, and verifies the descriptor before writing. Applying mode after
+// creation ensures that the process umask does not alter the requested bits. If
+// an operation after creation fails, the function attempts to remove that path.
 //
-// Two failures, one fix:
-//   - WITHOUT force the path is created O_EXCL, so an existing key is never destroyed.
-//     There was no --force and no exclusive create, so re-running a ceremony with the
-//     wrong path overwrote the private anchor and said nothing.
-//   - WITH force the write goes to a fresh temp file IN THE SAME DIRECTORY (so the rename
-//     cannot cross filesystems), is chmod'ed and re-stat'ed BEFORE it carries the secret
-//     into place, and only then replaces the target. The mode is then asserted on the
-//     final path: a promise nobody checks is a promise nobody keeps.
+// With force, the function stages data in a same-directory temporary file,
+// applies and verifies mode, renames the temporary file over path, and verifies
+// the resulting path.
 func writeKeyFile(path string, data []byte, mode os.FileMode, force bool, what string) error {
 	if !force {
 		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
@@ -605,16 +606,40 @@ func writeKeyFile(path string, data []byte, mode os.FileMode, force bool, what s
 			}
 			return err
 		}
+		// Chmod is not affected by the process umask. Verify the requested mode on
+		// the owned descriptor before writing the payload.
+		discard := func() { _ = f.Close(); _ = os.Remove(path) }
+		if merr := f.Chmod(mode); merr != nil {
+			discard()
+			return fmt.Errorf("set mode %04o on %s: %w", mode.Perm(), path, merr)
+		}
+		st, serr := f.Stat()
+		if serr != nil {
+			discard()
+			return fmt.Errorf("stat %s to verify the mode it was just given: %w", path, serr)
+		}
+		if got := st.Mode().Perm(); got != mode.Perm() {
+			discard()
+			return fmt.Errorf("%s came back at mode %04o after being set to %04o, which this filesystem "+
+				"reported — refusing to write %s",
+				path, got, mode.Perm(), what)
+		}
 		if _, werr := f.Write(data); werr != nil {
 			_ = f.Close()
-			_ = os.Remove(path) // a half-written key is worse than none
+			_ = os.Remove(path) // best-effort cleanup of a partially written artifact
 			return werr
 		}
 		if cerr := f.Close(); cerr != nil {
 			_ = os.Remove(path)
 			return cerr
 		}
-		return assertMode(path, mode, what)
+		if aerr := assertMode(path, mode, what); aerr != nil {
+			// The final path could not be verified; attempt to remove the file created
+			// by this branch.
+			_ = os.Remove(path)
+			return aerr
+		}
+		return nil
 	}
 
 	dir := filepath.Dir(path)
@@ -624,8 +649,8 @@ func writeKeyFile(path string, data []byte, mode os.FileMode, force bool, what s
 	}
 	tmpName := tmp.Name()
 	cleanup := func() { _ = tmp.Close(); _ = os.Remove(tmpName) }
-	// chmod BEFORE the secret is written: CreateTemp makes 0600, but the mode is asserted
-	// explicitly so this holds if that ever changes, and so a 0644 public key is right too.
+	// Apply the requested mode before writing. The temporary file is verified
+	// before it replaces path.
 	if err := tmp.Chmod(mode); err != nil {
 		cleanup()
 		return fmt.Errorf("set mode %04o on the temporary file: %w", mode, err)
@@ -634,7 +659,7 @@ func writeKeyFile(path string, data []byte, mode os.FileMode, force bool, what s
 		cleanup()
 		return err
 	}
-	if err := tmp.Sync(); err != nil { // the key must survive a crash between write and rename
+	if err := tmp.Sync(); err != nil { // flush the staged file before rename
 		cleanup()
 		return err
 	}
@@ -906,7 +931,7 @@ func parseLicenseFeatures(csv string) ([]string, error) {
 }
 
 func licenseVerifyCmd() *cobra.Command {
-	var pubB64, manifestPath, manifestSig, otaPub string
+	var pubB64, manifestPath, manifestSig, otaPub, dataDir string
 	cmd := &cobra.Command{
 		Use:   "verify <license-blob>",
 		Short: "Verify a license against a public key (default: embedded key), with profile/grace and optional CRL status",
@@ -921,22 +946,31 @@ func licenseVerifyCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pub := license.DefaultPublicKey()
-			if pubB64 != "" {
-				p, err := license.DecodePublicKey(pubB64)
-				if err != nil {
-					return err
-				}
-				pub = p
-			} else if len(pub) == 0 {
+			// --pubkey names one key; --data-dir adds that directory's administrative trust to the
+			// embedded key; neither verifies against the embedded key alone. All three apply the
+			// keyring's key id and epoch rules.
+			var kr license.Keyring
+			var err error
+			switch {
+			case strings.TrimSpace(pubB64) != "":
+				kr, err = resolveLicenseKeyring(pubB64, "")
+			case strings.TrimSpace(dataDir) != "":
+				kr, err = licenseKeyringForDataDir(dataDir)
+			default:
+				kr, err = license.NewKeyring(embeddedLicenseTrust(), 0)
+			}
+			if err != nil {
+				return withLicenseTrustAction(err)
+			}
+			if kr.Len() == 0 {
 				// A release build with no/invalid key injected has no embedded anchor.
 				// Mirror the sign path's clear message instead of the cryptic
 				// "license: bad public key size 0" from Verify.
-				return fmt.Errorf("this build embeds no verification key (license-key=%s); pass --pubkey <base64-public-key> to verify", license.KeyOrigin())
+				return fmt.Errorf("this build embeds no verification key (license-key=%s); pass --pubkey <base64-public-key> or --data-dir with a configured license trust", license.KeyOrigin())
 			}
-			lic, err := license.VerifyEnvelope(strings.TrimSpace(args[0]), pub)
+			lic, err := kr.Verify(strings.TrimSpace(args[0]), time.Now().UTC())
 			if err != nil {
-				return err
+				return withLicenseTrustAction(err)
 			}
 			rev, crlDesc, crlOK, err := loadRevocation(manifestPath, manifestSig, otaPub)
 			if err != nil {
@@ -946,11 +980,15 @@ func licenseVerifyCmd() *cobra.Command {
 			result := licenseLifecycle(lic, rev, crlDesc, crlOK, now)
 			reportKey, reportBody := licenseReport(lic, now)
 			result[reportKey] = reportBody
+			if trust := licenseTrustReport(lic); trust != nil {
+				result["trust"] = trust
+			}
 			// E2: honor -o instead of always printing JSON.
 			return renderReportOut(cmd, result)
 		},
 	}
 	cmd.Flags().StringVar(&pubB64, "pubkey", "", "base64 Ed25519 public key (default: embedded key)")
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", "also trust this data directory's administrative license trust (see `license trust`)")
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "OTA channel manifest to read the license CRL from (its signature must verify)")
 	cmd.Flags().StringVar(&manifestSig, "manifest-sig", "", "detached manifest signature (default <manifest>.sig)")
 	cmd.Flags().StringVar(&otaPub, "ota-pubkey", "", "base64 or @file Ed25519 OTA key for the manifest (default: the key embedded in this build)")

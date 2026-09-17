@@ -451,6 +451,16 @@ func resolveResourceServerRevisionMode(cfg ResourceServerConfig) (string, error)
 	}
 }
 
+// RevisionMode reports the revision posture this Resource Server RESOLVED at
+// construction: "legacy", "dual" or "rc-strict". It is a read-only diagnostic
+// accessor, added for a composition root that must state its EFFECTIVE
+// configuration at startup (D07-1). Reporting the resolved value is what keeps
+// that read-back from drifting: resolveResourceServerRevisionMode above stays the
+// single resolver, and a caller that re-derived the mode would be publishing a
+// prediction instead of the value this server actually uses. It exposes no
+// secret, no credential and no request state, and changes no behaviour.
+func (rs *ResourceServer) RevisionMode() string { return rs.revisionMode }
+
 // metadataURLFor derives the absolute URL where this RS serves its PRM document
 // (scheme://host + the well-known path), the value advertised in WWW-Authenticate's
 // resource_metadata parameter. It tolerates an unparseable input by returning the

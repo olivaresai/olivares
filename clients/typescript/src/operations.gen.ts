@@ -3,6 +3,548 @@
 // live in the hand-written core (./core.ts); version constants in version.gen.ts.
 
 import { ClientCore, type Json, type JsonInput, type RequestOptions } from "./core.js";
+export interface AuthCapabilityQuestion {
+  id: string;
+  kind: string;
+  operation: string;
+  selectors?: AuthCapabilitySelectors;
+  workspace_id?: string;
+}
+
+export interface AuthCapabilityQuestions {
+  questions: AuthCapabilityQuestion[];
+  schema_version: number;
+}
+
+export interface AuthCapabilityResult {
+  code: string;
+  id: string;
+  kind: string;
+  observed_at: string;
+  refresh_after_ms?: number;
+  state: string;
+}
+
+export interface AuthCapabilityResults {
+  results: AuthCapabilityResult[];
+  schema_version: number;
+}
+
+export interface AuthCapabilitySelectors {
+  body?: Record<string, string>;
+  path?: Record<string, string>;
+}
+
+export interface SessionsCommunicationAckResult {
+  ack_id: string;
+  audit_seq: number;
+  command_id: string;
+  delivery_id: string;
+  etag: string;
+  event_id: string;
+  fulfillment: SessionsCommunicationFulfillment;
+  late: boolean;
+  message_id: string;
+  replayed: boolean;
+  state: string;
+  version: number;
+}
+
+export interface SessionsCommunicationChannel {
+  acl_revision: number;
+  content_protection: string;
+  created_at: string;
+  default_ack_policy: string;
+  default_ack_timeout_ms: number;
+  default_wake: string;
+  description?: string;
+  id: string;
+  kind: string;
+  max_automation_depth: number;
+  max_fanout: number;
+  name: string;
+  protection_generation: number;
+  retention_policy_ref?: string;
+  route_revision: number;
+  sensitivity: string;
+  slug: string;
+  state: string;
+  subscription_revision: number;
+  tenant_id: string;
+  updated_at: string;
+  version: number;
+  workspace_id: string;
+}
+
+export interface SessionsCommunicationChannelAccess {
+  admin: boolean;
+  read: boolean;
+  write: boolean;
+}
+
+export interface SessionsCommunicationChannelAdministrationItem {
+  channel: SessionsCommunicationChannel;
+  etag: string;
+}
+
+export interface SessionsCommunicationChannelAdministrationPage {
+  continuation?: string;
+  has_more: boolean;
+  items: SessionsCommunicationChannelAdministrationItem[];
+}
+
+export interface SessionsCommunicationChannelCatalogItem {
+  acl_revision: number;
+  content_protection: string;
+  created_at: string;
+  default_ack_policy: string;
+  default_ack_timeout_ms: number;
+  default_wake: string;
+  description?: string;
+  id: string;
+  kind: string;
+  max_automation_depth: number;
+  max_fanout: number;
+  my_access: SessionsCommunicationChannelAccess;
+  name: string;
+  protection_generation: number;
+  retention_policy_ref?: string;
+  route_revision: number;
+  sensitivity: string;
+  slug: string;
+  state: string;
+  subscription_revision: number;
+  tenant_id: string;
+  updated_at: string;
+  version: number;
+  workspace_id: string;
+}
+
+export interface SessionsCommunicationChannelCatalogPage {
+  continuation?: string;
+  has_more: boolean;
+  items: SessionsCommunicationChannelCatalogItem[];
+}
+
+export interface SessionsCommunicationChannelCreateBody {
+  content_protection?: string;
+  default_ack_policy?: string;
+  default_ack_timeout_ms?: number;
+  default_wake?: string;
+  description?: string;
+  initial_grants: SessionsCommunicationChannelGrantInput[];
+  kind?: string;
+  max_automation_depth?: number;
+  max_fanout?: number;
+  name: string;
+  retention_policy_ref?: string;
+  sensitivity?: string;
+  slug: string;
+  workspace_id: string;
+}
+
+export interface SessionsCommunicationChannelGrant {
+  can_admin: boolean;
+  can_read: boolean;
+  can_write: boolean;
+  channel_id: string;
+  created_at: string;
+  expires_at?: string | null;
+  generation: number;
+  granted_by: SessionsCommunicationRef;
+  id: string;
+  revoked_by?: SessionsCommunicationRef | null;
+  state: string;
+  subject: SessionsCommunicationRef;
+  supersedes_id?: string;
+  tenant_id: string;
+  updated_at: string;
+  version: number;
+  workspace_id: string;
+}
+
+export interface SessionsCommunicationChannelGrantAdministrationItem {
+  grant: SessionsCommunicationChannelGrant;
+  temporal_state: string;
+}
+
+export interface SessionsCommunicationChannelGrantAdministrationPage {
+  channel: SessionsCommunicationChannel;
+  continuation?: string;
+  etag: string;
+  has_more: boolean;
+  items: SessionsCommunicationChannelGrantAdministrationItem[];
+  observed_at: string;
+}
+
+export interface SessionsCommunicationChannelGrantInput {
+  can_admin: boolean;
+  can_read: boolean;
+  can_write: boolean;
+  expires_at?: string | null;
+  subject: SessionsCommunicationRef;
+}
+
+export interface SessionsCommunicationChannelMutationResult {
+  audit_seq: number;
+  channel: SessionsCommunicationChannel;
+  etag: string;
+  grant?: SessionsCommunicationChannelGrant | null;
+  grants?: SessionsCommunicationChannelGrant[];
+}
+
+export interface SessionsCommunicationChannelUpdateBody {
+  channel_id: string;
+  content_protection?: string;
+  default_ack_policy?: string;
+  default_ack_timeout_ms?: number;
+  default_wake?: string;
+  description?: string;
+  max_automation_depth?: number;
+  max_fanout?: number;
+  name?: string;
+  retention_policy_ref?: string;
+  sensitivity?: string;
+  state?: string;
+}
+
+export interface SessionsCommunicationContentBlock {
+  code?: string;
+  format?: string;
+  reference?: SessionsCommunicationContentReference | null;
+  text?: string;
+  type: string;
+}
+
+export interface SessionsCommunicationContentReference {
+  hash?: string;
+  kind: string;
+  ref: string;
+}
+
+export interface SessionsCommunicationCursorAdvanceBody {
+  cursor: string;
+  delivery_id: string;
+}
+
+export interface SessionsCommunicationCursorAdvanceResult {
+  audit_seq: number;
+  command_id: string;
+  cursor_id: string;
+  etag: string;
+  projection: SessionsCommunicationCursorProjection;
+  replayed: boolean;
+  version: number;
+}
+
+export interface SessionsCommunicationCursorProjection {
+  barrier_delivery_id?: string;
+  barrier_reason?: string;
+  barrier_since?: string | null;
+  last_seen_seq?: number;
+}
+
+export interface SessionsCommunicationCursorTokenResult {
+  cursor: string;
+  cursor_id?: string;
+  etag: string;
+  version: number;
+}
+
+export interface SessionsCommunicationDeliveryView {
+  ack_due_at?: string | null;
+  acknowledged_at?: string | null;
+  available_at: string;
+  delivery_seq: number;
+  expires_at?: string | null;
+  first_seen_at?: string | null;
+  id: string;
+  message_id: string;
+  recipient: SessionsCommunicationRef;
+  required: boolean;
+  state: string;
+  version: number;
+}
+
+export interface SessionsCommunicationFulfillment {
+  acknowledged: number;
+  quorum?: number;
+  required: number;
+  state: string;
+  unmet: number;
+  viable: number;
+}
+
+export interface SessionsCommunicationHandoffContent {
+  artifact_refs?: SessionsCommunicationContentReference[];
+  next_action: string;
+  risk?: string;
+  summary: string;
+}
+
+export interface SessionsCommunicationHandoffOfferBody {
+  ack_deadline: string;
+  channel_id: string;
+  expected_owner_epoch?: number;
+  handoff: SessionsCommunicationHandoffContent;
+  recipient: SessionsCommunicationRef;
+  work_item_id: string;
+}
+
+export interface SessionsCommunicationHandoffOfferResult {
+  audit_seq: number;
+  command_id: string;
+  delivery_id: string;
+  etag: string;
+  event_id: string;
+  handoff_id: string;
+  message_id: string;
+  replayed: boolean;
+  state: string;
+  version: number;
+  work_item_id: string;
+}
+
+export interface SessionsCommunicationHandoffResponseBody {
+  reason?: SessionsCommunicationReason | null;
+  transition: string;
+}
+
+export interface SessionsCommunicationHandoffResponseResult {
+  ack_id?: string;
+  audit_seq: number;
+  command_id: string;
+  delivery_id: string;
+  etag: string;
+  event_id: string;
+  handoff_id: string;
+  message_id: string;
+  owner_epoch: number;
+  replayed: boolean;
+  resulting_lease_fence?: number;
+  state: string;
+  version: number;
+  work_item_id: string;
+}
+
+export interface SessionsCommunicationInboxPage {
+  continuation?: string;
+  cursor_target?: string;
+  has_more: boolean;
+  items: SessionsCommunicationReadResult[];
+}
+
+export interface SessionsCommunicationIncomingHandoffCarrier {
+  channel_id: string;
+  delivery_id: string;
+  delivery_version: number;
+  message_id: string;
+}
+
+export interface SessionsCommunicationIncomingHandoffOffer {
+  ack_deadline: string;
+  created_at: string;
+  etag: string;
+  from: SessionsCommunicationRef;
+  id: string;
+  state: string;
+  terminal_at?: string | null;
+  terminal_code?: string;
+  to: SessionsCommunicationRef;
+  version: number;
+}
+
+export interface SessionsCommunicationIncomingHandoffPage {
+  continuation?: string;
+  has_more: boolean;
+  items: SessionsCommunicationIncomingHandoffSummary[];
+}
+
+export interface SessionsCommunicationIncomingHandoffReadResult {
+  carrier: SessionsCommunicationIncomingHandoffCarrier;
+  content: SessionsCommunicationHandoffContent;
+  deadline_elapsed: boolean;
+  handoff: SessionsCommunicationIncomingHandoffOffer;
+  observed_at: string;
+  offer_context: string;
+  terminal_reason?: SessionsCommunicationReason | null;
+  work_item: SessionsCommunicationIncomingHandoffWorkItem;
+}
+
+export interface SessionsCommunicationIncomingHandoffSummary {
+  carrier: SessionsCommunicationIncomingHandoffCarrier;
+  deadline_elapsed: boolean;
+  handoff: SessionsCommunicationIncomingHandoffOffer;
+  observed_at: string;
+  work_item: SessionsCommunicationIncomingHandoffWorkItem;
+}
+
+export interface SessionsCommunicationIncomingHandoffWorkItem {
+  id: string;
+  presentation: string;
+}
+
+export interface SessionsCommunicationMessageContent {
+  blocks: SessionsCommunicationContentBlock[];
+  subject: string;
+}
+
+export interface SessionsCommunicationMessageSendBody {
+  available_at?: string;
+  channel_id: string;
+  content: SessionsCommunicationMessageContent;
+  recipient: SessionsCommunicationRef;
+  urgency?: string;
+}
+
+export interface SessionsCommunicationMessageView {
+  ack_due_at?: string | null;
+  ack_policy: string;
+  ack_quorum?: number;
+  available_at: string;
+  channel_id: string;
+  content: SessionsCommunicationMessageContent;
+  expires_at?: string | null;
+  id: string;
+  published_at?: string | null;
+  sender: SessionsCommunicationRef;
+  state: string;
+  terminal_at?: string | null;
+  terminal_code?: string;
+  thread_id: string;
+  urgency: string;
+  version: number;
+}
+
+export interface SessionsCommunicationPublishResult {
+  ack_quorum: number;
+  audience_hash: string;
+  audit_seq: number;
+  channel_id: string;
+  code: string;
+  command_id: string;
+  delivery_count: number;
+  delivery_id: string;
+  event_id: string;
+  fulfillment: SessionsCommunicationFulfillment;
+  message_id: string;
+  payload_digest: string;
+  plan_hash: string;
+  replayed: boolean;
+  required_count: number;
+  state: string;
+  verdict: string;
+  version: number;
+}
+
+export interface SessionsCommunicationReadResult {
+  delivery: SessionsCommunicationDeliveryView;
+  fulfillment: SessionsCommunicationFulfillment;
+  message: SessionsCommunicationMessageView;
+}
+
+export interface SessionsCommunicationReason {
+  code: string;
+  references?: SessionsCommunicationContentReference[];
+  text?: string;
+}
+
+export interface SessionsCommunicationRef {
+  kind: string;
+  ref: string;
+}
+
+export interface PostV1AuthCapabilitiesInput {
+  body: AuthCapabilityQuestions;
+}
+
+export interface GetV1MSessionsChannelsInput {
+  workspace_id: string;
+  continuation?: string;
+  limit?: number;
+}
+
+export interface PostV1MSessionsChannelsInput {
+  body: SessionsCommunicationChannelCreateBody;
+}
+
+export interface PatchV1MSessionsChannelsInput {
+  body: SessionsCommunicationChannelUpdateBody;
+  if_match: string;
+}
+
+export interface GetV1MSessionsChannelsAdministrationInput {
+  workspace_id: string;
+  state?: string;
+  continuation?: string;
+  limit?: number;
+}
+
+export interface GetV1MSessionsChannelsByIDGrantsInput {
+  workspace_id: string;
+  state?: string;
+  subject_kind?: string;
+  subject_ref?: string;
+  continuation?: string;
+  limit?: number;
+}
+
+export interface PostV1MSessionsChannelsByIDGrantsInput {
+  body: SessionsCommunicationChannelGrantInput;
+  if_match: string;
+}
+
+export interface PostV1MSessionsChannelsByIDGrantsByGrantIDRevokeInput {
+  if_match: string;
+}
+
+export interface PostV1MSessionsDeliveriesByIDAckInput {
+  if_match: string;
+  idempotency_key: string;
+}
+
+export interface PostV1MSessionsHandoffsInput {
+  body: SessionsCommunicationHandoffOfferBody;
+  if_match: string;
+  idempotency_key: string;
+}
+
+export interface PostV1MSessionsHandoffsByIDResponsesInput {
+  body: SessionsCommunicationHandoffResponseBody;
+  if_match: string;
+  idempotency_key: string;
+}
+
+export interface GetV1MSessionsInboxInput {
+  workspace_id: string;
+  continuation?: string;
+  limit?: number;
+}
+
+export interface GetV1MSessionsInboxCursorsPersonalByRecipientInput {
+  workspace_id: string;
+  target: string;
+}
+
+export interface PutV1MSessionsInboxCursorsPersonalByRecipientInput {
+  body: SessionsCommunicationCursorAdvanceBody;
+  if_match: string;
+  idempotency_key: string;
+}
+
+export interface GetV1MSessionsInboxHandoffsInput {
+  workspace_id: string;
+  state?: string;
+  continuation?: string;
+  limit?: number;
+}
+
+export interface PostV1MSessionsMessagesSendInput {
+  body: SessionsCommunicationMessageSendBody;
+  idempotency_key: string;
+  if_plan_hash?: string;
+}
+
 
 export class Client extends ClientCore {
   /**
@@ -51,7 +593,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /readyz — Readiness probe (store reachable AND this node is the active writer); 503 on a standby or when the store is down.
+   * GET /readyz — Readiness probe (store reachable AND this node is the active writer AND, before first setup, that setup read can run); 503 on standby, store down, unknown setup state, blocked first boot, or a failed setup probe.
    *
    * Stability: stable.
    */
@@ -165,6 +707,15 @@ export class Client extends ClientCore {
    */
   getV1AuditVerify(opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/audit/verify", "/v1/audit/verify", undefined, opts);
+  }
+
+  /**
+   * POST /v1/auth/capabilities — Project the CALLING credential's authority over registered operations.
+   * Stability: stable.
+   */
+  postV1AuthCapabilities(input: PostV1AuthCapabilitiesInput, opts?: RequestOptions): Promise<AuthCapabilityResults> {
+    const callOpts = opts;
+    return this.doJsonRequired("POST", "/v1/auth/capabilities", "/v1/auth/capabilities", input.body as unknown as JsonInput, callOpts) as unknown as Promise<AuthCapabilityResults>;
   }
 
   /**
@@ -2827,8 +3378,8 @@ export class Client extends ClientCore {
    *
    * Stability: beta.
    */
-  getV1MFinopsStatementsByIdExport(id: string, opts?: RequestOptions): Promise<Json> {
-    return this.do("GET", "/v1/m/finops/statements/{id}/export", `/v1/m/finops/statements/${encodeURIComponent(id)}/export`, undefined, opts);
+  getV1MFinopsStatementsByIdExport(id: string, opts?: RequestOptions): Promise<string> {
+    return this.doRaw("GET", "/v1/m/finops/statements/{id}/export", `/v1/m/finops/statements/${encodeURIComponent(id)}/export`, opts);
   }
 
   /**
@@ -3840,6 +4391,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/inferenceproxy/content-firewall — Reports the startup attachment state of the inline Messages proxy content inspector in this process, where an attached inspector can be the deny-all fallback; it does not report listener health, policy load or per-request inspection.
+   *
+   * Stability: beta.
+   */
+  getV1MInferenceproxyContentFirewall(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/inferenceproxy/content-firewall", "/v1/m/inferenceproxy/content-firewall", undefined, opts);
+  }
+
+  /**
    * POST /v1/m/inferenceproxy/device/approve — inferenceproxy module route (requires inferenceproxy:config:admin)
    *
    * Stability: beta.
@@ -3891,6 +4451,15 @@ export class Client extends ClientCore {
    */
   getV1MInventoryEntitiesByKindById(kind: string, id: string, opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/inventory/entities/{kind}/{id}", `/v1/m/inventory/entities/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/inventory/entities/{kind}/{id}/observations — Lists the stored observation receipts that name one catalog entity, one item per distinct receipt in ascending receipt order, in pages of at most 25 (?limit 1..25, ?cursor from the previous page): each item carries the receipt id, the event type, the registration snapshot recorded at reception (historical, not the source's current registration or health), the source-declared occurrence instant when declared, first and last reception of the same retained facts, the equal-facts delivery count and whether a conflicting redelivery is retained; names, references, labels, raw facts, hashes and event ids are withheld, a missing catalog entry is 404, and an empty page does not prove no observation.
+   *
+   * Stability: beta.
+   */
+  getV1MInventoryEntitiesByKindByIdObservations(kind: string, id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/inventory/entities/{kind}/{id}/observations", `/v1/m/inventory/entities/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/observations`, undefined, opts);
   }
 
   /**
@@ -6000,6 +6569,106 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/channels — Lists the active Channels of the selected workspace that the current caller may read, with the caller's own current local grant bits, without changing any state.
+   * Stability: beta.
+   */
+  getV1MSessionsChannels(input: GetV1MSessionsChannelsInput, opts?: RequestOptions): Promise<SessionsCommunicationChannelCatalogPage> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    query["workspace_id"] = input.workspace_id;
+    if (input.continuation !== undefined && input.continuation !== "") query["continuation"] = input.continuation;
+    if (input.limit !== undefined) query["limit"] = String(input.limit);
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("GET", "/v1/m/sessions/channels", "/v1/m/sessions/channels", undefined, callOpts) as unknown as Promise<SessionsCommunicationChannelCatalogPage>;
+  }
+
+  /**
+   * POST /v1/m/sessions/channels — Creates an active Channel with only the explicit initial grants supplied by an authorized caller; no grant is implied.
+   * Stability: beta.
+   */
+  postV1MSessionsChannels(input: PostV1MSessionsChannelsInput, opts?: RequestOptions): Promise<SessionsCommunicationChannelMutationResult> {
+    const callOpts = opts;
+    return this.doJsonRequired("POST", "/v1/m/sessions/channels", "/v1/m/sessions/channels", input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationChannelMutationResult>;
+  }
+
+  /**
+   * PATCH /v1/m/sessions/channels — Updates one Channel under conditional-write semantics while preserving the irreversible application-sealed content boundary.
+   * Stability: beta.
+   */
+  patchV1MSessionsChannels(input: PatchV1MSessionsChannelsInput, opts?: RequestOptions): Promise<SessionsCommunicationChannelMutationResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.doJsonRequired("PATCH", "/v1/m/sessions/channels", "/v1/m/sessions/channels", input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationChannelMutationResult>;
+  }
+
+  /**
+   * GET /v1/m/sessions/channels/administration — Lists the Channels of the selected workspace that the current caller may administer, each with the strong Channel ETag the existing mutations take as their precondition, without changing any state.
+   * Stability: beta.
+   */
+  getV1MSessionsChannelsAdministration(input: GetV1MSessionsChannelsAdministrationInput, opts?: RequestOptions): Promise<SessionsCommunicationChannelAdministrationPage> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    query["workspace_id"] = input.workspace_id;
+    if (input.state !== undefined && input.state !== "") query["state"] = input.state;
+    if (input.continuation !== undefined && input.continuation !== "") query["continuation"] = input.continuation;
+    if (input.limit !== undefined) query["limit"] = String(input.limit);
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("GET", "/v1/m/sessions/channels/administration", "/v1/m/sessions/channels/administration", undefined, callOpts) as unknown as Promise<SessionsCommunicationChannelAdministrationPage>;
+  }
+
+  /**
+   * GET /v1/m/sessions/channels/{id} — Returns one Channel only after current core and local read authorization.
+   * Stability: beta.
+   */
+  getV1MSessionsChannelsById(id: string, opts?: RequestOptions): Promise<SessionsCommunicationChannel> {
+    const callOpts = opts;
+    return this.do("GET", "/v1/m/sessions/channels/{id}", `/v1/m/sessions/channels/${encodeURIComponent(id)}`, undefined, callOpts) as unknown as Promise<SessionsCommunicationChannel>;
+  }
+
+  /**
+   * GET /v1/m/sessions/channels/{id}/grants — Returns one administrable Channel, its precondition ETag and a bounded page of the stored grant generations the requested filters select, without opening content or changing any state.
+   * Stability: beta.
+   */
+  getV1MSessionsChannelsByIdGrants(id: string, input: GetV1MSessionsChannelsByIDGrantsInput, opts?: RequestOptions): Promise<SessionsCommunicationChannelGrantAdministrationPage> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    query["workspace_id"] = input.workspace_id;
+    if (input.state !== undefined && input.state !== "") query["state"] = input.state;
+    if (input.subject_kind !== undefined && input.subject_kind !== "") query["subject_kind"] = input.subject_kind;
+    if (input.subject_ref !== undefined && input.subject_ref !== "") query["subject_ref"] = input.subject_ref;
+    if (input.continuation !== undefined && input.continuation !== "") query["continuation"] = input.continuation;
+    if (input.limit !== undefined) query["limit"] = String(input.limit);
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("GET", "/v1/m/sessions/channels/{id}/grants", `/v1/m/sessions/channels/${encodeURIComponent(id)}/grants`, undefined, callOpts) as unknown as Promise<SessionsCommunicationChannelGrantAdministrationPage>;
+  }
+
+  /**
+   * POST /v1/m/sessions/channels/{id}/grants — Adds one explicit, optionally expiring grant generation.
+   * Stability: beta.
+   */
+  postV1MSessionsChannelsByIdGrants(id: string, input: PostV1MSessionsChannelsByIDGrantsInput, opts?: RequestOptions): Promise<SessionsCommunicationChannelMutationResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.doJsonRequired("POST", "/v1/m/sessions/channels/{id}/grants", `/v1/m/sessions/channels/${encodeURIComponent(id)}/grants`, input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationChannelMutationResult>;
+  }
+
+  /**
+   * POST /v1/m/sessions/channels/{id}/grants/{grant_id}/revoke — Revokes one active grant without deleting its history.
+   * Stability: beta.
+   */
+  postV1MSessionsChannelsByIdGrantsByGrantIdRevoke(id: string, grant_id: string, input: PostV1MSessionsChannelsByIDGrantsByGrantIDRevokeInput, opts?: RequestOptions): Promise<SessionsCommunicationChannelMutationResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("POST", "/v1/m/sessions/channels/{id}/grants/{grant_id}/revoke", `/v1/m/sessions/channels/${encodeURIComponent(id)}/grants/${encodeURIComponent(grant_id)}/revoke`, undefined, callOpts) as unknown as Promise<SessionsCommunicationChannelMutationResult>;
+  }
+
+  /**
    * GET /v1/m/sessions/decisions — sessions module route (requires sessions:decision:read)
    *
    * Stability: beta.
@@ -6036,6 +6705,118 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/deliveries/{id} — Opens one authorized Delivery for its exact user, agent, or session recipient.
+   * Stability: beta.
+   */
+  getV1MSessionsDeliveriesById(id: string, opts?: RequestOptions): Promise<SessionsCommunicationReadResult> {
+    const callOpts = opts;
+    return this.do("GET", "/v1/m/sessions/deliveries/{id}", `/v1/m/sessions/deliveries/${encodeURIComponent(id)}`, undefined, callOpts) as unknown as Promise<SessionsCommunicationReadResult>;
+  }
+
+  /**
+   * POST /v1/m/sessions/deliveries/{id}/ack — Acknowledges one exact Delivery with CAS and idempotent receipt semantics.
+   * Stability: beta.
+   */
+  postV1MSessionsDeliveriesByIdAck(id: string, input: PostV1MSessionsDeliveriesByIDAckInput, opts?: RequestOptions): Promise<SessionsCommunicationAckResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    headers["Idempotency-Key"] = input.idempotency_key;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("POST", "/v1/m/sessions/deliveries/{id}/ack", `/v1/m/sessions/deliveries/${encodeURIComponent(id)}/ack`, undefined, callOpts) as unknown as Promise<SessionsCommunicationAckResult>;
+  }
+
+  /**
+   * GET /v1/m/sessions/deliveries/{id}/handoff — Opens the offer context of one exact Delivery for its own recipient.
+   * Stability: beta.
+   */
+  getV1MSessionsDeliveriesByIdHandoff(id: string, opts?: RequestOptions): Promise<SessionsCommunicationIncomingHandoffReadResult> {
+    const callOpts = opts;
+    return this.do("GET", "/v1/m/sessions/deliveries/{id}/handoff", `/v1/m/sessions/deliveries/${encodeURIComponent(id)}/handoff`, undefined, callOpts) as unknown as Promise<SessionsCommunicationIncomingHandoffReadResult>;
+  }
+
+  /**
+   * POST /v1/m/sessions/handoffs — Creates the carrier and WorkItem offer atomically without changing ownership.
+   * Stability: beta.
+   */
+  postV1MSessionsHandoffs(input: PostV1MSessionsHandoffsInput, opts?: RequestOptions): Promise<SessionsCommunicationHandoffOfferResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    headers["Idempotency-Key"] = input.idempotency_key;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.doJsonRequired("POST", "/v1/m/sessions/handoffs", "/v1/m/sessions/handoffs", input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationHandoffOfferResult>;
+  }
+
+  /**
+   * POST /v1/m/sessions/handoffs/{id}/responses — Accepts or rejects an offered Handoff; accept atomically transfers ownership and fences the old lease.
+   * Stability: beta.
+   */
+  postV1MSessionsHandoffsByIdResponses(id: string, input: PostV1MSessionsHandoffsByIDResponsesInput, opts?: RequestOptions): Promise<SessionsCommunicationHandoffResponseResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    headers["Idempotency-Key"] = input.idempotency_key;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.doJsonRequired("POST", "/v1/m/sessions/handoffs/{id}/responses", `/v1/m/sessions/handoffs/${encodeURIComponent(id)}/responses`, input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationHandoffResponseResult>;
+  }
+
+  /**
+   * GET /v1/m/sessions/inbox — Lists an authenticated principal's exact mailbox without advancing or acknowledging it.
+   * Stability: beta.
+   */
+  getV1MSessionsInbox(input: GetV1MSessionsInboxInput, opts?: RequestOptions): Promise<SessionsCommunicationInboxPage> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    query["workspace_id"] = input.workspace_id;
+    if (input.continuation !== undefined && input.continuation !== "") query["continuation"] = input.continuation;
+    if (input.limit !== undefined) query["limit"] = String(input.limit);
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("GET", "/v1/m/sessions/inbox", "/v1/m/sessions/inbox", undefined, callOpts) as unknown as Promise<SessionsCommunicationInboxPage>;
+  }
+
+  /**
+   * GET /v1/m/sessions/inbox/cursors/personal/{recipient} — Mints an opaque navigation token without advancing durable cursor state.
+   * Stability: beta.
+   */
+  getV1MSessionsInboxCursorsPersonalByRecipient(recipient: string, input: GetV1MSessionsInboxCursorsPersonalByRecipientInput, opts?: RequestOptions): Promise<SessionsCommunicationCursorTokenResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    query["workspace_id"] = input.workspace_id;
+    query["target"] = input.target;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("GET", "/v1/m/sessions/inbox/cursors/personal/{recipient}", `/v1/m/sessions/inbox/cursors/personal/${encodeURIComponent(recipient)}`, undefined, callOpts) as unknown as Promise<SessionsCommunicationCursorTokenResult>;
+  }
+
+  /**
+   * PUT /v1/m/sessions/inbox/cursors/personal/{recipient} — Rescans current Delivery authority and conditionally advances the personal cursor and barriers.
+   * Stability: beta.
+   */
+  putV1MSessionsInboxCursorsPersonalByRecipient(recipient: string, input: PutV1MSessionsInboxCursorsPersonalByRecipientInput, opts?: RequestOptions): Promise<SessionsCommunicationCursorAdvanceResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    headers["Idempotency-Key"] = input.idempotency_key;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.doJsonRequired("PUT", "/v1/m/sessions/inbox/cursors/personal/{recipient}", `/v1/m/sessions/inbox/cursors/personal/${encodeURIComponent(recipient)}`, input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationCursorAdvanceResult>;
+  }
+
+  /**
+   * GET /v1/m/sessions/inbox/handoffs — Lists the handoff offers addressed to the authenticated recipient without opening their content.
+   * Stability: beta.
+   */
+  getV1MSessionsInboxHandoffs(input: GetV1MSessionsInboxHandoffsInput, opts?: RequestOptions): Promise<SessionsCommunicationIncomingHandoffPage> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    query["workspace_id"] = input.workspace_id;
+    if (input.state !== undefined && input.state !== "") query["state"] = input.state;
+    if (input.continuation !== undefined && input.continuation !== "") query["continuation"] = input.continuation;
+    if (input.limit !== undefined) query["limit"] = String(input.limit);
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.do("GET", "/v1/m/sessions/inbox/handoffs", "/v1/m/sessions/inbox/handoffs", undefined, callOpts) as unknown as Promise<SessionsCommunicationIncomingHandoffPage>;
+  }
+
+  /**
    * GET /v1/m/sessions/leases — sessions module route (requires sessions:lease:read)
    *
    * Stability: beta.
@@ -6054,7 +6835,25 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/sessions/live/{ref} — Returns the full live operation of one session by its reference.
+   * GET /v1/m/sessions/live/by-id/{live_ref} — Returns the live operation of one session row by its opaque live_ref, whichever channel it was observed through.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsLiveByIdByLiveRef(live_ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/live/by-id/{live_ref}", `/v1/m/sessions/live/by-id/${encodeURIComponent(live_ref)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/live/by-id/{live_ref}/timeline — Returns the timeline of exactly one session row by its live_ref: a scoped row by the events written with that reference, a legacy row by its legacy events.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsLiveByIdByLiveRefTimeline(live_ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/live/by-id/{live_ref}/timeline", `/v1/m/sessions/live/by-id/${encodeURIComponent(live_ref)}/timeline`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/live/{ref} — Returns the live operation of the LEGACY row of one session by its bare external reference; a profile-scoped row is never returned here — read it by its live_ref.
    *
    * Stability: beta.
    */
@@ -6063,12 +6862,34 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/sessions/live/{ref}/timeline — Returns a session's reconstructable timeline in chronological (ingestion) order, keyset-paginated by the time-ordered row id.
+   * GET /v1/m/sessions/live/{ref}/timeline — Returns the LEGACY timeline of one session by its bare external reference — the events that carry no live_ref — in chronological (ingestion) order, keyset-paginated by the time-ordered row id.
    *
    * Stability: beta.
    */
   getV1MSessionsLiveByRefTimeline(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/sessions/live/{ref}/timeline", `/v1/m/sessions/live/${encodeURIComponent(ref)}/timeline`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/messages/send — Publishes one governed direct Message and required Delivery.
+   * Stability: beta.
+   */
+  postV1MSessionsMessagesSend(input: PostV1MSessionsMessagesSendInput, opts?: RequestOptions): Promise<SessionsCommunicationPublishResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["Idempotency-Key"] = input.idempotency_key;
+    if (input.if_plan_hash !== undefined && input.if_plan_hash !== "") headers["If-Plan-Hash"] = input.if_plan_hash;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.doJsonRequired("POST", "/v1/m/sessions/messages/send", "/v1/m/sessions/messages/send", input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationPublishResult>;
+  }
+
+  /**
+   * GET /v1/m/sessions/messages/{id} — Opens one authorized user Message after its exact carrier checks.
+   * Stability: beta.
+   */
+  getV1MSessionsMessagesById(id: string, opts?: RequestOptions): Promise<SessionsCommunicationReadResult> {
+    const callOpts = opts;
+    return this.do("GET", "/v1/m/sessions/messages/{id}", `/v1/m/sessions/messages/${encodeURIComponent(id)}`, undefined, callOpts) as unknown as Promise<SessionsCommunicationReadResult>;
   }
 
   /**
@@ -6144,6 +6965,114 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/provider-profiles — Lists the tenant's provider profiles as references and labels, never paths.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderProfiles(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-profiles", "/v1/m/sessions/provider-profiles", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/provider-profiles — Registers a provider profile for a configuration home on this node's execution environment; the homes are validated on the server and must already exist.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviderProfiles(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/provider-profiles", "/v1/m/sessions/provider-profiles", body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-profiles/{ref} — Returns one provider profile by its reference, without its paths.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderProfilesByRef(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-profiles/{ref}", `/v1/m/sessions/provider-profiles/${encodeURIComponent(ref)}`, undefined, opts);
+  }
+
+  /**
+   * PATCH /v1/m/sessions/provider-profiles/{ref} — Renames a provider profile and/or moves it between active and disabled; driver, environment and homes are immutable and retirement has its own route.
+   *
+   * Stability: beta.
+   */
+  patchV1MSessionsProviderProfilesByRef(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PATCH", "/v1/m/sessions/provider-profiles/{ref}", `/v1/m/sessions/provider-profiles/${encodeURIComponent(ref)}`, body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-profiles/{ref}/configuration — Returns the stored canonical homes of one provider profile; this is the only read that exposes paths, and it never exposes a credential value.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderProfilesByRefConfiguration(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-profiles/{ref}/configuration", `/v1/m/sessions/provider-profiles/${encodeURIComponent(ref)}/configuration`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-profiles/{ref}/host-tools — Reports the official provider CLI candidates this node observes for one provider profile, grouped into closed codes; it installs nothing, probes nothing and authorizes nothing.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderProfilesByRefHostTools(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-profiles/{ref}/host-tools", `/v1/m/sessions/provider-profiles/${encodeURIComponent(ref)}/host-tools`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-profiles/{ref}/launch-readiness — Reports the LOCAL launch requirements observed for one provider profile under one transport and isolation, with the checks this read cannot make left explicitly unknown; it starts nothing, mints nothing and authorizes nothing.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderProfilesByRefLaunchReadiness(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-profiles/{ref}/launch-readiness", `/v1/m/sessions/provider-profiles/${encodeURIComponent(ref)}/launch-readiness`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/provider-profiles/{ref}/retire — Retires a provider profile for good: the id stays, its history stays, and the home becomes free for a new profile id.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviderProfilesByRefRetire(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/provider-profiles/{ref}/retire", `/v1/m/sessions/provider-profiles/${encodeURIComponent(ref)}/retire`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-source-bindings — Lists the source-to-profile bindings of the tenant, optionally narrowed to one profile.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderSourceBindings(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-source-bindings", "/v1/m/sessions/provider-source-bindings", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/provider-source-bindings — Dedicates one configured source, at the exact revision this node has applied, to a provider profile; administering the source is checked through the composition port.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviderSourceBindings(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/provider-source-bindings", "/v1/m/sessions/provider-source-bindings", body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-source-bindings/{ref} — Returns one source-to-profile binding by its reference.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderSourceBindingsByRef(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-source-bindings/{ref}", `/v1/m/sessions/provider-source-bindings/${encodeURIComponent(ref)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/provider-source-bindings/{ref}/revoke — Revokes a source-to-profile binding; events already attributed under it keep their provenance and later observations through that source are no longer attributed to the profile.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsProviderSourceBindingsByRefRevoke(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/provider-source-bindings/{ref}/revoke", `/v1/m/sessions/provider-source-bindings/${encodeURIComponent(ref)}/revoke`, undefined, opts);
+  }
+
+  /**
    * GET /v1/m/sessions/runs — sessions module route (requires sessions:run:read)
    *
    * Stability: beta.
@@ -6213,6 +7142,15 @@ export class Client extends ClientCore {
    */
   postV1MSessionsRunsByRefInput(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/input", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/input`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/interrupt — Cancels the active provider turn of a live session and keeps its owned process running; it is the non-terminal control, /stop remains the terminal one, and the optional body decides which control plane answers — absent, it is the legacy interrupt of a non-work run; with a positive work_lease_fence, it is the fenced control this work-bound run's input and stop already use.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefInterrupt(ref: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/runs/{ref}/interrupt", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/interrupt`, body, opts);
   }
 
   /**

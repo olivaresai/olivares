@@ -211,6 +211,34 @@ export const TEMPLATES = {
 
   ...licenseVariants(),
 
+  // ⛔ THE PORTAL'S INVITATION, AND IT IS NOT `invite` BELOW. That one is the ENGINE's, it promises
+  // "you will choose your own password", and the customer portal has no passwords at all — it signs
+  // in with a single-use link. Reusing it would have sent every invited colleague looking for a
+  // step that does not exist, in seven languages.
+  //
+  // Nor does this one mention a password to DENY one: telling somebody a thing is absent invites
+  // them to look for it. It says what does happen instead.
+  //
+  // `runtime: 'worker'` because the licence Worker is what sends it; the engine has no call site
+  // and a template emitted into a bundle that never renders it is dead weight in a size budget.
+  portalInvite: {
+    runtime: 'worker',
+    subject: (c) => c.portalInvite.subject,
+    build: (c) => ({
+      preheader: c.portalInvite.preheader,
+      blocks: [
+        { t: 'h1', text: c.portalInvite.heading },
+        { t: 'p', text: c.portalInvite.intro, textAlt: c.portalInvite.textIntro },
+        { t: 'button', label: c.portalInvite.cta, href: '{{ACCEPT_URL}}' },
+        { t: 'small', text: c.portalInvite.expiry },
+        { t: 'small', text: c.portalInvite.howYouSignIn },
+        { t: 'link', intro: c.common.fallbackIntro, href: '{{ACCEPT_URL}}', htmlOnly: true },
+        { t: 'rule' },
+        { t: 'small', text: c.portalInvite.ignore },
+      ],
+    }),
+  },
+
   // The one that did not exist. core/api declares InviteSender and defines no
   // body, so whoever wires it invents the email — which is not a brand problem
   // but the absence of one.
@@ -290,4 +318,10 @@ export const ALLOWED_PLACEHOLDERS = {
   signin: ['VERIFY_URL'],
   ...licensePlaceholders(),
   invite: ['ACCEPT_URL', 'EXPIRES_AT'],
+  // ⛔ EVERY ONE OF THESE HAS TO APPEAR IN BOTH THE HTML AND THE PLAIN TEXT, which the build checks
+  // per medium rather than over their union. That is not pedantry about markers: a plain-text body
+  // is not a summary of the email, it IS the email for whoever reads it that way, and an invitation
+  // whose text half never says WHICH organization or WHICH role is an invitation to nothing in
+  // particular.
+  portalInvite: ['ACCEPT_URL', 'EXPIRES_AT', 'ORG_NAME', 'ROLE', 'INVITER'],
 }

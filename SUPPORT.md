@@ -3,11 +3,11 @@
 Thanks for using Olivares AI. This page explains **where to get help** — and,
 just as importantly, **where not to report security problems**.
 
-> Olivares AI is **beta** and in active development. There is no released,
-> supported version yet, and no commercial support offering exists yet; when paid
-> support activates, it carries best-effort first-response targets, not an SLA
-> (see [`SECURITY.md`](SECURITY.md) for the supported-versions statement).
-> Set your expectations accordingly: this is a developer build.
+> Olivares AI is **beta** and in active development. The first tagged release,
+> `v26.8.0`, is published and signed; no commercial support offering exists yet, and
+> when paid support activates it carries best-effort first-response targets, not an
+> SLA (see [`SECURITY.md`](SECURITY.md) for the supported-versions statement).
+> Set your expectations accordingly: this is a beta.
 
 ## Do NOT use these channels for security issues
 
@@ -25,7 +25,7 @@ a vulnerability)). Public disclosure before a fix puts users at risk.
 | **Report a bug** | Open a **Bug report** issue (use the template). Include the `olivares version`, your platform, and steps to reproduce. |
 | **Request a feature or change** | Open a **Feature request** issue (use the template). For anything non-trivial, please open it as a discussion first so the approach can be agreed before code is written — see [`CONTRIBUTING.md`](CONTRIBUTING.md). |
 | **Ask a question / discuss usage** | Use GitHub Discussions on this repository (when enabled). Questions are not bugs — please don't open issues for them. |
-| **Read the documentation** | Start with [`README.md`](README.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md). The full product documentation site lives in [`docs-site/`](docs-site/); it is not yet published to a public URL (that is a later step), so build it locally or browse the source for now. |
+| **Read the documentation** | Start with [`README.md`](README.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md). The full product documentation site is published at [docs.olivares.ai](https://docs.olivares.ai); its source lives in [`docs-site/`](docs-site/). |
 | **Contribute** | See [`CONTRIBUTING.md`](CONTRIBUTING.md) (setup, DCO/CLA, SPDX, the connector boundary) and [`GOVERNANCE.md`](GOVERNANCE.md) (how decisions are made). |
 | **Report conduct concerns** | Email the dedicated conduct alias in [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (`conduct@olivares.ai`). |
 

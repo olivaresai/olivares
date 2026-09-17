@@ -3,6 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { ApiError } from '@/lib/api/errors'
 import { http, type TenantRequestOptions } from '@/lib/api/client'
+import { workItemQueryKeys } from '@/lib/api/work-query-keys'
 import type {
   AcceptanceCriterion,
   Assessment,
@@ -97,12 +98,19 @@ const id = (v: string) => encodeURIComponent(v)
  *
  * Lo aplacé por «hay que leer el alcance de cada módulo» y el contraste externo lo refutó con
  * la firma del motor delante: aquí no había ambigüedad que resolver. */
+/** Re-exported so Work-side callers can reach the neutral builders without a
+ * second import path. Other features import them from `@/lib/api/work-query-keys`. */
+export { workItemQueryKeys }
+
 export const workKeys = {
   all: (tenant: string | null) => ['work', tenant] as const,
+  // The collection prefix and the detail key come from the neutral builders so a
+  // feature that changes WorkItem state through another module's route can
+  // invalidate them without importing this feature. The arrays are unchanged.
   items: (tenant: string | null, params: ListWorkParams) =>
-    ['work', tenant, 'items', params] as const,
+    [...workItemQueryKeys.collection(tenant), params] as const,
   item: (tenant: string | null, itemId: string) =>
-    ['work', tenant, 'item', itemId] as const,
+    workItemQueryKeys.detail(tenant, itemId),
   acceptance: (tenant: string | null, itemId: string) =>
     ['work', tenant, 'acceptance', itemId] as const,
   dependencies: (tenant: string | null, itemId: string) =>

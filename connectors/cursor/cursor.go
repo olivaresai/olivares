@@ -25,7 +25,7 @@
 // credential and no per-user OAuth: a control plane reads team governance with an admin
 // key, exactly as for Codex/Claude.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): the client exposes only the documented READ
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): the client exposes only the documented READ
 // endpoints (the query-with-body POSTs are reads), so the connector CANNOT mutate Cursor
 // — it never names the user-spend-limit / remove-member / group-write endpoints. It
 // carries token counts, billed money, model ids, role/actor identifiers and audit

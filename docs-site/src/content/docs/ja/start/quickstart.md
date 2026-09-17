@@ -230,7 +230,7 @@ pgAudit シグナルが名指しするのは*統制されたエージェント*�
 
 :::note[エンドポイントの形]
 Permitted-vs-Observed の結果は `/v1/m/accessmap/drift` で提供されます（`/diff` は存在しません）。
-`/v1/m/accessmap/*` のルートは 53 パスの安定コア契約には含まれず、別の **beta**
+`/v1/m/accessmap/*` のルートは 54 パスの安定コア契約には含まれず、別の **beta**
 ドキュメントとして [module-route リファレンス](/reference/api-beta/) で公開されます。
 [API リファレンス](/reference/api/)は安定コアサーフェスを記述します。
 :::

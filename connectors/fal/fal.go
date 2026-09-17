@@ -23,7 +23,7 @@
 // view never implies coverage the platform does not expose; the key-management REST
 // shape is UNVERIFIED-OFFLINE and degrades honestly on 403/404.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared
 // GET-only modelprovider client (auth scheme AuthFalKey → "Authorization: Key <cred>"),
 // so the connector CANNOT submit a job or mutate a key; it carries key inventory
 // METADATA and queue compute metrics — never a key value or the generated media. It

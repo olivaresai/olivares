@@ -72,15 +72,18 @@ type communicationCursorTokenKeyring struct {
 
 // communicationCursorTokenClaims is navigation state, never authorization
 // state. The service must re-observe all mutable authority before applying a
-// cursor advance. All fields remain package-private until the C2 API boundary
-// has its own deliberately narrower wire types.
+// cursor advance. All fields remain package-private; the public C2 boundary
+// returns only its deliberately narrower opaque-token result.
 type communicationCursorTokenClaims struct {
+	tokenVersion     int
 	tenantID         model.TenantID
 	workspaceID      model.ID
 	readerKind       RecipientKind
 	readerRef        model.ID
+	readerRefText    string
 	mailboxKind      MailboxKind
 	mailboxRef       model.ID
+	mailboxRefText   string
 	carrierClass     string
 	filterHash       []byte
 	cursorID         model.ID
@@ -207,6 +210,9 @@ func (r *communicationCursorTokenKeyring) verify(
 	token string,
 	observedAt time.Time,
 ) (communicationCursorTokenClaims, error) {
+	if strings.HasPrefix(token, communicationCursorTokenV2Prefix+".") {
+		return r.verifyV2(token, observedAt)
+	}
 	if err := r.validate(); err != nil {
 		return communicationCursorTokenClaims{}, err
 	}

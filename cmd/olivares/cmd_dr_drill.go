@@ -95,7 +95,9 @@ func drDrillCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := dr.WriteBundle(bf, dr.BundleInput{Manifest: m, KEK: cipher.Params(), SnapshotPath: snapshotPath, SealedKeys: sealed}); err != nil {
+			if err := dr.WriteAuthenticatedBundle(bf, dr.BundleInput{
+				Manifest: m, KEK: cipher.Params(), SnapshotPath: snapshotPath, SealedKeys: sealed,
+			}, cipher); err != nil {
 				_ = bf.Close()
 				return err
 			}
@@ -125,6 +127,9 @@ func drDrillCmd() *cobra.Command {
 			rcipher, err := dr.OpenCipher(pass, kek)
 			if err != nil {
 				return err
+			}
+			if err := dr.VerifyBundleIntegrity(restoreWork, rm, kek, rcipher, false); err != nil {
+				return fmt.Errorf("drill verify bundle authentication: %w", err)
 			}
 			if err := restoreKeys(restoreWork, restored, rm, rcipher, true); err != nil {
 				return err

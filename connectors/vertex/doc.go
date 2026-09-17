@@ -100,7 +100,7 @@
 // usage, cost, Model Armor posture and Model Armor platform-log surfaces gcp-audit does
 // not.
 //
-// # Security posture (docs/SECURITY-HARDENING.md-3)
+// # Security posture (docs/SECURITY-HARDENING.md §0-3)
 //
 // Read-only: it performs only GETs against Google APIs (and the operator's cost export),
 // except Cloud Logging entries:list's read-only POST query body, same as gcp-audit —

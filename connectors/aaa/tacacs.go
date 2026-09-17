@@ -49,7 +49,7 @@ func acctFlagValue(flag string) int {
 // where the av-pairs include service=, cmd=, priv-lvl=. TACACS+ is device
 // administration by definition, so every record is a device-admin session signal.
 // The command text (cmd=) can carry a secret, so it is redacted and hashed into
-// the de-dup detail and NEVER placed in the displayable title (docs/SECURITY-HARDENING.md-3).
+// the de-dup detail and NEVER placed in the displayable title (docs/SECURITY-HARDENING.md §2-3).
 func parseTACACSLine(line string) (aaaEvent, bool) {
 	fields := strings.Split(line, "\t")
 	if len(fields) < 6 {

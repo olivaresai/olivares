@@ -45,8 +45,17 @@ func newScheme(t *testing.T) *runtime.Scheme {
 }
 
 // newReconciler wires a fake client (with status subresource enabled for the
-// ControlPlane) and the reconciler under test.
+// ControlPlane) and the reconciler under test. It wires NO route prober: that is
+// the honest default for every test that is not about traffic readiness, and it
+// means those tests keep asserting what they were written to assert.
 func newReconciler(t *testing.T, objs ...client.Object) (*ControlPlaneReconciler, client.Client) {
+	t.Helper()
+	return newReconcilerWithProbe(t, nil, objs...)
+}
+
+// newReconcilerWithProbe is the same wiring with an explicit route observation.
+// Unit tests STATE the observation; nothing here speaks HTTP.
+func newReconcilerWithProbe(t *testing.T, probe RouteReadinessProber, objs ...client.Object) (*ControlPlaneReconciler, client.Client) {
 	t.Helper()
 	s := newScheme(t)
 	c := fake.NewClientBuilder().
@@ -54,7 +63,7 @@ func newReconciler(t *testing.T, objs ...client.Object) (*ControlPlaneReconciler
 		WithStatusSubresource(&opsv1alpha1.ControlPlane{}).
 		WithObjects(objs...).
 		Build()
-	return &ControlPlaneReconciler{Client: c, Scheme: s}, c
+	return &ControlPlaneReconciler{Client: c, Scheme: s, RouteProbe: probe}, c
 }
 
 func sampleCP() *opsv1alpha1.ControlPlane {
@@ -63,6 +72,10 @@ func sampleCP() *opsv1alpha1.ControlPlane {
 			Name:       "test",
 			Namespace:  "default",
 			Generation: 1,
+			// A real apiserver mints this; the fake client does not. Ownership is
+			// checked by UID (a name can be reused, a UID cannot), so the fixtures
+			// carry the identities a cluster would have.
+			UID: "cp-uid",
 		},
 		Spec: opsv1alpha1.ControlPlaneSpec{
 			Image:    "ghcr.io/olivaresai/olivares:0.1.0",

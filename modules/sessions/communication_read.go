@@ -34,13 +34,11 @@ var errDirectNoticePrincipalNotFound = fmt.Errorf(
 	ErrCommunicationNotFound,
 )
 
-// DirectNoticeInboxQuery is an intentionally narrow private keyset over the
-// immutable delivery sequence. AfterDeliverySeq is not the contractual REST
-// cursor: activation remains blocked until WP-2 C2 supplies a CursorBarrier for
-// mutable visibility across pages.
+// DirectNoticeInboxQuery is the internal immutable-sequence scan coordinate.
+// HTTP callers use DirectNoticeInboxRequest and never supply this value.
 type DirectNoticeInboxQuery struct {
-	AfterDeliverySeq int64 `json:"after_delivery_seq,omitempty"`
-	Limit            int   `json:"limit,omitempty"`
+	AfterDeliverySeq int64 `json:"-"`
+	Limit            int   `json:"-"`
 }
 
 // DirectNoticeMessageView exposes opened content without exposing its stored
@@ -90,9 +88,11 @@ type DirectNoticeReadResult struct {
 // DirectNoticeInboxPage reports only visible results. It deliberately has no
 // total, scanned-candidate count or other side channel for hidden deliveries.
 type DirectNoticeInboxPage struct {
-	Items                api.JSONArray[DirectNoticeReadResult] `json:"items"`
-	NextAfterDeliverySeq int64                                 `json:"next_after_delivery_seq"`
-	HasMore              bool                                  `json:"has_more"`
+	Items        api.JSONArray[DirectNoticeReadResult] `json:"items"`
+	Continuation string                                `json:"continuation,omitempty"`
+	CursorTarget string                                `json:"cursor_target,omitempty"`
+	HasMore      bool                                  `json:"has_more"`
+	nextAfter    int64
 }
 
 type directNoticeCarrierIDs struct {
@@ -164,9 +164,8 @@ type directNoticePayloadOpener func(
 	ProtectedPayloadOpenPlan,
 ) (json.RawMessage, error)
 
-// GetDirectNoticeMessage is the future handler-facing point read. The complete
-// K3 readiness conjunction intentionally remains false while the remaining
-// resolver, permission and pump cuts are absent, so this vertical mounts no route.
+// GetDirectNoticeMessage is the handler-facing user point read and remains
+// gated by the complete K3 readiness conjunction.
 func (m *Module) GetDirectNoticeMessage(
 	ctx context.Context,
 	scope DirectoryScopeRef,
@@ -176,6 +175,63 @@ func (m *Module) GetDirectNoticeMessage(
 	return m.getDirectNoticeMessageWithCurrentAuthority(
 		ctx, scope, ref, messageID, OpenProtectedPayload, true,
 	)
+}
+
+// GetDirectNoticeDelivery opens the carrier addressed by one exact Delivery.
+// Unlike the User-only Message lookup, this is the delivery-targeted read used
+// by User, Agent and communication-session inbox principals.
+func (m *Module) GetDirectNoticeDelivery(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	ref auth.PrincipalRef,
+	deliveryID model.ID,
+) (DirectNoticeReadResult, error) {
+	if !validCanonicalCommunicationID(deliveryID) {
+		return DirectNoticeReadResult{}, directNoticeReadNotFound("delivery is not visible")
+	}
+	question, err := newCommunicationAuthorityQuestion(
+		scope, messageDeliveryKind, deliveryID, CommunicationRead,
+	)
+	if err != nil {
+		return DirectNoticeReadResult{}, err
+	}
+	bound, err := m.bindCurrentCommunicationRequestAuthority(ctx, ref, question)
+	if err != nil {
+		return DirectNoticeReadResult{}, normalizeDirectNoticePointReadError(err)
+	}
+	inspected, err := bound.contextFor(question)
+	if err != nil || inspected.question != question {
+		return DirectNoticeReadResult{}, communicationError(
+			ErrCommunicationEvidenceUnknown,
+			"delivery-read authority context crossed its exact request",
+		)
+	}
+	readiness, readinessErr := m.EvaluateCommunicationReadiness(ctx)
+	if readinessErr != nil || !readiness.Effective {
+		return DirectNoticeReadResult{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "communication kernel is not ready",
+		)
+	}
+	identity, err := m.preflightDirectNoticeReaderIdentity(
+		ctx, scope, inspected.principal, nil,
+	)
+	if err != nil {
+		return DirectNoticeReadResult{}, normalizeDirectNoticePointReadError(err)
+	}
+	window, err := directNoticeReaderAuthorityWindow(identity)
+	if err != nil {
+		return DirectNoticeReadResult{}, err
+	}
+	authorized, hidden, err := m.authorizeDirectNoticePointReadWithAuthority(
+		ctx, question, bound, inspected, identity, messageDeliveryKind, deliveryID, window,
+	)
+	if err != nil {
+		return DirectNoticeReadResult{}, normalizeDirectNoticePointReadError(err)
+	}
+	if hidden {
+		return DirectNoticeReadResult{}, directNoticeReadNotFound("delivery is not visible")
+	}
+	return m.openDirectNoticeRead(ctx, authorized, OpenProtectedPayload)
 }
 
 // getDirectNoticeMessageWithAuthority is the private exact-authority seam. It
@@ -318,19 +374,6 @@ func (m *Module) getDirectNoticeMessageWithOpener(
 		return DirectNoticeReadResult{}, normalizeDirectNoticePointReadError(err)
 	}
 	return m.openDirectNoticeRead(ctx, authorized, opener)
-}
-
-// ListDirectNoticeInbox is the future handler-facing personal inbox. The
-// public boundary remains readiness-gated and therefore OFF during WP-2.
-func (m *Module) ListDirectNoticeInbox(
-	ctx context.Context,
-	scope DirectoryScopeRef,
-	ref auth.PrincipalRef,
-	query DirectNoticeInboxQuery,
-) (DirectNoticeInboxPage, error) {
-	return m.listDirectNoticeInboxWithCurrentAuthority(
-		ctx, scope, ref, query, OpenProtectedPayload, true,
-	)
 }
 
 func (m *Module) listDirectNoticeInbox(
@@ -517,16 +560,16 @@ func (m *Module) listDirectNoticeInboxBoundedWithOpener(
 			return DirectNoticeInboxPage{}, openErr
 		}
 		page.Items = append(page.Items, result)
-		page.NextAfterDeliverySeq = result.Delivery.DeliverySeq
+		page.nextAfter = result.Delivery.DeliverySeq
 	}
 	return page, nil
 }
 
 func emptyDirectNoticeInboxPage(query DirectNoticeInboxQuery) DirectNoticeInboxPage {
 	return DirectNoticeInboxPage{
-		Items:                make(api.JSONArray[DirectNoticeReadResult], 0),
-		NextAfterDeliverySeq: query.AfterDeliverySeq,
-		HasMore:              false,
+		Items:     make(api.JSONArray[DirectNoticeReadResult], 0),
+		HasMore:   false,
+		nextAfter: query.AfterDeliverySeq,
 	}
 }
 
@@ -622,10 +665,10 @@ func validateDirectNoticeReader(
 	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
 		return err
 	}
-	if principal.UserID == "" {
+	if principal.System {
 		return communicationError(
 			ErrInvalidCommunicationModel,
-			"direct notice read requires an authenticated User principal",
+			"direct notice read requires an authenticated directory principal",
 		)
 	}
 	return nil
@@ -803,11 +846,12 @@ func (m *Module) preflightDirectNoticeReaderIdentity(
 	case PrincipalNotFound:
 		return directNoticeReaderIdentityPreflight{}, errDirectNoticePrincipalNotFound
 	}
-	if resolution.Recipient == nil || resolution.Recipient.Recipient.Kind != RecipientUser ||
-		resolution.Recipient.Recipient.Ref != principal.UserID.String() {
+	if resolution.Recipient == nil || !communicationPrincipalMatchesRecipient(
+		principal, resolution.Recipient.Recipient,
+	) {
 		return directNoticeReaderIdentityPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown,
-			"direct notice principal did not resolve to the authenticated User",
+			"direct notice principal did not resolve to its authenticated identity",
 		)
 	}
 	closure, err := m.communicationGrantClosure.ResolveChannelGrantSubjects(ctx, scope, principal)
@@ -1000,6 +1044,52 @@ func resolveDirectNoticeMessageIDsFromRepositories(
 	return ids, nil
 }
 
+func resolveDirectNoticeDeliveryIDsFromRepositories(
+	ctx context.Context,
+	resolve communicationReadRepositoryResolver,
+	preflight directNoticeReaderIdentityPreflight,
+	deliveryID model.ID,
+) (directNoticeCarrierIDs, error) {
+	ids := directNoticeCarrierIDs{DeliveryID: deliveryID}
+	if resolve == nil {
+		return directNoticeCarrierIDs{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "direct notice read repositories are unavailable",
+		)
+	}
+	deliveryRepo, err := resolve(messageDeliveryKind)
+	if err != nil {
+		return directNoticeCarrierIDs{}, err
+	}
+	deliveryRecord, err := deliveryRepo.Get(ctx, deliveryID)
+	if err != nil {
+		return directNoticeCarrierIDs{}, err
+	}
+	if deliveryRecord.String(colCommRecipientKind) != string(preflight.Recipient.Kind) ||
+		deliveryRecord.String(colCommRecipientRef) != preflight.Recipient.Ref {
+		return directNoticeCarrierIDs{}, store.ErrNotFound
+	}
+	ids.DeliverySeq = deliveryRecord.Int(colCommDeliverySeq)
+	if ids.DeliverySeq < 1 {
+		return directNoticeCarrierIDs{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "direct notice Delivery sequence is malformed",
+		)
+	}
+	ids.MessageID, err = directNoticeRecordID(deliveryRecord, colCommMessageID)
+	if err != nil {
+		return directNoticeCarrierIDs{}, err
+	}
+	messageRepo, err := resolve(messageKind)
+	if err != nil {
+		return directNoticeCarrierIDs{}, err
+	}
+	messageRecord, err := messageRepo.Get(ctx, ids.MessageID)
+	if err != nil {
+		return directNoticeCarrierIDs{}, err
+	}
+	ids.ChannelID, err = directNoticeRecordID(messageRecord, colCommChannelID)
+	return ids, err
+}
+
 func (m *Module) resolveDirectNoticeDeliveryIDs(
 	ctx context.Context,
 	preflight directNoticeReaderPreflight,
@@ -1122,22 +1212,43 @@ func (m *Module) authorizeDirectNoticeReadWithAuthority(
 	messageID model.ID,
 	window communicationAuthorityWindow,
 ) (directNoticeAuthorizedRead, bool, error) {
+	return m.authorizeDirectNoticePointReadWithAuthority(
+		ctx, question, bound, inspected, identity, messageKind, messageID, window,
+	)
+}
+
+func (m *Module) authorizeDirectNoticePointReadWithAuthority(
+	ctx context.Context,
+	question communicationAuthorityQuestion,
+	bound communicationRequestAuthority,
+	inspected communicationRequestAuthorityInspection,
+	identity directNoticeReaderIdentityPreflight,
+	targetKind model.Kind,
+	targetID model.ID,
+	window communicationAuthorityWindow,
+) (directNoticeAuthorizedRead, bool, error) {
 	var authorized directNoticeAuthorizedRead
 	var hidden bool
-	err := m.mutateCommunicationWithNarrowedAuthority(
-		ctx, question, bound, CommunicationClaimAuthoritySnapshot{}, window,
+	claims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, identity.Scope.TenantID, communicationClaimsForPrincipal(identity.Principal),
+	)
+	if err != nil {
+		return directNoticeAuthorizedRead{}, false, err
+	}
+	err = m.mutateCommunicationWithNarrowedAuthority(
+		ctx, question, bound, claims, window,
 		func(tx *communicationTx, consumed communicationRequestAuthorityContext) error {
 			if err := validateConsumedDirectNoticeAuthority(inspected, consumed); err != nil {
 				return err
 			}
 			if consumed.question != question || consumed.question.entity != (EntityRef{
-				TenantID: identity.Scope.TenantID, Kind: messageKind, ID: messageID,
+				TenantID: identity.Scope.TenantID, Kind: targetKind, ID: targetID,
 				WorkspaceID: identity.Scope.WorkspaceID,
 			}) || consumed.question.operation != CommunicationRead ||
 				consumed.principal != identity.Principal {
 				return communicationError(
 					ErrCommunicationEvidenceUnknown,
-					"message-read authority crossed point-read preflight",
+					"carrier-read authority crossed point-read preflight",
 				)
 			}
 			preflight, err := directNoticeReaderPreflightWithCore(identity, consumed.witness)
@@ -1151,20 +1262,25 @@ func (m *Module) authorizeDirectNoticeReadWithAuthority(
 				return normalizeDirectNoticeAuthorityLockError(err)
 			}
 			if err := tx.lockTransaction(
-				ctx, directNoticeMessageLockKey(identity.Scope, messageID),
+				ctx, directNoticeMessageLockKey(identity.Scope, targetID),
 			); err != nil {
 				return directNoticeReadUnknown(
 					"direct notice point-read lock is unavailable", err,
 				)
 			}
-			ids, err := resolveDirectNoticeMessageIDsFromRepositories(
-				ctx,
-				func(kind model.Kind) (communicationReadRepository, error) {
-					return tx.repo(kind)
-				},
-				identity,
-				messageID,
-			)
+			resolve := func(kind model.Kind) (communicationReadRepository, error) {
+				return tx.repo(kind)
+			}
+			var ids directNoticeCarrierIDs
+			if targetKind == messageKind {
+				ids, err = resolveDirectNoticeMessageIDsFromRepositories(
+					ctx, resolve, identity, targetID,
+				)
+			} else {
+				ids, err = resolveDirectNoticeDeliveryIDsFromRepositories(
+					ctx, resolve, identity, targetID,
+				)
+			}
 			if errors.Is(err, ErrCommunicationEvidenceUnknown) {
 				return err
 			}
@@ -1264,8 +1380,8 @@ func authorizeDirectNoticeReadLocked(
 	if err != nil {
 		return directNoticeAuthorizedRead{}, false, directNoticeReadUnknown("locked Message is malformed", err)
 	}
-	audienceRecords, err := lockDirectNoticeRecordSet(
-		ctx, tx, messageAudienceKind,
+	audienceRecords, err := observeAppendOnlyRecordSet(
+		ctx, tx, messageAudienceKind, publishedMessageSetFence(ids.MessageID),
 		[]model.Filter{{Column: colCommMessageID, Op: model.OpEq, Value: ids.MessageID.String()}},
 		64,
 	)
@@ -1283,7 +1399,9 @@ func authorizeDirectNoticeReadLocked(
 		}
 		audiences = append(audiences, audience)
 	}
-	contributionRecords, err := lockDirectNoticeContributionSet(ctx, tx, audiences)
+	contributionRecords, err := observeAppendOnlyContributionSet(
+		ctx, tx, publishedMessageSetFence(ids.MessageID), audiences,
+	)
 	if err != nil {
 		return directNoticeAuthorizedRead{}, false, err
 	}
@@ -1310,7 +1428,7 @@ func authorizeDirectNoticeReadLocked(
 			Message: message, Deliveries: deliveries,
 			Audiences: audiences, Contributions: contributions,
 		},
-		epoch, tx.now.Time(),
+		epoch, tx.now.Time(), tx.claimAuthorityFacts,
 	)
 	if err != nil {
 		return directNoticeAuthorizedRead{}, true, err
@@ -1335,12 +1453,30 @@ func authorizeDirectNoticeReadLocked(
 // that currently confer read. If any matching grant has no expiry, durable
 // grant authority adds no time bound. Otherwise authority remains live until
 // the latest matching expiry, because any one current grant is sufficient.
+// directNoticeReadGrantFreshUntil is the read-bit OR-horizon the exact reads
+// have always narrowed to; it is the generalized channelGrantBitFreshUntil
+// asked for ChannelGrantRead, so the inbox semantics are unchanged.
 func directNoticeReadGrantFreshUntil(
 	grants []ChannelGrant,
 	closure ChannelGrantSubjectClosure,
 	dbNow time.Time,
 ) (time.Time, bool, error) {
-	if dbNow.IsZero() || closure.Outcome != ReadAllow {
+	return channelGrantBitFreshUntil(grants, closure, ChannelGrantRead, dbNow)
+}
+
+// channelGrantBitFreshUntil computes the OR-horizon for one requested grant
+// bit: among the caller's currently matching, active, unexpired grants that
+// carry the bit, the LATEST expiry bounds how long the bit stays true without a
+// row change. A matching non-expiring grant removes the extra horizon for that
+// bit (constrained=false). No matching grant at all is UNKNOWN, because the bit
+// was reported positive on evidence that no longer exists.
+func channelGrantBitFreshUntil(
+	grants []ChannelGrant,
+	closure ChannelGrantSubjectClosure,
+	bit ChannelGrantBit,
+	dbNow time.Time,
+) (time.Time, bool, error) {
+	if dbNow.IsZero() || closure.Outcome != ReadAllow || !bit.Valid() {
 		return time.Time{}, false, directNoticeReadUnknown(
 			"current ChannelGrant horizon is unavailable", nil,
 		)
@@ -1362,7 +1498,7 @@ func directNoticeReadGrantFreshUntil(
 	found := false
 	var latest time.Time
 	for _, grant := range grants {
-		if grant.State != ChannelGrantActive || !grant.CanRead {
+		if grant.State != ChannelGrantActive || !grantHasBit(grant, bit) {
 			continue
 		}
 		if _, matches := subjects[grant.Subject]; !matches {
@@ -1591,7 +1727,7 @@ func authorizeDirectNoticeReadBatchLocked(
 	if lockErr != nil {
 		return nil, lockErr
 	}
-	audienceRecords, lockErr := lockDirectNoticeBatchRecordSets(
+	audienceRecords, lockErr := observeAppendOnlyBatchRecordSets(
 		ctx, tx, messageAudienceKind, audienceSpecs,
 	)
 	if lockErr != nil {
@@ -1638,7 +1774,7 @@ func authorizeDirectNoticeReadBatchLocked(
 			OwnerID: messageID, Queries: queries, Bound: directNoticeReadSetBound,
 		})
 	}
-	contributionRecords, lockErr := lockDirectNoticeBatchRecordSets(
+	contributionRecords, lockErr := observeAppendOnlyBatchRecordSets(
 		ctx, tx, messageAudienceRecipientKind, contributionSpecs,
 	)
 	if lockErr != nil {
@@ -1673,7 +1809,7 @@ func authorizeDirectNoticeReadBatchLocked(
 	for _, input := range inputs {
 		plan, evaluateErr := evaluateDirectNoticeLockedRead(
 			input.Preflight, input.IDs, channels[input.IDs.ChannelID],
-			carriers[input.IDs.MessageID], epoch, dbNow,
+			carriers[input.IDs.MessageID], epoch, dbNow, tx.claimAuthorityFacts,
 		)
 		if evaluateErr != nil {
 			if hideDenied && directNoticeReadIsHidden(evaluateErr) {
@@ -1724,6 +1860,9 @@ func lockDirectNoticeBatchRecordSets(
 ) (map[model.ID][]model.Record, error) {
 	repo, err := tx.repo(kind)
 	if err != nil {
+		return nil, err
+	}
+	if err := refuseAppendOnlyRowLock(kind, repo); err != nil {
 		return nil, err
 	}
 	ordered := append([]directNoticeReadSetSpec(nil), specs...)
@@ -1828,6 +1967,7 @@ func evaluateDirectNoticeLockedRead(
 	lockedCarrier directNoticeReadLockedCarrier,
 	epoch model.DirectoryEpoch,
 	dbNow time.Time,
+	claimFacts []store.AuthorizationFactRef,
 ) (directNoticeAuthorizedRead, error) {
 	channel := lockedChannel.Channel
 	grants := lockedChannel.Grants
@@ -1860,6 +2000,14 @@ func evaluateDirectNoticeLockedRead(
 	)
 	if err != nil {
 		return directNoticeAuthorizedRead{}, err
+	}
+	// Publication may commit a future availability boundary. The signed
+	// audience and current ACL still do not make its plaintext legible early;
+	// point reads and inbox batches share this transaction-time concealment.
+	if dbNow.Before(message.AvailableAt) || dbNow.Before(delivery.AvailableAt) {
+		return directNoticeAuthorizedRead{}, directNoticeReadNotFound(
+			"direct notice is not yet available",
+		)
 	}
 	requiredCount := int64(0)
 	for _, candidate := range deliveries {
@@ -1929,7 +2077,8 @@ func evaluateDirectNoticeLockedRead(
 			"direct notice read gate has no verdict", nil,
 		)
 	}
-	if len(decision.RequiredClaims) != 0 ||
+	if !communicationClaimsEqualSnapshot(decision.RequiredClaims,
+		CommunicationClaimAuthoritySnapshot{facts: claimFacts}) ||
 		len(decision.SurvivingContributionIDs) != 1 ||
 		decision.SurvivingContributionIDs[0] != contributions[0].ID ||
 		!equalDirectNoticeAuthorityFacts(preflight.Facts, decision.Facts) {
@@ -1958,11 +2107,6 @@ func evaluateDirectNoticeLockedRead(
 			"message fulfillment is unavailable", err,
 		)
 	}
-	if message.Payload.Encoding != PayloadPlainJSON {
-		return directNoticeAuthorizedRead{}, directNoticeReadUnknown(
-			"private DirectNotice reader supports only historical plain payloads", nil,
-		)
-	}
 	aad := ContentAAD{
 		TenantID: preflight.Scope.TenantID, WorkspaceID: preflight.Scope.WorkspaceID,
 		ChannelID: message.ChannelID, EntityKind: messageKind, EntityID: message.ID,
@@ -1972,9 +2116,9 @@ func evaluateDirectNoticeLockedRead(
 	openPlan, err := PlanProtectedPayloadRead(
 		message.Payload, PayloadSlotMessage, protectedPayloadPolicyFrom(message.Payload), aad, aad,
 	)
-	if err != nil || openPlan.RequiresSealer {
+	if err != nil {
 		return directNoticeAuthorizedRead{}, directNoticeReadUnknown(
-			"historical DirectNotice payload cannot be opened", err,
+			"DirectNotice payload cannot be opened", err,
 		)
 	}
 	return directNoticeAuthorizedRead{
@@ -2018,6 +2162,21 @@ func directNoticeReadRowsCarryFutureDBTime(
 	return false
 }
 
+// refuseAppendOnlyRowLock keeps the set lockers for mutable rows only. An
+// append-only descriptor has no row update to fence and, on PostgreSQL, the
+// application role deliberately lacks the UPDATE privilege that
+// SELECT ... FOR UPDATE requires; such a set is read behind its parent fence
+// through observeAppendOnlyRecordSet instead.
+func refuseAppendOnlyRowLock(kind model.Kind, repo communicationRepository) error {
+	if repo != nil && repo.Descriptor().AppendOnly {
+		return communicationTransactionUnavailable(
+			fmt.Sprintf("row-update lock on append-only %q set; observe it behind its parent fence", kind),
+			nil,
+		)
+	}
+	return nil
+}
+
 func lockDirectNoticeRecordSet(
 	ctx context.Context,
 	tx *communicationTx,
@@ -2027,6 +2186,9 @@ func lockDirectNoticeRecordSet(
 ) ([]model.Record, error) {
 	repo, err := tx.repo(kind)
 	if err != nil {
+		return nil, err
+	}
+	if err := refuseAppendOnlyRowLock(kind, repo); err != nil {
 		return nil, err
 	}
 	query := model.Query{Filters: append([]model.Filter(nil), filters...), Limit: directNoticeReadSetPageSize}
@@ -2075,70 +2237,6 @@ func lockDirectNoticeRecordSet(
 	return locked, nil
 }
 
-func lockDirectNoticeContributionSet(
-	ctx context.Context,
-	tx *communicationTx,
-	audiences []MessageAudience,
-) ([]model.Record, error) {
-	repo, err := tx.repo(messageAudienceRecipientKind)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]model.ID, 0)
-	seen := make(map[model.ID]struct{})
-	ordered := append([]MessageAudience(nil), audiences...)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID.String() < ordered[j].ID.String() })
-	for _, audience := range ordered {
-		query := model.Query{
-			Filters: []model.Filter{{
-				Column: colCommMessageAudienceID, Op: model.OpEq, Value: audience.ID.String(),
-			}},
-			Limit: directNoticeReadSetPageSize,
-		}
-		seenCursors := make(map[string]struct{})
-		for {
-			rows, page, listErr := repo.List(ctx, query)
-			if listErr != nil {
-				return nil, listErr
-			}
-			for _, row := range rows {
-				id, parseErr := directNoticeRecordID(row, model.ColID)
-				if parseErr != nil {
-					return nil, parseErr
-				}
-				if _, duplicate := seen[id]; duplicate {
-					return nil, directNoticeReadUnknown("audience contribution set repeats an ID", nil)
-				}
-				seen[id] = struct{}{}
-				ids = append(ids, id)
-				if len(ids) > directNoticeReadSetBound {
-					return nil, directNoticeReadUnknown("audience contribution set exceeds bound", nil)
-				}
-			}
-			if !page.HasMore {
-				break
-			}
-			next, cursorErr := advanceDirectNoticeReadCursor(
-				query.Cursor, page.Cursor, len(rows), seenCursors,
-			)
-			if cursorErr != nil {
-				return nil, cursorErr
-			}
-			query.Cursor = next
-		}
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i].String() < ids[j].String() })
-	locked := make([]model.Record, 0, len(ids))
-	for _, id := range ids {
-		record, lockErr := tx.lockRecord(ctx, messageAudienceRecipientKind, id)
-		if lockErr != nil {
-			return nil, normalizeDirectNoticeLockedNotFound(lockErr)
-		}
-		locked = append(locked, record)
-	}
-	return locked, nil
-}
-
 func exactDirectNoticeReadGraph(
 	preflight directNoticeReaderPreflight,
 	ids directNoticeCarrierIDs,
@@ -2154,25 +2252,32 @@ func exactDirectNoticeReadGraph(
 	delivery := deliveries[0]
 	audience := audiences[0]
 	contribution := contributions[0]
-	if message.ID != ids.MessageID || message.ChannelID != channel.ID ||
+	audienceKind, audienceKindErr := recipientAudienceKind(delivery.Recipient)
+	sessionWitnessValid := contribution.ObservedSessionSID == "" &&
+		contribution.ObservedClaimFence == 0
+	if delivery.Recipient.Kind == RecipientSession {
+		sessionWitnessValid = contribution.ObservedSessionSID == delivery.Recipient.Ref &&
+			contribution.ObservedClaimFence > 0
+	}
+	if audienceKindErr != nil || message.ID != ids.MessageID || message.ChannelID != channel.ID ||
 		message.TenantID != preflight.Scope.TenantID || message.WorkspaceID != preflight.Scope.WorkspaceID ||
 		message.Kind != MessageNotice || message.WorkItemID != "" || message.ThreadID != message.ID ||
-		message.ReplyToID != "" || message.AutomationDepth != 0 || message.Sender.Kind != ActorUser ||
+		message.ReplyToID != "" || message.AutomationDepth != 0 || message.Sender.Validate() != nil ||
 		delivery.ID != ids.DeliveryID || delivery.DeliverySeq != ids.DeliverySeq ||
-		delivery.Recipient != preflight.Recipient || delivery.Recipient.Kind != RecipientUser ||
+		delivery.Recipient != preflight.Recipient ||
 		audience.MessageID != message.ID || audience.Ordinal != 1 || audience.RouteRuleID != "" ||
-		audience.Selector.Kind != AudienceUser || audience.Selector.Ref != delivery.Recipient.Ref ||
+		audience.Selector.Kind != audienceKind || audience.Selector.Ref != delivery.Recipient.Ref ||
 		audience.ResolvedCount != 1 || contribution.MessageAudienceID != audience.ID ||
 		contribution.MessageDeliveryID != delivery.ID || contribution.Recipient != delivery.Recipient ||
 		contribution.RecipientEpoch != delivery.RecipientEpoch ||
 		contribution.Selector != audience.Selector || contribution.CausalKind != CausalDirect ||
 		contribution.CausalRef != delivery.Recipient.Ref || contribution.CausalFactKind != "" ||
 		contribution.CausalFactID != "" || contribution.CausalFactVersion != 0 ||
-		contribution.ObservedSessionSID != "" || contribution.ObservedClaimFence != 0 ||
+		!sessionWitnessValid ||
 		contribution.OriginalSubscriber != nil || contribution.SubscriptionID != "" ||
 		contribution.SubscriptionGeneration != 0 || contribution.RouteRuleID != "" ||
 		contribution.RouteRuleGeneration != 0 {
-		return MessageDelivery{}, directNoticeReadNotFound("carrier is not a direct User notice")
+		return MessageDelivery{}, directNoticeReadNotFound("carrier is not a direct notice")
 	}
 	if err := ValidateMessageDeliveryLineage(message, delivery); err != nil {
 		return MessageDelivery{}, directNoticeReadUnknown("direct notice lineage is malformed", err)
@@ -2228,6 +2333,20 @@ func buildDirectNoticeCurrentAudience(
 	}
 	contribution := contributions[0]
 	audience := audiences[0]
+	causalWitness := CausalAuthorityWitness{
+		Kind: CausalAuthorityDirectPrincipal, Scope: preflight.Scope,
+		ContributionID: contribution.ID, Recipient: delivery.Recipient,
+		CausalKind: CausalDirect, CausalRef: delivery.Recipient.Ref,
+		DirectoryEpoch: preflight.Resolution.Recipient.DirectoryEpoch,
+		ObservedAt:     dbNow,
+		Evidence:       clean("direct_principal_current", "resolver:direct_notice_principal"),
+	}
+	if delivery.Recipient.Kind == RecipientSession {
+		causalWitness.Kind = CausalAuthoritySessionClaim
+		causalWitness.ObservedSessionSID = contribution.ObservedSessionSID
+		causalWitness.ObservedClaimFence = contribution.ObservedClaimFence
+		causalWitness.Evidence = clean("session_claim_current", "resolver:direct_notice_session_claim")
+	}
 	return CurrentAudienceEvidence{
 		TenantID: preflight.Scope.TenantID, WorkspaceID: preflight.Scope.WorkspaceID,
 		Recipient: preflight.Recipient, DeliveryID: delivery.ID, MessageID: message.ID,
@@ -2248,15 +2367,7 @@ func buildDirectNoticeCurrentAudience(
 			Evidence: clean("audience_set_locked", "same_tx:direct_notice_audience_set"),
 		},
 		Contributions: []CausalContributionEvidence{{
-			Audience: audience, Contribution: contribution,
-			Witness: CausalAuthorityWitness{
-				Kind: CausalAuthorityDirectPrincipal, Scope: preflight.Scope,
-				ContributionID: contribution.ID, Recipient: delivery.Recipient,
-				CausalKind: CausalDirect, CausalRef: delivery.Recipient.Ref,
-				DirectoryEpoch: preflight.Resolution.Recipient.DirectoryEpoch,
-				ObservedAt:     dbNow,
-				Evidence:       clean("direct_principal_current", "resolver:direct_notice_principal"),
-			},
+			Audience: audience, Contribution: contribution, Witness: causalWitness,
 		}},
 	}, nil
 }

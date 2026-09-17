@@ -129,7 +129,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
 
@@ -197,13 +197,36 @@ jobs:
       - name: Create cluster
         run: |
           set -euo pipefail
+          # ⛔ A CLUSTER BY THIS NAME CAN ALREADY BE ON THE HOST, and then this job dies here.
+          # Measured 2026-09-16, run 35076924428 on ci-runner-1: «failed to create cluster: node(s)
+          # already exist for a cluster with the name "olivares-e2e"». kind names are host-global
+          # (one Docker daemon under every runner of the host) and the delete at the end of this
+          # job is the only thing that removes it; how that one survived is not established (a
+          # killed job, a runner restart), what is established is that it was there. Deleting by
+          # THIS name before creating is what makes the job hermetic on a persistent runner; the
+          # `|| true` covers the normal case, where there is nothing to delete.
+          kind delete cluster --name olivares-e2e 2>/dev/null || true
           kind create cluster --name olivares-e2e --image "$KIND_NODE_IMAGE" --wait 180s
           kubectl cluster-info
           kind load docker-image "$IMAGE_OLD" "$IMAGE_NEW" --name olivares-e2e
 
-      # Postgres with the LEAST-PRIVILEGE application role the engine requires: it
-      # refuses to boot against a superuser/BYPASSRLS role (that would make FORCE RLS
-      # inert), so the e2e store is provisioned the same way production is.
+      # Postgres with the TWO least-privilege principals the engine requires, the same
+      # split production uses (deploy/postgres/01-app-role.sql + 02-admin-role.sql):
+      #
+      #   * olivares_app   — NOSUPERUSER NOBYPASSRLS, owns the database and runs the
+      #     migrations. The engine refuses to boot against a superuser/BYPASSRLS role,
+      #     because that would make FORCE ROW LEVEL SECURITY inert.
+      #   * olivares_admin — NOSUPERUSER BYPASSRLS, read-only. Without it
+      #     SystemScope.ListOrgs is RLS-limited to the cleared tenant GUC and returns
+      #     ErrEnumerationNotAuthoritative, so POST /v1/setup answers 501
+      #     cross_tenant_admin_pool_not_configured and GET /readyz answers 503
+      #     status=setup_blocked on the LEADER. A first boot on PostgreSQL cannot
+      #     complete without this role, which is why it is provisioned here and not
+      #     "optionally later".
+      #
+      # The two roles are deliberately separate principals with NO membership in either
+      # direction: membership would let the application role SET ROLE into BYPASSRLS and
+      # defeat the tenant backstop this split exists to keep.
       - name: Deploy Postgres
         run: |
           set -euo pipefail
@@ -211,6 +234,17 @@ jobs:
           cat > "${WORKDIR}/init.sql" <<'SQL'
           CREATE ROLE olivares_app LOGIN PASSWORD 'e2e-password' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
           CREATE DATABASE olivares OWNER olivares_app;
+          CREATE ROLE olivares_admin LOGIN PASSWORD 'e2e-admin-password' NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION;
+          GRANT CONNECT ON DATABASE olivares TO olivares_admin;
+          \connect olivares
+          GRANT USAGE ON SCHEMA public TO olivares_admin;
+          GRANT SELECT ON ALL TABLES IN SCHEMA public TO olivares_admin;
+          -- FUTURE tables, attached to the role that ACTUALLY CREATES THEM: olivares_app
+          -- owns the database and runs the migrations, so its default privileges are the
+          -- ones that apply. Set BEFORE the engine's first migration, which is what makes
+          -- every table that migration creates selectable without a later manual GRANT.
+          ALTER DEFAULT PRIVILEGES FOR ROLE olivares_app IN SCHEMA public
+            GRANT SELECT ON TABLES TO olivares_admin;
           SQL
           kubectl -n "$NS" create configmap pg-init --from-file=init.sql="${WORKDIR}/init.sql"
           kubectl -n "$NS" apply -f - <<'YAML'
@@ -265,8 +299,12 @@ jobs:
           go run ./operator/test/e2e/cmd/keygen > "$WORKDIR/audit-signing.key"
           kubectl -n "$NS" create secret generic audit-key \
             --from-file=audit-signing.key="${WORKDIR}/audit-signing.key"
+          # TWO keys in ONE Secret: the controller resolves the administrative key from
+          # cp.Spec.Postgres.DSNSecret, the same Secret as the application DSN, and wires
+          # --admin-dsn only when spec.postgres.adminDsnKey names a key in it.
           kubectl -n "$NS" create secret generic pg-dsn \
-            --from-literal=dsn="postgres://olivares_app:e2e-password@postgres.$NS.svc:5432/olivares?sslmode=disable"
+            --from-literal=dsn="postgres://olivares_app:e2e-password@postgres.$NS.svc:5432/olivares?sslmode=disable" \
+            --from-literal=admin-dsn="postgres://olivares_admin:e2e-admin-password@postgres.$NS.svc:5432/olivares?sslmode=disable"
 
       # Run the manager with EXACTLY the RBAC it ships with: a ServiceAccount bound
       # to the generated ClusterRole, authenticated with that account's token. If the

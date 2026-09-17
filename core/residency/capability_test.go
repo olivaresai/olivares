@@ -8,6 +8,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/residency"
 	"github.com/olivaresai/olivares/core/store"
@@ -30,10 +31,42 @@ import (
 
 func TestGuardPreservesRolloutStater(t *testing.T) {
 	t.Parallel()
-	inner := openStore(t)
+	ctx := context.Background()
+	inner, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, nil)
+	if err != nil {
+		t.Fatalf("open fresh store: %v", err)
+	}
+	t.Cleanup(func() { _ = inner.Close() })
 	if _, ok := inner.(store.RolloutStater); !ok {
 		t.Fatal("precondition: the real store must expose RolloutStater")
 	}
+	innerStatuser, ok := inner.(store.DirectoryStatuser)
+	if !ok {
+		t.Fatal("precondition: the real store must expose DirectoryStatuser")
+	}
+	innerStatus, innerSupported, err := innerStatuser.DirectoryStatus(ctx)
+	if err != nil || !innerSupported {
+		t.Fatalf("fresh inner DirectoryStatus: status=%+v supported=%t err=%v",
+			innerStatus, innerSupported, err)
+	}
+	wantFresh := store.DirectoryStatus{
+		Enabled:                       false,
+		EpochCoverageComplete:         false,
+		ControlMode:                   store.DirectoryControlStaged,
+		WriterPosture:                 store.DirectoryWriterSQLiteCapability,
+		ExpectedGeneration:            1,
+		CoverageProtocol:              "membership-union-v1",
+		UserAuthorityCoverageComplete: false,
+		InventoryAuthority:            "sqlite",
+		InventoryOrgCount:             0,
+		InventoryBusinessOrgCount:     0,
+		InventoryEpochCount:           0,
+		InventoryUnavailableReason:    "system_bootstrap_pending",
+	}
+	if innerStatus != wantFresh {
+		t.Fatalf("fresh prebootstrap directory status = %+v, want %+v", innerStatus, wantFresh)
+	}
+
 	reg, err := residency.NewRegistry("eu", []string{"eu", "us"})
 	if err != nil {
 		t.Fatalf("registry: %v", err)
@@ -42,16 +75,14 @@ func TestGuardPreservesRolloutStater(t *testing.T) {
 		t.Fatal("the guard swallowed store.RolloutStater: a region-scoped instance cannot boot")
 	}
 	wrapped := residency.Guard(inner, reg, nil)
-	status, supported, err := wrapped.(store.DirectoryStatuser).DirectoryStatus(context.Background())
-	if err != nil || !supported {
+	status, supported, err := wrapped.(store.DirectoryStatuser).DirectoryStatus(ctx)
+	if err != nil {
 		t.Fatalf("the guard swallowed DirectoryStatuser: status=%+v supported=%t err=%v",
 			status, supported, err)
 	}
-	if status.Enabled || !status.EpochCoverageComplete ||
-		status.ControlMode != store.DirectoryControlStaged ||
-		status.WriterPosture != store.DirectoryWriterSQLiteCapability ||
-		status.ExpectedGeneration != 1 {
-		t.Fatalf("forwarded directory status = %+v, want SQLite staged/OFF complete generation 1", status)
+	if status != innerStatus || supported != innerSupported {
+		t.Fatalf("forwarded DirectoryStatus tuple = (%+v, %t), want exact inner tuple (%+v, %t)",
+			status, supported, innerStatus, innerSupported)
 	}
 }
 

@@ -22,15 +22,20 @@ cover something, the page says so rather than implying it does.
   reproduces exactly that path.
 - **First-run setup is credential-free.** A fresh install has **no default
   credentials**; the engine prints a one-time, single-use setup token on first boot.
+- **Official Codex and Grok CLIs are session drivers when pinned.** Setting
+  `OLIVARES_SESSION_RUNTIME_CODEX_BIN` or `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  registers that driver on the node. Unset, profiles for that driver stay
+  observable and are not launchable. Launches go through a
+  [provider profile](/how-to/operate-provider-sessions/).
+  `CHANGELOG.md` `[26.9.0]` does **not** claim compatibility with an
+  authenticated official Grok account.
 - **The REST API and audit ledger are real.** The [API reference](/reference/api/)
   is rendered from the product's own OpenAPI 3.1 contract. The audit ledger is
   append-only and hash-chained with Ed25519-signed checkpoints, and can be exported
   in several SIEM formats.
 - **Releases are signed and verifiable offline.** Signature, SLSA provenance, SBOM
   and OpenVEX can all be [verified without network access](/how-to/verify-a-release/),
-  and the product ships an [air-gap bundle](/how-to/air-gap-install/). **No tagged
-  release exists yet**, so this describes what a release will carry, not an artifact
-  you can download and verify today — the same caveat `SECURITY.md` states.
+  and the product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **v26.9.0**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
 
 ## Open core — what is open vs enterprise
 
@@ -132,7 +137,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   Models you genuinely self-host (e.g. via vLLM/Ollama under module XXIII) can run
   air-gapped; brokered frontier models cannot.
 - **Module routes are a separate, beta contract.** The module endpoints (for
-  example the access-map graph and drift) are not part of the 53-path stable core
+  example the access-map graph and drift) are not part of the 54-path stable core
   contract; they are published as a separate **beta** document — the
   [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`).
   Beta means the shapes may change with notice, and field-level detail still lives

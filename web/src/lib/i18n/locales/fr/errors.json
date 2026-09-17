@@ -13,6 +13,10 @@
     "description": "Le plan de contrôle a rencontré une erreur inattendue. Veuillez réessayer.",
     "back": "Retour à la vue d’ensemble"
   },
+  "evidenceUnavailable": {
+    "title": "Ces informations ne peuvent pas être vérifiées",
+    "description": "Ces informations ne peuvent pas être chargées pour le moment. Réessayez, ou contactez un administrateur si cela persiste."
+  },
   "network": {
     "title": "Plan de contrôle injoignable",
     "description": "Nous n’avons pas pu joindre le plan de contrôle. Vérifiez votre connexion et que le moteur est en cours d’exécution."

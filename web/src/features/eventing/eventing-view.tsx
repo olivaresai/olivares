@@ -6,7 +6,7 @@
 // subscriptions / events / deliveries / dead-letters. The subscription editor
 // (react-hook-form + zod) configures the webhook endpoint; creation returns a
 // one-time HMAC secret shown in a reveal modal (never persisted client-side).
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   useInfiniteQuery,
@@ -49,7 +49,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
-import { useCommandStore } from '@/stores/command'
+import { usePendingCommandAction } from '@/features/navigation/command-actions'
 import { AsyncSection, IntelPage, SectionCard } from '@/features/_intel'
 import { RevisionsSheet } from '@/features/shared/revisions-sheet'
 import { eventingApi, eventingKeys } from './api'
@@ -127,18 +127,28 @@ export function EventingView() {
   // lump every action under write.
   const canAdmin = can('eventing:subscription:admin')
   const [createOpen, setCreateOpen] = useState(false)
-  // ⌘K palette action: "new subscription" navigated here — consume once.
-  useEffect(() => {
-    if (
-      useCommandStore.getState().consumeAction('eventing') ===
-      'createSubscription'
-    ) {
-      setCreateOpen(true)
-    }
-  }, [])
   const [editSub, setEditSub] = useState<Subscription | null>(null)
   const [revealSecret, setRevealSecret] = useState<string | null>(null)
   const [tab, setTab] = useState('subscriptions')
+  // ⌘K palette action: "new subscription". This view root is mounted for the whole
+  // visit, so a verb selected while already here is observed and consumed on that arrival.
+  // It selects the tab that holds the form and opens it, only if
+  // `eventing:subscription:write` is still held in the identity that queued it.
+  usePendingCommandAction('eventing', 'createSubscription', () => {
+    setTab('subscriptions')
+    setCreateOpen(true)
+  })
+  // ⛔ A REVOCATION CLOSES THE WRITE DIALOGS, IT DOES NOT HIDE THEM. Adjusted during render
+  //    rather than in an effect: no form mounts for the commit in between, and state left
+  //    set behind the render gate would reopen it when the grant came back.
+  const [writeSeen, setWriteSeen] = useState(canWrite)
+  if (writeSeen !== canWrite) {
+    setWriteSeen(canWrite)
+    if (!canWrite) {
+      setCreateOpen(false)
+      setEditSub(null)
+    }
+  }
   const [deliveryOrigin, setDeliveryOrigin] = useState<string>(ALL)
 
   const subsQ = useQuery({

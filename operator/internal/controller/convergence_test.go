@@ -56,6 +56,15 @@ func obs(total, ready, readyLeaders int32, images ...string) podObservation {
 	return o
 }
 
+// withRoute states the traffic-readiness observation of the single Ready
+// leader-labeled pod. The bare observation deliberately carries RouteUnknown —
+// "nobody looked" — so a leader-routing case that wants Ready must SAY what the
+// leader answered, which is the whole point of the predicate.
+func (o podObservation) withRoute(rr RouteReadiness) podObservation {
+	o.route = rr
+	return o
+}
+
 var testNow = metav1.NewTime(time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC))
 
 // TestClassifyRollout is the design §D.1 truth table. Convergence is derived from
@@ -114,7 +123,7 @@ func TestClassifyRollout(t *testing.T) {
 				ObservedGeneration: 2, Replicas: 3, CurrentReplicas: 3, UpdatedReplicas: 3, ReadyReplicas: 3,
 				CurrentRevision: "r2", UpdateRevision: "r2",
 			}),
-			pods:            obs(3, 3, 1, "img:v2"),
+			pods:            obs(3, 3, 1, "img:v2").withRoute(RouteReady),
 			wantImageRolled: true, wantReady: true, wantAvailable: true,
 			wantReason: reasonRolloutComplete,
 		},
@@ -151,7 +160,7 @@ func TestClassifyRollout(t *testing.T) {
 				ObservedGeneration: 3, Replicas: 3, CurrentReplicas: 3, UpdatedReplicas: 3, ReadyReplicas: 3,
 				CurrentRevision: "r3", UpdateRevision: "r3",
 			}),
-			pods:            obs(3, 3, 1, "img:v2"),
+			pods:            obs(3, 3, 1, "img:v2").withRoute(RouteReady),
 			wantImageRolled: true, wantReady: true, wantAvailable: true,
 			wantReason: reasonRolloutComplete,
 		},
@@ -162,7 +171,7 @@ func TestClassifyRollout(t *testing.T) {
 				ObservedGeneration: 1, Replicas: 3, CurrentReplicas: 3, UpdatedReplicas: 3, ReadyReplicas: 3,
 				CurrentRevision: "r1", UpdateRevision: "r1",
 			}),
-			pods:            obs(3, 3, 1, "img:v1"),
+			pods:            obs(3, 3, 1, "img:v1").withRoute(RouteReady),
 			wantImageRolled: true, wantReady: true, wantAvailable: true,
 			wantReason: reasonRolloutComplete,
 		},
@@ -237,15 +246,20 @@ func TestClassifyRollout(t *testing.T) {
 			wantReason:      reasonWaitingForPodHealth,
 		},
 		{
-			name: "15. pod list unavailable: fall back to counters, invent no leader verdict",
+			// The counters still stand in for the coarse "something serves" signal, so
+			// Available is unchanged — but READY is withheld, because an unobserved
+			// pod list cannot produce the traffic-readiness evidence PhaseReady
+			// claims. Falling back to counters for routability and then reporting
+			// Ready would be the label-only predicate wearing a different hat.
+			name: "15. pod list unavailable: available on counters, never Ready without a verified route",
 			cp:   splitCP("img:v1"),
 			sts: stsWith(1, appsv1.StatefulSetStatus{
 				ObservedGeneration: 1, Replicas: 3, CurrentReplicas: 3, UpdatedReplicas: 3, ReadyReplicas: 3,
 				CurrentRevision: "r1", UpdateRevision: "r1",
 			}),
 			pods:            podObservation{},
-			wantImageRolled: true, wantReady: true, wantAvailable: true,
-			wantReason: reasonRolloutComplete,
+			wantImageRolled: true, wantAvailable: true,
+			wantReason: reasonRouteProbeUnknown, wantDegraded: reasonRouteProbeUnknown,
 		},
 	}
 
@@ -456,5 +470,138 @@ func TestProgressDeadlineDefault(t *testing.T) {
 	cp.Spec.ProgressDeadlineSeconds = 90
 	if got, want := progressDeadline(cp), 90*time.Second; got != want {
 		t.Errorf("progress deadline = %s, want %s", got, want)
+	}
+}
+
+// TestRouteReadinessAndTheProgressClock is the static-versus-transient
+// distinction, which is where a readiness term can quietly break stall detection.
+//
+// A VERIFIED setup block is static: the engine answered, and its answer names a
+// human action, so measuring it against a rollout deadline would bury the real
+// instruction under "RolloutStalled". Everything else must keep the clock running
+// — an observation that FAILED must never be able to switch off the one mechanism
+// that notices a control plane which has stopped converging.
+func TestRouteReadinessAndTheProgressClock(t *testing.T) {
+	converged := appsv1.StatefulSetStatus{
+		ObservedGeneration: 1, Replicas: 3, CurrentReplicas: 3, UpdatedReplicas: 3, ReadyReplicas: 3,
+		CurrentRevision: "r1", UpdateRevision: "r1",
+	}
+	// A control plane that has been in this state far longer than any deadline.
+	settled := func() *opsv1alpha1.ControlPlane {
+		cp := splitCP("img:v1")
+		cp.Generation, cp.Status.ObservedGeneration = 1, 1
+		cp.Status.RolloutRevision = "r1"
+		cp.Status.LastProgressUpdatedReplicas = 3
+		cp.Status.LastProgressReadyReplicas = 3
+		long := metav1.NewTime(testNow.Add(-2 * time.Hour))
+		cp.Status.LastProgressTime = &long
+		return cp
+	}
+
+	tests := []struct {
+		name        string
+		route       RouteReadiness
+		wantStalled bool
+		wantStatic  bool
+		wantReason  string
+	}{
+		{
+			name: "a verified setup block is static, not a wedge", route: RouteSetupBlocked,
+			wantStalled: false, wantStatic: true, wantReason: reasonSetupBlocked,
+		},
+		{
+			name: "an unverified observation still runs the clock", route: RouteUnknown,
+			wantStalled: true, wantReason: reasonRouteProbeUnknown,
+		},
+		{
+			name: "a transient refusal still runs the clock", route: RouteNotReady,
+			wantStalled: true, wantReason: reasonRouteNotReady,
+		},
+		{
+			name: "a missing authorization still runs the clock", route: RouteForbidden,
+			wantStalled: true, wantReason: reasonRouteProbeForbidden,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyRollout(settled(), stsWith(1, converged), obs(3, 3, 1, "img:v1").withRoute(tc.route), testNow)
+			if got.ready {
+				t.Fatalf("ready = true with route %s", tc.route)
+			}
+			if got.stalled != tc.wantStalled {
+				t.Errorf("stalled = %v, want %v", got.stalled, tc.wantStalled)
+			}
+			if got.routeStaticallyBlocked != tc.wantStatic {
+				t.Errorf("routeStaticallyBlocked = %v, want %v", got.routeStaticallyBlocked, tc.wantStatic)
+			}
+			// The DIAGNOSIS survives the deadline: an expired clock changes what
+			// Progressing says, never what the operator is told to look at.
+			if got.degraded != tc.wantReason {
+				t.Errorf("degraded = %q, want %q", got.degraded, tc.wantReason)
+			}
+			if got.reason != tc.wantReason {
+				t.Errorf("reason = %q, want %q", got.reason, tc.wantReason)
+			}
+		})
+	}
+}
+
+// TestRouteReadinessDoesNotConcealAnUnfinishedRollout: while pods are still being
+// replaced, the reason an operator needs is the rollout's. A leader that refuses
+// traffic mid-upgrade is expected — it is being restarted — and reporting
+// SetupBlocked there would both mislead and stop the deadline on a rollout that is
+// genuinely in flight.
+func TestRouteReadinessDoesNotConcealAnUnfinishedRollout(t *testing.T) {
+	cp := splitCP("img:v2")
+	cp.Status.CurrentImage = "img:v1"
+	inFlight := stsWith(2, appsv1.StatefulSetStatus{
+		ObservedGeneration: 2, Replicas: 3, CurrentReplicas: 1, UpdatedReplicas: 2, ReadyReplicas: 3,
+		CurrentRevision: "r1", UpdateRevision: "r2",
+	})
+	for _, route := range []RouteReadiness{RouteSetupBlocked, RouteNotReady, RouteUnknown, RouteForbidden} {
+		t.Run(route.String(), func(t *testing.T) {
+			got := classifyRollout(cp, inFlight, obs(3, 3, 1, "img:v1", "img:v2").withRoute(route), testNow)
+			if got.reason != reasonUpgrading {
+				t.Errorf("reason = %q, want %q while the rollout is unfinished", got.reason, reasonUpgrading)
+			}
+			if got.ready {
+				t.Error("ready = true on an unfinished rollout")
+			}
+			if got.routeStaticallyBlocked {
+				t.Error("an unfinished rollout was excluded from the progress deadline by a route result")
+			}
+		})
+	}
+}
+
+// TestRouteReadinessNeverOverridesASafetyDerate: the existing derates describe a
+// spec the operator had to change or cannot apply. They outrank a route
+// observation, which describes the engine's current answer — an operator told
+// "the audit ledger would fork" must not be told "traffic readiness is unverified"
+// instead.
+func TestRouteReadinessNeverOverridesASafetyDerate(t *testing.T) {
+	cp := singleCP("img:v1")
+	cp.Spec.Replicas = 3 // sqlite: clamped to one effective replica
+	converged := stsWith(1, appsv1.StatefulSetStatus{
+		ObservedGeneration: 1, Replicas: 1, CurrentReplicas: 1, UpdatedReplicas: 1, ReadyReplicas: 1,
+		CurrentRevision: "r1", UpdateRevision: "r1",
+	})
+	// Even with an observation present, a non-leader-routing layout ignores it.
+	got := classifyRollout(cp, converged, obs(1, 1, 0, "img:v1").withRoute(RouteSetupBlocked), testNow)
+	if !got.ready {
+		t.Errorf("ready = false: the single-writer predicate must not consult a route observation")
+	}
+	if got.degraded != "" {
+		t.Errorf("degraded = %q, want none from the classifier (the clamp is applied in status)", got.degraded)
+	}
+
+	// And legacy HA keeps its own blocked reason, which is a layout fact.
+	legacy := haCP("img:v1")
+	blocked := stsWith(1, appsv1.StatefulSetStatus{
+		ObservedGeneration: 1, Replicas: 3, CurrentReplicas: 3, UpdatedReplicas: 3, ReadyReplicas: 1,
+		CurrentRevision: "r1", UpdateRevision: "r1",
+	})
+	if got := classifyRollout(legacy, blocked, obs(3, 1, 0, "img:v1").withRoute(RouteSetupBlocked), testNow); got.degraded != reasonHALegacyReadinessBlocked {
+		t.Errorf("degraded = %q, want %q", got.degraded, reasonHALegacyReadinessBlocked)
 	}
 }

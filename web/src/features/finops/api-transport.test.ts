@@ -95,3 +95,30 @@ describe('las siete listas de finops piden su techo', () => {
     expect(urls[0]).toContain('status=issued')
   })
 })
+
+it('carries the exact reference, page cursor and explicit tenant through normal HTTP', async () => {
+  let headers: Headers | undefined
+  globalThis.fetch = vi.fn(async (_url: string, init: RequestInit) => {
+    urls.push(String(_url))
+    headers = new Headers(init.headers)
+    return new Response(JSON.stringify({ items: [], has_more: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }) as never
+  await finopsApi.alerts(
+    {
+      alert_id: 'reference/with?delimiters',
+      budget_id: 'budget',
+      cursor: 'cursor+opaque',
+      limit: 1,
+    },
+    { tenant: 'tenant-reference' },
+  )
+  const params = new URL(urls[0], 'http://test').searchParams
+  expect(params.get('alert_id')).toBe('reference/with?delimiters')
+  expect(params.get('cursor')).toBe('cursor+opaque')
+  expect(params.get('budget_id')).toBe('budget')
+  expect(headers?.get('X-Olivares-Tenant')).toBe('tenant-reference')
+  expect(finopsApi.budgetStatusEnhanced).toBe(finopsApi.budgetStatus)
+})

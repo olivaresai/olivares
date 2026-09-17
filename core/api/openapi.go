@@ -176,6 +176,24 @@ func buildOpenAPI() map[string]any {
 		return o
 	}
 
+	// capabilityOperation stamps the two contract facts the generic op() helper cannot
+	// express for the self capability projection.
+	//
+	// The 503 is NOT decoration: the endpoint decides common unavailability BEFORE it
+	// resolves any target, precisely so the SHAPE of a failure cannot depend on which
+	// rows exist. A published contract that omitted it would describe an endpoint whose
+	// only failures are per-question, and a client would have no reason to expect the
+	// one answer that is not.
+	//
+	// The SDK family marks this operation for the schema-driven typed DTO emitters, so
+	// the four clients carry the finite state/kind/code/budget contract instead of an
+	// untyped JSON blob.
+	capabilityOperation := func(o map[string]any, unavailable map[string]any) map[string]any {
+		o["responses"].(map[string]any)["503"] = unavailable
+		o["x-olivares-sdk-family"] = "auth-capabilities-v1"
+		return o
+	}
+
 	tagHealth := []string{"health"}
 	tagAuth := []string{"auth"}
 	tagAgents := []string{"agents"}
@@ -193,7 +211,7 @@ func buildOpenAPI() map[string]any {
 			jsonResp("OK", obj("type", "object", "properties", obj("status", obj("type", "string")))), nil)),
 		"/livez", obj("get", op("livez", "Liveness probe (process is up)", tagHealth, false,
 			jsonResp("OK", obj("type", "object", "properties", obj("status", obj("type", "string")))), nil)),
-		"/readyz", obj("get", op("readyz", "Readiness probe (store reachable AND this node is the active writer); 503 on a standby or when the store is down", tagHealth, false,
+		"/readyz", obj("get", op("readyz", "Readiness probe (store reachable AND this node is the active writer AND, before first setup, that setup read can run); 503 on standby, store down, unknown setup state, blocked first boot, or a failed setup probe", tagHealth, false,
 			jsonResp("OK", obj("type", "object", "properties", obj("status", obj("type", "string")))), nil)),
 		"/pod-readyz", obj("get", op("podReadyz", "Pod-health probe (store reachable), with NO leadership check — the HA readiness probe, so a hot standby is healthy; 503 only when the store is down", tagHealth, false,
 			jsonResp("OK", obj("type", "object", "properties", obj("status", obj("type", "string")))), nil)),
@@ -220,6 +238,11 @@ func buildOpenAPI() map[string]any {
 			jsonResp("OK", ref("LoginResponse")), nil)),
 		"/v1/auth/whoami", obj("get", op("whoami", "The calling principal and its tenant grants", tagAuth, true,
 			jsonResp("OK", ref("WhoamiResponse")), nil)),
+		"/v1/auth/capabilities", obj("post", capabilityOperation(op("authCapabilities",
+			"Project the CALLING credential's authority over registered operations", tagAuth, true,
+			jsonResp("OK", ref("CapabilityResults")),
+			body(ref("CapabilityQuestions")), tenantParam),
+			jsonResp("Common authorization evidence is unavailable; no target was resolved", ref("Error")))),
 
 		// ── Agents ─────────────────────────────────────────────────────
 		"/v1/agents", obj(
@@ -719,6 +742,85 @@ func buildOpenAPI() map[string]any {
 			"expires_at", obj("type", "string", "format", "date-time"),
 		), "required", arr("token", "session_id", "expires_at")),
 
+		"CapabilityQuestions", obj("type", "object", "properties", obj(
+			"schema_version", obj("type", "integer", "enum", arr(CapabilitySchemaVersion),
+				"description", "Contract version. Only 2 is accepted; version 1 and every other value are rejected with 400 before any question lookup."),
+			"questions", obj("type", "array", "minItems", 1, "maxItems", 32,
+				"items", ref("CapabilityQuestion"),
+				"description", "Up to 32 independent questions. The limit protects one request; it does not cap "+
+					"the inventory of operations and does not prevent a later batch. Results stay independent per "+
+					"id — the batch never ANDs or ORs them, and its 200 never turns an unknown into a denial."),
+		), "additionalProperties", false, "required", arr("schema_version", "questions")),
+
+		"CapabilityQuestion", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "description", "Correlates this question with its result."),
+			"kind", obj("type", "string", "enum", arr("surface", "operation"),
+				"description", "`surface` asks whether this registered COLLECTION may be loaded at all in the "+
+					"named workspace. It asserts nothing about rows: an authorized empty list is reachable, and "+
+					"a not_reachable collection never denies an `operation` on another route. `operation` asks "+
+					"whether this exact operation on this exact resource is authorized right now."),
+			"operation", obj("type", "string",
+				"description", "`METHOD <registered pattern>`, e.g. `GET /v1/m/sessions/channels/administration`. "+
+					"It names a route as it is MOUNTED; it is never a resolved URL, and no HTTP call is made for it."),
+			"workspace_id", obj("type", "string", "format", "uuid",
+				"description", "For a collection: the workspace selector the route declares, corroborated by the "+
+					"server against the stored workspace row. For an entity: an assertion COMPARED with the row's "+
+					"stored workspace — a mismatch is answered with that route's own concealment and is never "+
+					"silently corrected."),
+			"selectors", ref("CapabilitySelectors"),
+		), "additionalProperties", false, "required", arr("id", "kind", "operation")),
+
+		"CapabilitySelectors", obj("type", "object", "properties", obj(
+			"path", obj("type", "object", "additionalProperties", obj("type", "string"),
+				"description", "The declared path locator of an entity route (its `{id}`)."),
+			"body", obj("type", "object", "additionalProperties", obj("type", "string"),
+				"description", "The ONE declared top-level body field an entity route uses to locate its row. It "+
+					"is an identification input, not a write payload: no other field of a command is admitted or "+
+					"consulted, and nothing is executed."),
+		// The two maps stay OPEN because the wire contract says a selector map is a map;
+		// what closes them is the per-operation validation, which admits only the keys
+		// the REGISTERED route declares. The wrapper object is closed here so a third
+		// selector family cannot arrive unnoticed.
+		), "additionalProperties", false),
+
+		"CapabilityResults", obj("type", "object", "properties", obj(
+			"schema_version", obj("type", "integer", "enum", arr(CapabilitySchemaVersion)),
+			"results", obj("type", "array", "items", ref("CapabilityResult")),
+		), "additionalProperties", false, "required", arr("schema_version", "results")),
+
+		"CapabilityResult", obj("type", "object", "properties", obj(
+			"id", obj("type", "string"),
+			"kind", obj("type", "string", "enum", arr("surface", "operation")),
+			"state", obj("type", "string",
+				"enum", arr("allowed", "denied", "unknown", "undisclosed", "reachable", "not_reachable"),
+				"description", "Operations answer `allowed`, `denied` or `unknown`. A registered concealing operation "+
+					"instead publishes `undisclosed` for every nonpositive authority outcome: it asserts neither "+
+					"denial, absence nor outage. Target-free input/support/step-up rejections remain `unknown`. "+
+					"Surfaces answer `reachable`, `not_reachable` or `unknown` and confer no row authority. "+
+					"Only a fresh positive with its finite budget may enable an action; no other state is a permit."),
+			"code", obj("type", "string",
+				"enum", arr("authorized", "admitted", "not_permitted", "not_disclosed",
+					"not_supported", "inputs_required", "engine_unready", "evidence_unavailable",
+					"step_up_required", "stale"),
+				"description", "`not_permitted` is an established non-concealing denial. `not_disclosed` accompanies "+
+					"`undisclosed` and carries no negative explanation. `not_supported`, `inputs_required` and "+
+					"`step_up_required` may accompany `unknown` only as target-free request gates on a concealing "+
+					"operation. Later authority failures, including unusable evidence, are not disclosed there. "+
+					"For other projections `engine_unready` and `evidence_unavailable` accompany `unknown`. "+
+					"`stale` is the CLIENT's own verdict after expiry or context change; the server never sends it."),
+			"observed_at", obj("type", "string", "format", "date-time",
+				"description", "For undisclosed, the common batch dispatch marker, not an authority fact. Other results retain their own observation instant."),
+			"refresh_after_ms", obj("type", "integer",
+				"description", "How long this POSITIVE may be shown, in milliseconds: the minimum of 30000 and "+
+					"what REMAINS of the evidence window of every predicate that founds it. It is present ONLY on "+
+					"`allowed`/`reachable`, and its ABSENCE on one is itself an instruction — treat that result as "+
+					"unknown rather than believing it. Discount the whole request with a MONOTONIC clock, "+
+					"including retries of the same question; a late response does not start a fresh window on "+
+					"arrival. It is an observation budget, NOT a lease: it grants nothing, and it does not promise "+
+					"that a revocation elsewhere will reach you within it. The handler re-authorizes every real "+
+					"act and accepts nothing from this response."),
+		), "additionalProperties", false, "required", arr("id", "kind", "state", "code", "observed_at")),
+
 		"WhoamiResponse", obj("type", "object", "properties", obj(
 			"kind", obj("type", "string", "enum", arr("user", "token")),
 			"user_id", obj("type", "string", "format", "uuid"),
@@ -742,6 +844,11 @@ func buildOpenAPI() map[string]any {
 			), "required", arr("tenant", "role", "permissions"))),
 			"aal", obj("type", "integer", "description", "Authentication assurance level (sessions only)"),
 			"amr", obj("type", "array", "items", obj("type", "string"), "description", "Authentication method references (sessions only)"),
+			"authentication_configuration", obj("type", "object",
+				"description", "Deployment authentication configuration observed for this response. This is not certificate validation or authorization.",
+				"properties", obj("piv_configured", obj("type", "boolean",
+					"description", "Whether this deployment has configured PIV verifier roots. Does not indicate certificate presence, OCSP status, or assurance level.")),
+				"required", arr("piv_configured")),
 		), "required", arr("kind", "user_id", "actor", "superadmin")),
 
 		// ── Server info ─────────────────────────────────────────────
@@ -1030,6 +1137,11 @@ func buildOpenAPI() map[string]any {
 			"config", obj("type", "object", "additionalProperties", obj("type", "string")),
 			"status", obj("type", "string"),
 			"source_mode", obj("type", "string", "enum", arr("export", "live")),
+			// The connector serving this source, reported BESIDE its name. Two
+			// sources of one kind share it and differ in name; it is absent until
+			// the source is wired (a plugin self-describes only once launched), and
+			// it is read-only — observed from the running connector, never authored.
+			"component", obj("type", "string", "readOnly", true),
 		)),
 
 		"SourceApplyResult", obj("type", "object", "properties", obj(

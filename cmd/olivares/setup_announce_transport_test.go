@@ -71,7 +71,7 @@ func TestFirstBootBannerDescribesTheRealTransport(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			eng := newAnnounceTestEngine(t)
 			var out bytes.Buffer
-			if err := announceSetup(context.Background(), &out, eng, tc.baseURL, tc.insecure); err != nil {
+			if err := announceSetup(context.Background(), &out, eng, declaredConsoleAddress(t, tc.baseURL, tc.insecure), tc.insecure); err != nil {
 				t.Fatalf("announceSetup: %v", err)
 			}
 			got := out.String()

@@ -17,5 +17,5 @@ export {
   type JsonInput,
   type RequestOptions,
 } from "./core.js";
-export { Client } from "./operations.gen.js";
+export * from "./operations.gen.js";
 export { API_VERSION, SPEC_HASH, STABILITY_POLICY } from "./version.gen.js";

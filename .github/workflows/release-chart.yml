@@ -88,6 +88,8 @@ jobs:
     # here to save minutes would silently downgrade the provenance we publish.
     runs-on: ubuntu-latest
     permissions:
+      # Job-level permissions replace the workflow map; unnamed scopes become none.
+      contents: read  # actions/checkout
       packages: write # push the chart OCI artifact to ghcr.io
       id-token: write # keyless cosign (Fulcio) signature over the manifest
     steps:
@@ -155,7 +157,21 @@ jobs:
       - name: helm registry login (ghcr.io)
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "${GHCR_TOKEN}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GHCR_TOKEN}" | helm registry login ghcr.io -u "${GHCR_USER}" --password-stdin
+
+      # Helm writes HELM_REGISTRY_CONFIG; cosign uses the Docker credential store.
+      # Authenticate the verified binary with the same job token before package/push.
+      - name: cosign registry login (ghcr.io)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          : "${OLIVARES_COSIGN_BIN:?verified cosign path is not set}"
+          printf '%s' "${GHCR_TOKEN}" | "${OLIVARES_COSIGN_BIN}" login ghcr.io -u "${GHCR_USER}" --password-stdin
 
       - name: package the chart
         id: package

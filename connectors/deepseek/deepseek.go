@@ -25,7 +25,7 @@
 // connectors/mistral and connectors/fal). The model catalog endpoint is OpenAI-compatible
 // (GET /models, {object:"list",data:[...]}), VERIFIED-SHAPE.
 //
-// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md-3): every call is a GET via the shared GET-only
+// READ-ONLY and minimal-data (docs/SECURITY-HARDENING.md §0-3): every call is a GET via the shared GET-only
 // modelprovider client; it carries model identifiers, capabilities and balance posture
 // only — never prompts, completions, or key values. It imports only the SDK and the Apache
 // modelprovider contract, never the engine.

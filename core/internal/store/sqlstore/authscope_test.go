@@ -19,7 +19,7 @@ import (
 // normal RLS-enforced scope, not the cross-tenant System path).
 func TestAuthPartitionRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	businessTenant := provisionTenant(t, st, "auth-round-trip")
 
 	// Create a user, a session, a token and a membership through AuthMutate.
@@ -107,7 +107,7 @@ func TestAuthPartitionRoundTrip(t *testing.T) {
 // session row relies on (zero AAL, nil AMR, nil expiry).
 func TestAuthAssuranceRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 
 	exp := model.NewTimestamp(time.Now().Add(15 * time.Minute))
 	var userID model.ID
@@ -196,7 +196,7 @@ func TestAuthAssuranceRoundTrip(t *testing.T) {
 // (credential) entities through the generic Ext path.
 func TestExtRejectsCoreNamespace(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	err := st.View(ctx, tenant, func(sc store.Scope) error {
 		for _, k := range []model.Kind{"core.user", "core.api_token", "core.agent", "core.org"} {
@@ -215,7 +215,7 @@ func TestExtRejectsCoreNamespace(t *testing.T) {
 // and re-provisioning is a no-op.
 func TestEnsureSystemTenantIdempotent(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	var first, second model.Org
 	run := func(dst *model.Org) {
 		if err := st.System(ctx, func(sys store.SystemScope) error {
@@ -255,7 +255,7 @@ func TestEnsureSystemTenantIdempotent(t *testing.T) {
 // another tenant's groups survive.
 func TestDropTenantPurgesGroups(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	victim := provisionTenant(t, st, "victim")
 	other := provisionTenant(t, st, "other")
 
@@ -329,7 +329,7 @@ func TestDropTenantPurgesGroups(t *testing.T) {
 // memberships and tokens that reference it (which live in the system tenant).
 func TestDropTenantPurgesCredentials(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	target := provisionTenant(t, st, "victim")
 
 	var userID model.ID

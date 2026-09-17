@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/dr"
+	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -51,12 +52,22 @@ func newDRCmd() *cobra.Command {
 // drFlags are the store-location flags shared with the audit/serve commands.
 type drFlags struct {
 	dataDir, engineKind, dsn, adminDSN string
+	// ownerDSN (Postgres only) is the owner role that runs DDL. `dr` was the ONE
+	// boot path in the binary that never carried it — serve, config, db check,
+	// db init, eventing egress and eventing fence all do — so in the
+	// least-privilege owner/app split the whole DR surface ran on a connection
+	// that is denied schema CREATE by design, and every documented command failed
+	// with SQLSTATE 42501: logical backup, logical restore, and the PITR companion
+	// on both sides. Empty means the single-role posture, where the application
+	// role owns the schema and is its own DDL connection.
+	ownerDSN string
 }
 
 func addDRStoreFlags(cmd *cobra.Command, f *drFlags) {
 	cmd.Flags().StringVar(&f.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().StringVar(&f.engineKind, "engine", "sqlite", "store engine: sqlite or postgres")
 	cmd.Flags().StringVar(&f.dsn, "dsn", "", "store DSN (default a SQLite file in the data dir)")
+	cmd.Flags().StringVar(&f.ownerDSN, "owner-dsn", "", "Postgres: the owner role, required in a split-role deployment (the app role has no schema CREATE). It runs the migrations AND is the pg_restore target, so the restored objects are owned by the owner exactly as the source's are. Accepts a file:/env: reference")
 	cmd.Flags().StringVar(&f.adminDSN, "admin-dsn", "", "Postgres only: NOSUPERUSER BYPASSRLS role DSN. REQUIRED to run pg_dump directly (it keeps row_security=off and ABORTS as the application role under FORCE RLS); also used for the cross-tenant org list, without which a backup may MISS tenants — see deploy/postgres/01-app-role.sql")
 }
 
@@ -141,12 +152,47 @@ func readRawKEK(path string) ([]byte, error) {
 	return nil, fmt.Errorf("kek file must hold 32 raw bytes or base64 of 32 bytes")
 }
 
+// resolveDSNRefs turns any file:/env: DSN reference into the literal DSN, ONCE,
+// before anything on the Postgres path uses one.
+//
+// boot() already resolves these (the same helper, the same three labels), but
+// boot is the LAST thing a DR command does. Everything before it — the occupancy
+// probe that decides whether a declaration is required, the authority preflight,
+// and pg_restore's --dbname — was handed the raw flag, so `--dsn file:/run/
+// secrets/db.dsn` reached pg_restore as the eleven bytes "file:/run/…". Resolving
+// here makes the DSN the command JUDGES and the DSN it USES the same STRING,
+// which is what the pre-flight's coherence check needs in order to be about the
+// invocation at all. It is a string, not a session: see the routing precondition
+// on preflightPostgresDR for what that does and does not bind.
+//
+// It is idempotent by construction: resolveDSNRef returns a value that is not a
+// reference unchanged, so boot resolving the already-resolved string is a no-op.
+// The store-backed schemes are refused there as they always were — the store is
+// the database about to be opened.
+func (f *drFlags) resolveDSNRefs(ctx context.Context) error {
+	for _, r := range []struct {
+		label string
+		dst   *string
+	}{{"--dsn", &f.dsn}, {"--owner-dsn", &f.ownerDSN}, {"--admin-dsn", &f.adminDSN}} {
+		resolved, err := resolveDSNRef(ctx, r.label, *r.dst, osGetenv)
+		if err != nil {
+			return err
+		}
+		*r.dst = resolved
+	}
+	return nil
+}
+
 // drBoot wires a full engine (store + signer + registered modules) on a data dir,
 // the same composition root the serve/audit commands use.
 func drBoot(ctx context.Context, f drFlags) (*engine, error) {
 	return boot(ctx, bootConfig{
 		DataDir: f.dataDir, Engine: f.engineKind, DSN: f.dsn, AdminDSN: f.adminDSN,
-		Version: version, Logger: slog.Default(),
+		// OwnerDSN is the field this boot path used to leave zero. bootConfig,
+		// store.Config and the migration lock already consumed it everywhere else;
+		// nothing below this line needed changing for the split to work.
+		OwnerDSN: f.ownerDSN,
+		Version:  version, Logger: slog.Default(),
 	})
 }
 
@@ -275,6 +321,9 @@ func drBackupCmd() *cobra.Command {
 				return err
 			}
 			sf.dataDir = dataDir
+			if err := sf.resolveDSNRefs(cmd.Context()); err != nil {
+				return err
+			}
 
 			// Seal every signing key in the data dir (audit + catalog).
 			sealed, keyRefs, err := sealSigningKeys(dataDir, cipher)
@@ -334,9 +383,10 @@ func drBackupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := dr.WriteBundle(f, dr.BundleInput{
+			bundleInput := dr.BundleInput{
 				Manifest: m, KEK: cipher.Params(), SnapshotPath: snapshotPath, SealedKeys: sealed,
-			}); err != nil {
+			}
+			if err := dr.WriteAuthenticatedBundle(f, bundleInput, cipher); err != nil {
 				_ = f.Close()
 				return err
 			}
@@ -574,6 +624,22 @@ func backupPostgres(ctx context.Context, sf drFlags, work string, keyRefs []dr.K
 		snapshotPath = snap
 	}
 
+	// The same preflight the restore path runs, and it is placed HERE rather than
+	// at the top of this function for a reason worth stating: a backup writes
+	// nothing to the target, so there is no destructive step to get in front of.
+	// What it buys is the message. Without it, a backup in the split posture dies
+	// inside the boot below with `create contract probe "olv_k3p_epoch" …
+	// permission denied for schema public (SQLSTATE 42501)` — a per-boot directory
+	// probe an operator has no reason to have heard of, naming neither the cause
+	// nor --owner-dsn. Failing one line earlier with the flag named is the whole
+	// difference between a recoverable outage and a call.
+	//
+	// Below the dump, not above it, so the dump path's own credential invariant
+	// (pg_dump runs on --admin-dsn, never the app role) keeps being exercised by
+	// the test that pins it.
+	if err := preflightPostgresDR(ctx, sf, "backup"); err != nil {
+		return nil, "", err
+	}
 	eng, err := drBoot(ctx, sf)
 	if err != nil {
 		return nil, "", err
@@ -603,7 +669,7 @@ func drRestoreCmd() *cobra.Command {
 	var kf kekFlags
 	var decl restoreDeclaration
 	var in string
-	var force, inPlace bool
+	var force, inPlace, allowLegacyUnsigned bool
 	var pgRestorePath string
 	cmd := &cobra.Command{
 		Use:   "restore",
@@ -623,6 +689,9 @@ func drRestoreCmd() *cobra.Command {
 				return err
 			}
 			sf.dataDir = resolvedDataDir
+			if err := sf.resolveDSNRefs(cmd.Context()); err != nil {
+				return err
+			}
 
 			// BEFORE anything is read, decrypted or written: if this restore would
 			// REPLACE an existing estate, it is the one destructive act in the
@@ -644,6 +713,25 @@ func drRestoreCmd() *cobra.Command {
 				}
 			}
 
+			// AUTHORITY, asked here because everything after this point writes.
+			//
+			// Position is the whole finding (dr_preflight.go): the store's boot guard
+			// asks the same privilege question and refuses correctly, but boot runs
+			// AFTER pg_restore, so its refusal arrives with the estate already
+			// written. Here the target database and the data dir are still untouched
+			// — no custody installed, nothing preserved, no bundle extracted — so a
+			// refusal costs an operator a re-run and nothing else.
+			//
+			// It goes AFTER the declaration gate on purpose. That gate is the
+			// operator's INTENT ("this restore replaces an estate: name yourself and
+			// say why"), it is fail-closed on an unreadable target, and it is already
+			// reviewed; putting a privilege check in front of it would change which
+			// refusal an operator sees for a live target and would answer a question
+			// nobody had asked yet.
+			if err := preflightPostgresDR(cmd.Context(), sf, "restore"); err != nil {
+				return err
+			}
+
 			work, err := os.MkdirTemp("", "olivares-dr-restore-")
 			if err != nil {
 				return err
@@ -658,6 +746,12 @@ func drRestoreCmd() *cobra.Command {
 			}
 			cipher, err := kf.restoreCipher(kek)
 			if err != nil {
+				return err
+			}
+			if err := dr.CheckImportCompatibility(m, version); err != nil {
+				return err
+			}
+			if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, allowLegacyUnsigned); err != nil {
 				return err
 			}
 
@@ -754,11 +848,49 @@ func drRestoreCmd() *cobra.Command {
 					return undoIfTheStoreWasNeverTouched(fmt.Errorf("--dsn is required for a Postgres restore"))
 				}
 				if m.Store.Method != dr.MethodPITR {
-					if err := runPgRestore(cmd.Context(), pgRestorePath, sf.dsn, filepath.Join(work, m.Store.File)); err != nil {
+					// THE OWNER RUNS THE RESTORE WHEN THERE IS ONE, and this line used
+					// to be sf.dsn unconditionally. Two things follow from the change,
+					// and both were measured: the app role in the split has no CREATE,
+					// so as it pg_restore cannot create the first function and the
+					// restore dies whole; and the objects a restore creates are owned by
+					// the role that created them, so restoring as the owner is what
+					// reproduces the SOURCE's ownership and therefore the source's
+					// append-only ACL posture. drDDLDSN is the single place that
+					// fallback is written, so the pre-flight judged THE SAME RESOLVED
+					// DSN this line hands pg_restore.
+					//
+					// ⛔ THE SAME DSN, NOT THE SAME SESSION, and an earlier version of
+					// this comment said "cannot diverge". pg_restore is a separate
+					// process that dials again; the pre-flight's connection is closed by
+					// then. Under a balancer free to answer that dial with another
+					// backend, nothing here re-checks it. What the pre-flight rules out
+					// is a static misconfiguration — the wrong credential, the wrong
+					// database, a read-only or standby target — vetted on one DSN and
+					// used on another. Binding the check to the session that performs
+					// the write is a different design and is not attempted here.
+					//
+					// It is never the admin DSN: that role is the read-only cross-tenant
+					// reader, and the preflight refuses a run that points a write here.
+					//
+					// No test seam here, deliberately: the property is not "which string
+					// was passed" but "which role created the objects", and that is only
+					// observable in the catalog of a real server. The round-trip cell
+					// asserts pg_get_userbyid(relowner) on every restored table, which is
+					// what kills the mutant that puts sf.dsn back.
+					if err := runPgRestore(cmd.Context(), pgRestorePath, drDDLDSN(sf), filepath.Join(work, m.Store.File)); err != nil {
 						// --single-transaction means no object and no row of the backup
 						// reached the database, so the estate is exactly where it was —
 						// EXCEPT for the custody this command already replaced.
 						return undoIfTheStoreWasNeverTouched(err)
+					}
+					// pg_restore strips function ACLs along with source role names.
+					// Close only the recognized compiled H functions under the
+					// target owner before Open can publish a Store. A refusal
+					// leaves the restored estate in place for operator recovery.
+					if err := coreengine.RestorePostgresUserAuthorityPrivileges(cmd.Context(), store.Config{
+						Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN,
+					}); err != nil {
+						return fmt.Errorf("close restored User authority privileges: %w", err)
 					}
 				}
 			default:
@@ -812,6 +944,7 @@ func drRestoreCmd() *cobra.Command {
 	cmd.Flags().StringVar(&in, "in", "", "DR bundle to restore (required)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing keys / store file in the data dir")
 	cmd.Flags().BoolVar(&inPlace, "in-place", false, "replace a LIVE data dir safely: stage + verify BEFORE promoting, auto-preserving the current store/keys as *.pre-restore-<ts> (sqlite only)")
+	cmd.Flags().BoolVar(&allowLegacyUnsigned, "allow-legacy-unsigned", false, "accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception)")
 	cmd.Flags().StringVar(&pgRestorePath, "pg-restore", "pg_restore", "pg_restore executable (Postgres engine only)")
 	_ = cmd.MarkFlagRequired("in")
 	return cmd
@@ -820,6 +953,7 @@ func drRestoreCmd() *cobra.Command {
 func drVerifyCmd() *cobra.Command {
 	var kf kekFlags
 	var in string
+	var allowLegacyUnsigned bool
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Test a DR bundle WITHOUT touching the live data dir (the DR drill)",
@@ -843,6 +977,12 @@ func drVerifyCmd() *cobra.Command {
 			}
 			cipher, err := kf.restoreCipher(kek)
 			if err != nil {
+				return err
+			}
+			if err := dr.CheckImportCompatibility(m, version); err != nil {
+				return err
+			}
+			if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, allowLegacyUnsigned); err != nil {
 				return err
 			}
 			if m.Store.Method == dr.MethodPITR {
@@ -899,6 +1039,7 @@ func drVerifyCmd() *cobra.Command {
 	}
 	addKEKFlags(cmd, &kf)
 	cmd.Flags().StringVar(&in, "in", "", "DR bundle to verify (required)")
+	cmd.Flags().BoolVar(&allowLegacyUnsigned, "allow-legacy-unsigned", false, "accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception)")
 	_ = cmd.MarkFlagRequired("in")
 	return cmd
 }

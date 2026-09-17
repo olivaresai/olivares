@@ -223,11 +223,14 @@ type identitySpec struct {
 	// permitted-grant edges there (vault ACL paths; ldap privileged-directory
 	// grants; idp app/scope assignments; infisical project grants), so
 	// as_source=true gives a ONE-SHOT permitted-grant pass per boot. For
-	// periodic re-scans wire a sources entry with poll_seconds instead — NEVER
-	// both for one kind (Descriptor names are unique; the second registration
-	// fails as a duplicate). Note okta+entra share Descriptor olivares.idp, so
-	// only one idp-family instance can register as a source per process (the
-	// One-instance-per-kind limit).
+	// periodic re-scans wire a sources entry with poll_seconds instead.
+	//
+	// The source is registered under THIS ENTRY'S NAME, not under the connector's
+	// descriptor, so two entries of one kind are two sources: okta and entra both
+	// resolve to the one idp connector (Descriptor olivares.idp) and can now BOTH
+	// be wired as sources, each with its own configuration and lifecycle. What is
+	// still refused is a duplicate NAME — including a sources[] entry that already
+	// claimed it — and the refusal leaves the first registration untouched.
 	AsSource bool `json:"as_source,omitempty"`
 	// Config is the connector's settings (carries directory/credential references).
 	Config map[string]string `json:"config,omitempty"`
@@ -778,7 +781,7 @@ func buildInProcSource(kind string) (sdk.SourceConnector, bool) {
 	// TTLV/TLS client (KMIP) — NO cloud SDK, no new dependency — so it runs
 	// IN-PROCESS (transport A) like the data-platform observers. They emit OBSERVED
 	// key/secret-access edges (cloud audit), provisioning edges (ESO/SOPS) or custody
-	// edges (KMIP); they NEVER read a secret value or key material (docs/SECURITY-HARDENING.md-3). All
+	// edges (KMIP); they NEVER read a secret value or key material (docs/SECURITY-HARDENING.md §2-3). All
 	// six are ALSO roster providers (buildRosterProvider) for the secret-store
 	// inventory, so an operator may wire them as an identity entry with
 	// as_source=true to get both the inventory and the edges.
@@ -909,9 +912,10 @@ func buildInProcSource(kind string) (sdk.SourceConnector, bool) {
 	// always live) register here for the same reason as the kinds: a
 	// cfg.Sources entry with poll_seconds re-runs the scan, while the identity
 	// entry's as_source=true runs it ONCE per boot. okta/entra resolve to the
-	// SAME idp connector (Descriptor olivares.idp), so only one idp-family
-	// instance can register as a source per process (the
-	// one-instance-per-kind limit).
+	// SAME idp connector (Descriptor olivares.idp) — a shared DESCRIPTOR, which is
+	// no longer a shared identity: each registration carries its own configured
+	// name, so an estate can wire both, and the descriptor stays what it always
+	// was, the connector's type.
 	case "ldap":
 		return ldap.New(), true
 	case "idp", "okta", "entra":
@@ -1057,9 +1061,10 @@ func buildRosterProvider(kind string) (identitysource.GraphProvider, sdk.SourceC
 	// and onepassword's streams the item-usage secret-access edges — those seven
 	// are re-pollable BATCH scans, so wire their
 	// edges/findings half as a cfg.Sources entry with poll_seconds
-	// (buildInProcSource above), NOT via as_source=true
-	// (which runs Gather once per boot, and a second registration of the same
-	// kind would collide on the unique Descriptor name).
+	// (buildInProcSource above) rather than via as_source=true, which runs Gather
+	// once per boot. (Registering the same KIND twice is no longer the obstacle it
+	// was: each registration carries its own name. The reason is the cadence — a
+	// one-shot pass per boot is not a re-pollable scan.)
 	// ai-control-tower Gather is a no-op (roster only).
 	case "entra-agent":
 		c := entraagent.New()
@@ -1309,7 +1314,9 @@ func knowledgeContentSources(cfg sourcesConfig, log *slog.Logger) []pendingConte
 // deny-closed admission gate first — signature verified against ConnectorTrust,
 // digest pinned at exec — and is refused with a WARN otherwise; a plugin-kind
 // source is extracted from the embedded set and loaded out-of-process (AutoMTLS);
-// an in-process-kind source is added directly with its re-poll interval. Every
+// an in-process-kind source is added directly with its re-poll interval. Each of
+// the three is registered under the ENTRY'S NAME (not the connector's descriptor),
+// so an operator can run several sources of one kind side by side. Every
 // un-wireable source WARNS (refused admission, unknown kind, not embedded, load
 // error) — never a silent no-op (12 §5). It is shared by `serve` (sinks go to
 // the local bus) and `collector` (sinks push to a remote core): the transport
@@ -1325,6 +1332,15 @@ func wireSources(ctx context.Context, rt *runtime.Runtime, cfg sourcesConfig, em
 	for _, s := range cfg.Sources {
 		if s.Tenant == "" {
 			log.Warn("ingest: source has no tenant; not wired", "name", s.Name, "kind", s.Kind)
+			continue
+		}
+		// The entry's own name IS the registration identity, on all three transports
+		// below, so two entries of one kind are two sources. A nameless entry is NOT
+		// wired: falling back to the connector's descriptor would silently make it
+		// "the one instance of that kind" and collide with its named siblings.
+		name := strings.TrimSpace(s.Name)
+		if name == "" {
+			log.Warn("ingest: source has no name; not wired (a configured source is never registered under its connector's descriptor by fallback)", "kind", s.Kind)
 			continue
 		}
 		rawCfg := sdk.Config{Settings: s.Config}
@@ -1349,7 +1365,7 @@ func wireSources(ctx context.Context, rt *runtime.Runtime, cfg sourcesConfig, em
 				log.Warn("ingest: external connector plugin secret reference could not be resolved; source NOT wired", "name", s.Name)
 				continue
 			}
-			if err := rt.LoadSourcePluginVerified(s.Plugin.Path, scfg, s.Tenant, digest); err != nil {
+			if err := rt.LoadSourcePluginVerifiedNamed(name, s.Plugin.Path, scfg, s.Tenant, digest); err != nil {
 				log.Warn("ingest: failed to load external connector plugin; source not wired", "name", s.Name, "error", err)
 				continue
 			}
@@ -1370,7 +1386,7 @@ func wireSources(ctx context.Context, rt *runtime.Runtime, cfg sourcesConfig, em
 				log.Warn("ingest: connector secret reference could not be resolved; source NOT wired", "name", s.Name, "kind", s.Kind)
 				continue
 			}
-			if err := rt.LoadSourcePlugin(path, scfg, s.Tenant); err != nil {
+			if err := rt.LoadSourcePluginNamed(name, path, scfg, s.Tenant); err != nil {
 				log.Warn("ingest: failed to load connector plugin; source not wired", "name", s.Name, "kind", s.Kind, "error", err)
 				continue
 			}
@@ -1392,7 +1408,7 @@ func wireSources(ctx context.Context, rt *runtime.Runtime, cfg sourcesConfig, em
 			log.Warn("ingest: source secret reference could not be resolved; not wired", "name", s.Name, "kind", s.Kind)
 			continue
 		}
-		if err := rt.AddPollSource(conn, scfg, s.Tenant, time.Duration(s.PollSeconds)*time.Second); err != nil {
+		if err := rt.AddPollSourceNamed(name, conn, scfg, s.Tenant, time.Duration(s.PollSeconds)*time.Second); err != nil {
 			log.Warn("ingest: failed to register in-process source; not wired", "name", s.Name, "kind", s.Kind, "error", err)
 			continue
 		}
@@ -1405,7 +1421,8 @@ func wireSources(ctx context.Context, rt *runtime.Runtime, cfg sourcesConfig, em
 // runtime's scheduler — closing IDN-06/CB-3 (the NHI roster stops being empty in
 // the binary). It Opens each provider here (the GraphProvider seam has no Open;
 // Snapshot needs the resolved config) and, when AsSource is set, also wires a
-// SEPARATE instance as a source so the connector's permitted-access edges flow —
+// SEPARATE instance as a source — registered under the entry's own name, with its
+// own settings map — so the connector's permitted-access edges flow —
 // since that is every identity connector with a grant surface
 // (vault/ldap/idp/infisical, one-shot per boot; see identitySpec.AsSource), no
 // longer Vault alone. Honest posture: with no providers configured, or all
@@ -1477,9 +1494,23 @@ func wireRoster(ctx context.Context, rt *runtime.Runtime, gov *governance.Module
 
 		if spec.AsSource {
 			if _, srcConn, _ := buildRosterProvider(spec.Kind); srcConn != nil {
-				// Reuse the already-resolved config: the second instance is the same
-				// connector kind, so its declared secret fields and references match.
-				if err := rt.AddSource(srcConn, resolved, spec.Tenant); err != nil {
+				sourceName := strings.TrimSpace(spec.Name)
+				if sourceName == "" {
+					log.Warn("roster: identity provider has no name, so it cannot also be wired as a source; roster still active", "kind", spec.Kind)
+					continue
+				}
+				// The same RESOLVED VALUES, in this instance's own map: the second
+				// instance is the same connector kind, so its declared secret fields
+				// and references match — but the two components must not share a
+				// mutable settings map. (The runtime copies again at registration;
+				// this keeps the provider's map out of reach either way.)
+				sourceCfg := sdk.Config{Settings: make(map[string]string, len(resolved.Settings))}
+				for k, v := range resolved.Settings {
+					sourceCfg.Settings[k] = v
+				}
+				// Registered under the ENTRY'S NAME: okta and entra share the one idp
+				// descriptor and are still two distinct sources.
+				if err := rt.AddSourceNamed(sourceName, srcConn, sourceCfg, spec.Tenant); err != nil {
 					log.Warn("roster: identity provider could not also be wired as a source; roster still active", "name", spec.Name, "kind", spec.Kind, "error", err)
 				} else {
 					log.Info("roster: also wired identity provider as a permitted-access source", "name", spec.Name, "kind", spec.Kind, "tenant", spec.Tenant)

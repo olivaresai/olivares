@@ -62,6 +62,23 @@ vi.stubGlobal('navigator', {
 })
 
 import { AAL, StepUpPanel } from './assurance'
+import { authApi } from '@/lib/api/endpoints'
+import { queryKeys } from '@/lib/api/query'
+import type { Whoami } from '@/lib/api/types'
+const actor: Whoami = {
+  kind: 'user',
+  user_id: 'u1',
+  actor: 'u1',
+  display_name: 'Operator',
+  superadmin: true,
+  grants: [],
+  aal: 1,
+}
+function client() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  qc.setQueryData(queryKeys.whoami, actor)
+  return qc
+}
 
 function Anfitrion({ onElevated }: { onElevated: () => void }) {
   const [montado, setMontado] = useState(true)
@@ -83,19 +100,16 @@ function Anfitrion({ onElevated }: { onElevated: () => void }) {
 }
 
 const wrap = (ui: React.ReactElement) =>
-  render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      {ui}
-    </QueryClientProvider>,
-  )
+  render(<QueryClientProvider client={client()}>{ui}</QueryClientProvider>)
 
 describe('StepUpPanel no reanuda una acción cuyo dueño ya se fue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(authApi, 'whoami').mockResolvedValue({ ...actor, aal: 3 })
     puerta.resolver = null
-    api.webauthnAuthOptions.mockResolvedValue({ publicKey: { challenge: 'AA' } })
+    api.webauthnAuthOptions.mockResolvedValue({
+      publicKey: { challenge: 'AA' },
+    })
     api.webauthnAuthenticate.mockImplementation(
       () => new Promise((r) => (puerta.resolver = r)),
     )

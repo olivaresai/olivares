@@ -58,6 +58,8 @@ import {
   finopsKeys,
 } from './api'
 import { StatementDetail, StatementList } from './chargeback-components'
+import { ModelRateCatalog } from './model-rate-catalog'
+import { readModelRateCatalog } from './model-rate-validation'
 import {
   AlertsTable,
   AllocationTable,
@@ -566,24 +568,6 @@ function CostCentresTab() {
   )
 }
 
-// --- catálogo de tarifas de modelo (C07-04) ----------------------------------
-//
-// ⛔ ES EL LIBRO DE PRECIOS DEL QUE DEPENDE TODA CIFRA DE COSTE ESTIMADA, y no tenía pantalla:
-//    `ratecatalog.go:19-23` — «the per-provider/model pricing table that resolves list-price
-//    rates (micro-USD per 1M tokens) for a given instant, **enabling the FinOps module to
-//    estimate cost when a provider's cost API does not report a dollar amount**».
-//
-// ⛔ DOS COSAS QUE UNA TABLA DE PRECIOS INGENUA DIRÍA MAL:
-//
-//    1. **`effective_until` vacío NO es «sin fecha» ni «caducada»: es que la tarifa SIGUE
-//       VIGENTE** (`:26-28`, «a null/empty effective_until means the rate is still current»).
-//       Pintar un guion ahí y ordenar por caducidad esconde justo la tarifa que se está
-//       aplicando ahora mismo.
-//    2. **El dinero es micro-USD ENTERO por 1M de tokens, sin floats** (`:22-23`, README.md).
-//       Un campo que acepte «3,00» y lo interprete como dólares mete un error de seis órdenes de
-//       magnitud en cada estimación que salga de aquí. La unidad se dice en la etiqueta, no se
-//       supone.
-
 // --- resultados graduados (C07-04) -------------------------------------------
 //
 // ⛔ SON EL NUMERADOR DEL «COSTE POR RESULTADO». La pestaña de valor ya enseña gasto sin
@@ -754,75 +738,34 @@ function ResultadosCard() {
   )
 }
 
+// --- catálogo de tarifas de modelo (C07-04) ----------------------------------
+//
+// La consulta, su recorte y sus estados de transporte viven aquí. Qué respuesta es legible y cómo
+// se presenta viven en `model-rate-validation.ts` y `model-rate-catalog.tsx`.
 function TarifasCard() {
   const { t } = useTranslation('finops')
-  const { activeTenant, can } = useAuth()
+  const { activeTenant } = useAuth()
   const q = useQuery({
     queryKey: finopsKeys.modelRates(activeTenant),
     queryFn: () => finopsApi.modelRates(undefined, { tenant: activeTenant }),
+    select: readModelRateCatalog,
   })
 
   return (
-    <SectionCard
-      title={t('rates.title')}
-      description={t('rates.description')}
-      actions={
-        can('finops:budget:write') ? (
-          <Badge variant="outline">{t('rates.unit')}</Badge>
-        ) : null
-      }
-    >
+    <SectionCard title={t('rates.title')} description={t('rates.description')}>
       <ListTruncationBadge
         query={q}
         label={t('rates.truncated', { n: q.data?.items?.length ?? 0 })}
         hint={t('rates.truncatedHint')}
       />
       <AsyncSection query={q} skeletonHeight={140}>
-        {(res) => {
-          const items = ((res as { items?: unknown[] })?.items ?? []) as Array<{
-            id: string
-            provider: string
-            model_ref?: string
-            input_rate_micro_usd?: number
-            output_rate_micro_usd?: number
-            effective_from?: string
-            effective_until?: string
-          }>
-          return items.length === 0 ? (
-            <EmptyState title={t('rates.empty')} />
-          ) : (
-            <div className="flex flex-col gap-1">
-              {items.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Badge variant="outline">{r.provider}</Badge>
-                    <span className="font-mono text-xs">{r.model_ref}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs">
-                    <span className="font-mono">
-                      {t('rates.inOut', {
-                        in: r.input_rate_micro_usd ?? 0,
-                        out: r.output_rate_micro_usd ?? 0,
-                      })}
-                    </span>
-                    {/* ⛔ Sin fecha de fin la tarifa está VIGENTE, y así se dice: un guion aquí
-                        se lee como «le falta un dato» y esconde la que se aplica hoy. */}
-                    {r.effective_until ? (
-                      <Badge variant="neutral">
-                        {t('rates.until', { at: r.effective_until })}
-                      </Badge>
-                    ) : (
-                      <Badge variant="success">{t('rates.current')}</Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        }}
+        {(read) => (
+          <ModelRateCatalog
+            read={read}
+            reloading={q.isFetching}
+            onReload={() => void q.refetch()}
+          />
+        )}
       </AsyncSection>
     </SectionCard>
   )
@@ -1698,7 +1641,15 @@ function AllocationSection({ range }: { range: { since: string } }) {
 
 // --- budgets tab (fans out a status query per budget) ------------------------
 
-function BudgetsTab({ canWrite }: { canWrite: boolean }) {
+export function BudgetsTab({ canWrite }: { canWrite: boolean }) {
+  const { activeTenant, can } = useAuth()
+  // Read authority owns the query/form lifetime, independently of write access.
+  // Unmounting also retires the selected reference when authority is withdrawn.
+  if (!activeTenant || !can('finops:budget:read')) return null
+  return <TenantBudgetsTab key={activeTenant} canWrite={canWrite} />
+}
+
+function TenantBudgetsTab({ canWrite }: { canWrite: boolean }) {
   const { t } = useTranslation(['finops', 'common'])
   const report = useFailedActionReporter()
   const { activeTenant } = useAuth()
@@ -1708,6 +1659,12 @@ function BudgetsTab({ canWrite }: { canWrite: boolean }) {
   const [editing, setEditing] = useState<Budget | null>(null)
   const [deleting, setDeleting] = useState<Budget | null>(null)
 
+  const [referenceInput, setReferenceInput] = useState('')
+  const [reference, setReference] = useState('')
+  const alertParams = useMemo(
+    () => (reference ? { alert_id: reference } : undefined),
+    [reference],
+  )
   const del = useMutation({
     mutationFn: (id: string) => finopsApi.deleteBudget(id),
     onSuccess: () => {
@@ -1737,19 +1694,21 @@ function BudgetsTab({ canWrite }: { canWrite: boolean }) {
     queryFn: () => finopsApi.budgets(),
   })
   const alertsQ = useQuery({
-    queryKey: finopsKeys.alerts(activeTenant),
-    queryFn: () => finopsApi.alerts(),
+    queryKey: finopsKeys.alerts(activeTenant, alertParams),
+    queryFn: () => finopsApi.alerts(alertParams, { tenant: activeTenant }),
+    enabled: !!activeTenant,
   })
 
   const budgets = budgetsQ.data?.items ?? []
   const statusQueries = useQueries({
     queries: budgets.map((b) => ({
       queryKey: finopsKeys.budgetStatus(activeTenant, b.id),
-      queryFn: () => finopsApi.budgetStatus(b.id),
+      queryFn: () => finopsApi.budgetStatus(b.id, { tenant: activeTenant }),
+      enabled: !!activeTenant,
     })),
   })
   const statuses = statusQueries
-    .map((q) => q.data)
+    .map((q) => (q.isSuccess ? q.data : undefined))
     .filter((s): s is BudgetStatus => s !== undefined)
 
   return (
@@ -1819,6 +1778,10 @@ function BudgetsTab({ canWrite }: { canWrite: boolean }) {
                         ) : null
                       }
                     />
+                  ) : statusQueries[i]?.isError ? (
+                    <AsyncSection key={b.id} query={statusQueries[i]}>
+                      {() => null}
+                    </AsyncSection>
                   ) : (
                     <div key={b.id ?? i} role="status">
                       <span className="sr-only">
@@ -1840,6 +1803,38 @@ function BudgetsTab({ canWrite }: { canWrite: boolean }) {
         noPadding
       >
         <div className="p-4">
+          <form
+            className="mb-3 flex items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setReference(referenceInput.trim())
+              if (referenceInput.trim() === reference) void alertsQ.refetch()
+            }}
+          >
+            <label className="flex flex-1 flex-col gap-1 text-xs">
+              {t('evidence.reference')}
+              <Input
+                value={referenceInput}
+                maxLength={128}
+                onChange={(event) => setReferenceInput(event.target.value)}
+              />
+            </label>
+            <Button type="submit" variant="secondary">
+              {t('evidence.lookup')}
+            </Button>
+            {reference ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setReference('')
+                  setReferenceInput('')
+                }}
+              >
+                {t('evidence.clear')}
+              </Button>
+            ) : null}
+          </form>
           <ListTruncationBadge
             query={alertsQ}
             label={t('alerts.truncated', {
@@ -1852,7 +1847,7 @@ function BudgetsTab({ canWrite }: { canWrite: boolean }) {
               list.items.length === 0 ? (
                 <EmptyState title={t('alerts.empty')} />
               ) : (
-                <AlertsTable alerts={list.items} />
+                <AlertsTable alerts={list.items} tenant={activeTenant} />
               )
             }
           </AsyncSection>

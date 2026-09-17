@@ -30,6 +30,10 @@ const (
 	upgradeTimerActionPrinted = "printed-timer-units"
 )
 
+// connectedTimerDefaultSchedule is the OnCalendar of an --enterprise --connect unit generated without
+// --timer-schedule: daily, in the same 03:00 window as the weekly default of every other unit.
+const connectedTimerDefaultSchedule = "*-*-* 03:00:00"
+
 // upgradeTimerResult is the -o json pane of `upgrade --install-timer`.
 //
 // This leaf has its OWN document rather than sharing upgradeResult, because it
@@ -46,14 +50,18 @@ const (
 // present on BOTH paths so the document has one shape: with --timer-dir the two
 // paths fill in as well, and without it they are "".
 type upgradeTimerResult struct {
-	Action      string `json:"action"`
-	Channel     string `json:"channel"`
-	Schedule    string `json:"schedule"`
-	ExecStart   string `json:"exec_start"`
-	ServicePath string `json:"service_path"`
-	TimerPath   string `json:"timer_path"`
-	ServiceUnit string `json:"service_unit"`
-	TimerUnit   string `json:"timer_unit"`
+	Action   string `json:"action"`
+	Channel  string `json:"channel"`
+	Schedule string `json:"schedule"`
+	// DownloadProtocol is the gated download protocol the scheduled enterprise run is pinned to
+	// (release-v1 | legacy). Omitted for a community unit, where the flag has no meaning and the
+	// existing timer JSON key set must stay byte-stable (TestL4UpgradeInstallTimerBothPanes).
+	DownloadProtocol string `json:"download_protocol,omitempty"`
+	ExecStart        string `json:"exec_start"`
+	ServicePath      string `json:"service_path"`
+	TimerPath        string `json:"timer_path"`
+	ServiceUnit      string `json:"service_unit"`
+	TimerUnit        string `json:"timer_unit"`
 }
 
 // generateUpgradeTimer renders the .service and .timer units and either writes them
@@ -86,9 +94,40 @@ func generateUpgradeTimer(cmd *cobra.Command, o *upgradeOptions) error {
 	}
 	args = append(args, "--data-dir", crlDir)
 	envFileHint := ""
+	protocol := ""
 	if o.enterprise {
-		args = append(args, "--enterprise", "--token", "${OLIVARES_UPGRADE_TOKEN}")
-		envFileHint = "EnvironmentFile=-/etc/olivares/upgrade.env\n"
+		// The token is NOT inlined as `--token ${OLIVARES_UPGRADE_TOKEN}`: systemd would expand it
+		// into ExecStart, and a download token in a unit's argv is readable in
+		// `/proc/<pid>/cmdline` by any local user for the life of the run. `upgrade --enterprise`
+		// reads OLIVARES_UPGRADE_TOKEN from the environment (buildUpdateSource), which the
+		// EnvironmentFile provides, so the bearer travels in the process environment and the
+		// Authorization header, never the command line.
+		//
+		// The gated download protocol IS pinned. An operator who generates the unit with
+		// `--download-protocol legacy` chose it for the gateway the unit will talk to; a unit that
+		// dropped it would default the scheduled run to release-v1 against that gateway and fail
+		// every night (R7 of the 2026-09-05 review). runUpgrade validated the value before this
+		// generator ran, so what is written here is what was accepted.
+		protocol = o.downloadProtocol
+		if protocol == "" {
+			protocol = downloadProtocolReleaseV1
+		}
+		args = append(args, "--enterprise", "--download-protocol", protocol)
+		if o.connect {
+			// The connected unit carries NO secret and needs no EnvironmentFile: each run proves
+			// possession of the key under --data-dir and receives a fresh bearer in memory.
+			args = append(args, "--connect")
+		} else {
+			envFileHint = "EnvironmentFile=-/etc/olivares/upgrade.env\n"
+		}
+	}
+	// Trust and license selection are pinned too, so the scheduled run verifies what the operator's
+	// run verified. Both are paths or public keys, never secrets.
+	if o.license != "" {
+		args = append(args, "--license", shellQuote(o.license))
+	}
+	if o.pubkey != "" {
+		args = append(args, "--pubkey", shellQuote(o.pubkey))
 	}
 	execStart := shellQuote(bin) + " " + strings.Join(args, " ")
 
@@ -120,9 +159,28 @@ SuccessExitStatus=0
 Nice=10
 `, bin, o.channel, envFileHint, execStart)
 
+	connectedNote := ""
+	schedule := o.timerSchedule
+	if o.enterprise && o.connect {
+		// A connected unit is also the credential's upkeep, so its default is daily. An explicitly
+		// given --timer-schedule is kept exactly as typed; no calendar expression is interpreted here.
+		if f := cmd.Flags().Lookup("timer-schedule"); f == nil || !f.Changed {
+			schedule = connectedTimerDefaultSchedule
+		}
+		connectedNote = `# CONNECTED UNIT. Each run first refreshes the connected credential by proof of possession, and
+# it refreshes ONLY when this timer fires: nothing schedules a refresh from the credential's refresh
+# planning boundary (` + "`olivares license connect status`" + `, last.effective_until). Without
+# --timer-schedule a connected unit runs daily. A provisional line's lease lasts 72 hours, and its
+# refresh is meant to happen 12 hours before it ends; a daily run leaves room for that only while
+# this host and service actually run. This is a fixed cadence, not a deadline. A slower explicit
+# --timer-schedule can let such a line lapse between runs: then run
+# ` + "`olivares license connect refresh`" + ` on its own shorter schedule. Upgrading the binary does not
+# rewrite this unit; regenerate it with ` + "`olivares upgrade --install-timer --enterprise --connect`" + `.
+`
+	}
 	timer := fmt.Sprintf(`# olivares-upgrade.timer — opt-in schedule for the verified upgrade.
 # Enable with:  systemctl enable --now olivares-upgrade.timer
-[Unit]
+%s[Unit]
 Description=Olivares AI — scheduled verified upgrade check (channel %s)
 
 [Timer]
@@ -134,14 +192,15 @@ Persistent=true
 
 [Install]
 WantedBy=timers.target
-`, o.channel, o.timerSchedule)
+`, connectedNote, o.channel, schedule)
 
 	res := upgradeTimerResult{
-		Channel:     o.channel,
-		Schedule:    o.timerSchedule,
-		ExecStart:   execStart,
-		ServiceUnit: service,
-		TimerUnit:   timer,
+		Channel:          o.channel,
+		Schedule:         schedule,
+		DownloadProtocol: protocol,
+		ExecStart:        execStart,
+		ServiceUnit:      service,
+		TimerUnit:        timer,
 	}
 
 	if o.timerDir != "" {
@@ -164,7 +223,7 @@ WantedBy=timers.target
 			if _, werr := fmt.Fprintf(w, "enable with:\n  sudo cp %s %s /etc/systemd/system/\n  sudo systemctl daemon-reload\n  sudo systemctl enable --now olivares-upgrade.timer\n", sp, tp); werr != nil {
 				return werr
 			}
-			if o.enterprise {
+			if o.enterprise && !o.connect {
 				_, werr := fmt.Fprintln(w, "\nenterprise: put your download token in /etc/olivares/upgrade.env (0600):\n  OLIVARES_UPGRADE_TOKEN=<token-from-your-license-email>")
 				return werr
 			}
@@ -180,7 +239,7 @@ WantedBy=timers.target
 		fmt.Fprint(w, timer)
 		fmt.Fprintln(w, "\n# Install: save the two blocks above, then:")
 		fmt.Fprintln(w, "#   sudo systemctl daemon-reload && sudo systemctl enable --now olivares-upgrade.timer")
-		if o.enterprise {
+		if o.enterprise && !o.connect {
 			fmt.Fprintln(w, "# Enterprise: OLIVARES_UPGRADE_TOKEN=<token> in /etc/olivares/upgrade.env (chmod 0600).")
 		}
 		_, werr := fmt.Fprintln(w, "# (Or write the files directly with:  olivares upgrade --install-timer --timer-dir <dir>)")

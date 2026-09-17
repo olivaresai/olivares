@@ -31,19 +31,59 @@ var baseTime = time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 type fakeHost struct {
 	mu     sync.Mutex
 	events []event.Event
+	// publishErr, when set, fails every publish. Publication happens AFTER the
+	// commit, so it is the seam where a delivery failure must not be able to reach
+	// back into rows that are already durable.
+	publishErr error
 }
 
 func (h *fakeHost) Publish(_ context.Context, e event.Event) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.events = append(h.events, e)
-	return nil
+	return h.publishErr
 }
+
+// failPublishing makes every subsequent publish fail.
+func (h *fakeHost) failPublishing(err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.publishErr = err
+}
+
 func (h *fakeHost) Subscribe([]event.Type, event.Handler) (func(), error) { return func() {}, nil }
 func (h *fakeHost) Logger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 func (h *fakeHost) Config() sdk.Config { return sdk.Config{} }
+
+// auditActions returns the actions recorded in the tenant's audit chain, so a test
+// can prove an audited write survived — or, after a rollback, that it did not.
+func auditActions(t *testing.T, st store.Store, tenant model.TenantID) []string {
+	t.Helper()
+	var out []string
+	if err := st.View(context.Background(), tenant, func(sc store.Scope) error {
+		return sc.Audit().Walk(context.Background(), 0, func(e model.AuditEvent) error {
+			out = append(out, e.Action)
+			return nil
+		})
+	}); err != nil {
+		t.Fatalf("walk audit: %v", err)
+	}
+	return out
+}
+
+// countAuditAction counts one action in the tenant's audit chain.
+func countAuditAction(t *testing.T, st store.Store, tenant model.TenantID, action string) int {
+	t.Helper()
+	n := 0
+	for _, a := range auditActions(t, st, tenant) {
+		if a == action {
+			n++
+		}
+	}
+	return n
+}
 
 type finopsTestData struct {
 	api.ModuleData

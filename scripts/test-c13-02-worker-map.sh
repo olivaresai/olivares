@@ -16,21 +16,35 @@ fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 
+# Built once and handed in: six throwaway trees would otherwise mean six `go build`s, which is
+# contention in a box shared by six lanes rather than caution.
+export GOWORK=off
+MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mc-bin.XXXXXX")"
+( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
+	echo "no pude construir el derivador: la bateria mediria NOT APPLICABLE" >&2; exit 2; }
+export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
+
 stage() {
 	rm -rf "$TMP/tree"
 	mkdir -p "$TMP/tree/scripts" "$TMP/tree/commercial/license-worker/src/catalog"
 	cp "$CHECK" "$TMP/tree/scripts/check-c13-02-worker-map.sh"
 	chmod +x "$TMP/tree/scripts/check-c13-02-worker-map.sh"
-	cat >"$TMP/tree/commercial/module-slug-package.json" <<'EOF'
-{"entries":[{"slug":"iso42001","package":"enterprise/iso42001"},{"slug":"reporting","package":"enterprise/reporting"},{"slug":"a","package":"enterprise/a"},{"slug":"b","package":"enterprise/b"},{"slug":"c","package":"enterprise/c"},{"slug":"d","package":"enterprise/d"},{"slug":"e","package":"enterprise/e"},{"slug":"f","package":"enterprise/f"},{"slug":"g","package":"enterprise/g"},{"slug":"h","package":"enterprise/h"},{"slug":"i","package":"enterprise/i"},{"slug":"j","package":"enterprise/j"},{"slug":"k","package":"enterprise/k"},{"slug":"l","package":"enterprise/l"},{"slug":"m","package":"enterprise/m"},{"slug":"n","package":"enterprise/n"},{"slug":"o","package":"enterprise/o"},{"slug":"p","package":"enterprise/p"},{"slug":"q","package":"enterprise/q"},{"slug":"r","package":"enterprise/r"}]}
-EOF
-	cp "$TMP/tree/commercial/module-slug-package.json" \
-		"$TMP/tree/commercial/license-worker/src/catalog/module-slug-package.json"
-	cat >"$TMP/tree/commercial/license-worker/src/catalog/slug-package.ts" <<'EOF'
-import map from "./module-slug-package.json" with { type: "json" };
-export function packageForSlug(slug: string): string | null { return null; }
-void map;
-EOF
+	# ⛔ EL FIXTURE ES AHORA EL MAPA REAL, y no veinte filas inventadas. Las de antes no llevaban
+	# `schema`, `source`, `pack` ni `canon_sha256`, así que sólo podían ejercitar la comparación
+	# entre copias — la comparación que estuvo VERDE sobre dos copias igualmente rancias. Con el
+	# mapa real y el canon montados, el caso mide la comparación que de verdad decide.
+	cp "$ROOT/commercial/module-slug-package.json" "$TMP/tree/commercial/"
+	cp "$ROOT/commercial/license-worker/src/catalog/module-slug-package.json" \
+		"$TMP/tree/commercial/license-worker/src/catalog/"
+	cp "$ROOT/commercial/license-worker/src/catalog/slug-package.ts" \
+		"$TMP/tree/commercial/license-worker/src/catalog/"
+	mkdir -p "$TMP/tree/design"
+	cp "$ROOT/design/PRICING-CANON.md" "$TMP/tree/design/"
+	cp "$ROOT/design/c13-02-package-view.json" "$TMP/tree/design/"
+	cp "$ROOT/commercial/module-package-slugs.json" "$TMP/tree/commercial/"
+	cp -r "$ROOT/commercial/commerce-lint" "$TMP/tree/commercial/"
+	cp "$ROOT/scripts/module-catalog-go.sh" "$TMP/tree/scripts/"
+	chmod +x "$TMP/tree/scripts/module-catalog-go.sh"
 }
 
 run() {
@@ -53,14 +67,38 @@ stage
 python3 - "$TMP/tree/commercial/license-worker/src/catalog/module-slug-package.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert d["entries"][0]["package"] != "enterprise/WRONG", "control de mutacion: ya estaba mutado"
 d["entries"][0]["package"] = "enterprise/WRONG"
-json.dump(d, open(sys.argv[1], "w", encoding="utf-8"))
+json.dump(d, open(sys.argv[1], "w", encoding="utf-8"), indent=2)
 PY
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
 	ok "firing: drifted Worker copy is FAIL"
 else
 	bad "drift should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+# ⭐ EL CASO QUE EL GATE VIEJO NO PODÍA VER, y es el defecto que se midió el 2026-09-03: las DOS
+# copias envejecidas igual. Comparadas entre sí coinciden perfectamente; sólo la derivación del
+# canon las desmiente. Sin este caso, la reparación no está probada.
+stage
+python3 - "$TMP/tree/commercial/module-slug-package.json" \
+	"$TMP/tree/commercial/license-worker/src/catalog/module-slug-package.json" <<'PY'
+import json, sys
+for path in sys.argv[1:]:
+	d = json.load(open(path, encoding="utf-8"))
+	before = len(d["entries"])
+	d["entries"] = [e for e in d["entries"] if e["slug"] != "caeptransmit"]
+	assert len(d["entries"]) == before - 1, "control de mutacion: caeptransmit no estaba"
+	json.dump(d, open(path, "w", encoding="utf-8"), indent=2)
+PY
+run
+if [ "$(cat "$TMP/rc")" = 1 ]; then
+	grep -q 'differs from the canon derivation' "$TMP/err" \
+		&& ok "firing: BOTH copies stale in the same way is FAIL (the case the old gate could not see)" \
+		|| bad "killed, but not by the canon derivation ($(cat "$TMP/err"))"
+else
+	bad "two equally stale copies stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"
 fi
 
 stage

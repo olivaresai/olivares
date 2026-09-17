@@ -74,6 +74,9 @@ export interface RequestOptions {
    *  entry — which is how the API expresses a repeatable filter such as
    *  /v1/audit's exclude_action. */
   query?: Record<string, string | string[]>;
+  /** Additional operation headers. Generated typed methods populate declared
+   * conditional and idempotency headers through this field. */
+  headers?: Record<string, string>;
   /** Per-call tenant override. */
   tenant?: string;
 }
@@ -253,6 +256,9 @@ export class ClientCore {
     if (this.opts.token) headers["Authorization"] = `Bearer ${this.opts.token}`;
     const tenant = opts?.tenant ?? this.opts.tenant;
     if (tenant) headers["X-Olivares-Tenant"] = tenant;
+    for (const [key, value] of Object.entries(opts?.headers ?? {})) {
+      headers[key] = value;
+    }
 
     const doFetch = this.opts.fetch ?? fetch;
     const resp = await doFetch(url, {

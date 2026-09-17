@@ -93,6 +93,7 @@ func newComplianceCmd() *cobra.Command {
 		newComplianceDoraCmd(&flags),
 		newComplianceOscalCmd(&flags),
 		newComplianceDepthCmd(&flags),
+		newComplianceAimsCmd(&flags),
 	)
 	return root
 }
@@ -1521,11 +1522,12 @@ func newComplianceDoraCmd(flags *authClientFlags) *cobra.Command {
 		Use:   "dora",
 		Short: "Inspect DORA registers and classified incidents",
 		Long: "dora lists the Register of Information and the classified major-incident\n" +
-			"records this build has stored. Generating them is provided by the\n" +
-			"enterprise add-on.\n\n" +
-			"Only listing is exposed here today; the console exports registers and\n" +
-			"incident reports.",
-		Example: "  olivares compliance dora registers\n  olivares compliance dora incidents -o json",
+			"records this build has stored, and exports a stored register with its\n" +
+			"ledger anchor. Generating them is provided by the enterprise\n" +
+			"doraregister add-on (Compliance Packs).\n\n" +
+			"An exported register is a DRAFT: it does not make the tenant DORA-compliant\n" +
+			"and is not a certification. Incident-report export stays on the console.",
+		Example: "  olivares compliance dora registers\n  olivares compliance dora export dr-1 -o json",
 	}
 	cmd.AddCommand(
 		simpleListCmd(flags, "registers", "List DORA registers of information",
@@ -1552,8 +1554,84 @@ func newComplianceDoraCmd(flags *authClientFlags) *cobra.Command {
 				}
 				return []any{str(m, "id"), str(m, "reference"), major, str(m, "classified_at")}
 			}),
+		newDoraExportRegisterCmd(flags),
 	)
 	return cmd
+}
+
+func newComplianceAimsCmd(flags *authClientFlags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "aims",
+		Short: "Inspect ISO/IEC 42001 AIMS certification-readiness packs",
+		Long: "aims lists the ISO/IEC 42001 AIMS certification-readiness packs this\n" +
+			"tenant has generated. The packager that STRUCTURES a pack is the commercial\n" +
+			"iso42001 add-on (Compliance Packs); without it POST /aims/pack answers 501\n" +
+			"and this list is honestly empty. A listed pack is a DRAFT for the customer's\n" +
+			"auditor, never a statement of conformity.\n\n" +
+			"Only listing is exposed here today; generate/export/delete stay on the\n" +
+			"console (regops AIMS family, permission compliance:aims:read|admin).",
+		Example: "  olivares compliance aims ls\n  olivares compliance aims ls -o json",
+	}
+	cmd.AddCommand(
+		simpleListCmd(flags, "ls", "List ISO/IEC 42001 AIMS packs",
+			"Lists the AIMS packs stored for this tenant (id, standard, organisation, error\n"+
+				"count, generated_at). Generation is the enterprise iso42001 add-on; an open\n"+
+				"build lists none rather than fabricating a Statement of Applicability.",
+			"  olivares compliance aims ls\n  olivares compliance aims ls -o json",
+			"/aims/pack",
+			[]string{"ID", "STANDARD", "ORGANISATION", "ERRORS", "GENERATED"},
+			func(m map[string]any) []any {
+				return []any{
+					str(m, "id"), str(m, "standard"),
+					str(m, "organisation_name"),
+					numOf(m, "error_count"), str(m, "generated_at"),
+				}
+			}),
+	)
+	return cmd
+}
+
+func newDoraExportRegisterCmd(flags *authClientFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "export <register-id>",
+		Short: "Export one DORA Register of Information",
+		Long: "export fetches the structured Register of Information for one stored id,\n" +
+			"with the live ledger anchor and the honesty disclaimer. Generation is the\n" +
+			"enterprise doraregister add-on; without it POST /dora/register answers 501\n" +
+			"and there is nothing to export. The payload is a DRAFT a competent person\n" +
+			"must review: it does not make the tenant DORA-compliant and is not a\n" +
+			"certification.",
+		Example: "  olivares compliance dora export dr-1\n  olivares compliance dora export dr-1 -o json",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := complianceCall{
+				flags: flags, method: http.MethodGet,
+				path: "/dora/register/" + url.PathEscape(args[0]) + "/export",
+			}.do(cmd)
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := res.decode(&out); err != nil {
+				return err
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				tw := newTabWriter(w)
+				fmt.Fprintf(tw, "regulation\t%s\n", str(out, "regulation"))
+				fmt.Fprintf(tw, "entity_lei\t%s\n", str(out, "entity_lei"))
+				fmt.Fprintf(tw, "reference_date\t%s\n", str(out, "reference_date"))
+				fmt.Fprintf(tw, "error_count\t%d\n", numOf(out, "error_count"))
+				fmt.Fprintf(tw, "doc_sha256\t%s\n", str(out, "doc_sha256"))
+				if err := tw.Flush(); err != nil {
+					return err
+				}
+				if d := str(out, "disclaimer"); d != "" {
+					fmt.Fprintf(w, "\n%s\n", d)
+				}
+				return nil
+			}, out)
+		},
+	}
 }
 
 func newComplianceOscalCmd(flags *authClientFlags) *cobra.Command {
@@ -1561,7 +1639,7 @@ func newComplianceOscalCmd(flags *authClientFlags) *cobra.Command {
 		Use:     "oscal",
 		Long:    "oscal exposes the NIST OSCAL surface: the machine-readable control catalogs,\nprofiles and system security plans a US federal program exchanges instead of\nspreadsheets. Ingestion of profiles and SSPs is an enterprise capability and answers\n501 without it; the export of what this deployment already knows is open.",
 		Short:   "Inspect ingested OSCAL profiles and SSPs",
-		Example: "  olivares compliance oscal ls",
+		Example: "  olivares compliance oscal ls\n  olivares compliance oscal get op-1 -o json",
 	}
 	cmd.AddCommand(
 		simpleListCmd(flags, "ls", "List registered OSCAL documents",
@@ -1575,16 +1653,60 @@ func newComplianceOscalCmd(flags *authClientFlags) *cobra.Command {
 					numOf(m, "selected_count"), str(m, "registered_at"),
 				}
 			}),
+		newOscalGetCmd(flags),
 	)
 	return cmd
+}
+
+func newOscalGetCmd(flags *authClientFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <profile-id>",
+		Short: "Show one ingested OSCAL profile or SSP",
+		Long: "get shows one registered OSCAL profile or SSP: framework, document kind,\n" +
+			"selected-control count, document hash and the honesty disclaimer. Ingestion\n" +
+			"is the enterprise oscalingest add-on (Compliance Packs); without it POST\n" +
+			"/oscal/profiles answers 501 and this get is a 404 on an empty store.",
+		Example: "  olivares compliance oscal get op-1\n  olivares compliance oscal get op-1 -o json",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := complianceCall{
+				flags: flags, method: http.MethodGet,
+				path: "/oscal/profiles/" + url.PathEscape(args[0]),
+			}.do(cmd)
+			if err != nil {
+				return err
+			}
+			var out map[string]any
+			if err := res.decode(&out); err != nil {
+				return err
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				tw := newTabWriter(w)
+				fmt.Fprintf(tw, "id\t%s\n", str(out, "id"))
+				fmt.Fprintf(tw, "framework\t%s\n", str(out, "framework"))
+				fmt.Fprintf(tw, "kind\t%s\n", str(out, "doc_kind"))
+				fmt.Fprintf(tw, "title\t%s\n", str(out, "title"))
+				fmt.Fprintf(tw, "selected\t%d\n", numOf(out, "selected_count"))
+				fmt.Fprintf(tw, "doc_sha256\t%s\n", str(out, "doc_sha256"))
+				fmt.Fprintf(tw, "registered\t%s by %s\n", str(out, "registered_at"), str(out, "registered_by"))
+				if err := tw.Flush(); err != nil {
+					return err
+				}
+				if d := str(out, "disclaimer"); d != "" {
+					fmt.Fprintf(w, "\n%s\n", d)
+				}
+				return nil
+			}, out)
+		},
+	}
 }
 
 func newComplianceDepthCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "depth",
 		Short:   "Inspect compliance-depth packs and control monitoring",
-		Long:    "depth groups the surfaces that go BELOW the base framework catalog: the\njurisdiction packs (US state law), the sector overlays, and continuous control\nmonitoring with its snapshots and drift. All four are read-only listings; pack\ngeneration and monitoring are enterprise capabilities, so an open build lists\nhonestly empty rather than fabricating rows.",
-		Example: "  olivares compliance depth us-law\n  olivares compliance depth drift",
+		Long:    "depth groups the surfaces that go BELOW the base framework catalog: the\njurisdiction packs (US state law), the sector overlays, FedRAMP 20x KSIs, and\ncontinuous control monitoring with its snapshots and drift. All five are\nread-only listings; pack generation and monitoring are enterprise capabilities,\nso an open build lists honestly empty rather than fabricating rows.",
+		Example: "  olivares compliance depth us-law\n  olivares compliance depth fedramp",
 	}
 	cmd.AddCommand(
 		simpleListCmd(flags, "us-law", "List US state-law packs",
@@ -1618,6 +1740,17 @@ func newComplianceDepthCmd(flags *authClientFlags) *cobra.Command {
 				return []any{
 					str(m, "id"), str(m, "framework"), str(m, "control_id"),
 					str(m, "from_status"), str(m, "to_status"),
+				}
+			}),
+		simpleListCmd(flags, "fedramp", "List FedRAMP 20x KSI packs",
+			"Lists the FedRAMP 20x Key Security Indicator packs stored for this tenant.\nGeneration is the enterprise compliancedepth add-on (Compliance Packs); without\nit POST /depth/fedramp answers 501 and this list is honestly empty. A listed\npack is a DRAFT: it does not make the tenant FedRAMP authorized.",
+			"  olivares compliance depth fedramp\n  olivares compliance depth fedramp -o json",
+			"/depth/fedramp",
+			[]string{"ID", "SYSTEM", "IMPACT", "ERRORS", "GENERATED"},
+			func(m map[string]any) []any {
+				return []any{
+					str(m, "id"), str(m, "system_name"), str(m, "impact_level"),
+					numOf(m, "error_count"), str(m, "generated_at"),
 				}
 			}),
 	)

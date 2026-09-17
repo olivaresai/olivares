@@ -356,13 +356,35 @@
     "mtd": "Dieser Monat"
   },
   "rates": {
-    "title": "Model rate catalogue",
-    "description": "List prices used to ESTIMATE cost when a provider does not report a dollar amount. These are not what you were billed.",
-    "unit": "micro-USD per 1M tokens (integer)",
-    "empty": "No rates in the catalogue",
-    "inOut": "in {{in}} · out {{out}}",
-    "until": "until {{at}}",
-    "current": "current",
+    "title": "Katalog der Modelltarife",
+    "description": "Listenpreise, mit denen Kosten GESCHÄTZT werden, wenn ein Anbieter keinen Betrag meldet. Das ist nicht der Betrag, der Ihnen berechnet wurde.",
+    "unit": "Mikro-USD pro 1 Mio. Tokens (Ganzzahl)",
+    "unitNote": "Eingabe- und Ausgabetarife sind in {{unit}} angegeben.",
+    "validityNote": "Die Daten zeigen die Gültigkeit, die jeder Eintrag angibt. Diese Liste zeigt nicht, welcher Eintrag für einen bestimmten Kostenposten verwendet wurde.",
+    "empty": "Keine Tarife im Katalog",
+    "emptyHint": "Für diese Organisation sind keine Listenpreise erfasst.",
+    "model": "Modell",
+    "provider": "Anbieter",
+    "inputRate": "Eingabetarif",
+    "outputRate": "Ausgabetarif",
+    "effectiveFrom": "Gültig ab",
+    "effectiveUntil": "Gültig bis",
+    "noEndDate": "Kein Enddatum",
+    "invalid": {
+      "title": "Tarifkatalog nicht verfügbar",
+      "description": "Die Antwort konnte nicht als Tarifkatalog gelesen werden, daher werden keine Tarife angezeigt. Ein erneuter Versuch wiederholt denselben Lesevorgang und ändert nichts.",
+      "reason": {
+        "envelope": "Die Antwort enthält keine lesbare Liste von Tarifeinträgen.",
+        "entry": "Eintrag {{n}} ist kein Tarifdatensatz.",
+        "missing": "In Eintrag {{n}} fehlt das Feld {{field}}.",
+        "empty": "In Eintrag {{n}} ist das Feld {{field}} leer.",
+        "type": "In Eintrag {{n}} hat das Feld {{field}} den falschen Typ.",
+        "negative": "In Eintrag {{n}} ist das Feld {{field}} negativ.",
+        "notInteger": "In Eintrag {{n}} ist das Feld {{field}} keine ganze Zahl.",
+        "unsafe": "In Eintrag {{n}} ist das Feld {{field}} zu groß, um es exakt anzuzeigen.",
+        "timestamp": "In Eintrag {{n}} ist das Feld {{field}} kein RFC-3339-Zeitstempel."
+      }
+    },
     "truncated": "{{n}} Tarife geladen; es gibt weitere",
     "truncatedHint": "Es gibt mehr Modelltarife als angezeigt; diese Seite ist nach Gültigkeitsdatum sortiert, neueste zuerst. Fehlt hier etwas, belegt das nicht, dass es im Katalog fehlt: Kostenrechnung und Vergleich ermitteln den gültigen Tarif aus dem Katalog, unabhängig von dieser Seite."
   },
@@ -455,5 +477,21 @@
     "riskDescription": "Subjekte, die Ausgaben ohne erfüllte Ergebnisse verbrauchen.",
     "riskEmpty": "Kein Subjekt verbraucht Ausgaben ohne Ergebnisse",
     "satisfiedOf": "{{satisfied}} von {{outcomes}} erfüllt"
+  },
+  "evidence": {
+    "atLeast": "Mindestens {{amount}}",
+    "original": "Ursprünglich gemeldet: {{amount}}",
+    "unknown": "Betrag unbekannt",
+    "exact": "Exakter Betrag",
+    "lower_bound": "Untergrenze; Gesamtsumme unvollständig",
+    "historical": "Historischer Wert; ungeprüft",
+    "unavailable": "Nicht verfügbar",
+    "barUnavailable": "Verbrauchsbalken nicht verfügbar: keine exakte Geldbasis.",
+    "forecast": "Prognose (nicht bestätigt): {{amount}}",
+    "cause": "Ursache",
+    "reference": "Alarmreferenz",
+    "digest": "Hash der gespeicherten Evidenz",
+    "lookup": "Nachschlagen",
+    "clear": "Zurücksetzen"
   }
 }

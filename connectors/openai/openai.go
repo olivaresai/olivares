@@ -17,7 +17,7 @@
 // governance of that surface is usage/cost/retention-based by design, with no
 // content collection.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): it performs only GETs, never
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §0-3): it performs only GETs, never
 // persists or logs the admin/org credential, and carries token counts, cost,
 // capabilities and inventory METADATA — never prompts, completions, or key values
 // (the admin-keys API returns only a masked redacted value, never the secret). It

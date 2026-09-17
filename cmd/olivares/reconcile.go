@@ -23,6 +23,7 @@ import (
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/sdk"
+	"github.com/olivaresai/olivares/sdk/event"
 )
 
 // sourceReconciler is the live connector/source reconfiguration engine. It
@@ -67,17 +68,72 @@ type sourceReconciler struct {
 	prepare func(ctx context.Context, def model.SourceDef) (*runtime.PreparedSource, sdk.Config, string)
 
 	mu sync.Mutex
-	// applied maps each spec name to the connector identity + config fingerprint it
-	// is currently wired as. It is the reconciler's view of "what is running",
-	// seeded by the first reconcile at boot and updated on every change. Guarded by
-	// mu (which also single-flights the reconciler's logic; the runtime serializes
-	// its own mutations independently via reloadMu).
+	// applied maps each spec name to the runtime registration it is currently wired
+	// as + the config fingerprint it was wired from. It is the reconciler's view of
+	// "what is running", seeded by the first reconcile at boot and updated on every
+	// change. Guarded by mu (which also single-flights the reconciler's logic; the
+	// runtime serializes its own mutations independently via reloadMu).
 	applied map[string]appliedSource
+	// environmentRef is this node's persistent execution-environment identity
+	// (B1); "" registers sources without a roster snapshot.
+	environmentRef string
 }
 
+// appliedSource records the TWO identities of a wired source separately, because
+// they are two different things and conflating them is what stopped an operator
+// from running two sources of one connector kind:
+//
+//   - registrationName is the source's identity in the runtime. It is the roster
+//     row's own name, so add / rotate / remove / status all address exactly this
+//     source and never a sibling that happens to share a connector.
+//   - componentName is the connector's Descriptor name — WHICH connector serves the
+//     row. Two rows of one kind share it. It is kept for inspection and diagnosis
+//     and nothing keys on it.
 type appliedSource struct {
-	descriptorName string // the connector's runtime identity (Descriptor.Name)
-	fingerprint    string // hash of the identity-affecting definition fields
+	registrationName string // the source's runtime identity (the roster row's name)
+	componentName    string // the connector's descriptor name (its type identity)
+	fingerprint      string // hash of the identity-affecting definition fields
+	// sourceID and sourceRevision are the durable roster row's persistent id and
+	// the version that was SUCCESSFULLY applied (B1). They are the identity the
+	// session plane binds to — a rename keeps them, a delete-and-recreate under the
+	// same name is another id, and a failed rotation leaves the previous revision
+	// here because the previous instance is what keeps running.
+	sourceID       model.ID
+	sourceRevision int64
+}
+
+// registrationFor builds the roster snapshot the runtime stamps on every event of
+// a reconciled source. Empty when this node has no execution-environment identity:
+// the source still runs, its events simply stay unattributed, as they always were.
+func (sr *sourceReconciler) registrationFor(def model.SourceDef) (event.SourceRegistration, bool) {
+	if sr.environmentRef == "" || def.ID.IsZero() || def.Version < 1 {
+		return event.SourceRegistration{}, false
+	}
+	return event.SourceRegistration{SourceID: def.ID.String(), SourceRevision: def.Version, EnvironmentRef: sr.environmentRef}, true
+}
+
+// useEnvironmentRef binds this node's persistent execution-environment identity
+// so reconciled sources are registered WITH their roster snapshot. Called once at
+// boot, before the first reconcile.
+func (sr *sourceReconciler) useEnvironmentRef(ref string) {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	sr.environmentRef = ref
+}
+
+// appliedRevision reports the persistent id and the successfully applied revision
+// of the source registered under name, or false when this node has not applied
+// it. It is what the provider-profile binding port answers "the revision this
+// environment applied" with — the reconciler's own record of what it wired, which
+// a failed Open never advances.
+func (sr *sourceReconciler) appliedRevision(name string) (model.ID, int64, bool) {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	app, ok := sr.applied[name]
+	if !ok || app.sourceID.IsZero() || app.sourceRevision < 1 {
+		return "", 0, false
+	}
+	return app.sourceID, app.sourceRevision, true
 }
 
 // requiresRestartDomains is the honest, always-stated list of configuration this
@@ -108,6 +164,8 @@ func (sr *sourceReconciler) ListSources(ctx context.Context) ([]api.SourceRoster
 	if err != nil {
 		return nil, err
 	}
+	// Keyed by REGISTRATION name — the same name the row was registered under — so
+	// two rows of one kind get their own status instead of sharing the connector's.
 	live := map[string]runtime.Status{}
 	for _, s := range sr.rt.LiveSourceInventory() {
 		live[s.Name] = s.Status
@@ -125,6 +183,20 @@ func (sr *sourceReconciler) ListSources(ctx context.Context) ([]api.SourceRoster
 			Name: d.Name, Kind: d.Kind, Tenant: d.Tenant, PollSeconds: d.PollSeconds,
 			Enabled: d.Enabled, Config: d.Config, Status: sourceStatus(d, applied, live),
 			SourceMode: sourceModeFromConfig(d.Config),
+			// The connector that serves this row, reported BESIDE its name rather
+			// than in place of it. Empty until the row is wired (an external plugin
+			// self-describes only once launched).
+			Component: applied[d.Name].componentName,
+			// The persistent id the session plane binds to (B1), beside the name.
+			ID: d.ID.String(),
+		}
+		// The revision this node applied, from the reconciler's own record and only
+		// when that record is for THIS row: a name whose applied entry belongs to a
+		// recreated row (another id) has nothing applied under this id. This is the
+		// same answer appliedRevision gives the binding port, so a console that
+		// names it cannot name a revision the port would refuse as stale.
+		if app, ok := applied[d.Name]; ok && !app.sourceID.IsZero() && app.sourceID == d.ID && app.sourceRevision >= 1 {
+			e.AppliedRevision = app.sourceRevision
 		}
 		if d.Plugin != nil {
 			e.Plugin = &api.SourcePluginInput{Path: d.Plugin.Path, SHA256: d.Plugin.SHA256, Bundle: d.Plugin.Bundle, PredicateTypes: d.Plugin.PredicateTypes}
@@ -139,7 +211,7 @@ func sourceStatus(d model.SourceDef, applied map[string]appliedSource, live map[
 		return "disabled"
 	}
 	if app, ok := applied[d.Name]; ok {
-		if st, ok := live[app.descriptorName]; ok {
+		if st, ok := live[app.registrationName]; ok {
 			return string(st)
 		}
 	}
@@ -164,7 +236,7 @@ func (sr *sourceReconciler) PutSource(ctx context.Context, actor auth.Principal,
 	if !saved.Enabled {
 		res.Action = "disabled"
 		if app, ok := sr.applied[saved.Name]; ok {
-			if rerr := sr.rt.RemoveSourceLive(ctx, app.descriptorName); rerr != nil {
+			if rerr := sr.rt.RemoveSourceLive(ctx, app.registrationName); rerr != nil {
 				res.Note = "persisted (disabled), but could not stop the running source live; it stops on next reload/restart: " + rerr.Error()
 				return res, nil
 			}
@@ -203,7 +275,7 @@ func (sr *sourceReconciler) DeleteSource(ctx context.Context, actor auth.Princip
 	defer sr.mu.Unlock()
 	res := api.SourceApplyResult{Name: name, Persisted: true, Action: "removed"}
 	if app, ok := sr.applied[name]; ok {
-		if rerr := sr.rt.RemoveSourceLive(ctx, app.descriptorName); rerr != nil {
+		if rerr := sr.rt.RemoveSourceLive(ctx, app.registrationName); rerr != nil {
 			res.Note = "deleted from the roster, but could not stop the running source live; it stops on restart: " + rerr.Error()
 			return res, nil
 		}
@@ -240,14 +312,15 @@ func (sr *sourceReconciler) reconcile(ctx context.Context) (api.SourceReloadRepo
 		}
 	}
 
-	// REMOVE first: applied specs that are gone or now disabled (frees identities
-	// before any re-add). Snapshot the keys so we can delete while iterating.
+	// REMOVE first: applied specs that are gone or now disabled (frees their
+	// registration names before any re-add). Snapshot the keys so we can delete
+	// while iterating.
 	for _, specName := range sortedAppliedKeys(sr.applied) {
 		if _, ok := want[specName]; ok {
 			continue
 		}
 		app := sr.applied[specName]
-		if rerr := sr.rt.RemoveSourceLive(ctx, app.descriptorName); rerr != nil {
+		if rerr := sr.rt.RemoveSourceLive(ctx, app.registrationName); rerr != nil {
 			report.Rejected = append(report.Rejected, api.SourceRejection{Name: specName, Reason: "remove failed: " + rerr.Error()})
 			continue
 		}
@@ -291,41 +364,67 @@ func (sr *sourceReconciler) applyLocked(ctx context.Context, def model.SourceDef
 	if rej != "" {
 		return "", rej
 	}
-	name := ps.Name()
-
-	// Identity-collision guard: two distinct desired sources must not resolve to
-	// the same connector identity (e.g. two in-process sources of one kind, or the
-	// okta/entra shared olivares.idp). Reject the newcomer honestly rather than let
-	// it silently rotate the other source out.
-	if owner, ok := sr.identityOwner(name); ok && owner != def.Name {
-		ps.Discard()
-		return "", fmt.Sprintf("connector identity %q is already used by source %q (only one instance per connector identity)", name, owner)
-	}
-
+	// The row's OWN name is the runtime identity. The store validated and trimmed
+	// it; it is passed through byte for byte — never lower-cased, truncated, or
+	// derived from the kind, the config or a secret. The connector's descriptor is
+	// recorded beside it (component), for inspection only.
+	//
+	// A same-descriptor sibling is NO LONGER a collision: two rows of one kind are
+	// two sources. What is still refused is a duplicate REGISTRATION name, and that
+	// refusal comes from the runtime, which owns the namespace — including a name
+	// already held by a module or an output, which it declines without disturbing
+	// the owner.
+	component := ps.ComponentName()
 	prev, hadPrev := sr.applied[def.Name]
 	poll := time.Duration(def.PollSeconds) * time.Second
 
-	if hadPrev && prev.descriptorName == name {
-		// Same identity → rotate in place (deny-closed: Open new before dropping old).
-		if err := sr.rt.ReplacePreparedSource(ctx, ps, cfg, def.Tenant, poll); err != nil {
+	// Rotate-or-add is decided by what is ACTUALLY registered under this name, not
+	// by the bookkeeping alone: a prior remove that failed leaves an applied entry
+	// with nothing behind it, and rotating that would refuse for ever. A prepared
+	// plugin's subprocess is reaped by whichever call takes it, so the choice has to
+	// be made before either is called — it cannot be retried with the same prepare.
+	// The roster snapshot the runtime stamps on this source's events (B1): the
+	// row's persistent id and the revision being applied. It is recorded in
+	// sr.applied ONLY after the runtime accepted the registration, so a failed Open
+	// leaves the previous revision as "applied" — which it is, because the previous
+	// instance is the one still running.
+	registration, registered := sr.registrationFor(def)
+	record := appliedSource{registrationName: def.Name, componentName: component, fingerprint: fingerprintDef(def)}
+	if registered {
+		record.sourceID, record.sourceRevision = def.ID, def.Version
+	}
+
+	if sr.rt.SourceIsRegistered(def.Name) {
+		// Rotate THIS registration in place (deny-closed: the candidate is Opened
+		// before the running one is dropped). A kind change takes the same path — the
+		// registration name is stable, so only this source is replaced and its
+		// previous connector is quiesced and closed by the swap, never orphaned.
+		var err error
+		if registered {
+			err = sr.rt.ReplacePreparedSourceRegistered(ctx, def.Name, ps, cfg, def.Tenant, poll, registration)
+		} else {
+			err = sr.rt.ReplacePreparedSourceNamed(ctx, def.Name, ps, cfg, def.Tenant, poll)
+		}
+		if err != nil {
 			return "", sr.applyErrReason("rotate", def.Name, err)
 		}
-		sr.applied[def.Name] = appliedSource{descriptorName: name, fingerprint: fingerprintDef(def)}
+		if hadPrev && prev.componentName != component {
+			sr.log.Info("reconfigure: source rotated onto a different connector", "source", def.Name, "from", prev.componentName, "to", component)
+		}
+		sr.applied[def.Name] = record
 		return "rotated", ""
 	}
 
-	// New identity: a fresh add, or a kind change that yields a new identity.
-	if err := sr.rt.AddPreparedSource(ctx, ps, cfg, def.Tenant, poll); err != nil {
+	var err error
+	if registered {
+		err = sr.rt.AddPreparedSourceRegistered(ctx, def.Name, ps, cfg, def.Tenant, poll, registration)
+	} else {
+		err = sr.rt.AddPreparedSourceNamed(ctx, def.Name, ps, cfg, def.Tenant, poll)
+	}
+	if err != nil {
 		return "", sr.applyErrReason("add", def.Name, err)
 	}
-	if hadPrev && prev.descriptorName != name {
-		// The spec previously ran under a different identity (kind changed); the old
-		// one is now an orphan — remove it (the new is already up: deny-closed).
-		if err := sr.rt.RemoveSourceLive(ctx, prev.descriptorName); err != nil {
-			sr.log.Warn("reconfigure: could not remove the prior connector after a kind change", "source", def.Name, "old", prev.descriptorName, "err", err)
-		}
-	}
-	sr.applied[def.Name] = appliedSource{descriptorName: name, fingerprint: fingerprintDef(def)}
+	sr.applied[def.Name] = record
 	if hadPrev {
 		return "rotated", ""
 	}
@@ -387,25 +486,14 @@ func (sr *sourceReconciler) defaultPrepare(ctx context.Context, def model.Source
 // connector Open failure (runtime.ErrSourceOpenFailed) ran against the RESOLVED
 // config — its underlying message can carry a live secret value — so it is
 // genericized exactly like an unresolvable reference; the detail is logged only at
-// Debug. Other failures (not-running, duplicate identity) carry no config and are
-// surfaced verbatim.
+// Debug. Other failures (not-running, a duplicate registration name) carry no
+// config and are surfaced verbatim.
 func (sr *sourceReconciler) applyErrReason(verb, name string, err error) string {
 	if errors.Is(err, runtime.ErrSourceOpenFailed) {
 		sr.log.Debug("reconfigure: connector open failed", "verb", verb, "source", name, "err", err)
 		return verb + " failed: the connector could not be opened with the supplied configuration"
 	}
 	return verb + " failed: " + err.Error()
-}
-
-// identityOwner reports which spec currently owns a connector identity, if any.
-// sr.mu MUST be held.
-func (sr *sourceReconciler) identityOwner(descriptorName string) (specName string, ok bool) {
-	for spec, app := range sr.applied {
-		if app.descriptorName == descriptorName {
-			return spec, true
-		}
-	}
-	return "", false
 }
 
 // fingerprintDef hashes the identity- and behavior-affecting fields of a

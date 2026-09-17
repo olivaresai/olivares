@@ -19,10 +19,11 @@ sirve y que la [referencia de la API](/reference/api/) renderiza:
 
 :::note[Estado de distribución]
 Los SDK viven en el repositorio del producto bajo `clients/` y se versionan
-con él. La publicación en los registros públicos (pkg.go.dev, Maven Central, PyPI,
-npm) ocurre con la publicación pública — hasta entonces, consúmelos desde el repo
+con él. Esta página no afirma que los clientes v26.9.0 estén en
+pkg.go.dev, Maven Central, PyPI o npm. Consúmelos desde el repo
 (ruta del módulo Go de arriba, `mvn -f clients/java install`,
-`pip install ./clients/python`, `npm install ./clients/typescript`).
+`pip install ./clients/python`, `npm install ./clients/typescript`)
+salvo que hayas verificado tú mismo un paquete de registro para esta versión.
 :::
 
 Los cuatro comparten un mismo diseño. Un núcleo escrito a mano implementa el comportamiento

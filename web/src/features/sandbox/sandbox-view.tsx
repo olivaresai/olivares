@@ -77,6 +77,8 @@ function AccionesSandbox({
   const [replayOpen, setReplayOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
   const [sesion, setSesion] = useState('')
+  const [liveRef, setLiveRef] = useState('')
+  const [compareLiveRef, setCompareLiveRef] = useState('')
   const [escenario, setEscenario] = useState('')
   const [base, setBase] = useState('')
   const [candidato, setCandidato] = useState('')
@@ -90,7 +92,12 @@ function AccionesSandbox({
   }
 
   const repetir = useMutation({
-    mutationFn: () => sandboxApi.replay({ session_ref: sesion.trim() }),
+    mutationFn: () =>
+      sandboxApi.replay(
+        liveRef.trim()
+          ? { live_ref: liveRef.trim() }
+          : { session_ref: sesion.trim() },
+      ),
     onSuccess: () => {
       setReplayOpen(false)
       refrescar()
@@ -102,6 +109,7 @@ function AccionesSandbox({
     mutationFn: () =>
       sandboxApi.compare({
         scenario_ref: escenario.trim() || undefined,
+        live_ref: compareLiveRef.trim() || undefined,
         baseline_variant: base.trim(),
         candidate_variant: candidato.trim(),
       }),
@@ -140,12 +148,21 @@ function AccionesSandbox({
                 cero pasos se lee como «la sesión no hizo nada» y no es eso. */}
             <DialogDescription>{t('actions.replayHint')}</DialogDescription>
           </DialogHeader>
-          <Field label={t('actions.sessionRef')}>
+          <Field label={t('actions.liveRef')}>
+            <Input
+              value={liveRef}
+              onChange={(e) => setLiveRef(e.target.value)}
+            />
+          </Field>
+          <Field label={t('actions.legacySessionRef')}>
             <Input value={sesion} onChange={(e) => setSesion(e.target.value)} />
           </Field>
           <DialogFooter>
             <Button
-              disabled={repetir.isPending || sesion.trim() === ''}
+              disabled={
+                repetir.isPending ||
+                (sesion.trim() === '') === (liveRef.trim() === '')
+              }
               onClick={() => repetir.mutate()}
             >
               {t('actions.run')}
@@ -169,6 +186,12 @@ function AccionesSandbox({
                 onChange={(e) => setEscenario(e.target.value)}
               />
             </Field>
+            <Field label={t('actions.liveRef')}>
+              <Input
+                value={compareLiveRef}
+                onChange={(e) => setCompareLiveRef(e.target.value)}
+              />
+            </Field>
             <Field label={t('actions.baseline')}>
               <Input value={base} onChange={(e) => setBase(e.target.value)} />
             </Field>
@@ -183,6 +206,7 @@ function AccionesSandbox({
             <Button
               disabled={
                 comparar.isPending ||
+                (escenario.trim() === '') === (compareLiveRef.trim() === '') ||
                 base.trim() === '' ||
                 candidato.trim() === ''
               }
@@ -440,7 +464,9 @@ function RunStreamDialog({
           <DialogTitle>{t('outputs.title')}</DialogTitle>
           <DialogDescription>
             {run ? (
-              <span className="font-mono text-xs">{run.subject_ref}</span>
+              <span className="font-mono text-xs">
+                {run.live_ref ?? run.subject_ref}
+              </span>
             ) : null}
           </DialogDescription>
         </DialogHeader>

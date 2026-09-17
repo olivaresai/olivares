@@ -60,6 +60,9 @@ type AuthScope interface {
 	// unique at the storage layer. A projection of FederationConfig.ClaimedDomains,
 	// maintained transactionally with the config write and converged at boot.
 	FederationDomainClaims() Repository[model.FederationDomainClaim]
+	// LoginCapability is the transaction-owned global/default login capability
+	// observation port (R5). Repeated calls share one per-transaction state.
+	LoginCapability() LoginCapabilityPort
 	// Secrets is the runtime secret store: named secrets whose value is
 	// sealed at rest, one row per (scope, name) in the system tenant. The engine
 	// resolves a `store:<name>` config reference to the opened value at Open; the

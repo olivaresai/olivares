@@ -616,6 +616,27 @@ async function measureContrast(page: Page, derived: DerivedPair[]) {
       probeParent.style.left = '-9999px'
       probeParent.style.color = SENTINEL_INHERIT
       const probe = document.createElement('div')
+      // ⛔ TRANSITIONS OFF, or every reading is one frame STALE — and this is the
+      // detector-free cure the note above says is still owed.
+      //
+      // The app stylesheet carries `transition: all` (measured on this very probe:
+      // transitionProperty "all", transitionDuration "1e-05s"). While a transition
+      // is in flight getComputedStyle returns the INTERPOLATED value, so a colour
+      // read straight after assignment comes back as the PREVIOUS one. A forced
+      // reflow does not help — the transition has not ticked yet. Both elements
+      // need it: the parent's sentinel was stale too, which is exactly why the
+      // sentinel never caught this and the run reported 0 unmeasured.
+      //
+      // Measured here, 2026-09-01, with a literal as the control:
+      //   before  toRGBA('#28282b') -> oklab(0.9848 …)   (the page's own foreground)
+      //   after   toRGBA('#28282b') -> rgb(40, 40, 43)   (what was actually asked for)
+      // and the dark gate went from 1247/1247 'failing' to 9 real failures.
+      //
+      // Unlike the canary, this does not read a colour back to decide anything:
+      // it removes the reason the reading was stale, so there is nothing left to
+      // detect.
+      probeParent.style.transition = 'none'
+      probe.style.transition = 'none'
       probeParent.appendChild(probe)
       document.body.appendChild(probeParent)
       const canvas = document.createElement('canvas')

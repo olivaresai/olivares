@@ -19,6 +19,9 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// decisionClaimBeforeDMLTestHook observes the lock boundary only in package tests.
+var decisionClaimBeforeDMLTestHook func(context.Context, *sql.Tx) error
+
 // ClaimDecision inserts the durable pending row that owns a delegation handle
 // JTI and a service-scoped nonce. ON CONFLICT DO NOTHING is supported by both
 // engines and, unlike an insert-then-catch strategy, does not abort a Postgres
@@ -46,6 +49,17 @@ func (a *authScope) ClaimDecision(
 		return model.PDPDecisionClaim{}, false, store.ErrReadOnly
 	}
 
+	if err := (&authAuditLog{auditLog: a.ts.auditLog(), ts: a.ts}).LockAppends(ctx); err != nil {
+		a.ts.directoryWriter.poison(err)
+		return model.PDPDecisionClaim{}, false, err
+	}
+
+	if decisionClaimBeforeDMLTestHook != nil {
+		if err := decisionClaimBeforeDMLTestHook(ctx, a.ts.tx); err != nil {
+			a.ts.directoryWriter.poison(err)
+			return model.PDPDecisionClaim{}, false, err
+		}
+	}
 	now := a.ts.s.clock.Now()
 	claim.State = "pending"
 	claim.ClaimedAt = now
@@ -278,6 +292,17 @@ func (a *authScope) FinalizeDecisionClaim(
 	}
 	if verdictHash != sha256HexBytes(verdictJSON) {
 		return false, store.ErrInvalidVerdict
+	}
+	if err := (&authAuditLog{auditLog: a.ts.auditLog(), ts: a.ts}).LockAppends(ctx); err != nil {
+		a.ts.directoryWriter.poison(err)
+		return false, err
+	}
+
+	if decisionClaimBeforeDMLTestHook != nil {
+		if err := decisionClaimBeforeDMLTestHook(ctx, a.ts.tx); err != nil {
+			a.ts.directoryWriter.poison(err)
+			return false, err
+		}
 	}
 	now := a.ts.s.clock.Now()
 	// Reset evidence_anchored to the deny-closed default in the SAME version-locked

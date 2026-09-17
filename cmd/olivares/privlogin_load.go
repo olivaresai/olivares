@@ -9,23 +9,25 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
-	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
 )
 
 // Privileged-login configuration for the composition root.
 //
-// WebAuthn relying party — discrete env keys (FromEnv idiom):
+// WebAuthn relying party — discrete env keys (FromEnv idiom), resolved in
+// publicaddr.go and no longer here:
 //
 //	OLIVARES_WEBAUTHN_RPID     e.g. "panel.example.com" (no scheme)
 //	OLIVARES_WEBAUTHN_ORIGINS  comma-separated exact origins, e.g. "https://panel.example.com"
 //	OLIVARES_WEBAUTHN_RP_NAME  display name (default "Olivares AI")
 //
-// Unset = the API derives RP id/origin per request from the proxy-aware
-// external URL (single-node default); a PARTIAL config (id without origins or
-// vice versa) is refused back to derivation, loudly — half a relying party
-// pins nothing.
+// Unset = the relying party comes from the declared console address, or is
+// derived per request from the proxy-aware external URL when no address was
+// declared. A PARTIAL pair — an ID with no origins, or the reverse — used to be
+// dropped back to derivation with a warning; it is now a startup refusal, and so
+// is a complete pair that cannot work. See resolveWebAuthnRP: an explicit
+// authentication configuration is never replaced silently by a derived one.
 //
 // PIV/CAC — OLIVARES_PIV_CONFIG points at a JSON file:
 //
@@ -39,29 +41,6 @@ import (
 // PIV config yields NIL — the route stays 501 and elevation is impossible.
 // Fail-closed here means NOT enabling a trust route from a config we could not
 // fully validate.
-
-// loadWebAuthnRP reads the pinned relying party, or zero for per-request derivation.
-func loadWebAuthnRP(getenv func(string) string, log *slog.Logger) auth.WebAuthnRP {
-	id := strings.TrimSpace(getenv("OLIVARES_WEBAUTHN_RPID"))
-	var origins []string
-	for _, o := range strings.Split(getenv("OLIVARES_WEBAUTHN_ORIGINS"), ",") {
-		if o = strings.TrimSpace(o); o != "" {
-			origins = append(origins, o)
-		}
-	}
-	if id == "" && len(origins) == 0 {
-		return auth.WebAuthnRP{}
-	}
-	if id == "" || len(origins) == 0 {
-		log.Warn("webauthn: partial relying-party config ignored; deriving per request (set both OLIVARES_WEBAUTHN_RPID and OLIVARES_WEBAUTHN_ORIGINS)")
-		return auth.WebAuthnRP{}
-	}
-	name := strings.TrimSpace(getenv("OLIVARES_WEBAUTHN_RP_NAME"))
-	if name == "" {
-		name = "Olivares AI"
-	}
-	return auth.WebAuthnRP{ID: id, DisplayName: name, Origins: origins}
-}
 
 // pivFile is the OLIVARES_PIV_CONFIG JSON shape.
 type pivFile struct {

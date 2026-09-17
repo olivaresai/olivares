@@ -43,14 +43,14 @@ func emitJava(doc *Document) []byte {
 	b.WriteString(genHeaderJava)
 	fmt.Fprintf(&b, "// API %s, spec sha256:%s.\n\n", doc.APIVersion, doc.SpecHash)
 	b.WriteString("package ai.olivares.client;\n\n")
-	b.WriteString("import java.util.Map;\n\n")
+	b.WriteString("import java.util.List;\nimport java.util.LinkedHashMap;\nimport java.util.Map;\nimport java.util.Objects;\n\n")
 	b.WriteString("/**\n")
 	b.WriteString(" * The control-plane API client: one method per published operation, on top of the\n")
 	b.WriteString(" * hand-written transport core ({@link ClientCore}). Construct it from\n")
 	b.WriteString(" * {@link ClientOptions}, or use {@link #of(String, String)} for the common case.\n")
 	b.WriteString(" *\n")
-	b.WriteString(" * <p>Published JSON schemas use generic values ({@code Object} / {@code Map}) rather\n")
-	b.WriteString(" * than generated DTOs; raw request bytes retain their declared media type. Auth,\n")
+	b.WriteString(" * <p>Ordinary operations use generic values ({@code Object} / {@code Map}); marked\n")
+	b.WriteString(" * typed families use schema-derived records. Raw bytes retain their media type. Auth,\n")
 	b.WriteString(" * tenancy, the single error envelope, cursor pagination, Retry-After-aware retries\n")
 	b.WriteString(" * and the deprecation signal all live in {@link ClientCore}.\n")
 	b.WriteString(" */\n")
@@ -67,12 +67,105 @@ func emitJava(doc *Document) []byte {
 	b.WriteString("    public static Client of(String endpoint, String token) {\n")
 	b.WriteString("        return new Client(ClientOptions.builder().endpoint(endpoint).token(token).build());\n")
 	b.WriteString("    }\n")
+	if documentHasSessionsCommunication(doc) {
+		emitSessionsCommunicationJavaTypes(&b, doc.sessionsCommunicationSchemas)
+		for _, op := range doc.Operations {
+			if op.sessionsCommunicationTyped() && op.sessionsCommunicationHasInput() {
+				emitJavaSessionsCommunicationInput(&b, op)
+			}
+		}
+	}
 
 	for _, op := range doc.Operations {
+		if op.sessionsCommunicationTyped() {
+			emitJavaSessionsCommunicationOp(&b, op)
+			continue
+		}
 		emitJavaOp(&b, op)
 	}
 	b.WriteString("}\n")
 	return []byte(b.String())
+}
+
+func emitJavaSessionsCommunicationInput(b *strings.Builder, op Operation) {
+	components := make([]string, 0, len(op.Parameters)+1)
+	var requiredReferences []string
+	if bodyType := op.sessionsCommunicationBodyType(); bodyType != "" {
+		components = append(components, "/* required */ "+bodyType+" body")
+		requiredReferences = append(requiredReferences, "body")
+	}
+	for _, parameter := range op.Parameters {
+		typ := "String"
+		if parameter.Type == "integer" {
+			typ = "long"
+			if !parameter.Required {
+				typ = "Long"
+			}
+		}
+		required := "optional"
+		if parameter.Required {
+			required = "required"
+			if typ == "String" {
+				requiredReferences = append(requiredReferences, paramIdent(parameter.Name))
+			}
+		}
+		components = append(components, "/* "+required+" */ "+typ+" "+paramIdent(parameter.Name))
+	}
+	fmt.Fprintf(b, "\n    public record %s(\n            %s\n    ) {\n",
+		op.sessionsCommunicationInputType(), strings.Join(components, ",\n            "))
+	if len(requiredReferences) > 0 {
+		fmt.Fprintf(b, "        public %s {\n", op.sessionsCommunicationInputType())
+		for _, field := range requiredReferences {
+			fmt.Fprintf(b, "            Objects.requireNonNull(%s, %q);\n", field, field)
+		}
+		b.WriteString("        }\n")
+	}
+	b.WriteString("    }\n")
+}
+
+func emitJavaSessionsCommunicationOp(b *strings.Builder, op Operation) {
+	name := op.javaName()
+	ret := op.sessionsCommunicationResultType()
+	var pathDecl, pathArgs []string
+	for _, p := range op.PathParams {
+		id := paramIdent(p)
+		pathDecl = append(pathDecl, "String "+id)
+		pathArgs = append(pathArgs, id)
+	}
+	if op.sessionsCommunicationHasInput() {
+		pathDecl = append(pathDecl, op.sessionsCommunicationInputType()+" input")
+		pathArgs = append(pathArgs, "input")
+	}
+	b.WriteString("\n")
+	writeJavaDoc(b, op, false)
+	fmt.Fprintf(b, "    public %s %s(%s) {\n", ret, name, strings.Join(pathDecl, ", "))
+	deleg := append(append([]string{}, pathArgs...), "RequestOptions.NONE")
+	fmt.Fprintf(b, "        return %s(%s);\n    }\n\n", name, strings.Join(deleg, ", "))
+	writeJavaDoc(b, op, true)
+	full := append(append([]string{}, pathDecl...), "RequestOptions options")
+	fmt.Fprintf(b, "    public %s %s(%s) {\n", ret, name, strings.Join(full, ", "))
+	b.WriteString("        Map<String, String> query = new LinkedHashMap<>();\n        Map<String, String> headers = new LinkedHashMap<>();\n")
+	for _, parameter := range op.Parameters {
+		target := "query"
+		if parameter.In == "header" {
+			target = "headers"
+		}
+		field := "input." + paramIdent(parameter.Name) + "()"
+		if parameter.Required {
+			fmt.Fprintf(b, "        %s.put(%q, String.valueOf(%s));\n", target, parameter.Name, field)
+		} else {
+			fmt.Fprintf(b, "        if (%s != null) %s.put(%q, String.valueOf(%s));\n", field, target, parameter.Name, field)
+		}
+	}
+	b.WriteString("        RequestOptions callOptions = RequestOptions.contract(options, query, headers);\n")
+	body := "null"
+	seam := "doJson"
+	if op.sessionsCommunicationBodyType() != "" {
+		body = "input.body()"
+		seam = "doJsonRequired"
+	}
+	fmt.Fprintf(b, "        return %s.from(%s(%q, %q, %s, %s, callOptions));\n    }\n",
+		ret, seam, op.Method, op.Path, javaPathExpr(op.Path), body)
 }
 
 // emitJavaOp writes the two overloads for one operation.
@@ -169,13 +262,88 @@ func writeJavaDoc(b *strings.Builder, op Operation, withOptions bool) {
 			fmt.Fprintf(b, "     *\n     * <p>Stability: %s.\n", op.Stability)
 		}
 	}
-	if op.HasBody && !op.bodyRequiredInSignature() {
-		b.WriteString("     *\n     * <p>The request body is optional; pass {@code null} to omit it.\n")
+	if lines := javaBodyDocLines[op.javaBodyDoc()]; len(lines) > 0 {
+		b.WriteString("     *\n")
+		for index, line := range lines {
+			if index == 0 {
+				fmt.Fprintf(b, "     * <p>%s\n", line)
+			} else {
+				fmt.Fprintf(b, "     * %s\n", line)
+			}
+		}
 	}
 	if op.Deprecated {
 		fmt.Fprintf(b, "     *\n     * @deprecated %s\n", op.docDeprecation())
 	}
 	b.WriteString("     */\n")
+}
+
+// javaBodyDoc is how the Java operation layer actually carries an operation's request
+// body, and therefore what its Javadoc may claim about it. It is derived from the SAME
+// predicates that pick the transport seam in emitJavaOp and emitJavaSessionsCommunicationOp,
+// so the prose cannot describe a different contract than the code beneath it.
+//
+// ⛔ It exists because the prose used to be keyed on bodyRequiredInSignature alone. That is
+// a SIGNATURE rule — false for every stable operation, since the stable document publishes
+// no disposition — so the typed capability projection, whose input record rejects a null
+// body and whose seam is doJsonRequired, was documented as "optional; pass null to omit it"
+// (independent review of N3-A, 2026-09-07). The same predicate called the stable bodies the
+// contract declares required "optional" and said nothing at all about a classified
+// required body, whose null does not disappear but travels as the JSON value null.
+type javaBodyDoc int
+
+const (
+	javaBodyNone             javaBodyDoc = iota // no request body reaches the wire from this method
+	javaBodyTypedRequired                       // typed input record; a null body is rejected on construction
+	javaBodyJSONRequired                        // Object body over doJsonRequired; null travels as JSON null
+	javaBodyRawRequired                         // byte[] body the contract requires; null sends no body
+	javaBodyDeclaredRequired                    // contract-required body behind the stable nullable signature
+	javaBodyOptional                            // contract-optional body; null omits it
+)
+
+func (o Operation) javaBodyDoc() javaBodyDoc {
+	if o.sessionsCommunicationTyped() {
+		if o.sessionsCommunicationBodyType() != "" {
+			return javaBodyTypedRequired
+		}
+		return javaBodyNone
+	}
+	switch {
+	case !o.HasBody:
+		return javaBodyNone
+	case o.bodyRequiredInSignature() && o.RawReqBody:
+		return javaBodyRawRequired
+	case o.bodyRequiredInSignature():
+		return javaBodyJSONRequired
+	case o.BodyRequired:
+		return javaBodyDeclaredRequired
+	default:
+		return javaBodyOptional
+	}
+}
+
+// javaBodyDocLines is the Javadoc paragraph for each body class. javaBodyNone has none,
+// which is what keeps an operation without a body distinct from one whose body is optional.
+// Each null clause states what ClientCore does with it (noBody for a raw or legacy null,
+// Json.write(null) for a required JSON null), not what the server will answer.
+var javaBodyDocLines = map[javaBodyDoc][]string{
+	javaBodyTypedRequired: {
+		"The request body is required: the {@code input} record rejects a {@code null} body.",
+	},
+	javaBodyJSONRequired: {
+		"The request body is required; {@code null} is sent as the JSON value {@code null},",
+		"never omitted.",
+	},
+	javaBodyRawRequired: {
+		"The request body is required and travels as raw bytes; {@code null} sends no body.",
+	},
+	javaBodyDeclaredRequired: {
+		"The contract declares the request body required. This stable signature keeps its",
+		"historical nullable parameter, so {@code null} omits the body instead of satisfying it.",
+	},
+	javaBodyOptional: {
+		"The request body is optional; pass {@code null} to omit it.",
+	},
 }
 
 // emitJavaVersion writes ApiMetadata.java: the API contract provenance the

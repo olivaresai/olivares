@@ -271,6 +271,9 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 	switch env.Action {
 	case CAEPSessionRevoke:
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+				return err
+			}
 			// For session-revoked, SubjectUserID may carry a session ID rather than a
 			// user ID (SSF opaque sub targeting one session). Try it as a session ID
 			// first; fall back to revoking ALL sessions for the user.
@@ -293,6 +296,9 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 	case CAEPTokenRevoke:
 		// token-claims-change: revoke tenant-bound tokens only (not sessions).
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+				return err
+			}
 			if err := revokeUserAccess(ctx, as, actor, userID, tenant, false); err != nil {
 				return err
 			}
@@ -302,6 +308,9 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 	case CAEPCredentialRevoke:
 		// credential-change: revoke all tenant-bound tokens and sessions.
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+				return err
+			}
 			if err := revokeUserAccess(ctx, as, actor, userID, tenant, true); err != nil {
 				return err
 			}
@@ -314,6 +323,9 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 			return a.DegradeSessionAssurance(ctx, actor, userID)
 		}
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+				return err
+			}
 			if err := revokeUserAccess(ctx, as, actor, userID, tenant, true); err != nil {
 				return err
 			}
@@ -328,6 +340,9 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 		}
 		// revokeAllUserCredentials cuts unbound/system tokens the SCIM path cannot reach.
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+				return err
+			}
 			// The disable (SCIMSetMemberActive) and the total credential cut
 			// (revokeAllUserCredentials) run in separate transactions. Between them,
 			// unbound system tokens remain valid — authToken checks t.Revoked, not
@@ -342,6 +357,9 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 	case CAEPCredentialCompromise:
 		// RISC credential-compromise: total credential cut (all tokens + all sessions).
 		return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+				return err
+			}
 			if err := revokeAllUserCredentials(ctx, as, actor, userID); err != nil {
 				return err
 			}
@@ -360,6 +378,9 @@ func (a *Authenticator) dispatchCAEPAction(ctx context.Context, actor Principal,
 // at AAL ≤ 1 are left untouched; revoked sessions are skipped.
 func (a *Authenticator) DegradeSessionAssurance(ctx context.Context, actor Principal, userID model.ID) error {
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+			return err
+		}
 		sessions, _, err := as.Sessions().List(ctx, model.Query{Filters: []model.Filter{
 			{Column: "user_id", Op: model.OpEq, Value: userID.String()},
 		}, Limit: 1000})

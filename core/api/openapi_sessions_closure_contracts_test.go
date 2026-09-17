@@ -31,6 +31,11 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		{http.MethodDelete, "/workspaces/{ref}/files", sessionsClosureBodyless, false},
 		{http.MethodPost, "/workspaces/{ref}/files/dir", sessionsClosureBodyless, false},
 		{http.MethodPost, "/workspaces/{ref}/files/move", sessionsClosureBodyful, true},
+		{http.MethodPost, "/provider-profiles", sessionsClosureBodyful, true},
+		{http.MethodPatch, "/provider-profiles/{ref}", sessionsClosureBodyful, true},
+		{http.MethodPost, "/provider-profiles/{ref}/retire", sessionsClosureBodyless, false},
+		{http.MethodPost, "/provider-source-bindings", sessionsClosureBodyful, true},
+		{http.MethodPost, "/provider-source-bindings/{ref}/revoke", sessionsClosureBodyless, false},
 	}
 	counts := map[sessionsClosureRequestBodyKind]int{}
 	for _, test := range tests {
@@ -48,9 +53,20 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 7, sessionsClosureBodyless: 7}
+	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 10, sessionsClosureBodyless: 9}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
+	}
+	// /runs/{ref}/interrupt LEFT this census when it gained its optional fenced
+	// body, and the departure is asserted rather than assumed. Declaring it bodyless
+	// here would not have failed anything — sessionsClosureRequestBody publishes
+	// nothing for a bodyless route and the run-control switch in openapi_modules.go
+	// would still have emitted the schema — so the census would have gone on
+	// claiming "no body" about a route that has one. Its contract is pinned with its
+	// siblings in TestSessionsRuntimeWorkControlOpenAPI.
+	interrupt := moduleRoute{ns: "sessions", method: http.MethodPost, pattern: "/runs/{ref}/interrupt"}
+	if decl, ok := sessionsClosureRequestBodyDeclarationFor(interrupt); ok {
+		t.Fatalf("interrupt is declared in the closure census as %#v; its body belongs with /input and /stop", decl)
 	}
 }
 
@@ -70,5 +86,16 @@ func TestSessionsClosureSchemasMatchStrictDTOs(t *testing.T) {
 	workspace := sessionsCreateWorkspaceSchema()
 	if got := capabilitiesSortedStrings(workspace["required"]); !reflect.DeepEqual(got, []string{"root_path"}) {
 		t.Fatalf("workspace required = %v", got)
+	}
+	profile := sessionsCreateProviderProfileSchema()
+	if profile["additionalProperties"] != false {
+		t.Fatal("provider profile decoder rejects unknown fields")
+	}
+	if got := capabilitiesSortedStrings(profile["required"]); !reflect.DeepEqual(got, []string{"config_home", "driver", "user_home"}) {
+		t.Fatalf("provider profile required = %v", got)
+	}
+	binding := sessionsCreateProviderBindingSchema()
+	if got := capabilitiesSortedStrings(binding["required"]); !reflect.DeepEqual(got, []string{"profile_ref", "source_id", "source_revision"}) {
+		t.Fatalf("provider binding required = %v", got)
 	}
 }

@@ -1,0 +1,267 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Manual three-package race profile. Not race-full. Not a release consumer.
+# Dispatch only; one closed matrix; max-parallel 1; existing race-rest PG
+# service, roles, wrapper, Go 60m / step 90m / job 175m.
+name: race-package-profile
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full 40-hex commit SHA; must equal HEAD and GITHUB_SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: race-package-profile-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  package-profile:
+    name: profile ${{ matrix.artifact }}
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 175
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - artifact: core-api
+            package: core/api
+          - artifact: core-auth
+            package: core/auth
+          - artifact: core-sqlstore
+            package: core/internal/store/sqlstore
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
+    env:
+      OLIVARES_GATE_STRICT_PG: "1"
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: allocate evidence before preparation
+        id: allocate
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/race-package-profile-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ matrix.artifact }}"
+          echo "OUT=$out" >> "$GITHUB_ENV"
+          python3 scripts/ci-race-package-profile.py run --phase allocate \
+            --package ${{ matrix.package }} --out "$out"
+      - name: require expected_sha to match this checkout
+        id: sha-guard
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          case "${EXPECTED_SHA}" in
+            *[!0-9a-fA-F]*|'')
+              echo "::error::expected_sha must be exactly 40 hex characters" >&2
+              exit 1 ;;
+          esac
+          if [ "${#EXPECTED_SHA}" -ne 40 ]; then
+            echo "::error::expected_sha must be exactly 40 hex characters (len=${#EXPECTED_SHA})" >&2
+            exit 1
+          fi
+          exp="$(printf '%s' "$EXPECTED_SHA" | tr 'A-F' 'a-f')"
+          head="$(git rev-parse HEAD)"
+          echo "HEAD=$head GITHUB_SHA=$GITHUB_SHA expected=$exp artifact=${{ matrix.artifact }} runner=${RUNNER_NAME:-} os=${RUNNER_OS:-} arch=${RUNNER_ARCH:-}"
+          if [ "$head" != "$exp" ] || [ "$GITHUB_SHA" != "$exp" ]; then
+            echo "::error::HEAD, GITHUB_SHA and expected_sha disagree; refusing to measure a moved cut" >&2
+            exit 1
+          fi
+      - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
+        run: |
+          {
+            echo "GOCACHE=$RUNNER_TEMP/gocache"
+            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOPATH=$RUNNER_TEMP/gopath"
+            echo "GOBIN=$RUNNER_TEMP/gopath/bin"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: setup-go
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - name: record executed Go and cache volume
+        run: |
+          set -euo pipefail
+          echo "setup_go_cache_hit=${{ steps.setup-go.outputs.cache-hit }}"
+          go version
+          gobin="$(command -v go)"
+          echo "go_path=$gobin"
+          sha256sum "$gobin"
+      - name: TMPDIR where an extracted binary can actually run
+        id: tmpdir
+        run: |
+          corto=""
+          # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
+          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
+          # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
+          # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
+          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
+          # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
+          # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
+          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
+          # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
+          # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
+          # que Go renueva al crear cada go-build*, y lo limita al usuario del runner.
+          # Y MIDE el espacio libre de cada candidato antes de probarlo: el «no space left» de hoy
+          # salio tres pasos mas abajo, dentro de `go build`; con la cifra aqui se lee en este paso.
+          # ⛔ EL BARRIDO VA EN SU PROPIO BUCLE, y es una correccion MEDIDA: F2 de la revision
+          # independiente del 2026-09-16 (assessments/engineering/r116-ci-host-residue-fixes/REVIEW.md).
+          # Dentro del bucle de seleccion solo alcanzaba a los candidatos probados ANTES del `break`,
+          # asi que con /var/tmp elegido /dev/shm NO SE BARRIA NUNCA — justo el tmpfs cuyo residuo
+          # tumbo la corrida 35076921214 y que en la 35081963451, con el barrido ya enviado, seguia
+          # al 43 % (18187 MiB libres de 32039). Reproducido aqui: con el barrido dentro del bucle
+          # los arboles viejos de /dev/shm y /run/user sobreviven; con este bucle aparte, no.
+          # ⛔ Y BARRE TAMBIEN `olv-exec-<pid>` (F5). Censo de los nombres que los guiones de este
+          # repositorio crean DENTRO de un candidato: `olv$$`, este paso; y `olv-exec-$$`, la sonda
+          # `probar` de `hook-only-legs` en mainline-ci.yml. El respaldo `olivares_pick_exec_workdir o`
+          # crea `o.XXXXXX` y NO se barre a proposito: el patron `o.??????` casaria nombres ajenos
+          # (`o.config` mide exactamente seis), y un barrido solo se amplia a patrones que no puedan
+          # casar lo que no es nuestro. Los parentesis del `find` NO son decorativos: sin ellos `-o`
+          # reparte los predicados, el `-exec` cuelga solo de la segunda rama y llega a borrar
+          # FICHEROS que no son directorios. Medido en las dos formas antes de elegir esta.
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -n "$c" ] && [ -d "$c" ]; then
+              find "$c" -maxdepth 1 -mindepth 1 -type d \( -name 'olv[0-9]*' -o -name 'olv-exec-[0-9]*' \) -user "$(id -un)" -mmin +360 -exec rm -rf {} + 2>/dev/null || true
+            fi
+          done
+          for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
+            if [ -z "$c" ]; then echo "  candidato <vacio>: variable sin definir"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidato $c: NO EXISTE"; continue; fi
+            # ⛔ `|| true` AL FINAL, y es una correccion MEDIDA: F3 de la revision independiente del
+            # 2026-09-16. El bloque corre bajo `bash --noprofile --norc -eo pipefail` (asi ejecuta
+            # GitHub un `run:` con `defaults.run.shell: bash`), asi que un `df` que falle sobre un
+            # montaje que se va entre el `[ -d ]` y esta linea MATA EL PASO — y con el, el respaldo
+            # `exec-workdir.sh` de abajo, que es lo que convierte esto en degradacion suave.
+            # Reproducido con esa misma shell: la tuberia aborta el bucle, no imprime nada y el
+            # texto posterior al bucle no se alcanza (rc 1). Una MEDIDA no decide el paso.
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidato %s: %d MiB libres de %d en %s\n", c, $4/1024, $2/1024, $1}' || true
+            d="$c/olv$$"
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidato $c: no puedo crear dentro"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidato $c: no puedo escribir"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidato $c: chmod falla"; rm -rf "$d"; continue; }
+            rc=0; "$d/.p" 2>/dev/null || rc=$?
+            rm -f "$d/.p"
+            if [ "$rc" -ne 7 ]; then echo "  candidato $c: NO EJECUTA (rc=$rc; 126 = noexec o sin permiso)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidato $c: ejecuta pero la ruta mide ${#d} (>24)"; rm -rf "$d"; continue; fi
+            corto="$d"; break
+          done
+          if [ -n "$corto" ]; then
+            echo "TMPDIR=$corto" >> "$GITHUB_ENV"
+            echo "TMPDIR corto y ejecutable: $corto (${#corto} caracteres)"
+          else
+            . scripts/lib/exec-workdir.sh
+            d="$(olivares_pick_exec_workdir o)" || {
+              echo "::error::ningun directorio permite ejecutar un binario"
+              exit 1
+            }
+            echo "TMPDIR=$d" >> "$GITHUB_ENV"
+            echo "::warning::sin candidato CORTO; uso $d (${#d} caracteres): un socket unix puede pasarse de 108"
+          fi
+      - name: resolve the ephemeral Postgres port into the test DSNs
+        id: pg-port
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+        # The instrument invokes scripts/ci-postgres-service.sh resolve with a receipt.
+        run: |
+          python3 scripts/ci-race-package-profile.py run --phase resolve \
+            --package ${{ matrix.package }} --out "$OUT"
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        id: pg-roles
+        env:
+          PGPASSWORD: postgres
+        # The instrument invokes scripts/ci-postgres-service.sh provision with a receipt.
+        run: |
+          python3 scripts/ci-race-package-profile.py run --phase provision \
+            --package ${{ matrix.package }} --out "$OUT"
+      - name: inventory the three closed packages
+        id: inventory
+        run: |
+          python3 scripts/ci-race-package-profile.py run --phase inventory \
+            --package ${{ matrix.package }} --out "$OUT"
+      - name: measure one package
+        id: measure
+        timeout-minutes: 90
+        env:
+          PYTHONUNBUFFERED: "1"
+          PG_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ci-race-package-profile.py run \
+            --package ${{ matrix.package }} \
+            --out "$OUT"
+      - name: preserve incomplete preparation or interrupted measure
+        if: always() && steps.allocate.outcome == 'success'
+        env:
+          RPP_SHA: ${{ steps.sha-guard.outcome }}
+          RPP_SETUP: ${{ steps.setup-go.outcome }}
+          RPP_TMPDIR: ${{ steps.tmpdir.outcome }}
+          RPP_RESOLVE: ${{ steps.pg-port.outcome }}
+          RPP_PROVISION: ${{ steps.pg-roles.outcome }}
+          RPP_INVENTORY: ${{ steps.inventory.outcome }}
+          RPP_MEASURE: ${{ steps.measure.outcome }}
+        run: |
+          python3 scripts/ci-race-package-profile.py run --phase finalize-prepare \
+            --package ${{ matrix.package }} --out "$OUT"
+      - name: summarize (admits partial evidence)
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${OUT:-}" ] && [ -d "$OUT" ]; then
+            python3 scripts/ci-race-package-profile.py summarize --out "$OUT"
+          else
+            echo "summarize: out directory absent; nothing to print"
+          fi
+      - name: integrity of the observation
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OUT:-}" ] || [ ! -d "$OUT" ]; then
+            echo "::error::integrity: out directory absent"
+            exit 3
+          fi
+          python3 scripts/ci-race-package-profile.py summarize --out "$OUT" --require-complete
+      - name: upload package profile
+        id: upload
+        if: always() && steps.allocate.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: race-package-profile-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.artifact }}
+          path: ${{ env.OUT }}
+          if-no-files-found: error
+          retention-days: 7
+      - name: remove this assignment's scratch
+        if: ${{ !cancelled() && steps.upload.outcome == 'success' && steps.upload.outputs.artifact-id != '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "${OUT:-}" ] && [ -d "$OUT" ]; then
+            rm -rf "$OUT"
+          fi

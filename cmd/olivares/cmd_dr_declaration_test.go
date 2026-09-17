@@ -231,6 +231,13 @@ func TestDRRestoreOverALiveEstateRefusesWithoutADeclaration(t *testing.T) {
 // This asserts the copy exists and still holds the PREVIOUS bytes — not merely
 // that a file with the right name appeared.
 func TestDRRestoreWithoutInPlacePreservesWhatItOverwrites(t *testing.T) {
+	// Sella la version del binario: el manifiesto de DR la toma de `version`, que en un binario
+	// de test vale "dev", y `dr.CheckImportCompatibility` rechaza una version productora no
+	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
+	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
+	prevVersion := version
+	version = "26.9.0"
+	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 
 	livePath := filepath.Join(src, "olivares.db")
@@ -296,6 +303,13 @@ func seedExtraTenant(t *testing.T, dataDir string) {
 // merely friction: it lands in the restored estate's SIGNED ledger, which is the
 // only place evidence of a restore survives the restore.
 func TestDRRestoreOverALiveEstateRecordsTheDeclaration(t *testing.T) {
+	// Sella la version del binario: el manifiesto de DR la toma de `version`, que en un binario
+	// de test vale "dev", y `dr.CheckImportCompatibility` rechaza una version productora no
+	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
+	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
+	prevVersion := version
+	version = "26.9.0"
+	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 
 	out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
@@ -347,6 +361,13 @@ func TestDRRestoreOverALiveEstateRecordsTheDeclaration(t *testing.T) {
 // "recorded" from "printed", and a restore record nobody can read back is not
 // evidence.
 func TestDRRestoreDeclarationReasonReachesTheStoredRow(t *testing.T) {
+	// Sella la version del binario: el manifiesto de DR la toma de `version`, que en un binario
+	// de test vale "dev", y `dr.CheckImportCompatibility` rechaza una version productora no
+	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
+	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
+	prevVersion := version
+	version = "26.9.0"
+	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 	const reason = "INC-42 ransomware recovery"
 	if out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",
@@ -401,6 +422,13 @@ func TestDRRestoreDeclarationReasonReachesTheStoredRow(t *testing.T) {
 // must not gain a single flag. A control that also fires when there is nothing to
 // protect is friction an operator will route around in an outage.
 func TestDRRestoreIntoAnEmptyTargetNeedsNoDeclaration(t *testing.T) {
+	// Sella la version del binario: el manifiesto de DR la toma de `version`, que en un binario
+	// de test vale "dev", y `dr.CheckImportCompatibility` rechaza una version productora no
+	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
+	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
+	prevVersion := version
+	version = "26.9.0"
+	t.Cleanup(func() { version = prevVersion })
 	_, bundle, pf := drDeclarationFixture(t)
 	dst := t.TempDir()
 
@@ -418,6 +446,13 @@ func TestDRRestoreIntoAnEmptyTargetNeedsNoDeclaration(t *testing.T) {
 // live-replacement path, the one measured replacing a real estate: --in-place
 // always targets a live data dir, so it always has something to destroy.
 func TestDRRestoreInPlaceRequiresAndRecordsTheDeclaration(t *testing.T) {
+	// Sella la version del binario: el manifiesto de DR la toma de `version`, que en un binario
+	// de test vale "dev", y `dr.CheckImportCompatibility` rechaza una version productora no
+	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
+	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
+	prevVersion := version
+	version = "26.9.0"
+	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 
 	out, err := runDR("restore", "--in", bundle, "--data-dir", src, "--engine", "sqlite",

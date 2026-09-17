@@ -92,5 +92,25 @@
     "denied": "Gerätecode {{code}} abgelehnt",
     "notFound": "Keine ausstehende Anfrage für diesen Benutzercode.",
     "expired": "Diese Anfrage ist abgelaufen oder wurde bereits verwendet."
+  },
+  "firewall": {
+    "title": "Messages-Inspektor",
+    "intro": "Ob dieser Control-Plane-Prozess mit dem an den Messages-Proxy angehängten Inhaltsinspektor gestartet ist.",
+    "refresh": "Erneut prüfen",
+    "limit": "Dies ist, was der antwortende Prozess beim Start aufgezeichnet hat. Es sagt nicht, ob der Proxy jetzt erreichbar ist, welche Richtlinie geladen ist oder ob eine einzelne Anfrage geprüft wurde.",
+    "states": {
+      "unobserved": "Nicht gemeldet",
+      "pep_not_composed": "Proxy nicht gestartet",
+      "inspector_absent": "Inspektor nicht angehängt",
+      "inspector_attached": "Inspektor angehängt",
+      "unreadable": "Konnte nicht gelesen werden"
+    },
+    "statesHint": {
+      "unobserved": "Dieser Prozess hat keinen Anhängezustand aufgezeichnet. Es wird in keine Richtung etwas behauptet.",
+      "pep_not_composed": "Der Messages-Proxy wurde in diesem Prozess nicht gestartet, daher konnte sich kein Inspektor anhängen.",
+      "inspector_absent": "Der Proxy startete ohne angehängten Inhaltsinspektor.",
+      "inspector_attached": "Beim Start wurde ein Inspektor angehängt. Es kann der restriktive Ersatz sein, der installiert wird, wenn die Konfiguration nicht lesbar ist; dies bedeutet also nicht, dass Inhalte wie konfiguriert geprüft werden.",
+      "unreadable": "Die Antwort entsprach keinem Zustand, den diese Konsole kennt. Über den Inspektor wird nichts behauptet."
+    }
   }
 }

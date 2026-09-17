@@ -33,12 +33,17 @@
     "home": "Resumen",
     "onboarding": "Asistente de configuración",
     "inventory": "Inventario",
-    "sessions": "Sesiones",
+    "sessions": "Observar sesiones",
     "accessMap": "Mapa de acceso",
     "health": "Salud y SLA",
     "capabilities": "MCP y skills",
     "protocolBindings": "Enlaces de protocolo",
-    "console": "Consola de control",
+    "communications": "Comunicaciones",
+    "communicationsInbox": "Bandeja de comunicaciones",
+    "communicationsNew": "Nuevo canal",
+    "communicationsAdministration": "Administración de canales",
+    "communicationsHandoffs": "Traspasos",
+    "console": "Administración",
     "permissions": "Permisos",
     "identity": "Identidad y NHI",
     "claudePolicy": "Gobierno de Claude Code",
@@ -48,7 +53,7 @@
     "catalog": "Catálogo",
     "killswitch": "Kill switch",
     "work": "Trabajo",
-    "agentops": "Claude Code",
+    "agentops": "Operar sesiones",
     "agentArtifacts": "Artefactos de agente",
     "models": "Modelos",
     "modelOps": "Operaciones de modelos",
@@ -84,7 +89,9 @@
     "reporting": "Informes",
     "postureExport": "Exportación de postura",
     "automations": "Automatizaciones",
-    "agentcoreExport": "Exportación a AgentCore"
+    "agentcoreExport": "Exportación a AgentCore",
+    "providerProfiles": "Perfiles de proveedor",
+    "providerBindings": "Vínculos de fuentes"
   },
   "workspace": {
     "switch": "Cambiar espacio de trabajo",
@@ -99,12 +106,17 @@
     "home": "Visión general del estado y la salud del estate",
     "onboarding": "Configuración del despliegue paso a paso",
     "inventory": "Descubre y cataloga cada agente, MCP y modelo",
-    "sessions": "Operación viva de agentes y cronologías",
+    "sessions": "Observa sesiones vivas y descubiertas con sus cronologías; comparte pantalla con Operar sesiones",
     "accessMap": "Qué lee y escribe cada agente (R/RW)",
     "health": "Disponibilidad y SLA de agentes y MCP",
     "capabilities": "Gobierna servidores MCP, skills y herramientas",
     "protocolBindings": "Compón y reconcilia enlaces gobernados A2A y MCP",
-    "console": "Da de alta usuarios, conecta SSO/IdP y gestiona workspaces y grupos de agentes.",
+    "communications": "Canales, avisos directos y bandeja personal del workspace seleccionado",
+    "communicationsInbox": "Tu bandeja exacta: entregas dirigidas a ti, leídas en fresco y acusadas de forma explícita",
+    "communicationsNew": "Crea un canal con concesiones iniciales explícitas",
+    "communicationsAdministration": "Administra canales: configuración e historial de concesiones, cada acto bajo el ETag actual del canal",
+    "communicationsHandoffs": "Ofertas de responsabilidad de trabajo dirigidas a ti: lee el contexto y acepta o rechaza",
+    "console": "Usuarios, SSO/IdP, workspaces, grupos de agentes, roles, secretos, conectores, claves API y la licencia de esta instalación",
     "permissions": "Identidad, roles y aprobaciones",
     "identity": "SSO, SCIM, el inventario NHI y el grafo WIF",
     "claudePolicy": "Política gestionada, hooks, MCP, sandbox y policy-as-code",
@@ -113,7 +125,7 @@
     "catalog": "Agentes y capacidades aprobados y curados",
     "killswitch": "Parada de emergencia, recuperación con doble control y contención guardiana",
     "work": "El backlog durable entre sesiones: unidades, dependencias, aceptación y decisiones",
-    "agentops": "Crea, adjunta y gobierna sesiones de Claude Code — sin SSH",
+    "agentops": "Crea, adjunta y gobierna sesiones de Claude Code — sin SSH; comparte pantalla con Observar sesiones",
     "agentArtifacts": "Skills, extensiones MCP y ficheros de instrucciones — registro, postura y BOM de cadena de suministro",
     "models": "Modelos, enrutado y claves de proveedor",
     "modelOps": "Modelos propios, admisión y despliegues",
@@ -129,8 +141,8 @@
     "redteam": "Pruebas adversariales de tus agentes",
     "dashboards": "KPIs ejecutivos e informes",
     "observability": "Salud de ingesta por estándar y trazas distribuidas",
-    "platforms": "Superficies de despliegue, matriz de compliance y ciclo de vida de modelos por plataforma",
-    "rateLimits": "Inventario de límites de Anthropic (solo lectura)",
+    "platforms": "Superficies de plataformas de proveedor, matriz de compliance y ciclo de vida de modelos por plataforma — referencia, no tus servidores",
+    "rateLimits": "Inventario de límites de uso de Anthropic y su disponibilidad (referencia de solo lectura)",
     "attestation": "Atestación de releases — SLSA, SBOM, VEX y Scorecard",
     "apiPlayground": "Explora y prueba la API del control plane",
     "audit": "Registro de evidencia a prueba de manipulación",
@@ -142,7 +154,16 @@
     "alerting": "Enruta hallazgos a destinos e inspecciona entregas",
     "reporting": "Genera y descarga informes de gobernanza",
     "postureExport": "Exporta la postura real para una torre de control",
-    "automations": "Los tres raíles de automatización y su catálogo de triggers"
+    "automations": "Los tres raíles de automatización y su catálogo de triggers",
+    "providerProfiles": "Registra y administra los directorios de proveedor bajo los que se lanzan las sesiones, y lee su configuración bajo demanda",
+    "providerBindings": "Dedica fuentes configuradas, en la revisión que aplicó este nodo, a perfiles de proveedor",
+    "routinePolicies": "Suelos de cadencia, topes de concurrencia, requisitos de aprobación, listas permitidas de cron y entornos bloqueados para las rutinas de Claude Code",
+    "agentcoreExport": "Planifica, revisa y aplica la proyección de las reglas de gobierno de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada",
+    "workspace-templates": "Instantáneas reutilizables de hooks, ajustes, conectores y políticas para sesiones de workspace",
+    "eventing": "Suscripciones webhook salientes, el registro de eventos capturados, las entregas y la cola de mensajes muertos",
+    "team-costs": "Atribución de costes por equipo: sesiones, tokens y gasto, con tendencia diaria y desglose por proyecto y por modelo",
+    "backups": "Instantáneas cifradas de recuperación ante desastres del control plane: crear, programar, descargar y restaurar",
+    "logs": "El flujo de registros del motor en vivo, con filtros por nivel y módulo, búsqueda y pausa"
   },
   "commandActions": {
     "eventing": {
@@ -154,5 +175,122 @@
     "orchestration": {
       "createSchedule": "Nueva programación"
     }
+  },
+  "aliases": {
+    "sessions": "Sesiones",
+    "agentops": "Claude Code · agentops",
+    "console": "Consola de control · Administración del tenant"
+  },
+  "areas": {
+    "infrastructure": {
+      "label": "Infraestructura",
+      "question": "¿Qué recursos y espacios tengo?",
+      "sections": {
+        "estate": "Inventario y espacios"
+      }
+    },
+    "ai": {
+      "label": "IA",
+      "question": "¿Qué sesiones, perfiles y modelos observo o gestiono?",
+      "sections": {
+        "sessions": "Sesiones",
+        "environments": "Perfiles y entornos",
+        "models": "Modelos",
+        "execution": "Ejecución especializada",
+        "provider-reference": "Referencia del proveedor"
+      }
+    },
+    "data-context": {
+      "label": "Datos y contexto",
+      "question": "¿Qué conocimiento, capacidades y artefactos conecto o reutilizo?",
+      "sections": {
+        "capabilities": "Capacidades",
+        "knowledge": "Conocimiento",
+        "artifacts": "Artefactos"
+      }
+    },
+    "work-communications": {
+      "label": "Trabajo y comunicaciones",
+      "question": "¿Qué trabajo coordino y cómo se comunica?",
+      "sections": {
+        "work": "Trabajo",
+        "communications": "Comunicaciones"
+      }
+    },
+    "automation": {
+      "label": "Automatización",
+      "question": "¿Qué flujos, eventos y notificaciones automatizo?",
+      "sections": {
+        "workflows": "Flujos y orquestación",
+        "events": "Eventos y notificaciones"
+      }
+    },
+    "security-identity": {
+      "label": "Seguridad e identidad",
+      "question": "¿Quién accede, con qué reglas, y cómo protejo el entorno?",
+      "sections": {
+        "access": "Identidad y acceso",
+        "policy": "Políticas",
+        "defense": "Protección y respuesta",
+        "boundaries": "Fronteras de gobierno"
+      }
+    },
+    "deployment": {
+      "label": "Despliegue",
+      "question": "¿Cómo preparo y controlo un despliegue?",
+      "sections": {
+        "deployments": "Despliegues"
+      }
+    },
+    "observation": {
+      "label": "Observabilidad y evidencias",
+      "question": "¿Qué ocurre, cuánto cuesta y qué puedo demostrar?",
+      "sections": {
+        "operations": "Estado y actividad",
+        "cost-adoption": "Costes y adopción",
+        "audit-recordings": "Auditoría y grabaciones",
+        "evaluation-evidence": "Evaluación y evidencias"
+      }
+    },
+    "system": {
+      "label": "Sistema y ajustes",
+      "question": "¿Cómo administro la organización, la instalación y mis preferencias?",
+      "sections": {
+        "administration": "Administración",
+        "maintenance": "Instalación y mantenimiento",
+        "development": "Herramientas de desarrollo",
+        "preferences": "Preferencias personales"
+      }
+    }
+  },
+  "directory": {
+    "areas": "Áreas",
+    "expand": "Mostrar los módulos de {{area}}",
+    "collapse": "Ocultar los módulos de {{area}}",
+    "expandAll": "Expandir todas las áreas",
+    "collapseAll": "Contraer todas las áreas",
+    "modulesOf": "Módulos de {{area}}",
+    "empty": "No hay entradas de esta área disponibles para ti",
+    "emptyHint": "Las entradas aparecen aquí cuando tu rol en la organización actual da acceso a un módulo de esta área.",
+    "backHome": "Ir al Resumen",
+    "area": "Área"
+  },
+  "personal": {
+    "favorites": "Favoritos",
+    "add": "Añadir {{name}} a favoritos",
+    "remove": "Quitar {{name}} de favoritos",
+    "viewAll": "Ver todos ({{count}})",
+    "manage": "Gestionar favoritos",
+    "empty": "Marca un módulo con la estrella para guardarlo aquí.",
+    "scope": "Guardados en este navegador para tu cuenta y organización.",
+    "temporary": "Los favoritos se mantienen en memoria por ahora.",
+    "clear": "Borrar favoritos",
+    "recents": "Recientes",
+    "recentManage": "Gestionar recientes",
+    "recentViewAll": "Ver recientes ({{count}})",
+    "recentEmpty": "Aquí aparecen los módulos que abres.",
+    "recentScope": "Abiertos en esta pestaña. Se borran al recargar, cerrar sesión o cambiar de cuenta u organización.",
+    "recentRemove": "Quitar {{name}} de recientes",
+    "recentClear": "Borrar recientes"
   }
 }

@@ -30,10 +30,15 @@ for this guide).
 
 - A Linux host with systemd and `curl`.
 - **Go 1.26+** to build the binary (the store is pure-Go SQLite, so no C
-  toolchain). Releases with signed prebuilt artifacts ship at the first public
-  release — until then you build from a checkout, and
-  [verify a release](/how-to/verify-a-release/) documents the chain you will
-  use once they exist.
+  toolchain). A prior tagged release already shipped signed archives and packages. This
+  tree's canon is **v26.9.0**; the install-surface witness still records
+  GitHub archives and native packages as **not-published** until that tag's
+  release job runs (`docs/releases/v26.9.0-install-surfaces.json`). Until
+  those assets exist, build from a checkout. The verified installer on
+  `main` (`scripts/install.sh`) is a published surface independent of the
+  tag. [Verify a release](/how-to/verify-a-release/) is the chain for
+  artifacts once they exist; [Install from a package](/how-to/install-from-packages/)
+  is the `.deb` / `.rpm` / `.apk` path.
 
 ## 1. Build and install the binary
 
@@ -146,7 +151,17 @@ makes that administrator its owner:
   Token:    olst_…
 
 The console serves HTTPS with a self-signed certificate on first boot — your
-browser will warn once; that is expected. The token is shown ONCE and is
+browser will warn once; that is expected.
+
+Passkeys will not work at that address:
+a browser will not run a passkey ceremony at an IP address. Reach the
+console by a host name.
+On this machine the same console also answers at
+  https://localhost:8443
+and at that address the relying party is derived from the name, which the
+verifier accepts.
+
+The token is shown ONCE and is
 single-use. Prefer the API? POST /v1/setup {"token":"…","email":"…",
 "password":"…"} — add "organization":"…" to name it (default: "Default
 Organization"). The reply carries the new organization's tenant_id.

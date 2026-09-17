@@ -244,6 +244,14 @@ func New(opts ...Option) *Module {
 	clock := m.clock
 	m.grants.now = func() time.Time { return clock.Now().Time() }
 	m.grants.maxStaleness = m.offlineStaleness
+	// C3-L1: bind the private, read-only durable loader the typed evidence paths use
+	// when a tenant has no usable runtime state, and its operational admission state.
+	// Both are wired here, before serving, on the same happens-before edge as the
+	// fields above. The admission clock is time.Now DIRECTLY, not the module clock:
+	// retry arithmetic needs monotonic readings, which model.Clock's UTC conversion
+	// discards. Policy freshness and evidence keep their existing clocks.
+	m.grants.loadTenant = m.reloadTenantGrants
+	m.grants.admission = newEvidenceLoadAdmission(time.Now)
 	return m
 }
 

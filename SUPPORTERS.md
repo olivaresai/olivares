@@ -39,6 +39,7 @@ There is no automation behind this file today, and saying so is the point — an
 empty section, not a script that failed quietly. When there is enough traffic to justify generating
 it, the generator lands with a gate that proves it ran.
 
-**To sponsor:** the **Sponsor** button on this repository, or
-[github.com/sponsors/fran-olivares](https://github.com/sponsors/fran-olivares).
+**To sponsor:** the **Sponsor** button on this repository,
+[github.com/sponsors/olivaresai](https://github.com/sponsors/olivaresai) (the project), or
+[github.com/sponsors/fran-olivares](https://github.com/sponsors/fran-olivares) (the maintainer).
 

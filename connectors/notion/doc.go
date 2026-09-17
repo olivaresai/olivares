@@ -9,6 +9,6 @@
 // Notion API native shape (pages + blocks, exported to a JSON file/directory). The
 // live API transport is a follow-up behind the same interface. Credentials are by
 // secret-store reference only; the page body is returned raw for the knowledge
-// module to redact (docs/SECURITY-HARDENING.md-4). Imports only the SDK + the shared content
+// module to redact (docs/SECURITY-HARDENING.md §3-4). Imports only the SDK + the shared content
 // helper, never /core.
 package notion

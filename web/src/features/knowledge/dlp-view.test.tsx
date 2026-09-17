@@ -20,6 +20,9 @@ vi.mock('@tanstack/react-router', () => ({
   ),
   useNavigate: () => () => {},
   useRouterState: () => '/',
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 // Mutable por casilla: el motor separa `knowledge:dlp:admin` (escribir política de egreso) de
 // `knowledge:dlp:read`, y la pantalla tiene que separar lo mismo. Por defecto, todo concedido —

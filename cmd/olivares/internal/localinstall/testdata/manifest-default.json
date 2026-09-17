@@ -1,0 +1,18 @@
+{
+  "schema": "olivares.ai/local-install/v2",
+  "mode": "system",
+  "init": "systemd",
+  "layout": "default",
+  "data_dir": "/var/lib/olivares",
+  "config": "/etc/olivares/olivares.env",
+  "workspace_dir": "/var/lib/olivares/workspaces",
+  "files": [
+    {"path": "/usr/local/bin/olivares", "role": "binary", "mode": "0755", "managed": true},
+    {"path": "/etc/olivares/olivares.env", "role": "config", "mode": "0640", "managed": true},
+    {"path": "/etc/systemd/system/olivares.service", "role": "unit", "mode": "0644", "managed": true},
+    {"path": "/etc/systemd/system/olivares.service.d/agentops.conf", "role": "dropin", "mode": "0644", "managed": true},
+    {"path": "/etc/olivares/agentops.env", "role": "runtime-env", "mode": "0640", "managed": true}
+  ],
+  "account": {"user": "olivares", "group": "olivares", "user_created": true, "group_created": true},
+  "manifest": "/var/lib/olivares/install-manifest.json"
+}

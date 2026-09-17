@@ -7,11 +7,10 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
-import { Skeleton } from '@/components/ui/skeleton'
+import { AsyncSection } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
-import { useWorkspaceFilter } from '@/lib/hooks/use-workspace-filter'
 import { cn } from '@/lib/utils'
+import type { ListResponse } from '@/lib/api/types'
 import { inventoryApi, inventoryKeys } from './api'
 import { Box, ENTITY_ICON, KIND_ORDER } from './entity-icons'
 import { InvStatus } from './status'
@@ -32,53 +31,64 @@ const BANDS: { id: string; kinds: string[] }[] = [
 
 const TOPO_LIMIT = 200
 
+const BAND_KIND_SET = new Set(BANDS.flatMap((b) => b.kinds))
+
 export function Topology({
   onSelect,
 }: {
-  onSelect: (entry: CatalogEntry) => void
+  onSelect: (entry: CatalogEntry, launcher?: HTMLElement) => void
 }) {
-  const { t } = useTranslation('inventory')
   const { activeTenant } = useAuth()
-  const { workspaceId, queryKey: wsKey } = useWorkspaceFilter()
 
+  // Tenant-wide, like the catalog: no workspace in the call or the key (api.ts).
   const query = useQuery({
-    queryKey: [
-      ...inventoryKeys.entities(activeTenant, { limit: TOPO_LIMIT }),
-      wsKey,
-    ],
-    queryFn: () =>
-      inventoryApi.entities({ workspace_id: workspaceId, limit: TOPO_LIMIT }),
+    queryKey: inventoryKeys.entities(activeTenant, { limit: TOPO_LIMIT }),
+    queryFn: () => inventoryApi.entities({ limit: TOPO_LIMIT }),
   })
 
+  // AsyncSection is the house mapping: pending → skeleton, 403 → calm forbidden,
+  // other failure → error with retry and request id, data → the page. It branches
+  // on `isError` BEFORE `data`, so a refetch that fails after a success shows the
+  // failure and never the previous rows or counts as current.
+  return (
+    <AsyncSection query={query} skeletonHeight={160}>
+      {(data) => <TopologyPage data={data} onSelect={onSelect} />}
+    </AsyncSection>
+  )
+}
+
+function TopologyPage({
+  data,
+  onSelect,
+}: {
+  data: ListResponse<CatalogEntry>
+  onSelect: (entry: CatalogEntry, launcher?: HTMLElement) => void
+}) {
+  const { t } = useTranslation('inventory')
+  const items = data.items ?? []
   const byKind = useMemo(() => {
     const map = new Map<string, CatalogEntry[]>()
-    for (const e of query.data?.items ?? []) {
+    for (const e of items) {
       const arr = map.get(e.kind) ?? []
       arr.push(e)
       map.set(e.kind, arr)
     }
     return map
-  }, [query.data])
+  }, [items])
 
-  if (query.isLoading) {
-    return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-40 w-full rounded-lg" />
-        ))}
-      </div>
-    )
-  }
-  if (query.error) return <ErrorState retry={() => void query.refetch()} />
-
-  const total = query.data?.items.length ?? 0
-  if (total === 0)
+  if (items.length === 0)
     return (
       <EmptyState
         title={t('topology.emptyTitle')}
         description={t('topology.emptyHint')}
       />
     )
+
+  // Strict boolean: a transport string is not a page-limit disclosure.
+  const pageLimited = data.has_more === true
+  const leftover = [...byKind.keys()]
+    .filter((k) => !BAND_KIND_SET.has(k))
+    .sort()
 
   return (
     <div className="space-y-5">
@@ -97,6 +107,7 @@ export function Topology({
                   key={kind}
                   kind={kind}
                   entries={byKind.get(kind) ?? []}
+                  pageLimited={pageLimited}
                   onSelect={onSelect}
                 />
               ))}
@@ -104,15 +115,37 @@ export function Topology({
           </section>
         )
       })}
-      {/* ⛔ NO CONVERTIDO A ListTruncationBadge A PROPOSITO: esto pinta un <p> discreto, no un
-          Badge de aviso. Convertirlo cambiaria el ASPECTO de la pantalla sin que nadie lo haya
-          pedido, y la convergencia era para unificar la REGLA, no para uniformar el diseno.
-          Le falta la guarda !error -- el aviso puede salir sobre datos viejos si la consulta
-          fallo -- y eso es una decision de esta vista, no de la convergencia. */}
-      {query.data?.has_more && (
-        <p className="text-xs text-muted-foreground">
-          {t('topology.truncated', { n: TOPO_LIMIT })}
-        </p>
+      {leftover.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('topology.bands.other')}
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {leftover.map((kind) => (
+              <KindCard
+                key={kind}
+                kind={kind}
+                entries={byKind.get(kind) ?? []}
+                pageLimited={pageLimited}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+      {/* Appearance stays a discreet <p>, not ListTruncationBadge. The rule is
+          the same one (`has_more === true` on a successful page): AsyncSection
+          has already refused to render this branch on error, so a retired page
+          cannot advertise a limit. */}
+      {pageLimited && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            {t('topology.truncated', { n: TOPO_LIMIT })}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t('topology.countsAreLoaded')}
+          </p>
+        </div>
       )}
     </div>
   )
@@ -121,48 +154,68 @@ export function Topology({
 function KindCard({
   kind,
   entries,
+  pageLimited,
   onSelect,
 }: {
   kind: string
   entries: CatalogEntry[]
-  onSelect: (entry: CatalogEntry) => void
+  pageLimited: boolean
+  onSelect: (entry: CatalogEntry, launcher?: HTMLElement) => void
 }) {
   const { t } = useTranslation('inventory')
   const Icon = ENTITY_ICON[kind] ?? Box
   const stale = entries.filter((e) => e.status === 'stale').length
   const shown = entries.slice(0, 8)
+  const kindLabel = t(`kinds.${kind}`, { defaultValue: kind })
   return (
-    <Card className="flex flex-col gap-2 p-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4">
+    <Card className="flex min-w-0 flex-col gap-2 p-3">
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4">
             <Icon />
           </span>
-          <span className="font-medium text-foreground">
-            {t(`kinds.${kind}`, { defaultValue: kind })}
+          <span className="min-w-0 break-words font-medium text-foreground">
+            {kindLabel}
           </span>
         </div>
-        <Badge variant="neutral" className="tabular-nums">
+        <Badge
+          variant="neutral"
+          className="shrink-0 tabular-nums"
+          title={
+            pageLimited
+              ? t('topology.loadedOnPage', { count: entries.length })
+              : undefined
+          }
+          aria-label={
+            pageLimited
+              ? t('topology.loadedOnPage', { count: entries.length })
+              : t('topology.loadedCount', { count: entries.length })
+          }
+        >
           {entries.length}
         </Badge>
       </div>
       {stale > 0 && <InvStatus status="stale" className="w-fit" />}
-      <div className="flex flex-wrap gap-1">
-        {shown.map((e) => (
-          <button
-            key={e.entity_id}
-            type="button"
-            onClick={() => onSelect(e)}
-            title={e.ref || e.name}
-            className={cn(
-              'max-w-[12rem] truncate rounded-sm border border-border bg-surface px-1.5 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-              'focus-visible:ring-2 focus-visible:ring-ring outline-none',
-              e.status === 'stale' && 'opacity-60',
-            )}
-          >
-            {e.name || e.ref || e.entity_id.slice(0, 8)}
-          </button>
-        ))}
+      <div className="flex min-w-0 flex-wrap gap-1">
+        {shown.map((e) => {
+          const label = e.name || e.ref || e.entity_id
+          return (
+            <button
+              key={e.entity_id}
+              type="button"
+              onClick={(event) => onSelect(e, event.currentTarget)}
+              title={label}
+              aria-label={label}
+              className={cn(
+                'min-w-0 max-w-full break-all rounded-sm border border-border bg-surface px-1.5 py-0.5 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:max-w-[12rem] sm:truncate sm:whitespace-nowrap',
+                'focus-visible:ring-2 focus-visible:ring-ring outline-none',
+                e.status === 'stale' && 'opacity-60',
+              )}
+            >
+              {label}
+            </button>
+          )
+        })}
         {entries.length > shown.length && (
           <span className="px-1 text-xs text-muted-foreground">
             +{entries.length - shown.length}

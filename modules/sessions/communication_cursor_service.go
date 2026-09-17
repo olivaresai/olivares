@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -48,7 +49,7 @@ var (
 	)
 )
 
-// DirectNoticeCursorAdvanceCommand is a private service envelope. A future
+// DirectNoticeCursorAdvanceCommand is a private service envelope. The
 // module-owned handler derives Method and Path from the admitted route; neither
 // tenant, workspace, actor, mailbox nor filter is accepted from this value.
 type DirectNoticeCursorAdvanceCommand struct {
@@ -57,6 +58,8 @@ type DirectNoticeCursorAdvanceCommand struct {
 	IdempotencyKey string `json:"-"`
 	Method         string `json:"-"`
 	Path           string `json:"-"`
+	reader         RecipientRef
+	targetDelivery model.ID
 }
 
 // DirectNoticeCursorAdvanceResult is reconstructible from the closed receipt.
@@ -71,9 +74,107 @@ type DirectNoticeCursorAdvanceResult struct {
 	Replayed   bool                         `json:"replayed"`
 }
 
-// directNoticeCursorService remains private until the route and readiness
-// owners wire a durable key source. Keeping the keyring here lets the complete
-// SQLite service/apply cut be exercised without making a public endpoint live.
+type DirectNoticeCursorTokenResult struct {
+	CursorToken string   `json:"cursor"`
+	CursorID    model.ID `json:"cursor_id,omitempty"`
+	Version     int64    `json:"version"`
+	ETag        string   `json:"etag"`
+}
+
+// GetInboxCursorToken observes, but never advances, one personal cursor. A
+// target comes only from the opaque continuation minted by ListDirectNoticeInbox.
+// It must still be an exact Delivery of the authenticated mailbox and pass a
+// fresh delivery:read decision; the returned c2v2 value carries no authority and
+// is revalidated by AdvanceInboxCursor.
+func (m *Module) GetInboxCursorToken(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	ref auth.PrincipalRef,
+	reader RecipientRef,
+	navigationToken string,
+) (DirectNoticeCursorTokenResult, error) {
+	readiness, readinessErr := m.EvaluateCommunicationReadiness(ctx)
+	if readinessErr != nil || !readiness.Effective {
+		return DirectNoticeCursorTokenResult{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "communication kernel is not ready",
+		)
+	}
+	identity, err := m.bindCurrentCommunicationInboxIdentity(ctx, scope, ref)
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	resolved, _, err := m.communicationPrincipalRecipient(ctx, scope, identity.principal)
+	if err != nil || resolved != reader {
+		return DirectNoticeCursorTokenResult{}, communicationError(
+			ErrCommunicationForbidden, "cursor path does not name the authenticated mailbox",
+		)
+	}
+	if navigationToken == "" || len(navigationToken) > communicationCursorTokenMaxBytes {
+		return DirectNoticeCursorTokenResult{}, communicationError(
+			ErrInvalidCommunicationModel, "cursor target is required",
+		)
+	}
+	navigation, lineage, observedAt, err := m.resolveCommunicationInboxNavigation(
+		ctx, scope, reader, navigationToken,
+	)
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	deliveryID := navigation.deliveryID
+	question, err := newCommunicationAuthorityQuestion(scope, messageDeliveryKind, deliveryID, CommunicationRead)
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	bound, err := m.bindCurrentCommunicationRequestAuthority(ctx, ref, question)
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	claimAuthority, err := m.communicationClaimAuthoritySnapshot(
+		ctx, scope.TenantID, communicationClaimsForPrincipal(identity.principal),
+	)
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	request, _, err := bound.transactionSnapshot(question, claimAuthority)
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	if err := m.mutateCommunicationTransaction(ctx, scope, request, claimAuthority, func(tx *communicationTx) error {
+		if err := tx.lockAuthoritySnapshot(ctx, nil); err != nil {
+			return err
+		}
+		return tx.refreshNow(ctx)
+	}); err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	filterHash, err := directNoticeCursorFilterHash()
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	claims := communicationCursorTokenClaims{
+		tokenVersion: communicationCursorTokenV2Version,
+		tenantID:     scope.TenantID, workspaceID: scope.WorkspaceID,
+		readerKind: reader.Kind, readerRefText: reader.Ref,
+		mailboxKind: MailboxPersonal, mailboxRefText: reader.Ref,
+		carrierClass: string(CursorCarrierDirectNoticeV1), filterHash: filterHash[:],
+		cursorID: lineage.cursorID, cursorVersion: lineage.cursorVersion,
+		baseDeliverySeq:  lineage.baseDeliverySeq,
+		afterDeliverySeq: navigation.afterDeliverySeq, deliveryID: deliveryID,
+	}
+	token, err := m.communicationCursorTokenKeyring().mintV2(claims, observedAt)
+	if err != nil {
+		return DirectNoticeCursorTokenResult{}, err
+	}
+	return DirectNoticeCursorTokenResult{
+		CursorToken: token, CursorID: lineage.cursorID, Version: lineage.cursorVersion,
+		ETag: communicationVersionETag(lineage.cursorVersion),
+	}, nil
+}
+
+// directNoticeCursorService is the private token/apply mechanism behind the
+// public PrincipalRef-bound cursor boundary. Keeping it private prevents a
+// caller from skipping the route's current delivery:write and per-candidate
+// delivery:read bindings while retaining the original c2v1 compatibility seam.
 type directNoticeCursorService struct {
 	module         *Module
 	keyring        *communicationCursorTokenKeyring
@@ -182,6 +283,171 @@ func (s *directNoticeCursorService) Advance(
 	return result, nil
 }
 
+// AdvanceInboxCursor is the authenticated public cursor boundary. The token is
+// navigation only: the target Delivery receives a fresh delivery:write check,
+// every scanned carrier receives its own delivery:read check, and their fact
+// union is locked with any exact session Claim before cursor effects.
+func (m *Module) AdvanceInboxCursor(
+	ctx context.Context,
+	scope DirectoryScopeRef,
+	ref auth.PrincipalRef,
+	reader RecipientRef,
+	cmd DirectNoticeCursorAdvanceCommand,
+) (DirectNoticeCursorAdvanceResult, error) {
+	readiness, readinessErr := m.EvaluateCommunicationReadiness(ctx)
+	if readinessErr != nil || !readiness.Effective {
+		return DirectNoticeCursorAdvanceResult{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "communication kernel is not ready",
+		)
+	}
+	identity, err := m.bindCurrentCommunicationInboxIdentity(ctx, scope, ref)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	resolvedReader, _, err := m.communicationPrincipalRecipient(ctx, scope, identity.principal)
+	if err != nil || resolvedReader != reader {
+		return DirectNoticeCursorAdvanceResult{}, communicationError(
+			ErrCommunicationForbidden, "cursor path does not name the authenticated mailbox",
+		)
+	}
+	cmd.reader = reader
+	normalized, err := normalizeDirectNoticeCursorAdvanceCommand(scope, identity.principal, cmd)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	service := newDirectNoticeCursorService(m, m.communicationCursorTokenKeyring())
+	observedAt, err := service.observeDBNow(ctx, scope)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	tokenClaims, err := service.keyring.verify(cmd.CursorToken, observedAt)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	if tokenClaims.tokenVersion != communicationCursorTokenV2Version {
+		return DirectNoticeCursorAdvanceResult{}, communicationCursorTokenInvalid(
+			"public cursor requires a c2v2 token",
+		)
+	}
+	if err := validateDirectNoticeCursorTokenBinding(normalized, tokenClaims); err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	if cmd.targetDelivery.IsZero() || tokenClaims.deliveryID != cmd.targetDelivery {
+		return DirectNoticeCursorAdvanceResult{}, communicationCursorTokenInvalid(
+			"cursor target does not match the authenticated Delivery resource",
+		)
+	}
+	if tokenClaims.afterDeliverySeq == tokenClaims.baseDeliverySeq || tokenClaims.deliveryID.IsZero() {
+		return DirectNoticeCursorAdvanceResult{}, communicationError(
+			ErrInvalidCommunicationModel, "cursor PUT requires an advancing Delivery target",
+		)
+	}
+	writeQuestion, err := newCommunicationAuthorityQuestion(
+		scope, messageDeliveryKind, tokenClaims.deliveryID, CommunicationDeliveryWrite,
+	)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	writeBound, err := m.bindCurrentCommunicationRequestAuthority(ctx, ref, writeQuestion)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	writeInspected, err := writeBound.contextFor(writeQuestion)
+	if err != nil || writeInspected.principal != identity.principal {
+		return DirectNoticeCursorAdvanceResult{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "cursor write authority crossed identity",
+		)
+	}
+	var latestObserved time.Time
+	var earliestFresh time.Time
+	preflight, err := service.preflightWithCore(
+		ctx, normalized, tokenClaims,
+		func(ctx context.Context, entity EntityRef) (ReadWitness, bool, error) {
+			if entity.TenantID != scope.TenantID || entity.WorkspaceID != scope.WorkspaceID ||
+				entity.Kind != messageDeliveryKind {
+				return ReadWitness{}, false, communicationError(
+					ErrCommunicationEvidenceUnknown, "cursor read question crossed scope",
+				)
+			}
+			evidence := identity.source.AuthorizeEvidence(ctx, auth.Request{
+				Principal: identity.resolved, Permission: permDeliveryRead, Tenant: scope.TenantID,
+				Resource: auth.ResourceAttrs{Kind: string(messageDeliveryKind), ID: entity.ID.String(), WorkspaceID: scope.WorkspaceID},
+			})
+			outcome, facts, err := validateCommunicationCoreAuthorizationEvidence(evidence, scope.TenantID)
+			if err != nil {
+				return ReadWitness{}, false, err
+			}
+			witness := ReadWitness{
+				Outcome: outcome, Code: "core_authorization_evaluated", Entity: entity,
+				Operation: CommunicationRead, Principal: identity.principal,
+				ObservedAt: evidence.ObservedAt, FreshUntil: evidence.FreshUntil,
+				CorePermission: communicationAuthorityEvidence(evidence.CorePermission),
+				ResourceGuard:  communicationAuthorityEvidence(evidence.ResourceGuard),
+				ForbidAbsence:  communicationAuthorityEvidence(evidence.ForbidAbsence),
+				Facts:          facts, EvidenceRef: communicationCoreAuthorizationEvidenceRef,
+			}
+			if err := ValidateReadWitness(witness); err != nil {
+				return ReadWitness{}, false, err
+			}
+			if outcome == ReadUnknown {
+				return ReadWitness{}, false, communicationError(ErrCommunicationEvidenceUnknown, "cursor read authority is unavailable")
+			}
+			if witness.ObservedAt.After(latestObserved) {
+				latestObserved = witness.ObservedAt
+			}
+			if earliestFresh.IsZero() || witness.FreshUntil.Before(earliestFresh) {
+				earliestFresh = witness.FreshUntil
+			}
+			return witness, outcome == ReadDeny, nil
+		},
+	)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	claims, err := m.communicationClaimAuthoritySnapshot(
+		ctx, scope.TenantID, communicationClaimsForPrincipal(identity.principal),
+	)
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	request, consumed, err := writeBound.transactionSnapshot(writeQuestion, claims)
+	if err != nil || consumed.principal != identity.principal {
+		return DirectNoticeCursorAdvanceResult{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "cursor write authority changed",
+		)
+	}
+	request.facts, err = canonicalAuthorizationFactUnion(append(request.facts, preflight.facts...))
+	if err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	if latestObserved.After(request.observedAt) {
+		request.observedAt = latestObserved
+	}
+	if !earliestFresh.IsZero() && earliestFresh.Before(request.freshUntil) {
+		request.freshUntil = earliestFresh
+	}
+	if err := request.validate(); err != nil {
+		return DirectNoticeCursorAdvanceResult{}, err
+	}
+	var result DirectNoticeCursorAdvanceResult
+	err = m.mutateCommunicationTransaction(ctx, scope, request, claims, func(tx *communicationTx) error {
+		var applyErr error
+		result, applyErr = applyDirectNoticeCursorAdvance(ctx, tx, preflight)
+		return applyErr
+	})
+	if errors.Is(err, errDirectNoticeCursorReplayNeedsFreshAudit) || errors.Is(err, store.ErrConflict) {
+		replay, found, replayErr := service.lookupReplay(ctx, normalized)
+		if replayErr != nil {
+			return DirectNoticeCursorAdvanceResult{}, replayErr
+		}
+		if found {
+			replay.Replayed = true
+			return replay, nil
+		}
+	}
+	return result, normalizeDirectNoticeCursorMutationError(err)
+}
+
 func normalizeDirectNoticeCursorAdvanceCommand(
 	scope DirectoryScopeRef,
 	principal CommunicationPrincipal,
@@ -193,10 +459,25 @@ func normalizeDirectNoticeCursorAdvanceCommand(
 	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
 		return directNoticeCursorNormalizedCommand{}, err
 	}
-	if principal.UserID == "" || principal.SessionID != "" {
+	if principal.System {
 		return directNoticeCursorNormalizedCommand{}, communicationError(
 			ErrInvalidCommunicationModel,
-			"DirectNotice cursor requires a claim-free authenticated User",
+			"DirectNotice cursor requires an authenticated directory principal",
+		)
+	}
+	reader := cmd.reader
+	if reader == (RecipientRef{}) {
+		var ok bool
+		reader, ok = CanonicalPrincipalRecipient(principal)
+		if !ok {
+			return directNoticeCursorNormalizedCommand{}, communicationError(
+				ErrCommunicationEvidenceUnknown, "cursor reader identity is unavailable",
+			)
+		}
+	}
+	if reader.Validate() != nil || !communicationPrincipalMatchesRecipient(principal, reader) {
+		return directNoticeCursorNormalizedCommand{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "cursor reader identity is unavailable",
 		)
 	}
 	if !validCommunicationCursorTokenCompactBound(cmd.CursorToken) {
@@ -204,7 +485,7 @@ func normalizeDirectNoticeCursorAdvanceCommand(
 			"token length is invalid",
 		)
 	}
-	if cmd.Method != http.MethodPut || cmd.Path != directNoticeCursorPathPrefix+principal.UserID.String() {
+	if cmd.Method != http.MethodPut || cmd.Path != directNoticeCursorPathPrefix+reader.Ref {
 		return directNoticeCursorNormalizedCommand{}, communicationError(
 			ErrInvalidCommunicationModel, "DirectNotice cursor method or path is not server-derived",
 		)
@@ -237,9 +518,11 @@ func normalizeDirectNoticeCursorAdvanceCommand(
 			ErrInvalidCommunicationModel, "DirectNotice cursor command scope is invalid",
 		)
 	}
-	actorRaw, err := canonicalJSON(CommunicationActorRef{
-		Kind: ActorUser, Ref: principal.UserID.String(),
-	})
+	actor, err := communicationActorForRecipient(reader)
+	if err != nil {
+		return directNoticeCursorNormalizedCommand{}, err
+	}
+	actorRaw, err := canonicalJSON(actor)
 	if err != nil {
 		return directNoticeCursorNormalizedCommand{}, err
 	}
@@ -257,7 +540,7 @@ func normalizeDirectNoticeCursorAdvanceCommand(
 	requestDigest := sha256.Sum256(requestRaw)
 	return directNoticeCursorNormalizedCommand{
 		command: cmd, scope: scope, principal: principal,
-		reader:          RecipientRef{Kind: RecipientUser, Ref: principal.UserID.String()},
+		reader:          reader,
 		expectedVersion: expectedVersion, filter: filter,
 		filterHash: append([]byte(nil), filterHash...), commandScope: commandScope,
 		actorFingerprint: actorFingerprint[:], idempotencyKeyHash: idempotencyHash[:],
@@ -287,8 +570,8 @@ func validateDirectNoticeCursorTokenBinding(
 ) error {
 	if claims.tenantID != normalized.scope.TenantID ||
 		claims.workspaceID != normalized.scope.WorkspaceID ||
-		claims.readerKind != RecipientUser || claims.readerRef != normalized.principal.UserID ||
-		claims.mailboxKind != MailboxPersonal || claims.mailboxRef != normalized.principal.UserID ||
+		claims.readerKind != normalized.reader.Kind || claims.readerReference() != normalized.reader.Ref ||
+		claims.mailboxKind != MailboxPersonal || claims.mailboxReference() != normalized.reader.Ref ||
 		claims.carrierClass != string(CursorCarrierDirectNoticeV1) ||
 		!bytes.Equal(claims.filterHash, normalized.filterHash) {
 		return communicationCursorTokenInvalid("claims do not match the admitted cursor resource")
@@ -471,7 +754,7 @@ func verifyDirectNoticeCursorAuditAnchor(
 	if err != nil || !found || event.Seq != receipt.AuditSeq ||
 		event.TenantID != normalized.scope.TenantID ||
 		event.Actor != directNoticeActor(normalized.principal) ||
-		event.ActorKind != model.ActorUser ||
+		event.ActorKind != communicationAuditKindForPrincipal(normalized.principal) ||
 		event.Action != directNoticeCursorAdvanceAuditAction ||
 		event.TargetKind != communicationCommandKind || event.TargetID != receipt.CommandID ||
 		!bytes.Equal(event.PayloadHash, receipt.PlanHash) ||
@@ -538,6 +821,25 @@ func (s *directNoticeCursorService) preflight(
 	normalized directNoticeCursorNormalizedCommand,
 	claims communicationCursorTokenClaims,
 ) (directNoticeCursorPreflight, error) {
+	return s.preflightWithCore(ctx, normalized, claims, func(
+		ctx context.Context,
+		entity EntityRef,
+	) (ReadWitness, bool, error) {
+		return s.module.authorizeDirectNoticeReadCore(ctx, normalized.principal, entity)
+	})
+}
+
+type directNoticeCursorCoreAuthorizer func(
+	context.Context,
+	EntityRef,
+) (ReadWitness, bool, error)
+
+func (s *directNoticeCursorService) preflightWithCore(
+	ctx context.Context,
+	normalized directNoticeCursorNormalizedCommand,
+	claims communicationCursorTokenClaims,
+	authorize directNoticeCursorCoreAuthorizer,
+) (directNoticeCursorPreflight, error) {
 	bound := s.candidateBound
 	if bound < 1 || bound > directNoticeCursorScanBound {
 		return directNoticeCursorPreflight{}, communicationError(
@@ -557,9 +859,12 @@ func (s *directNoticeCursorService) preflight(
 			TenantID: normalized.scope.TenantID, WorkspaceID: normalized.scope.WorkspaceID,
 			Kind: messageDeliveryKind, ID: identity.deliveryID,
 		}
-		core, denied, authErr := s.module.authorizeDirectNoticeReadCore(
-			ctx, normalized.principal, entity,
-		)
+		if authorize == nil {
+			return directNoticeCursorPreflight{}, communicationError(
+				ErrCommunicationEvidenceUnknown, "cursor core authorizer is unavailable",
+			)
+		}
+		core, denied, authErr := authorize(ctx, entity)
 		if authErr != nil {
 			return directNoticeCursorPreflight{}, authErr
 		}
@@ -653,7 +958,7 @@ func scanDirectNoticeCursorIdentityRange(
 	targetID model.ID,
 	bound int,
 ) ([]directNoticeCursorIdentity, error) {
-	if reader.Validate() != nil || reader.Kind != RecipientUser || fromExclusive < 0 ||
+	if reader.Validate() != nil || fromExclusive < 0 ||
 		toInclusive < fromExclusive || bound < 1 || bound > directNoticeCursorScanBound {
 		return nil, communicationError(ErrCommunicationEvidenceUnknown,
 			"cursor identity scan input is malformed")
@@ -864,6 +1169,13 @@ func applyDirectNoticeCursorAdvance(
 		return DirectNoticeCursorAdvanceResult{},
 			communicationTransactionUnavailable("cursor transaction", nil)
 	}
+	// Pin the complete core/directory/carrier fact set before taking either the
+	// idempotency lock or any domain-row lock. This preserves the common K3 lock
+	// order and prevents an authority writer from inverting with cursor replay.
+	if err := tx.lockAuthoritySnapshot(ctx, preflight.facts); err != nil {
+		return DirectNoticeCursorAdvanceResult{},
+			normalizeDirectNoticeAuthorityLockError(err)
+	}
 	if err := tx.lockTransaction(ctx, directNoticeCursorIdempotencyLockKey(preflight.normalized)); err != nil {
 		return DirectNoticeCursorAdvanceResult{}, err
 	}
@@ -881,15 +1193,6 @@ func applyDirectNoticeCursorAdvance(
 		// through one outer, consistent View.
 		return DirectNoticeCursorAdvanceResult{}, errDirectNoticeCursorReplayNeedsFreshAudit
 	}
-	if err := tx.lockAuthoritySnapshot(ctx, preflight.facts); err != nil {
-		return DirectNoticeCursorAdvanceResult{},
-			normalizeDirectNoticeAuthorityLockError(err)
-	}
-	if preflight.normalized.principal.SessionID != "" {
-		return DirectNoticeCursorAdvanceResult{}, communicationError(
-			ErrCommunicationEvidenceUnknown, "DirectNotice cursor Claim authority is unsupported",
-		)
-	}
 	locked, err := lockDirectNoticeCursorState(ctx, tx, preflight)
 	if err != nil {
 		return DirectNoticeCursorAdvanceResult{}, err
@@ -904,7 +1207,8 @@ func applyDirectNoticeCursorAdvance(
 	if err != nil {
 		return DirectNoticeCursorAdvanceResult{}, err
 	}
-	if plan.Verdict != VerdictClean || len(plan.RequiredClaims) != 0 ||
+	if plan.Verdict != VerdictClean || !communicationClaimsEqualSnapshot(
+		plan.RequiredClaims, CommunicationClaimAuthoritySnapshot{facts: tx.claimAuthorityFacts}) ||
 		!equalDirectNoticeAuthorityFacts(preflight.facts, plan.Facts) {
 		return DirectNoticeCursorAdvanceResult{}, communicationError(
 			ErrCommunicationEvidenceUnknown,
@@ -1222,7 +1526,7 @@ func lockDirectNoticeCursorCarriers(
 	if err != nil {
 		return nil, err
 	}
-	audienceRecords, err := lockDirectNoticeBatchRecordSets(
+	audienceRecords, err := observeAppendOnlyBatchRecordSets(
 		ctx, tx, messageAudienceKind, audienceSpecs,
 	)
 	if err != nil {
@@ -1266,7 +1570,7 @@ func lockDirectNoticeCursorCarriers(
 			OwnerID: messageID, Queries: queries, Bound: directNoticeReadSetBound,
 		})
 	}
-	contributionRecords, err := lockDirectNoticeBatchRecordSets(
+	contributionRecords, err := observeAppendOnlyBatchRecordSets(
 		ctx, tx, messageAudienceRecipientKind, contributionSpecs,
 	)
 	if err != nil {
@@ -1802,8 +2106,13 @@ func persistDirectNoticeCursorAdvance(
 	if err != nil {
 		return DirectNoticeCursorAdvanceResult{}, err
 	}
+	actor, actorErr := communicationActorForRecipient(preflight.normalized.reader)
+	if actorErr != nil {
+		return DirectNoticeCursorAdvanceResult{}, actorErr
+	}
+	_, auditKind := communicationAuditActor(actor)
 	audit, err := tx.appendAudit(ctx, model.AuditDraft{
-		Actor: directNoticeActor(preflight.normalized.principal), ActorKind: model.ActorUser,
+		Actor: directNoticeActor(preflight.normalized.principal), ActorKind: auditKind,
 		Action: directNoticeCursorAdvanceAuditAction, TargetKind: communicationCommandKind,
 		TargetID: preflight.commandID, PayloadHash: append([]byte(nil), planHash...),
 		Meta: map[string]any{

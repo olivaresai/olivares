@@ -48,7 +48,7 @@ func TestDelegationDescriptorsCreateOnFreshStore(t *testing.T) {
 
 func TestDelegationAuthRepositoriesRoundTripCRUD(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	now := model.NewTimestamp(time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC))
 	expires := model.NewTimestamp(now.Time().Add(5 * time.Minute))
 	disabled := model.NewTimestamp(now.Time().Add(time.Minute))
@@ -254,7 +254,7 @@ func TestDelegationAuthRepositoriesRoundTripCRUD(t *testing.T) {
 
 func TestDelegationUniqueConstraints(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	expires := model.NewTimestamp(time.Now().Add(5 * time.Minute))
 
 	var serviceA, serviceB model.PEPService
@@ -349,7 +349,7 @@ func TestDelegationUniqueConstraints(t *testing.T) {
 }
 
 func TestClaimDecisionCreatesPendingAndClassifiesConflictsAsData(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	serviceA := model.NewID()
 	serviceB := model.NewID()
 	issued := model.NewTimestamp(time.Now())
@@ -411,7 +411,7 @@ func TestClaimDecisionCreatesPendingAndClassifiesConflictsAsData(t *testing.T) {
 
 func TestClaimDecisionConcurrentSameKeysCreatesExactlyOnce(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	issued := model.NewTimestamp(time.Now())
 	claim := model.PDPDecisionClaim{
 		HandleJTI:          model.NewID(),
@@ -471,7 +471,7 @@ func TestClaimDecisionConcurrentSameKeysCreatesExactlyOnce(t *testing.T) {
 
 func TestAPITokenPurposeRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 
 	var restrictedID, ordinaryID model.ID
 	if err := st.AuthMutate(ctx, func(a store.AuthScope) error {
@@ -513,7 +513,7 @@ func TestAPITokenPurposeRoundTrip(t *testing.T) {
 
 func TestAPITokenSessionBindingRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	wantSID := "osn_" + model.NewID().String()
 	wantWorkspace := model.NewID()
 	wantRun := model.NewID().String()

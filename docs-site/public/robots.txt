@@ -1,0 +1,118 @@
+# Olivares AI documentation (docs.olivares.ai) — robots policy
+# -----------------------------------------------------------------------------
+# ⛔ POR QUÉ ESTE FICHERO EXISTE, y qué se servía antes de él. Medido el 2026-09-01:
+# `https://docs.olivares.ai/robots.txt` respondía 200 con 1248 bytes, 24 líneas y
+# CERO directivas — ni un `User-agent:`, ni un `Allow:`, ni un `Disallow:`, ni un
+# `Sitemap:`. No era nuestro: era el fichero de "content signals" que Cloudflare
+# inyecta cuando el origen no sirve ninguno. Aquí no había `robots.txt`.
+#
+# Las dos consecuencias, y la segunda es la que importa:
+#
+#   1. El sitemap de este sitio (2156 URLs) no se anunciaba en ninguna parte, y
+#      apenas se enlazaba desde el sitio principal. Descubrimiento por casualidad.
+#
+#   2. La postura anti-entrenamiento que `olivares.ai` aplica con cuidado NO regía
+#      aquí. El sitio principal bloquea con `Disallow: /` a veinte rastreadores de
+#      entrenamiento — se puede comprobar en `https://olivares.ai/robots.txt` —; en
+#      este subdominio no regía ninguna de esas líneas, así que las 2156 páginas de
+#      documentación de producto, la superficie técnica más valiosa que publicamos,
+#      estaban abiertas a todos ellos.
+#
+# Esto NO decide nada nuevo: aplica aquí la política que el proyecto ya tiene
+# firmada allí. La lista de abajo es la MISMA, en el mismo orden.
+#
+# CONTROL POSITIVO de que publicar este fichero surte efecto, medido antes de
+# escribirlo: `https://olivares.ai/robots.txt` devuelve exactamente los bytes que
+# su repositorio tiene en disco, sin rastro del preámbulo de "content signals".
+# ⇒ Cloudflare sólo inyecta el suyo cuando el origen no sirve ninguno.
+#
+# `scripts/check-robots.mjs` lo vigila sobre `dist/`, que es lo que se despliega:
+# un fichero en `public/` es una promesa que sólo se cumple si el build la copia.
+#
+# Un user-agent con grupo propio lee SÓLO su grupo, así que las reglas por bot de
+# abajo anulan el grupo genérico.
+
+# Por defecto: todo rastreable — buscadores, motores de respuesta y IA iniciada
+# por una persona. La documentación existe para ser encontrada y citada bien.
+User-agent: *
+Allow: /
+
+# Entrenamiento de IA — PERMITIDO (sólo Anthropic / Claude).
+# A diferencia del sitio principal, aquí no hay `Disallow` de páginas legales: este sitio no
+# publica ninguna (viven en olivares.ai/privacy, /terms e /imprint, y su política
+# se aplica allí, donde están).
+# Fuente: support.claude.com art. 8896518 — 2026-04-07.
+User-agent: ClaudeBot
+Allow: /
+
+# Claude-User y Claude-SearchBot no llevan grupo a propósito: caen en el
+# `User-agent: *` de arriba, igual que en el sitio principal.
+
+# Entrenamiento de IA — BLOQUEADO (todo rastreador de entrenamiento salvo
+# Anthropic). Misma lista y mismo orden que la del sitio principal.
+# Fuente: developers.openai.com/api/docs/bots (GPTBot).
+User-agent: GPTBot
+Disallow: /
+
+# Fuente: google-common-crawlers — 2026-04-23; Google-Extended no afecta a Search
+# ni a AI Overviews.
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: cohere-training-data-crawler
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: Omgili
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: YouBot
+Disallow: /
+
+User-agent: Timpibot
+Disallow: /
+
+User-agent: PanguBot
+Disallow: /
+
+User-agent: Webzio-Extended
+Disallow: /
+
+User-agent: AI2Bot
+Disallow: /
+
+User-agent: Ai2Bot-Dolma
+Disallow: /
+
+# Descubrimiento. Starlight genera el índice en cada build; sin esta línea el
+# sitemap sólo se encontraba por casualidad.
+Sitemap: https://docs.olivares.ai/sitemap-index.xml

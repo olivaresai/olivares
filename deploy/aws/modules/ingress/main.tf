@@ -132,16 +132,46 @@ resource "aws_lb" "alb" {
   enable_tls_version_and_cipher_suite_headers = true
 }
 
+# ⛔ EL BACKEND HABLA HTTP, Y NO ES UNA REBAJA: ES LA TOPOLOGIA. TLS termina en el ALB
+# —listener 443 HTTPS con certificado de ACM, `ELBSecurityPolicy-TLS13-1-2-2021-06` y HSTS,
+# unas lineas mas abajo— y el salto ALB→tarea vive en las SUBREDES PRIVADAS de nuestra VPC.
+# Es el reparto estandar y el que el resto del estate ya asume.
+#
+# ⛔ CORREGIDO EL 2026-09-02, y las dos mitades eran defectos DISTINTOS con el mismo sintoma
+# (ningun objetivo llega nunca a sano, y el servicio no arranca en su primer apply):
+#
+#   protocolo · el grupo pedia HTTPS a la tarea, y el plano de control sirve TEXTO PLANO:
+#               `cloud/control-plane/cmd/cloud-cp/main.go:239,275` monta `http.Server` y
+#               llama `ListenAndServe`, NO `ListenAndServeTLS`. Y no es que este apagado:
+#               en TODO `cloud/control-plane/` no hay ni un `ListenAndServeTLS` ni un
+#               `X509KeyPair` — el re-cifrado del backend **no esta construido**. La ranura
+#               `tls` de `modules/secrets/main.tf:35` esta DECLARADA Y NO LA CONSUME NADIE:
+#               reserva el sitio para el dia que se construya, y hoy no miente sobre el.
+#
+#   ruta ...... el chequeo pedia `/readyz`, y el plano de control no registra esa ruta: sus
+#               unicas rutas son `/health`, `/webhooks/*`, `/admin/` y `/metrics` (en OTRO
+#               servidor, `:9090`). Un chequeo contra una ruta que nadie sirve es un 404, y
+#               404 no casa el `matcher = "200"`.
+#
+# ⇒ Se apunta a `/health`, y **no se anade un `/readyz` gemelo**, porque `/health` YA HACE
+#   LA COMPROBACION DE READINESS: `main.go:217-224` hace `pools.Ping` y devuelve **503** si
+#   la base no responde. Un `/readyz` seria un segundo nombre para el mismo chequeo — y un
+#   nombre que nadie sirve es exactamente el defecto que esta linea corrige.
+#
+# ⚠ RIESGO QUE ESTO DEJA EN PIE, dicho y no escondido: el salto ALB→tarea va en claro dentro
+#   de la VPC. Lo acotan las subredes privadas y los grupos de seguridad, no el cifrado. El
+#   dia que se construya el re-cifrado, esto vuelve a `HTTPS` **y** el plano de control lee su
+#   par de la ranura `tls` — las dos cosas en el mismo cambio, o el servicio deja de arrancar.
 resource "aws_lb_target_group" "http" {
   name        = "${var.name}-http"
   port        = 8443
-  protocol    = "HTTPS"
+  protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
 
   health_check {
-    protocol = "HTTPS"
-    path     = "/readyz"
+    protocol = "HTTP"
+    path     = "/health"
     matcher  = "200"
   }
 

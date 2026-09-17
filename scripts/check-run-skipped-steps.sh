@@ -90,12 +90,20 @@ AQUI="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)" || exit 2
 # explicita, `GITHUB_REPOSITORY` (existe en toda corrida de Actions) y el remoto del directorio. Si
 # ninguna contesta NO se adivina: 2 «no he podido mirar», la tercera respuesta de siempre.
 REPO=""
+# ⛔ LAS CUATRO REFERENCIAS DE DENTRO SON `$REPO`, NO `$(repo_slug)`, Y LA DIFERENCIA TIRO LA CAJA
+# CUATRO VECES. Al retirar el slug escrito a mano (5ad5548751) se sustituyo `$REPO` por
+# `$(repo_slug)` en todo el fichero, incluidas las lineas de DENTRO de la propia funcion: cada una
+# se llamaba a si misma en un `$( )`, o sea un fork por vuelta y sin caso base. Medido en vivo:
+# 1 837 bash bloqueados en `anon_pipe_read`, ~14 MB cada uno, creciendo ~10/s. Y no paraba solo,
+# por dos motivos que conviene saber separados: el `exit 2` de aqui abajo vive en una subshell y
+# solo mata a la subshell; y un `timeout` sobre el guion mata al hijo directo, no a los nietos.
+# La memoizacion es lo que la funcion queria hacer, y `$REPO` es lo unico que la hace.
 repo_slug() {
-	[ -n "$(repo_slug)" ] && { printf '%s' "$(repo_slug)"; return 0; }
+	[ -n "$REPO" ] && { printf '%s' "$REPO"; return 0; }
 	REPO="${OLIVARES_RUN_REPO:-${GITHUB_REPOSITORY:-}}"
-	[ -n "$(repo_slug)" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || REPO=""
-	[ -n "$(repo_slug)" ] || { echo "check-run-skipped-steps: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_RUN_REPO)" >&2; exit 2; }
-	printf '%s' "$(repo_slug)"
+	[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || REPO=""
+	[ -n "$REPO" ] || { echo "check-run-skipped-steps: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_RUN_REPO)" >&2; exit 2; }
+	printf '%s' "$REPO"
 }
 JSON="${OLIVARES_RUN_JOBS_JSON:-}"
 RUNJSON="${OLIVARES_RUN_JSON:-}"

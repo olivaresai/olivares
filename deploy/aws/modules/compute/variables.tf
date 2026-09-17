@@ -132,3 +132,29 @@ variable "secrets_kms_key_arn" {
   default     = ""
   nullable    = false
 }
+
+variable "roles_task_image" {
+  type        = string
+  description = "Image BY DIGEST (repo@sha256:...) carrying a Postgres client, for the one-shot task that provisions the control plane's database roles. Empty keeps that task, its execution role and its policy at count 0. aws-images.yml builds three images; this is the client-only one, and only it carries psql."
+  default     = ""
+  nullable    = false
+}
+
+variable "master_user_secret_arn" {
+  type        = string
+  description = "ARN of the secret AWS manages with the RDS master password (manage_master_user_password = true). Read by the one-shot roles task ONLY: it is superuser on the database, so it is never wired into the long-lived services' execution role. Empty is refused when roles_task_image is set."
+  default     = ""
+  nullable    = false
+}
+
+variable "cloud_cp_max_pool_connections" {
+  type        = number
+  description = "CLOUD_CP_MAX_POOL_CONNECTIONS for the control plane. Not a secret: the client connection slots ONE control-plane process may declare across its nine runtime pools. 36 is four per runtime capability, the binary's default. It bounds neither server sessions nor replicas, surge, draining or rollback tasks, migrations or poolers."
+  default     = 36
+  nullable    = false
+
+  validation {
+    condition     = var.cloud_cp_max_pool_connections >= 9 && var.cloud_cp_max_pool_connections <= 2147483647 && floor(var.cloud_cp_max_pool_connections) == var.cloud_cp_max_pool_connections
+    error_message = "cloud_cp_max_pool_connections must be a whole number from 9 (one slot per runtime capability) to 2147483647."
+  }
+}

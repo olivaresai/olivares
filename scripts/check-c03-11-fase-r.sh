@@ -9,38 +9,60 @@ set -euo pipefail
 ROOT="${OLIVARES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 
-DOC="$(find design -maxdepth 1 -name 'C03-11-FASE-R-HOLD-*.md' -print | sort | tail -n 1 || true)"
+DOC="$(find design -maxdepth 1 -name 'C03-11-FASE-R-HOLD-*.md' -print 2>/dev/null | sort | tail -n 1 || true)"
 SEAT="$ROOT/core/auth/seatcap.go"
 WRANGLER="$ROOT/commercial/license-worker/wrangler.jsonc"
 
+_cls=""
+if [ -f "$ROOT/scripts/hub-leg.sh" ]; then
+	_cls="$(bash "$ROOT/scripts/hub-leg.sh" --classify --root "$ROOT" 2>/dev/null || true)"
+fi
+_public_partial=0
 if [[ -z "$DOC" || ! -f "$DOC" ]]; then
-	echo "C03-11: COULD NOT LOOK — no FASE R HOLD prep doc under design/" >&2
-	exit 2
+	if [ "$_cls" = "public" ]; then
+		echo "C03-11: SCOPED — public export; design/ HOLD doc is curated out of the published tree."
+		_public_partial=1
+	else
+		echo "C03-11: COULD NOT LOOK — no FASE R HOLD prep doc under design/" >&2
+		exit 2
+	fi
 fi
 if [[ ! -f "$SEAT" ]]; then
 	echo "C03-11: COULD NOT LOOK — core/auth/seatcap.go missing" >&2
 	exit 2
 fi
 if [[ ! -f "$WRANGLER" ]]; then
-	echo "C03-11: COULD NOT LOOK — wrangler.jsonc missing" >&2
-	exit 2
+	if [ "$_cls" = "public" ]; then
+		echo "C03-11: SCOPED — public export; commercial/license-worker/wrangler.jsonc is curated out."
+		_public_partial=1
+	else
+		echo "C03-11: COULD NOT LOOK — wrangler.jsonc missing" >&2
+		exit 2
+	fi
+fi
+if [ "$_public_partial" -eq 1 ]; then
+	# Overlay/commercial witnesses do not exist here. The seat-cap no-op still
+	# lives in Community core and is graded below; missing wrangler/doc is not a finding.
+	DOC=""
+	WRANGLER=""
 fi
 
 fail=0
-doc="$(cat "$DOC")"
 
-if ! grep -q 'HOLD' "$DOC"; then
-	echo "C03-11: HOLD marker missing from $DOC" >&2
-	fail=1
-fi
-if ! grep -q 'unlimitedSeatPolicy' "$DOC"; then
-	echo "C03-11: overlay seats measurement missing from $DOC" >&2
-	fail=1
-fi
-# Do not match "does not claim FIRMA A" — that is the HOLD sentence.
-if grep -qiE 'binaries replaced|FASE R complete|substitution is done' "$DOC"; then
-	echo "C03-11: prep doc claims a completed substitution" >&2
-	fail=1
+if [[ -n "$DOC" ]]; then
+	if ! grep -q 'HOLD' "$DOC"; then
+		echo "C03-11: HOLD marker missing from $DOC" >&2
+		fail=1
+	fi
+	if ! grep -q 'unlimitedSeatPolicy' "$DOC"; then
+		echo "C03-11: overlay seats measurement missing from $DOC" >&2
+		fail=1
+	fi
+	# Do not match "does not claim FIRMA A" — that is the HOLD sentence.
+	if grep -qiE 'binaries replaced|FASE R complete|substitution is done' "$DOC"; then
+		echo "C03-11: prep doc claims a completed substitution" >&2
+		fail=1
+	fi
 fi
 
 if ! grep -q 'func (a \*Authenticator) enforceSeatCapTx' "$SEAT"; then
@@ -81,25 +103,32 @@ fi
 # anada un entorno DESPUES de production, el `"FULFILLMENT_ENABLED": "false"` de ESE
 # entorno satisface la comprobacion y production puede quedarse en `true` sin que nada
 # lo diga. Por eso ademas de acotar, se AFIRMA que el bloque acota (abajo).
-prod_block="$(awk '/"production": \{/,/^    \},?$/' "$WRANGLER")"
-if [[ -z "$prod_block" ]]; then
-	echo "C03-11: COULD NOT LOOK — no encuentro el bloque \"production\" en $WRANGLER" >&2
-	exit 2
-fi
-# El rango tiene que ACOTAR. Si arrastra otra seccion, el grep de abajo puede quedar
-# satisfecho por el valor de OTRO entorno, que es justo el fallo que esta cura corta.
-if grep -qE '^[[:space:]]{4}"(sandbox|staging|preview|development)"[[:space:]]*:' <<<"$prod_block"; then
-	echo "C03-11: el bloque de production arrastra otra seccion — el rango no acota" >&2
-	fail=1
-fi
-if ! grep -q '"FULFILLMENT_ENABLED": "false"' <<<"$prod_block"; then
-	echo "C03-11: production fulfillment is not the explicit off" >&2
-	fail=1
+if [[ -n "$WRANGLER" ]]; then
+	prod_block="$(awk '/"production": \{/,/^    \},?$/' "$WRANGLER")"
+	if [[ -z "$prod_block" ]]; then
+		echo "C03-11: COULD NOT LOOK — no encuentro el bloque \"production\" en $WRANGLER" >&2
+		exit 2
+	fi
+	# El rango tiene que ACOTAR. Si arrastra otra seccion, el grep de abajo puede quedar
+	# satisfecho por el valor de OTRO entorno, que es justo el fallo que esta cura corta.
+	if grep -qE '^[[:space:]]{4}"(sandbox|staging|preview|development)"[[:space:]]*:' <<<"$prod_block"; then
+		echo "C03-11: el bloque de production arrastra otra seccion — el rango no acota" >&2
+		fail=1
+	fi
+	if ! grep -q '"FULFILLMENT_ENABLED": "false"' <<<"$prod_block"; then
+		echo "C03-11: production fulfillment is not the explicit off" >&2
+		fail=1
+	fi
 fi
 
 if [[ "$fail" -ne 0 ]]; then
 	echo "C03-11: $fail finding(s)" >&2
 	exit 1
+fi
+if [ "$_public_partial" -eq 1 ]; then
+	echo "C03-11: PARTIALLY APPLICABLE — seat seam still no-op; overlay HOLD doc and"
+	echo "  production fulfillment were not graded (curated out of this tree)."
+	exit 0
 fi
 echo "C03-11: CLEAN — FASE R remains HOLD; seat seam still no-op; production fulfillment off"
 exit 0

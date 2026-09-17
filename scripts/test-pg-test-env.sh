@@ -119,7 +119,7 @@ trap cleanup EXIT HUP INT TERM
 # Declaring the number closes it: a run that measures less than this battery claims to measure
 # is a FAILED run, whatever its individual cases said. Raise it deliberately when you add a
 # case — a diff that changes this line is exactly the review signal you want.
-EXPECTED_CASES=146
+EXPECTED_CASES=149
 
 pass=0
 fail=0
@@ -876,9 +876,22 @@ pg_image_agreement() { # pg_image_agreement <workflow>
 WORKFLOW="$ROOT/.github/workflows/mainline-ci.yml"
 TASKFILE="$ROOT/Taskfile.yml"
 
-# COUPLING GUARD. Twenty fixtures below hardcode this recipe VERBATIM, timeout included,
+# COUPLING GUARD. EIGHTEEN fixtures below hardcode this recipe VERBATIM, timeout included,
 # because a mutation has to reproduce the line byte-for-byte to strip a piece off it. That
 # makes ANY edit to it a repo-wide push outage.
+#
+# ⚠ THE COUNT SAID TWENTY AND THE FIXTURES WERE EIGHTEEN. Counted 2026-09-11 with
+# `grep -cF "$PINNED_RECIPE"`: 19 occurrences, one of which is this pin. The line below said
+# twenty, which is the defect this file's own contrast rounds keep finding one level up — a
+# number in prose ages in silence. The 2026-08-18 story keeps ITS number, because that is
+# what was measured that day and rewriting it would falsify the evidence, not the count.
+#
+# ⛔ AND THE RECIPE CHANGED ON PURPOSE ON 2026-09-11, which is the case these lines are for.
+# `race-modules` ran out of its 210-minute step ceiling (job 103097824594), so the task now
+# hands its argv to scripts/modules-race-partition.sh, which runs it over `./...` when no
+# partition is selected — the same packages as before — and over one partition of the same
+# `go list` inventory when CI's matrix selects one. The eighteen anchors moved with it, in
+# this commit, which is exactly what the message below demands of anyone who does it next.
 #
 # It happened on 2026-08-18 and the cause is worth keeping: the #856 merge silently reverted
 # the modules race cap 45m -> 30m. Nobody retuned anything on purpose. All twenty mutations
@@ -888,12 +901,12 @@ TASKFILE="$ROOT/Taskfile.yml"
 #
 # So the coupling is asserted ONCE, up front, and says what to do. One actionable line
 # instead of 34 -- and it points at the recipe, which is where the accident lands.
-PINNED_RECIPE="      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+PINNED_RECIPE="      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 if ! grep -qxF "$PINNED_RECIPE" "$TASKFILE"; then
 	printf 'pg-test-env: ⛔ NO HE PODIDO MIRAR: the modules race recipe this battery mutates is not in %s\n' "$TASKFILE" >&2
 	printf '             expected verbatim: %s\n' "$PINNED_RECIPE" >&2
-	printf '             found:             %s\n' "$(grep -n "with-pg-env.sh bash -c 'cd modules" "$TASKFILE" | head -1)" >&2
-	printf '             If the recipe changed ON PURPOSE, update PINNED_RECIPE and the 20 hardcoded\n' >&2
+	printf '             found:             %s\n' "$(grep -n "with-pg-env.sh bash scripts/modules-race-partition.sh" "$TASKFILE" | head -1)" >&2
+	printf '             If the recipe changed ON PURPOSE, update PINNED_RECIPE and the 18 hardcoded\n' >&2
 	printf '             copies below IN THE SAME COMMIT. If it changed by accident -- a merge revert\n' >&2
 	printf '             is how this last happened -- restore the RECIPE, not the anchors.\n' >&2
 	exit 2
@@ -993,7 +1006,7 @@ fi
 
 # The wrapper mutation is a single unique line, so sed is exact here; the guard above still
 # proves it landed.
-sed "s|bash scripts/with-pg-env.sh bash -c 'cd modules|bash -c 'cd modules|" \
+sed "s|bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh|bash scripts/modules-race-partition.sh|" \
 	"$TASKFILE" >"$WORK/tf-nowrapper.yml"
 if require_mutation "the modules recipe unwrapped" "$TASKFILE" "$WORK/tf-nowrapper.yml"; then
 	pg_wiring "$WORKFLOW" "$WORK/tf-nowrapper.yml" race-modules test:race-hot:modules \
@@ -1060,7 +1073,7 @@ fi
 # spellings, then four more plus a false positive, then seventeen. A Taskfile, by contrast, is
 # YAML: the set of targets whose name starts with test:race is enumerable exactly.
 cat "$TASKFILE" >"$WORK/tf-unwrapped.yml"
-sed -i "s|bash scripts/with-pg-env.sh bash -c 'cd modules|bash -c 'cd modules|" "$WORK/tf-unwrapped.yml"
+sed -i "s|bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh|bash scripts/modules-race-partition.sh|" "$WORK/tf-unwrapped.yml"
 if require_mutation "a race target stripped of its wrapper" "$TASKFILE" "$WORK/tf-unwrapped.yml"; then
 	pg_wiring "$WORKFLOW" "$WORK/tf-unwrapped.yml" >/dev/null 2>"$WORK/unwrapped.err"
 	rc_unwrapped=$?
@@ -1114,8 +1127,8 @@ tenth_case() { # tenth_case <label> <expected-exit> <needle> <workflow> <taskfil
 python3 - "$TASKFILE" "$WORK/tf-decoywrap.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-old = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
-new = "      - echo scripts/with-pg-env.sh >/dev/null; bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+old = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
+new = "      - echo scripts/with-pg-env.sh >/dev/null; bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(old, new, 1) if old in s else s)
 PY
 if require_mutation "a decoy mention of the wrapper" "$TASKFILE" "$WORK/tf-decoywrap.yml"; then
@@ -1189,7 +1202,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-varcmd.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-old = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+old = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 new = ("      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./eventing/...'\n"
        "      - T='go test'; cd modules && $T -count=1 ./eventing/...")
 open(sys.argv[2], 'w').write(s.replace(old, new, 1) if old in s else s)
@@ -1260,7 +1273,7 @@ key_case "an unmodelled target key" 2 '"watch"' '    watch: true\n'
 python3 - "$TASKFILE" "$WORK/tf-entry.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n      - unknown_entry_key: whatever", 1) if a in s else s)
 PY
 if require_mutation "an unmodelled cmds entry key" "$TASKFILE" "$WORK/tf-entry.yml"; then
@@ -1277,7 +1290,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-defer.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n      - defer: cd modules && go test -count=1 ./eventing/...", 1) if a in s else s)
 PY
 if require_mutation "a defer: running an unwrapped go test" "$TASKFILE" "$WORK/tf-defer.yml"; then
@@ -1351,7 +1364,7 @@ python3 - "$TASKFILE" "$WORK/tf-tmpl.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
 o = "  test:race-hot:modules:\n"
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 if o in s and a in s:
     s = s.replace(o, o + "    vars:\n      GO_CMD: go\n", 1)
     s = s.replace(a, a + "\n      - cd modules && {{.GO_CMD}} test -count=1 ./eventing/...", 1)
@@ -1390,7 +1403,7 @@ python3 - "$WORK/tf-defertask.yml" <<'PY'
 import sys
 p = sys.argv[1]
 s = open(p).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(p, 'w').write(s.replace(a, a + "\n      - defer: {task: pgprobe:unwrapped}", 1) if a in s else s)
 PY
 if require_mutation "a defer: calling another target" "$TASKFILE" "$WORK/tf-defertask.yml"; then
@@ -1406,7 +1419,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-defkey.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n      - defer: {task: test:race-hot:root, watch: true}", 1) if a in s else s)
 PY
 if require_mutation "an unmodelled key inside a nested call" "$TASKFILE" "$WORK/tf-defkey.yml"; then
@@ -1424,7 +1437,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-shelltask.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n      - task inc:unwrapped", 1) if a in s else s)
 PY
 if require_mutation "a shell command whose executable is task" "$TASKFILE" "$WORK/tf-shelltask.yml"; then
@@ -1445,7 +1458,7 @@ s = open(sys.argv[1]).read()
 # the Taskfile as a deliberate mutant, to prove the wiring gate refuses a recipe that hands
 # work to an unreviewed helper. It must never exist: if it ever did, this case would stop
 # testing anything.
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n      - bash scripts/pgprobe-hidden.sh", 1) if a in s else s)
 PY
 if require_mutation "a recipe running an unreviewed helper script" "$TASKFILE" "$WORK/tf-helper.yml"; then
@@ -1465,7 +1478,7 @@ s = open(sys.argv[1]).read()
 # export-closure: fixture scripts/pgprobe-hidden.sh — same mutant, spelled as a command
 # SUBSTITUTION so the case covers the other indirection. Deliberately absent, for the same
 # reason as the declaration above: a mutant that resolves proves nothing.
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + '\n      - PGPROBE="$(bash scripts/pgprobe-hidden.sh)"', 1) if a in s else s)
 PY
 if require_mutation "a program run inside a command substitution" "$TASKFILE" "$WORK/tf-subst.yml"; then
@@ -1485,7 +1498,7 @@ python3 - "$TASKFILE" "$WORK/tf-prefix.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
 o = "  test:race-hot:modules:\n"
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 if o in s and a in s:
     s = s.replace(o, o + "    env:\n      WRAPPER_ROOT: relocated\n", 1)
     s = s.replace(a, a + '\n      - bash "$WRAPPER_ROOT/scripts/with-pg-env.sh" go test -count=1 ./eventing/...', 1)
@@ -1558,7 +1571,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-optarg.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n      - env -u scripts/with-pg-env.sh go test -count=1 ./eventing/...", 1) if a in s else s)
 PY
 if require_mutation "an option consuming the wrapper path" "$TASKFILE" "$WORK/tf-optarg.yml"; then
@@ -1595,7 +1608,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-cleared.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n      - bash scripts/with-pg-env.sh env -u OLIVARES_TEST_POSTGRES_DSN go test -count=1 ./eventing/...", 1) if a in s else s)
 PY
 if require_mutation "the posture cleared by an option inside the argv" "$TASKFILE" "$WORK/tf-cleared.yml"; then
@@ -1622,7 +1635,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-ordinary.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 new = "      - bash scripts/with-pg-env.sh env WRAPPER_ENTERED=inside nohup env -u OLIVARES_TEST_POSTGRES_DSN go test -count=1 ./eventing/..."
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n" + new, 1) if a in s else s)
 PY
@@ -1645,7 +1658,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-unnamed.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 new = "      - bash scripts/with-pg-env.sh nice env -i PATH=\"$PATH\" go test -count=1 ./eventing/..."
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n" + new, 1) if a in s else s)
 PY
@@ -1666,7 +1679,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-ordinary-c.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 new = "      - bash scripts/with-pg-env.sh bash -c 'nohup env -u OLIVARES_TEST_POSTGRES_DSN go test -count=1 ./eventing/...'"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n" + new, 1) if a in s else s)
 PY
@@ -1741,6 +1754,66 @@ rc_ar_pass=$?
 [ "$rc_ar_pass" -eq 1 ] && grep -q "names OLIVARES_TEST_POSTGRES_DSN" "$WORK/arpass.err"
 check "naming the decided namespace to a non-data command is a finding" "exit $rc_ar_pass" $?
 
+# THE SQLSTORE ENTRY HELPER IS READ THROUGH CORE-RACE-PARTITION, not trusted by being
+# listed. race-core's recipe still enters core-race-partition.sh; that script now runs
+# scripts/sqlstore-race-entry-partition.sh with the same argv. A walk that lists the new
+# file without reading it would miss a posture clear inside it. Both halves run: the real
+# helper green, a helper that clears the posture red. A second mutant replaces the call
+# with an unreviewed script so an unknown nested runner stays UNVERIFIED.
+sqlstore_runner_fixture() { # sqlstore_runner_fixture <dir> <sqlstore-helper-body>
+	rm -rf "$1"
+	mkdir -p "$1/scripts"
+	cp "$TASKFILE" "$1/Taskfile.yml"
+	ln -s "$ROOT/.github" "$1/.github"
+	cp -R "$ROOT/scripts/." "$1/scripts/"
+	printf '%s\n' "$2" >"$1/scripts/sqlstore-race-entry-partition.sh"
+	"$PGWIRING" -workflow "$1/.github/workflows/mainline-ci.yml" -taskfile "$1/Taskfile.yml" -root "$1"
+}
+sqlstore_runner_fixture "$WORK/sqlstore-runner-clean" "$(cat "$ROOT/scripts/sqlstore-race-entry-partition.sh")" \
+	>/dev/null 2>"$WORK/sqlclean.err"
+rc_sql_clean=$?
+sqlstore_runner_fixture "$WORK/sqlstore-runner-clears" '#!/usr/bin/env bash
+unset OLIVARES_TEST_POSTGRES_DSN
+cd . && "$@" "${args[@]}"' >/dev/null 2>"$WORK/sqlclear.err"
+rc_sql_clear=$?
+[ "$rc_sql_clean" -eq 0 ] && [ "$rc_sql_clear" -eq 1 ] &&
+	grep -q "unsets OLIVARES_TEST_POSTGRES_DSN" "$WORK/sqlclear.err"
+check "the sqlstore entry helper inside core-race-partition is READ, not trusted" "clean=$rc_sql_clean cleared=$rc_sql_clear" $?
+
+# Only the exact preflight mode may be removed from the argv walk. The same helper with
+# an unknown mode remains UNVERIFIED; following its real body and command is mandatory.
+sed 's/--validate-argv/--unreviewed-preflight/' "$ROOT/scripts/core-race-partition.sh" \
+	>"$WORK/sqlstore-runner-clean/scripts/core-race-partition.sh"
+if cmp -s "$ROOT/scripts/core-race-partition.sh" "$WORK/sqlstore-runner-clean/scripts/core-race-partition.sh"; then
+	unexercised "unknown sqlstore preflight mode remains UNVERIFIED"
+else
+	"$PGWIRING" -workflow "$WORK/sqlstore-runner-clean/.github/workflows/mainline-ci.yml" \
+		-taskfile "$WORK/sqlstore-runner-clean/Taskfile.yml" -root "$WORK/sqlstore-runner-clean" \
+		>/dev/null 2>"$WORK/sqlmode.err"
+	rc_sql_mode=$?
+	[ "$rc_sql_mode" -eq 2 ] && grep -q 'unreviewed-preflight' "$WORK/sqlmode.err"
+	check "unknown sqlstore preflight mode remains UNVERIFIED" "exit $rc_sql_mode" $?
+fi
+
+rm -rf "$WORK/sqlstore-runner-unknown"
+mkdir -p "$WORK/sqlstore-runner-unknown/scripts"
+cp "$TASKFILE" "$WORK/sqlstore-runner-unknown/Taskfile.yml"
+ln -s "$ROOT/.github" "$WORK/sqlstore-runner-unknown/.github"
+cp -R "$ROOT/scripts/." "$WORK/sqlstore-runner-unknown/scripts/"
+sed 's|bash scripts/sqlstore-race-entry-partition.sh|bash scripts/not-a-reviewed-runner.sh|' \
+	"$ROOT/scripts/core-race-partition.sh" >"$WORK/sqlstore-runner-unknown/scripts/core-race-partition.sh"
+if cmp -s "$ROOT/scripts/core-race-partition.sh" "$WORK/sqlstore-runner-unknown/scripts/core-race-partition.sh"; then
+	unexercised "an unreviewed nested runner inside core-race-partition is UNVERIFIED"
+else
+	"$PGWIRING" -workflow "$WORK/sqlstore-runner-unknown/.github/workflows/mainline-ci.yml" \
+		-taskfile "$WORK/sqlstore-runner-unknown/Taskfile.yml" \
+		-root "$WORK/sqlstore-runner-unknown" \
+		>/dev/null 2>"$WORK/sqlunk.err"
+	rc_sql_unk=$?
+	[ "$rc_sql_unk" -eq 2 ] && grep -q 'not-a-reviewed-runner' "$WORK/sqlunk.err"
+	check "an unreviewed nested runner inside core-race-partition is UNVERIFIED" "exit $rc_sql_unk" $?
+fi
+
 # AND A CLEAR WHOSE TARGET THE READER CANNOT NAME. The two rows above key on the VERB and on the
 # OBJECT; the third pass of the seventeenth contrast supplied an input where the verb is visible
 # and the object is not — the three decided names put in an array and cleared by
@@ -1751,7 +1824,7 @@ check "naming the decided namespace to a non-data command is a finding" "exit $r
 python3 - "$TASKFILE" "$WORK/tf-indirect.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 new = ("      - bash scripts/with-pg-env.sh bash -c 'names=(OLIVARES_TEST_POSTGRES_DSN); "
        "for n in \"${names[@]}\"; do unset \"$n\"; done; go test -count=1 ./eventing/...'")
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n" + new, 1) if a in s else s)
@@ -1768,7 +1841,7 @@ fi
 python3 - "$TASKFILE" "$WORK/tf-unset.yml" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-a = "      - bash scripts/with-pg-env.sh bash -c 'cd modules && go test -race -count=1 -timeout 150m ./...'"
+a = "      - bash scripts/with-pg-env.sh bash scripts/modules-race-partition.sh go test -race -count=1 -timeout 150m"
 new = "      - bash scripts/with-pg-env.sh bash -c 'unset OLIVARES_TEST_POSTGRES_DSN; cd modules && go test -count=1 ./eventing/...'"
 open(sys.argv[2], 'w').write(s.replace(a, a + "\n" + new, 1) if a in s else s)
 PY
@@ -2061,6 +2134,7 @@ mkdir -p "$WORK/fake-root/.github/actions/pr-failure-report" "$WORK/fake-root/sc
 # lo que la fila pregunta. Una lista escrita a mano de dependencias envejece cada vez que
 # alguien toca el workflow, y el rojo aparece lejos de la causa.
 cp -R "$ROOT/scripts/." "$WORK/fake-root/scripts/"
+cp -R "$ROOT/.github/actions/." "$WORK/fake-root/.github/actions/"
 printf 'name: x\nruns:\n  using: composite\n  steps:\n    - run: task test:race-hot:modules\n      shell: bash\n' \
 	>"$WORK/fake-root/.github/actions/pr-failure-report/action.yml"
 "$PGWIRING" -workflow "$WORK/wf-action.yml" -taskfile "$TASKFILE" -root "$WORK/fake-root" \

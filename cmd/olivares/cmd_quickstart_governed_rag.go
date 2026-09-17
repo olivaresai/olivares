@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/core/webaddr"
 )
 
 type quickstartGovernedRAGOptions struct {
@@ -48,6 +50,19 @@ type quickstartGovernedRAGOptions struct {
 	mcpJWKSFile   string
 	mcpResource   string
 	mcpAuthServer string
+
+	// publicURL is this child command's OWN declared console address. Cobra local
+	// flags are per-command and are not inherited, so `quickstart governed-rag`
+	// needs its own or the parent's is simply not there.
+	publicURL    string
+	publicURLSet bool
+	// publicAddr is publicURL after ONE resolution, performed before any directory
+	// or file is created. Everything downstream reads this and never the
+	// environment.
+	publicAddr webaddr.Address
+	// publicAddrSource is WHICH input supplied it, carried alongside so no caller
+	// downstream has to infer it from the environment a second time.
+	publicAddrSource publicAddrSource
 }
 
 // newQuickstartGovernedRAGCmd writes the operator config for the governed RAG path:
@@ -95,11 +110,13 @@ func newQuickstartGovernedRAGCmd() *cobra.Command {
     --mcp-jwks-url https://idp.example.com/.well-known/jwks.json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			opts.publicURLSet = cmd.Flags().Changed("public-url")
 			return runQuickstartGovernedRAG(cmd.Context(), cmd.OutOrStdout(), opts)
 		},
 	}
 	f := cmd.Flags()
 	f.StringVar(&opts.listen, "listen", opts.listen, "HTTP (REST + web console) listen address when --start is used")
+	f.StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
 	f.StringVar(&opts.grpcListen, "grpc-listen", opts.grpcListen, "gRPC listen address when --start is used")
 	f.StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	f.StringVar(&opts.outDir, "out-dir", "", "directory for generated governed-RAG config (default <data-dir>/quickstart/governed-rag)")
@@ -134,6 +151,21 @@ func runQuickstartGovernedRAG(ctx context.Context, out io.Writer, opts quickstar
 	if err := opts.validate(); err != nil {
 		return err
 	}
+	// RESOLVE THE DECLARED ADDRESS BEFORE ANYTHING IS WRITTEN, and resolve it
+	// ONCE. This command used to read the setting twice: once here through
+	// runEngine, and once inside the bootstrap-script generator, which DISCARDED
+	// the refusal. Without --start that was silent — exit 0, a script carrying
+	// https://127.0.0.1:8443, and not a word about the address the operator
+	// declared. With --start the data directory and the config files were already
+	// on disk by the time runEngine refused, so the remedy came with a cleanup.
+	//
+	// The typed value travels from here into the script generator and into
+	// serveOptions; nothing downstream reads the environment again.
+	publicAddr, publicSource, err := resolvePublicAddr(opts.publicURL, opts.publicURLSet, osGetenv)
+	if err != nil {
+		return err
+	}
+	opts.publicAddr, opts.publicAddrSource = publicAddr, publicSource
 	// Resolve the data dir ONCE, here at the edge, so the derived out-dir, the
 	// generated config and the printed next steps all name the SAME directory —
 	// and so the resolution's error surfaces as this command's error.
@@ -159,18 +191,29 @@ func runQuickstartGovernedRAG(ctx context.Context, out io.Writer, opts quickstar
 	}
 	_ = os.Setenv("OLIVARES_SOURCES_CONFIG", paths.sources)
 	_ = os.Setenv("OLIVARES_AGENT_GATEWAY_CONFIG", paths.gateway)
-	serve := serveOptions{
-		listen: opts.listen, grpcListen: opts.grpcListen, dataDir: opts.dataDir,
-		engine: "sqlite", checkpointInterval: time.Hour,
-	}
-	announce := func(ctx context.Context, out io.Writer, eng *engine) error {
-		if err := announceQuickstart(ctx, out, eng, consoleURL(opts.listen, false)); err != nil {
+	serve := governedRAGServeOptions(opts)
+	announce := func(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
+		if err := announceQuickstart(ctx, out, eng, addr); err != nil {
 			return err
 		}
 		printGovernedRAGNextSteps(out, opts, paths)
 		return nil
 	}
 	return runEngine(ctx, out, serve, announce)
+}
+
+// governedRAGServeOptions is the serveOptions the --start path hands to
+// runEngine. Address and source are already resolved on opts; this copies them
+// and does not read the environment again. Passing only the address made
+// runEngine infer the environment after a flag had decided, so the boot line
+// named OLIVARES_PUBLIC_URL for a value that came from --public-url.
+func governedRAGServeOptions(opts quickstartGovernedRAGOptions) serveOptions {
+	return serveOptions{
+		listen: opts.listen, grpcListen: opts.grpcListen, dataDir: opts.dataDir,
+		engine: "sqlite", checkpointInterval: time.Hour,
+		publicAddr: opts.publicAddr, publicAddrResolved: true,
+		publicAddrSource: opts.publicAddrSource,
+	}
 }
 
 func (o quickstartGovernedRAGOptions) validate() error {
@@ -411,7 +454,16 @@ func secretName(ref string) string {
 
 func governedRAGBootstrapScript(opts quickstartGovernedRAGOptions) string {
 	tenant := emptyAsPlaceholder(opts.tenantID, "<tenant-id>")
-	base := strings.TrimRight(consoleURL(opts.listen, false), "/")
+	// This value is written into a file a human pastes into a shell, so it has to
+	// be the address that answers — the declared one when there is one, and an
+	// openable form of the bind otherwise. It used to be the bind spelling
+	// concatenated onto a scheme, which for a wildcard bind produced a URL curl
+	// cannot resolve.
+	//
+	// The address arrives ALREADY RESOLVED. This function used to resolve it
+	// itself and throw the refusal away, so an invalid declared address produced a
+	// script pointing at the bind with no diagnostic anywhere.
+	base := strings.TrimRight(governedRAGBaseURL(opts), "/")
 	return fmt.Sprintf(`#!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
@@ -489,4 +541,19 @@ EOF
 func jsonLiteral(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+// governedRAGBaseURL is the console address the generated bootstrap script points
+// at: the declared one when the operator declared one, and an openable form of
+// the bind otherwise.
+//
+// It takes the ALREADY-RESOLVED address. The previous version resolved it a
+// second time and dropped the error on the floor, which is how an invalid
+// declared address became a silent fall back to the bind.
+func governedRAGBaseURL(opts quickstartGovernedRAGOptions) string {
+	if !opts.publicAddr.IsZero() {
+		return opts.publicAddr.Origin
+	}
+	browse, _ := webaddr.FromListen(opts.listen, "https")
+	return browse.Origin
 }

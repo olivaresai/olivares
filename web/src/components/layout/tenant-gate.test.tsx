@@ -31,6 +31,9 @@ import type { ReactElement, ReactNode } from 'react'
 const routerMock = vi.hoisted(() => ({
   outlet: (() => null) as () => ReactElement | null,
   pathname: '/',
+  // No resolved route or guard admission in this wire fixture. Recents are proved
+  // separately with the real router in personal-navigation.test.tsx.
+  router: { state: { status: 'pending' }, subscribe: () => () => {} },
 }))
 vi.mock('@tanstack/react-router', () => ({
   Outlet: () => routerMock.outlet(),
@@ -40,6 +43,7 @@ vi.mock('@tanstack/react-router', () => ({
   ),
   useRouterState: () => routerMock.pathname,
   useNavigate: () => () => {},
+  useRouter: () => routerMock.router,
 }))
 
 import { Providers } from '@/app/providers'

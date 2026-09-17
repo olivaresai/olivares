@@ -23,12 +23,16 @@ package updatecheck
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/core/release"
 )
@@ -102,23 +106,26 @@ func Check(ctx context.Context, cfg Config) Status {
 	// the operator cannot act on. One resolver, both readers (core/release/channelurl.go).
 	layout, err := release.ResolveChannel(cfg.Endpoint, channel)
 	if err != nil {
-		st.Error = err.Error()
-		return st
+		return fail(st, &checkFailure{
+			stage:  stageResolve,
+			where:  displayEndpoint(cfg.Endpoint),
+			reason: resolveReason(cfg.Endpoint, channel),
+			err:    err,
+		})
 	}
-	mb, err := get(ctx, client, layout.ManifestURL())
+	manifestURL, signatureURL := layout.ManifestURL(), layout.SignatureURL()
+	where := displayEndpoint(manifestURL)
+	mb, err := get(ctx, client, manifestURL, stageManifest)
 	if err != nil {
-		st.Error = err.Error()
-		return st
+		return fail(st, err)
 	}
-	sig, err := get(ctx, client, layout.SignatureURL())
+	sig, err := get(ctx, client, signatureURL, stageSignature)
 	if err != nil {
-		st.Error = err.Error()
-		return st
+		return fail(st, err)
 	}
 	m, err := release.VerifyManifest(mb, sig, cfg.PubKey)
 	if err != nil {
-		st.Error = err.Error()
-		return st
+		return fail(st, &checkFailure{stage: stageVerify, where: where, reason: verifyReason(err), err: err})
 	}
 	// SAME BINDING AS THE CLI, and the console needs it more, not less: this runs
 	// unattended and its whole output is a badge. The signature proves the manifest is ours;
@@ -130,19 +137,16 @@ func Check(ctx context.Context, cfg Config) Status {
 	// states, and "I could not check" is the honest one when the answer is about a different
 	// channel than the question.
 	if got := strings.TrimSpace(m.Channel); got != channel {
-		st.Error = fmt.Sprintf("asked for channel %s and the endpoint served a manifest signed for channel %s — the signature is valid, so this is a wrong-channel answer (stale mirror or misrouted endpoint), not a forgery", channel, got)
-		return st
+		return fail(st, &checkFailure{stage: stageBinding, where: where, reason: wrongChannelReason(channel, got)})
 	}
 	if m.Stale(now) {
 		// Anti-freeze: a stale (but validly signed) manifest is not a trustworthy
 		// "up to date" signal — surface it as a failed check, not silence.
-		st.Error = "channel manifest is expired (stale or frozen mirror?)"
-		return st
+		return fail(st, &checkFailure{stage: stageFreshness, where: where, reason: reasonExpired})
 	}
 	plan, err := m.PlanUpgrade(cfg.CurrentVersion, "", "", cfg.InstallID, now)
 	if err != nil {
-		st.Error = err.Error()
-		return st
+		return fail(st, &checkFailure{stage: stageCompare, reason: reasonVersionUnparsable, err: err})
 	}
 	st.LatestVersion = m.Version
 	// An unstamped build has no position in the ordering, so neither answer is available
@@ -151,8 +155,7 @@ func Check(ctx context.Context, cfg Config) Status {
 	// instead of a fabricated verdict: Available and UpToDate both stay false, which is
 	// what the console already renders when a check could not conclude.
 	if !plan.CurrentKnown {
-		st.Error = fmt.Sprintf("this build carries no version stamp (%q), so it cannot be compared against channel %s", cfg.CurrentVersion, channel)
-		return st
+		return fail(st, &checkFailure{stage: stageCompare, reason: reasonUnstamped + channel})
 	}
 	st.Available = plan.Direction > 0 // a strictly newer release
 	st.UpToDate = plan.Direction <= 0 // running the latest or newer
@@ -163,21 +166,206 @@ func Check(ctx context.Context, cfg Config) Status {
 	return st
 }
 
-func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func get(ctx context.Context, client *http.Client, rawURL, stage string) ([]byte, error) {
+	where := displayEndpoint(rawURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, &checkFailure{stage: stage, where: where, reason: reasonBadRequestURL, err: err}
 	}
 	req.Header.Set("User-Agent", "olivares-updatecheck")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, &checkFailure{stage: stage, where: where, reason: transportReason(ctx, err), err: err}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("update check: %s returned %d", url, resp.StatusCode)
+		return nil, &checkFailure{stage: stage, where: where, reason: fmt.Sprintf(reasonHTTPStatus, resp.StatusCode)}
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // manifests are small
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxMetadataBytes+1))
+	if err != nil {
+		return nil, &checkFailure{stage: stage, where: where, reason: reasonReadFailed, err: err}
+	}
+	if len(body) > maxMetadataBytes {
+		return nil, &checkFailure{stage: stage, where: where, reason: reasonOversize}
+	}
+	return body, nil
+}
+
+const maxMetadataBytes = 1 << 20
+
+const maxStatusError = 400
+
+// checkFailure exposes owned stage/reason text and a display-only endpoint.
+// The underlying cause is available through Unwrap and must not reach Status.Error.
+type checkFailure struct {
+	stage  string
+	where  string
+	reason string
+	err    error
+}
+
+func (e *checkFailure) Error() string {
+	msg := "update check: " + e.stage
+	if e.where != "" {
+		msg += " (" + e.where + ")"
+	}
+	return msg + ": " + e.reason
+}
+
+func (e *checkFailure) Unwrap() error { return e.err }
+
+func fail(st Status, err error) Status {
+	st.Error = statusMessage(err)
+	st.Available = false
+	st.UpToDate = false
+	st.Security = false
+	st.Advisories = nil
+	return st
+}
+
+func statusMessage(err error) string {
+	var f *checkFailure
+	if !errors.As(err, &f) {
+		return "update check: failed for an unrecognized reason"
+	}
+	return clampStatusError(f.Error())
+}
+
+func clampStatusError(s string) string {
+	if len(s) <= maxStatusError {
+		return s
+	}
+	cut := maxStatusError
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "..."
+}
+
+const (
+	stageResolve   = "resolving the update endpoint"
+	stageManifest  = "fetching the channel manifest"
+	stageSignature = "fetching the manifest signature"
+	stageVerify    = "verifying the channel manifest"
+	stageBinding   = "checking the channel binding"
+	stageFreshness = "checking manifest freshness"
+	stageCompare   = "comparing versions"
+)
+
+const (
+	reasonChannelUnknown  = "the configured channel is not one of the published channels"
+	reasonEndpointEmpty   = "the configured endpoint is empty"
+	reasonEndpointNotURL  = "the configured endpoint is not an absolute URL"
+	reasonEndpointQueryFr = "an update endpoint is a base path, so it carries no query string and no fragment"
+	reasonEndpointLayout  = "the endpoint is not a usable public channel layout"
+
+	reasonBadRequestURL = "the resolved address is not a usable request URL"
+	reasonNetwork       = "network error"
+	reasonCanceled      = "the check was canceled"
+	reasonTimeout       = "the request timed out"
+	reasonReadFailed    = "the response could not be read"
+	reasonOversize      = "the response is larger than the 1 MiB limit for channel metadata"
+	reasonHTTPStatus    = "HTTP %d"
+
+	reasonNoKey        = "this build has no usable OTA verification key"
+	reasonBadSignature = "the signature does not verify against the OTA key"
+	reasonBadSigFormat = "the detached signature is not in a readable form"
+	reasonBadManifest  = "the signed manifest is not one this build accepts"
+
+	reasonExpired           = "the channel manifest is expired (stale or frozen mirror)"
+	reasonVersionUnparsable = "this build's version stamp is not a parsable version"
+	reasonUnstamped         = "this build carries no version stamp, so it cannot be compared against channel "
+)
+
+func resolveReason(endpoint, channel string) string {
+	if !release.ValidChannel(strings.TrimSpace(channel)) {
+		return reasonChannelUnknown
+	}
+	raw := strings.TrimRight(strings.TrimSpace(endpoint), "/")
+	if raw == "" {
+		return reasonEndpointEmpty
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return reasonEndpointNotURL
+	}
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") {
+		return reasonEndpointQueryFr
+	}
+	return reasonEndpointLayout
+}
+
+func verifyReason(err error) string {
+	switch {
+	case errors.Is(err, release.ErrNoKey):
+		return reasonNoKey
+	case errors.Is(err, release.ErrBadSignature):
+		return reasonBadSignature
+	}
+	var me *release.ManifestError
+	if errors.As(err, &me) {
+		return reasonBadManifest
+	}
+	return reasonBadSigFormat
+}
+
+func wrongChannelReason(asked, served string) string {
+	what := "a channel this build does not publish"
+	if release.ValidChannel(served) {
+		what = "channel " + served
+	}
+	return "asked for channel " + asked + ", and the endpoint served a manifest signed for " + what +
+		"; the signature is valid, so this is a wrong-channel answer (stale or misrouted mirror), not a forgery"
+}
+
+func transportReason(ctx context.Context, err error) string {
+	if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+		return reasonCanceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return reasonTimeout
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return reasonTimeout
+	}
+	return reasonNetwork
+}
+
+const (
+	displayEndpointMaxLen      = 96
+	displayEndpointUnavailable = ""
+)
+
+func displayEndpoint(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return displayEndpointUnavailable
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return displayEndpointUnavailable
+	}
+	if u.Host == "" {
+		return displayEndpointUnavailable
+	}
+	out := scheme + "://" + u.Host
+	if len(out) > displayEndpointMaxLen || !printableASCII(out) {
+		return displayEndpointUnavailable
+	}
+	return out
+}
+
+func printableASCII(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x21 || s[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // Checker caches the latest Status and refreshes it on an interval, so the console

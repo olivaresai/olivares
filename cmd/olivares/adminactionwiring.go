@@ -117,6 +117,14 @@ type budgetCapResolver interface {
 
 var _ budgetCapResolver = (*finops.Module)(nil)
 
+// Optional only for the explicitly uncertified legacy branch. New evidence
+// requires this capability on the SAME injected FinOps module, or is refused.
+type budgetEvidenceCapResolver interface {
+	BudgetEvidenceCapTarget(context.Context, model.TenantID, sdkmodel.FindingReport) (dimension, key string, ok bool, err error)
+}
+
+var _ budgetEvidenceCapResolver = (*finops.Module)(nil)
+
 // finopsBackstop is the opt-in, default-off, fail-closed FinOps→upstream-cap bridge.
 type finopsBackstop struct {
 	actuators       map[model.TenantID]*claudeapi.Actuator
@@ -206,7 +214,25 @@ func (s *finopsBackstop) onFinding(ctx context.Context, e event.Event) error {
 	if !ok {
 		return nil // no actuator provisioned for this tenant — fail-closed no-op
 	}
-	s.pushCap(ctx, tid, act, f.SubjectRef) // SubjectRef = the capped budget's id
+	if f.BudgetEvidence != nil {
+		resolver, wired := s.targets.(budgetEvidenceCapResolver)
+		if !wired || e.Source != sdkmodel.BudgetEvidenceProducer || e.SourceRegistration != nil ||
+			f.BudgetEvidenceValidity() != "structurally_valid" {
+			return nil
+		}
+		dimension, key, verified, err := resolver.BudgetEvidenceCapTarget(ctx, tid, f)
+		if err != nil {
+			s.log.Warn("finops-backstop: alert evidence lookup failed; not actuating", "tenant", tid.String(), "err", err)
+			return nil
+		}
+		if verified && key != "" {
+			s.pushVerifiedTarget(ctx, tid, act, dimension, key)
+		}
+		return nil // presence cannot fall through to the legacy resolver
+	}
+	// Historical findings without an extension retain their declared, uncertified
+	// behavior. Source text alone does not upgrade them into verified evidence.
+	s.pushCap(ctx, tid, act, f.SubjectRef)
 	return nil
 }
 
@@ -316,6 +342,12 @@ func (s *finopsBackstop) pushCap(ctx context.Context, tenant model.TenantID, act
 	if !ok || key == "" {
 		return // not a budget, deleted, or a global/un-keyed budget — no surgical target
 	}
+	s.pushVerifiedTarget(ctx, tenant, act, dimension, key)
+}
+
+// Both branches reach the same PEP. For new evidence the target is already bound
+// to its alert; approval re-drive preserves the resulting plan-bound subject.
+func (s *finopsBackstop) pushVerifiedTarget(ctx context.Context, tenant model.TenantID, act *claudeapi.Actuator, dimension, key string) {
 	spec := claudeapi.ActionSpec{Tenant: tenant.String(), RequestedBy: backstopActor}
 	switch dimension {
 	case "api_key":

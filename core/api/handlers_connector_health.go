@@ -58,7 +58,8 @@ type connectorSummaryDTO struct {
 // health:status:read so any admin/viewer with health permission can see it (not
 // superadmin-only like the source roster CRUD).
 func (s *Server) handleConnectorHealth(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := s.authzTenant(w, r, "health:status:read"); !ok {
+	_, tenant, ok := s.authzTenant(w, r, "health:status:read")
+	if !ok {
 		return
 	}
 
@@ -87,6 +88,13 @@ func (s *Server) handleConnectorHealth(w http.ResponseWriter, r *http.Request) {
 		}
 		items = make([]connectorHealthDTO, 0, len(sources))
 		for _, src := range sources {
+			// The roster's store scope is deployment-global, but each source names
+			// the business tenant whose observations it produces. Project before
+			// building either row metadata or the aggregate so neither can disclose
+			// a foreign, unassigned, or malformed roster entry.
+			if src.Tenant != tenant.String() {
+				continue
+			}
 			state := connectorStateToHealth(src.Enabled, src.Status)
 			// The trend follows the shared classification, not the literal
 			// "failed": a source the engine refused to wire reported "stable",

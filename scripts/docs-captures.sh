@@ -15,6 +15,13 @@
 #
 # Usage: scripts/docs-captures.sh [extra playwright args, e.g. --grep sessions]
 # Requires: go, pnpm, Playwright chromium (`pnpm --dir web exec playwright install chromium`).
+# ⛔ ESTE GUION RECONSTRUYE EL BUNDLE COMMITEADO (linea del `pnpm --dir web run build` mas abajo).
+# `web/vite.config` fija `outDir: ../core/internal/webui/dist` con `emptyOutDir: true`, asi que
+# VACIA y reescribe `core/internal/webui/dist`: 69 ficheros borrados y 69 nuevos sin trackear,
+# medido el 2026-08-26. No tiene invocador en el Taskfile, se corre a mano para capturas.
+# NO lo corras en un worktree con trabajo vivo: el residuo lo recoge el siguiente push, que muere
+# en `check-conflict-markers` con UNVERIFIED y parece culpa de la rama que lo sufre, no de aqui.
+#
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -155,17 +162,82 @@ fi
 printf 'demo-harness-inference-token-not-a-real-credential\n' >"$DATA/demo-inference-token"
 chmod 0600 "$DATA/demo-inference-token"
 
-echo "==> Booting engine (insecure, demo-seeded) on 127.0.0.1:$PORT"
+# ⛔ K3 ACTIVATION CEREMONY — WITHOUT IT EVERY COMMUNICATIONS DOOR PHOTOGRAPHS ITS FAILURE.
+#    Measured 2026-09-11: this harness booted the engine with communication activation not
+#    requested, so K3 store readiness stayed OFF ("communication store proof incomplete") and the
+#    engine answered 503 to GET /v1/m/sessions/inbox/handoffs and to the capabilities question.
+#    The /communications/handoffs cell passed with the right heading and tab while its table was
+#    still the retrying skeleton; published, that PNG would have shown a failure as the door.
+#
+#    The product has ONE way to make K3 effective, and the K3 browser journey's global setup
+#    already performs it: owned custody for the content sealer and the cursor keyring, a first
+#    boot with --seed-demo under OLIVARES_COMMUNICATION_ACTIVATION=on, `db
+#    activate-directory-writer` on the STOPPED store, and a second boot on the same data directory
+#    without --seed-demo (a second seed refuses: the demo org already exists). The same steps run
+#    here. The handoffs cell separately requires an authorized HTTP 200 collection read before
+#    it records a capture; the preliminary routing probe below cannot establish that result.
+#
+#    The keyrings are disposable random roots inside $DATA, written 0600 and never printed; the
+#    data directory is removed on exit with everything in it.
+K3_CUSTODY="$DATA/custody"
+mkdir -p "$K3_CUSTODY"
+chmod 0700 "$K3_CUSTODY"
+python3 - "$K3_CUSTODY" <<'PYCUSTODIA'
+import base64, json, os, secrets, sys
+
+d = sys.argv[1]
+
+
+def raiz():
+    return base64.b64encode(secrets.token_bytes(32)).decode()
+
+
+def escribe(nombre, doc):
+    fd = os.open(os.path.join(d, nombre), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        json.dump(doc, fh)
+
+
+escribe("content-keyring.json", {
+    "format": "olivares.communication-content-keyring.v1",
+    "current_seal_version": "seal-v1",
+    "current_digest_version": "digest-v1",
+    "keys": [{"version": "seal-v1", "root_key_base64": raiz()},
+             {"version": "digest-v1", "root_key_base64": raiz()}],
+})
+escribe("cursor-keyring.json", {
+    "format": "olivares.communication-cursor-keyring.v1",
+    "current_kid": "cursor-k1",
+    "keys": [{"kid": "cursor-k1", "key_base64": raiz()}],
+})
+PYCUSTODIA
+
 # Never launch the operator's real Claude binary from a documentation harness. The override points
 # only this disposable engine at the deterministic, zero-network fixture; the real procRunner,
 # admission, lifecycle ledger and workspace jail remain in the path.
-OLIVARES_SESSION_RUNTIME_CLAUDE_BIN="$ROOT/scripts/demo-agent.sh" \
-OLIVARES_SESSION_RUNTIME_TOKEN_FILE="$DATA/demo-inference-token" \
-DEMO_SESSION_UNIQUE=1 \
-TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
-"$BIN" serve --insecure --seed-demo --listen "127.0.0.1:$PORT" \
-  --grpc-listen "127.0.0.1:$GRPC_PORT" --data-dir "$DATA" >"$DATA/engine.log" 2>&1 &
-PID=$!
+# WIF is forced off for THIS fixture engine only: sessionruntime.go prefers WIF over the
+# lab token file, and an inherited opt-in must not replace the file issuer. Operator config
+# is not written.
+# The K3 variables are the journey's engine environment: activation requested, the two custody
+# files and no key wrap (custody is file-based). Both boots and the ceremony use the same set.
+# `&` stays on the engine command itself, so $! is the engine and not a subshell.
+arranca_motor() {
+  OLIVARES_SESSION_RUNTIME_CLAUDE_BIN="$ROOT/scripts/demo-agent.sh" \
+  OLIVARES_SESSION_RUNTIME_TOKEN_FILE="$DATA/demo-inference-token" \
+  OLIVARES_SESSION_RUNTIME_WIF=0 \
+  OLIVARES_COMMUNICATION_ACTIVATION=on \
+  OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE="$K3_CUSTODY/content-keyring.json" \
+  OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE="$K3_CUSTODY/cursor-keyring.json" \
+  OLIVARES_KEY_WRAP= \
+  DEMO_SESSION_UNIQUE=1 \
+  TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
+  "$BIN" serve --insecure "$@" --listen "127.0.0.1:$PORT" \
+    --grpc-listen "127.0.0.1:$GRPC_PORT" --data-dir "$DATA" >>"$DATA/engine.log" 2>&1 &
+  PID=$!
+}
+
+echo "==> Booting engine (insecure, demo-seeded, K3 activation requested) on 127.0.0.1:$PORT"
+arranca_motor --seed-demo
 
 echo "==> Waiting for the engine to accept connections"
 # ⛔ LA ESPERA ERA DE 20 s FIJOS Y NO TENÍA VEREDICTO. `seq 1 40` × `sleep 0.5` agota su presupuesto
@@ -193,6 +265,54 @@ if [ "$ARRIBA" -ne 1 ]; then
   exit 2
 fi
 
+echo "==> K3 activation ceremony on the STOPPED store"
+kill "$PID" 2>/dev/null || true
+PARADO=0
+for _ in $(seq 1 200); do
+  # An exited child stays a zombie until it is reaped, so `kill -0` alone would wait the budget out.
+  ESTADO="$(cut -d' ' -f3 "/proc/$PID/stat" 2>/dev/null || true)"
+  if [ -z "$ESTADO" ] || [ "$ESTADO" = "Z" ]; then
+    PARADO=1
+    break
+  fi
+  sleep 0.1
+done
+if [ "$PARADO" -ne 1 ]; then
+  echo "docs-captures: ⛔ the seeded engine (pid $PID) did not stop in 20 s; the ceremony needs the store STOPPED." >&2
+  exit 2
+fi
+wait "$PID" 2>/dev/null || true
+PID=""
+if ! OLIVARES_COMMUNICATION_ACTIVATION=on \
+  OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE="$K3_CUSTODY/content-keyring.json" \
+  OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE="$K3_CUSTODY/cursor-keyring.json" \
+  OLIVARES_KEY_WRAP= \
+  TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
+  "$BIN" db activate-directory-writer --data-dir "$DATA" --expected-generation 1 \
+  --writers-upgraded --writers-drained --actor docs-captures \
+  --reason "disposable documentation-capture estate, serve stopped" >"$DATA/activation.txt" 2>&1; then
+  echo "docs-captures: ⛔ the K3 activation ceremony failed; without it every communications door answers 503:" >&2
+  tail -20 "$DATA/activation.txt" >&2 || true
+  exit 2
+fi
+
+echo "==> Reopening the same store without --seed-demo, so readiness observes the enforced writer"
+arranca_motor
+ARRIBA=0
+for _ in $(seq 1 480); do
+  kill -0 "$PID" 2>/dev/null || break
+  if curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+    ARRIBA=1
+    break
+  fi
+  sleep 0.5
+done
+if [ "$ARRIBA" -ne 1 ]; then
+  echo "docs-captures: ⛔ the reopened engine did not accept connections in 240 s, or it died. Tail of its log:" >&2
+  tail -20 "$DATA/engine.log" >&2 2>/dev/null || echo "  (no log)" >&2
+  exit 2
+fi
+
 TOKEN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
@@ -204,6 +324,21 @@ if [ -z "$TENANT" ]; then
   cat "$DATA/engine.log" >&2
   exit 1
 fi
+
+# Preliminary routing probe only. A 4xx can precede the module's readiness check and therefore
+# does not prove effective K3 readiness. Each captured handoffs view must independently obtain
+# an authorized HTTP 200 collection read for its selected workspace.
+K3_PROBE="$(curl -s -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
+  "http://127.0.0.1:$PORT/v1/m/sessions/inbox?workspace_id=00000000-0000-7000-8000-000000000000" || true)"
+case "$K3_PROBE" in
+2?? | 4??) echo "==> K3 preliminary routing probe HTTP $K3_PROBE; authorized collection proof remains required" ;;
+*)
+  echo "docs-captures: ⛔ K3 preliminary routing probe failed after the ceremony (HTTP ${K3_PROBE:-none}). Tail of the engine log:" >&2
+  tail -20 "$DATA/engine.log" >&2 2>/dev/null || true
+  exit 2
+  ;;
+esac
 
 # ⛔ THE THREE CONNECTORS THE INTEGRATION GUIDES PHOTOGRAPH. `claude-code-prod`,
 #    `codex-enterprise` and `grok-demo` are prose examples in the guides and exist NOWHERE
@@ -448,50 +583,28 @@ echo "==> Launching governed sessions so /sessions is a table, not one row"
 WS_REF="$(curl -sf "http://127.0.0.1:$PORT/v1/m/sessions/workspaces" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
   | python3 -c 'import sys,json;i=(json.load(sys.stdin).get("items") or []);print(i[0].get("workspace_ref","") if i else "")' 2>/dev/null || true)"
-if [ -n "$WS_REF" ]; then
-  LANZADAS=0
-  while IFS='|' read -r nombre modelo; do
-    [ -n "$nombre" ] || continue
-    # ⛔ EL ERROR SE GUARDA, NO SE TIRA. La primera version mandaba stderr a /dev/null y la
-    #    corrida dijo «0 session(s) launched» sin una sola pista: tuve que diagnosticarlo a
-    #    mano contra el motor vivo. Un fallo silencioso aqui deja /sessions con una fila y
-    #    nadie sabe por que.
-    # ⛔ `--env-allow` NO ES OPCIONAL AQUI: la sesion NO HEREDA el entorno del motor. El propio
-    #    flag lo dice — «host env var NAMES to forward to the session (allowlist; nothing else
-    #    is inherited)». Sin esto, `DEMO_SESSION_UNIQUE` se exporta al MOTOR, el motor
-    #    lanza el agente con el entorno limpio, el agente no la ve y emite su id fijo: cinco
-    #    lanzamientos volvieron a colapsar en UNA fila. Es aislamiento bien hecho del producto,
-    #    y hay que pedirle el paso explicitamente.
-    if "$BIN" agent session create --name "$nombre" --model "$modelo" \
-        --workspace "$WS_REF" --transport stream-json \
-        --env-allow DEMO_SESSION_UNIQUE \
-        --server "http://127.0.0.1:$PORT" --token "$TOKEN" --tenant "$TENANT" \
-        --insecure >/dev/null 2>"$DATA/launch-$LANZADAS.err"; then
-      LANZADAS=$((LANZADAS + 1))
-    elif [ "$LANZADAS" = "0" ]; then
-      echo "   ⛔ launch refused; the engine says:" >&2
-      # ⛔ `grep … | head … || tail …` LEE EL RC DE `head`, que siempre es 0, asi que el
-      #    respaldo NUNCA corria y un error sin `"message"` salia como una linea vacia. Es la
-      #    misma trampa de la tuberia que ya me ha mordido hoy; se separa en dos pasos.
-      # ⛔ Y el `|| true` TAMPOCO es higiene: sin el, esta linea mata el arnes entero por
-      #    `set -euo pipefail`, y lo mata en la RUTA DE DIAGNOSTICO. Dos formas, medidas: sin
-      #    `"message"` en el log, `grep` sale 1; y con MUCHAS coincidencias, `head` cierra la
-      #    tuberia y `grep` recibe SIGPIPE (141). `pipefail` propaga los dos. En ambos casos el
-      #    respaldo `tail -2` de la linea siguiente NO llega a correr: el arnes muere sin decir
-      #    nada justo cuando ya habia algo que contar.
-      MSG="$( { grep -oE '"message":"[^"]*"' "$DATA/launch-0.err" 2>/dev/null || true; } | head -1)"
-      if [ -n "$MSG" ]; then echo "   $MSG" >&2; else tail -2 "$DATA/launch-0.err" >&2; fi
-    fi
-  done <<'SESIONES'
-billing-migration review|claude-opus-4-8
-entitlement audit sweep|claude-opus-4-8
-deploy-values reconcile|claude-sonnet-4-5
-incident postmortem draft|claude-opus-4-8
-dependency upgrade scan|claude-sonnet-4-5
-SESIONES
-  echo "   $LANZADAS session(s) launched"
-else
-  echo "   ⚠ no workspace ref: the launched sessions are NOT seeded and /sessions stays at one row" >&2
+# Receipts live outside $DATA so cleanup cannot erase the refusal or the five
+# corroborated identities. playwright-report/ is gitignored; callers may override.
+SEED_RECEIPTS="${DOCS_CAPTURE_SEED_RECEIPTS:-$ROOT/web/playwright-report/docs-session-seed}"
+mkdir -p "$SEED_RECEIPTS"
+if [ -z "$WS_REF" ]; then
+  echo "docs-captures: ⛔ no workspace ref: refusing the capture phase (the five governed sessions were not launched)" >&2
+  printf 'workspace_ref=\nrefused=missing-workspace\n' >"$SEED_RECEIPTS/refused.txt"
+  exit 1
+fi
+# OLIVARES_TOKEN is prefixed for this helper only (not exported to Playwright).
+# The helper registers a disposable profile, launches through the real CLI with
+# --provider-profile, and corroborates five distinct run/live/canonical identities.
+if ! OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-docs-capture-sessions.py" \
+    --server "http://127.0.0.1:$PORT" \
+    --tenant "$TENANT" \
+    --workspace "$WS_REF" \
+    --olivares-bin "$BIN" \
+    --scratch "$DATA/capture-profile-fixture" \
+    --receipts "$SEED_RECEIPTS"; then
+  echo "docs-captures: ⛔ governed session seed failed; refusing the capture phase" >&2
+  echo "   sanitized receipts: $SEED_RECEIPTS" >&2
+  exit 1
 fi
 
 DEMO_SESSION_ID="$(curl -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \

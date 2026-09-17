@@ -172,6 +172,17 @@ regexes = [
                                                                         # and captures the audit sentence's terminal full stop with it.
                                                                         # Exact-value scoping keeps both audit files scanned for every other
                                                                         # secret and preserves the immutable evidence hash.
+  '''^Ed25519-signed$''',                                               # doc PROSE, not a credential. generic-api-key joins the keyword
+                                                                        # "access" to the filler "map. A hash-chained, " and captures the
+                                                                        # next word as the secret: `…the access map. A hash-chained,
+                                                                        # Ed25519-signed audit ledger…` (docs/launch/v26.8.0/devto-article.md:113,
+                                                                        # commit 8df579c37; entropy 3.52; CI-710c, mainline-ci 33685919433 on
+                                                                        # main 710c59f3d). The phrase is how the product describes its own
+                                                                        # ledger and recurs (README.md:132, README.ja.md:133, comments in
+                                                                        # cmd/olivares), so it is exempted as an exact value rather than by
+                                                                        # fingerprint, which would come back on the next text that uses it.
+                                                                        # Anchored to that one word: any other captured string in those files
+                                                                        # still blocks.
   '''^subjectKind=$''',                                                 # doc-prose field name in core/auth/delegation.go (delegation verifier):
                                                                         # generic-api-key mis-flags `subjectKind="token"` inside a comment. Not a
                                                                         # secret (a struct field-name assignment); anchored to the exact captured
@@ -481,3 +492,327 @@ regexes = [
     '''^sk_test_abcdefghijklmnopqrstuvwx$''',   # stripe-access-token — fixture de `debe_cortar`, :1148
     '''^0123456789abcdef0123456789abcdef01234567$''',   # generic-api-key — fixture de `debe_cortar`, :1152
   ]
+
+# ── 2026-09-06 · FOUR historical generic-api-key findings on the private dev recovery range,
+#    each classified NON-SECRET by independent source and OpenPGP packet inspection ──────────
+#
+# Context, so nobody widens these. The private recovery bundle of 2026-09-06 (85 heads over the
+# prerequisite 99a1e964) was scanned with the previous revision of THIS file and returned exactly
+# four findings, all `generic-api-key`, none a credential. Each block below is rule-specific AND
+# exact-path AND exact-expression: `targetRules` names the ONE rule, `condition = "AND"` makes
+# every listed term mandatory, `paths` is one anchored file, and the regex is anchored to the
+# whole captured MATCH — identifier, operator and value together — which is narrower than the
+# Secret alone (the same value under `api_key` on the same path is still reported). Nothing is
+# exempted as a whole: not a directory, not a rule, not a commit, not a file. A credential in any
+# of these three files, a changed value on the same line, the same expression in another file, or
+# any other rule on the same path stays red. Controlled in both directions before landing and
+# permanently: over history — the mode the gate runs — by scripts/test-check-secrets.sh cases
+# 13-15, and in `dir`/`--no-git` mode by its case 16, which runs the scanner in that mode itself.
+#
+# Why `dir` mode is safe here when the README.de note above records it as a defect: that defect
+# is the GLOBAL path pre-filter (an allowlist without `targetRules` skips a whole file by path
+# before any regex runs). Blocks that carry `targetRules` are RULE allowlists, are never added to
+# the global list, and are evaluated per finding with all their AND terms — measured on gitleaks
+# v8.30.1, the version CI pins. `targetRules` is therefore load-bearing, and it is the one term
+# the history-mode cases cannot see dropped: case 16 exists for exactly that mutant.
+#
+# Deliberately WITHOUT `commits`, unlike the README.de and contrast-report blocks: those lines
+# were removed from the tree by a content fix and survive only in history, so a commit pin is
+# the exact scope. These three lines are LIVE source that the export re-commits under other
+# SHAs (see the retired .gitleaksignore note at the top of this file): a commit pin would clear
+# the private history and redden preprod and the public mirror on the very same line.
+#
+# Residual, stated: a NEW value on any of these lines — a re-retained key digest, another
+# version coordinate, another identifier — reddens the gate and is adjudicated on its own.
+# That is what exact anchoring is for, not a defect.
+
+# 1 · modules/sessions/communication_handoff_read_test.go — the assertion
+#     `strings.HasPrefix(token, communicationIncomingHandoffNavigationPrefix+".")`. The keyword
+#     `token,` is followed by a Go IDENTIFIER (the h3n1 token-family prefix constant); the `+`
+#     of the concatenation rides along in the capture because the rule's second alternative
+#     admits base64 characters. The token itself is minted six lines earlier from a keyring the
+#     test builds in-process; nothing literal is on this line.
+[[allowlists]]
+  description = "h3n1 token-domain test: the captured match is the Go identifier expression `token, communicationIncomingHandoffNavigationPrefix+`, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^modules/sessions/communication_handoff_read_test\.go$''']
+  regexTarget = "match"
+  regexes = ['''^token, communicationIncomingHandoffNavigationPrefix\+"$''']
+
+# 2 · scripts/check-release-version.sh — the gate's own self-test feeds `pins8` two synthetic Go
+#     lines assigning `key` the next (26.9.0) and stale (26.7.0) bundle coordinates,
+#     and asserts that the pin detector reports each. They are version COORDINATES
+#     of this product — the same strings the release gate hunts in shipping code — and `key` is
+#     the fixture's variable name. Anchored to the two exact coordinates on that exact fixture
+#     shape: `26.9.1`, another variable name or any other value on that line is still reported.
+[[allowlists]]
+  description = "check-release-version self-test: the two exact next/stale bundle coordinates assigned to key are synthetic inputs to the pin detector, not keys"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^scripts/check-release-version\.sh$''']
+  regexTarget = "match"
+  regexes = ['''^key = "olivares_26\.9\.0"$''', '''^key = "olivares_26\.7\.0"$''']
+
+# 3 · cmd/olivares/internal/toolinstall/claude_key.go — `claudeReleaseKeySHA256` is the SHA-256
+#     of the armored PUBLIC key embedded right below it, an integrity pin that the package's unit
+#     test recomputes. Verified independently before this entry existed: recomputing the digest
+#     over the embedded armor gives exactly this value, and the armor parses to OpenPGP packets
+#     [6, 13, 2] — public key, user id, signature — with no secret-key packet (5/7) and no
+#     private armor. Same class as the agentops image digest and the K2 binary digest above.
+#     Anchored to this one constant holding this one digest: a different 64-hex on the same
+#     line, or this digest under any other name, is still reported.
+[[allowlists]]
+  description = "toolinstall: `claudeReleaseKeySHA256` is the SHA-256 integrity pin of the embedded PUBLIC Claude Code release-signing key armor, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/internal/toolinstall/claude_key\.go$''']
+  regexTarget = "match"
+  regexes = ['''^claudeReleaseKeySHA256 = "bd70a5e4a268002704024ceba7f8446024114e94f3f0bdd11c23a9e592be81c6"$''']
+
+# The access-evidence classifier's two v7 start labels are public enum values,
+# not credentials. CI R16 captured them via the identifier's "access" prefix.
+# Scope all three terms: one rule, one source path, and the complete typed
+# declaration with its exact value. Other values, identifiers, paths and rules
+# remain findings, including dir mode (test-check-secrets cases 17-18).
+# Gitleaks v8.30.1 includes the preceding LF in its line target; permit only
+# that optional delimiter, not other declarations or text on the line.
+[[allowlists]]
+  description = "Access-evidence migration: two exact typed v7 classifier states, not secrets"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^core/internal/store/sqlstore/access_evidence_migration\.go$''']
+  regexTarget = "line"
+  regexes = [
+    '''^\n?[\t ]*accessEvidenceStartDirectPendingV7[\t ]+accessEvidenceStartClass[\t ]*=[\t ]*"direct-v6-pending-v7"[\t ]*\r?$''',
+    '''^\n?[\t ]*accessEvidenceStartFreshPendingV7[\t ]+accessEvidenceStartClass[\t ]*=[\t ]*"fresh-v6-pending-v7"[\t ]*\r?$''',
+  ]
+
+# R41 route-evidence fixed digest vector. The declaration is a public expected
+# digest in a Go test. All terms are required so neighboring values and rules
+# remain findings in history and directory scans.
+[[allowlists]]
+  description = "route-evidence digest test: exact fixed-vector declaration, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^core/auth/route_evidence_digest_internal_test\.go$''']
+  regexTarget = "match"
+  regexes = ['''^vectorCompleteReadToken    = "578d177303130d054346291dfe8e5025187e9801e998ff580ab2c14302e3202e"$''']
+# End R41 route-evidence fixed digest vector.
+
+# ── 2026-09-08 · the pre-verify diagnostic canary: the ONE github-pat reachable from the R18/R19
+#    lineage, triaged as a synthetic fixture and ratified as such by root ────────────────────────
+#
+# scripts/test-pre-verify-tanda.sh is the self-test of the pre-verify DIAGNOSTIC REDACTOR (its
+# `acotar` filter). One of its inputs, `SENUELO_DIAG`, is a single-quoted github-pat-SHAPED literal
+# (`ghp_` + 39 alphanumerics that spell Spanish decoy words) which the battery formats into a fake
+# `https://usuario:…@example.invalid/x.git` URL and an `OLIVARES_X_TOKEN=…` line, pipes through the
+# redactor, and asserts is ABSENT from the output. It is never exported, never handed to git or to
+# GitHub, and its host is the RFC 2606 `.invalid` domain. The introducing commit says so in its own
+# comment: the redaction is tested "with a synthetic string: never with a real credential". The
+# regression is meaningful BECAUSE the canary is PAT-shaped, so the live fixture stays as it is and
+# what the detector CAPTURES from it is allowlisted here.
+#
+# Introduced by 7c01f497 (then line 271) and still live at the same bytes later in the file, and
+# cherry-picked from cbe29145 on another ref. A `commits` pin would therefore miss the cherry-pick
+# source and every export/public re-SHA of the same line (see the retired .gitleaksignore note at
+# the top of this file), so — like the three 2026-09-06 blocks above — this block deliberately
+# carries NO `commits`. Same shape as those: ONE rule, ONE anchored path, ONE exact captured
+# Secret, `condition = "AND"`. The regex is anchored to what the detector captures — the default
+# github-pat rule is `ghp_` + exactly 36 alphanumerics, measured with the pinned gitleaks v8.30.1
+# on a disposable repository as a 40-byte Secret at columns 15-54 of the 58-byte line — and NOT to
+# the 43-byte source literal, which would never match (the `whsec_` lesson recorded above: the
+# exact value is what the detector CAPTURES, not what you read in the source).
+#
+# Deliberately NOT an entry in the global A-04 list, where the same bytes would be exempt on every
+# path under every rule. Here a different `ghp_` value on this same path (even one byte apart),
+# this exact capture on any other path, and any other rule on this path (a private key, a
+# generic-api-key) all stay red — controlled in both scanner modes by scripts/test-check-secrets.sh
+# cases 19-24, which assemble every specimen from fragments at runtime. Residual, stated: these
+# exact 40 bytes are exempt under github-pat anywhere in this ONE file. A new canary in that file
+# that crosses the rule's length reddens the gate and is adjudicated on its own; that is the
+# behaviour wanted, not a defect.
+[[allowlists]]
+  description = "pre-verify-tanda diagnostic canary: SENUELO_DIAG is a synthetic github-pat-shaped input to the redactor under test, not a credential"
+  targetRules = ["github-pat"]
+  condition = "AND"
+  paths = ['''^scripts/test-pre-verify-tanda\.sh$''']
+  regexTarget = "secret"
+  regexes = ['''^ghp_SENUELOdelDIAGNOSTICOquenodebeSALIR0$''']
+
+# ── 2026-09-12 · R74 · the three findings of the `secrets` job of mainline-ci 34692649320
+#    (job 103550537584) that were reachable from community 495781cbda91 ────────────────────
+#
+# The run named 15 findings: 12 not reachable from HEAD, carried by old branches of the
+# runner's persistent clone, and these three, reported `IN what you are merging`. Each was
+# reproduced locally one commit at a time with the pinned scanner and this config
+# (`gitleaks detect --log-opts '<sha>^!'`): one finding each, fingerprints identical to the
+# job's. Each capture is a synthetic fixture value; the provenance is recorded per block below
+# and in assessments/ci/r74-fixture-findings-20260912.
+#
+# WHY AN EXCEPTION AT ALL. All three values are already present in reachable history. History
+# is not rewritten, so the commits stay reachable and the findings recur on every history scan;
+# editing the current source cannot clear them. A `commits` or fingerprint pin does not survive
+# either, because the export rebuilds history with `git init` and the values reappear under new
+# SHAs — the retired `.gitleaksignore` note at the top of this file measured exactly that. The
+# selected mechanism is therefore the one the 2026-09-08 pre-verify canary settled on: per
+# finding, ONE rule, ONE anchored path, ONE anchored exact captured Secret, `condition = "AND"`,
+# and no `commits`.
+#
+# This is an adjudication of specific live synthetic values, not a claim that these particular
+# bytes are the only ones the fixtures could use. A different synthetic value of the same shape
+# would serve each test; it would also be a new finding needing its own adjudication.
+#
+# Residual, per block: those exact bytes are exempt under that ONE rule on that ONE path. A
+# changed value on the same path, an unrelated value of the same rule on the same path, the same
+# bytes on any other path, and any other rule on the same path all stay red. Permanent
+# regression coverage is scripts/test-check-secrets.sh cases 70, 71 and 72, which assert those
+# residuals in history mode and in correctly rooted directory mode, each with a no-fire control
+# that removes the block.
+
+# ── R74-F1 · aws-access-token · cmd/olivares/support_bundle_http_wiring_test.go:29 (0ba7e9464b94)
+# A support-bundle redaction witness. The 20-byte capture is hand-built: it decomposes exactly as
+# the literal `AKIA` + `SUPPORT` + `BUNDLE` + a three-letter tail, naming the fixture's own
+# subject. sha256 91b4d1d6653f823c… . It occurs on one line of one tracked file and in no config,
+# environment, deployment or workflow in the tree. Its only consumer is the `description` of a
+# secret written through the in-process engine;
+# TestSupportBundleHTTPRedactsCatalogSecretThroughCompositionRoot asserts the value is absent from
+# every bundle entry and that the inventory reads `rotated from [redacted:aws-access-key] during
+# onboarding`. That assertion requires a witness the redactor classifies as an AWS access key, so
+# the shape matters to the test; these particular bytes do not.
+[[allowlists]]
+  description = "support-bundle redaction witness: an AWS access-key-shaped synthetic value asserted absent from the bundle"
+  targetRules = ["aws-access-token"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/support_bundle_http_wiring_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^AKIASUPPORTBUNDLEWIT$''']
+
+# ── R74-F2 · generic-api-key · cmd/olivares/inferenceproxy_contentfirewall_test.go:195 (1a6484dbbf61)
+# The 16-byte capture is the password of a second test user that the content-firewall fixture
+# creates through `eng.authr.CreateUser` and then authenticates against the in-process engine at
+# 127.0.0.1, to show that a viewer of one tenant cannot read another's. It is self-describing
+# (`<word>-<word>-<5 digits>`, sha256 c9e3ba6bc8646200…) and occurs on exactly two lines of one
+# tracked file — the create and the login, its only consumers — and in no config, environment or
+# deployment. The user exists only in the test's own store, so the password authenticates nothing
+# outside that process.
+[[allowlists]]
+  description = "content-firewall cross-tenant fixture: the password of a second in-process test user, used only to create and log that user in"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/inferenceproxy_contentfirewall_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^other\-pass\-12345$''']
+
+# ── R74-F3 · generic-api-key · web/e2e-communications/engine-lifecycle.controls.ts:233 (6557f93d1ebb)
+# The 36-byte capture is `SECRET_SENTINEL`, a leak probe. The controls inject fake lifecycle
+# dependencies — a stubbed `inspect`, a `startHelper` returning a canned completion, and a
+# throwing `io.rename` — and plant the constant in the environment, in that fake child's stdout
+# (`{"ok":true,"credential":"…"}`) and in a thrown error; the test then asserts, per source, that
+# the same constant reaches neither the error nor any evidence file. No engine is booted. The
+# suite plants and searches the one constant, so it does not depend on the detector recognizing
+# the spelling. The bytes are self-describing (they spell `synthetic` and `secret`, sha256
+# 50824ea762647e0f…) and occur in one tracked file only.
+#
+# The path is NOT covered by the `web/e2e/.*\.(spec|test)\.ts$` exemption near the top of this
+# file (different directory, different suffix), and must not be made so: that would stop scanning
+# a whole e2e tree.
+[[allowlists]]
+  description = "engine-lifecycle controls leak probe: the synthetic constant the suite plants and then asserts reaches neither errors nor evidence"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^web/e2e\-communications/engine\-lifecycle\.controls\.ts$''']
+  regexTarget = "secret"
+  regexes = ['''^k3\-synthetic\-secret\-4f2b9c17e05d43a8$''']
+
+# ── R107-F1 · generic-api-key · core/internal/store/sqlstore/finopscustodynul_test.go:61 (7d90229645a8)
+# The detector captures the Go identifier on the right-hand side of
+# `nulSuffixKeyRef = custodyKeyRefG1 + "\x00" + "evil"` (15-byte Secret, sha256 420ea708322c…).
+# That identifier names the 30-byte sequential key-ref fixture declared in the sibling
+# migration test; this line concatenates a NUL and a suffix to prove SQLite TEXT length
+# stops at NUL. It is not a credential. A different identifier or a quoted token on this
+# path remains a finding.
+[[allowlists]]
+  description = "SQLite custody NUL probe: generic-api-key captures the fixture identifier custodyKeyRefG1, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^core/internal/store/sqlstore/finopscustodynul_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^custodyKeyRefG1$''']
+
+# ── R107-F2 · generic-api-key · core/internal/store/sqlstore/finopscustodymigration_test.go:76 (c00f2fa81856)
+# `custodyKeyRefG2` is a 29-byte sequential key-reference identity (`kr1_` + digits then
+# letters) used only as CHECK-constraint fixture data for FinOps custody relations.
+# The detector captures the exact quoted literal (sha256 751fbb5b5608…). A different
+# value in this file, or this value on another path, remains a finding.
+[[allowlists]]
+  description = "FinOps custody migration fixture: sequential kr1_ key-ref identity, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^core/internal/store/sqlstore/finopscustodymigration_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^kr1_234567abcdefghijklmnopqrs$''']
+
+# ── R107-F3 · generic-api-key · core/auth/mutation_authority_internal_test.go:466 (720f5d87c055; HEAD line 484)
+# TestRouteMutationAuthorityDigestVector pins completeDigest to a 64-hex expected codec
+# vector for the token-directory-only principal. The detector captures that digest
+# (sha256 517c23be8dc0…). It is a public test oracle, not a credential. A one-byte
+# change, another rule, or the same digest on another path remains a finding.
+[[allowlists]]
+  description = "route mutation authority digest vector: exact 64-hex completeDigest oracle, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^core/auth/mutation_authority_internal_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^34f641f77e6253bf2e1fc213488b10bc69d18b2bb81f2dee417f02674ef28893$''']
+
+# ── 2026-09-15 · connect-v1 PoP cross-language conformance vector · generic-api-key ────────────
+# Two findings, one per language side, on the SAME 86-char value at line 56 of the canonical
+# vector set for domain `olivares.connect.v1`. Classified NON-CREDENTIAL before this entry was
+# written, and the classification is checkable from the files themselves:
+#
+#   · The value is an Ed25519 SIGNATURE (64 bytes, base64url) — the `Olivares-Connect-New-Key-Proof`
+#     header of the `rotate-key` vector — over that vector's own `canonical` string. The private
+#     seed that produced it, `vectors[1].keys.new.seed_hex`, is PUBLISHED IN THE SAME FILE a few
+#     lines above. A signature derived from a seed printed beside it grants nothing the seed does
+#     not already give, which is the ordinary shape of a conformance vector (cf. RFC 8032).
+#   · It is a proof of possession, so it is bound to its message and to nothing else: the signed
+#     canonical pins `challenge = n_rotatenonce`, `exp = 1780000120`, `target = dep_example`,
+#     `binding_epoch = 1`, `method = POST` and that path. It authorizes no live deployment.
+#   · Measured, not assumed: the proof value, and the new key's `public_key` and `kid`, occur in
+#     EXACTLY these two files and nowhere else in the tree — no config, no manifest, no keyring.
+#
+# Why the rule fires HERE and not on its neighbours, which matters for how narrow this must be:
+# `generic-api-key` keys on the IDENTIFIER, and only this header name contains `Key`. The sibling
+# `Olivares-Connect-Proof` one line above and the two `mismatches[].signature` values are the same
+# 86-char base64url shape and are NOT reported. So this is an identifier-name match, not a
+# classification of the value — and the entry is therefore anchored to the whole captured MATCH
+# (identifier, colon and value together), never to the value alone.
+#
+# Both paths carry byte-identical bytes ON PURPOSE: `core/license/connectv1/testdata/` is the Go
+# side and `commercial/license-worker/src/connect/` the TypeScript Worker side of one
+# cross-language vector, and the suites assert the two agree. Exempting one and not the other
+# would redden whichever side is scanned second.
+#
+# Residual, stated: a different value on that line, this value under any other identifier, this
+# expression in any other file, or any other rule on either path is STILL a finding. Nothing is
+# exempted as a whole — not a directory, not a file, not a rule, not a commit.
+[[allowlists]]
+  description = "connect-v1 PoP conformance vector: the captured match is the New-Key-Proof Ed25519 signature over the vector's own canonical, produced by a seed published in the same file, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^core/license/connectv1/testdata/canonical-vectors\.b-c04256a\.json$''']
+  regexTarget = "match"
+  regexes = ['''^Olivares-Connect-New-Key-Proof": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg"$''']
+
+# Same vector, TypeScript Worker side. A separate block, not a second `paths` entry: with
+# `condition = "AND"` every listed term is mandatory, so two paths in one block can never both
+# hold for a single finding and the exemption would silently never apply. Measured here before
+# landing — the two-path form left both findings reported.
+[[allowlists]]
+  description = "connect-v1 PoP conformance vector (Worker side): the captured match is the New-Key-Proof Ed25519 signature over the vector's own canonical, produced by a seed published in the same file, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^commercial/license-worker/src/connect/canonical-vectors\.json$''']
+  regexTarget = "match"
+  regexes = ['''^Olivares-Connect-New-Key-Proof": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg"$''']

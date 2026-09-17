@@ -23,13 +23,46 @@
 // navigated to could ever be observed. Measured: deleting the URL write from setTab
 // (console-view.tsx) left the ENTIRE web suite — 164 files, 1644 tests — green. The seam was
 // documented, shipped, and pinned by nothing.
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useEffect as reactUseEffect, useState as reactUseState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
 const navigate = vi.fn()
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }))
+// useValidatedUrlState follows the location, so the mock has to be able to MOVE
+// it: a stub that always answers '' would wipe the tab the URL just seeded
+// (observability.test.tsx). Listeners let a later router navigation
+// re-render the still-mounted Console — the N2 defect initialTab() missed.
+const routerState = vi.hoisted(() => ({
+  listeners: new Set<() => void>(),
+}))
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) => {
+    const [, force] = reactUseState(0)
+    reactUseEffect(() => {
+      const fn = () => force((n) => n + 1)
+      routerState.listeners.add(fn)
+      return () => {
+        routerState.listeners.delete(fn)
+      }
+    }, [])
+    return select({ location: { searchStr: window.location.search } })
+  },
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
+}))
+
+function setSearchStr(next: string) {
+  window.history.replaceState(
+    null,
+    '',
+    `${window.location.pathname}${next}${window.location.hash}`,
+  )
+  for (const fn of routerState.listeners) fn()
+}
 
 // Each factory is written out in full: vi.mock is hoisted above every top-level
 // binding, so a shared helper is not in scope by the time it runs.
@@ -100,6 +133,60 @@ describe('ConsoleView — ?tab= deep link', () => {
     renderAt('?tab=not-a-tab')
     expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
   })
+
+  it.each([
+    ['people', 'PeopleTab mounted'],
+    ['agents', 'AgentsTab mounted'],
+    ['sso', 'SSOTab mounted'],
+    ['scopes', 'ScopesTab mounted'],
+    ['roles', 'RolesTab mounted'],
+    ['bindings', 'BindingsTab mounted'],
+    ['secrets', 'SecretsTab mounted'],
+    ['connectors', 'ConnectorsTab mounted'],
+    ['wsConnectors', 'WorkspaceConnectorsTab mounted'],
+    ['apiKeys', 'ApiKeysTab mounted'],
+    ['license', 'LicenseTab mounted'],
+  ] as const)('opens ?tab=%s', (id, mounted) => {
+    renderAt(`?tab=${id}`)
+    expect(screen.getByText(mounted)).toBeInTheDocument()
+    expect(screen.getAllByRole('tab')).toHaveLength(11)
+  })
+})
+
+describe('ConsoleView — URL drives the mounted selection', () => {
+  it('follows a later router navigation without remounting', () => {
+    // THE N2 DEFECT: initialTab() seeded useState once. A later ?tab= change
+    // with Console still mounted left the old panel on screen.
+    const { unmount } = renderAt('?tab=roles')
+    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('PeopleTab mounted')).toBeNull()
+
+    act(() => setSearchStr('?tab=people'))
+    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('RolesTab mounted')).toBeNull()
+
+    act(() => setSearchStr('?tab=license'))
+    expect(screen.getByText('LicenseTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('PeopleTab mounted')).toBeNull()
+    unmount()
+  })
+
+  it('clears an invalid tab with replace, preserving unrelated search', () => {
+    renderAt('?tab=not-a-tab&focus=svc_pool')
+    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(navigate).toHaveBeenCalledTimes(1)
+    const arg = navigate.mock.calls[0]![0] as {
+      search: (p: Record<string, unknown>) => Record<string, unknown>
+      replace: boolean
+      resetScroll: boolean
+    }
+    expect(arg.replace).toBe(true)
+    expect(arg.resetScroll).toBe(false)
+    expect(arg.search({ tab: 'not-a-tab', focus: 'svc_pool' })).toEqual({
+      tab: undefined,
+      focus: 'svc_pool',
+    })
+  })
 })
 
 describe('ConsoleView — the URL follows a manual tab change', () => {
@@ -114,9 +201,15 @@ describe('ConsoleView — the URL follows a manual tab change', () => {
     const arg = navigate.mock.calls[0]![0] as {
       search: (p: Record<string, unknown>) => Record<string, unknown>
       replace: boolean
+      resetScroll: boolean
     }
     expect(arg.replace).toBe(true)
     expect(arg.search({})).toEqual({ tab: 'bindings' })
+    // And OUT of scroll restoration: a tab switch is not a page change. Without this the
+    // router wrote a stale cached scrollLeft back onto the tab strip after render and
+    // scrolled the window to the top (console-tab-scroll-restoration, 2026-09-06).
+    expect(arg.resetScroll).toBe(false)
+    expect((navigate.mock.calls[0]![0] as { hash?: unknown }).hash).toBe(true)
   })
 
   it('PRESERVES the parameters already on the URL instead of clearing them', async () => {

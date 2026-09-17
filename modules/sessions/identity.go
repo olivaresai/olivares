@@ -222,6 +222,19 @@ func (m *Module) registerIdentitySchema(reg store.ExtensionRegistry) error {
 			Columns: []string{model.ColTenantID, colSID},
 			Unique:  true,
 		}},
+		// workspace_id holds a CORE workspace id and NULL means the tenant default
+		// (see colIDWorkspaceID), so that is the declared lineage. It is READ-ONLY
+		// under confinement: identity rows are minted and maintained by this module,
+		// so a confined module caller receives no writer at all rather than one whose
+		// safety depends on the confined decorator's stored-lineage guard continuing
+		// to hold. The identity writers (mintIdentity, touch, declare and the
+		// protocol synthetic identity) keep their unconfined Ext path unchanged.
+		WorkspaceLineage: model.WorkspaceLineageSpec{
+			Column:   colIDWorkspaceID,
+			Encoding: model.WorkspaceLineageID,
+			Unset:    model.WorkspaceUnsetMeansDefault,
+		},
+		WorkspaceConfinedReadOnly: true,
 	}); err != nil {
 		return err
 	}

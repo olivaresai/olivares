@@ -62,6 +62,41 @@ olivares status --server https://127.0.0.1:8443 \
 дополнения, чтобы значение выводилось без кавычек и переживало копирование,
 но curl требует дополненную форму.
 
+## Диагностика установки хоста
+
+Сгенерированная справка CLI описывает `olivares doctor` так: diagnose this host
+installation without printing secrets
+([CLI](/reference/cli/#command-olivares-doctor)). Флаги включают `--data-dir`, `--mode` (`auto` \| `user` \| `system`), `--init` (`auto` \| `systemd` \| `openrc` \| `launchd`), `--config`, `--unit`, `--binary`, `--server`, `--timeout`, `--ca-cert`, `--audit-tenant`, `--check-updates`.
+Не считайте эту таблицу дополнительным текстом справки; это эта сгенерированная
+команда.
+
+### `agentops-layout` check
+
+`olivares doctor` сообщает проверку с именем `agentops-layout`
+(`CHANGELOG.md` `[26.9.0]`; `cmd/olivares/cmd_doctor.go` `doctorAgentOpsCheck`).
+Это не подкоманда. Она измеряет родную раскладку AgentOps, которую записывает
+манифест владения: управляемый drop-in должен существовать со своим mode и
+называть записанные claude `HOME`, каталог токенов и workspace; runtime env
+должен существовать с mode конфигурации (значения никогда не читаются);
+workspace должен быть каталогом (`docs/RELEASE-INSTALLER.md`).
+
+Статусы, которые возвращает проверка:
+
+| Status | When |
+|---|---|
+| `not_applicable` | no readable manifest; malformed manifest; or the manifest records no AgentOps files (`dropin`, `runtime-env`, `workspace_dir` all empty) |
+| `fail` | drop-in does not reference a recorded token (`$dataDir/claude-home`, `$dataDir/run`, or `workspace_dir`); workspace path is absent or is not a directory |
+| `unknown` | drop-in or workspace is not readable |
+| `pass` | drop-in, runtime-env (values not read) and workspace directory agree with the record |
+
+Required равно false, пока манифест не запишет хотя бы один файл AgentOps; затем
+проверка required. Строки исправления, которые печатает движок, включают
+`rerun install-agentops.sh; the managed drop-in and the recorded layout disagree`
+и `recreate the recorded workspace or rerun install-agentops.sh with OLIVARES_WORKSPACE_DIR`.
+
+И текст, и `-o json` содержат имена ключей и пути, но никогда значения
+конфигурации (`docs/RELEASE-INSTALLER.md`).
+
 ## Источники и access map
 
 ### Карта пуста
@@ -105,7 +140,12 @@ kind=…` для каждого источника. Источник, котор
 
 ### `/readyz` возвращает 503
 
-Прочитайте тело — оно различает два случая:
+Прочитайте тело. 503 — это не ready и не успех. То, что `/livez` остаётся 200,
+означает только, что процесс жив; то, что `/pod-readyz` остаётся 200, означает
+только здоровье пода (хранилище достижимо) без проверки лидерства и без зонда
+возможности первой загрузки. Ни то ни другое не разблокирует стандартный Helm
+chart или плоский манифест, которые подключают `/readyz` как контейнерный
+`readinessProbe`.
 
 - `{"status":"unavailable","store":"down"}` — хранилище недоступно. На SQLite:
   переполнен диск, проблемы с PVC, права доступа к файлу. На Postgres:
@@ -113,10 +153,29 @@ kind=…` для каждого источника. Источник, котор
   (процесс жив), так что ничто не зацикливается на перезапуске при сбое
   хранилища; перезапустите pod/сервис вручную после исправления хранилища, если
   оно остаётся заклиненным.
-- `{"status":"standby","leader":false,…}` — резервный узел HA, отвечающий
+- `{"status":"standby","store":"up","leader":false}` — резервный узел HA, отвечающий
   честно. Это не ошибка: Service маршрутизирует на лидера; резервные узлы
   дренируются по замыслу. Если **все** реплики сообщают standby, выбор лидера
   застрял — проверьте связность advisory-lock Postgres.
+- `{"status":"setup_blocked","store":"up","leader":true,"setup_required":true,"code":"cross_tenant_admin_pool_not_configured"}`
+  — первая загрузка PostgreSQL не может авторитетно перечислить организации.
+  Создайте административную роль `NOSUPERUSER BYPASSRLS` и `--admin-dsn`
+  ([Postgres в Kubernetes](/ru/tutorials/getting-started/kubernetes/#2-postgres-многоарендный)).
+  В теле — фиксированное указание. Пока это предварительное условие не
+  исправлено, стандартный зонд readiness держит под Not Ready. Не
+  переназначайте зонд, чтобы это скрыть.
+- `{"status":"setup_unavailable","store":"up","leader":true,"code":"setup_state_unavailable"}`
+  — этот узел не смог наблюдать, настроена ли установка. `setup_required`
+  **опущен**, потому что его значение неизвестно. Это не известная пустая
+  установка.
+- `{"status":"setup_unavailable","store":"up","leader":true,"setup_required":true,"code":"setup_probe_unavailable"}`
+  — установка заведомо не настроена, но зонд возможности первой загрузки
+  отказал по причине, отличной от отказа административного пула. Таймаут —
+  не доказательство пустого парка.
+
+200 `{"status":"ok",…,"setup_required":true}` — другое наблюдение: первичную
+настройку можно пытаться выполнить. `POST /v1/setup` по-прежнему повторяет
+проверки власти. Этот 200 не расходует бюджет доступности; эти 503 — да.
 
 ### Pod умер, и ничто его не подхватило
 

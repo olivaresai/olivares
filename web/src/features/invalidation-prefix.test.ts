@@ -42,19 +42,45 @@ function ficheros(dir: string, out: string[] = []): string[] {
   return out
 }
 
+// `\Z` no es un ancla en JavaScript: sin el flag `u` casa la LETRA `Z`, y con `u` no compila. Con
+// `(?=^ {2}\w+:|\Z)` la alternativa «fin de fichero» no se cumplía nunca, así que el ÚLTIMO
+// constructor de un `api.ts` era invisible y cualquier línea del cuerpo que empezase por `Z`
+// truncaba el cuerpo antes del `params ?? null`.
+//
+// Fin de entrada es `(?![\s\S])`. `$` NO sirve: con el flag `m` casa también antes de cada `\n`.
+const CONSTRUCTOR =
+  /^ {2}(\w+): \([^)]*params\?[^)]*\) =>\n((?:.*\n){0,5}?)(?=^ {2}\w+:|(?![\s\S]))/gm
+
+/**
+ * Constructores con `params?` de UN fuente que NO devuelven un prefijo. Es la MISMA función que
+ * consume el barrido del árbol; los casos del segundo `describe` la ejercitan con snippets.
+ *
+ * No examina, y por tanto no cubre: firmas que no caben en una línea `  nombre: (…params?…) =>`,
+ * indentaciones distintas de dos espacios, un `)` dentro de la lista de parámetros, cuerpos de más
+ * de cinco líneas (límite probado abajo) y otras formas inseguras (`params || null`,
+ * `params ?? undefined`, `params ? x : null`). El censo medido está en el informe de la sesión.
+ */
+function constructoresInseguros(fuente: string): string[] {
+  // El ancla sola no basta: el cuerpo se consume con `(?:.*\n){0,5}?` y una última línea sin `\n`
+  // no la consume nadie, así que el terminal se escaparía. Normalizado, se ve igual con y sin él.
+  const src = fuente.endsWith('\n') ? fuente : `${fuente}\n`
+  const nombres: string[] = []
+  for (const b of src.matchAll(CONSTRUCTOR)) {
+    if (b[2].includes('params === undefined')) continue
+    if (!b[2].includes('params ?? null')) continue
+    nombres.push(b[1])
+  }
+  return nombres
+}
+
 /** Constructores con `params?` que NO devuelven un prefijo, por feature. */
 function inseguros(): Map<string, Set<string>> {
   const m = new Map<string, Set<string>>()
   for (const f of ficheros(RAIZ).filter((p) => p.endsWith('/api.ts'))) {
     const feature = f.slice(RAIZ.length + 1).split('/')[0]
-    const src = readFileSync(f, 'utf8')
-    for (const b of src.matchAll(
-      /^ {2}(\w+): \([^)]*params\?[^)]*\) =>\n((?:.*\n){0,5}?)(?=^ {2}\w+:|\Z)/gm,
-    )) {
-      if (b[2].includes('params === undefined')) continue
-      if (!b[2].includes('params ?? null')) continue
+    for (const n of constructoresInseguros(readFileSync(f, 'utf8'))) {
       const set = m.get(feature) ?? new Set<string>()
-      set.add(b[1])
+      set.add(n)
       m.set(feature, set)
     }
   }
@@ -104,5 +130,93 @@ describe('claves de invalidación', () => {
   it('el idioma correcto de console NO se marca', () => {
     const m = inseguros()
     expect(m.get('console') ?? new Set()).toEqual(new Set())
+  })
+})
+
+// El barrido de arriba mide el ÁRBOL —«hoy no hay ninguno»— y con `\Z` también salía verde. Estos
+// casos ejercitan `constructoresInseguros`, la misma función, sobre fuentes controlados: es lo que
+// separa «no hay» de «no miro».
+
+/** Un constructor con la firma que la guarda reconoce y el cuerpo que se le pase, con `\n` final. */
+const bloque = (nombre: string, ...cuerpo: string[]) =>
+  [`  ${nombre}: (params?: P) =>`, ...cuerpo, ''].join('\n')
+
+const CUERPO_INSEGURO = ["    [BASE, 'x', params ?? null] as const,"]
+const CUERPO_SEGURO = [
+  '    params === undefined',
+  "      ? ([BASE, 'x'] as const)",
+  "      : ([BASE, 'x', params] as const),",
+]
+
+describe('el escáner de constructores', () => {
+  it('ve un constructor inseguro TERMINAL con salto de línea final', () => {
+    expect(
+      constructoresInseguros(bloque('listar', ...CUERPO_INSEGURO)),
+    ).toEqual(['listar'])
+  })
+
+  it('ve un constructor inseguro TERMINAL sin salto de línea final', () => {
+    const sinSalto = bloque('listar', ...CUERPO_INSEGURO).replace(/\n$/, '')
+    expect(sinSalto.endsWith('\n')).toBe(false)
+    expect(constructoresInseguros(sinSalto)).toEqual(['listar'])
+  })
+
+  it('no marca el constructor seguro, esté o no al final del fuente', () => {
+    const seguro = bloque('listar', ...CUERPO_SEGURO)
+    expect(constructoresInseguros(seguro)).toEqual([])
+    expect(constructoresInseguros(seguro.replace(/\n$/, ''))).toEqual([])
+  })
+
+  // El cuerpo de cada vecino se corta en la firma del siguiente: ninguno hereda el idioma del otro.
+  // El segundo orden cubre además el caso terminal.
+  it('juzga a dos vecinos por SU cuerpo, en cualquier orden', () => {
+    const inseguroPrimero =
+      bloque('listar', ...CUERPO_INSEGURO) + bloque('detalle', ...CUERPO_SEGURO)
+    const seguroPrimero =
+      bloque('detalle', ...CUERPO_SEGURO) + bloque('listar', ...CUERPO_INSEGURO)
+    expect(
+      constructoresInseguros(inseguroPrimero),
+      'inseguro primero, seguro detrás',
+    ).toEqual(['listar'])
+    expect(
+      constructoresInseguros(seguroPrimero),
+      'seguro primero, inseguro TERMINAL detrás',
+    ).toEqual(['listar'])
+  })
+
+  // Control causal del defecto: una línea que empieza por `Z` —aquí la continuación de un template
+  // literal— satisfacía el viejo `\Z` y cortaba el cuerpo. Con `\Z` este caso devuelve `[]`.
+  it('no toma una letra Z del cuerpo por un fin de fichero', () => {
+    const conZ = [
+      '  auditar: (params?: P) =>',
+      '    [BASE, `Z',
+      'Zona`, params ?? null] as const,',
+      '',
+    ].join('\n')
+    expect(constructoresInseguros(conZ)).toEqual(['auditar'])
+  })
+
+  it('ve el cuerpo dentro del soporte real: de una a cinco líneas', () => {
+    for (let n = 1; n <= 5; n++) {
+      const relleno = Array.from(
+        { length: n - 1 },
+        (_, i) => `    // línea ${i + 1}`,
+      )
+      expect(
+        constructoresInseguros(
+          bloque('listar', ...relleno, ...CUERPO_INSEGURO),
+        ),
+        `cuerpo de ${n} línea(s)`,
+      ).toEqual(['listar'])
+    }
+  })
+
+  // Límite medido, no aceptado: la ventana del cuerpo es `{0,5}`, así que a la sexta línea el
+  // constructor no se mira. Se prueba para dejar escrito el punto ciego y detectar si cambia.
+  it('LÍMITE: un cuerpo de seis líneas queda fuera de la ventana del escáner', () => {
+    const relleno = Array.from({ length: 5 }, (_, i) => `    // línea ${i + 1}`)
+    expect(
+      constructoresInseguros(bloque('listar', ...relleno, ...CUERPO_INSEGURO)),
+    ).toEqual([])
   })
 })

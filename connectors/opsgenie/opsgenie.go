@@ -21,7 +21,7 @@
 // is processed asynchronously (HTTP 202 Accepted): a 202 is acceptance, not a
 // proof of closure.
 //
-// It is minimal-data (docs/SECURITY-HARDENING.md-3): it forwards only the non-sensitive
+// It is minimal-data (docs/SECURITY-HARDENING.md §2-3): it forwards only the non-sensitive
 // Notification fields (Title, Body, Severity, Tenant, Type and the Fields kv)
 // as the alert message/description/priority/details. The operator's Opsgenie
 // API key is declared as a Secret config field, is held in memory only on the

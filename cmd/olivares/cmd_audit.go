@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -355,12 +356,12 @@ func auditVerifyCmd() *cobra.Command {
 				// JSON). --strict turns a failed integrity check into a non-zero exit
 				// so an on-call cron / CI job can gate on $? instead of having to parse
 				// JSON — a green `verify && echo OK` must NOT lie about a tampered chain.
-				// An unattested ledger still fails --strict (the anchor an automation
-				// gate asked for does not exist), but it is not accused of tampering:
-				// everything that COULD be verified verified.
+				// A missing signed checkpoint leaves strict verification indeterminate.
+				// This state lasts until a checkpoint exists; it does not establish tampering.
 				if strict && status == "unattested" {
-					return fmt.Errorf("audit ledger NOT ATTESTED (--strict): chain, per-event signatures and markers all verified, but no signed checkpoint exists yet (%s) — run `olivares audit checkpoint` or let the scheduler fire; this is NOT evidence of tampering", cr.Reason)
+					return exitcode.New(exitcode.Indeterminate, fmt.Errorf("audit ledger NOT ATTESTED (--strict): chain, per-event signatures and markers all verified, but no signed checkpoint exists yet (%s) — run `olivares audit checkpoint` or let the scheduler fire; this is NOT evidence of tampering", cr.Reason))
 				}
+				// Recovered and corrupt states retain the established failure outcome.
 				if strict && status == "recovered" {
 					return fmt.Errorf("audit integrity incident RECOVERED (--strict): genesis chain remains broken at seq %d (%s), current epoch starts at seq %d — see the JSON report above", rep.BreakAt, rep.Reason, recovery["epoch_start_seq"])
 				}

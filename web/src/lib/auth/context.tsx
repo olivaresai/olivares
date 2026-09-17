@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   type ReactNode,
 } from 'react'
@@ -15,6 +16,7 @@ import { queryKeys } from '@/lib/api/query'
 import type { Grant, LoginRequest, Whoami } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
+import { observeStepUpContext } from '@/stores/step-up'
 import { can as rbacCan, confinedWorkspaceIn, roleInTenant } from './rbac'
 
 export type AuthStatus = 'anonymous' | 'loading' | 'authenticated' | 'error'
@@ -62,6 +64,9 @@ const REFRESH_FLOOR_MS = 5_000
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
+  // Observe transitions synchronously, including movements React batches into A→A.
+  // This retires only step-up intent; HTTP defaults and other caches stay unchanged.
+  useLayoutEffect(() => observeStepUpContext(queryClient), [queryClient])
   const token = useSessionStore((s) => s.token)
   const setSession = useSessionStore((s) => s.setSession)
   const clearSession = useSessionStore((s) => s.clear)

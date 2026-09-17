@@ -94,24 +94,27 @@ func TestHealthSummarySeparatesCatalogConfiguredAndRunning(t *testing.T) {
 	}
 }
 
-// The health summary and GET /v1/connectors/health read the same roster with the
-// same criterion, so the dashboard tile and the connector-health view cannot
-// disagree about how many connectors are running.
+// The deployment health summary and GET /v1/connectors/health agree when their
+// populations are the same. The former is a system-admin global snapshot while
+// the latter is a tenant projection, so a foreign row must contribute only to
+// the global counters.
 func TestHealthSummaryRunningAgreesWithConnectorHealthSummary(t *testing.T) {
-	roster := &stubSourceRoster{
-		sources: []api.SourceRosterEntry{
-			{Name: "aws-prod", Kind: "aws", Status: "running", Enabled: true},
-			{Name: "gcp-stg", Kind: "gcp-audit", Status: "failed", Enabled: true},
-			{Name: "paused", Kind: "github", Status: "stopped", Enabled: true},
-		},
-	}
+	roster := &stubSourceRoster{}
 	h := newHarnessOpts(t, func(o *api.Options) {
 		o.ConnectorOnboarding = catalogOf("aws", "gcp-audit", "github")
 		o.SourceRoster = roster
 	})
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
+	otherTenant := h.createOrg(admin, "globex")
+	roster.sources = []api.SourceRosterEntry{
+		{Name: "aws-prod", Kind: "aws", Tenant: tenant.String(), Status: "running", Enabled: true},
+		{Name: "gcp-stg", Kind: "gcp-audit", Tenant: tenant.String(), Status: "failed", Enabled: true},
+		{Name: "paused", Kind: "github", Tenant: tenant.String(), Status: "stopped", Enabled: true},
+	}
 
+	// With every configured row in the selected tenant, both endpoints count the
+	// same population and must agree exactly.
 	summary := h.do("GET", "/v1/console/health-summary", admin, nil, nil)
 	if summary.code != http.StatusOK {
 		t.Fatalf("health-summary = %d %s", summary.code, summary.raw)
@@ -131,6 +134,27 @@ func TestHealthSummaryRunningAgreesWithConnectorHealthSummary(t *testing.T) {
 	if summary.body["connectors_configured"] != fleetSummary["total"] {
 		t.Errorf("health-summary connectors_configured = %v but connectors/health total = %v",
 			summary.body["connectors_configured"], fleetSummary["total"])
+	}
+
+	// Adding a valid row for another tenant expands only the system-admin global
+	// population. The tenant health response and all its aggregate counters stay
+	// scoped to the tenant selected above.
+	roster.sources = append(roster.sources, api.SourceRosterEntry{
+		Name: "globex-running", Kind: "aws", Tenant: otherTenant.String(), Status: "running", Enabled: true,
+	})
+	summary = h.do("GET", "/v1/console/health-summary", admin, nil, nil)
+	fleet = h.do("GET", "/v1/connectors/health", admin, nil, tenantHdr(tenant))
+	if summary.code != http.StatusOK || fleet.code != http.StatusOK {
+		t.Fatalf("cross-tenant summaries: global=%d %s tenant=%d %s",
+			summary.code, summary.raw, fleet.code, fleet.raw)
+	}
+	fleetSummary, _ = fleet.body["summary"].(map[string]any)
+	if summary.body["connectors_configured"] != float64(4) || summary.body["connectors_running"] != float64(2) {
+		t.Errorf("global summary = configured %v running %v, want 4/2: %s",
+			summary.body["connectors_configured"], summary.body["connectors_running"], summary.raw)
+	}
+	if fleetSummary == nil || fleetSummary["total"] != float64(3) || fleetSummary["running"] != float64(1) {
+		t.Errorf("tenant summary = %v, want total 3/running 1: %s", fleetSummary, fleet.raw)
 	}
 }
 

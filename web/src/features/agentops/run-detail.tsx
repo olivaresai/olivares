@@ -402,6 +402,18 @@ export function RunInfo({ run }: { run: RunDTO }) {
       <KvRow label={t('info.claudeSessionId')} mono align="start">
         {run.claude_session_id || none}
       </KvRow>
+      <KvRow label={t('info.providerProfile')} mono align="start">
+        {run.provider_profile_ref || none}
+      </KvRow>
+      <KvRow label={t('info.providerDriver')} mono>
+        {run.provider_driver || none}
+      </KvRow>
+      <KvRow label={t('info.providerEnvironment')} mono align="start">
+        {run.provider_environment_ref || none}
+      </KvRow>
+      <KvRow label={t('info.liveRef')} mono align="start">
+        {run.live_ref || none}
+      </KvRow>
       <KvRow label={t('info.credentialId')} mono align="start">
         {run.credential_id || none}
       </KvRow>

@@ -1,9 +1,10 @@
 ---
 title: Konsolenreferenz — jeder Bildschirm und seine erforderliche Berechtigung
 description: >-
-  Alle von der Olivares-AI-Konsole veröffentlichten Routen, gruppiert nach den fünf
-  Hubs, mit der jeweils erforderlichen RBAC-Berechtigung und der Referenzseite, die
-  der Hilfe-Link im Produkt öffnet. Aus dem Routeninventar der Konsole generiert.
+  Alle von der Olivares-AI-Konsole veröffentlichten Routen, indexiert nach
+  historischen Hub-Kategorien, mit der jeweils erforderlichen RBAC-Berechtigung
+  und der Referenzseite, die der Hilfe-Link im Produkt öffnet. Aus dem
+  Routeninventar der Konsole generiert.
 ---
 
 Diese Seite ist die Karte der Konsole. Sie listet **jede von der Anwendung gemountete
@@ -11,25 +12,39 @@ Route** — keine Auswahl und nicht nur die Routen, an deren Dokumentation sich 
 erinnert hat — samt der Berechtigung, die ein Principal zum Öffnen benötigt, und der
 weiterführenden Dokumentation.
 
+Die aktuelle Seitenleiste zeigt **neun Bereiche mit Abschnitten**, nicht fünf Hubs.
+Nach Übersicht rendert sie die Bereiche, die dieser Principal tatsächlich öffnen darf,
+jeweils mit Verzeichnisseite und aufklappbaren Modulen, danach den angehefteten
+Eintrag Einstellungen. Ein Navigationsfilter ersetzt diesen gruppierten Baum durch
+eine rangierte Liste autorisierter Treffer; die Befehlspalette nutzt denselben Index,
+dieselbe Rangfolge und dieselbe Berechtigungsprojektion. Ein Bereichsverzeichnis ist
+eine Seite mit Links — den Einträgen, die Ihre Berechtigungen zulassen — keine
+Live-Ablesung von Fähigkeit, Verfügbarkeit oder Bereitschaft.
+
 Die Seite ist **generiert**. Das Verzeichnis stammt aus
 `web/src/features/route-census.json`, dem append-only Inventar, das
 `registry.route-conservation.test.ts` gegen den gebauten Router prüft. Ein Bildschirm
 kann daher nicht hinzugefügt, verschoben oder verloren werden, ohne dass sich diese
 Seite mitändert. Name und Kurzbeschreibung jedes Bildschirms sind die **eigenen Strings
 der Konsole** aus demselben Übersetzungskatalog, den die Seitenleiste rendert. Was Sie
-hier lesen, sehen Sie auch im Produkt.
+hier lesen, sehen Sie auch im Produkt. Die Tabellen darunter gruppieren diese Zeilen
+weiterhin nach den fünf historischen Hub-Kategorien (Betreiben, Automatisieren,
+Verbinden, Steuern, Nachweisen) sowie Anmeldung, Einrichtung und Konto. Diese
+Gruppierung ist ein Index, nicht die aktuelle Reihenfolge der Seitenleiste. Die neun
+Bereichsverzeichnisse stehen derzeit bei den Routen, die außerhalb der Feature-Registry
+gemountet sind.
 
 :::note[Berechtigungen erzwingt die Engine, nicht diese Tabelle]
-Die Spalte `Erforderlich` nennt die Berechtigung, die die Konsole prüft, bevor sie eine
-Route anbietet, und spiegelt das RBAC der Engine. Maßgeblich bleibt die Engine: Ein
-Deep-Link auf einen Bildschirm, für den Sie keine Berechtigung besitzen, wird von der
-API abgelehnt und nicht nur in der Seitenleiste verborgen. Siehe
-[Rollen und Berechtigungen](/de/reference/modules/vi-governance/).
+Die Spalte `Erforderlich` nennt die Berechtigung, die die Konsole vor dem Anbieten einer
+Route anhand der von der Engine gelieferten effektiven Berechtigungen prüft. Die Engine
+autorisiert API-Anfragen unabhängig davon, auch Anfragen außerhalb der Konsole.
+Ein sichtbarer Eintrag belegt nicht, dass das Modul konfiguriert oder betriebsbereit ist.
+Siehe [Rollen und Berechtigungen](/de/reference/modules/vi-governance/).
 :::
 
 ## So lesen Sie diese Seite
 
-- **Bildschirm** — der Name in Seitenleiste und Befehlspalette.
+- **Bildschirm** — der Name in Seitenleiste, Bereichsverzeichnissen und Befehlspalette.
 - **Pfad** — die URL unter dem Origin Ihrer Konsole. Sie ist ein veröffentlichter
   Contract: Bookmark, Deep-Link im Runbook und Querverweis aus der Dokumentation
   verwenden alle genau diesen String.
@@ -39,12 +54,15 @@ API abgelehnt und nicht nur in der Seitenleiste verborgen. Siehe
 - **Referenz** — die Seite, die der eigene Hilfe-Link der Konsole für diesen Bildschirm
   öffnet.
 
-Die fünf folgenden Überschriften sind die Hubs der Konsole in der Reihenfolge der
-Seitenleiste.
+Die folgenden Überschriften sind diese historischen Hub-Kategorien in der Reihenfolge
+des generierten Index — nicht die Reihenfolge der Seitenleiste. Die aktuelle
+Seitenleiste listet die Bereiche so: Infrastruktur, KI, Daten & Kontext, Arbeit &
+Kommunikation, Automatisierung, Sicherheit & Identität, Bereitstellung,
+Beobachtbarkeit & Nachweise, dann System & Einstellungen.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Die Konsole veröffentlicht **59 Routen**. Jede steht mit der erforderlichen
+Die Konsole veröffentlicht **75 Routen**. Jede steht mit der erforderlichen
 Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen unten.
 
 ### Betreiben
@@ -54,10 +72,17 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Übersicht | `/` | Estate-Übersicht und Zustand auf einen Blick | any signed-in user | [Dokumentationsstart](/de/) |
 | Claude Code | `/agentops` | Claude-Code-Sessions erstellen, anhängen und regeln — ohne SSH | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/de/how-to/run-claude-code-with-olivares/) |
 | Backups | `/backups` | Backups auslösen, planen, herunterladen und wiederherstellen, mit einer zweiten Bestätigung auf dem destruktiven Pfad. | `system:admin` | [how-to/backup-and-restore](/de/how-to/backup-and-restore/) |
+| Kommunikation | `/communications` | Kanäle, direkte Mitteilungen und der persönliche Posteingang des gewählten Workspace | `sessions:channel:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Kanalverwaltung | `/communications/administration` | Kanäle verwalten: Konfiguration und Berechtigungsverlauf, jeder Akt unter dem aktuellen ETag des Kanals | `sessions:channel:admin` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Übergaben | `/communications/handoffs` | An Sie gerichtete Angebote zur Übernahme von Arbeitsverantwortung: Kontext lesen und annehmen oder ablehnen | `sessions:delivery:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Kommunikations-Posteingang | `/communications/inbox` | Ihr exaktes Postfach: an Sie adressierte Zustellungen, frisch gelesen und ausdrücklich bestätigt | `sessions:delivery:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Neuer Kanal | `/communications/new` | Einen Kanal mit ausdrücklichen Anfangsberechtigungen anlegen | `sessions:channel:write` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Health & SLA | `/health` | Uptime und SLAs für Agenten und MCP | `health:status:read` | [reference/modules/xxii-health](/de/reference/modules/xxii-health/) |
 | Kill Switch | `/killswitch` | Notstopp, Wiederherstellung unter dualer Kontrolle und Guardian-Containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/de/how-to/cookbook/kill-switch-drill/) |
 | Logs | `/logs` | Live-Log-Stream der Engine, nach Level und Modul filterbar, mit Suche und Pause. | `system:admin` | [how-to/troubleshooting](/de/how-to/troubleshooting/) |
 | Observability | `/observability` | Ingestion-Zustand nach Standard und Trace-Drilldown | `health:status:read` | [reference/modules/observability](/de/reference/modules/observability/) |
+| Quellenbindungen | `/provider-bindings` | Konfigurierte Quellen in der von diesem Knoten angewendeten Revision Anbieterprofilen fest zuordnen | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Anbieterprofile | `/provider-profiles` | Die Anbieter-Home-Verzeichnisse registrieren und verwalten, unter denen Sessions starten, und ihre Konfiguration bei Bedarf auslesen | `sessions:profile:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Sandbox | `/sandbox` | Isolierte Agententests und Replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/de/reference/modules/xvii-sandbox/) |
 | Sessions | `/sessions` | Live-Agentenbetrieb und Timelines | `sessions:live:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Dienst eines Tenants entziehen oder wiederherstellen | `system:admin` | [how-to/troubleshooting](/de/how-to/troubleshooting/) |
@@ -135,6 +160,15 @@ bereitgestellt — nur diese Konsolenrouten verhalten sich so.
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
 | Einladung annehmen | `/accept-invite` | Ziel eines per E-Mail versendeten Einladungslinks: Der Eingeladene legt ohne vorherige Session ein Passwort fest und tritt dem Workspace bei. | **no sign-in** | — |
+| KI | `/areas/ai` | Verzeichnis des Bereichs KI: Beobachtung und Betrieb von Sitzungen, Anbieterprofilen und Umgebungen, Modelle, spezialisierte Ausführung und Anbieterreferenz. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Automatisierung | `/areas/automation` | Verzeichnis des Bereichs Automatisierung: Abläufe und Orchestrierung, Ereignisse und Benachrichtigungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Daten & Kontext | `/areas/data-context` | Verzeichnis des Bereichs Daten & Kontext: Fähigkeiten, Wissen und Artefakte. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Bereitstellung | `/areas/deployment` | Verzeichnis des Bereichs Bereitstellung: Vorbereitung und Steuerung von Bereitstellungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Infrastruktur | `/areas/infrastructure` | Verzeichnis des Bereichs Infrastruktur: Inventar und Arbeitsbereiche der Umgebung. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Beobachtbarkeit & Nachweise | `/areas/observation` | Verzeichnis des Bereichs Beobachtbarkeit & Nachweise: Status und Aktivität, Kosten und Einführung, Audit und Aufzeichnungen, Bewertung und Nachweise. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Sicherheit & Identität | `/areas/security-identity` | Verzeichnis des Bereichs Sicherheit & Identität: Identität und Zugriff, Richtlinien, Schutz und Reaktion, Governance-Grenzen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| System & Einstellungen | `/areas/system` | Verzeichnis des Bereichs System & Einstellungen: Administration, Installation und Wartung, Entwicklerwerkzeuge und persönliche Einstellungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Arbeit & Kommunikation | `/areas/work-communications` | Verzeichnis des Bereichs Arbeit & Kommunikation: dauerhaft erfasste sitzungsübergreifende Arbeit und geregelte Kommunikation. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | Anmelden | `/login` | Seite zur Anmeldung mit Zugangsdaten oder Token für ein bereits bereitgestelltes Konto. | **no sign-in** | — |
 | Einstellungen | `/settings` | Workspace- und Kontoeinstellungen | any signed-in user | — |
 | Ersteinrichtung | `/setup` | Einmalige Seite, die eine frische Bereitstellung nutzbar macht: Sie verbraucht das Setup-Token und erstellt das erste Owner-Konto. | **no sign-in** | — |
@@ -154,3 +188,5 @@ erscheinen hier wie alle anderen — die Route existiert und die Berechtigung is
 Welches Modul aktuiert und welches gegatet ist, steht in der
 [Modulübersicht](/de/reference/modules/overview/); die Seite
 [Ehrlichkeit und Grenzen](/de/start/honesty-and-limits/) nennt die allgemeine Regel.
+Die Liste eines Bereichsverzeichnisses ist keine Live-Ablesung von Fähigkeit oder
+Bereitschaft.

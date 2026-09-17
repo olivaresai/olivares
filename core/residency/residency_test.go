@@ -157,6 +157,37 @@ func TestGuardDenyClosed(t *testing.T) {
 	mustDeny(t, g, usT, "us tenant on eu instance")
 	// A tenant with no org row here (resident elsewhere): denied closed, not silently empty.
 	mustDeny(t, g, model.NewTenantID(), "non-resident tenant")
+
+	// Optional selective mutations retain the same policy inside their L0-held
+	// transaction, before either narrow callback can observe or change state.
+	selective, ok := g.(store.SelectiveMutator)
+	if !ok {
+		t.Fatal("residency guard swallowed SelectiveMutator")
+	}
+	plan, err := store.NewTransactionLockPlan("residency:selective")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranCoordination := false
+	err = selective.MutateCoordination(context.Background(), usT, plan, func(store.CoordinationMutationScope) error {
+		ranCoordination = true
+		return nil
+	})
+	if !errors.Is(err, store.ErrResidencyViolation) || ranCoordination {
+		t.Fatalf("cross-region selective coordination = %v ran=%t", err, ranCoordination)
+	}
+	evidencePlan, err := store.NewEvidenceOperationPlan("residency-selective-op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranEvidence := false
+	err = selective.MutateEvidenceOperation(context.Background(), usT, evidencePlan, func(store.EvidenceOperationMutationScope) error {
+		ranEvidence = true
+		return nil
+	})
+	if !errors.Is(err, store.ErrResidencyViolation) || ranEvidence {
+		t.Fatalf("cross-region selective evidence = %v ran=%t", err, ranEvidence)
+	}
 }
 
 // TestGuardPassthrough: with no home region (single-region mode) Guard returns the

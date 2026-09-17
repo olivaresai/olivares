@@ -19,10 +19,12 @@ Le control plane fournit quatre **SDK clients de première partie** pour son con
 | TypeScript | `@olivaresai/client` | `fetch` global (Node ≥ 20, Deno, navigateurs) |
 
 :::note[Statut de distribution]
-Les SDK vivent dans le dépôt du produit sous `clients/` et sont versionnés avec lui. La
-publication sur les registres publics (pkg.go.dev, Maven Central, PyPI, npm) a lieu avec la
-release publique — jusque-là, consommez-les depuis le dépôt (chemin de module Go ci-dessus,
-`mvn -f clients/java install`, `pip install ./clients/python`, `npm install ./clients/typescript`).
+Les SDK vivent dans le dépôt du produit sous `clients/` et sont versionnés avec lui.
+Cette page n’affirme pas que les clients v26.9.0 sont sur pkg.go.dev, Maven Central,
+PyPI ou npm. Consommez-les depuis le dépôt (chemin de module Go ci-dessus,
+`mvn -f clients/java install`, `pip install ./clients/python`,
+`npm install ./clients/typescript`) sauf si vous avez vous-même vérifié un
+paquet de registre pour cette version.
 :::
 
 Les quatre partagent une seule conception. Un cœur écrit à la main implémente le comportement

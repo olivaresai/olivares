@@ -11,7 +11,7 @@
 // on the policy side but never on the audit side is over-provisioned access; an
 // audit edge with no policy edge is shadow access.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): the log file is opened
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): the log file is opened
 // O_RDONLY via connectors/internal/logtail (never written), and the parser maps
 // ONLY the cleartext principal/access metadata. Verified against the audit-log
 // schema at developer.hashicorp.com/vault/docs/audit/schema on 2026-06-11

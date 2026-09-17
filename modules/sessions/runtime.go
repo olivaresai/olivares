@@ -45,7 +45,40 @@ type runtimeState struct {
 	recoveryWorkSessionCreds          WorkSessionCredentialSource
 	recoveryCommunicationSessionCreds CommunicationSessionCredentialSource
 
-	program                     string // the executable to launch ("claude")
+	program string // the executable to launch ("claude")
+	// drivers is the OPERABLE set of registered provider drivers, keyed by driver
+	// key. Registration is what makes a provider launchable on this node —
+	// readiness is per driver, never one shared flag (RATIFIED §3). The historical
+	// Claude path is not in here: it is the frame-driven runtime, unchanged.
+	drivers map[string]ProviderDriver
+	// driverPrograms are the operator's explicit executable overrides per driver.
+	// Absent ⇒ the driver's own official program name.
+	driverPrograms map[string]string
+	// providerCreds are the governed managed-injection adapters, per driver. There
+	// is NO default: a managed launch of a driver with no adapter is refused by
+	// name rather than borrowing another provider's issuer.
+	providerCreds map[string]ProviderCredentialSource
+	// approvalGate authorizes provider approval requests. DENY-CLOSED default.
+	approvalGate ProviderApprovalGate
+	// productVersion is what Olivares calls itself in a provider handshake. The
+	// composition root supplies the build's value; the module invents none.
+	productVersion string
+	// driverCallTimeout bounds one client->server protocol request;
+	// driverApprovalDeadline bounds one server->client approval.
+	driverCallTimeout      time.Duration
+	driverApprovalDeadline time.Duration
+	// environmentRef is this node's persistent execution-environment identity
+	// (B1), late-bound by the composition root. "" keeps profiled launches
+	// deny-closed; the legacy unprofiled path is unaffected.
+	environmentRef string
+	// hostTools is the optional official-CLI observation adapter behind the
+	// host-tools read (host_tools.go). nil answers unknown.
+	hostTools HostToolObserver
+	// profiledLaunchesEnabled is the B2 readiness switch: until every read surface
+	// (list/detail/timeline/SSE/export) understands scoped rows, the productive
+	// create endpoint refuses provider_profile_ref rather than launching a session
+	// whose identity some reader would still resolve by bare external id.
+	profiledLaunchesEnabled     bool
 	baseURL                     string // optional ANTHROPIC_BASE_URL → Olivares' inference gateway
 	idleWindow                  time.Duration
 	waitDelay                   time.Duration
@@ -79,10 +112,15 @@ type runtimeState struct {
 	opLocks map[string]*opLock
 }
 
-// opLock is a per-run mutex with a reference count so it can be reclaimed.
+// opLock is a per-run operation permit with a reference count so it can be
+// reclaimed. The permit is ONE token in a single-capacity channel rather than a
+// mutex: a waiter must be able to select between the permit and its caller's
+// cancellation, and sync.Mutex.Lock offers no such choice. refs counts the
+// holder plus every queued waiter, so the entry stays reachable for as long as
+// anyone can still act on it.
 type opLock struct {
-	mu   sync.Mutex
-	refs int
+	token chan struct{}
+	refs  int
 }
 
 // runTimer is the cancellable one-shot the duration ceiling arms (*time.Timer in
@@ -102,6 +140,12 @@ func newRuntimeState() *runtimeState {
 		stopGate:                    allowStopGate{},
 		recorder:                    noopRecorder{},
 		program:                     "claude",
+		drivers:                     map[string]ProviderDriver{},
+		driverPrograms:              map[string]string{},
+		providerCreds:               map[string]ProviderCredentialSource{},
+		approvalGate:                denyProviderApprovalGate{},
+		driverCallTimeout:           defaultDriverCallTimeout,
+		driverApprovalDeadline:      defaultDriverApprovalDeadline,
 		idleWindow:                  defaultRuntimeIdleWindow,
 		waitDelay:                   defaultWaitDelay,
 		ringFrames:                  defaultRingFrames,
@@ -113,25 +157,121 @@ func newRuntimeState() *runtimeState {
 	}
 }
 
-// lockRun acquires the per-run operation lock for key and returns its release.
+// errNilOperationContext refuses an admission request that carries no context at
+// all. That is a programming error at the call site, not a canceled or expired
+// request, so it is a distinct fixed private error and never a caller status.
+var errNilOperationContext = errors.New("run operation admission requires a context")
+
+// lockRunContext admits ONE operation owner per key and returns that owner's
+// single release, or refuses with the caller's own context error.
+//
+// ⛔ THE WAIT IS THE POINT. The pre-RW1 entrypoint incremented the reference and
+// then blocked on a sync.Mutex with no way back: an operator or work request
+// whose caller had already gone away kept waiting for a key held by someone
+// else, and only discovered the cancellation at its first context-aware store
+// call — after admission. A canceled waiter is not an active execution owner, so
+// it must be able to leave the queue.
+//
+// Cancellation is checked twice and the two checks answer different questions.
+// The first refuses a caller that was ALREADY canceled or expired, so an
+// already-dead request cannot consume a free permit. The second runs immediately
+// after a token is received, because the select below may pick the token branch
+// when both are ready; observing the cancellation there returns the permit
+// instead of carrying it into an operation nobody is waiting for.
+//
+// It promises cancellation-aware waiting and nothing more: no fairness or FIFO
+// order between waiters, no finite bound for a caller whose context cannot be
+// canceled, and no atomicity between a context signal and a process effect.
+// Cancellation observed AFTER a successful return belongs to the operation body,
+// exactly as it did before.
+func (rt *runtimeState) lockRunContext(ctx context.Context, key string) (func(), error) {
+	if ctx == nil {
+		return nil, errNilOperationContext
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err // refused before an entry is allocated: no reference, no permit
+	}
+	l := rt.retainOpLock(key)
+	select {
+	case <-l.token:
+	case <-ctx.Done():
+		rt.releaseOpRef(key, l) // never held the permit; drop exactly this waiter's reference
+		return nil, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		l.token <- struct{}{} // hand the permit straight back to the next waiter
+		rt.releaseOpRef(key, l)
+		return nil, err
+	}
+	return rt.opReleaser(key, l), nil
+}
+
+// lockRun is the uncancellable compatibility entrypoint. It is the SAME
+// exclusion as lockRunContext on the SAME token namespace — not a second
+// mechanism — waiting on a context that is never canceled.
+//
+// The kill-switch sweep is its only caller and stays here deliberately: routing
+// that wait through a cancellable sweep context would newly skip emergency-stop
+// admission whenever the sweep is canceled, which is a policy change RW1 does
+// not make. The sweep's broader cancellation semantics are unchanged.
 func (rt *runtimeState) lockRun(key string) func() {
+	release, err := rt.lockRunContext(context.Background(), key)
+	if err != nil {
+		// Unreachable: context.Background() is not nil, never canceled and has no
+		// deadline, and those three are the only refusals above. Returning a no-op
+		// release instead would be the one way to lose exclusion on this path, so
+		// the impossible case fails loudly rather than silently admitting a second
+		// owner of a live process.
+		panic("sessions: background run operation admission refused: " + err.Error())
+	}
+	return release
+}
+
+// retainOpLock takes one reference on key's entry, creating it with its single
+// permit when absent, and returns that EXACT entry. Taking the reference under
+// opMu before waiting outside it is what keeps a holder's release from reclaiming
+// an entry a queued waiter still points at.
+func (rt *runtimeState) retainOpLock(key string) *opLock {
 	rt.opMu.Lock()
+	defer rt.opMu.Unlock()
 	l := rt.opLocks[key]
 	if l == nil {
-		l = &opLock{}
+		l = &opLock{token: make(chan struct{}, 1)}
+		l.token <- struct{}{}
 		rt.opLocks[key] = l
 	}
 	l.refs++
-	rt.opMu.Unlock()
-	l.mu.Lock()
+	return l
+}
+
+// releaseOpRef drops exactly one reference and reclaims the entry only when the
+// last reference to that IDENTICAL entry is gone. The identity comparison matters:
+// a late drop must never delete a successor entry that a different operation is
+// already using under the same key.
+func (rt *runtimeState) releaseOpRef(key string, l *opLock) {
+	rt.opMu.Lock()
+	defer rt.opMu.Unlock()
+	l.refs--
+	if l.refs == 0 && rt.opLocks[key] == l {
+		delete(rt.opLocks, key)
+	}
+}
+
+// opReleaser builds the one release closure handed to an admitted owner. It is
+// idempotent against concurrent duplicate calls as well as sequential ones, so a
+// double release can neither mint a second permit nor drive the reference count
+// below zero.
+//
+// The permit is returned BEFORE the owner's reference is dropped. In the reverse
+// order the entry could be reclaimed and a fresh one created for the same key
+// while this owner still carried the old permit — two owners of one run.
+func (rt *runtimeState) opReleaser(key string, l *opLock) func() {
+	var once sync.Once
 	return func() {
-		l.mu.Unlock()
-		rt.opMu.Lock()
-		l.refs--
-		if l.refs == 0 {
-			delete(rt.opLocks, key)
-		}
-		rt.opMu.Unlock()
+		once.Do(func() {
+			l.token <- struct{}{}
+			rt.releaseOpRef(key, l)
+		})
 	}
 }
 
@@ -142,13 +282,15 @@ const defaultRuntimeIdleWindow = 5 * time.Minute
 
 // liveRun is a process Olivares currently supervises.
 type liveRun struct {
-	tenant    model.TenantID
-	runRef    string
-	runID     model.ID
-	transport Transport
-	proc      Process
-	ring      *outputRing
-	cancel    context.CancelFunc // cancels the per-run background context
+	// authorityMu pins registration while a profiled effect commits and publishes.
+	authorityMu sync.RWMutex
+	tenant      model.TenantID
+	runRef      string
+	runID       model.ID
+	transport   Transport
+	proc        Process
+	ring        *outputRing
+	cancel      context.CancelFunc // cancels the per-run background context
 
 	// recordIO is the LaunchGate's verdict: record this run's bridged I/O as
 	// governed ledger evidence. agentRef is the kill-switch agent dimension the active
@@ -161,6 +303,15 @@ type liveRun struct {
 	// canonical session; the zero value means the launcher named no holder.
 	claim    Lease
 	launchID model.ID
+	// profile is the home snapshot this process was launched under (B1), nil for a
+	// legacy run. The bridge binds the provider's session id under this profile's
+	// scope; it never reads the profile from a frame.
+	profile *ProviderHomeSnapshot
+	// driver / session are the owned protocol driver of a NON-Claude launch and
+	// its per-run conversation. Both nil on the historical frame-driven path, and
+	// that nil is what keeps that path byte-identical.
+	driver  ProviderDriver
+	session DriverSession
 	// workCredentialID is the non-sensitive revocation handle of the exact-SID
 	// kernel bearer injected at launch. The bearer itself never leaves LaunchSpec.
 	workCredentialID                model.ID
@@ -194,6 +345,15 @@ type liveRun struct {
 	finalizedCh       chan struct{}
 	lastActivityWrite time.Time
 	sessionIDCaptured bool
+	// conversationID is the provider conversation the correlated root response
+	// nominated for this launch, and authState the readiness the provider itself
+	// reported. Both are in-memory facts: the durable ones are the scoped alias and
+	// the run row, written only after the reservation commits.
+	conversationID string
+	authState      string
+	// sessionIDConflictReported dedups the warning for a profiled run whose
+	// announced id is already bound to another session (B1): reported once.
+	sessionIDConflictReported bool
 	// deadline is the template's session-duration ceiling, nil when unbounded.
 	// It is stopped by finalize/teardown so an early exit leaves no timer behind.
 	deadline runTimer
@@ -211,15 +371,49 @@ func (rt *runtimeState) getLive(tenant model.TenantID, runRef string) (*liveRun,
 }
 
 func (rt *runtimeState) putLive(lr *liveRun) {
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
-	rt.live[liveKey(lr.tenant, lr.runRef)] = lr
+	key := liveKey(lr.tenant, lr.runRef)
+	for {
+		prior, _ := rt.getLive(lr.tenant, lr.runRef)
+		if prior != nil {
+			prior.authorityMu.Lock()
+		}
+		rt.mu.Lock()
+		if rt.live[key] != prior {
+			rt.mu.Unlock()
+			if prior != nil {
+				prior.authorityMu.Unlock()
+			}
+			continue
+		}
+		rt.live[key] = lr
+		rt.mu.Unlock()
+		if prior != nil {
+			prior.authorityMu.Unlock()
+		}
+		return
+	}
 }
 
 func (rt *runtimeState) dropLive(tenant model.TenantID, runRef string) {
+	for {
+		lr, ok := rt.getLive(tenant, runRef)
+		if !ok || rt.dropLiveIf(lr) {
+			return
+		}
+	}
+}
+
+func (rt *runtimeState) dropLiveIf(lr *liveRun) bool {
+	lr.authorityMu.Lock()
+	defer lr.authorityMu.Unlock()
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	delete(rt.live, liveKey(tenant, runRef))
+	key := liveKey(lr.tenant, lr.runRef)
+	if rt.live[key] != lr {
+		return false
+	}
+	delete(rt.live, key)
+	return true
 }
 
 // runErr is a runtime error carrying the HTTP status the API should return, so a
@@ -287,6 +481,19 @@ type CreateRunParams struct {
 	// terms that were approved, and it is persisted so an operator can tell which revision
 	// a running child was started from after the template is edited.
 	TemplateVersion int64
+
+	// --- The provider-profile plane (B1, provider_profile.go). ---
+	//
+	// ProviderProfileRef names the profile the launch runs under, and it is the ONLY
+	// profile-shaped thing a caller may send. ProviderHome is the SERVER's resolution of
+	// it — the non-secret home snapshot the run row persists before the spawn and the
+	// child is started with — never accepted from the wire: the request DTO has no such
+	// field and an in-process value is overwritten by the resolver. Both carry
+	// `omitempty` on purpose: an unprofiled dispatch keeps the EXACT legacy K4 digest
+	// bytes, while a profiled one digests the profile AND the effective snapshot, so
+	// the same dispatch key with another home is a conflict rather than a replay.
+	ProviderProfileRef string                `json:"ProviderProfileRef,omitempty"`
+	ProviderHome       *ProviderHomeSnapshot `json:"ProviderHome,omitempty"`
 }
 
 // launchIntentFor builds the references-only launch intent the governance gates
@@ -316,6 +523,10 @@ func launchIntentFor(action LaunchAction, runRef string, p CreateRunParams, ws *
 		intent.AgentRef = p.AgentRef
 	} else if p.ActorKind == model.ActorAgent {
 		intent.AgentRef = p.Actor
+	}
+	if p.ProviderHome != nil {
+		intent.ProviderProfileRef = p.ProviderHome.ProfileID
+		intent.ProviderEnvironmentRef = p.ProviderHome.EnvironmentRef
 	}
 	if ws != nil {
 		intent.WorkspaceClassified = ws.dlpMode != dlpOff
@@ -414,6 +625,38 @@ func (m *Module) admitResume(
 	return lease, nil
 }
 
+// envSessionRuntimeTokenFileName is the composition root's token-file variable as
+// it appears in an operator's environment. The module never reads the environment —
+// it names the variable so a refusal is actionable, which is the same reason the
+// unwired message below already spells both variables out.
+const envSessionRuntimeTokenFileName = "OLIVARES_SESSION_RUNTIME_TOKEN_FILE"
+
+// ErrCredentialUnavailable is the classification a composition-root credential
+// adapter returns when a CONFIGURED source could not be read — the operator chose a
+// source and the deployment cannot produce it.
+//
+// It is deliberately NOT errNoCredential: "you wired nothing" and "what you wired is
+// unreadable" have different remedies, and an operator who receives the first for the
+// second goes looking for a configuration they already wrote. It is equally not the
+// fallthrough: an unreachable mint backend is still not a decision about this
+// launcher (P1-R6-01), so only a source that reported its own deny-closed cause is
+// classified here.
+//
+// The adapter wraps its cause behind this sentinel, so error IDENTITY survives for
+// internal inspection while the public answer below stays a fixed sentence.
+var ErrCredentialUnavailable = errors.New(
+	"sessions: the configured inference credential source could not be read; launch denied")
+
+// credentialUnavailableMsg is the FIXED public text for that refusal. It is a
+// constant on purpose: the cause's Error() carries the executor's own wording, and a
+// credential path is exactly the kind of value that must not be concatenated into a
+// response body. What the client gets is the variable NAME and the remedy; the cause
+// stays on the internal error.
+const credentialUnavailableMsg = "the configured inference credential source could not be read; " +
+	"stream-json launches are deny-closed (the file named by " + envSessionRuntimeTokenFileName +
+	" must exist, be readable by the Olivares process and be non-empty). " +
+	"remote-control launches do not need it"
+
 // denyClosedErr refuses an operation while PRESERVING what kind of failure it was.
 //
 // Both outcomes refuse, and deny-closed is not in question here or anywhere else in
@@ -462,6 +705,17 @@ func denyClosedErr(what string, err error) error {
 				"(set OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE). " +
 				"remote-control launches do not need it",
 		}
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		// Work that was canceled or ran out of time is not a verdict about any
+		// dependency, and it must not borrow one on its way out — including the
+		// credential classification below, which a canceled read can carry with it.
+		// Falling through leaves the established cancellation taxonomy in charge.
+	case errors.Is(err, ErrCredentialUnavailable):
+		// The CONFIGURED-but-unreadable source. Same 503 the unwired case answers,
+		// because both are an unavailable dependency, and a different sentence,
+		// because they have different remedies. The cause is dropped here and only
+		// here: it is preserved on the error the adapter returned.
+		return &runErr{http.StatusServiceUnavailable, credentialUnavailableMsg}
 	}
 	var re *runErr
 	if errors.As(err, &re) {
@@ -497,6 +751,13 @@ func (m *Module) createRunInternal(
 		return runDTO{}, err
 	}
 	if err := validateCreate(&p); err != nil {
+		return runDTO{}, err
+	}
+	// B1: the profile is resolved by the SERVER here — before the K4 dispatch digest,
+	// before the workspace, the kill-switch, the claim and every credential — so a
+	// launch that names a profile this node cannot honor is refused before anything
+	// durable happens, and a profiled dispatch digests the home it will run under.
+	if err := m.resolveLaunchProfileInto(ctx, tenant, &p); err != nil {
 		return runDTO{}, err
 	}
 	if work != nil {
@@ -535,6 +796,9 @@ func (m *Module) createRunInternal(
 	if err := m.ensureRuntimeCredentialWiring(); err != nil {
 		return runDTO{}, err
 	}
+	if err := m.ensureRuntimeCredentialReadiness(ctx); err != nil {
+		return runDTO{}, err
+	}
 
 	// SG-02-b: the reference is minted BEFORE the gate is consulted, and the claim is
 	// acquired against it, so the gate is asked about a launch that has an identity and
@@ -554,7 +818,7 @@ func (m *Module) createRunInternal(
 	// governance pre-flight (budget/HITL/PEP). Returns the PEP env to inject and
 	// whether to record I/O.
 	intent := launchIntentFor(LaunchActionCreate, runRef, p, ws, lease)
-	pr, err := m.preflight(ctx, tenant, intent, StopDims{AgentRef: intent.AgentRef})
+	pr, err := m.preflight(ctx, tenant, intent, StopDims{AgentRef: intent.AgentRef}, launchDriverKey(p))
 	if err != nil {
 		// The launch was refused AFTER the preamble took the claim. Give it back: a
 		// refused launch must not leave the session held by a launcher that never ran.
@@ -563,9 +827,13 @@ func (m *Module) createRunInternal(
 		m.releaseLaunchClaim(ctx, tenant, lease)
 		return runDTO{}, err
 	}
-	// Mint the inference credential (stream-json only; remote-control uses the
-	// operator's subscription OAuth, which does not mint — §0/§5 of the contract).
-	cred, err := m.maybeMint(ctx, tenant, runRef, p.Transport)
+	// Resolve the AUTHORIZED authentication source into the short-lived material
+	// this launch runs under: the Claude inference credential on the historical
+	// path (stream-json only; remote-control uses the operator's subscription
+	// OAuth, which does not mint — §0/§5 of the contract), the driver's own
+	// governed adapter under managed injection, or NOTHING at all when the profile
+	// is authorized to use its own account home.
+	cred, providerEnv, err := m.mintLaunchAuthority(ctx, tenant, runRef, p)
 	if err != nil {
 		m.releaseLaunchClaim(ctx, tenant, lease)
 		return runDTO{}, err
@@ -637,7 +905,7 @@ func (m *Module) createRunInternal(
 	wctx := context.WithoutCancel(ctx)
 	runCtx, cancel := context.WithCancel(context.Background())
 	spec := m.buildLaunchSpec(
-		p, cred, runtimeCreds.work, runtimeCreds.communication, "", ws, pr.injectEnv,
+		p, cred, runtimeCreds.work, runtimeCreds.communication, "", ws, pr.injectEnv, providerEnv,
 	)
 	proc, lerr := m.rt.runner.Launch(runCtx, spec)
 	if lerr != nil || proc == nil {
@@ -653,7 +921,7 @@ func (m *Module) createRunInternal(
 				tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
 				proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 				cancel: cancel, finalizedCh: make(chan struct{}),
-				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease,
+				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 				launchID:                        runtimeCreds.launchID,
 				workCredentialID:                runtimeCreds.work.ID,
 				workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -707,7 +975,7 @@ func (m *Module) createRunInternal(
 		tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
 		proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 		cancel: cancel, finalizedCh: make(chan struct{}),
-		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease,
+		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 		launchID:                        runtimeCreds.launchID,
 		workCredentialID:                runtimeCreds.work.ID,
 		workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -717,6 +985,9 @@ func (m *Module) createRunInternal(
 	}
 	m.rt.putLive(lr)
 	m.startRuntimeCredentialHeartbeat(lr)
+	// The owned protocol session exists BEFORE the pump does, so no frame can
+	// arrive with nobody to correlate it. A no-op on the Claude path.
+	m.attachDriverSession(lr, p, spec.Dir, "")
 	// ⛔ LA VENTANA SE ABRE ANTES DE ARRANCAR EL BRIDGE, no despues: si se abriera despues,
 	// los frames que llegaran en medio se aplicarian directos y competirian con el CAS de la
 	// reserva — que es exactamente la carrera que esto cierra. Y se vuelca SIEMPRE al salir,
@@ -727,6 +998,25 @@ func (m *Module) createRunInternal(
 	defer lr.cierraVentanaYVuelca()
 	go m.bridge(lr)
 	m.armRunDeadline(lr, p.MaxDuration)
+
+	// The owned handshake runs INSIDE the reservation window on purpose: the
+	// provider's root response is allowed to arrive before the launch transition
+	// commits, and the alias it nominates is queued rather than written — so a
+	// launch that then loses its row binds nothing, and the retry converges.
+	if herr := m.finishDriverLaunch(wctx, lr); herr != nil {
+		lr.mu.Lock()
+		lr.launchFailed, lr.stopRequested = true, true
+		lr.stopReason = "driver_handshake_failed"
+		lr.mu.Unlock()
+		stopped, teardownErr := m.teardownLiveWithContext(wctx, lr)
+		if !stopped {
+			// Keep the claim and the pending generation: an unstopped child is still
+			// ours, and a later stop retries that exact process.
+			return runDTO{}, errors.Join(herr, teardownErr)
+		}
+		m.awaitFinalize(lr)
+		return runDTO{}, errors.Join(herr, teardownErr)
+	}
 
 	// Transition PENDING → RUNNING (+ pid, started_at, 'launched' event). The guard
 	// permits 'launched' only FROM pending: if the process already exited and the
@@ -751,7 +1041,7 @@ func (m *Module) createRunInternal(
 		}
 		return runDTO{}, errors.Join(err, teardownErr)
 	}
-	return m.toRunDTO(rec), nil
+	return m.toRunDTO(m.settleDriverLaunch(wctx, lr, rec)), nil
 }
 
 // resumeRun relaunches a stopped session against its persisted claude_session_id.
@@ -762,7 +1052,12 @@ func (m *Module) createRunInternal(
 // still clears an attribution that no longer describes the driver, which is the
 // behavior runtime_governance_test.go already pins.
 func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind, agentIdentity string) (runDTO, error) {
-	defer m.rt.lockRun(liveKey(tenant, runRef))() // serialize with stop/cleanup/delete on this run
+	// serialize with stop/cleanup/delete on this run; a caller that is gone does not wait for it
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return runDTO{}, err
+	}
+	defer release()
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return runDTO{}, err
@@ -780,6 +1075,15 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	claudeID := rec.String(colClaudeSessionID)
 	if transport == TransportStreamJSON && claudeID == "" {
 		return runDTO{}, conflictErr("session has no captured Claude session id to resume")
+	}
+	// B1: a run launched under a profile continues ONLY on the same proven home. The
+	// stored snapshot is re-resolved against the profile row: a rename is fine, a
+	// retired/disabled profile, a home that moved or vanished, or another execution
+	// environment refuses here — before the reservation, before Runner, before any
+	// credential is minted. A legacy run (no snapshot) is not assigned today's HOME.
+	profile, err := m.revalidateStoredProfile(ctx, tenant, rec)
+	if err != nil {
+		return runDTO{}, err
 	}
 	// re-resolve the workspace on resume (it may have been disabled/deregistered
 	// or its root may be unavailable on this node — fail the resume deny-closed). Done
@@ -799,6 +1103,13 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		Name: rec.String(colRunName), Actor: actor, ActorKind: actorKind, AgentRef: agentIdentity,
 		TemplateID: rec.String(colTemplateID),
 	}
+	if profile.ProfileID != "" {
+		// The persisted profile, revalidated above. The client cannot name another one
+		// on resume: the request has no body that reaches this.
+		p.ProviderProfileRef = profile.ProfileID
+		snap := profile
+		p.ProviderHome = &snap
+	}
 	// the template is RE-RESOLVED on resume, exactly as the governance gates are
 	// re-run below, and for the same reason — the posture a session runs under is the
 	// CURRENT one, not the one it was born with. A template tightened (or archived, or
@@ -813,6 +1124,17 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	if err != nil {
 		return runDTO{}, err
 	}
+	// OpenCode has no mapping for template instructions, tool restrictions or a
+	// non-default Claude permission mode. Create already refuses those after the
+	// server resolves the driver. Resume re-resolves the CURRENT template above,
+	// so the same refusal has to run here — before the kill-switch, reservation,
+	// credentials or spawn — or a template tightened while the run was stopped
+	// would relaunch with those terms silently discarded.
+	if launchDriverKey(p) == providerDriverOpenCode {
+		if err := refuseOpenCodeUnsupportedControls(p); err != nil {
+			return runDTO{}, err
+		}
+	}
 	// First and alone: a stopped estate must not even reach the admission plane,
 	// which writes (SG-02-b).
 	agentRef := agentIdentity
@@ -823,6 +1145,9 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		return runDTO{}, err
 	}
 	if err := m.ensureRuntimeCredentialWiring(); err != nil {
+		return runDTO{}, err
+	}
+	if err := m.ensureRuntimeCredentialReadiness(ctx); err != nil {
 		return runDTO{}, err
 	}
 	// A previous process may have died while auth storage was unavailable. Retry
@@ -881,11 +1206,11 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	// change since the last launch is honored. recordIO is re-derived from the run's
 	// CRITICAL posture (permission_mode + workspace).
 	intent := launchIntentFor(LaunchActionResume, runRef, p, ws, lease)
-	pr, err := m.preflight(ctx, tenant, intent, StopDims{RunRef: runRef, AgentRef: intent.AgentRef})
+	pr, err := m.preflight(ctx, tenant, intent, StopDims{RunRef: runRef, AgentRef: intent.AgentRef}, launchDriverKey(p))
 	if err != nil {
 		return abortReservation(err, lease)
 	}
-	cred, err := m.maybeMint(ctx, tenant, runRef, transport)
+	cred, providerEnv, err := m.mintLaunchAuthority(ctx, tenant, runRef, p)
 	if err != nil {
 		return abortReservation(err, lease)
 	}
@@ -909,7 +1234,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	spec := m.buildLaunchSpec(
-		p, cred, runtimeCreds.work, runtimeCreds.communication, claudeID, ws, pr.injectEnv,
+		p, cred, runtimeCreds.work, runtimeCreds.communication, claudeID, ws, pr.injectEnv, providerEnv,
 	)
 	proc, lerr := m.rt.runner.Launch(runCtx, spec)
 	if lerr != nil || proc == nil {
@@ -920,7 +1245,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 				tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
 				proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 				cancel: cancel, finalizedCh: make(chan struct{}),
-				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease,
+				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 				launchID:                        launchID,
 				workCredentialID:                runtimeCreds.work.ID,
 				workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -959,7 +1284,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
 		proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 		cancel: cancel, finalizedCh: make(chan struct{}),
-		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease,
+		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 		launchID:                        launchID,
 		workCredentialID:                runtimeCreds.work.ID,
 		workCredentialNotAfter:          runtimeCreds.work.NotAfter,
@@ -969,6 +1294,10 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	}
 	m.rt.putLive(lr)
 	m.startRuntimeCredentialHeartbeat(lr)
+	// The stored conversation is resumed through the owned PROTOCOL, not through an
+	// argv flag: an app-server child continues a thread by asking it to, and the
+	// correlated response is what proves it continued the one we asked for.
+	m.attachDriverSession(lr, p, spec.Dir, claudeID)
 	// ⛔ LA VENTANA SE ABRE ANTES DE ARRANCAR EL BRIDGE, no despues: si se abriera despues,
 	// los frames que llegaran en medio se aplicarian directos y competirian con el CAS de la
 	// reserva — que es exactamente la carrera que esto cierra. Y se vuelca SIEMPRE al salir,
@@ -979,6 +1308,21 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	defer lr.cierraVentanaYVuelca()
 	go m.bridge(lr)
 	m.armRunDeadline(lr, p.MaxDuration)
+
+	// A resume that the provider refuses is a REFUSAL, not an invitation to start a
+	// different conversation under the same run.
+	if herr := m.finishDriverLaunch(wctx, lr); herr != nil {
+		lr.mu.Lock()
+		lr.launchFailed, lr.stopRequested = true, true
+		lr.stopReason = "driver_resume_refused"
+		lr.mu.Unlock()
+		stopped, teardownErr := m.teardownLiveWithContext(wctx, lr)
+		if !stopped {
+			return runDTO{}, errors.Join(herr, teardownErr)
+		}
+		m.awaitFinalize(lr)
+		return runDTO{}, errors.Join(herr, teardownErr)
+	}
 
 	gf := govFactsFor(intent, pr)
 	updated, err := m.transition(wctx, tenant, runRef, transitionInput{
@@ -1020,12 +1364,17 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		}
 		return runDTO{}, errors.Join(err, teardownErr)
 	}
-	return m.toRunDTO(updated), nil
+	return m.toRunDTO(m.settleDriverLaunch(wctx, lr, updated)), nil
 }
 
 // stopRun signals a graceful stop and waits for the bridge to finalize the row.
 func (m *Module) stopRun(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind string) (runDTO, error) {
-	defer m.rt.lockRun(liveKey(tenant, runRef))() // serialize with resume/cleanup/delete on this run
+	// serialize with resume/cleanup/delete on this run; a caller that is gone does not wait for it
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return runDTO{}, err
+	}
+	defer release()
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return runDTO{}, err
@@ -1086,29 +1435,239 @@ func (m *Module) stopRunLoaded(ctx context.Context, tenant model.TenantID, runRe
 		dto, err := m.reconcileTerminal(ctx, tenant, runRef, rec, actor, actorKind)
 		return dto, true, err
 	}
+	// ⛔ THE OPERATOR'S AUTHORITY, RE-PROVED BEFORE THE PROCESS IS TOUCHED. A stop
+	// is terminal and irreversible, and the review demonstrated it landing from a
+	// launch whose durable Claim had already moved to a successor. This asks the
+	// store with the claim row in the write set, so a takeover that commits
+	// concurrently refuses this stop instead of racing it.
+	//
+	// It runs BEFORE the 'stopping' ledger write and before Process.Stop, so a
+	// refusal here is a clean pre-effect refusal: attempted stays false and the
+	// work-fenced caller records a refusal rather than an ambiguity.
+	//
+	// This is the OPERATOR path only. stopAllRuns, the kill-switch sweep, the
+	// duration ceiling and teardownLiveWithContext never pass through here: the
+	// runtime reaping its own child is not an act of a holder, and fencing it would
+	// strand a process exactly when its authority is gone.
+	if err := m.assertRunAuthority(ctx, lr); err != nil {
+		return runDTO{}, false, err
+	}
 	// Record WHO requested the stop, then signal and wait for finalize.
 	if _, err := m.transition(ctx, tenant, runRef, transitionInput{
 		event: "stopping", actor: actor, actorKind: actorKind, detail: detail,
+		lease: lr.claim, guard: guardRuntimeLaunch(lr.launchID),
 	}); err != nil {
 		return runDTO{}, false, err
 	}
-	lr.mu.Lock()
-	lr.stopRequested = true
-	if detail != "" {
-		lr.stopReason = detail
-	}
-	lr.mu.Unlock()
-	stopErr := secretSafeCredentialError("session process stop", lr.proc.Stop(ctx))
-	revokeErr := m.revokeLiveRuntimeCredentials(ctx, lr)
-	select {
-	case <-lr.finalizedCh:
-	case <-ctx.Done():
+	outcome, stopErr, revokeErr := m.stopLiveEffect(ctx, lr, detail, legacyRevocationPhase(ctx))
+	if outcome == stopEffectCanceled {
 		return runDTO{}, true, errors.Join(ctx.Err(), stopErr, revokeErr)
-	case <-time.After(2 * m.rt.waitDelay):
-		// finalize is taking too long; return the current state honestly.
 	}
 	dto, err := m.getRun(ctx, tenant, runRef)
 	return dto, true, errors.Join(err, stopErr, revokeErr)
+}
+
+// stopEffectOutcome says how the wait for the bridge's finalize ended. The three
+// are kept apart because their callers answer differently: a canceled wait is
+// the caller's own lifetime ending and is reported as such, a timed-out wait is
+// an honest "the row has not settled yet", and a finalized one is the ordinary
+// path.
+type stopEffectOutcome uint8
+
+const (
+	stopEffectFinalized stopEffectOutcome = iota
+	stopEffectCanceled
+	stopEffectTimedOut
+)
+
+// stopLiveEffect is the EXTERNAL-EFFECT half of a terminal stop, extracted
+// verbatim so the legacy operator route and the managed Stop cross the process
+// boundary through the same code rather than through two that agree today.
+//
+// It performs no authority check of its own: every caller proves its authority
+// BEFORE calling, and the split is what lets each keep its own taxonomy for a
+// pre-effect refusal while sharing the effect itself.
+//
+// revoke creates the context the credential revocation runs under. The legacy
+// path passes its own context back unchanged; the managed Stop passes a bounded
+// phase (managed_stop_revocation.go).
+func (m *Module) stopLiveEffect(
+	ctx context.Context,
+	lr *liveRun,
+	reason string,
+	revoke revocationPhase,
+) (stopEffectOutcome, error, error) {
+	lr.mu.Lock()
+	lr.stopRequested = true
+	if reason != "" {
+		lr.stopReason = reason
+	}
+	lr.mu.Unlock()
+	if lr.session != nil {
+		// The BOUNDED graceful half of a terminal stop: cancel an in-flight provider
+		// turn and release the conversation, then tear the process group down. It is
+		// bounded on purpose — a provider that will not answer must not be able to
+		// postpone a stop, and the teardown below does not depend on it.
+		sctx, cancelShutdown := context.WithTimeout(context.WithoutCancel(ctx), m.rt.waitDelay)
+		lr.session.Shutdown(sctx)
+		cancelShutdown()
+	}
+	stopErr := secretSafeCredentialError("session process stop", lr.proc.Stop(ctx))
+	rctx, cancelRevoke := revoke()
+	revokeErr := m.revokeLiveRuntimeCredentials(rctx, lr)
+	// The revocation phase ends HERE. The finalize wait below is a separate stage
+	// with its own bound, and a bounded phase must not keep its deadline armed
+	// across it.
+	cancelRevoke()
+	select {
+	case <-lr.finalizedCh:
+		return stopEffectFinalized, stopErr, revokeErr
+	case <-ctx.Done():
+		return stopEffectCanceled, stopErr, revokeErr
+	case <-time.After(2 * m.rt.waitDelay):
+		// finalize is taking too long; return the current state honestly.
+		return stopEffectTimedOut, stopErr, revokeErr
+	}
+}
+
+// interruptRun cancels the ACTIVE provider turn of a live driver-backed run and
+// LEAVES THE PROCESS RUNNING.
+//
+// It is a different control from stop, not a softer one. Stop is terminal: it
+// ends the turn, the process group and the run. Interrupt ends the turn the model
+// is executing and hands the same owned child back, ready for the next input —
+// which is the only way an operator can say "not that" without paying for a new
+// process, a new conversation and a new claim generation.
+//
+// It carries the SAME controls as every other governed run control: the run must
+// be this runtime's live handle (ownership), the ledger writes are guarded by the
+// launch generation so a superseded incarnation cannot interrupt its successor
+// (claim/fence), and both the request and the outcome are recorded (audit).
+func (m *Module) interruptRun(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind string) (runDTO, error) {
+	// serialize with resume/stop/cleanup/delete; a caller that is gone does not wait for it
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return runDTO{}, err
+	}
+	defer release()
+	rec, err := m.loadRun(ctx, tenant, runRef)
+	if err != nil {
+		return runDTO{}, err
+	}
+	if err := m.refuseLegacyControlUnderWork(ctx, tenant, rec); err != nil {
+		return runDTO{}, err
+	}
+	dto, _, err := m.interruptRunLoaded(ctx, tenant, runRef, actor, actorKind, rec)
+	return dto, err
+}
+
+// interruptRunLoaded reports whether it crossed the external-effect boundary
+// while its caller holds the per-run operation lock. It is the exact counterpart
+// of stopRunLoaded and exists for the same reason: keeping the control-plane
+// SELECTION outside this body lets the legacy route keep its error taxonomy while
+// InterruptForWork tells a pre-effect refusal apart from an uncertain attempt.
+//
+// Everything before interruptDriverTurn is pre-effect, INCLUDING the 'interrupting'
+// ledger write: it is a durable record of an intention, not a frame on the child's
+// stdin, so a failure there leaves the provider turn exactly as it was.
+func (m *Module) interruptRunLoaded(
+	ctx context.Context,
+	tenant model.TenantID,
+	runRef, actor, actorKind string,
+	rec model.Record,
+) (runDTO, bool, error) {
+	if rec.String(colState) != stateRunning {
+		return runDTO{}, false, conflictErr("session is not running (state=" + rec.String(colState) + ")")
+	}
+	lr, ok := m.rt.getLive(tenant, runRef)
+	if !ok {
+		// A row this runtime does not supervise is not a process it can interrupt.
+		// Saying so is the answer; pretending otherwise would report a turn as
+		// cancelled while it continued somewhere else.
+		return runDTO{}, false, conflictErr("session is not supervised by this runtime")
+	}
+	if lr.session == nil {
+		// ⛔ AND IT NEVER BECOMES A STOP. A provider with no turn interruption is
+		// told so; ending the process instead would answer "cancel this turn" by
+		// destroying the conversation, the child and the claim generation — the one
+		// outcome an interrupt exists to avoid.
+		return runDTO{}, false, conflictErr("this session's provider has no turn interruption; stop it instead")
+	}
+	// The ledger writes now carry the launch's own claim, so the audit of an
+	// interrupt is itself fenced: a superseded launch cannot even record that it
+	// asked. interruptDriverTurn re-proves the same authority immediately before
+	// the frame crosses to the child.
+	if _, err := m.transition(ctx, tenant, runRef, transitionInput{
+		event: "interrupting", actor: actor, actorKind: actorKind,
+		detail: "provider turn interruption requested",
+		lease:  lr.claim, guard: guardRuntimeLaunch(lr.launchID),
+	}); err != nil {
+		return runDTO{}, false, err
+	}
+	attempted, err := m.interruptDriverTurn(ctx, lr)
+	if err != nil {
+		return runDTO{}, attempted, err
+	}
+	if _, err := m.transition(ctx, tenant, runRef, transitionInput{
+		event: "interrupted", actor: actor, actorKind: actorKind,
+		detail: "provider turn interrupted; the owned process stays live",
+		lease:  lr.claim, guard: guardRuntimeLaunch(lr.launchID),
+	}); err != nil {
+		return runDTO{}, true, err
+	}
+	dto, err := m.getRun(ctx, tenant, runRef)
+	return dto, true, err
+}
+
+// sendTextInput routes one operator turn to a driver-backed run. The driver
+// encodes it as that provider's own turn method: a start when the conversation is
+// idle, a steer when a turn is already in flight.
+//
+// It takes the per-run operation lock, like every other control that reaches the
+// child. Input used to be the exception, and the exception was the hole: a turn
+// could be written into a process that stop was already tearing down, and neither
+// side knew about the other.
+func (m *Module) sendTextInput(ctx context.Context, tenant model.TenantID, runRef, text string) error {
+	// serialize with stop/resume/interrupt; a caller that is gone does not wait for it
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return err
+	}
+	defer release()
+	rec, err := m.loadRun(ctx, tenant, runRef)
+	if err != nil {
+		return err
+	}
+	if err := m.refuseLegacyControlUnderWork(ctx, tenant, rec); err != nil {
+		return err
+	}
+	_, err = m.sendTextInputLoaded(ctx, tenant, runRef, text, rec)
+	return err
+}
+
+// sendTextInputLoaded is the shared body of the operator and work-fenced text
+// routes. It reports whether the input CROSSED to the child, which is the only
+// honest input to a durable ambiguity record: a refusal above the driver wrote
+// nothing, a failure after the frame went out may have done anything.
+//
+// The caller holds the per-run operation lock.
+func (m *Module) sendTextInputLoaded(
+	ctx context.Context,
+	tenant model.TenantID,
+	runRef, text string,
+	rec model.Record,
+) (bool, error) {
+	if rec.String(colState) != stateRunning {
+		return false, conflictErr("session is not running (state=" + rec.String(colState) + ")")
+	}
+	lr, ok := m.rt.getLive(tenant, runRef)
+	if !ok {
+		return false, conflictErr("session is not live (state=" + rec.String(colState) + ")")
+	}
+	if lr.session == nil {
+		return false, badRequest("this session is not driven by a provider protocol driver: send line or message")
+	}
+	return m.driverInput(ctx, lr, text)
 }
 
 // cleanupRun releases a stopped session: it blocks resume (clears the Claude
@@ -1116,7 +1675,12 @@ func (m *Module) stopRunLoaded(ctx context.Context, tenant model.TenantID, runRe
 // ~/.claude is a documented best-effort gap hardened in — v1 does NOT claim
 // to have purged on-disk state, it records the operator's intent to release.
 func (m *Module) cleanupRun(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind string) (runDTO, error) {
-	defer m.rt.lockRun(liveKey(tenant, runRef))() // serialize with resume/stop/delete on this run
+	// serialize with resume/stop/delete on this run; a caller that is gone does not wait for it
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return runDTO{}, err
+	}
+	defer release()
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return runDTO{}, err
@@ -1144,7 +1708,12 @@ func (m *Module) cleanupRun(ctx context.Context, tenant model.TenantID, runRef, 
 // deleteRun removes a cleaned session's row. The append-only run_event ledger is
 // immutable and is intentionally NOT deleted — it remains as permanent evidence.
 func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef string) error {
-	defer m.rt.lockRun(liveKey(tenant, runRef))() // serialize with resume/stop/cleanup on this run
+	// serialize with resume/stop/cleanup on this run; a caller that is gone does not wait for it
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return err
+	}
+	defer release()
 	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
@@ -1171,7 +1740,26 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef st
 }
 
 // sendInput writes one NDJSON line to a live session's stdin.
+//
+// It takes the per-run operation lock, like every other control that reaches the
+// child. Raw input was the LAST exception — the text route closed the same hole
+// one slice earlier — and the exception is the hole: a line could be written into
+// a process that stop was already tearing down, and neither side knew about the
+// other. The frame is unchanged: this is still one NDJSON line on the Claude
+// stream-json child's stdin, refused for a protocol-driven run below.
+//
+// ⛔ THE LOCK IS AT THIS OUTER ENTRY AND NOWHERE BELOW IT. sendInputLoaded is
+// called by BOTH this route and InputForWork while each already holds the lock,
+// so acquiring it there too would be a second acquisition of a NON-REENTRANT
+// mutex on the same key: a self-deadlock in the process that owns the child, not
+// a stronger guarantee.
 func (m *Module) sendInput(ctx context.Context, tenant model.TenantID, runRef string, line []byte) error {
+	// serialize with stop/resume/interrupt; a caller that is gone does not wait for it
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return err
+	}
+	defer release()
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return err
@@ -1187,6 +1775,8 @@ func (m *Module) sendInput(ctx context.Context, tenant model.TenantID, runRef st
 // selected and authorized the control plane. InputForWork uses that fact to
 // distinguish a pre-effect rejection from an uncertain attempted write; the
 // legacy route deliberately discards it and preserves its existing taxonomy.
+//
+// The caller holds the per-run operation lock (both of them do).
 func (m *Module) sendInputLoaded(ctx context.Context, tenant model.TenantID, runRef string, line []byte, rec model.Record) (bool, error) {
 	if Transport(rec.String(colTransport)) == TransportRemoteControl {
 		return false, conflictErr("remote-control sessions do not bridge input (I/O is relayed to Anthropic cloud)")
@@ -1203,6 +1793,19 @@ func (m *Module) sendInputLoaded(ctx context.Context, tenant model.TenantID, run
 	lr, ok := m.rt.getLive(tenant, runRef)
 	if !ok {
 		return false, conflictErr("session is not live (state=" + rec.String(colState) + ")")
+	}
+	if lr.session != nil {
+		// ⛔ A DRIVER RUN NEVER TAKES A RAW LINE. The child is an owned JSON-RPC peer,
+		// so an arbitrary line on its stdin is not "input": it is the whole method
+		// surface, approvals included, handed to whoever can reach this route. A turn
+		// is expressed as text and encoded by the driver.
+		return false, badRequest("this session is driven by an owned provider protocol: send text, not a raw protocol line")
+	}
+	// The same effect-boundary authority the text route now proves. Raw input and
+	// text input reach different children by different contracts, but they cross
+	// the same boundary and answer to the same holder.
+	if err := m.assertRunAuthority(ctx, lr); err != nil {
+		return false, err
 	}
 	if err := lr.proc.Send(ctx, line); err != nil {
 		// Process has received the complete LaunchSpec and may echo either bearer
@@ -1295,7 +1898,7 @@ func setOrNull(rec model.Record, col, v string) {
 // deny-closed when wired (the StopGate treats an unreadable state as stopped; a
 // LaunchGate error or Allowed=false blocks). On success it returns the governance
 // instructions the runtime applies to the launch.
-func (m *Module) preflight(ctx context.Context, tenant model.TenantID, intent LaunchIntent, dims StopDims) (preflightResult, error) {
+func (m *Module) preflight(ctx context.Context, tenant model.TenantID, intent LaunchIntent, dims StopDims, driver string) (preflightResult, error) {
 	if err := m.preflightStop(ctx, tenant, dims); err != nil {
 		return preflightResult{}, err
 	}
@@ -1318,6 +1921,14 @@ func (m *Module) preflight(ctx context.Context, tenant model.TenantID, intent La
 	}
 	if err := validateLaunchInjectedEnv(dec.InjectEnv); err != nil {
 		return preflightResult{}, denyClosedErr("launch gate returned an invalid environment", err)
+	}
+	if intent.ProviderProfileRef != "" {
+		if err := validateProfiledInjectedEnv(dec.InjectEnv); err != nil {
+			return preflightResult{}, denyClosedErr("launch gate returned an environment that conflicts with the provider profile", err)
+		}
+		if err := validateOpenCodeReservedInjection(driver, dec.InjectEnv); err != nil {
+			return preflightResult{}, denyClosedErr("launch gate returned an environment that conflicts with the OpenCode profile mapping", err)
+		}
 	}
 	return preflightResult{
 		injectEnv:            dec.InjectEnv,
@@ -1352,7 +1963,16 @@ func validateLaunchInjectedEnv(env []EnvVar) error {
 		reserved := name == "ANTHROPIC_AUTH_TOKEN" || name == "ANTHROPIC_BASE_URL" ||
 			name == "DISABLE_AUTOUPDATER" || name == "OLIVARES_COMMUNICATION_TOKEN" ||
 			strings.HasPrefix(name, "OLIVARES_WORK_") ||
-			strings.HasPrefix(name, "CLAUDE_CODE_")
+			strings.HasPrefix(name, "CLAUDE_CODE_") ||
+			// A launch gate provisions POLICY, never a provider identity. These four
+			// families are how the other official CLIs are authenticated and routed,
+			// and only the driver's own governed adapter may name them (§5.3/§6) — a
+			// gate that could set OPENAI_API_KEY would be a second, ungoverned issuer.
+			strings.HasPrefix(name, "OPENAI_") ||
+			strings.HasPrefix(name, "CODEX_") ||
+			strings.HasPrefix(name, "GROK_") ||
+			strings.HasPrefix(name, "XAI_") ||
+			strings.HasPrefix(name, "OPENCODE_")
 		if !validEnvName(name) || reserved || seen[name] || strings.ContainsRune(item.Value, '\x00') ||
 			len(item.Value) > 64*1024 {
 			return errors.New("invalid, duplicate, or runtime-reserved injected environment value")
@@ -1473,7 +2093,12 @@ func (m *Module) revokeWorkSessionCredential(
 	if source == nil {
 		return &runErr{http.StatusServiceUnavailable, "work-session credential issuer is not available"}
 	}
-	if err := source.Revoke(context.WithoutCancel(ctx), id, expected); err != nil {
+	// A lost version CAS against the concurrent in-process revoker is retried
+	// once; see retryOnceOnVersionConflict.
+	rctx := revocationContext(ctx)
+	if err := retryOnceOnVersionConflict(func() error {
+		return source.Revoke(rctx, id, expected)
+	}); err != nil {
 		m.warnf("sessions: could not revoke work-session credential", "credential_id", id.String())
 		return secretSafeCredentialError("work credential revoke", err)
 	}
@@ -1586,7 +2211,22 @@ func (m *Module) persistCreateWithWork(
 		setIf(row, colCredentialID, credID)
 		setRunGovFacts(row, gf)
 		setClaimStamp(row, lease)
+		// P2/W2: the run's authorization lineage, resolved from the identity this
+		// launch is claimed under, in THIS transaction, from THIS transaction's
+		// facts. It is the only place a new run acquires one. An unresolvable
+		// identity fails the callback, so the transaction rolls back: there is no
+		// pending row, no process, and no run carrying a workspace nobody proved.
+		if err := setRunAuthzWorkspace(ctx, sc, row, lease.SID); err != nil {
+			return err
+		}
+		setProfileSnapshot(row, p.ProviderHome)
 		if work != nil {
+			// A work-bound run is authorized in the workspace its lineage names, and
+			// the work lease question is asked in the item's. At creation they must be
+			// the same workspace, or the run would be born answering to two.
+			if err := assertWorkItemSharesRunLineage(ctx, sc, row, work.itemID); err != nil {
+				return err
+			}
 			row[colRunWorkItemID] = work.itemID.String()
 			row[colRunWorkLeaseFence] = work.leaseFence
 			row[colRunWorkDispatchKey] = append([]byte(nil), work.dispatchKey[:]...)
@@ -1762,6 +2402,23 @@ type transitionInput struct {
 	// the bridge's finalize and the kill-switch sweep are acts of the RUNTIME upon a
 	// session, and fencing those would leave a dead process unable to close its row.
 	lease Lease
+	// terminalObservation (P1) asks this transition to record WHAT WAS OBSERVED about
+	// the process it is retiring. It is a request, not the evidence: the evidence is
+	// completed inside the transaction, from the row as it stood before `mutate`
+	// cleared the launch id. Only the bridge's finalize and reconcileTerminal set it.
+	terminalObservation string
+}
+
+// terminalLifecycle reports whether an event/state pair actually retires a run.
+// An observation may only ride a transition that does, so a caller cannot attach
+// process evidence to a `stopping` or a `resumed`.
+func terminalLifecycle(event, state string) bool {
+	switch event {
+	case "stopped", "failed":
+	default:
+		return false
+	}
+	return state == stateStopped || state == stateFailed
 }
 
 // allowedFrom is the state-machine guard: the set of stored states each
@@ -1775,6 +2432,8 @@ var allowedFrom = map[string][]string{
 	"resuming":       {stateStopped, stateFailed}, // SG-02-b: the fenced write that precedes the spawn
 	"resume_aborted": {statePending},
 	"resumed":        {statePending},
+	"interrupting":   {stateRunning},
+	"interrupted":    {stateRunning},
 	"stopping":       {statePending, stateRunning},
 	"stopped":        {statePending, stateRunning},
 	"failed":         {statePending, stateRunning},
@@ -1839,6 +2498,36 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 				return err
 			}
 		}
+		// P1: THE CAPTURE HAPPENS HERE AND NOWHERE ELSE. `mutate` is three lines away
+		// and both terminal writers null `runtime_launch_id` inside it, so a capture
+		// after it records nothing. A capture BEFORE the transaction is equally wrong:
+		// this closure is re-run on a Store conflict, and the retry must re-read the
+		// row it actually won with rather than re-seal a value from a lost attempt.
+		var evidence *runtimeTerminalEvidence
+		if in.terminalObservation != "" {
+			to := from
+			if in.toState != "" {
+				to = in.toState
+			}
+			if !terminalLifecycle(in.event, to) {
+				return fmt.Errorf("%w: %s/%s does not retire a generation",
+					errInvalidTerminalEvidence, in.event, to)
+			}
+			evidence = &runtimeTerminalEvidence{observation: in.terminalObservation}
+			if raw := rec.String(colRuntimeLaunchID); raw != "" {
+				id, perr := model.ParseID(raw)
+				if perr != nil {
+					// A stored id we cannot parse is not a legacy unbound row. Refusing
+					// keeps malformed evidence out of an append-only ledger.
+					return fmt.Errorf("%w: unparseable retired launch id: %w",
+						errInvalidTerminalEvidence, perr)
+				}
+				evidence.launchID = id
+			}
+			if err := evidence.validate(); err != nil {
+				return err
+			}
+		}
 		if in.mutate != nil {
 			in.mutate(rec)
 		}
@@ -1857,6 +2546,7 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 			runID: runID, runRef: runRef, event: in.event,
 			fromState: from, toState: to, detail: in.detail,
 			actor: in.actor, actorKind: in.actorKind, at: m.now(),
+			terminalEvidence: evidence,
 		})
 		if err != nil {
 			return err
@@ -2038,10 +2728,15 @@ func (m *Module) teardownLiveWithContext(parent context.Context, lr *liveRun) (b
 	stopErr := secretSafeCredentialError("session process teardown", lr.proc.Stop(ctx))
 	lr.cancel()
 	revokeErr := m.revokeLiveRuntimeCredentials(ctx, lr)
-	if stopErr == nil {
+	// The bool answers "is that process gone?", and a forced teardown that had to
+	// abandon output DID collect it — the error still travels, so the loss is
+	// reported, but it must not be read as an unstopped child: this caller keeps
+	// the claim and the pending generation when the answer is no.
+	reaped := childWasReaped(stopErr)
+	if reaped {
 		m.rt.dropLive(lr.tenant, lr.runRef)
 	}
-	return stopErr == nil, errors.Join(
+	return reaped, errors.Join(
 		wrapCredentialCompensation("stop launched process", stopErr), revokeErr,
 	)
 }
@@ -2206,12 +2901,7 @@ func (m *Module) reapClosed(lr *liveRun) {
 	timer := time.NewTimer(closedRetention)
 	defer timer.Stop()
 	<-timer.C
-	key := liveKey(lr.tenant, lr.runRef)
-	m.rt.mu.Lock()
-	if cur, ok := m.rt.live[key]; ok && cur == lr {
-		delete(m.rt.live, key)
-	}
-	m.rt.mu.Unlock()
+	m.rt.dropLiveIf(lr)
 }
 
 // reconcileTerminal handles a stop request for a row with no live handle: if the
@@ -2274,6 +2964,9 @@ func (m *Module) reconcileTerminal(ctx context.Context, tenant model.TenantID, r
 			event: "stopped", toState: stateStopped,
 			detail: "orphaned: runtime handle lost; process not confirmed terminated",
 			actor:  actor, actorKind: actorKind,
+			// The detail has always said the process is not confirmed terminated. P1
+			// records that as a value a reader can match on instead of prose.
+			terminalObservation: obsHandleLostUnconfirmed,
 			guard: guardRuntimeRecoveryTerminal(
 				generation, rec.String(colCommunicationWorkspaceID),
 			),
@@ -2397,8 +3090,24 @@ func validateCreate(p *CreateRunParams) error {
 	if !validPermissionModes[p.PermissionMode] {
 		return badRequest("invalid permission_mode")
 	}
-	if p.Effort != "" && !validEffortLevels[p.Effort] {
-		return badRequest("invalid effort (want low|medium|high|xhigh|max)")
+	if p.Effort != "" {
+		// ⛔ validEffortLevels IS CLAUDE'S SET AND MUST NOT REACH ANOTHER PROVIDER.
+		// Codex advertises its own efforts per model (`ultra` among them, in the
+		// installed model/list), and its schema types the field as an OPEN non-empty
+		// string "advertised by the model". Holding it to Claude's GA enum would
+		// refuse a value the provider itself offers — the invented common enum §5.5
+		// forbids, arriving as a validation rather than as a mapping.
+		//
+		// An unprofiled launch IS the Claude path, so it keeps the enum here. A
+		// profiled one defers to its driver, which resolveLaunchProfileInto applies
+		// once the server knows which driver that is.
+		if p.ProviderProfileRef == "" {
+			if !validEffortLevels[p.Effort] {
+				return badRequest("invalid effort (want low|medium|high|xhigh|max)")
+			}
+		} else if !validOpenProviderTerm(p.Effort) {
+			return badRequest("invalid effort")
+		}
 	}
 	if len(p.EnvAllow) > 64 {
 		return badRequest("env_allow has too many names")

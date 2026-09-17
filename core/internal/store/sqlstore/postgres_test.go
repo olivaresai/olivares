@@ -109,9 +109,13 @@ func TestPostgresIntegration(t *testing.T) {
 
 func TestPostgresAuditAppendLockIncludesGlobalSpoolBudget(t *testing.T) {
 	pg := isolatedPGSplit(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	st, err := Open(ctx, store.Config{
+	// Fixture on an unbounded context: the Open runs the compiled migration plan and two
+	// tenant provisions follow it. Charged to the 10 s budget below they leave the append
+	// lock handoff with the remainder, and on a contended runner under -race that is how
+	// this class reports `context deadline exceeded` at the wait instead of a verdict on
+	// the spool budget (01f81b8e81 / 4859cc43f3 / 346bce0c8a).
+	setupCtx := context.Background()
+	st, err := Open(setupCtx, store.Config{
 		Engine: store.EnginePostgres, DSN: pg.App, OwnerDSN: pg.Owner, AdminDSN: pg.Admin,
 		MaxConns:           4,
 		AuditSpoolMaxBytes: largeAuditSpoolBudget,
@@ -123,6 +127,8 @@ func TestPostgresAuditAppendLockIncludesGlobalSpoolBudget(t *testing.T) {
 	tenantA := provisionTenant(t, st, "pg-audit-lock-a-"+uniqueSuffix())
 	tenantB := provisionTenant(t, st, "pg-audit-lock-b-"+uniqueSuffix())
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	firstLocked := make(chan struct{})
 	releaseFirst := make(chan struct{})
 	var releaseOnce sync.Once

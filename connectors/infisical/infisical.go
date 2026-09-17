@@ -7,7 +7,7 @@
 // membership edges that bind identities and members into each project, and it
 // exposes them as an identitysource.Graph to module VI (governance).
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): it performs only GETs against
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): it performs only GETs against
 // the Infisical REST API (the one exception is the universal-auth login, a POST
 // that exchanges the operator's machine-identity client_id/client_secret for a
 // short-lived access token — the spec'd auth handshake, never a mutation of the

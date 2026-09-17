@@ -123,7 +123,13 @@ const (
 // earlier boot created it. A row that fails validation fails the boot: this is the
 // record every later decision rests on, and a caller cannot be given a disposition
 // the engine does not itself believe.
-func classifyRolloutControls(ctx context.Context, mdb dialect.Execer, dia dialect.Dialect, controls []store.RolloutControl) error {
+func classifyRolloutControls(
+	ctx context.Context,
+	mdb dialect.Execer,
+	dia dialect.Dialect,
+	controls []store.RolloutControl,
+	freshBootstrap *freshBootstrapAdmission,
+) error {
 	// The tables are created even when NO control is declared, so the schema does not
 	// depend on which modules a build happens to enable. Without that, reading the
 	// disposition of a control this binary does not carry fails with "no such table" —
@@ -135,6 +141,21 @@ func classifyRolloutControls(ctx context.Context, mdb dialect.Execer, dia dialec
 		return fmt.Errorf("sqlstore: rollout classification: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	// THE PRE-STATE, RE-READ IN THE TRANSACTION THAT IS ABOUT TO WRITE.
+	//
+	// freshBootstrap is non-nil exactly when the boot classifier admitted the max0 frontier,
+	// and that admission was proved in ANOTHER transaction. This is the first transaction of
+	// this boot that can commit product schema, so what it must not do is create the three
+	// relations on top of a checkpoint that stopped being admissible in between. Re-proving
+	// costs catalog reads under the migration lock and turns "we checked earlier" into "this
+	// transaction checked". The rows and receipts already present are preserved either way:
+	// the loop below validates them and never restates one.
+	if freshBootstrap != nil {
+		if _, err := verifyFreshRolloutPreState(ctx, tx, dia, controls); err != nil {
+			return err
+		}
+	}
 
 	for _, ddl := range []string{rolloutStateDDL, rolloutTransitionDDL, rolloutClassificationDDL} {
 		if _, err := tx.ExecContext(ctx, ddl); err != nil {

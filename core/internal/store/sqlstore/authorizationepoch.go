@@ -217,6 +217,21 @@ func (sc *tenantScope) BumpAuthorizationEpoch(
 		expected.Version < 1 {
 		return store.AuthorizationFactRef{}, authorizationEpochUnavailable("expected witness is malformed", nil)
 	}
+	// The CAS below is a durable consumer row write built here rather than through
+	// genericRepo, so it reports itself to the custodial write gate. It is
+	// ORDINARY: this capability is offered to a confined Mutate scope, its caller
+	// is a module, and it is not the engine's own leased-authority touch.
+	//
+	// It is reported after the caller's argument checks and before the read and
+	// the clock, so a sealed scope refuses the write rather than the observations
+	// it would have needed — and a bump that later fails its CAS still counts as
+	// an attempted consumer write, matching genericRepo, which notes the write
+	// before issuing the statement.
+	if err := sc.guardScopeWrite(
+		scopeRowWrite, originOrdinary, model.AuthorizationEpochKind, expected.ID,
+	); err != nil {
+		return store.AuthorizationFactRef{}, err
+	}
 	current, found, err := readAuthorizationEpochRow(ctx, sc.tx, sc.s.dia, sc.tenant)
 	if err != nil {
 		return store.AuthorizationFactRef{}, authorizationEpochUnavailable("read before bump", err)

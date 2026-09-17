@@ -13,7 +13,9 @@ CHECK="$ROOT/scripts/check-aws-estate.sh"
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/aws-estate.XXXXXX")"
-trap 'rm -rf "$TMP"' EXIT
+# Go writes module-cache files read-only. `rm -rf` on EXIT would then
+# return 1 after a green compiled fixture and the selftest would lie.
+trap 'chmod -R u+w "$TMP" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 
 pass=0
 fail=0
@@ -52,8 +54,45 @@ stage() {
   mkdir -p "$TMP/tree/cloud/control-plane/internal/config"
   cp "$ROOT/cloud/control-plane/internal/config/config.go" \
      "$TMP/tree/cloud/control-plane/internal/config/" 2>/dev/null || true
+  # ⛔ Y `cmd/cloud-cp/main.go`, porque es el SEGUNDO sujeto del par chequeo↔ruta: sin el, esa
+  # comprobacion se SALTA y sus casos saldrian verdes por no haber mirado, que es justo la
+  # clase de falso verde que este banco existe para cortar.
+  mkdir -p "$TMP/tree/cloud/control-plane/cmd/cloud-cp"
+  cp "$ROOT/cloud/control-plane/cmd/cloud-cp/main.go" \
+     "$TMP/tree/cloud/control-plane/cmd/cloud-cp/" 2>/dev/null || true
+  # ⛔ Y EL PAQUETE DONDE `main.go` CONSTRUYE SUS RUTAS, con su `_test.go` y el `go.mod` del
+  # modulo. Desde a63c5cfb44 las rutas viven en `internal/httpapi.NewRouter`: sin el paquete el
+  # gate contesta «no he podido mirar» y TODOS los casos posteriores a ese bloque testificarian
+  # sobre eso (44 lo hicieron el 2026-09-06). El `_test.go` se copia a proposito, para probar
+  # que una ruta registrada solo en un test NO cuenta como servida; el `go.mod` es lo que
+  # permite resolver el import al directorio sin adivinar la disposicion.
+  mkdir -p "$TMP/tree/cloud/control-plane/internal/httpapi"
+  cp "$ROOT"/cloud/control-plane/internal/httpapi/*.go \
+     "$TMP/tree/cloud/control-plane/internal/httpapi/" 2>/dev/null || true
+  cp "$ROOT/cloud/control-plane/go.mod" "$TMP/tree/cloud/control-plane/" 2>/dev/null || true
+  # Y el parser de rutas servidas, que es quien lee el par por el lado del Go. Sin su fuente
+  # el gate contesta «no he podido mirar» y un caso lo prueba (r).
+  mkdir -p "$TMP/tree/scripts/served-routes-guard"
+  cp "$ROOT/scripts/served-routes-guard/go.mod" "$ROOT/scripts/served-routes-guard/main.go" \
+     "$TMP/tree/scripts/served-routes-guard/"
+  # ⛔ Y el SQL de los roles, que es el SUJETO de la cobertura de credenciales de la tarea de
+  # un solo uso. Sin el, esa comprobacion se SALTA y sus casos saldrian verdes por no haber
+  # mirado — la misma clase de falso verde que `main.go` trajo aqui arriba.
+  mkdir -p "$TMP/tree/cloud/control-plane/deploy"
+  cp "$ROOT/cloud/control-plane/deploy/cloud-control-roles.sql" \
+     "$TMP/tree/cloud/control-plane/deploy/" 2>/dev/null || true
+  # Y el Dockerfile de la imagen de roles, que es el tercer sujeto del par: sin el, los casos
+  # que lo mutan saldrian verdes por no haber mirado.
+  cp "$ROOT/cloud/control-plane/deploy/Dockerfile.roles" \
+     "$TMP/tree/cloud/control-plane/deploy/" 2>/dev/null || true
   mkdir -p "$TMP/tree/design"
-  cp "$ROOT"/design/aws-apply-role-policy.sandbox*.json "$TMP/tree/design/" 2>/dev/null || true
+  # ⛔ TODOS los conjuntos, no sólo el de sandbox: con el glob viejo las piezas de
+  # `production` no llegaban al árbol de pruebas, así que los casos que las mutan habrían
+  # salido verdes por no haber sujeto — un falso verde de manual.
+  cp "$ROOT"/design/aws-apply-role-policy.*.json "$TMP/tree/design/" 2>/dev/null || true
+  # Y el runbook del piloto, que es el otro sujeto del par runbook↔workflow. Sin el, esa
+  # comprobacion se SALTA y sus casos saldrian verdes por no haber mirado.
+  cp "$ROOT/design/AWS-RUNBOOK-DESPACHO-SANDBOX.md" "$TMP/tree/design/" 2>/dev/null || true
 }
 
 # ⛔ UN MUTANTE QUE NO SE APLICA ACUSA AL GATE DE CIEGO. Mutar YAML con `sed` es como se
@@ -95,6 +134,155 @@ run() {
   printf '%s\n' "$rc" >"$TMP/rc"
   return "$rc"
 }
+
+# ⛔ LO COMPILADO NECESITA EL GRAFO PINNADO ANTES DE GOPROXY=off. El bloque vive
+# en una funcion para que un invocador COMPILED_ONLY (la regresion de preparacion
+# rehusada) no acredite los 200 mutantes estaticos como "runtime cases".
+# shellcheck source=lib/aws-estate-compiled-modcache.sh
+. "$ROOT/scripts/lib/aws-estate-compiled-modcache.sh" \
+  || { echo "test-aws-estate: missing scripts/lib/aws-estate-compiled-modcache.sh" >&2; exit 2; }
+
+aws_estate_run_compiled_witnesses() {
+  local HEALTH_REG='mux.Handle("GET /health", health)'
+  local SRV_LIT='srv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}'
+  local MODULE="$TMP/module"
+  local cache="" prep_err="$TMP/compiled-prep.err"
+  local _ctrl_log _ctrl_rc
+
+  if [ "${OLIVARES_AWS_ESTATE_SKIP_REFUSED_PREP_CONTROL:-}" != 1 ] \
+     && { [ "${OLIVARES_AWS_ESTATE_COMPILED_ONLY:-}" != 1 ] \
+          || [ -n "${OLIVARES_AWS_ESTATE_COMPILED_MODCACHE_FORCE_RC:-}" ]; }; then
+    _ctrl_log="$TMP/refused-prep-control.log"
+    # `if ! cmd; then rc=$?` is always 0: the negation succeeded. Capture
+    # the child's status from the else of a positive `if cmd`.
+    if bash "$ROOT/scripts/test-aws-estate-compiled-modcache.sh" >"$_ctrl_log" 2>&1; then
+      ok "compiled-modcache bootstrap: refused preparation is NOT MEASURED, 0 runtime cases"
+    else
+      _ctrl_rc=$?
+      bad "compiled-modcache bootstrap regression — rc=$_ctrl_rc; $(tail -c 400 "$_ctrl_log")"
+    fi
+    if [ -n "${OLIVARES_AWS_ESTATE_COMPILED_MODCACHE_FORCE_RC:-}" ]; then
+      return 0
+    fi
+  fi
+
+  if ! cache="$(aws_estate_prepare_compiled_modcache \
+      "$ROOT/cloud/control-plane" "$TMP/compiled-modcache" 2>"$prep_err")"; then
+    bad "compiled witnesses NOT MEASURED — $(tr '\n' ' ' <"$prep_err" | tail -c 400)"
+    return 0
+  fi
+  AWS_ESTATE_COMPILED_GOMODCACHE_EFFECTIVE="$cache"
+
+  stage_module() {
+    rm -rf "$MODULE"
+    cp -a "$ROOT/cloud/control-plane" "$MODULE"
+    rm -f "$MODULE"/internal/httpapi/gate_witness_test.go "$MODULE"/cmd/cloud-cp/gate_witness_test.go
+  }
+  compiled() { # compiled <rc-esperado> <needle> <rotulo> <paquete> <test>
+    local want="$1" needle="$2" label="$3" pkg="$4" name="$5" got out
+    local gomodcache="${AWS_ESTATE_COMPILED_GOMODCACHE_EFFECTIVE:-}"
+    if [ -z "$gomodcache" ]; then
+      bad "$label — NOT MEASURED: compiled() invoked without a prepared module cache"
+      return
+    fi
+    # Sin tuberia que acabe en `grep -q` (SIGPIPE en exito bajo pipefail): la salida va a un
+    # fichero y se lee de ahi.
+    out="$(cd "$MODULE" && GOWORK=off GOPROXY=off GOMODCACHE="$gomodcache" \
+      GOFLAGS="-mod=mod -p=2" GOMAXPROCS=2 \
+      go test -count=1 -run "^${name}\$" -v "./$pkg" 2>&1)" && got=0 || got=$?
+    printf '%s\n' "$out" >"$TMP/compiled.out"
+    if command grep -qE 'module lookup disabled by GOPROXY=off|\[setup failed\]' "$TMP/compiled.out"; then
+      bad "$label — NOT MEASURED (compiled fixture setup; module graph unavailable), not a product verdict: $(tail -c 400 "$TMP/compiled.out")"
+      return
+    fi
+    if [ "$got" != "$want" ] || ! command grep -qF -- "$needle" "$TMP/compiled.out"; then
+      bad "$label — rc=$got, want $want with '$needle'; got: $(tail -c 400 "$TMP/compiled.out")"
+      return
+    fi
+    ok "$label"
+  }
+  local ROUTER_TEST='package httpapi
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/olivaresai/olivares-cloud-cp/internal/config"
+)
+
+func TestGateHealthWitness(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	router := NewRouter(config.Config{AdminAPIKey: "gate-admin", CloudCPPortalReadKey: "gate-portal"}, h, h, h, nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest("GET", "/health", nil))
+	t.Logf("router GET /health status=%d", rec.Code)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("got %d want 204", rec.Code)
+	}
+}
+'
+  # (am) el router real, compilado, sirve GET /health
+  stage_module
+  printf '%s' "$ROUTER_TEST" >"$MODULE/internal/httpapi/gate_witness_test.go"
+  compiled 0 "status=204" "compilado: el router real responde 204 a GET /health" internal/httpapi TestGateHealthWitness
+
+  # (an) el testigo raiz F1 compilado: el goto deja /health en 404 — la regresion es real
+  stage_module
+  printf '%s' "$ROUTER_TEST" >"$MODULE/internal/httpapi/gate_witness_test.go"
+  python3 "$ROOT/scripts/lib/subst-once.py" "$MODULE/internal/httpapi/routes.go" "$HEALTH_REG" 'goto afterHealth
+	mux.Handle("GET /health", health)
+afterHealth: ;'
+  compiled 1 "got 404 want 204" "compilado: con el goto el router real responde 404" internal/httpapi TestGateHealthWitness
+
+  # (ao)-(ap) el bloque REAL del servidor de main, extraido tal cual (la sentencia del literal y
+  # lo que la siga hasta la linea en blanco), dentro de un test del propio paquete main: el
+  # Handler que el servidor conserva responde 204; con la sustitucion raiz F2, 404.
+  server_block_test() { # server_block_test <main.go> → escribe el test con el bloque extraido
+    python3 - "$1" "$MODULE/cmd/cloud-cp/gate_witness_test.go" <<'PY'
+import re, sys
+src, dst = sys.argv[1:3]
+text = open(src, encoding="utf-8").read()
+m = re.search(r"(?ms)^\tsrv := &http\.Server\{Addr: cfg\.ListenAddr, Handler: mux\}\n(.*?)^\n", text)
+if not m:
+    sys.exit("server block anchor absent in " + src)
+head = "\n".join([
+    "package main", "",
+    "import (", "\t\"net/http\"", "\t\"net/http/httptest\"", "\t\"testing\"", "",
+    "\t\"github.com/olivaresai/olivares-cloud-cp/internal/config\"", ")", "",
+    "func TestGateServerBlockWitness(t *testing.T) {",
+    "\tcfg := config.Config{ListenAddr: \"127.0.0.1:0\"}",
+    "\tmux := http.NewServeMux()",
+    "\tmux.Handle(\"GET /health\", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))",
+    ""])
+tail = "\n".join([
+    "\trec := httptest.NewRecorder()",
+    "\tsrv.Handler.ServeHTTP(rec, httptest.NewRequest(\"GET\", \"/health\", nil))",
+    "\tt.Logf(\"server block GET /health status=%d\", rec.Code)",
+    "\tif rec.Code != http.StatusNoContent {",
+    "\t\tt.Fatalf(\"got %d want 204\", rec.Code)",
+    "\t}", "}", ""])
+open(dst, "w", encoding="utf-8").write(head + m.group(0) + tail)
+PY
+  }
+  stage_module
+  server_block_test "$MODULE/cmd/cloud-cp/main.go"
+  compiled 0 "status=204" "compilado: el bloque real del servidor conserva el Handler (204)" cmd/cloud-cp TestGateServerBlockWitness
+
+  stage_module
+  python3 "$ROOT/scripts/lib/subst-once.py" "$MODULE/cmd/cloud-cp/main.go" "$SRV_LIT" 'srv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}
+	srv.Handler = http.NotFoundHandler()'
+  server_block_test "$MODULE/cmd/cloud-cp/main.go"
+  compiled 1 "got 404 want 204" "compilado: con srv.Handler sustituido el bloque real responde 404" cmd/cloud-cp TestGateServerBlockWitness
+  rm -rf "$MODULE"
+}
+
+if [ "${OLIVARES_AWS_ESTATE_COMPILED_ONLY:-}" = 1 ]; then
+  aws_estate_run_compiled_witnesses
+  printf 'check-aws-estate selftest: %d passed, %d failed\n' "$pass" "$fail"
+  [ "$fail" -eq 0 ]
+  exit $?
+fi
 
 stage
 if run; then
@@ -312,7 +500,7 @@ expect 1 "has no aws-actions/configure-aws-credentials step" "the credential exc
 
 stage
 subst "$WF_T" \
-  'aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3' \
+  'aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4' \
   'aws-actions/configure-aws-credentials@v6'
 expect 1 "which is not a 40-hex commit OID" "a moving TAG instead of a commit digest is a finding"
 
@@ -348,12 +536,12 @@ expect 1 "BEFORE the credential exchange" "the exchange placed AFTER tofu is a f
 stage
 subst "$WF_T" '      - name: estate shape (no apply)' \
   '      - name: sneak credentials into the push path
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1
       - name: estate shape (no apply)'
-expect 1 'assumes an AWS role, but only "apply" may' "credentials in the validate job (push/PR path) are a finding"
+expect 1 'assumes an AWS role, but only' "credentials in the validate job (push/PR path) are a finding"
 
 # ═══ BLOQUEO DE ESTADO DEL BACKEND — AHORA EN HCL, NO EN TEXTO DE SHELL ══════
 #
@@ -395,10 +583,16 @@ subst "$WF_I" '          bash scripts/cosign-verified.sh sign --yes --upload=tru
              '          echo "not signing the control plane today"'
 subst "$WF_I" '          bash scripts/cosign-verified.sh sign --yes --upload=true "${ENGINE_REF}@${ENGINE_DIGEST}"' \
              '          echo "not signing the engine today"'
+# ⛔ Y LA TERCERA, o esto deja de probar lo que dice. Este caso afirma «NINGUNA firma», y con
+# una imagen mas en el workflow quitar dos deja una: entonces muerde el control de CUENTA
+# —que tambien es cierto— y el rotulo pasa a nombrar otra guarda. Un mutante dimensionado
+# para dos imagenes deja de ser total en cuanto hay tres.
+subst "$WF_I" '          bash scripts/cosign-verified.sh sign --yes --upload=true "${ROLES_REF}@${ROLES_DIGEST}"' \
+             '          echo "not signing the roles image today"'
 expect 1 "publishes without a cosign-verified.sh sign COMMAND" "pushing unsigned images is a finding"
 
 stage
-subst "$WF_I" '        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3' \
+subst "$WF_I" '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4' \
              '        uses: aws-actions/configure-aws-credentials@main'
 expect 1 "which is not a 40-hex commit OID" "a branch pin on the ECR path is a finding"
 
@@ -413,8 +607,8 @@ expect 2 "missing workflow parser source" "missing workflow parser source is COU
 # del carril rápido no la tiene. Se escribe como caso para que nadie lea el verde como
 # si sí lo comprobara.
 stage
-subst "$WF_T" '@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3' \
-             '@e6de054238d6b7531b4efff3b6587d9aade6a06c # v9.9.9-inventada'
+subst "$WF_T" '@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4' \
+             '@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v9.9.9-inventada'
 if run; then
   ok "declared blind spot: a wrong version COMMENT does not fire (the digest is what is pinned)"
 else
@@ -427,9 +621,17 @@ POL_G="$TMP/tree/design/aws-apply-role-policy.sandbox.0-guardrails.json"
 POL_C="$TMP/tree/design/aws-apply-role-policy.sandbox.3-compute-and-edge.json"
 
 stage
-rm -f "$TMP/tree"/design/aws-apply-role-policy.sandbox*.json
-expect 1 "no design/aws-apply-role-policy.sandbox*.json" \
+rm -f "$TMP/tree"/design/aws-apply-role-policy.*.json
+expect 1 "no design/aws-apply-role-policy.*.json" \
   "no least-privilege policy at all is a finding (AdministratorAccess would stay by default)"
+
+# ⛔ Y LA AUSENCIA PARCIAL, que con un solo conjunto no existía: quitar SÓLO las de sandbox
+# deja piezas en el árbol, así que el control de «¿hay alguna?» diría que sí mientras
+# `aws-iam-phase2.sh` —que por defecto es sandbox— no encuentra nada que adjuntar.
+stage
+rm -f "$TMP/tree"/design/aws-apply-role-policy.sandbox.*.json
+expect 1 "none for sandbox" \
+  "policy parts that exist but none for sandbox is a finding (partial absence)"
 
 # ⛔ EL MUTANTE QUE JUSTIFICA TODO EL PARTIDO: una pieza por encima del tope de IAM no se
 # puede adjuntar, y AWS sólo lo dice cuando ya está pegando. 6 144 caracteres sin
@@ -481,9 +683,14 @@ subst "$POL_C" "arn:aws:ecr:us-east-1:${_acct}:repository/olivares-pilot*" \
 expect 1 "different AWS accounts" \
   "a part pointing at another AWS account is a finding"
 
+# ⛔ SE BORRAN LOS DOS GEMELOS. Desde que el gate mira todos los estates, quitar sólo el
+# de sandbox lo caza el control de DERIVA (una pieza sin gemelo), que es cierto y es otra
+# guarda; y el «cero Deny» de sandbox lo tapaban los Deny de producción hasta que ese
+# recuento pasó a ser por estate. El mutante que aísla ESTA invariante retira la pieza de
+# guardas de los dos lados a la vez.
 stage
-rm -f "$POL_G"
-expect 1 "no Deny statement anywhere in the set" \
+rm -f "$POL_G" "${POL_G/.sandbox./.production.}"
+expect 1 "no Deny statement anywhere in the" \
   "losing the guardrail Denies is a finding (the role could rewrite its own trust)"
 
 stage
@@ -500,11 +707,11 @@ expect 1 "has no 2012-10-17 Version" \
 
 # 1 · Un canje CONDICIONAL puede no ocurrir, y el paso siguiente corre igual.
 stage
-subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: us-east-1' \
-  '        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+  '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         if: env.SOMETHING == '"'"'yes'"'"'
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -514,9 +721,9 @@ expect 1 "guards the credential exchange with" \
 
 # 2 · `continue-on-error` se traga el fallo del canje y deja correr al apply.
 stage
-subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+subst "$WF_T" '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:' \
-  '        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+  '        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         continue-on-error: true
         with:'
 expect 1 "sets continue-on-error on the credential exchange" \
@@ -527,7 +734,7 @@ expect 1 "sets continue-on-error on the credential exchange" \
 stage
 subst "$WF_T" '      - name: tofu apply (sandbox estate only)' \
   '      - name: a second exchange nobody looked at
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: arn:aws:iam::000000000000:role/somebody-elses
           aws-region: us-east-1
@@ -703,7 +910,7 @@ expect 1 "declares no state locking" \
 stage
 subst "$WF_I" '          bash scripts/cosign-verified.sh sign --yes --upload=true "${CP_REF}@${CP_DIGEST}"' \
              '          echo "bash scripts/cosign-verified.sh sign --yes --upload=true (not executed)"'
-expect 1 "signs without an explicit --upload=true on both images" \
+expect 1 "signs with an explicit --upload=true only" \
   "a cosign call replaced by an echo is a finding (C-01: mention is not invocation)"
 
 # C-01/e · UNA PUERTA VACÍA. `needs: validate` seguía valiendo con un `validate` que no
@@ -767,11 +974,14 @@ expect 1 "is a reusable workflow" \
 # es explícito; cosign v2 vincula `COSIGN_UPLOAD` cuando falta.
 stage
 subst "$WF_I" '--yes --upload=true "${ENGINE_REF}@${ENGINE_DIGEST}"' '--yes "${ENGINE_REF}@${ENGINE_DIGEST}"'
-expect 1 "signs without an explicit --upload=true on both images" \
+expect 1 "signs with an explicit --upload=true only" \
   "dropping --upload=true on ONE image is a finding (E-01: 1 of 2 is not 2 of 2)"
 
 # E-01/b · FIRMAR Y NO LEER DE VUELTA es una afirmación, no una prueba.
 stage
+# Las TRES: «nunca lee de vuelta» exige que no quede ninguna. Con dos sustituciones quedaba
+# una y mordia el control de cuenta, que dice otra cosa.
+subst "$WF_I" '          bash scripts/cosign-verified.sh verify \' '          : skip-verify \'
 subst "$WF_I" '          bash scripts/cosign-verified.sh verify \' '          : skip-verify \'
 subst "$WF_I" '          bash scripts/cosign-verified.sh verify \' '          : skip-verify \'
 expect 1 "never reads the signature back" \
@@ -818,9 +1028,13 @@ expect 1 "before finishing the attachments" \
 
 # G-05 · `scripts/` se exporta y `design/` no: una cuenta escrita aquí viaja al público.
 stage
+# ⛔ EL ANCLA NO PUEDE PARTIR LA TABLA `estate → SUB_TARGET`. Anclaba en
+# `ROLE="olivares-apply-sandbox"`, que desde el 2026-09-02 vive DENTRO de esa tabla, así
+# que el mutante la rompía y el hallazgo que salía era «no hay SUB_TARGET para sandbox»
+# — cierto, y de otra guarda. Un mutante que cambia de tema aprueba el gate sin probarlo.
 subst "$TMP/tree/scripts/aws-iam-phase2.sh" \
-  'ROLE="olivares-apply-sandbox"' \
-  'ROLE="olivares-apply-sandbox"
+  'BOOTSTRAP_MANAGED="arn:aws:iam::aws:policy/AdministratorAccess"' \
+  'BOOTSTRAP_MANAGED="arn:aws:iam::aws:policy/AdministratorAccess"
 ACCOUNT_FIJA="123456789012"'
 expect 1 "contains the 12-digit literal" \
   "a hardcoded account id in an exported script is a finding"
@@ -878,11 +1092,17 @@ expect 1 "switches the OIDC \`sub\` claim" \
 # no está en ninguno de los dos ficheros: está entre ellos. Aquí se voltea el `Effect` del
 # Allow de auto-lectura, que es la forma mínima de romperlo sin tocar el resto.
 stage
-subst "$TMP/tree/design/aws-apply-role-policy.sandbox.0-guardrails.json" \
-  '"Sid": "ReadItselfSoTheVerificationCanExist",
+# ⛔ EN LOS DOS GEMELOS, y por la razón de arriba: mutar uno solo lo caza el control de
+# deriva —que sale ANTES y es de otra guarda—, y el defecto entre ficheros que este caso
+# existe para probar no llegaría a medirse.
+for _pol in "$TMP/tree/design/aws-apply-role-policy.sandbox.0-guardrails.json" \
+            "$TMP/tree/design/aws-apply-role-policy.production.0-guardrails.json"; do
+  subst "$_pol" \
+    '"Sid": "ReadItselfSoTheVerificationCanExist",
       "Effect": "Allow",' \
-  '"Sid": "ReadItselfSoTheVerificationCanExist",
+    '"Sid": "ReadItselfSoTheVerificationCanExist",
       "Effect": "Deny",'
+done
 expect 1 "no apply would ever start again" \
   "a policy set that does not Allow the script's own self-reads is a finding (cross-file)"
 
@@ -1128,6 +1348,1069 @@ stage
 rm -rf "$TMP/tree/cloud"
 expect 0 "" "no cloud/control-plane in the tree is a SKIP, not a pass"
 
+
+# ⛔ EL PAR CHEQUEO-DE-SALUD ↔ RUTA SERVIDA. El estate llego a `main` pidiendo HTTPS `/readyz`
+# a un binario que sirve texto plano y no registra esa ruta: ningun objetivo llegaba nunca a
+# sano y el servicio no arrancaba en su primer apply. Ninguna de las dos mitades es incorrecta
+# EN SU FICHERO —el terraform no lee Go y el Go no sabe que hay un balanceador—, asi que el
+# defecto solo existe en el PAR, y por eso se prueban las tres derivas por separado.
+
+# (a) la ruta que nadie sirve
+stage
+subst "$TMP/tree/deploy/aws/modules/ingress/main.tf" 'path     = "/health"' 'path     = "/readyz"'
+expect 1 "NO la sirve" \
+  "un health_check contra una ruta que el plano de control no registra es un hallazgo"
+
+# (b) HTTPS pedido a un binario que no habla TLS
+stage
+subst "$TMP/tree/deploy/aws/modules/ingress/main.tf" 'protocol = "HTTP"' 'protocol = "HTTPS"'
+expect 1 "no habla TLS" \
+  "pedir HTTPS al backend sin ListenAndServeTLS en su fuente es un hallazgo"
+
+# (c) ⛔ Y LA DIRECCION CONTRARIA, que es la que se olvida: el dia que el plano de control
+#     aprenda TLS, dejar el chequeo en claro tiene que ser hallazgo TAMBIEN. Sin este caso el
+#     gate solo empuja hacia abajo y bendice el texto plano para siempre.
+stage
+subst "$TMP/tree/cloud/control-plane/cmd/cloud-cp/main.go" 'srv.ListenAndServe()' 'srv.ListenAndServeTLS("","")'
+expect 1 "habla TLS y el health_check pide HTTP" \
+  "si el binario habla TLS, un chequeo en claro es un hallazgo"
+
+# ⛔ (d)-(l) LAS RUTAS SE LEEN DONDE EL BINARIO LAS CONSTRUYE. Desde a63c5cfb44 `main.go` no
+# registra ninguna: llama a `httpapi.NewRouter`, y el lector que solo miraba `main.go` contaba
+# cero y salia «no he podido mirar» sobre un arbol que servia `/health`. Cada caso de abajo
+# corta una deriva DISTINTA de esa cadena y exige la frase de su guarda.
+ROUTES="$TMP/tree/cloud/control-plane/internal/httpapi/routes.go"
+ROUTES_TEST="$TMP/tree/cloud/control-plane/internal/httpapi/routes_test.go"
+CP_MAIN="$TMP/tree/cloud/control-plane/cmd/cloud-cp/main.go"
+HEALTH_REG='mux.Handle("GET /health", health)'
+
+# (d) el paquete de rutas pierde la ruta de salud
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle("GET /healthz", health)'
+expect 1 "NO la sirve" \
+  "la ruta de salud borrada del paquete de rutas es un hallazgo, aunque main.go no cambie"
+
+# (e) el paquete la sirve pero el servidor de cfg.ListenAddr sirve OTRO mux. El mutante se
+#     escribe COMPILABLE: el mux de metricas se define y registra ANTES del literal del servidor
+#     que lo sirve, porque el modelo lineal lee el orden y un uso antes de la definicion es «no
+#     he podido mirar», no un hallazgo.
+METRICS_DEF='	metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", metrics.Handler())
+'
+SRV_LIT='srv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}'
+stage
+subst "$CP_MAIN" "$METRICS_DEF" ''
+subst "$CP_MAIN" "$SRV_LIT" 'metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", metrics.Handler())
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: metricsMux}'
+expect 1 "NO la sirve" \
+  "el servidor en cfg.ListenAddr sirviendo el mux de metricas es un hallazgo: /health vive en otro handler"
+
+# (e2) la frontera de orden en main: un registro DESPUES de asociar el mux a un servidor
+#      queda fuera del modelo lineal, aunque sea la ruta de salud
+stage
+subst "$CP_MAIN" "$METRICS_DEF" ''
+subst "$CP_MAIN" "$SRV_LIT" 'metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", metrics.Handler())
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: metricsMux}
+	metricsMux.Handle("GET /health", health)'
+expect 2 "despues de asociar" \
+  "un registro tras asociar el mux al servidor es COULD NOT LOOK: la frontera de orden de main"
+
+# (f) main.go delega y el paquete no esta: no se puede mirar, no se aprueba
+stage
+rm -f "$ROUTES"
+expect 2 "no encuentro func NewRouter" \
+  "sin la fuente del paquete que construye las rutas el veredicto es COULD NOT LOOK"
+
+# (g) la ruta solo existe en un _test.go
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle("GET /healthz", health)'
+cat >>"$ROUTES_TEST" <<'GO'
+
+func routerForTests(health http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("GET /health", health)
+	return mux
+}
+GO
+expect 1 "NO la sirve" \
+  "una ruta registrada solo en un _test.go no es una ruta del binario"
+
+# (h) la ruta de salud detras de la credencial de admin
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle("GET /health", admin.APIKeyMiddleware(cfg.AdminAPIKey)(health))'
+expect 1 "detras de una credencial" \
+  "una ruta de salud que exige credencial es un hallazgo: el balanceador sondea sin cabeceras"
+
+# (i) no-fire: el registro repartido en varias lineas sigue siendo el mismo registro
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle(
+		"GET /health",
+		health,
+	)'
+expect 0 "" "no-fire: el registro de la ruta de salud en varias lineas sigue CLEAN"
+
+# (j) la ruta solo admite POST y el chequeo hace GET
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle("POST /health", health)'
+expect 1 "solo la registra para POST" \
+  "una ruta de salud registrada solo para POST es un hallazgo: el chequeo hace GET"
+
+# (k) main.go ya no tiene un servidor en cfg.ListenAddr que este gate sepa seguir
+stage
+subst "$CP_MAIN" 'Addr: cfg.ListenAddr' 'Addr: cfg.ListenAddress'
+expect 2 "http.Server con Addr: cfg.ListenAddr" \
+  "sin el http.Server de cfg.ListenAddr la cadena no se puede seguir: COULD NOT LOOK"
+
+# (l) sin go.mod el import no se resuelve a un directorio: no se adivina la disposicion
+stage
+rm -f "$TMP/tree/cloud/control-plane/go.mod"
+expect 2 "go.mod" \
+  "sin el go.mod del modulo el import de httpapi no se resuelve: COULD NOT LOOK"
+
+# ⛔ (m)-(r) LO QUE LA REVISION INDEPENDIENTE DE cf45f7f699 TUMBO, Y LO QUE EL MODELO ACOTADO
+# NO SIGUE. Dos mutaciones compilables sobre el paquete real dejaban el gate en CLEAN mientras
+# un httptest contra NewRouter devolvia 404: devolver un mux recien creado (los registros iban
+# a otro mux) y citar el registro dentro de una cadena raw. Cada caso exige la frase de SU
+# guarda; los de «no he podido mirar» prueban que una cadena que el modelo no sigue no se
+# aprueba por no haberla mirado.
+
+# (m) la funcion devuelve un http.NewServeMux() recien creado: los registros van a otro mux
+stage
+subst "$ROUTES" '	return mux
+}' '	return http.NewServeMux()
+}'
+expect 1 "mux que no se devuelve" \
+  "devolver un mux recien creado no acredita los registros del mux abandonado: hallazgo"
+
+# (n) el registro de salud citado en una cadena raw no es un registro
+stage
+subst "$ROUTES" "$HEALTH_REG" '_ = `mux.Handle("GET /health", health)`'
+expect 1 "NO la sirve" \
+  "un mux.Handle dentro de una cadena raw no es codigo ejecutable: hallazgo"
+
+# (o) el mux se pasa a otra llamada: el modelo acotado no sigue lo que esa llamada hace
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mount(mux, health)'
+expect 2 "se escapa" \
+  "un mux entregado a otra funcion es COULD NOT LOOK, no un pase"
+
+# (p) la funcion devuelve el mux envuelto: lo que hace el envoltorio no se sabe
+stage
+subst "$ROUTES" '	return mux
+}' '	return admin.APIKeyMiddleware(cfg.AdminAPIKey)(mux)
+}'
+expect 2 "este gate solo sigue un ServeMux declarado en la funcion" \
+  "un handler devuelto envuelto es COULD NOT LOOK, no un pase"
+
+# (q) dos caminos devuelven cosas distintas: ambiguo
+stage
+subst "$ROUTES" '	mux := http.NewServeMux()' '	if cfg.AdminAPIKey == "" {
+		return http.NewServeMux()
+	}
+	mux := http.NewServeMux()'
+expect 2 "ambiguo" \
+  "una funcion que devuelve un handler distinto segun el camino es COULD NOT LOOK"
+
+# (r) sin la fuente del parser de rutas no se mira
+stage
+rm -f "$TMP/tree/scripts/served-routes-guard/main.go"
+expect 2 "served-routes" \
+  "sin la fuente del parser de rutas servidas el veredicto es COULD NOT LOOK"
+
+# (s) no-fire: un comentario y una cadena que nombran otra ruta no cambian lo servido
+stage
+subst "$ROUTES" "$HEALTH_REG" '// mux.Handle("GET /readyz", health) — decoy in a comment
+	_ = "mux.Handle(\"GET /readyz\", health)"
+	mux.Handle("GET /health", health)'
+expect 0 "" "no-fire: rutas citadas en comentarios y cadenas no cuentan ni a favor ni en contra"
+
+# ⛔ (t)-(ab) EL CONTEXTO DE EJECUCION. La revision independiente de 9b2a26baa1 puso el registro
+# de salud dentro de `if false { … }` y dentro de una funcion anonima que nadie llama: el lector
+# visitaba todos los nodos de llamada del cuerpo y los acreditaba, mientras un httptest contra
+# el paquete real devolvia 404. El modelo lineal solo lee sentencias del nivel superior entre la
+# definicion del mux y el `return` final; cualquier otra mencion del mux es «no he podido
+# mirar» con el contexto nombrado. Un registro que no se ejecuta no se acredita, y tampoco se
+# «demuestra» que no se ejecute: se dice que esta fuera del modelo.
+
+# (t) testigo A de la revision: el registro dentro de un if
+stage
+subst "$ROUTES" "$HEALTH_REG" 'if false { mux.Handle("GET /health", health) }'
+expect 2 "contexto if (" \
+  "review: un registro dentro de un if no se acredita — COULD NOT LOOK nombrando el if"
+
+# (u) testigo B de la revision: el registro dentro de una funcion anonima que nadie llama
+stage
+subst "$ROUTES" "$HEALTH_REG" '_ = func() { mux.Handle("GET /health", health) }'
+expect 2 "funcion anonima" \
+  "review: definir una funcion anonima no la ejecuta — COULD NOT LOOK nombrando la funcion"
+
+# (v) defer, (w) go, (x) for: los tres cambian CUANDO o SI se registra
+stage
+subst "$ROUTES" "$HEALTH_REG" 'defer mux.Handle("GET /health", health)'
+expect 2 "contexto defer (" \
+  "un registro diferido esta fuera del modelo lineal: COULD NOT LOOK"
+
+stage
+subst "$ROUTES" "$HEALTH_REG" 'go mux.Handle("GET /health", health)'
+expect 2 "contexto go (" \
+  "un registro en una goroutine esta fuera del modelo lineal: COULD NOT LOOK"
+
+stage
+subst "$ROUTES" "$HEALTH_REG" 'for range 1 {
+		mux.Handle("GET /health", health)
+	}'
+expect 2 "contexto for range (" \
+  "un registro dentro de un bucle esta fuera del modelo lineal: COULD NOT LOOK"
+
+# (y) la frontera de orden del router: un return antes del final deja registros detras
+stage
+subst "$ROUTES" "$HEALTH_REG" 'return mux
+	mux.Handle("GET /health", health)'
+expect 2 "no es su ultima sentencia" \
+  "un return que no es la ultima sentencia rompe el camino lineal: COULD NOT LOOK"
+
+# (z) el mux copiado a otra variable: la copia registraria fuera del modelo
+stage
+subst "$ROUTES" "$HEALTH_REG" 'alias := mux
+	alias.Handle("GET /health", health)'
+expect 2 "se escapa" \
+  "copiar el mux a otra variable lo saca del modelo lineal: COULD NOT LOOK"
+
+# (aa) control positivo: el mismo router con el mux renombrado sigue CLEAN
+stage
+python3 - "$ROUTES" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+for old, new in (("mux := http.NewServeMux()", "served := http.NewServeMux()"),
+                 ("mux.Handle", "served.Handle"), ("return mux", "return served")):
+    if old not in s:
+        sys.exit("anchor absent: " + old)
+    s = s.replace(old, new)
+open(p, "w", encoding="utf-8").write(s)
+PY
+expect 0 "" "control positivo: el router real con el mux renombrado sigue CLEAN"
+
+# (ab) control positivo: sentencias intermedias que no tocan el mux —incluida una funcion
+#      anonima invocada— no rompen el camino lineal
+stage
+subst "$ROUTES" 'mux.Handle("/admin/", admin.APIKeyMiddleware(cfg.AdminAPIKey)(administrative))' 'authed := admin.APIKeyMiddleware(cfg.AdminAPIKey)(administrative)
+	func() {}()
+	mux.Handle("/admin/", authed)'
+expect 0 "" "control positivo: sentencias intermedias sin el mux mantienen el camino lineal CLEAN"
+
+# ⛔ (ac)-(ap) TRANSFERENCIAS DE CONTROL Y EL VINCULO DEL SERVIDOR. La revision raiz de
+# ee185bda96 dejo dos falsos CLEAN: un `goto` que salta el registro de salud sin nombrar el
+# mux, y un `srv.Handler = http.NotFoundHandler()` despues del literal que vinculaba el mux. El
+# modelo lineal lee ahora las transferencias de control en TODA sentencia antes de mirar el
+# mux, y el servidor seleccionado es una variable seguida: su literal se construye en una
+# asignacion simple del nivel superior y todo uso posterior es una llamada a un metodo suyo.
+# Lo que no encaja es «no he podido mirar» con la linea y el contexto; un salto no se
+# «demuestra» tomado ni no tomado.
+
+# (ac) testigo raiz F1: goto y etiqueta alrededor del registro de salud, sin nombrar el mux
+stage
+subst "$ROUTES" "$HEALTH_REG" 'goto afterHealth
+	mux.Handle("GET /health", health)
+afterHealth: ;'
+expect 2 "goto afterHealth" \
+  "root: un goto que salta el registro de salud es COULD NOT LOOK, no un pase"
+
+# (ad) una etiqueta sola es destino de salto: fuera del modelo aunque nadie salte
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle("GET /health", health)
+afterHealth:'
+expect 2 "etiqueta afterHealth" \
+  "una etiqueta en el cuerpo del router es COULD NOT LOOK"
+
+# (ae) un panic incondicional antes del return: el router nunca devuelve
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle("GET /health", health)
+	panic("boot")'
+expect 2 "termina en la linea" \
+  "un terminador incondicional antes de la frontera es COULD NOT LOOK"
+
+# (af) testigo raiz F2: el Handler del servidor sustituido tras el literal
+stage
+subst "$CP_MAIN" "$SRV_LIT" 'srv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}
+	srv.Handler = http.NotFoundHandler()'
+expect 2 "la asociacion Handler del servidor seleccionado no se conserva" \
+  "root: sustituir srv.Handler tras el literal es COULD NOT LOOK, no un pase"
+
+# (ag) el servidor reasignado entero
+stage
+subst "$CP_MAIN" "$SRV_LIT" 'srv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}
+	srv = &http.Server{Addr: cfg.MetricsAddr, Handler: http.NotFoundHandler()}'
+expect 2 "la asociacion Handler del servidor seleccionado no se conserva" \
+  "reasignar el servidor seleccionado es COULD NOT LOOK"
+
+# (ah) el servidor entregado a otra funcion: lo que haga con el no se sabe
+stage
+subst "$CP_MAIN" "$SRV_LIT" 'srv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}
+	tune(srv)'
+expect 2 "la asociacion Handler del servidor seleccionado no se conserva" \
+  "pasar el servidor a otra llamada es COULD NOT LOOK"
+
+# (ai) el literal del servidor construido dentro de un if: construccion condicional
+stage
+subst "$CP_MAIN" "$SRV_LIT" 'var srv *http.Server
+	if cfg.ListenAddr != "" {
+		srv = &http.Server{Addr: cfg.ListenAddr, Handler: mux}
+	}'
+expect 2 "construccion condicional" \
+  "un literal http.Server dentro de un if es COULD NOT LOOK"
+
+# (aj) el Handler vinculado por asignacion de campo, no por el literal
+stage
+subst "$CP_MAIN" "$SRV_LIT" 'srv := &http.Server{Addr: cfg.ListenAddr}
+	srv.Handler = mux'
+expect 2 "no es una variable simple" \
+  "un literal sin Handler que se rellena despues es COULD NOT LOOK"
+
+# (ak) control positivo: un metodo seguro del servidor tras el literal sigue CLEAN
+stage
+subst "$CP_MAIN" "$SRV_LIT" 'srv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}
+	srv.SetKeepAlivesEnabled(true)'
+expect 0 "" "control positivo: una llamada a un metodo del servidor conserva el vinculo"
+
+# (al) robustez del lector: un Handle sin argumentos no puede tumbarlo; es opaco y la
+#      ruta de salud, ausente, es un hallazgo
+stage
+subst "$ROUTES" "$HEALTH_REG" 'mux.Handle()'
+expect 1 "NO la sirve" \
+  "un mux.Handle() sin argumentos es opaco, no un panic: la salud ausente es hallazgo"
+
+# Both main paths must reject transfers before the selected server. The delegated
+# path used to skip these statements because they never mentioned the mux.
+for _main_kind in delegated inline; do
+  for _main_transfer in positive panic return goto; do
+    stage
+    if [[ "$_main_kind" == inline ]]; then
+      subst "$CP_MAIN" 'mux := httpapi.NewRouter(cfg, health, webhookHandler, adminHandler, tenantStore)' \
+        'mux := http.NewServeMux()
+	mux.Handle("GET /health", health)
+	_ = httpapi.NewRouter
+	_ = adminHandler'
+    fi
+    case "$_main_transfer" in
+      positive)
+        expect 0 "" "main $_main_kind: the unchanged setup path stays readable"
+        ;;
+      panic|return)
+        _main_stmt='panic("gate fixture stop")'
+        [[ "$_main_transfer" == return ]] && _main_stmt='return'
+        subst "$CP_MAIN" "$SRV_LIT" "$_main_stmt
+	$SRV_LIT"
+        expect 2 "main termina en la linea" "main $_main_kind: $_main_transfer before server is unknown"
+        ;;
+      goto)
+        subst "$CP_MAIN" "$SRV_LIT" "goto gateBeforeServer
+	panic(\"skipped\")
+gateBeforeServer: ;
+	$SRV_LIT"
+        expect 2 "goto gateBeforeServer" "main $_main_kind: transfer is unknown even without a mux use"
+        ;;
+    esac
+  done
+done
+
+# ⛔ (am)-(ap) LO COMPILADO. Un veredicto del gate sobre un mutante solo vale si el mutante
+# es una regresion real. El router real y el bloque real del servidor se compilan y se
+# consultan en proceso (httptest): 204 con la fuente, 404 con los testigos raiz. No se
+# ejecuta main ni su arranque. Si no compila, el caso es un fallo del banco, no un verde.
+# El grafo pinnado se prepara ANTES de GOPROXY=off; sin el, NOT MEASURED, no un 404.
+aws_estate_run_compiled_witnesses
+
+# ⛔ LA CREDENCIAL DEL MASTER DE RDS, Y LAS TRES PUERTAS POR LAS QUE SE ESCAPA. El permiso
+# que la tarea de un solo uso necesita es SUPERUSUARIO sobre la base de datos. La forma
+# barata de arreglar un fallo suyo es colgarlo del rol `-exec` que ya existe, y entonces el
+# servicio que atiende trafico se queda con esa autoridad para siempre por un paso que corre
+# una vez. Cada caso mata una puerta distinta; el ultimo prueba la direccion de NO disparo,
+# sin la cual esta pata bendeciria cualquier arbol que no traiga la tarea.
+
+# (a) el ARN nombrado desde la policy del rol que asumen los servicios
+stage
+subst "$TMP/tree/deploy/aws/modules/compute/main.tf" \
+  '          var.cp_secrets_enabled ? var.cp_runtime_secret_arn : "",' \
+  '          var.cp_secrets_enabled ? var.cp_runtime_secret_arn : "",
+          var.master_user_secret_arn,'
+expect 1 "solo puede alcanzarlo la tarea de un solo uso" \
+  "el ARN del master en la policy del rol -exec es un hallazgo"
+
+# (b) el rol de un solo uso prestado a una task definition de servicio. Es otra puerta: (a)
+#     no lo ve, porque el ARN no cambia de sitio -- lo que cambia es quien asume el rol.
+stage
+subst "$TMP/tree/deploy/aws/modules/compute/main.tf" \
+  '  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+  container_definitions = jsonencode([{
+    name      = "control-plane"' \
+  '  execution_role_arn       = aws_iam_role.roles_oneshot[0].arn
+  task_role_arn            = aws_iam_role.task.arn
+  container_definitions = jsonencode([{
+    name      = "control-plane"'
+expect 1 "existe para que NO lo asuma ningun servicio" \
+  "prestar el rol de un solo uso a un servicio es un hallazgo"
+
+# (c) comodin en la accion: anade escribir y borrar la credencial del master
+stage
+python3 - "$TMP/tree/deploy/aws/modules/compute/main.tf" <<'WILDACTION'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+# Anclado DENTRO del bloque de la tarea de un solo uso: la misma linea existe en
+# `execution_secrets`, y `subst` habria mutado esa.
+i = s.index('resource "aws_iam_role_policy" "roles_oneshot_master"')
+head, tail = s[:i], s[i:]
+old = 'Action = ["secretsmanager:GetSecretValue"]'
+if tail.count(old) != 1:
+    sys.exit("el ancla de la accion no esta una sola vez en roles_oneshot_master")
+open(p, "w", encoding="utf-8").write(head + tail.replace(old, 'Action = ["secretsmanager:*"]', 1))
+WILDACTION
+expect 1 "lleva comodin" \
+  "un comodin en la accion sobre la credencial del master es un hallazgo"
+
+# (d) comodin en el recurso: extiende la lectura a TODAS las ranuras de secretos
+stage
+subst "$TMP/tree/deploy/aws/modules/compute/main.tf" \
+  'Resource = compact([var.master_user_secret_arn, var.cp_databases_secret_arn])' \
+  'Resource = ["*"]'
+expect 1 "no es exactamente la entrada del master" \
+  "un comodin en el recurso de esa accion es un hallazgo"
+
+# (e) ⛔ LA DIRECCION DE NO DISPARO. Un arbol sin la tarea de un solo uso es legitimo -- era
+#     el estado antes de que existiera-- y esta pata tiene que callarse ahi. Sin este caso,
+#     un control que solo sabe decir que si no prueba nada.
+stage
+python3 - "$TMP/tree/deploy/aws/modules/compute/main.tf" <<'ONESHOTCUT'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+marca = "# ─── La tarea de UN SOLO USO"
+if marca not in s:
+    sys.exit("el ancla del bloque roles_oneshot no esta: el mutante no se aplico")
+open(p, "w", encoding="utf-8").write(s[:s.index(marca)])
+ONESHOTCUT
+expect 0 "" "sin tarea de un solo uso la pata calla, y lo dice (direccion de no disparo)"
+
+# ⛔ Y LA COBERTURA DE CREDENCIALES DE ESA TAREA. `cloud-control-roles.sql` exige un
+# `-v <rol>_password` por rol de login, y con una de menos la tarea NO PUEDE provisionar los
+# roles. Lo encontro el contraste `sol max` del 2026-09-02 sobre el commit que escribio la
+# tarea: llevaba solo `PGMASTER`.
+#
+# ⛔ CORREGIDO EL MISMO DIA: aqui decia «AVISA Y SALE CON CODIGO 0», y eso es FALSO en este
+# arbol — se curo el 2026-08-17 (`280326b45`), y hoy las diez guardas del SQL ejecutan
+# `SELECT 1/0` bajo ON_ERROR_STOP. El caso no cambia: descubrir la credencial que falta sobre
+# el arbol cuesta segundos, y descubrirla en el `run-task` cuesta un estate ya aplicado.
+
+# K-01 · ⛔ EL `kms:Decrypt` SOBRE `*`, que es como nacio esta policy. `ViaService` acota el
+#        SERVICIO que hace la llamada, no la clave, ni la cuenta, ni el secreto: con un
+#        comodin ahi el rol alcanza cualquier clave cuya otra mitad de autorizacion lo
+#        admita. Lo midio el contraste `sol max` del 2026-09-02 y la cura fue nombrar la CMK.
+stage
+python3 - "$TMP/tree/deploy/aws/modules/compute/main.tf" <<'KMSWILD'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+i = s.index('resource "aws_iam_role_policy" "roles_oneshot_master"')
+head, tail = s[:i], s[i:]
+old = "Resource = [var.secrets_kms_key_arn]"
+if tail.count(old) != 1:
+    sys.exit("el ancla del recurso de kms no esta una sola vez en roles_oneshot_master")
+open(p, "w", encoding="utf-8").write(head + tail.replace(old, 'Resource = ["*"]', 1))
+KMSWILD
+expect 1 "vuelve a estar sobre" \
+  "el kms:Decrypt de la tarea de un solo uso sobre * es un hallazgo"
+
+# K-02 · Y su ausencia: sin `kms:Decrypt` no puede leer la ranura cifrada con nuestra CMK.
+stage
+python3 - "$TMP/tree/deploy/aws/modules/compute/main.tf" <<'KMSGONE'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+i = s.index('resource "aws_iam_role_policy" "roles_oneshot_master"')
+head, tail = s[:i], s[i:]
+old = 'Action   = ["kms:Decrypt"]'
+if tail.count(old) != 1:
+    sys.exit("el ancla de la accion de kms no esta una sola vez en roles_oneshot_master")
+open(p, "w", encoding="utf-8").write(head + tail.replace(old, 'Action   = ["kms:DescribeKey"]', 1))
+KMSGONE
+expect 1 "ya no declara un statement de kms:Decrypt" \
+  "quitar el kms:Decrypt de la tarea de un solo uso es un hallazgo"
+
+# R-01 · La forma exacta en que nacio el defecto: solo la credencial del master.
+stage
+python3 - "$TMP/tree/deploy/aws/modules/compute/main.tf" <<'ONLYMASTER'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+i = s.index('resource "aws_ecs_task_definition" "roles_oneshot"')
+head, tail = s[:i], s[i:]
+a = tail.index("secrets = concat(")
+b = tail.index("logConfiguration", a)
+open(p, "w", encoding="utf-8").write(
+    head + tail[:a]
+    + 'secrets = [{ name = "PGMASTER", valueFrom = var.master_user_secret_arn }]\n    '
+    + tail[b:])
+ONLYMASTER
+expect 1 "no puede provisionar los roles" \
+  "la tarea de un solo uso con solo la credencial del master es un hallazgo"
+
+# R-02 · Y una sola de menos, que es como llegaria de verdad: alguien edita la lista.
+stage
+python3 - "$TMP/tree/deploy/aws/modules/compute/main.tf" <<'ONELESS'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+# La MISMA lista de diez sufijos la tiene la task definition del plano de control, asi que
+# el ancla se toma dentro del bloque de la tarea de un solo uso o se muta la equivocada.
+i = s.index('resource "aws_ecs_task_definition" "roles_oneshot"')
+head, tail = s[:i], s[i:]
+old = '"NOTIFIER_URL", "POLLER_URL", "RESOLVER_URL", "SWEEPER_URL", "TENANT_URL",'
+if tail.count(old) != 1:
+    sys.exit("el ancla de la lista de credenciales no esta una sola vez en roles_oneshot")
+open(p, "w", encoding="utf-8").write(
+    head + tail.replace(old, '"NOTIFIER_URL", "POLLER_URL", "RESOLVER_URL", "SWEEPER_URL",', 1))
+ONELESS
+expect 1 "recibe 9 credencial(es) de rol y el SQL exige 10" \
+  "una credencial de rol de menos que las que el SQL exige es un hallazgo"
+
+# R-03 · ⛔ LA CUENTA LA MANDA EL SQL, NO UNA LISTA DE ESTE GUION. Si el SQL pierde un rol,
+#        suplir diez para nueve no es un defecto — y este caso es el que impide que alguien
+#        «arregle» el control escribiendo el diez a mano, que es la forma de gate que mas
+#        veces se ha roto en esta casa.
+stage
+subst "$TMP/tree/cloud/control-plane/deploy/cloud-control-roles.sql" \
+  '\if :{?cloud_cp_billing_password}' '\if :{?cloud_cp_billing_password_RETIRED}'
+expect 0 "" "si el SQL pierde un rol, suplir de mas no dispara (la cuenta sale del SQL)"
+
+
+# ═══ DOS ENTORNOS: EL SEGUNDO NO ENTRA POR UNA PUERTA MAS BARATA ═════════════
+#
+# ⛔ Actions no tiene herencia de job, asi que `apply` y `apply-production` son copias. Lo
+# que impide que deriven no es un comentario: es que el guard las compara paso a paso. Y lo
+# que ata cada job a su rol es el PAR environment ↔ `sub` de la trust, que vive repartido
+# entre el workflow y `scripts/aws-iam-phase2.sh` y que nadie lee a la vez.
+
+# P-01 · Un pin subido en un job y no en el otro: un apply correria codigo sin revisar.
+stage
+python3 - "$WF_T" <<'PINDRIFT'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+i = s.index("apply-production:")
+head, tail = s[:i], s[i:]
+old = "cbe3b392738ccf3f987d68400dafcf4b0624a56c"
+if tail.count(old) != 1:
+    sys.exit("el ancla del pin de OIDC no esta una sola vez en apply-production")
+open(p, "w", encoding="utf-8").write(head + tail.replace(old, "1" * 40, 1))
+PINDRIFT
+expect 1 "a pin bumped on one environment and not on the other" \
+  "un pin de accion distinto entre los dos jobs de apply es un hallazgo"
+
+# P-02 · Y la comprobacion que desaparece de uno solo. Es la direccion cara: el job que la
+#        pierde es el que aplica PRODUCCION.
+stage
+python3 - "$WF_T" <<'SHADROP'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+i = s.index("apply-production:")
+head, tail = s[:i], s[i:]
+old = '          echo "${TOFU_SHA256}  $RUNNER_TEMP/tofu.zip" | sha256sum -c -\n'
+if tail.count(old) != 1:
+    sys.exit("el ancla del sha256 de tofu no esta una sola vez en apply-production")
+open(p, "w", encoding="utf-8").write(head + tail.replace(old, "", 1))
+SHADROP
+expect 1 "runs different commands in the two apply jobs" \
+  "quitar la verificacion sha256 de tofu solo en production es un hallazgo"
+
+# P-03 · ⛔ LA DIRECCION DE NO DISPARO DE LA PARIDAD: los comentarios difieren A PROPOSITO
+#        —la razon de cada paso se escribe UNA vez— y compararlos obligaria a duplicar la
+#        prosa, que es el defecto contrario. Un comentario nuevo en un job no es deriva.
+stage
+python3 - "$WF_T" <<'COMMENTONLY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+i = s.index("apply-production:")
+head, tail = s[:i], s[i:]
+old = "          set -euo pipefail\n"
+if old not in tail:
+    sys.exit("no encuentro donde meter un comentario en apply-production")
+open(p, "w", encoding="utf-8").write(
+    head + tail.replace(old, old + "          # una nota que solo esta en este job\n", 1))
+COMMENTONLY
+expect 0 "" "un comentario que solo esta en un job NO es deriva (direccion de no disparo)"
+
+# H-01 · ⛔ EL OLVIDO, que es el modo de fallo real y el que la primera version de este
+#        control NO mataba. Los defaults de la RAIZ son los nombres de PRODUCCION (decision
+#        de y correcta: son los definitivos), asi que un job de apply cuyo hostname
+#        resuelva a "" cae en ellos. `${{ inputs.hostname }}` a secas no esta vacio como
+#        TEXTO —parece puesto— y resuelve a "" con una entrada en blanco: dos estates
+#        pidiendo el mismo certificado ACM y el mismo CNAME de validacion.
+stage
+subst "$WF_T" \
+  "      TF_VAR_hostname: \${{ github.event.inputs.hostname || 'api.cloud.olivaresai.dev' }}" \
+  "      TF_VAR_hostname: \${{ github.event.inputs.hostname }}"
+expect 1 "an expression with no non-empty fallback" \
+  "el hostname del piloto sin respaldo cae al default de produccion y es un hallazgo"
+
+# H-02 · La misma caida por otra via: un respaldo que existe y esta vacio.
+stage
+subst "$WF_T" \
+  "      TF_VAR_hostname: \${{ github.event.inputs.hostname || 'api.cloud.olivaresai.dev' }}" \
+  "      TF_VAR_hostname: \${{ github.event.inputs.hostname || '' }}"
+expect 1 "an expression with no non-empty fallback" \
+  "un respaldo vacio es la misma caida y tambien es un hallazgo"
+
+# H-03 · Y la colision directa: los dos estates sobre el mismo nombre. ACM valida por DNS,
+#        asi que se pelean por el mismo certificado y el mismo CNAME.
+stage
+subst "$WF_T" \
+  "      TF_VAR_hostname: \${{ github.event.inputs.hostname || 'api.cloud.olivaresai.dev' }}" \
+  "      TF_VAR_hostname: api.cloud.olivares.ai"
+expect 1 "resolves TF_VAR_hostname to the same name as job" \
+  "los dos jobs de apply sobre el mismo hostname es un hallazgo"
+
+# H-04 · Un job de apply al que le falta el hostname del colector.
+stage
+subst "$WF_T" '      TF_VAR_ingest_hostname: ingest.cloud.olivares.ai
+' ''
+expect 1 "does not set TF_VAR_ingest_hostname" \
+  "un job de apply sin ingest_hostname cae al default de la raiz y es un hallazgo"
+
+# P-04 · El token de produccion cambiado por el del piloto: dos jobs, una sola puerta.
+stage
+subst "$WF_T" "github.event.inputs.confirm == 'apply-production-estate'" \
+              "github.event.inputs.confirm == 'apply-sandbox-estate'"
+expect 1 "the only condition that may open it is" \
+  "abrir production con el token del piloto es un hallazgo"
+
+# P-05 · El `environment` retirado de production, con su trust fijada en `environment:`.
+#        Falla en STS con el dispatch ya lanzado; aqui falla en el diff.
+stage
+subst "$WF_T" '    environment: production
+' ''
+expect 1 "declares no \`environment\` but the trust of estate" \
+  "quitar el environment de production, con la trust en environment:, es un hallazgo"
+
+# P-06 · Y la mitad de enfrente del mismo par: la trust movida a un ref mientras el job
+#        sigue declarando environment. El invariante es el PAR, no cada lado.
+stage
+subst "$TMP/tree/scripts/aws-iam-phase2.sh" \
+  'SUB_TARGET="repo:$REPO:environment:production"' \
+  'SUB_TARGET="repo:$REPO:ref:refs/heads/main"'
+expect 1 "switches the OIDC \`sub\` claim" \
+  "mover la trust de production a un ref deja el environment huerfano y es un hallazgo"
+
+# P-07 · Un estate cuyo nombre en el workflow y en la trust no coinciden. Ni la presencia
+#        de environment ni la de un SUB_TARGET bastan: tienen que ser la MISMA cadena.
+stage
+subst "$TMP/tree/scripts/aws-iam-phase2.sh" \
+  'SUB_TARGET="repo:$REPO:environment:production"' \
+  'SUB_TARGET="repo:$REPO:environment:prod"'
+expect 1 "the two names have to be the same string" \
+  "environment y trust con nombres distintos es un hallazgo"
+
+# P-08 · Las piezas de policy de produccion, derivadas de las de sandbox. Un permiso
+#        anadido a un lado para desatascar un apply y no al otro llega como un AccessDenied
+#        a mitad de camino, que es la peor hora para descubrirlo.
+stage
+subst "$TMP/tree/design/aws-apply-role-policy.production.3-compute-and-edge.json" \
+  '"ecs:CreateCluster"' '"ecs:CreateCluster",
+        "ecs:DeleteCluster"'
+expect 1 "is not its sandbox twin under the estate-prefix substitution" \
+  "una pieza de production que deriva de su gemela de sandbox es un hallazgo"
+
+# P-09 · Y la pieza que falta de un lado, que la comparacion de contenido no ve.
+stage
+rm -f "$TMP/tree/design/aws-apply-role-policy.production.1-state-and-network.json"
+expect 1 "is missing while its sandbox twin exists" \
+  "una pieza de production que falta es un hallazgo"
+
+# P-10 · ⛔ Y LA DIRECCION DE NO DISPARO DE TODO ESTE BLOQUE: un arbol con UN SOLO entorno
+#        —el estado anterior a este trabajo— tiene que salir limpio. Sin este caso, las
+#        nueve comprobaciones de arriba bendecirian cualquier arbol por no tener sujeto.
+stage
+rm -f "$TMP/tree"/design/aws-apply-role-policy.production.*.json
+python3 - "$WF_T" <<'DROPPROD'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+marca = "  # ─── PRODUCCION. MISMO ESTATE, OTRO TODO LO DEMAS"
+if marca not in s:
+    sys.exit("el ancla del job de produccion no esta: el mutante no se aplico")
+open(p, "w", encoding="utf-8").write(s[:s.index(marca)])
+DROPPROD
+expect 0 "" "un arbol con un solo entorno sigue limpio (direccion de no disparo)"
+
+# ═══ LA IMAGEN DE LA TAREA DE UN SOLO USO ════════════════════════════════════
+#
+# ⛔ Tres hechos en tres ficheros que nadie lee a la vez: que la task definition DECLARE lo que
+# corre, que la imagen que nombra EXISTA, y que su cliente de Postgres sea el major de la RDS.
+# La imagen trae un `CMD` seguro, pero el sitio donde eso se revisa en un diff es el estate.
+
+TD_T="$TMP/tree/deploy/aws/modules/compute/main.tf"
+DF_T="$TMP/tree/cloud/control-plane/deploy/Dockerfile.roles"
+
+# I-01 · La task definition sin `command`: lo que corre deja de estar en el diff del estate.
+stage
+subst "$TD_T" '    command    = ["/opt/olivares/roles-oneshot.sh"]
+' ''
+expect 1 "no declara \`command\`" \
+  "la task definition de la tarea de un solo uso sin command es un hallazgo"
+
+# I-02 · Y sin nombrar el lanzador: correr el SQL a pelo devuelve el cero mentiroso.
+stage
+subst "$TD_T" '"/opt/olivares/roles-oneshot.sh"' '"/opt/olivares/otra-cosa.sh"'
+expect 1 "no invoca roles-oneshot.sh" \
+  "una task definition que no invoca el lanzador es un hallazgo (y una MENCION en un comentario no basta)"
+
+# I-03 · La imagen que nadie construye. El sintoma llegaria como un `run-task` sin imagen, con
+#        el estate ya aplicado.
+stage
+rm -f "$DF_T"
+expect 1 "nombraria una imagen que nadie construye" \
+  "sin el Dockerfile de la imagen de roles es un hallazgo"
+
+# I-04 · ⛔ EL PAR IMAGEN ↔ RDS. El Dockerfile promete en un comentario que su major es el de la
+#        RDS; esto es lo que hace que la promesa valga algo. Un cliente por debajo del servidor
+#        puede no entender su protocolo, y el desacuerdo solo existe ENTRE los dos ficheros.
+# ⛔ EL MAJOR SE MIDE POR LA ASERCION, NO POR LA ETIQUETA, y este caso cambio por eso. La
+#    version anterior mutaba `FROM postgres:16-alpine@` a `15-alpine@` — y eso NO cambia la
+#    imagen: en `FROM etiqueta@digest` manda el DIGEST y la etiqueta es decorativa. Medido el
+#    2026-09-02: `crane config postgres:16-alpine@sha256:18cfe3ef…` da `PG_MAJOR=17`. Un caso
+#    que mutara la etiqueta estaria probando que el gate lee una decoracion.
+stage
+# ⚠ Y EL MUTANTE VA EN PYTHON, NO EN `subst`: el ancla contiene comillas SIMPLES —el
+#   `awk '{print $3}'` de la asercion— asi que envolverla en comillas simples las cierra a
+#   media cadena y el `$3` lo expande el shell. Bajo `set -u` eso sale como «$3: unbound
+#   variable» y la bateria muere ANTES de llegar a su caso: un mutante que no se aplica no
+#   prueba nada, y este ni siquiera llegaba a intentarlo.
+python3 - "$DF_T" <<'MAJOR15'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = '| cut -d. -f1)" = "16"'
+if s.count(old) != 1:
+    sys.exit("el ancla del major no esta una sola vez")
+open(p, "w", encoding="utf-8").write(s.replace(old, '| cut -d. -f1)" = "15"', 1))
+MAJOR15
+expect 1 "y la RDS declara el motor" \
+  "un cliente de Postgres por debajo del major de la RDS es un hallazgo"
+
+# I-04b · Sin la asercion no hay nada que compare los BYTES: el build aceptaria cualquier major.
+stage
+python3 - "$DF_T" <<'NOASSERT'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = 'RUN test "$(psql --version'
+i = s.find(old)
+if i < 0 or s.find(old, i + 1) >= 0:
+    sys.exit("el ancla de la asercion del major no esta una sola vez")
+j = s.index("\n", i)
+open(p, "w", encoding="utf-8").write(s[:i] + "RUN true # asercion retirada" + s[j:])
+NOASSERT
+expect 1 "no comprueba la version de" \
+  "sin la asercion de major el build acepta cualquier base y es un hallazgo"
+
+# I-04c · ⛔ RETIRADO Y DICHO POR QUE, en vez de borrado: probaba «declarar el major en un `ARG`
+#         y no comprobarlo», y el `ARG` ya no existe — el contraste `sol max` (F-06) midio que un
+#         `ARG` lo sobreescribe quien construye con `--build-arg`, asi que la asercion se podia
+#         desactivar desde fuera. Hoy el numero es un literal dentro del `RUN`, y su ausencia la
+#         cubre I-04b y su regreso como `ARG` lo cubre I-09.
+
+# I-17 · ⛔⛔ UN PASO QUE PUEDE FALLAR NO CUALIFICA NADA. Comprobar que la verificacion de firma
+#        EXISTE no dice nada si se le permite fallar: `continue-on-error: true` deja aplicar
+#        despues de que cosign diga que no, y los controles de presencia siguen viendo el paso y
+#        siguen en verde. Lo midio el contraste `sol max` (B-03) con un mutante de UNA linea.
+stage
+python3 - "$WF_T" <<'TOLERATE'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = "      - name: the images this apply consumes carry our signature\n"
+if s.count(old) != 2:
+    sys.exit("el ancla del paso de verificacion no esta dos veces")
+open(p, "w", encoding="utf-8").write(s.replace(old, old + "        continue-on-error: true\n", 1))
+TOLERATE
+expect 1 "sets continue-on-error" \
+  "un paso de un job privilegiado que tolera su propio fallo es un hallazgo"
+
+# I-18 · ⛔ Y EL CANAL QUE HARIA INUTIL LA VERIFICACION. `TF_VAR_*` es la precedencia MAS BAJA
+#        de OpenTofu por encima de los defaults: un `terraform.tfvars` o cualquier
+#        `*.auto.tfvars` GANA, asi que el digest verificado no tiene por que ser el aplicado —
+#        el contraste lo midio con un tag SIN FIRMA que quedaba CLEAN (B-02).
+stage
+python3 - "$WF_T" <<'NOTFVARS'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+n = re.subn(r"(?m)^[[:space:]]*for _f in [^\n]*tfvars[^\n]*$\n", "", s)
+if n[1] == 0:
+    n = re.subn(r"(?m)^\s*for _f in [^\n]*tfvars[^\n]*$\n", "", s)
+if n[1] == 0:
+    sys.exit("el ancla del bucle de tfvars no esta")
+open(p, "w", encoding="utf-8").write(n[0])
+NOTFVARS
+expect 1 "takes precedence over TF_VAR" \
+  "retirar el rechazo de tfvars es un hallazgo (el valor verificado dejaria de ser el aplicado)"
+
+# I-12 · ⛔ LO QUE UN APPLY CONSUME TIENE QUE ESTAR FIJADO POR DIGEST. Una referencia por
+#        ETIQUETA aplica sin protestar y deja de fijar lo que se despliega; una errata sale como
+#        una task definition que no puede tirar de su imagen, con el estate YA aplicado (F-09).
+stage
+python3 - "$WF_T" <<'NOPIN'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = "              *@sha256:*) ;;"
+if s.count(old) != 2:
+    sys.exit("el ancla de la comprobacion de digest no esta dos veces")
+open(p, "w", encoding="utf-8").write(s.replace(old, "              *) ;;", 2))
+NOPIN
+expect 1 "are pinned by digest" \
+  "un apply que no exige digest en sus imagenes es un hallazgo"
+
+# I-13 · Y la firma del digest que ESE apply consume. `aws-images.yml` firma lo que publica,
+#        pero esa promesa acababa en el registro: nada la ataba a lo que se teclea aqui.
+stage
+python3 - "$WF_T" <<'NOVERIFY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = "            bash scripts/cosign-verified.sh verify \\\n"
+if s.count(old) != 2:
+    sys.exit("el ancla del verify del apply no esta dos veces")
+open(p, "w", encoding="utf-8").write(s.replace(old, "            : skip-verify \\\n", 2))
+NOVERIFY
+expect 1 "without reading their signature back" \
+  "un apply que no verifica la firma de lo que despliega es un hallazgo"
+
+# I-10 · ⛔ LA COMPENSACION, que un CONTEO no ve. Firmar DOS veces la misma imagen y ninguna
+#        vez otra da el mismo total: con `uploaded < built` el guard callaba y quedaba una
+#        imagen sin firma en ECR (contraste `sol max`, F-04). Se comparan CONJUNTOS de destinos.
+stage
+subst "$WF_I" 'bash scripts/cosign-verified.sh sign --yes --upload=true "${ROLES_REF}@${ROLES_DIGEST}"' \
+              'bash scripts/cosign-verified.sh sign --yes --upload=true "${CP_REF}@${CP_DIGEST}"'
+expect 1 "DISTINCT target" \
+  "firmar dos veces una imagen y ninguna otra es un hallazgo (la cuenta cuadra)"
+
+# I-11 · Y la misma compensacion en la verificacion.
+stage
+subst "$WF_I" '            "${ROLES_REF}@${ROLES_DIGEST}" >/dev/null' \
+              '            "${CP_REF}@${CP_DIGEST}" >/dev/null'
+expect 1 "DISTINCT signature" \
+  "verificar dos veces una firma y otra nunca es un hallazgo"
+
+# I-07 · ⛔ EL DIGEST TIENE QUE PODER LLEGAR. `aws-images.yml` construye, firma y publica la
+#        imagen e imprime su digest para pegarlo en el dispatch — y si el dispatch no declara la
+#        entrada, ese digest NO LLEGA A NINGUN SITIO: la funcion queda inalcanzable con el gate
+#        en verde. Le paso a `roles_task_image` (contraste `sol max`, F-01).
+stage
+python3 - "$WF_T" <<'NOINPUT'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+i = s.index("      roles_task_image:")
+j = s.index("\n", s.index('default: ""', i)) + 1
+open(p, "w", encoding="utf-8").write(s[:i] + s[j:])
+NOINPUT
+expect 1 "no la ofrece como entrada" \
+  "una variable de imagen de la raiz sin entrada de dispatch es un hallazgo"
+
+# I-08 · Y la mitad de enfrente: la entrada existe y ningun job la exporta a OpenTofu, asi que
+#        se teclea y no llega.
+stage
+python3 - "$WF_T" <<'NOTFVAR'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = "      TF_VAR_roles_task_image: ${{ github.event.inputs.roles_task_image }}\n"
+if s.count(old) != 2:
+    sys.exit("el ancla de TF_VAR_roles_task_image no esta dos veces")
+open(p, "w", encoding="utf-8").write(s.replace(old, "", 2))
+NOTFVAR
+expect 1 "ningun job de apply la exporta" \
+  "una entrada de dispatch que ningun job exporta a TF_VAR es un hallazgo"
+
+# I-09 · ⛔ Y LA ASERCION DEL MAJOR NO PUEDE SER UN `ARG`: quien construye lo sobreescribe con
+#        `--build-arg` y la desactiva desde fuera sin tocar el fichero (F-06).
+stage
+python3 - "$DF_T" <<'ARGBACK'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+# ⚠ SE AÑADE el ARG y se CONSERVA la asercion: sustituirla disparaba la guarda de «no hay
+# asercion», que es cierta y es OTRA — y el caso habria cambiado de tema sin fallar.
+old = 'RUN test "$(psql --version'
+i = s.find(old)
+if i < 0:
+    sys.exit("el ancla de la asercion del major no esta")
+open(p, "w", encoding="utf-8").write(s[:i] + "ARG EXPECTED_PG_MAJOR=16\n" + s[i:])
+ARGBACK
+expect 1 "vuelve a declarar" \
+  "un major sobreescribible por --build-arg es un hallazgo"
+
+# I-06 · ⛔ Y QUE ALGUIEN LA CONSTRUYA. El Dockerfile puede existir y la task definition
+#        nombrarla mientras el workflow no la toca: entonces `roles_task_image` nombra algo que
+#        ningun pipeline publica. `aws-apply-guard` cuenta las imagenes y exige una firma por
+#        cada una, pero no sabe CUALES son — al retirar el paso bajan a dos y alli todo cuadra.
+stage
+subst "$WF_I" '            --file cloud/control-plane/deploy/Dockerfile.roles \'               '            --file cloud/control-plane/Dockerfile \'
+expect 1 "no construye cloud/control-plane/deploy/Dockerfile.roles" \
+  "un workflow que no construye la imagen de roles es un hallazgo"
+
+# I-14 · ⛔ SOLO CLIENTE. La imagen lleva dentro la credencial del MASTER, asi que no puede
+#        traer el SERVIDOR: `postgres`, `initdb`, `pg_ctl` son superficie de administracion de
+#        base de datos junto a la credencial que la administra (contraste `sol max`, F-08).
+stage
+subst "$DF_T" 'FROM alpine:3.22@' 'FROM postgres:16-alpine@'
+expect 1 "vuelve a partir de una imagen" \
+  "volver a una base con el servidor de Postgres es un hallazgo"
+
+# I-15 · Y el paquete pinchado por version: sin `=`, el cliente puede cambiar entre dos builds
+#        del MISMO commit, que es deriva sin diff.
+stage
+subst "$DF_T" 'postgresql16-client=16.15-r0' 'postgresql16-client'
+expect 1 "sin fijar version con" \
+  "instalar el cliente sin fijar su version es un hallazgo"
+
+# I-16 · Y que el build COMPRUEBE que no hay binarios de servidor: «el paquete -client no
+#        deberia traerlos» no es una comprobacion, y una dependencia puede arrastrarlos.
+stage
+python3 - "$DF_T" <<'NOSERVERCHECK'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+n = re.subn(r"(?m)^RUN for b in postgres initdb pg_ctl.*$", "RUN true", s)
+if n[1] != 1:
+    sys.exit("el ancla de la comprobacion de binarios de servidor no esta una sola vez")
+open(p, "w", encoding="utf-8").write(n[0])
+NOSERVERCHECK
+expect 1 "no comprueba en el build que la imagen NO trae" \
+  "no comprobar la ausencia de binarios de servidor es un hallazgo"
+
+# I-05 · La base sin pinchar por digest: una etiqueta es un puntero movil, y quien la controle
+#        decide que codigo corre con la credencial del master.
+stage
+python3 - "$DF_T" <<'UNPIN'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+# El nombre de la base cambio con F-08 (`postgres:16-alpine` -> `alpine`), asi que el ancla se
+# escribe sin nombrarla: lo que importa es que el `FROM` pierda su digest, no cual sea la imagen.
+n = re.subn(r"(?m)^(FROM \S+?)@sha256:[0-9a-f]{64}$", r"\1", s)
+if n[1] != 1:
+    sys.exit("el ancla del digest de la base no esta una sola vez")
+open(p, "w", encoding="utf-8").write(n[0])
+UNPIN
+expect 1 "no fija su base por digest" \
+  "la base de la imagen de roles sin digest es un hallazgo"
+
+# ═══ EL RUNBOOK DEL PILOTO Y LA ZONA A LA QUE MANDA ══════════════════════════
+#
+# ⛔ Tres veces el mismo rancio en dos dias sobre el fichero que gobierna el primer apply, y la
+# tercera a cuatro secciones de la correccion de la segunda: corregir una descripcion NO
+# arrastra a sus hermanas. Coste medido: los CNAME del piloto en la zona VIVA —la de los cinco
+# `MX` del correo de la casa— con los nombres de produccion.
+
+RB_T="$TMP/tree/design/AWS-RUNBOOK-DESPACHO-SANDBOX.md"
+
+# B-01 · La zona de altas, sola. Es la mitad que decide DONDE se escribe.
+# ⛔ RE-APUNTADO POR CLOUD-08, no borrado: la zona ya no va literal en la invocacion —va en
+#    `"$ZONE"`, porque la linea base se toma en el mismo acto—, asi que mutar la invocacion ya no
+#    es la deriva posible. La equivalente es mover la ASIGNACION, y eso es exactamente lo que
+#    hace B-08 mas abajo. Este caso pasa a probar la otra mitad: que una zona en variable SIN
+#    asignacion visible no cuela.
+stage
+python3 - "$RB_T" <<'NOASSIGN'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+n = re.subn(r"(?m)^ZONE=[A-Za-z0-9.-]+$\n", "", s)
+if n[1] != 1:
+    sys.exit("el ancla de la asignacion de ZONE no esta una sola vez")
+open(p, "w", encoding="utf-8").write(n[0])
+NOASSIGN
+expect 1 "ningun bloque de codigo la asigna" \
+  "una zona en variable sin asignacion visible es un hallazgo"
+
+# B-02 · Y los nombres, solos. Es la otra mitad y falla distinto: escribe en la zona buena un
+#        nombre que el piloto no usa.
+stage
+subst "$RB_T" 'api.cloud.olivaresai.dev    <alb_dns_name> "$BASE"' 'api.cloud.olivares.ai    <alb_dns_name> "$BASE"'
+expect 1 "es un COMANDO del runbook del PILOTO y nombra" \
+  "un comando del runbook del piloto con el nombre de produccion es un hallazgo"
+
+# B-03 · ⛔ LA PEOR DE LAS CUATRO, porque NO FALLA: una consulta de ACM filtrada por el dominio
+#        de produccion devuelve VACIO contra el piloto, y el vacio se lee como «el certificado
+#        no esta». Un comando roto avisa; este no.
+stage
+subst "$RB_T" 'DomainName==`api.cloud.olivaresai.dev`' 'DomainName==`api.cloud.olivares.ai`'
+expect 1 "es un COMANDO del runbook del PILOTO y nombra" \
+  "la consulta de ACM por el dominio de produccion es un hallazgo (devuelve vacio, no falla)"
+
+# B-06 · ⛔⛔ UNA LINEA BASE ES UNA FOTO, Y UNA FOTO ENVEJECE. `cloud-dns-add.sh` para si la zona
+#        ya difiere de la linea base que se le pasa, asi que citar una con FECHA FIJA en el
+#        runbook bloquea el alta sobre una zona SANA. Medido el 2026-09-02 (CLOUD-08): la que
+#        este runbook citaba tenia CERO registros y la zona ya tenia TRES `AAAA` legitimos
+#        posteriores — la primera alta habria muerto con «la zona ya difiere de su linea base».
+stage
+subst "$RB_T" '  api.cloud.olivaresai.dev    <alb_dns_name> "$BASE"' \
+              '  api.cloud.olivaresai.dev    <alb_dns_name> /workspace/.secrets/dns-baseline-olivaresai.dev-20260828T0950Z.json'
+expect 1 "linea base con FECHA FIJA" \
+  "citar una linea base con fecha fija es un hallazgo (una foto vieja bloquea una zona sana)"
+
+# B-07 · Y que el runbook TOME la linea base: sin ese paso, quien lo siga usara una de otro dia
+#        o ninguna, y la comparacion del guion deja de significar algo.
+stage
+python3 - "$RB_T" <<'NOBASE'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+n = re.subn(r"(?m)^BASE=.*$\n", "", s)
+if n[1] != 1:
+    sys.exit("el ancla de la toma de linea base no esta una sola vez")
+open(p, "w", encoding="utf-8").write(n[0])
+NOBASE
+expect 1 "ningun bloque de codigo TOMA la linea base" \
+  "un runbook con altas y sin tomar la linea base es un hallazgo"
+
+# B-08 · La zona viaja en una variable desde CLOUD-08, y la variable NO se cree a ciegas: se
+#        busca su asignacion y se compara ESE valor.
+stage
+subst "$RB_T" 'ZONE=olivaresai.dev' 'ZONE=olivares.ai'
+expect 1 "asigna ZONE=" \
+  "una ZONE asignada a la zona viva es un hallazgo"
+
+# B-04 · ⛔ DIRECCION DE NO DISPARO, y sin ella la pata seria inservible: la PROSA del runbook
+#        nombra produccion A PROPOSITO —la tabla de reparto, el parrafo de los defaults y el
+#        bloque historico que se conserva—. Prohibirselo seria obligarle a callar lo que hay que
+#        decir. Solo se miran los bloques de codigo.
+stage
+python3 - "$RB_T" <<'PROSEONLY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+marca = "\n### 1-b"
+if marca not in s:
+    sys.exit("no encuentro donde anadir prosa en el runbook")
+i = s.index(marca)
+open(p, "w", encoding="utf-8").write(
+    s[:i] + "\n> Nota de prueba: produccion vive en api.cloud.olivares.ai e "
+            "ingest.cloud.olivares.ai.\n" + s[i:])
+PROSEONLY
+expect 0 "" "la prosa que nombra produccion NO dispara (direccion de no disparo)"
+
+# B-05 · Y sin el runbook, la pata se salta y lo dice. No es lo mismo que aprobar.
+stage
+rm -f "$RB_T"
+expect 0 "" "sin el runbook del piloto la pata se SALTA, no aprueba"
 
 printf 'check-aws-estate selftest: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

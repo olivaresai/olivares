@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -107,6 +108,25 @@ type Options struct {
 	// reloads are reflected without rebuilding the API server. nil/ok=false omits
 	// TLS expiry from the health summary.
 	TLSCertNotAfter func() (time.Time, bool)
+	// CoreEntityResolver reads the authorization facts of a CORE row for a module
+	// route that declares EntityRef.CoreKind (V269 / COCKPIT-02 §3). nil is fine for
+	// every deployment whose modules declare none; a route that DOES declare one and
+	// finds this nil refuses to mount, rather than authorizing without its lineage.
+	CoreEntityResolver CoreEntityAuthorizationResolver
+
+	// PrincipalEvidenceProducer installs the sealed, windowed directory-epoch fact the evidence
+	// path needs before it can say anything but "unknown" about a principal.
+	//
+	// ⛔ ITS ABSENCE IS A REFUSAL TO START WHEN ANY GOVERNED ROUTE IS REGISTERED, and that is not
+	// caution. Without it AuthorizeRoute can never mint a witness, so every governed route answers
+	// 503 to everyone, forever — and 503 reads like an outage, not like a missing dependency. A
+	// refusal at boot names the precondition instead of leaving it to be diagnosed in production.
+	//
+	// ⛔ AND IT IS AN INTERFACE, NOT A BOOL. A bool would let anyone declare the dependency
+	// satisfied by editing configuration; a producer cannot be brought into existence that way.
+	// The guard relaxes by PRESENCE, and its mutant — remove the producer, the server refuses to
+	// start — is what keeps that honest.
+	PrincipalEvidenceProducer PrincipalEvidenceProducer
 	// Recorder is the privileged-session recording seam (SEC-G5). When set,
 	// every module route is gated and captured through it (recording.go). nil
 	// leaves module routes unrecorded — existing embedders and tests unchanged;
@@ -117,6 +137,16 @@ type Options struct {
 	// (single-node default); pinning it makes registered credentials survive a
 	// rename of the panel host only if the RP ID stays constant.
 	WebAuthn auth.WebAuthnRP
+	// WebAuthnUnusable states that this deployment HAS a declared console address
+	// and that address cannot be a relying party (an IP, or a name the verifier
+	// refuses). It is an explicit unavailable outcome and not a fallback: without
+	// it, an operator who declared "https://10.0.0.7:8443" would silently get a
+	// relying party derived from whatever Host header arrived, which is an
+	// authentication authority nobody chose. Ceremonies answer the typed 503.
+	//
+	// It is mutually exclusive with a pinned WebAuthn: a pin that validated is a
+	// usable relying party by construction.
+	WebAuthnUnusable bool
 	// PIV configures the PIV/CAC client-certificate route.
 	// nil = not configured: the status endpoint reports the honest 501 seam and
 	// elevation is refused (fail-closed).
@@ -264,6 +294,19 @@ type Server struct {
 	// rl: the inbound rate limiter; nil leaves the limiter middleware and the
 	// gRPC rate-limit hook disabled (no metering).
 	rl *ratelimit.Limiter
+	// routeResponseHeaders is the ROUTE-SPECIFIC response metadata declared at
+	// registration, keyed by "METHOD <full router pattern>". It is resolved by
+	// routeResponseMetadata BEFORE the authenticating and rate-limiting middlewares
+	// can answer, which is the only way a route-level declaration reaches a refusal
+	// written before chi routes the request. Empty for every route that declares
+	// nothing, which is all of them by default.
+	routeResponseHeaders map[string]map[string]string
+	// routeDescriptors is the ENGINE's private record of every module route it
+	// mounted, keyed by "METHOD <full spec path>" (capabilities_registry.go). It is
+	// written ONLY during mountModules, inside New, and read only afterwards from the
+	// self capability projection — so a served request can never give a route a
+	// description it did not declare.
+	routeDescriptors map[string]routeDescriptor
 	// residency: the multi-region residency registry; nil/non-enforcing in
 	// single-region mode. Used to validate a tenant's region pin at provisioning.
 	residency *residency.Registry
@@ -283,8 +326,18 @@ type Server struct {
 	// recorder: the privileged-session recording seam; nil leaves module
 	// routes unrecorded (recording.go).
 	recorder SessionRecorder
+	// coreEntityResolver (V269): reads the authorization facts of a core row for a
+	// module route that declares EntityRef.CoreKind; nil = no such route may mount.
+	coreEntityResolver CoreEntityAuthorizationResolver
+
+	// principalEvidence is the producer the governed door needs; nil is a refusal to mount a
+	// governed route (checkGovernedRoutesHaveEvidence), not a degraded mode.
+	principalEvidence PrincipalEvidenceProducer
 	// webauthn: the pinned relying party; zero = per-request derivation.
 	webauthn auth.WebAuthnRP
+	// webauthnUnusable: the declared console address cannot be a relying party, so
+	// ceremonies refuse deny-closed instead of deriving one from the request.
+	webauthnUnusable bool
 	// piv: the PIV/CAC client-cert route config; nil = not configured.
 	piv *auth.PIVConfig
 	// inviteSender: optional onboarding-invite email delivery; nil = invites
@@ -399,6 +452,11 @@ func New(opts Options) (*Server, error) {
 	if (opts.WebAuthn.ID == "") != (len(opts.WebAuthn.Origins) == 0) {
 		return nil, errors.New("api: Options.WebAuthn must set both ID and Origins, or neither (per-request derivation)")
 	}
+	// A pinned relying party and "no usable relying party" are contradictory
+	// states, and an embedder who set both would get one of them silently.
+	if opts.WebAuthnUnusable && opts.WebAuthn.ID != "" {
+		return nil, errors.New("api: Options.WebAuthnUnusable cannot be set together with a pinned Options.WebAuthn")
+	}
 	s := &Server{
 		st: opts.Store, authr: opts.Authenticator, authz: opts.Authorizer, signer: opts.Signer,
 		setupTok: opts.SetupToken, log: opts.Logger, clock: opts.Clock, version: opts.Version,
@@ -407,8 +465,10 @@ func New(opts Options) (*Server, error) {
 		keyCustody:      KeyCustodyInfo{Keys: append([]KeyInfo(nil), opts.KeyCustody.Keys...)},
 		busStats:        opts.BusStats,
 		tlsCertNotAfter: opts.TLSCertNotAfter,
-		recorder:        opts.Recorder, webauthn: opts.WebAuthn, piv: opts.PIV,
-		inviteSender: opts.InviteSender, fedSvc: opts.FederationService, secretStore: opts.SecretStore,
+		recorder:        opts.Recorder, webauthn: opts.WebAuthn, webauthnUnusable: opts.WebAuthnUnusable, piv: opts.PIV,
+		coreEntityResolver: opts.CoreEntityResolver,
+		principalEvidence:  opts.PrincipalEvidenceProducer,
+		inviteSender:       opts.InviteSender, fedSvc: opts.FederationService, secretStore: opts.SecretStore,
 		sourceRoster: opts.SourceRoster, connectorOnboarding: opts.ConnectorOnboarding,
 		knowledgeStatus:                opts.KnowledgeStatus,
 		updateStatus:                   opts.UpdateStatus,
@@ -530,7 +590,17 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// The deprecation signal sits with the other unconditional header
 	// middlewares: it must wrap the writer before accessLog's statusRecorder so a
 	// deprecated route's headers commit ahead of the first body byte.
-	mw = append(mw, s.deprecationHeaders, s.secureHeaders, s.accessLog, s.authenticate)
+	// ⛔ routeResponseMetadata GOES BEFORE authenticate, AND THAT ORDER IS THE FIX.
+	// A route that declares response metadata used to receive it inside its own
+	// mounted closure, which is downstream of every middleware that can answer
+	// first: an invalid bearer is refused by authenticate and a throttled caller by
+	// rateLimit, both before chi ever routes the request, so both answered WITHOUT
+	// the declaration. Resolving the pattern here — with chi's own matcher, for the
+	// routes that declared something and no others — is what lets a per-route
+	// declaration reach those refusals without giving any sibling a policy it never
+	// asked for. It is inert when nothing is declared.
+	mw = append(mw, s.deprecationHeaders, s.secureHeaders, s.accessLog,
+		s.routeResponseMetadata, s.authenticate)
 	// Stage-2: the HA leader-routing backstop runs right after authentication —
 	// BEFORE the rate limiter and the setup gate. A standby is dialable in that
 	// layout, so a request that lands on one is going to be refused no matter what;
@@ -600,6 +670,13 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		// token, extends expiry). Deny-closed for non-session principals.
 		r.Post("/refresh", s.handleRefresh)
 		r.Get("/whoami", s.handleWhoami)
+		// G1-A: the SELF capability projection. Whoami keeps its contract — identity,
+		// membership and the tenant-wide role floor — and this answers the different
+		// question it was never able to: is THIS registered operation authorized for
+		// the calling credential right now, and may THIS collection be loaded. It is
+		// additive; nothing consults it to decide a route, and the handler remains the
+		// authority for every real act (handlers_capabilities.go).
+		r.Post("/capabilities", s.handleAuthCapabilities)
 		// RFC 8693 token exchange: mint a down-scoped, audience-bound delegated
 		// token from a subject token. OAuth wire contract (form in, OAuth JSON out).
 		r.Post("/token-exchange", s.handleTokenExchange)
@@ -963,8 +1040,24 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 		if err := checkRoutePermsDeclared(m); err != nil {
 			return err
 		}
+		// ⛔ REGISTRAR ANTES DE COMPROBAR, Y COMPROBAR ANTES DE MONTAR. Si el registro fuera
+		// despues, la primera ruta gobernada quedaria rechazada por el ORDEN y no por la regla —
+		// la confusion que este catalogo existe para cerrar.
+		if d, ok := m.(ActionDeclarer); ok {
+			if err := auth.RegisterModuleActions(ns, d.Actions()); err != nil {
+				return fmt.Errorf("api: module %s: %w", ns, err)
+			}
+		}
+		if err := checkGovernedRoutes(m, ns, s.principalEvidence); err != nil {
+			return err
+		}
 		sub := chi.NewRouter()
-		m.APIRoutes(chiRegistrar{s: s, r: sub, ns: ns})
+		// The module's OWN capability adapter travels with its registrar, so every
+		// route it registers is filed with the adapter of the module that registered
+		// it. A module implementing none files nil, and its operations project as
+		// not_supported rather than as the outer boolean.
+		projector, _ := m.(ModuleCapabilityProjector)
+		m.APIRoutes(chiRegistrar{s: s, r: sub, ns: ns, projector: projector})
 		r.Mount("/m/"+ns, sub)
 		if sr, ok := m.(Searcher); ok {
 			for _, k := range sr.SearchKinds() {
@@ -992,6 +1085,65 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 // It replays APIRoutes against a recording registrar — the same double-call the OpenAPI
 // document already relies on (collectModuleRoutes), so a module that cannot tolerate it
 // is already broken. No handler runs and no route is mounted by the replay.
+// PrincipalEvidenceProducer reconstructs a principal's authority inside one tenant, carrying the
+// private provenance AuthorizeEvidence consumes. core/auth's *Authenticator satisfies it.
+type PrincipalEvidenceProducer interface {
+	ResolvePrincipalScope(context.Context, auth.PrincipalRef, model.TenantID) (auth.Principal, error)
+}
+
+// checkGovernedRoutes refuses to start a server whose governed routes cannot work, and it asks
+// BOTH questions in ONE replay of the module's routes.
+//
+// ⛔ UN SOLO REPLAY Y UNA SOLA PUERTA DE ERROR, porque son la misma pregunta en dos mitades: «¿esta
+// ruta gobernada puede llegar a decidir?». Sin productor de evidencia no puede acuñar testigo
+// nunca; con una acción que su módulo no declaró, la acción llega al motor de política como una
+// entidad que nadie registró. Las dos hacen inútil la ruta, y las dos se ven aquí, que es el único
+// sitio del árbol que ve TODAS las rutas de un módulo ANTES de montarlas.
+//
+// ⛔ Y DEVUELVE ERROR, NO PANIC, Y ESA DIFERENCIA ERA UNA AFIRMACIÓN MÍA FALSA. La validación de
+// acción vivía en HandlePolicy y hacía `panic`; yo declaré por escrito que «api.New devuelve error
+// nombrando la regla», y no era verdad — el caso que lo comprobaba tenía que convertir el panic en
+// dato con `recover`, que es la huella de una afirmación que no encaja con su código. Aquí sí lo
+// es: `mountModules` propaga, `api.New` devuelve, y el caso lo lee sin recuperar nada.
+//
+// TODAY THE EVIDENCE HALF CAN ONLY REFUSE, deliberately: nothing in the tree supplies a producer
+// yet, and the real composition root boots because it registers no governed route.
+//
+// ⚠ Y PRESENCIA NO ES CABLEADO, dicho aquí porque el tercer contraste lo levantó y tiene razón: un
+// productor guardado satisface esta guarda y NO hace que ningún camino de petición lo invoque.
+// Esto refuta «nadie lo inyectó», no «nadie lo llama». El carril que cablee la evidencia sustituye
+// esta comprobación por un testigo del CAMINO DE PETICIÓN — ruta gobernada, principal reconstruido
+// de verdad, 200 con testigo sólido; y quitar sólo la llamada ⇒ 503 con el handler en cero.
+func checkGovernedRoutes(m Module, ns string, producer PrincipalEvidenceProducer) error {
+	var routes []moduleRoute
+	m.APIRoutes(recordingRegistrar{ns: ns, out: &routes})
+	var governed []string
+	for _, r := range routes {
+		if !r.governed {
+			continue
+		}
+		governed = append(governed, r.method+" "+r.pattern)
+		// ⛔ CONTRA LO QUE ESTE MÓDULO DECLARÓ, no contra un catálogo global: una ruta que cita la
+		// acción de otro monta hoy y deja de montar el día que ese módulo no se cargue, o según el
+		// orden en que los dos se monten. El mensaje dice la REGLA, porque un «no declarada» a
+		// secas no dice dónde declararla.
+		if r.cedarAction != "" && !auth.ModuleDeclaresAction(ns, auth.CedarAction(r.cedarAction)) {
+			return fmt.Errorf(
+				"api: route %s %s declares Cedar action %q, which module %q does not declare; a "+
+					"module may only name actions it declares itself (add it to Actions())",
+				r.method, r.pattern, r.cedarAction, ns)
+		}
+	}
+	if len(governed) == 0 || producer != nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"api: module %q registers %d governed route(s) (%s) but no PrincipalEvidenceProducer is "+
+			"wired, so AuthorizeRoute can never mint a witness and every one of them would answer "+
+			"503: install one in the composition root before mounting them",
+		ns, len(governed), strings.Join(governed, ", "))
+}
+
 func checkRoutePermsDeclared(m Module) error {
 	declared := map[auth.Permission]bool{}
 	for _, p := range m.Permissions() {
@@ -1021,17 +1173,368 @@ type chiRegistrar struct {
 	s  *Server
 	r  chi.Router
 	ns string
+	// responseHeaders are set on the ResponseWriter BEFORE anything in the mounted
+	// closure can write, so they reach the engine's own refusals — the entity
+	// lineage denial, the authorization denial, the concealed not-found and the
+	// deferred locator error — and not only the module handler's own responses.
+	// It is nil for every route that does not ask, which is all of them by default.
+	responseHeaders map[string]string
+	// collectionScope is the workspace selector declared for the COLLECTION routes
+	// mounted through this registrar value. Like responseHeaders it travels on a COPY
+	// (withCollectionScope), so one route can never observe another's declaration, and
+	// it is nil for every route that did not ask — which is all of them by default.
+	collectionScope *CollectionScopeRef
+	// projector is the module's own capability adapter, or nil when the module
+	// implements none. It is set once by mountModules from the module being mounted.
+	projector ModuleCapabilityProjector
+}
+
+// WithCollectionScope returns a COPY of the registrar carrying scope. The registrar is
+// a value, so the declaration cannot leak onto any other route mounted through the
+// same seam — the identical argument withResponseHeaders makes.
+func (cr chiRegistrar) WithCollectionScope(scope CollectionScopeRef) RouteRegistrar {
+	if scope.WorkspaceQueryParam == "" {
+		// A declaration with no selector names nothing to corroborate. Returning the
+		// registrar unchanged keeps the route mounting exactly as it always did, which
+		// is the direction that authorizes LESS.
+		return cr
+	}
+	copied := scope
+	cr.collectionScope = &copied
+	return cr
 }
 
 func (cr chiRegistrar) Handle(method, pattern string, perm auth.Permission, h ModuleHandler) {
-	cr.handle(method, pattern, perm, nil, h)
+	cr.handle(method, pattern, perm, nil, auth.RouteMetadata{}, ungovernedRoute, h)
+}
+
+// NoStoreRouteRegistrar is the OPTIONAL capability a module asserts when EVERY
+// response of a route — success and refusal alike — must carry
+// `Cache-Control: no-store`.
+//
+// ⛔ IT IS AN OPTIONAL CAPABILITY ON THE CONCRETE REGISTRARS, this repository's
+// documented idiom (HandlePolicy above, core/store's EpochFencer). Adding it to
+// RouteRegistrar would break every implementer and test double for something no
+// other module wants today.
+//
+// ⛔ AND, AS recordingRegistrar.HandlePolicy PUT IT, AN OPTIONAL CAPABILITY FOUND
+// BY ASSERTION PUTS THE BURDEN ON EVERY REGISTRAR THAT ANSWERS: both in-tree
+// registrars implement it, so the published document and the mounted server
+// describe the same routes.
+//
+// ⛔ IT REACHES THE PRE-ROUTING REFUSALS TOO, AND THAT WAS A CORRECTION.
+// An earlier version of this comment declared the opposite as a settled limit:
+// that a refusal written by a global middleware before chi routes the request —
+// the 401 from `authenticate`, the 429 from `rateLimit` — could not carry the
+// header without changing global transport semantics for every route. An
+// independent HTTP witness measured both leaving `Cache-Control` absent, and the
+// stated reason did not hold: applying a route's OWN declared response metadata
+// before an early writer opts no sibling into anything. `routeResponseMetadata`
+// does exactly that, and a plain sibling mounted through this same registrar
+// still sends no cache directive.
+//
+// So the declaration now covers every response of the route, including the two
+// written before routing, and the published contract says so for all of them.
+type NoStoreRouteRegistrar interface {
+	// HandleNoStore mounts a collection route whose every response carries no-store.
+	HandleNoStore(method, pattern string, perm auth.Permission, handler ModuleHandler)
+	// HandleEntityNoStore mounts an entity route whose every response carries no-store.
+	HandleEntityNoStore(method, pattern string, perm auth.Permission, ref EntityRef, handler ModuleHandler)
+}
+
+// NoStoreResponseHeaders is the exact header set the capability applies. It is a
+// function, not a literal, so the runtime and the published contract cite one
+// source instead of two spellings of the same intent.
+func NoStoreResponseHeaders() map[string]string {
+	return map[string]string{"Cache-Control": "no-store"}
+}
+
+// declareRouteResponseHeaders records a route's response metadata under the FULL
+// pattern the router reports for it, so routeResponseMetadata can find it before
+// the request is routed.
+//
+// The key is built from the mount layout (`/v1/m/<namespace>` + the module's own
+// pattern) rather than guessed: mountModules mounts every module there and
+// nowhere else. A key that did not match what chi reports would apply nothing —
+// silently — so core/api's capability test drives a REAL invalid-credential 401
+// and a REAL limiter 429 through a mounted server rather than inspecting this map.
+//
+// ⛔ THE DECLARATION IS PER ROUTE AND IMMUTABLE ONCE FILED. Each entry is a fresh
+// COPY of the registrar's map, so one route can never observe or alter another's,
+// and the table is written ONLY here — inside mountModules, during New — and read
+// only afterwards, from the request path. Nothing at request time writes to it,
+// so a served request cannot give a route a directive it did not declare.
+func (cr chiRegistrar) declareRouteResponseHeaders(method, pattern string) {
+	if len(cr.responseHeaders) == 0 || cr.s == nil {
+		return
+	}
+	if cr.s.routeResponseHeaders == nil {
+		cr.s.routeResponseHeaders = map[string]map[string]string{}
+	}
+	copied := make(map[string]string, len(cr.responseHeaders))
+	for name, value := range cr.responseHeaders {
+		copied[name] = value
+	}
+	cr.s.routeResponseHeaders[method+" "+canonicalRoutePattern("/v1/m/"+cr.ns+pattern)] = copied
+}
+
+// routeResponseMetadata applies a matched route's DECLARED response headers
+// before any middleware downstream of it can answer.
+//
+// ⛔ WHY IT EXISTS AT ALL, since a route already sets its own headers. Those two
+// are not the same coverage. The route's own loop runs inside the mounted
+// closure, so it reaches every answer the ROUTE produces — including the engine's
+// entity-lineage denial and concealed not-found — but nothing that answers
+// earlier. `authenticate` refuses an invalid supplied credential and `rateLimit`
+// refuses a throttled caller BEFORE chi routes the request at all, and an
+// independent HTTP witness measured both leaving `Cache-Control` absent. This
+// middleware closes exactly those, and the route's own loop stays: it is the one
+// that still applies when a registrar is exercised without the full chain.
+//
+// ⛔ AND IT IS NOT A GLOBAL CACHE POLICY. It applies only what a route DECLARED,
+// to that route. A sibling mounted through the same registrar without a
+// declaration matches nothing here and still sends no cache directive, which the
+// capability test asserts in the same run as the two refusals above.
+//
+// The pattern is resolved with chi's own matcher over the built router, AND with
+// chi's own choice of routing path and method, so this cannot drift from how the
+// request will actually be routed. Matching costs one radix-tree lookup and
+// happens only while at least one route has declared something.
+func (s *Server) routeResponseMetadata(next http.Handler) http.Handler {
+	// ⚠ THE EMPTY-TABLE CHECK IS INSIDE THE CLOSURE, NOT HERE. The middleware chain
+	// is assembled before mountModules runs, so at build time NO route has declared
+	// anything yet; short-circuiting on that would remove this middleware from
+	// every server permanently — including the one whose routes declare something a
+	// moment later. deprecationHeaders may short-circuit because its table is set
+	// in New; this one is filled during mounting.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(s.routeResponseHeaders) > 0 && s.mux != nil {
+			// A FRESH route context — the live one must not be mutated — matched
+			// against the built router with the EFFECTIVE method and path chi will
+			// itself dispatch on, then canonicalised the same way the pattern was
+			// filed. Nothing about the request is decoded or rewritten.
+			method, routePath := effectiveChiRouteRequest(r)
+			rctx := chi.NewRouteContext()
+			if s.mux.Match(rctx, method, routePath) {
+				key := method + " " + canonicalRoutePattern(rctx.RoutePattern())
+				for name, value := range s.routeResponseHeaders[key] {
+					w.Header().Set(name, value)
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// effectiveChiRouteRequest reports the method and path the mounted router will
+// actually dispatch this request on, chosen exactly as chi chooses them.
+//
+// ⛔ IT EXISTS BECAUSE "THE SAME MATCHER" IS NOT "THE SAME RESOLUTION".
+// routeResponseMetadata used to call Match with `r.URL.Path`, and an independent
+// HTTP witness measured the consequence on the real mounted K3 router: chi's
+// routeHTTP prefers a non-empty `URL.RawPath`, so for an ESCAPED URL the two
+// disagreed about which route was being served, in both directions —
+//
+//   - GET /v1/m/sessions/channels/bad%2Fid/grants with an invalid bearer.
+//     chi routes it to the declared grant sheet ({id}/grants, id="bad%2Fid");
+//     the decoded Path is .../channels/bad/id/grants, which matches nothing. The
+//     pre-routing 401 of a route that DID declare no-store went out without it.
+//   - GET /v1/m/sessions/channels/%61dministration. chi routes the raw literal to
+//     the ordinary {id} detail route, which declares nothing; the decoded Path is
+//     .../channels/administration, the catalog. A route that declared NOTHING was
+//     given the catalog's directive, on its 401 and on its authenticated 404.
+//
+// The second is the one that matters most: applying a declaration to a route that
+// never made it is exactly the "global cache policy" this middleware is not
+// allowed to become, arriving through the back door.
+//
+// ⚠ THE CURE IS TO MATCH WHAT CHI MATCHES, NEVER TO DECODE THE REQUEST. Rewriting
+// `r.URL` so the decoded path routes "correctly" would change what the ROUTER
+// sees, i.e. change dispatch to fit the metadata guess — the opposite of the
+// requirement. This function only reads.
+//
+// The order below is chi's own (mux.go routeHTTP): a route context already
+// carrying a RoutePath wins (a parent router that has consumed a prefix), then a
+// non-empty RawPath, then Path, then "/". The live route context is READ and
+// never written; chi installs it in Mux.ServeHTTP before the middleware chain
+// runs, so at this depth RoutePath and RouteMethod are empty and the RawPath term
+// is the material one — but reading them keeps this correct if the engine is ever
+// mounted under a parent router.
+//
+// ⚠ `deprecationHeaders` (stability.go) performs the same class of pre-routing
+// resolution and still selects `URL.Path`. That is NOT changed here: it is a
+// different subsystem with its own table, contract and tests, and this task is
+// bounded to the response-metadata resolver. It is named so that the next reader
+// does not conclude from the earlier version of the comment above — which said
+// this reused the deprecation idiom — that the two are still identical. They are
+// not: this one follows dispatch, that one does not.
+func effectiveChiRouteRequest(r *http.Request) (method, routePath string) {
+	method = r.Method
+	if rctx := chi.RouteContext(r.Context()); rctx != nil {
+		routePath = rctx.RoutePath
+		if rctx.RouteMethod != "" {
+			method = rctx.RouteMethod
+		}
+	}
+	if routePath == "" {
+		if r.URL.RawPath != "" {
+			routePath = r.URL.RawPath
+		} else {
+			routePath = r.URL.Path
+		}
+		if routePath == "" {
+			routePath = "/"
+		}
+	}
+	return method, routePath
+}
+
+func (cr chiRegistrar) HandleNoStore(
+	method, pattern string, perm auth.Permission, h ModuleHandler,
+) {
+	cr.withResponseHeaders(NoStoreResponseHeaders()).Handle(method, pattern, perm, h)
+}
+
+func (cr chiRegistrar) HandleEntityNoStore(
+	method, pattern string, perm auth.Permission, ref EntityRef, h ModuleHandler,
+) {
+	cr.withResponseHeaders(NoStoreResponseHeaders()).HandleEntity(method, pattern, perm, ref, h)
+}
+
+// withResponseHeaders returns a COPY of the registrar carrying the headers. The
+// registrar is a value, so the copy cannot leak the declaration onto any other
+// route mounted through the same seam.
+func (cr chiRegistrar) withResponseHeaders(headers map[string]string) chiRegistrar {
+	if len(headers) == 0 {
+		return cr
+	}
+	copied := make(map[string]string, len(headers))
+	for name, value := range headers {
+		copied[name] = value
+	}
+	cr.responseHeaders = copied
+	return cr
+}
+
+// entityRefFor is the mapping from a route's declared metadata to the reference the engine
+// uses to find the row.
+//
+// ⛔ IT IS A FUNCTION SO THAT THE MAPPING CAN BE OBSERVED WITHOUT A TEST-ONLY FIELD ON THE
+// REGISTRAR. The defect it fixes (B01) was not that the route declared nothing - it was that
+// the declaration did not REACH the engine, so the test that matters reads what is handed
+// over rather than what was declared. Inlined, that step had nowhere to be looked at except
+// through a mounted server, and a test that mounts one is measuring five things at once.
+//
+// ⛔ AND THE LOCATOR TRAVELS WITH THE KIND. Without it the engine has an entity kind and no
+// way to find the row, so it denies BEFORE the handler - the route is mounted, reachable and
+// unusable, and the failure looks like an authorization decision. RouteMetadata.Validate
+// refuses that combination at boot, so a ref built here always carries exactly one locator.
+func entityRefFor(meta RouteMetadata) *EntityRef {
+	if meta.CoreKind == CoreKindNone {
+		// A route that resolves its own resource gets no ref: handing it one would send it
+		// through a row lookup it does not want and cannot satisfy.
+		return nil
+	}
+	// ⛔ ALL FIVE, NOT THREE. This used to carry CoreKind and the two locators and drop
+	// ResourceKind and ConcealDeniedAsNotFound on the floor, so the policy door could describe
+	// WHERE the row is and not WHAT it is nor how a denial should look. The kind is not
+	// presentation: with it empty the server derives the kind from the permission, and the
+	// scope resolver only adds a session's agent groups when the kind is `session`.
+	return &EntityRef{
+		CoreKind:                meta.CoreKind,
+		IDParam:                 meta.IDParam,
+		BodyIDField:             meta.BodyIDField,
+		ResourceKind:            meta.ResourceKind,
+		ConcealDeniedAsNotFound: meta.ConcealDeniedAsNotFound,
+	}
+}
+
+// HandlePolicy mounts a route WITH its sealed metadata (V269 / architecture §7.1).
+//
+// ⛔ IT IS A METHOD ON THE CONCRETE REGISTRAR AND NOT A METHOD ON RouteRegistrar, which is
+// this repository's own idiom for an optional capability — core/store documents EpochFencer
+// the same way ("asserted like AuditSpoolStatuser / CanonicalWalker"). Adding it to the
+// interface would break every implementer, test doubles included, for a capability most
+// modules do not want; a type assertion lets the module that needs it ask, and lets one that
+// finds it absent decide what to do rather than be told at compile time.
+//
+// ⛔ AND A MODULE THAT FINDS IT ABSENT MUST NOT FALL BACK TO Handle FOR A GOVERNED ROUTE.
+// Handle carries method, pattern and permission and drops the AAL floor, the Cedar action,
+// the scoped-grant requirement and the row lineage, so the route would serve under
+// substantially weaker authorization than its table declares. That is finding B01 of the
+// 2026-09-03 contrast, and the fix is this method existing rather than a comment asking
+// callers to be careful.
+func (cr chiRegistrar) HandlePolicy(method, pattern string, perm auth.Permission, meta RouteMetadata, h ModuleHandler) {
+	if err := meta.Validate(); err != nil {
+		// AT MOUNT, AND IT PANICS, exactly as HandleEntity does for an impossible EntityRef:
+		// registration runs at boot inside the composition root, so a panic is a REFUSAL TO
+		// START with the reason in the message. Deferring to the first request would serve
+		// every other route while this one waited to be discovered.
+		panic(fmt.Sprintf("%v (namespace %q, %s %s)", err, cr.ns, method, pattern))
+	}
+	// La accion NO se valida aqui: vive en checkGovernedRoutes, que corre ANTES de montar y
+	// devuelve error en vez de panic. Dos sitios comprobando lo mismo son dos productores, y el
+	// que hace panic es el que convierte una afirmacion sobre `api.New` en algo que un test tiene
+	// que `recover` para leer.
+	ref := entityRefFor(meta)
+
+	// ⛔ AND THE REF IS VALIDATED TOO, WHICH THIS DOOR DID NOT DO. meta.Validate answers
+	// questions about the METADATA; validateCoreEntityRef answers the ones about the ROW and
+	// its resolver, and only the second can see that a CoreKind route was mounted with no
+	// CoreEntityAuthorizationResolver wired. Options promises to refuse such a mount; without
+	// this call the promise was kept by HandleEntity and broken here, and the nil surfaced on
+	// the first request instead of at boot - as a denial, which is the one failure a reader
+	// cannot tell from working correctly.
+	if ref != nil {
+		if err := validateCoreEntityRef(*ref, cr.s.coreEntityResolver); err != nil {
+			panic(fmt.Sprintf("%v (namespace %q, %s %s)", err, cr.ns, method, pattern))
+		}
+	}
+	cr.handle(method, pattern, perm, ref, meta.RouteMetadata, governedRoute, h)
+}
+
+// HandleSealed is the governed door that accepts ONLY metadata which went through SealRoute.
+//
+// ⛔ IT EXISTS BECAUSE HandlePolicy CANNOT REFUSE A LITERAL, and a seal nobody has to use is a
+// convention rather than a mechanism. api.RouteMetadata embeds auth.RouteMetadata, which
+// PROMOTES its exported fields, so any caller could write MinimumAAL back to zero or
+// RequireScopedGrant to false between declaring a route and registering it — and the route would
+// mount looking exactly like one that had asked for less. SealedRoute keeps that value
+// unexported and offers only tightenings, so the loosening is not something a caller must
+// remember not to write: it is something they cannot spell.
+//
+// ⚠ AND THIS DOES NOT CLOSE R-629 ON ITS OWN, which is why the fila stays open. While
+// HandlePolicy still accepts a literal, this door is the safe one rather than the only one. The
+// switchover — HandlePolicy retiring or requiring the seal — moves six call sites that live in a
+// module whose package does not compile against the current pin, so it lands with that pin and
+// not before. Delivering it today would mean shipping a change whose composition root never
+// compiled.
+func (cr chiRegistrar) HandleSealed(method, pattern string, perm auth.Permission, s SealedRoute, h ModuleHandler) {
+	if !s.IsSealed() {
+		// AT MOUNT AND IT PANICS, like its neighbours: a zero SealedRoute carries a zero
+		// RouteMetadata, which is perfectly legal metadata, so without this the door would
+		// silently register the historical unrestricted route in place of whatever the caller
+		// meant to seal.
+		panic(fmt.Sprintf(
+			"api: HandleSealed was given metadata that never went through SealRoute "+
+				"(namespace %q, %s %s)", cr.ns, method, pattern))
+	}
+	cr.HandlePolicy(method, pattern, perm, s.Metadata(), h)
 }
 
 // HandleEntity mounts an entity route: the row is read BEFORE authorization so the
 // scoped engine sees the entity's stored lineage rather than a collection-level
 // blank. See EntityRef.
 func (cr chiRegistrar) HandleEntity(method, pattern string, perm auth.Permission, ref EntityRef, h ModuleHandler) {
-	cr.handle(method, pattern, perm, &ref, h)
+	// ⛔ AT MOUNT, AND IT PANICS. Registration runs at boot inside the composition
+	// root, so a panic here is a REFUSAL TO START with the reason in the message —
+	// the loud end of the same choice entityResource already makes for its own
+	// mutually-exclusive fields. The alternative, deferring to the first request,
+	// would serve every other route while this one waited to be discovered.
+	if err := validateCoreEntityRef(ref, cr.s.coreEntityResolver); err != nil {
+		panic(fmt.Sprintf("%v (namespace %q, %s %s)", err, cr.ns, method, pattern))
+	}
+	cr.handle(method, pattern, perm, &ref, auth.RouteMetadata{}, ungovernedRoute, h)
 }
 
 // restoredRequestBody replays the bytes consumed by the body entity locator and
@@ -1153,9 +1656,16 @@ func (cr chiRegistrar) entityResource(
 			"api: entity route must declare exactly one of IDParam and BodyIDField",
 		)
 	}
-	if ref.ConcealDeniedAsNotFound && ref.Kind == "" {
+	// A concealing route must be able to establish whether the row exists, so it needs
+	// a kind — either the external Kind or, since V269, a CoreKind. Accepting only the
+	// first made CoreKind and conceal-404 MUTUALLY UNREACHABLE: coreentity.go refuses a
+	// route that declares both kinds, and this refused a concealing route that declared
+	// only the core one, so the exact combination COCKPIT-02 requires could not exist.
+	// An adversarial contrast found it by reading the two guards together; neither test
+	// saw it alone, because the mount-time validator never runs entityResource.
+	if ref.ConcealDeniedAsNotFound && ref.Kind == "" && ref.CoreKind == CoreKindNone {
 		return res, "", false, nil, errors.New(
-			"api: a concealed entity route must declare Kind",
+			"api: a concealed entity route must declare Kind or CoreKind",
 		)
 	}
 	id := ""
@@ -1172,6 +1682,9 @@ func (cr chiRegistrar) entityResource(
 		return res, "", false, nil, nil
 	}
 	res.ID = id
+	if ref.CoreKind != CoreKindNone {
+		return cr.coreEntityResource(r, res, ref, model.ID(id))
+	}
 	if ref.Kind == "" || (ref.WorkspaceColumn == "" && !ref.ConcealDeniedAsNotFound) {
 		return res, "", true, nil, nil
 	}
@@ -1183,13 +1696,37 @@ func (cr chiRegistrar) entityResource(
 	if err != nil {
 		return res, "", false, nil, nil // likewise: let the shared path map the error
 	}
+	res, found, verr := cr.s.storedEntityLineage(r.Context(), tenant, res, ref, id)
+	if verr != nil {
+		return res, tenant, false, nil, verr
+	}
+	return res, tenant, found, nil, nil
+}
+
+// storedEntityLineage reads the declared row and stamps its STORED workspace onto res.
+//
+// ⛔ IT IS A METHOD ON THE SERVER, NOT INLINE, BECAUSE IT HAS A SECOND CONSUMER. The
+// self capability projection must decide an entity operation against the SAME lineage
+// the route would use, and a projection that resolved the row its own way would be
+// answering a different question from the one the handler will be authorized for. Two
+// copies of a lineage rule derive, and the one that derives is the one fewer people read.
+//
+// It fails CLOSED on a store error and reports absence separately: a missing row leaves
+// the resource at collection level — id set, no workspace — exactly as before.
+func (s *Server) storedEntityLineage(
+	ctx context.Context,
+	tenant model.TenantID,
+	res auth.ResourceAttrs,
+	ref EntityRef,
+	id string,
+) (auth.ResourceAttrs, bool, error) {
 	found := false
-	verr := cr.s.st.View(r.Context(), tenant, func(sc store.Scope) error {
+	verr := s.st.View(ctx, tenant, func(sc store.Scope) error {
 		repo, e := sc.Ext(ref.Kind)
 		if e != nil {
 			return e
 		}
-		rec, e := repo.Get(r.Context(), model.ID(id))
+		rec, e := repo.Get(ctx, model.ID(id))
 		if errors.Is(e, store.ErrNotFound) {
 			return nil // no row: stay at collection level, the handler answers 404
 		}
@@ -1205,15 +1742,38 @@ func (cr chiRegistrar) entityResource(
 		return nil
 	})
 	if verr != nil {
-		return res, tenant, false, nil, verr
+		return res, false, verr
 	}
-	return res, tenant, found, nil, nil
+	return res, found, nil
 }
 
 // authzEntityResource is the ordinary authorize-then-handle gate with one narrow
 // wire choice: an authenticated denial on an existence-concealing point route is
 // written as 404. Authentication and tenant resolution retain their shared
 // responses, notably 401; only the final authorization denial is conceal-able.
+// authzEntityResourcePolicy is authzEntityResource with the route's metadata carried in.
+// The old signature stays and delegates with a zero, so every existing route decides
+// bit-for-bit as before.
+func (cr chiRegistrar) authzEntityResourcePolicy(
+	w http.ResponseWriter,
+	r *http.Request,
+	perm auth.Permission,
+	res auth.ResourceAttrs,
+	meta auth.RouteMetadata,
+	concealDenied bool,
+	governed routeGovernance,
+) (auth.Principal, model.TenantID, auth.RouteAuthorizationWitness, bool) {
+	// ⛔ AQUI VIVE EL CONCEAL, Y POR ESO LA REGLA DE ERRORES NO CAMBIA. La ruta elige su denial:
+	// con conceal, `store.ErrNotFound` -> 404. Si el middleware pasara a escribir el error tipado
+	// de la autorizacion, esa 404 se volveria 403 y CONFIRMARIA QUE LA FILA EXISTE, que es lo
+	// unico que el conceal existe para impedir.
+	denial := errForbidden
+	if concealDenied {
+		denial = store.ErrNotFound
+	}
+	return cr.s.authzTenantResourcePolicy(w, r, perm, res, meta, denial, governed)
+}
+
 func (cr chiRegistrar) authzEntityResource(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -1229,16 +1789,64 @@ func (cr chiRegistrar) authzEntityResource(
 	return cr.s.authzTenantResource(w, r, perm, res)
 }
 
-func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref *EntityRef, h ModuleHandler) {
+// ⛔ handle SIRVE A LAS TRES GRAMATICAS DE REGISTRO, asi que la gobernanza tiene que ENTRAR:
+// deducirla aqui es imposible sin volver a mirar la metadata, que es justo lo que no vale
+// (una ruta gobernada con metadata vacia se degradaria sola). Handle y HandleEntity pasan
+// ungovernedRoute; HandlePolicy —y por tanto HandleSealed— pasa governedRoute.
+func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref *EntityRef, meta auth.RouteMetadata, governed routeGovernance, h ModuleHandler) {
+	// File the declaration where a PRE-ROUTING writer can find it. Registration
+	// time is the only moment that knows both the namespace and the pattern.
+	cr.declareRouteResponseHeaders(method, pattern)
+	// And file the route's OWN description — door, metadata, locator, concealment,
+	// declared collection scope — for the self capability projection. Registration is
+	// likewise the only moment that knows all of them together.
+	cr.declareRouteDescriptor(method, pattern, perm, ref, meta, governed)
 	cr.r.MethodFunc(method, pattern, func(w http.ResponseWriter, r *http.Request) {
+		// FIRST, before any branch can write: a route that declared response
+		// headers gets them on every answer it produces, including the refusals
+		// below that return before the module handler is ever called. Nil for
+		// every route that did not declare any, so this is inert by default.
+		for name, value := range cr.responseHeaders {
+			w.Header().Set(name, value)
+		}
 		var (
-			p        auth.Principal
-			tenant   model.TenantID
-			ok       bool
+			p      auth.Principal
+			tenant model.TenantID
+			ok     bool
+			// witness is the record of the decision that let this request through. For an
+			// ungoverned door it stays the zero value, which authorizes nothing by construction.
+			witness  auth.RouteAuthorizationWitness
 			resource = auth.ResourceFor(perm)
 		)
-		if ref == nil {
-			p, tenant, ok = cr.s.authzTenant(w, r, perm)
+		// ⛔ LA EVIDENCIA SE INSTALA AQUÍ, ANTES DE DIVIDIR COLECCIÓN Y ENTIDAD, Y SÓLO EN RUTA
+		// GOBERNADA. Antes esta pregunta vivía en la rama de entidad, y eso tenía dos defectos: la
+		// colección no la hacía nunca, y la de entidad comprobaba el principal CRUDO —el que aún no
+		// tiene evidencia— así que su respuesta era 503 pase lo que pase. Aquí cubre las dos ramas y
+		// valida el principal ya reconstruido.
+		//
+		// Sigue valiendo por qué va ANTES del cargador de entidad: una petición que no puede
+		// decidirse provocaría igualmente una lectura no autorizada —coste, latencia, bloqueos y
+		// trazas del resolvedor—, que es un oráculo por otra vía aunque el cuerpo salga idéntico.
+		//
+		// Una ruta NO gobernada no pasa por aquí: su camino booleano no pide evidencia, y hacerle
+		// esta pregunta le impondría un requisito que nunca declaró.
+		if governed {
+			var cont bool
+			if r, cont = cr.s.prepareGovernedPrincipal(w, r); !cont {
+				return
+			}
+		}
+		if ref == nil && cr.collectionScope != nil {
+			// A DECLARED collection scope is corroborated BEFORE the decision, and the
+			// corroborated workspace becomes the authorization resource. Everything
+			// else about this route — its door, its denial, its handler — is unchanged.
+			p, tenant, resource, witness, ok = cr.s.authzScopedCollectionPolicy(
+				w, r, perm, meta, *cr.collectionScope, governed,
+			)
+		} else if ref == nil {
+			p, tenant, witness, ok = cr.s.authzTenantResourcePolicy(
+				w, r, perm, resource, meta, errForbidden, governed,
+			)
 		} else {
 			res, _, found, locatorErr, err := cr.entityResource(r, perm, *ref)
 			if err != nil {
@@ -1258,8 +1866,8 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				// Do not turn JSON validity, the locator spelling or the body limit into
 				// an oracle. First ask the exact collection-level authorization question;
 				// only an admitted caller receives the deferred client error.
-				p, tenant, ok = cr.authzEntityResource(
-					w, r, perm, res, ref.ConcealDeniedAsNotFound,
+				p, tenant, witness, ok = cr.authzEntityResourcePolicy(
+					w, r, perm, res, meta, ref.ConcealDeniedAsNotFound, governed,
 				)
 				if !ok {
 					return
@@ -1267,8 +1875,8 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				cr.s.writeError(w, r, locatorErr)
 				return
 			}
-			p, tenant, ok = cr.authzEntityResource(
-				w, r, perm, res, ref.ConcealDeniedAsNotFound,
+			p, tenant, witness, ok = cr.authzEntityResourcePolicy(
+				w, r, perm, res, meta, ref.ConcealDeniedAsNotFound, governed,
 			)
 			if ok && ref.ConcealDeniedAsNotFound && !found {
 				cr.s.writeError(w, r, store.ErrNotFound)
@@ -1279,6 +1887,12 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 		if !ok {
 			return
 		}
+		// The recorder is an engine wrapper around the module route, not part of
+		// the module handler. Keep the already-authenticated, pre-confinement
+		// context for its tenant-global policy/session ledger. A recovered
+		// workspace-scoped token otherwise makes recording.config unreadable and
+		// turns every recorded module route into a false 503 after restart.
+		recorderCtx := r.Context()
 		// B-03: mark the request with the caller's workspace confinement,
 		// AFTER authorization (so the PDP's own reads keep engine authority) and
 		// BEFORE the handler. Every store handle the handler can reach — mc.Data
@@ -1289,7 +1903,11 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 			Principal: p,
 			Tenant:    tenant,
 			Resource:  resource,
-			Data:      NewScopedData(cr.s.st, tenant),
+			// ⛔ EL TESTIGO LLEGA AL HANDLER. Sin esto la decision se quedaba en un booleano y
+			// ninguna invariante suya alcanzaba a los bytes del cable (invariante V). Para las
+			// puertas no gobernadas es el valor cero, que no autoriza nada por construccion.
+			Authorization: witness,
+			Data:          NewScopedData(cr.s.st, tenant),
 		}
 		rec := cr.s.recorder
 		if rec == nil {
@@ -1300,7 +1918,7 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 		// deny-closed: on a recorded surface, no appendable evidence trail means no
 		// privileged action (recording.go).
 		call := recordedCall(r, cr.ns, method, pattern, perm, p, tenant)
-		dec, err := rec.Gate(r.Context(), call)
+		dec, err := rec.Gate(recorderCtx, call)
 		if err != nil {
 			if errors.Is(err, ErrRecordingConsentRequired) {
 				cr.s.writeError(w, r, err)
@@ -1349,7 +1967,7 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				BodyBytes:  bh.n,
 				DurationMS: cr.s.clock.Now().Time().Sub(start).Milliseconds(),
 			}
-			if rerr := rec.Record(context.WithoutCancel(r.Context()), call, dec, res); rerr != nil {
+			if rerr := rec.Record(context.WithoutCancel(recorderCtx), call, dec, res); rerr != nil {
 				// The action already ran; a failed frame append cannot retro-deny it. The
 				// recorder keeps the gap permanently evident (reserved > written); this log
 				// line is the immediate operational signal.

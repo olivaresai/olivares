@@ -69,6 +69,8 @@ PROD=(
 	RELEASE_GITHUB_REPO=olivaresai/olivares
 	OCI_IMAGE_REPO=ghcr.io/olivaresai/olivares
 	SOURCE_REPOSITORY_URL=https://github.com/olivaresai/olivares
+	MIRROR_IMAGE_REPO=docker.io/olivaresai/olivares
+	HOMEBREW_TAP_REPO=olivaresai/homebrew-tap
 	RELEASE_TAG=v26.8.0
 	COSIGN_MODE=keyless
 	COSIGN_TLOG_UPLOAD=true
@@ -98,6 +100,8 @@ REH=(
 	RELEASE_GITHUB_REPO="$REH_ID"
 	OCI_IMAGE_REPO="ghcr.io/$REH_ID"
 	SOURCE_REPOSITORY_URL="https://github.com/$REH_ID"
+	MIRROR_IMAGE_REPO="ghcr.io/$REH_ID/mirror"
+	HOMEBREW_TAP_REPO="${REH_ID%%/*}/homebrew-rehearsal"
 	OLIVARES_REHEARSAL_EXPECTED_REPO="$REH_ID"
 	OLIVARES_REHEARSAL_EXPECTED_OCI="ghcr.io/$REH_ID"
 	OLIVARES_REHEARSAL_EXPECTED_SOURCE="https://github.com/$REH_ID"
@@ -128,6 +132,8 @@ PRE=(
 	RELEASE_GITHUB_REPO="$PRE_ID"
 	OCI_IMAGE_REPO="ghcr.io/$PRE_ID"
 	SOURCE_REPOSITORY_URL="https://github.com/$PRE_ID"
+	MIRROR_IMAGE_REPO="ghcr.io/$PRE_ID/mirror"
+	HOMEBREW_TAP_REPO="${PRE_ID%%/*}/homebrew-preprod"
 	OLIVARES_PREPROD_EXPECTED_REPO="$PRE_ID"
 	OLIVARES_PREPROD_EXPECTED_OCI="ghcr.io/$PRE_ID"
 	OLIVARES_PREPROD_EXPECTED_SOURCE="https://github.com/$PRE_ID"
@@ -136,13 +142,14 @@ PRE=(
 	COSIGN_MODE=keyless
 	COSIGN_TLOG_UPLOAD=true
 	PUBLISH_LATEST=true
-	PUBLISH_DOCKERHUB=false
-	PUBLISH_HOMEBREW=false
+	PUBLISH_DOCKERHUB=true
+	PUBLISH_HOMEBREW=true
 	PUBLISH_OTA_STABLE=true
 	RUN_SLSA=true
 	ACKNOWLEDGE_PUBLIC_SLSA_LOG=true
 	OLIVARES_LICENSE_PUBKEY="$LIC"
 	OLIVARES_OTA_PUBKEY="$OTA"
+	HOMEBREW_PREPROD_TAP_GITHUB_TOKEN=preprod-scoped-fixture-token
 	GITHUB_REPOSITORY="$PRE_ID"
 	GITHUB_REF=refs/tags/v26.8.0
 	GITHUB_REF_NAME=v26.8.0
@@ -179,6 +186,9 @@ check "production profile is accepted" "exit 0" $?
 grep -qx 'release_github_repo=olivaresai/olivares' "$out" &&
 	grep -qx 'oci_image_repo=ghcr.io/olivaresai/olivares' "$out" &&
 	grep -qx 'source_repository_url=https://github.com/olivaresai/olivares' "$out" &&
+	grep -qx 'mirror_image_repo=docker.io/olivaresai/olivares' "$out" &&
+	grep -qx 'homebrew_tap_owner=olivaresai' "$out" &&
+	grep -qx 'homebrew_tap_name=homebrew-tap' "$out" &&
 	grep -qx 'release_github_owner=olivaresai' "$out" &&
 	grep -qx 'release_github_name=olivares' "$out"
 check "production outputs are exactly the reviewed tuple" "owner/name/oci/source" $?
@@ -328,10 +338,12 @@ check "a rehearsal WITHOUT injected expectations refuses (deny-closed)" "no embe
 # expected tuple naming a production surface passes §C.4.1 equality (declared == expected)
 # and only the tripwire can reject it — if any of these go green, it is decorative.
 oai="olivaresai/olivares-rehearsal"
-run_pf reh OLIVARES_REHEARSAL_EXPECTED_REPO="$oai" RELEASE_GITHUB_REPO="$oai" GITHUB_REPOSITORY="$oai"
+run_pf reh OLIVARES_REHEARSAL_EXPECTED_REPO="$oai" RELEASE_GITHUB_REPO="$oai" GITHUB_REPOSITORY="$oai" \
+	HOMEBREW_TAP_REPO=olivaresai/homebrew-rehearsal
 [ "$rc" -ne 0 ] && grep -q 'production surface' "$err"
 check "an olivaresai-named rehearsal destination still fails (§C.4.6 live)" "tripwire" $?
-run_pf reh OLIVARES_REHEARSAL_EXPECTED_OCI="docker.io/$REH_ID" OCI_IMAGE_REPO="docker.io/$REH_ID"
+run_pf reh OLIVARES_REHEARSAL_EXPECTED_OCI="docker.io/$REH_ID" OCI_IMAGE_REPO="docker.io/$REH_ID" \
+	MIRROR_IMAGE_REPO="docker.io/$REH_ID/mirror"
 [ "$rc" -ne 0 ] && grep -q 'production surface' "$err"
 check "a docker.io rehearsal destination fails the same tripwire" "tripwire" $?
 
@@ -345,8 +357,11 @@ check "preprod with an injected tuple and sandbox anchors is accepted" "exit 0" 
 
 grep -q "release_github_repo=$PRE_ID" "$out" &&
 	grep -q "oci_image_repo=ghcr.io/$PRE_ID" "$out" &&
+	grep -q "mirror_image_repo=ghcr.io/$PRE_ID/mirror" "$out" &&
+	grep -q "homebrew_tap_owner=${PRE_ID%%/*}" "$out" &&
+	grep -q 'homebrew_tap_name=homebrew-preprod' "$out" &&
 	grep -q 'release_version=26.8.0' "$out"
-check "preprod outputs carry the injected tuple and the real version" "tuple/26.8.0" $?
+check "preprod outputs carry every rehearsal destination and the real version" "release/oci/mirror/tap" $?
 
 # DENY-CLOSED: without the injection there is no name to fall back to.
 run_pf pre OLIVARES_PREPROD_EXPECTED_REPO= OLIVARES_PREPROD_EXPECTED_OCI= OLIVARES_PREPROD_EXPECTED_SOURCE=
@@ -354,13 +369,25 @@ run_pf pre OLIVARES_PREPROD_EXPECTED_REPO= OLIVARES_PREPROD_EXPECTED_OCI= OLIVAR
 check "a preprod act WITHOUT injected expectations refuses (deny-closed)" "no embedded name" $?
 
 # §C.4.6 must fire for preprod exactly as it does for rehearsal.
-run_pf pre OLIVARES_PREPROD_EXPECTED_REPO=olivaresai/olivares RELEASE_GITHUB_REPO=olivaresai/olivares GITHUB_REPOSITORY=olivaresai/olivares
+run_pf pre OLIVARES_PREPROD_EXPECTED_REPO=olivaresai/olivares RELEASE_GITHUB_REPO=olivaresai/olivares \
+	GITHUB_REPOSITORY=olivaresai/olivares HOMEBREW_TAP_REPO=olivaresai/homebrew-preprod
 [ "$rc" -ne 0 ] && grep -q 'production surface' "$err"
 check "an olivaresai-named preprod destination fails the tripwire (§C.4.6)" "tripwire" $?
 
-run_pf pre OLIVARES_PREPROD_EXPECTED_OCI="docker.io/$PRE_ID" OCI_IMAGE_REPO="docker.io/$PRE_ID"
+run_pf pre OLIVARES_PREPROD_EXPECTED_OCI="docker.io/$PRE_ID" OCI_IMAGE_REPO="docker.io/$PRE_ID" \
+	MIRROR_IMAGE_REPO="docker.io/$PRE_ID/mirror"
 [ "$rc" -ne 0 ] && grep -q 'production surface' "$err"
 check "a docker.io preprod destination fails the same tripwire" "tripwire" $?
+
+# The two paths that used to be skipped in preprod are now declared inputs. Either production
+# destination in a preprod tuple must die before a job with write permission starts.
+run_pf pre MIRROR_IMAGE_REPO=docker.io/olivaresai/olivares
+[ "$rc" -ne 0 ] && grep -q 'MIRROR_IMAGE_REPO' "$err"
+check "preprod cannot reach the production image mirror" "destination fence" $?
+
+run_pf pre HOMEBREW_TAP_REPO=olivaresai/homebrew-tap
+[ "$rc" -ne 0 ] && grep -q 'HOMEBREW_TAP_REPO' "$err"
+check "preprod cannot reach the production Homebrew tap" "destination fence" $?
 
 # §C.4.2: a run can only mutate itself. A tampered repository VARIABLE dies here, which is
 # what makes variable-borne expectations safe in the first place.
@@ -385,12 +412,20 @@ check "preprod REQUIRES the transparency log, like production" "tlog on" $?
 # §C.4.7: preprod publishes a real-shaped tag and a real channel, so a publication secret
 # sitting in it is the one ingredient that turns a rehearsal into a real publication.
 run_pf pre DOCKERHUB_USERNAME=someone DOCKERHUB_TOKEN=secret
-[ "$rc" -ne 0 ] && grep -q 'holds Docker Hub credentials' "$err"
+[ "$rc" -ne 0 ] && grep -q 'holds PRODUCTION Docker Hub credentials' "$err"
 check "a preprod repository holding Docker Hub credentials refuses (§C.4.7)" "no secrets" $?
 
 run_pf pre HOMEBREW_TAP_GITHUB_TOKEN=secret
 [ "$rc" -ne 0 ] && grep -q 'Homebrew tap token' "$err"
-check "a preprod repository holding a Homebrew tap token refuses (§C.4.7)" "no secrets" $?
+check "a preprod repository holding the PRODUCTION tap token refuses (§C.4.7)" "separate credential" $?
+
+run_pf pre HOMEBREW_PREPROD_TAP_GITHUB_TOKEN=
+[ "$rc" -ne 0 ] && grep -q 'HOMEBREW_PREPROD_TAP_GITHUB_TOKEN' "$err"
+check "preprod without its scoped tap credential refuses" "real publisher required" $?
+
+run_pf prod HOMEBREW_PREPROD_TAP_GITHUB_TOKEN=secret
+[ "$rc" -ne 0 ] && grep -q 'preprod Homebrew tap credential' "$err"
+check "production cannot receive the preprod tap credential" "credential separation" $?
 
 # The SLSA generators write PUBLIC records naming the running repository: a non-production
 # act must say out loud that it accepts them.

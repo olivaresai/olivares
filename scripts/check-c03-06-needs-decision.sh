@@ -2,8 +2,28 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# C03-06: EvaluateOverride stays ungated; durableLicensed still unscoped.
-# Overlay via OLIVARES_ENT_DIR. 0 CLEAN · 1 finding · 2 LOOK.
+# C03-06: the HISTORICAL record of the 2026-08-20 observation, preserved.
+# 0 CLEAN · 1 finding · 2 LOOK.
+#
+# ⛔ QUE CAMBIO AQUI, Y POR QUE (2026-09-05). Hasta hoy este guion comparaba la observacion
+# del 20/08 —«EvaluateOverride NO-GATE; durableLicensed sin composicion de compra»— con
+# FICHEROS VIVOS del checkout bajo `OLIVARES_ENT_DIR`, y por eso estaba ROJO: la mitad de
+# `durableLicensed` DEJO DE SER CIERTA cuando `daa083e56f331af6158475fc304fee633acbfc2b`
+# (2026-09-02) integro la composicion de compra. El rojo no era una regresion: era un HECHO
+# QUE CAMBIO, y el remediador lo dijo correctamente al negarse a curarlo con un numero.
+#
+# La adjudicacion (an internal design note (not shipped)) separa las dos cosas:
+#
+#   · ESTE guion conserva el REGISTRO: comprueba que el acta y su documento siguen diciendo
+#     lo que se observo, con su SHA y sus banderas intactos. NO abre el clon del overlay, NO
+#     lee ningun fichero vivo y NO acredita el `main` de hoy. Su nombre y su tarea se
+#     conservan por compatibilidad.
+#   · el HECHO PRESENTE lo mide `scripts/check-overlay-live-facts.sh`, contra el `origin/main`
+#     SELLADO y sus blobs, que es la unica fuente que puede acreditar un aterrizaje.
+#
+# ⚠ Consecuencia deliberada: este guion da el MISMO veredicto con un checkout Enterprise
+# nuevo, con uno viejo o sin ninguno. Un registro historico cuyo resultado dependa del arbol
+# de al lado no es un registro.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }
@@ -15,9 +35,11 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 
 JSON="${OLIVARES_C0306_JSON:-design/c03-06-needs-decision.json}"
 DOC="${OLIVARES_C0306_DOC:-design/C03-06-NEEDS-DECISION-2026-08-20.md}"
+ADJ="${OLIVARES_C0306_ADJ:-design/OVERLAY-FACT-GATES-ADJUDICATION-2026-09-05.md}"
 
 [ -f "$JSON" ] || cannot "missing $JSON"
 [ -f "$DOC" ] || cannot "missing $DOC"
+[ -f "$ADJ" ] || cannot "missing $ADJ: the record is preserved, but what superseded it is not"
 
 grep -q 'EvaluateOverride is NO-GATE' "$DOC" || fail "$DOC lost NO-GATE"
 grep -q 'HOLD on narrowing' "$DOC" || fail "$DOC lost HOLD on narrowing"
@@ -26,65 +48,41 @@ if grep -qiE 'durableLicensed now scoped|EvaluateOverride gated|FIRMA A claimed'
 	fail "$DOC claims a motor this lote does not have"
 fi
 
-python3 - "$JSON" <<'PY' || fail "JSON flags drifted"
-import json, re, sys
+# La adjudicacion tiene que seguir NOMBRANDO este lote y el commit que cambio el hecho: sin
+# eso, el registro queda huerfano y un lector futuro vuelve a leer la ausencia como vigente.
+grep -q 'C03-06' "$ADJ" || fail "$ADJ no longer names C03-06"
+grep -q 'daa083e56f331af6158475fc304fee633acbfc2b' "$ADJ" \
+	|| fail "$ADJ no longer names the commit that changed the fact"
+
+# ⛔ EL PIN SE COMPRUEBA POR SU VALOR, NO POR SU FORMA. Antes solo se exigia «40 hex», asi que
+# cambiar el SHA de la observacion por otro cualquiera pasaba el gate: un registro historico
+# cuyo sujeto se puede sustituir en silencio no registra nada. Los dos valores son los que el
+# acta trae desde el 2026-08-20 y no se re-miden nunca — moverlos reescribiria un hecho pasado.
+python3 - "$JSON" <<'PY' || fail "the historical record drifted"
+import json, sys
+
+HUB = "22d4c16deb31f41b5e7c6c19c8ac1cfa2dd29fde"
+OVERLAY = "bada7f7f9339a98131f7f9a0f536a3e9c474626c"
+
 data = json.load(open(sys.argv[1], encoding="utf-8"))
+if data.get("lote") != "C03-06":
+    raise SystemExit("the acta no longer says which lote it belongs to")
 if data.get("evaluate_override_gated") is not False:
     raise SystemExit("evaluate_override_gated must stay false")
 if data.get("durable_addon_scoped") is not False:
     raise SystemExit("durable_addon_scoped must stay false")
 if data.get("narrow_to_identity_scale") is not False:
     raise SystemExit("narrow_to_identity_scale must stay false")
-for key in ("hub", "overlay"):
-    val = data.get(key) or ""
-    if not re.fullmatch(r"[0-9a-f]{40}", val):
-        raise SystemExit("%s is not a 40-hex object id" % key)
+if data.get("hub") != HUB:
+    raise SystemExit("hub pin is %r; the 2026-08-20 observation was taken on %s"
+                     % (data.get("hub"), HUB))
+if data.get("overlay") != OVERLAY:
+    raise SystemExit("overlay pin is %r; the 2026-08-20 observation was taken on %s"
+                     % (data.get("overlay"), OVERLAY))
 PY
 
-ENT="${OLIVARES_ENT_DIR:-}"
-[ -n "$ENT" ] || cannot "OLIVARES_ENT_DIR unset"
-[ -d "$ENT" ] || cannot "OLIVARES_ENT_DIR is not a directory"
-
-LH="$ENT/enterprise/rtbf/legalhold.go"
-DB="$ENT/cmd-overlay/olivares/durablebus_enterprise.go"
-[ -f "$LH" ] || cannot "missing legal-hold source"
-[ -f "$DB" ] || cannot "missing durable-bus source"
-
-if grep -E 'addongate|addonGate|EntitlementFunc|ErrNotEntitled' "$LH" >/dev/null; then
-	fail "legal-hold override evaluation consults a commercial grant"
-fi
-grep -q 'func (h \*LegalHoldOverride) EvaluateOverride' "$LH" \
-	|| fail "EvaluateOverride missing"
-
-python3 - "$DB" <<'PY' || fail "durableLicensed is no longer the unscoped term check"
-import re, sys
-text = open(sys.argv[1], encoding="utf-8").read()
-start = text.find("func durableLicensed(")
-if start < 0:
-    raise SystemExit("durableLicensed not found")
-# Body: from the first '{' after the signature to the matching '}'.
-brace = text.find("{", start)
-if brace < 0:
-    raise SystemExit("durableLicensed has no body")
-depth = 0
-end = None
-for i, ch in enumerate(text[brace:], brace):
-    if ch == "{":
-        depth += 1
-    elif ch == "}":
-        depth -= 1
-        if depth == 0:
-            end = i
-            break
-if end is None:
-    raise SystemExit("durableLicensed body unclosed")
-body = text[brace : end + 1]
-if "StatusExpired" not in body:
-    raise SystemExit("durableLicensed lost the term check")
-for tok in ("Features", "grants", "addonGate", "Authorize", "EntitlementFunc"):
-    if tok in body:
-        raise SystemExit("durableLicensed consults %s" % tok)
-PY
-
-say "check-c03-06-needs-decision: CLEAN — EvaluateOverride ungated; durableLicensed unscoped."
+say "check-c03-06-needs-decision: CLEAN — HISTORICAL RECORD PRESERVED (overlay bada7f7f, hub"
+say "  22d4c16de, flags intact). This is NOT evidence about current main: the durableLicensed"
+say "  half was superseded by daa083e5 and today's facts are measured by"
+say "  scripts/check-overlay-live-facts.sh against the SEALED overlay main."
 exit 0

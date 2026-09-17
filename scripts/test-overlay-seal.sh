@@ -270,6 +270,70 @@ EOF
 	fi
 fi
 
+# Exercise the real copied hook across a simulated long export phase. Only unrelated
+# tasks are stubbed: both fetches use a real local Git origin and the reader is real.
+# Aging the fixture seal avoids a fifteen-minute sleep without changing the reader limit.
+if [ -r "$ROOT/.githooks/pre-push" ]; then
+	git -C "$ENT" update-ref refs/heads/main "$NEW"
+	cat >"$HK/bin/task" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+case "${1:-}" in
+lint:overlay-seal)
+	printf '%s\n' "${OLIVARES_ACT_ID:-<VACIO>}" >>"${OLIVARES_TEST_ACTLOG:?}"
+	exec bash "$OLIVARES_TEST_TREE/scripts/fetch-overlay-seal.sh"
+	;;
+lint:export)
+	read -r epoch act sha result <"$OLIVARES_OVERLAY_SEAL"
+	printf '%s %s %s %s\n' "$((epoch - 1200))" "$act" "$sha" "$result" >"$OLIVARES_OVERLAY_SEAL"
+	if bash "$OLIVARES_TEST_TREE/scripts/check-toy-reader.sh"; then exit 93; fi
+	printf 'expired\n' >>"$OLIVARES_TEST_TRACE"
+	if [ "$OLIVARES_TEST_REFRESH_MODE" = failed-fetch ]; then
+		git -C "$OLIVARES_ENT_DIR" remote set-url origin "$OLIVARES_TEST_TREE/missing-origin"
+	fi
+	;;
+lint:addon-sets)
+	printf 'entered-addon\n' >>"$OLIVARES_TEST_TRACE"
+	bash "$OLIVARES_TEST_TREE/scripts/check-toy-reader.sh"
+	printf 'reader\n' >>"$OLIVARES_TEST_TRACE"
+	;;
+esac
+EOF
+	for mode in refresh failed-fetch; do
+		git -C "$ENT" remote set-url origin "$ENT"
+		: >"$HK/actlog"
+		: >"$HK/trace"
+		rc=0
+		(
+			cd "$ROOT" || exit 1
+			PATH="$HK/bin:$PATH" OLIVARES_TEST_ACTLOG="$HK/actlog" \
+				OLIVARES_ROOT="$TREE" OLIVARES_ENT_DIR="$ENT" \
+				OLIVARES_OVERLAY_SEAL="$SEAL" OLIVARES_TEST_TREE="$TREE" \
+				OLIVARES_TEST_TRACE="$HK/trace" OLIVARES_TEST_REFRESH_MODE="$mode" \
+				TMPDIR="$TMP" timeout 240 bash .githooks/pre-push origin \
+				https://example.invalid/x.git <<<"$_refline" >"$HK/$mode.out" 2>&1
+		) || rc=$?
+		if [ "$(wc -l <"$HK/actlog")" -eq 2 ] &&
+			[ "$(sort -u "$HK/actlog" | wc -l)" -eq 1 ]; then
+			ok "$mode: both real fetches receive the same run nonce"
+		else
+			bad "$mode: expected two fetches sharing the current act"
+		fi
+		if [ "$mode" = refresh ]; then
+			if [ "$rc" -eq 0 ] && [ "$(cat "$HK/trace")" = $'expired\nentered-addon\nreader' ]; then
+				ok "long hook: stale evidence refuses, then real refresh permits the later reader"
+			else
+				bad "long hook: refresh/reader sequence failed (exit $rc; $(cat "$HK/$mode.out"))"
+			fi
+		elif [ "$rc" -eq 2 ] && [ "$(cat "$HK/trace")" = expired ] &&
+			! grep -q 'rc=0' "$SEAL"; then
+			ok "failed refresh: hook refuses before addon-sets and invalidates the previous seal"
+		else
+			bad "failed refresh did not stop the real hook (exit $rc)"
+		fi
+	done
+fi
+
 echo
 echo "test-overlay-seal: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

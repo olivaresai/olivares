@@ -263,5 +263,9 @@
       "label": "Vérification impossible",
       "help": "Le moteur N'A PAS pu mener l'observation à son terme. Ce n'est ni une réussite ni un résultat vide : la réponse est inconnue."
     }
+  },
+  "handoff": {
+    "offer": "Proposer un transfert",
+    "offerHint": "Proposez la responsabilité de cet élément à un destinataire via un canal. La propriété ne change qu'à son acceptation."
   }
 }

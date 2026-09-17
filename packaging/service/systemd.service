@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+[Unit]
+Description=Olivares AI — self-hosted engine for enterprise AI
+Documentation=https://github.com/olivaresai/olivares
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+@USER_LINE@
+@GROUP_LINE@
+EnvironmentFile=-@CONFIG@
+ExecStart=@BINARY@ serve --data-dir=@DATA_DIR@ --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h $OLIVARES_EXTRA_ARGS
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=@PROTECT_HOME@
+PrivateTmp=true
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+ReadWritePaths=@DATA_DIR@
+@BIND_PATHS@
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027
+
+[Install]
+WantedBy=@WANTED_BY@

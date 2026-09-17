@@ -83,6 +83,9 @@ const defaultExecuteMaxTokens = 1024
 type executeRequestDTO struct {
 	Input     string `json:"input"`
 	MaxTokens int    `json:"max_tokens,omitempty"`
+	// Operation is explicit for content-addressed execution profiles. It is optional
+	// only so callers of the legacy executor retain their existing request bytes.
+	Operation string `json:"operation,omitempty"`
 	// SessionRef is the acting session's external id, used ONLY for the FinOps
 	// identity-budget tie-in and cost attribution (fail-open, not the security boundary).
 	// F-01: it is NOT an entitlement input — the source-scope and model-access gates derive
@@ -143,6 +146,13 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		spec           routingSpec
 		suspendedTiers []string
 		notRouting     bool
+		// C2B: the policy's identity, retained from THIS read. The version is the row's
+		// optimistic-concurrency counter and specDigest is a canonical digest of the
+		// EFFECTIVE routing spec these gates are about to decide over — not the route
+		// witness's PolicyVersion, which is a maximum of independent fact versions and
+		// names no policy revision. Only the profiled Chat branch consumes them.
+		policyVersion int64
+		specDigest    [32]byte
 	)
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		p, err := sc.Policies().Get(r.Context(), id)
@@ -154,6 +164,11 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 			return nil
 		}
 		spec = parseRoutingSpec(p.Spec)
+		policyVersion = p.Version
+		var derr error
+		if specDigest, derr = routingSpecDigest(spec); derr != nil {
+			return derr
+		}
 		cat, err := buildCatalog(r.Context(), sc)
 		if err != nil {
 			return err
@@ -180,6 +195,39 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	if notRouting {
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
+	}
+
+	// A profile pin selects one exact operation/protocol/target authority. Resolve it
+	// before any spend gate. This lookup is immutable and I/O-free; C2A never touches
+	// a credential, inspector, executor or network client.
+	profile, profileErr := m.resolveExecutionProfile(r.Context(), mc.Tenant, spec)
+	if profileErr != nil {
+		writeExecutionProfileError(w, profileErr)
+		return
+	}
+	operation := in.Operation
+	if !spec.hasExecutionProfile() && operation != "" {
+		writeExecutionProfileError(w, executionProfileRequired())
+		return
+	}
+	if spec.hasExecutionProfile() {
+		if operation == "" {
+			operation = profile.Action
+		}
+		if operation != profile.Action || operation != ExecutionActionTextGenerate {
+			writeExecutionProfileError(w, unsupportedExecutionOperation())
+			return
+		}
+		if !dec.Resolved || !executionProfileMatchesTarget(profile, dec.Primary) {
+			writeExecutionProfileError(w, profileBindingMismatch())
+			return
+		}
+		if in.Surface == "" {
+			in.Surface = profile.Surface
+		} else if in.Surface != profile.Surface {
+			writeExecutionProfileError(w, profileBindingMismatch())
+			return
+		}
 	}
 	if !dec.Resolved || dec.Primary == nil {
 		// Nothing to execute — return the unresolved decision honestly (422), not a 500.
@@ -210,6 +258,10 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, status, executeResponseDTO{Decision: dec})
 		return
 	}
+	if spec.hasExecutionProfile() && !executionProfileMatchesTarget(profile, dec.Primary) {
+		writeExecutionProfileError(w, profileBindingMismatch())
+		return
+	}
 
 	// F-01: for the SECURITY gates below (source-scope + model-access), the acting actor is
 	// the AUTHENTICATED agent identity only (the token's Principal.AgentIdentity, set
@@ -238,6 +290,10 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, status, executeResponseDTO{Decision: dec})
 		return
 	}
+	if spec.hasExecutionProfile() && !executionProfileMatchesTarget(profile, dec.Primary) {
+		writeExecutionProfileError(w, profileBindingMismatch())
+		return
+	}
 
 	// 3.7) model-access governance gate (DENY-CLOSED). ORTHOGONAL to the
 	// source-scope gate above: scope answers "is this model in the actor's workspace
@@ -248,6 +304,23 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	// security deny can never be bypassed by a FinOps outage.
 	if status, denied := m.modelAccessDeniesRoute(r, mc, &dec, actorRef, in.Surface); denied {
 		writeJSON(w, status, executeResponseDTO{Decision: dec})
+		return
+	}
+	if spec.hasExecutionProfile() && !executionProfileMatchesTarget(profile, dec.Primary) {
+		writeExecutionProfileError(w, profileBindingMismatch())
+		return
+	}
+
+	// C2B: a fully valid Chat profile leaves the legacy path HERE, immediately before the
+	// budget block, and never reaches the legacy Executor or its catalog fallback chain.
+	// The branch hands the Chat composition the budget precheck as a CLOSURE over the
+	// decision these gates just produced, so the precheck below still runs exactly once,
+	// over exactly this primary and this session_ref — but only when the Chat sequence
+	// reaches that stage, and after its own content gates. With no Chat executor wired the
+	// port refuses with the same 503 C2A returned, before any policy, inspector, secret or
+	// transport I/O.
+	if spec.hasExecutionProfile() {
+		m.executeChatProfile(w, r, mc, in, dec, profile, id, policyVersion, specDigest)
 		return
 	}
 

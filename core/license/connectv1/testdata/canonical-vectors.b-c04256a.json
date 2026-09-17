@@ -1,0 +1,83 @@
+{
+  "schema": "olivares.connect.v1.canonical-vectors",
+  "domain": "olivares.connect.v1",
+  "vectors": [
+    {
+      "name": "bind-pending",
+      "message": {
+        "binding_epoch": 0,
+        "body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "n_testnonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000000,
+        "idempotency_key": "idem-bind-pending-1",
+        "kid": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "method": "POST",
+        "operation": "bind_pending",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments",
+        "target": "scope:dodo/bus_example/sub_example"
+      },
+      "canonical": "{\"binding_epoch\":0,\"body_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"challenge\":\"n_testnonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000000,\"idempotency_key\":\"idem-bind-pending-1\",\"kid\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"method\":\"POST\",\"operation\":\"bind_pending\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments\",\"target\":\"scope:dodo/bus_example/sub_example\"}"
+    },
+    {
+      "name": "rotate-key-with-new-key-proof",
+      "note": "Olivares-Connect-Proof is the bound (old) key's signature; Olivares-Connect-New-Key-Proof is the proposed key's signature over the SAME canonical message (old kid and epoch kept). Keys are test-only seeds.",
+      "body": "{\"deployment_id\":\"dep_example\",\"operation\":\"rotate-key\",\"new_public_key\":\"oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA\",\"channel\":\"stable\",\"public_key\":\"0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc\"}",
+      "message": {
+        "binding_epoch": 1,
+        "body_sha256": "e803e024b33fa441e9be6cce0cc6518b00c291b1586c84a54fe6fce6129fd29e",
+        "challenge": "n_rotatenonce",
+        "domain": "olivares.connect.v1",
+        "exp": 1780000120,
+        "idempotency_key": "idem-rotate-1",
+        "kid": "sha256:10ba682c8ad13513971e8b56881aab8bd702bb807796eca81932c735a94d6e6d",
+        "method": "POST",
+        "operation": "rotate-key",
+        "origin": "https://licenses.example",
+        "path": "/connect/deployments/dep_example/rotate-key",
+        "target": "dep_example"
+      },
+      "canonical": "{\"binding_epoch\":1,\"body_sha256\":\"e803e024b33fa441e9be6cce0cc6518b00c291b1586c84a54fe6fce6129fd29e\",\"challenge\":\"n_rotatenonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000120,\"idempotency_key\":\"idem-rotate-1\",\"kid\":\"sha256:10ba682c8ad13513971e8b56881aab8bd702bb807796eca81932c735a94d6e6d\",\"method\":\"POST\",\"operation\":\"rotate-key\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_example/rotate-key\",\"target\":\"dep_example\"}",
+      "keys": {
+        "old": {
+          "seed_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+          "public_key": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+          "kid": "sha256:10ba682c8ad13513971e8b56881aab8bd702bb807796eca81932c735a94d6e6d"
+        },
+        "new": {
+          "seed_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+          "public_key": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+          "kid": "sha256:1325b850c2871916eae203f0efc3c8987f64e5e3cdb27679e6d1fa97808357e6"
+        }
+      },
+      "headers": {
+        "Olivares-Connect-Proof": "ixFKsUWunc8EG_KITZ6bnu7yTpjiTdO72w6WcMxGELcwtFVG8-h_I9hSdKUrnkeqU0um7FAAEIXgWf0j2YDMCA",
+        "Olivares-Connect-New-Key-Proof": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg"
+      },
+      "mismatches": [
+        {
+          "name": "new key signs a message with its own kid",
+          "signed_canonical": "{\"binding_epoch\":1,\"body_sha256\":\"e803e024b33fa441e9be6cce0cc6518b00c291b1586c84a54fe6fce6129fd29e\",\"challenge\":\"n_rotatenonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000120,\"idempotency_key\":\"idem-rotate-1\",\"kid\":\"sha256:1325b850c2871916eae203f0efc3c8987f64e5e3cdb27679e6d1fa97808357e6\",\"method\":\"POST\",\"operation\":\"rotate-key\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_example/rotate-key\",\"target\":\"dep_example\"}",
+          "signature": "VM-TX52wWX-gihflcYePtwkpq4n8xXZPBRwdw8Ke09Nlrn-B3q7qqFywHNc-WjIeRtZjvnIR1coBLnJ91ME8Aw",
+          "verifies_with": "new",
+          "valid_for_canonical": false
+        },
+        {
+          "name": "old key signature presented as the new-key proof",
+          "signed_canonical": "{\"binding_epoch\":1,\"body_sha256\":\"e803e024b33fa441e9be6cce0cc6518b00c291b1586c84a54fe6fce6129fd29e\",\"challenge\":\"n_rotatenonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000120,\"idempotency_key\":\"idem-rotate-1\",\"kid\":\"sha256:10ba682c8ad13513971e8b56881aab8bd702bb807796eca81932c735a94d6e6d\",\"method\":\"POST\",\"operation\":\"rotate-key\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_example/rotate-key\",\"target\":\"dep_example\"}",
+          "signature": "ixFKsUWunc8EG_KITZ6bnu7yTpjiTdO72w6WcMxGELcwtFVG8-h_I9hSdKUrnkeqU0um7FAAEIXgWf0j2YDMCA",
+          "verifies_with": "new",
+          "valid_for_canonical": false
+        },
+        {
+          "name": "new key signature presented as the primary proof",
+          "signed_canonical": "{\"binding_epoch\":1,\"body_sha256\":\"e803e024b33fa441e9be6cce0cc6518b00c291b1586c84a54fe6fce6129fd29e\",\"challenge\":\"n_rotatenonce\",\"domain\":\"olivares.connect.v1\",\"exp\":1780000120,\"idempotency_key\":\"idem-rotate-1\",\"kid\":\"sha256:10ba682c8ad13513971e8b56881aab8bd702bb807796eca81932c735a94d6e6d\",\"method\":\"POST\",\"operation\":\"rotate-key\",\"origin\":\"https://licenses.example\",\"path\":\"/connect/deployments/dep_example/rotate-key\",\"target\":\"dep_example\"}",
+          "signature": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg",
+          "verifies_with": "old",
+          "valid_for_canonical": false
+        }
+      ]
+    }
+  ]
+}

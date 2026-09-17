@@ -219,8 +219,11 @@ func (e *scopedEngine) EvaluateEvidence(
 			err = nil
 		}
 	}()
-	before, loaded := e.tenantState(req.Tenant)
-	if !governanceEvidenceScopedStateUsable(req.Tenant, before, loaded) || e == nil || e.resolver == nil || e.resolver.data == nil {
+	// C3-L1: one shared ensure helper, so a tenant created after this process
+	// started can obtain its first truthful contribution without a restart. It
+	// returns the exact recaptured state; the algorithm below is unchanged.
+	before, ready := e.ensureEvidenceRuntime(ctx, req.Tenant)
+	if !ready || e == nil || e.resolver == nil || e.resolver.data == nil {
 		return decision, nil
 	}
 	deadline, deadlineErr := governanceEvidenceScopedDeadline(before, e.maxStaleness)
@@ -250,7 +253,7 @@ func (e *scopedEngine) EvaluateEvidence(
 		return nil
 	})
 	after, afterLoaded := e.tenantState(req.Tenant)
-	if viewErr != nil || !governanceEvidenceScopedStateStable(req.Tenant, before, loaded, after, afterLoaded, fact) {
+	if viewErr != nil || !governanceEvidenceScopedStateStable(req.Tenant, before, ready, after, afterLoaded, fact) {
 		return decision, nil
 	}
 	check := auth.CheckEvidence{Verdict: auth.CheckClean, Code: evidenceCodeScopedClean}
@@ -276,11 +279,8 @@ func (e *scopedEngine) EvaluateEvidence(
 // one View; a reload/replay, generation drift, missing binding, or unavailable state
 // before/after the View yields UNKNOWN rather than a torn CLEAN/BROKEN witness.
 //
-// A scope lineage lookup is intentionally not reported CLEAN in this cut. The only
-// durable fact currently available here is core.authorization_epoch, which covers
-// policy writers but not workspace/resource/session/agent-group lineage. A View makes
-// that read coherent, not revalidable after return. An explicit Cedar forbid can still
-// be BROKEN; grants degrade to ABSTAIN while ResourceGuard remains UNKNOWN.
+// Every consulted lineage relation contributes a selective durable generation.
+// Its absence and its rows are observed under the same View as policy authority.
 func (e *scopedEngine) ScopedEvidence(
 	ctx context.Context,
 	req auth.Request,
@@ -292,8 +292,11 @@ func (e *scopedEngine) ScopedEvidence(
 			err = nil
 		}
 	}()
-	before, loaded := e.tenantState(req.Tenant)
-	if !governanceEvidenceScopedStateUsable(req.Tenant, before, loaded) || e == nil || e.resolver == nil || e.resolver.data == nil {
+	// C3-L1: the same shared ensure helper as EvaluateEvidence. Neither method calls
+	// the other: their Cedar graphs, confinement checks and result types stay
+	// distinct, and the helper supplies no verdict of its own.
+	before, ready := e.ensureEvidenceRuntime(ctx, req.Tenant)
+	if !ready || e == nil || e.resolver == nil || e.resolver.data == nil {
 		return decision, nil
 	}
 	deadline, deadlineErr := governanceEvidenceScopedDeadline(before, e.maxStaleness)
@@ -307,7 +310,7 @@ func (e *scopedEngine) ScopedEvidence(
 		freshUntil    time.Time
 		cedarDecision cedar.Decision
 		diag          cedar.Diagnostic
-		lineageRead   bool
+		facts         []store.AuthorizationFactRef
 		resourceGuard auth.CheckEvidence
 	)
 	viewErr := e.resolver.data.View(ctx, req.Tenant, func(sc store.Scope) error {
@@ -319,8 +322,10 @@ func (e *scopedEngine) ScopedEvidence(
 		if fact != before.generation {
 			return errEvidenceUnavailable
 		}
+		lineage := &lineageEvidenceScope{Scope: sc, facts: make(map[model.Kind]store.AuthorizationFactRef)}
+		defer func() { facts = lineage.observedFacts(fact) }()
 		var guardErr error
-		resourceGuard, guardErr = governanceEvidenceConfinement(ctx, sc, req)
+		resourceGuard, guardErr = governanceEvidenceConfinement(ctx, lineage, req)
 		if guardErr != nil {
 			return guardErr
 		}
@@ -335,11 +340,10 @@ func (e *scopedEngine) ScopedEvidence(
 		if before.set == nil {
 			return nil
 		}
-		em, resource, principal, readsLineage, scopeErr := governanceEvidenceScope(ctx, sc, e.resolver, req)
+		em, resource, principal, _, scopeErr := governanceEvidenceScope(ctx, lineage, e.resolver, req)
 		if scopeErr != nil {
 			return scopeErr
 		}
-		lineageRead = readsLineage
 		cedarDecision, diag = cedar.Authorize(before.set.policies, em, cedar.Request{
 			Principal: principal,
 			Action:    actionUID(req),
@@ -349,7 +353,7 @@ func (e *scopedEngine) ScopedEvidence(
 		return nil
 	})
 	after, afterLoaded := e.tenantState(req.Tenant)
-	if viewErr != nil || !governanceEvidenceScopedStateStable(req.Tenant, before, loaded, after, afterLoaded, fact) {
+	if viewErr != nil || !governanceEvidenceScopedStateStable(req.Tenant, before, ready, after, afterLoaded, fact) {
 		return decision, nil
 	}
 	if resourceGuard.Verdict == auth.CheckBroken {
@@ -357,18 +361,10 @@ func (e *scopedEngine) ScopedEvidence(
 			Effect:        auth.EffectForbid,
 			ResourceGuard: resourceGuard,
 			ForbidAbsence: auth.CheckEvidence{Verdict: auth.CheckUnknown, Code: evidenceCodeScopedUnavailable},
-			Facts:         []store.AuthorizationFactRef{fact},
+			Facts:         facts,
 			ObservedAt:    observedAt,
 			FreshUntil:    freshUntil,
 		}, nil
-	}
-	// The result can be CLEAN without a store lookup (unconfined or a declared
-	// same-workspace target). Cedar scope resolution, however, can independently read
-	// workspace/resource/session/group lineage. authorization_epoch does not fence those
-	// rows, so such a read degrades the clean resource guard to UNKNOWN and prevents a
-	// reusable typed ALLOW unless an explicit forbid independently dominates.
-	if lineageRead && resourceGuard.Verdict == auth.CheckClean {
-		resourceGuard = auth.CheckEvidence{Verdict: auth.CheckUnknown, Code: evidenceCodeScopedUnavailable}
 	}
 	forbid := auth.CheckEvidence{Verdict: auth.CheckClean, Code: evidenceCodeScopedClean}
 	effect := auth.EffectAbstain
@@ -381,11 +377,8 @@ func (e *scopedEngine) ScopedEvidence(
 	} else if before.set != nil && (len(diag.Errors) > 0 || hasErroredForbid(before.set.policies, diag)) {
 		return decision, nil
 	}
-	// A positive grant cannot be attested if resource lineage was read without its own
-	// revalidable fact. The legacy enforcement decision remains unchanged; only typed
-	// evidence conservatively abstains.
 	if before.set != nil && cedarDecision == cedar.Allow && resourceGuard.Verdict == auth.CheckClean {
-		if !e.grantExpiredState(before, loaded, observedAt) {
+		if !e.grantExpiredState(before, ready, observedAt) {
 			effect = auth.EffectGrant
 		}
 	}
@@ -393,7 +386,7 @@ func (e *scopedEngine) ScopedEvidence(
 		Effect:        effect,
 		ResourceGuard: resourceGuard,
 		ForbidAbsence: forbid,
-		Facts:         []store.AuthorizationFactRef{fact},
+		Facts:         facts,
 		ObservedAt:    observedAt,
 		FreshUntil:    freshUntil,
 	}, nil
@@ -617,9 +610,9 @@ func governanceEvidenceScopedStateUsable(tenant model.TenantID, state scopedTena
 // lease subject/fence semantics to preserve, and a malformed fact must never become a
 // CLEAN/BROKEN provenance witness that a later locker rejects.
 func validGovernanceEvidenceEpochFact(tenant model.TenantID, fact store.AuthorizationFactRef) bool {
-	parsedTenant, err := model.ParseTenantID(tenant.String())
-	if err != nil || parsedTenant != tenant || tenant.IsZero() || tenant.IsSystem() ||
-		!validPolicyAuthorizationEpochFact(tenant, fact) {
+	// The tenant clause is shared with C3-L1 cold-load admission so the two cannot
+	// drift; the fact clauses below stay exactly as they were.
+	if !validGovernanceEvidenceTenant(tenant) || !validPolicyAuthorizationEpochFact(tenant, fact) {
 		return false
 	}
 	_, _, _, leased := fact.LeaseFenceWitness()
@@ -681,16 +674,8 @@ func governanceEvidenceScopeReadsLineage(req auth.Request) bool {
 	}
 }
 
-// governanceEvidenceConfinement is the subset whose result can be represented
-// safely with the sole fact available to this producer. It deliberately mirrors the
-// legacy Scoped ordering, but performs all store reads through the View already held by
-// ScopedEvidence (rather than calling targetWorkspace, which would open a second View).
-//
-// A no-store result can be CLEAN: an unconfined principal, or a confined principal
-// targeting its declared workspace, cannot be invalidated by resource lineage drift.
-// A store-resolved same-workspace entity is only UNKNOWN because authorization_epoch
-// does not cover that lineage after the View returns. A mismatch or the legacy
-// indeterminate write/recon cases are independently established BROKEN guards.
+// governanceEvidenceConfinement mirrors using the tracked producer View.
+// Successful relation reads, including absence, are covered by their generation.
 func governanceEvidenceConfinement(
 	ctx context.Context,
 	sc store.Scope,
@@ -701,26 +686,28 @@ func governanceEvidenceConfinement(
 		return auth.CheckEvidence{Verdict: auth.CheckClean, Code: evidenceCodeScopedGuardClean}, nil
 	}
 
-	target, known, readLineage, err := governanceEvidenceTargetWorkspace(ctx, sc, req)
+	target, known, _, err := governanceEvidenceTargetWorkspace(ctx, sc, req)
+	if err == nil && known && target.IsZero() {
+		// Persisted zero workspace means the tenant's canonical default. Its
+		// lookup is a dependency too, including a missing default row.
+		var workspace model.Workspace
+		workspace, err = sc.DefaultWorkspace(ctx)
+		if err == nil {
+			target = workspace.ID
+		}
+	}
 	if err != nil {
 		return auth.CheckEvidence{Verdict: auth.CheckUnknown, Code: evidenceCodeScopedUnavailable}, err
 	}
 	switch {
 	case known && target != confinedWorkspace:
 		return auth.CheckEvidence{Verdict: auth.CheckBroken, Code: evidenceCodeScopedGuardBroken}, nil
-	case known && readLineage:
-		return auth.CheckEvidence{Verdict: auth.CheckUnknown, Code: evidenceCodeScopedUnavailable}, nil
 	case known:
 		return auth.CheckEvidence{Verdict: auth.CheckClean, Code: evidenceCodeScopedGuardClean}, nil
 	case auth.IsAccessGraphReconPerm(req.Permission):
 		return auth.CheckEvidence{Verdict: auth.CheckBroken, Code: evidenceCodeScopedGuardBroken}, nil
 	case req.Permission.Verb() != auth.VerbRead:
 		return auth.CheckEvidence{Verdict: auth.CheckBroken, Code: evidenceCodeScopedGuardBroken}, nil
-	case readLineage:
-		// The entity lookup did not find a target, but it still consulted volatile
-		// lineage. An ordinary read is not an denial, yet its guard cannot be
-		// reported CLEAN from authorization_epoch alone.
-		return auth.CheckEvidence{Verdict: auth.CheckUnknown, Code: evidenceCodeScopedUnavailable}, nil
 	default:
 		// An indeterminate ordinary read has no tenant-wide mutation/recon escape;
 		// legacy abstains here, so its guard is clean rather than invented
@@ -730,9 +717,7 @@ func governanceEvidenceConfinement(
 }
 
 // governanceEvidenceTargetWorkspace is targetWorkspace's single-View counterpart.
-// `readLineage` is true whenever a tree entity lookup was attempted, including a
-// not-found result; callers use it to avoid treating that volatile lineage as
-// fact-bound CLEAN.
+// `readLineage` records an attempted tree lookup, including an absent row.
 func governanceEvidenceTargetWorkspace(
 	ctx context.Context,
 	sc store.Scope,

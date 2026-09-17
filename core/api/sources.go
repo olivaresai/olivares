@@ -73,6 +73,26 @@ type SourceRosterEntry struct {
 	Plugin      *SourcePluginInput `json:"plugin,omitempty"`
 	Status      string             `json:"status"`
 	SourceMode  string             `json:"source_mode"`
+	// ID is the roster row's PERSISTENT identity (B1): a rename keeps it, a
+	// delete-and-recreate under the same name is another id. It is what the
+	// session plane's source→profile binding names as source_id — never the
+	// editable Name. Read-only; absent for a roster that carries no ids.
+	ID string `json:"id,omitempty"`
+	// AppliedRevision is the revision of this row that THIS node's reconciler
+	// successfully applied — the exact source_revision a binding on this
+	// execution environment must name, taken from the reconciler's own record
+	// (a failed rotation never advances it). Zero/absent when the node has not
+	// applied the row (never opened, refused at Open, no execution-environment
+	// identity): nothing on this node can be bound to it, and a client must not
+	// guess a revision from the stored definition instead.
+	AppliedRevision int64 `json:"applied_revision,omitempty"`
+	// Component is the Descriptor name of the connector currently serving this
+	// source — its TYPE identity, reported BESIDE Name and never in place of it.
+	// Two sources of one kind share a Component and differ in Name; that is the
+	// whole point of showing both. It is empty while the source is not wired (an
+	// out-of-process plugin self-describes only once it has been launched), and it
+	// is read-only: it is observed from the running connector, never authored.
+	Component string `json:"component,omitempty"`
 }
 
 func normalizeRosterSourceMode(mode string) string {

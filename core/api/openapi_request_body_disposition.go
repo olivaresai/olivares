@@ -353,6 +353,7 @@ func sessionsLegacyRequestBodyIsSchemaPublished(r moduleRoute) bool {
 			"/protocol-binding-specs/{id}/disable",
 			"/protocol-bindings/{id}/reconcile",
 			"/runs/{ref}/input",
+			"/runs/{ref}/interrupt",
 			"/runs/{ref}/stop":
 			return true
 		}

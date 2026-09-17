@@ -14,6 +14,8 @@ For the *cooperative observe* path (OTLP telemetry → access map) see
 [Connect Claude Code](/how-to/connect-claude-code/); for the *govern* path (PreToolUse
 hooks as a PEP) see the [govern-claude-code example](https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code).
 This page is **co-deployment**: getting the two runtimes running together.
+To launch Claude, Codex or Grok under a provider profile after the runtimes
+exist, see [Operate a provider session](/how-to/operate-provider-sessions/).
 
 :::note[How governance actually reaches the session]
 A session is governed because **the engine owns `claude`'s stdin/stdout** — the
@@ -69,14 +71,14 @@ auto-update disabled. Pin the engine base by digest and verify it first:
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.8.0 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 Bring your own `claude` instead with `--build-arg CLAUDE_INSTALL=byo` (the image ships
@@ -85,7 +87,7 @@ without `claude`; mount yours at runtime and set `OLIVARES_SESSION_RUNTIME_CLAUD
 ### Bring it up
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.8.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -249,7 +251,7 @@ combined image. Choosing this topology is choosing stronger governor/governed is
   credential.
 - **Verified supply chain.** The engine is cosign-signed (verify it / pin by digest);
   `claude` installs from Anthropic's signed repos with the key fingerprint pinned. The
-  installer **refuses to run an unverified engine** unless you explicitly opt out.
+  installer **refuses to run an unverified engine**, with no verification bypass.
 - **Anchored audit.** Every lifecycle transition and every workspace mutation is sealed in
   the hash-chained, signed ledger by `PayloadHash` — the bytes of files and the contents
   of frames are never persisted.

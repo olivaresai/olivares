@@ -22,21 +22,25 @@ points (`deploy/compose/*.yml`), and the first-run flow they drive is the same
 one verified end-to-end against the binary in the
 [single-node tutorial](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Until the first release, build the image locally">
-Release images are published to `docker.io/olivaresai/olivares` on Docker Hub (signed,
-pinned by digest) **when the first public release ships** — the registry path is empty
-until that tag is cut. They are built and signed on `ghcr.io/olivaresai/olivares` first and
-then copied to Docker Hub by digest, so the ghcr.io coordinate serves the identical image as
-a fallback. Today, build the same hardened distroless image from source and point the stack
-at it:
+<Aside type="caution" title="Until v26.9.0 images are published, build locally">
+A prior tagged release already shipped signed images. This tree's canon is **v26.9.0**. The
+install-surface witness still records Docker Hub and GHCR as **not-published**
+for `26.9.0` until that tag's release job runs
+(`docs/releases/v26.9.0-install-surfaces.json`). The same honesty note is on
+[Deploy with Docker](/how-to/docker-deployment/). They are built and signed on
+`ghcr.io/olivaresai/olivares` first and then copied to Docker Hub by digest, so
+the ghcr.io coordinate serves the identical image as a fallback. Until the
+`26.9.0` tags exist, build the hardened distroless image from source and point
+the stack at it:
 
 ```bash
 task image                                   # builds olivares:dev
 echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 ```
 
-Once releases exist: set `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>`
-and [verify it](/how-to/verify-a-release/) first — by digest, never a tag.
+When the `26.9.0` image exists: set
+`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` and
+[verify it](/how-to/verify-a-release/) first — by digest, never a tag.
 </Aside>
 
 ## 1. Bring up the single-node stack (SQLite)
@@ -46,7 +50,7 @@ and [verify it](/how-to/verify-a-release/) first — by digest, never a tag.
 1. Start it:
 
    ```bash
-   docker compose -f deploy/compose/docker-compose.yml up -d
+   docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
    ```
 
    What you get, by design:
@@ -56,7 +60,7 @@ and [verify it](/how-to/verify-a-release/) first — by digest, never a tag.
    | Ports | `127.0.0.1:8443` (HTTPS: REST + web UI), `127.0.0.1:8444` (gRPC) — bound to **localhost on the host**; expose deliberately |
    | Data | named volume `olivares-data` → `/var/lib/olivares` (SQLite store, audit signing key, TLS material) |
    | Hardening | runs as `65532:65532`, read-only root, all capabilities dropped, `no-new-privileges`, tmpfs `/tmp` |
-   | Healthcheck | none in-container (the image is distroless — no shell). Probe `/livez` and `/readyz` from the host |
+   | Healthcheck | direct exec of the built-in `olivares readyz` command—no shell, curl, or wget. Only local `/readyz` HTTP 200 is healthy |
 
 2. Read the one-time setup token from the logs:
 
@@ -77,6 +81,14 @@ and [verify it](/how-to/verify-a-release/) first — by digest, never a tag.
    ```
 
 </Steps>
+
+<Aside type="note" title="Current contract versus hosted qualification">
+**DIST-24-12 current tree contract.** Hermetic local HTTP/TLS fixtures prove the
+probe's three answers: 200 → rc 0, a received non-200 → rc 1, and an input/TLS/
+transport failure → rc 2. **Docker qualification remains unmeasured until the
+dispatch workflow succeeds** for this commit; a checked-in workflow is not evidence
+that its Docker run has happened.
+</Aside>
 
 <Aside type="tip" title="Missed the token?">
 A restart does not re-print it (only its hash is stored). While no users exist

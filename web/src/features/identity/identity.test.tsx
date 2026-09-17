@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
+import { useSessionStore } from '@/stores/session'
 import './i18n'
 
 // --- mocks (hoisted so the vi.mock factories below can reference them) -------
@@ -37,7 +38,14 @@ const { api, mockNavigate, authState } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   authState: {
     activeTenant: 't1' as string | null,
-    principal: null as { aal?: number; amr?: string[] } | null,
+    principal: null as {
+      aal?: number
+      amr?: string[]
+      kind?: string
+      user_id?: string
+      actor?: string
+      authentication_configuration?: { piv_configured: boolean }
+    } | null,
     can: (_p: string) => true,
   },
 }))
@@ -66,6 +74,7 @@ vi.mock('@/features/shared', async (importOriginal) => ({
 }))
 
 // Import AFTER mocks are declared.
+import { pivStatusQueryKey } from './piv-configuration'
 import { FederationTab } from './federation'
 import { NhiRosterTab } from './nhi-roster'
 import { PostureTab } from './posture'
@@ -95,13 +104,15 @@ const scimConfig = {
   ],
 }
 
-function wrap(ui: ReactElement) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+function wrap(ui: ReactElement, qc?: QueryClient) {
+  const client =
+    qc ?? new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
 beforeEach(() => {
   authState.principal = null
+  useSessionStore.setState({ credentialGeneration: 0 })
   api.ssoStatus.mockRejectedValue(
     new ApiError(501, 'sso_not_configured', 'SSO not configured'),
   )
@@ -603,6 +614,86 @@ describe('AAL gate (fail-closed)', () => {
       await screen.findByText(/not configured on this deployment/i),
     ).toBeInTheDocument()
     expect(screen.queryByText(/backend pending/i)).not.toBeInTheDocument()
+  })
+
+  it('exact false skips the PIV status request and shows the not-configured card', async () => {
+    authState.principal = {
+      aal: 3,
+      amr: ['webauthn'],
+      kind: 'user',
+      user_id: 'u1',
+      actor: 'u1',
+      authentication_configuration: { piv_configured: false },
+    }
+    wrap(<PrivilegedLoginTab />)
+    expect(
+      await screen.findByText(/not configured on this deployment/i),
+    ).toBeInTheDocument()
+    expect(api.pivStatus).not.toHaveBeenCalled()
+    expect(screen.queryByText(/backend pending/i)).not.toBeInTheDocument()
+  })
+
+  it('true queries status and shows presented state, not the not-configured card', async () => {
+    authState.principal = {
+      aal: 3,
+      amr: ['webauthn'],
+      kind: 'user',
+      user_id: 'u1',
+      actor: 'u1',
+      authentication_configuration: { piv_configured: true },
+    }
+    api.pivStatus.mockResolvedValue({
+      presented: true,
+      subject: 'CN=Ada',
+      ocsp: 'good',
+    })
+    wrap(<PrivilegedLoginTab />)
+    expect(await screen.findByText('CN=Ada')).toBeInTheDocument()
+    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
+    expect(
+      screen.queryByText(/not configured on this deployment/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not label a failed whoami or unexpected status error as unconfigured', async () => {
+    authState.principal = null
+    api.pivStatus.mockRejectedValue(
+      new ApiError(500, 'internal', 'status unavailable'),
+    )
+    wrap(<PrivilegedLoginTab />)
+    expect(await screen.findByText('Something went wrong')).toBeInTheDocument()
+    await waitFor(() => expect(api.pivStatus).toHaveBeenCalled())
+    expect(
+      screen.queryByText(/not configured on this deployment/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('configured-to-unconfigured does not keep cached presented status', async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const previous = {
+      aal: 3,
+      amr: ['webauthn'],
+      kind: 'user' as const,
+      user_id: 'u1',
+      actor: 'u1',
+      authentication_configuration: { piv_configured: true },
+    }
+    qc.setQueryData(pivStatusQueryKey('t1', previous, 0), {
+      presented: true,
+      subject: 'CN=Ada',
+    })
+    authState.principal = {
+      ...previous,
+      authentication_configuration: { piv_configured: false },
+    }
+    wrap(<PrivilegedLoginTab />, qc)
+    expect(
+      await screen.findByText(/not configured on this deployment/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('CN=Ada')).not.toBeInTheDocument()
+    expect(api.pivStatus).not.toHaveBeenCalled()
   })
 
   it('keeps passkey actions closed when the credential inventory read fails', async () => {

@@ -27,13 +27,14 @@ func (m *Module) applyHandoffOffer(
 	inspected communicationRequestAuthorityInspection,
 	identity directNoticeReaderIdentityPreflight,
 	window communicationAuthorityWindow,
+	claims CommunicationClaimAuthoritySnapshot,
 	normalized handoffOfferNormalized,
 	ids handoffOfferIDs,
 	prepared handoffOfferPrepared,
 ) (HandoffOfferResult, error) {
 	var result HandoffOfferResult
 	err := m.mutateHandoffWithAuthority(
-		ctx, question, bound, window,
+		ctx, question, bound, window, claims,
 		func(
 			tx *communicationTx,
 			repositories handoffWorkRepositories,
@@ -107,7 +108,7 @@ func (m *Module) applyHandoffOffer(
 				return err
 			}
 			result, err = applyLockedHandoffOffer(
-				ctx, tx, repositories, reader, normalized, ids, prepared, carrier, work,
+				ctx, tx, repositories, reader, normalized, ids, prepared, carrier, work, false,
 			)
 			return err
 		},
@@ -122,13 +123,18 @@ func (m *Module) applyHandoffResponse(
 	inspected communicationRequestAuthorityInspection,
 	identity directNoticeReaderIdentityPreflight,
 	window communicationAuthorityWindow,
+	claims CommunicationClaimAuthoritySnapshot,
 	normalized handoffResponseNormalized,
 	ids handoffResponseIDs,
 	prepared handoffResponsePrepared,
+	mode handoffResponseMode,
 ) (HandoffResponseResult, error) {
+	if mode != handoffResponseApply && mode != handoffResponseRecognize {
+		return HandoffResponseResult{}, handoffRecognitionUnknown()
+	}
 	var result HandoffResponseResult
 	err := m.mutateHandoffWithAuthority(
-		ctx, question, bound, window,
+		ctx, question, bound, window, claims,
 		func(
 			tx *communicationTx,
 			repositories handoffWorkRepositories,
@@ -141,6 +147,9 @@ func (m *Module) applyHandoffResponse(
 				return err
 			}
 			if err := tx.lockAuthoritySnapshot(ctx, reader.Facts); err != nil {
+				if mode == handoffResponseApply {
+					return captureHandoffResponseAuthorityFailure(err, normalized, claims)
+				}
 				return normalizeDirectNoticeAuthorityLockError(err)
 			}
 			if err := tx.lockTransaction(ctx, handoffIdempotencyLockKey(normalized.handoffCommandIdentity)); err != nil {
@@ -149,6 +158,9 @@ func (m *Module) applyHandoffResponse(
 			receipt, replay, err := findHandoffReceipt(ctx, tx, normalized.handoffCommandIdentity)
 			if err != nil {
 				return err
+			}
+			if mode == handoffResponseRecognize && !replay {
+				return handoffRecognitionUnknown()
 			}
 			if replay && !bytes.Equal(receipt.RequestDigest, normalized.requestDigest) {
 				return errHandoffIdempotencyReused
@@ -215,13 +227,21 @@ func (m *Module) applyHandoffResponse(
 				result, err = handoffResponseResultFromReceipt(receipt, locked)
 				return err
 			}
+			// Keep the no-new-effect invariant at the effect seam as well as the
+			// absent-receipt branch; recognition never becomes a fresh command.
+			if mode != handoffResponseApply {
+				return handoffRecognitionUnknown()
+			}
 			result, err = applyLockedHandoffResponse(
 				ctx, tx, repositories, reader, normalized, ids, prepared, carrier, locked, work,
 			)
 			return err
 		},
 	)
-	return result, err
+	if err != nil {
+		return HandoffResponseResult{}, err
+	}
+	return result, nil
 }
 
 func (m *Module) applyHandoffCancel(
@@ -231,13 +251,14 @@ func (m *Module) applyHandoffCancel(
 	inspected communicationRequestAuthorityInspection,
 	identity directNoticeReaderIdentityPreflight,
 	window communicationAuthorityWindow,
+	claims CommunicationClaimAuthoritySnapshot,
 	normalized handoffCancelNormalized,
 	ids handoffLifecycleIDs,
 	prepared handoffResponsePrepared,
 ) (HandoffLifecycleResult, error) {
 	var result HandoffLifecycleResult
 	err := m.mutateHandoffWithAuthority(
-		ctx, question, bound, window,
+		ctx, question, bound, window, claims,
 		func(
 			tx *communicationTx,
 			repositories handoffWorkRepositories,
@@ -394,6 +415,7 @@ func (m *Module) mutateHandoffWithAuthority(
 	expected communicationAuthorityQuestion,
 	bound communicationRequestAuthority,
 	window communicationAuthorityWindow,
+	claims CommunicationClaimAuthoritySnapshot,
 	fn func(
 		*communicationTx,
 		handoffWorkRepositories,
@@ -410,7 +432,7 @@ func (m *Module) mutateHandoffWithAuthority(
 		return communicationTransactionUnavailable("Handoff mutation callback", nil)
 	}
 	request, consumed, err := bound.transactionSnapshot(
-		expected, CommunicationClaimAuthoritySnapshot{},
+		expected, claims,
 	)
 	if err != nil {
 		return err
@@ -434,7 +456,7 @@ func (m *Module) mutateHandoffWithAuthority(
 			return err
 		}
 		tx, err := newCommunicationTxWithAuthority(
-			ctx, confined, request, CommunicationClaimAuthoritySnapshot{},
+			ctx, confined, request, claims,
 		)
 		if err != nil {
 			return err
@@ -617,14 +639,23 @@ func lockHandoffWorkState(
 			},
 			Limit: 2,
 		})
-		if err != nil || page.HasMore || len(rows) != 1 {
+		// Three situations used to share one verdict. A failed read and evidence
+		// that contradicts the unique index are genuinely unknown. ZERO rows under
+		// the workspace clock lock, in a table unique on
+		// (tenant, workspace, guard_kind), is a KNOWN fact: this workspace has
+		// never observed a lease clock. K2's own reader already says so
+		// (observeLeaseClock, work_lease.go). The arm that actually needs the guard
+		// still refuses without it, one function later, and its 503 is then true.
+		switch {
+		case err != nil || page.HasMore || len(rows) > 1:
 			return handoffLockedWork{}, communicationError(
 				ErrCommunicationEvidenceUnknown, "Handoff lease clock guard is unavailable",
 			)
-		}
-		guard, err = handoffLockRawRecord(ctx, tx, repositories.guard, recordID(rows[0]))
-		if err != nil {
-			return handoffLockedWork{}, err
+		case len(rows) == 1:
+			guard, err = handoffLockRawRecord(ctx, tx, repositories.guard, recordID(rows[0]))
+			if err != nil {
+				return handoffLockedWork{}, err
+			}
 		}
 	}
 	if err := tx.lockTransaction(
@@ -717,8 +748,8 @@ func lockHandoffCarrier(
 	if err != nil {
 		return handoffLockedCarrier{}, err
 	}
-	audienceRecords, err := lockDirectNoticeRecordSet(
-		ctx, tx, messageAudienceKind,
+	audienceRecords, err := observeAppendOnlyRecordSet(
+		ctx, tx, messageAudienceKind, publishedMessageSetFence(messageID),
 		[]model.Filter{{Column: colCommMessageID, Op: model.OpEq, Value: messageID.String()}},
 		64,
 	)
@@ -735,7 +766,9 @@ func lockHandoffCarrier(
 		}
 		audiences = append(audiences, audience)
 	}
-	contributionRecords, err := lockDirectNoticeContributionSet(ctx, tx, audiences)
+	contributionRecords, err := observeAppendOnlyContributionSet(
+		ctx, tx, publishedMessageSetFence(messageID), audiences,
+	)
 	if err != nil {
 		return handoffLockedCarrier{}, err
 	}
@@ -929,7 +962,6 @@ func evaluateHandoffCancelAuthority(
 		reader.Core.Operation != CommunicationHandoffResponse || reader.Core.Entity != entity ||
 		reader.Core.Principal != reader.Principal || reader.Resolution.Recipient == nil ||
 		reader.Recipient != handoff.From ||
-		reader.Recipient != (RecipientRef{Kind: RecipientUser, Ref: reader.Principal.UserID.String()}) ||
 		carrier.epoch.Version != reader.Resolution.Recipient.DirectoryEpoch ||
 		directNoticeReadRowsCarryFutureDBTime(
 			carrier.channel, carrier.grants, carrier.message, carrier.deliveries,
@@ -1084,7 +1116,9 @@ func evaluateHandoffOfferAuthority(
 	default:
 		return communicationError(ErrCommunicationEvidenceUnknown, "Handoff send authority has no verdict")
 	}
-	if len(decision.RequiredClaims) != 0 ||
+	if !communicationClaimsContainedInSnapshot(decision.RequiredClaims, CommunicationClaimAuthoritySnapshot{
+		facts: tx.claimAuthorityFacts,
+	}) ||
 		!equalDirectNoticeAuthorityFacts(reader.Facts, decision.Facts) {
 		return communicationError(
 			ErrCommunicationEvidenceUnknown,
@@ -1201,7 +1235,9 @@ func evaluateHandoffResponseAuthority(
 			ErrCommunicationEvidenceUnknown, "Handoff target authority has no verdict",
 		)
 	}
-	if len(decision.RequiredClaims) != 0 || len(decision.SurvivingContributionIDs) != 1 ||
+	if !communicationClaimsEqualSnapshot(decision.RequiredClaims, CommunicationClaimAuthoritySnapshot{
+		facts: tx.claimAuthorityFacts,
+	}) || len(decision.SurvivingContributionIDs) != 1 ||
 		decision.SurvivingContributionIDs[0] != carrier.contributions[0].ID ||
 		!equalDirectNoticeAuthorityFacts(reader.Facts, decision.Facts) {
 		return ProtectedReadDecision{}, communicationError(
@@ -1304,6 +1340,7 @@ func applyLockedHandoffOffer(
 	prepared handoffOfferPrepared,
 	carrier handoffLockedCarrier,
 	work handoffLockedWork,
+	carrierCreated bool,
 ) (HandoffOfferResult, error) {
 	if tx == nil || work.item.Int(model.ColVersion) < 1 ||
 		work.item.Int(model.ColVersion) == math.MaxInt64 ||
@@ -1328,7 +1365,10 @@ func applyLockedHandoffOffer(
 		Kind: RecipientKind(work.item.String(colWorkOwnerKind)),
 		Ref:  work.item.String(colWorkOwnerRef),
 	}
-	actorRecipient := RecipientRef{Kind: RecipientUser, Ref: normalized.actor.Ref}
+	actorRecipient, err := communicationRecipientForActor(normalized.actor)
+	if err != nil {
+		return HandoffOfferResult{}, err
+	}
 	if from.Validate() != nil || from != actorRecipient || carrier.delivery.Recipient == from ||
 		carrier.message.Sender != normalized.actor || carrier.message.ChannelID != carrier.channel.ID ||
 		carrier.message.WorkItemID != normalized.command.WorkItemID ||
@@ -1375,20 +1415,34 @@ func applyLockedHandoffOffer(
 	}
 	itemAfter := cloneHandoffRecord(work.item)
 	itemAfter[colWorkLastEventSeq] = work.item.Int(colWorkLastEventSeq) + 1
-	planHash, err := canonicalHandoffPlanHash(
-		handoffOfferOperation, normalized.handoffCommandIdentity, reader.Facts,
-		Handoff{}, handoff, carrier.delivery, carrier.delivery, nil,
-		workProjectionFromRecords(itemAfter, work.lease),
-		[]string{
-			"handoff:insert", "work_item:cas", "work_event:append",
-			"work_outbox:insert", "command_receipt:append", "audit:append",
-		},
+	planFacts, err := canonicalCommunicationTransactionAuthorityFacts(
+		reader.Facts, tx.claimAuthorityFacts,
 	)
 	if err != nil {
 		return HandoffOfferResult{}, err
 	}
+	effects := []string{
+		"handoff:insert", "work_item:cas", "work_event:append",
+		"work_outbox:insert", "command_receipt:append", "audit:append",
+	}
+	if carrierCreated {
+		effects = append(effects,
+			"message:insert_publish", "audience:append", "audience_recipient:append",
+			"delivery:append", "delivery_sequence_guard:cas",
+		)
+	}
+	planHash, err := canonicalHandoffPlanHash(
+		handoffOfferOperation, normalized.handoffCommandIdentity, planFacts,
+		Handoff{}, handoff, carrier.delivery, carrier.delivery, nil,
+		workProjectionFromRecords(itemAfter, work.lease),
+		effects,
+	)
+	if err != nil {
+		return HandoffOfferResult{}, err
+	}
+	_, auditKind := communicationAuditActor(normalized.actor)
 	audit, err := tx.appendAudit(ctx, model.AuditDraft{
-		Actor: directNoticeActor(normalized.principal), ActorKind: model.ActorUser,
+		Actor: directNoticeActor(normalized.principal), ActorKind: auditKind,
 		Action: handoffOfferAuditAction, TargetKind: communicationCommandKind,
 		TargetID: ids.Command, PayloadHash: append([]byte(nil), planHash...),
 		Meta: map[string]any{
@@ -1492,8 +1546,12 @@ func applyLockedHandoffResponse(
 	if before.Version != normalized.expectedVersion {
 		return HandoffResponseResult{}, errHandoffVersionMismatch
 	}
+	actorRecipient, err := communicationRecipientForActor(normalized.actor)
+	if err != nil {
+		return HandoffResponseResult{}, err
+	}
 	if before.State != HandoffOffered || !tx.now.Time().Before(before.AckDeadline) ||
-		before.To != (RecipientRef{Kind: RecipientUser, Ref: normalized.actor.Ref}) ||
+		before.To != actorRecipient ||
 		terminalWorkStatuses[work.item.String(colWorkStatus)] ||
 		work.item.String(colWorkWorkspaceID) != normalized.scope.WorkspaceID.String() ||
 		recordID(work.item) != before.WorkItemID ||
@@ -1514,47 +1572,69 @@ func applyLockedHandoffResponse(
 	deliveryAfter := carrier.delivery
 	var ack *MessageAck
 	resultingFence := int64(0)
+	// endsLeaseGeneration records whether this transaction invalidated an
+	// execution generation. It, and not the transition, decides the lease and
+	// clock-guard effects, so the plan hash records what the transaction did.
+	endsLeaseGeneration := false
 	terminalCode := "handoff_rejected"
 	terminalReason := prepared.terminalReason
 	if normalized.command.Transition == HandoffAccept {
-		if prepared.terminalReason != nil || work.leaseState.Lifecycle != fenceActive ||
+		if prepared.terminalReason != nil ||
 			carrier.delivery.State != DeliveryAvailable ||
 			now.Before(carrier.delivery.AvailableAt) || carrier.delivery.AckDueAt == nil ||
 			!now.Before(*carrier.delivery.AckDueAt) ||
 			(carrier.delivery.ExpiresAt != nil && !now.Before(*carrier.delivery.ExpiresAt)) {
 			return HandoffResponseResult{}, errHandoffStaleOffer
 		}
-		next, err := fenceRelease(
-			work.leaseState,
-			fenceToken{Holder: work.leaseState.Holder, Fence: work.leaseState.Fence},
-			now, handoffLeaseEndReason,
-			fenceEndPolicy{Lifecycle: fenceRevoked, Bump: true},
-		)
-		if err != nil {
+		switch {
+		case work.leaseState.Lifecycle == fenceActive:
+			// Unchanged: an execution generation exists, so it is revoked, its fence
+			// advances and the workspace clock guard is required and advanced.
+			next, err := fenceRelease(
+				work.leaseState,
+				fenceToken{Holder: work.leaseState.Holder, Fence: work.leaseState.Fence},
+				now, handoffLeaseEndReason,
+				fenceEndPolicy{Lifecycle: fenceRevoked, Bump: true, RequireLive: true},
+			)
+			if err != nil {
+				return HandoffResponseResult{}, errHandoffStaleOffer
+			}
+			resultingFence = next.Fence
+			endsLeaseGeneration = true
+			applyWorkLeaseFenceState(
+				leaseAfter, next,
+				work.lease.String(colLeaseHolderSID),
+				work.lease.String(colLeaseHolderRunRef),
+				work.lease.String(colLeaseHolderAgentRef),
+			)
+			if len(work.clockGuard) == 0 || work.clockGuard.Int(colGuardEpoch) < 1 ||
+				work.clockGuard.Int(colGuardEpoch) == math.MaxInt64 ||
+				work.clockGuard.IsNull(colGuardLastDBTime) {
+				return HandoffResponseResult{}, communicationError(
+					ErrCommunicationEvidenceUnknown, "Handoff lease clock guard is unavailable",
+				)
+			}
+			last, err := model.ParseTimestamp(work.clockGuard.String(colGuardLastDBTime))
+			if err != nil || now.Before(last.Time()) {
+				return HandoffResponseResult{}, communicationError(
+					ErrCommunicationEvidenceUnknown, "Handoff lease clock moved backwards",
+				)
+			}
+			guardAfter[colGuardEpoch] = work.clockGuard.Int(colGuardEpoch) + 1
+			guardAfter[colGuardLastDBTime] = tx.now.String()
+		case handoffVacantWorkLeaseWitness(normalized.scope, before, work):
+			// The offer was sealed against the item's one and only vacant
+			// generation. There is no prior holder to fence: holder_sid is null and
+			// the durable trigger guarantees it has never been anything else, so a
+			// bump would invalidate no authority and would record in the event
+			// stream that a generation ended. Ownership still moves, fenced by
+			// owner_epoch. No lease row and no clock guard is written, no liveness
+			// is computed, and resultingFence stays 0 — which already and only means
+			// "no execution generation was ended".
+			resultingFence = 0
+		default:
 			return HandoffResponseResult{}, errHandoffStaleOffer
 		}
-		resultingFence = next.Fence
-		applyWorkLeaseFenceState(
-			leaseAfter, next,
-			work.lease.String(colLeaseHolderSID),
-			work.lease.String(colLeaseHolderRunRef),
-			work.lease.String(colLeaseHolderAgentRef),
-		)
-		if len(work.clockGuard) == 0 || work.clockGuard.Int(colGuardEpoch) < 1 ||
-			work.clockGuard.Int(colGuardEpoch) == math.MaxInt64 ||
-			work.clockGuard.IsNull(colGuardLastDBTime) {
-			return HandoffResponseResult{}, communicationError(
-				ErrCommunicationEvidenceUnknown, "Handoff lease clock guard is unavailable",
-			)
-		}
-		last, err := model.ParseTimestamp(work.clockGuard.String(colGuardLastDBTime))
-		if err != nil || now.Before(last.Time()) {
-			return HandoffResponseResult{}, communicationError(
-				ErrCommunicationEvidenceUnknown, "Handoff lease clock moved backwards",
-			)
-		}
-		guardAfter[colGuardEpoch] = work.clockGuard.Int(colGuardEpoch) + 1
-		guardAfter[colGuardLastDBTime] = tx.now.String()
 		itemAfter[colWorkOwnerKind] = string(before.To.Kind)
 		itemAfter[colWorkOwnerRef] = before.To.Ref
 		itemAfter[colWorkOwnerEpoch] = before.FromOwnerEpoch + 1
@@ -1609,18 +1689,30 @@ func applyLockedHandoffResponse(
 		"work_outbox:insert", "command_receipt:append", "audit:append",
 	}
 	if normalized.command.Transition == HandoffAccept {
-		effects = append(effects, "work_lease:cas", "work_guard:cas", "delivery:cas", "ack:append")
+		// The Ack is a Delivery fact and belongs to every accept. The lease and the
+		// clock guard belong only to an accept that ended a generation.
+		effects = append(effects, "delivery:cas", "ack:append")
+		if endsLeaseGeneration {
+			effects = append(effects, "work_lease:cas", "work_guard:cas")
+		}
+	}
+	planFacts, err := canonicalCommunicationTransactionAuthorityFacts(
+		reader.Facts, tx.claimAuthorityFacts,
+	)
+	if err != nil {
+		return HandoffResponseResult{}, err
 	}
 	planHash, err := canonicalHandoffPlanHash(
-		handoffResponseOperation, normalized.handoffCommandIdentity, reader.Facts,
+		handoffResponseOperation, normalized.handoffCommandIdentity, planFacts,
 		plan.Before, plan.After, carrier.delivery, deliveryAfter, ack,
 		workProjectionFromRecords(itemAfter, leaseAfter), effects,
 	)
 	if err != nil {
 		return HandoffResponseResult{}, err
 	}
+	_, auditKind := communicationAuditActor(normalized.actor)
 	audit, err := tx.appendAudit(ctx, model.AuditDraft{
-		Actor: directNoticeActor(normalized.principal), ActorKind: model.ActorUser,
+		Actor: directNoticeActor(normalized.principal), ActorKind: auditKind,
 		Action: handoffResponseAuditAction, TargetKind: communicationCommandKind,
 		TargetID: ids.Command, PayloadHash: append([]byte(nil), planHash...),
 		Meta: map[string]any{
@@ -1644,7 +1736,7 @@ func applyLockedHandoffResponse(
 	if _, err := handoffUpdateRawRecord(ctx, tx, repositories.item, itemAfter); err != nil {
 		return HandoffResponseResult{}, err
 	}
-	if normalized.command.Transition == HandoffAccept {
+	if endsLeaseGeneration {
 		if _, err := handoffUpdateRawRecord(ctx, tx, repositories.lease, leaseAfter); err != nil {
 			return HandoffResponseResult{}, err
 		}
@@ -1798,6 +1890,44 @@ func canonicalHandoffPlanHash(
 	}
 	digest := sha256.Sum256(raw)
 	return digest[:], nil
+}
+
+// handoffVacantWorkLeaseWitness is the complete, database-certified witness that
+// the locked WorkLease is the item's one and only VACANT generation: it has never
+// had a holder, and — because no lease transition ever returns a row to 'vacant'
+// (sqlite/0032, postgres/0005) — it never can again once acquired.
+//
+// The column list is a deliberate verbatim mirror of the trigger's own "vacant
+// sessions work lease carries authority" clause on both engines. Neither Go nor
+// SQL is the sole authority here: an edit to one that is not mirrored in the
+// other is what the durable controls in this module exist to catch.
+//
+// It is keyed on the LEASE GENERATION and never on owner_kind. Not one link of
+// the chain it unblocks reads the owner: an agent- or session-owned item that was
+// created and readied but never leased is in exactly this state.
+func handoffVacantWorkLeaseWitness(
+	scope DirectoryScopeRef,
+	before Handoff,
+	work handoffLockedWork,
+) bool {
+	if before.OfferedLeaseFence != 0 || work.leaseState.Fence != 0 ||
+		work.leaseState.Lifecycle != fenceVacant ||
+		work.lease.String(colLeaseState) != workLeaseVacant ||
+		work.lease.String(colWorkWorkspaceID) != scope.WorkspaceID.String() ||
+		work.lease.String(colWorkItemID) != before.WorkItemID.String() ||
+		work.lease.Int(colLeaseRenewalCount) != 0 {
+		return false
+	}
+	for _, column := range []string{
+		colLeaseHolderSID, colLeaseHolderRunRef, colLeaseHolderAgentRef,
+		colLeaseAcquiredAt, colLeaseRenewedAt, colLeaseExpiresAt,
+		colLeaseEndedAt, colLeaseEndReason,
+	} {
+		if !work.lease.IsNull(column) {
+			return false
+		}
+	}
+	return true
 }
 
 func workProjectionFromRecords(item, lease model.Record) handoffWorkProjection {
@@ -1957,6 +2087,13 @@ func findHandoffReceipt(
 	if err != nil {
 		return CommunicationCommandReceipt{}, false, communicationError(
 			ErrCommunicationEvidenceUnknown, "Handoff receipt cannot be decoded",
+		)
+	}
+	// Handoff writers emit plain response bindings. A paired keyed envelope
+	// passes generic shape validation, but this lookup has no keyed verifier.
+	if receipt.SealKeyVersion != "" || receipt.DigestKeyVersion != "" {
+		return CommunicationCommandReceipt{}, false, communicationError(
+			ErrCommunicationEvidenceUnknown, "Handoff receipt format is unavailable",
 		)
 	}
 	if receipt.TenantID != identity.scope.TenantID ||
@@ -2124,8 +2261,11 @@ func applyLockedHandoffLifecycle(
 	}
 	switch transition {
 	case HandoffWithdraw:
-		actorRecipient := RecipientRef{Kind: RecipientUser, Ref: identity.actor.Ref}
-		if identity.actor.Kind != ActorUser || actorRecipient != before.From ||
+		actorRecipient, err := communicationRecipientForActor(identity.actor)
+		if err != nil {
+			return HandoffLifecycleResult{}, err
+		}
+		if actorRecipient != before.From ||
 			!now.Before(before.AckDeadline) ||
 			terminalWorkStatuses[work.item.String(colWorkStatus)] ||
 			work.item.String(colWorkOwnerKind) != string(before.From.Kind) ||
@@ -2160,8 +2300,12 @@ func applyLockedHandoffLifecycle(
 		"handoff:cas", "work_item:cas", "work_event:append",
 		"work_outbox:insert", "command_receipt:append", "audit:append",
 	}
+	planFacts, err := canonicalCommunicationTransactionAuthorityFacts(facts, tx.claimAuthorityFacts)
+	if err != nil {
+		return HandoffLifecycleResult{}, err
+	}
 	planHash, err := canonicalHandoffPlanHash(
-		operation, identity, facts, plan.Before, plan.After,
+		operation, identity, planFacts, plan.Before, plan.After,
 		carrier.delivery, carrier.delivery, nil,
 		workProjectionFromRecords(itemAfter, work.lease), effects,
 	)

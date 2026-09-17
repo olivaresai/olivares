@@ -63,6 +63,9 @@ func TestDirectoryWriterActivationPublicSeamReportsReopen(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 	defer raw.Close() //nolint:errcheck
+	if err := raw.System(ctx, func(sys store.SystemScope) error { _, err := sys.EnsureSystemTenant(ctx); return err }); err != nil {
+		t.Fatal(err)
+	}
 	req := engine.DirectoryWriterActivationRequest{
 		ExpectedGeneration: 1,
 		WritersUpgraded:    true,
@@ -104,6 +107,9 @@ func TestDirectoryWriterActivationRejectsDecoratedStores(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 	defer raw.Close() //nolint:errcheck
+	if err := raw.System(ctx, func(sys store.SystemScope) error { _, err := sys.EnsureSystemTenant(ctx); return err }); err != nil {
+		t.Fatal(err)
+	}
 	reg, err := residency.NewRegistry("eu", []string{"eu", "us"})
 	if err != nil {
 		t.Fatalf("residency registry: %v", err)

@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Olivares tool cache — repository-local composite action.
+#
+# Installs the pinned CI tools this repository needs (go-task, optionally gitleaks) from their
+# GitHub release tarballs, verifies the published SHA-256, keeps the VERIFIED ARCHIVE in the
+# runner's persistent RUNNER_TOOL_CACHE, extracts the binary into a job-private directory and
+# exposes it on PATH for the following steps.
+#
+# MEASURED, not preventive: in run 34854565361 (2026-09-14) `go install …/task@v3.51.1` compiled
+# go-task from source in 15 jobs, 4m00s–6m20s each on ci-runner-1..9, and gitleaks took 45–56 s
+# more. A verified release tarball takes seconds and, because these runners keep their disk
+# between jobs, the second job on a runner re-verifies the cached archive and skips the download.
+#
+# CONTRACT (docs.github.com "Creating a composite action"): top-level name/description, typed
+# inputs, runs.using: "composite", every run step declares shell:, the bundled helper is
+# referenced through ${{ github.action_path }}. Trust model (native review 2026-09-14 16:05Z): the
+# cache keeps only the VERIFIED ARCHIVE keyed by the pinned sha256, re-hashed on every run; the
+# binary is extracted fresh into a job-private directory; publication is flock-serialized and
+# rename-only. Fail-closed: a checksum mismatch, a failed download or an unreachable binary is a
+# red with a reason; there is no `go install` fallback.
+#
+# Versions and checksums are PINNED via inputs; the checksums are the values published in each
+# release's checksums file (task_checksums.txt, gitleaks_<v>_checksums.txt) for linux amd64.
+name: "Olivares tool cache"
+description: >-
+  Install pinned go-task (and optionally gitleaks) from release tarballs verified against the
+  pinned SHA-256 on every run (archive cached per runner, binary extracted per job) and put them
+  on PATH. Fails closed on any checksum or reachability problem.
+
+inputs:
+  task_version:
+    description: "go-task release version (without v)."
+    required: false
+    default: "3.51.1"
+  task_sha256:
+    description: "SHA-256 of task_linux_amd64.tar.gz for that version, from task_checksums.txt."
+    required: false
+    default: "da7e92f0ff961ef2aae7cfecbad8d1fd2a08d7b09ba968673adf7ff389b243b5"
+  gitleaks:
+    description: "Set to \"true\" to also install gitleaks."
+    required: false
+    default: "false"
+  gitleaks_version:
+    description: "gitleaks release version (without v)."
+    required: false
+    default: "8.30.1"
+  gitleaks_sha256:
+    description: "SHA-256 of gitleaks_<version>_linux_x64.tar.gz, from the release checksums file."
+    required: false
+    default: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+runs:
+  using: "composite"
+  steps:
+    - name: install go-task (pinned release, cached per runner)
+      shell: bash
+      run: bash "${{ github.action_path }}/install.sh" task "${{ inputs.task_version }}" "${{ inputs.task_sha256 }}"
+    - name: install gitleaks (pinned release, cached per runner)
+      if: ${{ inputs.gitleaks == 'true' }}
+      shell: bash
+      run: bash "${{ github.action_path }}/install.sh" gitleaks "${{ inputs.gitleaks_version }}" "${{ inputs.gitleaks_sha256 }}"
+    - name: the tools are reachable from a later step, not only from the installer
+      shell: bash
+      run: |
+        # Installing is not reaching (measured 2026-08-18 on ci-runner-2). This runs as a
+        # SEPARATE step so it sees the PATH the following job steps will see.
+        command -v task || { echo "::error::task is not on PATH after olivares-tool-cache (PATH=$PATH)"; exit 1; }
+        task --version
+        if [[ "${{ inputs.gitleaks }}" == "true" ]]; then
+          command -v gitleaks || { echo "::error::gitleaks is not on PATH after olivares-tool-cache (PATH=$PATH)"; exit 1; }
+          gitleaks version
+        fi

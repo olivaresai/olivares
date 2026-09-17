@@ -1,0 +1,1 @@
+var e={collection:e=>[`work`,e,`items`],detail:(e,t)=>[`work`,e,`item`,t]};export{e as t};

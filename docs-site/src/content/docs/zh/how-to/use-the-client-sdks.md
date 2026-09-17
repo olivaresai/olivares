@@ -15,7 +15,7 @@ description: >-
 | TypeScript | `@olivaresai/client` | 全局 `fetch`（Node ≥ 20、Deno、浏览器） |
 
 :::note[分发状态]
-这些 SDK 位于产品仓库的 `clients/` 下，并与其一同版本化。向公共注册表（pkg.go.dev、Maven Central、PyPI、npm）发布将随公开发布一同进行 — 在此之前，请从仓库消费它们（上面的 Go 模块路径、`mvn -f clients/java install`、`pip install ./clients/python`、`npm install ./clients/typescript`）。
+这些 SDK 位于产品仓库的 `clients/` 下，并与其一同版本化。本页不断言 v26.9.0 客户端已发布到 pkg.go.dev、Maven Central、PyPI 或 npm。请从仓库使用它们（上面的 Go 模块路径、`mvn -f clients/java install`、`pip install ./clients/python`、`npm install ./clients/typescript`），除非你已自行核实该版本的注册表软件包。
 :::
 
 四者共享同一套设计。一个手写的核心实现了契约规定的行为 — 不透明的 bearer 令牌（`olvs_` 会话 / `olvk_` API 密钥）、`X-Olivares-Tenant` 头、API 的单一错误信封、游标分页（`items`/`cursor`/`has_more`）、对受限流调用尊重 `Retry-After` 的重试（429 总是重试；503 仅对幂等的 GET 重试），以及[稳定性策略](/zh/reference/api-stability/)的弃用头（每个端点呈现一次）。其上则是按每个已发布操作生成的方法，以路由命名（`GET /v1/agents` → `GetV1Agents` / `get_v1_agents` /

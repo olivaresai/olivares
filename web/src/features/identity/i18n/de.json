@@ -15,27 +15,53 @@
     "body": "{{what}} ist ein deklarierter Vertrag — der Backend-Endpunkt ist noch nicht aktiv, daher gibt es nichts anzuzeigen. Dieses Panel befüllt sich, sobald er bereitsteht; es erfindet niemals Daten."
   },
   "assurance": {
+    "address": {
+      "addressTitle": "Passkeys sind unter dieser Adresse nicht verfügbar.",
+      "ipBody": "Eine Passkey-Relying-Party muss ein Domainname sein, den der Verifizierer dieser Installation akzeptiert, und eine IP-Adresse ist keiner. Rufen Sie diese Konsole über einen Hostnamen auf, um einen Passkey zu registrieren oder zu verwenden.",
+      "nameBody": "Eine Passkey-Relying-Party muss ein Domainname sein, den der Verifizierer dieser Installation akzeptiert, und dieser Hostname ist keiner: Er braucht einen Punkt und darf nur ASCII-Buchstaben, Ziffern und Bindestriche enthalten.",
+      "insecureTitle": "Diese Seite ist kein sicherer Kontext.",
+      "insecureBody": "Browser führen die Passkey-API nur in einem sicheren Kontext aus, daher kann hier kein Passkey registriert oder verwendet werden. Rufen Sie diese Konsole über HTTPS oder auf dem lokalen Host auf.",
+      "unsupportedTitle": "Dieser Browser unterstützt keine Passkeys.",
+      "unsupportedBody": "Dieser Browser stellt keine WebAuthn-API bereit, daher kann hier kein Passkey registriert oder verwendet werden. Verwenden Sie einen Browser mit Passkey-Unterstützung oder eine vorgelegte PIV/CAC-Karte.",
+      "sameDevice": "Auf diesem Gerät antwortet dieselbe Konsole auch unter:"
+    },
     "stepUpTitle": "Step-up-Authentifizierung erforderlich",
-    "stepUpBody": "{{action}} erfordert {{required}}. Ihre Sitzung ist {{current}}. Authentifizieren Sie sich mit einem Hardware-Sicherheitsschlüssel, um fortzufahren.",
-    "authenticate": "Mit Sicherheitsschlüssel authentifizieren",
+    "stepUpBody": "{{action}} erfordert {{required}}. Ihre Sitzung ist {{current}}. Verwenden Sie einen Passkey auf Ihrem Gerät oder einen Sicherheitsschlüssel, um fortzufahren.",
+    "authenticate": "Mit Passkey authentifizieren",
     "authenticatePiv": "Mit PIV/CAC-Karte authentifizieren",
     "authenticating": "Warten auf Ihren Authentifikator…",
     "seamWhat": "Die Zeremonie der privilegierten Anmeldung (WebAuthn-Step-up)",
     "unsupported": "Dieser Browser unterstützt WebAuthn nicht. Für privilegierte Aktionen ist eine Plattform erforderlich, die phishing-resistente Authentifikatoren unterstützt.",
     "failed": "Das Step-up wurde nicht abgeschlossen. Die Aktion bleibt verweigert.",
+    "relyingPartyUnusable": "Passkeys sind in dieser Installation nicht verfügbar: Die Engine hat für die Adresse, unter der die Konsole ausgeliefert wird, keine verwendbare Relying Party. Ein Betreiber muss eine gültige Relying-Party-Domain konfigurieren — einen Hostnamen mit Punkt oder, wo passend, localhost —, die Konsole unter diesem deklarierten sicheren Origin aufrufen und die Engine nach der Änderung neu starten. Ein erneuter Versuch unter einer anderen Adresse behebt das allein nicht.",
     "actions": {
       "wif": "Anzeige des Workload Identity Federation-Graphen",
       "identity": "Verwaltung von Identität",
       "nhiLifecycleRotate": "Rotation eines NHI-Zugangsdatenwerts",
       "nhiLifecycleFinalize": "Endgültiger Abschluss der NHI-Außerbetriebnahme",
-      "generic": "Diese Aktion"
+      "generic": "Diese Aktion",
+      "console": "Verwalten von Konnektoren"
     },
     "aal": {
       "aal1": "AAL1 (Passwort)",
       "aal2": "AAL2 (Mehrfaktor)",
-      "aal3": "AAL3 (Hardware, phishing-resistent)"
+      "aal3": "AAL3 (phishing-resistent)"
     },
-    "unenrolled": "Für Ihr Konto ist noch kein Passkey registriert. Registrieren Sie zunächst einen Hardware-Sicherheitsschlüssel im Tab „Privilegierte Anmeldung“ und wiederholen Sie dann das Step-up."
+    "unenrolled": "Für Ihr Konto ist noch kein Passkey registriert. Registrieren Sie im Tab „Privilegierte Anmeldung“ einen Passkey auf Ihrem Gerät oder einen Sicherheitsschlüssel und authentifizieren Sie sich danach.",
+    "unenrolledInline": "Für Ihr Konto ist noch kein Passkey registriert. Registrieren Sie unten einen oder verwenden Sie eine vorgelegte PIV/CAC-Karte.",
+    "enrollHint": "Registrieren Sie Ihren ersten Passkey auf diesem Gerät oder einem Sicherheitsschlüssel. Die Registrierung allein authentifiziert die Sitzung nicht und schließt die ausstehende Aktion nicht ab.",
+    "passkeyName": "Passkey-Name",
+    "enrollUnsupported": "Dieser Browser kann keinen Passkey registrieren. Verwenden Sie einen unterstützten Browser oder eine vorgelegte PIV/CAC-Karte.",
+    "registered": "Passkey registriert. Authentifizieren Sie sich zur Prüfung dieser Sitzung. Prüfen Sie danach die ausstehende Aktion und schließen Sie sie ab.",
+    "registrationUnknown": "Die Registrierung konnte nicht bestätigt werden. Der Passkey wurde möglicherweise gespeichert. Wählen Sie zur Prüfung „Authentifizieren“. Die Registrierung wird nicht automatisch erneut gesendet.",
+    "authenticationUnknown": "Die Authentifizierung konnte nicht bestätigt werden. Die Sitzung ist möglicherweise bereits erhöht. Prüfen Sie die Sitzung vor einem weiteren Versuch.",
+    "needsAuthentication": "Vor der Registrierung eines weiteren Passkeys muss ein vorhandener Passkey diese Sitzung authentifizieren. Wählen Sie „Authentifizieren“.",
+    "checkSession": "Sitzung prüfen",
+    "sessionExpired": "Diese Sitzung wurde abgewiesen. Schließen Sie diese Aktion und melden Sie sich vor einem weiteren Versuch erneut an.",
+    "verificationFailed": "Die Sitzung konnte für diese Aktion nicht bestätigt werden. Die Authentifizierung wurde möglicherweise abgeschlossen; die Aktion wurde nicht fortgesetzt.",
+    "cancelled": "Der Passkey-Vorgang wurde abgebrochen oder ist abgelaufen. Sie können einen neuen Versuch starten. Die Aktion wurde nicht fortgesetzt.",
+    "cancelHint": "Schließen bricht diese Aktion ab. Eine bereits gesendete Registrierung oder Authentifizierung kann dennoch abgeschlossen werden.",
+    "registrationUnknownElsewhere": "Die Registrierung konnte nicht bestätigt werden. Der Passkey wurde möglicherweise gespeichert. Schließen Sie diesen Dialog und prüfen Sie Ihre Passkeys, bevor Sie eine weitere Registrierung starten."
   },
   "references": {
     "note": "Standards, die dieses Panel widerspiegelt. Das Panel beobachtet und verifiziert; es beansprucht keine Zertifizierung.",
@@ -531,7 +557,8 @@
     "pivRole": "Zugeordnete Rolle",
     "pivOcsp": "OCSP",
     "pivNote": "Ketten- und OCSP-Verifizierung werden vom Backend durchgeführt; das Panel spiegelt das Ergebnis wider.",
-    "pivNotConfigured": "PIV/CAC ist für diese Bereitstellung nicht konfiguriert. Ein Operator aktiviert es, indem er OLIVARES_PIV_CONFIG (Behörden-CA, Zertifikat-zu-Rolle-Zuordnung) an der Engine setzt.",
+    "pivNotConfigured": "Die PIV/CAC-Smartcard-Anmeldung ist für diese Bereitstellung nicht konfiguriert, daher kann hier keine Karte verwendet werden. Ein Administrator muss sie an der Engine konfigurieren, damit sie verfügbar wird.",
+    "pivSetupGuide": "Betriebsleitfaden: PIV/CAC-Anmeldung konfigurieren",
     "ocsp": {
       "good": "Fehlerfrei",
       "revoked": "Widerrufen",

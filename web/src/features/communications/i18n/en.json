@@ -1,0 +1,957 @@
+{
+  "doors": {
+    "catalog": {
+      "title": "Communications",
+      "description": "Channels of the selected workspace that this principal may read now, the direct notices sent through them and the personal inbox. Each read and each act is decided by the engine under its own permission."
+    },
+    "inbox": {
+      "title": "Communications inbox",
+      "description": "The exact personal mailbox of this principal in the selected workspace: deliveries addressed to it, opened fresh, acknowledged only by an explicit act."
+    },
+    "new": {
+      "title": "New channel",
+      "description": "Create a channel with explicit initial grants. Nothing is granted by implication, and the receipt of the act is not a durable list of who may read it later."
+    },
+    "administration": {
+      "title": "Channel administration",
+      "description": "The channels this principal may administer in the selected workspace: configuration and grant history, with each act confirmed under the channel's current ETag. Administration needs the channel:admin permission and a current local admin bit; it does not require, and does not give, the right to read the channel's content."
+    },
+    "handoffs": {
+      "title": "Handoffs",
+      "description": "Offers of work responsibility addressed to this principal in the selected workspace. The list carries no offer content; opening one reads its protected context fresh, and accepting or rejecting is an explicit act the engine decides."
+    }
+  },
+  "tabs": {
+    "channels": "Channels",
+    "inbox": "Inbox",
+    "create": "New channel",
+    "administration": "Administration",
+    "handoffs": "Handoffs"
+  },
+  "workspace": {
+    "requiredTitle": "Select a workspace",
+    "requiredBody": "Communications require an explicit workspace. Choose one in the workspace switcher: the console never picks one for you, and it makes no request until one is selected.",
+    "scope": "Workspace scope"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "loadMore": "Load more",
+    "newChannel": "New channel",
+    "open": "Open",
+    "openMessage": "Open message",
+    "sendNotice": "Send notice",
+    "compose": "Compose",
+    "confirm": "Confirm and send",
+    "ack": "Acknowledge",
+    "confirmAck": "Confirm acknowledgement",
+    "reread": "Re-read",
+    "retrySameKey": "Retry with the same key",
+    "discardAndEdit": "Discard this intention and edit",
+    "checkCatalog": "Check the catalog",
+    "addGrant": "Add grant",
+    "addMe": "Add my account as a subject",
+    "removeGrant": "Remove grant",
+    "addBlock": "Add block",
+    "removeBlock": "Remove block",
+    "useMe": "Use my account",
+    "create": "Create channel",
+    "creating": "Creating…",
+    "sending": "Sending…",
+    "acking": "Acknowledging…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "back": "Back to editing",
+    "pageSize": "Page size",
+    "administer": "Administer",
+    "advancing": "Advancing…",
+    "applyFilter": "Apply filter",
+    "applying": "Applying…",
+    "confirmArchive": "Confirm and archive",
+    "confirmChanges": "Confirm changes",
+    "confirmGrant": "Confirm grant",
+    "confirmRevoke": "Confirm revocation",
+    "confirmSeen": "Confirm: mark seen up to here",
+    "discardIntent": "Discard this intention",
+    "grantSuccessor": "Grant a successor (separate act)",
+    "leaveUndetermined": "Leave undetermined",
+    "markSeen": "Mark seen up to here",
+    "openBarrierDelivery": "Open the barrier delivery",
+    "refreshInbox": "Refresh the inbox",
+    "rereadAndEdit": "Re-read and edit again",
+    "rereadHistory": "Re-read the history",
+    "rereadToVerify": "Re-read to verify",
+    "revert": "Revert edits",
+    "reviewChanges": "Review changes",
+    "reviewGrant": "Review grant",
+    "revokeGeneration": "Revoke this generation",
+    "revokeThenGrant": "Revoke, then grant a successor",
+    "dismiss": "Dismiss"
+  },
+  "catalog": {
+    "title": "Visible channels",
+    "description": "Only the active channels this principal may read now, with its own current local bits. A page is not a search of the whole catalog: load more to continue from the server's continuation.",
+    "emptyTitle": "No visible channels",
+    "emptyBody": "This principal has no channel it may read in this workspace, or none exists yet. A read grant and the channel:read permission make one appear here.",
+    "truncated": "More channels exist beyond this page",
+    "truncatedHint": "The server reported more visible channels. Load more to continue from its continuation.",
+    "columns": {
+      "name": "Name",
+      "slug": "Slug",
+      "kind": "Kind",
+      "state": "State",
+      "protection": "Protection",
+      "access": "Your local access",
+      "updated": "Updated"
+    },
+    "openById": "Open a channel by ID",
+    "openByIdHint": "A channel opened by ID is read fresh with its ETag; that read does not report your local bits."
+  },
+  "access": {
+    "label": "Your local access",
+    "read": "read",
+    "write": "write",
+    "admin": "admin",
+    "none": "no local bits",
+    "unknown": "not reported by this read",
+    "hint": "Local bits are the channel's own grants for this principal. A core permission is required as well, and the engine decides every act at the moment it is asked."
+  },
+  "kind": {
+    "coordination": "Coordination",
+    "work": "Work",
+    "incident": "Incident",
+    "announcement": "Announcement",
+    "private": "Private"
+  },
+  "sensitivity": {
+    "internal": "Internal",
+    "restricted": "Restricted"
+  },
+  "protection": {
+    "storage": "Storage",
+    "application_sealed": "Application sealed"
+  },
+  "ackPolicy": {
+    "none": "None",
+    "each_required": "Each required",
+    "quorum": "Quorum"
+  },
+  "wake": {
+    "none": "None",
+    "primary": "Primary",
+    "all": "All",
+    "inherit": "Inherit"
+  },
+  "channel": {
+    "title": "Channel",
+    "description": "Read fresh from the engine with its ETag. This read carries no grants and no local bits.",
+    "fields": {
+      "id": "Channel ID",
+      "slug": "Slug",
+      "name": "Name",
+      "descriptionField": "Description",
+      "kind": "Kind",
+      "state": "State",
+      "sensitivity": "Sensitivity",
+      "protection": "Content protection",
+      "protectionGeneration": "Protection generation",
+      "ackPolicy": "Default ack policy",
+      "ackTimeout": "Default ack timeout (ms)",
+      "wake": "Default wake",
+      "retention": "Retention policy reference",
+      "maxFanout": "Max fanout",
+      "maxAutomationDepth": "Max automation depth",
+      "aclRevision": "ACL revision",
+      "routeRevision": "Route revision",
+      "subscriptionRevision": "Subscription revision",
+      "version": "Version",
+      "etag": "ETag",
+      "created": "Created",
+      "updated": "Updated",
+      "workspace": "Workspace",
+      "tenant": "Tenant"
+    },
+    "sendHint": {
+      "canWrite": "Your local write bit is current on this catalog page and you hold the send permission. The engine decides again on the send.",
+      "noWrite": "This catalog page reports no local write bit for you. The engine would refuse a send; composing is not offered.",
+      "unknown": "This read does not report your local bits. You hold the send permission; the engine decides local authority on the send.",
+      "noPermission": "You do not hold the message-send permission, so composing is not offered."
+    }
+  },
+  "create": {
+    "title": "Create a channel",
+    "description": "Every field of the contract is available. Initial grants are explicit: add each subject and tick each bit you intend. Nothing is added on your behalf.",
+    "fields": {
+      "slug": "Slug",
+      "slugHint": "Lowercase letters, digits and hyphens; unique in the workspace.",
+      "name": "Name",
+      "descriptionField": "Description",
+      "kind": "Kind",
+      "sensitivity": "Sensitivity",
+      "protection": "Content protection",
+      "protectionHint": "Application-sealed content is irreversible once written.",
+      "ackPolicy": "Default ack policy",
+      "ackTimeout": "Default ack timeout (ms)",
+      "wake": "Default wake",
+      "retention": "Retention policy reference",
+      "maxFanout": "Max fanout",
+      "maxAutomationDepth": "Max automation depth",
+      "grants": "Initial grants",
+      "grantsHint": "At least one grant with at least one bit. A grant is a subject and its three bits, each independent. Your own account is a subject like any other."
+    },
+    "grant": {
+      "subject": "Subject",
+      "read": "Read",
+      "write": "Write",
+      "admin": "Admin",
+      "expiresAt": "Expires at",
+      "expiresHint": "Optional. Leave empty for a grant with no expiry."
+    },
+    "validation": {
+      "slug": "The slug must be lowercase letters, digits and hyphens, starting with a letter or digit.",
+      "name": "A name is required.",
+      "grants": "At least one initial grant is required.",
+      "grantRef": "Every grant needs a subject reference.",
+      "grantBits": "Every grant needs at least one bit.",
+      "number": "Must be a whole number of zero or more.",
+      "fanout": "Must be a whole number of one or more."
+    },
+    "noReadHint": "You hold channel:write without channel:read. You can create with explicit grants; the catalog will not show the result to you, and this receipt does not change that.",
+    "result": {
+      "title": "Channel created",
+      "body": "This is the receipt of the act. The grants below are what was recorded now; they are not a durable list of who may read the channel later. Visibility is decided by the catalog on every read.",
+      "grants": "Grants recorded",
+      "noGrants": "No grant row was returned.",
+      "auditSeq": "Audit sequence",
+      "etag": "ETag"
+    },
+    "unknown": {
+      "title": "Outcome unknown",
+      "body": "The request may or may not have been applied: the transport failed before an answer arrived. This route has no idempotency key, so the console will not retry on its own. Check the catalog for slug “{{slug}}” before creating again. Not seeing it there is not proof it was not created if you lack read access."
+    }
+  },
+  "subject": {
+    "kind": "Kind",
+    "ref": "Reference",
+    "kinds": {
+      "user": "User",
+      "user_group": "User group",
+      "agent": "Agent",
+      "agent_group": "Agent group",
+      "session": "Session"
+    },
+    "pickUser": "Pick a user",
+    "pickAgent": "Pick an agent",
+    "manualRef": "Reference (ID)",
+    "userRefHint": "The canonical user ID. A user in the directory is not thereby an eligible recipient of this channel: the engine decides on the send.",
+    "agentRefHint": "The agent's identity ID, not its row ID or external ID.",
+    "sessionRefHint": "A canonical session ID. This console has no session directory yet; enter the ID from its source of authority.",
+    "groupRefHint": "The group ID.",
+    "noDirectory": "The directory is not offered to you (missing read permission). Enter a reference directly.",
+    "noIdentity": "not addressable — no identity",
+    "truncated": "The directory page is incomplete: more rows exist than are loaded.",
+    "loading": "Loading directory…",
+    "me": "me"
+  },
+  "compose": {
+    "title": "Send a direct notice",
+    "description": "One notice to one user, agent or session on channel “{{channel}}”. Content is typed blocks; the engine checks the recipient's current eligibility and grant on the send.",
+    "recipient": "Recipient",
+    "subjectField": "Subject",
+    "blocks": "Content blocks",
+    "block": {
+      "type": "Type",
+      "format": "Format",
+      "text": "Text",
+      "code": "Code",
+      "referenceKind": "Reference kind",
+      "referenceRef": "Reference",
+      "referenceHash": "Reference hash",
+      "referenceHint": "A reference is information for the reader. Nothing is fetched or executed from it.",
+      "codeHint": "One token, at most 128 characters. A status block carries nothing else.",
+      "markdownHint": "Markdown is stored as written and shown as text; raw HTML tags are refused by the engine."
+    },
+    "urgency": "Urgency",
+    "availableAt": "Available at",
+    "availableAtHint": "Optional deferred availability, in your local time. Leave empty to publish now.",
+    "validation": {
+      "recipient": "A recipient reference is required.",
+      "subject": "A subject is required.",
+      "blocks": "At least one block is required.",
+      "text": "A text block needs text.",
+      "reference": "A reference block needs a kind and a reference.",
+      "code": "A status block needs a code: one token of at most 128 characters, no spaces.",
+      "availableAt": "The availability time could not be read as a date.",
+      "markdownHtml": "A markdown block must not contain a raw HTML tag.",
+      "subjectLength": "The subject must be at most 256 bytes."
+    },
+    "confirm": {
+      "title": "Confirm the intention",
+      "body": "This intention is now immutable. Its key binds the body and the target; a retry after an ambiguous result re-sends exactly this, and editing starts a new intention.",
+      "key": "Idempotency key",
+      "channel": "Channel",
+      "recipient": "Recipient",
+      "subject": "Subject",
+      "blocksCount": "Blocks",
+      "urgency": "Urgency",
+      "availableAt": "Available at"
+    },
+    "result": {
+      "appliedTitle": "Notice published",
+      "appliedBody": "The engine created the message and its delivery now.",
+      "replayedTitle": "Already published",
+      "replayedBody": "The engine answered from its idempotency ledger: this exact intention was already applied. Nothing was sent a second time.",
+      "ambiguousTitle": "Outcome unknown",
+      "ambiguousBody": "The transport failed before an answer arrived, so the notice may or may not have been published. Retrying re-sends the same key and body: the engine either applies it once or replays the earlier result.",
+      "refusedTitle": "Send refused",
+      "refusedBody": "The engine did not publish this notice. The reason is the server's; the directory did not promise eligibility."
+    }
+  },
+  "urgency": {
+    "normal": "Normal",
+    "high": "High",
+    "critical": "Critical",
+    "": "Default"
+  },
+  "blockType": {
+    "text": "Text",
+    "reference": "Reference",
+    "status": "Status",
+    "action_ref": "Action reference"
+  },
+  "format": {
+    "plain": "Plain",
+    "markdown": "Markdown",
+    "": "Default"
+  },
+  "inbox": {
+    "title": "Personal inbox",
+    "description": "Deliveries addressed to this principal in this workspace, as the engine authorizes them now. Reading a page acknowledges nothing and advances no cursor.",
+    "emptyTitle": "No deliveries",
+    "emptyBody": "Nothing addressed to this principal is visible in this workspace right now.",
+    "truncated": "More deliveries exist beyond this page",
+    "truncatedHint": "The server reported more visible deliveries. Load more to continue from its continuation.",
+    "columns": {
+      "subject": "Subject",
+      "sender": "Sender",
+      "urgency": "Urgency",
+      "state": "Delivery state",
+      "available": "Available",
+      "ackDue": "Ack due",
+      "acknowledged": "Acknowledged",
+      "delivery": "Delivery"
+    }
+  },
+  "delivery": {
+    "title": "Delivery",
+    "description": "Read fresh for this principal. Acknowledging is an explicit act with the version you just read.",
+    "fields": {
+      "id": "Delivery ID",
+      "messageId": "Message ID",
+      "recipient": "Recipient",
+      "state": "State",
+      "required": "Required",
+      "seq": "Delivery sequence",
+      "version": "Version",
+      "available": "Available at",
+      "firstSeen": "First seen at",
+      "ackDue": "Ack due at",
+      "expires": "Expires at",
+      "acknowledged": "Acknowledged at"
+    },
+    "ack": {
+      "title": "Acknowledge this delivery",
+      "body": "The act sends If-Match {{etag}} — the version you read — and a key of its own. If the delivery changed meanwhile the engine answers 412 and you re-read before confirming again; the console never substitutes the version.",
+      "key": "Idempotency key",
+      "ifMatch": "If-Match",
+      "appliedTitle": "Acknowledged",
+      "appliedBody": "The engine recorded the acknowledgement.",
+      "replayedTitle": "Already acknowledged",
+      "replayedBody": "The engine replayed the receipt of an earlier identical acknowledgement.",
+      "late": "Late acknowledgement: recorded after the ack deadline. It is not counted as effective fulfillment.",
+      "conflictTitle": "The delivery changed since you read it",
+      "conflictBody": "The engine refused the acknowledgement: the version you read is no longer current, or the delivery is already acknowledged. Re-read the delivery and confirm again only if it still applies. Nothing was re-sent.",
+      "ambiguousTitle": "Outcome unknown",
+      "ambiguousBody": "The transport failed before an answer arrived. Retrying re-sends the same key and the same If-Match; the engine either applies it once, replays it, or refuses it with the current version.",
+      "refusedTitle": "Acknowledgement refused",
+      "noPermission": "You do not hold the delivery-write permission, so acknowledging is not offered."
+    },
+    "openMessageHint": "Opens the message with a read of its own, under the message-read permission.",
+    "noMessageRead": "You do not hold the message-read permission; the message is shown here only as this delivery carries it."
+  },
+  "message": {
+    "title": "Message",
+    "description": "Read fresh under the message-read permission, after the engine's exact carrier checks.",
+    "fields": {
+      "id": "Message ID",
+      "channel": "Channel",
+      "thread": "Thread",
+      "state": "State",
+      "sender": "Sender",
+      "urgency": "Urgency",
+      "ackPolicy": "Ack policy",
+      "ackQuorum": "Ack quorum",
+      "available": "Available at",
+      "published": "Published at",
+      "ackDue": "Ack due at",
+      "expires": "Expires at",
+      "terminal": "Terminal at",
+      "terminalCode": "Terminal code",
+      "version": "Version"
+    }
+  },
+  "content": {
+    "title": "Content",
+    "inert": "Shown as text. References and action references are information only: the console never fetches, follows or executes them.",
+    "markdownAsText": "markdown, shown as text",
+    "reference": "reference",
+    "action": "action reference",
+    "status": "status",
+    "hash": "hash",
+    "empty": "(empty)"
+  },
+  "fulfillment": {
+    "title": "Fulfillment",
+    "state": "State",
+    "required": "Required",
+    "acknowledged": "Acknowledged",
+    "viable": "Viable",
+    "unmet": "Unmet",
+    "quorum": "Quorum"
+  },
+  "receipt": {
+    "title": "Receipt",
+    "commandId": "Command ID",
+    "messageId": "Message ID",
+    "deliveryId": "Delivery ID",
+    "ackId": "Ack ID",
+    "eventId": "Event ID",
+    "auditSeq": "Audit sequence",
+    "version": "Version",
+    "etag": "ETag",
+    "state": "State",
+    "verdict": "Verdict",
+    "code": "Code",
+    "deliveryCount": "Deliveries",
+    "requiredCount": "Required",
+    "payloadDigest": "Payload digest",
+    "planHash": "Plan hash",
+    "audienceHash": "Audience hash",
+    "late": "Late"
+  },
+  "failure": {
+    "forbidden": "The engine refused this for the current principal.",
+    "step_up": "Your role permits this, but the session must be elevated first.",
+    "not_found": "Not found, or not visible to this principal.",
+    "unavailable": "The engine could not look: current authority, custody or store evidence is unavailable. This is neither an empty result nor a refusal.",
+    "version_mismatch": "The version you read is no longer current.",
+    "version_required": "The engine required a version precondition the console did not send.",
+    "plan_changed": "The publication would not reproduce the bound plan.",
+    "terminal": "The target is in a terminal state; the act cannot apply.",
+    "invalid": "The engine refused the request as malformed.",
+    "rate_limited": "Rate limited. Wait before asking again.",
+    "ambiguous": "The transport failed before an answer arrived.",
+    "aborted": "Cancelled by the console because the authority changed.",
+    "other": "The request failed.",
+    "code": "Code",
+    "status": "Status",
+    "requestId": "Request ID",
+    "message": "Server message",
+    "conflict": "The row changed since you read it, or the act no longer applies to it. Re-read before deciding again.",
+    "snapshot_changed": "The channel changed between two pages of this listing."
+  },
+  "authority": {
+    "lost": "The permission for this act is no longer held; nothing was sent.",
+    "confirmationClosed": "A pending confirmation was closed because the permission behind it was lost.",
+    "notAddressable": "This principal has no directory reference for this kind and cannot be addressed."
+  },
+  "states": {
+    "loading": "Loading…",
+    "reading": "Reading…"
+  },
+  "administration": {
+    "title": "Administrable channels",
+    "description": "Channels this principal may administer now: core channel:admin and a current local admin bit, decided by the engine on every read. Archived channels stay listed and inspectable. This is not the read catalog: a local read bit is neither required nor implied.",
+    "stateFilter": "Persisted state",
+    "states": {
+      "all": "All states",
+      "active": "Active only",
+      "archived": "Archived only"
+    },
+    "columns": {
+      "name": "Name",
+      "slug": "Slug",
+      "kind": "Kind",
+      "state": "State",
+      "sensitivity": "Sensitivity",
+      "protection": "Protection",
+      "etag": "ETag",
+      "updated": "Updated"
+    },
+    "openById": "Administer a channel by ID",
+    "openByIdHint": "The sheet is read through the grant history under channel:admin; it never uses the read-tier channel read.",
+    "emptyTitle": "No administrable channels",
+    "emptyBody": "No channel in this workspace grants this principal a current admin bit, or none matches the persisted state selected. A local admin grant and the channel:admin permission make one appear here.",
+    "truncated": "More administrable channels exist beyond this page",
+    "truncatedHint": "The server reported more administrable channels. Load more to continue from its continuation."
+  },
+  "channelState": {
+    "active": "Active",
+    "archived": "Archived"
+  },
+  "grantState": {
+    "active": "Active",
+    "revoked": "Revoked",
+    "expired": "Expired"
+  },
+  "admin": {
+    "title": "Channel administration",
+    "description": "Read fresh through the grant history with the channel's precondition ETag; no content is opened.",
+    "observedAt": "Observed at",
+    "tabs": {
+      "config": "Configuration",
+      "grants": "Grants"
+    },
+    "readFailedTitle": "The administrative read did not succeed",
+    "readFailedBody": "Nothing previously shown for this channel is kept: what is on screen must be what the engine authorizes now. Re-read when the cause is resolved."
+  },
+  "config": {
+    "immutable": "Slug, kind, tenant, workspace and the generation counters are informative and immutable here; the engine refuses a change that crosses them.",
+    "advanced": "Advanced options",
+    "archivedNote": "This channel is archived. Its state cannot return to active; its configuration may still be edited.",
+    "stateHint": "Archiving is one-way: an archived channel never returns to active.",
+    "stateLocked": "Archived. The engine refuses any state change on an archived channel.",
+    "sensitivityHint": "Restricted requires application-sealed content and cannot be lowered back to internal.",
+    "protectionHint": "Application-sealed protection cannot be lowered back to storage.",
+    "ackHint": "Ack policy “none” requires a zero timeout; any other policy requires a positive timeout.",
+    "wakeHint": "A channel default cannot be “inherit”; that value belongs to messages.",
+    "validation": {
+      "name": "The name must be 1 to 256 bytes.",
+      "description": "The description must be at most 4096 bytes.",
+      "fanout": "Max fanout must be a whole number of one or more.",
+      "depth": "Max automation depth must be a whole number of zero or more.",
+      "timeout": "The ack timeout must be a whole number of milliseconds.",
+      "ackTimeout": "Ack policy “none” needs a timeout of 0; every other policy needs a positive timeout.",
+      "restrictedSealed": "A restricted channel must be application-sealed.",
+      "sensitivityLowered": "Sensitivity cannot be lowered from restricted to internal.",
+      "protectionLowered": "Content protection cannot be lowered from application-sealed to storage.",
+      "archivedState": "An archived channel cannot return to active.",
+      "nothingChanged": "Nothing changed: there is no field to send."
+    },
+    "fieldNames": {
+      "name": "Name",
+      "description": "Description",
+      "state": "State",
+      "sensitivity": "Sensitivity",
+      "content_protection": "Content protection",
+      "default_ack_policy": "Default ack policy",
+      "default_ack_timeout_ms": "Default ack timeout (ms)",
+      "default_wake": "Default wake",
+      "retention_policy_ref": "Retention policy reference",
+      "max_fanout": "Max fanout",
+      "max_automation_depth": "Max automation depth"
+    },
+    "confirm": {
+      "title": "Confirm the configuration change",
+      "body": "Only the fields below are sent, with If-Match {{etag}} — the ETag of the read on screen. If the channel changed meanwhile the engine refuses and you re-read before confirming again; the console never substitutes the ETag.",
+      "archiving": "This archives the channel. Archiving is one-way: it will not return to active.",
+      "ifMatch": "If-Match"
+    },
+    "appliedTitle": "Configuration applied",
+    "appliedBody": "The engine committed the change. The sheet re-reads the channel; the next act uses the ETag of that read.",
+    "conflictTitle": "The channel changed since you read it",
+    "conflictBody": "The engine refused the change: its precondition no longer matches the current channel. Nothing was re-sent. Re-read, review your edits against the current values, and confirm again only if they still apply.",
+    "unknownTitle": "Result pending verification",
+    "unknownBody": "The transport failed before an answer arrived, so the change may or may not have been applied. This route has no idempotency key and the console will not re-send. Re-read the channel: the current values say whether it applied; a match does not by itself prove which attempt applied it.",
+    "refusedTitle": "Configuration refused",
+    "noPermission": "You do not hold the channel:admin permission, so configuration changes are not offered.",
+    "rebased": "The channel changed while you were editing. Fields you had not touched were refreshed from that read ({{fields}}); your own edits are kept and only they will be sent. Review the changes again to confirm against the new version.",
+    "versionMoved": "The channel has changed. Your edits are preserved; review them again before confirming."
+  },
+  "grants": {
+    "filters": {
+      "title": "Grant history filters",
+      "state": "Persisted state",
+      "stateHint": "Selects the stored state. An active row past its expiry is still “active” here and reads “expired” at the observation instant.",
+      "subjectKind": "Subject kind",
+      "subjectRef": "Subject reference",
+      "subjectHint": "Kind and reference travel together: both, or neither. Groups are not expanded.",
+      "anySubject": "Any subject",
+      "applied": "Filtered to subject {{kind}} {{ref}}."
+    },
+    "columns": {
+      "subject": "Subject",
+      "bits": "Bits",
+      "generation": "Generation",
+      "stored": "Stored state",
+      "temporal": "At observation",
+      "expires": "Expires",
+      "grantedBy": "Granted by",
+      "created": "Created"
+    },
+    "truncated": "More generations exist beyond this page",
+    "truncatedHint": "The server reported more generations. Load more to continue from its continuation; a channel change between pages restarts the listing.",
+    "emptyTitle": "No generations",
+    "emptyBody": "No stored grant generation matches the selected state and subject. A new grant adds one.",
+    "temporalHint": "“Stored state” is what the engine persisted; “at observation” is whether the row was in force at the observed instant. An expiry that has passed is reported, not materialized: it does not revoke the row, and a successor for that subject still requires an explicit revocation first.",
+    "snapshotChanged": "The channel changed between two pages of this history, so every page read so far was discarded and the listing restarted from the beginning (restarted {{count}} time(s)).",
+    "detail": {
+      "title": "Generation detail",
+      "id": "Grant ID",
+      "supersedes": "Supersedes",
+      "revokedBy": "Revoked by",
+      "version": "Row version",
+      "updated": "Updated",
+      "expiredActive": "This row is stored active but its expiry has passed at the observation instant. The engine did not revoke it: a successor for this subject requires revoking this generation explicitly.",
+      "notActive": "This generation is not stored active; nothing can be revoked here. A new grant for its subject requires no active generation."
+    },
+    "form": {
+      "title": "New grant generation",
+      "hint": "One subject, three independent bits, an optional expiry. A directory row is a candidate, not an eligible subject: the engine decides on the act, and a recorded generation is not a promise of effective access."
+    },
+    "validation": {
+      "expiry": "The expiry could not be read as a date.",
+      "expiryPast": "The expiry must be in the future."
+    },
+    "confirm": {
+      "title": "Confirm the grant",
+      "body": "This sends exactly the generation below with If-Match of the read on screen. The engine refuses it if the subject already holds an active generation, or if the channel changed meanwhile; then you re-read and confirm again. Nothing is retried on its own.",
+      "successorOf": "Successor of revoked generation {{id}}. It is a separate act: the revocation above already committed."
+    },
+    "appliedTitle": "Grant recorded",
+    "appliedBody": "The engine recorded this generation now. It is not a promise that the subject can act: the engine decides every act at the moment it is asked.",
+    "conflictTitle": "The channel changed since you read it",
+    "conflictBody": "The engine refused the act: its precondition no longer matches the current channel, or the target generation is no longer what you saw. Nothing was re-sent. Re-read the history and confirm again only if the act still applies.",
+    "unknownTitle": "Result pending verification",
+    "unknownBody": "The transport failed before an answer arrived. The act may or may not have been applied, and this route has no idempotency key: the console will not re-send. Re-read the history and decide; a matching row shows the current state, not which attempt produced it.",
+    "unknownAct": "Act",
+    "unknownGrant": "Grant (POST …/grants)",
+    "unknownRevoke": "Revoke (POST …/revoke)",
+    "refusedTitle": "Grant refused",
+    "revoke": {
+      "title": "Revoke this exact generation",
+      "body": "This revokes the generation shown, by its ID, with If-Match of the read on screen. Its history is kept. A successor for the subject is a separate act after re-reading.",
+      "bodyThenGrant": "First act of two: revoke the generation shown. After the engine's answer is read, you will be offered a separate confirmation for a successor generation; nothing is chained automatically.",
+      "ownAdminWarning": "This generation is an admin grant for your own account. It may be what sustains your administrative access to this channel; the console does not compute your full authority, and the engine decides your next request.",
+      "appliedTitle": "Generation revoked",
+      "appliedBody": "The engine recorded the revocation now. Its history stays readable under the revoked state.",
+      "refusedTitle": "Revocation refused"
+    },
+    "stateFilters": {
+      "active": "Active (stored)",
+      "revoked": "Revoked (stored)",
+      "expired": "Expired (stored)",
+      "all": "All (stored)"
+    }
+  },
+  "cursor": {
+    "title": "Mark seen up to here",
+    "description": "Advances your personal seen cursor to the last delivery of one inbox page. It acknowledges nothing and changes no delivery.",
+    "section": {
+      "title": "Seen cursor",
+      "hint": "Each loaded page can be marked seen up to its last delivery. The target is the page's own, minted by the engine for that exact delivery; the table's local filter must be empty so the scope is unambiguous.",
+      "page": "Page {{page}} · {{count}} deliveries",
+      "upTo": "up to"
+    },
+    "reasons": {
+      "noPermission": "Requires the delivery:write permission.",
+      "noRecipient": "This session is not a user identity; the personal cursor belongs to a user mailbox.",
+      "filtered": "Clear the table filter first: the cursor target is the server page, not the filtered rows.",
+      "emptyPage": "This page has no deliveries to mark.",
+      "otherRecipient": "The last delivery of this page is not addressed to your user identity."
+    },
+    "fields": {
+      "scope": "Scope",
+      "scopeValue": "page {{page}} of the loaded chain ({{count}} deliveries)",
+      "workspace": "Workspace",
+      "recipient": "Recipient",
+      "lastSubject": "Last subject",
+      "lastDelivery": "Last delivery",
+      "lastSeq": "Delivery sequence",
+      "cursorVersion": "Cursor version",
+      "cursorId": "Cursor ID",
+      "replayed": "Replayed",
+      "lastSeenSeq": "Last seen sequence",
+      "barrierDelivery": "Barrier delivery",
+      "barrierReason": "Barrier reason",
+      "barrierSince": "Barrier since"
+    },
+    "preparing": "Preparing: asking the engine for the cursor target of this page…",
+    "prepareFailedTitle": "The cursor target could not be prepared",
+    "prepareFailedBody": "Nothing was advanced. Refresh the inbox and prepare again from a current page.",
+    "confirm": {
+      "title": "Confirm the advance",
+      "body": "This sends the prepared target and the delivery above with If-Match of the cursor version read, and a key of its own. Only confirming advances anything. A retry after an ambiguous result re-sends exactly this."
+    },
+    "conflictTitle": "The cursor changed since it was prepared",
+    "conflictBody": "The engine refused the advance: the cursor version or the target is no longer current. Nothing was re-sent. Refresh the inbox and prepare again from a current page.",
+    "ambiguousTitle": "Outcome unknown",
+    "ambiguousBody": "The transport failed before an answer arrived. Retrying re-sends the same target, the same If-Match and the same key; the engine either applies it once, replays it, or refuses it with its current version. Leaving it undetermined keeps the previous result unknown.",
+    "refusedTitle": "Advance refused",
+    "refusedBody": "The engine did not advance the cursor. Refresh the inbox before preparing again.",
+    "result": {
+      "appliedTitle": "Cursor advanced",
+      "appliedBody": "The engine committed the advance and returned the position below. The inbox is re-read from the durable cursor.",
+      "replayedTitle": "Already advanced",
+      "replayedBody": "The engine replayed the result of an identical earlier command. Nothing was applied twice.",
+      "barrierTitle": "Advance limited by a barrier",
+      "barrierBody": "The engine stopped at the delivery below for the reason it names; the cursor did not reach the target. This is not a full advance.",
+      "barrierHint": "Open the barrier delivery with a fresh read. Resolving it does not advance anything by itself: refresh the inbox, prepare a new target and confirm again.",
+      "notAck": "A seen cursor is not an acknowledgement and does not change any delivery's state or first-seen mark."
+    }
+  },
+  "capability": {
+    "actInterrupted": "A confirmation was closed while its act was already being sent: this console has no current answer for that act. Nothing was decided and nothing was refused; whether the act reached the engine is not established here.",
+    "checking": "Checking access…",
+    "confirmationClosed": "A pending confirmation was closed: this console has no current answer for that act. Nothing was decided, nothing was refused and nothing was sent.",
+    "globalAccountBody": "Use a member account for this organization to open this view. Global accounts cannot check access to this view.",
+    "globalAccountTitle": "Sign in with a member account",
+    "notConfirmed": "Nothing was sent: the authorization for this act could not be confirmed just now.",
+    "retrying": "Rechecking every few seconds.",
+    "unavailableBody": "This console has no current answer for this action. Nothing was decided and nothing was refused.",
+    "unavailableTitle": "Access could not be established",
+    "undisclosedBody": "The engine did not publish an answer for this action here. That is not a statement about your role, about whether the target exists, or about the service being available.",
+    "undisclosedTitle": "This decision is not being disclosed"
+  },
+  "continuity": {
+    "interrupted": "Access could not be confirmed for a moment, so the pending confirmation was closed. Your edits are preserved and nothing was sent; review them again before confirming.",
+    "interruptedSend": "Access could not be confirmed while the change was being sent, so the confirmation was closed. Your edits are preserved and nothing was re-sent; whether the change reached the engine is not established here — re-read to verify."
+  },
+  "handoff": {
+    "state": {
+      "offered": "Offered",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn",
+      "expired": "Expired"
+    },
+    "context": {
+      "current": "Answerable now",
+      "stale": "No longer current",
+      "terminal": "Already resolved"
+    },
+    "actions": {
+      "accept": "Accept responsibility",
+      "reject": "Reject handoff"
+    },
+    "retained": {
+      "submitting": "A handoff operation is on the wire.",
+      "uncertain": "A handoff operation has no confirmed result.",
+      "confirmed": "The offer receipt is still available.",
+      "responseConfirmed": "The response receipt is still available.",
+      "reopen": "Show the operation"
+    },
+    "lost": {
+      "title": "Credentials changed",
+      "body": "Submission stopped; the result has not been confirmed. Read the current state before acting again.",
+      "notSent": "The submission did not start, so this command was not sent. Read the current state before acting again.",
+      "latestNotSent": "The latest attempt did not start and was not sent. The earlier attempt is a separate fact. Read the current state before acting again."
+    },
+    "uncertain": {
+      "title": "The result is not known",
+      "body": "The request may or may not have been applied. A timeout is not a rollback. Retrying sends the identical operation under the same key, so the engine can answer that it was already applied instead of applying it twice.",
+      "discard": "Stop tracking this locally",
+      "priorTransmission": "An earlier attempt was transmitted and its outcome was never confirmed. Later answers describe the request that returned them, not that one."
+    },
+    "references": {
+      "hint": "A kind and a reference are required; the hash is optional. References are labels the recipient reads — nothing here is fetched, followed or opened.",
+      "kind": "Kind",
+      "ref": "Reference",
+      "hash": "Hash",
+      "add": "Add reference",
+      "remove": "Remove reference"
+    },
+    "offer": {
+      "title": "Offer handoff",
+      "description": "Offer responsibility for this work item to a recipient over a channel. Creating the offer does not transfer ownership: only an accepted response does.",
+      "readRefusedTitle": "The work item could not be read",
+      "itemTitle": "Work item",
+      "item": "Work item",
+      "itemId": "Work item ID",
+      "itemStatus": "Status",
+      "currentOwner": "Current owner",
+      "ownerEpoch": "Owner epoch",
+      "itemWorkspace": "Item workspace",
+      "precondition": "Precondition (If-Match)",
+      "itemMismatch": "The read returned a different work item than the one requested. Nothing can be offered under this read.",
+      "workspaceMismatchTitle": "Select the item's workspace",
+      "workspaceMismatchBody": "This item belongs to workspace {{itemWorkspace}} and the selected workspace is {{selected}}. Select the item's workspace in the switcher to offer it; the console never selects one for you.",
+      "workspaceNone": "No explicit workspace is selected. An offer is workspace-scoped, so select the item's workspace in the switcher; the console never selects one for you.",
+      "noPrecondition": "The work item read carried no ETag, so there is no precondition to send. Re-read the item; a version is not turned into a validator here.",
+      "noPermission": "Offering a handoff requires sessions:message-send:write. The engine also checks item ownership and channel authority.",
+      "channel": "Channel",
+      "channelHint": "The canonical channel ID the carrier is published on. It can always be typed.",
+      "channelPick": "Pick a channel",
+      "channelNoDirectory": "The channel catalog is not readable with this permission, so the channel ID is entered directly. A listed channel would be a candidate anyway, never an eligibility decision.",
+      "recipient": "Recipient",
+      "summary": "Summary",
+      "nextAction": "Next action",
+      "risk": "Risk",
+      "riskHint": "Optional.",
+      "artifacts": "Artifact references",
+      "deadline": "Response deadline",
+      "deadlineHint": "An absolute instant, entered in your own time zone. It starts empty on purpose: the console does not choose a commitment for you, and it never extends one.",
+      "deadlineReview": "{{zone}} local, sent as {{utc}}. The server clock is final and can still refuse it.",
+      "review": "Review offer",
+      "confirm": "Confirm and offer",
+      "confirmTitle": "Review before offering",
+      "confirmBody": "From here the key, the body, the target and the precondition are frozen. A retry after an unknown result sends exactly this object.",
+      "key": "Idempotency key",
+      "submitting": "Offering…",
+      "conflictTitle": "The offer did not apply",
+      "conflictBody": "The item moved since it was read, or the command no longer applies. This response does not say which. Re-read the item and review a new offer; the precondition is never replaced and resent.",
+      "refusedTitle": "The offer was refused",
+      "createdTitle": "Offer created",
+      "replayedTitle": "Offer already applied (replay)",
+      "pendingBody": "Ownership has not transferred. The recipient's response is pending.",
+      "startOver": "Start a new offer",
+      "serverFinal": "The engine is the final validator: it can still refuse this offer for eligibility, authority or limits, and its answer is shown as it comes.",
+      "validation": {
+        "channel": "A channel is required.",
+        "channelFormat": "The channel ID must be a canonical UUID.",
+        "recipient": "A recipient reference is required.",
+        "recipientLength": "The recipient reference is longer than 1024 bytes.",
+        "summary": "A summary is required.",
+        "summaryLength": "The summary is longer than 32 KiB.",
+        "nextAction": "A next action is required.",
+        "nextActionLength": "The next action is longer than 32 KiB.",
+        "riskLength": "The risk note is longer than 32 KiB.",
+        "references": "Each reference needs a kind and a reference of 1 to 512 bytes, already trimmed and without line breaks.",
+        "referencesMax": "At most 64 artifact references.",
+        "deadline": {
+          "empty": "A response deadline is required.",
+          "unreadable": "The response deadline cannot be read as an instant.",
+          "past": "The response deadline must be later than the current time."
+        }
+      },
+      "targetRefusedTitle": "Finish the current offer first",
+      "targetRefusedBody": "A previous offer was sent and has not resolved. Resolve it or stop local tracking, then start the new one.",
+      "conflictTitleLatest": "This attempt did not apply",
+      "conflictBodyLatest": "The item moved since it was read, or the command no longer applies. This answer is about the request that just returned. Re-read the item and review a new offer from its current state.",
+      "refusedTitleLatest": "This attempt was refused"
+    },
+    "inbox": {
+      "title": "Handoffs addressed to you",
+      "description": "One page at a time on the server's continuation. This collection is content-free: the summary, next action and risk of an offer are only readable by opening it.",
+      "filter": "State",
+      "truncated": "More offers exist beyond this page",
+      "truncatedHint": "The engine reports that a further offer was authorized in the same transaction. It is not a total, and it is not a count of hidden rows.",
+      "emptyTitle": "No {{state}} handoffs in this workspace",
+      "emptyBody": "This is an empty authorized result, not a refusal and not a failure to look.",
+      "unavailableTitle": "Handoff information cannot be verified",
+      "unavailableBody": "Handoff information cannot currently be loaded. Retry, or contact an administrator if it persists.",
+      "accountGuidanceTitle": "Use a member account for personal handoffs",
+      "accountGuidanceBody": "You're signed in as a global administrator. Sign in with a member account for this organization to view the offers addressed to you.",
+      "accountGuidanceHint": "Use the account that received the offer.",
+      "contentFree": "Rows show identity, state and timing only. Open a row to read its protected context under its own authorized read.",
+      "elapsed": "Window elapsed",
+      "elapsedHint": "The response window has passed at the engine's observation. The row can still be persisted as offered: this read never runs the reaper, so this is not proof that an expiration was recorded.",
+      "columns": {
+        "workItem": "Work item",
+        "from": "Sender",
+        "to": "Recipient",
+        "state": "State",
+        "deadline": "Deadline",
+        "observed": "Observed",
+        "delivery": "Carrier delivery"
+      }
+    },
+    "detail": {
+      "title": "Handoff offer",
+      "description": "The protected context of one offer, read fresh through its carrier delivery. It is not kept after this panel closes.",
+      "contextTitle": "Offer context",
+      "summary": "Summary",
+      "nextAction": "Next action",
+      "risk": "Risk",
+      "artifacts": "Artifact references",
+      "artifactsInert": "References are shown as text. Nothing here is fetched, followed or opened.",
+      "adminTitle": "Receipt fields",
+      "workItem": "Work item",
+      "handoffId": "Handoff ID",
+      "from": "Sender",
+      "to": "Recipient",
+      "deadline": "Response deadline",
+      "created": "Created",
+      "observed": "Observed",
+      "precondition": "Handoff ETag (If-Match)",
+      "preconditionHint": "A response is bound to the handoff ETag above, never to the carrier delivery version beside it.",
+      "carrierDelivery": "Carrier delivery",
+      "carrierVersion": "Carrier delivery version",
+      "channel": "Channel",
+      "terminalTitle": "Reason recorded by the engine",
+      "deadlineElapsed": "Window elapsed",
+      "notCurrent": {
+        "stale": "This offer is no longer current",
+        "terminal": "This offer is already resolved"
+      },
+      "notCurrentBody": "The engine reports it cannot be answered now, so no response control is offered. Re-read to see its current state.",
+      "noRespondPermission": "Responding requires sessions:handoff-response:write."
+    },
+    "respond": {
+      "acceptTitle": "Accept responsibility",
+      "rejectTitle": "Reject handoff",
+      "acceptDescription": "Accepting transfers ownership of the work item to the recipient below and creates an acknowledgment. It does not start a session and does not acquire an execution lease.",
+      "rejectDescription": "Rejecting requires a reason code. Ownership does not move.",
+      "reasonCode": "Reason code",
+      "reasonCodeHint": "These four are console presets, not the engine's list. The engine keeps an open vocabulary, so a custom code is available.",
+      "reasonCodeEmpty": "Choose a reason",
+      "customCode": "Custom reason code",
+      "customCodeHint": "A lowercase token of at most 128 bytes: letters, digits, dot, hyphen and underscore, starting with a letter or a digit.",
+      "reasonText": "Explanation",
+      "reasonTextHint": "Optional, up to 32 KiB.",
+      "reasonReferences": "Reason references",
+      "reasons": {
+        "not_available": "Not available",
+        "outside_scope": "Outside my scope",
+        "needs_information": "Needs more information",
+        "other": "Other",
+        "custom": "Custom code…"
+      },
+      "review": "Review response",
+      "confirmTitle": "Review before responding",
+      "confirmAcceptBody": "Confirming transfers ownership of this work item to the recipient above. The key, the body and the precondition are frozen from here.",
+      "confirmRejectBody": "Confirming records this rejection. Ownership does not move. The key, the body and the precondition are frozen from here.",
+      "confirmAccept": "Confirm acceptance",
+      "confirmReject": "Confirm rejection",
+      "transition": "Response",
+      "submitting": "Responding…",
+      "conflictTitle": "The response did not apply",
+      "conflictBody": "The offer moved since it was read, or the command no longer applies. This response does not say which. Re-read the offer and review a new response; the precondition is never replaced and resent.",
+      "refusedTitle": "The response was refused",
+      "acceptedTitle": "Responsibility accepted",
+      "rejectedTitle": "Handoff rejected",
+      "replayedTitle": "Response already applied (replay)",
+      "acceptedBody": "Ownership of the work item moved and the owner epoch advanced.",
+      "rejectedBody": "The rejection was recorded. Ownership did not move.",
+      "validation": {
+        "code": "A reason code is required.",
+        "codeLength": "The reason code is longer than 128 bytes.",
+        "codeShape": "The reason code must be a lowercase token: letters, digits, dot, hyphen and underscore, starting with a letter or a digit.",
+        "textLength": "The explanation is longer than 32 KiB.",
+        "references": "Each reference needs a kind and a reference of 1 to 512 bytes, already trimmed and without line breaks.",
+        "referencesMax": "At most 64 reason references."
+      },
+      "targetRefusedTitle": "Finish the current response first",
+      "targetRefusedBody": "A previous response was sent and has not resolved. Resolve it or stop local tracking, then start the new one.",
+      "startNew": "Start a new response",
+      "conflictTitleLatest": "This attempt did not apply",
+      "conflictBodyLatest": "The offer moved since it was read, or the command no longer applies. This answer is about the request that just returned. Re-read the offer and review a new response from its current state.",
+      "refusedTitleLatest": "This attempt was refused"
+    },
+    "receipt": {
+      "handoffId": "Handoff ID",
+      "deliveryId": "Carrier delivery",
+      "ownerEpoch": "Owner epoch",
+      "leaseFence": "Resulting lease fence",
+      "status": "HTTP {{status}}",
+      "noLease": "The response carried no lease fence. Responsibility moved; no execution lease was acquired and no session is running.",
+      "notCurrentOwnership": "These are the values this receipt reported. Read the work item for current ownership."
+    },
+    "tracking": {
+      "limits": "Hiding this panel keeps local tracking. Stopping tracking or leaving this context cannot cancel or roll back a command already sent, a full reload ends this local observer, and there is no command-status lookup here.",
+      "pendingHide": "You can hide this panel while the command is pending; tracking continues here and the result is unchanged. Stopping tracking or leaving this context cannot cancel or roll back a command already sent.",
+      "ended": "Local tracking ended because access to this context changed. The engine outcome is not established here.",
+      "endedAfterSend": "A command had already been sent. Ending local tracking did not cancel or roll it back.",
+      "stoppedAfterSend": "You stopped tracking a command that may already have been sent. That does not cancel it or roll it back, and its outcome is not established here. Read the current state before acting again."
+    }
+  }
+}

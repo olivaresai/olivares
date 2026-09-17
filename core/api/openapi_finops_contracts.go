@@ -330,3 +330,105 @@ func finopsOutcomeIngestSchema() map[string]any {
 	}
 	return schema
 }
+
+// These are response DTOs, not mutation inputs. Decimal money is a STRING: neither
+// an int64 projection nor a JSON number can represent every established sum.
+func finopsEvidenceReadRoute(r moduleRoute) bool {
+	return r.ns == "finops" && r.method == http.MethodGet && (r.pattern == "/alerts" || r.pattern == "/budgets/{id}/status")
+}
+func finopsEvidenceResponse(r moduleRoute) map[string]any {
+	schema := finopsBudgetStatusSchema()
+	if r.pattern == "/alerts" {
+		schema = finopsObjectSchema(oaObj("items", oaObj("type", "array", "items", finopsAlertSchema()), "cursor", oaObj("type", "string"), "has_more", oaObj("type", "boolean")), "items", "has_more")
+	}
+	return oaObj("description", "Tenant-scoped financial evidence; legacy numeric fields are classified separately. Forecast is not certified.", "content", oaObj("application/json", oaObj("schema", schema)))
+}
+func finopsAlertParameters() []any {
+	return []any{
+		oaParam("alert_id", "query", "Optional UUID validated by the handler (400 if malformed). A reference grants no access; an authorized tenant with no matching row receives an empty list.", false, oaObj("type", "string", "format", "uuid")),
+		oaParam("budget_id", "query", "Optional budget filter, combined with alert_id.", false, oaObj("type", "string")),
+		oaParam("limit", "query", "Page size; default 100, store maximum 1000.", false, oaObj("type", "integer")),
+		oaParam("cursor", "query", "Opaque continuation cursor from the preceding page.", false, oaObj("type", "string")),
+	}
+}
+func finopsStrings(names ...string) map[string]any {
+	p := map[string]any{}
+	for _, n := range names {
+		p[n] = oaObj("type", "string")
+	}
+	return p
+}
+func finopsDecimal(nullable bool) map[string]any {
+	p := oaObj("type", "string", "pattern", "^(0|-?[1-9][0-9]*)$", "description", "Canonical integer micro-USD, without floating-point conversion.")
+	if nullable {
+		p["type"] = oaEnum("string", "null")
+	}
+	return p
+}
+func finopsCauses() map[string]any { return oaObj("type", "array", "items", oaObj("type", "string")) }
+func finopsComponentSchema() map[string]any {
+	return finopsObjectSchema(oaObj("state", oaObj("type", "string", "enum", oaEnum("known", "unknown", "nonnegative_unknown", "indeterminate")), "value_micro_usd", finopsDecimal(true), "causes", finopsCauses(), "rows_read", oaObj("type", "integer"), "pages_read", oaObj("type", "integer")), "state", "value_micro_usd")
+}
+func finopsComponentsSchema() map[string]any {
+	return finopsObjectSchema(oaObj("cost", finopsComponentSchema(), "static_reservation", finopsComponentSchema(), "dynamic_reservation", finopsComponentSchema()), "cost", "static_reservation", "dynamic_reservation")
+}
+func finopsCrossingSchema() map[string]any {
+	return oaObj("type", "string", "enum", oaEnum("proven", "not_reached", "unproven"))
+}
+func finopsThresholdSchema() map[string]any {
+	p := finopsStrings("threshold", "target_micro_usd") // the target may be a terminating rational decimal
+	p["result"] = finopsCrossingSchema()
+	p["legacy_threshold_pct"] = oaObj("type", "integer")
+	p["causes"] = finopsCauses()
+	return finopsObjectSchema(p, "threshold", "result")
+}
+func finopsEnvelopeSchema() map[string]any {
+	policy := finopsStrings("id", "name", "dimension", "key", "period", "currency", "action", "reserved_micro_usd", "config_fault")
+	policy["version"] = finopsInt64Schema()
+	policy["limit_micro_usd"] = finopsDecimal(false)
+	amount := finopsObjectSchema(oaObj("class", oaObj("type", "string", "enum", oaEnum("exact", "lower_bound", "unknown")), "value_micro_usd", finopsDecimal(true), "currency", oaObj("type", "string"), "causes", finopsCauses()), "class", "value_micro_usd", "currency")
+	decision := finopsStrings("threshold", "target_micro_usd", "target_numerator", "target_denominator")
+	decision["result"] = finopsCrossingSchema()
+	decision["legacy_threshold_pct"] = oaObj("type", "integer")
+	decision["causes"] = finopsCauses()
+	ctx := finopsStrings("window_start", "window_end", "window_bounds", "provenance_filter", "scope_column", "scope_value", "evaluated_at", "sample_occurred_at", "read_consistency")
+	ctx["scope_resolved"] = oaObj("type", "boolean")
+	p := finopsStrings("alert_id", "tenant_id", "budget_id")
+	p["schema_version"] = oaObj("type", "integer", "const", 1)
+	p["digest_version"] = oaObj("type", "integer", "const", 1)
+	p["policy"] = finopsObjectSchema(policy, "id", "version", "name", "dimension", "key", "period", "currency", "action", "limit_micro_usd")
+	p["amount"] = amount
+	p["components"] = finopsComponentsSchema()
+	p["decision"] = finopsObjectSchema(decision, "result", "threshold", "target_numerator", "target_denominator", "legacy_threshold_pct")
+	p["context"] = finopsObjectSchema(ctx, "window_bounds", "provenance_filter", "scope_resolved", "evaluated_at", "sample_occurred_at", "read_consistency")
+	p["legacy"] = finopsObjectSchema(oaObj("value_kind", oaObj("type", "string", "enum", oaEnum("exact", "lower_bound", "unavailable")), "spend_micro_usd", finopsInt64Schema(), "note", oaObj("type", "string")), "value_kind", "spend_micro_usd")
+	return finopsObjectSchema(p, "schema_version", "digest_version", "alert_id", "tenant_id", "budget_id", "policy", "amount", "components", "decision", "context", "legacy")
+}
+func finopsAlertSchema() map[string]any {
+	p := finopsStrings("id", "budget_id", "dimension", "key", "period", "period_start", "severity", "triggered_at")
+	for _, n := range []string{"threshold_pct", "spend_micro_usd", "limit_micro_usd"} {
+		p[n] = finopsInt64Schema()
+	}
+	p["legacy_value_kind"] = oaObj("type", "string", "enum", oaEnum("exact", "lower_bound", "unavailable", "unverified"))
+	p["amount_evidence"] = finopsObjectSchema(oaObj("state", oaObj("type", "string", "enum", oaEnum("valid", "unknown")), "cause", oaObj("type", "string"), "evidence_hash", oaObj("type", "string", "description", "Recorded digest; may be invalid when state=unknown. A digest alone establishes no financial claim."), "envelope", finopsEnvelopeSchema()), "state")
+	return finopsObjectSchema(p, "id", "budget_id", "dimension", "period", "period_start", "threshold_pct", "spend_micro_usd", "limit_micro_usd", "severity", "triggered_at", "legacy_value_kind", "amount_evidence")
+}
+func finopsBudgetStatusSchema() map[string]any {
+	p := finopsStrings("id", "name", "dimension", "key", "period", "period_start", "currency", "action", "exhaustion_confidence")
+	for _, n := range []string{"limit_micro_usd", "reserved_micro_usd", "spend_micro_usd", "remaining_micro_usd", "projected_micro_usd"} {
+		p[n] = finopsInt64Schema()
+	}
+	for _, n := range []string{"consumed_pct", "projected_pct", "samples", "exhaustion_days_remaining"} {
+		p[n] = oaObj("type", "integer")
+	}
+	for _, n := range []string{"enabled", "over", "truncated"} {
+		p[n] = oaObj("type", "boolean")
+	}
+	fields := finopsStrings("spend_micro_usd", "remaining_micro_usd", "projected_micro_usd")
+	for n := range fields {
+		fields[n] = oaObj("type", "string", "enum", oaEnum("exact", "lower_bound", "unavailable"))
+	}
+	fields["over"] = finopsCrossingSchema()
+	p["amount"] = finopsObjectSchema(oaObj("state", oaObj("type", "string", "enum", oaEnum("complete", "incomplete")), "class", oaObj("type", "string", "enum", oaEnum("exact", "lower_bound", "unknown")), "effective_micro_usd", finopsDecimal(true), "remaining_micro_usd", finopsDecimal(true), "currency", oaObj("type", "string"), "causes", finopsCauses(), "components", finopsComponentsSchema(), "thresholds", oaObj("type", oaEnum("array", "null"), "items", finopsThresholdSchema()), "over_limit", finopsThresholdSchema(), "legacy_projection", oaObj("type", "string", "enum", oaEnum("exact", "lower_bound", "unavailable")), "legacy_fields", finopsObjectSchema(fields, "spend_micro_usd", "remaining_micro_usd", "projected_micro_usd", "over"), "forecast_certified", oaObj("type", "boolean", "const", false)), "state", "class", "effective_micro_usd", "remaining_micro_usd", "currency", "components", "thresholds", "over_limit", "legacy_projection", "legacy_fields", "forecast_certified")
+	return finopsObjectSchema(p, "id", "name", "enabled", "dimension", "period", "currency", "action", "limit_micro_usd", "spend_micro_usd", "remaining_micro_usd", "consumed_pct", "projected_micro_usd", "projected_pct", "over", "samples", "exhaustion_days_remaining")
+}

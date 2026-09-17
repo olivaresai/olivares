@@ -9,6 +9,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"database/sql"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/dr"
@@ -115,7 +118,77 @@ func TestBundleRoundTrip(t *testing.T) {
 	if m.Store.Method != dr.MethodVacuumInto || m.Store.SHA256 == "" {
 		t.Fatalf("store meta wrong: %+v", m.Store)
 	}
+	cipher, err := dr.OpenCipher([]byte(testPass), kek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dr.VerifyBundleIntegrity(dir, m, kek, cipher, false); err != nil {
+		t.Fatalf("authenticated bundle did not verify: %v", err)
+	}
+	if len(m.Files) != 3 || m.Authentication.Algorithm == "" || m.Authentication.Value == "" {
+		t.Fatalf("bundle lacks the authenticated per-file inventory: files=%d auth=%+v", len(m.Files), m.Authentication)
+	}
 	_ = dir
+}
+
+func TestBundleIntegrityRejectsAlteredDigestAndPayload(t *testing.T) {
+	src := newEstate(t)
+	tn := src.newTenant(t)
+	src.appendN(t, tn, 2)
+	b := makeBundle(t, src)
+	dir, m, kek := extractBundle(t, b)
+	cipher, err := dr.OpenCipher([]byte(testPass), kek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dr.VerifyBundleIntegrity(dir, m, kek, cipher, false); err != nil {
+		t.Fatalf("positive control: %v", err)
+	}
+
+	original := m.Files[0].SHA256
+	m.Files[0].SHA256 = strings.Repeat("0", 64)
+	if err := dr.VerifyBundleIntegrity(dir, m, kek, cipher, false); err == nil || !strings.Contains(err.Error(), "authentication mismatch") {
+		t.Fatalf("altered manifest digest was not rejected by its keyed authentication: %v", err)
+	}
+	m.Files[0].SHA256 = original
+
+	snapshot := filepath.Join(dir, m.Store.File)
+	f, err := os.OpenFile(snapshot, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write([]byte("altered")); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := dr.VerifyBundleIntegrity(dir, m, kek, cipher, false); err == nil || !strings.Contains(err.Error(), "payload digest mismatch") {
+		t.Fatalf("altered payload was not rejected: %v", err)
+	}
+}
+
+func TestBundleIntegrityRequiresExplicitLegacyException(t *testing.T) {
+	cipher, err := dr.NewRawKeyCipher(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &dr.Manifest{Format: dr.ManifestFormat}
+	if err := dr.VerifyBundleIntegrity(t.TempDir(), m, cipher.Params(), cipher, false); err == nil || !strings.Contains(err.Error(), "unsigned") {
+		t.Fatalf("unsigned legacy bundle was not refused: %v", err)
+	}
+	if err := dr.VerifyBundleIntegrity(t.TempDir(), m, cipher.Params(), cipher, true); err != nil {
+		t.Fatalf("explicit legacy exception did not work: %v", err)
+	}
+}
+
+func TestWriteBundleRequiresAuthenticatedManifest(t *testing.T) {
+	var out bytes.Buffer
+	err := dr.WriteBundle(&out, dr.BundleInput{Manifest: &dr.Manifest{Format: dr.ManifestFormat}})
+	if err == nil || !strings.Contains(err.Error(), "requires an authenticated manifest") {
+		t.Fatalf("low-level serializer accepted an unauthenticated manifest: %v", err)
+	}
 }
 
 func TestExtractBundleRejectsTraversal(t *testing.T) {
@@ -126,8 +199,46 @@ func TestExtractBundleRejectsTraversal(t *testing.T) {
 	_, _ = tw.Write([]byte("bad"))
 	_ = tw.Close()
 	_ = gz.Close()
-	if _, _, err := dr.ExtractBundle(&buf, t.TempDir()); err == nil {
-		t.Fatal("expected a path-traversal rejection")
+	if _, _, err := dr.ExtractBundle(&buf, t.TempDir()); err == nil || !strings.Contains(err.Error(), `unsafe bundle entry "../escape"`) {
+		t.Fatalf("expected the path guard itself to reject traversal, got %v", err)
+	}
+}
+
+func TestExtractBundleRejectsAbsolutePath(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	_ = tw.WriteHeader(&tar.Header{Name: "/absolute", Mode: 0o600, Size: 3, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("bad"))
+	_ = tw.Close()
+	_ = gz.Close()
+	if _, _, err := dr.ExtractBundle(&buf, t.TempDir()); err == nil || !strings.Contains(err.Error(), `unsafe bundle entry "/absolute"`) {
+		t.Fatalf("expected the path guard itself to reject an absolute path, got %v", err)
+	}
+}
+
+func TestExtractBundleRejectsBackslashAlias(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	_ = tw.WriteHeader(&tar.Header{Name: `store\olivares.db`, Mode: 0o600, Size: 3, Typeflag: tar.TypeReg})
+	_, _ = tw.Write([]byte("bad"))
+	_ = tw.Close()
+	_ = gz.Close()
+	if _, _, err := dr.ExtractBundle(&buf, t.TempDir()); err == nil || !strings.Contains(err.Error(), "unsafe bundle entry") {
+		t.Fatalf("expected a backslash alias to be rejected, got %v", err)
+	}
+}
+
+func TestExtractBundleRejectsLinkEntry(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	_ = tw.WriteHeader(&tar.Header{Name: "store/olivares.db", Linkname: "/etc/passwd", Typeflag: tar.TypeSymlink})
+	_ = tw.Close()
+	_ = gz.Close()
+	if _, _, err := dr.ExtractBundle(&buf, t.TempDir()); err == nil || !strings.Contains(err.Error(), "is not a regular file") {
+		t.Fatalf("expected a link entry to be rejected, got %v", err)
 	}
 }
 

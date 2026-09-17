@@ -887,8 +887,10 @@ func TestBuildInProcSourceS156(t *testing.T) {
 // infisical project grants) resolve in buildInProcSource, so a cfg.Sources
 // entry with poll_seconds re-runs them — the as_source=true path runs a Gather
 // only once per boot. okta/entra are aliases of the one idp connector
-// (Descriptor olivares.idp — the one-instance-per-kind limit applies to
-// the family). The roster-only kinds stay pinned NOT to resolve
+// (Descriptor olivares.idp): a shared descriptor, no longer a shared identity —
+// each registration carries its own configured name, and
+// TestWireRosterWiresTwoIdpEntriesAsSeparateSources wires both at once. The
+// roster-only kinds stay pinned NOT to resolve
 // (TestBuildInProcSourceS156), and spiffe/keycloak keep a no-op Gather.
 func TestBuildInProcSourceS158IdentityGrants(t *testing.T) {
 	cases := map[string]string{

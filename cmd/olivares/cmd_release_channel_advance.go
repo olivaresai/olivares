@@ -165,16 +165,31 @@ func runReleaseVerifyChannelAdvance(cmd *cobra.Command, o *channelAdvanceOptions
 		return indeterminate("no OTA key to authenticate the live channel with (%v). This build embeds none, so pass --pubkey. Comparing against unauthenticated bytes is not a cheaper answer: a replayed OLDER live manifest would make this report an advance while the real head is newer", kerr)
 	}
 
+	// ⛔ THE RESOLVER QUOTES THE RAW ENDPOINT, so its refusal is never printed as it comes. The
+	// resolver is a library and says `bad update endpoint "<what you passed>"` — with the
+	// userinfo, the query and the fragment in it. This command took that text straight to
+	// stderr, and an independent review measured a fabricated password, query token and
+	// fragment token on the operator's terminal from one mistyped `--endpoint`. The wrapper is
+	// the SAME one `olivares upgrade` uses for the same class of refusal (buildCommunitySource
+	// below wraps its own): one owner for the display rule, not a second formatter here. `%w`
+	// rather than `%v` because the wrapper keeps the original chain and this is where it would
+	// otherwise be dropped — errors.Is/As still reach the resolver's cause.
 	layout, lerr := release.ResolveChannel(o.endpoint, o.channel)
 	if lerr != nil {
-		return usage("%v", lerr)
+		return usage("%w", wrapCommunitySourceResolve(o.endpoint, o.channel, lerr))
 	}
 	// ⛔ A PINNED ENDPOINT IS NOT THE CHANNEL HEAD, and this command's whole subject is the
 	// head. Pointed at `…/releases/tag/<tag>` it would compare two authentic versions and
 	// neither of them the live one — reporting an advance while the head is newer, which is
 	// the same false green by another route. Refused by shape, with the form that works named.
+	//
+	// NEITHER the endpoint nor the tag is echoed. Both are operator input and both are
+	// unbounded: the endpoint carries userinfo, and the tag is a percent-DECODED path segment,
+	// so `--endpoint …/releases/tag/%1b[31m…` puts raw terminal escapes on stderr. The label is
+	// the upgrade path's own display formatter — scheme and host, control bytes rejected,
+	// length bounded — and the refusal names the shape instead of quoting the input.
 	if layout.ReleaseAssets() && layout.Tag() != "" {
-		return usage("--endpoint %q pins ONE release (%s), and this check is about the CHANNEL HEAD: comparing against a release you chose says nothing about what the channel serves. Point it at the repository instead (…/<owner>/<repo>), which resolves to whatever is currently latest", o.endpoint, layout.Tag())
+		return usage("--endpoint %s pins ONE release, and this check is about the CHANNEL HEAD: comparing against a release you chose says nothing about what the channel serves. Point it at the repository instead (…/<owner>/<repo>), which resolves to whatever is currently latest", displayEndpoint(o.endpoint))
 	}
 	// cli-transport-exempt: this reads a PUBLIC release channel, not the operator's control
 	// plane. Its trust anchor is the Ed25519 signature verified above after the bytes arrive
@@ -183,7 +198,7 @@ func runReleaseVerifyChannelAdvance(cmd *cobra.Command, o *channelAdvanceOptions
 	// for the same endpoints.
 	src, err := buildCommunitySource(o.endpoint, o.channel, &http.Client{Timeout: o.timeout})
 	if err != nil {
-		return usage("%v", err)
+		return usage("%w", err)
 	}
 	fmt.Fprintf(out, "candidate: %s %s (channel %s)\n", o.candidate, cand.Version, cand.Channel)
 	fmt.Fprintf(out, "live:      %s\n", src.describe())

@@ -12,7 +12,7 @@
 // is ready, but NOT a v1-blocking dependency. The v1-vs-post-v1 cut is the release
 // session's call, not this connector's.
 //
-// Minimal-data / credential handling (docs/SECURITY-HARDENING.md-3): only the displayable Notification
+// Minimal-data / credential handling (docs/SECURITY-HARDENING.md §2-3): only the displayable Notification
 // text reaches the wire. The Auth Token is the operator credential — declared Secret,
 // held in memory only, sent as the HTTP Basic password, and NEVER logged (the delivery
 // transport never logs headers). The Account SID appears in the request path (it is an

@@ -31,6 +31,22 @@ type fixture struct {
 	dumpPath string
 }
 
+// fixturePublishedLocales is the roster a throwaway tree publishes. It is NOT
+// the site's list: production reads docs-site/src/site-locales.mjs via the
+// wrapper. The battery owns this list so it can add an eighth locale without
+// editing the canonical declaration.
+var fixturePublishedLocales = []string{"de", "es", "fr", "ja", "ru", "zh"}
+
+var fixtureArchivedSlugs = []string{"2026-06"}
+
+const fixtureArchivedRel = "docs-site/src/content/docs/2026-06/reference/cli.md"
+
+const fixtureArchivedSentinel = "ARCHIVED SNAPSHOT SENTINEL — do not regenerate\n"
+
+func fixtureLocalesPath(dir string) string {
+	return filepath.Join(dir, "locales.json")
+}
+
 const fixtureExitCodes = `package exitcode
 
 // The exit-code contract (documented in the root command's help).
@@ -124,8 +140,29 @@ func writeFixture(base string, d cliDump) (fixture, error) {
 	if err := writeDump(f.dumpPath, d); err != nil {
 		return f, err
 	}
-	page := "---\ntitle: fixture\n---\n\nHuman prose above.\n\n" + beginMarker + "\n" + endMarker + "\n\nHuman prose below.\n"
+	page := skeletonCLIPage("fixture", "Human prose above.", "Human prose below.")
 	if err := os.WriteFile(filepath.Join(base, pageRel), []byte(page), 0o600); err != nil {
+		return f, err
+	}
+	for _, lang := range fixturePublishedLocales {
+		rel := localeCLIPageRel(lang)
+		if err := os.MkdirAll(filepath.Join(base, filepath.Dir(rel)), 0o755); err != nil {
+			return f, err
+		}
+		loc := skeletonCLIPage("fixture-"+lang,
+			"Locale "+lang+" prose above.",
+			"Locale "+lang+" prose below.")
+		if err := os.WriteFile(filepath.Join(base, rel), []byte(loc), 0o600); err != nil {
+			return f, err
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(base, filepath.Dir(fixtureArchivedRel)), 0o755); err != nil {
+		return f, err
+	}
+	if err := os.WriteFile(filepath.Join(base, fixtureArchivedRel), []byte(fixtureArchivedSentinel), 0o600); err != nil {
+		return f, err
+	}
+	if err := writeLocaleRoster(fixtureLocalesPath(base), fixturePublishedLocales, fixtureArchivedSlugs); err != nil {
 		return f, err
 	}
 	// Generate once so the fixture starts in sync.
@@ -133,6 +170,30 @@ func writeFixture(base string, d cliDump) (fixture, error) {
 		return f, fmt.Errorf("could not put the fixture in sync: rc=%d", rc)
 	}
 	return f, nil
+}
+
+func writeLocaleRoster(path string, published, archived []string) error {
+	raw, err := json.MarshalIndent(localeRoster{
+		Schema:    localeRosterSchema,
+		Published: published,
+		Archived:  archived,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(raw, '\n'), 0o600)
+}
+
+func skeletonCLIPage(title, above, below string) string {
+	return "---\ntitle: " + title + "\n---\n\n" + above + "\n\n" + beginMarker + "\n" + endMarker + "\n\n" + below + "\n"
+}
+
+func readPage(root, rel string) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func writeDump(path string, d cliDump) error {
@@ -149,9 +210,18 @@ func runQuiet(root, dumpPath string, write, list bool) int {
 	return rc
 }
 
+func runQuietRoster(root, dumpPath, localesFile string, write, list bool) int {
+	rc, _ := runCapturingRoster(root, dumpPath, localesFile, write, list)
+	return rc
+}
+
 // runCapturing runs the gate and returns its exit code together with everything
 // it printed, so a red case can assert WHICH offender was named.
 func runCapturing(root, dumpPath string, write, list bool) (int, string) {
+	return runCapturingRoster(root, dumpPath, fixtureLocalesPath(root), write, list)
+}
+
+func runCapturingRoster(root, dumpPath, localesFile string, write, list bool) (int, string) {
 	oldOut, oldErr := os.Stdout, os.Stderr
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -173,7 +243,7 @@ func runCapturing(root, dumpPath string, write, list bool) (int, string) {
 		}
 		done <- b.String()
 	}()
-	rc := run(root, dumpPath, write, list)
+	rc := run(root, dumpPath, localesFile, write, list)
 	_ = w.Close()
 	out := <-done
 	_ = r.Close()
@@ -260,19 +330,85 @@ func runSelfTest() int {
 	add("in-sync-tree", 0, "matches the binary", nil)
 
 	// Regenerating twice must produce identical bytes: a page that churns on every
-	// run makes the gate useless as a diff.
+	// run makes the gate useless as a diff. All seven pages are in the comparison,
+	// because a locale copy that churned while English stayed still would be invisible
+	// to an English-only check.
 	n++
 	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
-		first, _ := os.ReadFile(filepath.Join(f.dir, pageRel))
-		runQuiet(f.dir, f.dumpPath, true, false)
-		second, _ := os.ReadFile(filepath.Join(f.dir, pageRel))
 		rc := 0
-		if string(first) != string(second) {
-			rc = 1
+		var mismatch strings.Builder
+		first := map[string][]byte{}
+		for _, rel := range allCLIPageRels(fixturePublishedLocales) {
+			raw, err := os.ReadFile(filepath.Join(f.dir, rel))
+			if err != nil {
+				rc = -1
+				mismatch.WriteString(err.Error())
+				break
+			}
+			first[rel] = raw
 		}
-		results = append(results, caseResult{name: "regeneration-is-deterministic", wantRC: 0, gotRC: rc})
+		if rc == 0 {
+			runQuiet(f.dir, f.dumpPath, true, false)
+			for _, rel := range allCLIPageRels(fixturePublishedLocales) {
+				second, err := os.ReadFile(filepath.Join(f.dir, rel))
+				if err != nil {
+					rc = -1
+					mismatch.WriteString(err.Error())
+					break
+				}
+				if string(first[rel]) != string(second) {
+					rc = 1
+					mismatch.WriteString(rel + " changed on a second write")
+					break
+				}
+			}
+		}
+		results = append(results, caseResult{name: "regeneration-is-deterministic", wantRC: 0, gotRC: rc, out: mismatch.String()})
 	} else {
 		results = append(results, caseResult{name: "regeneration-is-deterministic", wantRC: 0, gotRC: -1, out: err.Error()})
+	}
+
+	// After a write, the six locale copies and the English page share one generated
+	// region (the binary's English help) while keeping their own surrounding prose.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		en, err := readPage(f.dir, pageRel)
+		rc := 0
+		out := ""
+		if err != nil {
+			rc, out = -1, err.Error()
+		} else {
+			_, enRegion, _, err := splitRegion(en)
+			if err != nil {
+				rc, out = -1, err.Error()
+			} else {
+				for _, lang := range fixturePublishedLocales {
+					rel := localeCLIPageRel(lang)
+					page, err := readPage(f.dir, rel)
+					if err != nil {
+						rc, out = -1, err.Error()
+						break
+					}
+					if !strings.Contains(page, "Locale "+lang+" prose above.") ||
+						!strings.Contains(page, "Locale "+lang+" prose below.") {
+						rc, out = 1, rel+": generator dropped localized manual prose"
+						break
+					}
+					_, locRegion, _, err := splitRegion(page)
+					if err != nil {
+						rc, out = -1, err.Error()
+						break
+					}
+					if locRegion != enRegion {
+						rc, out = 1, rel+": generated region differs from English"
+						break
+					}
+				}
+			}
+		}
+		results = append(results, caseResult{name: "locales-share-english-region-keep-prose", wantRC: 0, gotRC: rc, out: out})
+	} else {
+		results = append(results, caseResult{name: "locales-share-english-region-keep-prose", wantRC: 0, gotRC: -1, out: err.Error()})
 	}
 
 	// A rendered page is only useful if the strings the tree carries survive markdown.
@@ -362,6 +498,314 @@ func runSelfTest() int {
 			}
 		}
 	})
+
+	// One locale copy stale, English still matching: drift must name that copy, not
+	// claim the tree is in sync because the English page happened to match.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		p := filepath.Join(f.dir, localeCLIPageRel("de"))
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			results = append(results, caseResult{name: "stale-locale-is-drift", wantRC: 1, gotRC: -1, out: err.Error()})
+		} else {
+			mut := strings.Replace(string(raw), "summary of cmd000", "STALE locale summary of cmd000", 1)
+			if mut == string(raw) {
+				results = append(results, caseResult{name: "stale-locale-is-drift", wantRC: 1, gotRC: -1,
+					out: "fixture had no summary of cmd000 to perturb"})
+			} else if err := os.WriteFile(p, []byte(mut), 0o600); err != nil {
+				results = append(results, caseResult{name: "stale-locale-is-drift", wantRC: 1, gotRC: -1, out: err.Error()})
+			} else {
+				rc, out := runCapturing(f.dir, f.dumpPath, false, false)
+				results = append(results, caseResult{
+					name: "stale-locale-is-drift", wantRC: 1, gotRC: rc,
+					needle: "de/reference/cli.md", out: out,
+				})
+			}
+		}
+	} else {
+		results = append(results, caseResult{name: "stale-locale-is-drift", wantRC: 1, gotRC: -1, out: err.Error()})
+	}
+
+	// --write on a stale locale must refresh the generated region and leave the
+	// localized manual prose (and English) untouched outside the markers.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		p := filepath.Join(f.dir, localeCLIPageRel("es"))
+		raw, err := os.ReadFile(p)
+		name := "write-refreshes-locale-keeps-prose"
+		if err != nil {
+			results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: err.Error()})
+		} else {
+			mut := strings.Replace(string(raw), "summary of cmd000", "STALE locale summary of cmd000", 1)
+			if mut == string(raw) {
+				results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1,
+					out: "fixture had no summary of cmd000 to perturb"})
+			} else if err := os.WriteFile(p, []byte(mut), 0o600); err != nil {
+				results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: err.Error()})
+			} else {
+				enBefore, _ := os.ReadFile(filepath.Join(f.dir, pageRel))
+				rc := runQuiet(f.dir, f.dumpPath, true, false)
+				if rc != 0 {
+					results = append(results, caseResult{name: name, wantRC: 0, gotRC: rc, out: "write failed"})
+				} else {
+					after, err := readPage(f.dir, localeCLIPageRel("es"))
+					enAfter, _ := os.ReadFile(filepath.Join(f.dir, pageRel))
+					switch {
+					case err != nil:
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: err.Error()})
+					case strings.Contains(after, "STALE locale summary"):
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 1, out: "stale generated text survived --write"})
+					case !strings.Contains(after, "Locale es prose above.") || !strings.Contains(after, "Locale es prose below."):
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 1, out: "manual locale prose changed"})
+					case string(enBefore) != string(enAfter):
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 1, out: "English page changed while only es was stale"})
+					default:
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 0})
+					}
+				}
+			}
+		}
+	} else {
+		results = append(results, caseResult{name: "write-refreshes-locale-keeps-prose", wantRC: 0, gotRC: -1, out: err.Error()})
+	}
+
+	// A malformed last locale must not rewrite the pages that loaded cleanly.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		name := "write-refuses-malformed-late-locale"
+		enBefore, _ := os.ReadFile(filepath.Join(f.dir, pageRel))
+		zh := filepath.Join(f.dir, localeCLIPageRel("zh"))
+		raw, err := os.ReadFile(zh)
+		if err != nil {
+			results = append(results, caseResult{name: name, wantRC: 2, gotRC: -1, out: err.Error()})
+		} else {
+			_ = os.WriteFile(zh, []byte(string(raw)+endMarker+"\n"), 0o600)
+			rc, out := runCapturing(f.dir, f.dumpPath, true, false)
+			enAfter, _ := os.ReadFile(filepath.Join(f.dir, pageRel))
+			got := rc
+			if string(enBefore) != string(enAfter) {
+				got = 1
+				out = "English page was rewritten despite a malformed later locale\n" + out
+			}
+			results = append(results, caseResult{
+				name: name, wantRC: 2, gotRC: got,
+				needle: "ambiguous generated markers", out: out,
+			})
+		}
+	} else {
+		results = append(results, caseResult{name: "write-refuses-malformed-late-locale", wantRC: 2, gotRC: -1, out: err.Error()})
+	}
+
+	// Staging write-phase failure: a directory sitting at the last locale's temp
+	// path makes os.WriteFile of the staged bytes fail before any rename. Earlier
+	// pages — including one that is genuinely stale — must stay unreplaced. A
+	// writer that skips staging and writes pages in order would refresh `de` and
+	// then either succeed (temp path is irrelevant) or fail after replacing.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		name := "write-staging-blocked-leaves-earlier-pages"
+		dePath := filepath.Join(f.dir, localeCLIPageRel("de"))
+		raw, err := os.ReadFile(dePath)
+		if err != nil {
+			results = append(results, caseResult{name: name, wantRC: 2, gotRC: -1, out: err.Error()})
+		} else {
+			mut := strings.Replace(string(raw), "summary of cmd000", "STALE locale summary of cmd000", 1)
+			if mut == string(raw) {
+				results = append(results, caseResult{name: name, wantRC: 2, gotRC: -1,
+					out: "fixture had no summary of cmd000 to perturb"})
+			} else if err := os.WriteFile(dePath, []byte(mut), 0o600); err != nil {
+				results = append(results, caseResult{name: name, wantRC: 2, gotRC: -1, out: err.Error()})
+			} else {
+				zhPage := filepath.Join(f.dir, localeCLIPageRel("zh"))
+				if err := os.Mkdir(zhPage+writeStagingSuffix, 0o755); err != nil {
+					results = append(results, caseResult{name: name, wantRC: 2, gotRC: -1, out: err.Error()})
+				} else {
+					rc, out := runCapturing(f.dir, f.dumpPath, true, false)
+					deAfter, _ := os.ReadFile(dePath)
+					got := rc
+					if !strings.Contains(string(deAfter), "STALE locale summary of cmd000") {
+						got = 1
+						out = "stale earlier page was replaced despite a blocked staging write\n" + out
+					}
+					results = append(results, caseResult{
+						name: name, wantRC: 2, gotRC: got,
+						needle: "could not write", out: out,
+					})
+				}
+			}
+		}
+	} else {
+		results = append(results, caseResult{name: "write-staging-blocked-leaves-earlier-pages", wantRC: 2, gotRC: -1, out: err.Error()})
+	}
+
+	// A mode-0444 file with a writable directory is replaced through sibling
+	// staging. File identity discriminates a direct write even when this process
+	// has privileges that bypass the mode bits.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		name := "write-over-readonly-file-via-staging"
+		zhPath := filepath.Join(f.dir, localeCLIPageRel("zh"))
+		raw, err := os.ReadFile(zhPath)
+		if err != nil {
+			results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: err.Error()})
+		} else {
+			mut := strings.Replace(string(raw), "summary of cmd000", "STALE locale summary of cmd000", 1)
+			if mut == string(raw) {
+				results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1,
+					out: "fixture had no summary of cmd000 to perturb"})
+			} else if err := os.WriteFile(zhPath, []byte(mut), 0o600); err != nil {
+				results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: err.Error()})
+			} else if err := os.Chmod(zhPath, 0o444); err != nil {
+				results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: err.Error()})
+			} else {
+				beforeInfo, err := os.Stat(zhPath)
+				if err != nil {
+					results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: err.Error()})
+				} else if got := beforeInfo.Mode().Perm(); got != 0o444 {
+					results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1,
+						out: fmt.Sprintf("could not plant mode 0444: got %04o", got)})
+				} else {
+					rc := runQuiet(f.dir, f.dumpPath, true, false)
+					after, readErr := os.ReadFile(zhPath)
+					afterInfo, statErr := os.Stat(zhPath)
+					_, stagingErr := os.Stat(zhPath + writeStagingSuffix)
+					switch {
+					case readErr != nil:
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: readErr.Error()})
+					case statErr != nil:
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1, out: statErr.Error()})
+					case stagingErr == nil:
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 1,
+							out: "staging file remained after successful replacement"})
+					case !os.IsNotExist(stagingErr):
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: -1,
+							out: "could not inspect staging path: " + stagingErr.Error()})
+					case rc != 0:
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: rc,
+							out: "staging --write failed over a readonly file"})
+					case string(after) != string(raw):
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 1,
+							out: "readonly locale page does not match its exact original bytes after --write"})
+					case os.SameFile(beforeInfo, afterInfo):
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 1,
+							out: "readonly locale page kept its file identity; it was written directly"})
+					default:
+						results = append(results, caseResult{name: name, wantRC: 0, gotRC: 0})
+					}
+				}
+			}
+		}
+	} else {
+		results = append(results, caseResult{name: "write-over-readonly-file-via-staging", wantRC: 0, gotRC: -1, out: err.Error()})
+	}
+
+	// A newly declared published locale is not optional: missing page => 2.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		name := "declared-eighth-locale-missing-page"
+		extra := append(append([]string{}, fixturePublishedLocales...), "it")
+		if err := writeLocaleRoster(fixtureLocalesPath(f.dir), extra, fixtureArchivedSlugs); err != nil {
+			results = append(results, caseResult{name: name, wantRC: 2, gotRC: -1, out: err.Error()})
+		} else {
+			rc, out := runCapturing(f.dir, f.dumpPath, false, false)
+			results = append(results, caseResult{
+				name: name, wantRC: 2, gotRC: rc,
+				needle: "it/reference/cli.md", out: out,
+			})
+		}
+	} else {
+		results = append(results, caseResult{name: "declared-eighth-locale-missing-page", wantRC: 2, gotRC: -1, out: err.Error()})
+	}
+
+	// Same eighth locale, page present but stale => drift, not CANNOT LOOK.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		name := "declared-eighth-locale-stale"
+		rel := localeCLIPageRel("it")
+		if err := os.MkdirAll(filepath.Join(f.dir, filepath.Dir(rel)), 0o755); err != nil {
+			results = append(results, caseResult{name: name, wantRC: 1, gotRC: -1, out: err.Error()})
+		} else if err := os.WriteFile(filepath.Join(f.dir, rel),
+			[]byte(skeletonCLIPage("fixture-it", "Locale it prose above.", "Locale it prose below.")), 0o600); err != nil {
+			results = append(results, caseResult{name: name, wantRC: 1, gotRC: -1, out: err.Error()})
+		} else {
+			extra := append(append([]string{}, fixturePublishedLocales...), "it")
+			if err := writeLocaleRoster(fixtureLocalesPath(f.dir), extra, fixtureArchivedSlugs); err != nil {
+				results = append(results, caseResult{name: name, wantRC: 1, gotRC: -1, out: err.Error()})
+			} else {
+				rc, out := runCapturing(f.dir, f.dumpPath, false, false)
+				results = append(results, caseResult{
+					name: name, wantRC: 1, gotRC: rc,
+					needle: "it/reference/cli.md", out: out,
+				})
+			}
+		}
+	} else {
+		results = append(results, caseResult{name: "declared-eighth-locale-stale", wantRC: 1, gotRC: -1, out: err.Error()})
+	}
+
+	// An undeclared locale directory is not discovered by walking. A garbage
+	// page at it/ must not turn a matching roster red, and --write must not
+	// rewrite it. The archived VERSIONS snapshot is the same shape.
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		name := "undeclared-and-archived-pages-are-not-walked"
+		itRel := localeCLIPageRel("it")
+		itBody := "UNDECLARED LOCALE — do not regenerate\n"
+		ok := true
+		out := ""
+		if err := os.MkdirAll(filepath.Join(f.dir, filepath.Dir(itRel)), 0o755); err != nil {
+			ok, out = false, err.Error()
+		} else if err := os.WriteFile(filepath.Join(f.dir, itRel), []byte(itBody), 0o600); err != nil {
+			ok, out = false, err.Error()
+		} else if rc := runQuiet(f.dir, f.dumpPath, false, false); rc != 0 {
+			ok, out = false, fmt.Sprintf("check rc=%d on an undeclared extra locale dir", rc)
+		} else if rc := runQuiet(f.dir, f.dumpPath, true, false); rc != 0 {
+			ok, out = false, fmt.Sprintf("write rc=%d", rc)
+		} else {
+			itAfter, _ := os.ReadFile(filepath.Join(f.dir, itRel))
+			archAfter, _ := os.ReadFile(filepath.Join(f.dir, fixtureArchivedRel))
+			if string(itAfter) != itBody {
+				ok, out = false, "undeclared it/ page was rewritten"
+			} else if string(archAfter) != fixtureArchivedSentinel {
+				ok, out = false, "archived 2026-06 snapshot was rewritten"
+			}
+		}
+		if ok {
+			results = append(results, caseResult{name: name, wantRC: 0, gotRC: 0})
+		} else {
+			results = append(results, caseResult{name: name, wantRC: 0, gotRC: 1, out: out})
+		}
+	} else {
+		results = append(results, caseResult{name: "undeclared-and-archived-pages-are-not-walked", wantRC: 0, gotRC: -1, out: err.Error()})
+	}
+
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		name := "archived-slug-must-not-be-published"
+		if err := writeLocaleRoster(fixtureLocalesPath(f.dir),
+			append(append([]string{}, fixturePublishedLocales...), "2026-06"), fixtureArchivedSlugs); err != nil {
+			results = append(results, caseResult{name: name, wantRC: 2, gotRC: -1, out: err.Error()})
+		} else {
+			rc, out := runCapturing(f.dir, f.dumpPath, false, false)
+			results = append(results, caseResult{
+				name: name, wantRC: 2, gotRC: rc,
+				needle: "archived VERSIONS slug", out: out,
+			})
+		}
+	} else {
+		results = append(results, caseResult{name: "archived-slug-must-not-be-published", wantRC: 2, gotRC: -1, out: err.Error()})
+	}
+
+	n++
+	if f, err := writeFixture(filepath.Join(base, fmt.Sprintf("t%02d", n)), newFixtureDump()); err == nil {
+		rc, out := runCapturingRoster(f.dir, f.dumpPath, "", false, false)
+		results = append(results, caseResult{
+			name: "locales-file-flag-missing", wantRC: 2, gotRC: rc,
+			needle: "no -locales-file was given", out: out,
+		})
+	} else {
+		results = append(results, caseResult{name: "locales-file-flag-missing", wantRC: 2, gotRC: -1, out: err.Error()})
+	}
 
 	// ── RED: prose the public surface must not carry ─────────────────────────────
 	add("banned-absolute-in-flag-usage", 1, "is an absolute claim the canon forbids", func(d *cliDump) {
@@ -482,6 +926,31 @@ func runSelfTest() int {
 	})
 	cannotCase("page-lost-its-markers", "lost its", func(f fixture) error {
 		return os.WriteFile(filepath.Join(f.dir, pageRel), []byte("---\ntitle: x\n---\n\nno markers here\n"), 0o600)
+	})
+	cannotCase("locale-page-missing", "es/reference/cli.md", func(f fixture) error {
+		return os.Remove(filepath.Join(f.dir, localeCLIPageRel("es")))
+	})
+	cannotCase("locale-page-lost-its-markers", "fr/reference/cli.md", func(f fixture) error {
+		return os.WriteFile(filepath.Join(f.dir, localeCLIPageRel("fr")),
+			[]byte("---\ntitle: x\n---\n\nno markers here\n"), 0o600)
+	})
+	cannotCase("locale-page-duplicate-begin-marker", "ambiguous generated markers", func(f fixture) error {
+		p := filepath.Join(f.dir, localeCLIPageRel("ja"))
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(p, []byte(string(raw)+beginMarker+"\n"), 0o600)
+	})
+	cannotCase("locales-file-missing", "could not read the locale roster", func(f fixture) error {
+		return os.Remove(fixtureLocalesPath(f.dir))
+	})
+	cannotCase("locales-file-empty", "is empty", func(f fixture) error {
+		return os.WriteFile(fixtureLocalesPath(f.dir), nil, 0o600)
+	})
+	cannotCase("locales-file-unknown-schema", "this gate speaks", func(f fixture) error {
+		return os.WriteFile(fixtureLocalesPath(f.dir),
+			[]byte(`{"schema":"olivares.cli-ref-locales/99","published":["de"],"archived":[]}`+"\n"), 0o600)
 	})
 	cannotCase("exitcode-source-missing", "could not parse the exit-code contract", func(f fixture) error {
 		return os.Remove(filepath.Join(f.dir, exitCodeRel))

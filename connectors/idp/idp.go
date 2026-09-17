@@ -9,7 +9,7 @@
 // and the membership edges between them, and exposes them as an
 // identitysource.Graph to module VI (governance).
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): every directory call is a GET
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): every directory call is a GET
 // (the shared httpx client is GET-only by construction), and the connector pulls
 // identity METADATA only — object ids, display names, login/UPN, mail, account
 // status, group memberships — never a credential value. The operator credential

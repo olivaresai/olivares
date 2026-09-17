@@ -94,6 +94,21 @@ escanea() {
 				# LIMITE, con el mismo criterio que la guarda de linea: mira el ORDEN en el texto,
 				# no el flujo. Una asignacion dentro de un `if` que no se toma pasaria. Se acepta,
 				# y por eso la bateria trae el caso `lee-y-asigna`, que DEBE seguir saliendo rojo.
+				# ⛔ LA ASIGNACION AUTORREFERENTE ES UNA LECTURA, y la regla de abajo no la ve.
+				#    Un VAR=$VAR marca VAR como asignada y se traga la lectura de la MISMA linea,
+				#    que es justo la que revienta si la variable no existe. Medido el 2026-09-02:
+				#    con ese defecto reintroducido, esta pata salia LIMPIO rc 0 — y ese defecto
+				#    tumbo enterprise-ci del overlay tras quince casos verdes.
+				#    Va ANTES de registrar la asignacion, o el orden vuelve a taparla.
+				for (k in V) {
+					# INMEDIATAMENTE despues del =, o casa TEXTO: mi primera version marcaba un
+					# printf que ESCRIBE un fixture, donde el VAR= y el $VAR no tenian relacion.
+					# (Sin comillas simples en este comentario: cierran el programa awk.)
+					if (linea ~ ("(^|[[:space:]])(export[[:space:]]+)?" V[k] "=\"?\\$\\{?" V[k] "\\}?\"?([[:space:]]|;|$)")) {
+						printf "%s:%d  %s=\"$%s\" (autorreferente: lee lo que aun no existe)\n", archivo, FNR, V[k], V[k]
+						sucio = 1
+					}
+				}
 				for (k in V) {
 					if (!(V[k] in asignada) && linea ~ ("(^|[[:space:]])(export[[:space:]]+)?" V[k] "="))
 						asignada[V[k]] = FNR
@@ -216,7 +231,28 @@ if [ "${1:-}" = "--selftest" ]; then
 		echo "  FAIL  esperaba 1 en lee-y-asigna, dio $nb"; fail=1
 	fi
 
-	[ "$fail" = "0" ] && { echo "check-unbound-env selftest: 6 passed, 0 failed"; exit 0; }
+	# ⛔ CASO 7: EL DEFECTO QUE ESTA PATA NO VEIA. Reintroduce `TMPDIR="$TMPDIR"` bajo `set -u`,
+	#    que es lo que tumbo enterprise-ci del overlay el 2026-09-02 mientras esta pata, sin la
+	#    regla de arriba, decia LIMPIO rc 0.
+	amb2="$(mktemp -d "${TMPDIR:-/tmp}/unbound-selfref.XXXXXX")"
+	trap 'rm -rf "$caso" "$amb" "$amb2"' EXIT
+	# El fixture ESCRIBE la silueta que la pata caza, asi que se veria a si misma: exencion
+	# VISIBLE en la linea con el marcador que esta pata ya soporta.
+	printf '#!/bin/bash\nset -uo pipefail\nenv TMPDIR="$TMPDIR" true\n' > "$amb2/selfref.sh" # unbound-ok
+	nsr="$(escanea "$amb2" 2>/dev/null | grep -c 'autorreferente' || true)"
+	if [ "${nsr:-0}" -ge 1 ]; then
+		echo "  ok    la asignacion AUTORREFERENTE se ve"
+	else
+		echo "  FAIL  la autorreferencia NO se ve: es el bug que tumbo el runner del overlay"; fail=1
+	fi
+	# CASO 8, su control negativo: un printf que ESCRIBE un fixture no es una autorreferencia.
+	printf '#!/bin/bash\nset -uo pipefail\nprintf "export HOME=/w/x %s" "$PWD" > /dev/null\n' > "$amb2/fixture.sh"
+	rm -f "$amb2/selfref.sh"
+	nfx="$(escanea "$amb2" 2>/dev/null | grep -c 'autorreferente' || true)"
+	if [ "${nfx:-0}" = "0" ]; then echo "  ok    un fixture escrito por printf NO es autorreferencia"
+	else echo "  FAIL  falso positivo sobre un printf que escribe un fixture"; fail=1; fi
+
+	[ "$fail" = "0" ] && { echo "check-unbound-env selftest: 8 passed, 0 failed"; exit 0; }
 	echo "check-unbound-env selftest: FAILED"; exit 1
 fi
 

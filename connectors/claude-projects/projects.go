@@ -7,7 +7,7 @@
 // governance posture findings that the engine appends to the tamper-evident audit
 // ledger.
 //
-// READ-ONLY BY CONSTRUCTION (docs/SECURITY-HARDENING.md-3). Every call is a GET via the shared
+// READ-ONLY BY CONSTRUCTION (docs/SECURITY-HARDENING.md §0-3). Every call is a GET via the shared
 // GET-only modelprovider client, so this connector CANNOT create, modify or delete
 // projects — it observes and governs.
 //

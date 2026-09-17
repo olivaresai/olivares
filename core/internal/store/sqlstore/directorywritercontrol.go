@@ -34,6 +34,7 @@ const (
 type directoryWriterControlState struct {
 	Mode               directoryWriterMode
 	ExpectedGeneration int64
+	CoverageProtocol   string
 }
 
 type directoryWriterACLQuerier interface {
@@ -51,7 +52,7 @@ func directoryWriterRelation(dia dialect.Dialect, table string) string {
 // directoryWriterSourceTables is a closed inventory. Adding a mutable directory
 // fact to the registry does not silently put it behind this capability: the K3
 // writer protocol must name and test the new source deliberately.
-var directoryWriterSourceTables = []string{
+var legacyDirectoryWriterSourceTables = []string{
 	"users",
 	"memberships",
 	"user_groups",
@@ -62,6 +63,8 @@ var directoryWriterSourceTables = []string{
 	"agent_group_members",
 	"orgs",
 }
+
+var directoryWriterSourceTables = append(append([]string(nil), legacyDirectoryWriterSourceTables...), "auth_sessions", "core_user_authority")
 
 func isDirectoryWriterSourceTable(table string) bool {
 	for _, source := range directoryWriterSourceTables {
@@ -78,6 +81,14 @@ func isDirectoryWriterSourceTable(table string) bool {
 // inventory above; qualification is nevertheless required for both the
 // post-lock validation reads and the target DML they authorize.
 func isDirectoryAuthorityTable(table string) bool {
+	if _, protected := lineageForTable(table); protected {
+		return true
+	}
+	for _, relation := range lineageRelations {
+		if table == relation.descriptor().Table {
+			return true
+		}
+	}
 	if isDirectoryWriterSourceTable(table) {
 		return true
 	}
@@ -307,7 +318,7 @@ func verifyDirectoryWriterControlPerBoot(
 	return nil
 }
 
-func verifyDirectoryWriterControl(
+func verifyDirectoryWriterControlShape(
 	ctx context.Context,
 	tx *sql.Tx,
 	dia dialect.Dialect,
@@ -522,8 +533,12 @@ type sqliteDirectoryWriterGuardSpec struct {
 }
 
 func sqliteDirectoryWriterGuardSpecs() []sqliteDirectoryWriterGuardSpec {
+	return sqliteDirectoryWriterGuardSpecsFor(directoryWriterSourceTables, sqliteDirectoryWriterGuardBody)
+}
+
+func sqliteDirectoryWriterGuardSpecsFor(tables []string, body func(string) string) []sqliteDirectoryWriterGuardSpec {
 	var specs []sqliteDirectoryWriterGuardSpec
-	for _, table := range directoryWriterSourceTables {
+	for _, table := range tables {
 		for _, event := range []struct {
 			suffix string
 			verb   string
@@ -547,7 +562,7 @@ func sqliteDirectoryWriterGuardSpecs() []sqliteDirectoryWriterGuardSpec {
 			}
 			name := table + "_directory_writer_guard_" + event.suffix
 			definition := fmt.Sprintf("CREATE TRIGGER %s BEFORE %s ON %s", name, event.verb, table)
-			definition += "\n" + sqliteDirectoryWriterGuardBody(needsGeneration)
+			definition += "\n" + body(needsGeneration)
 			specs = append(specs, sqliteDirectoryWriterGuardSpec{
 				Table: table, Name: name, Definition: definition,
 				CreateStatement: strings.Replace(definition,
@@ -558,7 +573,7 @@ func sqliteDirectoryWriterGuardSpecs() []sqliteDirectoryWriterGuardSpec {
 	return specs
 }
 
-func sqliteDirectoryWriterGuardBody(needsGeneration string) string {
+func legacySQLiteDirectoryWriterGuardBody(needsGeneration string) string {
 	return `BEGIN
   SELECT RAISE(ABORT, 'directory writer control invalid')
   WHERE (SELECT COUNT(*) FROM main.directory_writer_control) <> 1
@@ -771,7 +786,7 @@ SECURITY INVOKER
 PARALLEL UNSAFE
 SET search_path = pg_catalog
 AS $olivares_directory_writer$
-` + postgresDirectoryWriterGuardBody + `
+` + postgresUserAuthorityWriterGuardBody() + `
 $olivares_directory_writer$`
 }
 
@@ -796,7 +811,7 @@ func canonicalPostgresDirectoryWriterDefinition() guardDefinition {
 			Kind: "f", ReturnTypeSchema: "pg_catalog", ReturnTypeName: "trigger",
 			Language: "plpgsql", Variadic: "0", AllArgTypesNull: true,
 			ArgModesNull: true, ArgNamesNull: true, ArgDefaultsNull: true,
-			Src:      "\n" + postgresDirectoryWriterGuardBody + "\n",
+			Src:      "\n" + postgresUserAuthorityWriterGuardBody() + "\n",
 			Volatile: "v", Parallel: "u", Cost: 100, Rows: 0, Support: "0",
 			TransformsNull: true, ConfigNull: false,
 		},

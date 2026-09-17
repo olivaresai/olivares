@@ -27,7 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useStepUpStore } from '@/stores/step-up'
+import { useStepUpStore, type StepUpRequest } from '@/stores/step-up'
 
 // AAL3 is not a guess: `step_up_required` is raised by requireAAL3
 // (core/api/middleware.go:298) and by core/auth's credential lifecycle, and
@@ -42,18 +42,41 @@ const StepUpPanel = lazy(() =>
   })),
 )
 
+/** The same owned panel is hosted inline by Add, or in the global dialog.
+ * Every closure carries only an expected instance; live state owns the retry.
+ */
+export function StepUpRequestPanel({ request }: { request: StepUpRequest }) {
+  return (
+    <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+      <StepUpPanel
+        key={request.instance}
+        minAal={AAL3}
+        currentAal={1}
+        action={request.action}
+        allowEnrollment={request.enrollment === 'connector-add'}
+        isCurrentRequest={() =>
+          useStepUpStore.getState().current(request.instance)
+        }
+        onUnenrolled={() =>
+          useStepUpStore.getState().dropRetry(request.instance)
+        }
+        onElevated={() => useStepUpStore.getState().consume(request.instance)}
+      />
+    </Suspense>
+  )
+}
+
 export function StepUpHost() {
   const { t } = useTranslation('common')
   const request = useStepUpStore((s) => s.request)
-  const clear = useStepUpStore((s) => s.clear)
-
+  // Add owns its existing dialog and its Save demand. A second dialog would hide
+  // that intent and create a nested focus trap during first enrollment.
+  if (request?.enrollment === 'connector-add') return null
   return (
     <Dialog
       open={request !== null}
       onOpenChange={(open) => {
-        // Dismissing leaves the action DENIED and says so in the panel copy —
-        // closing this dialog never completes anything.
-        if (!open) clear()
+        if (!open && request) useStepUpStore.getState().clear(request.instance)
       }}
     >
       {request !== null && (
@@ -61,38 +84,12 @@ export function StepUpHost() {
           <DialogHeader>
             <DialogTitle>{t('privileged.stepUp.title')}</DialogTitle>
             <DialogDescription>
-              {/* ⛔ LA COPY DEPENDE DE SI HAY REINTENTO, y no es un matiz: la de por defecto dice
-                  «complete the step-up below and the action resumes», mientras `onElevated` de
-                  abajo sólo ejecuta `retry?.()`. Un llamador que NO entrega reintento es legítimo
-                  —el contrato del store lo permite expresamente (stores/step-up.ts:22-29)— pero
-                  entonces el panel estaba prometiendo una reanudación que nunca ocurría: ocho
-                  llamadas de la consola están hoy en ese caso.
-                  Se arregla aquí y no en las ocho porque el que miente es el TEXTO, no ellas. */}
               {request.retry
                 ? t('privileged.stepUp.description')
                 : t('privileged.stepUp.descriptionNoResume')}
             </DialogDescription>
           </DialogHeader>
-          <Suspense fallback={<Skeleton className="h-48 w-full" />}>
-            <StepUpPanel
-              minAal={AAL3}
-              // The panel's copy contrasts "required" against "current". The
-              // engine refused for assurance, so whatever the principal cached,
-              // the level that COUNTED was below AAL3 — reporting the cached
-              // value here would show a session claiming an assurance the engine
-              // had just rejected.
-              currentAal={1}
-              action={request.action}
-              onElevated={() => {
-                // Order matters: hand the retry the elevated session, then close.
-                // The engine has already verified the ceremony and whoami has been
-                // re-read by the panel, so the resumed call carries the new AAL.
-                const { retry } = request
-                clear()
-                retry?.()
-              }}
-            />
-          </Suspense>
+          <StepUpRequestPanel request={request} />
         </DialogContent>
       )}
     </Dialog>

@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -24,30 +25,23 @@ import (
 // per-signal write could not do (decision A, 2026-06-03). Inventory discovers the
 // entities an edge names; the access map records the edges.
 func (m *Module) onEdge(ctx context.Context, tenantRef string, edge sdkmodel.EdgeObservation) error {
-	tenant, ok := tenantOf(tenantRef)
-	if !ok {
-		m.debugf("inventory: edge for non-tenant ref; skipped", "tenant", tenantRef)
-		return nil
-	}
-	m.noteTenant(tenant)
-	at := edge.ObservedAt
-	if at.IsZero() {
-		at = m.clock.Now().Time()
-	}
-	source := string(edge.Source)
+	return m.onEvent(ctx, event.FromObservation(tenantRef, "", edge))
+}
 
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		if err := m.materializeOrigin(ctx, sc, edge, at, source); err != nil {
+func (m *Module) onEdgeEvent(ctx context.Context, e event.Event, edge sdkmodel.EdgeObservation) error {
+	facts := newInventoryFacts(e, &edge, nil)
+	return m.persistObservation(ctx, e, facts, func(sc store.Scope, at time.Time, p *provenanceProjection) error {
+		if err := m.materializeOrigin(ctx, sc, edge, at, string(edge.Source), p); err != nil {
 			return err
 		}
-		return m.materializeResource(ctx, sc, edge, at, source)
+		return m.materializeResource(ctx, sc, edge, at, string(edge.Source), p)
 	})
 }
 
 // materializeOrigin resolves the edge's origin to a core entity and records its
 // catalog entry (an honest skip when the origin kind is unknown or the reference
 // empty). The AccessEdge itself is ; inventory only catalogs the entity.
-func (m *Module) materializeOrigin(ctx context.Context, sc store.Scope, edge sdkmodel.EdgeObservation, at time.Time, source string) error {
+func (m *Module) materializeOrigin(ctx context.Context, sc store.Scope, edge sdkmodel.EdgeObservation, at time.Time, source string, p *provenanceProjection) error {
 	ref := edge.OriginRef
 	if ref == "" {
 		return nil
@@ -76,13 +70,19 @@ func (m *Module) materializeOrigin(ctx context.Context, sc store.Scope, edge sdk
 	if err != nil || id.IsZero() {
 		return err
 	}
-	return m.cat(ctx, sc, kind, id, originName(edge.OriginKind, ref), ref, source, edge, at)
+	namespace := edge.OriginKind
+	if kind == kindMCPServer {
+		namespace = rkMCPServer
+	}
+	return m.catalogMember(ctx, sc, observationMember{Kind: kind, EntityID: id,
+		Native: nativeReference{Namespace: namespace, Ref: ref}, Name: originName(edge.OriginKind, ref),
+		Ref: ref, Signal: source, Host: hostOf(edge)}, at, edge.ObservedAt, p)
 }
 
 // materializeResource resolves the edge's resource to a core entity (and, when
 // the edge names a tool, a Tool) and records their catalog entries. The
 // AccessEdge that ties origin and resource is ; inventory only catalogs.
-func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge sdkmodel.EdgeObservation, at time.Time, source string) error {
+func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge sdkmodel.EdgeObservation, at time.Time, source string, p *provenanceProjection) error {
 	rk := edge.ResourceKind
 	ref := edge.ResourceRef
 
@@ -99,7 +99,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 				return err
 			}
 			serverID = id
-			if err := m.cat(ctx, sc, kindMCPServer, serverID, server, server, source, edge, at); err != nil {
+			if err := m.cat(ctx, sc, kindMCPServer, serverID, server, server, source, edge, at, p); err != nil {
 				return err
 			}
 		}
@@ -111,7 +111,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindTool, toolID, tool, ref, source, edge, at)
+		return m.cat(ctx, sc, kindTool, toolID, tool, ref, source, edge, at, p)
 
 	case rkMCPServer:
 		if ref == "" {
@@ -121,14 +121,14 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindMCPServer, serverID, ref, ref, source, edge, at)
+		return m.cat(ctx, sc, kindMCPServer, serverID, ref, ref, source, edge, at, p)
 
 	case rkMCPResource, rkMCPResourceTemplate:
 		resID, err := foResource(ctx, sc, rk, ref, resourceName(rk, ref))
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindResource, resID, resourceName(rk, ref), ref, source, edge, at)
+		return m.cat(ctx, sc, kindResource, resID, resourceName(rk, ref), ref, source, edge, at, p)
 
 	case rkMCPPrompt:
 		server, name := splitServerTool(ref)
@@ -142,7 +142,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 				return err
 			}
 			serverID = id
-			if err := m.cat(ctx, sc, kindMCPServer, serverID, server, server, source, edge, at); err != nil {
+			if err := m.cat(ctx, sc, kindMCPServer, serverID, server, server, source, edge, at, p); err != nil {
 				return err
 			}
 		}
@@ -153,7 +153,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindSkill, skillID, name, ref, source, edge, at)
+		return m.cat(ctx, sc, kindSkill, skillID, name, ref, source, edge, at, p)
 
 	case rkClaudeTool:
 		name := edge.ToolRef
@@ -167,7 +167,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindTool, toolID, name, name, source, edge, at)
+		return m.cat(ctx, sc, kindTool, toolID, name, name, source, edge, at, p)
 
 	case rkA2AAgent:
 		// AIP-05: the remote/peer agent in an observed A2A edge is itself an Agent,
@@ -180,7 +180,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindAgent, agentID, ref, ref, source, edge, at)
+		return m.cat(ctx, sc, kindAgent, agentID, ref, ref, source, edge, at, p)
 
 	case rkCMAManagedAgent:
 		// a CMA session / managed-agent run (e.g. the session a work item wraps) is a
@@ -193,7 +193,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindSession, sid, ref, ref, source, edge, at)
+		return m.cat(ctx, sc, kindSession, sid, ref, ref, source, edge, at, p)
 
 	case rkCMASkill:
 		// a CMA skill attached to an agent is a Skill entity (no MCP server).
@@ -204,7 +204,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindSkill, skID, ref, ref, source, edge, at)
+		return m.cat(ctx, sc, kindSkill, skID, ref, ref, source, edge, at, p)
 
 	case rkCMAAgentDef:
 		// a multi-agent roster grant names an agent DEFINITION — an Agent entity
@@ -217,7 +217,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindAgent, agentID, ref, ref, source, edge, at)
+		return m.cat(ctx, sc, kindAgent, agentID, ref, ref, source, edge, at, p)
 
 	case rkCMAAgentTool:
 		// an agent's declared built-in/custom tool (the PERMITTED tools[]
@@ -229,7 +229,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindTool, toolID, ref, ref, source, edge, at)
+		return m.cat(ctx, sc, kindTool, toolID, ref, ref, source, edge, at, p)
 
 	case rkCMAVault, rkCMAVaultCred, rkCMAMemoryStore, rkCMAEnvironment, rkCMAPermPolicy, rkCMADream:
 		// the CMA control-plane resources (incl. a Dreams job) are inventoried
@@ -243,7 +243,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		return m.cat(ctx, sc, kindResource, resID, resourceName(rk, ref), ref, source, edge, at)
+		return m.cat(ctx, sc, kindResource, resID, resourceName(rk, ref), ref, source, edge, at, p)
 
 	default:
 		// file / http.url / shell / web.search / agent.task / unknown → a Resource,
@@ -253,7 +253,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 		if err != nil {
 			return err
 		}
-		if err := m.cat(ctx, sc, kindResource, resID, name, ref, source, edge, at); err != nil {
+		if err := m.cat(ctx, sc, kindResource, resID, name, ref, source, edge, at, p); err != nil {
 			return err
 		}
 		if edge.ToolRef != "" {
@@ -261,7 +261,7 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 			if err != nil {
 				return err
 			}
-			return m.cat(ctx, sc, kindTool, toolID, edge.ToolRef, edge.ToolRef, source, edge, at)
+			return m.cat(ctx, sc, kindTool, toolID, edge.ToolRef, edge.ToolRef, source, edge, at, p)
 		}
 		return nil
 	}
@@ -272,27 +272,23 @@ func (m *Module) materializeResource(ctx context.Context, sc store.Scope, edge s
 // CostRecord: cost/FinOps accounting is module XI; inventory only
 // discovers the entities. The live token/cost view is module II (sessions).
 func (m *Module) onCost(ctx context.Context, tenantRef string, cost sdkmodel.CostSample) error {
-	tenant, ok := tenantOf(tenantRef)
-	if !ok {
-		return nil
-	}
+	return m.onEvent(ctx, event.FromObservation(tenantRef, "", cost))
+}
+
+func (m *Module) onCostEvent(ctx context.Context, e event.Event, cost sdkmodel.CostSample) error {
 	if cost.ProviderRef == "" && cost.ModelRef == "" {
 		return nil
 	}
-	m.noteTenant(tenant)
-	at := cost.OccurredAt
-	if at.IsZero() {
-		at = m.clock.Now().Time()
-	}
+	facts := newInventoryFacts(e, nil, &cost)
 	const source = "cost"
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.persistObservation(ctx, e, facts, func(sc store.Scope, at time.Time, p *provenanceProjection) error {
 		var providerID model.ID
 		if cost.ProviderRef != "" {
 			var err error
 			if providerID, err = foProvider(ctx, sc, cost.ProviderRef); err != nil {
 				return err
 			}
-			if err := m.catRef(ctx, sc, kindProvider, providerID, cost.ProviderRef, cost.ProviderRef, source, at); err != nil {
+			if err := m.catRef(ctx, sc, kindProvider, providerID, cost.ProviderRef, cost.ProviderRef, source, at, cost.OccurredAt, p, nativeReference{Namespace: string(cost.Gateway), Ref: cost.ProviderRef}); err != nil {
 				return err
 			}
 		}
@@ -301,7 +297,7 @@ func (m *Module) onCost(ctx context.Context, tenantRef string, cost sdkmodel.Cos
 			if err != nil {
 				return err
 			}
-			if err := m.catRef(ctx, sc, kindModel, modelID, cost.ModelRef, cost.ModelRef, source, at); err != nil {
+			if err := m.catRef(ctx, sc, kindModel, modelID, cost.ModelRef, cost.ModelRef, source, at, cost.OccurredAt, p, nativeReference{Namespace: string(cost.Gateway), Parent: cost.ProviderRef, Ref: cost.ModelRef}); err != nil {
 				return err
 			}
 		}
@@ -311,14 +307,18 @@ func (m *Module) onCost(ctx context.Context, tenantRef string, cost sdkmodel.Cos
 
 // cat records a catalog entry for an entity discovered through an edge,
 // attributing the host the edge was seen on (unknown for cooperative edges).
-func (m *Module) cat(ctx context.Context, sc store.Scope, kind string, id model.ID, name, ref, source string, edge sdkmodel.EdgeObservation, at time.Time) error {
-	return m.upsertCatalogEntry(ctx, sc, kind, id, name, ref, source, hostOf(edge), at)
+func (m *Module) cat(ctx context.Context, sc store.Scope, kind string, id model.ID, name, ref, source string, edge sdkmodel.EdgeObservation, at time.Time, p *provenanceProjection) error {
+	// The source's claim comes straight off the observation and is passed through
+	// UNTOUCHED, zero included: a zero here becomes a NULL column, never our clock.
+	return m.catalogMember(ctx, sc, observationMember{Kind: kind, EntityID: id,
+		Native: resourceNative(kind, ref, edge), Name: name, Ref: ref, Signal: source, Host: hostOf(edge)}, at, edge.ObservedAt, p)
 }
 
 // catRef records a catalog entry for an entity discovered outside an edge (a
 // cost sample), with no host.
-func (m *Module) catRef(ctx context.Context, sc store.Scope, kind string, id model.ID, name, ref, source string, at time.Time) error {
-	return m.upsertCatalogEntry(ctx, sc, kind, id, name, ref, source, "", at)
+func (m *Module) catRef(ctx context.Context, sc store.Scope, kind string, id model.ID, name, ref, source string, at, occurred time.Time, p *provenanceProjection, native nativeReference) error {
+	return m.catalogMember(ctx, sc, observationMember{Kind: kind, EntityID: id,
+		Native: native, Name: name, Ref: ref, Signal: source}, at, occurred, p)
 }
 
 // originName derives a display name for an origin entity from its kind and ref.

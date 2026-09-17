@@ -254,6 +254,13 @@ type Scope interface {
 	// EXTERNAL effects, whose claim/settle primitives append their ledger events
 	// through the SAME transaction as their row changes (see EvidenceOperationRepo).
 	EvidenceOperations() EvidenceOperationRepo
+	// AccessEvidence returns the tenant-pinned access-evidence store (v26.9
+	// increment A): the separate, immutable records of policy artifacts and
+	// authority transitions, observed action stages and authorization decisions.
+	// It is a sibling of the journal, not a replacement: an observation or
+	// decision that names an operation must name one EvidenceOperations already
+	// holds. See AccessEvidenceRepo.
+	AccessEvidence() AccessEvidenceRepo
 
 	// Ext returns a registered module repository by kind, or ErrUnknownEntity.
 	// It is tenant-pinned exactly like the typed repositories.

@@ -438,6 +438,10 @@ func (m *Module) handleCreateRouting(w http.ResponseWriter, r *http.Request, mc 
 		return
 	}
 	in.normalize()
+	if _, perr := m.resolveExecutionProfile(r.Context(), mc.Tenant, in.routingSpec); perr != nil {
+		writeExecutionProfileError(w, perr)
+		return
+	}
 	var out routingPolicyDTO
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		p, err := sc.Policies().Create(r.Context(), model.Policy{
@@ -475,6 +479,7 @@ func (m *Module) handleUpdateRouting(w http.ResponseWriter, r *http.Request, mc 
 	in.normalize()
 	var out routingPolicyDTO
 	notRouting := false
+	var profileErr *executionProfileHTTPError
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		p, err := sc.Policies().Get(r.Context(), id)
 		if err != nil {
@@ -482,6 +487,9 @@ func (m *Module) handleUpdateRouting(w http.ResponseWriter, r *http.Request, mc 
 		}
 		if p.Kind != policyKindRouting {
 			notRouting = true
+			return nil
+		}
+		if _, profileErr = m.resolveExecutionProfile(r.Context(), mc.Tenant, in.routingSpec); profileErr != nil {
 			return nil
 		}
 		p.Name = in.Name
@@ -500,6 +508,10 @@ func (m *Module) handleUpdateRouting(w http.ResponseWriter, r *http.Request, mc 
 	}
 	if notRouting {
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
+		return
+	}
+	if profileErr != nil {
+		writeExecutionProfileError(w, profileErr)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

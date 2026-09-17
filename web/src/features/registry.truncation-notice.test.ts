@@ -335,12 +335,14 @@ const SIN_AVISO_CONOCIDAS: Record<string, string> = {
   //    La tercera celda dijo que SOBRABAN y se borraron el 2026-08-27, junto con otras seis que
   //    el mismo aterrizaje dejo obsoletas. Se deja escrito porque el valor de esta lista es que
   //    ENCOJA: una exencion que nadie retira envejece hasta volverse permiso.
-  // ⛔ LAS TRES SIGUIENTES ESTABAN FALSAMENTE ABSUELTAS y las nombro el retro-contraste
-  //    `sol max` del 2026-08-25: su unico token de aviso vivia en un fichero que NO es una
-  //    pantalla, y `ficherosDeVista` los contaba. Entran ahora que «vista» significa `.tsx`.
-  executive:
-    'alcanza listas truncables por el api de CINCO features; su unico token estaba en fixtures.ts',
-  // Y las cuatro que consumen SUS PROPIAS listas y no avisan en ninguna vista. El numero es
+  // ⛔ `executive` Y `home` VIVIAN AQUI Y SE RETIRAN. Entraron el 2026-08-25 porque su unico
+  //    token de `has_more` vivia en un fichero que no es pantalla (`fixtures.ts`). Los
+  //    tableros ya declaran el recorte de la pagina live de Sessions (`PartialSourceNote`
+  //    kind=page; c3642051b3 y siguientes). La tercera celda dijo que las exenciones
+  //    SOBRAN: ese rojo es como este gate celebra un arreglo. No afirma que findings,
+  //    incidents o status en esos tableros tengan aviso por lista: esta guarda es por
+  //    FEATURE, y avisoPorLista todavia no acusa.
+  // Y las que consumen SUS PROPIAS listas y no avisan en ninguna vista. El numero es
   // el de metodos `ListResponse<…>` de su `api.ts`, medido el 2026-08-25, no estimado.
   // ⛔ LA MAYOR DE LAS VEINTE, Y TAMPOCO ES UN HUECO. `handleListUSStatePacks`
   //    (modules/compliance/depthhandlers.go) llama a `listAll` y devuelve `listResponse{Items}`
@@ -354,8 +356,6 @@ const SIN_AVISO_CONOCIDAS: Record<string, string> = {
   //    su aviso: la tercera celda de esta bateria dijo que la exencion SOBRA, y ese rojo es la
   //    forma que tiene este gate de celebrar un arreglo. Se borra en el mismo aterrizaje que la
   //    vuelve falsa: una exencion que nadie retira envejece hasta volverse permiso.
-  // Misma lista y mismo motor que `residency`: las dos piden `/v1/system/orgs`.
-  home: 'alcanza CUATRO listas truncables por el api de otras features (securityApi.findings, sessionsApi.live, healthApi.incidents, healthApi.status) y el panel no declara ningun techo',
 }
 
 describe('toda pantalla que llama a una operacion truncable avisa del recorte', () => {

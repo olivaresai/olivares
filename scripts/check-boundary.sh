@@ -48,23 +48,38 @@ die_unverified() { # die_unverified <what> <dir> <rc> <output>
 	exit 2
 }
 
+# Helpers below return status. The caller in this shell prints UNVERIFIED and
+# exits 2. `command -v go` fails closed before the first module header.
+
+if ! command -v go >/dev/null 2>&1; then
+	echo "check-boundary: go is not on PATH; the licence boundary is UNVERIFIED." >&2
+	exit 2
+fi
+
 # stderr goes to a file, never into the captured stdout: `go list` can warn while
 # succeeding, and a warning folded into the package list would be walked as if it were
 # a package name.
-BOUNDARY_ERR="$(mktemp)"
+BOUNDARY_ERR="$(mktemp "${TMPDIR:-/tmp}/check-boundary.XXXXXX")" || {
+	echo "check-boundary: could not create a temp file; the licence boundary is UNVERIFIED." >&2
+	exit 2
+}
 trap 'rm -f "${BOUNDARY_ERR}"' EXIT
 
-list_pkgs() { # list_pkgs <dir>
+list_pkgs() { # list_pkgs <dir> — prints packages; returns go list's status
 	local dir="$1" out rc=0
 	out="$(cd "${dir}" && go list ./... 2>"${BOUNDARY_ERR}")" || rc=$?
-	[ "${rc}" -eq 0 ] || die_unverified "'go list ./...'" "${dir}" "${rc}" "$(cat "${BOUNDARY_ERR}")"
+	[ "${rc}" -eq 0 ] || return "${rc}"
+	# Empty stdout is a successful look that found no packages. Do not emit a
+	# blank line; the caller treats empty pkgs as "no Go sources".
+	[ -n "${out}" ] || return 0
 	printf '%s\n' "${out}"
 }
 
-list_deps() { # list_deps <dir> <pattern-or-pkg>
+list_deps() { # list_deps <dir> <pattern-or-pkg> — prints deps; returns go list's status
 	local dir="$1" pkg="$2" out rc=0
 	out="$(cd "${dir}" && go list -deps "${pkg}" 2>"${BOUNDARY_ERR}")" || rc=$?
-	[ "${rc}" -eq 0 ] || die_unverified "'go list -deps ${pkg}'" "${dir}" "${rc}" "$(cat "${BOUNDARY_ERR}")"
+	[ "${rc}" -eq 0 ] || return "${rc}"
+	[ -n "${out}" ] || return 0
 	printf '%s\n' "${out}"
 }
 
@@ -99,7 +114,12 @@ for m in "${FORBIDDEN_MODULES[@]}"; do
   # All packages in the module. An empty list is only legitimate when the module has
   # no Go sources at all; otherwise the toolchain saw something we did not, and the
   # gate must say so instead of skipping the module in silence.
-  pkgs="$(list_pkgs "${m}")"
+  pkgs=""
+  list_pkgs_rc=0
+  pkgs="$(list_pkgs "${m}")" || list_pkgs_rc=$?
+  if [ "${list_pkgs_rc}" -ne 0 ]; then
+    die_unverified "'go list ./...'" "${m}" "${list_pkgs_rc}" "$(cat "${BOUNDARY_ERR}")"
+  fi
   if [ -z "${pkgs}" ]; then
     if [ -n "$(find "${m}" -name '*.go' -not -path '*/vendor/*' -print -quit)" ]; then
       echo "check-boundary: ${m} has Go sources but 'go list ./...' returned no packages;" >&2
@@ -117,7 +137,12 @@ for m in "${FORBIDDEN_MODULES[@]}"; do
     [ -n "${pkg}" ] || continue
     inspected=$((inspected + 1))
     apache_inspected=$((apache_inspected + 1))
-    deps="$(list_deps "${m}" "${pkg}")"
+    deps=""
+    list_deps_rc=0
+    deps="$(list_deps "${m}" "${pkg}")" || list_deps_rc=$?
+    if [ "${list_deps_rc}" -ne 0 ]; then
+      die_unverified "'go list -deps ${pkg}'" "${m}" "${list_deps_rc}" "$(cat "${BOUNDARY_ERR}")"
+    fi
     hits="$(printf '%s\n' "${deps}" | grep "^${CORE_PREFIX}\(/\|$\)" || true)"
     if [ -n "${hits}" ]; then
       echo "    BOUNDARY VIOLATION: ${pkg} transitively imports ${CORE_PREFIX}"
@@ -144,7 +169,12 @@ if [ ! -d "core" ]; then
 fi
 if [ -d "core" ]; then
   echo "==> core: must not import /modules or /connectors (no outward layering inversion)"
-  core_deps="$(list_deps core "./...")"
+  core_deps=""
+  core_list_rc=0
+  core_deps="$(list_deps core "./...")" || core_list_rc=$?
+  if [ "${core_list_rc}" -ne 0 ]; then
+    die_unverified "'go list -deps ./...'" "core" "${core_list_rc}" "$(cat "${BOUNDARY_ERR}")"
+  fi
   [ -n "${core_deps}" ] || { echo "check-boundary: core resolved to no dependencies at all; UNVERIFIED." >&2; exit 2; }
   core_hits="$(printf '%s\n' "${core_deps}" | grep "^${OUTWARD}\(/\|$\)" || true)"
   if [ -n "${core_hits}" ]; then

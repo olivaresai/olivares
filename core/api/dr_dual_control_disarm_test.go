@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -63,11 +62,26 @@ func drHarnessAt(t *testing.T, start time.Time) (*harness, string, store.Store, 
 }
 
 // newDRHarnessAt is newDRHarness with an injected clock.
-func newDRHarnessAt(t *testing.T, dir string, st store.Store, clk model.Clock) *harness {
+func newDRHarnessAt(
+	t *testing.T,
+	dir string,
+	st store.Store,
+	clk model.Clock,
+	observeOpen ...harnessStoreOpener,
+) *harness {
 	t.Helper()
-	return newHarnessOpts(t, func(o *api.Options) {
-		o.Store = st
-		o.Authenticator = auth.NewAuthenticator(st, nil)
+	if st == nil {
+		t.Fatal("newDRHarnessAt requires a prepared store")
+	}
+	if len(observeOpen) > 1 {
+		t.Fatal("newDRHarnessAt accepts at most one store-open observer")
+	}
+	var open harnessStoreOpener
+	if len(observeOpen) == 1 {
+		open = observeOpen[0]
+	}
+	return newHarnessOptsFromStoreSource(t, harnessStoreSource{borrowed: st, open: open}, func(o *api.Options) {
+		o.Version = "26.9.0"
 		o.DR = &api.DRConfig{DataDir: dir, EngineKind: "sqlite"}
 		o.Clock = clk
 	})

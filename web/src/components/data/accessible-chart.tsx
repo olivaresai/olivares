@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import type { TableColumn } from '@/components/data/data-table'
+import type { TableColumn, TableRowData } from '@/components/data/data-table'
 import { BarChart3, TableIcon } from 'lucide-react'
 import { useId, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,7 +27,7 @@ import { DataTable } from './data-table'
  * the caller supplies the rendered chart, the SR `summary`, and the equivalent
  * tabular `columns`/`data`. i18n: toggle labels come from the `common` namespace.
  */
-export interface AccessibleChartProps<TRow> {
+export interface AccessibleChartProps<TRow extends TableRowData> {
   /** Visible + accessible name for the whole figure (e.g. "Spend by model"). */
   title: string
   /** A sentence describing what the chart conveys, for assistive tech (1.1.1).
@@ -56,7 +56,7 @@ export interface AccessibleChartProps<TRow> {
   className?: string
 }
 
-export function AccessibleChart<TRow>({
+export function AccessibleChart<TRow extends TableRowData>({
   title,
   summary,
   children,

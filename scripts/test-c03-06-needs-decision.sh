@@ -3,6 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 #
 # Battery for check-c03-06-needs-decision.sh. Both firing directions.
+#
+# ⛔ QUE MIDE AHORA (2026-09-05). El guion dejo de comparar la ausencia del 20/08 con ficheros
+# vivos del overlay, asi que los mutantes que PLANTABAN la capacidad en un checkout ya no
+# dicen nada de el: la etapa que los sustituye es la INVERSA y es la que importa —un checkout
+# Enterprise que SI tiene la composicion de compra NO cambia el veredicto del registro.
+# Lo demas que se exige es integridad: banderas, PINES EXACTOS y la adjudicacion que lo
+# supera. Ver an internal design note (not shipped)
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,22 +31,21 @@ stage() {
 	chmod +x "$TMP/tree/scripts/check-c03-06-needs-decision.sh"
 	cp "$ROOT/design/c03-06-needs-decision.json" "$TMP/tree/design/"
 	cp "$ROOT/design/C03-06-NEEDS-DECISION-2026-08-20.md" "$TMP/tree/design/"
+	cp "$ROOT/design/OVERLAY-FACT-GATES-ADJUDICATION-2026-09-05.md" "$TMP/tree/design/"
+	# Un checkout Enterprise que YA TIENE lo que el acta observo ausente. Existe para probar
+	# que NO influye: es el sujeto de la comparacion retirada.
 	cat >"$TMP/ent/enterprise/rtbf/legalhold.go" <<'EOF'
 package rtbf
 
 func (h *LegalHoldOverride) EvaluateOverride(_ context.Context, holdID string, reason string, approvers int) (*OverrideDecision, error) {
-	return nil, nil
+	return nil, addonGate("rtbf").Authorize(nil, "override")
 }
 EOF
 	cat >"$TMP/ent/cmd-overlay/olivares/durablebus_enterprise.go" <<'EOF'
 package olivares
 
 func durableLicensed(licenseFile, dataDir string, getenv func(string) string) bool {
-	c, err := license.Verify(src.Blob, pub)
-	if err != nil {
-		return false
-	}
-	return c.Status(time.Now()) != license.StatusExpired
+	return combinedPurchaseView(holder.claims, holder.grants)(activation.PackIdentityScale)
 }
 EOF
 }
@@ -53,95 +59,125 @@ run() {
 	return 0
 }
 
-stage
-run
-if [ "$(cat "$TMP/rc")" = 0 ]; then
-	ok "no-fire: live classification pin is CLEAN"
-else
-	bad "live should be CLEAN ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect() {
+	if [ "$(cat "$TMP/rc")" = "$1" ]; then
+		ok "$2"
+	else
+		bad "$2 — got $(cat "$TMP/rc"), wanted $1 [$(tail -1 "$TMP/err")]"
+	fi
+}
 
-stage
-echo 'addonGate.Authorize(ctx, "wire")' >>"$TMP/ent/enterprise/rtbf/legalhold.go"
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: gated EvaluateOverride is FAIL"
-else
-	bad "gated override should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
-
-stage
-python3 - "$TMP/ent/cmd-overlay/olivares/durablebus_enterprise.go" <<'PY'
-from pathlib import Path
-import sys
-p = Path(sys.argv[1])
-t = p.read_text()
-old = "\treturn c.Status(time.Now()) != license.StatusExpired\n"
-new = "\treturn len(c.Features) > 0 && c.Status(time.Now()) != license.StatusExpired\n"
-if old not in t:
-    raise SystemExit("term return not found")
-p.write_text(t.replace(old, new, 1))
-PY
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: Features consult in durableLicensed is FAIL"
-else
-	bad "Features consult should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
-
-stage
-python3 - "$TMP/tree/design/c03-06-needs-decision.json" <<'PY'
+acta_set() {
+	python3 - "$TMP/tree/design/c03-06-needs-decision.json" "$1" "$2" <<'PY'
 import json, sys
-from pathlib import Path
-p = Path(sys.argv[1])
-d = json.loads(p.read_text())
-d["evaluate_override_gated"] = True
-p.write_text(json.dumps(d))
+p, k, v = sys.argv[1], sys.argv[2], sys.argv[3]
+d = json.load(open(p, encoding="utf-8"))
+d[k] = json.loads(v)
+json.dump(d, open(p, "w", encoding="utf-8"), indent=2)
 PY
+}
+
+stage
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: evaluate_override_gated true is FAIL"
+expect 0 "no-fire: the historical record is intact"
+if grep -q 'HISTORICAL RECORD PRESERVED' "$TMP/out" && grep -q 'NOT evidence about current main' "$TMP/out"; then
+	ok "the verdict says, in words, that it does not attest current main"
 else
-	bad "gated flag should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+	bad "the CLEAN message must name itself historical ($(cat "$TMP/out"))"
 fi
+
+# ── LA ETAPA QUE SUSTITUYE A LOS MUTANTES DE OVERLAY ──────────────────────────────────────
+stage
+rm -rf "$TMP/ent"
+run
+expect 0 "no-fire: no Enterprise checkout at all gives the same verdict"
+
+stage
+run
+rc_with=$(cat "$TMP/rc")
+rm -rf "$TMP/ent"
+run
+if [ "$rc_with" = "$(cat "$TMP/rc")" ]; then
+	ok "no-fire: a checkout that ALREADY has the capability does not move a historical verdict"
+else
+	bad "the verdict depended on the neighbouring tree ($rc_with vs $(cat "$TMP/rc"))"
+fi
+
+# ── integridad del registro ───────────────────────────────────────────────────────────────
+stage
+acta_set evaluate_override_gated true
+run
+expect 1 "firing: evaluate_override_gated flipped"
+
+stage
+acta_set durable_addon_scoped true
+run
+expect 1 "firing: durable_addon_scoped flipped"
+
+stage
+acta_set narrow_to_identity_scale true
+run
+expect 1 "firing: narrow_to_identity_scale flipped"
+
+stage
+acta_set overlay '"8d1720414b1356aea958002ba30f30fe2664e041"'
+run
+expect 1 "firing: the overlay pin was replaced with another 40-hex — a record whose subject can be swapped records nothing"
+
+stage
+acta_set hub '"0000000000000000000000000000000000000000"'
+run
+expect 1 "firing: the hub pin was replaced"
+
+stage
+acta_set lote '"C99-99"'
+run
+expect 1 "firing: the acta no longer says which lote it belongs to"
 
 stage
 echo 'durableLicensed now scoped' >>"$TMP/tree/design/C03-06-NEEDS-DECISION-2026-08-20.md"
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then
-	ok "firing: doc claims scoped motor is FAIL"
-else
-	bad "scoped claim should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect 1 "firing: the historical doc claims a motor the lote did not have"
+
+stage
+python3 - "$TMP/tree/design/C03-06-NEEDS-DECISION-2026-08-20.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read().replace("EvaluateOverride is NO-GATE", "")
+open(p, "w", encoding="utf-8").write(t)
+PY
+run
+expect 1 "firing: the historical doc lost NO-GATE"
+
+stage
+python3 - "$TMP/tree/design/OVERLAY-FACT-GATES-ADJUDICATION-2026-09-05.md" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read().replace("daa083e56f331af6158475fc304fee633acbfc2b", "an integrated commit")
+open(p, "w", encoding="utf-8").write(t)
+PY
+run
+expect 1 "firing: the adjudication stopped naming the commit that changed the fact"
+
+stage
+rm -f "$TMP/tree/design/OVERLAY-FACT-GATES-ADJUDICATION-2026-09-05.md"
+run
+expect 2 "LOOK: the record survives but the adjudication that supersedes it is missing"
 
 stage
 rm -f "$TMP/tree/design/C03-06-NEEDS-DECISION-2026-08-20.md"
 run
-if [ "$(cat "$TMP/rc")" = 2 ]; then
-	ok "missing decision doc is COULD NOT LOOK"
-else
-	bad "missing doc should be 2 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect 2 "LOOK: missing decision doc"
+
+stage
+rm -f "$TMP/tree/design/c03-06-needs-decision.json"
+run
+expect 2 "LOOK: missing acta"
 
 stage
 run
-OLIVARES_ROOT="$TMP/tree" OLIVARES_ENT_DIR="" \
-	bash "$TMP/tree/scripts/check-c03-06-needs-decision.sh" \
-	>"$TMP/out" 2>"$TMP/err" || true
-if grep -q 'COULD NOT LOOK' "$TMP/err"; then
-	ok "unset overlay dir is COULD NOT LOOK"
-else
-	bad "unset overlay dir should LOOK 2 ($(cat "$TMP/err"))"
-fi
-
-stage
-run
-if [ "$(cat "$TMP/rc")" = 0 ]; then
-	ok "no-fire: restored live stays CLEAN"
-else
-	bad "restored live should be CLEAN ($(cat "$TMP/rc") $(cat "$TMP/err"))"
-fi
+expect 0 "no-fire: restored record stays CLEAN"
 
 echo "check-c03-06-needs-decision selftest: $pass passed, $fail failed"
-if [[ "$fail" -ne 0 ]]; then exit 1; fi
+[ "$fail" -eq 0 ] || exit 1
 exit 0

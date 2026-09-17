@@ -358,6 +358,10 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 			out["amr"] = p.AMR
 		}
 	}
+	// Deployment readiness, not this principal's certificate, OCSP, AAL, or grants.
+	out["authentication_configuration"] = map[string]any{
+		"piv_configured": s.pivVerifierRootsConfigured(),
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 

@@ -32,7 +32,7 @@
 // registry blades were retired on 2026-05-01. Those legacy APIs are deliberately
 // not used by this package.
 //
-// It is read-only and minimal-data (docs/SECURITY-HARDENING.md-3): the OAuth2
+// It is read-only and minimal-data (docs/SECURITY-HARDENING.md §2-3): the OAuth2
 // client-credentials token POST is the only non-GET call, every Graph call is a
 // GET through the shared httpx client, and only package metadata is read: ids,
 // display names, package type/status, blocked flag, publisher, version,

@@ -32,7 +32,6 @@ import type {
   ComparisonWithProjection,
   CostCenter,
   CostCenterMapping,
-  EnhancedBudgetStatus,
   EnhancedForecastResponse,
   ExportProvenance,
   ForecastResponse,
@@ -58,6 +57,17 @@ const BASE = '/v1/m/finops'
  *    existe. 1000 es el máximo que el motor acepta; por encima lo recorta él.
  */
 const FINOPS_PAGE = 1000
+export interface AlertParams {
+  budget_id?: string
+  alert_id?: string
+  limit?: number
+  cursor?: string
+}
+const readBudgetStatus = (id: string, request?: TenantRequestOptions) =>
+  http.get<BudgetStatus>(
+    `${BASE}/budgets/${encodeURIComponent(id)}/status`,
+    request,
+  )
 
 export interface RangeParams {
   since?: string
@@ -218,11 +228,11 @@ export const finopsApi = {
     http.get<ListResponse<Budget>>(`${BASE}/budgets`, {
       query: { limit: FINOPS_PAGE },
     }),
-  budgetStatus: (id: string) =>
-    http.get<BudgetStatus>(`${BASE}/budgets/${id}/status`),
-  alerts: (params?: { budget_id?: string; limit?: number }) =>
+  budgetStatus: readBudgetStatus,
+  alerts: (params?: AlertParams, request?: TenantRequestOptions) =>
     http.get<ListResponse<Alert>>(`${BASE}/alerts`, {
       query: { limit: FINOPS_PAGE, ...params },
+      ...request,
     }),
   createBudget: (body: BudgetInput) =>
     http.post<Budget>(`${BASE}/budgets`, body),
@@ -344,8 +354,7 @@ export const finopsApi = {
     }),
 
   //enhanced budget status with exhaustion
-  budgetStatusEnhanced: (id: string) =>
-    http.get<EnhancedBudgetStatus>(`${BASE}/budgets/${id}/status`),
+  budgetStatusEnhanced: readBudgetStatus,
 }
 
 export const finopsKeys = {

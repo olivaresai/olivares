@@ -1,0 +1,949 @@
+{
+  "exact": {
+    "alerts": {
+      "items": [
+        {
+          "id": "01a08125-7c31-7008-b2ea-e7515231b6da",
+          "budget_id": "01a08125-7c1a-7b42-a089-6317611bf415",
+          "dimension": "global",
+          "period": "monthly",
+          "period_start": "2026-06-01T00:00:00.000000000Z",
+          "threshold_pct": 100,
+          "spend_micro_usd": 12000000,
+          "limit_micro_usd": 10000000,
+          "severity": "high",
+          "triggered_at": "2026-06-10T12:00:00.000000000Z",
+          "legacy_value_kind": "exact",
+          "amount_evidence": {
+            "state": "valid",
+            "evidence_hash": "5c851c8440e30c449be2b1a2304b2eecccf7b0e74761e0913c968964eb92a561",
+            "envelope": {
+              "schema_version": 1,
+              "digest_version": 1,
+              "alert_id": "01a08125-7c31-7008-b2ea-e7515231b6da",
+              "tenant_id": "01a08125-7bfd-7ca3-9336-76496b4ee4b1",
+              "budget_id": "01a08125-7c1a-7b42-a089-6317611bf415",
+              "policy": {
+                "id": "01a08125-7c1a-7b42-a089-6317611bf415",
+                "version": 1,
+                "name": "exact",
+                "dimension": "global",
+                "key": "",
+                "period": "monthly",
+                "currency": "USD",
+                "action": "alert",
+                "limit_micro_usd": "10000000",
+                "reserved_micro_usd": "0"
+              },
+              "amount": {
+                "class": "exact",
+                "value_micro_usd": "12000000",
+                "currency": "USD"
+              },
+              "components": {
+                "cost": {
+                  "state": "known",
+                  "value_micro_usd": "12000000",
+                  "rows_read": 1,
+                  "pages_read": 1
+                },
+                "static_reservation": {
+                  "state": "known",
+                  "value_micro_usd": "0"
+                },
+                "dynamic_reservation": {
+                  "state": "known",
+                  "value_micro_usd": "0"
+                }
+              },
+              "decision": {
+                "result": "proven",
+                "threshold": "1",
+                "target_micro_usd": "10000000",
+                "target_numerator": "10000000",
+                "target_denominator": "1",
+                "legacy_threshold_pct": 100
+              },
+              "context": {
+                "window_start": "2026-06-01T00:00:00.000000000Z",
+                "window_end": "2026-07-01T00:00:00.000000000Z",
+                "window_bounds": "half_open_start_inclusive_end_exclusive",
+                "provenance_filter": "estimated_stream_billed_excluded",
+                "scope_resolved": true,
+                "evaluated_at": "2026-06-10T12:00:00.000000000Z",
+                "sample_occurred_at": "2026-06-10T12:00:00.000000000Z",
+                "read_consistency": "scope_paged_enumeration"
+              },
+              "legacy": {
+                "value_kind": "exact",
+                "spend_micro_usd": 12000000
+              }
+            }
+          }
+        }
+      ],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-7c1a-7b42-a089-6317611bf415",
+      "name": "exact",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "spend_micro_usd": 12000000,
+      "remaining_micro_usd": -2000000,
+      "consumed_pct": 120,
+      "projected_micro_usd": 37894736,
+      "projected_pct": 378,
+      "over": true,
+      "samples": 1,
+      "exhaustion_days_remaining": 0,
+      "exhaustion_confidence": "high",
+      "amount": {
+        "state": "complete",
+        "class": "exact",
+        "effective_micro_usd": "12000000",
+        "remaining_micro_usd": "-2000000",
+        "currency": "USD",
+        "components": {
+          "cost": {
+            "state": "known",
+            "value_micro_usd": "12000000",
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          },
+          "dynamic_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "proven",
+            "legacy_threshold_pct": 100
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "proven"
+        },
+        "legacy_projection": "exact",
+        "legacy_fields": {
+          "spend_micro_usd": "exact",
+          "remaining_micro_usd": "exact",
+          "projected_micro_usd": "unavailable",
+          "over": "proven"
+        },
+        "forecast_certified": false
+      }
+    }
+  },
+  "future": {
+    "alerts": {
+      "items": [
+        {
+          "id": "01a08125-e029-74e2-b680-7d704d114148",
+          "budget_id": "01a08125-e014-78b6-ba8b-1abb0e9706f5",
+          "dimension": "global",
+          "period": "monthly",
+          "period_start": "2026-06-01T00:00:00.000000000Z",
+          "threshold_pct": 100,
+          "spend_micro_usd": 12000000,
+          "limit_micro_usd": 10000000,
+          "severity": "high",
+          "triggered_at": "2026-06-10T12:00:00.000000000Z",
+          "legacy_value_kind": "unverified",
+          "amount_evidence": {
+            "state": "unknown",
+            "cause": "unsupported_evidence_version",
+            "evidence_hash": "16eaec2bde62427a020c06699ba30c68a319c7ad2b25cf70f086c2dfa58b1be8"
+          }
+        }
+      ],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-e014-78b6-ba8b-1abb0e9706f5",
+      "name": "future",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "spend_micro_usd": 12000000,
+      "remaining_micro_usd": -2000000,
+      "consumed_pct": 120,
+      "projected_micro_usd": 37894736,
+      "projected_pct": 378,
+      "over": true,
+      "samples": 1,
+      "exhaustion_days_remaining": 0,
+      "exhaustion_confidence": "high",
+      "amount": {
+        "state": "complete",
+        "class": "exact",
+        "effective_micro_usd": "12000000",
+        "remaining_micro_usd": "-2000000",
+        "currency": "USD",
+        "components": {
+          "cost": {
+            "state": "known",
+            "value_micro_usd": "12000000",
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          },
+          "dynamic_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "proven",
+            "legacy_threshold_pct": 100
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "proven"
+        },
+        "legacy_projection": "exact",
+        "legacy_fields": {
+          "spend_micro_usd": "exact",
+          "remaining_micro_usd": "exact",
+          "projected_micro_usd": "unavailable",
+          "over": "proven"
+        },
+        "forecast_certified": false
+      }
+    }
+  },
+  "historical": {
+    "alerts": {
+      "items": [
+        {
+          "id": "01a08125-c455-760d-8908-4a7803dfd425",
+          "budget_id": "01a08125-c441-70fe-8e82-61d25c70379a",
+          "dimension": "global",
+          "period": "monthly",
+          "period_start": "2026-06-01T00:00:00.000000000Z",
+          "threshold_pct": 100,
+          "spend_micro_usd": 12000000,
+          "limit_micro_usd": 10000000,
+          "severity": "high",
+          "triggered_at": "2026-06-10T12:00:00.000000000Z",
+          "legacy_value_kind": "unverified",
+          "amount_evidence": {
+            "state": "unknown",
+            "cause": "legacy_unversioned"
+          }
+        }
+      ],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-c441-70fe-8e82-61d25c70379a",
+      "name": "historical",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "spend_micro_usd": 12000000,
+      "remaining_micro_usd": -2000000,
+      "consumed_pct": 120,
+      "projected_micro_usd": 37894736,
+      "projected_pct": 378,
+      "over": true,
+      "samples": 1,
+      "exhaustion_days_remaining": 0,
+      "exhaustion_confidence": "high",
+      "amount": {
+        "state": "complete",
+        "class": "exact",
+        "effective_micro_usd": "12000000",
+        "remaining_micro_usd": "-2000000",
+        "currency": "USD",
+        "components": {
+          "cost": {
+            "state": "known",
+            "value_micro_usd": "12000000",
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          },
+          "dynamic_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "proven",
+            "legacy_threshold_pct": 100
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "proven"
+        },
+        "legacy_projection": "exact",
+        "legacy_fields": {
+          "spend_micro_usd": "exact",
+          "remaining_micro_usd": "exact",
+          "projected_micro_usd": "unavailable",
+          "over": "proven"
+        },
+        "forecast_certified": false
+      }
+    }
+  },
+  "lower_bound": {
+    "alerts": {
+      "items": [
+        {
+          "id": "01a08125-8b2b-7dc0-a892-16720eaa5731",
+          "budget_id": "01a08125-8b17-71f3-9ed4-808f6ac8dcae",
+          "dimension": "global",
+          "period": "monthly",
+          "period_start": "2026-06-01T00:00:00.000000000Z",
+          "threshold_pct": 100,
+          "spend_micro_usd": 12000000,
+          "limit_micro_usd": 10000000,
+          "severity": "high",
+          "triggered_at": "2026-06-10T12:00:00.000000000Z",
+          "legacy_value_kind": "lower_bound",
+          "amount_evidence": {
+            "state": "valid",
+            "evidence_hash": "4466fa87a9c8bd3c14a9eb27cc36a01aafd58f1559a152919f6c1d55c28f0e20",
+            "envelope": {
+              "schema_version": 1,
+              "digest_version": 1,
+              "alert_id": "01a08125-8b2b-7dc0-a892-16720eaa5731",
+              "tenant_id": "01a08125-8af9-76cf-91d6-d9116e062e67",
+              "budget_id": "01a08125-8b17-71f3-9ed4-808f6ac8dcae",
+              "policy": {
+                "id": "01a08125-8b17-71f3-9ed4-808f6ac8dcae",
+                "version": 1,
+                "name": "lower_bound",
+                "dimension": "global",
+                "key": "",
+                "period": "monthly",
+                "currency": "USD",
+                "action": "alert",
+                "limit_micro_usd": "10000000",
+                "reserved_micro_usd": "12000000"
+              },
+              "amount": {
+                "class": "lower_bound",
+                "value_micro_usd": "12000000",
+                "currency": "USD",
+                "causes": ["dynamic_reservation_scan_incomplete"]
+              },
+              "components": {
+                "cost": {
+                  "state": "known",
+                  "value_micro_usd": "0",
+                  "rows_read": 1,
+                  "pages_read": 1
+                },
+                "static_reservation": {
+                  "state": "known",
+                  "value_micro_usd": "12000000"
+                },
+                "dynamic_reservation": {
+                  "state": "nonnegative_unknown",
+                  "value_micro_usd": null,
+                  "causes": ["dynamic_reservation_scan_incomplete"]
+                }
+              },
+              "decision": {
+                "result": "proven",
+                "threshold": "1",
+                "target_micro_usd": "10000000",
+                "target_numerator": "10000000",
+                "target_denominator": "1",
+                "legacy_threshold_pct": 100
+              },
+              "context": {
+                "window_start": "2026-06-01T00:00:00.000000000Z",
+                "window_end": "2026-07-01T00:00:00.000000000Z",
+                "window_bounds": "half_open_start_inclusive_end_exclusive",
+                "provenance_filter": "estimated_stream_billed_excluded",
+                "scope_resolved": true,
+                "evaluated_at": "2026-06-10T12:00:00.000000000Z",
+                "sample_occurred_at": "2026-06-10T12:00:00.000000000Z",
+                "read_consistency": "scope_paged_enumeration"
+              },
+              "legacy": {
+                "value_kind": "lower_bound",
+                "spend_micro_usd": 12000000
+              }
+            }
+          }
+        }
+      ],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-8b17-71f3-9ed4-808f6ac8dcae",
+      "name": "lower_bound",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "reserved_micro_usd": 12000000,
+      "spend_micro_usd": 0,
+      "remaining_micro_usd": 0,
+      "consumed_pct": 120,
+      "projected_micro_usd": 12000000,
+      "projected_pct": 120,
+      "over": true,
+      "samples": 1,
+      "truncated": true,
+      "exhaustion_days_remaining": 0,
+      "exhaustion_confidence": "high",
+      "amount": {
+        "state": "incomplete",
+        "class": "lower_bound",
+        "effective_micro_usd": "12000000",
+        "remaining_micro_usd": null,
+        "currency": "USD",
+        "causes": ["dynamic_reservation_scan_incomplete"],
+        "components": {
+          "cost": {
+            "state": "known",
+            "value_micro_usd": "0",
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "12000000"
+          },
+          "dynamic_reservation": {
+            "state": "nonnegative_unknown",
+            "value_micro_usd": null,
+            "causes": ["dynamic_reservation_scan_incomplete"]
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "proven",
+            "legacy_threshold_pct": 100
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "proven"
+        },
+        "legacy_projection": "unavailable",
+        "legacy_fields": {
+          "spend_micro_usd": "exact",
+          "remaining_micro_usd": "unavailable",
+          "projected_micro_usd": "unavailable",
+          "over": "unproven"
+        },
+        "forecast_certified": false
+      }
+    }
+  },
+  "malformed": {
+    "alerts": {
+      "items": [
+        {
+          "id": "01a08125-d1fa-722a-bcf1-839562629e22",
+          "budget_id": "01a08125-d1e5-7358-8ce2-a02193a1c659",
+          "dimension": "global",
+          "period": "monthly",
+          "period_start": "2026-06-01T00:00:00.000000000Z",
+          "threshold_pct": 100,
+          "spend_micro_usd": 12000000,
+          "limit_micro_usd": 10000000,
+          "severity": "high",
+          "triggered_at": "2026-06-10T12:00:00.000000000Z",
+          "legacy_value_kind": "unverified",
+          "amount_evidence": {
+            "state": "unknown",
+            "cause": "malformed_evidence",
+            "evidence_hash": "3d6eb788d140621e9df28d33907a527413187872ddea24b9daf5ffd515050ec9"
+          }
+        }
+      ],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-d1e5-7358-8ce2-a02193a1c659",
+      "name": "malformed",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "spend_micro_usd": 12000000,
+      "remaining_micro_usd": -2000000,
+      "consumed_pct": 120,
+      "projected_micro_usd": 37894736,
+      "projected_pct": 378,
+      "over": true,
+      "samples": 1,
+      "exhaustion_days_remaining": 0,
+      "exhaustion_confidence": "high",
+      "amount": {
+        "state": "complete",
+        "class": "exact",
+        "effective_micro_usd": "12000000",
+        "remaining_micro_usd": "-2000000",
+        "currency": "USD",
+        "components": {
+          "cost": {
+            "state": "known",
+            "value_micro_usd": "12000000",
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          },
+          "dynamic_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "proven",
+            "legacy_threshold_pct": 100
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "proven"
+        },
+        "legacy_projection": "exact",
+        "legacy_fields": {
+          "spend_micro_usd": "exact",
+          "remaining_micro_usd": "exact",
+          "projected_micro_usd": "unavailable",
+          "over": "proven"
+        },
+        "forecast_certified": false
+      }
+    }
+  },
+  "unknown": {
+    "alerts": {
+      "items": [
+        {
+          "id": "01a08125-9a37-7a6f-bb0c-59c8807fee4a",
+          "budget_id": "01a08125-9a1d-7f09-be3b-fa5087f92d22",
+          "dimension": "global",
+          "period": "monthly",
+          "period_start": "2026-06-01T00:00:00.000000000Z",
+          "threshold_pct": 100,
+          "spend_micro_usd": 12000000,
+          "limit_micro_usd": 10000000,
+          "severity": "high",
+          "triggered_at": "2026-06-10T12:00:00.000000000Z",
+          "legacy_value_kind": "exact",
+          "amount_evidence": {
+            "state": "valid",
+            "evidence_hash": "e8c02e4519fe7f1178a38a3fddcdaa2b5c0725b71293e6bf7f2f4eff11077e64",
+            "envelope": {
+              "schema_version": 1,
+              "digest_version": 1,
+              "alert_id": "01a08125-9a37-7a6f-bb0c-59c8807fee4a",
+              "tenant_id": "01a08125-99fd-7e3f-ac24-0db0fb7f9fe3",
+              "budget_id": "01a08125-9a1d-7f09-be3b-fa5087f92d22",
+              "policy": {
+                "id": "01a08125-9a1d-7f09-be3b-fa5087f92d22",
+                "version": 1,
+                "name": "unknown",
+                "dimension": "global",
+                "key": "",
+                "period": "monthly",
+                "currency": "USD",
+                "action": "alert",
+                "limit_micro_usd": "10000000",
+                "reserved_micro_usd": "0"
+              },
+              "amount": {
+                "class": "exact",
+                "value_micro_usd": "12000000",
+                "currency": "USD"
+              },
+              "components": {
+                "cost": {
+                  "state": "known",
+                  "value_micro_usd": "12000000",
+                  "rows_read": 1,
+                  "pages_read": 1
+                },
+                "static_reservation": {
+                  "state": "known",
+                  "value_micro_usd": "0"
+                },
+                "dynamic_reservation": {
+                  "state": "known",
+                  "value_micro_usd": "0"
+                }
+              },
+              "decision": {
+                "result": "proven",
+                "threshold": "1",
+                "target_micro_usd": "10000000",
+                "target_numerator": "10000000",
+                "target_denominator": "1",
+                "legacy_threshold_pct": 100
+              },
+              "context": {
+                "window_start": "2026-06-01T00:00:00.000000000Z",
+                "window_end": "2026-07-01T00:00:00.000000000Z",
+                "window_bounds": "half_open_start_inclusive_end_exclusive",
+                "provenance_filter": "estimated_stream_billed_excluded",
+                "scope_resolved": true,
+                "evaluated_at": "2026-06-10T12:00:00.000000000Z",
+                "sample_occurred_at": "2026-06-10T12:00:00.000000000Z",
+                "read_consistency": "scope_paged_enumeration"
+              },
+              "legacy": {
+                "value_kind": "exact",
+                "spend_micro_usd": 12000000
+              }
+            }
+          }
+        }
+      ],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-9a1d-7f09-be3b-fa5087f92d22",
+      "name": "unknown",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "spend_micro_usd": 12000000000,
+      "remaining_micro_usd": -11990000000,
+      "consumed_pct": 120000,
+      "projected_micro_usd": 37894736842,
+      "projected_pct": 378947,
+      "over": true,
+      "samples": 1000,
+      "truncated": true,
+      "exhaustion_days_remaining": 0,
+      "exhaustion_confidence": "high",
+      "amount": {
+        "state": "incomplete",
+        "class": "unknown",
+        "effective_micro_usd": null,
+        "remaining_micro_usd": null,
+        "currency": "USD",
+        "causes": ["cost_cursor_missing"],
+        "components": {
+          "cost": {
+            "state": "unknown",
+            "value_micro_usd": null,
+            "causes": ["cost_cursor_missing"],
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          },
+          "dynamic_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "unproven",
+            "legacy_threshold_pct": 100,
+            "causes": ["cost_cursor_missing"]
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "unproven",
+          "causes": ["cost_cursor_missing"]
+        },
+        "legacy_projection": "unavailable",
+        "legacy_fields": {
+          "spend_micro_usd": "unavailable",
+          "remaining_micro_usd": "unavailable",
+          "projected_micro_usd": "unavailable",
+          "over": "unproven"
+        },
+        "forecast_certified": false
+      }
+    }
+  },
+  "wide": {
+    "alerts": {
+      "items": [
+        {
+          "id": "01a08125-b662-75f2-b481-7bd390508b43",
+          "budget_id": "01a08125-b64d-744e-981f-3e76fed5587a",
+          "dimension": "global",
+          "period": "monthly",
+          "period_start": "2026-06-01T00:00:00.000000000Z",
+          "threshold_pct": 100,
+          "spend_micro_usd": 9007199254740993,
+          "limit_micro_usd": 10000000,
+          "severity": "high",
+          "triggered_at": "2026-06-10T12:00:00.000000000Z",
+          "legacy_value_kind": "exact",
+          "amount_evidence": {
+            "state": "valid",
+            "evidence_hash": "78834ebbea06b45c1a90cf4249a21da0d5192df9d5a2e26868ab99d46bba410f",
+            "envelope": {
+              "schema_version": 1,
+              "digest_version": 1,
+              "alert_id": "01a08125-b662-75f2-b481-7bd390508b43",
+              "tenant_id": "01a08125-b632-70a7-be9b-8821bcee18fb",
+              "budget_id": "01a08125-b64d-744e-981f-3e76fed5587a",
+              "policy": {
+                "id": "01a08125-b64d-744e-981f-3e76fed5587a",
+                "version": 1,
+                "name": "wide",
+                "dimension": "global",
+                "key": "",
+                "period": "monthly",
+                "currency": "USD",
+                "action": "alert",
+                "limit_micro_usd": "10000000",
+                "reserved_micro_usd": "0"
+              },
+              "amount": {
+                "class": "exact",
+                "value_micro_usd": "9007199254740993",
+                "currency": "USD"
+              },
+              "components": {
+                "cost": {
+                  "state": "known",
+                  "value_micro_usd": "9007199254740993",
+                  "rows_read": 1,
+                  "pages_read": 1
+                },
+                "static_reservation": {
+                  "state": "known",
+                  "value_micro_usd": "0"
+                },
+                "dynamic_reservation": {
+                  "state": "known",
+                  "value_micro_usd": "0"
+                }
+              },
+              "decision": {
+                "result": "proven",
+                "threshold": "1",
+                "target_micro_usd": "10000000",
+                "target_numerator": "10000000",
+                "target_denominator": "1",
+                "legacy_threshold_pct": 100
+              },
+              "context": {
+                "window_start": "2026-06-01T00:00:00.000000000Z",
+                "window_end": "2026-07-01T00:00:00.000000000Z",
+                "window_bounds": "half_open_start_inclusive_end_exclusive",
+                "provenance_filter": "estimated_stream_billed_excluded",
+                "scope_resolved": true,
+                "evaluated_at": "2026-06-10T12:00:00.000000000Z",
+                "sample_occurred_at": "2026-06-10T12:00:00.000000000Z",
+                "read_consistency": "scope_paged_enumeration"
+              },
+              "legacy": {
+                "value_kind": "exact",
+                "spend_micro_usd": 9007199254740993
+              }
+            }
+          }
+        }
+      ],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-b64d-744e-981f-3e76fed5587a",
+      "name": "wide",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "spend_micro_usd": 9007199254740993,
+      "remaining_micro_usd": -9007199244740993,
+      "consumed_pct": 90071992547,
+      "projected_micro_usd": 28443787120234712,
+      "projected_pct": 284437871202,
+      "over": true,
+      "samples": 1,
+      "exhaustion_days_remaining": 0,
+      "exhaustion_confidence": "high",
+      "amount": {
+        "state": "complete",
+        "class": "exact",
+        "effective_micro_usd": "9007199254740993",
+        "remaining_micro_usd": "-9007199244740993",
+        "currency": "USD",
+        "components": {
+          "cost": {
+            "state": "known",
+            "value_micro_usd": "9007199254740993",
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          },
+          "dynamic_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "proven",
+            "legacy_threshold_pct": 100
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "proven"
+        },
+        "legacy_projection": "exact",
+        "legacy_fields": {
+          "spend_micro_usd": "exact",
+          "remaining_micro_usd": "exact",
+          "projected_micro_usd": "unavailable",
+          "over": "proven"
+        },
+        "forecast_certified": false
+      }
+    }
+  },
+  "zero": {
+    "alerts": {
+      "items": [],
+      "has_more": false
+    },
+    "status": {
+      "id": "01a08125-a865-769f-94f1-9f9851153d8a",
+      "name": "zero",
+      "enabled": true,
+      "dimension": "global",
+      "period": "monthly",
+      "period_start": "2026-06-01T00:00:00.000000000Z",
+      "currency": "USD",
+      "action": "alert",
+      "limit_micro_usd": 10000000,
+      "spend_micro_usd": 0,
+      "remaining_micro_usd": 10000000,
+      "consumed_pct": 0,
+      "projected_micro_usd": 0,
+      "projected_pct": 0,
+      "over": false,
+      "samples": 1,
+      "exhaustion_days_remaining": -1,
+      "exhaustion_confidence": "low",
+      "amount": {
+        "state": "complete",
+        "class": "exact",
+        "effective_micro_usd": "0",
+        "remaining_micro_usd": "10000000",
+        "currency": "USD",
+        "components": {
+          "cost": {
+            "state": "known",
+            "value_micro_usd": "0",
+            "rows_read": 1,
+            "pages_read": 1
+          },
+          "static_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          },
+          "dynamic_reservation": {
+            "state": "known",
+            "value_micro_usd": "0"
+          }
+        },
+        "thresholds": [
+          {
+            "threshold": "1",
+            "target_micro_usd": "10000000",
+            "result": "not_reached",
+            "legacy_threshold_pct": 100
+          }
+        ],
+        "over_limit": {
+          "threshold": "1",
+          "target_micro_usd": "10000000",
+          "result": "not_reached"
+        },
+        "legacy_projection": "exact",
+        "legacy_fields": {
+          "spend_micro_usd": "exact",
+          "remaining_micro_usd": "exact",
+          "projected_micro_usd": "unavailable",
+          "over": "not_reached"
+        },
+        "forecast_certified": false
+      }
+    }
+  }
+}

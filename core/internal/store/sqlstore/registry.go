@@ -358,6 +358,10 @@ func validateAuthorizationFact(d model.EntityDescriptor) error {
 	if d.AuthorizationFact && !allowedAuthorizationFactKind(d.Kind) {
 		return fmt.Errorf("entity %q is not in the authorization fact allowlist", d.Kind)
 	}
+	if d.AuthorizationFact && ((d.Kind == model.UserAuthorityKind && d.AuthorizationLockOrder != 4) ||
+		(d.Kind != model.UserAuthorityKind && d.AuthorizationLockOrder < 5)) {
+		return fmt.Errorf("authorization order below five is reserved for User authority at four")
+	}
 	if !touch.Declared() {
 		return nil
 	}
@@ -406,8 +410,11 @@ func validateAuthorizationFact(d model.EntityDescriptor) error {
 }
 
 func allowedAuthorizationFactKind(kind model.Kind) bool {
+	if model.IsLineageEpochKind(kind) {
+		return true
+	}
 	switch kind {
-	case "core.identity", "core.agent", model.DirectoryEpochKind,
+	case "core.identity", "core.agent", model.DirectoryEpochKind, model.UserAuthorityKind,
 		model.AuthorizationEpochKind,
 		"governance.nhi_lifecycle", "sessions.claim":
 		return true
@@ -426,6 +433,11 @@ func allowedAuthorizationFactKind(kind model.Kind) bool {
 // principal.
 func validateWorkspaceLineage(d model.EntityDescriptor) error {
 	s := d.WorkspaceLineage
+	if d.WorkspaceConfinedReadOnly && !s.Declared() {
+		// Read-only confined exposure filters through the lineage; without one the
+		// flag would name a reader that can never exist.
+		return fmt.Errorf("workspace lineage: read-only confined exposure requires a declared lineage")
+	}
 	if !s.Declared() {
 		// A spec is either fully absent or fully specified; half of one is a
 		// declaration whose meaning nobody can state.
@@ -584,6 +596,11 @@ func (r *registry) mutableTenantTables() []string {
 	for _, t := range r.appendOnlyTables() {
 		appendOnly[t] = true
 	}
+	// Lineage generations are read-only to the application. Their narrower
+	// owner/trigger ACL is verified separately; ordinary DML is not required.
+	for _, relation := range lineageRelations {
+		appendOnly[relation.descriptor().Table] = true
+	}
 	out := make([]string, 0, len(r.order)+1)
 	for _, t := range r.tenantTables() {
 		if !appendOnly[t] {
@@ -633,11 +650,26 @@ func (r *registry) SchemaInvariants(
 	namespace string,
 	byEngine map[store.Engine][]store.SchemaTrigger,
 ) error {
-	if r.closed {
-		return fmt.Errorf("%w: registration is closed", store.ErrInvalidDescriptor)
-	}
 	if !isNamespace(namespace) {
 		return fmt.Errorf("%w: invalid namespace %q", store.ErrInvalidDescriptor, namespace)
+	}
+	return r.registerSchemaInvariants(namespace, byEngine)
+}
+
+// coreSchemaInvariantNamespace is the reserved namespace core's own invariants register
+// under. It is named because the retention comparator gates on it and a gate keyed to a
+// literal typed twice is a gate that drifts.
+const coreSchemaInvariantNamespace = "core"
+
+// Core's retained H guard enters only through this compiled, private path.
+// The public module registry still cannot claim the reserved core namespace.
+func (r *registry) registerCoreUserAuthorityInvariants() error {
+	return r.registerSchemaInvariants(coreSchemaInvariantNamespace, userAuthoritySchemaInvariants())
+}
+
+func (r *registry) registerSchemaInvariants(namespace string, byEngine map[store.Engine][]store.SchemaTrigger) error {
+	if r.closed {
+		return fmt.Errorf("%w: registration is closed", store.ErrInvalidDescriptor)
 	}
 	if _, exists := r.invariants[namespace]; exists {
 		return fmt.Errorf("%w: duplicate schema-invariant namespace %q", store.ErrInvalidDescriptor, namespace)

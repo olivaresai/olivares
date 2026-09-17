@@ -36,6 +36,13 @@ package model
 // that infers "safe to re-attempt under a new operation" may do so from
 // not_sent and blocked only — never from completed or withheld, whose dispatch
 // already ran.
+//
+// refused is neither the claim state nor a settlement state. A refused row
+// records that the operation identity was burned before anything was claimed
+// or dispatched: it carries no claim, outcome, result or dispatch reference,
+// it can never be settled, and a new effect requires a new operation. Core
+// schema v11 admits the word at the database; no generic claim or settle
+// writes it.
 type EvidenceOperationState string
 
 // The evidence operation states.
@@ -46,23 +53,29 @@ const (
 	EvidenceOpUnknown   EvidenceOperationState = "unknown"
 	EvidenceOpBlocked   EvidenceOperationState = "blocked"
 	EvidenceOpWithheld  EvidenceOperationState = "withheld"
+	EvidenceOpRefused   EvidenceOperationState = "refused"
 )
 
 // Valid reports whether s is a known state.
 func (s EvidenceOperationState) Valid() bool {
 	switch s {
 	case EvidenceOpClaimed, EvidenceOpCompleted, EvidenceOpNotSent,
-		EvidenceOpUnknown, EvidenceOpBlocked, EvidenceOpWithheld:
+		EvidenceOpUnknown, EvidenceOpBlocked, EvidenceOpWithheld, EvidenceOpRefused:
 		return true
 	}
 	return false
 }
 
-// Terminal reports whether s is a settlement state (valid and not "claimed").
-// Only terminal states may be recorded by a settle; "claimed" is written
-// exclusively by the claim itself.
+// Terminal reports whether s is one of the five settlement states. Only these
+// may be recorded by a settle; "claimed" is written exclusively by the claim
+// itself, and "refused" is not a settlement.
 func (s EvidenceOperationState) Terminal() bool {
-	return s.Valid() && s != EvidenceOpClaimed
+	switch s {
+	case EvidenceOpCompleted, EvidenceOpNotSent, EvidenceOpUnknown,
+		EvidenceOpBlocked, EvidenceOpWithheld:
+		return true
+	}
+	return false
 }
 
 // EvidenceOperation is one row of the durable evidence operation journal: the

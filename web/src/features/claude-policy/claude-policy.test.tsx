@@ -20,7 +20,12 @@ vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 // this suite mounts the view without a router — every tab click was raising an unhandled
 // "Cannot read properties of null (reading 'navigate')" while the assertions still
 // passed. Stubbing it here keeps the run free of errors that mask real ones.
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
+}))
 
 const authState = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,

@@ -26,6 +26,7 @@ const (
 )
 
 type compareRequest struct {
+	LiveRef          string `json:"live_ref,omitempty"`
 	ScenarioRef      string `json:"scenario_ref,omitempty"`
 	SessionRef       string `json:"session_ref,omitempty"`
 	BaselineVariant  string `json:"baseline_variant"`
@@ -49,9 +50,16 @@ func (m *Module) handleCompare(w http.ResponseWriter, r *http.Request, mc api.Mo
 		return
 	}
 	scenarioRef := strings.TrimSpace(req.ScenarioRef)
-	sessionRef := clamp(strings.TrimSpace(req.SessionRef), maxRefLen)
-	if scenarioRef == "" && sessionRef == "" {
-		writeJSON(w, http.StatusBadRequest, errorBody("scenario_ref or session_ref is required"))
+	var sessionRef, liveRef string
+	if scenarioRef == "" {
+		var targetErr error
+		sessionRef, liveRef, targetErr = historyTarget(req.SessionRef, req.LiveRef)
+		if targetErr != nil {
+			writeJSON(w, http.StatusBadRequest, errorBody(targetErr.Error()))
+			return
+		}
+	} else if strings.TrimSpace(req.SessionRef) != "" || strings.TrimSpace(req.LiveRef) != "" {
+		writeJSON(w, http.StatusBadRequest, errorBody("select one scenario or session"))
 		return
 	}
 
@@ -83,7 +91,7 @@ func (m *Module) handleCompare(w http.ResponseWriter, r *http.Request, mc api.Mo
 		}
 		subjectKind, subjectRef = scen.SubjectKind, scen.ID
 	} else {
-		timeline, err := m.history.Timeline(r.Context(), mc.Tenant, sessionRef)
+		timeline, err := m.historyTimeline(r.Context(), mc.Tenant, sessionRef, liveRef)
 		if err != nil {
 			m.debugf("sandbox: history source error", "err", err)
 		}
@@ -92,6 +100,9 @@ func (m *Module) handleCompare(w http.ResponseWriter, r *http.Request, mc api.Mo
 			spec.Steps = append(spec.Steps, Step{Key: clamp(t.Key, maxNameLen), Input: clamp(t.Input, maxStepLen)})
 		}
 		subjectKind, subjectRef = "session", sessionRef
+		if liveRef != "" {
+			subjectKind, subjectRef = "session_live", liveRef
+		}
 	}
 
 	suiteRef := strings.TrimSpace(req.SuiteRef)
@@ -101,11 +112,13 @@ func (m *Module) handleCompare(w http.ResponseWriter, r *http.Request, mc api.Mo
 	// outputs (the honest "unchanged" path when nothing distinguishes them).
 	startBase := m.clock.Now()
 	baseRes := m.executeSpec(r.Context(), mc.Tenant, spec)
+	baseRes.liveRef = liveRef
 	m.score(r.Context(), mc.Tenant, &baseRes, suiteRef, subjectKind, subjectRef, baseVar)
 	endBase := m.clock.Now()
 
 	startCand := m.clock.Now()
 	candRes := m.executeSpec(r.Context(), mc.Tenant, spec)
+	candRes.liveRef = liveRef
 	m.score(r.Context(), mc.Tenant, &candRes, suiteRef, subjectKind, subjectRef, candVar)
 	endCand := m.clock.Now()
 
@@ -144,6 +157,9 @@ func (m *Module) handleCompare(w http.ResponseWriter, r *http.Request, mc api.Mo
 			colBaselineRun: baseDTO.ID, colCandidateRun: candDTO.ID, colSubjectRef: clamp(subjectRef, maxRefLen),
 			colVerdict: verdict, colBaselineScore: baseScore, colCandScore: candScore, colDelta: delta,
 			colDecidedBy: mc.Principal.Actor(), colOccurredAt: endCand.String(),
+		}
+		if liveRef != "" {
+			rec[colLiveRef] = liveRef
 		}
 		if scenarioRef != "" {
 			rec[colScenarioRef] = scenarioRef
@@ -203,6 +219,7 @@ func decideVerdict(base, cand runResult) (verdict string, baseScore, candScore, 
 // ---- comparison reads ------------------------------------------------------------
 
 type comparisonDTO struct {
+	LiveRef        string  `json:"live_ref,omitempty"`
 	ID             string  `json:"id"`
 	ScenarioRef    string  `json:"scenario_ref,omitempty"`
 	BaselineRunRef string  `json:"baseline_run_ref"`
@@ -220,7 +237,7 @@ type comparisonDTO struct {
 func toComparisonDTO(rec model.Record) comparisonDTO {
 	return comparisonDTO{
 		ID: rec.String(model.ColID), ScenarioRef: rec.String(colScenarioRef), BaselineRunRef: rec.String(colBaselineRun),
-		CandidateRun: rec.String(colCandidateRun), SubjectRef: rec.String(colSubjectRef), SuiteRef: rec.String(colSuiteRef),
+		LiveRef: rec.String(colLiveRef), CandidateRun: rec.String(colCandidateRun), SubjectRef: rec.String(colSubjectRef), SuiteRef: rec.String(colSuiteRef),
 		Verdict: rec.String(colVerdict), BaselineScore: rec.Float(colBaselineScore), CandidateScore: rec.Float(colCandScore),
 		Delta: rec.Float(colDelta), DecidedBy: rec.String(colDecidedBy), OccurredAt: rec.String(colOccurredAt),
 	}

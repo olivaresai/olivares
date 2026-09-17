@@ -12,6 +12,27 @@ pass=0; fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass+1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail+1)); }
 
+# ⛔ EL ÁRBOL DE PRUEBA MONTA EL DERIVADOR. Sin él, el gate contesta SCOPED y los casos pasan sin
+# ejercitar la comprobación que de verdad decide — que es exactamente cómo este banco quedó rojo en
+# la pata 277 de un push: la guarda pasó a «no contradicción» y el caso del slug inventado se quedó
+# sin nadie que lo cazara. El derivador se construye UNA vez y se pasa por variable.
+export GOWORK=off
+MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mb-bin.XXXXXX")"
+( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
+	echo "test-module-bridge: NO PUDE MIRAR — el derivador no construye" >&2; exit 2; }
+export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
+
+stage_derivation() {
+	mkdir -p "$TMP/tree/commercial/license-worker/src/catalog" "$TMP/tree/commercial/license-worker/contracts"
+	cp "$ROOT/design/PRICING-CANON.md" "$ROOT/design/c13-02-package-view.json" "$TMP/tree/design/"
+	cp "$ROOT/commercial/module-package-slugs.json" "$TMP/tree/commercial/"
+	cp "$ROOT/commercial/license-worker/src/catalog/module-slug-package.json" \
+		"$TMP/tree/commercial/license-worker/src/catalog/"
+	cp -r "$ROOT/commercial/commerce-lint" "$TMP/tree/commercial/"
+	cp "$ROOT/scripts/module-catalog-go.sh" "$TMP/tree/scripts/"
+	chmod +x "$TMP/tree/scripts/module-catalog-go.sh"
+}
+
 stage() {
   rm -rf "$TMP/tree"
   mkdir -p "$TMP/tree/design" "$TMP/tree/commercial" "$TMP/tree/scripts"
@@ -19,6 +40,7 @@ stage() {
   cp "$ROOT/commercial/module-slug-package.json" "$TMP/tree/commercial/"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-module-bridge.sh"
+  stage_derivation
 }
 run() { OLIVARES_ROOT="$TMP/tree" bash "$TMP/tree/scripts/check-module-bridge.sh" >/dev/null 2>"$TMP/err"; }
 
@@ -43,7 +65,16 @@ d=json.load(open(p))
 d["entries"].append({"slug":"invented-addon","package":"enterprise/invented"})
 json.dump(d, open(p,"w"))
 PY
-if run; then bad "invented slug stayed CLEAN"; else ok "JSON slug not in VOCABULARIO is a finding"; fi
+# ⛔ ESTE CASO MATÓ UN PUSH EN LA PATA 277, y tenía razón. La guarda pasó de igualdad exacta con el
+# VOCABULARIO —necesaria de retirar: esa tabla es una medida fechada y el canon crece— a «no
+# contradicción», y con eso un slug INVENTADO pasaba a reportarse como crecimiento. La cura no es
+# volver al pin: es preguntar a la AUTORIDAD. Un slug que el canon no vende hace que el mapa deje de
+# ser la derivación, y eso lo mide `-module-catalog=check`. Ahora el testigo lo dice.
+if run; then bad "invented slug stayed CLEAN"; else
+  grep -qE 'canon derivation|derivación del canon' "$TMP/err" \
+    && ok "JSON slug the canon does not sell is a finding, BY THE DERIVATION" \
+    || ok "JSON slug not in VOCABULARIO is a finding ($(head -1 "$TMP/err"))"
+fi
 
 stage
 rm -f "$TMP/tree/commercial/module-slug-package.json"

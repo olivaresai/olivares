@@ -108,15 +108,19 @@ func TestSQLiteBootCreatesTheGuardControlPlane(t *testing.T) {
 		"SELECT COUNT(*) FROM "+dialect.GuardReceiptsTable+" WHERE receipt_kind='bootstrap'").Scan(&bootstrapReceipts); err != nil {
 		t.Fatalf("count bootstrap receipts: %v", err)
 	}
-	if want := len(dialect.GuardControlPlaneTables()) + 1; bootstrapReceipts != want {
-		t.Errorf("found %d bootstrap receipts, want one per control-plane relation plus v7 completion (%d)", bootstrapReceipts, want)
+	// One per control-plane relation, plus the v7 completion seal, plus the v9 completion
+	// seal. The third is new with the access-evidence edition and is not a replacement:
+	// the fresh path still writes the v7 witness, and v9 appends its own beside it.
+	if want := len(dialect.GuardControlPlaneTables()) + 2; bootstrapReceipts != want {
+		t.Errorf("found %d bootstrap receipts, want one per control-plane relation plus the v7 and v9 completions (%d)", bootstrapReceipts, want)
 	}
 	history, err := verifyGuardEditionHistory(ctx, raw, dia, m)
 	if err != nil {
-		t.Fatalf("verify completed fresh v7 history: %v", err)
+		t.Fatalf("verify completed fresh v9 history: %v", err)
 	}
-	if history.Kind != guardEditionHistoryCurrentCompleted {
-		t.Fatalf("fresh SQLite history = %s, want %s", history.Kind, guardEditionHistoryCurrentCompleted)
+	if history.Kind != guardEditionHistoryCurrentV9Completed || !history.CompletedV9 {
+		t.Fatalf("fresh SQLite history = %s (completedV9=%t), want %s",
+			history.Kind, history.CompletedV9, guardEditionHistoryCurrentV9Completed)
 	}
 
 	var version int

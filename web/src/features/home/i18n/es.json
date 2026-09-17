@@ -37,7 +37,17 @@
     }
   },
   "state": {
-    "unavailable": "No se pudo cargar — abre para reintentar"
+    "unavailable": "No se pudo cargar — abre para reintentar",
+    "pendingIdle": "Consulta no iniciada — abre para cargar",
+    "pendingPaused": "Consulta en pausa — esperando para reanudar"
+  },
+  "availability": {
+    "loading": "{{source}}: cargando.",
+    "pendingIdle": "{{source}}: consulta no iniciada.",
+    "pendingPaused": "{{source}}: consulta en pausa, esperando para reanudar.",
+    "unavailable": "{{source}}: no se pudo cargar.",
+    "partial": "{{source}}: cifras disponibles, datos parciales.",
+    "current": "{{source}}: cifras disponibles."
   },
   "empty": {
     "title": "Aún no hay nada que mostrar",

@@ -22,16 +22,20 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
   reproduce exactamente ese recorrido.
 - **La configuración del primer arranque no requiere credenciales.** Una instalación nueva no tiene **credenciales
   por defecto**; el motor imprime un token de configuración de un solo uso en el primer arranque.
+- **Las CLI oficiales de Codex y Grok son controladores de sesión cuando se fijan.**
+  Definir `OLIVARES_SESSION_RUNTIME_CODEX_BIN` o `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  registra ese controlador en el nodo. Sin definir, los perfiles de ese
+  controlador siguen observables y no se pueden lanzar. Los lanzamientos van
+  por un [perfil de proveedor](/how-to/operate-provider-sessions/).
+  `CHANGELOG.md` `[26.9.0]` **no** afirma compatibilidad con una cuenta oficial
+  de Grok autenticada.
 - **La API REST y el audit ledger son reales.** La [referencia de la API](/reference/api/)
   se renderiza desde el propio contrato OpenAPI 3.1 del producto. El audit ledger es
   append-only y hash-chained con checkpoints firmados con Ed25519, y puede exportarse
   en varios formatos SIEM.
 - **Las releases están firmadas y son verificables sin conexión.** Firma, procedencia SLSA, SBOM
   y OpenVEX pueden todos [verificarse sin acceso a red](/es/how-to/verify-a-release/),
-  y el producto incluye un [bundle air-gap](/es/how-to/air-gap-install/). **Todavía no
-  existe ninguna release etiquetada**, así que esto describe lo que una release
-  llevará, no un artefacto que puedas descargar y verificar hoy — la misma salvedad
-  que declara `SECURITY.md`.
+  y el producto incluye un [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **v26.9.0**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
 
 ## Open core — qué es abierto vs enterprise
 
@@ -135,7 +139,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   air-gapped; los modelos frontier brokered no.
 - **Las rutas de módulo son un contrato beta separado.** Los endpoints de módulo (por
   ejemplo, el grafo del access map y el drift) no forman parte del contrato estable de
-  53 rutas del núcleo; se publican como un documento **beta** separado: la
+  54 rutas del núcleo; se publican como un documento **beta** separado: la
   [referencia de rutas de módulo](/reference/api-beta/) (servida en
   `/openapi.beta.json`). Beta significa que las formas pueden cambiar con aviso, y el
   detalle de cada campo sigue viviendo en las interfaces tipadas del producto. La

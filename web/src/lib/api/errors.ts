@@ -118,6 +118,13 @@ export function isApiErrorCode(e: unknown, code: ApiErrorCode): boolean {
   return isApiError(e) && e.code === code
 }
 
+/** The engine could not look: typed unknown, not an unexpected 5xx.
+ *  Bound to the `evidence_unavailable` code. A 503 without that code stays a
+ *  generic server error — status alone does not mean unknown. */
+export function isEvidenceUnavailable(error: unknown): error is ApiError {
+  return isApiError(error) && error.code === 'evidence_unavailable'
+}
+
 /** parseErrorEnvelope extracts {code,message} plus any EXTRA structured fields
  * the handler attached, tolerating a malformed/empty body (some 5xx may not
  * carry the envelope). The extras ride to ApiError.details so callers read a

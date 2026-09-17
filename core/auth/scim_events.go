@@ -282,6 +282,9 @@ func (a *Authenticator) SCIMSetMemberActive(ctx context.Context, actor Principal
 		return err
 	}
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
+			return err
+		}
 		u, err := as.Users().Get(ctx, id)
 		if err != nil {
 			return err

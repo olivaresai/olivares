@@ -18,13 +18,13 @@ import (
 )
 
 // principalAuthoritySealDomain is written verbatim as the first bytes of every
-// v1 preimage. The trailing NUL is part of the domain, not a separator supplied
+// v2 preimage. The trailing NUL is part of the domain, not a separator supplied
 // by the encoder.
-const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v1\x00"
+const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v2\x00"
 
 var errInvalidPrincipalAuthoritySeal = errors.New("auth: invalid principal authority seal input")
 
-// The v1 encoding has a fixed field order and a closed set of type tags. Every
+// The v2 encoding has a fixed field order and a closed set of type tags. Every
 // variable-width value carries an unsigned 64-bit big-endian byte length; every
 // collection carries an unsigned 64-bit big-endian element count. Integers are
 // fixed-width two's-complement big-endian values. Maps and authority sets are
@@ -77,13 +77,16 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	w.str(p.localSubject)
 	// A resolved principal must carry no local attribution. Encode the semantic
 	// zero explicitly so adding a local shape to a future protocol requires a
-	// new domain/version rather than silently changing v1.
+	// new domain/version rather than silently changing v2.
 	w.nilValue()
 	w.boolean(p.localSystem)
 	w.ref(p.credentialRef)
 	w.tenant(p.evidence.tenant)
 	w.ref(p.evidence.ref)
 	w.fact(p.evidence.directoryEpoch)
+	w.i64(int64(p.evidence.authorityMode))
+	w.id(p.evidence.userAuthority.UserID)
+	w.i64(p.evidence.userAuthority.Version)
 	w.instant(p.evidence.observedAt)
 	w.instant(p.evidence.freshUntil)
 	return w.sum(), nil
@@ -97,13 +100,14 @@ func validPrincipalAuthoritySeal(p Principal) bool {
 	return subtle.ConstantTimeCompare(want[:], p.evidence.seal[:]) == 1
 }
 
-// validPrincipalAuthorityShape accepts exactly the three credential shapes the
-// resolver can reconstruct: a human session, an ordinary bound token, or one of
-// the two server-authored runtime tokens. Synthetic, delegated, superadmin and
-// local principals cannot acquire a valid v1 seal.
+// validPrincipalAuthorityShape accepts exactly the credential shapes the
+// resolver can reconstruct: a human session, an ordinary bound token, a
+// canonical agent-OBO token, or one of the two server-authored runtime tokens.
+// Synthetic, ambiguous delegation/act-as, superadmin and local principals
+// cannot acquire a valid v2 seal.
 func validPrincipalAuthorityShape(p Principal) bool {
 	if p.localVia != "" || p.localSubject != "" || len(p.localMeta) != 0 || p.localSystem ||
-		p.Superadmin || !validPrincipalAuthorityProvenanceShape(p) ||
+		p.Superadmin || !validPrincipalAuthorityProvenanceShape(p) || !validPrincipalReadAuthorityShape(p) ||
 		len(p.grants) != 1 {
 		return false
 	}
@@ -117,10 +121,23 @@ func validPrincipalAuthorityShape(p Principal) bool {
 		return validSealedSessionPrincipal(p, role)
 	case KindToken:
 		if p.restricted == nil {
-			return validSealedOrdinaryTokenPrincipal(p, role)
+			return validSealedOrdinaryTokenPrincipal(p, role) ||
+				validSealedAgentOBOTokenPrincipal(p, role)
 		}
 		return validSealedWorkSessionPrincipal(p, role) ||
 			validSealedCommunicationSessionPrincipal(p, role)
+	default:
+		return false
+	}
+}
+
+func validPrincipalReadAuthorityShape(p Principal) bool {
+	switch p.evidence.authorityMode {
+	case principalHumanAuthority:
+		return p.Kind == KindUser && validPrincipalEvidenceID(p.UserID) &&
+			p.evidence.userAuthority.UserID == p.UserID && p.evidence.userAuthority.Version > 0
+	case principalTokenDirectoryOnly:
+		return p.Kind == KindToken && p.evidence.userAuthority == (store.UserAuthorityFactRef{})
 	default:
 		return false
 	}
@@ -159,6 +176,14 @@ func validSealedOrdinaryTokenPrincipal(p Principal, role string) bool {
 	return (p.UserID.IsZero() || validPrincipalEvidenceID(p.UserID)) && IsRole(role) &&
 		p.AAL == 0 && len(p.AMR) == 0 && p.AgentIdentity == "" &&
 		p.SessionIdentity == "" && p.SessionWorkspaceID.IsZero() &&
+		p.SessionRunRef == "" && p.SessionFence == 0 && len(p.groups) == 0 &&
+		len(p.audiences) == 0 && p.actAs.IsZero() && len(p.confined) == 0
+}
+
+func validSealedAgentOBOTokenPrincipal(p Principal, role string) bool {
+	return validPrincipalEvidenceID(p.UserID) && IsRole(role) && role != RoleOwner &&
+		p.AAL == 0 && len(p.AMR) == 0 && validRuntimeAgentIdentity(p.AgentIdentity) &&
+		p.AgentIdentity != "" && p.SessionIdentity == "" && p.SessionWorkspaceID.IsZero() &&
 		p.SessionRunRef == "" && p.SessionFence == 0 && len(p.groups) == 0 &&
 		len(p.audiences) == 0 && p.actAs.IsZero() && len(p.confined) == 0
 }

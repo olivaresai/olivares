@@ -530,7 +530,7 @@ else:
     # fixtures assume today's canon; the real run re-derives every time
     (MODULES, CONN_DIRS, NONGO, CATALOGS, ENFORCEMENT, KINDS,
      PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS) = (30, 158, 1, 26, 4, 110,
-                                                                     67, 22, 22, 11, 10, 12, 53)
+                                                                     67, 22, 22, 11, 10, 12, 54)
 INTEGRATIONS = CONN_DIRS - NONGO
 
 EXPECT = {"modules": MODULES, "integrations": INTEGRATIONS,
@@ -826,7 +826,7 @@ def selftest():
     # One site fixed and the other left behind — the failure mode this metric exists for.
     expect_red("paths claimed in only ONE of the two sites",
                lambda: require_digit_claim("t", "reference/index.md",
-                                           "row: (53 core paths)\nprose: the contract describes 24 core paths",
+                                           "row: (54 core paths)\nprose: the contract describes 24 core paths",
                                            "paths", minimum=2))
     expect_red("spelled wrong integrations", lambda: check_spelled("t", "f.srt", "A hundred and fifty-six\nintegrations."))
     expect_red("spelled wrong modules es", lambda: check_spelled("t", "f.srt", "Veintinueve módulos."))
@@ -869,10 +869,10 @@ def selftest():
     expect_green("allowlisted waiver", lambda: check_units("t", allowlisted_waiver, f"the old '41 console views' figure <!-- {WAIVER} -->"))
     expect_green("module dirs metric untouched", lambda: check_units("t", "f.md", "31 module dirs"))
     expect_green("paths canon, all seven nouns", lambda: check_units("t", "f.md",
-        "(53 core paths) · **53 paths core** · (53 Core-Paths) · **53 chemins de cœur** · "
-        "**53 のコアパス** · **53 базовых пути** · **53 条核心路径**"))
+        "(54 core paths) · **54 paths core** · (54 Core-Paths) · **54 chemins de cœur** · "
+        "**54 のコアパス** · **54 базовых пути** · **54 条核心路径**"))
     expect_green("paths claimed at BOTH sites", lambda: require_digit_claim(
-        "t", "reference/index.md", "row: (53 core paths)\nprose: describes **53 core paths**.",
+        "t", "reference/index.md", "row: (54 core paths)\nprose: describes **54 core paths**.",
         "paths", minimum=2))
     # Subset prose below the floor stays legal: "three core paths handle auth" is a true
     # sentence about a subset, and only the canonical magnitude carries the wrong-count trap.

@@ -134,6 +134,7 @@ func (m *Module) Permissions() []auth.Permission {
 	perms := append([]auth.Permission{permLiveRead}, runtimePermissions()...)
 	perms = append(perms, workspacePermissions()...)
 	perms = append(perms, templatePermissions()...)
+	perms = append(perms, providerProfilePermissions()...)
 	perms = append(perms, permWorkRead, permWorkWrite, permWorkAdmin,
 		permDecisionRead, permDecisionWrite, permDecisionAdmin,
 		permLeaseRead, permLeaseWrite, permLeaseAdmin,
@@ -145,14 +146,21 @@ func (m *Module) Permissions() []auth.Permission {
 // (managed-run lifecycle) endpoints, and the workspace-plane endpoints.
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/live", permLiveRead, m.handleListLive)
+	// B2: navigation by the row's own opaque reference. The bare external-id
+	// routes below stay, and stay LEGACY: they answer only for a legacy row and
+	// never pick "the first" of several profile-scoped rows sharing an id.
+	reg.Handle("GET", "/live/by-id/{live_ref}", permLiveRead, m.handleGetLiveByID)
+	reg.Handle("GET", "/live/by-id/{live_ref}/timeline", permLiveRead, m.handleTimelineByID)
 	reg.Handle("GET", "/live/{ref}", permLiveRead, m.handleGetLive)
 	reg.Handle("GET", "/live/{ref}/timeline", permLiveRead, m.handleTimeline)
 	reg.Handle("GET", "/stream", permLiveRead, m.handleStream)
 	m.runtimeRoutes(reg)
 	m.workspaceRoutes(reg)
 	m.templateRoutes(reg)
+	m.providerProfileRoutes(reg)
 	m.workRoutes(reg)
 	m.protocolBindingRoutes(reg)
+	m.communicationRoutes(reg)
 }
 
 // handleListLive lists live sessions, most-recently-active first. The recency
@@ -168,6 +176,16 @@ func (m *Module) handleListLive(w http.ResponseWriter, r *http.Request, mc api.M
 	// cc_state is derived at read time (not a stored column), so an optional
 	// cc_state filter is applied in-memory over the returned page.
 	ccFilter := r.URL.Query().Get("cc_state")
+	// B2: exact STORE filters for the rows of one profile and/or one external id —
+	// the way a console finds the observation rows that share a managed run's
+	// profile and id without ever joining them to the run. Both are equality on
+	// persisted columns; neither implies attribution.
+	if v := strings.TrimSpace(r.URL.Query().Get("provider_profile_ref")); v != "" {
+		q.Filters = append(q.Filters, eq(colLiveProfileID, v))
+	}
+	if v := strings.TrimSpace(r.URL.Query().Get("session_ref")); v != "" {
+		q.Filters = append(q.Filters, eq(colSessionRef, v))
+	}
 	out := listResponse[liveDTO]{Items: []liveDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(liveKind)
@@ -195,7 +213,7 @@ func (m *Module) handleListLive(w http.ResponseWriter, r *http.Request, mc api.M
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleGetLive returns the full live operation of one session by its reference.
+// handleGetLive returns the live operation of the LEGACY row of one session by its bare external reference; a profile-scoped row is never returned here — read it by its live_ref.
 func (m *Module) handleGetLive(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	ref := chi.URLParam(r, "ref")
 	if ref == "" {
@@ -209,7 +227,10 @@ func (m *Module) handleGetLive(w http.ResponseWriter, r *http.Request, mc api.Mo
 		if err != nil {
 			return err
 		}
-		recs, _, err := repo.List(r.Context(), model.Query{Filters: []model.Filter{eq(colSessionRef, ref)}, Limit: 1})
+		// LEGACY selector: the row with no observation scope. A bare external id
+		// is not enough to name a profile-scoped row, and "the first one" would be
+		// a home this caller never asked for.
+		recs, _, err := repo.List(r.Context(), model.Query{Filters: liveKeyFilters(ref, ""), Limit: 1})
 		if err != nil {
 			return err
 		}
@@ -231,8 +252,66 @@ func (m *Module) handleGetLive(w http.ResponseWriter, r *http.Request, mc api.Mo
 	writeJSON(w, http.StatusOK, dto)
 }
 
-// handleTimeline returns a session's reconstructable timeline in chronological
-// (ingestion) order, keyset-paginated by the time-ordered row id.
+// handleGetLiveByID returns the live operation of one session row by its opaque live_ref, whichever channel it was observed through.
+func (m *Module) handleGetLiveByID(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	id, ok := parseLiveRef(chi.URLParam(r, "live_ref"))
+	if !ok {
+		writeJSON(w, http.StatusNotFound, errorBody("not found"))
+		return
+	}
+	var dto liveDTO
+	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+		rec, err := findLiveByID(r.Context(), sc, id)
+		if err != nil {
+			return err
+		}
+		dto = m.toLiveDTO(rec)
+		return nil
+	})
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dto)
+}
+
+// handleTimelineByID returns the timeline of exactly one session row by its live_ref: a scoped row by the events written with that reference, a legacy row by its legacy events.
+func (m *Module) handleTimelineByID(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	id, ok := parseLiveRef(chi.URLParam(r, "live_ref"))
+	if !ok {
+		writeJSON(w, http.StatusNotFound, errorBody("not found"))
+		return
+	}
+	q := listQuery(r)
+	out := listResponse[timelineDTO]{Items: []timelineDTO{}}
+	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+		live, err := findLiveByID(r.Context(), sc, id)
+		if err != nil {
+			return err
+		}
+		q.Filters = append(q.Filters, timelineFiltersFor(live)...)
+		repo, err := sc.Ext(timelineKind)
+		if err != nil {
+			return err
+		}
+		recs, page, err := repo.List(r.Context(), q)
+		if err != nil {
+			return err
+		}
+		for _, rec := range recs {
+			out.Items = append(out.Items, toTimelineDTO(rec))
+		}
+		out.Cursor, out.HasMore = page.Cursor, page.HasMore
+		return nil
+	})
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleTimeline returns the LEGACY timeline of one session by its bare external reference — the events that carry no live_ref — in chronological (ingestion) order, keyset-paginated by the time-ordered row id.
 func (m *Module) handleTimeline(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	ref := chi.URLParam(r, "ref")
 	if ref == "" {
@@ -240,7 +319,7 @@ func (m *Module) handleTimeline(w http.ResponseWriter, r *http.Request, mc api.M
 		return
 	}
 	q := listQuery(r)
-	q.Filters = append(q.Filters, eq(colTLSessionRef, ref))
+	q.Filters = append(q.Filters, legacyTimelineFilters(ref)...)
 	out := listResponse[timelineDTO]{Items: []timelineDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(timelineKind)

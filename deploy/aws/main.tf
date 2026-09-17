@@ -47,6 +47,8 @@ module "compute" {
   engine_base_url         = "https://olivares-${var.environment}-engine.internal:8443"
   otel_endpoint           = ""
   operator_alert_to       = ""
+  # Not secret. One process's client-slot budget for its nine runtime pools; see the variable.
+  cloud_cp_max_pool_connections = var.cloud_cp_max_pool_connections
   # Ídem: los dos target groups los crea `modules/ingress` sin condición, así que el
   # llamador sabe AL PLANIFICAR que va a registrarse en ellos; lo que no sabe es su ARN.
   attach_alb_target_group = true
@@ -58,6 +60,12 @@ module "compute" {
   # existed — the module already defaulted both to "".
   image                  = var.image
   engine_image           = var.engine_image
+  # La tarea de un solo uso que provisiona los roles de Postgres. Vacía = no existe
+  # (count 0), igual que las dos de arriba. El ARN del secreto del MASTER se le pasa
+  # SÓLO a ella: es superusuario de la base de datos, y el módulo lo cuelga de un rol
+  # de ejecución propio que ningún servicio asume.
+  roles_task_image       = var.roles_task_image
+  master_user_secret_arn = module.data.master_user_secret_arn
 }
 
 module "ingress" {

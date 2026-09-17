@@ -75,6 +75,10 @@ type Authenticator struct {
 	// embedders and the test suite are unenforced.
 	loginPolicy LoginPolicy
 
+	// loginComponent is the declared login enforcement component state (R5,
+	// login_capability.go). The zero value is LoginComponentUnset, which adds no guard.
+	loginComponent loginComponentCell
+
 	// agentChecker validates an agent identity's lifecycle status for token
 	// exchange (agent-OBO). Set via SetAgentLifecycleChecker from the
 	// composition root (governance module). nil means agent-OBO is unavailable
@@ -251,11 +255,14 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 		if !validPrincipalRef(PrincipalRef{kind: KindToken, credentialID: t.ID, version: t.Version}) {
 			return ErrUnauthenticated
 		}
-		// A token-exchange/delegation row stays authenticated on the historical
-		// bearer path, but it must not expose the reusable evidence credential
-		// handle. Principal evidence intentionally does not compose delegated,
-		// audience-bound or agent-OBO authority in this cut.
-		if t.Purpose == "" && tokenCarriesDelegationBinding(t) {
+		// Generic delegated/act-as/audience tokens stay on the historical bearer
+		// path and do not expose the reusable evidence handle. A canonical
+		// agent-OBO token is the one exception: its agent identity is the subject
+		// K3 authorizes, its verb scope exactly matches its stored role, and it has
+		// no act-as or audience ambiguity. The communication kernel separately
+		// revalidates the current Agent/lifecycle/channel facts before any effect.
+		if t.Purpose == "" && tokenCarriesDelegationBinding(t) &&
+			!principalEvidenceAgentOBOToken(t) {
 			return nil
 		}
 		p = p.withCredentialRef(t.Version)
@@ -270,6 +277,23 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 func tokenCarriesDelegationBinding(t model.APIToken) bool {
 	return t.Scope != "" || !t.ParentTokenID.IsZero() || t.Audience != "" ||
 		!t.ActAsUserID.IsZero() || t.AgentRef != ""
+}
+
+// principalEvidenceAgentOBOToken recognizes the product token-exchange shape
+// that represents one agent as itself. Scope is stored canonically by
+// ExchangeToken; requiring exact role/scope parity prevents a hand-written or
+// corrupted row from presenting an editor role under a read-only delegation.
+// Act-as and audience-bound credentials remain excluded because either adds a
+// second possible authority subject/target interpretation.
+func principalEvidenceAgentOBOToken(t model.APIToken) bool {
+	if t.Purpose != "" || t.AgentRef == "" || !validRuntimeAgentIdentity(t.AgentRef) ||
+		!validPrincipalEvidenceTenant(t.BoundTenantID) || !validPrincipalEvidenceID(t.UserID) ||
+		!IsRole(t.Role) || t.Role == RoleOwner ||
+		!t.ActAsUserID.IsZero() || t.Audience != "" {
+		return false
+	}
+	wantScope := strings.Join(scopeForTier(verbTierForRole(t.Role)), " ")
+	return wantScope != "" && t.Scope == wantScope
 }
 
 // lookupAPITokenBySelector is the shared selector lookup for ordinary and PEP
@@ -535,6 +559,11 @@ func (a *Authenticator) mintSession(ctx context.Context, user model.User, ip, ac
 		sess model.AuthSession
 	)
 	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// R5: for an absent component, the capability lock and the posture read come
+		// first, before the session create takes directory/user authority.
+		if err := a.guardNewLoginSession(ctx, as); err != nil {
+			return err
+		}
 		t, s, err := a.mintSessionTx(ctx, as, user, ip, action, amr)
 		tok, sess = t, s
 		return err
@@ -550,6 +579,12 @@ func (a *Authenticator) mintSession(ctx context.Context, user model.User, ip, ac
 // an onboarding invite — onboarding.go). A fresh session is always AAL1; assurance
 // is only ever raised by a verified step-up ceremony (ElevateSession).
 func (a *Authenticator) mintSessionTx(ctx context.Context, as store.AuthScope, user model.User, ip, action string, amr []string) (string, model.AuthSession, error) {
+	// R5 defense at the create seam: the guard is idempotent, so a caller that already
+	// took it first pays one more read. A caller that reached here after a directory or
+	// audit lock gets the store's lock-order error, which also poisons the transaction.
+	if err := a.guardNewLoginSession(ctx, as); err != nil {
+		return "", model.AuthSession{}, err
+	}
 	cred, err := NewCredential(PrefixSession)
 	if err != nil {
 		return "", model.AuthSession{}, err

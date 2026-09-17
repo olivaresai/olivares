@@ -108,12 +108,12 @@ func TestModelsRequestBodySchemasMatchHandlerDTOs(t *testing.T) {
 	}{
 		{
 			http.MethodPost, "/routing-policies",
-			[]string{"access_tiers", "allow_deprecated", "deny_deprecated", "deny_retired", "enabled", "gateway_endpoint", "id", "min_context_window", "name", "pinned_model", "preferred_providers", "require_zdr", "required_capabilities", "strategy"},
+			[]string{"access_tiers", "allow_deprecated", "deny_deprecated", "deny_retired", "enabled", "execution_profile_ref", "execution_profile_revision", "gateway_endpoint", "id", "min_context_window", "name", "pinned_model", "preferred_providers", "require_zdr", "required_capabilities", "strategy"},
 			[]string{"name"},
 		},
 		{
 			http.MethodPost, "/routing-policies/{id}/execute",
-			[]string{"input", "max_tokens", "session_ref", "surface"},
+			[]string{"input", "max_tokens", "operation", "session_ref", "surface"},
 			[]string{"input"},
 		},
 		{

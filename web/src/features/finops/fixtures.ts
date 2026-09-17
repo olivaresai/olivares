@@ -323,6 +323,32 @@ export const budgetsFixture: Budget[] = [
 
 export const budgetStatusFixtures: Record<string, BudgetStatus> = {
   'bdg-global': {
+    amount: {
+      state: 'complete',
+      class: 'exact',
+      effective_micro_usd: '12400000000',
+      remaining_micro_usd: '87600000000',
+      currency: 'USD',
+      components: {
+        cost: { state: 'known', value_micro_usd: '12400000000' },
+        static_reservation: { state: 'known', value_micro_usd: '0' },
+        dynamic_reservation: { state: 'known', value_micro_usd: '0' },
+      },
+      thresholds: [],
+      over_limit: {
+        threshold: '1',
+        target_micro_usd: '100000000000',
+        result: 'not_reached',
+      },
+      legacy_projection: 'exact',
+      legacy_fields: {
+        spend_micro_usd: 'exact',
+        remaining_micro_usd: 'exact',
+        projected_micro_usd: 'unavailable',
+        over: 'not_reached',
+      },
+      forecast_certified: false,
+    },
     id: 'bdg-global',
     name: 'Monthly cap',
     enabled: true,
@@ -345,6 +371,32 @@ export const budgetStatusFixtures: Record<string, BudgetStatus> = {
   // On track to exceed: projection > 100% — the at-risk case the flow test asserts.
   // Enforcing (block) budget with reserved capacity counting toward the limit.
   'bdg-opus': {
+    amount: {
+      state: 'complete',
+      class: 'exact',
+      effective_micro_usd: '29000000000',
+      remaining_micro_usd: '1000000000',
+      currency: 'USD',
+      components: {
+        cost: { state: 'known', value_micro_usd: '24000000000' },
+        static_reservation: { state: 'known', value_micro_usd: '5000000000' },
+        dynamic_reservation: { state: 'known', value_micro_usd: '0' },
+      },
+      thresholds: [],
+      over_limit: {
+        threshold: '1',
+        target_micro_usd: '30000000000',
+        result: 'not_reached',
+      },
+      legacy_projection: 'exact',
+      legacy_fields: {
+        spend_micro_usd: 'exact',
+        remaining_micro_usd: 'exact',
+        projected_micro_usd: 'unavailable',
+        over: 'not_reached',
+      },
+      forecast_certified: false,
+    },
     id: 'bdg-opus',
     name: 'Opus guardrail',
     enabled: true,
@@ -369,6 +421,9 @@ export const budgetStatusFixtures: Record<string, BudgetStatus> = {
 
 export const alertsFixture: Alert[] = [
   {
+    id: 'fixture-alert-opus',
+    legacy_value_kind: 'unverified',
+    amount_evidence: { state: 'unknown', cause: 'legacy_unversioned' },
     budget_id: 'bdg-opus',
     dimension: 'model',
     key: 'claude-opus-4-8',
@@ -381,6 +436,9 @@ export const alertsFixture: Alert[] = [
     triggered_at: '2026-06-03T09:12:00Z',
   },
   {
+    id: 'fixture-alert-global',
+    legacy_value_kind: 'unverified',
+    amount_evidence: { state: 'unknown', cause: 'legacy_unversioned' },
     budget_id: 'bdg-global',
     dimension: 'global',
     key: '',

@@ -231,7 +231,7 @@ type ControlPlaneSpec struct {
 	// single-WRITER system but supports active-passive HA: with
 	// engine=postgres and a shared audit signing key (auditSigningKeySecret), run
 	// >1 replica and a Postgres advisory-lock elects one active writer while the
-	// rest are hot standbys that take over on failover (ARCHITECTURE.md-ARCHITECTURE
+	// rest are hot standbys that take over on failover (docs/05-ARCHITECTURE
 	// §7.1). With engine=sqlite the store and audit key are local to one pod, so
 	// >1 replicas would fork the ledger; the operator CLAMPS sqlite to 1 effective
 	// replica and reports it via a Degraded condition. Set Engine=postgres (with
@@ -391,12 +391,19 @@ func (s *ControlPlaneSpec) Validate() error {
 
 // Condition types and phases reported in status.
 const (
-	// ConditionAvailable answers ONE question: can clients reach the control plane
-	// right now? In the leader-routing HA layout that means exactly one Ready pod
+	// ConditionAvailable answers ONE question: is there an endpoint to reach right
+	// now? In the leader-routing HA layout that means exactly one Ready pod
 	// publishes the leader label (the single endpoint of the `<name>-leader`
 	// Service); otherwise it means at least one Ready replica serves. It is
 	// deliberately independent of Progressing — a healthy image rollout is normally
 	// Progressing=True AND Available=True.
+	//
+	// It is equally independent of PhaseReady, and the difference is not cosmetic:
+	// Available is ENDPOINT REACHABILITY and nothing more. It does not claim the
+	// engine behind that endpoint will accept client traffic, that first setup is
+	// complete, or that writes are authorized. On a first boot it is True precisely
+	// so the setup ceremony can be reached — withdrawing the endpoint there would
+	// make an incomplete install unrecoverable.
 	ConditionAvailable = "Available"
 	// ConditionProgressing is True while a rollout (create/scale/upgrade/
 	// reconfigure) is ADVANCING toward the desired state. It is False both when the
@@ -411,8 +418,23 @@ const (
 	// SpecInvalid), or when a state needs an operator's attention: the legacy HA
 	// readiness layout (HALegacyReadinessBlocked), a pending layout cut-over
 	// (HALeaderServiceMigrationRequired), a missing or duplicated leader label
-	// (LeaderNotPublished / MultipleLeadersPublished), or a wedged rollout
-	// (RolloutStalled). False means the spec is applied as written.
+	// (LeaderNotPublished / MultipleLeadersPublished), a wedged rollout
+	// (RolloutStalled), or — in the leader-routing layout, on a rollout that has
+	// otherwise converged — a published leader that will not take client traffic:
+	//
+	//   SetupBlocked         the leader answered that first setup cannot complete
+	//                        until the cross-tenant administrative pool is
+	//                        configured. Verified, and static until a human acts.
+	//   RouteNotReady        the leader answered with another readiness refusal
+	//                        (a standby whose label has not caught up, a store that
+	//                        went down under a Ready pod). Usually transient.
+	//   RouteProbeForbidden  the API server refused this MANAGER's read of the pod
+	//                        proxy: operator authorization, not engine health.
+	//   RouteProbeUnknown    traffic readiness could not be verified at all. It is
+	//                        explicitly UNVERIFIED — it is not evidence that the
+	//                        engine is refusing traffic.
+	//
+	// False means the spec is applied as written.
 	ConditionDegraded = "Degraded"
 
 	// PhasePending is set when zero replicas are desired (nothing to converge to).
@@ -423,9 +445,24 @@ const (
 	// PhaseReady is set when the rollout is fully realized in OBSERVED state (the
 	// StatefulSet has observed the latest generation, revisions are settled, and
 	// every desired replica exists, is updated and is Ready) AND client traffic can
-	// reach the writer — in the leader-routing HA layout, exactly one Ready pod
-	// publishing the leader label. The legacy HA layout cannot reach it by
-	// construction: standbys fail the leader-only readiness probe on purpose.
+	// reach the writer.
+	//
+	// In the leader-routing HA layout the second half is OBSERVED, not inferred:
+	// exactly one Ready pod publishes the leader label, and that pod answered a
+	// fresh GET /readyz. The label alone is not enough — the engine publishes it on
+	// winning the election, while /readyz additionally reports store access, the
+	// established writer identity and, on a first boot, whether the setup ceremony
+	// can run. Every other layout wires /readyz as the kubelet's own readiness
+	// probe, so the predicate there is unchanged. The legacy HA layout cannot reach
+	// Ready by construction: standbys fail the leader-only readiness probe on
+	// purpose.
+	//
+	// Ready is a statement about the OBSERVED moment, never a durable one. It does
+	// not mean the installation is complete (a first boot is Ready while
+	// setup_required is still true: the engine can serve the ceremony) and it
+	// authorizes no request — application routes keep refusing until
+	// POST /v1/setup completes, and a successful observation is never remembered
+	// into a later reconcile.
 	PhaseReady = "Ready"
 	// PhaseInvalid is set when the spec is a structurally-impossible combination
 	// (the same combinations the admission CEL rules reject). The controller

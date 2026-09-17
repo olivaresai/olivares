@@ -46,7 +46,6 @@ governanceApi.getRoutinePolicy
 healthApi.getCheck
 identityApi.groups
 killswitchApi.get
-knowledgeApi.activeContract
 knowledgeApi.allMemory
 knowledgeApi.getContract
 knowledgeApi.getDocument

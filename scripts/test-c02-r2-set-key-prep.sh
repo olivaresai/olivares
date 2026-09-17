@@ -19,6 +19,8 @@ if [ ! -r "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
   exit 0
 fi
 
+. "$ROOT/scripts/lib/c02-download-contract-tests.sh"
+
 pass=0; fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
@@ -29,12 +31,8 @@ stage() {
     "$TMP/tree/commercial/license-worker/src/download"
   cp "$ROOT/design/c02-r2-set-key-prep-2026-08-20.json" "$TMP/tree/design/"
   cp "$ROOT/design/C02-R2-SET-KEY-PREP-2026-08-20.md" "$TMP/tree/design/"
-  cp "$ROOT/commercial/license-worker/src/download/artifacts.ts" \
-    "$TMP/tree/commercial/license-worker/src/download/"
-  cp "$ROOT/commercial/license-worker/src/download/sets.ts" \
-    "$TMP/tree/commercial/license-worker/src/download/"
-  cp "$ROOT/commercial/license-worker/src/download/gate.ts" \
-    "$TMP/tree/commercial/license-worker/src/download/"
+  cp -R "$ROOT/commercial/license-worker/src" "$TMP/tree/commercial/license-worker/"
+  cp "$ROOT/commercial/license-worker/package.json" "$TMP/tree/commercial/license-worker/"
   # export-closure: hub-only scripts/publish-enterprise-artifacts.sh — el publicador de artefactos enterprise NO viaja
   # en el arbol publicado, y este test lo COPIA a su arbol de pruebas. Alli el `cp`
   # moriria por `set -e` y el rojo no seria del test. Guarda EN EL SITIO DE LLAMADA —no
@@ -43,7 +41,17 @@ stage() {
   # falso devuelve 1 y `set -e` mata el guion.
   if [ -f "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
     cp "$ROOT/scripts/publish-enterprise-artifacts.sh" "$TMP/tree/scripts/"
+    # Y EL CONTRATO QUE ESE PUBLICADOR LEE. Desde `f42b3442b` la clave del artefacto no esta en el
+    # guion: esta en `keys.artifact` del contrato generado. Un banco que copia el sujeto y no lo que
+    # el sujeto LEE no prueba el arbol, prueba el banco.
+    if [ -f "$ROOT/commercial/license-worker/contracts/publisher.gen.json" ]; then
+      mkdir -p "$TMP/tree/commercial/license-worker/contracts"
+      cp "$ROOT/commercial/license-worker/contracts/publisher.gen.json" \
+        "$TMP/tree/commercial/license-worker/contracts/"
+    fi
   fi
+  mkdir -p "$TMP/tree/scripts/lib"
+  cp "$ROOT/scripts/lib/c02-download-contract.mjs" "$TMP/tree/scripts/lib/"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-c02-r2-set-key-prep.sh"
 }
@@ -198,6 +206,8 @@ else
   bad "overbroad allowlist mutant survived rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"
 fi
 
+c02_download_contract_mutants
+
 stage
 python3 - "$TMP/tree/design/c02-r2-set-key-prep-2026-08-20.json" <<'PY'
 import json, sys
@@ -216,20 +226,6 @@ printf '\nfunction legacyMonolithKey(version: string, os: string, arch: string):
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (legacyMonolithKey landed) is killed"
 else bad "legacyMonolithKey stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
-
-stage
-sed -i 's/artifactKey(version, os, arch, purchased)/artifactKey(version, os, arch)/' \
-  "$TMP/tree/commercial/license-worker/src/download/gate.ts"
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (gate dropped purchased set) is killed"
-else bad "purchased set stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
-
-stage
-sed -i 's/downloadAuditLabel(version, purchased, os, arch)/`${version} ${os}\/${arch}`/' \
-  "$TMP/tree/commercial/license-worker/src/download/gate.ts"
-run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (audit label helper dropped) is killed"
-else bad "audit helper stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
 stage
 python3 - "$TMP/tree/design/c02-r2-set-key-prep-2026-08-20.json" <<'PY'
@@ -276,6 +272,15 @@ PY
 run
 if [ "$(cat "$TMP/rc")" = 0 ]; then ok "no-fire: multiline artifactKey stays CLEAN"
 else bad "multiline artifactKey should stay CLEAN ($(cat "$TMP/err"))"; fi
+
+c02_download_contract_overrides \
+  OLIVARES_C02R2P_JSON=design/c02-r2-set-key-prep-2026-08-20.json \
+  OLIVARES_C02R2P_DOC=design/C02-R2-SET-KEY-PREP-2026-08-20.md \
+  OLIVARES_C02R2P_ART=commercial/license-worker/src/download/artifacts.ts \
+  OLIVARES_C02R2P_SETS=commercial/license-worker/src/download/sets.ts \
+  OLIVARES_C02R2P_GATE=commercial/license-worker/src/download/gate.ts \
+  OLIVARES_C02R2P_PUB=scripts/publish-enterprise-artifacts.sh \
+  OLIVARES_C02R2P_CONTRATO=commercial/license-worker/contracts/publisher.gen.json
 
 echo "check-c02-r2-set-key-prep selftest: $pass passed, $fail failed"
 if [ "$fail" -ne 0 ]; then exit 1; fi

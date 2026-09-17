@@ -93,7 +93,9 @@ export function MetricStat({
           {value}
         </span>
         {caption ? (
-          <span className="text-xs text-muted-foreground">{caption}</span>
+          <span className="min-w-0 text-xs text-muted-foreground">
+            {caption}
+          </span>
         ) : null}
       </div>
       {trend ? <div className="mt-auto pt-1">{trend}</div> : null}

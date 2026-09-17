@@ -253,6 +253,21 @@ type EntityDescriptor struct {
 	// declared": the entity stays fully usable for the engine and for a
 	// tenant-wide principal, and is refused to a workspace-confined one.
 	WorkspaceLineage WorkspaceLineageSpec
+	// WorkspaceConfinedReadOnly opts an entity with a declared WorkspaceLineage
+	// into READ-ONLY exposure through a workspace-confined Scope.Ext: filtered
+	// Get/List (and DistinctProjector when the raw repository has it), while
+	// every write refuses before reaching the store and no transaction-stamped
+	// write or row lock is exposed. Zero keeps the ordinary confined behavior.
+	// It exists because declaring lineage on an engine-owned entity would
+	// otherwise hand a confined caller a writer at all. The confined generic
+	// Update requires BOTH the stored and the proposed lineage before it
+	// delegates (store.checkStoredAndIncoming), so a foreign stored row is
+	// already ErrNotFound; this flag does not rely on that guard. It refuses
+	// every required write before anything is delegated and exposes no
+	// transaction-stamped write and no row lock, so an entity's own producers
+	// remain its only writers. Registry validation requires a declared lineage
+	// when this is set; an unconfined Scope is unaffected.
+	WorkspaceConfinedReadOnly bool
 }
 
 // EntityColumns returns the entity-specific column names in declaration order.

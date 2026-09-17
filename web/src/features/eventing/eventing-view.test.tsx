@@ -7,7 +7,7 @@
 // sink_* would make the backend delete it), "Load more" actually paginates,
 // and the delivery filters are real controls fed from the live rosters.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,6 +46,10 @@ vi.mock('./api', async (importOriginal) => ({
   eventingApi: api,
 }))
 
+import { queryKeys } from '@/lib/api/query'
+import { liveCapabilityContext } from '@/lib/auth/capabilities'
+import { useCommandStore } from '@/stores/command'
+import { useTenantStore } from '@/stores/tenant'
 import { EventingView } from './eventing-view'
 
 const sub = {
@@ -109,17 +113,42 @@ function makeDelivery(id: string) {
   }
 }
 
-function wrap(ui: ReactElement) {
+const PRINCIPAL = {
+  kind: 'user',
+  user_id: 'u-1',
+  actor: 'u-1',
+  display_name: 'Ada',
+  superadmin: false,
+  grants: [],
+}
+
+function client() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // The principal the capability context is read from: without it the palette cells below
+  // would pass as "no identity established" rather than as an authority decision.
+  qc.setQueryData(queryKeys.whoami, PRINCIPAL)
+  return qc
+}
+
+function wrap(ui: ReactElement, qc = client()) {
   return {
     ...render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>),
     qc,
   }
 }
 
+/** A principal holding exactly `permissions` — never a blanket `() => true`. */
+function holding(...permissions: string[]) {
+  const held = new Set(permissions)
+  authState.can = (permission: string) => held.has(permission)
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   authState.can = () => true
+  authState.activeTenant = 't1'
+  useTenantStore.setState({ activeTenant: 't1' })
+  useCommandStore.setState({ pendingAction: null, open: false, opener: null })
   api.subscriptions.mockResolvedValue({ items: [sub], has_more: false })
   api.subscription.mockResolvedValue(sub)
   api.eventTypes.mockResolvedValue(eventTypeCatalog)
@@ -492,5 +521,122 @@ describe('EventingView delivery filters (E3d)', () => {
         expect.objectContaining({ event_type: 'audit.event' }),
       ),
     )
+  })
+
+  /* ── the ⌘K verb and its own permission (A1, spec04 §1) ────────────────────── */
+
+  it('opens the create form from the palette verb for a principal who may write', async () => {
+    holding('eventing:subscription:read', 'eventing:subscription:write')
+    const qc = client()
+    useCommandStore
+      .getState()
+      .setPendingAction(
+        'eventing',
+        'createSubscription',
+        liveCapabilityContext(qc),
+      )
+    wrap(<EventingView />, qc)
+    expect(
+      await screen.findByRole('dialog', { name: /new subscription/i }),
+    ).toBeInTheDocument()
+    expect(useCommandStore.getState().pendingAction).toBeNull()
+  })
+
+  it('opens nothing from the palette verb for a reader, and clears the command', async () => {
+    // The reader holds the page permission the palette used to gate this verb on. The
+    // dialog here was already `canWrite`-gated, so the visible defect was the dead end:
+    // taken off their work to a page where the verb does nothing and says nothing.
+    holding('eventing:subscription:read')
+    const qc = client()
+    useCommandStore
+      .getState()
+      .setPendingAction(
+        'eventing',
+        'createSubscription',
+        liveCapabilityContext(qc),
+      )
+    wrap(<EventingView />, qc)
+    expect(await screen.findByText('siem-hook')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(useCommandStore.getState().pendingAction).toBeNull()
+  })
+
+  it('ignores a command whose identity has moved on', async () => {
+    holding('eventing:subscription:read', 'eventing:subscription:write')
+    const qc = client()
+    useCommandStore
+      .getState()
+      .setPendingAction(
+        'eventing',
+        'createSubscription',
+        liveCapabilityContext(qc),
+      )
+    // The operator switched tenant between choosing the verb and arriving here.
+    useTenantStore.setState({ activeTenant: 't2' })
+    authState.activeTenant = 't2'
+    wrap(<EventingView />, qc)
+    expect(await screen.findByText('siem-hook')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(useCommandStore.getState().pendingAction).toBeNull()
+  })
+
+  it('acts on a verb chosen while the view is already on screen', async () => {
+    // The correction-1 case: navigating to the page you are on remounts nothing, so the
+    // view root observes the command instead of consuming it at a mount.
+    holding('eventing:subscription:read', 'eventing:subscription:write')
+    const qc = client()
+    wrap(<EventingView />, qc)
+    expect(await screen.findByText('siem-hook')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await act(async () => {
+      useCommandStore
+        .getState()
+        .setPendingAction(
+          'eventing',
+          'createSubscription',
+          liveCapabilityContext(qc),
+        )
+    })
+
+    expect(
+      await screen.findByRole('dialog', { name: /new subscription/i }),
+    ).toBeInTheDocument()
+    expect(useCommandStore.getState().pendingAction).toBeNull()
+  })
+
+  it('closes the create dialog when the write grant goes, and does not reopen it', async () => {
+    holding('eventing:subscription:read', 'eventing:subscription:write')
+    const qc = client()
+    useCommandStore
+      .getState()
+      .setPendingAction(
+        'eventing',
+        'createSubscription',
+        liveCapabilityContext(qc),
+      )
+    const { rerender } = wrap(<EventingView />, qc)
+    expect(
+      await screen.findByRole('dialog', { name: /new subscription/i }),
+    ).toBeInTheDocument()
+
+    const again = () =>
+      rerender(
+        <QueryClientProvider client={qc}>
+          <EventingView />
+        </QueryClientProvider>,
+      )
+    holding('eventing:subscription:read')
+    again()
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+
+    // FIRES IF: the dialog is only hidden behind the render gate — the grant coming back
+    // would reopen the form by itself.
+    holding('eventing:subscription:read', 'eventing:subscription:write')
+    again()
+    expect(await screen.findByText('siem-hook')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

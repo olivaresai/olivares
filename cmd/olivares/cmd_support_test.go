@@ -588,13 +588,18 @@ func writeSupportTestDRBundle(t *testing.T, name, notes string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeErr := dr.WriteBundle(f, dr.BundleInput{
+	cipher, err := dr.NewRawKeyCipher(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeErr := dr.WriteAuthenticatedBundle(f, dr.BundleInput{
 		Manifest: &dr.Manifest{
 			Format: dr.ManifestFormat, CreatedAt: "2026-07-15T00:00:00Z",
 			EngineKind: "postgres", Store: dr.StoreSnapshot{Method: dr.MethodPITR},
 			TipMatch: dr.TipAdvisory, Notes: notes,
 		},
-	})
+		KEK: cipher.Params(),
+	}, cipher)
 	closeErr := f.Close()
 	if writeErr != nil {
 		t.Fatalf("write DR bundle: %v", writeErr)

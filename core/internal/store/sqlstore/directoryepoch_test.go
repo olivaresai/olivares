@@ -9,7 +9,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -36,14 +38,30 @@ func TestDirectoryEpochSQLiteCreateUsesDatabaseClockAndSecondBoot(t *testing.T) 
 	if err != nil {
 		t.Fatalf("open SQLite directory store: %v", err)
 	}
+	// The first boot of a fresh estate opens BEFORE SYSTEM genesis. Its witness is
+	// the exact staged-legacy status the ratified bootstrap contract names: an empty
+	// authoritative inventory, coverage incomplete, and the reason spelled out. It is
+	// cached for the process, so provisioning below does not turn it into coverage.
+	directoryEpochTestWantStatus(t, st, store.DirectoryStatus{
+		EpochCoverageComplete:      false,
+		ControlMode:                store.DirectoryControlStaged,
+		WriterPosture:              store.DirectoryWriterSQLiteCapability,
+		ExpectedGeneration:         1,
+		CoverageProtocol:           coverageProtocolLegacy,
+		InventoryAuthority:         "sqlite",
+		InventoryUnavailableReason: "system_bootstrap_pending",
+	})
 	before := time.Now().UTC().Add(-time.Second)
 	tenant := provisionTenant(t, st, "directory-epoch-clock")
 	after := time.Now().UTC().Add(time.Second)
 	directoryEpochTestWantStatus(t, st, store.DirectoryStatus{
-		EpochCoverageComplete: true,
-		ControlMode:           store.DirectoryControlStaged,
-		WriterPosture:         store.DirectoryWriterSQLiteCapability,
-		ExpectedGeneration:    1,
+		EpochCoverageComplete:      false,
+		ControlMode:                store.DirectoryControlStaged,
+		WriterPosture:              store.DirectoryWriterSQLiteCapability,
+		ExpectedGeneration:         1,
+		CoverageProtocol:           coverageProtocolLegacy,
+		InventoryAuthority:         "sqlite",
+		InventoryUnavailableReason: "system_bootstrap_pending",
 	})
 	if err := st.Close(); err != nil {
 		t.Fatalf("close first SQLite boot: %v", err)
@@ -74,11 +92,20 @@ func TestDirectoryEpochSQLiteCreateUsesDatabaseClockAndSecondBoot(t *testing.T) 
 	if err != nil {
 		t.Fatalf("second SQLite boot: %v", err)
 	}
+	// After the reopen the inventory is complete and counted: the SYSTEM witness
+	// plus the one business organization, with its epoch, and no User yet, so the
+	// User authority coverage is trivially complete.
 	directoryEpochTestWantStatus(t, reopened, store.DirectoryStatus{
-		EpochCoverageComplete: true,
-		ControlMode:           store.DirectoryControlStaged,
-		WriterPosture:         store.DirectoryWriterSQLiteCapability,
-		ExpectedGeneration:    1,
+		EpochCoverageComplete:         true,
+		ControlMode:                   store.DirectoryControlStaged,
+		WriterPosture:                 store.DirectoryWriterSQLiteCapability,
+		ExpectedGeneration:            1,
+		CoverageProtocol:              coverageProtocolLegacy,
+		UserAuthorityCoverageComplete: true,
+		InventoryAuthority:            "sqlite",
+		InventoryOrgCount:             2,
+		InventoryBusinessOrgCount:     1,
+		InventoryEpochCount:           1,
 	})
 	if err := reopened.Close(); err != nil {
 		t.Fatalf("close second SQLite boot: %v", err)
@@ -148,11 +175,19 @@ func TestDirectoryEpochSQLiteBackfillRollsBackAllAndRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("retry backfill: %v", err)
 	}
+	// The retried backfill proves the complete inventory: SYSTEM plus the two
+	// business organizations whose epochs it just re-seeded.
 	directoryEpochTestWantStatus(t, healed, store.DirectoryStatus{
-		EpochCoverageComplete: true,
-		ControlMode:           store.DirectoryControlStaged,
-		WriterPosture:         store.DirectoryWriterSQLiteCapability,
-		ExpectedGeneration:    1,
+		EpochCoverageComplete:         true,
+		ControlMode:                   store.DirectoryControlStaged,
+		WriterPosture:                 store.DirectoryWriterSQLiteCapability,
+		ExpectedGeneration:            1,
+		CoverageProtocol:              coverageProtocolLegacy,
+		UserAuthorityCoverageComplete: true,
+		InventoryAuthority:            "sqlite",
+		InventoryOrgCount:             3,
+		InventoryBusinessOrgCount:     2,
+		InventoryEpochCount:           2,
 	})
 	if err := healed.Close(); err != nil {
 		t.Fatalf("close healed boot: %v", err)
@@ -300,106 +335,156 @@ func TestDirectoryEpochDropValidatesTenantBeforeWriterLock(t *testing.T) {
 	}
 }
 
-func TestDirectoryEpochNoAdminReadsStatusWithoutStartingReconcileTransaction(t *testing.T) {
-	ctx := context.Background()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open probe database: %v", err)
+func TestEpochReconcilersPinOneReadOnlyAdminSnapshot(t *testing.T) {
+	directoryFile := parseSQLStoreSource(t, "directoryepoch.go")
+	helper := sqlstoreSourceFunc(directoryFile, "openDirectoryReconcileInventory")
+	if helper == nil || helper.Body == nil {
+		t.Fatal("directoryepoch.go has no openDirectoryReconcileInventory helper")
 	}
-	defer db.Close() //nolint:errcheck
-	if _, err := db.ExecContext(ctx, "ATTACH DATABASE ':memory:' AS public"); err != nil {
-		t.Fatalf("attach public probe schema: %v", err)
+	helperEvents := sqlstoreASTEvents(helper.Body)
+	requireOrderedASTEvents(t, "openDirectoryReconcileInventory", helperEvents, []string{
+		"call:adminDB.BeginTx(",
+		"kv:Isolation=sql.LevelRepeatableRead",
+		"kv:ReadOnly=true",
+		"call:dia.ConnRolePosture(ctx,adminTx)",
+		"call:requirePinnedDirectoryAdminPosture(",
+		"call:verifyDirectoryActivationDatabaseIdentity(",
+		"kv:admin=adminTx",
+		"assign:out.queryer=adminTx",
+	})
+	forbidUnpinnedAdminEnumeration(t, "openDirectoryReconcileInventory", helperEvents)
+
+	for _, rec := range []struct {
+		path, name string
+	}{
+		{"directoryepoch.go", "reconcileDirectoryEpochs"},
+		{"authorizationepoch.go", "reconcileAuthorizationEpochs"},
+	} {
+		file := directoryFile
+		if rec.path != "directoryepoch.go" {
+			file = parseSQLStoreSource(t, rec.path)
+		}
+		fn := sqlstoreSourceFunc(file, rec.name)
+		if fn == nil || fn.Body == nil {
+			t.Fatalf("%s has no %s", rec.path, rec.name)
+		}
+		events := sqlstoreASTEvents(fn.Body)
+		requireOrderedASTEvents(t, rec.path+" "+rec.name, events, []string{
+			"call:openDirectoryReconcileInventory(",
+			"inventory.queryer",
+			"call:inventory.commit()",
+			"call:tx.Commit()",
+		})
+		forbidUnpinnedAdminEnumeration(t, rec.path+" "+rec.name, events)
 	}
-	if _, err := db.ExecContext(ctx, `CREATE TABLE public.directory_writer_control (
-control_key TEXT NOT NULL, mode TEXT NOT NULL, expected_generation INTEGER NOT NULL)`); err != nil {
-		t.Fatalf("create probe control: %v", err)
-	}
-	controlInsert := `INSERT INTO public.directory_writer_control
-(control_key, mode, expected_generation) VALUES ('core.directory.writer', 'enforced', 7)`
-	if _, err := db.ExecContext(ctx, controlInsert); err != nil {
-		t.Fatalf("seed probe control: %v", err)
-	}
-	pgDia, ok := dialect.New(store.EnginePostgres)
-	if !ok {
-		t.Fatal("PostgreSQL dialect unavailable")
-	}
-	result, err := reconcileDirectoryEpochs(ctx, db, db, pgDia, guardRoleFact{})
-	if err != nil {
-		t.Fatalf("no-admin status-only reconcile: %v", err)
-	}
-	if result.coverageComplete || result.control.Mode != directoryWriterEnforced ||
-		result.control.ExpectedGeneration != 7 {
-		t.Fatalf("no-admin result = %+v, want incomplete enforced/generation 7", result)
-	}
-	// Any acquire/bind leg would have executed PostgreSQL catalog functions on
-	// this SQLite probe and failed. Success therefore distinguishes the early,
-	// read-only status path from the transactional reconciler.
 }
 
-func TestEpochReconcilersPinOneReadOnlyAdminSnapshot(t *testing.T) {
-	directorySource, err := os.ReadFile("directoryepoch.go")
+func parseSQLStoreSource(t *testing.T, name string) *ast.File {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("parse %s: %v", name, err)
 	}
-	text := string(directorySource)
-	requiredInOrder := []string{
-		"adminDB.BeginTx(ctx, &sql.TxOptions{",
-		"Isolation: sql.LevelRepeatableRead",
-		"ReadOnly:  true",
-		"dia.ConnRolePosture(ctx, adminTx)",
-		"requirePinnedDirectoryAdminPosture(posture, adminRoleForBoot)",
-		"verifyDirectoryActivationDatabaseIdentity(",
-		"directoryActivationWitnesses{admin: adminTx}",
-		"out.queryer = adminTx",
-	}
-	position := 0
-	for _, fragment := range requiredInOrder {
-		next := strings.Index(text[position:], fragment)
-		if next < 0 {
-			t.Fatalf("directoryepoch.go lacks ordered admin snapshot fragment %q", fragment)
-		}
-		position += next + len(fragment)
-	}
-	if strings.Contains(text, "queryer = adminDB") ||
-		strings.Contains(text, "enumerateDirectoryTenants(ctx, adminDB") {
-		t.Fatal("epoch reconciliation enumerates the AdminDSN pool outside its attested transaction")
-	}
+	return file
+}
 
-	for _, test := range []struct {
-		path string
-		seq  []string
-	}{
-		{
-			path: "directoryepoch.go",
-			seq: []string{
-				"inventory, err := openDirectoryReconcileInventory(",
-				"enumerateDirectoryTenants(ctx, inventory.queryer, dia)",
-				"inventory.commit()",
-				"tx.Commit()",
-			},
-		},
-		{
-			path: "authorizationepoch.go",
-			seq: []string{
-				"inventory, err := openDirectoryReconcileInventory(",
-				"enumerateDirectoryTenants(ctx, inventory.queryer, dia)",
-				"inventory.commit()",
-				"tx.Commit()",
-			},
-		},
-	} {
-		source, readErr := os.ReadFile(test.path)
-		if readErr != nil {
-			t.Fatal(readErr)
+func sqlstoreSourceFunc(file *ast.File, name string) *ast.FuncDecl {
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Recv == nil && fn.Name.Name == name {
+			return fn
 		}
-		body := string(source)
-		position = 0
-		for _, fragment := range test.seq {
-			next := strings.Index(body[position:], fragment)
-			if next < 0 {
-				t.Fatalf("%s lacks ordered reconcile fragment %q", test.path, fragment)
+	}
+	return nil
+}
+
+func sqlstoreASTEvents(root ast.Node) []string {
+	var events []string
+	ast.Inspect(root, func(node ast.Node) bool {
+		if node == nil {
+			return true
+		}
+		if _, ok := node.(*ast.FuncLit); ok {
+			return false
+		}
+		switch x := node.(type) {
+		case *ast.CallExpr:
+			var args []string
+			for _, arg := range x.Args {
+				args = append(args, sqlstoreASTExpr(arg))
 			}
-			position += next + len(fragment)
+			events = append(events, "call:"+sqlstoreASTExpr(x.Fun)+"("+strings.Join(args, ",")+")")
+		case *ast.AssignStmt:
+			if len(x.Lhs) == 1 && len(x.Rhs) == 1 {
+				events = append(events, "assign:"+sqlstoreASTExpr(x.Lhs[0])+"="+sqlstoreASTExpr(x.Rhs[0]))
+			}
+		case *ast.KeyValueExpr:
+			events = append(events, "kv:"+sqlstoreASTExpr(x.Key)+"="+sqlstoreASTExpr(x.Value))
+		}
+		return true
+	})
+	return events
+}
+
+func sqlstoreASTExpr(e ast.Expr) string {
+	switch x := e.(type) {
+	case *ast.Ident:
+		return x.Name
+	case *ast.SelectorExpr:
+		return sqlstoreASTExpr(x.X) + "." + x.Sel.Name
+	case *ast.StarExpr:
+		return "*" + sqlstoreASTExpr(x.X)
+	case *ast.UnaryExpr:
+		return x.Op.String() + sqlstoreASTExpr(x.X)
+	case *ast.ParenExpr:
+		return sqlstoreASTExpr(x.X)
+	case *ast.CompositeLit:
+		return sqlstoreASTExpr(x.Type)
+	case *ast.CallExpr:
+		return sqlstoreASTExpr(x.Fun) + "()"
+	case *ast.BasicLit:
+		return x.Value
+	}
+	return ""
+}
+
+func requireOrderedASTEvents(t *testing.T, where string, events, want []string) {
+	t.Helper()
+	position := 0
+	for _, fragment := range want {
+		found := -1
+		for i := position; i < len(events); i++ {
+			if astEventMatches(events[i], fragment) {
+				found = i
+				break
+			}
+		}
+		if found < 0 {
+			t.Fatalf("%s lacks ordered call-path event %q", where, fragment)
+		}
+		position = found + 1
+	}
+}
+
+func astEventMatches(event, fragment string) bool {
+	if event == fragment || strings.HasPrefix(event, fragment) {
+		return true
+	}
+	return fragment == "inventory.queryer" &&
+		strings.HasPrefix(event, "call:") && strings.Contains(event, "inventory.queryer")
+}
+
+func forbidUnpinnedAdminEnumeration(t *testing.T, where string, events []string) {
+	t.Helper()
+	for _, ev := range events {
+		if strings.Contains(ev, "queryer=adminDB") {
+			t.Fatalf("%s assigns queryer to the AdminDSN pool outside the attested transaction: %s", where, ev)
+		}
+		if strings.HasPrefix(ev, "call:enumerateDirectoryTenants(") && strings.Contains(ev, ",adminDB,") {
+			t.Fatalf("%s enumerates tenants from the AdminDSN pool: %s", where, ev)
+		}
+		if strings.HasPrefix(ev, "call:readDirectoryInventory(") && strings.Contains(ev, ",adminDB,") {
+			t.Fatalf("%s reads directory inventory from the AdminDSN pool: %s", where, ev)
 		}
 	}
 }
@@ -877,23 +962,27 @@ func TestDirectoryEpochSQLiteDropPurgesClosedAuthEstate(t *testing.T) {
 }
 
 func TestDirectoryEpochSQLiteLifecyclePathsShareGlobalWriterReservation(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	// The fixture (the first Open with the compiled migration plan, the tenant, the raw epoch
+	// removal) runs on an unbounded context; the 15 s budget below is for the LIFECYCLE RACE
+	// only. Started here, the budget was mostly spent by the fixture under -race on a loaded
+	// runner and the backfill pause at L1026 reported `context deadline exceeded` (run
+	// 35035490468, race-core p4, 15.10 s), the same class as the writer-races fix.
+	setupCtx := context.Background()
 	dsn := filepath.Join(t.TempDir(), "directory-lifecycle-lock.db")
 	cfg := store.Config{Engine: store.EngineSQLite, DSN: dsn}
-	st, err := Open(ctx, cfg, nil)
+	st, err := Open(setupCtx, cfg, nil)
 	if err != nil {
 		t.Fatalf("open SQLite lifecycle-lock store: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	missing := provisionTenant(t, st, "directory-sqlite-lock-backfill")
 	raw := directoryEpochTestOpenSQLite(t, dsn)
-	tx, err := raw.BeginTx(ctx, nil)
+	tx, err := raw.BeginTx(setupCtx, nil)
 	if err != nil {
 		t.Fatalf("begin SQLite epoch removal: %v", err)
 	}
 	directoryEpochTestBindSQLite(t, tx, missing)
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(setupCtx,
 		"DELETE FROM main.core_directory_epoch WHERE tenant_id = ?", missing.String()); err != nil {
 		t.Fatalf("remove SQLite epoch: %v", err)
 	}
@@ -905,6 +994,8 @@ func TestDirectoryEpochSQLiteLifecyclePathsShareGlobalWriterReservation(t *testi
 		t.Fatalf("close raw SQLite lifecycle pool: %v", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	backfillPaused := make(chan struct{})
 	releaseBackfill := make(chan struct{})
 	var once sync.Once

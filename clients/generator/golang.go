@@ -35,9 +35,20 @@ func emitGo(doc *Document) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString(genHeaderGo)
 	fmt.Fprintf(&b, "// API %s, spec sha256:%s.\n\n", doc.APIVersion, doc.SpecHash)
-	b.WriteString("package olivares\n\nimport \"context\"\n\n")
+	b.WriteString("package olivares\n\nimport \"context\"\n")
+	if documentHasSessionsCommunication(doc) {
+		b.WriteString("import \"strconv\"\n")
+	}
+	b.WriteString("\n")
+	if documentHasSessionsCommunication(doc) {
+		emitSessionsCommunicationGoTypes(&b, doc.sessionsCommunicationSchemas)
+	}
 
 	for _, op := range doc.Operations {
+		if op.sessionsCommunicationTyped() {
+			emitGoSessionsCommunicationOp(&b, op)
+			continue
+		}
 		name := op.goName()
 		fmt.Fprintf(&b, "// %s calls %s %s: %s\n", name, op.Method, op.Path, sentence(op.Summary))
 		if op.Stability != "" {
@@ -92,6 +103,68 @@ func emitGo(doc *Document) ([]byte, error) {
 		fmt.Fprintf(&b, "\treturn c.%s(ctx, %q, %q, %s, %s, opts...)\n}\n\n", jsonSeam, op.Method, op.Path, goPathExpr(op.Path), bodyArg)
 	}
 	return format.Source([]byte(b.String()))
+}
+
+func emitGoSessionsCommunicationOp(b *strings.Builder, op Operation) {
+	name := op.goName()
+	resultType := op.sessionsCommunicationResultType()
+	if op.sessionsCommunicationHasInput() {
+		fmt.Fprintf(b, "type %s struct {\n", op.sessionsCommunicationInputType())
+		if bodyType := op.sessionsCommunicationBodyType(); bodyType != "" {
+			fmt.Fprintf(b, "\tBody %s\n", bodyType)
+		}
+		for _, parameter := range op.Parameters {
+			goType := "string"
+			if parameter.Type == "integer" {
+				goType = "int64"
+			}
+			if !parameter.Required {
+				goType = "*" + goType
+			}
+			fmt.Fprintf(b, "\t%s %s\n", typedFieldName(parameter.Name), goType)
+		}
+		b.WriteString("}\n\n")
+	}
+	fmt.Fprintf(b, "// %s calls %s %s with the published typed communication contract.\n", name, op.Method, op.Path)
+	params := []string{"ctx context.Context"}
+	for _, p := range op.PathParams {
+		params = append(params, paramIdent(p)+" string")
+	}
+	if op.sessionsCommunicationHasInput() {
+		params = append(params, "input "+op.sessionsCommunicationInputType())
+	}
+	params = append(params, "opts ...RequestOption")
+	fmt.Fprintf(b, "func (c *Client) %s(%s) (%s, error) {\n", name, strings.Join(params, ", "), resultType)
+	b.WriteString("\tcallOpts := append([]RequestOption(nil), opts...)\n")
+	for _, parameter := range op.Parameters {
+		field := "input." + typedFieldName(parameter.Name)
+		value := field
+		if !parameter.Required {
+			value = "*" + field
+		}
+		if parameter.Type == "integer" {
+			value = "strconv.FormatInt(" + field + ", 10)"
+			if !parameter.Required {
+				value = "strconv.FormatInt(*" + field + ", 10)"
+			}
+		}
+		option := "requestQuery"
+		if parameter.In == "header" {
+			option = "requestHeader"
+		}
+		if parameter.Required {
+			fmt.Fprintf(b, "\tcallOpts = append(callOpts, %s(%q, %s))\n", option, parameter.Name, value)
+		} else {
+			fmt.Fprintf(b, "\tif %s != nil { callOpts = append(callOpts, %s(%q, %s)) }\n", field, option, parameter.Name, value)
+		}
+	}
+	body := "nil"
+	if op.sessionsCommunicationBodyType() != "" {
+		body = "input.Body"
+	}
+	fmt.Fprintf(b, "\tvar out %s\n", resultType)
+	fmt.Fprintf(b, "\terr := c.doTyped(ctx, %q, %q, %s, %s, &out, callOpts...)\n", op.Method, op.Path, goPathExpr(op.Path), body)
+	b.WriteString("\treturn out, err\n}\n\n")
 }
 
 func emitGoVersion(doc *Document) ([]byte, error) {

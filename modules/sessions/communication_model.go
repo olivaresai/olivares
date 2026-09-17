@@ -995,6 +995,8 @@ const (
 	CommunicationDecisionRequestWrite CommunicationOperation = "sessions:decision-request:write"
 	CommunicationMessageSend          CommunicationOperation = "sessions:message-send:write"
 	CommunicationHandoffResponse      CommunicationOperation = "sessions:handoff-response:write"
+	CommunicationChannelWrite         CommunicationOperation = "sessions:channel:write"
+	CommunicationChannelAdmin         CommunicationOperation = "sessions:channel:admin"
 )
 
 // ReadWitness contains only evidence a core-side adapter can produce without

@@ -15,6 +15,8 @@ co-deploy します。
 [Claude Code を接続する](/how-to/connect-claude-code/) を、*ガバナンス* の経路（PEP としての
 PreToolUse フック）については [govern-claude-code の例](https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code)
 を参照してください。このページは **co-deployment** です。2 つのランタイムを一緒に動かすことを扱います。
+ランタイムがある状態で Claude、Codex、Grok をプロバイダープロファイルの下で起動するには
+[プロバイダーセッションを運用する](/how-to/operate-provider-sessions/) を参照してください。
 
 :::note[ガバナンスは実際にどうセッションに届くか]
 セッションがガバナンスされるのは、**エンジンが `claude` の stdin/stdout を所有する** からです —
@@ -70,14 +72,14 @@ Docker API へのアクセスが必要です（エンジンが意図的にデフ
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.8.0 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 代わりに `--build-arg CLAUDE_INSTALL=byo` で独自の `claude` を持ち込めます（イメージは `claude` なしで
@@ -86,7 +88,7 @@ docker build -f Dockerfile.agentops \
 ### 起動する
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.8.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -245,7 +247,7 @@ cap-drop）を得て、エンジンが Docker API を通じて作成し破棄し
   クレデンシャルを覆い隠しうる周辺の `ANTHROPIC_*`/`CLAUDE_CODE_*` も **なし** です。
 - **検証済みサプライチェーン。** エンジンは cosign 署名済みです（検証する / ダイジェストで固定する）。
   `claude` は鍵フィンガープリントを固定した Anthropic の署名済みリポジトリからインストールされます。
-  インストーラーは、明示的にオプトアウトしない限り **未検証のエンジンの実行を拒否** します。
+  インストーラーは **未検証のエンジンの実行を拒否** し、検証の bypass はありません。
 - **アンカーされた監査。** すべてのライフサイクル遷移とすべてのワークスペース変更は、ハッシュ連鎖された
   署名済み台帳に `PayloadHash` によって封印されます — ファイルのバイト列やフレームの内容が永続化される
   ことは決してありません。

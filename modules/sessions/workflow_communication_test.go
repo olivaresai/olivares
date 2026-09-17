@@ -60,6 +60,7 @@ func newWorkflowCommunicationFixtureFromDirect(
 	if !ok {
 		t.Fatal("workflow target has no opaque principal reference")
 	}
+	fixture.reanchorOperationClock(t)
 	var authorizationFact store.AuthorizationFactRef
 	err = fixture.m.viewCommunication(ctx, fixture.scope, func(sc store.Scope) error {
 		directory := sc.(store.DirectorySnapshotReader)

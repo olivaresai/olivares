@@ -14,11 +14,11 @@
 //   - Hermetic: stdlib only — the generator EMITS Java/Python/TS as text and
 //     never invokes their toolchains, and makes no network calls, so the whole
 //     pipeline (including the Java target) runs inside the ordinary Go build gate.
-//   - Thin by design: the generated layer represents published JSON schemas with
-//     generic language values rather than generated DTOs, and sends raw request
-//     bytes under their exact declared media type. Everything contractual (auth,
-//     tenancy, error envelope, pagination, Retry-After, deprecation signals)
-//     lives in each SDK's hand-written core, which this tool never touches.
+//   - Thin by design: ordinary operations retain generic language values. A route
+//     family explicitly marked for typed SDK generation gets DTOs derived from its
+//     canonical request/success schemas in one shared model for all four languages.
+//     Raw request bytes keep their exact declared media type. Auth, tenancy, the
+//     error envelope, retries and deprecation signals stay in the hand-written core.
 //   - Deprecations travel: an operation marked deprecated in the spec (from
 //     core/api/stability.go) is emitted with the language-native deprecation
 //     marker, so integrators see the sunset in their IDE, not in an outage.
@@ -133,5 +133,10 @@ func loadUnion(stablePath, betaPath string) (*Document, error) {
 	// recorded provenance (and the sdk:check gate) tracks the union, not just stable.
 	sum := sha256.Sum256([]byte(doc.SpecHash + ":" + betaDoc.SpecHash))
 	doc.SpecHash = hex.EncodeToString(sum[:])
+	catalog, err := buildSessionsCommunicationSchemas(doc)
+	if err != nil {
+		return nil, err
+	}
+	doc.sessionsCommunicationSchemas = catalog
 	return doc, nil
 }

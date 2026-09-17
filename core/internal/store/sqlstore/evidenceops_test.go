@@ -92,7 +92,7 @@ func mustVerifyChain(t *testing.T, st store.Store, tenant model.TenantID) {
 
 func TestEvidenceClaimFreshAnchorsAndCreatesRow(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-fresh")
 
 	spec := testClaim("op-fresh-1", "digest-a")
@@ -131,9 +131,49 @@ func TestEvidenceClaimFreshAnchorsAndCreatesRow(t *testing.T) {
 	mustVerifyChain(t, st, tenant)
 }
 
+func TestEvidenceHelpersPreferSelectiveAndPreserveSystemFallback(t *testing.T) {
+	ctx := context.Background()
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
+	tenant := provisionTenant(t, st, "ev-selective-preference")
+	counting := &racedCountingStore{Store: st}
+
+	claim := testClaim("op-selective-preference", "digest-a")
+	out, err := store.ClaimEvidenceOperation(ctx, counting, tenant, claim)
+	if err != nil || !out.Fresh || out.Receipt.MustRefuse(out.Binding) {
+		t.Fatalf("business selective claim = %+v err=%v", out, err)
+	}
+	settlement := store.EvidenceSettlement{
+		OperationID: claim.OperationID, EffectDigest: claim.EffectDigest,
+		State: model.EvidenceOpCompleted, ResultDigest: "result", DispatchRef: "dispatch",
+		Actor: claim.Actor, ActorKind: claim.ActorKind,
+	}
+	settled, err := store.SettleEvidenceOperation(ctx, counting, tenant, settlement)
+	if err != nil || !settled.Fresh || settled.Receipt.MustRefuse(settled.Binding) {
+		t.Fatalf("business selective settle = %+v err=%v", settled, err)
+	}
+	if got := counting.selective.Load(); got != 2 {
+		t.Fatalf("business selective attempts = %d, want claim + settle", got)
+	}
+	if got := counting.legacy.Load(); got != 0 {
+		t.Fatalf("business helpers used legacy Mutate %d times", got)
+	}
+
+	systemClaim := testClaim("op-system-compatibility", "digest-system")
+	systemOut, err := store.ClaimEvidenceOperation(ctx, counting, model.SystemTenantID, systemClaim)
+	if err != nil || !systemOut.Fresh || systemOut.Receipt.MustRefuse(systemOut.Binding) {
+		t.Fatalf("SYSTEM compatibility claim = %+v err=%v", systemOut, err)
+	}
+	if got := counting.selective.Load(); got != 2 {
+		t.Fatalf("SYSTEM helper entered business selective path; attempts=%d", got)
+	}
+	if got := counting.legacy.Load(); got != 1 {
+		t.Fatalf("SYSTEM helper legacy attempts = %d, want 1", got)
+	}
+}
+
 func TestEvidenceClaimExactReplayIsSilent(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-replay")
 
 	spec := testClaim("op-replay-1", "digest-a")
@@ -167,7 +207,7 @@ func TestEvidenceClaimExactReplayIsSilent(t *testing.T) {
 
 func TestEvidenceClaimRebindRefusesWithoutMutation(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-rebind")
 
 	if _, err := store.ClaimEvidenceOperation(ctx, st, tenant, testClaim("op-rebind-1", "digest-a")); err != nil {
@@ -252,7 +292,7 @@ func TestEvidenceClaimBlockModeSpoolFull(t *testing.T) {
 
 func TestEvidenceClaimNotLeader(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-standby")
 	st.(*sqlStore).elector = &epochElector{toggleElector: toggleElector{activeVal: false}, epoch: 3}
 
@@ -271,7 +311,7 @@ func TestEvidenceClaimNotLeader(t *testing.T) {
 
 func TestEvidenceClaimNoFenceCapabilityFailsClosed(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-nofence")
 	// An elector WITHOUT the EpochFencer capability cannot durably fence: the
 	// claim must refuse (ledger_unwired — fencing infrastructure not wired),
@@ -303,7 +343,7 @@ func TestEvidenceClaimNilStoreUnwired(t *testing.T) {
 
 func TestEvidenceClaimStoresLeaderEpoch(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-epoch")
 	el := &epochElector{toggleElector: toggleElector{activeVal: true}, epoch: 7}
 	st.(*sqlStore).elector = el
@@ -349,7 +389,7 @@ func (e *epochElector) FencedEpoch(context.Context) (uint64, error) {
 
 func TestEvidenceSettleTerminalStates(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-settle")
 
 	// All five terminal words, `withheld` (stage-7 B-bis) included: a FRESH
@@ -396,7 +436,7 @@ func TestEvidenceSettleTerminalStates(t *testing.T) {
 
 func TestEvidenceSettleMissingRowIsIntegrityError(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-settle-missing")
 
 	_, err := store.SettleEvidenceOperation(ctx, st, tenant, store.EvidenceSettlement{
@@ -414,7 +454,7 @@ func TestEvidenceSettleMissingRowIsIntegrityError(t *testing.T) {
 
 func TestEvidenceSettleIdempotentAndConflicting(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-resettle")
 
 	if _, err := store.ClaimEvidenceOperation(ctx, st, tenant, testClaim("op-resettle-1", "digest-a")); err != nil {
@@ -466,7 +506,7 @@ func TestEvidenceSettleIdempotentAndConflicting(t *testing.T) {
 
 func TestEvidenceSettleWrongDigestIsRebind(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-settle-rebind")
 
 	if _, err := store.ClaimEvidenceOperation(ctx, st, tenant, testClaim("op-sr-1", "digest-a")); err != nil {
@@ -522,7 +562,7 @@ func TestEvidenceSettleDegradeDropLeavesClaimed(t *testing.T) {
 
 func TestEvidenceCrashShapeUnsettledClaimNeverRedispatches(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-crash")
 
 	spec := testClaim("op-crash-1", "digest-a")
@@ -546,7 +586,7 @@ func TestEvidenceCrashShapeUnsettledClaimNeverRedispatches(t *testing.T) {
 
 func TestEvidenceConcurrentDuplicateClaims(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-race")
 
 	const workers = 8
@@ -657,7 +697,7 @@ func (r *racedOnceRepo) Claim(ctx context.Context, c store.EvidenceClaim) (store
 
 func TestEvidenceClaimRacedLoserRollsBackAppendAndRereadsWinner(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-raced-retry")
 
 	// CONTROL: the probe is observable when its transaction commits — so the
@@ -820,7 +860,7 @@ func (f *flipFencer) FencedEpoch(context.Context) (uint64, error) {
 
 func TestEvidenceClaimFenceFailsInsideTransaction(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-fence-intx")
 	flip := &flipFencer{toggleElector: toggleElector{activeVal: true}, first: 7, second: 8}
 	st.(*sqlStore).elector = flip
@@ -849,7 +889,7 @@ func TestEvidenceClaimFenceFailsInsideTransaction(t *testing.T) {
 
 func TestEvidenceSettleFenceRefusesNewerEpoch(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-settle-fence")
 	el := &epochElector{toggleElector: toggleElector{activeVal: true}, epoch: 7}
 	st.(*sqlStore).elector = el
@@ -928,7 +968,7 @@ func (r *postFreshClaimHookRepo) Claim(ctx context.Context, c store.EvidenceClai
 
 func TestEvidenceClaimLostLockDuringTransactionPGShape(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-lostlock")
 
 	// A REAL pgElector over the fake lock backend: leader at epoch 1.
@@ -974,7 +1014,7 @@ func TestEvidenceClaimLostLockDuringTransactionPGShape(t *testing.T) {
 
 func TestMutateWrapsAvailabilityErrors(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-mutate-wrap")
 
 	// A raw class-08 error surfacing through the Mutate callback must come back
@@ -996,7 +1036,7 @@ func TestMutateWrapsAvailabilityErrors(t *testing.T) {
 
 func TestEvidenceClaimValidation(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-validate")
 
 	// Incomplete bindings fail closed: the driver refuses with a write_error
@@ -1046,7 +1086,7 @@ func corruptEvidenceOpsRow(t *testing.T, st store.Store, query string, args ...a
 
 func TestEvidenceSettleDispatchRefDivergenceIsIntegrityError(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-dispatchref")
 
 	if _, err := store.ClaimEvidenceOperation(ctx, st, tenant, testClaim("op-dr-1", "digest-a")); err != nil {
@@ -1170,7 +1210,7 @@ func TestEvidenceDecodeRejectsInvalidState(t *testing.T) {
 
 func TestEvidenceWhitespaceBindingNeverTouchesTheStore(t *testing.T) {
 	ctx := context.Background()
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-whitespace")
 
 	// Whitespace-only binding fields are invalid under the sdk TrimSpace rule:
@@ -1228,7 +1268,7 @@ func TestEvidenceSettleValidationPrecedesAvailability(t *testing.T) {
 		t.Fatalf("nil-store invalid settlement err = %v, want ErrEvidenceInvalid", err)
 	}
 	// A standby must NOT mask it as ledger_unavailable either.
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "ev-va")
 	st.(*sqlStore).elector = &toggleElector{activeVal: false}
 	if _, err := store.SettleEvidenceOperation(ctx, st, tenant, invalid); !errors.Is(err, store.ErrEvidenceInvalid) {
@@ -1381,60 +1421,82 @@ func TestPostgresEvidenceOperations(t *testing.T) {
 		t.Fatalf("pg idempotent re-settle: %+v err=%v", again, err)
 	}
 
-	// Real concurrency on a multi-connection pool, INSTRUMENTED (review
-	// P1-4): the racedCountingStore counts every losing Mutate that surfaced
-	// ErrEvidenceRaced, so this test PROVES the real unique-conflict retry was
-	// traversed at least once, instead of merely tolerating either path. On
-	// Postgres a loser whose read-miss precedes the winner's commit is
-	// guaranteed onto this path: its Append serializes on the per-tenant
-	// advisory xact lock until the winner commits, and its insert then hits the
-	// committed unique index. Rounds with fresh operation ids bound the
-	// residual scheduling luck.
+	// Deterministic real concurrency on a multi-connection pool. Both selective
+	// transactions must report the same read miss before either may append. One
+	// then wins; the other's audit append waits on the tenant chain lock and its
+	// later insert loses the real UNIQUE index. The helper rolls that transaction
+	// back whole and performs its one bounded reread.
 	counting := &racedCountingStore{Store: st}
-	const workers = 6
-	const maxRounds = 20
-	rounds := 0
-	for r := 0; r < maxRounds && counting.raced.Load() == 0; r++ {
-		rounds++
-		race := testClaim(fmt.Sprintf("op-pg-race-%d", r), "digest-a")
-		outs := make([]store.EvidenceClaimOutcome, workers)
-		errs := make([]error, workers)
-		var start sync.WaitGroup
-		start.Add(1)
-		var wg sync.WaitGroup
-		for i := 0; i < workers; i++ {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				start.Wait() // barrier: maximize read-miss overlap
-				outs[i], errs[i] = store.ClaimEvidenceOperation(ctx, counting, tenant, race)
-			}(i)
+	raw := st.(*sqlStore)
+	const raceID = "op-pg-race-deterministic"
+	arrived := make(chan struct{}, 2)
+	releaseMisses := make(chan struct{})
+	raw.evidenceClaimAfterMissTestHook = func(hookCtx context.Context, operationID string) error {
+		if operationID != raceID {
+			return nil
 		}
-		start.Done()
-		wg.Wait()
-		var freshCount int
-		for i := 0; i < workers; i++ {
-			if errs[i] != nil {
-				t.Fatalf("pg concurrent claim %d (round %d): %v", i, r, errs[i])
-			}
-			if outs[i].Receipt.MustRefuse(outs[i].Binding) {
-				t.Fatalf("pg concurrent claim %d (round %d) refused: %+v", i, r, outs[i].Receipt)
-			}
-			if outs[i].Fresh {
-				freshCount++
-			}
-		}
-		if freshCount != 1 {
-			t.Fatalf("pg round %d fresh winners = %d, want 1", r, freshCount)
+		arrived <- struct{}{}
+		select {
+		case <-releaseMisses:
+			return nil
+		case <-hookCtx.Done():
+			return hookCtx.Err()
 		}
 	}
-	if counting.raced.Load() == 0 {
-		t.Fatalf("no loser traversed the real unique-conflict raced path in %d rounds", rounds)
+	t.Cleanup(func() { raw.evidenceClaimAfterMissTestHook = nil })
+	race := testClaim(raceID, "digest-a")
+	outs := make([]store.EvidenceClaimOutcome, 2)
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i := range outs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			outs[i], errs[i] = store.ClaimEvidenceOperation(ctx, counting, tenant, race)
+		}(i)
 	}
-	// One claim event per operation: op-pg-1 + one per race round — the losing
-	// appends (raced or replayed) all rolled back or never happened.
-	if n := countAuditAction(t, st, tenant, "mcp.tool.call.claim"); n != 1+rounds {
-		t.Fatalf("pg claim events = %d, want %d", n, 1+rounds)
+	for i := 0; i < 2; i++ {
+		select {
+		case <-arrived:
+		case <-time.After(2 * time.Second):
+			close(releaseMisses)
+			t.Fatalf("only %d evidence contenders reached the read-miss barrier", i)
+		}
+	}
+	close(releaseMisses)
+	wg.Wait()
+	raw.evidenceClaimAfterMissTestHook = nil
+	var freshCount int
+	for i := range outs {
+		if errs[i] != nil {
+			t.Fatalf("pg deterministic concurrent claim %d: %v", i, errs[i])
+		}
+		if outs[i].Receipt.MustRefuse(outs[i].Binding) {
+			t.Fatalf("pg deterministic concurrent claim %d refused: %+v", i, outs[i].Receipt)
+		}
+		if outs[i].Fresh {
+			freshCount++
+		}
+	}
+	if freshCount != 1 {
+		t.Fatalf("pg deterministic fresh winners = %d, want 1", freshCount)
+	}
+	if got := counting.raced.Load(); got != 1 {
+		t.Fatalf("real unique-conflict losers = %d, want exactly 1", got)
+	}
+	if got := counting.selective.Load(); got != 3 {
+		t.Fatalf("selective attempts = %d, want winner + loser + one bounded reread", got)
+	}
+	if got := counting.legacy.Load(); got != 0 {
+		t.Fatalf("deterministic race unexpectedly used legacy Mutate %d times", got)
+	}
+	if _, err := getEvidenceOp(t, st, tenant, raceID); err != nil {
+		t.Fatalf("read committed deterministic winner: %v", err)
+	}
+	// One claim event for op-pg-1 and one for the deterministic winner. The
+	// loser's append was rolled back whole; its reread appended nothing.
+	if n := countAuditAction(t, st, tenant, "mcp.tool.call.claim"); n != 2 {
+		t.Fatalf("pg claim events = %d, want 2", n)
 	}
 	mustVerifyChain(t, st, tenant)
 
@@ -1477,15 +1539,41 @@ func TestPostgresEvidenceOperations(t *testing.T) {
 	}
 }
 
-// racedCountingStore counts Mutate calls that lost the unique-conflict race
-// (ErrEvidenceRaced) before the driver's retry, WITHOUT altering behavior.
+// racedCountingStore counts selective attempts and real unique-conflict losers
+// before the driver's retry, without altering behavior.
 type racedCountingStore struct {
 	store.Store
-	raced atomic.Int64
+	raced     atomic.Int64
+	selective atomic.Int64
+	legacy    atomic.Int64
 }
 
 func (s *racedCountingStore) Mutate(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	s.legacy.Add(1)
 	err := s.Store.Mutate(ctx, tenant, fn)
+	if errors.Is(err, store.ErrEvidenceRaced) {
+		s.raced.Add(1)
+	}
+	return err
+}
+
+func (s *racedCountingStore) MutateCoordination(
+	ctx context.Context,
+	tenant model.TenantID,
+	plan store.TransactionLockPlan,
+	fn func(store.CoordinationMutationScope) error,
+) error {
+	return s.Store.(store.SelectiveMutator).MutateCoordination(ctx, tenant, plan, fn)
+}
+
+func (s *racedCountingStore) MutateEvidenceOperation(
+	ctx context.Context,
+	tenant model.TenantID,
+	plan store.EvidenceOperationPlan,
+	fn func(store.EvidenceOperationMutationScope) error,
+) error {
+	s.selective.Add(1)
+	err := s.Store.(store.SelectiveMutator).MutateEvidenceOperation(ctx, tenant, plan, fn)
 	if errors.Is(err, store.ErrEvidenceRaced) {
 		s.raced.Add(1)
 	}

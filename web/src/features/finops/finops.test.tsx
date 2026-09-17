@@ -175,9 +175,10 @@ describe('FutureDimensionsPanel — declared seam', () => {
 })
 
 describe('BudgetCard — threshold flow', () => {
-  it('flags a budget on track to exceed (projected_pct ≥ 100)', () => {
+  it('keeps an uncertified forecast visible without declaring a crossing', () => {
     renderIntel(<BudgetCard status={budgetStatusFixtures['bdg-opus']} />)
-    expect(screen.getByText(/On track to exceed/i)).toBeInTheDocument()
+    expect(screen.queryByText(/On track to exceed/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/Forecast \(not certified\)/i)).toBeInTheDocument()
     expect(screen.getByText('Opus guardrail')).toBeInTheDocument()
   })
 

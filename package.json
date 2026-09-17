@@ -12,5 +12,11 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-uri": "^3.1.7",
+      "js-yaml": "^4.3.1"
+    }
   }
 }

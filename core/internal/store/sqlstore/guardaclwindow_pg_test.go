@@ -224,8 +224,12 @@ func TestPostgresTheRolloutDoesNotRunWhileTheAppRoleCanWriteTheControlPlane(t *t
 	if unitReceipts != 0 {
 		t.Errorf("the boot refused, but only after writing %d unit receipts", unitReceipts)
 	}
-	if bootstrapReceipts != 4 {
-		t.Errorf("the ACL fixture lost its authenticated v7 bootstrap prefix: got %d rows, want 4", bootstrapReceipts)
+	// Three metadata receipts, the v7 completion and the v9 completion. The count moved
+	// with core v9, which appends its own witness beside the v7 one rather than replacing
+	// it; what this assertion is for is unchanged — the prefix the authenticated boot
+	// wrote must still be intact after the refusal.
+	if bootstrapReceipts != 5 {
+		t.Errorf("the ACL fixture lost its authenticated bootstrap prefix: got %d rows, want 5", bootstrapReceipts)
 	}
 	t.Logf("GUARD_ACL_BEFORE_ROLLOUT|refused=%v|gate_events=%d|unit_receipts=%d|bootstrap_receipts=%d",
 		errors.Is(err, store.ErrAppendOnlyACLOpen), events, unitReceipts, bootstrapReceipts)

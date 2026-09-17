@@ -23,8 +23,8 @@
 #
 # THREE ANSWERS, AND THE CODE CARRIES THEM — never the prose (canon §1.5):
 #   0  the live site agrees with the tree
-#   1  it disagrees: the site is stale, or a promise is broken
-#   2  I COULD NOT LOOK: no curl, no network, no source file. Not a pass.
+#   1  it disagrees, or the tree lacks the source needed to state the promise
+#   2  I COULD NOT LOOK at the live host: no curl/network, including a WAF refusal. Not a pass.
 #
 # Usage:  bash scripts/check-docs-site-live.sh [--host docs.olivares.ai]
 set -uo pipefail
@@ -60,18 +60,26 @@ command -v curl >/dev/null 2>&1 || {
 	exit 2
 }
 [ -r "$REDIRECTS" ] || {
-	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR: falta $REDIRECTS." >&2
-	exit 2
+	echo "check-docs-site-live: ✗ el árbol no contiene $REDIRECTS; no puede declarar sus redirecciones." >&2
+	exit 1
 }
 [ -d "$CONTENT" ] || {
-	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR: falta $CONTENT." >&2
-	exit 2
+	echo "check-docs-site-live: ✗ el árbol no contiene $CONTENT; no puede declarar sus rutas." >&2
+	exit 1
 }
 
 # ⛔ A NON-BROWSER User-Agent gets a 1010 from workers.dev-class hosts, measured in this repo. A
 # gate that trips on its own client is a gate that reports the site broken when it is not.
 UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
 CURL=(curl -sS --max-time 20 -A "$UA" -o /dev/null)
+# The deploy runner's source IP is behind the docs host's WAF (403 measured in Actions run
+# 33254456401), while the same host answers 200 from an allowed vantage. agreed bypass is
+# one exact secret header; the workflow supplies only its value. No domain rule is edited here and
+# the value is never printed. With no secret the ordinary browser probe remains useful, but a WAF
+# refusal stays answer 2 instead of becoming a finding about this tree.
+if [ -n "${DOCS_LIVE_PROBE:-}" ]; then
+	CURL+=(-H "X-Olivares-Docs-Live: ${DOCS_LIVE_PROBE}") # OLIVARES_DOCS_LIVE_HEADER:
+fi
 
 # probe <url> -> prints "<http_code> <redirect_url>"; empty output means the request itself failed,
 # which is a COULD-NOT-LOOK for that probe and never a finding about the site.
@@ -93,11 +101,16 @@ echo "check-docs-site-live: https://$HOST"
 # ---------------------------------------------------------------------------------------------
 control="$(probe "https://$HOST/")" || control=""
 control_code="${control%% *}"
-if [ -z "$control" ] || [ "$control_code" != "200" ]; then
+if [ -z "$control" ] || [ "$control_code" = "000" ] || [ "$control_code" = "403" ]; then
 	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR: el control positivo https://$HOST/ dio" \
 		"'${control:-sin respuesta}' en vez de 200. Sin él, un 404 no distingue un sitio roto de" \
 		"una red caída." >&2
 	exit 2
+fi
+if [ "$control_code" != "200" ]; then
+	echo "check-docs-site-live: ✗ el control positivo https://$HOST/ respondió HTTP $control_code;" \
+		"el host fue observable pero la raíz publicada está rota." >&2
+	exit 1
 fi
 nota "control positivo: / -> 200"
 
@@ -183,9 +196,9 @@ nota "reglas de _redirects verificadas: $reglas (líneas ilegibles: $malformadas
 # Cloudflare IGNORA en silencio toda regla que no cumpla `source destination [code]`: una regla
 # ilegible aquí es una redirección que en producción no existe.
 if [ "$reglas" -eq 0 ]; then
-	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR: ninguna regla legible en $REDIRECTS." \
+	echo "check-docs-site-live: ✗ ninguna regla legible en $REDIRECTS." \
 		"Un fichero vacío o malformado no es un sitio sin redirecciones: es un gate sin entrada." >&2
-	exit 2
+	exit 1
 fi
 if [ "$malformadas" -gt 0 ]; then
 	nota "✗ $malformadas línea(s) de _redirects que este gate no puede leer — Cloudflare las ignora" \
@@ -262,9 +275,9 @@ nota "rutas estructurales verificadas: $rutas"
 # movido, ruta equivocada— este tramo no comprueba nada y el gate salía 0. Cero rutas es no haber
 # mirado, no un sitio correcto.
 if [ "$rutas" -eq 0 ]; then
-	echo "check-docs-site-live: ⛔ NO HE PODIDO MIRAR: cero rutas estructurales descubiertas bajo" \
+	echo "check-docs-site-live: ✗ cero rutas estructurales descubiertas bajo" \
 		"$CONTENT. Descubrir nada no es lo mismo que comprobar algo." >&2
-	exit 2
+	exit 1
 fi
 
 # ---------------------------------------------------------------------------------------------

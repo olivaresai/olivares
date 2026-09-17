@@ -18,7 +18,7 @@
 //     failures. This connector builds one delivery.Client in Open and calls Send
 //     in Notify.
 //
-// Minimal data and credential safety (docs/SECURITY-HARDENING.md-3). A Notification already
+// Minimal data and credential safety (docs/SECURITY-HARDENING.md §2-3). A Notification already
 // carries only non-sensitive, displayable fields, so the connector forwards what
 // it is given and adds no enrichment. The destination credential (HEC token,
 // Elastic API key, bearer) arrives via the Secret config field, is held only in

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
@@ -217,7 +218,13 @@ const (
 // it. That is the one pre-gate exception the design authorizes.
 func verifyBootstrapFunction(ctx context.Context, q rowQuerier) error {
 	want := canonicalGuardDefinition().Function
-	got, exists, err := projectGuardFunction(ctx, q, want.Schema, want.Name)
+	// THE EXACT ZERO-INPUT SIGNATURE, not every overload of the name. The identity this
+	// bootstrap decides about is `public.olivares_block_mutation()`; an unrelated overload of
+	// that name is a different function that this build neither creates, replaces nor points a
+	// trigger at, and refusing the boot over it refused a coexistence the contract ratifies.
+	// See guardZeroInputFunctionProjectionSQL for the measurement and for why the narrowing is
+	// confined to this caller.
+	got, exists, err := projectGuardZeroInputFunction(ctx, q, want.Schema, want.Name)
 	if err != nil {
 		return err
 	}
@@ -462,20 +469,19 @@ type guardEditionInventoryState string
 type guardEditionGateState string
 type guardEditionHistoryKind string
 
-// guardEditionPath identifies the first edition that activated this inventory lineage.
-// It is kept beside the coarse receipt/inventory states so a fresh/direct epoch-2 receipt
-// set can only correlate with an all-epoch-2 census, while an epoch-1->2 transition can
-// only correlate with the epoch-1 prefix plus the epoch-2 delta. Without this token the
-// individually valid projections form cross-products no transaction ever wrote.
-type guardEditionPath int64
+// The guardEditionPath token — the identity of the candidate history a projection
+// follows — now lives in guardeditiongraph.go, because with more than one parent per
+// node the start epoch stopped identifying a path and the whole crossed sequence had to.
 
 const (
-	guardEditionReceiptsCurrent          guardEditionReceiptState = "current-bootstrap"
-	guardEditionReceiptsCurrentCompleted guardEditionReceiptState = "current-bootstrap-plus-v7-completion"
-	guardEditionReceiptsDirectStarted    guardEditionReceiptState = "current-bootstrap-plus-direct-v7-start"
-	guardEditionReceiptsDirectCompleted  guardEditionReceiptState = "current-bootstrap-plus-direct-v7-start-and-completion"
-	guardEditionReceiptsPredecessor      guardEditionReceiptState = "predecessor-bootstrap"
-	guardEditionReceiptsSealed           guardEditionReceiptState = "predecessor-bootstrap-plus-transition-seal"
+	guardEditionReceiptsCurrent            guardEditionReceiptState = "current-bootstrap"
+	guardEditionReceiptsCurrentCompleted   guardEditionReceiptState = "current-bootstrap-plus-v7-completion"
+	guardEditionReceiptsDirectStarted      guardEditionReceiptState = "current-bootstrap-plus-direct-v7-start"
+	guardEditionReceiptsDirectCompleted    guardEditionReceiptState = "current-bootstrap-plus-direct-v7-start-and-completion"
+	guardEditionReceiptsCurrentV9Completed guardEditionReceiptState = "current-bootstrap-plus-v7-and-v9-completion"
+	guardEditionReceiptsDirectV9Completed  guardEditionReceiptState = "current-bootstrap-plus-direct-v7-and-v9-completion"
+	guardEditionReceiptsPredecessor        guardEditionReceiptState = "predecessor-bootstrap"
+	guardEditionReceiptsSealed             guardEditionReceiptState = "predecessor-bootstrap-plus-transition-seal"
 
 	guardEditionInventoryCurrent     guardEditionInventoryState = "current-census"
 	guardEditionInventoryPredecessor guardEditionInventoryState = "predecessor-census"
@@ -485,13 +491,15 @@ const (
 	guardEditionGateCurrent     guardEditionGateState = "current"
 	guardEditionGatePredecessor guardEditionGateState = "predecessor-ready"
 
-	guardEditionHistoryCurrent          guardEditionHistoryKind = "current-before-v7"
-	guardEditionHistoryCurrentCompleted guardEditionHistoryKind = "current-v7-completed"
-	guardEditionHistoryDirectStarted    guardEditionHistoryKind = "direct-v7-started"
-	guardEditionHistoryDirectCompleted  guardEditionHistoryKind = "direct-v7-completed"
-	guardEditionHistoryPredecessor      guardEditionHistoryKind = "predecessor"
-	guardEditionHistoryPredecessorV7    guardEditionHistoryKind = "predecessor-v7-completed"
-	guardEditionHistoryTransitioned     guardEditionHistoryKind = "transitioned"
+	guardEditionHistoryCurrent            guardEditionHistoryKind = "current-before-v7"
+	guardEditionHistoryCurrentCompleted   guardEditionHistoryKind = "current-v7-completed"
+	guardEditionHistoryDirectStarted      guardEditionHistoryKind = "direct-v7-started"
+	guardEditionHistoryDirectCompleted    guardEditionHistoryKind = "direct-v7-completed"
+	guardEditionHistoryCurrentV9Completed guardEditionHistoryKind = "current-v9-completed"
+	guardEditionHistoryDirectV9Completed  guardEditionHistoryKind = "direct-v9-completed"
+	guardEditionHistoryPredecessor        guardEditionHistoryKind = "predecessor"
+	guardEditionHistoryPredecessorV7      guardEditionHistoryKind = "predecessor-v7-completed"
+	guardEditionHistoryTransitioned       guardEditionHistoryKind = "transitioned"
 )
 
 type guardEditionHistory struct {
@@ -502,12 +510,23 @@ type guardEditionHistory struct {
 	GateState         guardEditionGateState
 	Path              guardEditionPath
 	TerminalReceiptID [32]byte
+	// ParentEpoch is the exact compiled predecessor a predecessor/transitioned history
+	// came from. With one parent per node it could be re-derived; with several it is a
+	// FACT about the projection that selected this history, so it is carried instead of
+	// recomputed by whoever needs it next.
+	ParentEpoch int64
+	// CompletedV9 records that this history's node has crossed the access-evidence
+	// delta: either its v9 completion seal is present, or its transition seal is over a
+	// node that carries DA. Kept beside Kind because "transitioned" alone cannot say it.
+	CompletedV9 bool
 }
 
 func guardEditionHistoryCompletesV7(kind guardEditionHistoryKind) bool {
 	switch kind {
 	case guardEditionHistoryCurrentCompleted,
 		guardEditionHistoryDirectCompleted,
+		guardEditionHistoryCurrentV9Completed,
+		guardEditionHistoryDirectV9Completed,
 		guardEditionHistoryPredecessorV7,
 		guardEditionHistoryTransitioned:
 		return true
@@ -516,19 +535,36 @@ func guardEditionHistoryCompletesV7(kind guardEditionHistoryKind) bool {
 	}
 }
 
+// guardEditionHistoryCompletesV9 is the predicate a later same-B DF/DK edge requires of
+// its source, and the one core v9's fresh/direct actions establish.
+//
+// It is deliberately NOT "the epoch is 5, 6 or 7". A database whose census reaches an
+// access-evidence edition but whose v9 transaction has not committed is exactly the
+// pending state the migration exists to close, and treating the epoch as the witness
+// would let a deleted tracker plus deleted tables read as a completed upgrade.
+func guardEditionHistoryCompletesV9(history guardEditionHistory) bool {
+	if !history.CompletedV9 {
+		return false
+	}
+	return guardEditionHistoryCompletesV7(history.Kind)
+}
+
 // verifyGuardCompletedV7History is the tracked-v7 preflight selector. It performs no
 // writes. Normally the current manifest verifies directly. During a chained multi-edition
 // boot, however, core v7 may be durable while one or more later module editions have not
-// crossed their edges yet. Walk only the compiled predecessor chain and accept the first
-// exact history that carries the completed witness; the post-module seam will cross the
-// remaining edges in order.
+// crossed their edges yet. Walk the compiled ancestor editions, newest first, and accept
+// the first exact history that carries the completed witness; the v9 migration and the
+// post-module seam cross the remaining edges in order.
 func verifyGuardCompletedV7History(
 	ctx context.Context,
 	q guardEditionQuerier,
 	dia dialect.Dialect,
 	current guardManifest,
 ) (guardEditionHistory, error) {
-	candidate := current
+	graph, err := guardEditionGraphFor(current)
+	if err != nil {
+		return guardEditionHistory{}, err
+	}
 	var attempts []string
 	// The rendered attempts are for a human; `causes` keeps the ERROR VALUES so the
 	// summary below can still be inspected with errors.Is. Rendering a cause with
@@ -538,29 +574,25 @@ func verifyGuardCompletedV7History(
 	// exactly that in its own words — without the named error "this test would pass
 	// without a checkpoint".
 	var causes []error
-	for {
-		history, err := verifyGuardEditionHistory(ctx, q, dia, candidate)
-		if err == nil && guardEditionHistoryCompletesV7(history.Kind) {
+	for _, epoch := range graph.epochsDescending() {
+		if epoch < 2 {
+			// Epoch 1 predates the guard edition edges entirely: it has no v7
+			// witness to complete, and asking for one would report a missing edge
+			// rather than the missing completion this selector is about.
+			continue
+		}
+		node, _ := graph.node(epoch)
+		history, verr := verifyGuardEditionHistory(ctx, q, dia, node.Manifest)
+		if verr == nil && guardEditionHistoryCompletesV7(history.Kind) {
 			return history, nil
 		}
-		if err != nil {
-			attempts = append(attempts, fmt.Sprintf("epoch %d: %v", candidate.CodeEpoch, err))
-			causes = append(causes, err)
-		} else {
-			attempts = append(attempts, fmt.Sprintf("epoch %d: history %q has no completed v7 witness",
-				candidate.CodeEpoch, history.Kind))
+		if verr != nil {
+			attempts = append(attempts, fmt.Sprintf("epoch %d: %v", epoch, verr))
+			causes = append(causes, verr)
+			continue
 		}
-		if candidate.CodeEpoch <= 2 {
-			break
-		}
-		edge, ok, edgeErr := guardManifestEditionEdge(candidate)
-		if edgeErr != nil {
-			return guardEditionHistory{}, edgeErr
-		}
-		if !ok {
-			break
-		}
-		candidate = edge.From
+		attempts = append(attempts, fmt.Sprintf("epoch %d: history %q has no completed v7 witness",
+			epoch, history.Kind))
 	}
 	summary := fmt.Errorf("%w: tracked core v7 has no completed history in the compiled predecessor lineage (%s)",
 		ErrGuardManifestNoEdge, strings.Join(attempts, "; "))
@@ -625,6 +657,12 @@ func correlateGuardEditionHistory(
 		case receipts == guardEditionReceiptsDirectCompleted &&
 			inventory == guardEditionInventoryCurrent && gate == guardEditionGateAbsent:
 			return guardEditionHistoryDirectCompleted, nil
+		case receipts == guardEditionReceiptsCurrentV9Completed &&
+			inventory == guardEditionInventoryCurrent && gate == guardEditionGateAbsent:
+			return guardEditionHistoryCurrentV9Completed, nil
+		case receipts == guardEditionReceiptsDirectV9Completed &&
+			inventory == guardEditionInventoryCurrent && gate == guardEditionGateAbsent:
+			return guardEditionHistoryDirectV9Completed, nil
 		case receipts == guardEditionReceiptsPredecessor &&
 			inventory == guardEditionInventoryPredecessor && gate == guardEditionGateAbsent:
 			return guardEditionHistoryPredecessor, nil
@@ -646,6 +684,12 @@ func correlateGuardEditionHistory(
 		case receipts == guardEditionReceiptsDirectCompleted && inventory == guardEditionInventoryCurrent &&
 			(gate == guardEditionGateAbsent || gate == guardEditionGateCurrent):
 			return guardEditionHistoryDirectCompleted, nil
+		case receipts == guardEditionReceiptsCurrentV9Completed && inventory == guardEditionInventoryCurrent &&
+			(gate == guardEditionGateAbsent || gate == guardEditionGateCurrent):
+			return guardEditionHistoryCurrentV9Completed, nil
+		case receipts == guardEditionReceiptsDirectV9Completed && inventory == guardEditionInventoryCurrent &&
+			(gate == guardEditionGateAbsent || gate == guardEditionGateCurrent):
+			return guardEditionHistoryDirectV9Completed, nil
 		case receipts == guardEditionReceiptsPredecessor && inventory == guardEditionInventoryPredecessor &&
 			gate == guardEditionGatePredecessor:
 			return guardEditionHistoryPredecessor, nil
@@ -682,6 +726,23 @@ func guardEditionTwoMigrationExec(dia dialect.Dialect, current guardManifest) di
 			return fmt.Errorf("%w: v7 selected unrecognized migration action %q", ErrGuardManifestNoEdge, action)
 		}
 
+		// The ONLY edge core v7 crosses is the directory delta into epoch 2. It is
+		// selected as the sole compiled predecessor of that node rather than as
+		// "whatever parent the graph offers": v7 predates every other delta, and a v7
+		// that could cross an access-evidence edge would create relations its own
+		// transaction never made.
+		if migrationManifest.CodeEpoch != 2 {
+			return fmt.Errorf("%w: core v7 can only cross the directory edge into edition 2, not into %d",
+				ErrGuardManifestNoEdge, migrationManifest.CodeEpoch)
+		}
+		edge, ok, err := guardManifestSoleEditionEdge(migrationManifest)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("%w: epoch %d has no compiled edition edge",
+				ErrGuardManifestNoEdge, migrationManifest.CodeEpoch)
+		}
 		var plans []guardUnitPlan
 		openCurrent := dia.Name() == store.EnginePostgres
 		if openCurrent {
@@ -706,7 +767,7 @@ func guardEditionTwoMigrationExec(dia dialect.Dialect, current guardManifest) di
 					migrationManifest.CodeEpoch, len(refusals), len(migrationManifest.Specs), refusals[0])
 			}
 		}
-		return transitionGuardEditionInTx(ctx, tx, dia, migrationManifest, history, plans, openCurrent)
+		return transitionGuardEditionInTx(ctx, tx, dia, migrationManifest, edge, history, plans, openCurrent)
 	}
 }
 
@@ -721,7 +782,7 @@ func guardV7MigrationManifest(
 	dia dialect.Dialect,
 	current guardManifest,
 ) (guardManifest, guardEditionHistory, error) {
-	candidate := current
+	var candidate guardManifest
 	var attempts []string
 	// Third site of the same class in this file, confirmed as a defect by the sol max
 	// contrast of 2026-08-20 (it names this function as repeating the pattern). Its
@@ -731,30 +792,32 @@ func guardV7MigrationManifest(
 	// finds the file next, and because a caller that starts inspecting would meet the
 	// same silent flattening the other two had.
 	var causes []error
-	for {
+	graph, gerr := guardEditionGraphFor(current)
+	if gerr != nil {
+		return guardManifest{}, guardEditionHistory{}, gerr
+	}
+	for _, epoch := range graph.epochsDescending() {
+		if epoch < 2 {
+			continue
+		}
+		node, _ := graph.node(epoch)
+		candidate = node.Manifest
 		history, err := verifyGuardEditionHistory(ctx, q, dia, candidate)
 		if err == nil {
+			// Two starts and no third. A fresh or direct install completes v7 at the
+			// edition v6 bootstrapped — which is the CURRENT one; and the only edge
+			// v7 itself crosses is the directory delta into epoch 2, so that is the
+			// only node whose predecessor history it may act on.
 			if history.Kind == guardEditionHistoryCurrent ||
-				history.Kind == guardEditionHistoryDirectStarted || candidate.CodeEpoch == 2 {
+				history.Kind == guardEditionHistoryDirectStarted || epoch == 2 {
 				return candidate, history, nil
 			}
 			attempts = append(attempts, fmt.Sprintf("epoch %d: history %q cannot run core v7",
-				candidate.CodeEpoch, history.Kind))
-		} else {
-			attempts = append(attempts, fmt.Sprintf("epoch %d: %v", candidate.CodeEpoch, err))
-			causes = append(causes, err)
+				epoch, history.Kind))
+			continue
 		}
-		if candidate.CodeEpoch <= 2 {
-			break
-		}
-		edge, ok, edgeErr := guardManifestEditionEdge(candidate)
-		if edgeErr != nil {
-			return guardManifest{}, guardEditionHistory{}, edgeErr
-		}
-		if !ok {
-			break
-		}
-		candidate = edge.From
+		attempts = append(attempts, fmt.Sprintf("epoch %d: %v", epoch, err))
+		causes = append(causes, err)
 	}
 	summary := fmt.Errorf("%w: core v7 history matches no edition in the compiled predecessor lineage (%s)",
 		ErrGuardManifestNoEdge, strings.Join(attempts, "; "))
@@ -799,29 +862,39 @@ func completeV7GuardEditionInTx(
 	return nil
 }
 
+// transitionGuardEditionInTx commits ONE compiled edge.
+//
+// The edge is a PARAMETER rather than a derivation, and that is the DAG's central
+// discipline: an epoch-6 node has two compiled parents, so a function that re-derived
+// "the" edge here could commit a different transition from the one the selector proved
+// the database was standing on. The caller has already correlated the durable history;
+// this writes exactly that history's next step.
 func transitionGuardEditionInTx(
 	ctx context.Context,
 	tx *sql.Tx,
 	dia dialect.Dialect,
 	current guardManifest,
+	edge guardManifestEdge,
 	history guardEditionHistory,
 	plans []guardUnitPlan,
 	openCurrent bool,
 ) error {
 	want := guardEditionHistoryPredecessor
-	if current.CodeEpoch >= 3 {
+	if edge.From.CodeEpoch >= 2 {
 		want = guardEditionHistoryPredecessorV7
 	}
 	if history.Kind != want {
 		return fmt.Errorf("%w: guard edition %d transition requires predecessor history %q, got %q",
 			ErrGuardManifestNoEdge, current.CodeEpoch, want, history.Kind)
 	}
-	edge, ok, err := guardManifestEditionEdge(current)
-	if err != nil {
-		return err
+	if edge.To.CodeEpoch != current.CodeEpoch || edge.To.CodeSHA256 != current.CodeSHA256 {
+		return fmt.Errorf("%w: the supplied edge targets edition %d/%s, not the %d/%s being transitioned",
+			ErrGuardManifestNoEdge, edge.To.CodeEpoch, hexDigest(edge.To.CodeSHA256),
+			current.CodeEpoch, hexDigest(current.CodeSHA256))
 	}
-	if !ok {
-		return fmt.Errorf("%w: epoch %d has no compiled edition edge", ErrGuardManifestNoEdge, current.CodeEpoch)
+	if history.ParentEpoch != edge.From.CodeEpoch {
+		return fmt.Errorf("%w: the durable history stands on edition %d and the supplied edge starts at %d",
+			ErrGuardManifestNoEdge, history.ParentEpoch, edge.From.CodeEpoch)
 	}
 	revision, retained, err := verifyInventoryChain(ctx, tx, dia, edge.From)
 	if err != nil {
@@ -1090,7 +1163,7 @@ FROM `+guardOnly(dia)+guardInventoryEventsTable+` ORDER BY event_ordinal`))
 // history followed by this edge's complete delta. It never accepts an epoch independently
 // per entry; doing so would admit torn or hand-spliced mixtures no transition wrote.
 func verifyGuardActivationCensus(manifest guardManifest, activations map[guardKey]inventoryEvent) error {
-	starts, err := guardActivationPathStarts(manifest)
+	lineages, err := guardEditionLineagesFor(manifest)
 	if err != nil {
 		return err
 	}
@@ -1099,16 +1172,14 @@ func verifyGuardActivationCensus(manifest guardManifest, activations map[guardKe
 	// same recipe, and the sweep is what proves the class does not live anywhere else.
 	var differences []string
 	var causes []error
-	for _, start := range starts {
-		expected, xerr := guardActivationExpectationsForPath(manifest, start)
-		if xerr != nil {
-			return xerr
-		}
-		if xerr = verifyGuardActivationExpectations(expected, activations); xerr == nil {
+	for _, lineage := range lineages {
+		expected := guardActivationExpectationsForLineage(lineage)
+		if xerr := verifyGuardActivationExpectations(expected, activations); xerr == nil {
 			return nil
+		} else {
+			differences = append(differences, fmt.Sprintf("path %s: %v", lineage.path(), xerr))
+			causes = append(causes, xerr)
 		}
-		differences = append(differences, fmt.Sprintf("from epoch %d: %v", start, xerr))
-		causes = append(causes, xerr)
 	}
 	summary := fmt.Errorf("%w: the inventory is not any complete compiled lineage ending at epoch %d (%s)",
 		ErrGuardInventoryUnsupported, manifest.CodeEpoch, strings.Join(differences, "; "))
@@ -1123,49 +1194,36 @@ type guardActivationExpectation struct {
 	Epoch int64
 }
 
-func guardActivationPathStarts(manifest guardManifest) ([]guardEditionPath, error) {
-	starts := []guardEditionPath{guardEditionPath(manifest.CodeEpoch)}
-	edge, ok, err := guardManifestEditionEdge(manifest)
+// guardEditionLineagesFor enumerates every compiled candidate history ending at a
+// manifest's own edition.
+func guardEditionLineagesFor(manifest guardManifest) ([]guardEditionLineage, error) {
+	graph, err := guardEditionGraphFor(manifest)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		return starts, nil
-	}
-	predecessor, err := guardActivationPathStarts(edge.From)
-	if err != nil {
-		return nil, err
-	}
-	return append(starts, predecessor...), nil
+	return graph.lineagesEndingAt(manifest.CodeEpoch)
 }
 
-func guardActivationExpectationsForPath(
-	manifest guardManifest,
-	start guardEditionPath,
-) ([]guardActivationExpectation, error) {
-	if int64(start) == manifest.CodeEpoch {
-		expected := make([]guardActivationExpectation, 0, len(manifest.Specs))
-		for _, spec := range manifest.Specs {
-			expected = append(expected, guardActivationExpectation{Spec: spec, Epoch: manifest.CodeEpoch})
+// guardActivationExpectationsForLineage is the exact inventory a lineage writes: the
+// start edition's whole census in manifest order, then each crossed edge's additions in
+// the order the edges were crossed.
+//
+// The ORDER is the discriminator. Two lineages between the same endpoints activate the
+// same relations, and only the sequence tells them apart — E2 -> E5 -> E6 records the
+// access-evidence delta before the communication delta, E2 -> E3 -> E6 after — so an
+// expectation list that sorted its entries would make two different histories look alike.
+func guardActivationExpectationsForLineage(lineage guardEditionLineage) []guardActivationExpectation {
+	start := lineage.start()
+	expected := make([]guardActivationExpectation, 0, len(start.Manifest.Specs))
+	for _, spec := range start.Manifest.Specs {
+		expected = append(expected, guardActivationExpectation{Spec: spec, Epoch: start.Epoch})
+	}
+	for _, edge := range lineage.Edges {
+		for _, spec := range edge.Additions {
+			expected = append(expected, guardActivationExpectation{Spec: spec, Epoch: edge.To.CodeEpoch})
 		}
-		return expected, nil
 	}
-	edge, ok, err := guardManifestEditionEdge(manifest)
-	if err != nil {
-		return nil, err
-	}
-	if !ok || int64(start) > edge.From.CodeEpoch {
-		return nil, fmt.Errorf("%w: epoch %d has no compiled activation lineage starting at epoch %d",
-			ErrGuardInventoryUnsupported, manifest.CodeEpoch, start)
-	}
-	expected, err := guardActivationExpectationsForPath(edge.From, start)
-	if err != nil {
-		return nil, err
-	}
-	for _, spec := range edge.Additions {
-		expected = append(expected, guardActivationExpectation{Spec: spec, Epoch: edge.To.CodeEpoch})
-	}
-	return expected, nil
+	return expected
 }
 
 func verifyGuardActivationsExact(manifest guardManifest, activations map[guardKey]inventoryEvent) error {
@@ -1333,26 +1391,50 @@ type guardEditionQuerier interface {
 	dialect.Querier
 }
 
+// guardEditionInventorySelection is the one candidate history the inventory stream
+// matches, with everything the correlator needs from it.
+type guardEditionInventorySelection struct {
+	State       guardEditionInventoryState
+	Path        guardEditionPath
+	ParentEpoch int64
+	Revision    int64
+	Retained    [32]byte
+}
+
+// classifyGuardEditionInventory is selectRecordedLineage's inventory half: it evaluates
+// every COMPLETE compiled candidate history and accepts exactly one.
+//
+// "Exactly one" is not decoration now that editions form a DAG. Two lineages between the
+// same endpoints activate the same relations in a different sequence, so a single
+// inventory can match at most one of them — but the moment that stops being provable by
+// construction, picking the first would silently choose which upgrade a database is
+// believed to have performed. An ambiguous match therefore writes nothing and joins its
+// refusal to ErrGuardManifestNoEdge.
 func classifyGuardEditionInventory(
 	ctx context.Context,
 	q dialect.Querier,
 	dia dialect.Dialect,
 	current guardManifest,
-) (guardEditionInventoryState, guardEditionPath, int64, [32]byte, error) {
+) (guardEditionInventorySelection, error) {
+	trivial := guardEditionPathOf([]guardEditionNode{{Epoch: current.CodeEpoch}})
 	if revision, retained, err := verifyInventoryChainExact(ctx, q, dia, current); err == nil {
-		return guardEditionInventoryCurrent, guardEditionPath(current.CodeEpoch), revision, retained, nil
+		return guardEditionInventorySelection{
+			State: guardEditionInventoryCurrent, Path: trivial, Revision: revision, Retained: retained,
+		}, nil
 	}
-	edge, ok, err := guardManifestEditionEdge(current)
+	graph, err := guardEditionGraphFor(current)
 	if err != nil {
-		return "", 0, 0, [32]byte{}, err
+		return guardEditionInventorySelection{}, err
 	}
-	if !ok {
+	parents := graph.parentEpochs(current.CodeEpoch)
+	if len(parents) == 0 {
 		_, _, currentErr := verifyInventoryChainExact(ctx, q, dia, current)
-		return "", 0, 0, [32]byte{}, currentErr
+		return guardEditionInventorySelection{}, currentErr
 	}
-	starts, err := guardActivationPathStarts(edge.From)
-	if err != nil {
-		return "", 0, 0, [32]byte{}, err
+
+	type candidate struct {
+		selection guardEditionInventorySelection
+		lineage   guardEditionLineage
 	}
 	// Same contract as verifyGuardCompletedV7History above: the rendered lists are for
 	// a human and `causes` keeps the error VALUES, so the ErrGuardGateChainBroken a
@@ -1362,30 +1444,66 @@ func classifyGuardEditionInventory(
 	// control on SQLite.
 	var predecessorErrs, mixedErrs []string
 	var causes []error
-	for _, start := range starts {
-		expected, xerr := guardActivationExpectationsForPath(edge.From, start)
-		if xerr != nil {
-			return "", 0, 0, [32]byte{}, xerr
+	var matches []candidate
+
+	// PREDECESSOR: the stream stops at one of the compiled parents, so this database has
+	// not crossed the last edge yet.
+	for _, parent := range parents {
+		lineages, lerr := graph.lineagesEndingAt(parent)
+		if lerr != nil {
+			return guardEditionInventorySelection{}, lerr
 		}
-		revision, retained, xerr := verifyInventoryChainExpectations(ctx, q, dia, current, expected)
+		for _, lineage := range lineages {
+			revision, retained, xerr := verifyInventoryChainExpectations(
+				ctx, q, dia, current, guardActivationExpectationsForLineage(lineage))
+			if xerr == nil {
+				matches = append(matches, candidate{guardEditionInventorySelection{
+					State: guardEditionInventoryPredecessor, Path: lineage.path(),
+					ParentEpoch: parent, Revision: revision, Retained: retained,
+				}, lineage})
+				continue
+			}
+			predecessorErrs = append(predecessorErrs, fmt.Sprintf("path %s: %v", lineage.path(), xerr))
+			causes = append(causes, xerr)
+		}
+	}
+	// CARRY-FORWARD: the stream reaches this edition through one exact sequence of edges.
+	lineages, lerr := graph.lineagesEndingAt(current.CodeEpoch)
+	if lerr != nil {
+		return guardEditionInventorySelection{}, lerr
+	}
+	for _, lineage := range lineages {
+		if len(lineage.Edges) == 0 {
+			continue // the trivial lineage is the exact-current case tried above
+		}
+		revision, retained, xerr := verifyInventoryChainExpectations(
+			ctx, q, dia, current, guardActivationExpectationsForLineage(lineage))
 		if xerr == nil {
-			return guardEditionInventoryPredecessor, start, revision, retained, nil
+			last := lineage.Edges[len(lineage.Edges)-1]
+			matches = append(matches, candidate{guardEditionInventorySelection{
+				State: guardEditionInventoryMixed, Path: lineage.path(),
+				ParentEpoch: last.From.CodeEpoch, Revision: revision, Retained: retained,
+			}, lineage})
+			continue
 		}
-		predecessorErrs = append(predecessorErrs, fmt.Sprintf("path %d: %v", start, xerr))
+		mixedErrs = append(mixedErrs, fmt.Sprintf("path %s: %v", lineage.path(), xerr))
 		causes = append(causes, xerr)
 	}
-	for _, start := range starts {
-		expected, xerr := guardActivationExpectationsForPath(current, start)
-		if xerr != nil {
-			return "", 0, 0, [32]byte{}, xerr
+
+	switch len(matches) {
+	case 1:
+		return matches[0].selection, nil
+	case 0:
+	default:
+		paths := make([]string, 0, len(matches))
+		for _, m := range matches {
+			paths = append(paths, fmt.Sprintf("%s/%s", m.selection.State, m.lineage.path()))
 		}
-		revision, retained, xerr := verifyInventoryChainExpectations(ctx, q, dia, current, expected)
-		if xerr == nil {
-			return guardEditionInventoryMixed, start, revision, retained, nil
-		}
-		mixedErrs = append(mixedErrs, fmt.Sprintf("path %d: %v", start, xerr))
-		causes = append(causes, xerr)
+		return guardEditionInventorySelection{}, fmt.Errorf(
+			"%w: the inventory matches %d compiled candidate histories (%s); an ambiguous history is not an authorisation",
+			ErrGuardManifestNoEdge, len(matches), strings.Join(paths, ", "))
 	}
+
 	_, _, currentErr := verifyInventoryChainExact(ctx, q, dia, current)
 	summary := fmt.Errorf("%w: inventory is neither current, a complete predecessor lineage, nor its authorized carry-forward (current: %v; predecessor: %s; carry-forward: %s)",
 		ErrGuardInventoryUnsupported, currentErr,
@@ -1394,9 +1512,9 @@ func classifyGuardEditionInventory(
 		causes = append(causes, currentErr)
 	}
 	if len(causes) == 0 {
-		return "", 0, 0, [32]byte{}, summary
+		return guardEditionInventorySelection{}, summary
 	}
-	return "", 0, 0, [32]byte{}, errors.Join(append([]error{summary}, causes...)...)
+	return guardEditionInventorySelection{}, errors.Join(append([]error{summary}, causes...)...)
 }
 
 func verifyGuardGateTuple(
@@ -1557,56 +1675,79 @@ func verifyGuardHistoricalCheckpoint(
 	return nil
 }
 
+// guardEditionGateSelection is the gate half of the durable selector: which edition the
+// gate stream says a rollout was last opened for, and — when that is a predecessor —
+// exactly which compiled parent it was.
+type guardEditionGateSelection struct {
+	State       guardEditionGateState
+	Gate        gateProjection
+	ParentEpoch int64
+}
+
 func classifyGuardEditionGate(
 	ctx context.Context,
 	q guardEditionQuerier,
 	dia dialect.Dialect,
 	current guardManifest,
-	edge guardManifestEdge,
+	graph guardEditionGraph,
 	revision int64,
 	retained [32]byte,
-) (guardEditionGateState, gateProjection, error) {
+) (guardEditionGateSelection, error) {
 	recorded, err := latestRecordedEdition(ctx, q, dia)
 	if err != nil {
-		return "", gateProjection{}, err
+		return guardEditionGateSelection{}, err
 	}
 	if !recorded.Found {
-		return guardEditionGateAbsent, gateProjection{}, nil
+		return guardEditionGateSelection{State: guardEditionGateAbsent}, nil
 	}
 	var (
-		state   guardEditionGateState
-		edition guardManifest
+		state       guardEditionGateState
+		edition     guardManifest
+		parentEpoch int64
 	)
 	switch {
 	case recorded.Format == current.Format && recorded.CodeEpoch == current.CodeEpoch &&
 		recorded.CodeSHA256 == current.CodeSHA256:
 		state, edition = guardEditionGateCurrent, current
-	case edge.authorizes(recorded.Format, recorded.CodeEpoch, recorded.CodeSHA256):
-		state, edition = guardEditionGatePredecessor, edge.From
 	default:
-		return "", gateProjection{}, classifyRecordedEdition(current, recorded)
+		// EVERY compiled parent is tried, and the one that authorizes the recorded
+		// tuple is NAMED. With a chain the caller could re-derive it; with a DAG an
+		// epoch-6 target has two, and "the predecessor" would be a guess.
+		edges, eerr := graph.predecessorEdges(current.CodeEpoch)
+		if eerr != nil {
+			return guardEditionGateSelection{}, eerr
+		}
+		for _, edge := range edges {
+			if edge.authorizes(recorded.Format, recorded.CodeEpoch, recorded.CodeSHA256) {
+				state, edition, parentEpoch = guardEditionGatePredecessor, edge.From, edge.From.CodeEpoch
+				break
+			}
+		}
+		if state == "" {
+			return guardEditionGateSelection{}, classifyRecordedEdition(current, recorded)
+		}
 	}
 	rollout, err := guardBootstrapRollout(edition, revision, retained)
 	if err != nil {
-		return "", gateProjection{}, err
+		return guardEditionGateSelection{}, err
 	}
 	if recorded.RolloutID != rollout.RolloutID {
-		return "", gateProjection{}, fmt.Errorf("%w: latest %s edition is recorded under rollout %s, want %s for retained pair %d/%s",
+		return guardEditionGateSelection{}, fmt.Errorf("%w: latest %s edition is recorded under rollout %s, want %s for retained pair %d/%s",
 			ErrGuardGateIllegalTransition, state, recorded.RolloutID, rollout.RolloutID,
 			revision, hexDigest(retained))
 	}
 	gate, err := verifyGuardGateTuple(ctx, q, dia, rollout)
 	if err != nil {
-		return "", gateProjection{}, err
+		return guardEditionGateSelection{}, err
 	}
 	if state == guardEditionGatePredecessor {
-		if err := verifyGuardHistoricalCheckpoint(ctx, q, dia, edge.From, rollout, gate); err != nil {
-			return "", gateProjection{}, err
+		if err := verifyGuardHistoricalCheckpoint(ctx, q, dia, edition, rollout, gate); err != nil {
+			return guardEditionGateSelection{}, err
 		}
 	} else if err := verifyGuardCheckpoint(ctx, q, dia, rollout.RolloutID, gate); err != nil {
-		return "", gateProjection{}, err
+		return guardEditionGateSelection{}, err
 	}
-	return state, gate, nil
+	return guardEditionGateSelection{State: state, Gate: gate, ParentEpoch: parentEpoch}, nil
 }
 
 // verifyGuardEditionHistory is the sole selector for durable edition state. Receipt,
@@ -1621,6 +1762,10 @@ func verifyGuardEditionHistory(
 	if err := requireCompleteGuardCurrentEdition(current); err != nil {
 		return guardEditionHistory{}, err
 	}
+	graph, err := guardEditionGraphFor(current)
+	if err != nil {
+		return guardEditionHistory{}, err
+	}
 	if err := verifyGuardControlPlaneShape(ctx, q, dia); err != nil {
 		return guardEditionHistory{}, err
 	}
@@ -1631,29 +1776,33 @@ func verifyGuardEditionHistory(
 	if err := verifyGuardControlPlaneCatalog(ctx, q, dia, current.Format); err != nil {
 		return guardEditionHistory{}, err
 	}
-	inventoryState, inventoryPath, revision, retained, err := classifyGuardEditionInventory(ctx, q, dia, current)
+	inventory, err := classifyGuardEditionInventory(ctx, q, dia, current)
 	if err != nil {
 		return guardEditionHistory{}, err
 	}
-	edge, ok, err := guardManifestEditionEdge(current)
-	if err != nil {
-		return guardEditionHistory{}, err
-	}
-	if !ok {
+	if len(graph.parentEpochs(current.CodeEpoch)) == 0 {
 		return guardEditionHistory{}, fmt.Errorf("%w: epoch %d has no compiled edition edge",
 			ErrGuardManifestNoEdge, current.CodeEpoch)
 	}
-	gateState, gate, err := classifyGuardEditionGate(ctx, q, dia, current, edge, revision, retained)
+	gateSelection, err := classifyGuardEditionGate(ctx, q, dia, current, graph, inventory.Revision, inventory.Retained)
 	if err != nil {
 		return guardEditionHistory{}, err
 	}
-	kind, err := correlateGuardEditionHistory(dia.Name(), receiptVariant.State, inventoryState, gateState)
+	kind, err := correlateGuardEditionHistory(dia.Name(), receiptVariant.State, inventory.State, gateSelection.State)
 	if err != nil {
 		return guardEditionHistory{}, err
 	}
-	if receiptVariant.Path != inventoryPath {
-		return guardEditionHistory{}, fmt.Errorf("%w: receipt history follows epoch-%d lineage while inventory follows epoch-%d lineage; no transition writes that cross-product",
-			ErrGuardManifestNoEdge, receiptVariant.Path, inventoryPath)
+	if receiptVariant.Path != inventory.Path {
+		return guardEditionHistory{}, fmt.Errorf("%w: receipt history follows lineage %s while inventory follows lineage %s; no transition writes that cross-product",
+			ErrGuardManifestNoEdge, receiptVariant.Path, inventory.Path)
+	}
+	// The three projections must also agree about WHICH compiled parent they stand on.
+	// Path equality already implies it for receipts and inventory; the gate is read from
+	// a different stream, so its parent is compared explicitly rather than assumed.
+	parentEpoch := inventory.ParentEpoch
+	if gateSelection.State == guardEditionGatePredecessor && gateSelection.ParentEpoch != parentEpoch {
+		return guardEditionHistory{}, fmt.Errorf("%w: the gate stream stands on edition %d while receipts and inventory stand on %d",
+			ErrGuardManifestNoEdge, gateSelection.ParentEpoch, parentEpoch)
 	}
 	if kind == guardEditionHistoryPredecessor && receiptVariant.CompletedV7 {
 		kind = guardEditionHistoryPredecessorV7
@@ -1661,56 +1810,89 @@ func verifyGuardEditionHistory(
 	if dia.Name() == store.EnginePostgres &&
 		(kind == guardEditionHistoryPredecessor || kind == guardEditionHistoryPredecessorV7 ||
 			kind == guardEditionHistoryTransitioned) {
-		if err := verifyGuardHistoricalGatePath(ctx, q, dia, edge.From, receiptVariant.Path, revision, retained); err != nil {
+		if err := verifyGuardHistoricalGatePath(ctx, q, dia, graph, parentEpoch,
+			receiptVariant.Path, inventory.Revision, inventory.Retained); err != nil {
 			return guardEditionHistory{}, err
 		}
 	}
 	return guardEditionHistory{
-		Kind: kind, Revision: revision, Retained: retained, Gate: gate, GateState: gateState,
+		Kind: kind, Revision: inventory.Revision, Retained: inventory.Retained,
+		Gate: gateSelection.Gate, GateState: gateSelection.State,
 		Path: receiptVariant.Path, TerminalReceiptID: receiptVariant.TerminalReceiptID,
+		ParentEpoch: parentEpoch, CompletedV9: receiptVariant.CompletedV9,
 	}, nil
 }
 
+// verifyGuardHistoricalGatePath re-verifies every rollout the recorded lineage closed,
+// from the edition the database currently stands on back to the one it was bootstrapped
+// at.
+//
+// It walks the SELECTED LINEAGE rather than "every epoch between two numbers". With a
+// chain those were the same walk; with the DAG an epoch-6 history could have reached its
+// parent through either the communication or the access-evidence edge, and re-deriving
+// the route here would verify rollouts a different upgrade would have opened.
 func verifyGuardHistoricalGatePath(
 	ctx context.Context,
 	q guardEditionQuerier,
 	dia dialect.Dialect,
-	latest guardManifest,
-	start guardEditionPath,
+	graph guardEditionGraph,
+	standingOn int64,
+	path guardEditionPath,
 	revision int64,
 	retained [32]byte,
 ) error {
-	manifest := latest
-	for {
-		if manifest.CodeEpoch < int64(start) {
-			return fmt.Errorf("%w: historical gate lineage passed epoch %d without reaching path start %d",
-				ErrGuardManifestNoEdge, manifest.CodeEpoch, start)
+	lineages, err := graph.lineagesEndingAt(standingOn)
+	if err != nil {
+		return err
+	}
+	var selected *guardEditionLineage
+	for i := range lineages {
+		if lineages[i].path() == path {
+			selected = &lineages[i]
+			break
 		}
-		rollout, err := guardBootstrapRollout(manifest, revision, retained)
-		if err != nil {
-			return err
+	}
+	if selected == nil {
+		// The receipts named a lineage ending at the CURRENT edition (a carry-forward),
+		// so the historical part of it is the prefix that ends at the parent.
+		currentLineages, cerr := graph.lineagesEndingAt(graph.Current)
+		if cerr != nil {
+			return cerr
 		}
-		gate, err := verifyGuardGateTuple(ctx, q, dia, rollout)
-		if err != nil {
+		for i := range currentLineages {
+			if currentLineages[i].path() != path || len(currentLineages[i].Edges) == 0 {
+				continue
+			}
+			prefix := guardEditionLineage{
+				Nodes: currentLineages[i].Nodes[:len(currentLineages[i].Nodes)-1],
+				Edges: currentLineages[i].Edges[:len(currentLineages[i].Edges)-1],
+			}
+			if prefix.end().Epoch == standingOn {
+				selected = &prefix
+			}
+			break
+		}
+	}
+	if selected == nil {
+		return fmt.Errorf("%w: no compiled lineage %s ends at edition %d",
+			ErrGuardManifestNoEdge, path, standingOn)
+	}
+	for i := len(selected.Nodes) - 1; i >= 0; i-- {
+		manifest := selected.Nodes[i].Manifest
+		rollout, rerr := guardBootstrapRollout(manifest, revision, retained)
+		if rerr != nil {
+			return rerr
+		}
+		gate, gerr := verifyGuardGateTuple(ctx, q, dia, rollout)
+		if gerr != nil {
 			return fmt.Errorf("%w: historical epoch-%d gate is absent or divergent: %v",
-				ErrGuardManifestNoEdge, manifest.CodeEpoch, err)
+				ErrGuardManifestNoEdge, manifest.CodeEpoch, gerr)
 		}
 		if err := verifyGuardHistoricalCheckpoint(ctx, q, dia, manifest, rollout, gate); err != nil {
 			return err
 		}
-		if manifest.CodeEpoch == int64(start) {
-			return nil
-		}
-		edge, ok, err := guardManifestEditionEdge(manifest)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("%w: historical epoch-%d has no compiled predecessor on path to epoch %d",
-				ErrGuardManifestNoEdge, manifest.CodeEpoch, start)
-		}
-		manifest = edge.From
 	}
+	return nil
 }
 
 // openOrVerifyGuardRollout recognizes this edition's rollout, or opens it.
@@ -1770,9 +1952,18 @@ func openOrVerifyGuardRollout(
 			RetainedSHA256: proj.RetainedSHA256,
 		}, proj, false, nil
 	}
-	if history.GateState != guardEditionGateAbsent ||
-		(history.Kind != guardEditionHistoryCurrentCompleted &&
-			history.Kind != guardEditionHistoryDirectCompleted) {
+	// THE HISTORIES THAT MAY OPEN A ROLLOUT FROM OUTSIDE AN EDITION TRANSACTION.
+	//
+	// They are the fresh and direct completions, at BOTH core boundaries: a database that
+	// stopped after v7 and one that has since crossed v9 are the same shape here — an
+	// edition v6 bootstrapped directly, never transitioned into, whose rollout no
+	// migration has opened. Every transitioned history had its gate opened inside the
+	// transaction that crossed its edge, and is handled above.
+	openable := history.Kind == guardEditionHistoryCurrentCompleted ||
+		history.Kind == guardEditionHistoryDirectCompleted ||
+		history.Kind == guardEditionHistoryCurrentV9Completed ||
+		history.Kind == guardEditionHistoryDirectV9Completed
+	if history.GateState != guardEditionGateAbsent || !openable {
 		return guardRolloutContext{}, gateProjection{}, false, fmt.Errorf(
 			"%w: history %q with gate %q cannot open a rollout outside the v7 edition transaction",
 			ErrGuardManifestNoEdge, history.Kind, history.GateState)
@@ -2058,6 +2249,114 @@ func guardV7Seal(current guardManifest, phase guardV7SealPhase, completionFollow
 	return seal, nil
 }
 
+const (
+	// guardAccessEvidenceV9SealUnitDomain is the v9 completion witness's own unit-id
+	// domain. A DIFFERENT tag from the bootstrap and v7-seal units, so a v9 completion
+	// can never be presented as either, and neither can be replayed as one.
+	guardAccessEvidenceV9SealUnitDomain = "access-evidence-v9-seal-unit"
+	// guardAccessEvidenceV9AttemptID names the one act this receipt attests.
+	guardAccessEvidenceV9AttemptID = "access-evidence-v9-complete"
+)
+
+func guardAccessEvidenceV9SealUnitID(format int64, key guardKey) (string, error) {
+	w := newCanonWriter(canonDomainEntry, format)
+	w.str(guardAccessEvidenceV9SealUnitDomain)
+	key.canon(w)
+	digest, err := w.sum()
+	if err != nil {
+		return "", err
+	}
+	return hexDigest(digest), nil
+}
+
+// guardAccessEvidenceV9Seal is the immutable completion witness core v9 appends on the
+// fresh and direct paths.
+//
+// WHY THE TRACKING ROW IS NOT ENOUGH, which is the whole argument for this receipt. The
+// authorized pre-v9 direct checkpoint is "current history, direct-v7-completed, no DA
+// tables, no v9 row". Deleting the v9 tracking row AND the four relations after a
+// successful upgrade reproduces that state exactly, so a tracker alone cannot tell a
+// pending creation from a completed one that was dismantled. An append-only receipt
+// bound to the previous terminal claim can: the ledger refuses deletion, and the seal
+// names the exact v7 completion it follows.
+//
+// The guarded-transition path deliberately gets NO second seal. Its edition transition
+// seal is already immutable, already binds its exact From/To pair, and a deleted v9
+// tracker cannot make a transitioned history look like its source again.
+func guardAccessEvidenceV9Seal(
+	current guardManifest,
+	predecessorReceiptID [32]byte,
+	followsDirectStart bool,
+) (guardReceipt, error) {
+	membership, ok := guardEditionMembershipForEpoch(current.CodeEpoch)
+	if !ok || !membership.has(guardDeltaAccessEvidence) {
+		return guardReceipt{}, fmt.Errorf(
+			"sqlstore: guard edition %d does not carry the access-evidence delta, so it has no v9 completion to seal",
+			current.CodeEpoch)
+	}
+	if predecessorReceiptID == ([32]byte{}) {
+		return guardReceipt{}, fmt.Errorf(
+			"sqlstore: the v9 completion seal has no terminal v7 predecessor receipt")
+	}
+	meta, err := guardMetadataSpecs(current.Format)
+	if err != nil {
+		return guardReceipt{}, err
+	}
+	if len(meta) == 0 || meta[0].Key.Relation != guardGateEventsTable {
+		return guardReceipt{}, fmt.Errorf("sqlstore: the v9 seal requires %s as the first fixed metadata spec",
+			guardGateEventsTable)
+	}
+	empty, err := emptyRetainedDigest()
+	if err != nil {
+		return guardReceipt{}, err
+	}
+	rollout, err := guardBootstrapRollout(current, 0, empty)
+	if err != nil {
+		return guardReceipt{}, err
+	}
+	unitID, err := guardAccessEvidenceV9SealUnitID(current.Format, meta[0].Key)
+	if err != nil {
+		return guardReceipt{}, err
+	}
+	prestateSHA, err := prestateDigest(rollout.bind(prestate{
+		TargetExists:          true,
+		GuardPresent:          true,
+		GuardEnableState:      guardStateAlways,
+		GuardMatchesCanonical: true,
+	}, meta[0]))
+	if err != nil {
+		return guardReceipt{}, err
+	}
+	// followsDirectStart is not a field of the body: it is already expressed by WHICH
+	// terminal receipt this seal names, because the fresh and direct v7 completions have
+	// different ids. Keeping it as a parameter makes the caller state which path it is
+	// on, so a direct upgrade cannot accidentally build the fresh seal.
+	_ = followsDirectStart
+	seal := guardReceipt{
+		RolloutID:            rollout.RolloutID,
+		UnitID:               unitID,
+		Kind:                 guardReceiptKindBootstrap,
+		Intent:               guardIntentBootstrap,
+		Key:                  meta[0].Key,
+		Epoch:                rollout.CodeEpoch,
+		Format:               rollout.Format,
+		CodeSHA256:           rollout.CodeSHA256,
+		RetainedRevision:     rollout.RetainedRevision,
+		RetainedSHA256:       rollout.RetainedSHA256,
+		SpecSHA256:           meta[0].SpecSHA256,
+		DefinitionSHA256:     meta[0].DefinitionSHA256,
+		PrestateSHA256:       prestateSHA,
+		FromEnableState:      someText(guardStateAlways),
+		ToEnableState:        guardStateAlways,
+		PredecessorReceiptID: someDigest(predecessorReceiptID),
+		AttemptID:            guardAccessEvidenceV9AttemptID,
+	}
+	if seal.ReceiptID, err = seal.bodyDigest(); err != nil {
+		return guardReceipt{}, err
+	}
+	return seal, nil
+}
+
 func guardBootstrapRollout(m guardManifest, revision int64, retained [32]byte) (guardRolloutContext, error) {
 	rolloutID, err := guardRolloutID(m.Format, m.CodeEpoch, m.CodeSHA256, revision, retained)
 	if err != nil {
@@ -2323,7 +2622,12 @@ type guardBootstrapReceiptVariant struct {
 	Receipts          []guardReceipt
 	Path              guardEditionPath
 	CompletedV7       bool
+	CompletedV9       bool
 	TerminalReceiptID [32]byte
+	// Epoch is the edition this variant's history ENDS at. For a predecessor variant
+	// that is the parent, not the edition being opened, and the caller needs the
+	// difference to know which edge it is standing before.
+	Epoch int64
 }
 
 func guardBootstrapTerminalReceipt(receipts []guardReceipt) ([32]byte, error) {
@@ -2336,12 +2640,16 @@ func guardBootstrapTerminalReceipt(receipts []guardReceipt) ([32]byte, error) {
 		guardGateEventsTable)
 }
 
-// guardBootstrapReceiptVariants enumerates complete receipt histories, never individual
-// receipt options. A later edge can therefore link its seal to the real terminal claim of
-// a fresh completion, direct completion, or prior transition without synthesizing an old
-// bootstrap receipt that was not terminal on that path.
-func guardBootstrapReceiptVariants(current guardManifest) ([]guardBootstrapReceiptVariant, error) {
-	bootstrap, err := expectedGuardBootstrapReceipts(current)
+// guardBootstrapVariantsAtNode enumerates the complete receipt histories a database can
+// hold while standing at ONE edition, without any transition.
+//
+// These are the four the migrations write directly — the bootstrap alone, its universal
+// v7 completion, the direct-upgrade start, and start plus completion — and, for an
+// edition that carries the access-evidence delta, the two v9-sealed forms core v9
+// appends on the fresh and direct paths.
+func guardBootstrapVariantsAtNode(node guardEditionNode) ([]guardBootstrapReceiptVariant, error) {
+	manifest := node.Manifest
+	bootstrap, err := expectedGuardBootstrapReceipts(manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -2349,34 +2657,104 @@ func guardBootstrapReceiptVariants(current guardManifest) ([]guardBootstrapRecei
 	if err != nil {
 		return nil, err
 	}
-	freshCompletion, err := guardV7Seal(current, guardV7SealCompletion, false)
+	freshCompletion, err := guardV7Seal(manifest, guardV7SealCompletion, false)
 	if err != nil {
 		return nil, err
 	}
-	directStart, err := guardV7Seal(current, guardV7SealStart, false)
+	directStart, err := guardV7Seal(manifest, guardV7SealStart, false)
 	if err != nil {
 		return nil, err
 	}
-	directCompletion, err := guardV7Seal(current, guardV7SealCompletion, true)
+	directCompletion, err := guardV7Seal(manifest, guardV7SealCompletion, true)
 	if err != nil {
 		return nil, err
 	}
-	path := guardEditionPath(current.CodeEpoch)
-	variants := []guardBootstrapReceiptVariant{
-		{State: guardEditionReceiptsCurrent, Receipts: append([]guardReceipt(nil), bootstrap...), Path: path, TerminalReceiptID: bootstrapTerminal},
-		{State: guardEditionReceiptsCurrentCompleted, Receipts: append(append([]guardReceipt(nil), bootstrap...), freshCompletion), Path: path, CompletedV7: true, TerminalReceiptID: freshCompletion.ReceiptID},
-		{State: guardEditionReceiptsDirectStarted, Receipts: append(append([]guardReceipt(nil), bootstrap...), directStart), Path: path, TerminalReceiptID: directStart.ReceiptID},
-		{State: guardEditionReceiptsDirectCompleted, Receipts: append(append(append([]guardReceipt(nil), bootstrap...), directStart), directCompletion), Path: path, CompletedV7: true, TerminalReceiptID: directCompletion.ReceiptID},
+	path := guardEditionPathOf([]guardEditionNode{{Epoch: node.Epoch}})
+	with := func(base []guardReceipt, extra ...guardReceipt) []guardReceipt {
+		return append(append([]guardReceipt(nil), base...), extra...)
 	}
+	out := []guardBootstrapReceiptVariant{
+		{State: guardEditionReceiptsCurrent, Receipts: with(bootstrap), Path: path,
+			TerminalReceiptID: bootstrapTerminal, Epoch: node.Epoch},
+		{State: guardEditionReceiptsCurrentCompleted, Receipts: with(bootstrap, freshCompletion), Path: path,
+			CompletedV7: true, TerminalReceiptID: freshCompletion.ReceiptID, Epoch: node.Epoch},
+		{State: guardEditionReceiptsDirectStarted, Receipts: with(bootstrap, directStart), Path: path,
+			TerminalReceiptID: directStart.ReceiptID, Epoch: node.Epoch},
+		{State: guardEditionReceiptsDirectCompleted, Receipts: with(bootstrap, directStart, directCompletion), Path: path,
+			CompletedV7: true, TerminalReceiptID: directCompletion.ReceiptID, Epoch: node.Epoch},
+	}
+	if !node.Membership.has(guardDeltaAccessEvidence) {
+		return out, nil
+	}
+	// The v9 completion seal exists only on the two paths that have no DA edge to seal:
+	// a fresh database, whose v2 already created the relations, and a direct <=v5
+	// upgrade, whose v6 bootstrap already declared this edition. A guarded transition
+	// gets its immutable witness from its edge seal instead and needs no second one.
+	freshV9, err := guardAccessEvidenceV9Seal(manifest, freshCompletion.ReceiptID, false)
+	if err != nil {
+		return nil, err
+	}
+	directV9, err := guardAccessEvidenceV9Seal(manifest, directCompletion.ReceiptID, true)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out,
+		guardBootstrapReceiptVariant{
+			State: guardEditionReceiptsCurrentV9Completed, Receipts: with(bootstrap, freshCompletion, freshV9),
+			Path: path, CompletedV7: true, CompletedV9: true,
+			TerminalReceiptID: freshV9.ReceiptID, Epoch: node.Epoch,
+		},
+		guardBootstrapReceiptVariant{
+			State: guardEditionReceiptsDirectV9Completed, Receipts: with(bootstrap, directStart, directCompletion, directV9),
+			Path: path, CompletedV7: true, CompletedV9: true,
+			TerminalReceiptID: directV9.ReceiptID, Epoch: node.Epoch,
+		},
+	)
+	return out, nil
+}
 
-	edge, ok, err := guardManifestEditionEdge(current)
+// guardEditionSealEligible decides whether a source history may carry ONE more edge.
+//
+// The three answers are different questions and were one before the DAG. The directory
+// edge into epoch 2 is crossed INSIDE core v7, so its source is still at the plain
+// bootstrap. Every other edge needs a completed v7. And an edge leaving an edition that
+// already carries the access-evidence delta additionally needs a completed v9: without
+// it, a database whose v9 transaction never committed could be walked forward as though
+// it had.
+func guardEditionSealEligible(edge guardManifestEdge, source guardBootstrapReceiptVariant) bool {
+	if edge.To.CodeEpoch == 2 {
+		return source.State == guardEditionReceiptsCurrent
+	}
+	if membership, ok := guardEditionMembershipForEpoch(edge.From.CodeEpoch); ok &&
+		membership.has(guardDeltaAccessEvidence) {
+		return source.CompletedV9
+	}
+	return source.CompletedV7
+}
+
+// guardBootstrapReceiptVariants enumerates complete receipt histories, never individual
+// receipt options. A later edge can therefore link its seal to the real terminal claim of
+// a fresh completion, direct completion, v9 completion or prior transition without
+// synthesizing an old bootstrap receipt that was not terminal on that path.
+//
+// The enumeration follows LINEAGES: one seal per crossed edge, in the order the edges
+// were crossed. Two lineages between the same endpoints therefore produce different
+// receipt sets, because each seal binds its own exact From/To pair and its predecessor's
+// terminal receipt id.
+func guardBootstrapReceiptVariants(current guardManifest) ([]guardBootstrapReceiptVariant, error) {
+	graph, err := guardEditionGraphFor(current)
 	if err != nil {
 		return nil, err
 	}
+	return guardBootstrapVariantsForNode(graph, current.CodeEpoch)
+}
+
+func guardBootstrapVariantsForNode(graph guardEditionGraph, epoch int64) ([]guardBootstrapReceiptVariant, error) {
+	node, ok := graph.node(epoch)
 	if !ok {
-		return variants, nil
+		return nil, fmt.Errorf("%w: edition %d is not in this graph", ErrGuardManifestNoEdge, epoch)
 	}
-	predecessors, err := guardBootstrapReceiptVariants(edge.From)
+	variants, err := guardBootstrapVariantsAtNode(node)
 	if err != nil {
 		return nil, err
 	}
@@ -2384,25 +2762,35 @@ func guardBootstrapReceiptVariants(current guardManifest) ([]guardBootstrapRecei
 	if err != nil {
 		return nil, err
 	}
-	for _, predecessor := range predecessors {
-		eligible := current.CodeEpoch == 2 && predecessor.State == guardEditionReceiptsCurrent
-		if current.CodeEpoch >= 3 {
-			eligible = predecessor.CompletedV7
+	for _, parent := range graph.parentEpochs(epoch) {
+		edge, eerr := graph.edge(parent, epoch)
+		if eerr != nil {
+			return nil, eerr
 		}
-		if !eligible {
-			continue
-		}
-		seal, serr := guardEditionTransitionSeal(edge, 0, empty, predecessor.TerminalReceiptID)
+		sources, serr := guardBootstrapVariantsForNode(graph, parent)
 		if serr != nil {
 			return nil, serr
 		}
-		variants = append(variants, guardBootstrapReceiptVariant{
-			State:             guardEditionReceiptsSealed,
-			Receipts:          append(append([]guardReceipt(nil), predecessor.Receipts...), seal),
-			Path:              predecessor.Path,
-			CompletedV7:       true,
-			TerminalReceiptID: seal.ReceiptID,
-		})
+		parentNode, _ := graph.node(parent)
+		for _, source := range sources {
+			if !guardEditionSealEligible(edge, source) {
+				continue
+			}
+			seal, sealErr := guardEditionTransitionSeal(edge, 0, empty, source.TerminalReceiptID)
+			if sealErr != nil {
+				return nil, sealErr
+			}
+			variants = append(variants, guardBootstrapReceiptVariant{
+				State:             guardEditionReceiptsSealed,
+				Receipts:          append(append([]guardReceipt(nil), source.Receipts...), seal),
+				Path:              source.Path + guardEditionPath(">") + guardEditionPath(strconv.FormatInt(epoch, 10)),
+				CompletedV7:       true,
+				CompletedV9:       source.CompletedV9 || node.Membership.has(guardDeltaAccessEvidence),
+				TerminalReceiptID: seal.ReceiptID,
+				Epoch:             epoch,
+			})
+			_ = parentNode
+		}
 	}
 	return variants, nil
 }
@@ -2426,45 +2814,62 @@ func classifyGuardBootstrapReceiptVariant(
 		}
 		return variant, actual, nil
 	}
-	variants, err := guardBootstrapReceiptVariants(current)
+	graph, err := guardEditionGraphFor(current)
+	if err != nil {
+		return guardBootstrapReceiptVariant{}, nil, err
+	}
+	variants, err := guardBootstrapVariantsForNode(graph, current.CodeEpoch)
 	if err != nil {
 		return guardBootstrapReceiptVariant{}, nil, err
 	}
 	var differences []string
+	var matches []guardBootstrapReceiptVariant
 	for _, variant := range variants {
 		if diff := guardBootstrapReceiptSetDifference(actual, variant.Receipts); diff == "" {
-			return accept(variant)
+			matches = append(matches, variant)
 		} else {
-			differences = append(differences, fmt.Sprintf("%s/path-%d: %s", variant.State, variant.Path, diff))
+			differences = append(differences, fmt.Sprintf("%s/path-%s: %s", variant.State, variant.Path, diff))
 		}
 	}
-	edge, ok, err := guardManifestEditionEdge(current)
-	if err != nil {
-		return guardBootstrapReceiptVariant{}, nil, err
-	}
-	if ok {
-		predecessors, perr := guardBootstrapReceiptVariants(edge.From)
-		if perr != nil {
-			return guardBootstrapReceiptVariant{}, nil, perr
+	// PREDECESSOR HISTORIES: the database is standing at one of the compiled parents and
+	// has not crossed the last edge. Every parent is enumerated and named, because with
+	// more than one of them "the predecessor" is not a fact.
+	for _, parent := range graph.parentEpochs(current.CodeEpoch) {
+		edge, eerr := graph.edge(parent, current.CodeEpoch)
+		if eerr != nil {
+			return guardBootstrapReceiptVariant{}, nil, eerr
 		}
-		for _, predecessor := range predecessors {
-			eligible := current.CodeEpoch == 2 && predecessor.State == guardEditionReceiptsCurrent
-			if current.CodeEpoch >= 3 {
-				eligible = predecessor.CompletedV7
-			}
-			if !eligible {
+		sources, serr := guardBootstrapVariantsForNode(graph, parent)
+		if serr != nil {
+			return guardBootstrapReceiptVariant{}, nil, serr
+		}
+		for _, source := range sources {
+			if !guardEditionSealEligible(edge, source) {
 				continue
 			}
-			if diff := guardBootstrapReceiptSetDifference(actual, predecessor.Receipts); diff == "" {
-				predecessor.State = guardEditionReceiptsPredecessor
-				return accept(predecessor)
+			if diff := guardBootstrapReceiptSetDifference(actual, source.Receipts); diff == "" {
+				source.State = guardEditionReceiptsPredecessor
+				matches = append(matches, source)
 			} else {
-				differences = append(differences, fmt.Sprintf("predecessor/path-%d: %s", predecessor.Path, diff))
+				differences = append(differences, fmt.Sprintf("predecessor-%d/path-%s: %s", parent, source.Path, diff))
 			}
 		}
 	}
-	return guardBootstrapReceiptVariant{}, nil, fmt.Errorf("%w: bootstrap history is not an exact compiled current, predecessor, or transitioned variant (%s)",
-		ErrGuardBootstrapReceiptsInvalid, strings.Join(differences, "; "))
+	switch len(matches) {
+	case 1:
+		return accept(matches[0])
+	case 0:
+		return guardBootstrapReceiptVariant{}, nil, fmt.Errorf("%w: bootstrap history is not an exact compiled current, predecessor, or transitioned variant (%s)",
+			ErrGuardBootstrapReceiptsInvalid, strings.Join(differences, "; "))
+	default:
+		names := make([]string, 0, len(matches))
+		for _, m := range matches {
+			names = append(names, fmt.Sprintf("%s/path-%s", m.State, m.Path))
+		}
+		return guardBootstrapReceiptVariant{}, nil, fmt.Errorf(
+			"%w: the bootstrap receipt history matches %d compiled variants (%s); an ambiguous history is not an authorisation",
+			ErrGuardManifestNoEdge, len(matches), strings.Join(names, ", "))
+	}
 }
 
 func verifyGuardBootstrapReceiptHistory(

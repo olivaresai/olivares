@@ -263,5 +263,9 @@
       "label": "No he podido mirar",
       "help": "El motor NO pudo completar la observación. Esto no es un aprobado ni un resultado vacío: la respuesta se desconoce."
     }
+  },
+  "handoff": {
+    "offer": "Ofrecer un traspaso",
+    "offerHint": "Ofrece la responsabilidad de este ítem a un destinatario a través de un canal. La titularidad no se mueve hasta que lo acepte."
   }
 }

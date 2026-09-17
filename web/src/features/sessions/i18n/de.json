@@ -24,7 +24,8 @@
     "duration": "Dauer",
     "lastSeen": "Zuletzt gesehen",
     "provenance": "Herkunft",
-    "control": "Steuerung"
+    "control": "Steuerung",
+    "instance": "Instanz"
   },
   "state": {
     "active": "Aktiv",
@@ -93,7 +94,8 @@
   "allSources": "Alle Herkünfte",
   "tabs": {
     "sessions": "Sitzungen",
-    "workspaces": "Arbeitsbereiche"
+    "workspaces": "Arbeitsbereiche",
+    "profiles": "Anbieterprofile"
   },
   "partial": {
     "noLiveRead": "Beobachtete Sitzungen werden nicht angezeigt: Ihre Rolle enthält sessions:live:read nicht. Die gestarteten unten sind der lesbare Teil, nicht das ganze Bild.",
@@ -173,7 +175,31 @@
     "noObservationYet": "Für diese Sitzung wurde noch nichts beobachtet – unter dieser Referenz ist keine Telemetrie auf der Ebene eingetroffen.",
     "actionFailed": "Die Aktion konnte nicht abgeschlossen werden.",
     "activeRun": "in Verwendung",
-    "pickRun": "Mehrere Läufe steuern diese Sitzung. Wählen Sie einen aus, um sich aufzuschalten, ihn zu regeln oder zu stoppen."
+    "pickRun": "Mehrere Läufe steuern diese Sitzung. Wählen Sie einen aus, um sich aufzuschalten, ihn zu regeln oder zu stoppen.",
+    "attributionTitle": "Zuordnung",
+    "attribution": {
+      "legacy": "Altbestand",
+      "observed": "Über Quelle beobachtet",
+      "source": "Bekannte Quelle",
+      "managed": "Von Olivares verwaltet"
+    },
+    "attributionExplain": {
+      "legacy": "Aus einem Kanal ohne registrierte Quelle zusammengeführt: ein alter Connector, eine per Collector gesendete Beobachtung oder ein altes Ereignis. Eine Provider-Instanz wird nachträglich nie zugewiesen.",
+      "observed": "Kam über eine Quelle, die diesem Provider-Profil gewidmet ist. Das sagt, welche konfigurierte Quelle sie geliefert hat – nicht, dass die enthaltene ID zu einem von Olivares gestarteten Prozess gehört.",
+      "source": "Kam über eine registrierte Quelle, die keinem Profil gewidmet ist: der Kanal ist bekannt, die Provider-Instanz nicht.",
+      "managed": "Von Olivares' eigener Brücke für eine von ihm gestartete Sitzung geschrieben: die einzige Zeile mit nachgewiesener kanonischer Sitzung und nachgewiesenem Lauf."
+    },
+    "liveRef": "Zeilenreferenz",
+    "profile": "Provider-Profil",
+    "provider": "Provider",
+    "environment": "Ausführungsumgebung",
+    "binding": "Quellenbindung",
+    "canonicalSid": "Kanonische Sitzung",
+    "related": {
+      "title": "Auch über gebundene Quellen beobachtet",
+      "explain": "Diese Zeilen teilen Profil und Provider-Sitzungs-ID dieses Laufs, kamen aber über eine Quelle und nicht über den Prozess, den Olivares hält. Sie werden neben dem Lauf gezeigt, nie mit ihm verschmolzen.",
+      "open": "Öffnen"
+    }
   },
   "facet": {
     "observed": "Beobachtet: {{state}}",

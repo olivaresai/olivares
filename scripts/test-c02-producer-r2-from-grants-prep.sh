@@ -21,6 +21,8 @@ if [ ! -r "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
   exit 0
 fi
 
+. "$ROOT/scripts/lib/c02-download-contract-tests.sh"
+
 pass=0; fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
@@ -32,10 +34,10 @@ stage() {
     "$TMP/tree/commercial/license-worker/test"
   cp "$ROOT/design/c02-producer-r2-from-grants-prep-2026-08-20.json" "$TMP/tree/design/"
   cp "$ROOT/design/C02-PRODUCER-R2-FROM-GRANTS-PREP-2026-08-20.md" "$TMP/tree/design/"
-  cp "$ROOT/commercial/license-worker/src/download/artifacts.ts" \
-    "$TMP/tree/commercial/license-worker/src/download/"
-  cp "$ROOT/commercial/license-worker/src/download/gate.ts" \
-    "$TMP/tree/commercial/license-worker/src/download/"
+  cp -R "$ROOT/commercial/license-worker/src" "$TMP/tree/commercial/license-worker/"
+  cp "$ROOT/commercial/license-worker/package.json" "$TMP/tree/commercial/license-worker/"
+  mkdir -p "$TMP/tree/scripts/lib"
+  cp "$ROOT/scripts/lib/c02-download-contract.mjs" "$TMP/tree/scripts/lib/"
   cp "$ROOT/commercial/license-worker/test/download.test.ts" \
     "$TMP/tree/commercial/license-worker/test/"
   # Guarda EN EL SITIO DE LLAMADA, no solo la salida temprana de arriba: si alguien
@@ -43,6 +45,14 @@ stage() {
   # una lista que acaba en `&&` con el lado izquierdo falso devuelve 1 y `set -e` mata.
   if [ -f "$ROOT/scripts/publish-enterprise-artifacts.sh" ]; then
     cp "$ROOT/scripts/publish-enterprise-artifacts.sh" "$TMP/tree/scripts/"
+    # Y EL CONTRATO QUE ESE PUBLICADOR LEE: desde `f42b3442b` la clave del artefacto vive en
+    # `keys.artifact` del contrato generado, no en el guion. Un banco que copia el sujeto y no
+    # lo que el sujeto LEE no prueba el arbol, prueba el banco.
+    if [ -f "$ROOT/commercial/license-worker/contracts/publisher.gen.json" ]; then
+      mkdir -p "$TMP/tree/commercial/license-worker/contracts"
+      cp "$ROOT/commercial/license-worker/contracts/publisher.gen.json" \
+        "$TMP/tree/commercial/license-worker/contracts/"
+    fi
   fi
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-c02-producer-r2-from-grants-prep.sh"
@@ -97,6 +107,7 @@ from pathlib import Path
 import sys
 p = Path(sys.argv[1])
 text = p.read_text(encoding="utf-8")
+assert text.count("export function artifactKey(version: string, os: string, arch: string, set: string)") == 1
 p.write_text(
     text.replace(
         "export function artifactKey(version: string, os: string, arch: string, set: string)",
@@ -106,7 +117,7 @@ p.write_text(
 )
 PY
 run
-if [ "$(cat "$TMP/rc")" = 1 ]; then ok "mutant (artifactKey 3-arg) is killed"
+if [ "$(cat "$TMP/rc")" = 1 ] && grep -Fq "artifactKey arity is 3, want 4" "$TMP/err"; then ok "mutant (artifactKey 3-arg) is killed"
 else bad "3-arg stayed rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
 stage
@@ -119,6 +130,17 @@ stage
 run
 if [ "$(cat "$TMP/rc")" = 0 ]; then ok "no-fire: live pin stays CLEAN"
 else bad "no-fire should stay CLEAN ($(cat "$TMP/err"))"; fi
+
+c02_download_contract_mutants
+c02_download_contract_overrides \
+  OLIVARES_C02PKP_JSON=design/c02-producer-r2-from-grants-prep-2026-08-20.json \
+  OLIVARES_C02PKP_DOC=design/C02-PRODUCER-R2-FROM-GRANTS-PREP-2026-08-20.md \
+  OLIVARES_C02PKP_ART=commercial/license-worker/src/download/artifacts.ts \
+  OLIVARES_C02PKP_SETS=commercial/license-worker/src/download/sets.ts \
+  OLIVARES_C02PKP_GATE=commercial/license-worker/src/download/gate.ts \
+  OLIVARES_C02PKP_PUB=scripts/publish-enterprise-artifacts.sh \
+  OLIVARES_C02_CONTRATO=commercial/license-worker/contracts/publisher.gen.json \
+  OLIVARES_C02PKP_TEST=commercial/license-worker/test/download.test.ts
 
 echo "check-c02-producer-r2-from-grants-prep selftest: $pass passed, $fail failed"
 if [ "$fail" -ne 0 ]; then exit 1; fi

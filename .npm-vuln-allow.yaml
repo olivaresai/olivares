@@ -24,104 +24,16 @@
 # Derived from the gate's OWN run, not from a separate sweep by hand: a hand sweep missed one
 # (GHSA-8r6m-32jq-jx6q, in connectors/backstage/plugin-frontend) because it looked at six
 # workspaces where the gate enumerates eight from git.
-allow:
-  - id: GHSA-2p49-hgcm-8545
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-2pvr-wf23-7pc7
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-3jxr-9vmj-r5cp
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-4c8g-83qw-93j6
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-4cwx-7wf7-3272
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-52cp-r559-cp3m
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-5p4m-2wfm-xmqj
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-7p8r-x3mc-p8w7
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-8r6m-32jq-jx6q
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-96hv-2xvq-fx4p
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-f88m-g3jw-g9cj
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-hmw2-7cc7-3qxx
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-mh99-v99m-4gvg
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-r28c-9q8g-f849
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-rgw5-rvv9-x895
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-v2hh-gcrm-f6hx
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-v9p9-hfj2-hcw8
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-vrm6-8vpv-qv8q
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-vxpw-j846-p89q
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
-  - id: GHSA-xcpc-8h2w-3j85
-    reason: >-
-      Pre-existing when the npm gate was introduced on 2026-08-07; NOT assessed.
-      Recorded so the gate blocks new advisories from day one. Triage before it expires.
-    expires: "2026-09-06"
+#
+# 2026-09-07: the shared expiry did its job. The gate went red on the first CI run after
+# 2026-09-06 (mainline run 34131797918, job 101773451524, step 10) and the twenty entries were
+# triaged: every one was a published fix reachable by a patch/minor bump, so NONE became a real
+# exception. Ten had already left the graphs before the expiry (astro, fast-uri x3, ws, sharp,
+# form-data, undici x3 - all at or past their first patched version in every lockfile); the
+# other ten (svgo, brace-expansion x3, undici, js-yaml x2, fast-xml-parser, postcss, adm-zip)
+# were cured by moving the vulnerable nodes inside their parents' existing ranges, see
+# olivares-ai-control assessments/implementation/r16-js-dependencies/REPORT.md.
+# The list is empty on purpose: an entry here is a decision with a reason and a date, and
+# today there is nothing to decide. A blocking advisory that cannot be bumped gets its own
+# entry, its own reason and its own date - never a renewed blanket expiry.
+allow: []

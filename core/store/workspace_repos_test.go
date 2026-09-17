@@ -305,3 +305,100 @@ func TestConfinedAuditLogPreservesAppendLockCapabilityExactly(t *testing.T) {
 		})
 	}
 }
+
+type workspaceCapabilityProjector struct {
+	workspaceCapabilityTestRepo
+	seen *DistinctProjection
+}
+
+func (p workspaceCapabilityProjector) ProjectDistinct(
+	_ context.Context,
+	projection DistinctProjection,
+) (DistinctPage, error) {
+	if p.seen != nil {
+		*p.seen = projection
+	}
+	return DistinctPage{Values: []string{"a"}}, nil
+}
+
+// TestConfinedGenericRepoPreservesDistinctProjectorExactly extends the
+// capability-fidelity contract to DistinctProjector: it is exposed only through
+// the projecting wrappers, and every one of them forces the workspace lineage
+// predicate into the projection before delegating.
+func TestConfinedGenericRepoPreservesDistinctProjectorExactly(t *testing.T) {
+	spec := model.WorkspaceLineageSpec{Column: "workspace_id", Encoding: model.WorkspaceLineageID}
+	boundary := workspaceBoundary{id: model.ID("ws-a"), defaultID: model.ID("ws-default")}
+	var seen DistinctProjection
+	projector := workspaceCapabilityProjector{seen: &seen}
+	base := confinedGenericRepo{raw: workspaceCapabilityTestRepo{}, b: boundary, spec: spec}
+	plain := confinedDistinctProjectingGenericRepo{confinedGenericRepo: base, projector: projector}
+	rowOnly := confinedDistinctProjectingRowLockingGenericRepo{
+		confinedRowLockingGenericRepo: confinedRowLockingGenericRepo{
+			confinedGenericRepo: base, locker: workspaceCapabilityRowLocker{},
+		},
+		projector: projector,
+	}
+	stampedOnly := confinedDistinctProjectingTransactionStampedGenericRepo{
+		confinedTransactionStampedGenericRepo: confinedTransactionStampedGenericRepo{
+			confinedGenericRepo: base, stamped: workspaceCapabilityStampedRepo{},
+		},
+		projector: projector,
+	}
+	both := confinedDistinctProjectingTransactionStampedRowLockingGenericRepo{
+		confinedTransactionStampedRowLockingGenericRepo: confinedTransactionStampedRowLockingGenericRepo{
+			confinedTransactionStampedGenericRepo: stampedOnly.confinedTransactionStampedGenericRepo,
+			locker:                                workspaceCapabilityRowLocker{},
+		},
+		projector: projector,
+	}
+	for _, test := range []struct {
+		name          string
+		repo          any
+		wantStamped   bool
+		wantLocker    bool
+		wantProjector bool
+	}{
+		{name: "base without projector", repo: base},
+		{name: "projecting", repo: plain, wantProjector: true},
+		{name: "projecting row", repo: rowOnly, wantLocker: true, wantProjector: true},
+		{name: "projecting stamped", repo: stampedOnly, wantStamped: true, wantProjector: true},
+		{name: "projecting both", repo: both, wantStamped: true, wantLocker: true, wantProjector: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, gotStamped := test.repo.(TransactionStampedGenericRepo)
+			_, gotLocker := test.repo.(RowLocker[model.Record])
+			gotProjector, hasProjector := test.repo.(DistinctProjector)
+			if gotStamped != test.wantStamped || gotLocker != test.wantLocker || hasProjector != test.wantProjector {
+				t.Fatalf("capabilities stamped=%t locker=%t projector=%t, want %t/%t/%t",
+					gotStamped, gotLocker, hasProjector, test.wantStamped, test.wantLocker, test.wantProjector)
+			}
+			if !hasProjector {
+				return
+			}
+			seen = DistinctProjection{}
+			page, err := gotProjector.ProjectDistinct(context.Background(), DistinctProjection{
+				Column: "channel_id", Limit: 5,
+				Filters: []model.Filter{
+					{Column: "workspace_id", Op: model.OpEq, Value: "ws-other"},
+					{Column: "state", Op: model.OpEq, Value: "active"},
+				},
+			})
+			if err != nil || len(page.Values) != 1 {
+				t.Fatalf("project = %+v, %v", page, err)
+			}
+			forced := 0
+			for _, f := range seen.Filters {
+				if f.Column != "workspace_id" {
+					continue
+				}
+				forced++
+				if f.Op != model.OpEq || f.Value != "ws-a" {
+					t.Fatalf("lineage predicate = %+v, want workspace ws-a", f)
+				}
+			}
+			if forced != 1 || len(seen.Filters) != 2 {
+				t.Fatalf("forced lineage predicates = %d over %+v", forced, seen.Filters)
+			}
+		})
+	}
+}

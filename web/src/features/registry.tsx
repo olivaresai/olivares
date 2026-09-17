@@ -4,6 +4,15 @@
 import type { LucideIcon } from 'lucide-react'
 import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
 import {
+  administrationDeepLinkQuestion,
+  administrationSurfaceQuestion,
+} from '@/features/communications/capabilities'
+import { ChannelAdminContinuity } from '@/features/communications/channel-admin-continuity'
+import type {
+  CapabilityAccess,
+  NormalizedCapabilityQuestion,
+} from '@/lib/auth/capabilities'
+import {
   Building2,
   Activity,
   AudioLines,
@@ -15,12 +24,16 @@ import {
   CalendarCog,
   CloudUpload,
   Code2,
+  Bot,
   Boxes,
+  CalendarClock,
   ClipboardCheck,
   ClipboardList,
   Coins,
   Compass,
+  Container,
   Cpu,
+  Database,
   DatabaseBackup,
   Disc3,
   DollarSign,
@@ -30,12 +43,19 @@ import {
   FlaskConical,
   Gauge,
   Globe,
+  Handshake,
   HeartPulse,
+  IdCard,
+  Inbox,
+  KeyRound,
   Layers,
   LayoutDashboard,
   LayoutTemplate,
   Library,
+  Link2,
   Logs,
+  MailPlus,
+  MessagesSquare,
   Network,
   OctagonAlert,
   PackageCheck,
@@ -47,12 +67,16 @@ import {
   Rocket,
   Scale,
   ScrollText,
+  Server,
+  Settings2,
   Share2,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   Siren,
   SlidersHorizontal,
   Swords,
+  Telescope,
   Terminal,
   Timer,
   Waypoints,
@@ -116,6 +140,20 @@ const ProtocolBindingsView = lazy(() =>
     default: m.ProtocolBindingsView,
   })),
 )
+// K3 first increment (I1): ONE room with THREE doors, the pattern again. The
+// catalog (`/communications`, sessions:channel:read), the personal inbox
+// (`/communications/inbox`, sessions:delivery:read) and channel creation
+// (`/communications/new`, sessions:channel:write) mount the same view opened on a
+// different tab, because the engine declares those three tiers independently: a
+// principal holding only delivery:read must reach its own mailbox without the
+// catalog, and one holding only channel:write must be able to create with explicit
+// grants without reading anything. They are doors, not redirects — RequirePermission
+// blocks a route on the ONE permission its entry declares.
+const CommunicationsView = lazy(() =>
+  import('./communications').then((m) => ({
+    default: m.CommunicationsView,
+  })),
+)
 //ONE destination for sessions, whichever way they reached the plane. Both
 // `/sessions` (observe) and `/agentops` (operate) mount this view and open the SAME
 // card, so an operator no longer has to know whether a session was DISCOVERED or
@@ -126,6 +164,16 @@ const ProtocolBindingsView = lazy(() =>
 const SessionsWorkspaceView = lazy(() =>
   import('./sessions/sessions-workspace-view').then((m) => ({
     default: m.SessionsWorkspaceView,
+  })),
+)
+// B1 provider-profile plane: its OWN room with two doors, same pattern as above.
+// `/provider-profiles` (sessions:profile:read) and `/provider-bindings`
+// (sessions:profile-binding:read) mount one view; the entrance names the tab that
+// opens first. They exist because the plane's read tiers are independent of runs
+// and live sessions, and a principal holding only one of them had no route.
+const ProviderAdminView = lazy(() =>
+  import('./agentops/provider-admin-view').then((m) => ({
+    default: m.ProviderAdminView,
   })),
 )
 
@@ -478,9 +526,24 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       'sessions',
       'agentops',
       'workspace-templates',
+      'providerProfiles',
+      'providerBindings',
       'voice',
       'recordings',
       'session-viewer',
+      // K3 I1: the communication kernel's console — channels, direct notices and
+      // the personal inbox between sessions, agents and users. Three doors, one
+      // room, all under Operate, so the span of this noun does not widen.
+      'communications',
+      'communicationsInbox',
+      'communicationsNew',
+      // K3 I2: channel administration (configuration and grant history) is the
+      // fourth door of the same room, still under Operate.
+      'communicationsAdministration',
+      // K3 I3: the personal handoff page — offers of work responsibility addressed
+      // to this principal. Fifth door of the same room, still under Operate, so the
+      // span of this noun does not widen.
+      'communicationsHandoffs',
     ],
   },
   // The widest noun in the product: FOUR hubs. Running an agent, administering the
@@ -603,6 +666,170 @@ export function nounsForView(viewId: string): NounId[] {
   return PRODUCT_NOUNS.filter((n) => n.views.includes(viewId)).map((n) => n.id)
 }
 
+/**
+ * THE NINE AREAS (N1, 2026-09-06) — the navigational structure the console is BROWSED by.
+ *
+ * Ratified by root (assessments/product/console-navigation-hierarchy/ROOT-DECISION.md) over the
+ * proposal's ROUTE-MAP: every published route keeps its path, permission, component, actions,
+ * shortcuts, docs link, nouns and Saved Views namespace, and is additionally placed in exactly
+ * ONE area and ONE section of it. The areas are a structure for finding things, never a
+ * capability ceiling: a future capability adds a section or an area when a journey justifies
+ * it, and nothing here decides what a principal may do — `permission` on the leaf still does.
+ *
+ * Each area also mounts a DIRECTORY page (`path`, under the authenticated shell) that lists the
+ * area's authorized entries with the console's own labels and descriptions. A directory is
+ * visible when ANY of its leaves is authorized (the union), so no parent-level permission was
+ * invented for it. It is a page of links, not an operational dashboard: it requests no counts,
+ * no availability and no readiness, because no aggregate contract exists for those yet.
+ *
+ * `hub`, `HUB_ORDER` and `PRODUCT_NOUNS` stay as search and compatibility vocabulary (the
+ * guide generator and the noun index still read them); the shell's PRIMARY ordering is this.
+ */
+export type AreaId =
+  | 'infrastructure'
+  | 'ai'
+  | 'data-context'
+  | 'work-communications'
+  | 'automation'
+  | 'security-identity'
+  | 'deployment'
+  | 'observation'
+  | 'system'
+
+export interface NavArea {
+  /** Stable id — also the i18n key under nav:areas.<id> and the preference key. */
+  id: AreaId
+  /**
+   * The directory page's route. Mounted by app/routes.tsx as a LITERAL createRoute per area
+   * (the guide generator and the census read literals), so navigation/routes.test.ts pins that
+   * the mounted set equals this list in both directions.
+   */
+  path: `/areas/${string}`
+  icon: LucideIcon
+  /** Section ids in display order; every leaf of the area names one of these. */
+  sections: readonly string[]
+  /** Docs page the topbar help link opens on the directory page. */
+  helpHref: string
+}
+
+/** The nine areas, in the ratified order (the eight original domains' relative order kept;
+ * Work & communications inserted between Data and Automation). */
+export const NAV_AREAS: readonly NavArea[] = [
+  {
+    id: 'infrastructure',
+    path: '/areas/infrastructure',
+    icon: Server,
+    sections: ['estate'],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'ai',
+    path: '/areas/ai',
+    icon: Bot,
+    sections: [
+      'sessions',
+      'environments',
+      'models',
+      'execution',
+      'provider-reference',
+    ],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'data-context',
+    path: '/areas/data-context',
+    icon: Database,
+    sections: ['capabilities', 'knowledge', 'artifacts'],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'work-communications',
+    path: '/areas/work-communications',
+    icon: MessagesSquare,
+    sections: ['work', 'communications'],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'automation',
+    path: '/areas/automation',
+    icon: CalendarClock,
+    sections: ['workflows', 'events'],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'security-identity',
+    path: '/areas/security-identity',
+    icon: Shield,
+    sections: ['access', 'policy', 'defense', 'boundaries'],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'deployment',
+    path: '/areas/deployment',
+    icon: Container,
+    sections: ['deployments'],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'observation',
+    path: '/areas/observation',
+    icon: Telescope,
+    sections: [
+      'operations',
+      'cost-adoption',
+      'audit-recordings',
+      'evaluation-evidence',
+    ],
+    helpHref: '/reference/console',
+  },
+  {
+    id: 'system',
+    path: '/areas/system',
+    icon: Settings2,
+    // `preferences` holds the pinned Settings utility (app/routes.tsx settingsRoute), which is
+    // not a FEATURE_VIEWS entry; navigation/model.ts places it there explicitly.
+    sections: ['administration', 'maintenance', 'development', 'preferences'],
+    helpHref: '/reference/console',
+  },
+]
+
+/**
+ * ONE PALETTE VERB: its stable id and the permission the ENGINE requires for the write it
+ * opens. Both fields are required — a mutation action that declares no permission would
+ * fall back to the page's, which is the defect this type exists to make unrepresentable.
+ *
+ * `id` is unchanged and remains the i18n key segment (`nav:commandActions.<viewId>.<id>`)
+ * and the value the view consumes from the pending-command store, so no translation and no
+ * consumer key moves. `permission` is a registry LITERAL, which is what
+ * `scripts/check-console-perms.mjs` reads to prove the console never asks for a permission
+ * the engine does not declare.
+ */
+export interface CommandAction {
+  readonly id: string
+  readonly permission: string
+}
+
+/** Where a view sits in the area structure. Exactly one shape per view, typed so a new entry
+ * cannot be registered without a place (the compiler refuses it) and route-map.test.ts pins
+ * each existing entry to the ratified ROUTE-MAP row. */
+export type FeatureNavigation =
+  /** The `/` overview: the root of the structure, not a member of any area. */
+  | { readonly kind: 'root' }
+  /** An ordinary leaf: listed in its area's directory, sidebar section and palette. */
+  | {
+      readonly kind: 'feature'
+      readonly areaId: AreaId
+      readonly sectionId: string
+    }
+  /** A deep-link-only detail reached from `parentViewId` (the recording viewer): breadcrumbs
+   * resolve through the parent, and no directory, sidebar or palette lists it. */
+  | {
+      readonly kind: 'detail'
+      readonly areaId: AreaId
+      readonly sectionId: string
+      readonly parentViewId: string
+    }
+
 export interface FeatureView {
   /** Stable id — also the i18n key under nav.items/nav.descriptions and the route id. */
   id: string
@@ -632,10 +859,22 @@ export interface FeatureView {
    * registry-help.test.ts pins every slug to a page that actually exists. */
   helpHref: string
   /** Palette actions: quick verbs ⌘K offers for this view (e.g. "new
-   * subscription"), gated by the SAME permission as the view. `action` is
-   * consumed by the view on mount via the pending-command store; the i18n label
-   * lives under nav:commandActions.<id>.<action>. */
-  commandActions?: readonly string[]
+   * subscription"). Each one DECLARES ITS OWN MUTATION PERMISSION and is consumed by the
+   * view on mount via the pending-command store; the i18n label still lives under
+   * nav:commandActions.<id>.<action.id>, unchanged.
+   *
+   * ⛔ THE VIEW'S OWN `permission` DOES NOT AUTHORIZE THESE, and until 2026-09-11 it was
+   *    the only thing that did. `commandActions` was `readonly string[]`, so a verb had
+   *    nowhere to say what it needed, and the palette filtered the list by `navigable(v)`
+   *    — the view's READ permission. specification04 §1 says the opposite in as many
+   *    words: "An action in the palette requires its mutation permission, target, and
+   *    current context; read permission for its page does not authorize it."
+   *
+   *    `orchestration` shows why a verb tier cannot be derived either: its view reads
+   *    `orchestration:graph:read` and its action writes `orchestration:schedule:write` —
+   *    a DIFFERENT RESOURCE, not a stronger verb on the same one. Hence a declared pair,
+   *    with no fallback: an action with no permission is an action nobody may run. */
+  commandActions?: readonly CommandAction[]
   /**
    * Saved-views namespace for this view (plan 3.7). It partitions stored
    * views SERVER-SIDE — `savedViewsApi.list(featureId)` and the (tenant,
@@ -652,6 +891,69 @@ export interface FeatureView {
    * uniqueness and the one production value that already exists in the wild.
    */
   savedViewsFeatureId?: string
+  /**
+   * The view's place in the nine-area structure (N1). Required: an entry with no place
+   * would be reachable by url and findable by nobody. Areas are the union of their
+   * authorized leaves; this field never widens or narrows `permission`.
+   */
+  navigation: FeatureNavigation
+  /**
+   * OPTIONAL, and it does NOT replace `permission` (G1-B).
+   *
+   * A view whose authority the whoami reflection cannot express declares the registered
+   * questions the engine answers instead. `permission` stays exactly as it was: it remains
+   * the reflection every unmigrated consumer reads, it remains what
+   * `scripts/check-console-perms.mjs` proves the engine declares, and it is NOT deleted
+   * merely because this view stopped deciding with it.
+   *
+   * The question BUILDERS live in the owning feature — this field points at them and
+   * declares nothing about the wire itself, so there is exactly one place in the console
+   * where a registered question is spelled out.
+   */
+  capability?: FeatureCapability
+  /**
+   * OPTIONAL, and it AUTHORIZES NOTHING.
+   *
+   * A view whose authority expires and is re-answered on a budget is torn down and rebuilt
+   * at every gap in that answer — the gate mounts a protected child only for a current
+   * positive, and the capability layer never replays an expired one. Measured on this
+   * view: 34–46 ms of teardown every ~5 s, destroying whatever the operator had typed and
+   * not yet sent.
+   *
+   * A view may therefore declare ONE boundary that the gate mounts in a stable position
+   * AROUND ITS OWN ALREADY-DECIDED ANSWER: the protected children when they are permitted,
+   * the gate's notice otherwise. The boundary never receives the protected tree without an
+   * admission, cannot mount it, and cannot be handed a fabricated one — the gate still
+   * computes the decision. What it may do is outlive the subtree, so the operator's unsent
+   * text is not spent by a refresh.
+   *
+   * `admitted` and `access` are informational: the gate's decision and the exact answer it
+   * came from, which is the only way to tell an interruption (`checking`, `unknown`) from
+   * an answer (a refusal, a concealment, a step-up). Views that declare nothing here keep
+   * their behaviour exactly.
+   */
+  continuity?: ComponentType<{
+    admitted: boolean
+    access: CapabilityAccess | null
+    children: ReactNode
+  }>
+}
+
+/**
+ * How a view asks the engine instead of the reflection.
+ *
+ * `surface` decides NAVIGATION and the collection route: may this principal load this
+ * view's collection in the current workspace? `deepLink`, when present, decides a route
+ * whose url names ONE entity — an independent question that a `not_reachable` surface
+ * neither answers nor forbids. Both return null when there is nothing to ask (no
+ * workspace selected, no valid entity in the url); null is not a permission.
+ */
+export interface FeatureCapability {
+  surface: (workspace: string | null) => NormalizedCapabilityQuestion | null
+  deepLink?: (
+    workspace: string | null,
+    search: string,
+  ) => NormalizedCapabilityQuestion | null
 }
 
 /**
@@ -666,6 +968,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'home',
     path: '/',
+    navigation: { kind: 'root' },
     helpHref: '/',
     hub: 'operate',
     icon: LayoutDashboard,
@@ -678,6 +981,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'onboarding',
     path: '/onboarding',
+    navigation: { kind: 'feature', areaId: 'system', sectionId: 'maintenance' },
     helpHref: '/start/quickstart',
     hub: 'connect',
     // Compass, not Rocket: Rocket is Deploy's icon — a guided first-run
@@ -693,6 +997,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'workspaceDashboard',
     path: '/workspace',
+    navigation: {
+      kind: 'feature',
+      areaId: 'infrastructure',
+      sectionId: 'estate',
+    },
     helpHref: '/reference/modules/xx-multi-tenancy',
     hub: 'operate',
     // PanelsTopLeft, not Layers: Layers belongs to Platforms; a dashboard
@@ -706,6 +1015,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'inventory',
     path: '/inventory',
+    navigation: {
+      kind: 'feature',
+      areaId: 'infrastructure',
+      sectionId: 'estate',
+    },
     helpHref: '/reference/modules/i-inventory',
     hub: 'connect',
     icon: Boxes,
@@ -718,6 +1032,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // permission the observed half needs.
     id: 'sessions',
     path: '/sessions',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'sessions' },
     helpHref: '/reference/modules/ii-sessions',
     hub: 'operate',
     icon: Activity,
@@ -727,6 +1042,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'accessMap',
     path: '/access-map',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'access',
+    },
     helpHref: '/reference/modules/iii-access-map',
     hub: 'govern',
     icon: Network,
@@ -739,6 +1059,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // perm server-side, the superadmin system-ledger toggle is hidden otherwise.
     id: 'audit',
     path: '/audit',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'audit-recordings',
+    },
     savedViewsFeatureId: 'audit',
     helpHref: '/reference/modules/ix-security',
     hub: 'prove',
@@ -749,6 +1074,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'health',
     path: '/health',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'operations',
+    },
     helpHref: '/reference/modules/xxii-health',
     hub: 'operate',
     icon: HeartPulse,
@@ -763,6 +1093,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // admins/owners + superadmins see it; each tab gates its writes further.
     id: 'console',
     path: '/console',
+    navigation: {
+      kind: 'feature',
+      areaId: 'system',
+      sectionId: 'administration',
+    },
     helpHref: '/reference/modules/xx-multi-tenancy',
     hub: 'govern',
     icon: SlidersHorizontal,
@@ -772,6 +1107,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'capabilities',
     path: '/capabilities',
+    navigation: {
+      kind: 'feature',
+      areaId: 'data-context',
+      sectionId: 'capabilities',
+    },
     helpHref: '/reference/modules/v-capabilities',
     hub: 'connect',
     icon: Plug,
@@ -781,6 +1121,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'protocolBindings',
     path: '/communications/protocol-bindings',
+    navigation: {
+      kind: 'feature',
+      areaId: 'work-communications',
+      sectionId: 'communications',
+    },
     helpHref: '/reference/modules/ii-sessions',
     hub: 'connect',
     icon: Cable,
@@ -788,8 +1133,123 @@ export const FEATURE_VIEWS: FeatureView[] = [
     element: lazyView(ProtocolBindingsView),
   },
   {
+    // K3 I1 — the CATALOG door: visible channels and the channel card, gated on the
+    // read tier the engine requires on `GET /channels` and `GET /channels/{id}`.
+    // Sending gates inside on sessions:message-send:write and the channel's own bits.
+    id: 'communications',
+    path: '/communications',
+    navigation: {
+      kind: 'feature',
+      areaId: 'work-communications',
+      sectionId: 'communications',
+    },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: MessagesSquare,
+    permission: 'sessions:channel:read',
+    element: lazyView(CommunicationsView, { entrance: 'catalog' as const }),
+  },
+  {
+    // K3 I1 — the INBOX door: the exact personal mailbox, delivery and message reads
+    // and the explicit Ack. Its own permission because the engine declares
+    // sessions:delivery:read independently of channel:read; message reads gate on
+    // sessions:message:read and the Ack on sessions:delivery:write inside.
+    id: 'communicationsInbox',
+    path: '/communications/inbox',
+    navigation: {
+      kind: 'feature',
+      areaId: 'work-communications',
+      sectionId: 'communications',
+    },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: Inbox,
+    permission: 'sessions:delivery:read',
+    element: lazyView(CommunicationsView, { entrance: 'inbox' as const }),
+  },
+  {
+    // K3 I1 — the CREATE door: `POST /channels` with explicit initial grants, usable
+    // by a principal that cannot read the catalog at all.
+    id: 'communicationsNew',
+    path: '/communications/new',
+    navigation: {
+      kind: 'feature',
+      areaId: 'work-communications',
+      sectionId: 'communications',
+    },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: MailPlus,
+    permission: 'sessions:channel:write',
+    element: lazyView(CommunicationsView, { entrance: 'new' as const }),
+  },
+  {
+    // K3 I3 — the Handoffs door: the personal page of work-responsibility offers
+    // addressed to this principal, the protected offer context behind each one and
+    // the accept/reject response. Its own route because the personal collection is
+    // a `sessions:delivery:read` surface a principal may hold without the catalog,
+    // like the ordinary inbox beside it; responding is gated apart, on
+    // `sessions:handoff-response:write`, where the act happens. The icon is
+    // distinct from the inbox's because every registered view needs its own glyph.
+    id: 'communicationsHandoffs',
+    path: '/communications/handoffs',
+    navigation: {
+      kind: 'feature',
+      areaId: 'work-communications',
+      sectionId: 'communications',
+    },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: Handshake,
+    permission: 'sessions:delivery:read',
+    element: lazyView(CommunicationsView, { entrance: 'handoffs' as const }),
+  },
+  {
+    // K3 I2 — the ADMINISTRATION door: the administrable catalog
+    // (`GET /channels/administration`), the grant history, `PATCH /channels`, grant
+    // and revoke. Its own permission because the engine declares
+    // sessions:channel:admin independently of channel:read: a principal holding
+    // core admin and a local admin bit — and no local read bit — must reach it
+    // without the catalog. The engine decides the local bit on every read.
+    id: 'communicationsAdministration',
+    path: '/communications/administration',
+    navigation: {
+      kind: 'feature',
+      areaId: 'work-communications',
+      sectionId: 'communications',
+    },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: KeyRound,
+    // ⛔ KEPT, AND IT NO LONGER DECIDES. `sessions:channel:admin` is a tenant-wide
+    //    membership fact, and this door's authority is not: it may be held through a
+    //    workspace-scoped authored grant the permission set never names, and it may be
+    //    reflected here while an authored policy forbids the same operation. So the
+    //    engine is asked (`capability` below) and this string stays for what it still
+    //    truthfully is — the reflection, read by every unmigrated consumer and by the
+    //    census that proves the console never asks for a permission the engine does not
+    //    declare. Removing it would not tighten anything; it would delete the record.
+    permission: 'sessions:channel:admin',
+    capability: {
+      surface: administrationSurfaceQuestion,
+      deepLink: administrationDeepLinkQuestion,
+    },
+    // The one view whose answer expires on a budget while an operator is typing into it.
+    // The boundary holds their touched fields and nothing else, above the cut that
+    // rebuilds this room every few seconds; see channel-admin-continuity.tsx.
+    continuity: ChannelAdminContinuity,
+    element: lazyView(CommunicationsView, {
+      entrance: 'administration' as const,
+    }),
+  },
+  {
     id: 'permissions',
     path: '/permissions',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'access',
+    },
     helpHref: '/reference/modules/vi-governance',
     hub: 'govern',
     icon: ShieldCheck,
@@ -799,6 +1259,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'identity',
     path: '/identity',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'access',
+    },
     helpHref: '/reference/modules/vi-governance',
     hub: 'govern',
     icon: Fingerprint,
@@ -808,6 +1273,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'claudePolicy',
     path: '/claude-policy',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'policy',
+    },
     helpHref: '/how-to/connectors/claude-code-hooks-pep',
     hub: 'govern',
     icon: ScrollText,
@@ -822,6 +1292,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // separately on governance:routine:admin inside the view.
     id: 'routinePolicies',
     path: '/routine-policies',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'policy',
+    },
     helpHref: '/reference/modules/vi-governance',
     hub: 'govern',
     // CalendarCog, not Timer (taken by Orchestration) and not Workflow: this is
@@ -841,6 +1316,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // principal may reach", not "a :read suffix".
     id: 'agentcoreExport',
     path: '/agentcore-export',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'boundaries',
+    },
     helpHref: '/reference/modules/vi-governance',
     // `hub`, not `group`. #694 was written before main renamed the nav axis, and its NEW entry
     // came through the merge with the old field name because there was nothing to merge it
@@ -857,6 +1337,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'deploy',
     path: '/deploy',
+    navigation: {
+      kind: 'feature',
+      areaId: 'deployment',
+      sectionId: 'deployments',
+    },
     helpHref: '/reference/modules/vii-deploy',
     hub: 'connect',
     icon: Rocket,
@@ -866,6 +1351,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'knowledge',
     path: '/knowledge',
+    navigation: {
+      kind: 'feature',
+      areaId: 'data-context',
+      sectionId: 'knowledge',
+    },
     helpHref: '/reference/modules/viii-knowledge',
     hub: 'connect',
     icon: BookOpen,
@@ -875,6 +1365,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'catalog',
     path: '/catalog',
+    navigation: {
+      kind: 'feature',
+      areaId: 'data-context',
+      sectionId: 'capabilities',
+    },
     helpHref: '/reference/modules/xiv-catalog',
     hub: 'connect',
     icon: Library,
@@ -884,6 +1379,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'killswitch',
     path: '/killswitch',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'defense',
+    },
     helpHref: '/how-to/cookbook/kill-switch-drill',
     hub: 'operate',
     icon: OctagonAlert,
@@ -898,6 +1398,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // wire by cmd/olivares/work_console_whoami_reach_test.go.
     id: 'work',
     path: '/work',
+    navigation: {
+      kind: 'feature',
+      areaId: 'work-communications',
+      sectionId: 'work',
+    },
     helpHref: '/reference/modules/ii-sessions',
     hub: 'operate',
     icon: ClipboardList,
@@ -912,6 +1417,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // so nothing an operator could reach before became unreachable.
     id: 'agentops',
     path: '/agentops',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'sessions' },
     helpHref: '/how-to/run-claude-code-with-olivares',
     hub: 'operate',
     icon: Terminal,
@@ -919,10 +1425,46 @@ export const FEATURE_VIEWS: FeatureView[] = [
     element: lazyView(SessionsWorkspaceView, { entrance: 'operate' as const }),
   },
   {
+    // B1: the provider-profile plane's own door, gated on ITS read tier. The plane is
+    // also a tab inside `/agentops` and `/sessions`, but those routes require run:read
+    // or live:read, so a principal holding only sessions:profile:read could reach no
+    // screen for a permission the engine declares. Same view as the next entry, opened
+    // on the profiles tab; write/admin actions gate further inside (sessions:profile:
+    // write/admin). Two doors into one room — not a redirect, and the generic route
+    // guard keeps declaring exactly one permission per entry.
+    id: 'providerProfiles',
+    path: '/provider-profiles',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: IdCard,
+    permission: 'sessions:profile:read',
+    element: lazyView(ProviderAdminView, { entrance: 'profiles' as const }),
+  },
+  {
+    // B1: the source-binding door, gated on the binding plane's OWN read tier, which is
+    // independent of the profile tiers. Opens on the tenant-wide bindings table; bind
+    // and revoke gate on sessions:profile-binding:write/admin inside, and binding also
+    // needs the deployment-wide source authority the engine decides on the roster read.
+    id: 'providerBindings',
+    path: '/provider-bindings',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
+    helpHref: '/reference/modules/ii-sessions',
+    hub: 'operate',
+    icon: Link2,
+    permission: 'sessions:profile-binding:read',
+    element: lazyView(ProviderAdminView, { entrance: 'bindings' as const }),
+  },
+  {
     // Agent-artifact supply chain. This is tenant-estate metadata and its
     // own models.agent_aibom ledger, not the lineage of one owned model.
     id: 'agentArtifacts',
     path: '/agent-artifacts',
+    navigation: {
+      kind: 'feature',
+      areaId: 'data-context',
+      sectionId: 'artifacts',
+    },
     helpHref: '/reference/modules/xxiii-model-operations',
     hub: 'prove',
     icon: PackageSearch,
@@ -935,6 +1477,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // create/edit/archive actions gate further inside the view.
     id: 'workspace-templates',
     path: '/workspace-templates',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'environments' },
     helpHref: '/reference/modules/ii-sessions',
     hub: 'operate',
     icon: LayoutTemplate,
@@ -947,11 +1490,14 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // write actions gate further inside the view (eventing:subscription:write).
     id: 'eventing',
     path: '/eventing',
+    navigation: { kind: 'feature', areaId: 'automation', sectionId: 'events' },
     helpHref: '/reference/modules/eventing',
     hub: 'automate',
     icon: Bell,
     permission: 'eventing:subscription:read',
-    commandActions: ['createSubscription'],
+    commandActions: [
+      { id: 'createSubscription', permission: 'eventing:subscription:write' },
+    ],
     element: lazyView(EventingView),
   },
   {
@@ -961,6 +1507,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // independently on a per-rail 403 (deny-closed, never a blank page).
     id: 'automations',
     path: '/automations',
+    navigation: {
+      kind: 'feature',
+      areaId: 'automation',
+      sectionId: 'workflows',
+    },
     helpHref: '/reference/modules/iv-orchestration',
     hub: 'automate',
     icon: Zap,
@@ -973,6 +1524,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // DLP writes need admin, and every write requires an AAL3 step-up in the view.
     id: 'inferenceProxy',
     path: '/inference-proxy',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'policy',
+    },
     helpHref: '/reference/modules/inferenceproxy',
     hub: 'govern',
     icon: Waypoints,
@@ -985,11 +1541,12 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // delete/test need admin (enforced server-side and mirrored inside the view).
     id: 'alerting',
     path: '/alerting',
+    navigation: { kind: 'feature', areaId: 'automation', sectionId: 'events' },
     helpHref: '/reference/modules/xv-notify',
     hub: 'automate',
     icon: Siren,
     permission: 'notify:route:read',
-    commandActions: ['createRoute'],
+    commandActions: [{ id: 'createRoute', permission: 'notify:route:write' }],
     element: lazyView(AlertingView),
   },
 
@@ -997,6 +1554,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'models',
     path: '/models',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'models' },
     helpHref: '/reference/modules/x-models',
     hub: 'connect',
     icon: Cpu,
@@ -1006,6 +1564,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'modelOps',
     path: '/model-operations',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'models' },
     helpHref: '/reference/modules/xxiii-model-operations',
     hub: 'connect',
     icon: BadgeCheck,
@@ -1015,6 +1574,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'finops',
     path: '/finops',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'cost-adoption',
+    },
     helpHref: '/reference/modules/xi-finops',
     hub: 'prove',
     icon: Coins,
@@ -1024,6 +1588,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'adoption',
     path: '/adoption',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'cost-adoption',
+    },
     helpHref: '/reference/modules/claudeadoption',
     hub: 'prove',
     icon: Gauge,
@@ -1035,6 +1604,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'evals',
     path: '/evals',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'evaluation-evidence',
+    },
     helpHref: '/reference/modules/xii-evals',
     hub: 'prove',
     icon: ClipboardCheck,
@@ -1044,6 +1618,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'security',
     path: '/security',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'defense',
+    },
     helpHref: '/reference/modules/ix-security',
     hub: 'prove',
     icon: ShieldAlert,
@@ -1053,6 +1632,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'recordings',
     path: '/recordings',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'audit-recordings',
+    },
     savedViewsFeatureId: 'recordings',
     helpHref: '/reference/modules/recording',
     hub: 'prove',
@@ -1065,6 +1649,12 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // RecordingsView. Not a sidebar entry; navigation is deep-link only.
     id: 'session-viewer',
     path: '/session-viewer/$id',
+    navigation: {
+      kind: 'detail',
+      areaId: 'observation',
+      sectionId: 'audit-recordings',
+      parentViewId: 'recordings',
+    },
     helpHref: '/reference/modules/recording',
     hub: 'prove',
     icon: Play,
@@ -1075,6 +1665,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'compliance',
     path: '/compliance',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'evaluation-evidence',
+    },
     helpHref: '/reference/modules/xiii-compliance',
     hub: 'prove',
     // Scale, not ScrollText: ScrollText is the Claude-policy icon —
@@ -1089,6 +1684,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // Gated on the export read perm the backend enforces on /v1/m/posture/export.
     id: 'postureExport',
     path: '/posture-export',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'evaluation-evidence',
+    },
     savedViewsFeatureId: 'posture-export',
     helpHref: '/reference/modules/posture-export',
     hub: 'prove',
@@ -1099,16 +1699,24 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'orchestration',
     path: '/orchestration',
+    navigation: {
+      kind: 'feature',
+      areaId: 'automation',
+      sectionId: 'workflows',
+    },
     helpHref: '/reference/modules/iv-orchestration',
     hub: 'automate',
     icon: Workflow,
     permission: 'orchestration:graph:read',
-    commandActions: ['createSchedule'],
+    commandActions: [
+      { id: 'createSchedule', permission: 'orchestration:schedule:write' },
+    ],
     element: lazyView(OrchestrationView),
   },
   {
     id: 'voice',
     path: '/voice',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'execution' },
     helpHref: '/reference/modules/xvi-voice',
     hub: 'operate',
     icon: AudioLines,
@@ -1118,6 +1726,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'sandbox',
     path: '/sandbox',
+    navigation: { kind: 'feature', areaId: 'ai', sectionId: 'execution' },
     helpHref: '/reference/modules/xvii-sandbox',
     hub: 'operate',
     icon: FlaskConical,
@@ -1127,6 +1736,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'redteam',
     path: '/red-team',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'defense',
+    },
     helpHref: '/reference/modules/xviii-redteam',
     hub: 'prove',
     icon: Swords,
@@ -1142,6 +1756,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'dashboards',
     path: '/dashboards',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'operations',
+    },
     helpHref: '/reference/modules/xxi-executive-dashboards',
     hub: 'prove',
     icon: BarChart3,
@@ -1153,6 +1772,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // enforces finops:spend:read on the /analytics/team-summary endpoint.
     id: 'team-costs',
     path: '/team-costs',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'cost-adoption',
+    },
     savedViewsFeatureId: 'team-costs',
     helpHref: '/reference/modules/xi-finops',
     hub: 'prove',
@@ -1167,6 +1791,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
     // reporting read perm the backend enforces on /v1/m/reporting/reports.
     id: 'reporting',
     path: '/reporting',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'evaluation-evidence',
+    },
     helpHref: '/reference/modules/reporting',
     hub: 'prove',
     icon: FileBarChart,
@@ -1181,6 +1810,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'observability',
     path: '/observability',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'operations',
+    },
     savedViewsFeatureId: 'observability',
     helpHref: '/reference/modules/observability',
     hub: 'operate',
@@ -1191,6 +1825,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'platforms',
     path: '/platforms',
+    navigation: {
+      kind: 'feature',
+      areaId: 'ai',
+      sectionId: 'provider-reference',
+    },
     helpHref: '/reference/modules/x-models',
     hub: 'connect',
     icon: Layers,
@@ -1200,6 +1839,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'rateLimits',
     path: '/rate-limits',
+    navigation: {
+      kind: 'feature',
+      areaId: 'ai',
+      sectionId: 'provider-reference',
+    },
     helpHref: '/reference/modules/x-models',
     hub: 'govern',
     // Timer, not Gauge: Gauge belongs to Adoption; rate limits are about
@@ -1211,6 +1855,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'attestation',
     path: '/attestation',
+    navigation: {
+      kind: 'feature',
+      areaId: 'observation',
+      sectionId: 'evaluation-evidence',
+    },
     helpHref: '/how-to/verify-a-release',
     hub: 'prove',
     icon: PackageCheck,
@@ -1220,6 +1869,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'apiPlayground',
     path: '/api-playground',
+    navigation: { kind: 'feature', areaId: 'system', sectionId: 'development' },
     helpHref: '/reference/modules/xix-api-manage-as-code',
     hub: 'connect',
     icon: Code2,
@@ -1232,6 +1882,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'backups',
     path: '/backups',
+    navigation: { kind: 'feature', areaId: 'system', sectionId: 'maintenance' },
     helpHref: '/how-to/backup-and-restore',
     hub: 'operate',
     icon: DatabaseBackup,
@@ -1243,6 +1894,7 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'logs',
     path: '/logs',
+    navigation: { kind: 'feature', areaId: 'system', sectionId: 'maintenance' },
     helpHref: '/how-to/troubleshooting',
     hub: 'operate',
     // Logs, not ScrollText: ScrollText is the Claude-policy icon, and
@@ -1264,6 +1916,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'tenants',
     path: '/tenants',
+    navigation: {
+      kind: 'feature',
+      areaId: 'system',
+      sectionId: 'administration',
+    },
     helpHref: '/how-to/troubleshooting',
     hub: 'operate',
     icon: Building2,
@@ -1275,6 +1932,11 @@ export const FEATURE_VIEWS: FeatureView[] = [
   {
     id: 'residency',
     path: '/residency',
+    navigation: {
+      kind: 'feature',
+      areaId: 'security-identity',
+      sectionId: 'boundaries',
+    },
     helpHref: '/reference/modules/xiii-compliance',
     hub: 'govern',
     icon: Globe,
@@ -1309,4 +1971,29 @@ export function viewsByHub(): Record<HubId, FeatureView[]> {
     if (!v.hideInNav) out[v.hub].push(v)
   }
   return out
+}
+
+/**
+ * The visible (non-hidden) views of one area, grouped by section in the area's section order
+ * and, inside a section, in registry order. A section with no view is omitted; a view naming
+ * a section its area does not declare is a defect route-map.test.ts reports, not one this
+ * silently files somewhere.
+ */
+export function viewsByArea(
+  areaId: AreaId,
+): { sectionId: string; views: FeatureView[] }[] {
+  const area = NAV_AREAS.find((a) => a.id === areaId)
+  if (!area) return []
+  return area.sections
+    .map((sectionId) => ({
+      sectionId,
+      views: FEATURE_VIEWS.filter(
+        (v) =>
+          !v.hideInNav &&
+          v.navigation.kind === 'feature' &&
+          v.navigation.areaId === areaId &&
+          v.navigation.sectionId === sectionId,
+      ),
+    }))
+    .filter((s) => s.views.length > 0)
 }

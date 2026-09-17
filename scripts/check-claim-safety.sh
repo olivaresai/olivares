@@ -21,6 +21,18 @@
 #   OLIVARES_CLAIM_FILES=1 bash scripts/check-claim-safety.sh <commit>
 set -u
 
+# ⛔ EL ENTORNO GIT AMBIENTE NO DECIDE QUE REPOSITORIO NI QUE ALMACEN SE MIRAN. `GIT_DIR` llega
+# exportada desde cualquier worktree enlazado, y un `GIT_OBJECT_DIRECTORY` o un
+# `GIT_ALTERNATE_OBJECT_DIRECTORIES` heredados cambiarian el almacen que se lee y el que se escribe.
+# Se sanea como el resto de la casa, antes de resolver nada; la libreria trae ademas el almacen
+# propio de la fusion (abajo).
+_olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+  echo "check-claim-safety: NO HE PODIDO MIRAR: no puedo cargar $_olivares_git_env (aislamiento git)." >&2
+  exit 2; }
+unset _olivares_git_env
+
 PROTEGIDO="${OLIVARES_CLAIM_PROTECTED:-sessions/status/inbox/}"
 # ⛔ OBLIGATORIA desde la v2, y la razon es la que encontro el lector: siendo opcional, OMITIRLA
 # daba rc 0 «limpio». Una guarda cuyo modo por defecto es no comprobar nada no protege: protege a
@@ -70,13 +82,33 @@ echo "check-claim-safety: commit ${CS} · base ${BS}"
 # ⛔ EL VEREDICTO DEL MERGE SE LEE DEL rc, NO DE SI stdout VINO VACIO. Un stdout vacio puede ser
 # un conflicto, un fallo de git o un binario que no esta: los tres se escriben igual. `merge-tree`
 # sale != 0 cuando conflicta, y ese es el dato.
-FUS=$(git merge-tree --write-tree "$BS" "$CS" 2>/dev/null); RCM=$?
+#
+# ⛔ Y LA FUSION ESCRIBE, Y NO PUEDE HACERLO EN EL ALMACEN DEL REPOSITORIO QUE SE JUZGA. `merge-tree
+# --write-tree` escribe el arbol fusionado y, al conflictar, los blobs con marcadores: medido con git
+# 2.39.5 en un repositorio desechable, 2 objetos sueltos en una fusion que conflicta y 1 en una limpia
+# divergente. Al conflictar este guion sale 2 aqui abajo y nadie vuelve a alcanzarlos. La fusion y
+# TODA lectura que dependa de su arbol van contra un almacen PROPIO y temporal que lee del almacen
+# resuelto del repositorio y de sus alternates (`scripts/lib/git-env.sh`). No se exporta nada, y se
+# borra al salir o al ser interrumpido; un SIGKILL no deja correr ninguna limpieza. Si no se puede
+# abrir, o no lee la base y el claim, es 2: un almacen que no ve lo que mide no da un veredicto.
+trap olivares_git_owned_store_close EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+olivares_git_owned_store_open "$BS" "$CS" "${BS}^{tree}" "${CS}^{tree}" || {
+  echo "check-claim-safety: NO HE PODIDO MIRAR: no pude abrir un almacen de objetos propio para la fusion." >&2
+  echo "  Sin el, la fusion escribiria en el almacen del repositorio objetos que nadie alcanza; y un" >&2
+  echo "  almacen que no lee la base y el claim no daria un veredicto, daria otra cosa." >&2
+  exit 2; }
+FUS=$(olivares_git_owned merge-tree --write-tree "$BS" "$CS" 2>/dev/null); RCM=$?
 if [ "$RCM" -ne 0 ] || [ -z "$FUS" ]; then
   echo "check-claim-safety: NO HE PODIDO MIRAR: la fusion de ${CS} sobre ${BS} CONFLICTA." >&2
   echo "  Un claim que no fusiona no se puede juzgar por lo que destruiria: primero se rebasa." >&2; exit 2
 fi
-echo "  arbol fusionado: ${FUS}"
-NUM=$(git diff --numstat "$BS" "$FUS" 2>/dev/null) || { echo "check-claim-safety: NO HE PODIDO MIRAR: git diff fallo." >&2; exit 2; }
+# El OID va MARCADO: ese arbol vive en el almacen propio y desaparece con el. Citarlo como un objeto
+# recuperable del repositorio seria citar algo que alli no existe.
+echo "  arbol fusionado (transitorio: vive en un almacen propio que se borra al salir): ${FUS}"
+NUM=$(olivares_git_owned diff --numstat "$BS" "$FUS" 2>/dev/null) || { echo "check-claim-safety: NO HE PODIDO MIRAR: git diff fallo." >&2; exit 2; }
 if [ -z "$NUM" ]; then
   echo "check-claim-safety: NO HE PODIDO MIRAR: la fusion no cambia NADA sobre la base." >&2
   echo "  Un claim que no aporta nada no es 'limpio': o ya esta aterrizado, o comparas contra ti mismo." >&2; exit 2
@@ -104,7 +136,7 @@ fi
 # texto: mi propia comprobacion «un fichero, +12/-0» era CIERTA Y CIEGA mientras el commit volvia
 # `test-claim-safety.sh` de 100755 a 100644 — una bateria no ejecutable es una bateria que el
 # gancho no puede correr (`./scripts/...` sale 126). La sonda que lo ve es `git diff --summary`.
-SUM=$(git diff --summary "$BS" "$FUS" 2>/dev/null)
+SUM=$(olivares_git_owned diff --summary "$BS" "$FUS" 2>/dev/null)
 MODO=$(printf '%s\n' "$SUM" | grep -E '^ *mode change ' || true)
 NOEXE=$(printf '%s\n' "$SUM" | grep -E '^ *create mode 100644 scripts/' || true)
 if [ -n "$MODO" ]; then
@@ -152,7 +184,7 @@ fi
 # enciende en todo no informa: se aprende a saltarlo. Y es AVISO, no hallazgo: no cambia el rc,
 # porque esto no sabe si ya lo corriste.
 NUEVOS=$(printf '%s\n' "$NUM" | awk -F'\t' '$3 ~ /^scripts\// {print $3}' | while IFS= read -r f; do
-           git cat-file -e "${BS}:${f}" 2>/dev/null || printf '%s\n' "$f"; done)
+           olivares_git_owned cat-file -e "${BS}:${f}" 2>/dev/null || printf '%s\n' "$f"; done)
 if [ -n "$NUEVOS" ]; then
   echo "  ⚠ guion(es) NUEVO(s) bajo scripts/ — \`scripts/\` viaja en el export:"
   printf '%s\n' "$NUEVOS" | sed 's/^/      /'

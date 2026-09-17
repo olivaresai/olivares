@@ -5,12 +5,26 @@
 // C07-04 — centros de coste: la pantalla que da dueño al gasto sin atribuir, y las dos cosas que
 // el motor hace y una lista plana escondería.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen, userEvent, waitFor, within } from '@/test/intel'
+import { ApiError } from '@/lib/api/errors'
+import {
+  act,
+  createTestQueryClient,
+  renderIntel,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+} from '@/test/intel'
 import '@/features/_intel'
 import './i18n'
 
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
+}))
+
+// La ceremonia la cubre la batería de identidad; aquí sólo tiene que DISTINGUIRSE del muro de permisos.
+vi.mock('@/features/identity/assurance', () => ({
+  StepUpPanel: () => <div>step-up ceremony</div>,
 }))
 
 const centrosMock = vi.fn()
@@ -68,13 +82,24 @@ async function abrir(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('tab', { name: /Cost centres/i }))
 }
 
+// ⛔ LA FORMA DEL SERVIDOR (`modelRateDTO`, `modules/finops/ratecatalog.go`): `model` —no
+//    `model_ref`—, las tarifas de caché que el DTO también envía y la marca canónica del store.
 const TARIFA = {
   id: 'mr-1',
   provider: 'anthropic',
-  model_ref: 'claude-opus-5',
+  model: 'claude-opus-5',
   input_rate_micro_usd: 15_000_000,
   output_rate_micro_usd: 75_000_000,
-  effective_from: '2026-01-01T00:00:00Z',
+  cache_read_rate_micro_usd: 1_500_000,
+  cache_creation_rate_micro_usd: 18_750_000,
+  effective_from: '2026-01-01T00:00:00.000000000Z',
+}
+
+/** La misma tarifa con UN campo del DTO ausente. */
+const sinCampo = (campo: keyof typeof TARIFA): Record<string, unknown> => {
+  const fila: Record<string, unknown> = { ...TARIFA }
+  delete fila[campo]
+  return fila
 }
 
 beforeEach(() => {
@@ -82,7 +107,9 @@ beforeEach(() => {
   crearMock.mockReset().mockResolvedValue({ id: 'cc-2' })
   actualizarMock.mockReset().mockResolvedValue({ ...CC })
   reglasMock.mockReset().mockResolvedValue({ items: [] })
-  tarifasMock.mockReset().mockResolvedValue({ items: [TARIFA] })
+  tarifasMock
+    .mockReset()
+    .mockResolvedValue({ items: [TARIFA], has_more: false })
 })
 
 describe('los centros de coste', () => {
@@ -343,28 +370,46 @@ describe('los centros de coste', () => {
     ).toBeInTheDocument()
   })
   /**
-   * ⛔ `effective_until` VACÍO no es «le falta la fecha»: es que **la tarifa sigue vigente**
-   * (`ratecatalog.go:26-28` — «a null/empty effective_until means the rate is still current»).
-   *
-   * EL MUTANTE: pintar un guion. Se lee como un registro incompleto, y en una tabla ordenable por
-   * caducidad esconde justo la tarifa que se está aplicando hoy — la que multiplica cada token de
-   * cada estimación de coste del producto.
+   * ⛔ LA IDENTIDAD DEL MODELO VIAJA EN `model` (`modelRateDTO`, `ratecatalog.go`: `json:"model"`).
+   * La tarjeta leía `model_ref`, un campo que el motor no envía, así que cada tarifa se pintaba con
+   * su proveedor y SIN modelo. Y esta fixture decía `model_ref` también: el oráculo estaba copiado
+   * del sujeto, igual que el `cc_name` de arriba. Ahora tiene la forma del servidor.
    */
-  it('una tarifa sin fecha de fin se dice VIGENTE, no con un guion', async () => {
+  it('pinta el MODELO que el motor envía en `model`', async () => {
     const user = userEvent.setup()
     await abrir(user)
-    expect(await screen.findByText('current')).toBeInTheDocument()
+    expect(await screen.findByText('claude-opus-5')).toBeInTheDocument()
   })
 
-  /** LA DIRECCIÓN QUE NO DEBE DISPARAR: con fecha de fin NO se dice vigente. */
-  it('una tarifa con fecha de fin no se dice vigente', async () => {
+  /**
+   * ⛔ SIN FECHA DE FIN NO ES «VIGENTE». La tarjeta decía `current` en toda fila sin
+   * `effective_until`, también en una que empieza en el futuro o que otra posterior sustituye. Qué
+   * entrada se aplica en un instante lo resuelve el motor (`resolveRate`), no esta lista: la
+   * pantalla dice el hecho —no tiene fecha de fin— y nada más.
+   */
+  it('una tarifa sin fecha de fin lo dice, sin llamarla vigente', async () => {
+    const user = userEvent.setup()
+    await abrir(user)
+    expect(await screen.findByText('No end date')).toBeInTheDocument()
+    expect(screen.queryByText(/^current$/i)).toBeNull()
+  })
+
+  /** Con fecha de fin se enseña ESE instante, formateado, y no se dice que no la tenga. */
+  it('una tarifa con fecha de fin enseña esa fecha', async () => {
     tarifasMock.mockResolvedValue({
-      items: [{ ...TARIFA, effective_until: '2026-06-30T00:00:00Z' }],
+      items: [{ ...TARIFA, effective_until: '2026-06-30T00:00:00.000000000Z' }],
+      has_more: false,
     })
     const user = userEvent.setup()
     await abrir(user)
-    expect(await screen.findByText(/until 2026-06-30/i)).toBeInTheDocument()
-    expect(screen.queryByText('current')).toBeNull()
+    await screen.findByText('claude-opus-5')
+    const hasta = document.querySelector(
+      'time[datetime="2026-06-30T00:00:00.000Z"]',
+    )
+    expect(hasta).not.toBeNull()
+    expect(hasta?.textContent).not.toBe('')
+    expect(hasta?.textContent).not.toContain('2026-06-30T')
+    expect(screen.queryByText('No end date')).toBeNull()
   })
 
   /**
@@ -378,5 +423,135 @@ describe('los centros de coste', () => {
     expect(
       await screen.findByText(/micro-USD per 1M tokens/i),
     ).toBeInTheDocument()
+  })
+
+  /**
+   * ⛔ LA FORMA VIEJA (`model_ref`, sin `model`) NO ES UNA TARIFA SIN NOMBRE: ES UN CATÁLOGO QUE NO
+   * SE PUEDE LEER. La tarjeta anterior pintaba el proveedor y un hueco donde iba el modelo. El único
+   * remedio que se ofrece es REPETIR LA LECTURA —otro GET bajo el mismo inquilino—, nunca escribir.
+   */
+  it('la forma vieja es un catálogo NO DISPONIBLE, y reintentar es otro GET que lo recupera', async () => {
+    tarifasMock
+      .mockResolvedValueOnce({
+        items: [{ ...sinCampo('model'), model_ref: 'claude-opus-5' }],
+        has_more: false,
+      })
+      .mockResolvedValueOnce({ items: [TARIFA], has_more: false })
+    const user = userEvent.setup()
+    await abrir(user)
+    const titulo = await screen.findByText('Rate catalogue unavailable')
+    const alerta = titulo.closest('[role="alert"]') as HTMLElement
+    expect(screen.queryByText('anthropic')).toBeNull()
+
+    await user.click(within(alerta).getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('claude-opus-5')).toBeInTheDocument()
+    expect(screen.queryByText('Rate catalogue unavailable')).toBeNull()
+    expect(tarifasMock).toHaveBeenCalledTimes(2)
+    for (const llamada of tarifasMock.mock.calls)
+      expect(llamada).toEqual([undefined, { tenant: 't1' }])
+    expect(crearMock).not.toHaveBeenCalled()
+    expect(actualizarMock).not.toHaveBeenCalled()
+  })
+
+  /** ⛔ UNA TARIFA SIN IMPORTE NO SE PINTA COMO CERO. La tarjeta anterior hacía `?? 0`. */
+  it('una tarifa sin importe no se pinta como cero: el catálogo no está disponible', async () => {
+    tarifasMock.mockResolvedValue({
+      items: [sinCampo('input_rate_micro_usd')],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    await abrir(user)
+    expect(
+      await screen.findByText('Rate catalogue unavailable'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/\bin 0\b/)).toBeNull()
+    expect(screen.queryByText('claude-opus-5')).toBeNull()
+  })
+
+  /** ⛔ Y UN SOBRE SIN `items` NO ES «NO HAY TARIFAS». La tarjeta anterior hacía `?.items ?? []`. */
+  it('un sobre sin `items` no es un catálogo vacío', async () => {
+    tarifasMock.mockResolvedValue({ has_more: false })
+    const user = userEvent.setup()
+    await abrir(user)
+    expect(
+      await screen.findByText('Rate catalogue unavailable'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No rates in the catalogue')).toBeNull()
+  })
+
+  /** El recorte de una página LEGIBLE se declara con las filas que cargó (mil: el techo real). */
+  it('una página legible recortada dice cuántas tarifas cargó', async () => {
+    const mil = Array.from({ length: 1000 }, (_, i) => ({
+      ...TARIFA,
+      id: `mr-${i}`,
+      model: `modelo-${i}`,
+    }))
+    tarifasMock.mockResolvedValue({ items: mil, has_more: true })
+    const user = userEvent.setup()
+    await abrir(user)
+    expect(
+      await screen.findByText('Loaded 1000 rates; there are more'),
+    ).toBeInTheDocument()
+  })
+
+  /**
+   * ⛔ Y UNA PÁGINA ILEGIBLE NO DECLARA RECORTE: el aviso hablaría de filas cargadas que la pantalla
+   * no enseña. La tarjeta anterior lo pintaba con cualquier `has_more: true`.
+   */
+  it('una página ilegible no declara recorte', async () => {
+    tarifasMock.mockResolvedValue({
+      items: [sinCampo('model')],
+      has_more: true,
+    })
+    const user = userEvent.setup()
+    await abrir(user)
+    await screen.findByText('Rate catalogue unavailable')
+    expect(screen.queryByText(/Loaded \d+ rates/)).toBeNull()
+  })
+
+  /**
+   * Los estados de TRANSPORTE siguen siendo de AsyncSection: un 403 de nivel pide la ceremonia. No
+   * es un permiso que falta ni un catálogo ilegible.
+   */
+  it('un 403 de nivel ofrece la ceremonia, no el catálogo no disponible', async () => {
+    tarifasMock.mockRejectedValue(
+      new ApiError(403, 'step_up_required', 'step-up required'),
+    )
+    const user = userEvent.setup()
+    await abrir(user)
+    expect(await screen.findByText('step-up ceremony')).toBeInTheDocument()
+    expect(screen.queryByText('Rate catalogue unavailable')).toBeNull()
+  })
+
+  /**
+   * ⛔ Y SI LA RE-LECTURA FALLA, LAS FILAS DE ANTES NO SE QUEDAN AL LADO DEL FALLO. react-query
+   * conserva el último dato bueno; AsyncSection enseña el error y el aviso de recorte se apaga.
+   */
+  it('un fallo al re-leer quita las filas y enseña el fallo, sin catálogo retenido', async () => {
+    const queryClient = createTestQueryClient()
+    renderIntel(<FinOpsView />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('tab', { name: /Cost centres/i }))
+    expect(await screen.findByText('claude-opus-5')).toBeInTheDocument()
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: ['finops', 't1', 'model-rates'], exact: true }),
+    ).toBeDefined()
+
+    tarifasMock.mockRejectedValueOnce(
+      new ApiError(500, 'internal', 'detalle crudo del servidor', 'req-9'),
+    )
+    await act(async () => {
+      await queryClient.refetchQueries({
+        queryKey: ['finops', 't1', 'model-rates'],
+        exact: true,
+      })
+    })
+    expect(await screen.findByText('Something went wrong')).toBeInTheDocument()
+    expect(screen.queryByText('claude-opus-5')).toBeNull()
+    expect(document.body.textContent).not.toContain(
+      'detalle crudo del servidor',
+    )
   })
 })

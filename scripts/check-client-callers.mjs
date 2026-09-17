@@ -55,7 +55,7 @@ const FEATURES = join(RAIZ, 'features')
 // ⛔ TRINQUETE. Es la cuenta de HOY, y sólo puede BAJAR. Subirla exige decir en el commit qué
 //    método nuevo se queda sin pantalla y por qué — que es justo la conversación que no ocurre
 //    sola.
-const BASE = 98
+const BASE = 97
 
 function ficheros(dir, out = []) {
   let entradas

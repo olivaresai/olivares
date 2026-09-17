@@ -146,16 +146,23 @@ func (s *licenseService) InstallLicense(ctx context.Context, blob string, acknow
 	if kind, detail, present := licenseOverridePresent(s.explicitPath, s.getenv); present {
 		return api.LicenseStatus{}, fmt.Errorf("%w: a %s license override (%s) is active; edit that source instead of installing to the data dir", api.ErrLicenseManagedExternally, kind, detail)
 	}
-	// Verify against the build's embedded key BEFORE persisting — refuse a malformed or
-	// wrong-key blob so we never store garbage. This is NOT a gate: a VALID-but-expired
-	// blob installs fine (it just reports "expired" and lifts nothing). It only rejects a
-	// structurally/cryptographically bad blob (a paste/format error).
-	if len(s.holder.pub) == 0 {
-		return api.LicenseStatus{}, fmt.Errorf("%w (this build embeds no verification key: %s)", api.ErrLicenseInvalid, license.KeyOrigin())
+	// Verify against the data directory's license trust keyring BEFORE persisting — refuse a
+	// malformed, untrusted or fenced blob so we never store garbage. This is NOT a gate: a
+	// VALID-but-expired blob installs fine (it just reports "expired" and lifts nothing). It only
+	// rejects a structurally/cryptographically bad blob (a paste/format error) or one this
+	// deployment's trust refuses, leaving the installed license untouched.
+	kr, terr := licenseKeyringForDataDir(s.dataDir)
+	if terr != nil {
+		return api.LicenseStatus{}, fmt.Errorf("%w: %w", api.ErrLicenseInvalid, withLicenseTrustAction(terr))
 	}
-	v, err := license.VerifyEnvelope(blob, s.holder.pub)
+	if kr.Len() == 0 {
+		return api.LicenseStatus{}, fmt.Errorf("%w (this build embeds no verification key and the data directory configures none: %s)", api.ErrLicenseInvalid, license.KeyOrigin())
+	}
+	v, err := kr.Verify(blob, s.holder.clock())
 	if err != nil {
-		return api.LicenseStatus{}, fmt.Errorf("%w: %v", api.ErrLicenseInvalid, err)
+		// Both chains stay routable: api.ErrLicenseInvalid for the HTTP mapping, the keyring
+		// refusal for a caller that has to say which trust rule refused.
+		return api.LicenseStatus{}, fmt.Errorf("%w: %w", api.ErrLicenseInvalid, withLicenseTrustAction(err))
 	}
 	newOK := v.Status(s.holder.clock()) != license.StatusExpired
 	// checkDowngrade takes the flat claim set and is INERT in every build since B10 (no license
@@ -219,7 +226,8 @@ func (s *licenseService) checkDowngrade(_ context.Context, _ license.Claims, _, 
 // applies it. It is what the SIGHUP handler and POST /v1/console/runtime/reload call
 // (alongside the source reload), so a file-based `license install` + reload applies
 // WITHOUT a restart and an externally-rotated override file is picked up. It never
-// fails the caller: an unreadable configured source logs and keeps the live license.
+// fails the caller: an unreadable configured source logs and keeps the live license
+// blob, which is verified again under the license trust as it is now.
 func (s *licenseService) Reconcile(ctx context.Context) {
 	s.reconcileMu.Lock()
 	defer s.reconcileMu.Unlock()
@@ -231,12 +239,24 @@ func (s *licenseService) Reconcile(ctx context.Context) {
 func (s *licenseService) reEvaluate() licenseDisplay { return s.holder.reEvaluate() }
 
 func (s *licenseService) reconcileLocked(ctx context.Context) (api.LicenseStatus, error) {
+	// The keyring is re-read on EVERY reconcile, before the license source and whatever that read
+	// returns, and applied in the same swap. An unusable trust document is NOT answered by keeping
+	// the previous keyring: the change an operator was making may be a revocation, so every license
+	// reads invalid, with the reason, until it is repaired — the same answer boot gives. An absent
+	// document is not an error: the build's embedded key alone is the trust.
+	kr, terr := licenseKeyringForDataDir(s.dataDir)
+	if terr != nil {
+		s.log.Warn("license: the license trust document could not be used; every license reads invalid until it is repaired", "err", terr)
+	}
 	src, err := resolveLicense(s.explicitPath, s.dataDir, s.getenv)
 	if err != nil {
-		s.log.Warn("license: reconcile could not read the configured source; keeping the current live license", "err", err)
-		return s.statusFor(ctx, s.holder.display())
+		// A configured source that cannot be read keeps the live license BLOB: a failed read is not
+		// a removal. It does not keep the live TRUST: the blob is verified again under the keyring
+		// just read, so a revocation, an epoch fence or an unusable document applies to it now.
+		s.log.Warn("license: reconcile could not read the configured source; keeping the current license, verified under the current license trust", "err", err)
+		src, _, _ = s.holder.snapshot()
 	}
-	d := s.holder.set(src)
+	d := s.holder.apply(src, kr, terr)
 	return s.statusFor(ctx, d)
 }
 

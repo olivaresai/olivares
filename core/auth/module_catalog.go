@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -43,6 +44,58 @@ import (
 type moduleCatalog struct {
 	perms map[Permission]struct{}
 	kinds map[string]struct{}
+	// actions maps a module NAMESPACE to the Cedar Action IDs that module declared.
+	//
+	// ⛔ KEYED BY MODULE AND NOT A FLAT SET, and the data forces it. A permission carries its
+	// namespace in the string ("<ns>:<resource>:<verb>"), so "only its own" is a spelling check.
+	// An ACTION does not: `session:stop`, `agent:read` and `shell:open` are <resource>:<verb>,
+	// and a mandatory prefix would rename every one of them and break the Cedar policies that
+	// already cite them. So ownership is STORED here instead of read off the name.
+	//
+	// A flat set would let a route mount with another module's action — which works today and
+	// stops working the day that module is not loaded, or depending on the ORDER the two mount.
+	// That hidden dependency is exactly what this exists to turn into a boot failure.
+	actions map[string]map[CedarAction]struct{}
+}
+
+// clone returns a deep copy of the snapshot; the nil receiver clones to an empty one.
+//
+// ⛔ EXISTE PARA QUE UN CAMPO NUEVO NO PUEDA OLVIDARLO UN ESCRITOR, y esa es la avería que
+// corrige, no una preferencia de estilo. `actions` se añadió a esta estructura y **sólo**
+// `RegisterModuleActions` aprendió a copiarlo: `RegisterModulePermissions` seguía construyendo su
+// snapshot con `perms` y `kinds` a mano, así que **el siguiente registro de permisos borraba
+// TODAS las acciones ya declaradas**.
+//
+// ⛔ Y EL DAÑO NO FUE EL BORRADO: FUE QUE UN TESTIGO PASÓ POR LA RAZÓN EQUIVOCADA. El caso
+// escrito para separar «acción propia» de «acción de otro» rechazaba la ajena porque el registro
+// de permisos del prestatario ya había borrado al prestamista — o sea, medía **pérdida de estado**
+// creyendo medir **pertenencia**, que es la distinción que ese caso existe para hacer.
+//
+// Dos escritores copiando campo a campo son una lista que deriva; un clon es una lista que no
+// puede. Un campo nuevo entra aquí y los dos lo heredan.
+func (c *moduleCatalog) clone() *moduleCatalog {
+	next := &moduleCatalog{
+		perms:   map[Permission]struct{}{},
+		kinds:   map[string]struct{}{},
+		actions: map[string]map[CedarAction]struct{}{},
+	}
+	if c == nil {
+		return next
+	}
+	for p := range c.perms {
+		next.perms[p] = struct{}{}
+	}
+	for k := range c.kinds {
+		next.kinds[k] = struct{}{}
+	}
+	for ns, set := range c.actions {
+		cp := make(map[CedarAction]struct{}, len(set))
+		for a := range set {
+			cp[a] = struct{}{}
+		}
+		next.actions[ns] = cp
+	}
+	return next
 }
 
 // moduleCatalogPtr holds the live snapshot. Registration happens at boot (before the
@@ -94,18 +147,7 @@ func RegisterModulePermissions(perms []Permission) error {
 	// then be overwritten by a snapshot that never saw it (a lost update).
 	for {
 		cur := moduleCatalogPtr.Load()
-		next := &moduleCatalog{
-			perms: make(map[Permission]struct{}, len(add)),
-			kinds: make(map[string]struct{}, len(add)),
-		}
-		if cur != nil {
-			for p := range cur.perms {
-				next.perms[p] = struct{}{}
-			}
-			for k := range cur.kinds {
-				next.kinds[k] = struct{}{}
-			}
-		}
+		next := cur.clone()
 		for p := range add {
 			next.perms[p] = struct{}{}
 			if kind, _, ok := SplitPermission(p); ok {
@@ -116,6 +158,60 @@ func RegisterModulePermissions(perms []Permission) error {
 			return nil
 		}
 	}
+}
+
+// RegisterModuleActions records the Cedar Action IDs that ONE module declares. The composition
+// root calls it once per mounted module, BEFORE that module's routes are registered, so a route
+// declaring an action can be checked against what its own module said it owns.
+//
+// It is deny-closed on malformed input, like its sibling: a nameless module, an empty action or
+// one that is not "<resource>:<verb>" with both halves non-empty fails the MOUNT rather than
+// being dropped. Dropping it silently would leave a module believing an action it declares is
+// registered when it is not — and the route that cites it would then be refused for a reason
+// nobody could find.
+func RegisterModuleActions(ns string, actions []CedarAction) error {
+	if ns == "" {
+		return errors.New("auth: a module must have a namespace to declare actions")
+	}
+	if len(actions) == 0 {
+		return nil
+	}
+	add := make(map[CedarAction]struct{}, len(actions))
+	for _, a := range actions {
+		res, verb, ok := strings.Cut(string(a), ":")
+		if !ok || res == "" || verb == "" || strings.ContainsAny(string(a), " \t\n") ||
+			strings.Contains(verb, ":") {
+			return fmt.Errorf(
+				"auth: module %q declares %q, which is not a Cedar action of the form "+
+					"<resource>:<verb> with both halves non-empty", ns, a)
+		}
+		add[a] = struct{}{}
+	}
+	for {
+		cur := moduleCatalogPtr.Load()
+		next := cur.clone()
+		if next.actions[ns] == nil {
+			next.actions[ns] = map[CedarAction]struct{}{}
+		}
+		for a := range add {
+			next.actions[ns][a] = struct{}{}
+		}
+		if moduleCatalogPtr.CompareAndSwap(cur, next) {
+			return nil
+		}
+	}
+}
+
+// ModuleDeclaresAction reports whether ns declared a. An unknown namespace declares nothing,
+// which is what makes the check deny-closed: a module that never called RegisterModuleActions
+// cannot mount a route that names an action.
+func ModuleDeclaresAction(ns string, a CedarAction) bool {
+	c := loadModuleCatalog()
+	if c.actions == nil {
+		return false
+	}
+	_, ok := c.actions[ns][a]
+	return ok
 }
 
 // isModulePermKind reports whether kind is exactly "<namespace>:<resource>" with both

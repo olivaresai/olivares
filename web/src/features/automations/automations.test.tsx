@@ -34,6 +34,9 @@ vi.mock('@/lib/auth/context', () => ({
 // El enrutador no es el sujeto: el `Link` de la tarjeta sólo tiene que renderizar.
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children?: ReactNode }) => <a href="#">{children}</a>,
+  // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
+  // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
+  useRouter: () => undefined,
 }))
 
 import { AutomationsView } from './automations-view'

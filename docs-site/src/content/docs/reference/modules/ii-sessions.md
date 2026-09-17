@@ -2,15 +2,21 @@
 title: "Module II — live operation & sessions"
 description: >-
   The live operational overlay per agent session: current action, live
-  tokens/cost, a derived Claude Code state and a replayable timeline, streamed
-  over server-sent events. What it derives, what stays honestly empty, and the limits.
+  tokens/cost, a derived state and a replayable timeline, plus the managed
+  runs the plane launches under a provider profile. What it derives, what
+  stays honestly empty, and the limits.
 ---
 
 Module II is the **live operation** view of the estate: what every agent session
-is doing right now, its live token and cost totals, a derived Claude Code state,
+is doing right now, its live token and cost totals, a derived liveness state,
 and a reconstructable timeline. Where module I (inventory) materializes the durable
 estate, module II keeps a **live operational overlay** per session over the same
 observation stream — and shows only what that stream honestly carries.
+
+v26.9.0 also **launches** official provider CLIs as owned children under a
+[provider profile](/how-to/operate-provider-sessions/). That managed path is
+the same module. It does not replace the overlay, and it does not merge two
+homes that announce the same provider session id (`CHANGELOG.md` `[26.9.0]` B1/B2).
 
 ## What it is
 
@@ -21,7 +27,8 @@ observation stream — never polled, never fabricated. Per session it tracks:
 - the **current action** (the last tool used) and the resource/mode it touched;
 - the **live token and cost totals**, read from cost samples (the canonical cost
   ledger and FinOps are module XI, not here — this is the live figure only);
-- a **derived Claude Code state** (`cc_state`); and
+- a **derived liveness state** (`cc_state`, still named for the original Claude
+  Code derivation); and
 - a **timeline** to which every observed event is appended in ingest order.
 
 ## Its contract & entities
@@ -41,6 +48,39 @@ every read requires the session read permission, and **opening the stream is
 auto-audited**. The SSE channel is strictly **tenant-isolated** (a client receives
 only snapshots for its authorized tenant) and **best-effort** (a slow client drops
 the intermediate frame and gets the next — ingest never blocks).
+
+## Provider profiles and `live_ref`
+
+A **provider profile** is the durable identity of one configured provider
+instance on one execution environment: driver, environment, and the canonical
+`config_home` / `user_home`. It is not an authenticated provider account.
+Register, rename, disable/enable and retire live under
+`/v1/m/sessions/provider-profiles`. Paths appear only on the admin
+`configuration` read. A launch names `provider_profile_ref`; the server
+resolves the homes and persists a non-secret snapshot on the run before spawn
+(`CHANGELOG.md` `[26.9.0]` B1; `web/src/features/agentops/types.ts`).
+
+An observation folds into the live row of its **channel**, computed by the
+server from the host-stamped source registration (`CHANGELOG.md` `[26.9.0]` B2):
+
+| Channel | Meaning |
+|---|---|
+| `legacy` | no registration |
+| `observed` | a source dedicated to a profile by a binding approved at host admission for the exact applied revision |
+| `source` | a known registration with no verifiable profile |
+| `managed` | a run the plane launched; the only row carrying `canonical_sid` and `run_ref` |
+
+Every live row exposes `live_ref` and `attribution`. Two homes that announce
+the same provider session id are two rows with two timelines. Read one row
+with `GET /v1/m/sessions/live/by-id/{live_ref}` (and its timeline / stream /
+runs query). Bare external-id routes stay and are **legacy**: they answer for
+the legacy row only.
+
+Drivers are registered **per node** by pinning an official binary
+(`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` — see
+[Configuration](/reference/configuration/)). Unset, that driver's profiles
+stay observable and are not launchable. Operator steps:
+[Operate a provider session](/how-to/operate-provider-sessions/).
 
 ## What it consumes (and what it derives)
 
@@ -81,5 +121,6 @@ summary.
 - [Access & resource map](/reference/modules/iii-access-map/) — the sibling Core
   module that owns the R/RW access graph.
 - [Architecture overview](/explanation/architecture/overview/) — the engine and layers.
-- [Connect Claude Code](/how-to/connect-claude-code/) — start producing the live stream.
+- [Connect Claude Code](/how-to/connect-claude-code/) — start producing the cooperative live stream.
+- [Operate a provider session](/how-to/operate-provider-sessions/) — register a profile and launch Codex, Grok or Claude.
 - [Honesty & limits](/start/honesty-and-limits/) — what the product does and does not do today.

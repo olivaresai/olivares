@@ -84,20 +84,48 @@ func (m *Module) bridge(lr *liveRun) {
 			m.onStdout(ctx, lr, frame.Data, at)
 		}
 	}
+	// The owned child is gone: fail every in-flight protocol waiter now, so a
+	// handshake or a turn returns an error instead of hanging on a dead process.
+	m.closeDriverSession(lr)
 	lr.ring.close()
 	// flush + seal this run's I/O evidence chain once its I/O has ended
 	// (only when the run was flagged for recording). Best-effort, like Record.
 	if lr.recordIO {
 		_ = m.rt.recorder.Finalize(ctx, lr.tenant, lr.runRef)
 	}
-	exit, _ := lr.proc.Wait()
-	m.finalize(lr, exit)
+	// P1: the Wait error is RETAINED, not discarded. It is used only to classify the
+	// observation; its text never reaches a stored field or the audit metadata.
+	exit, waitErr := lr.proc.Wait()
+	m.finalize(lr, exit, waitErr)
 }
 
 // onStdout drives stored state from a stream-json output line: it captures the
 // resumable session id from the init message and tracks activity (throttled).
 func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time.Time) {
+	if lr.session != nil {
+		// ⛔ CORRELATION HAPPENS FIRST AND IS NEVER DEFERRED. An owned RPC child is
+		// blocked waiting for the answer to a request this process sent, and the
+		// handshake that sent it runs BEFORE the reservation transition — so
+		// queueing this behind the window would deadlock the launch against the very
+		// window that exists to keep its writes out of the way. It is safe to run
+		// here precisely because it touches NO row: it resolves an in-memory waiter
+		// and dispatches a protocol reply, and every durable consequence still goes
+		// through the deferral below.
+		lr.session.Deliver(OutputFrame{Stream: streamStdout, Data: data})
+	}
 	aplicar := func() {
+		if lr.session != nil {
+			// A driver run's conversation is nominated by the CORRELATED ROOT RESPONSE
+			// and by nothing else, so no frame captures an id here. What a later frame
+			// is good for is the idempotent RETRY of a capture whose store write did
+			// not confirm: without it a run whose alias transaction lost a race would
+			// keep an id the plane knows and the database does not.
+			if m.retryDriverCapture(ctx, lr, at) {
+				return
+			}
+			m.touchActivity(ctx, lr, at)
+			return
+		}
 		if sj, ok := parseStreamJSON(data); ok && sj.isInit() {
 			m.captureSessionID(ctx, lr, sj.SessionID, at)
 			return
@@ -122,6 +150,12 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 // captureSessionID records the Claude session id (once) so the session can be
 // resumed, and advances activity. Best-effort with one conflict retry.
 func (m *Module) captureSessionID(ctx context.Context, lr *liveRun, sessionID string, at time.Time) {
+	if lr.profile != nil {
+		// B1: a PROFILED run binds its provider id under the profile scope, inside one
+		// transaction with the run row, and is marked captured only after that commit.
+		m.captureProfiledSessionID(ctx, lr, sessionID, at)
+		return
+	}
 	lr.mu.Lock()
 	if lr.sessionIDCaptured {
 		lr.mu.Unlock()
@@ -248,10 +282,18 @@ func (m *Module) touchActivity(ctx context.Context, lr *liveRun, at time.Time) {
 		return
 	}
 	lr.lastActivityWrite = at
+	captured := lr.sessionIDCaptured
 	lr.mu.Unlock()
-	m.mutateRunBest(ctx, lr, func(rec model.Record) {
-		rec[colLastActivityAt] = model.NewTimestamp(at).String()
-	})
+	if lr.profile != nil {
+		// The run and its managed row share the same current authority transaction.
+		if captured {
+			m.touchManagedLive(ctx, lr, at)
+		}
+	} else {
+		m.mutateRunBest(ctx, lr, func(rec model.Record) {
+			rec[colLastActivityAt] = model.NewTimestamp(at).String()
+		})
+	}
 	// SG-02-b: the session is demonstrably alive, so its lease is renewed on the same
 	// throttle. The fence does NOT move on a renewal (claim.go Claim/Heartbeat), so a
 	// long session keeps one identity and one token from start to finish.
@@ -261,7 +303,7 @@ func (m *Module) touchActivity(ctx context.Context, lr *liveRun, at time.Time) {
 // finalize records the terminal transition exactly once when the process exits.
 // A process killed by an operator stop (SIGTERM → non-zero exit) is recorded as
 // STOPPED (intentional), not FAILED — the stopRequested flag distinguishes them.
-func (m *Module) finalize(lr *liveRun, exit int) {
+func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 	lr.mu.Lock()
 	if lr.finalized {
 		lr.mu.Unlock()
@@ -339,9 +381,17 @@ func (m *Module) finalize(lr *liveRun, exit int) {
 		// estaba en el fichero y la llamada siguiente lo olvidaba. Lo midio r25 y me lo
 		// adjudico; el hueco que tapaba es que un rechazo de la guarda —o un fallo de
 		// verdad— dejaba la fila sin asentar y sin que nadie se enterase.
+		// P1: nil means this Process exited under the port contract; an error means
+		// collection was not confirmed. Not childWasReaped, which classifies STOP
+		// errors, not Wait errors.
+		observation := obsProcessExitObserved
+		if waitErr != nil {
+			observation = obsProcessWaitUnverified
+		}
 		if _, err := m.transition(ctx, lr.tenant, lr.runRef, transitionInput{
 			event: event, toState: state,
 			detail: "exit " + strconv.Itoa(exit), guard: guardRuntimeLaunch(lr.launchID),
+			terminalObservation: observation,
 			mutate: func(rec model.Record) {
 				rec[colExitCode] = int64(exit)
 				rec[colStoppedAt] = model.NewTimestamp(m.now()).String()
@@ -434,62 +484,108 @@ func conservaElSelloMasNuevo(rec model.Record, antes string) {
 // inference token by value, used and discarded; optional gateway base URL; the
 // governance PEP env), and the RESOLVED workspace. ws is nil when the run has
 // no workspace_ref; injectEnv is the LaunchGate's governance env, empty when
-// no gate is wired.
-func (m *Module) buildLaunchSpec(p CreateRunParams, cred Credential, workCred WorkSessionCredential, communicationCred CommunicationSessionCredential, resumeID string, ws *resolvedWorkspace, injectEnv []EnvVar) LaunchSpec {
+// no gate is wired; providerEnv is the governed managed credential of a non-Claude
+// driver (§5.3), empty for every other source.
+//
+// It has TWO shapes, chosen by the run's driver, and the split is deliberate:
+//
+//   - the historical Claude path, unchanged to the byte. Its argv, its
+//     ANTHROPIC_* bearer, its gateway base URL and its updater pin all belong to
+//     that CLI and travel with it;
+//   - a REGISTERED driver, whose argv comes from the driver itself and which
+//     receives NO Anthropic variable at all. Reusing the Claude bearer for another
+//     provider is precisely the confusion §5.1 forbids, and the cheapest way to
+//     make it impossible is for this function to never build it.
+func (m *Module) buildLaunchSpec(
+	p CreateRunParams,
+	cred Credential,
+	workCred WorkSessionCredential,
+	communicationCred CommunicationSessionCredential,
+	resumeID string,
+	ws *resolvedWorkspace,
+	injectEnv []EnvVar,
+	providerEnv []EnvVar,
+) LaunchSpec {
+	driverKey := launchDriverKey(p)
+	drv, driven := m.driverFor(driverKey)
+	dir, mount := launchWorkspaceTarget(p, ws)
+
 	var args []string
-	switch p.Transport {
-	case TransportStreamJSON:
-		// The supported headless control transport: bidirectional NDJSON over stdio.
-		args = append(args, "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--print")
-	case TransportRemoteControl:
-		// Lifecycle-only: I/O is relayed to Anthropic's cloud, not bridged (§0).
-		args = append(args, "--remote-control")
-		if p.Name != "" {
-			args = append(args, "--name", p.Name)
+	var driverLaunch DriverLaunch
+	program := m.rt.program
+	if driven {
+		// The driver owns its own official argv. resumeID is deliberately NOT a flag
+		// here: an app-server/ACP child resumes through a METHOD on the owned
+		// protocol, and the correlated root response is the only thing allowed to
+		// nominate the conversation.
+		program = m.driverProgram(drv)
+		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort}
+		if p.ProviderHome != nil {
+			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
+			driverLaunch.UserHome = p.ProviderHome.UserHome
 		}
-	}
-	args = append(args, "--permission-mode", p.PermissionMode)
-	if p.Model != "" {
-		args = append(args, "--model", p.Model)
-	}
-	if p.Effort != "" {
-		args = append(args, "--effort", p.Effort)
-	}
-	// the template's terms, as argv the operator never chose. This is the line
-	// where a workspace template stops being a description and becomes a restriction —
-	// it is built from the SERVER's merge (templateapply.go), so a caller who skips the
-	// console and posts straight to /runs gets the same confinement.
-	//
-	// The allowlist travels as ONE comma-separated value rather than the flag's
-	// space-separated variadic form: a variadic `--allowedTools A B` would swallow the
-	// flags that follow it. Tool specs routinely contain spaces (`Bash(git *)`) and
-	// never commas — templateTerms refuses one that does, so the join is lossless.
-	//
-	// It is only a restriction in company: `--allowedTools` AUTO-APPROVES, it does not
-	// confine (connectors/claude SDKEvaluationOrder). What denies everything it does not
-	// name is the permission mode dontAsk that the merge pins alongside it. Emitting
-	// this flag without that mode would read as a lock-down and be a widening.
-	if len(p.AllowedTools) > 0 {
-		args = append(args, "--allowedTools", strings.Join(p.AllowedTools, ","))
-	}
-	if p.Instructions != "" {
-		args = append(args, "--append-system-prompt", p.Instructions)
-	}
-	if resumeID != "" {
-		args = append(args, "--resume", resumeID)
+		args = drv.LaunchArgs(driverLaunch)
+	} else {
+		switch p.Transport {
+		case TransportStreamJSON:
+			// The supported headless control transport: bidirectional NDJSON over stdio.
+			args = append(args, "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--print")
+		case TransportRemoteControl:
+			// Lifecycle-only: I/O is relayed to Anthropic's cloud, not bridged (§0).
+			args = append(args, "--remote-control")
+			if p.Name != "" {
+				args = append(args, "--name", p.Name)
+			}
+		}
+		args = append(args, "--permission-mode", p.PermissionMode)
+		if p.Model != "" {
+			args = append(args, "--model", p.Model)
+		}
+		if p.Effort != "" {
+			args = append(args, "--effort", p.Effort)
+		}
+		// the template's terms, as argv the operator never chose. This is the line
+		// where a workspace template stops being a description and becomes a restriction —
+		// it is built from the SERVER's merge (templateapply.go), so a caller who skips the
+		// console and posts straight to /runs gets the same confinement.
+		//
+		// The allowlist travels as ONE comma-separated value rather than the flag's
+		// space-separated variadic form: a variadic `--allowedTools A B` would swallow the
+		// flags that follow it. Tool specs routinely contain spaces (`Bash(git *)`) and
+		// never commas — templateTerms refuses one that does, so the join is lossless.
+		//
+		// It is only a restriction in company: `--allowedTools` AUTO-APPROVES, it does not
+		// confine (connectors/claude SDKEvaluationOrder). What denies everything it does not
+		// name is the permission mode dontAsk that the merge pins alongside it. Emitting
+		// this flag without that mode would read as a lock-down and be a widening.
+		if len(p.AllowedTools) > 0 {
+			args = append(args, "--allowedTools", strings.Join(p.AllowedTools, ","))
+		}
+		if p.Instructions != "" {
+			args = append(args, "--append-system-prompt", p.Instructions)
+		}
+		if resumeID != "" {
+			args = append(args, "--resume", resumeID)
+		}
 	}
 
 	var env []EnvVar
-	if cred.Token != "" {
-		// Bearer precedence over a (now-stripped) ANTHROPIC_API_KEY; the WIF token is
-		// short-lived and never persisted (only its id reaches the row/ledger).
-		env = append(env, EnvVar{Name: "ANTHROPIC_AUTH_TOKEN", Value: cred.Token})
+	if !driven {
+		if cred.Token != "" {
+			// Bearer precedence over a (now-stripped) ANTHROPIC_API_KEY; the WIF token is
+			// short-lived and never persisted (only its id reaches the row/ledger).
+			env = append(env, EnvVar{Name: "ANTHROPIC_AUTH_TOKEN", Value: cred.Token})
+		}
+		if m.rt.baseURL != "" {
+			// Route the operated session's inference through Olivares' own gateway so it
+			// is PEP/budget/model-governed (wires the gateway; here it is an env-ref).
+			env = append(env, EnvVar{Name: "ANTHROPIC_BASE_URL", Value: m.rt.baseURL})
+		}
 	}
-	if m.rt.baseURL != "" {
-		// Route the operated session's inference through Olivares' own gateway so it
-		// is PEP/budget/model-governed (wires the gateway; here it is an env-ref).
-		env = append(env, EnvVar{Name: "ANTHROPIC_BASE_URL", Value: m.rt.baseURL})
-	}
+	// §5.3: the governed managed credential of THIS driver's own adapter, and
+	// nothing else. Empty under provider_account_home, where the authorized home is
+	// the credential and Olivares injects nothing at all.
+	env = append(env, providerEnv...)
 	if workCred.Token != "" {
 		// Exact-session kernel authority. These are explicit launch values, not
 		// inherited host environment, and the token is never persisted/logged.
@@ -507,13 +603,57 @@ func (m *Module) buildLaunchSpec(p CreateRunParams, cred Credential, workCred Wo
 			Name: "OLIVARES_COMMUNICATION_TOKEN", Value: communicationCred.Token,
 		})
 	}
-	// A conducted session MUST NOT self-mutate under governance: disable Claude Code's
-	// background auto-updater for the child so the binary stays pinned for the session's
-	// lifetime (reproducibility + the co-deployment's pinned-artifact guarantee).
-	// The deploy artifacts (image/compose/systemd) also set this on the engine, but the
-	// procRunner env is a strict ALLOWLIST that would otherwise strip it from the child —
-	// so inject it explicitly here, where it actually reaches `claude`.
-	env = append(env, EnvVar{Name: "DISABLE_AUTOUPDATER", Value: "1"})
+	// B1: a profiled launch runs under the profile's homes. Both are explicit launch
+	// values — they override whatever the host process inherited — and neither is a
+	// credential: the configuration home is where the provider keeps its own settings
+	// and transcripts, HOME is the child's user home. LaunchSpec.Dir (the workspace) is
+	// a third, unrelated path. Which VARIABLE carries the configuration home is the
+	// driver's own (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, …): naming another provider's
+	// variable would point a child at a home nobody selected. A caller or a gate that
+	// names either variable for a profiled launch is refused before this point rather
+	// than resolved by order.
+	if p.ProviderHome != nil {
+		env = append(env,
+			EnvVar{Name: envUserHome, Value: p.ProviderHome.UserHome},
+			EnvVar{Name: m.configHomeEnvForDriver(p.ProviderHome.Driver), Value: p.ProviderHome.ConfigHome},
+		)
+		if p.ProviderHome.Driver == providerDriverOpenCode {
+			// Runtime-owned XDG mapping beside HOME/ConfigHome. Do not set
+			// XDG_RUNTIME_DIR: OC1 refuses an unqualified runtime directory.
+			env = append(env, openCodeXDGMapping(p.ProviderHome.UserHome)...)
+		}
+	}
+	if driven {
+		// A registered driver may need an explicit, non-secret variable of its OWN
+		// official CLI — today, the one that pins the child's version by disabling its
+		// background updater, which is the same guarantee the Claude branch below gets
+		// from Claude's own variable. It is optional: a driver that declares none
+		// builds exactly the environment it built before.
+		//
+		// A name the profile OWNS is dropped rather than ordered: the whole point of
+		// resolving homes server-side is that nothing downstream re-points them, and a
+		// driver is downstream of that decision like a caller or a gate.
+		if withEnv, ok := drv.(ProviderDriverLaunchEnv); ok {
+			for _, item := range withEnv.LaunchEnv(driverLaunch) {
+				if providerHomeEnvName(item.Name) ||
+					(driverKey == providerDriverOpenCode && openCodeReservedEnvName(item.Name)) {
+					m.warnf("sessions: a provider driver named a variable the profile owns; it was dropped",
+						"driver", driverKey, "name", item.Name)
+					continue
+				}
+				env = append(env, item)
+			}
+		}
+	} else {
+		// A conducted session MUST NOT self-mutate under governance: disable Claude Code's
+		// background auto-updater for the child so the binary stays pinned for the session's
+		// lifetime (reproducibility + the co-deployment's pinned-artifact guarantee).
+		// The deploy artifacts (image/compose/systemd) also set this on the engine, but the
+		// procRunner env is a strict ALLOWLIST that would otherwise strip it from the child —
+		// so inject it explicitly here, where it actually reaches `claude`. It is Claude's
+		// own variable and is not invented for another provider's CLI.
+		env = append(env, EnvVar{Name: "DISABLE_AUTOUPDATER", Value: "1"})
+	}
 
 	// the governance env the LaunchGate wants on the child — the OLIVARES_HOOK_PEP_*
 	// the managed PreToolUse hook reads to reach the governed PEP, so every tool-call the
@@ -521,32 +661,39 @@ func (m *Module) buildLaunchSpec(p CreateRunParams, cred Credential, workCred Wo
 	// any host value); a per-session PEP bearer is held in memory and never persisted.
 	env = append(env, injectEnv...)
 
-	spec := LaunchSpec{
-		Program:   m.rt.program,
+	return LaunchSpec{
+		Program:   program,
 		Args:      args,
+		Dir:       dir,
 		Env:       env,
 		EnvAllow:  p.EnvAllow,
 		Isolation: p.Isolation,
 		WaitDelay: m.rt.waitDelay,
+		Workspace: mount,
 	}
-	// ref→path is now GOVERNED. A run with no workspace keeps the empty Dir
-	// (the native runner falls back to the process cwd). A resolved workspace sets the
-	// working directory; for native that is the canonical host root, for a container it
-	// is the in-container target plus the bind mount the runner consumes.
-	if ws != nil {
-		switch p.Isolation {
-		case IsolationContainer, IsolationSandbox:
-			spec.Dir = ws.containerTgt
-			spec.Workspace = &WorkspaceMount{
-				HostPath:        ws.rootReal,
-				ContainerTarget: ws.containerTgt,
-				ReadOnly:        ws.mountMode == mountRO,
-			}
-		default: // native
-			spec.Dir = ws.rootReal
+}
+
+// launchWorkspaceTarget resolves the child's working directory and, for a
+// containerized launch, its bind mount.
+//
+// ref→path is GOVERNED. A run with no workspace keeps the empty Dir
+// (the native runner falls back to the process cwd). A resolved workspace sets the
+// working directory; for native that is the canonical host root, for a container it
+// is the in-container target plus the bind mount the runner consumes.
+func launchWorkspaceTarget(p CreateRunParams, ws *resolvedWorkspace) (string, *WorkspaceMount) {
+	if ws == nil {
+		return "", nil
+	}
+	switch p.Isolation {
+	case IsolationContainer, IsolationSandbox:
+		return ws.containerTgt, &WorkspaceMount{
+			HostPath:        ws.rootReal,
+			ContainerTarget: ws.containerTgt,
+			ReadOnly:        ws.mountMode == mountRO,
 		}
+	default: // native
+		return ws.rootReal, nil
 	}
-	return spec
 }
 
 // runtimeSettleWarrantsWarning decides whether a failed settle of the runtime row after

@@ -17,7 +17,7 @@
 //   - it does not fit any sealed observation kind (cracking the frozen S02 wire
 //     contract to add a "document" kind would reach into /core);
 //   - the event bus is a fan-out backbone (S02 §4) — broadcasting document bodies
-//     to every subscriber would violate minimal data (docs/SECURITY-HARDENING.md-3): content must
+//     to every subscriber would violate minimal data (docs/SECURITY-HARDENING.md §2-3): content must
 //     go straight into the governed knowledge store, redacted, never broadcast.
 //
 // So content travels a typed Go contract here, exactly as the identity roster and

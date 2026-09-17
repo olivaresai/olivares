@@ -18,17 +18,17 @@ import (
 // (TestSeatCap_FinitePolicyNeverGates proves it cannot refuse an account).
 func TestSeatLimitReportsWiredPolicy(t *testing.T) {
 	// nil policy → unlimited.
-	a := auth.NewAuthenticator(testStore(t), nil)
+	a := auth.NewAuthenticator(nil, nil)
 	if limit, ok := a.SeatLimit(); ok || limit > 0 {
 		t.Fatalf("nil policy SeatLimit = (%d,%v), want unlimited (0,false)", limit, ok)
 	}
 	// community policy → unlimited too (B10 removed the cap of 3).
-	a = auth.NewAuthenticator(testStore(t), nil).WithSeatPolicy(auth.NewCommunitySeatPolicy())
+	a = auth.NewAuthenticator(nil, nil).WithSeatPolicy(auth.NewCommunitySeatPolicy())
 	if limit, ok := a.SeatLimit(); ok || limit > 0 {
 		t.Fatalf("community SeatLimit = (%d,%v), want unlimited (0,false)", limit, ok)
 	}
 	// an explicit figure → reported verbatim, for display.
-	a = auth.NewAuthenticator(testStore(t), nil).WithSeatPolicy(stubSeatPolicy{limit: 25, ok: true})
+	a = auth.NewAuthenticator(nil, nil).WithSeatPolicy(stubSeatPolicy{limit: 25, ok: true})
 	if limit, ok := a.SeatLimit(); !ok || limit != 25 {
 		t.Fatalf("advertised SeatLimit = (%d,%v), want (25,true)", limit, ok)
 	}

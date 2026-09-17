@@ -520,7 +520,40 @@ WHERE fn.nspname = $1 AND p.proname = $2`
 // represent — one identity, one footprint — so it is refused rather than resolved by
 // picking one.
 func projectGuardFunction(ctx context.Context, q rowQuerier, schema, name string) (guardFunctionForm, bool, error) {
-	rows, err := q.QueryContext(ctx, guardFunctionProjectionSQL, schema, name)
+	return decodeGuardFunctionProjection(ctx, q, guardFunctionProjectionSQL, schema, name)
+}
+
+// guardZeroInputFunctionProjectionSQL is guardFunctionProjectionSQL narrowed to the EXACT
+// ZERO-INPUT SIGNATURE of that name, and it exists for exactly one caller.
+//
+// verifyBootstrapFunction asks about `public.olivares_block_mutation()`, a trigger function that
+// by construction takes no input arguments — PostgreSQL passes a trigger its context, not
+// parameters. The unnarrowed projection selects by schema and name alone and then refuses more
+// than one row, so an UNRELATED overload of that name, which this build never creates and which
+// `CREATE OR REPLACE FUNCTION` never replaces, made the bootstrap refuse a database it has no
+// claim on. Measured on PostgreSQL 16 with a split owner: a foreign
+// `olivares_block_mutation(text)` alone refused the boot AFTER the three rollout relations had
+// committed.
+//
+// It is NARROW ON PURPOSE. The other consumers of the unnarrowed projection — the event-fence
+// handler and the three directory-writer calls — keep their own projections, their own
+// multiple-overload refusal and their own OID, ownership, EXECUTE-ACL and trigger-attachment
+// checks. This adds a predicate for one caller; it does not move a function boundary.
+const guardZeroInputFunctionProjectionSQL = guardFunctionProjectionSQL + `
+  AND p.pronargs = 0
+  AND COALESCE(pg_catalog.array_length(p.proargtypes, 1), 0) = 0`
+
+// projectGuardZeroInputFunction reads the zero-input overload of a function name, through the
+// SAME decoder, the same canonical comparison fields and the same refusal of an ambiguous
+// projection as projectGuardFunction.
+func projectGuardZeroInputFunction(ctx context.Context, q rowQuerier, schema, name string) (guardFunctionForm, bool, error) {
+	return decodeGuardFunctionProjection(ctx, q, guardZeroInputFunctionProjectionSQL, schema, name)
+}
+
+// decodeGuardFunctionProjection is the shared body: one row or none, every canonical field
+// decoded, and more than one row refused rather than resolved by picking one.
+func decodeGuardFunctionProjection(ctx context.Context, q rowQuerier, query, schema, name string) (guardFunctionForm, bool, error) {
+	rows, err := q.QueryContext(ctx, query, schema, name)
 	if err != nil {
 		return guardFunctionForm{}, false, fmt.Errorf("sqlstore: project the guard function %s.%s: %w", schema, name, err)
 	}

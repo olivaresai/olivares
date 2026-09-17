@@ -22,12 +22,29 @@ import (
 // caller cannot reach another tenant's data through it. It implements
 // store.Scope.
 type tenantScope struct {
+	lineageWriter   *lineageWriteTracker
 	s               *sqlStore
 	tx              *sql.Tx
 	tenant          model.TenantID
 	readOnly        bool                   // true in a View scope
 	audit           *auditLog              // one chain head per transaction
 	directoryWriter *directoryWriteTracker // shared by all protected repositories
+	bindingPoison   error                  // binding failures terminate View and prevent Mutate commit
+	authorityLocked bool                   // prevents late SYSTEM locks after tenant authority
+
+	// The custodial effect state (P2 / W1). custodyMu guards all five fields and
+	// the write gate that reads them; see custodial_write_gate.go for what each
+	// phase admits. They are inert in every transaction that never binds one:
+	// custodyForeign is the only field an ordinary write touches, and nothing
+	// reads it unless a binding is attempted.
+	custodyMu         sync.Mutex
+	custodyPhase      custodyPhase
+	custodyBound      bool
+	custodyForeign    int
+	custodyPoisoned   error
+	finished          bool
+	loginCapabilityMu sync.Mutex
+	loginCapability   *loginCapabilityTx // R5 capability state shared by every port of this transaction
 
 	transactionNowMu  sync.Mutex
 	transactionNow    model.Timestamp // latest DB time observed through this exact transaction
@@ -107,6 +124,9 @@ func (sc *tenantScope) LockTransaction(ctx context.Context, key string) error {
 	if key == "" {
 		return errors.New("sqlstore: transaction lock key is empty")
 	}
+	if err := sc.guardScopeWrite(scopeRowLock, originOrdinary, "core.transaction_lock", model.ID(key)); err != nil {
+		return err
+	}
 	switch sc.s.dia.Name() {
 	case store.EnginePostgres:
 		if _, err := sc.tx.ExecContext(ctx,
@@ -127,59 +147,112 @@ func (sc *tenantScope) LockTransaction(ctx context.Context, key string) error {
 // module/core rows cannot be probed through a workspace-confined scope. The
 // method returns no payload and sorts by the declared global order before
 // taking locks, so callers cannot manufacture a lock-order inversion.
-func (sc *tenantScope) LockAuthoritySnapshot(
-	ctx context.Context,
-	refs []store.AuthorizationFactRef,
-) error {
+func (sc *tenantScope) LockAuthoritySnapshot(ctx context.Context, refs []store.AuthorizationFactRef) error {
 	if sc.readOnly {
 		return store.ErrReadOnly
 	}
+	if sc.directoryWriter != nil && !sc.directoryWriter.locked {
+		sc.directoryWriter.authorityBeforeDirectory = true
+	}
+	sc.authorityLocked = true
+	return sc.validateAuthoritySnapshot(ctx, refs, true)
+}
+
+// ValidateAuthoritySnapshot uses the identical grammar and version/lease checks
+// in a new stable View. It acquires no row/table locks and never renews a lease.
+func (sc *tenantScope) ValidateAuthoritySnapshot(ctx context.Context, refs []store.AuthorizationFactRef) error {
+	if sc.bindingPoison != nil {
+		return sc.bindingPoison
+	}
+	if !sc.readOnly {
+		return errors.New("sqlstore: read authority barrier requires View")
+	}
+	return sc.validateAuthoritySnapshot(ctx, refs, false)
+}
+
+func (sc *tenantScope) validateAuthoritySnapshot(
+	ctx context.Context,
+	refs []store.AuthorizationFactRef,
+	lock bool,
+) error {
+	facts, locksIdentityTable, err := sc.prepareAuthoritySnapshot(refs)
+	if err != nil {
+		return err
+	}
+	return sc.applyAuthoritySnapshot(ctx, facts, locksIdentityTable, lock)
+}
+
+type orderedAuthorityFact struct {
+	ref      store.AuthorizationFactRef
+	desc     model.EntityDescriptor
+	subject  string
+	fence    int64
+	deadline model.Timestamp
+	touch    bool
+	locked   model.Record
+}
+
+// prepareAuthoritySnapshot validates the snapshot grammar for THIS scope's own
+// tenant. It is the only entrypoint ordinary tenant callers use.
+func (sc *tenantScope) prepareAuthoritySnapshot(refs []store.AuthorizationFactRef) ([]orderedAuthorityFact, bool, error) {
+	return sc.prepareAuthoritySnapshotFor(sc.tenant, refs)
+}
+
+// prepareAuthoritySnapshotFor is the same grammar with the epoch-binding tenant
+// supplied explicitly. The auth partition needs to validate a BUSINESS tenant's
+// facts before it borrows that tenant's presentation, which is the one thing the
+// scope's own pin cannot express while the scope is pinned to SYSTEM. Nothing
+// else changes: the allowlist, lease coordinates, duplicate rules, budget,
+// identity-table predicate and canonical order are the unchanged originals, and
+// the ordinary entrypoint above still passes sc.tenant.
+func (sc *tenantScope) prepareAuthoritySnapshotFor(
+	tenant model.TenantID,
+	refs []store.AuthorizationFactRef,
+) ([]orderedAuthorityFact, bool, error) {
 	if len(refs) == 0 || len(refs) > 64 {
-		return errors.New("sqlstore: authorization snapshot must contain 1..64 facts")
+		return nil, false, errors.New("sqlstore: authorization snapshot must contain 1..64 facts")
 	}
-	type orderedFact struct {
-		ref      store.AuthorizationFactRef
-		desc     model.EntityDescriptor
-		subject  string
-		fence    int64
-		deadline model.Timestamp
-		touch    bool
-		locked   model.Record
-	}
-	facts := make([]orderedFact, 0, len(refs))
+
+	facts := make([]orderedAuthorityFact, 0, len(refs))
 	seen := make(map[string]struct{}, len(refs))
 	seenLeaseSubject := make(map[string]struct{}, len(refs))
 	locksIdentityTable := false
 	for _, ref := range refs {
-		if ref.ID.IsZero() || ref.Version < 1 {
-			return errors.New("sqlstore: authorization snapshot contains a malformed fact")
+		if ref.Kind == model.UserAuthorityKind {
+			return nil, false, errors.New("sqlstore: User authority requires the typed snapshot bundle")
+		}
+		if validateCreateID(ref.ID) != nil || ref.Version < 1 {
+			return nil, false, errors.New("sqlstore: authorization snapshot contains a malformed fact")
 		}
 		desc, ok := sc.s.reg.lookup(ref.Kind)
 		if !ok || !allowedAuthorizationFactKind(ref.Kind) ||
 			!desc.AuthorizationFact || desc.AuthorizationLockOrder == 0 {
-			return fmt.Errorf("sqlstore: entity %q is not an authorization fact", ref.Kind)
+			return nil, false, fmt.Errorf("sqlstore: entity %q is not an authorization fact", ref.Kind)
+		}
+		if (ref.Kind == model.DirectoryEpochKind || ref.Kind == model.AuthorizationEpochKind || model.IsLineageEpochKind(ref.Kind)) && ref.ID != model.ID(tenant) {
+			return nil, false, errors.New("sqlstore: authorization epoch crosses tenant")
 		}
 		key := string(ref.Kind) + "\x00" + ref.ID.String()
 		if _, duplicate := seen[key]; duplicate {
-			return errors.New("sqlstore: authorization snapshot contains a duplicate fact")
+			return nil, false, errors.New("sqlstore: authorization snapshot contains a duplicate fact")
 		}
 		seen[key] = struct{}{}
 		subject, fence, deadline, hasLeaseFence := ref.LeaseFenceWitness()
 		if desc.AuthorizationLeaseFence.Declared() != hasLeaseFence {
-			return errors.New(
+			return nil, false, errors.New(
 				"sqlstore: authorization snapshot lease/fence witness does not match descriptor",
 			)
 		}
 		if hasLeaseFence {
 			subjectKey := string(ref.Kind) + "\x00" + subject
 			if _, duplicate := seenLeaseSubject[subjectKey]; duplicate {
-				return errors.New(
+				return nil, false, errors.New(
 					"sqlstore: authorization snapshot contains a duplicate leased subject",
 				)
 			}
 			seenLeaseSubject[subjectKey] = struct{}{}
 		}
-		facts = append(facts, orderedFact{
+		facts = append(facts, orderedAuthorityFact{
 			ref: ref, desc: desc, subject: subject, fence: fence,
 			deadline: deadline, touch: hasLeaseFence,
 		})
@@ -202,10 +275,14 @@ func (sc *tenantScope) LockAuthoritySnapshot(
 		}
 		return facts[i].ref.ID.String() < facts[j].ref.ID.String()
 	})
+	return facts, locksIdentityTable, nil
+}
+
+func (sc *tenantScope) applyAuthoritySnapshot(ctx context.Context, facts []orderedAuthorityFact, locksIdentityTable, lock bool) error {
 	identityTableLocked := false
 	for i := range facts {
 		fact := &facts[i]
-		if locksIdentityTable && !identityTableLocked && fact.ref.Kind == identityDescriptor.Kind {
+		if lock && locksIdentityTable && !identityTableLocked && fact.ref.Kind == identityDescriptor.Kind {
 			// Epoch is order 5 and Identity is order 10. Take every lower-order
 			// row first, then fence Identity's ExternalID predicate immediately
 			// before its first row. DropTenant takes epoch before its ordinary
@@ -219,7 +296,21 @@ func (sc *tenantScope) LockAuthoritySnapshot(
 			}
 			identityTableLocked = true
 		}
-		locked, err := sc.repo(fact.desc).Lock(ctx, fact.ref.ID)
+		var locked model.Record
+		var err error
+		if lock && sc.s.dia.Name() == store.EnginePostgres && model.IsLineageEpochKind(fact.ref.Kind) {
+			// FOR UPDATE requires UPDATE privilege in PostgreSQL. Keep epochs
+			// trigger-only and expose only this closed owner routine for locks.
+			// #nosec G202 -- the routine name is "olivares_lock_"+fact.desc.Table under a model.IsLineageEpochKind branch: desc comes from reg.lookup for one of six compiled core kinds whose Table registerCore takes from lineageRelations, which is the same six-name set postgresLineageRoutines CREATEs (lineage_functions.go:52), and validateModule refuses the core namespace so no module can widen it. The tenant travels as $1.
+			_, err = sc.tx.ExecContext(ctx, "SELECT public.olivares_lock_"+fact.desc.Table+"($1)", sc.tenant.String())
+			if err == nil {
+				locked, err = sc.repo(fact.desc).Get(ctx, fact.ref.ID)
+			}
+		} else if lock {
+			locked, err = sc.repo(fact.desc).Lock(ctx, fact.ref.ID)
+		} else {
+			locked, err = sc.repo(fact.desc).Get(ctx, fact.ref.ID)
+		}
 		if err != nil {
 			if fact.touch && errors.Is(err, store.ErrNotFound) {
 				return store.ErrConflict
@@ -227,6 +318,9 @@ func (sc *tenantScope) LockAuthoritySnapshot(
 			return err
 		}
 		if locked.Int(model.ColVersion) != fact.ref.Version {
+			if lock && fact.touch {
+				return store.NewLockedLeasedVersionConflict(fact.ref)
+			}
 			return store.ErrConflict
 		}
 		fact.locked = locked
@@ -281,8 +375,13 @@ func (sc *tenantScope) LockAuthoritySnapshot(
 			!authorityNow.Before(fact.deadline) {
 			return store.ErrConflict
 		}
-		if _, err := sc.repo(fact.desc).UpdateAtTransactionTime(ctx, fact.locked); err != nil {
-			return err
+		if lock {
+			// THE authority-touch site. Its input is fact.locked — the record this
+			// engine read and locked above — so the origin attributes a renewal of
+			// the engine's own leased authority, never a consumer write.
+			if _, err := sc.authorityTouchRepo(fact.desc).UpdateAtTransactionTime(ctx, fact.locked); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -313,6 +412,18 @@ func (sc *tenantScope) repo(desc model.EntityDescriptor) *genericRepo {
 		readOnly:         sc.readOnly,
 		engineQualified:  isDirectoryAuthorityTable(desc.Table),
 		transactionStamp: sc.observedTransactionTime,
+		// Every repository a tenant Scope hands out reports its writes to the
+		// one gate. origin stays the zero value (ordinary) here: only
+		// custodyRepo and authorityTouchRepo change it.
+		writeGuard: sc.guardScopeWrite,
+		poison: func(err error) {
+			if sc.lineageWriter != nil {
+				sc.lineageWriter.poison(err)
+			}
+			if sc.directoryWriter != nil {
+				sc.directoryWriter.poison(err)
+			}
+		},
 	}
 }
 
@@ -323,6 +434,7 @@ func (sc *tenantScope) auditLog() *auditLog {
 			readOnly: sc.readOnly, signEvent: sc.s.signEvent,
 			spoolMaxBytes: sc.s.spoolMaxBytes, spoolOnFull: sc.s.spoolOnFull,
 			blindMeta: sc.s.blindMeta, directoryWriter: sc.directoryWriter,
+			writeGuard: sc.guardScopeWrite,
 		}
 	}
 	return sc.audit
@@ -380,7 +492,11 @@ func (sc *tenantScope) Agents() store.Repository[model.Agent] {
 	)
 }
 func (sc *tenantScope) Sessions() store.Repository[model.Session] {
-	return newTypedRepo(sc.repo(sessionDescriptor), sessionCodec)
+	inner := newTypedRepo(sc.repo(sessionDescriptor), sessionCodec)
+	if sc.lineageWriter == nil {
+		return inner
+	}
+	return &lineageTrackedRepo[model.Session]{Repository: inner, tracker: sc.lineageWriter}
 }
 func (sc *tenantScope) Providers() store.Repository[model.Provider] {
 	return newTypedRepo(sc.repo(providerDescriptor), providerCodec)
@@ -409,7 +525,7 @@ func (sc *tenantScope) Identities() store.MutableRepository[model.Identity] {
 	return newMutableDirectoryRepo(tracked)
 }
 func (sc *tenantScope) Policies() store.Repository[model.Policy] {
-	return newTypedRepo(sc.repo(policyDescriptor), policyCodec)
+	return newPolicyRepo(sc.repo(policyDescriptor))
 }
 func (sc *tenantScope) Costs() store.Repository[model.CostRecord] {
 	return newTypedRepo(sc.repo(costDescriptor), costCodec)
@@ -474,7 +590,26 @@ func (sc *tenantScope) Audit() store.AuditLog { return sc.auditLog() }
 // sharing the scope's audit log so a claim/settle's ledger event and its row
 // change ride one chain head in one transaction.
 func (sc *tenantScope) EvidenceOperations() store.EvidenceOperationRepo {
-	return newEvidenceOpsRepo(sc.repo(evidenceOpDescriptor), sc.auditLog())
+	return newEvidenceOpsRepo(
+		sc.repo(evidenceOpDescriptor), sc.auditLog(), sc.s.evidenceClaimAfterMissTestHook,
+	)
+}
+
+// AccessEvidence returns the tenant-pinned access-evidence store (v26.9
+// increment A). It shares the scope's audit log, so a record and the ledger
+// event anchoring it ride one chain head in one transaction, and it is handed
+// the SAME evidence journal the rest of the engine uses — read-only, as the
+// single authority on governed operations — rather than a second copy of its
+// semantics.
+func (sc *tenantScope) AccessEvidence() store.AccessEvidenceRepo {
+	return newAccessEvidenceRepo(
+		sc.repo(policyArtifactDescriptor),
+		sc.repo(authorityTransitionDescriptor),
+		sc.repo(actionObservationDescriptor),
+		sc.repo(authorizationDecisionDescriptor),
+		sc.EvidenceOperations(),
+		sc.auditLog(),
+	)
 }
 
 func (sc *tenantScope) Ext(kind model.Kind) (store.GenericRepo, error) {

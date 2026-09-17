@@ -636,8 +636,13 @@ type WorkspaceSummaryDTO struct {
 // handleWorkspaceSummary returns a workspace with counts of its scoped entities.
 func (s *Server) handleWorkspaceSummary(w http.ResponseWriter, r *http.Request) {
 	id := model.ID(chi.URLParam(r, "id"))
-	_, tenant, ok := s.authzTenantEntity(w, r, "tenant:read", id)
+	p, tenant, ok := s.authzTenantEntity(w, r, "tenant:read", id)
 	if !ok {
+		return
+	}
+	// Match Workspace GET's concealment before reading metadata or scoped counts.
+	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined && !p.Superadmin && id != confinedWS {
+		s.writeError(w, r, store.ErrNotFound)
 		return
 	}
 	var dto WorkspaceSummaryDTO

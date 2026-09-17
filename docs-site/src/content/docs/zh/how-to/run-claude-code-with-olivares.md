@@ -12,6 +12,8 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 [连接 Claude Code](/how-to/connect-claude-code/)；关于*治理*路径（将 PreToolUse 钩子用作 PEP），
 见 [govern-claude-code 示例](https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code)。
 本页讲的是**联合部署**：让两个运行时一起跑起来。
+运行时已存在后，要在提供商配置文件下启动 Claude、Codex 或 Grok，见
+[运行提供商会话](/how-to/operate-provider-sessions/)。
 
 :::note[治理究竟如何抵达会话]
 一个会话之所以受治理，是因为**引擎掌握着 `claude` 的 stdin/stdout**——即 `stream-json` 无头传输。
@@ -61,14 +63,14 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \
   --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
   --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.8.0 .
+  -t olivares-agentops:26.9.0 .
 ```
 
 也可改用 `--build-arg CLAUDE_INSTALL=byo` 自带 `claude`（镜像不携带 `claude`；在运行时挂载你自己的，
@@ -77,7 +79,7 @@ docker build -f Dockerfile.agentops \
 ### 启动它
 
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.8.0
+export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.9.0
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.agentops.yml up -d
 ```
@@ -217,7 +219,7 @@ Docker attach/hijack 桥接。数据模型接缝已经**建模**了它（`--isol
 - **最小数据、白名单环境。** 子进程 `claude` 仅继承一个明确的白名单（PATH、HOME、locale……）外加内存中的
   推理令牌——**没有** `OLIVARES_*` 签名密钥，**没有**可能遮蔽所铸造凭据的环境态 `ANTHROPIC_*`/`CLAUDE_CODE_*`。
 - **经过验证的供应链。** 引擎经 cosign 签名（验证它 / 按摘要固定）；`claude` 从 Anthropic 的签名仓库安装，
-  密钥指纹被固定。安装程序**拒绝运行未经验证的引擎**，除非你显式选择退出。
+  密钥指纹被固定。安装程序**拒绝运行未经验证的引擎**，且没有绕过校验的开关。
 - **锚定的审计。** 每一次生命周期转换和每一次工作区变更都通过 `PayloadHash` 被封存在哈希链式（hash-chained）、
   签名的账本中——文件的字节与帧的内容从不被持久化。
 

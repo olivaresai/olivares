@@ -1,0 +1,115 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+// Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+
+package sqlstore
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
+)
+
+// Fixture adapter only. Every schema, guard, writer and activation instruction
+// executes from the archived, unmodified ae19349 v9 implementation.
+func TestF2AV9Fixture(t *testing.T) {
+	ctx := context.Background()
+	cfg := store.Config{Engine: store.Engine(os.Getenv("OLIVARES_F2A_ENGINE")), DSN: os.Getenv("OLIVARES_F2A_DSN"), OwnerDSN: os.Getenv("OLIVARES_F2A_OWNER_DSN"), AdminDSN: os.Getenv("OLIVARES_F2A_ADMIN_DSN")}
+	raw, err := Open(ctx, cfg, nil)
+	if err != nil {
+		t.Fatalf("v9 Open: %v", err)
+	}
+	defer raw.Close()
+	mode := os.Getenv("OLIVARES_F2A_V9_MODE")
+	if mode == "open" {
+		return
+	}
+	if err := raw.System(ctx, func(sys store.SystemScope) error { _, err := sys.EnsureSystemTenant(ctx); return err }); err != nil {
+		t.Fatal(err)
+	}
+	tenants := []model.TenantID{provisionTenant(t, raw, "historical-first"), provisionTenant(t, raw, "historical-second")}
+	var users []model.User
+	var sessions []model.AuthSession
+	for i, tenant := range tenants {
+		if err := raw.AuthMutate(ctx, func(as store.AuthScope) error {
+			u, err := as.Users().Create(ctx, model.User{Email: fmt.Sprintf("historical-%d@example.test", i), Status: model.StatusActive})
+			if err != nil {
+				return err
+			}
+			users = append(users, u)
+			if _, err := as.Memberships().Create(ctx, model.Membership{UserID: u.ID, TargetTenantID: tenant, Role: "viewer"}); err != nil {
+				return err
+			}
+			session, err := as.Sessions().Create(ctx, model.AuthSession{UserID: u.ID, Selector: fmt.Sprintf("historical-session-%d", i), SecretHash: []byte("fixture-not-a-secret"), ExpiresAt: model.NewTimestamp(time.Now().Add(24 * time.Hour))})
+			if err != nil {
+				return err
+			}
+			sessions = append(sessions, session)
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if mode == "enforced" {
+		if _, _, _, err := ActivateDirectoryWriter(ctx, raw, cfg, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := readDirectoryWriterControlState(ctx, raw.(*sqlStore).db, raw.(*sqlStore).dia)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := struct {
+		Users      []model.User
+		Sessions   []model.AuthSession
+		Tenants    []model.TenantID
+		Mode       string
+		Generation int64
+	}{users, sessions, tenants, string(state.Mode), state.ExpectedGeneration}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(os.Getenv("OLIVARES_F2A_MANIFEST"), encoded, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if mode == "writer" {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			phase := scanner.Text()
+			err := raw.AuthMutate(ctx, func(as store.AuthScope) error {
+				u, err := as.Users().Get(ctx, users[0].ID)
+				if err != nil {
+					return err
+				}
+				u.DisplayName = "old-writer-must-not-commit"
+				_, err = as.Users().Update(ctx, u)
+				return err
+			})
+			if phase == "staged" {
+				allowed := cfg.Engine == store.EnginePostgres
+				if (err == nil) != allowed {
+					t.Fatalf("old staged write: allowed=%t err=%v", allowed, err)
+				}
+				fmt.Printf("OLD_STAGED_WRITE: allowed=%t err=%v\n", allowed, err)
+				if err := os.WriteFile(os.Getenv("OLIVARES_F2A_MANIFEST")+".staged", []byte("phase-complete"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				continue
+			}
+			if err == nil {
+				t.Fatal("old writer unexpectedly committed")
+			}
+			fmt.Printf("OLD_WRITE_REJECTED: %v\n", err)
+			return
+		}
+		t.Fatal("missing old-writer instruction")
+	}
+}

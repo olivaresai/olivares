@@ -239,6 +239,23 @@ classify() {
     # was already treating them as source; only the gate was not.
     *.sql|*.rego|*.tf|*.proto|*.lua|*.astro)
       echo source; return ;;
+    # `.cedar` and `.allow` entered 2026-09-02 (V269-02) and are SOURCE, decided
+    # file by file rather than by analogy — which is what this classify() asks for.
+    #
+    #   .cedar — an authorization POLICY is a program: modules/governance/testdata/cockpit/
+    #            *.cedar is compiled by cedar-go and evaluated against the real engine in
+    #            cockpit_policy_test.go. It sits beside .rego, which is here for the same
+    #            reason. Cedar takes `//` comments, so a header costs nothing.
+    #   .allow — scripts/community-session-cockpit-strings.allow is READ BY A GATE and
+    #            decides whether a push is refused, so it is not captured evidence like a
+    #            .csv fixture: it is the gate's rule set, in the same class as the shell
+    #            script that consumes it. It takes `#` comments.
+    #
+    # Both already carried module-correct inline headers when this line was written; the
+    # tree was treating them as source and only the gate was not — the same shape recorded
+    # for .awk above.
+    *.cedar|*.allow)
+      echo source; return ;;
     # ---- NOT SOURCE, by NAME ------------------------------------------------
     # Container/build recipes and project metadata. `Dockerfile.*` covers the five variants
     # (release, fips, stig, agentops, ebpf-source) whose suffixes are NOT extensions.

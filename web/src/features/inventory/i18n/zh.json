@@ -2,6 +2,9 @@
   "title": "清单",
   "subtitle": "在您的资产域中发现的每个智能体、会话、MCP、模型和身份。",
   "refresh": "刷新",
+  "scope": {
+    "note": "租户级清单。工作区选择器不会筛选此视图。"
+  },
   "summary": {
     "total": "实体",
     "active": "活跃",
@@ -49,18 +52,68 @@
     "lastSeen": "最后发现",
     "relations": "关系",
     "viewAccess": "访问映射",
-    "viewSessions": "会话"
+    "viewSessions": "会话",
+    "gone": "此条目已不在目录中。",
+    "noProjection": "此条目没有可显示的其他详细信息。这并不能确定它是否存在关系。"
+  },
+  "freshness": {
+    "title": "目录新鲜度",
+    "independent": "目录新鲜度与观测历史是彼此独立的读取，不是同一份原子快照。",
+    "storedState": "已存储的目录状态",
+    "storedHint": "活跃与过期是已存储的目录状态。它们不是健康、可用性或来源覆盖。",
+    "localReception": "最近一次本地接收",
+    "firstLocalReception": "首次本地接收",
+    "sourceOccurred": "来源声明的发生时刻",
+    "sourceOccurredUnknown": "来源未声明发生时刻。",
+    "timeUnknown": "没有可用的接收时刻。",
+    "occurrenceCount": "目录出现次数",
+    "occurrenceHint": "统计该实体的目录物化次数。它不是收据数、相符事实投递数，也不是覆盖合计。"
+  },
+  "history": {
+    "title": "观测历史",
+    "coverageUnknown": "这段历史不能证明来源覆盖、发现完整性或当前健康状况。",
+    "loaded": "已加载 {{count}} 条",
+    "empty": "没有可用的已存储收据。这并不能证明该实体从未被观测过。",
+    "refresh": "刷新历史",
+    "loadMore": "加载更多",
+    "loading": "正在加载观测历史",
+    "loadingMore": "正在加载更多收据",
+    "receipt": "收据",
+    "eventType": "事件类型",
+    "eventTypeEdge": "边观测",
+    "eventTypeCost": "成本抽样",
+    "registration": "接收时的登记",
+    "registeredSnapshot": "历史登记快照",
+    "unattributed": "未归属",
+    "invalid": "不完整的历史快照",
+    "sourceId": "接收时的来源标识",
+    "sourceRevision": "已应用的登记修订",
+    "environmentRef": "执行环境",
+    "sourceOccurred": "来源声明的发生时刻",
+    "sourceOccurredUnknown": "来源未声明发生时刻。",
+    "timeUnknown": "没有可用的接收时刻。",
+    "firstReceived": "所保留事实的首次接收",
+    "lastReceived": "带所保留事实的最近一次投递",
+    "deliveries": "相符事实的投递",
+    "conflict": "冲突的再次投递",
+    "conflictYes": "保留了一次携带不同事实的再次投递。这并不计数或标注那些变体的时间。",
+    "conflictNo": "未保留冲突的再次投递。",
+    "malformed": "无法显示此观测页。缺失的项目列表、没有可用游标的续页，或未前进的游标是错误，而不是空历史。"
   },
   "topology": {
     "note": "按类型划分的资产域构成。运行时使用情况（哪个智能体运行哪个模型/MCP）显示在「会话」中；资源访问（R/RW）显示在「访问映射」中。",
     "bands": {
       "origins": "谁在执行",
       "capabilities": "可使用的能力",
-      "resources": "所触及的资源"
+      "resources": "所触及的资源",
+      "other": "其他类型"
     },
     "emptyTitle": "尚未发现任何内容",
     "emptyHint": "随着连接器报告活动，您的资产域将在此处编入清单。",
-    "truncated": "显示前 {{n}} 个实体"
+    "truncated": "显示前 {{n}} 个实体",
+    "countsAreLoaded": "计数为本页已加载的项目，并非整个资产域的总数。",
+    "loadedOnPage": "本页已加载 {{count}} 项",
+    "loadedCount": "已加载 {{count}} 项"
   },
   "empty": {
     "catalog": {

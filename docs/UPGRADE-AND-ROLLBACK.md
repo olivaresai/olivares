@@ -45,8 +45,8 @@ command is for binary/systemd/compose installs.
 
 ## 1. Versioning and the image coordinate
 
-Releases use CalVer (`vYY.M.PATCH`, e.g. `v26.8.0`); container tags drop the leading `v`
-(`:26.8.0`, `:latest`, `:26.8.0-fips`, `:26.8.0-stig`). See [`../INSTALL.md`](../INSTALL.md#versioning).
+Releases use CalVer (`vYY.M.PATCH`, e.g. `v26.9.0`); container tags drop the leading `v`
+(`:26.9.0`, `:latest`, `:26.9.0-fips`, `:26.9.0-stig`). See [`../INSTALL.md`](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
 
@@ -62,11 +62,11 @@ ghcr.io does not rate-limit anonymous pulls of public images. **In production, p
 digest** — a tag is mutable, a digest is exactly what you verified:
 
 ```sh
-cosign verify docker.io/olivaresai/olivares:26.8.0 \
+cosign verify docker.io/olivaresai/olivares:26.9.0 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:26.8.0   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:26.9.0   # -> sha256:<…>
 ```
 
 ---
@@ -152,6 +152,98 @@ against a live engine. For a deployment under systemd, run it as the service use
    upgrade you compare, and the new rows' phases tell you whether a later rollback is safe
    (§5).
 
+### 3.1 PostgreSQL owner/app split: the effective-privilege preflight
+
+**This only concerns PostgreSQL deployments that run a separate owner role
+(`--owner-dsn`).** Single-role PostgreSQL and SQLite are unaffected: there the application
+role owns the schema it creates, so there is nothing for a later grant to miss.
+
+In the split the OWNER creates the tables and the APP role only holds DML on them. An
+upgrade that adds a relation therefore depends on the app role acquiring privileges on an
+object that did not exist when the grants were written. If it does not, the old behaviour
+was the worst possible one: the migration **committed** — the tracking table advanced and
+the relations were created — and the deployment then failed with `SQLSTATE 42501`. Rolling
+the binary back does not undo a tracking row, so the estate was left in a state neither
+release could serve.
+
+Since this release, boot measures that **before its first durable change**, inside the
+migration advisory lock:
+
+- for relations that **already exist**, it measures the app role's *effective* privileges
+  on their OIDs;
+- for relations this upgrade **still has to create**, the owner session creates one
+  ordinary probe table inside a transaction that is **always rolled back**, and measures
+  the app role's effective privileges on that fresh OID.
+
+*Effective* is the operative word. A privilege held **directly, through a group role, or
+through `PUBLIC`** all count, because all three work at runtime. `pg_default_acl` is
+neither consulted nor required: it is a convenient way to provision, not the contract, so
+an estate whose grants were applied by hand passes exactly as it should.
+
+If the check fails, boot stops with `ErrPostgresUpgradePrivilegePreflight` and **nothing
+has been migrated** — the trackers, relations and receipts are exactly as they were. The
+message names the relations, the privileges and the OID it measured. There is deliberately
+**no `--force` and no `--skip-preflight`**: a flag on `serve` would mix "I authorize schema
+commits" with "I authorize serving" and leave you without an observable boundary.
+
+> [!NOTE]
+> **Why `DELETE` on `audit_spool_gaps` is asked for even with the audit spool disabled.**
+> That table holds *degrade episodes*: durable records that some evidence was dropped. A
+> node only ever **creates** one while `OLIVARES_AUDIT_SPOOL_MAX_BYTES` is positive and
+> `on_full` is `degrade` — but the record **outlives the process**. Whichever node starts
+> next has to seal it into the signed ledger as a gap marker and remove it, and that
+> happens on the first ordinary write regardless of the budget, including after you have
+> turned the option off. So the engine asks for `SELECT` and `DELETE` there
+> unconditionally, and for `INSERT`/`UPDATE` — the ones that *record* new losses — only
+> when the option is actually on.
+>
+> It asks rather than checks on purpose: deciding whether an episode is pending is a
+> cross-tenant read of a `FORCE ROW LEVEL SECURITY` table, which the least-privilege owner
+> cannot perform, and the engine will not acquire an admin credential or relax a guard in
+> order to look. The standard grants in
+> [`deploy/postgres/01-app-role.sql`](../deploy/postgres/01-app-role.sql) already cover
+> this; you only meet it on an estate whose grants were narrowed by hand.
+
+**Two supported ways forward.**
+
+**A — let the grants reach future tables** (the convenient route, and what
+`olivares db init --owner-role …` sets up for you):
+
+```sh
+psql "$OWNER_DSN" -v ON_ERROR_STOP=1 -c \
+  'ALTER DEFAULT PRIVILEGES IN SCHEMA public
+     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO olivares_app'
+# then start the service again; nothing else is needed
+```
+
+**B — separate the phases deliberately** (`migrate` → `grant` → `serve`), which is the
+route for estates whose grants are provisioned by hand or by a change-controlled script:
+
+```sh
+# 1. Apply the schema and STOP. No service is opened, no leader election, no listeners.
+olivares migrate apply --dsn env:DATABASE_URL --owner-dsn env:OWNER_DSN
+
+# 2. Grant on the relations that NOW EXIST — which is the whole point of the phase.
+psql "$OWNER_DSN" -v ON_ERROR_STOP=1 -c \
+  'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO olivares_app'
+
+# 3. Only now start the service.
+olivares serve --engine postgres --dsn env:DATABASE_URL --owner-dsn env:OWNER_DSN
+```
+
+> [!IMPORTANT]
+> **`migrate apply` exiting 0 means the schema was applied. It does NOT mean the node is
+> ready.** It never reports `serving_ready`, and it deliberately does not accept
+> `--admin-dsn`: the phase performs no cross-tenant read, so an admin credential is not
+> merely unused — it is never opened. Step 2 is yours, and step 3 re-runs the full
+> preflight against the relations that now exist.
+
+`migrate apply` is idempotent and safe to re-run. It applies the same schema `serve` would
+— including the fencing-epoch relation used by leader election, which is materialized in
+this phase precisely so your step-2 grant can cover it — and it stops before every runtime
+step: no epoch backfill, no audit-spool recompute, no metadata-blinding actuation, no
+elector, no listeners. Every connection it opened is closed before it returns.
+
 ---
 
 ## 4. Upgrade
@@ -172,7 +264,8 @@ keeps it loopback-only on the host.)
 **Docker Compose**
 ```sh
 # set OLIVARES_IMAGE to the new digest in deploy/compose/.env, then:
-docker compose -f deploy/compose/docker-compose.yml up -d   # recreates with the data volume reused
+docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
+# recreates with the data volume reused and returns only after /readyz is healthy
 ```
 
 **Native packages (systemd)**
@@ -200,6 +293,12 @@ olivares migrate status --data-dir /var/lib/olivares    # confirm the new versio
 ---
 
 ## 5. Rollback — roll back the binary, not the schema
+
+> **Login enforcement.** Once a deployment has run an artifact that carries the login
+> enforcement component, rolling back to one that does not — while require-SSO or the
+> login-surface IP allow-list is still configured — refuses at startup, before any listener
+> is acquired. See [`LOGIN-ENFORCEMENT-OPERATIONS.md`](LOGIN-ENFORCEMENT-OPERATIONS.md) §6
+> and §7 before planning that downgrade.
 
 The expand-contract discipline means **the previous release's binary runs against the
 upgraded schema** (every destructive change ships a release *after* the additive one it
@@ -355,6 +454,7 @@ olivares upgrade --check                      # community: show the plan (curren
 olivares upgrade                              # community: install the latest stable release
 olivares upgrade --channel security           # take only security releases (§8)
 olivares upgrade --enterprise --token <TOKEN> # licensed enterprise superset (needs a live license)
+olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connected enterprise: no pasted token
 # → after any swap, restart the service to run the new binary (§9 for zero downtime)
 ```
 
@@ -380,7 +480,7 @@ olivares upgrade --enterprise --token <TOKEN> # licensed enterprise superset (ne
   (and the audit record truthful) rather than bypassing them:
 
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 26.8.0
+  olivares upgrade --target /opt/olivares/olivares --current-version 26.9.0
   ```
 
   Released binaries are unaffected — every published artifact is stamped at build time, so
@@ -410,8 +510,27 @@ olivares upgrade --enterprise --token <TOKEN> # licensed enterprise superset (ne
   self-selects deterministically. A manual `olivares upgrade` proceeds regardless (explicit
   intent); the opt-in timer below respects the cohort with `--if-eligible`.
 - **`--token`** (enterprise) comes from your license/fulfilment email; it authorises the
-  gated download from `licenses.olivares.ai` (override with `--endpoint`). After an
+  gated download from `licenses.olivares.ai` (override with `--endpoint`). It travels in the
+  `Authorization` header, **never the query string, argv or a redirect** — set it with `--token`
+  or the `OLIVARES_UPGRADE_TOKEN` environment variable (the systemd timer reads the latter from an
+  `EnvironmentFile`, so no download token ever appears in a unit's command line). After an
   enterprise upgrade, restart and run `olivares enterprise enable <preset>`.
+- **`--download-protocol`** (enterprise) selects the gated download protocol: `release-v1` (the
+  default first-party flow) resolves ONE consistent `{version, set, manifest, signature}` tuple and
+  corroborates it on every request, so the manifest, its signature and the artifact are one
+  release even if the channel advances mid-download (a mismatch is a named conflict, never mixed
+  bytes). `legacy` keeps the existing per-request `/download` route for a custom or older gateway;
+  it gains no permission to bypass the token version, the manifest signature or the artifact SHA. A
+  `404` from the new route is a compatibility diagnostic, not an automatic downgrade.
+- **`--connect`** (enterprise) replaces a pasted token with the deployment's own identity. Once
+  `olivares license connect start` has bound the data directory (the purchase owner approves its
+  key once in the customer portal, from any browser), `upgrade --enterprise --connect` first
+  refreshes the credential and download token by proof of possession, then runs the unchanged
+  gated download. It works when the installed credential has expired, as long as the purchase is
+  current. The returned credential replaces `license.key` only after it verifies against the data
+  directory's license trust and confers a current right; a refusal, a timeout or an unverifiable
+  answer leaves the license, the token and the binary unchanged. `--connect` is refused together
+  with `--bundle` (which stays offline) and with `--token`.
 
 **Opt-in automatic checks (systemd timer).** Auto-update is **never on by default** — a
 control plane does not change under an operator without a maintenance window. `olivares
@@ -424,8 +543,24 @@ sudo systemctl daemon-reload && sudo systemctl enable --now olivares-upgrade.tim
 ```
 
 The enterprise token, if any, is read from an `EnvironmentFile` — never inlined into the
-unit. The service runs `--if-eligible`, so a node upgrades only when it is in the manifest's
-rollout cohort and in the window.
+unit. A connected unit (`--enterprise --connect`) needs neither a token nor an
+`EnvironmentFile`: it pins `--data-dir`, `--connect` and any `--license` or `--pubkey` you gave,
+and each run proves possession of the key stored under that data directory. It refreshes the
+connected credential only when the timer fires on its `OnCalendar` schedule. It does not schedule
+itself from the credential's refresh planning boundary (`olivares license connect status`,
+`last.effective_until`): the earliest boundary among the credential's active signed lines, such as
+an add-on's provisional lease, and not the end of every line's right. When `--timer-schedule` is
+omitted, a connected unit runs daily (`*-*-* 03:00:00`, with the same random delay of up to 30 minutes
+and `Persistent=true`); the Community timer and any explicit `--timer-schedule` are unchanged. A
+provisional lease lasts 72 h, and its refresh is meant to happen 12 h before it ends. A daily run leaves
+room for that only while the host and the service can actually run: it is a fixed cadence, not a
+deadline-driven scheduler, and it promises nothing through a long outage. With a slower explicit
+schedule, run `olivares license connect refresh` on its own shorter schedule. Upgrading the binary does
+not rewrite a unit that is already installed; regenerate it with
+`olivares upgrade --install-timer --enterprise --connect --data-dir <dir> --timer-dir /etc/systemd/system`,
+then `sudo systemctl daemon-reload`. The service runs
+`--if-eligible`, so a node upgrades only when it is in the manifest's rollout cohort and in the
+window.
 
 ### Activation: `olivares enterprise enable <preset>` (buying turns something ON)
 
@@ -464,6 +599,8 @@ preview-diff enable under the **Edition & license** tab (superadmin + AAL3).
 | **CLI** | `olivares license install <file\|->` writes `<data-dir>/license.key` (0600, atomically) after verifying it, and names the licence it replaced; `olivares license uninstall --yes` removes it and reports what the engine resolves afterwards; `olivares license status` prints the at-rest status as JSON. Both REFUSE while a `--license`/`OLIVARES_LICENSE*` override outranks the data-dir file (`install --force` stages it anyway) |
 | **Console** | **Edition & license** tab → paste or upload the blob (superadmin + AAL3 step-up) |
 | **File / env** | The engine reads, in precedence order, `--license <path>` > `OLIVARES_LICENSE_PATH` > `OLIVARES_LICENSE` (inline) > `<data-dir>/license.key` |
+| **Connected** | `olivares license connect start` creates the deployment's Ed25519 key under `<data-dir>/connect/` (0700; files 0600), requests the owner's approval and prints the approval URL and key fingerprint; running it again after approval completes the binding. `refresh`, `rotate-key`, `recover`, `reactivate`, `deactivate`, `status` and `abandon` follow. Every step is recorded before it is sent and repeated with the same operation id after a crash or timeout. A verified `rotate-key`, `recover` or `reactivate` is recorded before the new key replaces the old one; after an interruption, running the same command again completes it without contacting the service, and `abandon` refuses to discard it. A NEW `recover`, `reactivate` or `deactivate --owner-approval` request needs the current purchase credential with `--evidence <file>` (or `--evidence -` for stdin); the installed license is not used as that evidence, and finishing a recorded request repeats it without reading evidence again. No key, credential, token or approval reference is printed or placed in a URL or argument |
+| **Trust** | `olivares license trust status\|set\|fence` manages `<data-dir>/license-trust.json`: keys added to the embedded anchor, retired to verify-only, revoked, or pinned to a `key_epoch`, plus a minimum-epoch fence. Boot, reload, both install surfaces, the enterprise upgrade and `--bundle` gates, doctor and the connected client verify through this one keyring; it reloads with the license, also when a configured license source cannot be read: the live license is then kept and verified under the current trust |
 
 A **renewal or a fresh install applies live — zero downtime.** The console install
 hot-applies immediately; a file install applies on the next `SIGHUP` /
@@ -628,8 +765,8 @@ An air-gapped deployment upgrades from a **local bundle**, verified **offline** 
 network, no cosign, no Rekor. On a connected host, build the signed bundle for a release:
 
 ```sh
-scripts/export-update-bundle.sh --dir <release-dir> --channel stable --version 26.8.0 \
-  --sign-key <dedicated-ed25519-ota-key> --out olivares-update-26.8.0.tar.gz
+scripts/export-update-bundle.sh --dir <release-dir> --channel stable --version 26.9.0 \
+  --sign-key <dedicated-ed25519-ota-key> --out olivares-update-26.9.0.tar.gz
 ```
 
 The bundle is a tarball of the signed `manifest.json`, its signature, and the platform
@@ -638,10 +775,10 @@ the box** — `--check` does not — so stage the license first (it is a file; i
 gap the way the bundle does):
 
 ```sh
-olivares upgrade --bundle olivares-update-26.8.0.tar.gz --pubkey <release.pub> --check
+olivares upgrade --bundle olivares-update-26.9.0.tar.gz --pubkey <release.pub> --check
 olivares license install ./license.key   # once. Verified OFFLINE, against the license key
                                          # embedded in this binary — no call is made
-olivares upgrade --bundle olivares-update-26.8.0.tar.gz --pubkey <release.pub> --yes
+olivares upgrade --bundle olivares-update-26.9.0.tar.gz --pubkey <release.pub> --yes
 ```
 
 `--bundle` runs the identical verify → anti-rollback → SHA-bind → atomic-swap path as the
@@ -721,3 +858,11 @@ support-period readiness pack is [`CRA-READINESS.md`](CRA-READINESS.md).
 - [`SECURITY-HARDENING.md`](SECURITY-HARDENING.md) — the secure-by-default posture.
 - [`../INSTALL.md`](../INSTALL.md) — the per-OS install matrix and the image coordinate.
 - [`RELEASE-VERIFICATION.md`](RELEASE-VERIFICATION.md) — verifying a release (cosign / SBOM / SLSA).
+
+## Core v10 directory User authority
+
+[Directory User authority](DIRECTORY-USER-AUTHORITY.md) describes the required
+stopped-store ceremony for staged and already enforced legacy installations,
+the PostgreSQL noAdmin inventory role, exact retry and commit reconciliation.
+Core v10 preserves v1–v9 history; its activation advances protocol, H coverage and
+business G atomically. This foundation does not claim whole F2 readiness.

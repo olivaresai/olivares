@@ -236,3 +236,9 @@ id_ecdsa.*
 *.tfstate.backup
 *.tfplan
 anchoridt.*
+
+# LT1 · las observaciones terminales por invocacion de scripts/lib/overlay-measurement.sh.
+# Son EVIDENCIA DE ENTREGA: el llamador de publicacion las recoge con su manifiesto SHA256 en
+# su directorio retenido. Aqui se ignoran porque el directorio por defecto vive en el arbol de
+# trabajo y una observacion no es fuente versionada.
+/.overlay-observations/

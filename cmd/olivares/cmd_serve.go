@@ -25,7 +25,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/secure"
-	"github.com/olivaresai/olivares/core/serverhandover"
+	"github.com/olivaresai/olivares/core/webaddr"
 	"github.com/olivaresai/olivares/core/webui"
 )
 
@@ -33,18 +33,36 @@ import (
 // `quickstart` build one and hand it to runEngine, so the secure boot/serve path
 // lives in exactly one place.
 type serveOptions struct {
-	listen, grpcListen    string
-	dataDir, engine, dsn  string
-	adminDSN, ownerDSN    string
-	region                string
-	knownRegions          []string
-	tlsCert, tlsKey, lic  string
-	grpcClientCA          string
-	insecure, seedDemo    bool
-	insecureAllowPublic   bool
+	listen, grpcListen   string
+	dataDir, engine, dsn string
+	adminDSN, ownerDSN   string
+	region               string
+	knownRegions         []string
+	tlsCert, tlsKey, lic string
+	grpcClientCA         string
+	insecure, seedDemo   bool
+	insecureAllowPublic  bool
+	// publicURL is the operator-declared browser address of the console, and
+	// publicURLSet is the FLAG'S PRESENCE — not its emptiness. The two are carried
+	// apart so that `--public-url=` clears an OLIVARES_PUBLIC_URL set in the
+	// environment file instead of silently falling through to it.
+	publicURL    string
+	publicURLSet bool
+	// publicAddr carries an address a CALLER already resolved, and
+	// publicAddrResolved says so. `quickstart governed-rag` resolves before it
+	// writes any file, so runEngine must not read the setting a second time —
+	// reading it twice is how a refusal came to be discarded on one of the paths.
+	publicAddr         webaddr.Address
+	publicAddrResolved bool
+	// publicAddrSource travels with a pre-resolved address so this command never
+	// has to infer the source after a flag already decided it.
+	publicAddrSource      publicAddrSource
 	allowPrivilegedDBRole bool
 	reusePort             bool
 	checkpointInterval    time.Duration
+	// bindListener acquires each serve-family listener; nil means bindServeListener.
+	// Private and test-only: no flag sets it and it selects no alternate transport.
+	bindListener serveListenerBind
 }
 
 // newServeCmd runs the engine: the REST/web HTTP server and the gRPC server,
@@ -66,10 +84,14 @@ func newServeCmd() *cobra.Command {
     --tls-cert /etc/olivares/cert.pem --tls-key /etc/olivares/key.pem
 
   # Development mode (plaintext, loopback only)
-  olivares serve --insecure --listen 127.0.0.1:8080`,
+  olivares serve --insecure --listen 127.0.0.1:8080
+
+  # Behind a reverse proxy: bind every interface, declare the address a browser uses
+  olivares serve --listen :8443 --public-url https://olivares.example.com`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			announce := func(ctx context.Context, out io.Writer, eng *engine) error {
+			opts.publicURLSet = cmd.Flags().Changed("public-url")
+			announce := func(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
 				if opts.seedDemo {
 					if err := announceDemo(ctx, out, eng); err != nil {
 						return err
@@ -79,12 +101,13 @@ func newServeCmd() *cobra.Command {
 					}
 					return nil
 				}
-				return announceSetup(ctx, out, eng, consoleURL(opts.listen, opts.insecure), opts.insecure)
+				return announceSetup(ctx, out, eng, addr, opts.insecure)
 			}
 			return runEngine(cmd.Context(), cmd.OutOrStdout(), opts, announce)
 		},
 	}
 	cmd.Flags().StringVar(&opts.listen, "listen", "127.0.0.1:8443", "HTTP (REST + web) listen address")
+	cmd.Flags().StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
 	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", "127.0.0.1:8444", "gRPC listen address")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().StringVar(&opts.engine, "engine", "sqlite", "store engine: sqlite or postgres")
@@ -92,7 +115,7 @@ func newServeCmd() *cobra.Command {
 		return []string{"sqlite", "postgres"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	cmd.Flags().StringVar(&opts.dsn, "dsn", "", "store DSN (default a SQLite file in the data dir). May be a file:<path> or env:<VAR> reference resolved at boot, so the password stays out of the env file")
-	cmd.Flags().StringVar(&opts.adminDSN, "admin-dsn", "", "Postgres only: DSN of a dedicated NOSUPERUSER BYPASSRLS role used ONLY for cross-tenant System reads (org list, multi-tenant checkpoint coverage). Without it those reads are RLS-limited (see deploy/postgres/01-app-role.sql)")
+	cmd.Flags().StringVar(&opts.adminDSN, "admin-dsn", "", "Postgres: DSN of a dedicated NOSUPERUSER BYPASSRLS read role for first setup and cross-tenant operations (org listing, checkpoints, DR backup). Provision with olivares db init --admin-role; see deploy/postgres/README.md. Keep the app role NOSUPERUSER NOBYPASSRLS; never use a superuser here")
 	cmd.Flags().StringVar(&opts.ownerDSN, "owner-dsn", "", "Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with `olivares db init`). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn")
 	cmd.Flags().StringVar(&opts.region, "region", "", "data-residency HOME region of THIS instance (e.g. eu, us). When set, the instance is region-scoped: it serves only tenants pinned to this region and denies cross-region access fail-closed. Empty = single-region mode, no residency enforcement")
 	cmd.Flags().StringSliceVar(&opts.knownRegions, "known-regions", nil, "comma-separated region codes valid across the whole deployment (e.g. eu,us); a tenant pin must be one of these. The home --region is always included. Only meaningful with --region set")
@@ -110,12 +133,33 @@ func newServeCmd() *cobra.Command {
 }
 
 // runEngine boots the engine and serves it (HTTP/REST/web + gRPC, plus any
-// provisioned side servers), TLS-on-by-default. It calls announce once after boot
-// — before the listeners start — to print the first-run guidance for the caller's
-// mode (serve setup-token, demo, or quickstart). This is the single secure boot/
-// serve path shared by `serve` and `quickstart`.
-func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce func(context.Context, io.Writer, *engine) error) error {
+// provisioned side servers), TLS-on-by-default. It prepares every server and
+// acquires every present serve listener first, then calls announce once to print
+// the first-run guidance for the caller's mode (serve setup-token, demo, or
+// quickstart), and only after that announcement was accepted by its writer does it
+// start serving. A preparation or bind failure therefore mints no new setup token.
+// This is the single secure boot/serve path shared by `serve` and `quickstart`.
+func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce func(context.Context, io.Writer, *engine, consoleAddress) error) error {
 	log := slog.Default()
+
+	// The declared browser address is resolved and validated FIRST — before the
+	// demo guard, before the bind guard, and above all before boot() creates a
+	// data directory or mints a key. A refused value is a configuration error the
+	// operator fixes in a file, and making them clean up a half-created
+	// installation first would be gratuitous. Parsed once here and carried as a
+	// typed value: nothing downstream re-parses a string.
+	publicAddr, publicSource := opts.publicAddr, opts.publicAddrSource
+	if !opts.publicAddrResolved {
+		var err error
+		publicAddr, publicSource, err = resolvePublicAddr(opts.publicURL, opts.publicURLSet, osGetenv)
+		if err != nil {
+			return err
+		}
+	}
+	if !publicAddr.IsZero() {
+		log.Info("console: public address declared", "source", publicSource.String(), "url", publicAddr.Origin)
+	}
+	consoleAddr := resolveConsoleAddress(publicAddr, opts.listen, opts.insecure)
 
 	// Trust-domain collision is a BUILD defect only the artifact can reveal: a direct
 	// -ldflags build bypasses scripts/check-release-pubkey.sh, so surface it on every
@@ -160,8 +204,10 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		Version: version, Logger: log, DemoSeed: opts.seedDemo,
 		AllowPrivilegedDBRole: opts.allowPrivilegedDBRole,
 		Region:                opts.region, KnownRegions: opts.knownRegions,
-		ServeMode:       true, // long-lived server: OK to run the background update-check
-		TLSCertNotAfter: tlsCertNotAfter,
+		ServeMode:        true, // long-lived server: OK to run the background update-check
+		TLSCertNotAfter:  tlsCertNotAfter,
+		PublicAddr:       publicAddr,
+		PublicAddrSource: publicSource,
 	})
 	if err != nil {
 		return err
@@ -173,10 +219,6 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// closes (defers are LIFO).
 	cp := startCheckpointer(eng.signer, eng.store, opts.checkpointInterval, log, eng.metrics)
 	defer cp.stop(context.Background())
-
-	if err := announce(ctx, out, eng); err != nil {
-		return err
-	}
 
 	tlsCert, tlsKey := opts.tlsCert, opts.tlsKey
 	if tlsCert == "" {
@@ -212,7 +254,10 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// wrapped OUTSIDE the API's auth/setup middleware (see webui.go).: the
 	// enterprise build further wraps it with the unauthenticated SP-metadata
 	// endpoint (public by design); the default build leaves it unchanged.
-	httpSrv.Handler = withEnterpriseHTTP(newSPAHandler(eng.api.Handler(), webui.FS()), eng, log)
+	// editionWebFS lets the commercial build serve its own console bundle (the cockpit's
+	// terminal) without the public dist moving: the default build returns base unchanged
+	// (COCKPIT-07 §4).
+	httpSrv.Handler = withEnterpriseHTTP(newSPAHandler(eng.api.Handler(), editionWebFS(webui.FS())), eng, log)
 	// PIV/CAC: when configured, the HTTP listener REQUESTS (never
 	// requires) a client certificate and verifies a presented one against
 	// the PIV CA — VerifyClientCertIfGiven keeps every certless browser and
@@ -352,29 +397,62 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	if proxySrv != nil {
 		nServers++
 	}
+	// The HTTP servers in launch order: the primary, then each present auxiliary. The
+	// gRPC listener is acquired second, between the primary and the auxiliaries.
+	var auxHTTP []*http.Server
+	for _, srv := range []*http.Server{hitlSrv, voiceWebhookSrv, gatewaySrv, codexPEPSrv, grokPEPSrv, hookPEPSrv, proxySrv} {
+		if srv != nil {
+			auxHTTP = append(auxHTTP, srv)
+		}
+	}
+
+	// Plaintext off-host refusal for every HTTP listener, before any socket exists.
+	for _, srv := range append([]*http.Server{httpSrv}, auxHTTP...) {
+		if err := plaintextBindRefusal(srv.Addr, opts.insecure, opts.insecureAllowPublic); err != nil {
+			return fmt.Errorf("listener failed: %w", err)
+		}
+	}
+
+	// Acquire every serve listener synchronously; no Serve runs here.
+	specs := make([]serveListenerSpec, 0, nServers)
+	specs = append(specs,
+		serveListenerSpec{addr: httpBindAddr(httpSrv.Addr, opts.insecure, opts.reusePort), http: true},
+		serveListenerSpec{addr: opts.grpcListen},
+	)
+	for _, srv := range auxHTTP {
+		specs = append(specs, serveListenerSpec{addr: httpBindAddr(srv.Addr, opts.insecure, opts.reusePort), http: true})
+	}
+	bind := opts.bindListener
+	if bind == nil {
+		bind = bindServeListener
+	}
+	owned, err := acquireServeListeners(ctx, bind, specs, opts.reusePort, log)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return withCloseErrors(fmt.Errorf("serve startup canceled after binding, before the announcement: %w", err), owned.closeAll())
+	}
+
+	// The advice is built HERE and not at parse time, because it describes what a
+	// passkey prompt will do and that is only known once boot has resolved the
+	// relying party. The announcement runs only once every listener is held, so a
+	// bind failure can no longer follow a freshly minted setup token. A token that
+	// may have been partly delivered is kept: the pending-setup banner is the recovery.
+	if err := runAnnouncement(ctx, out, eng, consoleAddr.withPlan(eng.webAuthn), announce); err != nil {
+		return withCloseErrors(err, owned.closeAll())
+	}
+	// A callback may cancel and still return nil. This is an observation before
+	// launch, not an atomic stop/admission barrier.
+	if err := ctx.Err(); err != nil {
+		return withCloseErrors(fmt.Errorf("serve startup canceled after the announcement, before serving: %w", err), owned.closeAll())
+	}
+
 	errCh := make(chan error, nServers)
-	go serveHTTP(httpSrv, opts.listen, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
-	go serveGRPC(grpcSrv, opts.grpcListen, opts.reusePort, errCh)
-	if hitlSrv != nil {
-		go serveHTTP(hitlSrv, hitlSrv.Addr, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
-	}
-	if voiceWebhookSrv != nil {
-		go serveHTTP(voiceWebhookSrv, voiceWebhookSrv.Addr, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
-	}
-	if gatewaySrv != nil {
-		go serveHTTP(gatewaySrv, gatewaySrv.Addr, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
-	}
-	if codexPEPSrv != nil {
-		go serveHTTP(codexPEPSrv, codexPEPSrv.Addr, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
-	}
-	if grokPEPSrv != nil {
-		go serveHTTP(grokPEPSrv, grokPEPSrv.Addr, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
-	}
-	if hookPEPSrv != nil {
-		go serveHTTP(hookPEPSrv, hookPEPSrv.Addr, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
-	}
-	if proxySrv != nil {
-		go serveHTTP(proxySrv, proxySrv.Addr, opts.insecure, opts.insecureAllowPublic, opts.reusePort, log, errCh)
+	go serveHTTP(httpSrv, owned.listeners[0], opts.insecure, log, errCh)
+	go serveGRPC(grpcSrv, owned.listeners[1], errCh)
+	for i, srv := range auxHTTP {
+		go serveHTTP(srv, owned.listeners[2+i], opts.insecure, log, errCh)
 	}
 
 	// SIGHUP reconciles the durable source roster into the running engine —
@@ -389,7 +467,18 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// already enforces the expiry per call). OFF the shutdown path.
 	go watchLicenseExpiry(ctx, eng, log)
 
-	return waitAndShutdown(ctx, httpSrv, grpcSrv, hitlSrv, voiceWebhookSrv, gatewaySrv, hookPEPSrv, codexPEPSrv, grokPEPSrv, proxySrv, errCh, log)
+	// V269 / COCKPIT-03 §3: auxiliary listeners this edition serves. Empty in every
+	// build today; the seam and its shutdown path land before the engine so the wiring
+	// is already final when it arrives.
+	auxServers := editionAgentServers()
+	serveEditionAuxServers(ctx, auxServers, log, errCh)
+	defer shutdownEditionAuxServers(context.Background(), auxServers, log)
+
+	// Owner fallback after the unchanged DS1 drain: a Serve goroutine that never
+	// entered still holds its listener. It runs before the checkpointer and store
+	// close. Closed sockets are not a goroutine join.
+	shutdownErr := waitAndShutdown(ctx, httpSrv, grpcSrv, hitlSrv, voiceWebhookSrv, gatewaySrv, hookPEPSrv, codexPEPSrv, grokPEPSrv, proxySrv, errCh, log)
+	return withCloseErrors(shutdownErr, owned.closeAll())
 }
 
 // watchReloadSignal reconciles the source roster on each SIGHUP until ctx is done.
@@ -490,20 +579,22 @@ func watchLicenseExpiry(ctx context.Context, eng *engine, log *slog.Logger) {
 	}
 }
 
-// consoleURL is the browser URL for the embedded console at the given listen
-// address (https unless --insecure).
-func consoleURL(listen string, insecure bool) string {
-	scheme := "https"
-	if insecure {
-		scheme = "http"
-	}
-	return scheme + "://" + listen
-}
+// publicURLFlagHelp is shared by `serve`, `quickstart` and `quickstart
+// governed-rag` so the three cannot describe the same field differently. It
+// states the precedence and the restart requirement, because both are things an
+// operator can only learn from here.
+const publicURLFlagHelp = "the address a browser reaches this console at, as scheme://host[:port] " +
+	"(e.g. https://olivares.example.com). It is what the startup panel prints and what the WebAuthn " +
+	"relying party is derived from, and it is independent of --listen: declare it when the engine sits " +
+	"behind a reverse proxy, binds a wildcard, or is reached by a name that is not the bind. " +
+	"Defaults to $OLIVARES_PUBLIC_URL; passing the flag wins over the environment, and passing it EMPTY " +
+	"clears it. Start-time only: a change takes a restart"
 
 // announceSetup, on a fresh install (no users), mints and prints the one-time
 // setup token to STDOUT ONLY (never the logs), pointing the operator at the
 // embedded console's setup wizard (the API path is offered as the alternative).
-func announceSetup(ctx context.Context, out io.Writer, eng *engine, baseURL string, insecure bool) error {
+func announceSetup(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress, insecure bool) error {
+	baseURL := addr.URL()
 	has, err := eng.authr.HasAnyUser(ctx)
 	if err != nil {
 		return err
@@ -527,12 +618,31 @@ func announceSetup(ctx context.Context, out io.Writer, eng *engine, baseURL stri
 	//
 	// consoleURL already takes the posture; announceSetup did not, which is exactly how the
 	// two halves of one screen came to disagree.
+	// THE JOINER IS NOT PART OF THE SENTENCE, and separating them is not tidiness.
+	// These literals used to END in the whitespace that runs them into the token
+	// paragraph — a trailing space here, a trailing newline under --insecure — so
+	// the registered quotation in check-engine-output-citations.mjs ended in a
+	// space too, and every documented fence had to carry an invisible trailing
+	// space to stay anchored. The moment the address advice broke the line there,
+	// fourteen pages stopped matching a quotation whose last character nobody can
+	// see. The sentence ends at its full stop; the joiner is chosen below.
 	transport := "The console serves HTTPS with a self-signed certificate on first boot — your\n" +
-		"browser will warn once; that is expected. "
+		"browser will warn once; that is expected."
+	join := " "
 	if insecure {
 		transport = "--insecure is ON: TLS is OFF and the console is served over PLAIN HTTP.\n" +
-			"The setup token below travels in the clear — loopback development only.\n"
+			"The setup token below travels in the clear — loopback development only."
+		join = "\n"
 	}
+	// The address advice goes HERE, in the transport slot: after the Token line and
+	// inside the closing marker. Both halves of that placement are load-bearing.
+	// The documented way to read this banner is a RANGE — `sed -n '/FIRST-BOOT
+	// SETUP/,/========================/p'` in install-service.sh and in seven
+	// tutorial pages — so anything printed after the closing line is outside every
+	// capture command the product itself publishes. And sixty documented `grep
+	// -A<n>` commands count lines from the header to `Token:`, so the advice must
+	// go after Token, not before it.
+	transport = withAddressAdvice(transport, join, addr.Advice)
 	if created {
 		fmt.Fprintf(out, "\n=== FIRST-BOOT SETUP ===\n"+
 			"No accounts exist yet. Open the console and create the first administrator\n"+
@@ -631,69 +741,6 @@ func newGRPCServer(eng *engine, loader *secure.CertificateLoader, clientCA strin
 	return eng.api.NewGRPCServer(grpc.Creds(credentials.NewTLS(tlsCfg))), nil
 }
 
-func serveHTTP(srv *http.Server, addr string, insecure, allowPublicBind, reusePort bool, log *slog.Logger, errCh chan<- error) {
-	// The choke point. insecureBindGuard reads --listen and --grpc-listen, but the
-	// SIX auxiliary listeners take their addresses from operator config files
-	// (agentGatewayConfig.Listen and friends) and are served with the same global
-	// --insecure switch — so loopback primaries let that guard pass while an
-	// auxiliary socket served plain HTTP off-host (found by the Codex contrast of
-	// 2026-08-06, F-01). Adding a seventh address to the guard's arguments would
-	// fix today's six and miss the eighth listener someone adds next year.
-	//
-	// Every HTTP listener this file starts is created here — the primary server and
-	// all six auxiliaries — so this is where the refusal belongs, and it runs
-	// BEFORE any bind, because refusing after binding is not refusing.
-	//
-	// HONEST BOUND, stated precisely because a looser version of this sentence was
-	// wrong twice. This is NOT "every plaintext listener in the process":
-	//   - serveGRPC creates its own listener and does not pass through here. It is
-	//     covered, but by the FLAG-level guard on --grpc-listen, which is the
-	//     mechanism the paragraph above argues against relying on alone.
-	//   - in-process source connectors open their own servers entirely outside both
-	//     guards. THREE of them carry no loopback refusal and no allow_public_bind
-	//     opt-in: github and gitlab call ListenAndServe directly
-	//     (connectors/{github,gitlab}/gather.go) with WILDCARD defaults :9800/:9801,
-	//     and connectors/tak serves plaintext CoT over TCP/UDP with 0.0.0.0 examples
-	//     in its own field docs. --insecure governs none of them.
-	// Those bypasses predate this guard and are reported separately; do not read
-	// the line above as covering them.
-	if insecure && !allowPublicBind && !hostIsLoopback(addr) {
-		errCh <- fmt.Errorf("refusing to serve PLAINTEXT on %q, which is reachable off-host: with --insecure there is no TLS, so this listener's traffic (bearer tokens, governed decisions, the first-boot setup token) would cross the network in the clear. Bind it to loopback, drop --insecure, or — only if something in front of the engine terminates TLS — declare it with --insecure-allow-public-bind", addr)
-		return
-	}
-	// With --reuse-port, bind through SO_REUSEPORT so a second instance can hold the
-	// SAME address for a zero-downtime handover; otherwise use the standard
-	// ListenAndServe path. srv.Addr == addr for every caller.
-	var lis net.Listener
-	if reusePort {
-		if !serverhandover.Supported() {
-			log.Warn("--reuse-port set but SO_REUSEPORT is unsupported here; using a plain listener (drain+restart, not overlap)", "addr", addr)
-		}
-		l, err := serverhandover.Listen(context.Background(), "tcp", addr)
-		if err != nil {
-			errCh <- fmt.Errorf("reuse-port listen %s: %w", addr, err)
-			return
-		}
-		lis = l
-	}
-	if insecure {
-		log.Warn("INSECURE MODE: serving plaintext HTTP — never expose beyond localhost", "addr", addr)
-		if lis != nil {
-			errCh <- srv.Serve(lis)
-		} else {
-			errCh <- srv.ListenAndServe()
-		}
-		return
-	}
-	// The shared reloadable GetCertificate callback was installed before any
-	// listener starts. Empty file arguments make net/http use that callback.
-	if lis != nil {
-		errCh <- srv.ServeTLS(lis, "", "")
-	} else {
-		errCh <- srv.ListenAndServeTLS("", "")
-	}
-}
-
 // hostIsLoopback reports whether addr (host:port, host, or :port) binds only the
 // local host. A wildcard bind (empty host / 0.0.0.0 / ::) is NOT loopback.
 // insecureBindGuard refuses the one combination that turns a development
@@ -773,26 +820,6 @@ func hostIsLoopback(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func serveGRPC(srv *grpc.Server, addr string, reusePort bool, errCh chan<- error) {
-	// With --reuse-port the gRPC listener ALSO binds via SO_REUSEPORT, so a second
-	// instance can hold the same gRPC port during a zero-downtime handover — without
-	// this the new process would abort with EADDRINUSE on the gRPC socket.
-	var (
-		lis net.Listener
-		err error
-	)
-	if reusePort {
-		lis, err = serverhandover.Listen(context.Background(), "tcp", addr)
-	} else {
-		lis, err = net.Listen("tcp", addr)
-	}
-	if err != nil {
-		errCh <- err
-		return
-	}
-	errCh <- srv.Serve(lis)
-}
-
 // buildHITLReceiverServer constructs the inbound HITL round-trip receiver's HTTP server
 // from OLIVARES_HITL_CONFIG, backed by the in-process governed approval API (apiDecider
 // over the engine's own handler — the full authenticate→tenant→authorize→audit chain).
@@ -825,12 +852,19 @@ func buildHITLReceiverServer(eng *engine, tlsCert, tlsKey string, insecure bool,
 	return srv, nil
 }
 
-// waitAndShutdown blocks until a signal or a fatal listener error, then drains
-// the HTTP server(s), gracefully stops gRPC, and closes the engine (store last).
+// waitAndShutdown blocks until a signal, a canceled context or a fatal listener
+// error, then drains the HTTP server(s) it was given and gracefully stops gRPC.
+// It owns transports only: closing the engine and its store belongs to its caller.
+// A fatal listener error does NOT skip that drain — the wrapped cause is retained,
+// the same sequence runs, and that cause is returned once the sequence completes.
 func waitAndShutdown(ctx context.Context, httpSrv *http.Server, grpcSrv *grpc.Server, hitlSrv, voiceWebhookSrv, gatewaySrv, hookPEPSrv, codexPEPSrv, grokPEPSrv, proxySrv *http.Server, errCh <-chan error, log *slog.Logger) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
+
+	// The fatal listener cause, if any. It is retained here and returned at the end:
+	// returning it from the select would leave every transport below still admitting.
+	var fatalErr error
 
 	select {
 	case <-sigCh:
@@ -839,7 +873,10 @@ func waitAndShutdown(ctx context.Context, httpSrv *http.Server, grpcSrv *grpc.Se
 		log.Info("context canceled; draining")
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, grpc.ErrServerStopped) {
-			return fmt.Errorf("listener failed: %w", err)
+			fatalErr = fmt.Errorf("listener failed: %w", err)
+			// A constant line, like the other two arms: the caller already receives
+			// the cause itself, so the log adds no error payload to repeat it.
+			log.Error("listener failed; draining")
 		}
 	}
 
@@ -889,5 +926,20 @@ func waitAndShutdown(ctx context.Context, httpSrv *http.Server, grpcSrv *grpc.Se
 		}
 	}
 	grpcSrv.GracefulStop()
-	return nil
+	return fatalErr
+}
+
+// withAddressAdvice folds the address paragraphs into a banner's transport slot.
+//
+// join is the whitespace that runs the transport sentence into the paragraph that
+// follows it when there is nothing to say — a space with TLS on, a newline under
+// --insecure. With nothing to say the banner is byte-for-byte the one an operator
+// saw before this change; with something to say the advice becomes its own
+// paragraph and the joiner is not used, because a sentence followed by a blank
+// line does not need one.
+func withAddressAdvice(transport, join, advice string) string {
+	if advice == "" {
+		return transport + join
+	}
+	return transport + "\n\n" + advice + "\n\n"
 }

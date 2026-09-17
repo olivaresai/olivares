@@ -111,6 +111,9 @@ func TestDirectoryActivationPostgresSingleAndSplit(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Open: %v", err)
 			}
+			if err := raw.System(ctx, func(sys store.SystemScope) error { _, err := sys.EnsureSystemTenant(ctx); return err }); err != nil {
+				t.Fatal(err)
+			}
 			tenant := provisionTenant(t, raw, "pg-activation-"+strings.ReplaceAll(tc.name, " ", "-"))
 			legacyTarget := mustCreateAgent(t, raw, tenant, "before activation")
 			cached, _, err := raw.(store.DirectoryStatuser).DirectoryStatus(ctx)
@@ -123,7 +126,7 @@ func TestDirectoryActivationPostgresSingleAndSplit(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ActivateDirectoryWriter: %v", err)
 			}
-			if !changed || before != cached || after.Enabled ||
+			if !changed || !before.EpochCoverageComplete || before.InventoryOrgCount != 2 || after.Enabled ||
 				after.ControlMode != store.DirectoryControlEnforced ||
 				after.ExpectedGeneration != 2 || after.WriterPosture != tc.posture {
 				t.Fatalf("activation before=%+v after=%+v changed=%t", before, after, changed)
@@ -148,6 +151,8 @@ func TestDirectoryActivationPostgresSingleAndSplit(t *testing.T) {
 				_ = tx.Rollback()
 				t.Fatalf("bind raw old writer: %v", err)
 			}
+			// Supply only the protocol so missing generation remains the cause.
+			directoryWriterTestMustExec(t, tx, "SELECT pg_catalog.set_config($1, $2, true)", directoryCoverageProtocolGUC, coverageProtocolTarget)
 			_, err = tx.ExecContext(ctx, `UPDATE public.agents SET name = name
 WHERE id = $1 AND tenant_id = $2`, legacyTarget.ID.String(), tenant.String())
 			_ = tx.Rollback()
@@ -436,6 +441,9 @@ func TestDirectoryActivationPostgresDrainsOldWriterBeforeAdminSnapshot(t *testin
 		t.Fatalf("Open: %v", err)
 	}
 	defer raw.Close() //nolint:errcheck
+	if err := raw.System(ctx, func(sys store.SystemScope) error { _, err := sys.EnsureSystemTenant(ctx); return err }); err != nil {
+		t.Fatal(err)
+	}
 	app, err := openPGPinnedToEngineSchema(pg.App, 2)
 	if err != nil {
 		t.Fatalf("open old app: %v", err)
@@ -500,7 +508,7 @@ WHERE relation = 'public.orgs'::pg_catalog.regclass
 	select {
 	case got := <-done:
 		if got.changed || !errors.Is(got.err, store.ErrDirectoryUnavailable) ||
-			!strings.Contains(got.err.Error(), "coverage mismatch") {
+			!strings.Contains(got.err.Error(), "business organization/directory epoch inventory is incomplete") {
 			t.Fatalf("activation after old writer commit changed=%t err=%v", got.changed, got.err)
 		}
 	case <-time.After(10 * time.Second):

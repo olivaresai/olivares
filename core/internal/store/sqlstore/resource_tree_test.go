@@ -6,11 +6,11 @@ package sqlstore
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
 
-	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -34,7 +34,7 @@ func mkResource(t *testing.T, st store.Store, tenant model.TenantID, parent mode
 
 // TestResourceTreeCreateAndPath checks parent links and the materialized path.
 func TestResourceTreeCreateAndPath(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 
 	root := mkResource(t, st, tenant, "", "root")
@@ -61,7 +61,7 @@ func TestResourceTreeCreateAndPath(t *testing.T) {
 // TestResourceSubtreeAndChildren checks the prefix query and direct-children
 // listing, and that a sibling subtree is not swept in.
 func TestResourceSubtreeAndChildren(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	ctx := context.Background()
 
@@ -112,7 +112,7 @@ func TestResourceSubtreeAndChildren(t *testing.T) {
 
 // TestResourceSubtreeFilter checks q.Filters narrow a subtree.
 func TestResourceSubtreeFilter(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	ctx := context.Background()
 
@@ -144,7 +144,7 @@ func TestResourceSubtreeFilter(t *testing.T) {
 
 // TestResourceMove reparents a subtree and checks every path is rewritten.
 func TestResourceMove(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	ctx := context.Background()
 
@@ -222,7 +222,7 @@ func TestResourceMove(t *testing.T) {
 
 // TestResourceMoveCycleGuard rejects a move that would make a node its own ancestor.
 func TestResourceMoveCycleGuard(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	ctx := context.Background()
 
@@ -252,7 +252,7 @@ func TestResourceMoveCycleGuard(t *testing.T) {
 // TestResourceUpdatePreservesTree proves Update cannot restructure the tree:
 // parent_id/path are forced back to the stored values, so only Move reparents.
 func TestResourceUpdatePreservesTree(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	ctx := context.Background()
 
@@ -286,7 +286,7 @@ func TestResourceUpdatePreservesTree(t *testing.T) {
 
 // TestResourceCreateUnderMissingParent rejects attaching under a non-existent parent.
 func TestResourceCreateUnderMissingParent(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	ctx := context.Background()
 
@@ -302,7 +302,7 @@ func TestResourceCreateUnderMissingParent(t *testing.T) {
 // TestResourceFlatCreateGetsRootPath proves a plain Create (no parent) still gets
 // a valid root path — back-compat for callers that ignore the hierarchy.
 func TestResourceFlatCreateGetsRootPath(t *testing.T) {
-	st := openSQLiteTest(t, nil)
+	st := openInitializedSQLiteTest(t, initializedSQLiteCore)
 	tenant := provisionTenant(t, st, "acme")
 	ctx := context.Background()
 
@@ -325,17 +325,62 @@ func TestResourceFlatCreateGetsRootPath(t *testing.T) {
 
 // makeLegacyResourcePath forces a resource to the pre shape (NULL path AND
 // NULL parent_id, the way the additive reconcile leaves a row that predates the
-// tree columns) via a raw maintenance UPDATE. The SQLite scope pin is cleared so
-// the write runs on the privileged path, like the engine's own migrations.
-func makeLegacyResourcePath(t *testing.T, st store.Store, id model.ID) {
+// tree columns) via a raw maintenance UPDATE.
+//
+// The UPDATE stays raw: the deliberately illegal shape is the subject of the
+// three fixtures that call this, and no repository would produce it. What it may
+// not skip is the lineage writer protocol. `resources` is a guarded relation, so
+// the same statement on the engine connection aborts in the lineage trigger
+// ("lineage writer protocol required", SQLITE_CONSTRAINT_TRIGGER 1811) before it
+// writes anything, and the fixture that depended on it proved nothing. It is
+// armed here the way a legitimate transaction is — Mutate plus the scope's own
+// tx, the protocol this package already uses for raw DML on guarded tables —
+// which leaves the triggers, the tripwire and every caller assertion exactly as
+// production has them. The tenant pin is no longer cleared either: the row
+// belongs to the bound tenant, so the tripwire is satisfied without disarming
+// it, and the connection is left as the callers found it.
+//
+// The unarmed statement is asserted first, as a control. The callers can no
+// longer observe that refusal, so without it a lineage guard that stopped
+// refusing an unarmed writer would turn all three legacy fixtures green for the
+// wrong reason. The post-condition is checked too: an arming that silently wrote
+// nothing would leave the callers asserting healing that never had to happen.
+func makeLegacyResourcePath(t *testing.T, st store.Store, tenant model.TenantID, id model.ID) {
 	t.Helper()
+	ctx := context.Background()
 	ss := st.(*sqlStore)
-	if _, err := ss.db.Exec("DELETE FROM " + dialect.ScopeTenantTable); err != nil {
-		t.Fatalf("clear scope pin: %v", err)
+	const legacyUpdate = "UPDATE resources SET path = NULL, parent_id = NULL WHERE id = ?"
+
+	if _, err := ss.db.ExecContext(ctx, legacyUpdate, id.String()); err == nil ||
+		!strings.Contains(err.Error(), "lineage writer protocol required") {
+		t.Fatalf("unarmed legacy seed = %v, want the lineage writer refusal", err)
 	}
-	if _, err := ss.db.Exec("UPDATE resources SET path = NULL, parent_id = NULL WHERE id = ?", id.String()); err != nil {
+	if path, parent := rawResourceTreeColumns(t, ss, id); !path.Valid || parent.Valid {
+		t.Fatalf("refused unarmed seed still nulled the row: path=%v parent=%v", path, parent)
+	}
+
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		_, err := sc.(*tenantScope).tx.ExecContext(ctx, legacyUpdate, id.String())
+		return err
+	}); err != nil {
 		t.Fatalf("null resource path: %v", err)
 	}
+	if path, parent := rawResourceTreeColumns(t, ss, id); path.Valid || parent.Valid {
+		t.Fatalf("legacy seed did not land: path=%v parent=%v, want both NULL", path, parent)
+	}
+}
+
+// rawResourceTreeColumns reads the two tree columns straight off the engine, so
+// the legacy shape is observed as it is stored rather than through the
+// repository, which substitutes an empty string for a NULL path.
+func rawResourceTreeColumns(t *testing.T, ss *sqlStore, id model.ID) (path, parent sql.NullString) {
+	t.Helper()
+	if err := ss.db.QueryRowContext(context.Background(),
+		"SELECT path, parent_id FROM resources WHERE id = ?", id.String(),
+	).Scan(&path, &parent); err != nil {
+		t.Fatalf("read resource tree columns: %v", err)
+	}
+	return path, parent
 }
 
 // TestResourceLegacyParentHealedOnCreate proves a child created under a legacy
@@ -347,7 +392,7 @@ func TestResourceLegacyParentHealedOnCreate(t *testing.T) {
 	ctx := context.Background()
 
 	legacy := mkResource(t, st, tenant, "", "legacy")
-	makeLegacyResourcePath(t, st, legacy.ID)
+	makeLegacyResourcePath(t, st, tenant, legacy.ID)
 
 	var child model.Resource
 	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
@@ -398,7 +443,7 @@ func TestResourceMoveLegacyCycleGuard(t *testing.T) {
 
 	legacy := mkResource(t, st, tenant, "", "legacy")
 	child := mkResource(t, st, tenant, legacy.ID, "child") // child.parent_id = legacy
-	makeLegacyResourcePath(t, st, legacy.ID)               // now legacy has a NULL path again
+	makeLegacyResourcePath(t, st, tenant, legacy.ID)       // now legacy has a NULL path again
 
 	err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
 		_, e := sc.Resources().Move(ctx, legacy.ID, child.ID)
@@ -418,7 +463,7 @@ func TestResourceMoveUnderLegacyParent(t *testing.T) {
 
 	legacy := mkResource(t, st, tenant, "", "legacy")
 	node := mkResource(t, st, tenant, "", "node") // a separate root
-	makeLegacyResourcePath(t, st, legacy.ID)
+	makeLegacyResourcePath(t, st, tenant, legacy.ID)
 
 	var moved model.Resource
 	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {

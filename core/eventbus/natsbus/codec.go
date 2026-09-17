@@ -87,6 +87,14 @@ func EncodeEvent(e event.Event) ([]byte, error) {
 	if !e.Time.IsZero() {
 		pe.Time = timestamppb.New(e.Time)
 	}
+	// B1: the host-stamped registration snapshot rides the bridge as its own
+	// message so a peer node folds the event under the same provenance the
+	// originating node established. Absent stays absent — never synthesized here.
+	if r := e.SourceRegistration; r != nil {
+		pe.SourceRegistration = &pb.SourceRegistration{
+			SourceId: r.SourceID, SourceRevision: r.SourceRevision, EnvironmentRef: r.EnvironmentRef, BindingRef: r.BindingRef,
+		}
+	}
 	switch p := e.Payload.(type) {
 	case nil:
 		// no payload, no oneof
@@ -139,6 +147,18 @@ func DecodeEvent(data []byte, decoders map[event.Type]PayloadDecoder) (event.Eve
 	}
 	if ts := pe.GetTime(); ts != nil {
 		e.Time = ts.AsTime()
+	}
+	// A frame without the snapshot decodes to nil (unattributed); a frame with a
+	// PARTIAL one decodes to nil too, because a snapshot that cannot resolve a
+	// registration is not evidence of one, and the internal bridge only ever
+	// preserves what an authorized node stamped whole.
+	if r := pe.GetSourceRegistration(); r != nil {
+		reg := event.SourceRegistration{
+			SourceID: r.GetSourceId(), SourceRevision: r.GetSourceRevision(), EnvironmentRef: r.GetEnvironmentRef(), BindingRef: r.GetBindingRef(),
+		}
+		if reg.Valid() {
+			e.SourceRegistration = &reg
+		}
 	}
 	switch p := pe.GetPayload().(type) {
 	case nil:

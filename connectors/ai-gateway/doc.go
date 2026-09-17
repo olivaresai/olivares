@@ -44,7 +44,7 @@
 // package-local SignalAIGateway = "ai_gateway" identifies the collector (CostSample
 // has no Source field; the const exists for log/doc consistency).
 //
-// # Minimal data (docs/SECURITY-HARDENING.md-3)
+// # Minimal data (docs/SECURITY-HARDENING.md §2-3)
 //
 // Only structural usage metadata is read: token counts, the model name, the provider/
 // backend name, the cost, and the timestamp. The usageRecord struct has NO field for

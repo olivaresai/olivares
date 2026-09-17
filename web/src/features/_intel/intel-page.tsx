@@ -87,18 +87,26 @@ export function SectionCard({
   /** Tables manage their own padding; pass true to let content go edge-to-edge. */
   noPadding?: boolean
 }) {
+  const hasHeading = Boolean(title || description)
   return (
     <Card className={cn('flex flex-col', className)}>
       {title || actions ? (
-        <CardHeader>
-          <div className="space-y-1">
+        // The row wraps: the heading keeps a readable 16rem before the actions move
+        // below it, and the actions wrap among themselves inside the card. Wide cards
+        // still place both side by side.
+        <CardHeader className="flex-wrap">
+          <div
+            className={cn('min-w-0 flex-1 space-y-1', hasHeading && 'basis-64')}
+          >
             {title ? <CardTitle>{title}</CardTitle> : null}
             {description ? (
               <CardDescription>{description}</CardDescription>
             ) : null}
           </div>
           {actions ? (
-            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+              {actions}
+            </div>
           ) : null}
         </CardHeader>
       ) : null}

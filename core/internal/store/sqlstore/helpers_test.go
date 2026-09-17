@@ -6,6 +6,7 @@ package sqlstore
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -29,11 +30,41 @@ func openSQLiteTest(t *testing.T, register func(store.ExtensionRegistry) error) 
 }
 
 // provisionTenant creates a tenant via the System path and returns its id.
+//
+// It provisions in the order the product boots: the reserved SYSTEM organization
+// first, through the same idempotent EnsureSystemTenant the active writer runs at
+// promotion (cmd/olivares/boot.go, promote), and only then the business tenant.
+// Since core v10 the boot inventory decoder treats a business organization
+// without the SYSTEM witness as corruption and refuses to reopen, so a fixture
+// that skipped genesis was not a smaller fixture: it was a database no real
+// deployment can produce. A test that needs that corrupt state on purpose calls
+// provisionTenantWithoutSystemWitness and says so.
 func provisionTenant(t *testing.T, st store.Store, slug string) model.TenantID {
 	t.Helper()
+	return provisionTenantWith(t, st, slug, true)
+}
+
+// provisionTenantWithoutSystemWitness creates a business tenant on a store whose
+// SYSTEM organization has deliberately NOT been provisioned. It exists for the
+// negative cases that prove a nonempty inventory lacking the SYSTEM witness is
+// refused; it is never a shortcut for an ordinary fixture, because the store it
+// leaves behind cannot be reopened.
+func provisionTenantWithoutSystemWitness(t *testing.T, st store.Store, slug string) model.TenantID {
+	t.Helper()
+	return provisionTenantWith(t, st, slug, false)
+}
+
+func provisionTenantWith(t *testing.T, st store.Store, slug string, systemFirst bool) model.TenantID {
+	t.Helper()
+	ctx := context.Background()
 	var org model.Org
-	err := st.System(context.Background(), func(sys store.SystemScope) error {
-		o, err := sys.CreateOrg(context.Background(), model.Org{
+	err := st.System(ctx, func(sys store.SystemScope) error {
+		if systemFirst {
+			if _, err := sys.EnsureSystemTenant(ctx); err != nil {
+				return fmt.Errorf("ensure SYSTEM tenant: %w", err)
+			}
+		}
+		o, err := sys.CreateOrg(ctx, model.Org{
 			Name: slug, Slug: slug, Status: model.StatusActive,
 		})
 		org = o

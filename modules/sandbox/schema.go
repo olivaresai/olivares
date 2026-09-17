@@ -42,6 +42,7 @@ const (
 	colScenarioRef = "scenario_ref"
 	colKind        = "kind" // "scenario" | "replay" | "compare"
 	colSubjectRef  = "subject_ref"
+	colLiveRef     = "live_ref"
 	colVariant     = "variant"
 	colRunner      = "runner" // "inproc-mock" | "container" | ...
 	colIsolated    = "isolated"
@@ -117,6 +118,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colScenarioRef, Kind: model.KindUUID, Nullable: true, Indexed: true},
 			{Name: colKind, Kind: model.KindText, Indexed: true},
 			{Name: colSubjectRef, Kind: model.KindText, Indexed: true},
+			{Name: colLiveRef, Kind: model.KindUUID, Nullable: true},
 			{Name: colVariant, Kind: model.KindText, Nullable: true},
 			{Name: colRunner, Kind: model.KindText, Indexed: true},
 			{Name: colIsolated, Kind: model.KindBool},
@@ -161,6 +163,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colBaselineRun, Kind: model.KindUUID},
 			{Name: colCandidateRun, Kind: model.KindUUID},
 			{Name: colSubjectRef, Kind: model.KindText, Nullable: true},
+			{Name: colLiveRef, Kind: model.KindUUID, Nullable: true},
 			{Name: colSuiteRef, Kind: model.KindUUID, Nullable: true},
 			{Name: colVerdict, Kind: model.KindText, Indexed: true},
 			{Name: colBaselineScore, Kind: model.KindFloat},

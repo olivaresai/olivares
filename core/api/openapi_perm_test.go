@@ -20,10 +20,11 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 	// The exempt set mirrored from openapi_permissions.go — duplicated here on
 	// purpose: growing it must be a conscious two-file change.
 	exempt := map[string]bool{
-		"logout":        true,
-		"refreshToken":  true,
-		"whoami":        true,
-		"searchConsole": true,
+		"logout":           true,
+		"refreshToken":     true,
+		"whoami":           true,
+		"searchConsole":    true,
+		"authCapabilities": true,
 	}
 
 	h := newHarness(t)

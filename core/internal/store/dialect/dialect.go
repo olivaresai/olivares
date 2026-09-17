@@ -209,6 +209,27 @@ type Dialect interface {
 	// migrate.Migration.Exec.
 	GuardControlPlaneStmts() []string
 
+	// FinOpsCustodyControlStmts renders the role-free DDL of the prospective core v12
+	// FinOps custody control relations: the mutable enrollment head, the append-only
+	// transition journal, the append-only per-generation proof, their typed constraints,
+	// the one-live-instance index and the statement-order guards — plus, on PostgreSQL,
+	// the single guard function, its triggers in ALWAYS, the statement-level TRUNCATE
+	// refusals and the PUBLIC revocation.
+	//
+	// It is implemented on BOTH engines for the same reason GuardControlPlaneStmts is: one
+	// core plan runs on both, so PostgreSQL-only SQL in a core migration would break every
+	// SQLite boot at a user's first start rather than in CI.
+	//
+	// ROLE-FREE BY CONTRACT. The split-topology application REVOKE/GRANT pair is appended
+	// by the migration constructor that knows the resolved roles, so the statements here
+	// are identical for every deployment and a managed-object inventory can name them
+	// without knowing anything about roles.
+	FinOpsCustodyControlStmts() []string
+
+	// LoginCapabilityControlStmts renders core v13's global login capability control
+	// relation (R5). Role-free: split-topology grants belong to the migration constructor.
+	LoginCapabilityControlStmts() []string
+
 	// DirectoryWriterControlStmts renders core v7's raw directory-writer control.
 	// It is deliberately not an entity descriptor: runtime code may read it only
 	// through the engine-owned writer seam, and no public repository is generated.

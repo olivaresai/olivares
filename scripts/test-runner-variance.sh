@@ -231,6 +231,204 @@ check "(21c) el matado por el techo ensena el suyo, distinto" 0 "$( grep -q 'fai
 check "(21d) el verde NO lleva anotacion de paso rojo" 0 \
   "$( grep -qE 'A .*paso rojo' "$TMP/out" && echo "anoto un paso rojo en un job verde" || echo 0 )"
 
+# 22 · EL SELECTOR DE NOMBRES, que hasta hoy no lo ejercitaba NADIE. El camino de fixture entra
+#      por `OLIVARES_RV_JOBS` y salta el filtro entero, asi que cuando `race-modules` se partio en
+#      una matriz —y la API paso a devolver `race-modules (partition N)`— esta bateria habria
+#      seguido verde mientras el censo perdia la pata mas cara del arbol SIN DECIRLO. `--filter`
+#      existe para que el filtro real se pueda mirar sin red.
+cat > "$TMP/api.json" <<J
+{"jobs":[{"name":"race-modules (partition 3)"},{"name":"race-modules"},{"name":"race-rest"},
+         {"name":"race-core"},{"name":"web"},{"name":"race-hot"},
+         {"name":"race-modules-extra"},{"name":"race-restricted"}]}
+J
+bash "$SUT" --filter "$TMP/api.json" > "$TMP/filtro" 2>&1
+check "(22) el filtro acepta el nombre de la MATRIZ" 0 \
+  "$( grep -qxF 'race-modules (partition 3)' "$TMP/filtro"; echo $? )"
+check "(22b) y sigue aceptando el nombre sin matriz" 0 \
+  "$( grep -qxF 'race-modules' "$TMP/filtro"; echo $? )"
+check "(22c) y descarta lo que no es una pata -race" 0 \
+  "$( grep -qxE 'web|race-hot' "$TMP/filtro" && echo "colo un job ajeno" || echo 0 )"
+check "(22d) las tres patas declaradas estan" 4 "$( grep -c . "$TMP/filtro" )"
+check "(22f) un prefijo no casa un nombre mas largo" 0 \
+  "$( grep -qxE 'race-modules-extra|race-restricted' "$TMP/filtro" && echo "colo un prefijo" || echo 0 )"
+
+# 22e · CONTROL POSITIVO. Con el predicado de antes —igualdad exacta— el nombre de la matriz
+#       desaparece: eso es lo que estaba a punto de pasar, y lo que (22) mide de verdad.
+sed 's/matrix_leg(\$j)/false/' "$SUT" > "$TMP/m22.sh"
+if cmp -s "$SUT" "$TMP/m22.sh"; then
+  check "(22e) MUTACION NO APLICADA: el ancla del selector se movio" 0 1
+else
+  bash "$TMP/m22.sh" --filter "$TMP/api.json" > "$TMP/filtro22" 2>&1
+  check "(22e) con igualdad exacta el nombre de la matriz SE PIERDE" 0 \
+    "$( grep -qxF 'race-modules (partition 3)' "$TMP/filtro22" && echo "el mutante no cambio nada" || echo 0 )"
+fi
+
+# 22g · a declared name is jq data, not jq source.
+OLIVARES_RV_JOBNAMES='x") or true or (.name|startswith("' bash "$SUT" --filter "$TMP/api.json" \
+  > "$TMP/filtroinj" 2>&1
+check "(22g) un nombre no se interpola en jq" 0 \
+  "$( grep -qxF 'web' "$TMP/filtroinj" && echo "inyecto jq" || echo 0 )"
+
+# 22h · a wildcard in OLIVARES_RV_JOBNAMES is a name, not a pathname.
+#      cwd contains files that would match '*' and 'race-*'.
+mkdir -p "$TMP/globcwd"
+touch "$TMP/globcwd/web" "$TMP/globcwd/race-modules" "$TMP/globcwd/race-rest"
+cat > "$TMP/globjobs.json" <<J
+{"jobs":[{"name":"*"},{"name":"web"},{"name":"race-modules"},{"name":"race-rest"},{"name":"race-*"}]}
+J
+SUT_ABS="$(CDPATH='' cd -- "$(dirname -- "$SUT")" && pwd)/$(basename -- "$SUT")"
+( CDPATH='' cd -- "$TMP/globcwd" && OLIVARES_RV_JOBNAMES='*' bash "$SUT_ABS" --filter "$TMP/globjobs.json" ) \
+  > "$TMP/filtroglob" 2>&1
+check "(22h) un glob literal no se expande por el cwd" 0 \
+  "$( grep -qxF '*' "$TMP/filtroglob"; echo $? )"
+check "(22i) y no selecciona los ficheros que casarian" 0 \
+  "$( grep -qxE 'web|race-modules|race-rest' "$TMP/filtroglob" && echo glob || echo 0 )"
+check "(22j) y solo esa linea" 1 "$( grep -c . "$TMP/filtroglob" )"
+( CDPATH='' cd -- "$TMP/globcwd" && OLIVARES_RV_JOBNAMES='race-*' bash "$SUT_ABS" --filter "$TMP/globjobs.json" ) \
+  > "$TMP/filtroglob2" 2>&1
+check "(22k) race-* es un nombre, no un glob" 0 \
+  "$( grep -qxF 'race-*' "$TMP/filtroglob2"; echo $? )"
+check "(22l) y no arrastra race-modules/race-rest" 0 \
+  "$( grep -qxE 'race-modules|race-rest' "$TMP/filtroglob2" && echo glob || echo 0 )"
+
+# 23–26 · LIVE PATH with a fake `gh`. JSON fixtures never call repo_slug or the
+# API name filter. The stub never execs a real client; unexpected argv fails.
+mkdir -p "$TMP/fakebin"
+cat > "$TMP/fakebin/gh" <<'GHEOF'
+#!/bin/sh
+log="${FAKE_GH_LOG:-/dev/null}"
+printf '%s\n' "$*" >> "$log"
+case "$1" in
+  repo)
+    if [ "$2" = "view" ] && [ "${FAKE_GH_VIEW_RC:-0}" -ne 0 ]; then
+      exit "${FAKE_GH_VIEW_RC}"
+    fi
+    if [ "$2" = "view" ] && [ "${3:-}" = "--json" ] && [ "${4:-}" = "nameWithOwner" ]; then
+      [ -n "${FAKE_GH_SLUG:-}" ] || exit 1
+      printf '%s\n' "$FAKE_GH_SLUG"
+      exit 0
+    fi
+    echo "fake-gh: unexpected repo invocation" >&2
+    exit 1
+    ;;
+  api)
+    # ALWAYS_OK succeeds even on an empty slug. A swallowed repo_slug failure
+    # would then print a table; the unknown-source case must not reach here.
+    if [ "${FAKE_GH_API_ALWAYS_OK:-}" = "1" ]; then
+      case "$2" in
+        *"/jobs"*) [ -r "${FAKE_GH_JOBS:-}" ] || exit 1; cat "${FAKE_GH_JOBS}"; exit 0 ;;
+        *) [ -r "${FAKE_GH_RUNS:-}" ] || exit 1; cat "${FAKE_GH_RUNS}"; exit 0 ;;
+      esac
+    fi
+    slug="${FAKE_GH_SLUG:-}"
+    [ -n "$slug" ] || exit 1
+    path="$2"
+    case "$path" in
+      "repos/${slug}/actions/workflows/mainline-ci.yml/runs"*)
+        [ -r "${FAKE_GH_RUNS:-}" ] || exit 1
+        cat "${FAKE_GH_RUNS}"
+        exit 0
+        ;;
+      "repos/${slug}/actions/runs/"*"/jobs"*)
+        [ -r "${FAKE_GH_JOBS:-}" ] || exit 1
+        cat "${FAKE_GH_JOBS}"
+        exit 0
+        ;;
+    esac
+    echo "fake-gh: unexpected api path" >&2
+    exit 1
+    ;;
+  *)
+    echo "fake-gh: unexpected command" >&2
+    exit 1
+    ;;
+esac
+GHEOF
+chmod +x "$TMP/fakebin/gh"
+
+live_env() {
+  env -u OLIVARES_RV_JOBS -u OLIVARES_RV_LOGDIR \
+    -u GH_TOKEN -u GITHUB_TOKEN -u GH_HOST -u GH_ENTERPRISE_TOKEN \
+    "$@"
+}
+
+cat > "$TMP/runs.json" <<J
+{"workflow_runs":[{"id":101,"created_at":"2026-08-30T06:00:00Z"}]}
+J
+cat > "$TMP/livejobs.json" <<J
+{"jobs":[
+  {"name":"race-modules (partition 2)","status":"completed","id":11,"runner_name":"srv17",
+   "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:10:00Z","conclusion":"success","steps":[]},
+  {"name":"race-rest","status":"completed","id":12,"runner_name":"srv17",
+   "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:05:00Z","conclusion":"success","steps":[]},
+  {"name":"race-core","status":"completed","id":13,"runner_name":"ci-runner-9",
+   "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:08:00Z","conclusion":"success","steps":[]},
+  {"name":"race-modules-extra","status":"completed","id":14,"runner_name":"trap",
+   "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:01:00Z","conclusion":"success","steps":[]},
+  {"name":"web","status":"completed","id":15,"runner_name":"web",
+   "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:01:00Z","conclusion":"success","steps":[]}
+]}
+J
+
+# Unknown source: view fails, but API would succeed. If slug=$(repo_slug) swallows
+# exit 2, MODE=job prints a table (rc 0). API must not run.
+: > "$TMP/gh23.log"
+RC23=$( live_env -u OLIVARES_RV_REPO -u GITHUB_REPOSITORY \
+  OLIVARES_RV_MODE=job \
+  FAKE_GH_LOG="$TMP/gh23.log" FAKE_GH_VIEW_RC=1 FAKE_GH_API_ALWAYS_OK=1 \
+  FAKE_GH_RUNS="$TMP/runs.json" FAKE_GH_JOBS="$TMP/livejobs.json" \
+  PATH="$TMP/fakebin:$PATH" \
+  timeout 8 bash "$SUT" > "$TMP/out" 2>&1; echo $? )
+check "(23) sin repositorio conocido -> 2" 2 "$RC23"
+check "(23b) y nombra la causa" 0 "$( grep -q 'NO PUDE MIRAR' "$TMP/out"; echo $? )"
+check "(23c) y no alcanzo GitHub" 0 \
+  "$( grep -qiE 'api.github.com|https://' "$TMP/gh23.log" && echo hit || echo 0 )"
+check "(23d) y no llamo a la API de corridas/jobs" 0 \
+  "$( grep -q '^api ' "$TMP/gh23.log" && echo api || echo 0 )"
+check "(23e) y no imprimio tabla" 0 \
+  "$( grep -q 'observacion(es)' "$TMP/out" && echo tabla || echo 0 )"
+
+: > "$TMP/gh24.log"
+RC24=$( live_env -u GITHUB_REPOSITORY \
+  OLIVARES_RV_REPO=owner/fixture OLIVARES_RV_MODE=job \
+  FAKE_GH_LOG="$TMP/gh24.log" FAKE_GH_SLUG=owner/fixture FAKE_GH_VIEW_RC=1 \
+  FAKE_GH_RUNS="$TMP/runs.json" FAKE_GH_JOBS="$TMP/livejobs.json" \
+  PATH="$TMP/fakebin:$PATH" \
+  timeout 8 bash "$SUT" > "$TMP/out" 2>&1; echo $? )
+check "(24) fuente correcta + filtro en el camino real -> rc 0" 0 "$RC24"
+check "(24b) incluye la etiqueta de matriz" 0 \
+  "$( grep -q 'race-modules (partition 2)' "$TMP/out"; echo $? )"
+check "(24c) no captura un prefijo ajeno" 0 \
+  "$( grep -q 'race-modules-extra' "$TMP/out" && echo colo || echo 0 )"
+check "(24d) no llamo repo view (manda OLIVARES_RV_REPO)" 0 \
+  "$( grep -q 'repo view' "$TMP/gh24.log" && echo view || echo 0 )"
+check "(24e) ninguna consulta salio del stub" 0 \
+  "$( grep -qiE 'api.github.com|https://' "$TMP/gh24.log" && echo hit || echo 0 )"
+
+: > "$TMP/gh25.log"
+RC25=$( live_env -u OLIVARES_RV_REPO \
+  GITHUB_REPOSITORY=owner/fixture OLIVARES_RV_MODE=job \
+  FAKE_GH_LOG="$TMP/gh25.log" FAKE_GH_SLUG=owner/fixture FAKE_GH_VIEW_RC=1 \
+  FAKE_GH_RUNS="$TMP/runs.json" FAKE_GH_JOBS="$TMP/livejobs.json" \
+  PATH="$TMP/fakebin:$PATH" \
+  timeout 8 bash "$SUT" > "$TMP/out" 2>&1; echo $? )
+check "(25) GITHUB_REPOSITORY resuelve sin repo view -> rc 0" 0 "$RC25"
+check "(25b) y no llamo repo view" 0 \
+  "$( grep -q 'repo view' "$TMP/gh25.log" && echo view || echo 0 )"
+
+: > "$TMP/gh26.log"
+RC26=$( live_env -u OLIVARES_RV_REPO -u GITHUB_REPOSITORY \
+  OLIVARES_RV_MODE=job \
+  FAKE_GH_LOG="$TMP/gh26.log" FAKE_GH_SLUG=owner/fixture FAKE_GH_VIEW_RC=0 \
+  FAKE_GH_RUNS="$TMP/runs.json" FAKE_GH_JOBS="$TMP/livejobs.json" \
+  PATH="$TMP/fakebin:$PATH" \
+  timeout 8 bash "$SUT" > "$TMP/out" 2>&1; echo $? )
+check "(26) gh repo view de solo lectura resuelve -> rc 0" 0 "$RC26"
+check "(26b) y pidio nameWithOwner" 0 \
+  "$( grep -q 'repo view --json nameWithOwner' "$TMP/gh26.log"; echo $? )"
+check "(26c) y no alcanzo GitHub" 0 \
+  "$( grep -qiE 'api.github.com|https://' "$TMP/gh26.log" && echo hit || echo 0 )"
+
 echo
 echo "check-runner-variance selftest: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

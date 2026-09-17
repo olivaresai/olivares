@@ -249,7 +249,7 @@ siehe [Eine Quelle anbinden](/de/how-to/connect-a-source/). Die Demo-Estate zeig
 :::note[Die Form des Endpunkts]
 Das Permitted-vs-Observed-Ergebnis wird unter `/v1/m/accessmap/drift` ausgeliefert
 (es gibt kein `/diff`). Die `/v1/m/accessmap/*`-Routen gehören nicht zum stabilen
-Kernvertrag mit 53 Pfaden; sie werden als separates **Beta**-Dokument in der
+Kernvertrag mit 54 Pfaden; sie werden als separates **Beta**-Dokument in der
 [Modulrouten-Referenz](/reference/api-beta/) veröffentlicht. Die
 [API-Referenz](/reference/api/) dokumentiert die stabile Kernfläche.
 :::

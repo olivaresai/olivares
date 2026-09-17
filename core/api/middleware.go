@@ -6,6 +6,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -171,6 +172,94 @@ var RootEnginePaths = []string{"/healthz", "/openapi.json", "/openapi.beta.json"
 // remain open during PROMOTION, but public Active and IsLeader stay false until
 // the callback establishes leadership. IsLeader() is the signal the label
 // publisher advertises on, so the gate and the routing label can never disagree.
+// prepareGovernedPrincipal installs the principal's SEALED authority evidence for a governed
+// route, and it is the only place in this package that calls the evidence producer.
+//
+// ⛔ ÉSTE ERA EL HUECO, Y LO ENCONTRÓ UN TESTIGO, NO UNA LECTURA. `PrincipalEvidenceProducer`
+// estaba declarado, cableado en boot y comprobado AL MONTAR (checkGovernedRoutes), y su método no
+// lo invocaba nadie: el principal de la petición nunca recibía evidencia, de modo que
+// PrincipalAuthorityAvailable fallaba SIEMPRE y toda ruta gobernada respondía 503. Un cableado sin
+// llamada es una declaración, y sólo un caso que EJERCITA el camino de éxito puede distinguirlos.
+//
+// ⛔ Y EL PRINCIPAL SE SUSTITUYE EN EL CONTEXTO ORIGINAL, NO EN EL HIJO. El hijo lleva el plazo de
+// cinco segundos que acota ESTA lectura y se cancela al volver; propagarlo cancelaría el resto de
+// la petición en cuanto venciera. Son dos duraciones distintas y la del productor no es la del
+// cliente. El `Retry-After` tampoco es ese plazo: uno acota la lectura, el otro orienta el reintento.
+//
+// El orden de los estados es el de K3-EVIDENCIA-HTTP-SPEC §2.3, no una elección de aquí: 401 sin
+// principal y ante una credencial concluyentemente inválida; el 400/403 del tenant se conserva; y
+// todo lo demás colapsa a un 503 UNIFORME cuya causa va al log y nunca al cuerpo, porque distinguir
+// «sin referencia» de «sin productor» de «evidencia inservible» es un oráculo sobre el estado
+// interno de la autoridad.
+func (s *Server) prepareGovernedPrincipal(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+	raw, ok := principalFrom(r.Context())
+	if !ok {
+		s.writeError(w, r, auth.ErrUnauthenticated)
+		return r, false
+	}
+	tenant, err := s.resolveTenant(r, raw)
+	if err != nil {
+		// Un tenant inválido o que contradice el binding del token NO es «no pude decidir»:
+		// conserva el 400/403 que ya daba, y el productor ni se llama.
+		s.writeError(w, r, err)
+		return r, false
+	}
+
+	// Declarada ANTES de la clausura que la lee: `undecided` se define aquí arriba y la medida se
+	// toma más abajo, así que un `:=` en el punto de la medida la dejaría fuera de su alcance.
+	var espera time.Duration
+	undecided := func(why string, cause error) (*http.Request, bool) {
+		if s.log != nil {
+			s.log.Info("api: the principal's authority could not be reconstructed",
+				"why", why, "err", cause, "path", r.URL.Path, "producer_ms", espera.Milliseconds())
+		}
+		w.Header().Set("Retry-After", "5")
+		s.writeError(w, r, auth.ErrRouteUndecided)
+		return r, false
+	}
+
+	ref, ok := raw.Ref()
+	if !ok {
+		return undecided("the principal carries no credential reference", nil)
+	}
+	if s.principalEvidence == nil {
+		return undecided("no evidence producer is installed", nil)
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	// El coste de la reconstrucción se MIDE, no se supone: es una lectura de store por petición
+	// gobernada, y una sola cifra en el log distingue «el productor es caro» de «lo caro está en
+	// otro sitio». La primera corrida de esta puerta hizo sospechar del productor y los tiempos
+	// decían otra cosa — el caso cuyo doble falla al instante tardaba lo mismo.
+	inicio := time.Now()
+	resolved, perr := s.principalEvidence.ResolvePrincipalScope(ctx, ref, tenant)
+	espera = time.Since(inicio)
+	if perr != nil {
+		// Una credencial concluyentemente inválida se responde 401 y no 503: son dos remedios
+		// distintos, y servir «reintenta» a quien tiene que volver a autenticarse es una espera
+		// que nunca termina.
+		if errors.Is(perr, auth.ErrUnauthenticated) {
+			s.writeError(w, r, auth.ErrUnauthenticated)
+			return r, false
+		}
+		return undecided("the producer could not reconstruct the scope", perr)
+	}
+	if got, ok := resolved.Ref(); !ok || got != ref {
+		// La referencia de salida tiene que ser la de entrada: un productor que devolviera otra
+		// habría cambiado de sujeto a mitad de la decisión.
+		return undecided("the reconstructed principal does not carry the same reference", nil)
+	}
+	if aerr := s.authz.PrincipalAuthorityAvailable(resolved, tenant); aerr != nil {
+		return undecided("the reconstructed authority is not usable for this tenant", aerr)
+	}
+
+	if h := actorHolderFrom(r.Context()); h != nil {
+		h.actor = resolved.Actor()
+	}
+	return r.WithContext(withPrincipal(r.Context(), resolved)), true
+}
+
 func (s *Server) leaderGate(next http.Handler) http.Handler {
 	exempt := make(map[string]bool, len(RootEnginePaths))
 	for _, p := range RootEnginePaths {
@@ -210,22 +299,32 @@ func (s *Server) setupCompleteNow(r *http.Request) bool {
 	return s.isSetupComplete(r.Context())
 }
 
-// isSetupComplete reports whether the first superadmin exists, caching the first
-// true so steady state costs no extra query while a crash mid-setup safely
-// re-enters setup mode. It is shared by the REST setup gate and the gRPC path.
+// isSetupComplete uses the shared setup-state observation and fails closed on error.
+// The REST setup gate and gRPC path retain their boolean authorization contract.
 func (s *Server) isSetupComplete(ctx context.Context) bool {
-	if s.setupComplete.Load() {
-		return true
-	}
-	has, err := s.authr.HasAnyUser(ctx)
+	complete, err := s.setupState(ctx)
 	if err != nil {
 		s.log.Error("api: setup-gate check failed", "err", err)
 		return false // fail closed: stay in setup mode on error
 	}
+	return complete
+}
+
+// setupState queries the global authentication authority and caches the first true.
+// Errors and negative observations are not cached. Readiness uses the error to
+// distinguish an unknown state from an installation with no users.
+func (s *Server) setupState(ctx context.Context) (bool, error) {
+	if s.setupComplete.Load() {
+		return true, nil
+	}
+	has, err := s.authr.HasAnyUser(ctx)
+	if err != nil {
+		return false, err
+	}
 	if has {
 		s.setupComplete.Store(true)
 	}
-	return has
+	return has, nil
 }
 
 // authzTenant authenticates, resolves the single canonical tenant, and authorizes
@@ -277,21 +376,139 @@ func (s *Server) authzTenantResourceWithDenial(
 	res auth.ResourceAttrs,
 	denial error,
 ) (auth.Principal, model.TenantID, bool) {
+	// Las puertas no gobernadas descartan el testigo: su metadata es cero, asi que no hay
+	// pregunta sellada que conservar. El campo queda a cero en su ModuleContext.
+	p, tenant, _, ok := s.authzTenantResourcePolicy(
+		w, r, perm, res, auth.RouteMetadata{}, denial, ungovernedRoute,
+	)
+	return p, tenant, ok
+}
+
+// routeGovernance says WHICH DOOR a request arrived through. It is a named type and not a bare
+// bool so a call site cannot pass the wrong one by position and still compile, and it is a
+// PARAMETER and not a property of the metadata so that emptying the metadata cannot downgrade a
+// governed route to the boolean path in silence.
+type routeGovernance bool
+
+const (
+	// ungovernedRoute declared no policy: RBAC and the tenant are the whole question, and the
+	// witness stays zero, which authorizes nothing by construction.
+	ungovernedRoute routeGovernance = false
+	// governedRoute was registered through HandlePolicy/HandleSealed and must produce a witness
+	// before any HTTP effect (invariant V).
+	governedRoute routeGovernance = true
+)
+
+// authzTenantResourcePolicy is the same flow with the route's SEALED metadata carried into
+// the decision (V269 / architecture §7.1).
+//
+// ⛔ AQUI DECIA «THE ZERO METADATA IS BIT-FOR-BIT THE OLD BEHAVIOUR». ERA CIERTO Y DEJO DE
+// SERLO EN EL MISMO COMMIT QUE ESTE COMENTARIO SOBREVIVIO, y la suite lo desmintio con
+// CINCUENTA tests en rojo sirviendo 503 en rutas ordinarias — crear un agente, listar,
+// auditar.
+//
+// Lo que la frase afirmaba de la METADATA sigue siendo verdad: cada arma de rbacPermitted
+// solo RETIRA el termino RBAC, y el resolvedor consulta SessionInheritsAgentGroups solo
+// cuando es true, asi que el cero es inerte. Pero la equivalencia no vivia ahi. Vivia en que
+// las dos puertas llamaban a la MISMA funcion, y al cambiarla a AuthorizeRoute la divergencia
+// se mudo de eje: `Authorize` pregunta «¿RBAC o grant permiten?», y `AuthorizeEvidence`
+// pregunta ademas «¿respalda a este principal un hecho de epoca de directorio, sellado y con
+// ventana?» (evidence.go, principalAuthorizationEvidence). Un principal sin ese hecho no da
+// CheckBroken sino CheckUnknown, y un desconocido no es una denegacion: es ErrRouteUndecided,
+// o sea 503 — el API entero caido, no un permiso de menos.
+//
+// ⇒ LA LECCION, que es lo unico que impide repetirlo: un comentario que afirma equivalencia
+// nombra el eje en el que la comprobo. Este nombraba la metadata, seguia siendo cierto sobre
+// la metadata, y el sistema habia divergido por otro lado. Una afirmacion de equivalencia
+// envejece cuando cambia CUALQUIERA de sus dos lados, no solo el que cita.
+//
+// ⛔ AND MinimumAAL IS CHECKED HERE, BEFORE THE DECISION, NOT INSIDE THE AUTHORIZER. A
+// step-up is a precondition of authentication, not a term of the algebra: folding it in
+// would make "prove who you are again" indistinguishable from "you may not do this", two
+// answers with different remedies. Checking it BEFORE also means a principal who must step
+// up learns nothing about what waited behind it.
+func (s *Server) authzTenantResourcePolicy(
+	w http.ResponseWriter,
+	r *http.Request,
+	perm auth.Permission,
+	res auth.ResourceAttrs,
+	meta auth.RouteMetadata,
+	denial error,
+	governed routeGovernance,
+) (auth.Principal, model.TenantID, auth.RouteAuthorizationWitness, bool) {
+	var none auth.RouteAuthorizationWitness
 	p, ok := principalFrom(r.Context())
 	if !ok {
 		s.writeError(w, r, auth.ErrUnauthenticated)
-		return auth.Principal{}, "", false
+		return auth.Principal{}, "", none, false
 	}
 	tenant, err := s.resolveTenant(r, p)
 	if err != nil {
 		s.writeError(w, r, err)
-		return auth.Principal{}, "", false
+		return auth.Principal{}, "", none, false
 	}
-	if dec := s.authz.Authorize(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res}); !dec.Allow {
+	if meta.RequiresStepUp(p.AAL) {
+		s.writeError(w, r, auth.ErrStepUpRequired)
+		return auth.Principal{}, "", none, false
+	}
+
+	// ⛔ EL CAMINO LO ELIGE LA PUERTA, Y NO LA METADATA. Una ruta NO gobernada no declaro
+	// politica alguna, asi que exigirle la evidencia sellada del camino de testigo le impone un
+	// requisito que nadie escribio para ella — y su fallo no es «un permiso menos», es 503.
+	//
+	// ⛔ Y NO SE RAMIFICA SOBRE meta.IsZero(), aunque hoy distinguiria los mismos casos. Seria
+	// la familia «un valor a cero apaga la comprobacion»: una ruta GOBERNADA cuya metadata
+	// quedara vacia —por un refactor, por un literal a medio rellenar— se degradaria al camino
+	// booleano en silencio y sin que ningun test lo notara. La gobernanza es una propiedad de
+	// la GRAMATICA DE REGISTRO (invariante IV), que es donde no puede derivar a cero sola, y por
+	// eso viaja como parametro con tipo propio en vez de deducirse de un valor.
+	if !governed {
+		if dec := s.authz.Authorize(r.Context(), auth.Request{
+			Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
+		}); !dec.Allow {
+			s.writeError(w, r, denial)
+			return auth.Principal{}, "", none, false
+		}
+		return p, tenant, none, true
+	}
+
+	// ⛔ AuthorizeRoute Y NO Authorize: ESTA RUTA TIENE QUE PRODUCIR UN TESTIGO. Con el booleano,
+	// nada de lo que el testigo liga sobrevivia a la decision, asi que ninguna invariante suya
+	// alcanzaba al efecto HTTP (invariante V). Ahora el testigo viaja hasta el handler en el
+	// ModuleContext y `CheckRowSet` puede exigir que responda a la pregunta de ESTA peticion.
+	// Bound this evidence decision without imposing a lifetime on the handler
+	// (which may stream). An existing earlier request deadline remains binding.
+	decisionCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	witness, aerr := s.authz.AuthorizeRoute(decisionCtx, auth.Request{
+		Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
+	})
+	switch {
+	case aerr == nil:
+		return p, tenant, witness, true
+
+	// ⛔ EL step-up SIGUE SIENDO SUYO: "vuelve a demostrar quien eres" no es "no puedes", y las
+	// dos respuestas tienen remedios distintos. Ya se servia asi antes de este cambio.
+	case errors.Is(aerr, auth.ErrStepUpRequired):
+		s.writeError(w, r, auth.ErrStepUpRequired)
+
+	// ⛔ EL TERCER ESTADO, que en este camino NO EXISTIA: hasta ahora una decision que no pudo
+	// establecerse se servia como denegacion. Va con su propia forma (503) y ANTES de cualquier
+	// lectura de fila, para que no pueda correlacionar con la existencia; y la ruta con conceal y
+	// la ruta sin conceal responden IGUAL, porque un undecided que distinguiera seria justo el
+	// oraculo que el conceal existe para cerrar.
+	case errors.Is(aerr, auth.ErrRouteUndecided):
+		w.Header().Set("Retry-After", "5")
+		s.writeError(w, r, aerr)
+
+	// ⛔ Y LA DENEGACION DE POLITICA SIGUE ESCRIBIENDO EL `denial` QUE LA RUTA PASO. Cambiarlo por
+	// el error tipado convertiria en 403 lo que hoy es 404 en toda ruta con
+	// ConcealDeniedAsNotFound — y eso no es presentacion: CONFIRMA QUE LA FILA EXISTE. Seria
+	// curar el testigo y abrir un oraculo de existencia en el mismo commit.
+	default:
 		s.writeError(w, r, denial)
-		return auth.Principal{}, "", false
 	}
-	return p, tenant, true
+	return auth.Principal{}, "", none, false
 }
 
 // requireAAL3 is the assurance gate for privileged CONFIGURE actions: SSO
@@ -366,4 +583,82 @@ func (s *Server) resolveTenantValue(p auth.Principal, raw string) (model.TenantI
 		}
 	}
 	return "", errTenantRequired
+}
+
+// authzScopedCollectionPolicy is the ordinary collection flow with ONE step inserted
+// where the ratified contract puts it: between the authentication/step-up preconditions
+// and the authorization decision, the DECLARED workspace selector is corroborated
+// against the stored row, and the corroborated workspace becomes the resource the
+// decision is made against.
+//
+// ⛔ THE ORDER IS THE CONTRACT, NOT A CONVENIENCE. Form first (decided from the request
+// alone, no row read), then 401, then step-up, then the lookup, then the decision. A
+// caller who must re-authenticate learns nothing about what waited behind it, and an
+// infrastructure UNKNOWN cannot appear only after a hidden row has been probed.
+//
+// ⛔ AND EVERY NON-ADMISSIBLE SCOPE SHARES THE COLLECTION'S OWN GENERIC REFUSAL. Before
+// this seam the handler answered 503 for an absent workspace and 403 for an inactive
+// one, both AFTER the PEP; moving the resolver in front of the decision would have let
+// an authenticated caller with no permission on this collection tell those two apart
+// from each other and from a plain denial — by status — before ever being authorized.
+// So a known absence, a known non-active status, a crossed confinement and a known outer
+// denial are written as the SAME generic 403, with no field that distinguishes them.
+//
+// ⛔ WHAT DOES NOT COLLAPSE INTO THAT 403: a real store failure and an id/tenant
+// integrity mismatch stay 503 UNKNOWN. "I could not look" is not "you may not", they
+// have different remedies, and recoding one as the other would fabricate a denial the
+// engine never established — the exact substitution the whole projection refuses.
+func (s *Server) authzScopedCollectionPolicy(
+	w http.ResponseWriter,
+	r *http.Request,
+	perm auth.Permission,
+	meta auth.RouteMetadata,
+	scope CollectionScopeRef,
+	governed routeGovernance,
+) (auth.Principal, model.TenantID, auth.ResourceAttrs, auth.RouteAuthorizationWitness, bool) {
+	var (
+		none     auth.RouteAuthorizationWitness
+		resource = auth.ResourceFor(perm)
+	)
+	raw, wellFormed := collectionScopeSelector(r, scope)
+	p, ok := principalFrom(r.Context())
+	if !ok {
+		s.writeError(w, r, auth.ErrUnauthenticated)
+		return auth.Principal{}, "", resource, none, false
+	}
+	tenant, err := s.resolveTenant(r, p)
+	if err != nil {
+		s.writeError(w, r, err)
+		return auth.Principal{}, "", resource, none, false
+	}
+	if meta.RequiresStepUp(p.AAL) {
+		s.writeError(w, r, auth.ErrStepUpRequired)
+		return auth.Principal{}, "", resource, none, false
+	}
+	if !wellFormed {
+		s.writeError(w, r, errBadRequest)
+		return auth.Principal{}, "", resource, none, false
+	}
+	workspace, admission := s.corroborateActiveWorkspace(r.Context(), p, tenant, raw)
+	switch admission {
+	case workspaceAdmissionOK:
+	case workspaceAdmissionInvalid:
+		s.writeError(w, r, errBadRequest)
+		return auth.Principal{}, "", resource, none, false
+	case workspaceAdmissionNotAdmissible:
+		s.writeError(w, r, errForbidden)
+		return auth.Principal{}, "", resource, none, false
+	default:
+		s.writeError(w, r, errEntityAuthorizationUnavailable)
+		return auth.Principal{}, "", resource, none, false
+	}
+	// ⛔ NEVER A FABRICATED OR ZERO WORKSPACE. If corroboration did not succeed the
+	// request does not continue with a blank scope "for uniformity": a blank scope is a
+	// DIFFERENT authorization question, and answering it would be authorizing to make
+	// two refusals look alike.
+	resource.WorkspaceID = workspace
+	p, tenant, witness, decided := s.authzTenantResourcePolicy(
+		w, r, perm, resource, meta, errForbidden, governed,
+	)
+	return p, tenant, resource, witness, decided
 }

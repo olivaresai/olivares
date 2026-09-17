@@ -34,7 +34,7 @@ Every SLI is `good events / valid events` (SRE). The control plane exposes a sin
 
 ### 1.1 Availability / reachability — *is the control plane up?*
 
-The honest primary signal is an **external blackbox probe of `/readyz`** (HTTP 200 vs 503/timeout), because a down engine cannot report its own downtime and a sub-scrape-interval outage is invisible to a self-scrape. `/readyz` returns **503** when the store ping fails (`core/api/metrics.go:130-144`); the load balancer drains the pod on that signal.
+The honest primary signal is an **external blackbox probe of `/readyz`** (HTTP 200 vs 503/timeout), because a down engine cannot report its own downtime and a sub-scrape-interval outage is invisible to a self-scrape. `/readyz` returns **503** when the store ping fails, when this node is a standby, when setup state cannot be observed, when first-boot enumeration is not authoritative, or when the setup capability probe fails (`handleReadyz` in `core/api/metrics.go`). The load balancer drains the pod on that 503. A 503 is not success.
 
 ```
 # Authoritative availability SLI = external prober (status page / blackbox_exporter):
@@ -117,7 +117,7 @@ The **HA tier is implemented** as active-passive over Postgres: `core.replicaCou
 ### 2.2 What counts against the budget
 
 - **Burns budget:** 503s from `/readyz`, 5xx responses, ingest p99 over target, ingest rejects, planned schema-change downtime (it is downtime, budgeted like any other).
-- **Does not burn budget:** 4xx (client errors), `setup_required` (a fresh engine is *ready to be set up*, `/readyz` still 200), maintenance announced and inside an agreed window with the customer (see incident-comms doc).
+- **Does not burn budget:** 4xx (client errors), HTTP 200 from `/readyz` with `setup_required=true` (a fresh engine whose first-boot prerequisites work is *ready to be set up*; that observation is not an outage), maintenance announced and inside an agreed window with the customer (see incident-comms doc). A 503 from `/readyz` — including `setup_blocked` and `setup_unavailable` — is not this case and burns budget as above. `setup_required` omitted (unknown setup state) is a 503, not a ready observation.
 
 ---
 

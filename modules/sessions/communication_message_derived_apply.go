@@ -84,9 +84,22 @@ func canonicalMessageDerivedSourceHash(
 }
 
 func messageDerivedLockKey(normalized messageDerivedNormalized) string {
+	return messageDerivedReceiptLockKey(
+		normalized.scope, normalized.commandScope, normalized.idempotencyKeyHash,
+	)
+}
+
+// messageDerivedReceiptLockKey is the transaction key applyDerived acquires
+// before it looks up or appends its receipt; the receipt fence derives the
+// same key from the same identity.
+func messageDerivedReceiptLockKey(
+	scope DirectoryScopeRef,
+	commandScope string,
+	idempotencyKeyHash []byte,
+) string {
 	return fmt.Sprintf(
 		"sessions.communication.message.derived:%s:%s:%x",
-		normalized.scope.WorkspaceID, normalized.commandScope, normalized.idempotencyKeyHash,
+		scope.WorkspaceID, commandScope, idempotencyKeyHash,
 	)
 }
 
@@ -142,43 +155,25 @@ func messageDerivedResultFromReceipt(
 	}, nil
 }
 
-func lockMessageDerivedOrigin(
+// observeMessageDerivedOrigin proves that the escalation's OriginEventID is
+// the Event of an overdue receipt of the locked source Message, and that the
+// source still carries an overdue Delivery. Both origin rows are append-only
+// evidence read behind the source Message's row lock (see
+// observeMessageOverdueOrigin for the fence); they are never row-locked.
+func observeMessageDerivedOrigin(
 	ctx context.Context,
 	tx *communicationTx,
 	normalized messageDerivedNormalized,
 	locked messageLifecycleLocked,
 ) error {
-	receipts, err := tx.repo(communicationCommandKind)
+	origin, err := observeMessageOverdueOrigin(
+		ctx, tx, normalized.command.MessageID, normalized.command.OriginEventID,
+	)
 	if err != nil {
 		return err
 	}
-	rows, page, err := receipts.List(ctx, model.Query{
-		Filters: []model.Filter{
-			{Column: colCommCommandScope, Op: model.OpEq, Value: messageLifecycleOverdueScope},
-			{Column: colEventID, Op: model.OpEq, Value: normalized.command.OriginEventID.String()},
-		},
-		Limit: 2,
-	})
-	if err != nil {
-		return err
-	}
-	if page.HasMore || len(rows) != 1 {
-		return communicationError(
-			ErrCommunicationEvidenceUnknown, "overdue escalation origin receipt is unavailable",
-		)
-	}
-	receiptID, err := model.ParseID(rows[0].String(model.ColID))
-	if err != nil {
-		return communicationError(
-			ErrCommunicationEvidenceUnknown, "overdue escalation receipt identity is malformed",
-		)
-	}
-	record, err := tx.lockRecord(ctx, communicationCommandKind, receiptID)
-	if err != nil {
-		return err
-	}
-	receipt, err := communicationCommandReceiptFromRecord(record)
-	if err != nil || receipt.CommandScope != messageLifecycleOverdueScope ||
+	receipt := origin.receipt
+	if receipt.CommandScope != messageLifecycleOverdueScope ||
 		receipt.ResultKind != string(messageKind) || receipt.ResultID != normalized.command.MessageID ||
 		receipt.EventID != normalized.command.OriginEventID ||
 		receipt.ResponseProjectionJSON.IDs["message_id"] != normalized.command.MessageID ||
@@ -187,34 +182,7 @@ func lockMessageDerivedOrigin(
 			ErrCommunicationEvidenceUnknown, "overdue escalation receipt crosses Message lineage",
 		)
 	}
-	events, err := tx.repo(workEventKind)
-	if err != nil {
-		return err
-	}
-	eventRows, eventPage, err := events.List(ctx, model.Query{
-		Filters: []model.Filter{{
-			Column: colEventID, Op: model.OpEq, Value: normalized.command.OriginEventID.String(),
-		}},
-		Limit: 2,
-	})
-	if err != nil {
-		return err
-	}
-	if eventPage.HasMore || len(eventRows) != 1 {
-		return communicationError(
-			ErrCommunicationEvidenceUnknown, "overdue escalation origin Event is unavailable",
-		)
-	}
-	eventRowID, err := model.ParseID(eventRows[0].String(model.ColID))
-	if err != nil {
-		return communicationError(
-			ErrCommunicationEvidenceUnknown, "overdue escalation Event identity is malformed",
-		)
-	}
-	eventRecord, err := tx.lockRecord(ctx, workEventKind, eventRowID)
-	if err != nil {
-		return err
-	}
+	eventRecord := origin.event
 	var payload messageLifecycleEventProjection
 	if eventRecord.String(colEventType) != messageLifecycleOverdueEvent ||
 		json.Unmarshal([]byte(eventRecord.String(colEventPayload)), &payload) != nil ||
@@ -659,7 +627,7 @@ func (s *messageDerivedService) applyDerived(
 						"overdue escalation source is no longer published",
 					)
 				}
-				if err := lockMessageDerivedOrigin(ctx, tx, normalized, lockedSource); err != nil {
+				if err := observeMessageDerivedOrigin(ctx, tx, normalized, lockedSource); err != nil {
 					return err
 				}
 			}

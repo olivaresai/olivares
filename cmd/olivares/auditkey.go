@@ -134,7 +134,11 @@ func sealerCustodyInfo(purpose, envValue string, present bool) api.KeyInfo {
 // keyLoadOption tunes how a signing key is resolved.
 type keyLoadOption func(*keyLoadOptions)
 
-type keyLoadOptions struct{ noMint bool }
+type keyLoadOptions struct {
+	noMint bool
+	// enrolled is the STRICT completed-custody mode. See withEnrolledCustody.
+	enrolled bool
+}
 
 func applyKeyLoadOptions(opts []keyLoadOption) keyLoadOptions {
 	var o keyLoadOptions
@@ -154,6 +158,46 @@ func applyKeyLoadOptions(opts []keyLoadOption) keyLoadOptions {
 // rather than something a read silently repairs. That is the point: repairing an
 // installation is a job for `serve`/`quickstart`, which say what they are doing.
 func withoutMinting() keyLoadOption { return func(o *keyLoadOptions) { o.noMint = true } }
+
+// withEnrolledCustody is the STRICT mode an ordinary boot passes when its
+// publication admission reported that this destination carries a COMPLETED restore
+// control (F3-IR-5).
+//
+// # Why withoutMinting is not this mode
+//
+// withoutMinting is a READ-ONLY command's option and it stops short of custody in two
+// measured ways:
+//
+//  1. It is CHECK-THEN-CALL. It asks fileExistsAt and then calls
+//     LoadOrCreateSigningKey anyway, so a key removed between the two calls is
+//     created rather than reported — and nothing about "the file existed a moment
+//     ago" is a no-creation guarantee. This mode calls the LOAD-ONLY entry point, so
+//     there is no branch that can write a key at all.
+//  2. It does not close SOURCE SUBSTITUTION. The catalog and policy loaders are
+//     deliberately lenient about a configured-but-absent BYOK file: they log and fall
+//     through to the local data-directory key. Under withoutMinting that fallthrough
+//     still happens; it merely fails later if the local key is also absent — and
+//     SUCCEEDS, with the wrong key, when a local one exists. A completed operation
+//     published a specific selection, so a configured source that cannot be read is a
+//     custody failure here, never a reason to serve a different key.
+//
+// It also never mints an auxiliary key, never persists CMEK plaintext and never
+// changes an external Secret/KMS selection. The ordinary unenrolled path keeps its
+// existing lenient contract untouched: this mode is entered only when a completed
+// control says the destination's custody was already chosen.
+func withEnrolledCustody() keyLoadOption {
+	return func(o *keyLoadOptions) { o.enrolled, o.noMint = true, true }
+}
+
+// errEnrolledCustody reports a key that a completed restore control requires and this
+// boot could not load. It is a custody failure, never an absence to repair: the
+// remedy is to provision the custody that operation published, and minting a fresh
+// key here would serve the restored estate under a key nobody chose.
+func errEnrolledCustody(purpose, where string, cause error) error {
+	return fmt.Errorf(
+		"%s signing key: this destination carries a COMPLETED restore control, so its custody was already selected and this boot must LOAD it — %s: %w",
+		purpose, where, cause)
+}
 
 // errNoMint reports an absent key under withoutMinting, as a NotFound so the
 // caller's exit code says "there is nothing here", not "something broke".
@@ -223,7 +267,11 @@ func loadAuditSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOption
 	// No shared source: single-node / dev. Mint-on-absent in the data dir, exactly
 	// as before. >1 replica is rejected by the Helm chart in this mode.
 	path := filepath.Join(dataDir, "audit-signing.key")
-	if applyKeyLoadOptions(opts).noMint && !fileExistsAt(path) {
+	o := applyKeyLoadOptions(opts)
+	if o.enrolled {
+		return loadEnrolledLocalKey("audit", path)
+	}
+	if o.noMint && !fileExistsAt(path) {
 		return loadedSigningKey{}, errNoMint("audit", path)
 	}
 	k, created, err := secure.LoadOrCreateSigningKey(path)
@@ -273,6 +321,12 @@ func loadCatalogSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOpti
 			}
 			log.Info("catalog signing key loaded from a mounted file (shared-custody / HA)", "path", file)
 			return loadedSigningKey{priv: k, mode: custodyModeBYOKFile}, nil
+		} else if applyKeyLoadOptions(opts).enrolled {
+			// STRICT: the configured source wins, and it cannot be read. Falling through
+			// to the local key below would substitute a DIFFERENT key for the one the
+			// completed operation published — and would succeed while doing it.
+			return loadedSigningKey{}, errEnrolledCustody("catalog",
+				"the configured source "+envCatalogKeyFile+"="+file+" is missing or unreadable and this mode never falls back to a local key", statErr)
 		}
 		// Configured but ABSENT. Unlike the audit key — whose absence MUST fail closed
 		// (a forked ledger is catastrophic) — the catalog key is artifact-signing with
@@ -283,7 +337,11 @@ func loadCatalogSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOpti
 		log.Warn("catalog signing key file not present; minting a per-node catalog key — provision catalog-signing.key in the shared Secret for consistent artifact verification across HA replicas", "path", file)
 	}
 	path := filepath.Join(dataDir, "catalog-signing.key")
-	if applyKeyLoadOptions(opts).noMint && !fileExistsAt(path) {
+	o := applyKeyLoadOptions(opts)
+	if o.enrolled {
+		return loadEnrolledLocalKey("catalog", path)
+	}
+	if o.noMint && !fileExistsAt(path) {
 		return loadedSigningKey{}, errNoMint("catalog", path)
 	}
 	k, created, err := secure.LoadOrCreateSigningKey(path)
@@ -332,13 +390,22 @@ func loadPolicySigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOptio
 			}
 			log.Info("policy signing key loaded from a mounted file (shared-custody / HA)", "path", file)
 			return loadedSigningKey{priv: k, mode: custodyModeBYOKFile}, nil
+		} else if applyKeyLoadOptions(opts).enrolled {
+			// STRICT, exactly as the catalog key above: a configured source that cannot
+			// be read is a custody failure, not permission to serve the local key.
+			return loadedSigningKey{}, errEnrolledCustody("policy",
+				"the configured source "+envPolicyKeyFile+"="+file+" is missing or unreadable and this mode never falls back to a local key", statErr)
 		}
 		// Configured but ABSENT: lenient like the catalog key (artifact signing
 		// with an honest fallback, never ledger integrity) — mint per-node loudly.
 		log.Warn("policy signing key file not present; minting a per-node policy key — provision policy-signing.key in the shared Secret so pull agents verify one pinned fingerprint across HA replicas", "path", file)
 	}
 	path := filepath.Join(dataDir, "policy-signing.key")
-	if applyKeyLoadOptions(opts).noMint && !fileExistsAt(path) {
+	o := applyKeyLoadOptions(opts)
+	if o.enrolled {
+		return loadEnrolledLocalKey("policy", path)
+	}
+	if o.noMint && !fileExistsAt(path) {
 		return loadedSigningKey{}, errNoMint("policy", path)
 	}
 	k, created, err := secure.LoadOrCreateSigningKey(path)
@@ -346,6 +413,26 @@ func loadPolicySigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOptio
 		return loadedSigningKey{}, err
 	}
 	return mintedSigningKey(k, created), nil
+}
+
+// loadEnrolledLocalKey is the LOAD-ONLY local path of the strict enrolled mode.
+//
+// It calls secure.LoadSigningKey, which reads an existing file and has no create
+// branch at all — rather than the existence check that today precedes
+// LoadOrCreateSigningKey. The difference is not stylistic: a check-then-call still
+// reaches a function that WRITES, so a key deleted between the two calls is minted,
+// and "it existed when I looked" is not a no-creation guarantee. Absence and
+// disappearance are the same custody failure here.
+func loadEnrolledLocalKey(purpose, path string) (loadedSigningKey, error) {
+	k, err := secure.LoadSigningKey(path)
+	if err != nil {
+		return loadedSigningKey{}, errEnrolledCustody(purpose,
+			"the local key at "+path+" could not be loaded and this mode never creates one", err)
+	}
+	// custodyModeMinted is the SOURCE of an installed local key, not a claim that this
+	// call minted it: opgate's vocabulary gives a local file and a freshly created one
+	// the same custody source, and created stays false because nothing was created.
+	return loadedSigningKey{priv: k, mode: custodyModeMinted}, nil
 }
 
 // loadSealedKey opens a sealed signing-key envelope through the configured KEK.

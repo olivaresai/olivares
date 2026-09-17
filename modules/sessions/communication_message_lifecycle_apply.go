@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync/atomic"
@@ -368,6 +369,11 @@ func verifyMessageLifecyclePrepared(
 	return nil
 }
 
+// lookupMessageLifecycleReceipt observes the receipt of one command identity
+// behind the transaction key its caller acquired for that identity (the
+// lifecycle key for lifecycle and workflow scopes, the derived key for derived
+// scopes; see commandReceiptFenceKey). The receipt is append-only evidence and
+// is never row-locked.
 func lookupMessageLifecycleReceipt(
 	ctx context.Context,
 	tx *communicationTx,
@@ -377,41 +383,23 @@ func lookupMessageLifecycleReceipt(
 	idempotencyKeyHash []byte,
 	requestDigest []byte,
 ) (CommunicationCommandReceipt, bool, error) {
-	repo, err := tx.repo(communicationCommandKind)
+	fence, err := newCommandReceiptFence(scope, commandScope, actorFingerprint, idempotencyKeyHash)
 	if err != nil {
 		return CommunicationCommandReceipt{}, false, err
 	}
-	rows, page, err := repo.List(ctx, model.Query{
-		Filters: []model.Filter{
-			{Column: colCommCommandScope, Op: model.OpEq, Value: commandScope},
-			{Column: colCommActorFingerprint, Op: model.OpEq, Value: actorFingerprint},
-			{Column: colCommIdempotencyKeyHash, Op: model.OpEq, Value: idempotencyKeyHash},
-		},
-		Limit: 2,
-	})
-	if err != nil || page.HasMore || len(rows) > 1 {
+	receipt, found, err := observeCommandReceipt(ctx, tx, fence)
+	if err != nil {
+		// A structural refusal or a data-shaped contradiction is already the
+		// evidence sentinel; a raw store error is folded as before.
+		if errors.Is(err, ErrCommunicationEvidenceUnknown) {
+			return CommunicationCommandReceipt{}, false, err
+		}
 		return CommunicationCommandReceipt{}, false, communicationError(
 			ErrCommunicationEvidenceUnknown, "Message lifecycle receipt lookup is ambiguous",
 		)
 	}
-	if len(rows) == 0 {
+	if !found {
 		return CommunicationCommandReceipt{}, false, nil
-	}
-	id, err := model.ParseID(rows[0].String(model.ColID))
-	if err != nil || !validCanonicalCommunicationID(id) {
-		return CommunicationCommandReceipt{}, false, communicationError(
-			ErrCommunicationEvidenceUnknown, "Message lifecycle receipt identity is malformed",
-		)
-	}
-	record, err := tx.lockRecord(ctx, communicationCommandKind, id)
-	if err != nil {
-		return CommunicationCommandReceipt{}, false, err
-	}
-	receipt, err := communicationCommandReceiptFromRecord(record)
-	if err != nil {
-		return CommunicationCommandReceipt{}, false, communicationError(
-			ErrCommunicationEvidenceUnknown, "Message lifecycle receipt is malformed",
-		)
 	}
 	if !bytes.Equal(receipt.RequestDigest, requestDigest) {
 		return CommunicationCommandReceipt{}, false, fmt.Errorf(

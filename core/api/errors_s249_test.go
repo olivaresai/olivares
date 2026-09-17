@@ -27,6 +27,11 @@ func TestStatusFor_LoginEnforcement(t *testing.T) {
 		{"sso_required wrapped", fmt.Errorf("policy: %w", auth.ErrSSORequired), http.StatusForbidden, "sso_required"},
 		{"network_not_allowed", auth.ErrNetworkNotAllowed, http.StatusForbidden, "network_not_allowed"},
 		{"network wrapped", fmt.Errorf("posture read: %w", auth.ErrNetworkNotAllowed), http.StatusForbidden, "network_not_allowed"},
+		// R5: a build without the recorded enforcement component refuses a new session as a
+		// deployment state, not as an authentication failure or an edition prompt.
+		{"login_enforcement_unavailable", auth.ErrLoginEnforcementComponentAbsent, http.StatusServiceUnavailable, "login_enforcement_unavailable"},
+		{"login_enforcement_unavailable wrapped", fmt.Errorf("mint session: %w", auth.ErrLoginEnforcementComponentAbsent), http.StatusServiceUnavailable, "login_enforcement_unavailable"},
+		{"invalid credentials stay 401", auth.ErrInvalidCredentials, http.StatusUnauthorized, "unauthenticated"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

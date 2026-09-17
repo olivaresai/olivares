@@ -5,8 +5,8 @@
 #
 # test-release-security-sig-guard.sh — battery for the PHASE-2 guard that refuses to finish
 # the signing ceremony green while an UNSIGNED security manifest sits on the draft
-# (`.github/workflows/release.yml`, step "attach verified OTA signature to the draft
-# release").
+# (`.github/workflows/release.yml`, step "attach the verified OTA pair, then verify and
+# PUBLISH the complete candidate").
 #
 # WHY IT RUNS THE REAL BLOCK. `scripts/test-release-wiring.sh` pins workflow SHAPE by
 # grepping the YAML text, and it says so: a determined edit satisfies the string and breaks
@@ -59,7 +59,7 @@ _olivares_git_env="${ROOT}/scripts/lib/git-env.sh"
 unset _olivares_git_env
 
 WF="${OLIVARES_SIGGUARD_WORKFLOW:-$ROOT/.github/workflows/release.yml}"
-STEP="attach verified OTA signature to the draft release"
+STEP="attach the verified OTA pair, then verify and PUBLISH the complete candidate"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/olivares-sigguard.XXXXXX")" || exit 1
 # ${TMPDIR:-/tmp} may be mounted noexec (this dev container's /tmp is) and this battery runs
@@ -114,6 +114,34 @@ awk -v step="      - name: ${STEP}" '
 
 [ -s "$BLOCK" ] && [ "$(wc -l <"$BLOCK")" -ge 10 ]
 check "the step's run: block was extracted from the workflow" "not an empty payload" $?
+
+# --- the publication tail is ASSERTED HERE AND THEN CUT ------------------------------------
+# ⛔ WHY IT IS CUT, AND WHY CUTTING IS NOT DROPPING COVERAGE. Since QA07 this same scalar
+# ends by invoking scripts/release-finalize-stable.sh, which re-resolves the release through
+# the GitHub API, downloads the COMPLETE candidate by asset id, runs the product verifier
+# twice and PATCHes the release. This battery's declared subject is the security-manifest
+# guard and the custody half; executing a full publication inside every one of its cases
+# would make each case depend on machinery that has its own battery
+# (scripts/test-release-finalize-stable.sh) — and the two green cases here would then be
+# measuring that machinery instead of this guard.
+#
+# So the invocation is asserted to EXIST, to come AFTER the custody call and INSIDE the
+# checked window, and only then removed from the executable copy. Removing it from the
+# workflow reddens the assertions below; removing the assertions is a visible edit to this
+# file. What is NOT acceptable — and what the cut avoids — is a battery that silently stops
+# at the custody call and never says so.
+command grep -q 'bash scripts/release-finalize-stable.sh' "$BLOCK"
+check "the block invokes the publication finalizer" "the ceremony finishes its own job" $?
+_fin_line="$(command grep -n 'release-finalize-stable.sh' "$BLOCK" | head -1 | cut -d: -f1)"
+_cust_line="$(command grep -n 'release-attach-stable-pair.sh' "$BLOCK" | command grep -v '^[0-9]*:[[:space:]]*#' | head -1 | cut -d: -f1)"
+[ -n "$_fin_line" ] && [ -n "$_cust_line" ] && [ "$_cust_line" -lt "$_fin_line" ]
+check "publication runs AFTER the attachment succeeded" "order, not mere presence" $?
+[ -f "$ROOT/scripts/release-finalize-stable.sh" ]
+check "the finalizer the block invokes exists" "not a dangling call" $?
+# The executable copy keeps everything up to the finalizer call and drops the call itself.
+command sed -i '/bash scripts\/release-finalize-stable.sh/d' "$BLOCK"
+! command grep -q 'release-finalize-stable.sh "\${RELEASE_TAG}"' "$BLOCK"
+check "the executable copy stops before publishing" "this battery publishes nothing" $?
 # THE PAYLOAD IS THE BLOCK PLUS THE SCRIPT IT CALLS. The custody half of this ceremony — the
 # single draft read, the refusals, the staging, the upload and the rollback — moved into
 # scripts/release-attach-stable-pair.sh because the `run:` had grown to 21,600 characters
@@ -437,6 +465,34 @@ if [ -z "$EXPECT_JQ" ]; then
 fi
 [ -n "$EXPECT_JQ" ]
 check "the jq the block sends was extracted from it" "expectation cannot drift" $?
+# prep_fixture <qué prepara> <mandato…> — prepara el fixture y PARA si no puede.
+#
+# ⛔ POR QUÉ EXISTE. Las cuatro preparaciones de abajo mutaban el repo compartido
+#    $WORK/root con `2>/dev/null` y `>/dev/null 2>&1`, DESCARTANDO su propio código de
+#    salida. Si una fallaba, el caso siguiente no fallaba por eso: juzgaba un árbol que no
+#    era el que creía, y su veredicto —verde o rojo— no decía nada sobre el sujeto. Un
+#    fixture roto era indistinguible de uno correcto.
+#
+#    Lo señaló el 2026-08-29 al analizar seis observaciones de esta pata: tres rojas
+#    con TRES casos distintos y siempre exactamente `fail=1`, o sea UN caso cayendo cada
+#    vez. Con las preparaciones mudas, esa firma no se puede atribuir: no hay forma de
+#    saber si cayó el caso o cayó su preparación.
+#
+#    NO afirmo que esto sea la causa de la intermitencia — 35 corridas en cuatro
+#    configuraciones (serie, parejas concurrentes, con y sin el fallback de TMPDIR, y con
+#    contención sobre el .git compartido) salieron 35/35 limpias y NO la reprodujeron. Lo
+#    que esto arregla es que la próxima vez la pata pueda DECIR qué le pasó, en vez de
+#    dejar un rojo que hay que adivinar.
+prep_fixture() {
+	local que="$1"
+	shift
+	if ! (cd "$WORK/root" && "$@") >/dev/null 2>&1; then
+		printf 'test-release-security-sig-guard: ⛔ NO HE PODIDO MIRAR: falló la preparación del fixture (%s).\n' "$que" >&2
+		printf '  El caso siguiente juzgaría un árbol que no es el que cree. Un fixture roto es\n' >&2
+		printf '  indistinguible de uno correcto, así que esto para en vez de seguir.\n' >&2
+		exit 2
+	fi
+}
 # run_block <assets-listing> [VAR=VAL …]
 run_block() {
 	n=$((n + 1))
@@ -707,11 +763,11 @@ check "the tag resolving to the dispatched commit proceeds" "non-firing directio
 
 # The TAG moves while the evidence and the input stay put, so this exercises the
 # tag-vs-evidence comparison rather than the evidence-vs-input one that now precedes it.
-(cd "$WORK/root" && /usr/bin/git tag -f v26.8.0 "$OTHER_OID" >/dev/null 2>&1)
+prep_fixture "mover la etiqueta al OID ajeno" /usr/bin/git tag -f v26.8.0 "$OTHER_OID"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
 [ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'does not resolve to the commit'
 check "a tag that resolves ELSEWHERE refuses" "the object, not the name" $?
-(cd "$WORK/root" && /usr/bin/git tag -f v26.8.0 "$FIXTURE_OID" >/dev/null 2>&1)
+prep_fixture "devolver la etiqueta al OID del fixture" /usr/bin/git tag -f v26.8.0 "$FIXTURE_OID"
 RELEASE_COMMIT_OVERRIDE="$OTHER_OID"
 [ "$(command grep -c '^ARG upload$' "$log")" -eq 0 ]
 check "the OID mismatch refuses BEFORE any upload" "no draft mutation" $?
@@ -731,7 +787,8 @@ RELEASE_COMMIT_OVERRIDE=""
 # returned rc=0 — three values that move together are not evidence. The authority is
 # release-commit.txt, whose digest sits in the cosign-verified checksums.txt of the run that
 # actually built the artifacts.
-(cd "$WORK/root" && /usr/bin/git checkout -q "$OTHER_OID" 2>/dev/null && /usr/bin/git tag -f v26.8.0 "$OTHER_OID" >/dev/null 2>&1)
+prep_fixture "situar HEAD en el OID ajeno" /usr/bin/git checkout -q "$OTHER_OID"
+prep_fixture "mover la etiqueta al OID ajeno" /usr/bin/git tag -f v26.8.0 "$OTHER_OID"
 RELEASE_COMMIT_OVERRIDE="$OTHER_OID"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'
 [ "$rc" -ne 0 ] && printf '%s' "$out" | command grep -q 'not the one phase 1 recorded'
@@ -739,7 +796,8 @@ check "a moved tag plus a matching raw input cannot impersonate phase 1" "eviden
 [ "$(command grep -c '^ARG upload$' "$log")" -eq 0 ]
 check "and it refuses before touching the draft" "no mutation on a forged identity" $?
 RELEASE_COMMIT_OVERRIDE=""
-(cd "$WORK/root" && /usr/bin/git checkout -q "$FIXTURE_OID" 2>/dev/null && /usr/bin/git tag -f v26.8.0 "$FIXTURE_OID" >/dev/null 2>&1)
+prep_fixture "devolver HEAD al OID del fixture" /usr/bin/git checkout -q "$FIXTURE_OID"
+prep_fixture "devolver la etiqueta al OID del fixture" /usr/bin/git tag -f v26.8.0 "$FIXTURE_OID"
 
 printf '%s\n' "$FIXTURE_OID" >>"$WORK/root/ota-dist/release-commit.txt"
 run_block $'stable-manifest.json\nstable-manifest.json.sig'

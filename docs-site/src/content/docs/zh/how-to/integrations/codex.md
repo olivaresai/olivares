@@ -11,6 +11,12 @@ automation credential 读取 Analytics、Compliance、Audit Logs 和已结算成
 把 session 和工具决策发送到本地 PEP。仅凭通过个人 ChatGPT subscription 认证的 session，
 并不能获得企业 API 的访问权。
 
+本页是 **连接器与 PEP hook** 路径。它不会把官方 Codex CLI 作为受治理子进程启动。
+该运行路径是
+[运行提供商会话](/how-to/operate-provider-sessions/)
+（`OLIVARES_SESSION_RUNTIME_CODEX_BIN` 加上提供商配置文件；
+`CHANGELOG.md` `[26.9.0]`）。
+
 ## 添加 Codex
 
 ### 前置条件

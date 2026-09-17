@@ -26,7 +26,7 @@
 // read; Create/Put/Update/Delete/Rotate = write). An event AWS does not classify
 // yields ModeUnknown — never a guess (ARCHITECTURE.md).
 //
-// Minimal data (docs/SECURITY-HARDENING.md-3): AWS itself excludes SecretString/SecretBinary and
+// Minimal data (docs/SECURITY-HARDENING.md §2-3): AWS itself excludes SecretString/SecretBinary and
 // the KMS Plaintext from CloudTrail, and this connector reads ONLY the identity,
 // the operation name, the key/secret ARN and the timestamp — never a payload, a
 // request/response body, a grant token or any credential. There is a test that the

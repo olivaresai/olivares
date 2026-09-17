@@ -165,6 +165,17 @@ RAIZ_REPO=$(git rev-parse --show-toplevel 2>/dev/null) || no_he_podido "no encue
 cd "$RAIZ_REPO" || no_he_podido "no he podido entrar en $RAIZ_REPO"
 printf 'rebase-web-branch: raiz %s\n' "$PWD"
 
+# Resolve the input before repository-state checks and fetch. Pin the commit once so
+# a moving ref cannot change the requested boundary during this invocation.
+# Invalid revisions remain argument errors, including when resuming a rebase.
+if [ -n "$DESDE" ]; then
+  _desde_arg=$DESDE
+  # --verify -q como --clasifica-cabeza en este fichero; --end-of-options para que
+  # un rev que parece un flag siga siendo el rev.
+  DESDE=$(git rev-parse --verify -q --end-of-options "${_desde_arg}^{commit}") \
+    || no_he_podido "--desde ${_desde_arg} no resuelve a un commit en este repositorio"
+fi
+
 hay_rebase() {
   local gd; gd=$(git rev-parse --git-dir)
   [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ]
@@ -236,8 +247,9 @@ printf 'rebase-web-branch: rama %s · %s commits sobre main\n' \
 #    al empujar, y tenia razon. `case` no crea proceso, no crea tuberia y no puede recibir SIGPIPE.
 if [ "$REANUDANDO" != "1" ]; then
   if [ -n "$DESDE" ]; then
-    git rev-parse -q --verify "${DESDE}^{commit}" >/dev/null 2>&1 \
-      || no_he_podido "--desde $DESDE no resuelve a un commit en este repositorio"
+    # La resolucion del rev ya se hizo arriba, con el repositorio fijado y antes de las guardas
+    # de estado. Aqui queda la comprobacion SEMANTICA, que si es un hallazgo (1): el rev existe
+    # y no describe esta rama. $DESDE es el commit fijado, no el texto que paso quien invoca.
     git merge-base --is-ancestor "$DESDE" HEAD 2>/dev/null \
       || morir "--desde $DESDE no es ancestro de HEAD: saltarlo no describe esta rama"
     printf 'rebase-web-branch: saltando todo hasta %s inclusive (--desde)\n' "$(git rev-parse --short "$DESDE")"

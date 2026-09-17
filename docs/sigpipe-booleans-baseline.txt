@@ -39,7 +39,7 @@
 # 4 y el fichero en 3, restaurar la tuberia vieja habria dado 4 — igual al suelo, ninguna subida —
 # y el trinquete NO la habria nombrado. Un suelo desfasado es el detector apagado para ese
 # fichero. Lo señalo P a las 20:31Z y es la segunda vez hoy: la primera fue check-channel-parity.
-3	scripts/check-git-env-isolation.sh
+1	scripts/check-git-env-isolation.sh
 1	scripts/check-migration-contiguity.sh
 7	scripts/check-migrations.sh
 1	scripts/check-ocsf-claims.sh

@@ -167,6 +167,22 @@ postgres:
   # the NOBYPASSRLS app role against FORCE-RLS tables (no backup at all), and the
   # manifest's cross-tenant tenant inventory needs the same role to be complete.
   adminDsnKey: ""
+  # OPT-IN: name the key in dsnSecret holding the OWNER-role DSN of a
+  # least-privilege owner/app split (`olivares db init --owner-role`,
+  # deploy/postgres/01-app-role.sql). In that split the application role is denied
+  # CREATE on schema public BY DESIGN, so any command that runs the schema's DDL
+  # must connect as the owner instead. Empty (default) is the SINGLE-ROLE posture,
+  # where the app role owns the schema and is its own DDL connection.
+  #
+  # SCOPE, stated so this key is not read as more than it is: today it is consumed
+  # by the DR backup CronJob (backup.enabled), which boots the engine to build the
+  # chain-tip manifest and cannot do that as the app role in the split. The core
+  # StatefulSet does NOT yet wire an owner DSN, so this chart cannot by itself run
+  # the engine in the split posture — deploy that posture with an externally
+  # provisioned database and `serve --owner-dsn`.
+  #
+  # Set it ONLY when the key exists: a named-but-absent key fails the Job closed.
+  ownerDsnKey: ""
 
   # One-shot Helm pre-install/pre-upgrade hook Job that applies the RLS role SQL
   # (files/app-role.sql, kept in sync with deploy/postgres/01-app-role.sql) to

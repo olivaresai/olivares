@@ -1,9 +1,11 @@
-# Cloudflare Pages/Workers headers, applied to the deployed static docs site
-# (docs.olivares.ai). Astro copies docs-site/public/ verbatim to the dist root, so
-# this file lands at the published root where Cloudflare reads it.
-#
-# RFC 9116 §3 requires /.well-known/security.txt to be served as text/plain with the
-# charset parameter set to utf-8. We set it explicitly rather than relying on a host
-# default that might emit text/plain without a charset (or application/octet-stream).
+# Astro copies this file into dist. Keep the security.txt rule before the catch-all.
+# Per-page CSP hashes are in the sealed HTML; frame-ancestors requires a response header.
+# Only the catch-all may set the four required security headers.
 /.well-known/security.txt
   Content-Type: text/plain; charset=utf-8
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'none'

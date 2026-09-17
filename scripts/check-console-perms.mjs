@@ -57,7 +57,7 @@
 // Exit: 0 clean · 1 findings · 2 could not run the check at all (fail-closed).
 
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { accessSync, constants as fsConstants, existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -72,7 +72,17 @@ const asJson = args.has('--json')
 
 function die(msg) {
   console.error(`check-console-perms: ${msg}`)
+  process.exitCode = 2
   process.exit(2)
+}
+
+function readableFile(p) {
+  try {
+    accessSync(p, fsConstants.R_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 // --- typescript ------------------------------------------------------------
@@ -80,27 +90,69 @@ function die(msg) {
 // with the SAME compiler the console is built with, or it is reading a different
 // language than the one that ships.
 const tsEntry = await resolveTypeScript()
-const ts = (await import(pathToFileURL(tsEntry).href)).default
+let ts
+try {
+  const mod = await import(pathToFileURL(tsEntry).href)
+  ts = mod?.default
+} catch (e) {
+  die(
+    `cannot load the typescript compiler from ${tsEntry}: ${e.message}. ` +
+      'Refusing to guess: without the compiler nothing was checked',
+  )
+}
+if (
+  !ts ||
+  typeof ts.createProgram !== 'function' ||
+  typeof ts.readConfigFile !== 'function' ||
+  typeof ts.parseJsonConfigFileContent !== 'function'
+) {
+  die(
+    `the module at ${tsEntry} is not a usable TypeScript compiler ` +
+      '(createProgram/readConfigFile/parseJsonConfigFileContent missing). ' +
+      'Refusing to guess: without the compiler nothing was checked',
+  )
+}
+
+function compilerCandidate(p) {
+  if (!existsSync(p)) return null
+  if (!readableFile(p)) {
+    die(
+      `typescript compiler at ${p} exists but is unreadable; ` +
+        'Refusing to guess: without the compiler nothing was checked',
+    )
+  }
+  return p
+}
 
 async function resolveTypeScript() {
-  const { readdirSync } = await import('node:fs')
   // web/node_modules first: that is the compiler the console is actually built
   // with (pnpm --dir web install), and CI installs there, not at the repo root.
   // The root tree only carries commit tooling, so preferring it would silently
   // parse the console with a different compiler than the one that ships it.
   for (const base of [path.join(WEB, 'node_modules'), path.join(REPO, 'node_modules')]) {
-    const direct = path.join(base, 'typescript', 'lib', 'typescript.js')
-    if (existsSync(direct)) return direct
+    const direct = compilerCandidate(path.join(base, 'typescript', 'lib', 'typescript.js'))
+    if (direct) return direct
     // pnpm keeps the real package under .pnpm/typescript@<version>/…
     const store = path.join(base, '.pnpm')
     if (!existsSync(store)) continue
-    const hit = readdirSync(store)
+    let entries
+    try {
+      entries = readdirSync(store)
+    } catch (e) {
+      die(
+        `cannot read ${store}: ${e.message}. ` +
+          'Refusing to guess: without the compiler nothing was checked',
+      )
+    }
+    const hit = entries
       .filter((d) => d.startsWith('typescript@'))
       .sort()
       .pop()
     if (hit) {
-      const p = path.join(store, hit, 'node_modules', 'typescript', 'lib', 'typescript.js')
-      if (existsSync(p)) return p
+      const p = compilerCandidate(
+        path.join(store, hit, 'node_modules', 'typescript', 'lib', 'typescript.js'),
+      )
+      if (p) return p
     }
   }
   die(
@@ -597,12 +649,767 @@ if (callSites.length === 0 && findings.length === 0) {
   die('found no can() call sites at all; refusing to report the console clean')
 }
 
+// --- 3-bis. the console's OTHER way of asking (G1-B) ------------------------
+//
+// A screen no longer has to mirror a permission to have a surface. Since G1-B, a view
+// whose authority the whoami reflection cannot express asks the ENGINE about the exact
+// registered operation instead, through `POST /v1/auth/capabilities`, and enables itself
+// only on that answer. `sessions:channel:admin` is the first: it can be held through a
+// workspace-scoped authored grant the permission set never names, and it can be reflected
+// while an authored policy forbids the operation. A `can()` for it would be a lie in both
+// directions, so the migrated screens do not write one.
+//
+// ⛔ WITHOUT THIS BLOCK THE SURFACE CENSUS BELOW WOULD BE MEASURING THE WRONG THING. It
+//    asks "does any screen ask the engine about this route's permission?" and answered it
+//    by looking for `can()` alone — so a route whose console surface is a REAL capability
+//    question would be reported as having none, and the ratchet would push the next writer
+//    to add a `can()` that decides nothing just to quiet it. That call is precisely what
+//    must not exist: a permission mirror beside a screen that does not use it is how the
+//    two drift apart again.
+//
+// ⛔ MATCHING THE SPELLING `capabilityQuestion` IS NOT A CONSUMER. A first version of
+//    this block credited every CallExpression whose callee text was that name. That
+//    treated an exported builder nobody calls, and an unrelated local namesake, as a
+//    console surface — the uncovered count dropped from one unaccounted permission to
+//    a fake zero while the process still exited 0 under the ratchet. The property is
+//    the credit, not that exit.
+//
+// Recognition is therefore the same KIND of thing can() already does, pointed at the
+// current five builders and their actual hook/guard path, without a generic compiler:
+//
+//   1. SYMBOL, not spelling. The real `capabilityQuestion` / `useCapability` /
+//      `requestCapabilityPermit` / `CapabilityPreflight.request` are the declarations
+//      in web/src/lib/auth/capabilities.ts. Import aliases, `const x = useCapability`
+//      and re-exports follow the existing declOf/canonicalDecl hop. A live-file call
+//      that keeps the name but does not resolve to those declarations is unreadable,
+//      the same as a namesake `can()`. Unsupported callees (computed, comma, spread)
+//      are refused, not guessed.
+//   2. A REAL CONSUMER must receive the question. Credit flows from `useCapability(q)`,
+//      `preflight.request(q)` and `requestCapabilityPermit({ question: q })` — the
+//      hook and the dispatch-time guard — not from a builder that merely exists. The
+//      five feature builders count when a consumer calls them (or a registry field
+//      typed as FeatureCapability.surface/deepLink holds them and a consumer calls
+//      that field). An unused intermediate that takes a question and is never called
+//      contributes nothing; a dead hook in a file no live can() surface imports
+//      contributes nothing. Spelling `useCapability` one level later is not a loophole.
+//   3. LIVE EXECUTION starts at the callable containing each real can() site, then
+//      follows direct calls, rendered JSX components and callbacks handed to a call.
+//      Static/dynamic imports only bound the files this small graph may inspect; being
+//      somewhere in an imported module is not execution. This is enough to follow the
+//      current administration tree and shared projection without pretending to be a
+//      whole-program reachability analysis from index.html.
+//
+// The operation string is still resolved with the existing resolver and matched
+// against `${method} /v1/m/${namespace}${pattern}` from the same inventory. It is
+// not an exemption list, it names no permission of its own, and an operation this
+// guard cannot read is a FINDING. The generic `can(view.permission)` census is
+// unchanged: it still resolves every registry permission literal, including
+// `sessions:channel:admin`, and that overlap remains a documented limitation.
+const capabilityQuestions = [] // {operation, node} — CONSUMED questions only
+
+const capsSf = program
+  .getSourceFiles()
+  .find((sf) => sf.fileName.endsWith(path.join('src', 'lib', 'auth', 'capabilities.ts')))
+const capQuestionDecls = new Set()
+const consumerDecls = new Set()
+const plumbingDecls = new Set()
+function noteCapabilityExport(name, decl) {
+  if (name === 'capabilityQuestion') {
+    capQuestionDecls.add(decl)
+    plumbingDecls.add(decl)
+    const inner = callableOf(decl)
+    if (inner) plumbingDecls.add(inner)
+  }
+  if (name === 'useCapability' || name === 'requestCapabilityPermit') {
+    consumerDecls.add(decl)
+    plumbingDecls.add(decl)
+    const inner = callableOf(decl)
+    if (inner) plumbingDecls.add(inner)
+  }
+  if (name === 'useCapabilityPreflight') {
+    plumbingDecls.add(decl)
+    const inner = callableOf(decl)
+    if (inner) plumbingDecls.add(inner)
+  }
+}
+if (capsSf) {
+  walk(capsSf, (n) => {
+    if (ts.isFunctionDeclaration(n) && n.name) noteCapabilityExport(n.name.text, n)
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name)) noteCapabilityExport(n.name.text, n)
+    if (
+      ts.isInterfaceDeclaration(n) &&
+      n.name.text === 'CapabilityPreflight'
+    ) {
+      for (const m of n.members) {
+        if (
+          ts.isPropertySignature(m) &&
+          ts.isIdentifier(m.name) &&
+          m.name.text === 'request'
+        ) {
+          consumerDecls.add(m)
+        }
+      }
+    }
+  })
+}
+
+function unwrapExpr(expr) {
+  while (expr) {
+    if (ts.isParenthesizedExpression(expr)) {
+      expr = expr.expression
+      continue
+    }
+    if (ts.isAsExpression(expr) || ts.isSatisfiesExpression?.(expr) || ts.isNonNullExpression(expr)) {
+      expr = expr.expression
+      continue
+    }
+    break
+  }
+  return expr
+}
+
+function calleeNameNode(call) {
+  const expr = unwrapExpr(call.expression)
+  if (!expr) return null
+  if (ts.isPropertyAccessExpression(expr)) return expr.name
+  if (ts.isIdentifier(expr)) return expr
+  return null
+}
+
+function isFunctionLike(n) {
+  return (
+    ts.isFunctionDeclaration(n) ||
+    ts.isFunctionExpression(n) ||
+    ts.isArrowFunction(n) ||
+    ts.isMethodDeclaration(n)
+  )
+}
+
+function callableOf(decl) {
+  if (!decl) return null
+  if (isFunctionLike(decl)) return decl
+  if (ts.isVariableDeclaration(decl) && decl.initializer) {
+    const init = unwrapExpr(decl.initializer)
+    if (init && (ts.isFunctionExpression(init) || ts.isArrowFunction(init))) return init
+  }
+  if (ts.isPropertyAssignment(decl) && decl.initializer) {
+    const init = unwrapExpr(decl.initializer)
+    if (init && (ts.isFunctionExpression(init) || ts.isArrowFunction(init))) return init
+  }
+  return null
+}
+
+function isInsidePlumbing(node) {
+  for (let p = node.parent; p; p = p.parent) {
+    if (ts.isSourceFile(p)) return false
+    if (plumbingDecls.has(p)) return true
+    const inner = callableOf(p)
+    if (inner && plumbingDecls.has(inner)) return true
+  }
+  return false
+}
+
+function recordConsumedCapabilityQuestionSite(operation, node) {
+  capabilityQuestions.push({ operation, node })
+}
+
+// FeatureCapability.surface/deepLink are the registry's actual consumer path
+// (authorization.ts calls them; the five builders are the values written there).
+// Nested `{ surface, deepLink }` literals do not take FeatureCapability as a
+// contextual type, so writesTo() on those members is empty; FeatureView.capability
+// DOES, and the object literal it receives names the builders.
+const featureCapFields = new Map()
+let featureViewCapabilitySig = null
+for (const sf of sourceFiles) {
+  walk(sf, (n) => {
+    if (ts.isInterfaceDeclaration(n) && n.name.text === 'FeatureCapability') {
+      for (const m of n.members) {
+        if (
+          ts.isPropertySignature(m) &&
+          ts.isIdentifier(m.name) &&
+          (m.name.text === 'surface' || m.name.text === 'deepLink')
+        ) {
+          featureCapFields.set(m.name.text, m)
+        }
+      }
+    }
+    if (ts.isInterfaceDeclaration(n) && n.name.text === 'FeatureView') {
+      for (const m of n.members) {
+        if (
+          ts.isPropertySignature(m) &&
+          ts.isIdentifier(m.name) &&
+          m.name.text === 'capability'
+        ) {
+          featureViewCapabilitySig = m
+        }
+      }
+    }
+  })
+}
+
+const productionByName = new Map()
+for (const sf of sourceFiles) productionByName.set(sf.fileName, sf)
+
+const compilerOptions = program.getCompilerOptions()
+function resolveImportedProduction(fromSf, spec) {
+  const r = ts.resolveModuleName(spec, fromSf.fileName, compilerOptions, ts.sys)
+  const fileName = r.resolvedModule?.resolvedFileName
+  if (!fileName) return null
+  return productionByName.get(fileName) ?? null
+}
+
+function importedSpecsFrom(sf) {
+  const specs = []
+  walk(sf, (n) => {
+    if (ts.isImportDeclaration(n)) {
+      if (n.importClause?.isTypeOnly) return
+      if (n.moduleSpecifier && ts.isStringLiteral(n.moduleSpecifier)) specs.push(n.moduleSpecifier.text)
+      return
+    }
+    if (ts.isExportDeclaration(n)) {
+      if (n.isTypeOnly) return
+      if (n.moduleSpecifier && ts.isStringLiteral(n.moduleSpecifier)) specs.push(n.moduleSpecifier.text)
+      return
+    }
+    if (
+      ts.isCallExpression(n) &&
+      n.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      n.arguments[0] &&
+      ts.isStringLiteral(n.arguments[0])
+    ) {
+      specs.push(n.arguments[0].text)
+    }
+  })
+  return specs
+}
+
+const liveFiles = new Set()
+{
+  const queue = []
+  for (const c of callSites) {
+    const sf = c.node.getSourceFile()
+    if (!liveFiles.has(sf)) {
+      liveFiles.add(sf)
+      queue.push(sf)
+    }
+  }
+  while (queue.length) {
+    const sf = queue.pop()
+    for (const spec of importedSpecsFrom(sf)) {
+      const dep = resolveImportedProduction(sf, spec)
+      if (!dep || liveFiles.has(dep)) continue
+      liveFiles.add(dep)
+      queue.push(dep)
+    }
+  }
+}
+
+/** The nearest function/method whose execution owns `node`. */
+function enclosingCallable(node) {
+  for (let p = node.parent; p; p = p.parent) {
+    if (isFunctionLike(p)) return p
+    if (ts.isSourceFile(p)) return null
+  }
+  return null
+}
+
+// React's memo hooks are syntax only after their exported SYMBOL says so. Local
+// helpers called useMemo/useCallback may ignore the callback entirely and cannot be
+// treated as React merely because they share the spelling. Resolving exports from the
+// module symbol preserves named-import aliases, namespace access and local re-exports.
+const reactMemoDecls = new Map()
+for (const sf of sourceFiles) {
+  walk(sf, (n) => {
+    if (
+      !(ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) ||
+      !n.moduleSpecifier ||
+      !ts.isStringLiteral(n.moduleSpecifier) ||
+      n.moduleSpecifier.text !== 'react'
+    ) {
+      return
+    }
+    let moduleSymbol = checker.getSymbolAtLocation(n.moduleSpecifier)
+    if (!moduleSymbol) return
+    if (moduleSymbol.flags & ts.SymbolFlags.Alias) {
+      try {
+        moduleSymbol = checker.getAliasedSymbol(moduleSymbol)
+      } catch {
+        return
+      }
+    }
+    for (const exported of checker.getExportsOfModule(moduleSymbol)) {
+      if (exported.name !== 'useMemo' && exported.name !== 'useCallback') continue
+      let target = exported
+      if (target.flags & ts.SymbolFlags.Alias) {
+        try {
+          target = checker.getAliasedSymbol(target)
+        } catch {
+          continue
+        }
+      }
+      for (const decl of target.declarations ?? []) reactMemoDecls.set(decl, exported.name)
+    }
+  })
+}
+
+/**
+ * A bounded execution graph for consumer credit.
+ *
+ * Every real can() call supplies an already-established console execution root. From
+ * those roots we follow only syntax that demonstrates the next callable can execute:
+ * an ordinary call, a rendered JSX component, or a callback handed to an external
+ * typed API (including callbacks in an inline options object). A local helper has a
+ * body the scanner would have to prove invokes its callback; this bounded graph does
+ * not guess. Merely declaring a hook in one of the imported files creates no edge and
+ * therefore earns no credit.
+ */
+const executionEdges = new Map()
+function addExecutionEdge(owner, target) {
+  if (!owner || !target || owner === target) return
+  let targets = executionEdges.get(owner)
+  if (!targets) {
+    targets = new Set()
+    executionEdges.set(owner, targets)
+  }
+  targets.add(target)
+}
+
+function addCallbacksInArgument(owner, arg) {
+  const visit = (n) => {
+    if (isFunctionLike(n)) {
+      addExecutionEdge(owner, n)
+      return
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(arg)
+}
+
+for (const sf of liveFiles) {
+  walk(sf, (n) => {
+    if (ts.isCallExpression(n) && !isInsidePlumbing(n)) {
+      const owner = enclosingCallable(n)
+      const nameNode = calleeNameNode(n)
+      const calleeDecl = nameNode ? canonicalDecl(nameNode) : null
+      if (owner && calleeDecl) {
+        let target = callableOf(calleeDecl)
+        // React.useCallback retains its argument. The callback becomes executable
+        // only when the returned value is itself called (including through an alias).
+        if (!target && ts.isVariableDeclaration(calleeDecl) && calleeDecl.initializer) {
+          const wrapped = memoizedCallable(unwrapExpr(calleeDecl.initializer))
+          if (wrapped?.kind === 'useCallback') target = wrapped.fn
+        }
+        addExecutionEdge(owner, target)
+      }
+      // Package/framework declarations describe callbacks that the invoked API may
+      // execute. For a source-local helper, passing a closure alone proves nothing:
+      // the IR2 namesake returned null without ever invoking the closure. React's real
+      // useCallback is also known to retain, rather than execute, its callback.
+      if (
+        owner &&
+        calleeDecl?.getSourceFile().isDeclarationFile &&
+        reactMemoDecls.get(calleeDecl) !== 'useCallback'
+      ) {
+        for (const arg of n.arguments) addCallbacksInArgument(owner, arg)
+      }
+      return
+    }
+    if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
+      const owner = enclosingCallable(n)
+      const tag = n.tagName
+      const nameNode = ts.isPropertyAccessExpression(tag)
+        ? tag.name
+        : ts.isIdentifier(tag)
+          ? tag
+          : null
+      if (owner && nameNode) addExecutionEdge(owner, callableOf(canonicalDecl(nameNode)))
+    }
+  })
+}
+
+const reachableCallables = new Set()
+{
+  const queue = []
+  for (const c of callSites) {
+    // A can() may sit in a callback created by the component (the shared
+    // useViewAccess projection does exactly this inside React.useMemo). Creating that
+    // callback demonstrates every containing callable on the lexical chain; it says
+    // nothing about sibling declarations, so a never-called hook remains unreachable.
+    for (let p = c.node.parent; p; p = p.parent) {
+      if (ts.isSourceFile(p)) break
+      if (!isFunctionLike(p) || reachableCallables.has(p)) continue
+      reachableCallables.add(p)
+      queue.push(p)
+    }
+  }
+  while (queue.length) {
+    const owner = queue.pop()
+    for (const target of executionEdges.get(owner) ?? []) {
+      if (reachableCallables.has(target)) continue
+      reachableCallables.add(target)
+      queue.push(target)
+    }
+  }
+}
+
+function isInReachableExecution(node) {
+  const owner = enclosingCallable(node)
+  return !!owner && reachableCallables.has(owner)
+}
+
+function extractOperationsFromCapabilityQuestionCall(call) {
+  const arg = call.arguments[0]
+  if (!arg || !ts.isObjectLiteralExpression(arg)) return null
+  const prop = arg.properties.find(
+    (p) =>
+      ts.isPropertyAssignment(p) &&
+      (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) &&
+      p.name.text === 'operation',
+  )
+  if (!prop || !ts.isPropertyAssignment(prop)) return null
+  return resolve(prop.initializer)
+}
+
+function exportedNameOf(decl) {
+  if (ts.isFunctionDeclaration(decl) && decl.name) return decl.name.text
+  if (ts.isVariableDeclaration(decl) && ts.isIdentifier(decl.name)) return decl.name.text
+  if (ts.isPropertySignature(decl) && ts.isIdentifier(decl.name)) return decl.name.text
+  return null
+}
+
+function questionArgOfConsumer(call, decl) {
+  if (exportedNameOf(decl) === 'requestCapabilityPermit') {
+    const arg = call.arguments[0]
+    if (!arg) return { kind: 'expr', expr: null, missing: true }
+    if (!ts.isObjectLiteralExpression(arg)) return { kind: 'unreadable', node: arg }
+    const prop = arg.properties.find(
+      (p) =>
+        ts.isPropertyAssignment(p) &&
+        (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) &&
+        p.name.text === 'question',
+    )
+    if (!prop || !ts.isPropertyAssignment(prop)) return { kind: 'unreadable', node: arg }
+    return { kind: 'expr', expr: prop.initializer, missing: false }
+  }
+  return { kind: 'expr', expr: call.arguments[0] ?? null, missing: call.arguments.length === 0 }
+}
+
+const callsByCallable = new Map()
+for (const sf of liveFiles) {
+  walk(sf, (n) => {
+    if (!ts.isCallExpression(n) || isInsidePlumbing(n) || !isInReachableExecution(n)) return
+    const nameNode = calleeNameNode(n)
+    if (!nameNode) return
+    const callable = callableOf(canonicalDecl(nameNode))
+    if (!callable) return
+    let list = callsByCallable.get(callable)
+    if (!list) {
+      list = []
+      callsByCallable.set(callable, list)
+    }
+    list.push(n)
+  })
+}
+
+function memoizedCallable(expr) {
+  if (!ts.isCallExpression(expr)) return null
+  const name = calleeNameNode(expr)
+  if (!name) return null
+  const kind = reactMemoDecls.get(canonicalDecl(name))
+  if (!kind) return null
+  const fn = unwrapExpr(expr.arguments[0])
+  if (fn && (ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return { fn, kind }
+  return null
+}
+
+function resolveFeatureCapabilityField(fieldName, depth, seen) {
+  if (!featureViewCapabilitySig) return null
+  const { writes, opaque } = writesTo(featureViewCapabilitySig)
+  if (opaque) return null
+  if (writes.length === 0) return null
+  const out = []
+  for (const w of writes) {
+    const obj = unwrapExpr(w)
+    if (obj && ts.isObjectLiteralExpression(obj)) {
+      const prop = obj.properties.find(
+        (p) =>
+          ts.isPropertyAssignment(p) &&
+          (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) &&
+          p.name.text === fieldName,
+      )
+      if (!prop || !ts.isPropertyAssignment(prop)) continue
+      const v = resolveQuestionExpr(prop.initializer, depth + 1, seen)
+      if (v === null) return null
+      out.push(...v)
+      continue
+    }
+    const v = resolveQuestionExpr(w, depth + 1, seen)
+    if (v === null) return null
+    out.push(...v)
+  }
+  return out
+}
+
+function resolveQuestionExpr(expr, depth = 0, seen = new Set()) {
+  expr = unwrapExpr(expr)
+  if (!expr || depth > 16) return null
+  if (expr.kind === ts.SyntaxKind.NullKeyword) return []
+  if (ts.isIdentifier(expr) && (expr.text === 'undefined' || expr.text === 'null')) return []
+  const memo = memoizedCallable(expr)
+  if (memo) return extractOperationsFromFunction(memo.fn, depth + 1, seen)
+  if (ts.isConditionalExpression(expr)) {
+    const a = resolveQuestionExpr(expr.whenTrue, depth + 1, seen)
+    const b = resolveQuestionExpr(expr.whenFalse, depth + 1, seen)
+    return a && b ? [...a, ...b] : null
+  }
+  if (
+    ts.isBinaryExpression(expr) &&
+    (expr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+      expr.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+  ) {
+    const a = resolveQuestionExpr(expr.left, depth + 1, seen)
+    const b = resolveQuestionExpr(expr.right, depth + 1, seen)
+    return a && b ? [...a, ...b] : null
+  }
+
+  if (ts.isCallExpression(expr)) {
+    const nameNode = calleeNameNode(expr)
+    if (!nameNode) return null
+    let d = canonicalDecl(nameNode)
+    if (d && capQuestionDecls.has(d)) return extractOperationsFromCapabilityQuestionCall(expr)
+    const callable = callableOf(d)
+    if (callable) return extractOperationsFromFunction(callable, depth + 1, seen)
+    // `const ask = React.useCallback(() => question, []); ask()` — unlike useMemo,
+    // useCallback returns the callback rather than its value, so the invocation is
+    // the demonstrated point at which its returned question exists.
+    if (d && ts.isVariableDeclaration(d) && d.initializer) {
+      const wrapped = memoizedCallable(unwrapExpr(d.initializer))
+      if (wrapped?.kind === 'useCallback') {
+        return extractOperationsFromFunction(wrapped.fn, depth + 1, seen)
+      }
+    }
+    const field = nameNode.text
+    if (
+      (d && featureCapFields.get(field) === d) ||
+      (!d && featureCapFields.has(field))
+    ) {
+      return resolveFeatureCapabilityField(field, depth + 1, seen)
+    }
+    if (d && (ts.isPropertySignature(d) || ts.isPropertyDeclaration(d))) {
+      const { writes, opaque } = writesTo(d)
+      if (opaque) return null
+      if (writes.length === 0) {
+        if (featureCapFields.has(field)) return resolveFeatureCapabilityField(field, depth + 1, seen)
+        return null
+      }
+      const out = []
+      for (const w of writes) {
+        const v = resolveQuestionExpr(w, depth + 1, new Set(seen))
+        if (v === null) return null
+        out.push(...v)
+      }
+      return out
+    }
+    return null
+  }
+
+  const nameNode = ts.isPropertyAccessExpression(expr)
+    ? expr.name
+    : ts.isIdentifier(expr)
+      ? expr
+      : null
+  if (!nameNode) return null
+  const d = declOf(nameNode)
+  if (!d) return null
+  if (seen.has(d)) return []
+  const next = new Set(seen)
+  next.add(d)
+  if (ts.isParameter(d)) return resolveParameterWrites(d, depth + 1, next)
+  if (ts.isVariableDeclaration(d) && d.initializer) {
+    return resolveQuestionExpr(d.initializer, depth + 1, next)
+  }
+  if (ts.isPropertyAssignment(d)) return resolveQuestionExpr(d.initializer, depth + 1, next)
+  if (ts.isShorthandPropertyAssignment(d)) {
+    const v = checker.getShorthandAssignmentValueSymbol(d)?.declarations?.[0]
+    return v && ts.isVariableDeclaration(v) ? resolveQuestionExpr(v.initializer, depth + 1, next) : null
+  }
+  const callable = callableOf(d) || (ts.isFunctionDeclaration(d) ? d : null)
+  // extractOperationsFromFunction records `callable` itself. Adding the same
+  // FunctionDeclaration to `seen` here made every builder identifier return [].
+  if (callable) return extractOperationsFromFunction(callable, depth + 1, seen)
+  const sig = sinkSignatureOf(d)
+  if (sig) {
+    const { writes, opaque } = writesTo(sig)
+    if (opaque) return null
+    if (writes.length === 0) return null
+    const out = []
+    for (const w of writes) {
+      const v = resolveQuestionExpr(w, depth + 1, new Set(next))
+      if (v === null) return null
+      out.push(...v)
+    }
+    return out
+  }
+  return null
+}
+
+function extractOperationsFromFunction(callable, depth, seen) {
+  if (!callable || depth > 16) return null
+  if (seen.has(callable)) return []
+  const next = new Set(seen)
+  next.add(callable)
+  const body = callable.body
+  if (!body) return null
+  if (!ts.isBlock(body)) return resolveQuestionExpr(body, depth + 1, next)
+  const out = []
+  let unreadable = false
+  const visit = (n) => {
+    if (isFunctionLike(n) || ts.isClassDeclaration(n)) return
+    if (ts.isReturnStatement(n)) {
+      if (!n.expression) return
+      const v = resolveQuestionExpr(n.expression, depth + 1, next)
+      if (v === null) unreadable = true
+      else out.push(...v)
+      return
+    }
+    ts.forEachChild(n, visit)
+  }
+  for (const stmt of body.statements) visit(stmt)
+  return unreadable ? null : out
+}
+
+function resolveParameterWrites(param, depth, seen) {
+  const fn = param.parent
+  if (!fn || !fn.parameters) return []
+  const idx = fn.parameters.indexOf(param)
+  if (idx < 0) return null
+  const callers = callsByCallable.get(fn) ?? []
+  if (callers.length === 0) return []
+  const out = []
+  for (const call of callers) {
+    const arg = call.arguments[idx]
+    if (!arg) return null
+    const v = resolveQuestionExpr(arg, depth + 1, seen)
+    if (v === null) return null
+    out.push(...v)
+  }
+  return out
+}
+
+for (const sf of sourceFiles) {
+  walk(sf, (n) => {
+    if (!ts.isCallExpression(n) || isInsidePlumbing(n)) return
+    const nameNode = calleeNameNode(n)
+    if (!nameNode) return
+    const d = canonicalDecl(nameNode)
+    const live = liveFiles.has(sf) && isInReachableExecution(n)
+
+    if (nameNode.text === 'capabilityQuestion' && !capQuestionDecls.has(d)) {
+      if (live) {
+        finding(
+          'unreadable',
+          n,
+          'a call to something named capabilityQuestion() that does not resolve to ' +
+            `web/src/lib/auth/capabilities.ts. Declared at ${d ? at(d) : 'nowhere this guard could follow'}. ` +
+            'If this is an unrelated helper, it needs a different name — matching the text is not a consumer.',
+        )
+      }
+      return
+    }
+
+    const isConsumer = !!d && consumerDecls.has(d)
+    if (!isConsumer) {
+      if (
+        live &&
+        (nameNode.text === 'useCapability' || nameNode.text === 'requestCapabilityPermit')
+      ) {
+        finding(
+          'unreadable',
+          n,
+          `a call to something named ${nameNode.text}() that does not resolve to ` +
+            `web/src/lib/auth/capabilities.ts. Declared at ${d ? at(d) : 'nowhere this guard could follow'}. ` +
+            'A namesake hook is not a capability consumer.',
+        )
+      }
+      return
+    }
+    if (!live) return
+
+    const arg = questionArgOfConsumer(n, d)
+    if (arg.kind === 'unreadable') {
+      finding(
+        'unreadable',
+        arg.node,
+        `${nameNode.text}() received a question this guard cannot read. ` +
+          'An argument it cannot follow is a route whose console surface it cannot account for.',
+      )
+      return
+    }
+    if (arg.missing || arg.expr == null) {
+      if (arg.missing) {
+        finding('unreadable', n, `${nameNode.text}() called with no question argument`)
+      }
+      return
+    }
+    const values = resolveQuestionExpr(arg.expr)
+    if (values === null) {
+      finding(
+        'unreadable',
+        arg.expr,
+        `cannot resolve the question passed to ${nameNode.text}(): \`${arg.expr
+          .getText(sf)
+          .replace(/\s+/g, ' ')
+          .slice(0, 90)}\`. A consumer whose question this guard cannot read is a ` +
+          'route whose console surface it cannot account for.',
+      )
+      return
+    }
+    for (const v of values) recordConsumedCapabilityQuestionSite(v, arg.expr)
+  })
+}
+
 // --- 4. compare ------------------------------------------------------------
 inv = engineInventory()
 const sitesOf = new Map()
 for (const c of callSites) {
   if (!sitesOf.has(c.permission)) sitesOf.set(c.permission, [])
   sitesOf.get(c.permission).push(c.node)
+}
+
+// The permissions a REGISTERED CAPABILITY QUESTION covers: the console named a mounted
+// route, and the engine declares that route under this permission. Both halves come from
+// the same two sources the rest of this guard reads — the console's own source and
+// permsdump — so neither side can be satisfied by a string nobody uses.
+//
+// ⛔ RESOLVED HERE, ABOVE THE `--json` EARLY RETURN, so a question the engine cannot
+//    answer is a FINDING in every mode. The census that consumes `porCapacidad` sits
+//    below that return and is only visible on stderr; hanging this check off it would
+//    have made the defect invisible to every caller that asks for JSON.
+const rutaDeOperacion = new Map()
+for (const m of inv.modules ?? []) {
+  for (const r of m.routes ?? []) {
+    if (!r.permission || !r.method || !r.pattern) continue
+    rutaDeOperacion.set(`${r.method} /v1/m/${m.namespace}${r.pattern}`, r.permission)
+  }
+}
+const porCapacidad = new Map()
+for (const q of capabilityQuestions) {
+  const perm = rutaDeOperacion.get(q.operation)
+  if (!perm) {
+    // A question naming an operation the engine does not mount is the SAME class of defect
+    // this guard exists for, in the other direction: the screen would be permanently
+    // unavailable and nothing would say why. The engine answers `not_supported`, which is
+    // an unknown, so it never grants — but it never works either.
+    finding(
+      'undeclared',
+      q.node,
+      `the console asks the capability endpoint about \`${q.operation}\`, which the engine ` +
+        'mounts under no route. It can never answer anything but not_supported.',
+    )
+    continue
+  }
+  if (!porCapacidad.has(perm)) porCapacidad.set(perm, [])
+  porCapacidad.get(perm).push(q.operation)
 }
 
 const FORMS =
@@ -674,7 +1481,18 @@ if (args.has('--list')) {
 }
 
 if (asJson) {
-  console.log(JSON.stringify({ checked: sitesOf.size, callSites: callSites.length, findings }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        checked: sitesOf.size,
+        callSites: callSites.length,
+        capabilityQuestions: capabilityQuestions.length,
+        findings,
+      },
+      null,
+      2,
+    ),
+  )
   process.exit(findings.length ? 1 : 0)
 }
 
@@ -701,7 +1519,25 @@ if (asJson) {
 // literales daba 40 porque veía 177 permisos donde éste resuelve 188 — la diferencia son las
 // constantes, props y propiedades de objeto que sólo un parseo real alcanza. 40 era un TECHO, no
 // un censo, y fijar el trinquete ahí lo habría dejado flojo en doce.
-const SIN_SUPERFICIE_TRINQUETE = 26
+// MEDIDO el 2026-09-06 sobre el árbol de K3 I1 (web/src/features/communications): **25**. Las
+// cinco patas que bajan de 30 a 25 son las que ese incremento hace pedir a can() desde una
+// pantalla real —sessions:channel:write, sessions:delivery:read, sessions:delivery:write,
+// sessions:message-send:write y sessions:message:read—; quedan sessions:channel:admin y
+// sessions:handoff-response:write (I2/I3 del plan) y sessions:decision:write, que no es K3.
+// El trinquete baja al número verificado por este mismo guion, nunca a una cifra deducida.
+// MEDIDO el 2026-09-07 sobre el árbol de K3 I2 (la puerta /communications/administration y su
+// hoja): **24**. La pata que baja de 25 a 24 es sessions:channel:admin, que ahora pide can() desde
+// una pantalla real (el registro, la pestaña Administración, el guard de cada acto administrativo);
+// quedan sessions:handoff-response:write (I3) y sessions:decision:write, que no es K3.
+// MEDIDO el 2026-09-10 sobre el árbol de K3 I3 (la puerta /communications/handoffs, su hoja y el
+// host de respuesta): **22**. La pata que se cubre es sessions:handoff-response:write, que ahora
+// pide can() desde una pantalla real — la vista de comunicaciones, el control de respuesta de la
+// hoja y el guard del acto en handoff-response-host.tsx. Queda sessions:decision:write, que no
+// es K3.
+// La cifra no es la que el contrato preveía (esperaba 23 bajando de 24) y se fija la MEDIDA:
+// sobre el árbol base 27054d311a, antes de tocar nada, este guion ya daba 23 contra un trinquete
+// de 24, así que el trinquete venía uno flojo. 23 − 1 = 22.
+const SIN_SUPERFICIE_TRINQUETE = 22
 const enRutas = new Map()
 for (const m of inv.modules ?? []) {
   for (const r of m.routes ?? []) {
@@ -713,7 +1549,18 @@ for (const m of inv.modules ?? []) {
 if (enRutas.size === 0) {
   die('the inventory declared no route permissions at all; refusing to report the console clean')
 }
-const sinSuperficie = [...enRutas.keys()].filter((perm) => !sitesOf.has(perm)).sort()
+if (porCapacidad.size > 0) {
+  const filas = [...porCapacidad]
+    .sort()
+    .map(([p, ops]) => `${p} (${[...new Set(ops)].sort().join(', ')})`)
+  console.error(
+    `check-console-perms: ${porCapacidad.size} route permission(s) have a REGISTERED ` +
+      `CAPABILITY QUESTION as their console surface: ${filas.join('; ')}`,
+  )
+}
+const sinSuperficie = [...enRutas.keys()]
+  .filter((perm) => !sitesOf.has(perm) && !porCapacidad.has(perm))
+  .sort()
 for (const perm of sinSuperficie) {
   const rutas = enRutas.get(perm)
   console.error(
@@ -747,7 +1594,7 @@ for (const f of findings) {
     for (const s of f.sites.slice(1)) console.error(`    also at ${s}`)
   }
 }
-const scope = `${sitesOf.size} distinct permissions across ${callSites.length} can() call sites, against ${Object.keys(inv.declared).length} declared by the engine`
+const scope = `${sitesOf.size} distinct permissions across ${callSites.length} can() call sites and ${capabilityQuestions.length} registered capability question(s), against ${Object.keys(inv.declared).length} declared by the engine`
 if (findings.length) {
   console.error(
     `\ncheck-console-perms: ${findings.length} finding(s) over ${scope}.\n` +

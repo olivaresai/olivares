@@ -1,0 +1,112 @@
+{
+  "$comment": "SPDX-FileCopyrightText: 2026 Olivares.AI; SPDX-License-Identifier: AGPL-3.0-only",
+  "schema": "olivares.ai/install-surfaces/v1",
+  "version": "v26.9.0",
+  "measured_at": "2026-09-15T20:29:52Z",
+  "surfaces": [
+    {
+      "id": "github-release",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^release:$"
+      },
+      "prose": {
+        "path": "README.md",
+        "contains": "https://github.com/olivaresai/olivares/releases/tag/v26.9.0"
+      },
+      "evidence": "No v26.9.0 tag exists in this repository when measured (git tag --list 'v26.9.0' empty at 206d03b158); release.yml produces the release from the tag push"
+    },
+    {
+      "id": "archives",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^archives:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "olivares_${ver#v}_${os}_${arch}.tar.gz"
+      },
+      "evidence": "The archives producer is present and unchanged; no v26.9.0 archive can exist before the tag that builds it"
+    },
+    {
+      "id": "native-packages",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^nfpms:$"
+      },
+      "prose": {
+        "path": "docs-site/src/content/docs/how-to/install-from-packages.md",
+        "contains": "olivares_26.9.0_linux_amd64.deb"
+      },
+      "evidence": "The nfpms producer is present and unchanged; no v26.9.0 deb, rpm or apk asset can exist before the tag that builds it"
+    },
+    {
+      "id": "ghcr",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^dockers:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "ghcr.io/olivaresai/olivares:26.9.0"
+      },
+      "evidence": "The dockers producer is present and unchanged; the 26.9.0 image tag is pushed by the release job, which the tag has not run"
+    },
+    {
+      "id": "docker-hub",
+      "status": "not-published",
+      "producer": {
+        "path": ".github/workflows/release.yml",
+        "matches": "^[[:space:]]+MIRROR_IMAGE_REPO:.*['\"]docker[.]io/olivaresai/olivares['\"]"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "docker.io/olivaresai/olivares:26.9.0"
+      },
+      "evidence": "The mirror producer is present and unchanged; the Docker Hub 26.9.0 tag is mirrored by the release job, which the tag has not run"
+    },
+    {
+      "id": "homebrew",
+      "status": "not-published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^homebrew_casks:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "brew install olivaresai/tap/olivares"
+      },
+      "evidence": "The cask producer is present and unchanged; the tap cask is bumped by the release job, which the tag has not run"
+    },
+    {
+      "id": "installer",
+      "status": "published",
+      "producer": {
+        "path": "scripts/install.sh",
+        "matches": "^[[:space:]]+cosign verify-blob"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh"
+      },
+      "evidence": "The installer is served from main, not from a release asset, so its publication state does not depend on the v26.9.0 tag; it verifies whichever signed payload it resolves"
+    },
+    {
+      "id": "helm-oci",
+      "status": "not-published",
+      "producer": {
+        "path": ".github/workflows/release-chart.yml",
+        "matches": "^[[:space:]]+tags: [[][\"]chart-v[*][\"][]]$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "is **not live yet**"
+      },
+      "evidence": "No chart-v tag exists in this repository when measured (git tag --list empty of chart-v at 206d03b158) and no release-chart run has published the public OCI name"
+    }
+  ]
+}

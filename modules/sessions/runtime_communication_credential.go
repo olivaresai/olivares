@@ -94,6 +94,36 @@ func (m *Module) ensureRuntimeCredentialWiring() error {
 	return nil
 }
 
+// ensureRuntimeCredentialReadiness samples the EFFECTIVE K3 readiness before a
+// communication bearer is minted. Requested activation
+// (EnableCommunicationSessionCredentials) is configuration; a bearer is only
+// usable when the store proof, sealer, directory resolver, permissions and
+// pump are all present now, so an unusable credential is never issued while
+// any of them is absent. Standalone module users that enabled credentials
+// without a readiness composition keep the historical behavior only when no
+// readiness witness at all was bound; a bound witness that answers OFF denies.
+func (m *Module) ensureRuntimeCredentialReadiness(ctx context.Context) error {
+	if !m.rt.communicationCredentialsEnabled || !m.communicationReadinessComposed() {
+		return nil
+	}
+	readiness, err := m.EvaluateCommunicationReadiness(ctx)
+	if err != nil || !readiness.Effective {
+		return &runErr{
+			status: http.StatusServiceUnavailable,
+			msg:    "session communication readiness is not effective; launch denied",
+		}
+	}
+	return nil
+}
+
+// communicationReadinessComposed reports whether the composition root bound at
+// least one dynamic readiness witness. Standalone tests that construct the
+// module with the issuers alone are not a composed deployment.
+func (m *Module) communicationReadinessComposed() bool {
+	return communicationPortBound(m.communicationStoreReadiness) ||
+		communicationPortBound(m.communicationPumpReadiness)
+}
+
 // mintRuntimeCredentials emits communication BEFORE work. The communication
 // issuer rejects a stale fence before the work issuer can supersede a current
 // work bearer; reversing this order lets a delayed launcher revoke live work
@@ -109,6 +139,9 @@ func (m *Module) mintRuntimeCredentials(
 		return runtimeCredentials{work: work}, err
 	}
 	if err := m.ensureRuntimeCredentialWiring(); err != nil {
+		return runtimeCredentials{}, err
+	}
+	if err := m.ensureRuntimeCredentialReadiness(ctx); err != nil {
 		return runtimeCredentials{}, err
 	}
 	request, err := m.communicationCredentialRequest(ctx, tenant, runRef, agentRef, lease)
@@ -402,12 +435,64 @@ func (m *Module) revokeCommunicationSessionCredential(
 	if source == nil {
 		return &runErr{http.StatusServiceUnavailable, "communication credential issuer is not available"}
 	}
-	if err := source.Revoke(context.WithoutCancel(ctx), id, expected); err != nil {
+	// A lost version CAS against the concurrent in-process revoker is retried
+	// once; see retryOnceOnVersionConflict.
+	rctx := revocationContext(ctx)
+	if err := retryOnceOnVersionConflict(func() error {
+		return source.Revoke(rctx, id, expected)
+	}); err != nil {
 		m.warnf("sessions: could not revoke communication-session credential",
 			"credential_id", id.String())
 		return secretSafeCredentialError("communication credential revoke", err)
 	}
 	return nil
+}
+
+// retryOnceOnVersionConflict runs one revocation step and, when the store answers
+// a VERSION CONFLICT, runs it exactly once more.
+//
+// ⛔ TWO REVOKERS OF THE SAME HANDLE ARE BY DESIGN. A terminal stop revokes right
+// after Process.Stop returns (runtime.go, stopLiveEffect) and the bridge revokes
+// again when it observes that same child die (runtime_bridge.go, finalize). One
+// event releases both, so they overlap; the redundancy is what keeps a process
+// that dies WITHOUT a stop, and a stop whose finalize is delayed, from leaving a
+// live bearer behind. Neither may be dropped.
+//
+// The issuer call is idempotent — core/auth's revokeTokenTree skips a token that
+// is already revoked — but idempotent is not the same as concurrency-safe under an
+// optimistic version. Measured on PostgreSQL 16.15 (READ COMMITTED) on 2026-09-15
+// with a probe that releases two concurrent RevokeWorkSessionCredential calls on
+// ONE token, twelve pairs per run: 11 of 12 pairs in the first run and 12 of 12 in
+// the second left a caller holding store.ErrConflict, because the loser's
+// compare-and-swap matched zero rows once the winner committed. The same probe on
+// SQLite produced ZERO conflicts in twenty-four racers in both runs, since its
+// single writer serialises the two transactions and the second caller simply reads
+// the revoked row. The engine difference is the whole defect: on Postgres a
+// COMPLETED revocation reached StopForWork as `work_stop_ambiguous`, and that false
+// ambiguity was written to the work journal (CI run 35004444187, cmd/olivares
+// TestBootWorkLaunchAuthorityPostgres).
+//
+// So a conflict is not an answer here: it is the store saying "somebody else
+// committed, look again". Looking again is CONCLUSIVE rather than hopeful — the
+// issuer re-reads the row in a fresh transaction, so the second attempt either
+// observes the winner's commit (already revoked: a no-op that returns nil) or
+// re-applies its own compare-and-swap, and in both cases it re-presents the EXACT
+// binding, so the retry is never a wider revoker than the first attempt.
+//
+// ONE retry, not a loop: a conflict that survives it is contention this runtime
+// cannot resolve, and it keeps its error, its retained handle and its ambiguity.
+// Only store.ErrConflict qualifies — every other revocation failure is reported on
+// its first attempt exactly as before.
+//
+// clearStoredRuntimeCredentialHandles has applied this same rule to the DURABLE
+// handles since K3, inline; it now shares this helper, so the revocation chain
+// states the rule once instead of twice.
+func retryOnceOnVersionConflict(attempt func() error) error {
+	err := attempt()
+	if errors.Is(err, store.ErrConflict) {
+		err = attempt()
+	}
+	return err
 }
 
 func wrapCredentialCompensation(operation string, err error) error {
@@ -574,11 +659,8 @@ func (m *Module) clearStoredRuntimeCredentialHandles(
 		_, err = repo.Update(ctx, record)
 		return err
 	}
-	err := data.Mutate(context.WithoutCancel(ctx), tenant, attempt)
-	if errors.Is(err, store.ErrConflict) {
-		err = data.Mutate(context.WithoutCancel(ctx), tenant, attempt)
-	}
-	return err
+	rctx := revocationContext(ctx)
+	return retryOnceOnVersionConflict(func() error { return data.Mutate(rctx, tenant, attempt) })
 }
 
 func (m *Module) revokeLiveRuntimeCredentials(ctx context.Context, lr *liveRun) error {

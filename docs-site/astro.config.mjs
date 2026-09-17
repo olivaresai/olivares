@@ -6,8 +6,9 @@ import { defineConfig, fontProviders } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import starlightOpenAPI, { createOpenAPISidebarGroup } from 'starlight-openapi'
 import starlightVersions from 'starlight-versions'
+import sitemap from '@astrojs/sitemap'
 import { localizeSidebar } from './src/sidebar-i18n.mjs'
-import { LOCALES, VERSIONS } from './src/site-locales.mjs'
+import { ARCHIVED_SLUGS, LOCALES, VERSIONS } from './src/site-locales.mjs'
 
 // The REST reference is generated at build time DIRECTLY from the product's own
 // OpenAPI 3.1 contract (web/openapi/openapi.json, authored by core/api).
@@ -34,6 +35,45 @@ export default defineConfig({
   // Deterministic, reproducible static output; no SSR, no backend, no phone-home.
   output: 'static',
   trailingSlash: 'ignore',
+  // Astro 7 default is compressHTML:'jsx', which strips the space between
+  // adjacent inline tags. Keep the v6 HTML-aware compressor so existing
+  // markup does not need a site-wide rewrite.
+  compressHTML: true,
+
+  // seal-csp runs after font-display rewrites, recalculates inline hashes, and
+  // places the policy before governed elements. check-response-policy verifies
+  // the final artifact. Response-only framing controls live in public/_headers.
+  // Shiki and Starlight require style attributes; scripts retain hash-based CSP.
+  security: {
+    csp: {
+      algorithm: 'SHA-256',
+      // `default-src 'none'` is the floor; every resource type this site actually uses is
+      // named below. Verified against 16 Chromium journeys — nothing falls through to it.
+      directives: [
+        "default-src 'none'",
+        // `data:` for the 18 inline SVG backgrounds in the built CSS; no remote image origin.
+        "img-src 'self' data:",
+        // The three self-hosted @fontsource families, resolved at build with `remote: false`.
+        "font-src 'self'",
+        // Pagefind fetches its index and fragments from /pagefind/ on this origin.
+        "connect-src 'self'",
+        "manifest-src 'self'",
+        // Pagefind runs its WASM search in `new Worker('/pagefind/pagefind-worker.js')`.
+        "worker-src 'self'",
+        "media-src 'none'",
+        // No page in the built site contains an <iframe>; measured, not assumed.
+        "frame-src 'none'",
+        "object-src 'none'",
+        "base-uri 'none'",
+        // The only form is the one Pagefind's UI creates at runtime, and it never submits.
+        "form-action 'self'",
+      ],
+      scriptDirective: { resources: ["'self'"] },
+      styleDirective: {
+        resources: ["'self'", { resource: "'unsafe-inline'", kind: 'attribute' }],
+      },
+    },
+  },
 
   // THE BRAND'S TYPE, SELF-HOSTED AND METRIC-MATCHED.
   //
@@ -62,12 +102,50 @@ export default defineConfig({
   // means the build never reaches a CDN: no Google Fonts, no jsDelivr, nothing fetched at build
   // or at render. Parsing the package's own index.css also keeps every subset it ships with its
   // unicode-range, so the Cyrillic of the /ru locale still resolves.
+  // ⛔ `display: 'optional'` EN LAS TRES FAMILIAS, Y LA ELECCIÓN ES MEDIDA — la alternativa
+  // evidente se probó y EMPEORA las cosas. Añadido el 2026-09-01.
+  //
+  // El defecto: en producción este sitio tenía un CLS por encima del umbral, reproducible. Medido
+  // con Chromium sobre el `dist` construido, servido en local y con el régimen fijado por CDP
+  // (100 ms de latencia, 6 Mbit/s — que es lo que hace que las fuentes lleguen DESPUÉS del primer
+  // pintado, igual que detrás del CDN), 4-5 corridas por celda:
+  //
+  //   ruta                          A tal cual        B preload      C optional     D preload+optional
+  //   /start/quickstart/            0,1552  x5        0,1552 (max 0,4288)  0,0000 x5   0,0000 x5
+  //   /how-to/troubleshooting/      0,1344            —              0,0000      —
+  //   /start/what-is-olivares-ai/   0,1160            —              0,0000      —
+  //   /explanation/work-plane/      0,0988            —              0,0001      —
+  //
+  // Y LA CAUSA ESTÁ AISLADA, no inferida: bloqueando las `woff2` en la capa de red, el CLS de
+  // `/start/quickstart/` y `/reference/cli/` cae a **0,0000 en las tres corridas de cada una**.
+  // Quitada la fuente, desaparece el salto entero. Es el intercambio de fuente y nada más.
+  //
+  // ⛔ POR QUÉ NO ES `preload`, que era lo que yo iba a hacer: **no arregla el CLS** (0,1552 de
+  // mediana, y una corrida salió PEOR, 0,4288) y en combinación duplica el LCP —1140 ms frente a
+  // 524 ms—, porque las caras compiten por ancho de banda con el contenido. `optional` no regresa
+  // el LCP: 524-728 ms frente a los 504-896 ms de la línea base.
+  //
+  // POR QUÉ FUNCIONA: con `optional` el navegador da a la cara un bloqueo brevísimo y, si no ha
+  // llegado, **se queda con la de reserva para toda la vida de la página**. No hay intercambio, así
+  // que no hay reflujo. Y la reserva no desentona porque `optimizedFallbacks` ya está puesto: las
+  // métricas van ajustadas con `size-adjust` (134,28 % / 99,98 % / 170,03 % en el HTML servido).
+  //
+  // ⚠ EL COSTE, dicho en voz alta: un visitante con la caché fría y la red lenta puede ver la
+  // página entera con la tipografía de reserva. Es un intercambio deliberado —la marca cede ante
+  // un salto de contenido medido— y se puede revertir en tres líneas si se decide al revés.
+  //
+  // ⛔ Y ESTO CORRIGE UNA MEDIDA ANTERIOR DE ESTE MISMO REPOSITORIO, no un descuido:
+  // `src/components/Head.astro` afirma «CLS stays at 0 either way, because the thing that fixes it
+  // is optimizedFallbacks». Esa tabla se tomó EN LOCAL, con las fuentes llegando a ~275 ms, o sea
+  // antes del pintado — un régimen en el que el salto no puede ocurrir. `optimizedFallbacks` está
+  // puesto y no basta. Una medida tomada en el régimen equivocado no es falsa: es de otra cosa.
   fonts: [
     {
       provider: fontProviders.npm({ remote: false }),
       name: 'Inter Variable',
       cssVariable: '--olv-font-sans',
       options: { package: '@fontsource-variable/inter' },
+      display: 'optional',
       optimizedFallbacks: true,
       fallbacks: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
     },
@@ -76,6 +154,7 @@ export default defineConfig({
       name: 'JetBrains Mono Variable',
       cssVariable: '--olv-font-mono',
       options: { package: '@fontsource-variable/jetbrains-mono' },
+      display: 'optional',
       optimizedFallbacks: true,
       fallbacks: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono', 'monospace'],
     },
@@ -84,11 +163,34 @@ export default defineConfig({
       name: 'Space Grotesk Variable',
       cssVariable: '--olv-font-display',
       options: { package: '@fontsource-variable/space-grotesk' },
+      display: 'optional',
       optimizedFallbacks: true,
       fallbacks: ['Inter Variable', 'system-ui', 'sans-serif'],
     },
   ],
   integrations: [
+    // ⛔ EL SITEMAP SE DECLARA AQUI A PROPOSITO, para poder FILTRARLO.
+    //
+    // Starlight anade `@astrojs/sitemap` por su cuenta **sólo si no está ya en `integrations`**
+    // (`node_modules/@astrojs/starlight/index.ts:101`), asi que declararlo es la via soportada
+    // para configurarlo — no una duplicacion.
+    //
+    // Lo que filtra, y por que: el snapshot archivado `/2026-06/` publicaba **553** de las 2.156
+    // URLs del sitio, auto-canonicas y sin `noindex`. Un sitemap es una peticion explicita de
+    // indexacion: mientras esas URLs estuvieran dentro, estabamos pidiendo indexar 553
+    // casi-duplicados de nuestro propio contenido. El `noindex` lo pone
+    // `src/components/Head.astro`; esto retira la peticion. Las dos mitades hacen falta —
+    // `noindex` sin sacarlas del sitemap deja la contradiccion «enviada pero no indexable», que
+    // es justo la senal que Search Console reporta como defecto.
+    //
+    // ⛔ NO se bloquean ademas en `robots.txt`: un rastreador que no puede descargar la pagina no
+    // puede leer su `noindex`. Ese error ya se pago en el sitio principal y esta escrito alli.
+    sitemap({
+      filter: (page) => {
+        const path = new URL(page).pathname
+        return !ARCHIVED_SLUGS.some((slug) => path.startsWith(`/${slug}/`) || path.includes(`/${slug}/`))
+      },
+    }),
     starlight({
       title: 'Olivares AI docs',
       description:
@@ -147,6 +249,24 @@ export default defineConfig({
           tag: 'meta',
           attrs: { name: 'twitter:image', content: 'https://docs.olivares.ai/og-image.png' },
         },
+        // ⛔ EL `alt` DE LA TARJETA, que no existía en ninguna de las 2.156 páginas. Medido el
+        // 2026-09-01: cero `og:image:alt` y cero `twitter:image:alt` en todo el sitio.
+        //
+        // No es cosmético y no es SEO de ranking: es lo que oye quien navega con lector de
+        // pantalla cuando alguien comparte un enlace de la documentación. Una imagen compartida
+        // sin `alt` es una imagen que para esa persona no existe.
+        //
+        // El texto describe la TARJETA, que es una sola para todo el sitio, no la página —
+        // describir la página aquí sería mentir en 2.155 de ellas. Cuando haya tarjeta por
+        // página, este `alt` se genera con ella.
+        {
+          tag: 'meta',
+          attrs: { property: 'og:image:alt', content: 'Olivares AI — documentación de producto' },
+        },
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:image:alt', content: 'Olivares AI — documentación de producto' },
+        },
         {
           tag: 'link',
           attrs: { rel: 'icon', href: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
@@ -191,10 +311,11 @@ export default defineConfig({
       // y meter gramaticas de terceros en este repositorio es decision de quien gobierna la cadena
       // de suministro, no de esta sesion. Tenirlas con una gramatica ajena esta descartado: una
       // politica de seguridad mal coloreada es peor que una sin colorear.
-      // brand.css is GENERATED from the design tokens (scripts/gen-brand-css.mjs); motion.css is
-      // hand-authored component selectors and loads after it, so the generated file stays
-      // purely token-derived and can be regenerated without losing anything.
-      customCss: ['./src/styles/brand.css', './src/styles/motion.css'],
+      // brand.css is GENERATED from the design tokens (scripts/gen-brand-css.mjs). type.css is
+      // the reading scale (Starlight --sl-text-* / --sl-text-h* and splash/button sizing).
+      // motion.css is hand-authored component selectors. Both load after brand.css so the
+      // generated file stays purely token-derived and can be regenerated without losing anything.
+      customCss: ['./src/styles/brand.css', './src/styles/type.css', './src/styles/motion.css'],
       // The site ships from the public repository: every page links to its own
       // source for edits and contributions.
       editLink: {
@@ -234,18 +355,17 @@ export default defineConfig({
               label: 'Install & operate',
               items: [
                 { label: 'Self-host the control plane', slug: 'how-to/self-hosting' },
+                { label: 'Your first hour (as shipped)', slug: 'how-to/first-hour' },
                 { label: 'Deploy with Docker', slug: 'how-to/docker-deployment' },
                 //(C-13, community plan): the .deb/.rpm/.apk path. No page on this
                 // site mentioned a package format before it — `self-hosting` Option 1 is the
                 // tarball. It sits right after Docker because that is the fork a newcomer
                 // actually faces: container or host package.
-                // ⛔ COMMENTED OUT ON PURPOSE. The page carries `draft: true` until the
-                // packages are tested on Leap/Tumbleweed and RHEL/Fedora, and Starlight
-                // drops drafts from the production build — a sidebar entry pointing at a
-                // slug the build does not emit fails the build. PUBLISHING IS TWO EDITS,
-                // and neither works alone: remove `draft: true` from the page AND uncomment
-                // the line below.
-                // { label: 'Install from a package', slug: 'how-to/install-from-packages' },
+                // The v26.8.0 package names are measured from the public release and guarded by
+                // scripts/check-install-docs.sh. Keep this route and the page's `draft: false`
+                // together: either disappearing is an independently red install-truth gate.
+                { label: 'Install from a package', slug: 'how-to/install-from-packages' },
+                { label: 'Install with Homebrew', slug: 'how-to/install-from-homebrew' },
                 { label: 'Install air-gapped', slug: 'how-to/air-gap-install' },
                 { label: 'Verify a release', slug: 'how-to/verify-a-release' },
                 { label: 'Harden a deployment', slug: 'how-to/security-hardening' },
@@ -267,6 +387,7 @@ export default defineConfig({
                 { label: 'Connect a source', slug: 'how-to/connect-a-source' },
                 { label: 'Connect Claude Code', slug: 'how-to/connect-claude-code' },
                 { label: 'Run Claude Code with Olivares', slug: 'how-to/run-claude-code-with-olivares' },
+                { label: 'Operate a provider session', slug: 'how-to/operate-provider-sessions' },
                 { label: 'Governed data for Claude', slug: 'how-to/governed-data-for-claude' },
                 { label: 'Govern Postgres content', slug: 'how-to/govern-postgres-content' },
                 { label: 'Govern your file server', slug: 'how-to/govern-your-file-server' },
@@ -372,6 +493,8 @@ export default defineConfig({
                 { label: 'Output integrations & notifications', slug: 'reference/modules/xv-notify' },
                 { label: 'Eventing & webhooks', slug: 'reference/modules/eventing' },
                 { label: 'Saved console views', slug: 'reference/modules/consoleviews' },
+                // Edition availability descriptor (modules/sessioncockpit; not one of the 30)
+                { label: 'Session cockpit (availability)', slug: 'reference/modules/session-cockpit' },
                 // Platform & core capabilities (not counted among the 30 modules)
                 { label: 'API & manage-as-code (platform)', slug: 'reference/modules/xix-api-manage-as-code' },
                 { label: 'Multi-tenancy & org management (platform)', slug: 'reference/modules/xx-multi-tenancy' },
@@ -403,12 +526,11 @@ export default defineConfig({
         },
       ]),
       plugins: [
-        // Versioning: ACTIVE. The product is pre-1.0 with no release cut
-        // (the binary reports `dev`, the repo has no tags), so the archived
-        // version is honestly a DATED DOCS SNAPSHOT — the public-launch baseline
-        // (2026-06) — not a product release we refuse to fabricate. When the
-        // release gate cuts the first release, add `{ slug: '1.0', label: 'v1.0' }` here (see
-        // README.md §Versioning); the plugin snapshots current docs on build.
+        // Versioning: ACTIVE. CalVer cuts exist (v26.8.0 shipped; canon is
+        // v26.9.0). The archived version remains a DATED DOCS SNAPSHOT — the
+        // 2026-06 public-launch baseline — not a fabricated product-release
+        // archive. Adding `{ slug: 'v26.9.0', label: 'v26.9.0' }` is a separate
+        // maintainer-reviewed change (README.md §Versioning).
         starlightVersions({
           current: { label: 'Latest' },
           // Declared in src/site-locales.mjs, same reason as `locales` above: the
