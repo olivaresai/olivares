@@ -81,6 +81,7 @@
     "spec": "Especificación",
     "specCaption": "Definición de solo lectura. Los secretos se referencian dentro de la especificación por nombre o localizador — nunca como valores. Las credenciales en línea se rechazan al guardar.",
     "specEmpty": "Sin especificación",
+    "specEmptyHint": "La especificación de interfaz de esta entrada aparece aquí cuando la entrada publica una. Esta no publica ninguna.",
     "integrity": "Integridad y aprobación",
     "contentHash": "Hash del contenido",
     "signed": "Firmada",

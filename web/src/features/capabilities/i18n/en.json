@@ -213,6 +213,7 @@
       "delete": "Deleted"
     },
     "empty": "No revisions",
+    "emptyHint": "Every change to this server is kept as a revision you can compare and restore. The first edit creates one.",
     "truncated": "Loaded {{n}} revisions; there are more",
     "truncatedHint": "The history is longer than this page. A revision missing from this list does not prove it was never recorded."
   },

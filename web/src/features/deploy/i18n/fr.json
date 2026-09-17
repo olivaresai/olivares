@@ -178,7 +178,8 @@
     "current": "Actuelle",
     "rollback": "Restaurer",
     "caption": "La restauration se fait en deux étapes : elle déclare une NOUVELLE révision désirée correspondant à la version choisie, puis vous utilisez Planifier et appliquer (une action gouvernée) pour la restaurer réellement.",
-    "empty": "Aucune révision"
+    "empty": "Aucune révision",
+    "emptyHint": "Chaque modification de ce déploiement est conservée comme une révision que vous pouvez comparer et restaurer. La première édition en crée une."
   },
   "rollback": {
     "title": "Restaurer l’état désiré ?",

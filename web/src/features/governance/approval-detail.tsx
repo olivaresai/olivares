@@ -313,7 +313,13 @@ function DecisionTrail({
     return <StepUpRequiredState action="generic" onElevated={onRetry} />
   if (error instanceof ApiError && error.isForbidden) return <ForbiddenState />
   if (error) return <ErrorState retry={onRetry} />
-  if (items.length === 0) return <EmptyState title={t('detail.trailEmpty')} />
+  if (items.length === 0)
+    return (
+      <EmptyState
+        description={t('detail.trailEmptyHint')}
+        title={t('detail.trailEmpty')}
+      />
+    )
 
   return (
     <ol className="flex flex-col gap-2">

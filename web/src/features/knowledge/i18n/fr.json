@@ -214,6 +214,7 @@
     "createdBy": "Par",
     "current": "Actuelle",
     "revisionsEmpty": "Aucune révision",
+    "revisionsEmptyHint": "Chaque modification de ce prompt est conservée comme une révision que vous pouvez comparer et restaurer. La première édition en crée une.",
     "truncated": "{{n}} prompts charges ; il y en a plus",
     "truncatedHint": "Il y a plus de prompts que ceux affiches ; cette page prend les lignes par id. Un prompt absent de cette liste n’est pas pour autant non publie."
   },
@@ -384,7 +385,9 @@
       "completenessThreshold": "Seuil de complétude",
       "freshnessOverride": "Remplacement de fraîcheur",
       "noContract": "Aucun contrat actif",
+      "noContractHint": "Un contrat fixe le schéma et les garanties promises par ce produit de données. Publiez-en un pour versionner ces promesses.",
       "undetermined": "Impossible à déterminer — le moteur n’a pas indiqué quel contrat est actif.",
+      "undeterminedHint": "Rien n’est affirmé ici plutôt que de deviner. Réessayez, ou ouvrez le produit de données pour lire son contrat directement.",
       "newVersion": "Nouvelle version du contrat",
       "note": "Note de modification",
       "modes": {
@@ -481,10 +484,12 @@
     "unanchored": "Sans ancrage (aucun historique)",
     "legacy": "Héritée (antérieure à l'ancrage)",
     "truncated": "Les COMPTES ci-dessus sont complets ; cette liste de détail est plafonnée. Une liste courte ne signifie pas peu de problèmes.",
-    "allHealthy": "Toutes les lignes vérifiées sont valides"
+    "allHealthy": "Toutes les lignes vérifiées sont valides",
+    "allHealthyHint": "Un contrôle d’intégrité compare chaque ligne stockée à son condensé enregistré. Toutes les lignes vérifiées correspondent."
   },
   "scans": {
     "empty": "No scans yet",
+    "emptyHint": "Une analyse parcourt une source et consigne ce qu’elle trouve. Lancez une analyse pour en voir les résultats ici.",
     "sourceName": "Source name",
     "scanSource": "Scan source",
     "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",

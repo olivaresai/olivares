@@ -120,6 +120,7 @@ export function ConnectorCatalog({ kinds }: { kinds: ConnectorInfo[] }) {
 
       {rows.length === 0 ? (
         <EmptyState
+          description={t('console:connectors.catalog.noMatchHint')}
           title={t('console:connectors.catalog.noMatch', { query: q.trim() })}
           icon={<Search />}
         />

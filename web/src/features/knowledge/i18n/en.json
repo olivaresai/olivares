@@ -214,6 +214,7 @@
     "createdBy": "By",
     "current": "Current",
     "revisionsEmpty": "No revisions",
+    "revisionsEmptyHint": "Every change to this prompt is kept as a revision you can compare and restore. The first edit creates one.",
     "truncated": "Loaded {{n}} prompts; there are more",
     "truncatedHint": "There are more prompts than shown; this page takes rows by id. One missing from this list does not prove it is not published."
   },
@@ -384,7 +385,9 @@
       "completenessThreshold": "Completeness threshold",
       "freshnessOverride": "Freshness override",
       "noContract": "No active contract",
+      "noContractHint": "A contract fixes the schema and the guarantees this data product promises. Publish one to version those promises.",
       "undetermined": "Cannot be determined — the engine did not answer which contract is active.",
+      "undeterminedHint": "Nothing is claimed here rather than a guess. Retry, or open the data product to read its contract directly.",
       "newVersion": "New contract version",
       "note": "Change note",
       "modes": {
@@ -481,10 +484,12 @@
     "unanchored": "Unanchored (no ledger history)",
     "legacy": "Legacy (predates anchoring)",
     "truncated": "The COUNTS above are complete; this detail list is capped. A short list does not mean few problems.",
-    "allHealthy": "Every checked row verified"
+    "allHealthy": "Every checked row verified",
+    "allHealthyHint": "An integrity check compares each stored row with its recorded digest. Every checked row matched."
   },
   "scans": {
     "empty": "No scans yet",
+    "emptyHint": "A scan walks a source and records what it found. Start a scan to see its results here.",
     "sourceName": "Source name",
     "scanSource": "Scan source",
     "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",

@@ -121,6 +121,7 @@
     "dependencies": "Après : {{value}}",
     "noDependencies": "Aucune dépendance",
     "empty": "Ce workflow ne comporte aucune étape planifiée.",
+    "emptyHint": "Une exécution à blanc liste les étapes que le workflow suivrait, dans l’ordre, sans en exécuter aucune. Ajoutez d’abord une étape au workflow.",
     "failed": "Impossible de générer la simulation."
   },
   "run": {
@@ -143,6 +144,7 @@
     "current": "Exécution {{id}}",
     "history": "Historique des exécutions",
     "historyEmpty": "Aucune exécution n’a été enregistrée.",
+    "historyEmptyHint": "Chaque exécution de ce workflow est listée ici avec son résultat et sa durée. Exécutez le workflow pour enregistrer la première.",
     "historyFailed": "L'historique des exécutions n'a pas pu être chargé.",
     "viewRun": "Voir l’exécution {{id}}",
     "paused": "En pause : {{reason}}",
@@ -171,6 +173,7 @@
     "title": "Historique des révisions — {{name}}",
     "description": "Comparez des instantanés immuables du workflow ou restaurez-en un.",
     "empty": "Aucune révision enregistrée",
+    "emptyHint": "Chaque modification de ce workflow est conservée comme une révision que vous pouvez comparer et restaurer. La première édition en crée une.",
     "loading": "Chargement de l’historique des révisions…",
     "loadMore": "Charger plus",
     "compare": "Comparer les révisions",

@@ -43,7 +43,12 @@ export function EvidenceTimeline({
 }) {
   const { t } = useTranslation('intel')
   if (events.length === 0) {
-    return <EmptyState title={t('timeline.empty')} />
+    return (
+      <EmptyState
+        description={t('timeline.emptyHint')}
+        title={t('timeline.empty')}
+      />
+    )
   }
   return (
     <ol className={cn('flex flex-col', className)}>

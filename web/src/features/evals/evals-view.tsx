@@ -249,7 +249,12 @@ function CalibrationItemsPanel() {
             human_score?: number
           }>
           if (items.length === 0)
-            return <EmptyState title={t('calibItems.empty')} />
+            return (
+              <EmptyState
+                description={t('calibItems.emptyHint')}
+                title={t('calibItems.empty')}
+              />
+            )
 
           // ⛔ LA DISTRIBUCIÓN ES LA EXPLICACIÓN, y por eso va antes de la lista.
           const pasan = items.filter((i) => i.human_passed).length
@@ -347,7 +352,10 @@ function CalibrationTab({ tenant }: { tenant: string | null }) {
               meets_target: boolean
             }>
             return informes.length === 0 ? (
-              <EmptyState title={t('calibration.empty')} />
+              <EmptyState
+                description={t('calibration.emptyHint')}
+                title={t('calibration.empty')}
+              />
             ) : (
               informes.map((r) => (
                 <div
@@ -504,7 +512,10 @@ function GateTab({
           <AsyncSection query={gatesQ} skeletonHeight={240}>
             {(list) =>
               (list.items ?? []).length === 0 ? (
-                <EmptyState title={t('gate.empty')} />
+                <EmptyState
+                  description={t('gate.emptyHint')}
+                  title={t('gate.empty')}
+                />
               ) : (
                 (list.items ?? []).map((g) => (
                   <GateRow
@@ -720,7 +731,10 @@ function ScorecardsTab({ tenant }: { tenant: string | null }) {
       <AsyncSection query={scorecardsQ} skeletonHeight={220}>
         {(list) =>
           list.items.length === 0 ? (
-            <EmptyState title={t('scorecards.empty')} />
+            <EmptyState
+              description={t('scorecards.emptyHint')}
+              title={t('scorecards.empty')}
+            />
           ) : (
             <ScorecardGrid scorecards={list.items} />
           )
@@ -760,7 +774,10 @@ function RunsTab({ tenant }: { tenant: string | null }) {
           <AsyncSection query={runsQ} skeletonHeight={240}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('runs.empty')} />
+                <EmptyState
+                  description={t('runs.emptyHint')}
+                  title={t('runs.empty')}
+                />
               ) : (
                 <RunsTable
                   runs={list.items}
@@ -902,7 +919,10 @@ function RunDetailDialog({
             <AsyncSection query={resultsQ} skeletonHeight={200}>
               {(list) =>
                 list.items.length === 0 ? (
-                  <EmptyState title={t('cases.empty')} />
+                  <EmptyState
+                    description={t('cases.emptyHint')}
+                    title={t('cases.empty')}
+                  />
                 ) : (
                   <CaseResultsTable results={list.items} />
                 )
@@ -1077,7 +1097,12 @@ function AbTab({ tenant }: { tenant: string | null }) {
         <AsyncSection query={suitesQ} skeletonHeight={120}>
           {(list) => {
             if (list.items.length === 0) {
-              return <EmptyState title={t('ab.noSuites')} />
+              return (
+                <EmptyState
+                  description={t('ab.noSuitesHint')}
+                  title={t('ab.noSuites')}
+                />
+              )
             }
             return (
               <div className="flex flex-col gap-4">
@@ -1248,7 +1273,10 @@ function DriftTab({ tenant }: { tenant: string | null }) {
           if (list.items.length === 0) {
             return (
               <SectionCard>
-                <EmptyState title={t('drift.empty')} />
+                <EmptyState
+                  description={t('drift.emptyHint')}
+                  title={t('drift.empty')}
+                />
               </SectionCard>
             )
           }

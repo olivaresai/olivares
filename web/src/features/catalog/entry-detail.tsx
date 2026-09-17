@@ -369,7 +369,10 @@ function DetailBody({ entry }: { entry: EntryDTO }) {
             {JSON.stringify(entry.spec, null, 2)}
           </pre>
         ) : (
-          <EmptyState title={t('detail.specEmpty')} />
+          <EmptyState
+            description={t('detail.specEmptyHint')}
+            title={t('detail.specEmpty')}
+          />
         )}
       </Section>
 

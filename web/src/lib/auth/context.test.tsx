@@ -11,14 +11,17 @@
 // (core/api/openapi.go:184), so by the time a 401 arrives the credential is already dead and a
 // reactive refresh would be refused too. Every case below names the guard it measures and the
 // direction that must NOT fire it.
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { queryKeys } from '@/lib/api/query'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 
 const refreshMock = vi.fn()
 const whoamiMock = vi.fn()
+const loginMock = vi.fn()
 vi.mock('@/lib/api/endpoints', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/endpoints')>()
   return {
@@ -27,12 +30,13 @@ vi.mock('@/lib/api/endpoints', async (importOriginal) => {
       ...actual.authApi,
       refresh: (...a: unknown[]) => refreshMock(...a),
       whoami: (...a: unknown[]) => whoamiMock(...a),
+      login: (...a: unknown[]) => loginMock(...a),
       logout: () => Promise.resolve(),
     },
   }
 })
 
-const { AuthProvider } = await import('./context')
+const { AuthProvider, useAuth } = await import('./context')
 
 const IN = (ms: number) => new Date(Date.now() + ms).toISOString()
 
@@ -50,6 +54,7 @@ function mount() {
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   refreshMock.mockReset()
+  loginMock.mockReset()
   whoamiMock.mockReset().mockResolvedValue({ grants: [], superadmin: false })
   useTenantStore.getState().clear()
 })
@@ -187,5 +192,49 @@ describe('session renewal', () => {
     await vi.advanceTimersByTimeAsync(600_000)
     expect(refreshMock).toHaveBeenCalledTimes(1)
     expect(useSessionStore.getState().token).toBe('olvs_old')
+  })
+})
+
+function LoginProbe() {
+  const { login, status } = useAuth()
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        void login({ email: 'demo@olivares.local', password: 'x' })
+      }
+    >
+      {status}
+    </button>
+  )
+}
+
+describe('login populates whoami without aborting it', () => {
+  it('calls whoami once after login and keeps the session', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    loginMock.mockResolvedValue({
+      token: 'olvs_login',
+      session_id: 's-login',
+      expires_at: IN(600_000),
+    })
+    whoamiMock.mockResolvedValue({ grants: [], superadmin: true })
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider>
+          <LoginProbe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    )
+    await user.click(screen.getByRole('button'))
+    await waitFor(() => expect(loginMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(whoamiMock).toHaveBeenCalledTimes(1))
+    expect(useSessionStore.getState().token).toBe('olvs_login')
+    expect(qc.getQueryData(queryKeys.whoami)).toEqual({
+      grants: [],
+      superadmin: true,
+    })
   })
 })

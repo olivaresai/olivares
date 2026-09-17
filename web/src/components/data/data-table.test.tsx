@@ -47,7 +47,12 @@ const make = (n: number): Row[] =>
 // The bench's own tables are not product surfaces; `empty` is required, so they
 // declare one once and share it. A test that omitted it would not compile — which
 // is the point of the prop being required at all.
-const BENCH_EMPTY = <EmptyState title="Nothing on this bench" />
+const BENCH_EMPTY = (
+  <EmptyState
+    title="Nothing on this bench"
+    description="Rows appear here once the read returns some."
+  />
+)
 
 const bodyRows = () =>
   within(screen.getByRole('grid').querySelector('tbody')!)
@@ -827,7 +832,12 @@ describe('DataTable — evidence_unavailable is unknown, not an unexpected 503',
 // igual al scrollport, `sticky` a ambos extremos) sólo se puede medir en un navegador de
 // verdad: jsdom no tiene motor de layout y daría verde a cualquier cosa.
 describe('DataTable — the state is a sibling of the table, not a row in it', () => {
-  const CALLER_EMPTY = <EmptyState title="No agents enrolled yet" />
+  const CALLER_EMPTY = (
+    <EmptyState
+      title="No agents enrolled yet"
+      description="Rows appear here once the read returns some."
+    />
+  )
   const scrollport = () => screen.getByRole('grid').parentElement as HTMLElement
   const stateBlock = () =>
     document.querySelectorAll('[data-slot="data-table-state"]')

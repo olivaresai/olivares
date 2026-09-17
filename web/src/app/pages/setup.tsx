@@ -87,7 +87,7 @@ export function SetupPage() {
     <AuthShell>
       <Card className="p-6">
         <div className="mb-5 flex flex-col gap-1">
-          <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
+          <h1 className="font-display text-title text-foreground">
             {t('setup.title')}
           </h1>
           <p className="text-sm text-muted-foreground">{t('setup.subtitle')}</p>

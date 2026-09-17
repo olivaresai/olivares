@@ -51,6 +51,13 @@ export interface RevisionsSheetLabels {
   description: string
   caption?: string
   empty: string
+  /**
+   * ONE sentence under `empty`: what a revision IS for this entity, and what creates
+   * the first one. Required, like `EmptyState.description` itself (D21) — a shared
+   * sheet that let a caller skip it would be the one place the compiler could not see
+   * a bare empty state.
+   */
+  emptyHint: string
   loading: string
   loadMore: string
   compareTitle: string
@@ -212,7 +219,11 @@ export function RevisionsSheet<TSnapshot, TEntity>({
           ) : revisionsQ.isError ? (
             <ErrorState retry={() => void revisionsQ.refetch()} />
           ) : revisions.length === 0 ? (
-            <EmptyState icon={<History />} title={labels.empty} />
+            <EmptyState
+              description={labels.emptyHint}
+              icon={<History />}
+              title={labels.empty}
+            />
           ) : (
             <div className="flex flex-col gap-5">
               <ol className="flex flex-col gap-2">

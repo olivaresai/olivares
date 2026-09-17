@@ -3,6 +3,7 @@
     "title": "Schwellenwert-Warnungen",
     "description": "Verlauf der Budget-Schwellenwert-Überschreitungen. Die Zustellung an Slack/SIEM übernehmen die Ausgabe-Konnektoren — dies ist der Datensatz.",
     "empty": "Keine Warnungen überschritten",
+    "emptyHint": "Eine Budgetmeldung wird ausgelöst, wenn Ausgaben eine von Ihnen gesetzte Schwelle überschreiten. In diesem Zeitraum wurde keine überschritten.",
     "columns": {
       "triggeredAt": "Ausgelöst",
       "budget": "Budget",
@@ -149,6 +150,7 @@
     "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
     "editTitle": "Edit cost centre",
     "empty": "No cost centres yet",
+    "emptyHint": "Eine Kostenstelle ordnet Ausgaben einem Team oder einer Budgetverantwortlichen zu. Legen Sie eine an, um mit der Zuordnung zu beginnen.",
     "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
     "key": "Key",
     "name": "Name",
@@ -157,6 +159,7 @@
     "newRule": "New rule",
     "newRuleDescription": "Bind one dimension value to this cost centre.",
     "noRules": "No rules — traffic stays unattributed",
+    "noRulesHint": "Eine Regel ordnet Traffic einer Kostenstelle zu. Ohne Regel bleibt jede Anfrage in den Berichten unzugeordnet.",
     "owner": "Owner",
     "priority": "priority {{n}}",
     "priorityLabel": "Priority",
@@ -317,6 +320,7 @@
     "title": "Optimierungsempfehlungen",
     "description": "Mögliche Einsparungen aus dem gesteuerten Bestand. Schätzungen sind kein Versprechen — prüfen Sie Fähigkeit und Qualitätseignung.",
     "empty": "Keine Empfehlungen",
+    "emptyHint": "Empfehlungen erscheinen hier, wenn Ausgaben, Routing oder Limits verbessert werden können. Derzeit gibt es nichts zu ändern.",
     "estimatedSavings": "Gesch. Einsparung",
     "subject": "Gegenstand",
     "kind": {
@@ -415,6 +419,7 @@
     "description": "Zugewiesene Plätze gegenüber den tatsächlich aktiven Akteuren, pro Tag. Ein Tag ohne Platz-Snapshot meldet nichts — er ist kein Tag mit null Nutzung.",
     "provider": "Anbieter",
     "empty": "Keine Tage gemeldet",
+    "emptyHint": "Die Sitzplatznutzung wird pro Tag aus der Sitzungsaktivität gemeldet. Kein Tag in diesem Zeitraum hat welche gemeldet.",
     "assigned": "{{assigned}} zugewiesen · {{active}} aktiv",
     "noSnapshot": "für diesen Tag wurde kein Platz-Snapshot gemeldet"
   },
@@ -476,6 +481,7 @@
     "riskTitle": "Kündigungsrisiko",
     "riskDescription": "Subjekte, die Ausgaben ohne erfüllte Ergebnisse verbrauchen.",
     "riskEmpty": "Kein Subjekt verbraucht Ausgaben ohne Ergebnisse",
+    "riskEmptyHint": "Dieses Panel listet Subjekte auf, deren Ausgaben nicht durch Ergebnisse gedeckt sind. Keines hat die Schwelle in diesem Zeitraum überschritten.",
     "satisfiedOf": "{{satisfied}} von {{outcomes}} erfüllt"
   },
   "evidence": {

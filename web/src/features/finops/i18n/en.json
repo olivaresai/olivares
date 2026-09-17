@@ -3,6 +3,7 @@
     "title": "Threshold alerts",
     "description": "History of budget-threshold crossings. Delivery to Slack/SIEM is handled by the output connectors — this is the record.",
     "empty": "No alerts crossed",
+    "emptyHint": "A budget alert fires when spend crosses a threshold you set. None has crossed in this range.",
     "columns": {
       "triggeredAt": "Triggered",
       "budget": "Budget",
@@ -149,6 +150,7 @@
     "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
     "editTitle": "Edit cost centre",
     "empty": "No cost centres yet",
+    "emptyHint": "A cost centre attributes spend to a team or a budget owner. Create one to start attributing.",
     "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
     "key": "Key",
     "name": "Name",
@@ -157,6 +159,7 @@
     "newRule": "New rule",
     "newRuleDescription": "Bind one dimension value to this cost centre.",
     "noRules": "No rules — traffic stays unattributed",
+    "noRulesHint": "A rule maps traffic to a cost centre. With no rule, every request stays unattributed in the reports.",
     "owner": "Owner",
     "priority": "priority {{n}}",
     "priorityLabel": "Priority",
@@ -317,6 +320,7 @@
     "title": "Optimization recommendations",
     "description": "Candidate savings from the governed estate. Estimates are not a promise — verify capability and quality fit.",
     "empty": "No recommendations",
+    "emptyHint": "Recommendations appear here when spend, routing or rate limits can be improved. There is nothing to change right now.",
     "estimatedSavings": "Est. savings",
     "subject": "Subject",
     "kind": {
@@ -415,6 +419,7 @@
     "description": "Assigned seats against the actors actually active, per day. A day with no seat snapshot reports nothing — it is not a day with zero usage.",
     "provider": "Provider",
     "empty": "No days reported",
+    "emptyHint": "Seat usage is reported per day from session activity. No day in this range reported any.",
     "assigned": "{{assigned}} assigned · {{active}} active",
     "noSnapshot": "no seat snapshot posted for this day"
   },
@@ -476,6 +481,7 @@
     "riskTitle": "Cancellation risk",
     "riskDescription": "Subjects burning spend without satisfied outcomes.",
     "riskEmpty": "No subject is burning spend without outcomes",
+    "riskEmptyHint": "This panel lists subjects whose spend is not matched by outcomes. None crossed the threshold in this range.",
     "satisfiedOf": "{{satisfied}} of {{outcomes}} satisfied"
   },
   "evidence": {

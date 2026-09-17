@@ -213,7 +213,10 @@ function DevelopersTab({ range }: { range: { since: string } }) {
         <AsyncSection query={devQ} skeletonHeight={240}>
           {(res) =>
             res.developers.length === 0 ? (
-              <EmptyState title={t('developers.empty')} />
+              <EmptyState
+                description={t('developers.emptyHint')}
+                title={t('developers.empty')}
+              />
             ) : (
               <DeveloperTable developers={res.developers} />
             )
@@ -258,7 +261,10 @@ function TrendTab({ range }: { range: { since: string } }) {
       <AsyncSection query={trendQ} skeletonHeight={300}>
         {(trend) =>
           trend.days.length === 0 ? (
-            <EmptyState title={t('trend.empty')} />
+            <EmptyState
+              description={t('trend.emptyHint')}
+              title={t('trend.empty')}
+            />
           ) : (
             <AdoptionTrend trend={trend} />
           )

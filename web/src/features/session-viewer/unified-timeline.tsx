@@ -128,7 +128,7 @@ export function UnifiedTimeline({
         <EmptyState
           icon={<Disc3 />}
           title={t('timeline.empty')}
-          description=""
+          description={t('timeline.emptyHint')}
         />
       </div>
     )

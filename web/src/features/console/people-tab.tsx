@@ -248,7 +248,10 @@ export function PeopleTab() {
         ) : invites.isError ? (
           <ErrorState retry={() => void invites.refetch()} />
         ) : items.length === 0 ? (
-          <EmptyState title={t('console:people.noInvites')} />
+          <EmptyState
+            description={t('console:people.noInvitesHint')}
+            title={t('console:people.noInvites')}
+          />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">

@@ -67,6 +67,7 @@
     "trailTitle": "不可变使用轨迹",
     "trailCaption": "所有未达到审批人数即继续执行的操作。这些记录只能追加，无法编辑或删除。",
     "trailEmpty": "此授权未被使用",
+    "trailEmptyHint": "在紧急破窗授权下进行的所有操作都会记录在这里以供复核。该授权从未被使用。",
     "trailLabel": "不可变 break-glass 使用轨迹",
     "useAction": "操作",
     "useSubject": "对象",
@@ -217,6 +218,7 @@
     "trail": "决策轨迹",
     "trailCaption": "不可变的、仅追加的记录，记载谁在何时作出了何种决策。只读 —— 永远无法被编辑或删除。",
     "trailEmpty": "尚无决策记录",
+    "trailEmptyHint": "关于该审批的每一次决定——谁在何时因何决定——都会记录在这里。目前还没有人做出决定。",
     "decisionApprove": "已批准",
     "decisionReject": "已拒绝"
   },
@@ -334,7 +336,8 @@
     "via": "经由",
     "kindIdentity": "身份",
     "kindCollection": "集合",
-    "empty": "暂无成员"
+    "empty": "暂无成员",
+    "emptyHint": "属于该组的主体会列在这里。先添加一名成员。"
   },
   "bindings": {
     "title": "智能体绑定",
@@ -677,7 +680,9 @@
     "title": "新兴的代理身份标准",
     "description": "一个「设计方向」登记表：我们跟踪什么、它会接入哪里，以及为什么尚未实现。",
     "noAccess": "你没有访问身份登记表的权限。",
+    "noAccessHint": "此面板跟踪平台正在对齐的各项标准。请向管理员申请身份注册表读取权限。",
     "empty": "没有跟踪任何内容",
+    "emptyHint": "平台正在对齐的标准及其状态会显示在这里。目前尚未跟踪任何标准。",
     "verifiedAt": "修订版本于 {{month}} 对照一手来源核对。它们会变动——请当作日期，而非保证。",
     "spec": "规范",
     "revision": "修订版本",

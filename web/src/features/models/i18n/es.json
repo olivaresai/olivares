@@ -47,6 +47,8 @@
     "title": "Modelos gobernados",
     "description": "Modelos en el estate de este tenant, enriquecidos desde el catálogo.",
     "empty": "Sin modelos en el estate",
+    "emptyHint": "Aquí se lista cada modelo que este inquilino puede llamar, con su proveedor y sus límites. Añade un proveedor para poblar el patrimonio.",
+    "addProvider": "Añade un proveedor",
     "columns": {
       "name": "Modelo",
       "provider": "Proveedor",
@@ -120,6 +122,7 @@
     "description": "Referencias gobernadas a claves de API y workspaces de proveedor. Solo se guarda una pista enmascarada — nunca el valor secreto.",
     "new": "Añadir referencia",
     "empty": "Sin referencias a claves",
+    "emptyHint": "Una referencia de clave apunta a una credencial que guarda el motor, nunca al secreto en sí. Añade una para poder llamar a un modelo.",
     "maskedOnly": "Solo referencia — el valor secreto nunca se guarda ni se muestra.",
     "columns": {
       "name": "Nombre",
@@ -233,6 +236,7 @@
     "title": "Residencia por workspace",
     "description": "Dónde procesa cada workspace la inferencia y dónde reposa su dato, según lo reporta el proveedor.",
     "empty": "Ningún workspace reporta ajustes de residencia",
+    "emptyHint": "Los ajustes de residencia dicen en qué regiones puede un espacio de trabajo llamar a modelos. Ningún espacio ha declarado ninguna.",
     "unrestricted": "El proveedor no reporta ninguna restricción",
     "allowed": "Permitidas: {{geos}}",
     "unreported": "no reportado",
@@ -245,9 +249,11 @@
     "title": "Reglas de acceso a modelos",
     "description": "Quién puede usar qué modelo, y dónde.",
     "empty": "Sin reglas de acceso: todos los sujetos están sin restringir",
+    "emptyHint": "Una regla de acceso dice qué sujetos pueden llamar a qué modelos. Sin ninguna, todo sujeto puede llamar a todos los modelos del patrimonio.",
     "groupsTitle": "Grupos de modelos",
     "groupsDescription": "Conjuntos con nombre a los que una regla puede apuntar en vez de a un modelo suelto.",
     "groupsEmpty": "No hay grupos de modelos",
+    "groupsEmptyHint": "Un grupo de modelos nombra un conjunto de modelos para que una sola regla los gobierne todos. Crea uno para empezar.",
     "members": "{{n}} miembros",
     "confinementNotice": "⛔ Un allow no sólo suma. Un sujeto NOMBRADO por cualquier allow queda CONFINADO a sus allows: todo lo demás pasa a estar denegado para él. Un sujeto que no aparece en ninguna regla está sin restringir. Así que crear el PRIMER allow para alguien le QUITA el resto del catálogo.",
     "effect": {

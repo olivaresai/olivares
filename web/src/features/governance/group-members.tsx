@@ -106,7 +106,10 @@ export function GroupMembersSheet({
           ) : query.error ? (
             <ErrorState retry={() => query.refetch()} />
           ) : members.length === 0 ? (
-            <EmptyState title={t('members.empty')} />
+            <EmptyState
+              description={t('members.emptyHint')}
+              title={t('members.empty')}
+            />
           ) : (
             <ul className="flex flex-col gap-2">
               {members.map((m, i) => (

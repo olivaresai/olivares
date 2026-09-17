@@ -544,6 +544,7 @@ function LoadedWorkflowEditor({
           title: t('revisions.title', { name: initialWorkflow.name }),
           description: t('revisions.description'),
           empty: t('revisions.empty'),
+          emptyHint: t('revisions.emptyHint'),
           loading: t('revisions.loading'),
           loadMore: t('revisions.loadMore'),
           compareTitle: t('revisions.compare'),

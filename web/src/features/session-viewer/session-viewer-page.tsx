@@ -320,7 +320,7 @@ export function SessionViewerPage() {
 
   // No session ID in URL.
   if (!sessionId) {
-    return <EmptyState title={t('notFound')} description="" />
+    return <EmptyState title={t('notFound')} description={t('notFoundHint')} />
   }
 
   // Loading.
@@ -359,7 +359,7 @@ export function SessionViewerPage() {
   }
 
   if (!session) {
-    return <EmptyState title={t('notFound')} description="" />
+    return <EmptyState title={t('notFound')} description={t('notFoundHint')} />
   }
 
   return (

@@ -682,7 +682,10 @@ function AnomaliesTab() {
       <AsyncSection query={anomaliesQ} skeletonHeight={220}>
         {(data) =>
           data.items.length === 0 ? (
-            <EmptyState title={t('anomalies.empty')} />
+            <EmptyState
+              description={t('anomalies.emptyHint')}
+              title={t('anomalies.empty')}
+            />
           ) : (
             <AnomalyList anomalies={data.items} />
           )
@@ -752,7 +755,10 @@ function ForensicsTab() {
         <AsyncSection query={casesQ} skeletonHeight={200}>
           {(list) =>
             list.items.length === 0 ? (
-              <EmptyState title={t('forensics.empty')} />
+              <EmptyState
+                description={t('forensics.emptyHint')}
+                title={t('forensics.empty')}
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {list.items.map((c) => (

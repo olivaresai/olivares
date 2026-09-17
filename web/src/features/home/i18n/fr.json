@@ -4,6 +4,37 @@
   "asOfNote": "Agrégats en temps réel sur les 30 derniers jours, sur les modules que votre rôle peut ouvrir. Chaque tuile renvoie à son module ; ouvrez le rapport exécutif pour la synthèse complète et le PDF.",
   "openReport": "Rapport exécutif",
   "range": "30 derniers jours",
+  "next": {
+    "title": "Étape suivante",
+    "provider": {
+      "title": "Ajouter un fournisseur",
+      "description": "Connectez Claude, Codex ou un autre moteur pour que ses sessions soient attribuées et gouvernées."
+    },
+    "agent": {
+      "title": "Déployer un agent",
+      "description": "Déployez un agent dans un espace de travail, avec sa politique et son historique de révisions."
+    },
+    "session": {
+      "title": "Démarrer une session",
+      "description": "Lancez une exécution gouvernée et suivez ses appels d’outils en direct."
+    }
+  },
+  "recent": {
+    "title": "Travail récent",
+    "description": "Les cinq sessions les plus récentes observées par ce déploiement.",
+    "openAll": "Toutes les sessions",
+    "worked": "a travaillé {{duration}}",
+    "toolCalls_one": "{{count}} appel d’outil",
+    "toolCalls_many": "{{count}} appels d’outil",
+    "toolCalls_other": "{{count}} appels d’outil",
+    "events_one": "{{count}} événement",
+    "events_many": "{{count}} événements",
+    "events_other": "{{count}} événements",
+    "emptyTitle": "Aucune session pour l’instant",
+    "emptyDescription": "Chaque exécution d’un moteur connecté apparaît ici, avec ce qu’elle a fait, sa durée et son coût.",
+    "unavailableTitle": "Impossible de charger le travail récent",
+    "unavailableDescription": "La lecture des sessions n’a pas répondu. Les chiffres ci-dessus ne sont pas affectés."
+  },
   "tiles": {
     "inventory": {
       "label": "Inventaire",

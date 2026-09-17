@@ -117,6 +117,7 @@
     "title": "Ergebnisse je Prüfsonde",
     "description": "Das Ergebnis jeder Prüfsonde. Der Fingerabdruck ist ein Einweg-Hash — niemals eine Angriffsnutzlast.",
     "empty": "Keine Ergebnisse für diesen Lauf.",
+    "emptyHint": "Jede Probe des Laufs wird hier mit Urteil und zugehörigem Nachweis aufgeführt. Dieser Lauf hat keine Ergebnisse aufgezeichnet.",
     "columns": {
       "probe": "Prüfsonde",
       "family": "Familie",

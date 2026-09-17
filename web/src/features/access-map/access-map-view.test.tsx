@@ -248,6 +248,26 @@ describe('AccessMapView', () => {
     expect(await screen.findByTestId('graph-canvas')).toBeInTheDocument()
   })
 
+  it('offers a keyboard-reachable list of every node on the map', async () => {
+    const user = userEvent.setup()
+    renderView()
+    const summary = await screen.findByText('Map as a list', {
+      selector: 'summary',
+    })
+    await user.click(summary)
+    const row = await screen.findByRole('button', { name: 'agent-1' })
+    expect(row).toBeInTheDocument()
+    // The row SELECTS; it does not navigate. Assert the EFFECT, not the tag:
+    // a link to `#access-node-<id>` passed a role check while pointing at a
+    // fragment that exists nowhere in the tree.
+    await user.click(row)
+    expect(
+      await screen.findByText(
+        /A graph node — expand to see what it connects to/i,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('keeps a failed neighbors read visible and lets the operator retry it', async () => {
     const user = userEvent.setup()
     vi.mocked(accessMapApi.neighbors).mockReset()

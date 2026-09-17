@@ -6,18 +6,53 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * PageHeader — the consistent title block every management view opens with: an
- * optional icon chip, a display title, a one-line description, and an optional
- * right-aligned action slot (a primary "create" button, a refresh, etc.). Keeping
- * it a single primitive means all of share the same heading rhythm.
+ * PageHeader — the ONE title block of a management view: an optional icon chip, the
+ * page `<h1>`, a one-line description, a row of secondary controls and, last and
+ * rightmost, THE PRIMARY ACTION.
+ *
+ * ⛔ WHY `primaryAction` IS ITS OWN SLOT AND NOT "the first child of `actions`" (D21).
+ *    The T3 Code side-by-side (an internal design note (not shipped) §3.14) recorded the
+ *    defect this closes: our front door offered "six read-only cards, no action anywhere
+ *    on the page". A single `actions` bag cannot be measured — a header with a range
+ *    picker in it looks, to any test and to any census, exactly like a header with a
+ *    "New policy" button in it. A named slot can: `page-header.test.tsx` asserts that
+ *    the primary action is the LAST control in the header, and a screen that offers
+ *    nothing says so by leaving the slot empty rather than by hiding it among filters.
+ *
+ * ⛔ AND WHY THE HEADING NO LONGER SPELLS ITS OWN TYPE. It used to be
+ *    `font-display text-xl font-semibold tracking-tight` written by hand — four
+ *    decisions, repeated in six places with three different sizes (measured 2026-09-17:
+ *    `text-xl` here and in IntelPage, `text-lg` in login/setup/accept-invite/tenant-gate,
+ *    `text-2xl` in settings and the status page). `text-display` is one token that
+ *    carries size, leading, tracking and weight together (web/tokens/primitives.tokens.json,
+ *    the `type` group), so the ladder moves in one place or not at all.
  */
 export interface PageHeaderProps {
   title: ReactNode
   description?: ReactNode
   icon?: LucideIcon
-  /** Right-aligned actions (buttons, filters). */
+  /**
+   * Secondary controls: filters, a range picker, an export, a refresh. Never the
+   * verb the page exists for — that is `primaryAction`.
+   */
   actions?: ReactNode
+  /**
+   * THE verb of this screen, rendered last so it is the rightmost control in the
+   * header and the first one a reader's eye lands on coming off the title.
+   * Omit it only when the screen genuinely offers nothing to do.
+   */
+  primaryAction?: ReactNode
+  /** Notices rendered under the header (honesty markers, caveats, partial reads). */
+  notices?: ReactNode
   className?: string
+  /**
+   * The element the title row is rendered as. `div` by default, because that is what
+   * this primitive has always emitted and 32 views depend on it; `IntelPage` passes
+   * `header`, which is what ITS 26 views have always emitted. Neither is a landmark
+   * inside `<main>`, so the a11y inventory is unchanged either way — the prop exists
+   * so consolidating the two headers changed no DOM, and that is checkable.
+   */
+  as?: 'header' | 'div'
 }
 
 export function PageHeader({
@@ -25,33 +60,40 @@ export function PageHeader({
   description,
   icon: Icon,
   actions,
+  primaryAction,
+  notices,
   className,
+  as: Tag = 'div',
 }: PageHeaderProps) {
+  const hasControls = actions != null || primaryAction != null
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
-        className,
-      )}
-    >
-      <div className="flex items-start gap-3">
-        {Icon && (
-          <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground [&_svg]:size-5">
-            <Icon />
+    <div className={cn('flex flex-col gap-3', className)}>
+      <Tag className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          {Icon && (
+            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground [&_svg]:size-5">
+              <Icon />
+            </span>
+          )}
+          <div className="min-w-0">
+            <h1 className="font-display text-display text-foreground">
+              {title}
+            </h1>
+            {description != null && (
+              <p className="mt-1 max-w-2xl text-body text-muted-foreground">
+                {description}
+              </p>
+            )}
+          </div>
+        </div>
+        {hasControls && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {actions}
+            {primaryAction}
           </div>
         )}
-        <div className="min-w-0">
-          <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">
-            {title}
-          </h1>
-          {description != null && (
-            <p className="text-sm text-muted-foreground">{description}</p>
-          )}
-        </div>
-      </div>
-      {actions != null && (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
-      )}
+      </Tag>
+      {notices != null && <div className="flex flex-col gap-2">{notices}</div>}
     </div>
   )
 }

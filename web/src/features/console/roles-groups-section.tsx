@@ -91,6 +91,7 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
         <ErrorState retry={() => void query.refetch()} />
       ) : groups.length === 0 ? (
         <EmptyState
+          description={t('console:granular.groupSubjects.noGroupsHint')}
           title={t('console:granular.groupSubjects.noGroups')}
           icon={<GitBranch />}
         />

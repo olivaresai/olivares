@@ -10,7 +10,7 @@
 // exposes no such route, and the console never fabricates one — classification runs
 // server-side at egress, which the section states honestly.
 import './i18n'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Waypoints, Plus, Trash2, Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -225,7 +225,12 @@ function ConfigSection() {
 
   // Switching tenants abandons the edit. Carrying a draft across is not a convenience: the
   // form is bound to a config that no longer belongs to what is on screen.
-  useEffect(discard, [activeTenant])
+  const [boundTenant, setBoundTenant] = useState(activeTenant)
+  if (boundTenant !== activeTenant) {
+    setBoundTenant(activeTenant)
+    setDraft(null)
+    setMandatoryTouched(false)
+  }
 
   const save = usePrivilegedMutation({
     mutationFn: () => {
@@ -518,7 +523,10 @@ function DLPSection() {
           hint={t('dlp.truncatedHint')}
         />
         {!canRead ? (
-          <EmptyState title={t('dlp.noRead')} />
+          <EmptyState
+            description={t('dlp.noReadHint')}
+            title={t('dlp.noRead')}
+          />
         ) : rulesQ.isLoading ? (
           <div role="status" className="flex justify-center py-6">
             <span className="sr-only">{t('common:states.loading')}</span>

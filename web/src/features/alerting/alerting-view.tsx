@@ -473,6 +473,7 @@ function RoutesTab({
             title: t('history.title', { name: historyRoute.name }),
             description: t('history.description'),
             empty: t('history.empty'),
+            emptyHint: t('history.emptyHint'),
             loading: t('common:states.loading'),
             loadMore: t('history.loadMore'),
             compareTitle: t('history.compareTitle'),
@@ -966,7 +967,12 @@ function DeliveriesTab() {
   const [status, setStatus] = useState<string>('all')
 
   if (!can('notify:delivery:read')) {
-    return <EmptyState title={t('deliveries.noRead')} />
+    return (
+      <EmptyState
+        description={t('deliveries.noReadHint')}
+        title={t('deliveries.noRead')}
+      />
+    )
   }
 
   const params = status === 'all' ? undefined : { status }
@@ -1032,7 +1038,10 @@ function DeliveriesList({
       ) : deliveriesQ.isError ? (
         <ErrorState retry={() => void deliveriesQ.refetch()} />
       ) : items.length === 0 ? (
-        <EmptyState title={t('deliveries.empty')} />
+        <EmptyState
+          description={t('deliveries.emptyHint')}
+          title={t('deliveries.empty')}
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

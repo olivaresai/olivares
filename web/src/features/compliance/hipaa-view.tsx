@@ -104,7 +104,11 @@ export function HipaaTab({ canRead }: { canRead: boolean }) {
   if (!canRead) {
     return (
       <SectionCard title={t('hipaa.title')}>
-        <EmptyState icon={<ShieldQuestion />} title={t('hipaa.forbidden')} />
+        <EmptyState
+          description={t('hipaa.forbiddenHint')}
+          icon={<ShieldQuestion />}
+          title={t('hipaa.forbidden')}
+        />
       </SectionCard>
     )
   }
@@ -184,7 +188,11 @@ export function HipaaTab({ canRead }: { canRead: boolean }) {
           </p>
         ) : null}
         {r.controls.length === 0 ? (
-          <EmptyState icon={<ShieldQuestion />} title={t('hipaa.noControls')} />
+          <EmptyState
+            description={t('hipaa.noControlsHint')}
+            icon={<ShieldQuestion />}
+            title={t('hipaa.noControls')}
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {r.controls.map((c) => (

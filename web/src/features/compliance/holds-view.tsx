@@ -110,7 +110,11 @@ export function HoldsTab({
   if (!canRead) {
     return (
       <SectionCard title={t('holds.title')}>
-        <EmptyState icon={<LockKeyhole />} title={t('holds.noAccess')} />
+        <EmptyState
+          description={t('holds.noAccessHint')}
+          icon={<LockKeyhole />}
+          title={t('holds.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -733,7 +737,11 @@ function HoldCustodyTrail({
         <AsyncSection query={eventsQ} skeletonHeight={180}>
           {(list) =>
             list.items.length === 0 ? (
-              <EmptyState icon={<Gavel />} title={t('holds.custodyEmpty')} />
+              <EmptyState
+                description={t('holds.custodyEmptyHint')}
+                icon={<Gavel />}
+                title={t('holds.custodyEmpty')}
+              />
             ) : (
               <ol className="flex flex-col gap-2">
                 {list.items.map((ev, i) => (

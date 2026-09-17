@@ -531,12 +531,12 @@ function DetailBody({
           activeContractError.status === 404 ? (
           <EmptyState
             title={t('dataProducts.contract.noContract')}
-            description=""
+            description={t('dataProducts.contract.noContractHint')}
           />
         ) : (
           <EmptyState
             title={t('dataProducts.contract.undetermined')}
-            description=""
+            description={t('dataProducts.contract.undeterminedHint')}
           />
         )}
 

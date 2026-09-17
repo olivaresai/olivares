@@ -178,7 +178,8 @@
     "current": "Actual",
     "rollback": "Hacer rollback",
     "caption": "El rollback son dos pasos: declara una NUEVA versión deseada que coincide con la versión elegida, y luego usted ejecuta Plan y Aplicar (acción gobernada) para restaurarla de verdad.",
-    "empty": "Sin versiones"
+    "empty": "Sin versiones",
+    "emptyHint": "Cada cambio en este despliegue se guarda como una revisión que puedes comparar y restaurar. La primera edición crea una."
   },
   "rollback": {
     "title": "¿Hacer rollback del estado deseado?",

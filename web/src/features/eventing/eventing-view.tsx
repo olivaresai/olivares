@@ -485,6 +485,7 @@ function SubscriptionsTab({
             description: t('history.description'),
             caption: t('history.scopeCaption'),
             empty: t('history.empty'),
+            emptyHint: t('history.emptyHint'),
             loading: t('common:states.loading'),
             loadMore: t('history.loadMore'),
             compareTitle: t('history.compareTitle'),
@@ -772,7 +773,10 @@ function EventsTab() {
       <AsyncSection query={eventsQ} skeletonHeight={240}>
         {() =>
           events.length === 0 ? (
-            <EmptyState title={t('events.empty')} />
+            <EmptyState
+              description={t('events.emptyHint')}
+              title={t('events.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {events.map((evt) => (
@@ -935,7 +939,10 @@ function DeliveriesTab({
       <AsyncSection query={deliveriesQ} skeletonHeight={240}>
         {() =>
           deliveries.length === 0 ? (
-            <EmptyState title={t('deliveries.empty')} />
+            <EmptyState
+              description={t('deliveries.emptyHint')}
+              title={t('deliveries.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {deliveries.map((d) => (

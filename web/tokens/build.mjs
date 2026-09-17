@@ -163,6 +163,29 @@ const GRAPHITE = [
 const FONTS = ['font-sans', 'font-mono', 'font-display']
 const RADII = ['radius-sm', 'radius-md', 'radius-lg', 'radius-xl']
 const MOTION = ['ease-out', 'ease-in', 'animate-pulse-live']
+// D21 — the operator type scale. Emitted as Tailwind 4 `--text-<name>` entries WITH
+// their `--line-height` / `--letter-spacing` / `--font-weight` sub-keys, so one
+// utility (`text-title`) carries all four decisions instead of four utilities that
+// drift apart. Ordered largest-first: the emit plan is the reading order of the file.
+const TYPE_STEPS = [
+  'display-lg',
+  'display',
+  'title',
+  'heading',
+  'body',
+  'caption',
+  'overline',
+]
+const TYPE_SUBKEYS = ['line-height', 'letter-spacing', 'font-weight']
+// D21 — the shell's content width, named instead of bracketed.
+const LAYOUT = ['container-page']
+// D21 — the two keys Tailwind reads for EVERY `transition*` utility. There is no
+// `--duration-*` namespace in Tailwind 4 (`duration-150` is a bare-number utility),
+// so these two are the only place a console-wide motion decision can be made once.
+const MOTION_DEFAULTS = [
+  'default-transition-duration',
+  'default-transition-timing-function',
+]
 
 const light = await load(['theme.light.tokens.json', 'derived.tokens.json'])
 const dark = await load(['theme.dark.tokens.json'])
@@ -256,6 +279,39 @@ themeLines.push('  /* Motion — fast, mechanical, no bounce */')
 themeLines.push(`  --ease-out: ${primMap.get('ease-out')};`)
 themeLines.push(`  --ease-in: ${primMap.get('ease-in')};`)
 themeLines.push(`  --animate-pulse-live: ${primMap.get('animate-pulse-live')};`)
+// The defaults every `transition`/`transition-colors` utility inherits. They are
+// emitted next to the curves they use so a reader sees the whole motion decision at
+// once, and `block()`'s orphan check (above) still guarantees nothing is dropped.
+for (const name of MOTION_DEFAULTS) {
+  if (!primMap.has(name))
+    throw new Error(`token missing for @theme inline: --${name}`)
+  themeLines.push(`  --${name}: ${primMap.get(name)};`)
+}
+themeLines.push('')
+themeLines.push(
+  '  /* Operator type scale — size + leading + tracking + weight per step (D21) */',
+)
+for (const step of TYPE_STEPS) {
+  const base = `text-${step}`
+  if (!primMap.has(base))
+    throw new Error(`token missing for @theme inline: --${base}`)
+  themeLines.push(`  --${base}: ${primMap.get(base)};`)
+  for (const sub of TYPE_SUBKEYS) {
+    const name = `${base}--${sub}`
+    // Tracking and weight are optional per step on purpose: `text-body` inherits the
+    // page's, and emitting an empty sub-key would override it with nothing.
+    if (primMap.has(name)) themeLines.push(`  --${name}: ${primMap.get(name)};`)
+  }
+}
+themeLines.push('')
+themeLines.push(
+  '  /* Layout — the shell content width, named rather than bracketed (D21) */',
+)
+for (const name of LAYOUT) {
+  if (!primMap.has(name))
+    throw new Error(`token missing for @theme inline: --${name}`)
+  themeLines.push(`  --${name}: ${primMap.get(name)};`)
+}
 themeLines.push('}')
 
 const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */

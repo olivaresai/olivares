@@ -32,7 +32,10 @@ export function EmergingStandardsPanel({ canRead }: { canRead: boolean }) {
   if (!canRead) {
     return (
       <SectionCard title={t('emerging.title')}>
-        <EmptyState title={t('emerging.noAccess')} />
+        <EmptyState
+          description={t('emerging.noAccessHint')}
+          title={t('emerging.noAccess')}
+        />
       </SectionCard>
     )
   }
@@ -55,7 +58,10 @@ export function EmergingStandardsPanel({ canRead }: { canRead: boolean }) {
             {t('emerging.verifiedAt', { month: q.data.verified_at })}
           </p>
           {q.data.standards.length === 0 ? (
-            <EmptyState title={t('emerging.empty')} />
+            <EmptyState
+              description={t('emerging.emptyHint')}
+              title={t('emerging.empty')}
+            />
           ) : (
             <ul className="flex flex-col gap-3">
               {q.data.standards.map((s) => (

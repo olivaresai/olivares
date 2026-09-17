@@ -27,6 +27,7 @@
   "timeline": {
     "loadMore": "Mehr laden",
     "empty": "Keine Ereignisse aufgezeichnet",
+    "emptyHint": "Jedes von der Aufzeichnung erfasste Ereignis erscheint hier der Reihe nach. Diese Aufzeichnung hat keines erfasst.",
     "activityUnavailable": "Die Agentenaktivität ist nicht verfügbar, weil der Timeline-Resolver nicht eingebunden ist oder nicht geantwortet hat. Governance-Nachweise bleiben verfügbar.",
     "tool": "Werkzeugaufruf",
     "mcp": "MCP-Aufruf",
@@ -120,7 +121,9 @@
     "subtitle": "Korrelierte semantische Ereignisse aus dem Nachweis-Hauptbuch.",
     "seq": "seq {{seq}}",
     "empty": "Keine korrelierten Hauptbuch-Ereignisse",
+    "emptyHint": "Ereignisse des Audit-Ledgers, die mit dieser Aufzeichnung korrelieren, erscheinen hier. Keines korreliert damit.",
     "truncated": "Die Hauptbuch-Ansicht ist gekürzt; jenseits dieses begrenzten Fensters existieren weitere korrelierte Ereignisse."
   },
-  "notFound": "Aufzeichnungssitzung nicht gefunden"
+  "notFound": "Aufzeichnungssitzung nicht gefunden",
+  "notFoundHint": "Die Aufbewahrung kann die Aufzeichnung gelöscht haben, oder der Link ist falsch. Öffnen Sie die Aufzeichnungsliste, um sie zu finden."
 }

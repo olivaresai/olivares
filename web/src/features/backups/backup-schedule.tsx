@@ -5,7 +5,7 @@
 // Schedule configuration form for automated backups. The engine owns the cron
 // scheduler; this form reads/writes the {enabled, cron, retain_days} config and
 // adds no logic (ARCHITECTURE.md SS8).
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -66,15 +66,17 @@ export function BackupSchedule() {
   const [dirty, setDirty] = useState(false)
 
   // Seed local state when the query resolves (or re-resolves after a mutation).
-  useEffect(() => {
-    if (scheduleQ.data) {
-      setEnabled(scheduleQ.data.enabled)
-      setCron(scheduleQ.data.cron)
-      setRetainDays(scheduleQ.data.retain_days)
-      setDualControl(scheduleQ.data.require_dual_control_restore ?? false)
-      setDirty(false)
-    }
-  }, [scheduleQ.data])
+  // Adjust during render: an effect that setState here was the cascading-render defect.
+  const data = scheduleQ.data
+  const [seeded, setSeeded] = useState<DRSchedule | undefined>(undefined)
+  if (data !== undefined && data !== seeded) {
+    setSeeded(data)
+    setEnabled(data.enabled)
+    setCron(data.cron)
+    setRetainDays(data.retain_days)
+    setDualControl(data.require_dual_control_restore ?? false)
+    setDirty(false)
+  }
 
   const saveMutation = usePrivilegedMutation<void, DRSchedule>({
     mutationFn: () =>

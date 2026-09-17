@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { currentLanguage } from '@/lib/i18n'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Cpu, Plus, Wand2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -115,7 +116,10 @@ function ResidencyCard() {
             as_of?: string
           }>
           return filas.length === 0 ? (
-            <EmptyState title={t('residency.empty')} />
+            <EmptyState
+              description={t('residency.emptyHint')}
+              title={t('residency.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {filas.map((r) => (
@@ -204,7 +208,8 @@ function ModelAccessTab() {
   const accesoParams = { limit: EVIDENCE_PAGE }
   const q = useQuery({
     queryKey: modelsKeys.modelAccess(activeTenant, accesoParams),
-    queryFn: () => modelsApi.modelAccess({ tenant: activeTenant }, accesoParams),
+    queryFn: () =>
+      modelsApi.modelAccess({ tenant: activeTenant }, accesoParams),
   })
 
   const grupos = useQuery({
@@ -246,7 +251,12 @@ function ModelAccessTab() {
               description?: string
             }>
             if (reglas.length === 0)
-              return <EmptyState title={t('access.empty')} />
+              return (
+                <EmptyState
+                  description={t('access.emptyHint')}
+                  title={t('access.empty')}
+                />
+              )
 
             // Los sujetos CONFINADOS por al menos un allow: para ellos, lo no listado está negado.
             const confinados = new Set(
@@ -329,7 +339,10 @@ function ModelAccessTab() {
             const items = ((res as { items?: unknown[] })?.items ??
               []) as Array<{ id: string; name?: string; members?: string[] }>
             return items.length === 0 ? (
-              <EmptyState title={t('access.groupsEmpty')} />
+              <EmptyState
+                description={t('access.groupsEmptyHint')}
+                title={t('access.groupsEmpty')}
+              />
             ) : (
               <div className="flex flex-col gap-1">
                 {items.map((g) => (
@@ -371,7 +384,8 @@ export function ModelsView() {
   const listaParams = { limit: EVIDENCE_PAGE }
   const modelsQ = useQuery({
     queryKey: modelsKeys.models(activeTenant, listaParams),
-    queryFn: () => modelsApi.models({ tenant: activeTenant, query: listaParams }),
+    queryFn: () =>
+      modelsApi.models({ tenant: activeTenant, query: listaParams }),
   })
   const policiesQ = useQuery({
     queryKey: modelsKeys.routingPolicies(activeTenant, listaParams),
@@ -425,7 +439,25 @@ export function ModelsView() {
             <AsyncSection query={modelsQ} skeletonHeight={240}>
               {(list) =>
                 list.items.length === 0 ? (
-                  <EmptyState title={t('estate.empty')} />
+                  <EmptyState
+                    description={t('estate.emptyHint')}
+                    title={t('estate.empty')}
+                    // The estate is filled by connecting a provider, and nothing on
+                    // this tab does that — so the empty state carries the verb rather
+                    // than leaving the operator to find the plane that owns it. Gated
+                    // on the WRITE permission, like the front door's own offer: a card
+                    // that invites a read-only principal to add one is a 403 waiting.
+                    action={
+                      can('sessions:profile:write') ? (
+                        <Button asChild variant="primary">
+                          <Link to={'/provider-profiles' as never}>
+                            <Plus />
+                            {t('estate.addProvider')}
+                          </Link>
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <ModelsTable models={list.items} />
                 )
@@ -509,7 +541,10 @@ export function ModelsView() {
             <AsyncSection query={keysQ} skeletonHeight={180}>
               {(list) =>
                 list.items.length === 0 ? (
-                  <EmptyState title={t('keys.empty')} />
+                  <EmptyState
+                    description={t('keys.emptyHint')}
+                    title={t('keys.empty')}
+                  />
                 ) : (
                   <KeyRefsTable keys={list.items} />
                 )

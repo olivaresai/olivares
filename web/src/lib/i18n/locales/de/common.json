@@ -34,6 +34,7 @@
     "loading": "Wird geladen…",
     "empty": "Hier ist noch nichts",
     "noResults": "Keine Ergebnisse",
+    "noResultsHint": "Keine Zeile entspricht dem aktuellen Filter. Entfernen Sie ihn oder erweitern Sie die Suche, um die Zeilen wieder zu sehen.",
     "comingSoon": "Demnächst verfügbar",
     "loaded": "Geladen",
     "yes": "Ja",

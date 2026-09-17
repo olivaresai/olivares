@@ -41,7 +41,8 @@
     "runs": "Runs",
     "lastScore": "Last score",
     "regressed": "Regressed",
-    "empty": "No scorecards yet — run an eval against a golden suite."
+    "empty": "No scorecards yet — run an eval against a golden suite.",
+    "emptyHint": "A scorecard summarises how a model scored across a suite's cases. Run an eval against a golden suite to produce one."
   },
   "runs": {
     "title": "Eval runs",
@@ -57,6 +58,7 @@
     "regressed": "Regressed · drift {{drift}}",
     "noRegression": "None",
     "empty": "No runs in range.",
+    "emptyHint": "Every eval run in the selected range is listed here with its score and its duration. Widen the range, or start a run.",
     "overN": "over {{n}}",
     "notScored": "not scored — no verdict",
     "noBaseline": "no baseline — nothing compared"
@@ -74,7 +76,8 @@
       "label": "Label",
       "fingerprint": "Fingerprint"
     },
-    "empty": "No case results for this run."
+    "empty": "No case results for this run.",
+    "emptyHint": "Each case in the suite is listed here with the judge's verdict. This run recorded no case results."
   },
   "ab": {
     "title": "A/B comparison",
@@ -94,6 +97,7 @@
     "suiteLabel": "Suite",
     "selectSuite": "Select a suite",
     "noSuites": "No suites yet. A comparison is scored against a suite's cases, so create one first.",
+    "noSuitesHint": "A comparison is scored against a suite's cases, so a suite has to exist first. Create one in the Suites tab.",
     "labelA": "Variant A label",
     "labelB": "Variant B label",
     "outputsA": "Variant A outputs",
@@ -119,7 +123,8 @@
     "threshold": "Pass threshold",
     "pickerTitle": "Subject",
     "note": "The threshold line is the suite pass threshold; points below it failed the bar at that time.",
-    "empty": "No trend data yet."
+    "empty": "No trend data yet.",
+    "emptyHint": "Drift compares a model's recent scores with its own history. Two or more runs of the same suite produce the first trend."
   },
   "outcomeBar": {
     "passed": "Passed",
@@ -141,6 +146,7 @@
     "title": "CI gate",
     "description": "Regression gate evaluations: what the gate measured, and what CI must act on.",
     "empty": "No gate evaluations",
+    "emptyHint": "A gate evaluation decides whether a candidate may ship. Run an eval against a gated suite to record one.",
     "measured": "measured {{verdict}}",
     "effective": "CI acts on {{verdict}}",
     "sampled": "{{sampled}} of {{total}} cases sampled",
@@ -160,6 +166,7 @@
     "title": "Judge calibration",
     "description": "How far the LLM judge agrees with human labels. A set that cannot measure chance-corrected agreement cannot certify anything.",
     "empty": "No calibration reports",
+    "emptyHint": "A calibration report compares the judge's scores with human labels. Run a calibration to produce one.",
     "meets": "meets target",
     "below": "below target",
     "cannotCertify": "cannot certify — kappa undefined",
@@ -176,6 +183,7 @@
     "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
     "run": "Run calibration",
     "empty": "No labelled items yet",
+    "emptyHint": "Labelled items are the human judgements a calibration report is scored against. Label a case to add the first one.",
     "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
     "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
     "humanPass": "human: pass",

@@ -429,7 +429,10 @@ function TracesTab({ tenant }: { tenant: string | null }) {
         }
       >
         {!canDrill || selected === null ? (
-          <EmptyState title={t('traces.selectPrompt')} />
+          <EmptyState
+            description={t('traces.selectPromptHint')}
+            title={t('traces.selectPrompt')}
+          />
         ) : (
           <AsyncSection query={detailQ} skeletonHeight={220}>
             {(trace) => (

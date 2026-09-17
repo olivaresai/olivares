@@ -81,6 +81,7 @@
     "spec": "Spécification",
     "specCaption": "Définition en lecture seule. Les secrets sont référencés dans la spécification par nom ou localisateur — jamais sous forme de valeurs. Les identifiants en clair sont rejetés à l’écriture.",
     "specEmpty": "Aucune spécification",
+    "specEmptyHint": "La spécification d’interface de cette entrée apparaît ici lorsque l’entrée en publie une. Celle-ci n’en publie aucune.",
     "integrity": "Intégrité et approbation",
     "contentHash": "Hachage du contenu",
     "signed": "Signé",

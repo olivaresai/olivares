@@ -166,7 +166,10 @@ export function PromptDetailSheet({
                 ) : revisionsQuery.error ? (
                   <ErrorState retry={() => revisionsQuery.refetch()} />
                 ) : sorted.length === 0 ? (
-                  <EmptyState title={t('prompts.revisionsEmpty')} />
+                  <EmptyState
+                    description={t('prompts.revisionsEmptyHint')}
+                    title={t('prompts.revisionsEmpty')}
+                  />
                 ) : (
                   <ol className="flex flex-col gap-3">
                     {sorted.map((r: RevisionDTO) => (

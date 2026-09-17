@@ -34,6 +34,7 @@
     "loading": "Chargement…",
     "empty": "Rien ici pour l’instant",
     "noResults": "Aucun résultat",
+    "noResultsHint": "Aucune ligne ne correspond au filtre actuel. Supprimez-le, ou élargissez la recherche, pour revoir les lignes.",
     "comingSoon": "Bientôt disponible",
     "loaded": "Chargé",
     "yes": "Oui",

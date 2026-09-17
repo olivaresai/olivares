@@ -4,6 +4,35 @@
   "asOfNote": "Live aggregates over the last 30 days, across the modules your role can open. Each tile links to its module; open the executive report for the full rollup and PDF.",
   "openReport": "Executive report",
   "range": "last 30 days",
+  "next": {
+    "title": "Next step",
+    "provider": {
+      "title": "Add a provider",
+      "description": "Connect Claude, Codex or another engine so its sessions are attributed and governed."
+    },
+    "agent": {
+      "title": "Deploy an agent",
+      "description": "Roll an agent out to a workspace, with its policy and its revision history."
+    },
+    "session": {
+      "title": "Start a session",
+      "description": "Launch a governed run and watch its tool calls as they happen."
+    }
+  },
+  "recent": {
+    "title": "Recent work",
+    "description": "The five most recent sessions this deployment observed.",
+    "openAll": "All sessions",
+    "worked": "worked for {{duration}}",
+    "toolCalls_one": "{{count}} tool call",
+    "toolCalls_other": "{{count}} tool calls",
+    "events_one": "{{count}} event",
+    "events_other": "{{count}} events",
+    "emptyTitle": "No sessions yet",
+    "emptyDescription": "Every run a connected engine performs appears here, with what it did, how long it took and what it cost.",
+    "unavailableTitle": "Couldn’t load recent work",
+    "unavailableDescription": "The sessions read did not answer. The estate figures above are unaffected."
+  },
   "tiles": {
     "inventory": {
       "label": "Inventory",

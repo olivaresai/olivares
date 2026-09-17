@@ -91,6 +91,7 @@
     "loadingMore": "加载中…",
     "waterfallTitle": "Span 瀑布图",
     "selectPrompt": "选择一条追踪以查看其 span 瀑布图。",
+    "selectPromptHint": "从列表中选择一条链路，即可查看它产生的所有 span 及其耗时与错误。",
     "exportBtn": "导出 OTLP",
     "exportTitle": "下载兼容 OTLP 的 JSON，适用于 Jaeger / Tempo / Datadog",
     "legend": "参与者图例",

@@ -308,7 +308,10 @@ export function SandboxView() {
               <AsyncSection query={runsQ} skeletonHeight={260}>
                 {(list) =>
                   list.items.length === 0 ? (
-                    <EmptyState title={t('runs.empty')} />
+                    <EmptyState
+                      description={t('runs.emptyHint')}
+                      title={t('runs.empty')}
+                    />
                   ) : (
                     <RunsTable runs={list.items} onRowClick={setOpenRun} />
                   )

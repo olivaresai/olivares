@@ -43,6 +43,7 @@
     "note": "Cette liste ne couvre que les exports réalisés dans cette session du navigateur. Chaque export est enregistré dans le journal d'audit inviolable (action posture.export) —",
     "auditLink": "ouvrez l'Explorateur d'audit",
     "empty": "Aucun export pour l'instant dans cette session.",
+    "emptyHint": "Les exports que vous générez dans cette session sont listés ici pour que vous puissiez les retélécharger. Générez-en un pour commencer.",
     "colTime": "Heure",
     "colFilters": "Filtres",
     "colCounts": "Décomptes",

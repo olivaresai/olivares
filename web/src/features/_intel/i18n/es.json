@@ -93,6 +93,7 @@
   "timeline": {
     "title": "Cronología reconstruida",
     "empty": "Sin eventos en el rango.",
+    "emptyHint": "Los eventos de evidencia aparecen aquí a medida que el motor los registra. Amplía el intervalo para alcanzar eventos más antiguos.",
     "seq": "seq"
   },
   "consumption": {

@@ -75,6 +75,8 @@ import { complianceApi, complianceKeys } from '@/features/compliance/api'
 import { healthApi, healthKeys } from '@/features/health/api'
 import { formatInt, formatMicroUsd, formatPercent } from '@/lib/format'
 import { EstateTile, type TileState } from './components'
+import { NextStep } from './next-step'
+import { RecentWork } from './recent-work'
 import './i18n'
 
 /** The overview's 30-day window start as an ISO string. Module-level (not inline in
@@ -396,7 +398,16 @@ export function HomeView() {
       >
         {announcement}
       </div>
-      <StatGrid>
+      {/* THE NEXT ACTION, FIRST. The T3 side-by-side found this page offering "six
+          read-only cards, no action anywhere"; the verbs go above the numbers because
+          an operator who cannot start anything does not need a faster way to read. */}
+      <NextStep />
+
+      {/* Three columns on a wide screen, not four: the front door holds SIX tiles, and
+          a four-column grid leaves the second row half-empty — measured at 1600 px on
+          2026-09-17. `StatGrid`'s own default stays as it is for the views that lead
+          with four figures. */}
+      <StatGrid className="lg:grid-cols-3">
         {canInventory ? (
           <EstateTile
             to="/inventory"
@@ -662,6 +673,17 @@ export function HomeView() {
 
       {/* Keep the cost figure's honesty: a truncated aggregate is a floor, never hidden. */}
       {canFinops && cost?.truncated ? <TruncatedNotice /> : null}
+
+      {/* WHAT HAPPENED, under the numbers that summarise it. Reads NOTHING new: the
+          rows are the very page `sessionsQ` already fetched for the live tile. Mounted
+          only for a role that may read live sessions, like the tile above it. */}
+      {canSessions ? (
+        <RecentWork
+          sessions={sessionsQ.data?.items}
+          state={tileState(sessionsQ)}
+          canStartSession={can('sessions:run:write')}
+        />
+      ) : null}
     </IntelPage>
   )
 }

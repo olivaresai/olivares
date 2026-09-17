@@ -94,7 +94,10 @@ export function RevisionsSheet({
           ) : query.error ? (
             <ErrorState retry={() => query.refetch()} />
           ) : revisions.length === 0 ? (
-            <EmptyState title={t('revisions.empty')} />
+            <EmptyState
+              description={t('revisions.emptyHint')}
+              title={t('revisions.empty')}
+            />
           ) : (
             <ol className="flex flex-col gap-3">
               {revisions.map((r: RevisionDTO) => (

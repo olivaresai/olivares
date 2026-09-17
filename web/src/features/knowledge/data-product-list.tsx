@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,18 @@ function QualityBadge({ score }: { score: number }) {
   )
 }
 
+const FRESHNESS_TICK_MS = 30_000
+function subscribeFreshness(onChange: () => void) {
+  const id = window.setInterval(onChange, FRESHNESS_TICK_MS)
+  return () => window.clearInterval(id)
+}
+function freshnessTick(): number {
+  return Math.floor(Date.now() / FRESHNESS_TICK_MS)
+}
+function freshnessTickServer(): number {
+  return 0
+}
+
 function FreshnessBadge({
   lastIngest,
   sla,
@@ -49,13 +61,18 @@ function FreshnessBadge({
   sla: number
 }) {
   const { t } = useTranslation('knowledge')
+  const tick = useSyncExternalStore(
+    subscribeFreshness,
+    freshnessTick,
+    freshnessTickServer,
+  )
 
   if (!lastIngest) {
     return <Badge variant="neutral">{t('dataProducts.health.unknown')}</Badge>
   }
 
   const ageSeconds = Math.floor(
-    (Date.now() - new Date(lastIngest).getTime()) / 1000,
+    (tick * FRESHNESS_TICK_MS - new Date(lastIngest).getTime()) / 1000,
   )
   const ratio = sla > 0 ? ageSeconds / sla : 0
 

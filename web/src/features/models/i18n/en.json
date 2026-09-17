@@ -47,6 +47,8 @@
     "title": "Governed models",
     "description": "Models in this tenant's estate, enriched from the catalog.",
     "empty": "No models in the estate",
+    "emptyHint": "Every model this tenant can call is listed here with its provider and its limits. Add a provider to populate the estate.",
+    "addProvider": "Add a provider",
     "columns": {
       "name": "Model",
       "provider": "Provider",
@@ -120,6 +122,7 @@
     "description": "Governed references to provider API keys and workspaces. Only a masked hint is stored — never the secret value.",
     "new": "Add key reference",
     "empty": "No key references",
+    "emptyHint": "A key reference points at a credential the engine holds, never at the secret itself. Add one to let a model be called.",
     "maskedOnly": "Reference only — the secret value is never stored or shown.",
     "columns": {
       "name": "Name",
@@ -233,6 +236,7 @@
     "title": "Workspace residency",
     "description": "Where each workspace processes inference and where its data rests, as the provider reports it.",
     "empty": "No workspace reports residency settings",
+    "emptyHint": "Residency settings say which regions a workspace may call models in. No workspace has declared any.",
     "unrestricted": "The provider reports no restriction",
     "allowed": "Allowed: {{geos}}",
     "unreported": "not reported",
@@ -245,9 +249,11 @@
     "title": "Model access rules",
     "description": "Who may use which model, and where.",
     "empty": "No access rules — every subject is unrestricted",
+    "emptyHint": "An access rule says which subjects may call which models. With none, every subject may call every model in the estate.",
     "groupsTitle": "Model groups",
     "groupsDescription": "Named sets a rule can target instead of a single model.",
     "groupsEmpty": "No model groups",
+    "groupsEmptyHint": "A model group names a set of models so one rule can govern all of them. Create one to start.",
     "members": "{{n}} members",
     "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
     "effect": {

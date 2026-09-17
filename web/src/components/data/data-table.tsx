@@ -375,7 +375,10 @@ export function DataTable<TData extends RowData>({
     data.length === 0 ? (
       empty
     ) : (
-      <EmptyState title={t('states.noResults')} />
+      <EmptyState
+        description={t('states.noResultsHint')}
+        title={t('states.noResults')}
+      />
     )
   ) : null
 

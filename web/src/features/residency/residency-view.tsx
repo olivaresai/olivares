@@ -123,7 +123,10 @@ export function ResidencyView() {
           ) : orgsQ.isError ? (
             <ErrorState retry={() => void orgsQ.refetch()} />
           ) : orgs.length === 0 ? (
-            <EmptyState title={t('orgs.empty')} />
+            <EmptyState
+              description={t('orgs.emptyHint')}
+              title={t('orgs.empty')}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

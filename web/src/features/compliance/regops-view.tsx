@@ -213,7 +213,11 @@ export function RegOpsTab({
       !canAimsRead &&
       !canCcmRead ? (
         <SectionCard title={t('regops.title')}>
-          <EmptyState icon={<Landmark />} title={t('regops.noAccess')} />
+          <EmptyState
+            description={t('regops.noAccessHint')}
+            icon={<Landmark />}
+            title={t('regops.noAccess')}
+          />
         </SectionCard>
       ) : null}
     </>
@@ -1834,6 +1838,7 @@ function CcmPanel({ canAdmin }: { canAdmin: boolean }) {
           {(list) =>
             (list.items ?? []).length === 0 ? (
               <EmptyState
+                description={t('regops.ccm.noDriftHint')}
                 icon={<ShieldCheck />}
                 title={t('regops.ccm.noDrift')}
               />

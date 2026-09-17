@@ -149,7 +149,13 @@ export function FindingList({
 }: {
   findings: IdentityFinding[]
   emptyTitle: string
-  emptyDescription?: string
+  /**
+   * ⛔ REQUIRED SINCE D21, and the compiler is what found it. It used to be optional,
+   *    so this list could render a titled empty state with no sentence under it — and
+   *    a text census counted the site as "described" because the PROP was present.
+   *    Both callers already passed one; the type now says they must.
+   */
+  emptyDescription: string
   label: string
 }) {
   if (findings.length === 0) {

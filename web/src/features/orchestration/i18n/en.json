@@ -37,6 +37,7 @@
     "filter": "Filter by state",
     "allStates": "All states",
     "empty": "No flows in this state",
+    "emptyHint": "Flows in this state appear here with their next run. Change the state filter, or create a flow.",
     "columns": {
       "supervisor": "Supervisor",
       "workers": "Workers",
@@ -179,7 +180,9 @@
     "description": "Append-only record of fire decisions for the selected schedule. A decision is shown exactly as it resolved — an approval is not an actuation.",
     "pick": "Select a schedule",
     "pickHint": "Select a schedule to see its decision ledger.",
+    "pickHintDetail": "The ledger shows every decision the scheduler took for that schedule, and the reason behind each one.",
     "empty": "No decisions recorded",
+    "emptyHint": "Each time the scheduler decides to run, skip or delay an occurrence it is recorded here. This schedule has decided nothing yet.",
     "gate": "Gate",
     "plan": "plan",
     "op": {
@@ -214,7 +217,8 @@
       "workflow": "Workflow"
     },
     "estateDescription": "Append-only record of every decision in the estate, most recent first. Includes decisions that belong to no schedule.",
-    "forbidden": "Your role cannot read schedule decisions."
+    "forbidden": "Your role cannot read schedule decisions.",
+    "forbiddenHint": "The decision ledger records why the scheduler ran, skipped or delayed each occurrence. Ask an administrator for the schedule decision read permission."
   },
   "timeline": {
     "title": "Activity timeline",
@@ -232,6 +236,7 @@
     "description": "Chronological, append-only snapshots of this schedule.",
     "scopeCaption": "Restore re-applies only mutable fields — never name, subject kind, or trigger kind.",
     "empty": "No revisions recorded",
+    "emptyHint": "Every change to this schedule is kept as a revision you can compare and restore. The first edit creates one.",
     "loadMore": "Load more",
     "compareTitle": "Snapshot diff",
     "selectTwo": "Select two revisions to compare their snapshots.",

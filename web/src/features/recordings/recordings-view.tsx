@@ -10,7 +10,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Disc3 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Badge } from '@/components/ui/badge'
@@ -178,8 +178,14 @@ export function RecordingsView() {
   const [searchDraft, setSearchDraft] = useState(
     filters[initialSearchField] ?? '',
   )
-
-  useEffect(() => {
+  const [boundGrant, setBoundGrant] = useState(filters.grant)
+  const [boundSubject, setBoundSubject] = useState(filters.subject_contains)
+  if (
+    filters.grant !== boundGrant ||
+    filters.subject_contains !== boundSubject
+  ) {
+    setBoundGrant(filters.grant)
+    setBoundSubject(filters.subject_contains)
     if (filters.grant) {
       setSearchField('grant')
       setSearchDraft(filters.grant)
@@ -189,7 +195,7 @@ export function RecordingsView() {
     } else {
       setSearchDraft('')
     }
-  }, [filters.grant, filters.subject_contains])
+  }
 
   const patchFilters = useCallback(
     (patch: UrlState) => {

@@ -22,6 +22,7 @@
   },
   "stream": {
     "empty": "No hay entradas de log para mostrar.",
+    "emptyHint": "Las líneas del registro del motor aparecen aquí según se escriben. Amplía el filtro, o baja el nivel, para ver más.",
     "ariaLabel": "Flujo de logs",
     "attrsAriaLabel": "Atributos estructurados del registro"
   },

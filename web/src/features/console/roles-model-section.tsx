@@ -160,6 +160,7 @@ function ModelGroupsSection({
           </h2>
         </div>
         <EmptyState
+          description={t('console:roles.readOnlyNoticeHint')}
           title={t('console:roles.readOnlyNotice')}
           icon={<ShieldCheck />}
         />
@@ -193,6 +194,15 @@ function ModelGroupsSection({
         <ErrorState retry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState
+          action={
+            canWrite ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:granular.modelGroups.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:granular.modelGroups.noneHint')}
           title={t('console:granular.modelGroups.none')}
           icon={<Layers />}
         />
@@ -514,6 +524,7 @@ function ModelAccessSection({
           </h2>
         </div>
         <EmptyState
+          description={t('console:roles.readOnlyNoticeHint')}
           title={t('console:roles.readOnlyNotice')}
           icon={<ShieldCheck />}
         />
@@ -547,6 +558,15 @@ function ModelAccessSection({
         <ErrorState retry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:granular.modelAccess.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:granular.modelAccess.noneHint')}
           title={t('console:granular.modelAccess.none')}
           icon={<ShieldCheck />}
         />

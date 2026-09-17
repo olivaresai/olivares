@@ -104,7 +104,13 @@ export function CapabilityCatalog() {
   if (query.isError) return <ErrorState title={t('capabilities.error')} />
 
   const items = query.data?.capabilities ?? []
-  if (items.length === 0) return <EmptyState title={t('capabilities.empty')} />
+  if (items.length === 0)
+    return (
+      <EmptyState
+        description={t('capabilities.emptyHint')}
+        title={t('capabilities.empty')}
+      />
+    )
 
   return (
     <section aria-labelledby="capability-catalog-title">

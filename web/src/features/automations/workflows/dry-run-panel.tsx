@@ -94,7 +94,10 @@ export function DryRunPanel({ workflowId }: { workflowId: string }) {
                 </div>
               </section>
               {dryRun.data.steps.length === 0 ? (
-                <EmptyState title={t('dryRun.empty')} />
+                <EmptyState
+                  description={t('dryRun.emptyHint')}
+                  title={t('dryRun.empty')}
+                />
               ) : (
                 <ol className="space-y-3">
                   {dryRun.data.steps.map((step) => (

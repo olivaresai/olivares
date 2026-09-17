@@ -149,6 +149,12 @@
     "title": "No access observed yet",
     "description": "Once connectors report agent activity, the R/RW relationships appear here."
   },
+  "list": {
+    "summary": "Map as a list",
+    "hint": "Keyboard-accessible list of every node on this map. Selecting a row opens the same detail as the graph.",
+    "node": "Node",
+    "kind": "Kind"
+  },
   "forbidden": {
     "title": "Access map not authorized",
     "description": "Your role does not include permission to view the access graph."

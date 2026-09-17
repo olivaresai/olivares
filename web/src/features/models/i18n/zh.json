@@ -47,6 +47,8 @@
     "title": "受治理的模型",
     "description": "本租户资产域中的模型，已由目录信息加以丰富。",
     "empty": "资产域中暂无模型",
+    "emptyHint": "该租户可调用的每个模型及其供应商与限制都会列在这里。添加供应商即可填充资产。",
+    "addProvider": "添加供应商",
     "columns": {
       "name": "模型",
       "provider": "提供商",
@@ -120,6 +122,7 @@
     "description": "对提供商 API 密钥和工作区的受治理引用。仅存储经掩码处理的提示——绝不存储密钥值。",
     "new": "添加密钥引用",
     "empty": "暂无密钥引用",
+    "emptyHint": "密钥引用指向引擎保管的凭据，而不是密钥本身。添加一条后才能调用模型。",
     "maskedOnly": "仅为引用——密钥值从不存储或展示。",
     "columns": {
       "name": "名称",
@@ -233,6 +236,7 @@
     "title": "工作区数据驻留",
     "description": "按提供方的报告，各工作区在何处执行推理，以及其数据存放在何处。",
     "empty": "没有工作区报告驻留设置",
+    "emptyHint": "驻留设置规定工作区可以在哪些区域调用模型。目前没有工作区声明任何区域。",
     "unrestricted": "提供方未报告任何限制",
     "allowed": "允许：{{geos}}",
     "unreported": "未报告",
@@ -245,9 +249,11 @@
     "title": "Model access rules",
     "description": "Who may use which model, and where.",
     "empty": "No access rules — every subject is unrestricted",
+    "emptyHint": "访问规则规定哪些主体可以调用哪些模型。没有规则时，任何主体都可以调用资产中的所有模型。",
     "groupsTitle": "Model groups",
     "groupsDescription": "Named sets a rule can target instead of a single model.",
     "groupsEmpty": "No model groups",
+    "groupsEmptyHint": "模型组为一组模型命名，使一条规则即可治理全部模型。先创建一个。",
     "members": "{{n}} members",
     "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
     "effect": {

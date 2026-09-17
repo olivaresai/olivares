@@ -34,6 +34,7 @@
     "loading": "Loading…",
     "empty": "Nothing here yet",
     "noResults": "No results",
+    "noResultsHint": "No row matches the current filter. Clear it, or widen the search, to see the rows again.",
     "comingSoon": "Coming soon",
     "loaded": "Loaded",
     "yes": "Yes",

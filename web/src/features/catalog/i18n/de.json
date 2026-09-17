@@ -81,6 +81,7 @@
     "spec": "Spezifikation",
     "specCaption": "Schreibgeschützte Definition. Geheimnisse werden innerhalb der Spezifikation per Name oder Locator referenziert — niemals als Werte. Inline-Anmeldedaten werden beim Schreiben abgelehnt.",
     "specEmpty": "Keine Spezifikation",
+    "specEmptyHint": "Die Schnittstellenspezifikation dieses Eintrags erscheint hier, sobald der Eintrag eine veröffentlicht. Dieser veröffentlicht keine.",
     "integrity": "Integrität & Genehmigung",
     "contentHash": "Inhalts-Hash",
     "signed": "Signiert",

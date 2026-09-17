@@ -22,6 +22,7 @@
   },
   "stream": {
     "empty": "Aucune entrée de log à afficher.",
+    "emptyHint": "Les lignes de journal du moteur apparaissent ici au fur et à mesure. Élargissez le filtre, ou abaissez le niveau, pour en voir davantage.",
     "ariaLabel": "Flux de logs",
     "attrsAriaLabel": "Attributs structurés du journal"
   },

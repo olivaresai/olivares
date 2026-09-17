@@ -62,6 +62,7 @@ export function AccessReviewSection() {
           </p>
         </div>
         <EmptyState
+          description={t('granular.accessReview.readOnlyNoticeHint')}
           title={t('granular.accessReview.readOnlyNotice')}
           icon={<ShieldCheck />}
         />

@@ -67,6 +67,7 @@
     "trailTitle": "Immutable use trail",
     "trailCaption": "Every action that proceeded without its approval quorum. These entries are append-only and cannot be edited or removed.",
     "trailEmpty": "This grant was not used",
+    "trailEmptyHint": "Everything done under a break-glass grant is recorded here for review. This grant was never used.",
     "trailLabel": "Immutable break-glass use trail",
     "useAction": "Action",
     "useSubject": "Subject",
@@ -218,6 +219,7 @@
     "trail": "Decision trail",
     "trailCaption": "The immutable, append-only record of who decided what, when. Read-only — it can never be edited or removed.",
     "trailEmpty": "No decisions recorded yet",
+    "trailEmptyHint": "Every decision on this approval — who decided, when and why — is recorded here. Nobody has decided yet.",
     "decisionApprove": "Approved",
     "decisionReject": "Rejected"
   },
@@ -336,7 +338,8 @@
     "via": "via",
     "kindIdentity": "Identity",
     "kindCollection": "Collection",
-    "empty": "No members"
+    "empty": "No members",
+    "emptyHint": "The subjects that belong to this group are listed here. Add a member to start."
   },
   "bindings": {
     "title": "Agent bindings",
@@ -680,7 +683,9 @@
     "title": "Emerging agent-identity standards",
     "description": "A design-toward registry: what we track, where it would plug in, and why it is not implemented.",
     "noAccess": "You do not have access to the identity registry.",
+    "noAccessHint": "This panel tracks the standards the platform is aligning towards. Ask an administrator for the identity registry read permission.",
     "empty": "Nothing tracked",
+    "emptyHint": "Standards the platform is aligning towards appear here with their status. None is being tracked yet.",
     "verifiedAt": "Revisions verified against primary sources in {{month}}. They move — treat this as a date, not a guarantee.",
     "spec": "Spec",
     "revision": "Revision",

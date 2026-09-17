@@ -42,8 +42,15 @@ import type { Run } from './types'
 export function RunStreamPanel({ run }: { run: Run }) {
   const { t } = useTranslation('sandbox')
   const { activeTenant } = useAuth()
-  const { outputs, summary, status, complete, interrupted, unreadable, reconnect } =
-    useRunStream({ runId: run.id })
+  const {
+    outputs,
+    summary,
+    status,
+    complete,
+    interrupted,
+    unreadable,
+    reconnect,
+  } = useRunStream({ runId: run.id })
 
   const fallbackQ = useQuery({
     queryKey: sandboxKeys.outputs(activeTenant, run.id),
@@ -99,7 +106,12 @@ export function RunStreamPanel({ run }: { run: Run }) {
             </div>
           </div>
           <div>
-            <Button type="button" variant="outline" size="sm" onClick={reconnect}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={reconnect}
+            >
               <RotateCw className="size-3.5" aria-hidden />
               {t('stream.reconnect')}
             </Button>
@@ -114,6 +126,11 @@ export function RunStreamPanel({ run }: { run: Run }) {
         // lost on the way: with unreadable frames, what happened is that this client
         // could not read them, which is a different sentence entirely.
         <EmptyState
+          description={
+            unreadable > 0
+              ? t('stream.emptyUnreadableHint')
+              : t('outputs.emptyHint')
+          }
           title={
             unreadable > 0 ? t('stream.emptyUnreadable') : t('outputs.empty')
           }
@@ -124,7 +141,10 @@ export function RunStreamPanel({ run }: { run: Run }) {
         <AsyncSection query={fallbackQ} skeletonHeight={160}>
           {(list) =>
             list.items.length === 0 ? (
-              <EmptyState title={t('outputs.empty')} />
+              <EmptyState
+                description={t('outputs.emptyHint')}
+                title={t('outputs.empty')}
+              />
             ) : (
               <div className="flex flex-col gap-3">
                 <CaveatNotice>{t('stream.snapshot')}</CaveatNotice>

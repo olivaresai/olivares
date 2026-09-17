@@ -44,14 +44,14 @@ export function SettingsPage() {
   // resolvedLanguage already maps region variants (en-US→en, zh-CN→zh) and
   // applies the fallback, so the switcher reflects the real UI language for all
   // six locales — not just en/es.
-  const lang: LanguageCode =
-    (SUPPORTED_LANGUAGES.find((l) => l.code === i18n.resolvedLanguage)?.code ??
-      'en') as LanguageCode
+  const lang: LanguageCode = (SUPPORTED_LANGUAGES.find(
+    (l) => l.code === i18n.resolvedLanguage,
+  )?.code ?? 'en') as LanguageCode
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="font-display text-display text-foreground">
           {t('settings:title')}
         </h1>
         <p className="text-sm text-muted-foreground">

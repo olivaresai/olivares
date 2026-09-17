@@ -47,6 +47,8 @@
     "title": "Modèles gouvernés",
     "description": "Modèles du parc de ce locataire, enrichis à partir du catalogue.",
     "empty": "Aucun modèle dans le parc",
+    "emptyHint": "Chaque modèle que ce locataire peut appeler est listé ici avec son fournisseur et ses limites. Ajoutez un fournisseur pour peupler le parc.",
+    "addProvider": "Ajouter un fournisseur",
     "columns": {
       "name": "Modèle",
       "provider": "Fournisseur",
@@ -120,6 +122,7 @@
     "description": "Références gouvernées vers les clés d'API et les espaces de travail des fournisseurs. Seul un indice masqué est stocké — jamais la valeur du secret.",
     "new": "Ajouter une référence de clé",
     "empty": "Aucune référence de clé",
+    "emptyHint": "Une référence de clé pointe vers un identifiant détenu par le moteur, jamais vers le secret lui-même. Ajoutez-en une pour qu’un modèle puisse être appelé.",
     "maskedOnly": "Référence uniquement — la valeur du secret n'est jamais stockée ni affichée.",
     "columns": {
       "name": "Nom",
@@ -233,6 +236,7 @@
     "title": "Résidence par workspace",
     "description": "Où chaque workspace traite l'inférence et où ses données reposent, tel que le fournisseur le rapporte.",
     "empty": "Aucun workspace ne rapporte de paramètres de résidence",
+    "emptyHint": "Les paramètres de résidence indiquent dans quelles régions un espace de travail peut appeler des modèles. Aucun espace n’en a déclaré.",
     "unrestricted": "Le fournisseur ne rapporte aucune restriction",
     "allowed": "Autorisées : {{geos}}",
     "unreported": "non rapporté",
@@ -245,9 +249,11 @@
     "title": "Model access rules",
     "description": "Who may use which model, and where.",
     "empty": "No access rules — every subject is unrestricted",
+    "emptyHint": "Une règle d’accès indique quels sujets peuvent appeler quels modèles. Sans règle, chaque sujet peut appeler tous les modèles du parc.",
     "groupsTitle": "Model groups",
     "groupsDescription": "Named sets a rule can target instead of a single model.",
     "groupsEmpty": "No model groups",
+    "groupsEmptyHint": "Un groupe de modèles nomme un ensemble de modèles pour qu’une seule règle les gouverne tous. Créez-en un pour commencer.",
     "members": "{{n}} members",
     "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
     "effect": {

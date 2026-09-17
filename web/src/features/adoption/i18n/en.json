@@ -84,7 +84,8 @@
     "title": "Daily trend",
     "description": "Productivity over time for the selected lens.",
     "lensLabel": "Lens",
-    "empty": "No activity in this range."
+    "empty": "No activity in this range.",
+    "emptyHint": "The adoption trend is drawn from sessions in the selected range. Widen the range to cover days with activity."
   },
   "teams": {
     "title": "By team",
@@ -100,6 +101,7 @@
     "title": "By developer",
     "description": "Per-developer ROI from the admin Analytics feed.",
     "empty": "No per-developer activity in this range.",
+    "emptyHint": "Per-developer activity appears here once developers run sessions in this range. Widen the range to cover more days.",
     "locked": "Per-developer view restricted",
     "lockedHint": "Viewing individual developer productivity requires the adoption:developer:read permission (deny-closed).",
     "columns": {

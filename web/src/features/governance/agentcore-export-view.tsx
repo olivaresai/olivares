@@ -41,7 +41,7 @@ import {
   RefreshCw,
   Upload,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -257,7 +257,9 @@ export function AgentCoreExportView() {
     },
   })
 
-  applyRef.current = applyMutation.mutate
+  useEffect(() => {
+    applyRef.current = applyMutation.mutate
+  })
 
   if (!canExport) return <ForbiddenState />
 
@@ -442,7 +444,9 @@ export function AgentCoreExportView() {
               pendingApply.mode ??
               t('agentcoreExport.modeTenantConfigured'),
           })}
-          tone={(pendingApply.plan.Deletes ?? []).length > 0 ? 'danger' : 'default'}
+          tone={
+            (pendingApply.plan.Deletes ?? []).length > 0 ? 'danger' : 'default'
+          }
           confirmLabel={t('agentcoreExport.confirmApply')}
           pending={applyMutation.isPending}
           onConfirm={() => applyMutation.mutate(pendingApply)}
@@ -513,9 +517,7 @@ function PlanPanel({
               pintaban «0 updates» en ámbar y «0 deletes» en rojo. Un aviso a cero
               no avisa de nada y gasta la atención que el aviso de verdad necesita. */}
           <Badge
-            variant={
-              (plan.Updates ?? []).length > 0 ? 'warning' : 'neutral'
-            }
+            variant={(plan.Updates ?? []).length > 0 ? 'warning' : 'neutral'}
           >
             {t('agentcoreExport.updates', { n: (plan.Updates ?? []).length })}
           </Badge>
@@ -698,7 +700,9 @@ function OutcomePanel({ outcome }: { outcome: AgentCoreApplyOutcome }) {
                 className="flex flex-col gap-1 p-2 text-xs"
               >
                 <span className="flex flex-wrap items-center gap-2">
-                  <Badge variant={agentCoreResultFailed(r) ? 'danger' : 'neutral'}>
+                  <Badge
+                    variant={agentCoreResultFailed(r) ? 'danger' : 'neutral'}
+                  >
                     {r.op}
                   </Badge>
                   <span className="font-mono">{r.name}</span>

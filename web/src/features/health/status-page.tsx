@@ -46,7 +46,7 @@ export function StatusPage() {
       className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 outline-none"
     >
       <header className="mb-8 text-center">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+        <h1 className="font-display text-display-lg text-foreground">
           {t('statusPage.title')}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -62,14 +62,11 @@ export function StatusPage() {
       <div
         className={cn(
           'mb-6 rounded-lg border p-6 text-center',
-          overallStatus === 'operational' &&
-            'border-success/30 bg-success/5',
+          overallStatus === 'operational' && 'border-success/30 bg-success/5',
           (overallStatus === 'not_configured' || overallStatus === undefined) &&
             'border-border bg-muted/40',
-          overallStatus === 'degraded' &&
-            'border-warning/30 bg-warning/5',
-          overallStatus === 'outage' &&
-            'border-danger/30 bg-danger/5',
+          overallStatus === 'degraded' && 'border-warning/30 bg-warning/5',
+          overallStatus === 'outage' && 'border-danger/30 bg-danger/5',
         )}
       >
         <StatusIcon status={overallStatus} className="mx-auto mb-2 size-8" />
@@ -109,7 +106,9 @@ export function StatusPage() {
         <span>
           {data?.timestamp &&
             t('statusPage.lastUpdated', {
-              time: new Date(data.timestamp).toLocaleTimeString(currentLanguage()),
+              time: new Date(data.timestamp).toLocaleTimeString(
+                currentLanguage(),
+              ),
             })}
         </span>
         <button

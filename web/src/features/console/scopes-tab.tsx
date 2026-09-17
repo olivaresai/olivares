@@ -141,7 +141,18 @@ export function ScopesTab() {
         ) : workspaces.isError ? (
           <ErrorState retry={() => void workspaces.refetch()} />
         ) : wsItems.length === 0 ? (
-          <EmptyState title={t('console:workspaces.none')} />
+          <EmptyState
+            action={
+              isOwner ? (
+                <Button onClick={() => setWsCreateOpen(true)}>
+                  <Plus />
+                  {t('console:workspaces.create')}
+                </Button>
+              ) : undefined
+            }
+            description={t('console:workspaces.noneHint')}
+            title={t('console:workspaces.none')}
+          />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
@@ -241,7 +252,19 @@ export function ScopesTab() {
         ) : groups.isError ? (
           <ErrorState retry={() => void groups.refetch()} />
         ) : groupItems.length === 0 ? (
-          <EmptyState title={t('console:groups.none')} icon={<Boxes />} />
+          <EmptyState
+            action={
+              canManageGroups ? (
+                <Button onClick={() => setGroupCreateOpen(true)}>
+                  <Plus />
+                  {t('console:groups.create')}
+                </Button>
+              ) : undefined
+            }
+            description={t('console:groups.noneHint')}
+            title={t('console:groups.none')}
+            icon={<Boxes />}
+          />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">

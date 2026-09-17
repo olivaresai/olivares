@@ -194,7 +194,11 @@ export function RunPanel({
                 retry={() => void history.refetch()}
               />
             ) : (history.data?.items.length ?? 0) === 0 ? (
-              <EmptyState className="py-6" title={t('run.historyEmpty')} />
+              <EmptyState
+                description={t('run.historyEmptyHint')}
+                className="py-6"
+                title={t('run.historyEmpty')}
+              />
             ) : (
               <ul className="space-y-2">
                 {history.data?.items.map((run) => (

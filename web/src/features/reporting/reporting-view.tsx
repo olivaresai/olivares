@@ -102,7 +102,10 @@ export function ReportingView() {
           ) : reportsQ.isError ? (
             <ErrorState retry={() => void reportsQ.refetch()} />
           ) : reports.length === 0 ? (
-            <EmptyState title={t('catalog.empty')} />
+            <EmptyState
+              description={t('catalog.emptyHint')}
+              title={t('catalog.empty')}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -499,7 +502,10 @@ function ScheduleRunsDialog({
         {/* La poda, dicha DONDE se lee la lista: es lo que impide sacar la conclusión falsa. */}
         <IntelNotice tone="info">{t('runs.notAnArchive')}</IntelNotice>
         {q.isLoading ? null : runs.length === 0 ? (
-          <EmptyState title={t('runs.empty')} />
+          <EmptyState
+            description={t('runs.emptyHint')}
+            title={t('runs.empty')}
+          />
         ) : (
           <div className="flex flex-col gap-2">
             {runs.map((r) => (
@@ -587,7 +593,10 @@ function SchedulesCard({ canRead }: { canRead: boolean }) {
         ) : schedulesQ.isError ? (
           <ErrorState retry={() => void schedulesQ.refetch()} />
         ) : schedules.length === 0 ? (
-          <EmptyState title={t('schedules.empty')} />
+          <EmptyState
+            description={t('schedules.emptyHint')}
+            title={t('schedules.empty')}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

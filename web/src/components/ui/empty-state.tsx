@@ -5,12 +5,36 @@ import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * EmptyState — the calm "nothing here yet" placeholder for a list, table, or
- * panel that has no rows (a fresh project, a filtered view with no matches).
- * Centered, restrained, hairline-free: a muted icon chip, a short title, an
- * optional one-line explanation, and at most ONE action. This is NOT an error —
- * it must read as expected and unalarming (use ErrorState for failures, and
- * ForbiddenState for permission/paywall views).
+ * EmptyState — the calm "nothing here yet" placeholder for a list, table, or panel
+ * that has no rows (a fresh deployment, a filtered view with no matches). This is NOT
+ * an error — it must read as expected and unalarming (use ErrorState for failures,
+ * and ForbiddenState for permission/paywall views).
+ *
+ * ⛔ `description` IS REQUIRED, AND THAT IS THE POINT (D21).
+ *
+ *    D15 measured the console's 300 `<EmptyState>` call sites and found 94 that
+ *    carried neither a description nor an action
+ *    (`…/D15-console-quality/empty-state-census.tsv`); re-measured here with
+ *    `src/test/empty-state-census.ts` the true figure was **100**, because six more
+ *    passed `description=""` and a census that only asks "is the prop present" counts
+ *    those as described. A title saying "no data" and nothing telling the operator
+ *    what the surface will hold is 17:1xZ complaint stated as a number.
+ *
+ *    All 100 are fixed, and this type is what keeps them fixed. A census would find
+ *    the 101st the day after someone writes it; a REQUIRED prop cannot be written
+ *    past, because TypeScript demands a required property be present even when its
+ *    type admits `undefined` — and `NonNullable<ReactNode>` closes the
+ *    `description={undefined}` door as well. `tsc -b`, which every build and every
+ *    `task test:web` already runs, IS the gate. The census stays as the SECOND
+ *    instrument: the compiler cannot see that a description is the empty string, and
+ *    it cannot count how many empty states offer an action.
+ *
+ *    The cost is stated rather than discovered: a lane that adds an `<EmptyState>`
+ *    without a description gets a compile error, and the error IS the requirement.
+ *
+ * ⛔ ONE PRIMARY ACTION, and `secondaryAction` is deliberately quieter. An empty state
+ *    that offers three equal buttons has not decided what the operator should do next,
+ *    which is the same defect as offering none.
  */
 export interface EmptyStateProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
@@ -19,9 +43,18 @@ export interface EmptyStateProps extends Omit<
   /** A lucide icon element, e.g. <Inbox />. Sized down to 20px in a muted chip. */
   icon?: ReactNode
   title: ReactNode
-  description?: ReactNode
-  /** A single CTA node (typically a <Button>), placed below the description. */
+  /**
+   * ONE sentence: what this surface will show, and — when there is nothing to
+   * click — why there is nothing here yet. Required; see the note above.
+   */
+  description: NonNullable<ReactNode>
+  /** The single primary CTA (typically a <Button>), placed below the description. */
   action?: ReactNode
+  /**
+   * An optional quieter alternative beside the primary one — "Learn more", "Clear
+   * the filter", "Open the docs". Never a second way to do the same thing.
+   */
+  secondaryAction?: ReactNode
 }
 
 export function EmptyState({
@@ -29,6 +62,7 @@ export function EmptyState({
   title,
   description,
   action,
+  secondaryAction,
   className,
   ...props
 }: EmptyStateProps) {
@@ -55,14 +89,17 @@ export function EmptyState({
         </div>
       ) : null}
       <div className="flex flex-col items-center gap-1.5">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        {description ? (
-          <p className="max-w-sm text-sm text-muted-foreground">
-            {description}
-          </p>
-        ) : null}
+        <p className="text-heading text-foreground">{title}</p>
+        <p className="max-w-sm text-body text-muted-foreground">
+          {description}
+        </p>
       </div>
-      {action ? <div className="mt-1">{action}</div> : null}
+      {action || secondaryAction ? (
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+          {action}
+          {secondaryAction}
+        </div>
+      ) : null}
     </div>
   )
 }

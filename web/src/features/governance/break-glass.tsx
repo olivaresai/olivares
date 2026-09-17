@@ -894,7 +894,12 @@ function UseTrail({
   }
   if (error) return <ErrorState retry={onRetry} />
   if (items.length === 0) {
-    return <EmptyState title={t('breakGlass.trailEmpty')} />
+    return (
+      <EmptyState
+        description={t('breakGlass.trailEmptyHint')}
+        title={t('breakGlass.trailEmpty')}
+      />
+    )
   }
 
   return (

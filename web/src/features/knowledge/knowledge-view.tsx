@@ -163,7 +163,10 @@ function MemoryIntegrityPanel({ canAdmin }: { canAdmin: boolean }) {
           ) : null}
 
           {(informe.entries ?? []).length === 0 ? (
-            <EmptyState title={t('integrity.allHealthy')} />
+            <EmptyState
+              description={t('integrity.allHealthyHint')}
+              title={t('integrity.allHealthy')}
+            />
           ) : (
             <div className="flex flex-col gap-2">
               {(informe.entries ?? []).map((e) => (
@@ -301,7 +304,10 @@ function ScansPanel({
       />
 
       {escaneos.length === 0 ? (
-        <EmptyState title={t('scans.empty')} />
+        <EmptyState
+          description={t('scans.emptyHint')}
+          title={t('scans.empty')}
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {escaneos.map((s) => (

@@ -214,6 +214,7 @@
       "delete": "Supprimée"
     },
     "empty": "Aucune révision",
+    "emptyHint": "Chaque modification de ce serveur est conservée comme une révision que vous pouvez comparer et restaurer. La première édition en crée une.",
     "truncated": "{{n}} revisions chargees ; il y en a plus",
     "truncatedHint": "L’historique est plus long que cette page. Une revision absente de cette liste n’est pas pour autant jamais enregistree."
   },

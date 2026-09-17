@@ -43,6 +43,7 @@
     "note": "This list covers only exports made in this browser session. Every export is recorded in the tamper-evident audit ledger (action posture.export) —",
     "auditLink": "open the Audit Explorer",
     "empty": "No exports yet in this session.",
+    "emptyHint": "Exports you generate in this session are listed here so you can download them again. Generate one to start.",
     "colTime": "Time",
     "colFilters": "Filters",
     "colCounts": "Counts",

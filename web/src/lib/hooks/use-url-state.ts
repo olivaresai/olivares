@@ -75,45 +75,40 @@ export function useUrlState(
   options?: UrlStateOptions,
 ): [UrlState, (patch: UrlState) => void] {
   const navigate = useNavigate()
-  // The owned-keys list is a stable contract per call site; keep the first one.
-  const keysRef = useRef(keys)
-  // Options are a per-call-site contract too, but callers pass a fresh object
-  // literal. Read through a ref so patch's identity stays [navigate].
-  const optionsRef = useRef(options)
-  optionsRef.current = options
-  const [state, setState] = useState<UrlState>(() =>
-    readSearch(keysRef.current),
-  )
-
-  // Follow the location. Subscribing to the router (rather than to popstate)
-  // covers programmatic navigation too, which is how a saved view is applied
-  // and how one feature deep-links into another.
+  // The owned-keys list is a stable contract per call site; freeze the first one
+  // in state (not a ref) so later renders never read a ref during render.
+  const [ownedKeys] = useState(keys)
+  const resetScroll = options?.resetScroll
   const searchStr = useRouterState({
     select: (s: { location: { searchStr: string } }) => s.location.searchStr,
   })
-  useEffect(() => {
-    // `searchStr` is the notification's payload. Reading window.location here
-    // can observe the previous URL for one tick and revert the optimistic state
-    // after a filter already fired its new request.
-    const next = readSearch(keysRef.current, searchStr)
-    // Guard the identity: a replace we just performed re-runs this effect, and
-    // handing back a fresh object every time would re-render every consumer on
-    // every navigation in the app.
-    setState((prev) => (sameState(prev, next, keysRef.current) ? prev : next))
-  }, [searchStr])
-
+  const fromUrl = useMemo(
+    () => readSearch(ownedKeys, searchStr),
+    [ownedKeys, searchStr],
+  )
+  // Optimistic overlay so a patch updates the view before the router reports
+  // the new search string. When searchStr actually changes, drop the overlay
+  // and trust the URL (Back/Forward, a foreign navigate, a saved view).
+  const [optimistic, setOptimistic] = useState<UrlState | null>(null)
+  const [seenSearch, setSeenSearch] = useState(searchStr)
+  if (searchStr !== seenSearch) {
+    setSeenSearch(searchStr)
+    setOptimistic(null)
+  }
+  const state = optimistic ?? fromUrl
   const stateRef = useRef(state)
-  stateRef.current = state
+  useEffect(() => {
+    stateRef.current = state
+  })
 
   const patch = useCallback(
     (p: UrlState) => {
-      // Compute against the LATEST state through a ref rather than inside a
-      // setState updater: navigate() is a side effect, and a side effect in a
-      // React reducer runs twice under StrictMode.
+      // navigate() is a side effect, so it stays in the event handler, never
+      // inside a setState updater (StrictMode would fire it twice).
       const prev = stateRef.current
       const next: UrlState = { ...prev }
       const searchPatch: Record<string, unknown> = {}
-      for (const k of keysRef.current) {
+      for (const k of ownedKeys) {
         if (!(k in p)) continue
         const v = p[k]
         if (v === undefined || v === '') delete next[k]
@@ -121,10 +116,9 @@ export function useUrlState(
         searchPatch[k] = next[k]
       }
       stateRef.current = next
-      setState(next)
+      if (!sameState(prev, next, ownedKeys)) setOptimistic(next)
       // Reflect into the URL: merge over the existing search so non-owned
       // params survive; explicit undefined deletes (TanStack drops them).
-      const resetScroll = optionsRef.current?.resetScroll
       void navigate({
         search: (cur: Record<string, unknown>) => ({ ...cur, ...searchPatch }),
         replace: true,
@@ -134,7 +128,7 @@ export function useUrlState(
         ...(resetScroll !== undefined ? { resetScroll } : {}),
       } as never)
     },
-    [navigate],
+    [navigate, ownedKeys, resetScroll],
   )
 
   return [state, patch]
@@ -182,26 +176,27 @@ export function useValidatedUrlState<T>(
   // decode has nothing to complain about, and without the latch the notice
   // would flash and vanish before it could be read. It clears on the operator's
   // next deliberate change — or when they dismiss it.
+  //
+  // Latch the report during render (the array identity IS the event). The URL
+  // cleanup is the only remaining effect: it navigates, it does not setState.
   const [reported, setReported] = useState<string[]>([])
+  const [seenIssues, setSeenIssues] = useState<readonly string[] | null>(null)
+  if (decoded.issues.length > 0 && seenIssues !== decoded.issues) {
+    setSeenIssues(decoded.issues)
+    setReported([...decoded.issues])
+  }
+
   useEffect(() => {
     if (decoded.issues.length === 0) return
-    // A NEW array instance per event, CLONED here rather than passed through.
-    // The identity is what lets a consumer tell "the same latched complaint"
-    // from "it happened again" — keying on the joined names cannot, because two
-    // bad links naming the same key are two events and the second has to speak.
-    // Storing the decoder's own array would make that contract depend on the
-    // decoder allocating a fresh one, which nothing requires it to do.
-    setReported([...decoded.issues])
     const clear: UrlState = {}
     for (const k of decoded.issues) clear[k] = undefined
     patch(clear)
-    // `decoded` is memoised on [raw, decode], so this re-enters exactly when the
-    // URL state actually changed — never once per render.
   }, [decoded, patch])
 
   const patchAndClearReport = useCallback(
     (p: UrlState) => {
       setReported([])
+      setSeenIssues(null)
       patch(p)
     },
     [patch],

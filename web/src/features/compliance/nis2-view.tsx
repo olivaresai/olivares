@@ -132,7 +132,11 @@ export function Nis2Tab({
   if (!canRead) {
     return (
       <SectionCard title={t('nis2.title')}>
-        <EmptyState icon={<Siren />} title={t('nis2.noAccess')} />
+        <EmptyState
+          description={t('nis2.noAccessHint')}
+          icon={<Siren />}
+          title={t('nis2.noAccess')}
+        />
       </SectionCard>
     )
   }

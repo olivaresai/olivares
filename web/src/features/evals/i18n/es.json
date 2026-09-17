@@ -41,7 +41,8 @@
     "runs": "Ejecuciones",
     "lastScore": "Última puntuación",
     "regressed": "Regresión",
-    "empty": "Aún no hay cuadros: lanza una evaluación contra una suite golden."
+    "empty": "Aún no hay cuadros: lanza una evaluación contra una suite golden.",
+    "emptyHint": "Un cuadro de mando resume cómo puntuó un modelo en los casos de una suite. Ejecuta una evaluación contra una suite dorada para generar uno."
   },
   "runs": {
     "title": "Ejecuciones de evaluación",
@@ -57,6 +58,7 @@
     "regressed": "Regresión · deriva {{drift}}",
     "noRegression": "Ninguna",
     "empty": "No hay ejecuciones en el rango.",
+    "emptyHint": "Aquí se lista cada ejecución de evaluación del intervalo seleccionado, con su puntuación y su duración. Amplía el intervalo o inicia una ejecución.",
     "overN": "sobre {{n}}",
     "notScored": "sin puntuar: no hay veredicto",
     "noBaseline": "sin línea base: no se comparó nada"
@@ -74,7 +76,8 @@
       "label": "Etiqueta",
       "fingerprint": "Huella"
     },
-    "empty": "No hay resultados por caso para esta ejecución."
+    "empty": "No hay resultados por caso para esta ejecución.",
+    "emptyHint": "Aquí se lista cada caso de la suite con el veredicto del juez. Esta ejecución no ha registrado resultados de casos."
   },
   "ab": {
     "title": "Comparativa A/B",
@@ -94,6 +97,7 @@
     "suiteLabel": "Suite",
     "selectSuite": "Selecciona una suite",
     "noSuites": "Todavía no hay suites. Una comparación se puntúa contra los casos de una suite, así que crea una primero.",
+    "noSuitesHint": "Una comparación se puntúa con los casos de una suite, así que primero tiene que existir una. Crea una en la pestaña Suites.",
     "labelA": "Etiqueta de la variante A",
     "labelB": "Etiqueta de la variante B",
     "outputsA": "Salidas de la variante A",
@@ -119,7 +123,8 @@
     "threshold": "Umbral de aprobación",
     "pickerTitle": "Sujeto",
     "note": "La línea de umbral es el umbral de aprobación de la suite; los puntos por debajo no superaron el listón en ese momento.",
-    "empty": "Aún no hay datos de tendencia."
+    "empty": "Aún no hay datos de tendencia.",
+    "emptyHint": "La deriva compara las puntuaciones recientes de un modelo con su propio histórico. Dos o más ejecuciones de la misma suite producen la primera tendencia."
   },
   "outcomeBar": {
     "passed": "Aprobados",
@@ -141,6 +146,7 @@
     "title": "Gate de CI",
     "description": "Evaluaciones del gate de regresión: lo que el gate midió, y lo que CI debe obedecer.",
     "empty": "Sin evaluaciones del gate",
+    "emptyHint": "Una evaluación de puerta decide si un candidato puede publicarse. Ejecuta una evaluación contra una suite con puerta para registrar una.",
     "measured": "medido {{verdict}}",
     "effective": "CI obedece {{verdict}}",
     "sampled": "{{sampled}} de {{total}} casos muestreados",
@@ -160,6 +166,7 @@
     "title": "Calibración del juez",
     "description": "Cuánto coincide el juez LLM con las etiquetas humanas. Un conjunto que no puede medir el acuerdo corregido por azar no puede certificar nada.",
     "empty": "Sin informes de calibración",
+    "emptyHint": "Un informe de calibración compara las puntuaciones del juez con las etiquetas humanas. Ejecuta una calibración para generar uno.",
     "meets": "cumple el objetivo",
     "below": "por debajo del objetivo",
     "cannotCertify": "no se puede certificar — kappa indefinida",
@@ -176,6 +183,7 @@
     "description": "Las etiquetas humanas contra las que se mide al juez, y la razón de que un informe pueda certificar o no.",
     "run": "Ejecutar calibración",
     "empty": "Todavía no hay casos etiquetados",
+    "emptyHint": "Los elementos etiquetados son los juicios humanos con los que se puntúa un informe de calibración. Etiqueta un caso para añadir el primero.",
     "distribution": "{{pass}} etiquetados como pasa · {{fail}} como falla",
     "degenerate": "⛔ Todas las etiquetas son iguales, así que kappa NO se puede calcular y ningún informe de este conjunto podrá certificar. Etiqueta casos del otro signo.",
     "humanPass": "humano: pasa",

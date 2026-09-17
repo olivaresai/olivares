@@ -555,7 +555,10 @@ function RunDetail({ runId, onClose }: { runId: string; onClose: () => void }) {
           <AsyncSection query={resultsQ} skeletonHeight={200}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('results.empty')} />
+                <EmptyState
+                  description={t('results.emptyHint')}
+                  title={t('results.empty')}
+                />
               ) : (
                 <ResultsTable results={list.items} />
               )

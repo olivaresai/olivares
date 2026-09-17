@@ -142,11 +142,20 @@ function NavItem({
       )}
     >
       <Icon />
-      {!collapsed && !context && <span className="truncate">{label}</span>}
+      {!collapsed && !context && (
+        <span className="truncate" title={label}>
+          {label}
+        </span>
+      )}
       {!collapsed && context && (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate">{label}</span>
-          <span className="truncate text-[0.6875rem] leading-tight text-muted-foreground">
+          <span className="truncate" title={label}>
+            {label}
+          </span>
+          <span
+            className="truncate text-[0.6875rem] leading-tight text-muted-foreground"
+            title={context}
+          >
             {context}
           </span>
         </span>
@@ -495,7 +504,9 @@ function SidebarBody({
                         className={cn(ROW_CLASS, 'font-medium text-foreground')}
                       >
                         <Icon />
-                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                        <span className="min-w-0 flex-1 truncate" title={label}>
+                          {label}
+                        </span>
                         <ArrowRight
                           aria-hidden="true"
                           className="size-3.5 text-muted-foreground"
@@ -538,7 +549,9 @@ function SidebarBody({
                       )}
                     >
                       <Icon />
-                      <span className="truncate">{label}</span>
+                      <span className="truncate" title={label}>
+                        {label}
+                      </span>
                     </Link>
                     <button
                       type="button"

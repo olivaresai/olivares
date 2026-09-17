@@ -34,6 +34,7 @@
     "loading": "加载中…",
     "empty": "此处暂无内容",
     "noResults": "无结果",
+    "noResultsHint": "没有行匹配当前筛选条件。清除筛选或放宽搜索范围即可重新看到数据。",
     "comingSoon": "敬请期待",
     "loaded": "已加载",
     "yes": "是",

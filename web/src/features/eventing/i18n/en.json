@@ -107,6 +107,7 @@
     "title": "Captured events",
     "description": "The event log with sequence cursor. Filter by event type to narrow results.",
     "empty": "No events captured",
+    "emptyHint": "Every event the bus captured is listed here, newest first. Nothing has been published in this range.",
     "typeFilter": "Filter by type",
     "allTypes": "All types",
     "columns": {
@@ -123,6 +124,7 @@
     "title": "Deliveries",
     "description": "Delivery state for webhook event dispatches. Filter by subscription, status, or event type.",
     "empty": "No deliveries",
+    "emptyHint": "Each attempt to deliver an event to a subscription is listed here with its outcome. Nothing has been delivered yet.",
     "subscriptionFilter": "Subscription",
     "statusFilter": "Status",
     "typeFilter": "Event type",
@@ -188,6 +190,7 @@
     "description": "Chronological, append-only snapshots of this subscription.",
     "scopeCaption": "Restore re-applies only the delivery shape — never credentials or the sink profile.",
     "empty": "No revisions recorded",
+    "emptyHint": "Every change to this subscription is kept as a revision you can compare and restore. The first edit creates one.",
     "loadMore": "Load more",
     "compareTitle": "Snapshot diff",
     "selectTwo": "Select two revisions to compare their snapshots.",

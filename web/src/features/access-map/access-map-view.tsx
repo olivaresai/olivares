@@ -4,7 +4,7 @@
 import { Panel } from '@xyflow/react'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, Network, RefreshCw, ShieldCheck } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,8 @@ import { accessEdgeTypes } from './edges'
 import { AccessFilters } from './filters'
 import {
   type AccessFilterState,
+  type OriginNodeData,
+  type ResourceNodeData,
   buildGraph,
   distinctSignalSources,
   emptyFilter,
@@ -108,6 +110,7 @@ export function AccessMapView() {
     return focus ? { ...base, search: focus } : base
   })
   const [overlay, setOverlay] = useState(false)
+  const [listOpen, setListOpen] = useState(false)
   const [selection, setSelection] = useState<Selection>(null)
   const [extra, setExtra] = useState<GraphResponse | null>(null)
   const [expandFailure, setExpandFailure] = useState<{
@@ -115,9 +118,14 @@ export function AccessMapView() {
     kind: string
     error: unknown
   } | null>(null)
-  // Bumped on every tenant switch (below). Captured before any await that will later WRITE
-  // state, so a completion from a previous context is dropped instead of landing.
-  const generation = useRef(0)
+  // Bumped on every tenant identity, in layout, so a completion from a previous
+  // context is dropped instead of landing. The bump cannot live in render: that
+  // is a ref write during render (react-hooks/refs). Layout runs in the same
+  // commit, before paint and before network continuations.
+  const generationRef = useRef(0)
+  useLayoutEffect(() => {
+    generationRef.current += 1
+  }, [activeTenant])
 
   const graphQuery = useQuery({
     queryKey: accessMapKeys.graph(activeTenant, { limit: GRAPH_LIMIT }),
@@ -172,15 +180,15 @@ export function AccessMapView() {
     // guard does not cover it because it guards a different piece of state. Found by the
     // second the model contrast, which is right that "closed for settled state and for
     // recheck" is not "closed for every async write of that state".
-    const askedIn = generation.current
+    const askedIn = generationRef.current
     setExpandFailure(null)
     try {
       const res = await accessMapApi.neighbors(id, 'both', kind)
-      if (askedIn !== generation.current) return
+      if (askedIn !== generationRef.current) return
       setExtra((prev) => mergeGraphs(prev ?? merged, res))
       setSelection(null)
     } catch (error) {
-      if (askedIn !== generation.current) return
+      if (askedIn !== generationRef.current) return
       // Neighbors is privileged/audited too. Preserve the graph, but do not
       // convert a failed read into a silently successful no-op.
       setExpandFailure({ id, kind, error })
@@ -216,7 +224,6 @@ export function AccessMapView() {
   const [seenTenant, setSeenTenant] = useState(activeTenant)
   if (seenTenant !== activeTenant) {
     setSeenTenant(activeTenant)
-    generation.current += 1
     setSelection(null)
     setExtra(null)
     setExpandFailure(null)
@@ -226,10 +233,10 @@ export function AccessMapView() {
     setRecheck({ status: 'checking', edgeId })
     // The context this check was ASKED in. A completion from an older one is dropped, not
     // rendered: it was measured against an estate the sheet is no longer showing.
-    const askedIn = generation.current
+    const askedIn = generationRef.current
     try {
       const res = await driftQuery.refetch()
-      if (askedIn !== generation.current) return
+      if (askedIn !== generationRef.current) return
       // isSuccess is load-bearing: react-query hands back the PREVIOUS data on a
       // failed refetch, so trusting res.data alone would grade a failed check against
       // stale findings and could report "clear" without having measured anything.
@@ -240,7 +247,7 @@ export function AccessMapView() {
         edgeId,
       })
     } catch {
-      if (askedIn !== generation.current) return
+      if (askedIn !== generationRef.current) return
       setRecheck({ status: 'unknown', edgeId })
     }
   }
@@ -423,64 +430,130 @@ export function AccessMapView() {
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-          {/* Graph (desktop). React Flow ≤ threshold (the polished view); Sigma
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            {/* Graph (desktop). React Flow ≤ threshold (the polished view); Sigma
               WebGL above it — SAME built model, same selection/click contract. */}
-          <div className="hidden h-[70vh] min-h-[460px] flex-1 md:block">
-            {useWebGL ? (
-              <SigmaGraph
-                nodes={render.nodes}
-                edges={render.edges}
-                nodeColor={accessNodeColor}
-                ariaLabel={t('subtitle')}
-                onNodeClick={(id, data) =>
-                  setSelection(selectionFromNodeData(id, data))
-                }
-                onEdgeClick={(id) => selectEdge(id)}
-                onPaneClick={() => setSelection(null)}
-                fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${render.nodes.length}|${render.clustered}`}
-              >
-                <div className="pointer-events-none absolute bottom-3 left-3 z-10">
-                  <AccessLegend overlay={overlay && canDrift} />
-                </div>
-              </SigmaGraph>
-            ) : (
-              <GraphCanvas
-                fitMinZoom={LEGIBLE_FIT_MIN_ZOOM}
-                nodes={built.nodes}
-                edges={built.edges}
-                nodeTypes={accessNodeTypes}
-                edgeTypes={accessEdgeTypes}
-                ariaLabel={t('subtitle')}
-                onNodeClick={(n) =>
-                  setSelection(selectionFromNodeData(n.id, n.data))
-                }
-                onEdgeClick={(e) => selectEdge(e.id)}
-                onPaneClick={() => setSelection(null)}
-                minimapColor={(n) =>
-                  (n.data as { hasUnexpected?: boolean }).hasUnexpected
-                    ? 'var(--color-danger)'
-                    : (n.data as { role?: string }).role === 'origin'
-                      ? 'var(--color-accent-text)'
-                      : 'var(--color-graphite-400)'
-                }
-                fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${built.nodes.length}`}
-              >
-                <Panel position="bottom-left">
-                  <AccessLegend overlay={overlay && canDrift} />
-                </Panel>
-              </GraphCanvas>
-            )}
-          </div>
+            <div className="hidden h-[70vh] min-h-[460px] flex-1 md:block">
+              {useWebGL ? (
+                <SigmaGraph
+                  nodes={render.nodes}
+                  edges={render.edges}
+                  nodeColor={accessNodeColor}
+                  ariaLabel={t('subtitle')}
+                  onNodeClick={(id, data) =>
+                    setSelection(selectionFromNodeData(id, data))
+                  }
+                  onEdgeClick={(id) => selectEdge(id)}
+                  onPaneClick={() => setSelection(null)}
+                  fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${render.nodes.length}|${render.clustered}`}
+                >
+                  <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+                    <AccessLegend overlay={overlay && canDrift} />
+                  </div>
+                </SigmaGraph>
+              ) : (
+                <GraphCanvas
+                  fitMinZoom={LEGIBLE_FIT_MIN_ZOOM}
+                  nodes={built.nodes}
+                  edges={built.edges}
+                  nodeTypes={accessNodeTypes}
+                  edgeTypes={accessEdgeTypes}
+                  ariaLabel={t('subtitle')}
+                  onNodeClick={(n) =>
+                    setSelection(selectionFromNodeData(n.id, n.data))
+                  }
+                  onEdgeClick={(e) => selectEdge(e.id)}
+                  onPaneClick={() => setSelection(null)}
+                  minimapColor={(n) =>
+                    (n.data as { hasUnexpected?: boolean }).hasUnexpected
+                      ? 'var(--color-danger)'
+                      : (n.data as { role?: string }).role === 'origin'
+                        ? 'var(--color-accent-text)'
+                        : 'var(--color-graphite-400)'
+                  }
+                  fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${built.nodes.length}`}
+                >
+                  <Panel position="bottom-left">
+                    <AccessLegend overlay={overlay && canDrift} />
+                  </Panel>
+                </GraphCanvas>
+              )}
+            </div>
 
-          {/* Mobile fallback: the graph needs width; show a dignified summary. */}
-          <div className="rounded-lg border border-border bg-surface p-6 text-center md:hidden">
-            <Network className="mx-auto mb-2 size-6 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">
-              {t('mobile.title')}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t('mobile.hint')}
-            </p>
+            {/* Mobile fallback: the graph needs width; show a dignified summary. */}
+            <div className="rounded-lg border border-border bg-surface p-6 text-center md:hidden">
+              <Network className="mx-auto mb-2 size-6 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">
+                {t('mobile.title')}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('mobile.hint')}
+              </p>
+            </div>
+
+            {/* Keyboard path: the canvas is pointer-first; this list is the same
+              selection contract without requiring a mouse. */}
+            <details
+              className="rounded-lg border border-border bg-surface p-3"
+              onToggle={(e) =>
+                setListOpen((e.currentTarget as HTMLDetailsElement).open)
+              }
+            >
+              <summary className="cursor-pointer text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {t('list.summary')}
+              </summary>
+              {listOpen ? (
+                <>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('list.hint')}
+                  </p>
+                  <table className="mt-3 w-full text-left text-sm">
+                    <caption className="sr-only">{t('list.summary')}</caption>
+                    <thead>
+                      <tr className="text-xs text-muted-foreground">
+                        <th className="py-1 pr-3 font-medium">
+                          {t('list.node')}
+                        </th>
+                        <th className="py-1 font-medium">{t('list.kind')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {built.nodes.map((n) => {
+                        const data = n.data as OriginNodeData | ResourceNodeData
+                        return (
+                          <tr key={n.id} className="border-t border-border">
+                            <td className="py-1 pr-3">
+                              {/* ⛔ UN BOTÓN, NO UN ENLACE. Esto se escribió como
+                                `<a href="#access-node-${n.id}">` con
+                                `preventDefault()`, y ese ancla NO EXISTE en
+                                ningún sitio del árbol: un lector de pantalla lo
+                                anuncia como enlace a un destino que no está, y
+                                el teclado lo ofrece como navegación cuando lo
+                                que hace es SELECCIONAR. Selecciona, luego es un
+                                botón. */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelection(
+                                    selectionFromNodeData(n.id, n.data),
+                                  )
+                                }
+                                className="text-left text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                {data.label}
+                              </button>
+                            </td>
+                            <td className="py-1 text-muted-foreground">
+                              {data.kind}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </>
+              ) : null}
+            </details>
           </div>
 
           {/* Drift side panel */}

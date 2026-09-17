@@ -4,6 +4,33 @@
   "asOfNote": "以下为最近 30 天的实时聚合数据，涵盖您的角色可打开的各模块。每个磁贴均链接至对应模块；打开高管报告可查看完整汇总与 PDF。",
   "openReport": "高管报告",
   "range": "最近 30 天",
+  "next": {
+    "title": "下一步",
+    "provider": {
+      "title": "添加供应商",
+      "description": "接入 Claude、Codex 或其他引擎，让它的会话可被归属与治理。"
+    },
+    "agent": {
+      "title": "部署代理",
+      "description": "把代理发布到工作区，连同它的策略与修订历史。"
+    },
+    "session": {
+      "title": "启动会话",
+      "description": "启动一次受治理的运行，并实时查看它的工具调用。"
+    }
+  },
+  "recent": {
+    "title": "近期工作",
+    "description": "此部署观测到的最近五个会话。",
+    "openAll": "全部会话",
+    "worked": "运行 {{duration}}",
+    "toolCalls_other": "{{count}} 次工具调用",
+    "events_other": "{{count}} 个事件",
+    "emptyTitle": "还没有会话",
+    "emptyDescription": "已接入引擎的每次运行都会出现在这里：做了什么、用了多久、花了多少。",
+    "unavailableTitle": "无法加载近期工作",
+    "unavailableDescription": "会话读取没有响应。上方的数字不受影响。"
+  },
   "tiles": {
     "inventory": {
       "label": "清单",

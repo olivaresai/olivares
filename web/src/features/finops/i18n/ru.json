@@ -3,6 +3,7 @@
     "title": "Оповещения о порогах",
     "description": "История пересечений порогов бюджета. Доставка в Slack/SIEM выполняется выходными коннекторами — это запись.",
     "empty": "Порогов не пересечено",
+    "emptyHint": "Бюджетное оповещение срабатывает, когда расходы превышают заданный порог. В этом диапазоне порог не превышался.",
     "columns": {
       "triggeredAt": "Сработало",
       "budget": "Бюджет",
@@ -153,6 +154,7 @@
     "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
     "editTitle": "Edit cost centre",
     "empty": "No cost centres yet",
+    "emptyHint": "Центр затрат относит расходы на команду или владельца бюджета. Создайте один, чтобы начать распределение.",
     "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
     "key": "Key",
     "name": "Name",
@@ -161,6 +163,7 @@
     "newRule": "New rule",
     "newRuleDescription": "Bind one dimension value to this cost centre.",
     "noRules": "No rules — traffic stays unattributed",
+    "noRulesHint": "Правило сопоставляет трафик с центром затрат. Без правил каждый запрос остаётся нераспределённым в отчётах.",
     "owner": "Owner",
     "priority": "priority {{n}}",
     "priorityLabel": "Priority",
@@ -321,6 +324,7 @@
     "title": "Рекомендации по оптимизации",
     "description": "Возможная экономия по управляемому ИТ-ландшафту. Оценки не являются обещанием — проверьте соответствие по возможностям и качеству.",
     "empty": "Нет рекомендаций",
+    "emptyHint": "Рекомендации появляются здесь, когда расходы, маршрутизацию или лимиты можно улучшить. Сейчас менять нечего.",
     "estimatedSavings": "Оцен. экономия",
     "subject": "Предмет",
     "kind": {
@@ -419,6 +423,7 @@
     "description": "Назначенные места против фактически активных субъектов по дням. День без снимка мест ничего не сообщает — это не день с нулевым использованием.",
     "provider": "Поставщик",
     "empty": "Дней не зафиксировано",
+    "emptyHint": "Использование мест собирается по дням из активности сессий. Ни один день в этом диапазоне ничего не сообщил.",
     "assigned": "назначено {{assigned}} · активно {{active}}",
     "noSnapshot": "снимок мест за этот день не опубликован"
   },
@@ -480,6 +485,7 @@
     "riskTitle": "Риск расторжения",
     "riskDescription": "Субъекты, расходующие бюджет без достигнутых результатов.",
     "riskEmpty": "Ни один субъект не расходует бюджет без результатов",
+    "riskEmptyHint": "Эта панель перечисляет субъектов, чьи расходы не подкреплены результатами. Никто не превысил порог в этом диапазоне.",
     "satisfiedOf": "достигнуто {{satisfied}} из {{outcomes}}"
   },
   "evidence": {

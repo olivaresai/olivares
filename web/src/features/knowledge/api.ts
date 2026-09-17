@@ -469,7 +469,7 @@ export async function fetchMemoryExport(params?: {
   }
   const raw = await res.text()
   const primera = raw.split('\n', 1)[0] ?? ''
-  let manifest: MemoryExportManifest | null = null
+  let manifest: MemoryExportManifest | null
   try {
     manifest = primera ? (JSON.parse(primera) as MemoryExportManifest) : null
   } catch {

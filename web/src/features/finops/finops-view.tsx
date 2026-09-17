@@ -332,7 +332,10 @@ function CostCentresTab() {
               //    motor porque no lo mira; `CostCenter` sí.
               []) as CostCenter[]
             return items.length === 0 ? (
-              <EmptyState title={t('costCentres.empty')} />
+              <EmptyState
+                description={t('costCentres.emptyHint')}
+                title={t('costCentres.empty')}
+              />
             ) : (
               <div className="flex flex-col gap-1">
                 {items.map((c) => (
@@ -456,7 +459,12 @@ function CostCentresTab() {
                 priority: number
               }>
               if (items.length === 0)
-                return <EmptyState title={t('costCentres.noRules')} />
+                return (
+                  <EmptyState
+                    description={t('costCentres.noRulesHint')}
+                    title={t('costCentres.noRules')}
+                  />
+                )
 
               // ⛔ VERDAD 3: la prioridad ordena DENTRO de una dimensión y sólo decide ENTRE
               //    dimensiones distintas. Dos reglas con la MISMA dimensión y la MISMA clave son
@@ -1033,7 +1041,10 @@ function SeatsTab() {
             has_seats: boolean
           }>
           return dias.length === 0 ? (
-            <EmptyState title={t('seats.empty')} />
+            <EmptyState
+              description={t('seats.emptyHint')}
+              title={t('seats.empty')}
+            />
           ) : (
             <div className="flex flex-col gap-1">
               {dias.map((d) => (
@@ -1139,7 +1150,10 @@ function ValueTab({ tenant }: { tenant: string | null }) {
             description={t('value.riskDescription')}
           >
             {(s.cancellation_risk ?? []).length === 0 ? (
-              <EmptyState title={t('value.riskEmpty')} />
+              <EmptyState
+                description={t('value.riskEmptyHint')}
+                title={t('value.riskEmpty')}
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {(s.cancellation_risk ?? []).map((r) => (
@@ -1282,7 +1296,10 @@ export function FinOpsView() {
             <AsyncSection query={recsQ} skeletonHeight={180}>
               {(recs) =>
                 recs.recommendations.length === 0 ? (
-                  <EmptyState title={t('optimization.empty')} />
+                  <EmptyState
+                    description={t('optimization.emptyHint')}
+                    title={t('optimization.empty')}
+                  />
                 ) : (
                   <div className="flex flex-col gap-3">
                     {recs.recommendations.map((rec, i) => (
@@ -1845,7 +1862,10 @@ function TenantBudgetsTab({ canWrite }: { canWrite: boolean }) {
           <AsyncSection query={alertsQ} skeletonHeight={140}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('alerts.empty')} />
+                <EmptyState
+                  description={t('alerts.emptyHint')}
+                  title={t('alerts.empty')}
+                />
               ) : (
                 <AlertsTable alerts={list.items} tenant={activeTenant} />
               )

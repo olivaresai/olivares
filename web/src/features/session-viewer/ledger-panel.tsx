@@ -42,7 +42,7 @@ export function LedgerPanel({
         <EmptyState
           icon={<ScrollText />}
           title={t('ledger.empty')}
-          description=""
+          description={t('ledger.emptyHint')}
         />
       ) : (
         <ol className="flex flex-col" data-testid="session-ledger">

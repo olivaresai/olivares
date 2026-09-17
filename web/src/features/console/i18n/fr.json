@@ -116,6 +116,7 @@
     "pendingTitle": "Invitations en attente",
     "pendingCaption": "Invitations en attente d'acceptation. Le lien à usage unique définit le mot de passe et active le compte.",
     "noInvites": "Aucune invitation en attente.",
+    "noInvitesHint": "Les invitations que vous envoyez apparaissent ici jusqu’à leur acceptation ou leur expiration. Invitez quelqu’un pour ajouter la première.",
     "email": "E-mail",
     "role": "Rôle",
     "expires": "Expire le",
@@ -440,6 +441,7 @@
     "catalog": {
       "caption": "Tous les connecteurs que cette build peut activer, lus depuis le moteur — {{count}} au total. La consultation est en lecture seule ; en ajouter un exige toujours une authentification renforcée.",
       "noMatch": "Aucun connecteur ne correspond à « {{query}} ».",
+      "noMatchHint": "Le catalogue liste tous les connecteurs que cette build peut installer. Effacez la recherche pour tous les voir.",
       "search": "Filtrer par nom ou type",
       "title": "Connecteurs pris en charge"
     },
@@ -472,6 +474,7 @@
     "created": "Espace de travail créé.",
     "renamed": "Espace de travail renommé.",
     "none": "Aucun espace de travail pour le moment.",
+    "noneHint": "Un espace de travail délimite les agents, les sessions et les attributions dans cette organisation. Créez-en un pour commencer.",
     "ownerOnly": "Seul le propriétaire de l'organisation peut créer des espaces de travail."
   },
   "agents": {
@@ -561,10 +564,12 @@
     "deleted": "Groupe d'agents supprimé.",
     "created": "Groupe d'agents créé.",
     "updated": "Groupe d'agents mis à jour.",
-    "none": "Aucun groupe d'agents pour le moment."
+    "none": "Aucun groupe d'agents pour le moment.",
+    "noneHint": "Un groupe d’agents nomme un ensemble d’agents pour qu’une seule politique les gouverne tous. Créez-en un pour commencer."
   },
   "roles": {
     "readOnlyNotice": "Vous devez disposer d'un accès RBAC de gouvernance pour gérer les rôles et la délégation.",
+    "readOnlyNoticeHint": "Les rôles, leurs permissions et qui peut les déléguer se gèrent ici. Demandez à un administrateur la permission RBAC de gouvernance.",
     "authority": {
       "title": "Votre autorité de délégation",
       "superadmin": "Vous êtes superadministrateur — vous pouvez déléguer n'importe quel rôle dans n'importe quel périmètre.",
@@ -584,6 +589,7 @@
       "role": "Rôle",
       "scope": "Périmètre",
       "none": "Aucun octroi délimité pour le moment.",
+      "noneHint": "Une attribution restreinte donne à un sujet un rôle dans un espace de travail ou une ressource, pas sur tout le locataire. Attribuez-en une pour commencer.",
       "revoke": "Révoquer",
       "revokeTitle": "Révoquer l'octroi",
       "revokeBody": "Le sujet perd immédiatement ce rôle délimité. La révocation est elle-même soumise au plafond de délégation.",
@@ -625,6 +631,7 @@
       "permissions": "Permissions",
       "groups": "Groupes",
       "none": "Aucun rôle personnalisé pour le moment.",
+      "noneHint": "Un rôle personnalisé est un ensemble nommé de permissions que vous pouvez attribuer comme un rôle intégré. Créez-en un pour commencer.",
       "edit": "Modifier",
       "delete": "Supprimer",
       "deleteTitle": "Supprimer le rôle personnalisé",
@@ -659,6 +666,7 @@
       "name": "Nom",
       "permissions": "Permissions",
       "none": "Aucun groupe de permissions pour le moment.",
+      "noneHint": "Un groupe de permissions regroupe des permissions afin qu’un rôle puisse les inclure par leur nom. Créez-en un pour commencer.",
       "edit": "Modifier",
       "delete": "Supprimer",
       "deleteTitle": "Supprimer le groupe de permissions",
@@ -690,6 +698,7 @@
       "title": "Groupes sujets et hiérarchie",
       "caption": "Accordez des rôles aux groupes d'utilisateurs provisionnés et configurez la hiérarchie des groupes. Les membres d'un groupe enfant héritent des octrois du parent.",
       "noGroups": "Aucun groupe provisionné. Les groupes sont poussés par le fournisseur d'identité (SCIM).",
+      "noGroupsHint": "Les groupes proviennent de votre fournisseur d’identité via SCIM ; la console n’en crée jamais. Provisionnez-en un là-bas et il apparaîtra ici.",
       "colName": "Groupe",
       "colParent": "Parent",
       "colMembers": "Membres",
@@ -735,6 +744,7 @@
       "colFamilies": "Familles",
       "colTiers": "Niveaux",
       "none": "Aucun groupe de modèles pour l'instant.",
+      "noneHint": "Un groupe de modèles nomme un ensemble de modèles pour qu’une seule règle les gouverne tous. Créez un groupe pour commencer.",
       "edit": "Modifier",
       "delete": "Supprimer",
       "deleteTitle": "Supprimer le groupe de modèles",
@@ -760,6 +770,7 @@
       "effectAllow": "Autoriser",
       "effectForbid": "Interdire",
       "none": "Aucune règle d'accès aux modèles pour l'instant.",
+      "noneHint": "Une règle d’accès aux modèles indique quels sujets peuvent appeler quels modèles. Sans règle, chaque sujet peut appeler tous les modèles de ce locataire.",
       "edit": "Modifier",
       "delete": "Supprimer",
       "deleteTitle": "Supprimer la règle d'accès aux modèles",
@@ -797,6 +808,7 @@
       "title": "Revue d'accès",
       "caption": "Requêtes inverses : qui peut accéder à quoi ? Le moteur évalue chaque candidat — les résultats font autorité, ils ne sont pas mis en cache.",
       "readOnlyNotice": "Vous devez disposer d'un accès en lecture authz pour exécuter des revues d'accès.",
+      "readOnlyNoticeHint": "Une revue des accès liste qui détient quoi, afin qu’un relecteur puisse confirmer ou révoquer. Demandez à un administrateur la permission de lecture authz.",
       "searchSubject": "Qui peut accéder à…",
       "searchResource": "À quoi quelqu'un peut-il accéder…",
       "export": "Exporter la revue d'accès",

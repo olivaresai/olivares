@@ -84,7 +84,12 @@ export function LogStream({ entries, autoScroll }: LogStreamProps) {
     // EmptyState, not a bare div: the shared primitive carries role="status"
     // so a resolved-but-empty stream is announced instead of silent (4.1.3).
     return (
-      <EmptyState icon={<Logs />} title={t('stream.empty')} className="h-64" />
+      <EmptyState
+        description={t('stream.emptyHint')}
+        icon={<Logs />}
+        title={t('stream.empty')}
+        className="h-64"
+      />
     )
   }
 

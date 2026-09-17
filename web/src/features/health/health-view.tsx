@@ -631,7 +631,11 @@ function SlaTab({
       </div>
 
       {subjects.length === 0 ? (
-        <EmptyState icon={<Activity />} title={t('sla.pickEmpty')} />
+        <EmptyState
+          description={t('sla.pickEmptyHint')}
+          icon={<Activity />}
+          title={t('sla.pickEmpty')}
+        />
       ) : !selected ? (
         <EmptyState
           icon={<Activity />}

@@ -1,18 +1,40 @@
 {
-  "$description": "Theme-independent primitives surfaced to Tailwind 4 via @theme inline: the neutral graphite ramp (for surfaces/wells and the access-graph neutrals beyond the semantic tokens), self-hosted font stacks, instrument-grade radii, and the fast/mechanical motion curves. Identical in light and dark. Re-derived to a near-neutral cool gray (brandv4 neutrals #28282b / #fafaf9) so the warm-graphite tint no longer survives in graphs/dots. Emitted into the @theme inline{} block by tokens/build.mjs (ADM-CORE-04).",
+  "$description": "Theme-independent primitives surfaced to Tailwind 4 via @theme inline: the neutral graphite ramp (for surfaces/wells and the access-graph neutrals beyond the semantic tokens), self-hosted font stacks, instrument-grade radii, the fast/mechanical motion curves, the OPERATOR TYPE SCALE and the page container width. Identical in light and dark. Re-derived to a near-neutral cool gray (brandv4 neutrals #28282b / #fafaf9) so the warm-graphite tint no longer survives in graphs/dots. Emitted into the @theme inline{} block by tokens/build.mjs (ADM-CORE-04).",
   "graphite": {
     "$type": "color",
-    "graphite-50": { "$value": "#fafafa" },
-    "graphite-100": { "$value": "#f3f3f4" },
-    "graphite-200": { "$value": "#e4e4e6" },
-    "graphite-300": { "$value": "#c9c9cd" },
-    "graphite-400": { "$value": "#9c9ca3" },
-    "graphite-500": { "$value": "#71717a" },
-    "graphite-600": { "$value": "#52525a" },
-    "graphite-700": { "$value": "#3f3f45" },
-    "graphite-800": { "$value": "#2e2e32" },
-    "graphite-900": { "$value": "#232327" },
-    "graphite-950": { "$value": "#1b1b1e" }
+    "graphite-50": {
+      "$value": "#fafafa"
+    },
+    "graphite-100": {
+      "$value": "#f3f3f4"
+    },
+    "graphite-200": {
+      "$value": "#e4e4e6"
+    },
+    "graphite-300": {
+      "$value": "#c9c9cd"
+    },
+    "graphite-400": {
+      "$value": "#9c9ca3"
+    },
+    "graphite-500": {
+      "$value": "#71717a"
+    },
+    "graphite-600": {
+      "$value": "#52525a"
+    },
+    "graphite-700": {
+      "$value": "#3f3f45"
+    },
+    "graphite-800": {
+      "$value": "#2e2e32"
+    },
+    "graphite-900": {
+      "$value": "#232327"
+    },
+    "graphite-950": {
+      "$value": "#1b1b1e"
+    }
   },
   "font": {
     "$type": "fontFamily",
@@ -28,10 +50,18 @@
   },
   "radius": {
     "$type": "dimension",
-    "radius-sm": { "$value": "0.25rem" },
-    "radius-md": { "$value": "0.375rem" },
-    "radius-lg": { "$value": "0.5rem" },
-    "radius-xl": { "$value": "0.75rem" }
+    "radius-sm": {
+      "$value": "0.25rem"
+    },
+    "radius-md": {
+      "$value": "0.375rem"
+    },
+    "radius-lg": {
+      "$value": "0.5rem"
+    },
+    "radius-xl": {
+      "$value": "0.75rem"
+    }
   },
   "motion": {
     "ease-out": {
@@ -45,6 +75,97 @@
     "animate-pulse-live": {
       "$type": "duration",
       "$value": "pulse-live 2s ease-in-out infinite"
+    },
+    "default-transition-duration": {
+      "$type": "duration",
+      "$value": "140ms"
+    },
+    "default-transition-timing-function": {
+      "$type": "cubicBezier",
+      "$value": "cubic-bezier(0.2, 0.7, 0.2, 1)"
+    }
+  },
+  "type": {
+    "$description": "The operator type scale (D21). Tailwind 4 reads `--text-<name>` plus the `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one entry here emits one utility that carries size, leading, tracking and weight together — which is the point: `font-display text-xl font-semibold tracking-tight` written by hand on every page is four decisions that drift independently, and they had.",
+    "$type": "dimension",
+    "text-display-lg": {
+      "$value": "2rem"
+    },
+    "text-display-lg--line-height": {
+      "$value": "2.375rem"
+    },
+    "text-display-lg--letter-spacing": {
+      "$value": "-0.025em"
+    },
+    "text-display-lg--font-weight": {
+      "$value": "600"
+    },
+    "text-display": {
+      "$value": "1.5rem"
+    },
+    "text-display--line-height": {
+      "$value": "1.875rem"
+    },
+    "text-display--letter-spacing": {
+      "$value": "-0.02em"
+    },
+    "text-display--font-weight": {
+      "$value": "600"
+    },
+    "text-title": {
+      "$value": "1.125rem"
+    },
+    "text-title--line-height": {
+      "$value": "1.5rem"
+    },
+    "text-title--letter-spacing": {
+      "$value": "-0.015em"
+    },
+    "text-title--font-weight": {
+      "$value": "600"
+    },
+    "text-heading": {
+      "$value": "1rem"
+    },
+    "text-heading--line-height": {
+      "$value": "1.375rem"
+    },
+    "text-heading--letter-spacing": {
+      "$value": "-0.01em"
+    },
+    "text-heading--font-weight": {
+      "$value": "600"
+    },
+    "text-body": {
+      "$value": "0.875rem"
+    },
+    "text-body--line-height": {
+      "$value": "1.375rem"
+    },
+    "text-caption": {
+      "$value": "0.75rem"
+    },
+    "text-caption--line-height": {
+      "$value": "1.125rem"
+    },
+    "text-overline": {
+      "$value": "0.6875rem"
+    },
+    "text-overline--line-height": {
+      "$value": "1rem"
+    },
+    "text-overline--letter-spacing": {
+      "$value": "0.08em"
+    },
+    "text-overline--font-weight": {
+      "$value": "600"
+    }
+  },
+  "layout": {
+    "$description": "The authenticated shell's content width. It was the arbitrary `max-w-[1440px]` in app-layout.tsx — a number with no name, which is how a second screen ends up with a different one. As a `--container-*` entry Tailwind emits `max-w-page`, so there is a utility to reach for instead of a bracket.",
+    "$type": "dimension",
+    "container-page": {
+      "$value": "90rem"
     }
   }
 }

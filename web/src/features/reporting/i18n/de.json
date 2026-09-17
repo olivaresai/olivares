@@ -4,6 +4,7 @@
   "catalog": {
     "title": "Berichte auf Abruf",
     "empty": "Keine Berichtstypen verfügbar.",
+    "emptyHint": "Der Katalog listet die Berichtstypen auf, die dieser Build erzeugen kann. In dieser Edition ist keiner verfügbar.",
     "colReport": "Bericht",
     "colFormats": "Formate",
     "colActions": "Aktionen",
@@ -35,6 +36,7 @@
     "new": "Neue Planung",
     "enterprise": "Geplante Berichte sind eine Enterprise-Funktion und in dieser Edition nicht aktiviert.",
     "empty": "Noch keine geplanten Berichte.",
+    "emptyHint": "Ein Zeitplan erzeugt einen Bericht in einem Takt und stellt ihn zu. Legen Sie einen an, damit ein Bericht ungefragt eintrifft.",
     "colReport": "Bericht",
     "colCron": "Cron",
     "colStatus": "Status",
@@ -75,6 +77,7 @@
     "title": "Ausführungsverlauf",
     "description": "Jede aufgezeichnete Ausführung dieses Zeitplans: wann sie lief und, falls sie fehlschlug, warum.",
     "notAnArchive": "Anbieter begrenzen diese Liste und entfernen alte Läufe — sie ist eine betriebliche Hilfe, kein Archiv. Eine kurze Liste bedeutet nicht, dass der Zeitplan nur wenige Male lief.",
-    "empty": "Keine Läufe aufgezeichnet"
+    "empty": "Keine Läufe aufgezeichnet",
+    "emptyHint": "Jeder Berichtslauf wird hier mit Status und Ausgabe aufgeführt. Führen Sie einen Bericht aus, um den ersten aufzuzeichnen."
   }
 }

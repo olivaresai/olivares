@@ -12,8 +12,6 @@ e2e/four-tabs-live.spec.ts
 e2e/onboarding-first-hour.spec.ts
 e2e/sessions-unified.spec.ts
 index.html
-src/app/pages/login.tsx
-src/app/pages/settings.tsx
 src/components/charts/index.tsx
 src/components/layout/command-menu.test.tsx
 src/components/layout/notification-bell.tsx
@@ -55,7 +53,6 @@ src/features/governance/routine-policies.test.tsx
 src/features/governance/routine-policy-editor.tsx
 src/features/governance/step-up-policy.test.tsx
 src/features/health/status-page.test.tsx
-src/features/health/status-page.tsx
 src/features/identity/assurance-unmount.test.tsx
 src/features/identity/identity-deeplink.test.tsx
 src/features/identity/identity-view.tsx
@@ -66,20 +63,17 @@ src/features/identity/wif/wif-graph.tsx
 src/features/identity/wif/wif-lint.test.ts
 src/features/identity/wif/wif-lint.ts
 src/features/inference-proxy/inference-proxy-view.test.tsx
-src/features/inference-proxy/inference-proxy-view.tsx
 src/features/inventory/topology.tsx
 src/features/killswitch/types.ts
 src/features/model-ops/deployments.test.tsx
 src/features/model-ops/documents.test.tsx
 src/features/model-ops/evidence.test.tsx
-src/features/models/models-view.tsx
 src/features/observability/observability.test.tsx
 src/features/observability/types.ts
 src/features/onboarding/onboarding-dismissed.test.tsx
 src/features/platforms/fixtures.ts
 src/features/platforms/platforms.test.tsx
 src/features/posture-export/posture-export-view.test.tsx
-src/features/posture-export/posture-export-view.tsx
 src/features/recordings/recordings.test.tsx
 src/features/redteam/types.ts
 src/features/registry.a11y-coverage.test.ts
@@ -88,7 +82,6 @@ src/features/registry.route-conservation.test.ts
 src/features/route-census.test.ts
 src/features/route-census.ts
 src/features/sandbox/fixtures.ts
-src/features/sandbox/run-stream.tsx
 src/features/sandbox/sandbox.test.tsx
 src/features/sandbox/stream.test.tsx
 src/features/sandbox/types.ts

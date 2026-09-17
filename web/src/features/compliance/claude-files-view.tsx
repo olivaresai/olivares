@@ -100,7 +100,11 @@ export function ClaudeFilesPanel({
   if (!canRead) {
     return (
       <SectionCard title={t('claudeFiles.title')}>
-        <EmptyState icon={<FileWarning />} title={t('claudeFiles.noAccess')} />
+        <EmptyState
+          description={t('claudeFiles.noAccessHint')}
+          icon={<FileWarning />}
+          title={t('claudeFiles.noAccess')}
+        />
       </SectionCard>
     )
   }

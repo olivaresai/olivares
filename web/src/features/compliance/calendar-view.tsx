@@ -91,6 +91,7 @@ export function CalendarTab({ framework }: { framework: string | null }) {
               : cal.milestones
             return milestones.length === 0 ? (
               <EmptyState
+                description={t('calendar.emptyHint')}
                 icon={<CalendarClock />}
                 title={t('calendar.empty')}
               />
@@ -115,7 +116,11 @@ export function CalendarTab({ framework }: { framework: string | null }) {
         <AsyncSection query={calendarQ} skeletonHeight={180}>
           {(cal) =>
             cal.watchlist.length === 0 ? (
-              <EmptyState icon={<Eye />} title={t('calendar.watchlistEmpty')} />
+              <EmptyState
+                description={t('calendar.watchlistEmptyHint')}
+                icon={<Eye />}
+                title={t('calendar.watchlistEmpty')}
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {cal.watchlist.map((w) => (

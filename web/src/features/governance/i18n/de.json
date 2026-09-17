@@ -67,6 +67,7 @@
     "trailTitle": "Unveränderliche Nutzungsspur",
     "trailCaption": "Jede Aktion, die ohne ihr Genehmigungsquorum fortgesetzt wurde. Diese Einträge sind nur anhängbar und können weder bearbeitet noch gelöscht werden.",
     "trailEmpty": "Diese Freigabe wurde nicht genutzt",
+    "trailEmptyHint": "Alles, was unter einer Notfallfreigabe getan wird, wird hier zur Prüfung festgehalten. Diese Freigabe wurde nie genutzt.",
     "trailLabel": "Unveränderliche Break-Glass-Nutzungsspur",
     "useAction": "Aktion",
     "useSubject": "Gegenstand",
@@ -218,6 +219,7 @@
     "trail": "Entscheidungspfad",
     "trailCaption": "Der unveränderliche, ausschließlich anfügende Datensatz, wer wann was entschieden hat. Schreibgeschützt — er kann niemals bearbeitet oder entfernt werden.",
     "trailEmpty": "Noch keine Entscheidungen festgehalten",
+    "trailEmptyHint": "Jede Entscheidung zu dieser Freigabe — wer, wann und warum — wird hier festgehalten. Es hat noch niemand entschieden.",
     "decisionApprove": "Genehmigt",
     "decisionReject": "Abgelehnt"
   },
@@ -336,7 +338,8 @@
     "via": "über",
     "kindIdentity": "Identität",
     "kindCollection": "Sammlung",
-    "empty": "Keine Mitglieder"
+    "empty": "Keine Mitglieder",
+    "emptyHint": "Hier werden die Subjekte aufgeführt, die zu dieser Gruppe gehören. Fügen Sie ein Mitglied hinzu, um zu beginnen."
   },
   "bindings": {
     "title": "Agent-Bindungen",
@@ -680,7 +683,9 @@
     "title": "Aufkommende Standards für Agenten-Identität",
     "description": "Ein „Design-toward“-Register: was wir verfolgen, wo es andocken würde und warum es nicht implementiert ist.",
     "noAccess": "Sie haben keinen Zugriff auf das Identitätsregister.",
+    "noAccessHint": "Dieses Panel verfolgt die Standards, an denen sich die Plattform ausrichtet. Bitten Sie eine Administratorin um die Leseberechtigung für die Identitätsregistrierung.",
     "empty": "Nichts verfolgt",
+    "emptyHint": "Standards, an denen sich die Plattform ausrichtet, erscheinen hier mit ihrem Status. Es wird noch keiner verfolgt.",
     "verifiedAt": "Revisionen im {{month}} gegen Primärquellen geprüft. Sie ändern sich — als Datum verstehen, nicht als Zusage.",
     "spec": "Spezifikation",
     "revision": "Revision",

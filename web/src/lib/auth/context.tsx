@@ -8,6 +8,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -73,6 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeTenant = useTenantStore((s) => s.activeTenant)
   const setActiveTenantStore = useTenantStore((s) => s.setActiveTenant)
   const clearTenant = useTenantStore((s) => s.clear)
+  // Held true while login() owns the first whoami. Otherwise `enabled: !!token`
+  // starts a GET the moment setSession lands, and the login navigation (or a
+  // competing fetchQuery) aborts it — console-walk records
+  // GET /v1/auth/whoami net::ERR_ABORTED on the login step.
+  const [loginInFlight, setLoginInFlight] = useState(false)
 
   // Load the principal whenever a token is present. A 401 here means the token was
   // revoked/expired — the client's onUnauthorized hook clears the session, so the
@@ -80,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const whoami = useQuery({
     queryKey: queryKeys.whoami,
     queryFn: () => authApi.whoami(),
-    enabled: !!token,
+    enabled: !!token && !loginInFlight,
     staleTime: 60_000,
   })
 
@@ -200,13 +206,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (req: LoginRequest) => {
       const res = await authApi.login(req)
+      // Disable the observer first so setSession cannot start a second GET.
+      setLoginInFlight(true)
       setSession({
         token: res.token,
         sessionId: res.session_id,
         expiresAt: res.expires_at,
       })
-      // Enable + refetch whoami against the new token.
-      await queryClient.invalidateQueries({ queryKey: queryKeys.whoami })
+      try {
+        const principal = await authApi.whoami()
+        queryClient.setQueryData(queryKeys.whoami, principal)
+      } finally {
+        setLoginInFlight(false)
+      }
     },
     [setSession, queryClient],
   )

@@ -153,7 +153,11 @@ export function RetentionTab({
   if (!canRead) {
     return (
       <SectionCard title={t('retention.title')}>
-        <EmptyState icon={<LockKeyhole />} title={t('retention.noAccess')} />
+        <EmptyState
+          description={t('retention.noAccessHint')}
+          icon={<LockKeyhole />}
+          title={t('retention.noAccess')}
+        />
       </SectionCard>
     )
   }

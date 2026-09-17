@@ -34,6 +34,7 @@
     "loading": "Cargando…",
     "empty": "Aún no hay nada aquí",
     "noResults": "Sin resultados",
+    "noResultsHint": "Ninguna fila coincide con el filtro actual. Quítalo, o amplía la búsqueda, para volver a ver las filas.",
     "comingSoon": "Próximamente",
     "loaded": "Cargado",
     "yes": "Sí",

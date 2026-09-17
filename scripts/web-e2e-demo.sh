@@ -158,5 +158,15 @@ fi
 
 echo "==> Running Playwright demo and console-functional specs against live seeded data"
 cd "$ROOT/web"
+# d15-console-quality.spec.ts runs HERE and not in scripts/web-e2e.sh, and the reason is
+# measured rather than stylistic: that script puts every spec which does not fill `#token`
+# on one shared engine that nothing sets up, so a spec signing in as demo@olivares.local
+# finds no login form, signs nobody in, and then grades the login page as if it were the
+# ten routes. The spec carries the DEMO_TENANT guard so that case is a visible SKIP; this
+# line is what makes it actually RUN.
+# d21-console-first-screens.spec.ts joins them for the same reason and with the same
+# guard: it signs in as the demo operator, and on the shared engine of scripts/web-e2e.sh
+# it would grade the login page in seven languages and call it green.
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" DEMO_TENANT="$TENANT" \
-  pnpm exec playwright test e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts
+  pnpm exec playwright test e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts \
+  e2e/d15-console-quality.spec.ts e2e/d21-console-first-screens.spec.ts

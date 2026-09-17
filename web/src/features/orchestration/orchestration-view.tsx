@@ -290,7 +290,10 @@ function FlowsTab({ tenant }: { tenant: string | null }) {
       <AsyncSection query={flowsQ} skeletonHeight={200}>
         {(list) =>
           list.items.length === 0 ? (
-            <EmptyState title={t('flows.empty')} />
+            <EmptyState
+              description={t('flows.emptyHint')}
+              title={t('flows.empty')}
+            />
           ) : (
             <FlowsTable flows={list.items} />
           )
@@ -471,9 +474,15 @@ function SchedulesTab({
         }
       >
         {selectedId === null ? (
-          <EmptyState title={t('decisions.pickHint')} />
+          <EmptyState
+            description={t('decisions.pickHintDetail')}
+            title={t('decisions.pickHint')}
+          />
         ) : enLedger && !puedeLeerSchedules ? (
-          <EmptyState title={t('decisions.forbidden')} />
+          <EmptyState
+            description={t('decisions.forbiddenHint')}
+            title={t('decisions.forbidden')}
+          />
         ) : enLedger ? (
           <AsyncSection query={ledgerQ} skeletonHeight={180}>
             {(list) => (
@@ -482,7 +491,10 @@ function SchedulesTab({
                   {t('decisions.estateCaveat')}
                 </CaveatNotice>
                 {list.items.length === 0 ? (
-                  <EmptyState title={t('decisions.empty')} />
+                  <EmptyState
+                    description={t('decisions.emptyHint')}
+                    title={t('decisions.empty')}
+                  />
                 ) : (
                   <DecisionList decisions={list.items} showSubject />
                 )}
@@ -502,7 +514,10 @@ function SchedulesTab({
           <AsyncSection query={decisionsQ} skeletonHeight={180}>
             {(list) =>
               list.items.length === 0 ? (
-                <EmptyState title={t('decisions.empty')} />
+                <EmptyState
+                  description={t('decisions.emptyHint')}
+                  title={t('decisions.empty')}
+                />
               ) : (
                 <DecisionList decisions={list.items} />
               )
@@ -551,6 +566,7 @@ function SchedulesTab({
             description: t('history.description'),
             caption: t('history.scopeCaption'),
             empty: t('history.empty'),
+            emptyHint: t('history.emptyHint'),
             loading: t('common:states.loading'),
             loadMore: t('history.loadMore'),
             compareTitle: t('history.compareTitle'),

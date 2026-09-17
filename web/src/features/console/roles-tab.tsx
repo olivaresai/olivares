@@ -116,6 +116,7 @@ export function RolesTab() {
     return (
       <div className="pt-4">
         <EmptyState
+          description={t('console:roles.readOnlyNoticeHint')}
           title={t('console:roles.readOnlyNotice')}
           icon={<ShieldCheck />}
         />
@@ -311,6 +312,15 @@ function GrantsSection({
         <ErrorState retry={refetch} />
       ) : grants.length === 0 ? (
         <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:roles.grants.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:roles.grants.noneHint')}
           title={t('console:roles.grants.none')}
           icon={<ShieldCheck />}
         />
@@ -797,7 +807,19 @@ function RolesSection({
       ) : isError ? (
         <ErrorState retry={refetch} />
       ) : roles.length === 0 ? (
-        <EmptyState title={t('console:roles.defs.none')} icon={<KeyRound />} />
+        <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:roles.defs.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:roles.defs.noneHint')}
+          title={t('console:roles.defs.none')}
+          icon={<KeyRound />}
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-sm">
@@ -1168,7 +1190,19 @@ function GroupsSection({
       ) : isError ? (
         <ErrorState retry={refetch} />
       ) : groups.length === 0 ? (
-        <EmptyState title={t('console:roles.groups.none')} icon={<Layers />} />
+        <EmptyState
+          action={
+            canAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                {t('console:roles.groups.create')}
+              </Button>
+            ) : undefined
+          }
+          description={t('console:roles.groups.noneHint')}
+          title={t('console:roles.groups.none')}
+          icon={<Layers />}
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-sm">

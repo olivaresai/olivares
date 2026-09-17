@@ -172,7 +172,11 @@ export function ErasureTab({
   if (!canRead) {
     return (
       <SectionCard title={t('erasure.title')}>
-        <EmptyState icon={<Trash2 />} title={t('erasure.noAccess')} />
+        <EmptyState
+          description={t('erasure.noAccessHint')}
+          icon={<Trash2 />}
+          title={t('erasure.noAccess')}
+        />
       </SectionCard>
     )
   }

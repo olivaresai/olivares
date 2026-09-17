@@ -17,7 +17,7 @@
 // nothing was wrong. role="status" + aria-live="polite" so a screen reader is
 // told without being interrupted (a rejected filter is not an emergency).
 import { X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import './i18n'
@@ -43,12 +43,18 @@ export function UrlStateNotice({
   const { t } = useTranslation('shared')
   const [dismissed, setDismissed] = useState(false)
   const signature = issues.join(',')
+  const [seenSig, setSeenSig] = useState(signature)
+  const [seenOrigin, setSeenOrigin] = useState(origin)
+  const [seenEvent, setSeenEvent] = useState<readonly string[] | null>(null)
 
   // A NEW rejection after a dismissal must speak again: the operator dismissed
-  // the previous one, not every future one.
-  useEffect(() => {
+  // the previous one, not every future one. Adjust during render — an effect
+  // that setState here was the cascading-render defect.
+  if (signature !== seenSig || origin !== seenOrigin) {
+    setSeenSig(signature)
+    setSeenOrigin(origin)
     setDismissed(false)
-  }, [signature, origin])
+  }
 
   // …including a new rejection that happens to name the SAME keys. Keying the
   // reset on the names alone silenced that case permanently: paste a bad link,
@@ -59,14 +65,10 @@ export function UrlStateNotice({
   // new array instance. Waiting for an empty state in between would never fire:
   // the hook latches the complaint across its own URL cleanup precisely so the
   // notice survives long enough to be read.
-  const lastEvent = useRef<readonly string[] | null>(null)
-  useEffect(() => {
-    if (issues.length === 0) return
-    if (lastEvent.current !== issues) {
-      if (lastEvent.current !== null) setDismissed(false)
-      lastEvent.current = issues
-    }
-  }, [issues])
+  if (issues.length > 0 && seenEvent !== issues) {
+    if (seenEvent !== null) setDismissed(false)
+    setSeenEvent(issues)
+  }
 
   if (issues.length === 0 || dismissed) return null
 

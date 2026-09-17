@@ -284,7 +284,9 @@ export function PostureExportView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={ANY}>{t('filters.severityAny')}</SelectItem>
+                    <SelectItem value={ANY}>
+                      {t('filters.severityAny')}
+                    </SelectItem>
                     {SEVERITIES.map((s) => (
                       <SelectItem key={s} value={s}>
                         {t(`severity.${s}`)}
@@ -315,7 +317,10 @@ export function PostureExportView() {
                 />
               )}
             </Field>
-            <Field label={t('filters.kind')} description={t('filters.kindHint')}>
+            <Field
+              label={t('filters.kind')}
+              description={t('filters.kindHint')}
+            >
               {({ id }) => (
                 <Input
                   id={id}
@@ -362,14 +367,21 @@ export function PostureExportView() {
             .
           </CaveatNotice>
           {history.length === 0 ? (
-            <EmptyState title={t('history.empty')} />
+            <EmptyState
+              description={t('history.emptyHint')}
+              title={t('history.empty')}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">{t('history.colTime')}</th>
-                    <th className="py-2 pr-4 font-medium">{t('history.colFilters')}</th>
+                    <th className="py-2 pr-4 font-medium">
+                      {t('history.colTime')}
+                    </th>
+                    <th className="py-2 pr-4 font-medium">
+                      {t('history.colFilters')}
+                    </th>
                     <th className="py-2 pr-4 text-right font-medium">
                       {t('history.colCounts')}
                     </th>
@@ -413,7 +425,8 @@ function describeFilters(
   t: (k: string, o?: Record<string, unknown>) => string,
 ): string {
   const parts: string[] = []
-  if (f.severity) parts.push(t('summary.severityFloor', { severity: f.severity }))
+  if (f.severity)
+    parts.push(t('summary.severityFloor', { severity: f.severity }))
   if (f.category?.trim()) parts.push(`category=${f.category.trim()}`)
   if (f.kind?.trim()) parts.push(`kind=${f.kind.trim()}`)
   return parts.length ? parts.join(', ') : t('filters.none')
@@ -445,9 +458,13 @@ function SummaryCard({ doc }: { doc: PostureExportDoc }) {
           ))}
         </div>
         {s.truncated ? (
-          <CaveatNotice tone="warning">{t('summary.truncatedHint')}</CaveatNotice>
+          <CaveatNotice tone="warning">
+            {t('summary.truncatedHint')}
+          </CaveatNotice>
         ) : null}
-        <p className="text-xs leading-relaxed text-muted-foreground">{doc.note}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {doc.note}
+        </p>
       </CardContent>
     </Card>
   )

@@ -70,6 +70,7 @@ export function useRunAttach({
   onEnd,
 }: UseRunAttachOptions): UseRunAttachResult {
   const token = useSessionStore((s) => s.token)
+  const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
   const tenant = useTenantStore((s) => s.activeTenant)
   const [status, setStatus] = useState<StreamStatus>('closed')
   const [ended, setEnded] = useState(false)
@@ -87,20 +88,21 @@ export function useRunAttach({
   }, [onFrame, onLag, onNotice, onEnd])
 
   // Cursor owner is compared privately; the bearer is never placed in React
-  // state, a key, or a log.
-  const ownerRef = useRef({ runRef, tenant, token })
+  // state, a key, or a log. credentialGeneration is the non-secret counter.
+  const ownerKey = `${runRef ?? ''}\n${tenant ?? ''}\n${credentialGeneration}`
+  const [owner, setOwner] = useState(ownerKey)
   const cursorRef = useRef(0)
-  if (
-    ownerRef.current.runRef !== runRef ||
-    ownerRef.current.tenant !== tenant ||
-    ownerRef.current.token !== token
-  ) {
-    ownerRef.current = { runRef, tenant, token }
-    cursorRef.current = 0
+  if (owner !== ownerKey) {
+    setOwner(ownerKey)
     if (ended) setEnded(false)
     if (ioUnavailable !== null) setIoUnavailable(null)
     if (status !== 'closed') setStatus('closed')
   }
+  // Reset the replay cursor after the identity commit, before the stream
+  // effect (declaration order). Retry/sessionKey must NOT reset it.
+  useEffect(() => {
+    cursorRef.current = 0
+  }, [ownerKey])
 
   const active = enabled && !!runRef && !!token
 
