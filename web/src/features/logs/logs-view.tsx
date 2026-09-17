@@ -62,8 +62,8 @@ export function LogsView() {
 
   // --- entries accumulator (ref to avoid per-line re-renders) -----------------
   const entriesRef = useRef<LogEntry[]>([])
-  // A render tick: bumped to trigger a batched visual refresh.
-  const [renderTick, setRenderTick] = useState(0)
+  // Snapshot published on the rAF tick so render never reads the ref.
+  const [entries, setEntries] = useState<LogEntry[]>([])
   const rafRef = useRef(0)
 
   /** Schedule a batched render via requestAnimationFrame. */
@@ -71,7 +71,7 @@ export function LogsView() {
     if (rafRef.current) return // already scheduled
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0
-      setRenderTick((t) => t + 1)
+      setEntries(entriesRef.current.slice())
     })
   }, [])
 
@@ -146,7 +146,7 @@ export function LogsView() {
 
   // --- filtered view (applies client-side level + search filters) -------------
   const displayed = useMemo(() => {
-    let items = entriesRef.current
+    let items = entries
     // Level filter (client-side, when multiple levels selected or for consistency).
     if (filters.levels.size > 0) {
       items = items.filter((e) => filters.levels.has(e.level))
@@ -164,9 +164,7 @@ export function LogsView() {
       items = items.filter((e) => e.message.toLowerCase().includes(needle))
     }
     return items
-    // renderTick is in the deps to pick up new entries from the rAF batch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, renderTick])
+  }, [filters, entries])
 
   // --- scroll tracking --------------------------------------------------------
   const scrollContainerRef = useRef<HTMLDivElement>(null)

@@ -149,6 +149,12 @@
     "title": "Noch kein Zugriff beobachtet",
     "description": "Sobald Konnektoren Agentenaktivität melden, erscheinen die R/RW-Beziehungen hier."
   },
+  "list": {
+    "summary": "Karte als Liste",
+    "hint": "Tastaturbedienbare Liste jedes Knotens auf dieser Karte. Eine Zeile öffnet dasselbe Detail wie der Graph.",
+    "node": "Knoten",
+    "kind": "Art"
+  },
   "forbidden": {
     "title": "Zugriffskarte nicht autorisiert",
     "description": "Ihre Rolle umfasst keine Berechtigung zum Anzeigen des Zugriffsgraphen."

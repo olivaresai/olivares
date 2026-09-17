@@ -104,7 +104,9 @@ function effectiveIntent(
  *    transcribir a mano un dato que la pantalla de al lado ya exhibe, y cada errata se paga con
  *    un `invalid_command` del motor. Con una sola fuente, los dos caminos siembran igual.
  */
-export function sembrarDesde(intent: WorkIntent | null): Record<string, string> {
+export function sembrarDesde(
+  intent: WorkIntent | null,
+): Record<string, string> {
   const body = (intent?.body ?? {}) as Record<string, unknown>
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(body)) {
@@ -126,7 +128,13 @@ export function ApplyFlow({
   acceptanceState,
 }: ApplyFlowProps) {
   const { t } = useTranslation('work')
-  const [phase, setPhase] = useState<Phase>('planning')
+  const [phase, setPhase] = useState<Phase>(() =>
+    open &&
+    intent &&
+    requiredFieldsFor(intent.command, acceptanceState).length > 0
+      ? 'input'
+      : 'planning',
+  )
   const [plan, setPlan] = useState<Plan | null>(null)
   const [outcome, setOutcome] = useState<ApplyOutcome | null>(null)
   const [failure, setFailure] = useState<ApplyFailure | null>(null)
@@ -145,7 +153,9 @@ export function ApplyFlow({
   const [failureReason, setFailureReason] = useState<string | null>(null)
   /** En qué fase murió: decide si el reintento re-planifica o re-aplica. */
   const [fallaronEnPlan, setFallaronEnPlan] = useState(false)
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    sembrarDesde(intent),
+  )
 
   // What the engine will REQUIRE for this command. Empty for most; not empty for the
   // six actions that shipped inoperable in the first pass.
@@ -153,34 +163,13 @@ export function ApplyFlow({
     ? requiredFieldsFor(intent.command, acceptanceState)
     : []
 
-  const reset = useCallback(() => {
-    setPhase('planning')
-    setPlan(null)
-    setOutcome(null)
-    setFailure(null)
-    setFailureCode(null)
-    setFailureReason(null)
-    setFallaronEnPlan(false)
-    // ⛔ SEMBRADO DESDE LA PROPIA INTENCIÓN, y no es comodidad. Un contraste `sol max` midió el
-    // 2026-08-16 que los comandos de lease piden `holder_sid` —una identidad de SESIÓN— a un
-    // humano que no la tiene: la pantalla EXHIBE el titular en la fila de al lado y el diálogo
-    // le pedía que lo transcribiera. Un campo obligatorio que sólo se puede rellenar copiando lo
-    // que ya está en la misma pantalla no es una pregunta: es una trampa de transcripción, y
-    // cada error tipográfico se paga con un `invalid_command` del motor.
-    //
-    // Se siembra lo que la intención TRAE, no lo que el diálogo adivina: quien la levanta decide
-    // qué sabe. Y sigue siendo editable, porque un titular sembrado es un valor por defecto, no
-    // una afirmación — `takeover` existe justamente para nombrar a otro.
-    setValues(sembrarDesde(intent))
-  }, [intent])
-
   const runPlan = useCallback(
     async (withValues: Record<string, string>) => {
       if (!intent) return
       setPhase('planning')
       setFailure(null)
       setFailureCode(null)
-    setFailureReason(null)
+      setFailureReason(null)
       try {
         const p = await planWork(effectiveIntent(intent, fields, withValues))
         setPlan(p)
@@ -189,7 +178,6 @@ export function ApplyFlow({
         setFailure(classifyApplyFailure(err))
         setFailureCode(workErrorCode(err))
         setFailureReason(workErrorReason(err))
-      setFailureReason(workErrorReason(err))
         setFallaronEnPlan(true)
         setPhase('failed')
       }
@@ -204,22 +192,48 @@ export function ApplyFlow({
   // Keyed on intent.key rather than on `intent`, so a parent that rebuilds the object
   // each render cannot re-plan in a loop — and, more importantly, so a NEW intent (a
   // genuinely new intention, hence a new key) always gets its own plan.
+  //
+  // Reset happens during render when the session (open + key) changes. The effect
+  // only starts the network plan; it does not setState synchronously.
   const intentKey = intent?.key ?? null
+  const session = `${open ? '1' : '0'}:${intentKey ?? ''}`
+  const [boundSession, setBoundSession] = useState(session)
+  if (session !== boundSession) {
+    setBoundSession(session)
+    setPlan(null)
+    setOutcome(null)
+    setFailure(null)
+    setFailureCode(null)
+    setFailureReason(null)
+    setFallaronEnPlan(false)
+    setValues(sembrarDesde(intent))
+    setPhase(!open ? 'planning' : fields.length > 0 ? 'input' : 'planning')
+  }
+
   useEffect(() => {
-    if (!open || !intentKey) {
-      reset()
-      return
+    if (!open || !intentKey || fields.length > 0) return
+    const current = intent
+    if (!current) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const p = await planWork(effectiveIntent(current, fields, {}))
+        if (cancelled) return
+        setPlan(p)
+        setPhase('planned')
+      } catch (err) {
+        if (cancelled) return
+        setFailure(classifyApplyFailure(err))
+        setFailureCode(workErrorCode(err))
+        setFailureReason(workErrorReason(err))
+        setFallaronEnPlan(true)
+        setPhase('failed')
+      }
+    })()
+    return () => {
+      cancelled = true
     }
-    if (fields.length > 0) {
-      // The operator has to supply what the engine demands BEFORE anything is planned.
-      // Planning without it would just render a ROTO plan the operator cannot act on.
-      // ⛔ SEMBRAR, NO BORRAR: `setValues({})` tiraba lo que la intención ya traía.
-      setValues(sembrarDesde(intent))
-      setPhase('input')
-      return
-    }
-    void runPlan({})
-    // runPlan closes over `intent`, which is pinned by its key for this effect.
+    // intent is pinned by intentKey; fields are a function of that command.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, intentKey])
 

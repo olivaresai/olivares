@@ -1,0 +1,1 @@
+import{Xt as e,zt as t}from"./index-D0L0loM_.js";function n(n){return e(t,n)}export{n as t};

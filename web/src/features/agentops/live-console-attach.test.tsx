@@ -285,7 +285,15 @@ describe('LiveConsole attach continuity', () => {
           useTenantStore.setState({ activeTenant: 't2' })
         }
         if (identity === 'credential') {
-          useSessionStore.setState({ token: 'olvs_other' })
+          // Production advances credentialGeneration only through setSession
+          // (login, refresh, 401 clear). Patching `token` on the store would
+          // leave the opaque remount key unchanged and leak the prior
+          // transcript — the defect this case exists to catch.
+          useSessionStore.getState().setSession({
+            token: 'olvs_other',
+            sessionId: 's1',
+            expiresAt: '2099-01-01T00:00:00Z',
+          })
         }
         if (identity === 'run') {
           view.run({ ...baseRun, run_ref: 'run_b' })

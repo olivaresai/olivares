@@ -26,33 +26,17 @@ import './i18n'
 const MAX_FRAMES = 5000
 
 function useOpaqueAttachEpoch(runRef: string) {
-  // Opaque remount key: the bearer is compared privately and never written
-  // into a React key, the DOM or a log.
-  const token = useSessionStore((s) => s.token)
+  // Opaque remount key: the bearer is never written into a React key, the DOM
+  // or a log. credentialGeneration is the non-secret "the credential moved"
+  // counter (stores/session.ts).
   const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
   const tenant = useTenantStore((s) => s.activeTenant)
-  const stamp = useRef({
-    token,
-    tenant,
-    runRef,
-    credentialGeneration,
-    epoch: 0,
-  })
-  if (
-    stamp.current.token !== token ||
-    stamp.current.tenant !== tenant ||
-    stamp.current.runRef !== runRef ||
-    stamp.current.credentialGeneration !== credentialGeneration
-  ) {
-    stamp.current = {
-      token,
-      tenant,
-      runRef,
-      credentialGeneration,
-      epoch: stamp.current.epoch + 1,
-    }
+  const identity = `${credentialGeneration}:${tenant ?? ''}:${runRef}`
+  const [stamp, setStamp] = useState({ identity, epoch: 0 })
+  if (stamp.identity !== identity) {
+    setStamp({ identity, epoch: stamp.epoch + 1 })
   }
-  return stamp.current.epoch
+  return stamp.epoch
 }
 
 /**
@@ -151,11 +135,13 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
     allowed: canInterrupt,
     intent: interruptIntent,
   })
-  currentInterrupt.current = {
-    isAuthorized,
-    allowed: canInterrupt,
-    intent: interruptIntent,
-  }
+  useEffect(() => {
+    currentInterrupt.current = {
+      isAuthorized,
+      allowed: canInterrupt,
+      intent: interruptIntent,
+    }
+  })
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true

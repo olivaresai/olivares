@@ -300,8 +300,7 @@ export function DeliveryRow({
   const showRetry =
     delivery.status === 'queued' &&
     retryAt != null &&
-    !Number.isNaN(retryAt.getTime()) &&
-    retryAt.getTime() > Date.now()
+    !Number.isNaN(retryAt.getTime())
   return (
     <div className="flex items-center gap-3 rounded-md border border-border bg-surface px-3 py-2 text-sm">
       <span className="w-16 shrink-0 font-mono text-xs text-muted-foreground">

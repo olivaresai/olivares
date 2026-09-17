@@ -50,6 +50,9 @@ export function AppLayout() {
           sidebar nav straight to the routed content on every page. */}
         <a
           href="#main-content"
+          onClick={() => {
+            document.getElementById('main-content')?.focus()
+          }}
           className="sr-only z-50 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:left-2 focus-visible:top-2 focus-visible:ring-2 focus-visible:ring-ring"
         >
           {t('a11y.skipToContent')}

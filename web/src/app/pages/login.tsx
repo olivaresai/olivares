@@ -78,7 +78,6 @@ export function LoginPage() {
               id="email"
               type="email"
               autoComplete="username"
-              autoFocus
               placeholder={t('login.emailPlaceholder')}
               aria-invalid={!!form.formState.errors.email}
               {...form.register('email')}

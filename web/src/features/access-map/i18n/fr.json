@@ -149,6 +149,12 @@
     "title": "Aucun accès observé pour l’instant",
     "description": "Dès que les connecteurs signaleront l’activité des agents, les relations R/RW apparaîtront ici."
   },
+  "list": {
+    "summary": "Carte sous forme de liste",
+    "hint": "Liste accessible au clavier de chaque nœud de cette carte. Sélectionner une ligne ouvre le même détail que le graphe.",
+    "node": "Nœud",
+    "kind": "Type"
+  },
   "forbidden": {
     "title": "Carte des accès non autorisée",
     "description": "Votre rôle n’inclut pas la permission de consulter le graphe des accès."

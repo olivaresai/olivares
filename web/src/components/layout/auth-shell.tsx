@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ThemeToggle } from './theme-toggle'
 import { Wordmark } from './brand'
 
@@ -23,8 +24,18 @@ import { Wordmark } from './brand'
  *   que el ancla se llame igual en las dos mitades del producto es lo que permite que el enlace de
  *   salto —hoy sólo en el layout autenticado— valga aquí el día que se añada, sin un segundo nombre. */
 export function AuthShell({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('common')
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center gap-7 bg-background px-4 py-12">
+      <a
+        href="#main-content"
+        onClick={() => {
+          document.getElementById('main-content')?.focus()
+        }}
+        className="sr-only z-50 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:left-2 focus-visible:top-2 focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {t('a11y.skipToContent')}
+      </a>
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
