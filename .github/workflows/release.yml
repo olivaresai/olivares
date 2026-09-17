@@ -462,7 +462,7 @@ jobs:
               changed="$(git diff --name-only "${green}" HEAD)"
               [ -n "${changed}" ] || continue
               if ! printf '%s\n' "${changed}" | grep -qvE '^\.github/workflows/'; then
-                echo "race-full evidence: green run on ${green}; diff to ${GITHUB_SHA} is workflow-only:"; printf '  %s\n' ${changed}
+                echo "race-full evidence: green run on ${green}; diff to ${GITHUB_SHA} is workflow-only:"; printf '%s\n' "${changed}" | sed 's/^/  /'
                 match=1; break
               fi
             done
