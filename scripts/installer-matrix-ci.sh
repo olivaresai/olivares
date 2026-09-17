@@ -195,6 +195,16 @@ chmod 0755 "$work/fakebin/"*
 export PATH="$work/fakebin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 cleanup_live() {
+	# A red must say what it read. Every installer/service/doctor invocation below sends its
+	# output to $all_log, so a failing one under `set -e` exits with nothing on the job log
+	# (public PR #32 macos leg, 2026-09-17: two OK lines, then "exit code 1" and no cause).
+	# On a non-zero exit the tail of both logs is printed before the scratch is removed.
+	local rc=$?
+	if [[ "$rc" -ne 0 ]]; then
+		printf 'installer-matrix: exit %s — last 60 lines of %s:\n' "$rc" "$all_log" >&2
+		tail -n 60 "$all_log" >&2 2>/dev/null || true
+		if [[ -s "$MATRIX_ENGINE_LOG" ]]; then printf 'installer-matrix: last 30 lines of the engine log:\n' >&2; tail -n 30 "$MATRIX_ENGINE_LOG" >&2 2>/dev/null || true; fi
+	fi
 	if [[ -s "$MATRIX_PID_FILE" ]]; then
 		pid="$(cat "$MATRIX_PID_FILE")"
 		kill "$pid" 2>/dev/null || true
