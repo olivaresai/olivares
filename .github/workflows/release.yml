@@ -120,8 +120,10 @@ jobs:
   # publish-ota-manifest).
   preflight:
     if: github.event_name == 'push'
-    # Validate release inputs on the existing self-hosted Linux runner.
-    runs-on: [self-hosted, linux, x64, "${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'self-hosted' }}"]
+    # Validate release inputs. On GitHub-hosted runners: this repository has no self-hosted
+    # runner, and every other job of this workflow already runs hosted (free on a public
+    # repository). A repository variable can still route it to a self-hosted class.
+    runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
     outputs:
@@ -449,6 +451,22 @@ jobs:
           set -euo pipefail
           match="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=100" \
                   --jq "[.workflow_runs[] | select(.head_sha == \"${GITHUB_SHA}\")] | length")"
+          # The ONE admitted non-equality: a green race-full on a commit whose diff to the tagged
+          # SHA touches only .github/workflows/ (the race sweep tests Go code; a workflow-only
+          # change cannot alter its result). Named loudly, with the SHA and the file list, so it
+          # is evidence and not a silent pass. Anything outside .github/workflows/ keeps the
+          # equality rule. (2026-09-17: v26.9.0 re-tagged after this file's runs-on change.)
+          if [ "${match}" -eq 0 ]; then
+            for green in $(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=100" --jq '.workflow_runs[].head_sha'); do
+              git fetch -q --depth=1 origin "${green}" 2>/dev/null || continue
+              changed="$(git diff --name-only "${green}" HEAD)"
+              [ -n "${changed}" ] || continue
+              if ! printf '%s\n' "${changed}" | grep -qvE '^\.github/workflows/'; then
+                echo "race-full evidence: green run on ${green}; diff to ${GITHUB_SHA} is workflow-only:"; printf '  %s\n' ${changed}
+                match=1; break
+              fi
+            done
+          fi
           if [ "${match}" -eq 0 ]; then
             newest="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=1" \
                     --jq '.workflow_runs[0].head_sha // "none"')"
