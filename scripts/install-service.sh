@@ -13,6 +13,16 @@ say() { printf '%s\n' "$*"; }
 diag() { printf '%s\n' "$*" >&2; }
 err() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+# same_bytes <a> <b>: the idempotency check for rendered service files. `cmp` belongs to
+# diffutils, which minimal images do not carry (fedora:latest container: "cmp: command not
+# found", and the missing tool read as "refusing to replace existing service file",
+# 2026-09-17). Without cmp the two files are compared by SHA-256 (sha256sum or shasum).
+same_bytes() {
+  if have cmp; then cmp -s "$1" "$2"; return; fi
+  if have sha256sum; then [ "$(sha256sum "$1" | awk '{print $1}')" = "$(sha256sum "$2" | awk '{print $1}')" ]; return; fi
+  if have shasum; then [ "$(shasum -a 256 "$1" | awk '{print $1}')" = "$(shasum -a 256 "$2" | awk '{print $1}')" ]; return; fi
+  err "cannot compare $1 with $2: none of cmp, sha256sum or shasum is available"
+}
 usage() {
   cat <<'EOF'
 Usage: install-service.sh (--user|--system) --binary ABSOLUTE_PATH
@@ -505,7 +515,7 @@ render() {
     "$input" >"$tmp"
   if grep -Eq '@[A-Z_]+@' "$tmp"; then rm -f "$tmp"; err "unresolved service template marker"; fi
   if [ -e "$output" ]; then
-    if cmp -s "$tmp" "$output"; then rm -f "$tmp"; chmod "$mode_bits" "$output"; return 0; fi
+    if same_bytes "$tmp" "$output"; then rm -f "$tmp"; chmod "$mode_bits" "$output"; return 0; fi
     rm -f "$tmp"
     err "refusing to replace existing service file: $output"
   fi
@@ -532,7 +542,7 @@ render_launchd_wrapper() {
     printf "exec %s serve --data-dir=%s --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h \${OLIVARES_EXTRA_ARGS:-}\n" "'$binary'" "'$data_dir'"
   } >"$tmp"
   if [ -e "$output" ]; then
-    if cmp -s "$tmp" "$output"; then rm -f "$tmp"; chmod 0755 "$output"; return 0; fi
+    if same_bytes "$tmp" "$output"; then rm -f "$tmp"; chmod 0755 "$output"; return 0; fi
     rm -f "$tmp"
     err "refusing to replace existing launchd wrapper: $output"
   fi
