@@ -1946,6 +1946,10 @@ jobs:
           fi
           # Follow symlinks so the digest is of the file that actually executes.
           abs="$("${TRUSTED_BIN}/readlink" -f "${resolved}")"
+          # The installer writes the binary execute-only (measured 2026-09-17, run 35243925445:
+          # `sha256sum: …/.slsa/bin/v2.7.1/slsa-verifier: Permission denied`). Digesting it is the
+          # whole point of this step; the file is the runner user's own, so u+r moves no trust line.
+          chmod u+r "${abs}"
           # Split in the shell rather than piping: a failing sha256sum inside a pipeline would
           # leave an EMPTY digest that matches nothing and reports the wrong reason.
           sum_line="$("${TRUSTED_BIN}/sha256sum" "${abs}")"
