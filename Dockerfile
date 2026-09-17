@@ -46,7 +46,7 @@ COPY core/internal/webui/dist/index.html ./core/internal/webui/dist/index.html
 RUN cd web && pnpm run build
 
 # ---- go stage: compile the single static binary with the UI embedded ----------
-FROM golang:1.26.6-bookworm AS build
+FROM golang:1.27.1-bookworm AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
 # The full source comes in BEFORE `go mod download`. The go command reads go.work
