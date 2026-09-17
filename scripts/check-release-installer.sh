@@ -19,6 +19,7 @@ for path in \
   scripts/install-bootstrap.sh \
   scripts/render-release-installer.sh \
   deploy/distribution/install-endpoints.json \
+  scripts/assert-cosign-binary.sh \
   docs/RELEASE-INSTALLER.md; do
   require_file "$path"
 done
@@ -33,8 +34,42 @@ bash -n "$root/scripts/render-release-installer.sh" || fail "renderer does not p
 marker='@OLIVARES_INSTALLER_VERSION@'
 [[ "$(grep -Foc "$marker" "$root/scripts/install.sh")" -eq 1 ]] ||
   fail "installer source must contain exactly one render marker"
-grep -Fq 'have cosign || err' "$root/scripts/install.sh" || fail "second stage must require cosign"
-grep -Fq 'have cosign || err' "$root/scripts/install-bootstrap.sh" || fail "bootstrap must require cosign"
+for path in scripts/install.sh scripts/install-bootstrap.sh; do
+  grep -Fq 'resolve_cosign' "$root/$path" || fail "$path must resolve cosign (PATH, or the pinned temporary copy)"
+  # shellcheck disable=SC2016 # the literal text of the call is what the contract pins
+  grep -Fq '"$cosign_bin" verify-blob' "$root/$path" || fail "$path must verify with the resolved cosign"
+  if grep -Fq 'have cosign || err' "$root/$path"; then
+    fail "$path refuses when cosign is absent instead of using the pinned temporary copy"
+  fi
+done
+# The cosign the installers fetch when none is on PATH must be the one this repository
+# approves: same version, same SHA-256 per platform as scripts/assert-cosign-binary.sh.
+if ! python3 - "$root" <<'PY'
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+approved_text = (root / "scripts/assert-cosign-binary.sh").read_text(encoding="utf-8")
+table = approved_text.split("<<'DIGESTS'", 1)[1].split("\nDIGESTS\n", 1)[0]
+approved = {}
+for line in table.strip().splitlines():
+    digest, name = line.split()
+    approved[name] = digest
+version = re.search(r"cosign/releases/download/(v[0-9]+\.[0-9]+\.[0-9]+)/cosign_checksums\.txt", approved_text).group(1)
+platforms = ["linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64"]
+for script in ("scripts/install.sh", "scripts/install-bootstrap.sh"):
+    text = (root / script).read_text(encoding="utf-8")
+    assert f"COSIGN_VERSION='{version}'" in text, f"{script}: COSIGN_VERSION is not {version}"
+    body = text.split("cosign_digest() {", 1)[1].split("\n}\n", 1)[0]
+    rows = dict(re.findall(r"^\s+([a-z0-9]+-[a-z0-9]+)\) printf '%s' ([0-9a-f]{64}) ;;$", body, re.M))
+    assert sorted(rows) == sorted(platforms), f"{script}: pinned platforms {sorted(rows)}"
+    for platform in platforms:
+        assert rows[platform] == approved[f"cosign-{platform}"], f"{script}: {platform} digest differs from the approved table"
+PY
+then
+  fail "installer cosign pins must equal scripts/assert-cosign-binary.sh (version and per-platform SHA-256)"
+fi
 grep -Fq 'non-interactive installation must pin --version' "$root/scripts/install-bootstrap.sh" ||
   fail "bootstrap must pin versions in non-interactive use"
 grep -Fq 'bootstrap trust: this response is trusted through HTTPS' "$root/scripts/install-bootstrap.sh" ||

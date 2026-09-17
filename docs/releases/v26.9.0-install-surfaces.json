@@ -87,11 +87,11 @@
       "status": "published",
       "producer": {
         "path": "scripts/install.sh",
-        "matches": "^[[:space:]]+cosign verify-blob"
+        "matches": "^\"[$]cosign_bin\" verify-blob"
       },
       "prose": {
         "path": "INSTALL.md",
-        "contains": "https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh"
+        "contains": "https://olivares.ai/olivares/install.sh"
       },
       "evidence": "The installer is served from main, not from a release asset, so its publication state does not depend on the v26.9.0 tag; it verifies whichever signed payload it resolves"
     },

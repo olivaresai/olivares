@@ -96,13 +96,19 @@ failing every ceremony later. Correct the pair, or clear **both** keys, and rest
 ### HTTPS convenience path
 
 The script body itself arrives over HTTPS; the pipe does not pre-verify those bytes.
-Once running, it detects your OS/architecture, requires `cosign`, verifies the signed
-checksum manifest and archive SHA-256, and installs to a writable directory without
-invoking sudo. Non-interactive use must pin the version:
+Once running, it detects your OS/architecture, verifies the signed checksum manifest and
+archive SHA-256 with `cosign`, and installs to a writable directory without invoking
+sudo. If `cosign` is not on PATH the installer fetches cosign v2.6.4 into its temporary
+directory, uses it only if its SHA-256 equals the digest pinned in the script, and
+removes it afterwards; pass `--install-cosign` to keep that verified copy next to
+`olivares`, or set `OLIVARES_COSIGN=/path/to/cosign` to use your own. Without
+`--version` the latest release is installed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install.sh | sh -s -- --version v26.9.0
+curl -fsSL https://olivares.ai/olivares/install.sh | sh
 ```
+
+To pin a release: `curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version v26.9.0`.
 
 Use `--bindir "$HOME/.local/bin"` to select an absolute install directory. Verification
 cannot be bypassed and privilege escalation is always an explicit operator step. The

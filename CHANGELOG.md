@@ -198,6 +198,16 @@ month, release-of-month; the current release is `v26.9.0`).
 
 ### Fixed
 
+- The installer (`scripts/install.sh`, served at `https://olivares.ai/olivares/install.sh`)
+  and the HTTPS bootstrap no longer stop with `cosign is required` on a host without
+  cosign: they fetch cosign v2.6.4 into their temporary directory, accept it only if its
+  SHA-256 equals the digest pinned in the script (the per-platform rows
+  `scripts/assert-cosign-binary.sh` approves), say so in the printed plan, verify the
+  release with it and remove it afterwards. `--install-cosign` keeps the verified copy
+  next to `olivares`; `OLIVARES_COSIGN=/path/to/cosign` uses your own. A temporary
+  directory mounted `noexec` falls back to `$XDG_CACHE_HOME`/`~/.cache`. Reported by
+  Fran on v26.8 and again on v26.9 (`curl -fsSL https://olivares.ai/olivares/install.sh | sh`).
+
 - The packaged OpenRC unit now brings up loopback, re-owns `/var/lib/olivares`
   before start, and logs to `/var/log/olivares.log`. The `.apk` no longer ships
   a `root:root` data-directory node (apk was resetting ownership after

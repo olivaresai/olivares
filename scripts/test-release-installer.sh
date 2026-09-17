@@ -101,9 +101,18 @@ grep -Fq 'bootstrap trust: this response is trusted through HTTPS' "$scratch/out
 expect_rc 1 "mutant: non-interactive bootstrap without a pin is refused" \
   env CI=1 /bin/sh "$root/scripts/install-bootstrap.sh" --dry-run
 grep -Fq 'must pin --version' "$scratch/err"
-expect_rc 1 "mutant: absent cosign is fail-closed" \
-  env CI=1 PATH=/usr/bin:/bin /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0
-grep -Fq 'cosign is required' "$scratch/err"
+expect_rc 0 "without cosign on PATH the plan discloses the pinned temporary copy" \
+  env CI=1 PATH=/usr/bin:/bin OLIVARES_OS=linux OLIVARES_ARCH=amd64 \
+    /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0 --dry-run
+grep -Fq 'cosign: not on PATH; a temporary copy of cosign v2.6.4' "$scratch/out"
+grep -Fq 'pass --install-cosign to keep it' "$scratch/out"
+expect_rc 0 "second stage without cosign on PATH discloses the same, and --install-cosign" \
+  env PATH=/usr/bin:/bin OLIVARES_OS=linux OLIVARES_ARCH=amd64 \
+    /bin/sh "$rendered" --bindir /opt/olivares/bin --install-cosign --dry-run
+grep -Fq 'cosign: not on PATH; a temporary copy of cosign v2.6.4' "$scratch/out"
+grep -Fq -- '--install-cosign: that verified copy is kept at /opt/olivares/bin/cosign' "$scratch/out"
+expect_rc 1 "mutant: --install-cosign is not an uninstall option" \
+  env PATH=/usr/bin:/bin /bin/sh "$rendered" --uninstall --plan --install-cosign
 
 fixture="$scratch/fixture"
 fakebin="$scratch/fakebin"
@@ -163,6 +172,58 @@ expect_rc 0 "verified second stage executes only after both checks" \
     --version v26.9.0 --bindir /opt/olivares/bin
 grep -Fq 'executed:--version v26.9.0 --bindir /opt/olivares/bin' "$marker"
 
+rm -f "$marker"
+# The same fake curl without a cosign on PATH: the scripts must then fetch the
+# pinned cosign through it and accept it only on the pinned SHA-256.
+nocosign="$scratch/fakebin-nocosign"
+mkdir -p "$nocosign"
+cp "$fakebin/curl" "$nocosign/curl"
+cat >"$fixture/cosign-linux-amd64" <<'ROGUE'
+#!/bin/sh
+printf 'rogue cosign executed\n' >"$EXEC_MARKER.cosign"
+exit 0
+ROGUE
+chmod 0755 "$fixture/cosign-linux-amd64"
+nocosign_env=(
+  CI=1
+  EXEC_MARKER="$marker"
+  FIXTURE="$fixture"
+  OLIVARES_GITHUB_URL=https://fixture.invalid
+  OLIVARES_COSIGN_RELEASE_URL=https://fixture.invalid/cosign
+  OLIVARES_OS=linux
+  OLIVARES_ARCH=amd64
+  PATH="$nocosign:/usr/bin:/bin"
+)
+expect_rc 1 "mutant: without cosign, a fetched cosign off its pinned SHA-256 is refused unexecuted (bootstrap)" \
+  env "${nocosign_env[@]}" /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0
+grep -Fq 'does not match its pinned SHA-256' "$scratch/err"
+[[ ! -e "$marker.cosign" ]] || { printf 'rogue cosign was executed by the bootstrap\n' >&2; exit 1; }
+[[ ! -e "$marker" ]] || { printf 'second stage ran after a rogue cosign\n' >&2; exit 1; }
+expect_rc 1 "mutant: without cosign, a fetched cosign off its pinned SHA-256 is refused unexecuted (second stage)" \
+  env "${nocosign_env[@]}" /bin/sh "$rendered" --bindir "$scratch/never-installed"
+grep -Fq 'does not match its pinned SHA-256' "$scratch/err"
+[[ ! -e "$marker.cosign" ]] || { printf 'rogue cosign was executed by the second stage\n' >&2; exit 1; }
+[[ ! -e "$scratch/never-installed" ]] || { printf 'second stage installed after a rogue cosign\n' >&2; exit 1; }
+# With the real pinned cosign (opt-in: OLIVARES_TEST_COSIGN_BINARY, digest checked here first)
+# the temporary copy becomes the verifier: it rejects the fixture's fake signature, so the
+# second stage never runs, and the refusal is cosign's, not a digest mismatch.
+real_cosign="${OLIVARES_TEST_COSIGN_BINARY:-}"
+if [[ -n "$real_cosign" && -f "$real_cosign" ]] &&
+  [[ "$(sha256sum "$real_cosign" | awk '{print $1}')" = 309779b0c4e409186b0a80daba99041fe2cf65a920ce645013901df6211895a9 ]]; then
+  cp "$real_cosign" "$fixture/cosign-linux-amd64"
+  expect_rc 1 "pinned temporary cosign is the verifier: a fake signature is refused by cosign itself" \
+    env "${nocosign_env[@]}" /bin/sh "$root/scripts/install-bootstrap.sh" --version v26.9.0
+  grep -Fq 'cosign is not on PATH: fetching the pinned cosign v2.6.4 for linux/amd64' "$scratch/out"
+  if grep -Fq 'does not match its pinned SHA-256' "$scratch/err"; then
+    printf 'the real pinned cosign was reported as a digest mismatch\n' >&2
+    exit 1
+  fi
+  [[ ! -e "$marker" ]] || { printf 'second stage ran after cosign refused the signature\n' >&2; exit 1; }
+else
+  printf '# skip: OLIVARES_TEST_COSIGN_BINARY is not the pinned cosign v2.6.4 linux/amd64; the real-verifier case did not run\n'
+fi
+rm -f "$fixture/cosign-linux-amd64"
+
 make_mutant() {
   local name="$1"
   local dest="$scratch/$name"
@@ -170,7 +231,7 @@ make_mutant() {
   cp "$root/.goreleaser.yaml" "$dest/.goreleaser.yaml"
   cp "$root/README.md" "$root/INSTALL.md" "$dest/"
   cp "$root/scripts/install.sh" "$root/scripts/install-bootstrap.sh" \
-    "$root/scripts/render-release-installer.sh" "$dest/scripts/"
+    "$root/scripts/render-release-installer.sh" "$root/scripts/assert-cosign-binary.sh" "$dest/scripts/"
   cp "$root/deploy/distribution/install-endpoints.json" "$dest/deploy/distribution/"
   cp "$root/docs/RELEASE-INSTALLER.md" "$dest/docs/"
   printf '%s\n' "$dest"
@@ -179,6 +240,18 @@ make_mutant() {
 mutant="$(make_mutant marker-mutant)"
 sed -i 's/@OLIVARES_INSTALLER_VERSION@/26.9.0/' "$mutant/scripts/install.sh"
 expect_rc 1 "mutant: source without the release marker is red" \
+  env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-release-installer.sh"
+
+mutant="$(make_mutant cosign-pin-mutant)"
+sed -i 's/^    linux-arm64) printf .%s. df408e5418/    linux-arm64) printf '"'"'%s'"'"' 00408e5418/' "$mutant/scripts/install.sh"
+grep -Fq '00408e5418' "$mutant/scripts/install.sh"
+expect_rc 1 "mutant: an installer cosign digest that drifts from the approved table is red" \
+  env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-release-installer.sh"
+grep -Fq 'linux-arm64 digest differs from the approved table' "$scratch/err"
+
+mutant="$(make_mutant cosign-refusal-mutant)"
+sed -i 's/^resolve_cosign$/have cosign || err "cosign is required"/' "$mutant/scripts/install.sh"
+expect_rc 1 "mutant: an installer that refuses without cosign instead of fetching the pinned copy is red" \
   env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-release-installer.sh"
 
 mutant="$(make_mutant route-mutant)"

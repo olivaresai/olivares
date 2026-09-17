@@ -16,9 +16,18 @@ into that script, records its SHA-256 in `checksums.txt`, and uploads it with th
 draft. The release workflow signs `checksums.txt` with cosign. An operator who
 downloads the installer, `checksums.txt`, its signature and certificate can
 verify the release identity and installer digest before running any installer
-code. Missing cosign, a missing or duplicate checksum row, a bad signature, a
-digest mismatch, or a requested version different from the embedded version is
-a hard failure.
+code. A missing or duplicate checksum row, a bad signature, a digest mismatch,
+or a requested version different from the embedded version is a hard failure.
+
+cosign is the verifier and is never optional, but it need not be pre-installed:
+both scripts use the `cosign` on PATH and otherwise fetch cosign v2.6.4 from the
+sigstore release into their temporary directory, accept it only if its SHA-256
+equals the digest pinned in the script (the same per-platform rows
+`scripts/assert-cosign-binary.sh` approves; `scripts/check-release-installer.sh`
+keeps the two tables equal), and remove it afterwards. The printed plan says which
+cosign will be used. `--install-cosign` keeps the verified copy next to `olivares`;
+`OLIVARES_COSIGN=/path/to/cosign` names your own. A cosign whose digest differs from
+the pin is never executed.
 
 ```sh
 ver=YY.M.PATCH
