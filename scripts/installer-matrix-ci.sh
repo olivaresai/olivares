@@ -53,15 +53,26 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 		printf 'installer-matrix: NO HE PODIDO MIRAR — docker is unavailable\n' >&2
 		exit 2
 	}
-	command -v cosign >/dev/null 2>&1 || {
-		printf 'installer-matrix: NO HE PODIDO MIRAR — cosign is unavailable\n' >&2
-		exit 2
-	}
+	# The workflow isolates the reviewed cosign OUT of PATH (assert-cosign-binary.sh --isolate)
+	# and hands its location in OLIVARES_COSIGN_BIN, so a PATH lookup alone fails on every
+	# hosted leg (public PR #31, 2026-09-17: six legs "cosign is unavailable"). The isolated
+	# binary is preferred; PATH is the fallback for a local run.
+	if [ -n "${OLIVARES_COSIGN_BIN:-}" ]; then
+		[ -x "$OLIVARES_COSIGN_BIN" ] || {
+			printf 'installer-matrix: NO HE PODIDO MIRAR — OLIVARES_COSIGN_BIN=%s is not an executable file\n' "$OLIVARES_COSIGN_BIN" >&2
+			exit 2
+		}
+	else
+		command -v cosign >/dev/null 2>&1 || {
+			printf 'installer-matrix: NO HE PODIDO MIRAR — cosign is unavailable (neither OLIVARES_COSIGN_BIN nor PATH)\n' >&2
+			exit 2
+		}
+	fi
 	host_scratch="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/olivares-installer-${family}.XXXXXX")"
 	trap 'rm -rf -- "$host_scratch"' EXIT
 	mkdir -p "$host_scratch/candidate"
 	install -m 0755 "$candidate" "$host_scratch/candidate/olivares"
-	cosign_path="$(command -v cosign)"
+	cosign_path="${OLIVARES_COSIGN_BIN:-$(command -v cosign)}"
 	# This program is expanded by /bin/sh inside the container.
 	# shellcheck disable=SC2016
 	bootstrap='case "$MATRIX_FAMILY" in

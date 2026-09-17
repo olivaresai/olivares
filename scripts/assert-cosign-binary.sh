@@ -77,7 +77,17 @@ set -euo pipefail
 #    Ninguna de las dos salidas es honesta: «no he podido calcular el digest» no es «el binario es
 #    otro». Se comprueba antes, se nombra la herramienta que falta y se sale 2 — nunca 1, que aquí
 #    significa «binario no aprobado», y nunca 0.
-for _tool in command readlink sha256sum awk sed date printf; do
+# sha256sum is GNU coreutils; macOS ships `shasum -a 256` instead (hosted macos-14 leg of
+# installer-matrix, public PR #31, 2026-09-17: "'sha256sum' is not on this host"). Either one
+# hashes the bytes; the preflight names the pair and _sha256 picks the one present.
+if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+	echo "assert-cosign-binary: ⛔ NO HE PODIDO MIRAR: 'sha256sum' is not on this host (nor 'shasum', its macOS equivalent), so the binary was never hashed. This says NOTHING about whether it is approved — install one of them and re-run." >&2
+	exit 2
+fi
+_sha256() { # _sha256 <file> -> lowercase hex digest
+	if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print tolower($1)}'; else shasum -a 256 "$1" | awk '{print tolower($1)}'; fi
+}
+for _tool in command readlink awk sed date printf; do
 	if ! command -v "$_tool" >/dev/null 2>&1; then
 		echo "assert-cosign-binary: ⛔ NO HE PODIDO MIRAR: '$_tool' is not on this host, so the binary was never hashed. This says NOTHING about whether it is approved — install $_tool and re-run." >&2
 		exit 2
@@ -272,7 +282,7 @@ fi
 # hashed afterwards, so an unapproved binary was executed by the very check meant to decide
 # whether it should be. Digests are version-specific, so the hash alone selects the lane;
 # the version is then a CROSS-CHECK on the table, not the gate.
-digest="$(sha256sum "$abs" | awk '{print $1}')"
+digest="$(_sha256 "$abs")"
 
 lane=""
 expected_version=""
@@ -394,7 +404,7 @@ if [ "$isolate" = "1" ]; then
 
 	# --- postconditions, all fail-closed ---------------------------------------------------
 	[ -f "$dest" ] && [ -x "$dest" ] || die "isolation destination $dest is not a regular executable file."
-	moved_digest="$(sha256sum "$dest" | awk '{print $1}')"
+	moved_digest="$(_sha256 "$dest")"
 	[ "$moved_digest" = "$digest" ] ||
 		die "the isolated binary's sha256 changed during the move (was $digest, now $moved_digest)."
 	[ ! -f "$abs" ] || [ ! -x "$abs" ] ||
