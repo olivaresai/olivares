@@ -83,13 +83,17 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 	mkdir -p "$host_scratch/candidate"
 	install -m 0755 "$candidate" "$host_scratch/candidate/olivares"
 	cosign_path="${OLIVARES_COSIGN_BIN:-$(command -v cosign)}"
+	# python3 is on the list because the doctor predicate in installer-matrix-lib.sh reads the
+	# doctor JSON with it, and the minimal images ship without it (the debian/fedora/opensuse/
+	# alpine legs answered "required tool is unavailable: python3" after every install step
+	# had passed, 2026-09-17).
 	# This program is expanded by /bin/sh inside the container.
 	# shellcheck disable=SC2016
 	bootstrap='case "$MATRIX_FAMILY" in
-debian|ubuntu) export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y --no-install-recommends bash ca-certificates coreutils curl gzip procps tar ;;
-fedora) dnf install -y bash ca-certificates coreutils curl gzip procps-ng tar ;;
-opensuse-leap) zypper --non-interactive refresh; zypper --non-interactive install -y bash ca-certificates coreutils curl gzip procps tar ;;
-alpine) apk add --no-cache bash ca-certificates coreutils curl gzip procps tar ;;
+debian|ubuntu) export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y --no-install-recommends bash ca-certificates coreutils curl gzip procps python3 tar ;;
+fedora) dnf install -y bash ca-certificates coreutils curl gzip procps-ng python3 tar ;;
+opensuse-leap) zypper --non-interactive refresh; zypper --non-interactive install -y bash ca-certificates coreutils curl gzip procps python3 tar ;;
+alpine) apk add --no-cache bash ca-certificates coreutils curl gzip procps python3 tar ;;
 *) echo "installer-matrix: NO HE PODIDO MIRAR — bootstrap family $MATRIX_FAMILY" >&2; exit 2 ;;
 esac
 exec bash /repo/scripts/installer-matrix-ci.sh --inside --family "$MATRIX_FAMILY" --candidate /matrix/candidate/olivares --release-version "$MATRIX_RELEASE_VERSION"'
@@ -133,7 +137,11 @@ export HOME="$work/home"
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$HOME/.local/share"
 export TMPDIR="$work/tmp"
-export MATRIX_BINARY="$work/bin/olivares"
+# The fake init adapters start the engine from MATRIX_BINARY; it must be the binary the
+# service adapter installed and validated, $HOME/.local/bin/olivares (the leg log said
+# "nohup: failed to run command '…/bin/olivares': No such file or directory" while the
+# --start phase waited 60 s for /livez and /readyz, 2026-09-17).
+export MATRIX_BINARY="$HOME/.local/bin/olivares"
 export MATRIX_DATA="$XDG_DATA_HOME/olivares"
 export MATRIX_CONFIG="$XDG_CONFIG_HOME/olivares/olivares.env"
 if [[ "$init_name" == launchd ]]; then
