@@ -205,8 +205,8 @@ month, release-of-month; the current release is `v26.9.0`).
   `scripts/assert-cosign-binary.sh` approves), say so in the printed plan, verify the
   release with it and remove it afterwards. `--install-cosign` keeps the verified copy
   next to `olivares`; `OLIVARES_COSIGN=/path/to/cosign` uses your own. A temporary
-  directory mounted `noexec` falls back to `$XDG_CACHE_HOME`/`~/.cache`. Reported by
-  Fran on v26.8 and again on v26.9 (`curl -fsSL https://olivares.ai/olivares/install.sh | sh`).
+  directory mounted `noexec` falls back to `$XDG_CACHE_HOME`/`~/.cache`. Reported
+  against v26.8 and again against v26.9 (`curl -fsSL https://olivares.ai/olivares/install.sh | sh`).
 
 - The packaged OpenRC unit now brings up loopback, re-owns `/var/lib/olivares`
   before start, and logs to `/var/log/olivares.log`. The `.apk` no longer ships
