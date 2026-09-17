@@ -69,7 +69,17 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 		}
 	fi
 	host_scratch="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/olivares-installer-${family}.XXXXXX")"
-	trap 'rm -rf -- "$host_scratch"' EXIT
+	# The container writes into the bind-mounted scratch as root. On a hosted runner the job
+	# user cannot remove those files, and a cleanup that fails inside the EXIT trap turned a
+	# green leg red (public PR #32, 2026-09-17: "rm: cannot remove …/live/bin/olivares:
+	# Permission denied", exit 1 after every assertion passed). The scratch is therefore
+	# emptied from inside a container of the same image, and the cleanup never decides the
+	# verdict: the assertions above it do.
+	cleanup_scratch() {
+		docker run --rm -v "$host_scratch:/scratch" "$image" sh -c 'rm -rf /scratch/live /scratch/candidate' >/dev/null 2>&1 || true
+		rm -rf -- "$host_scratch" 2>/dev/null || true
+	}
+	trap cleanup_scratch EXIT
 	mkdir -p "$host_scratch/candidate"
 	install -m 0755 "$candidate" "$host_scratch/candidate/olivares"
 	cosign_path="${OLIVARES_COSIGN_BIN:-$(command -v cosign)}"
