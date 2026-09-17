@@ -116,9 +116,11 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now olivares
 ```
 
-The engine binds **loopback** by default — `127.0.0.1:8443` is deliberate.
-Expose it later, behind your own ingress and TLS, as an explicit decision
-(see [hardening](/how-to/security-hardening/)).
+The engine binds **every interface** by default (`:8443`): it is a server. The
+command above passes `--listen 127.0.0.1:8443` to restrict this tutorial's
+install to the host you are on, which is an explicit decision — drop those two
+flags to let the console answer from the network, and front it with your own
+ingress and TLS when you do (see [hardening](/how-to/security-hardening/)).
 
 <Aside type="note" title="TLS is on, with a self-signed certificate">
 With no `--tls-cert`/`--tls-key`, the engine generates a self-signed

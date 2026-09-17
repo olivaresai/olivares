@@ -36,13 +36,15 @@ not fill the rest of the console. Do not use it to “explore the product”.
 
 A fresh data directory has **no default credentials**. The recommended
 first command is `olivares quickstart` (`cmd/olivares/cmd_quickstart.go`).
-It is `serve` with secure defaults: TLS on, loopback-only, no default
-credentials. The default listen address is `127.0.0.1:8443` (`:61`).
+It is `serve` with secure defaults: TLS on, no default credentials, a
+single-use setup token. The default listen address is `:8443` — every
+interface, because this is a server (`cmd/olivares/binddefaults.go`).
 Measured on a clean install of the public binary on 2026-09-04 with real
 TLS (including a run on **:8460**); the panel text is the same.
 
 The welcome panel (`announceQuickstart`, `:154-163`) is numbered. The
-engine prints `127.0.0.1`. **Do not use that host for the passkey
+engine prints `https://localhost:8443` for that bind, and lists every other
+address this host answers at below the token. **Do not use an IP for the passkey
 ceremony.** The browser rejects an IP as WebAuthn RP ID (`SecurityError`).
 The product derives the RP ID from the request hostname
 (`core/api/handlers_webauthn.go:33-50`). Open the console at
@@ -59,8 +61,9 @@ registering the passkey. `PORT` is `8443` unless you passed `--listen`.
          olst_…
 ```
 
-The printed banner still shows `https://127.0.0.1:8443`. Rewrite the host
-to `localhost` in the address bar.
+The banner prints `localhost` for the default bind, then lists this host's
+other addresses under the token — those are for reaching the console from
+another machine, and a passkey ceremony still needs a name, not an address.
 
 The token prefix is `olst_` (`cmd/olivares/e2e_binary_test.go` matches
 `olst_[A-Z0-9]+`). The console page is `/setup`. The API the wizard posts

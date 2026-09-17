@@ -54,14 +54,19 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 
    | プロパティ | 値 |
    |---|---|
-   | ポート | `127.0.0.1:8443`（HTTPS：REST + web UI）、`127.0.0.1:8444`（gRPC） — **ホスト上の localhost** にバインド。公開は意図的に |
+   | ポート | `8443`（HTTPS：REST + web UI）、`8444`（gRPC） — **すべてのホストインターフェース**に公開。これはサーバーだからです。`.env` に `OLIVARES_BIND=127.0.0.1` を設定するとホストだけに制限できます |
    | データ | 名前付きボリューム `olivares-data` → `/var/lib/olivares`（SQLite ストア、audit 署名鍵、TLS 素材） |
    | 堅牢化 | `65532:65532` として実行、read-only root、全 capability をドロップ、`no-new-privileges`、tmpfs `/tmp` |
    | ヘルスチェック | 組み込みの `olivares readyz` を直接実行（shell、curl、wget は不要）。ローカル `/readyz` の HTTP 200 だけを正常とする |
 
-2. ログからワンタイムのセットアップトークンを読み取ります：
+2. エンジンに現在地を尋ね、ログからワンタイムのセットアップトークンを読み取ります：
 
    ```bash
+   # where the console answers, and whether setup is still pending. The image is
+   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
+   # the one-time setup token, printed once at first boot
    docker compose -f deploy/compose/docker-compose.yml logs olivares \
      | sed -n '/FIRST-BOOT SETUP/,/========================/p'
    ```
@@ -80,11 +85,36 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 </Steps>
 
 <Aside type="tip" title="トークンを逃した？">
-再起動してもトークンは再印字されません（保存されるのはそのハッシュだけです）。まだユーザーが
-存在しない間は、リカバリは安全です：`docker compose down` し、`olivares-data` ボリュームから
-`setup.token` を削除（または新規インストールならボリュームごと削除）し、再び `up -d` します —
-新しいトークンが鋳造されます。
+再起動してもトークンは再印字されません（保存されるのはそのハッシュだけです）。管理者がまだ
+存在しない間は、何も再起動せずに代替トークンを鋳造できます。稼働中のエンジンは即座にそれを
+受け付け、以前のトークンは使えなくなります：
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares \
+  olivares first-boot --new-token
+```
 </Aside>
+
+<Aside type="tip" title="4 つのコマンドと、それぞれに `-f` が要る理由">
+このスタックは自身の Compose プロジェクト名を持つため、エンジンのコンテナは `olivares`
+（`compose-olivares-1` ではありません）、override のサービスは `olivares-postgres-1` と
+`olivares-backup-1` になります。Compose は compose ファイルを**作業ディレクトリ**から探し、
+このファイルは `deploy/compose/` にあります — したがってリポジトリのルートで単に
+`docker compose ps` と打つと *"no configuration file provided"* と返ります。毎回 `-f` を渡すか、
+`export COMPOSE_FILE=deploy/compose/docker-compose.yml` を一度実行してください。
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+docker compose -f deploy/compose/docker-compose.yml logs olivares
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
+```
+
+`olivares quickstart` は**ローカルバイナリ**の経路であり、こちらではありません。ここではサーバーは
+すでに動いており（コンテナのコマンドは `serve`）、`quickstart` はコンテナ内で 2 つ目のエンジンを
+起動してしまいます。
+</Aside>
+
 
 ## 2. ソースを配線する
 

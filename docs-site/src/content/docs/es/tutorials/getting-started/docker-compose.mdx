@@ -56,14 +56,19 @@ Cuando exista la imagen `26.9.0`: establece
 
    | Propiedad | Valor |
    |---|---|
-   | Puertos | `127.0.0.1:8443` (HTTPS: REST + UI web), `127.0.0.1:8444` (gRPC) — vinculados a **localhost en el host**; expón deliberadamente |
+   | Puertos | `8443` (HTTPS: REST + UI web), `8444` (gRPC) — publicados en **todas las interfaces del host**, porque esto es un servidor. Pon `OLIVARES_BIND=127.0.0.1` en `.env` para restringirlos al host |
    | Datos | volumen nombrado `olivares-data` → `/var/lib/olivares` (almacén SQLite, clave de firma de auditoría, material TLS) |
    | Endurecimiento | corre como `65532:65532`, root de solo lectura, todas las capabilities descartadas, `no-new-privileges`, tmpfs `/tmp` |
    | Healthcheck | ejecución directa de `olivares readyz` dentro del binario — sin shell, curl ni wget. Sólo un HTTP 200 de `/readyz` local es saludable |
 
-2. Lee el token de configuración de un solo uso de los logs:
+2. Pregunta al motor dónde está, y lee el token de configuración de un solo uso de los logs:
 
    ```bash
+   # where the console answers, and whether setup is still pending. The image is
+   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
+   # the one-time setup token, printed once at first boot
    docker compose -f deploy/compose/docker-compose.yml logs olivares \
      | sed -n '/FIRST-BOOT SETUP/,/========================/p'
    ```
@@ -83,10 +88,35 @@ Cuando exista la imagen `26.9.0`: establece
 
 <Aside type="tip" title="¿Te perdiste el token?">
 Un reinicio no lo vuelve a imprimir (solo se almacena su hash). Mientras no exista ningún
-usuario todavía, la recuperación es segura: `docker compose down`, elimina `setup.token` del
-volumen `olivares-data` (o elimina el volumen entero en una instalación nueva), y haz
-`up -d` de nuevo — se acuña un token nuevo.
+administrador, acuña uno de repuesto sin reiniciar nada — el motor en marcha lo acepta al
+instante y el token anterior deja de funcionar:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares \
+  olivares first-boot --new-token
+```
 </Aside>
+
+<Aside type="tip" title="Los cuatro comandos, y por qué cada uno necesita el `-f`">
+El stack nombra su propio proyecto de Compose, así que el contenedor del motor es
+`olivares` (no `compose-olivares-1`) y los servicios de los overrides son
+`olivares-postgres-1` y `olivares-backup-1`. Compose sigue buscando un fichero compose en
+el **directorio de trabajo**, y éste vive en `deploy/compose/` — así que un `docker compose
+ps` a secas en la raíz del repositorio responde *"no configuration file provided"*. Pasa
+`-f` siempre, o haz `export COMPOSE_FILE=deploy/compose/docker-compose.yml` una vez.
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+docker compose -f deploy/compose/docker-compose.yml logs olivares
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
+```
+
+`olivares quickstart` es la vía del **binario local**, no ésta: aquí el servidor ya está
+corriendo — el comando del contenedor es `serve` — y `quickstart` arrancaría un segundo
+motor dentro del contenedor.
+</Aside>
+
 
 ## 2. Cablea fuentes
 

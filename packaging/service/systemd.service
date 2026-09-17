@@ -11,7 +11,16 @@ Type=simple
 @USER_LINE@
 @GROUP_LINE@
 EnvironmentFile=-@CONFIG@
-ExecStart=@BINARY@ serve --data-dir=@DATA_DIR@ --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h $OLIVARES_EXTRA_ARGS
+# --listen=:8443 is the dual-stack wildcard: the console accepts connections from the
+# network on every address of this host, IPv4 and, where the kernel has IPv6, IPv6 too.
+# That is what a server is for. (The bind is written `:8443` and not as a literal IPv4
+# wildcard on purpose: the literal binds IPv4 ONLY, and check-service-install.sh
+# rejects it in this directory for that reason.)
+# TLS is on with a self-signed first-boot certificate and there are no default
+# credentials. To restrict the engine to this host, set OLIVARES_EXTRA_ARGS in the
+# environment file to "--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444" — the
+# later flag on the command line wins — or edit this line with a drop-in override.
+ExecStart=@BINARY@ serve --data-dir=@DATA_DIR@ --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h $OLIVARES_EXTRA_ARGS
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s

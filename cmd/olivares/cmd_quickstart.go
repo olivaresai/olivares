@@ -16,10 +16,15 @@ import (
 )
 
 // newQuickstartCmd is the one-command first run: it starts the engine with the
-// secure defaults (TLS-on, loopback-only, no default credentials) and prints a
-// single, clear next step — open the embedded console and finish setup with a
-// one-time token. It is `serve` with friendly defaults and a guided banner;
+// secure defaults (TLS on, no default credentials, a single-use setup token) and
+// prints a single, clear next step — open the embedded console and finish setup
+// with that token. It is `serve` with friendly defaults and a guided banner;
 // everything it runs is the same secure path (runEngine).
+//
+// It binds every interface, like `serve` (binddefaults.go). What makes this path
+// safe is the three properties above, none of which depends on the bind; saying
+// "loopback-only" here, as this comment and two banner lines used to, described a
+// default the product no longer has and a safety it never came from.
 func newQuickstartCmd() *cobra.Command {
 	opts := serveOptions{
 		engine:             "sqlite",
@@ -29,12 +34,17 @@ func newQuickstartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "quickstart",
 		Short: "Start Olivares AI for the first time — secure by default, one command to the console",
-		Long: "quickstart runs the engine with the secure defaults (TLS on, loopback-only, no\n" +
-			"default credentials) and points you at the embedded console to create your first\n" +
-			"administrator with a one-time token. It is the fastest safe way in; for production\n" +
-			"options (systemd, Compose, Kubernetes, air-gapped) see INSTALL.md.",
-		Example: `  # Start with defaults (loopback, self-signed TLS, SQLite)
+		Long: "quickstart runs the engine with the secure defaults (TLS on, no default\n" +
+			"credentials, a single-use setup token) and points you at the embedded console to\n" +
+			"create your first administrator with that token. The console accepts connections\n" +
+			"from the network: pass --listen 127.0.0.1:8443 to restrict it to this machine. It\n" +
+			"is the fastest safe way in; for production options (systemd, Compose, Kubernetes,\n" +
+			"air-gapped) see INSTALL.md.",
+		Example: `  # Start with defaults (every interface, self-signed TLS, SQLite)
   olivares quickstart
+
+  # Restrict the console to this machine
+  olivares quickstart --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
 
   # Start with a custom data directory
   olivares quickstart --data-dir /var/lib/olivares`,
@@ -59,9 +69,9 @@ func newQuickstartCmd() *cobra.Command {
 			return runEngine(cmd.Context(), cmd.OutOrStdout(), opts, announce)
 		},
 	}
-	cmd.Flags().StringVar(&opts.listen, "listen", "127.0.0.1:8443", "HTTP (REST + web console) listen address")
+	cmd.Flags().StringVar(&opts.listen, "listen", defaultHTTPListen, "HTTP (REST + web console) listen address. The default "+defaultHTTPListen+" is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::); bind 127.0.0.1:8443 to restrict it to this host")
 	cmd.Flags().StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
-	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", "127.0.0.1:8444", "gRPC listen address")
+	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", defaultGRPCListen, "gRPC listen address. The default "+defaultGRPCListen+" is EVERY interface, like --listen; bind 127.0.0.1:8444 to restrict it")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().BoolVar(&quiet, "quiet", false,
 		"print only the guided panel, holding the engine's startup checks back to errors "+
@@ -100,8 +110,8 @@ func quickstartHeader(out io.Writer, dataDir string, quiet bool) {
 		dataDir = abs
 	}
 	fmt.Fprintf(out, "\n=== OLIVARES AI — FIRST RUN ===\n"+
-		"Starting the engine, secure by default: TLS on, loopback-only, no default\n"+
-		"credentials. Data directory: %s\n", dataDir)
+		"Starting the engine, secure by default: TLS on, no default credentials, a\n"+
+		"single-use setup token. Data directory: %s\n", dataDir)
 	if quiet {
 		fmt.Fprint(out, "\nStartup checks are running (held back to errors by --quiet).\n"+
 			"Your console URL and one-time setup token follow.\n\n")
@@ -156,8 +166,8 @@ func announceQuickstart(ctx context.Context, out io.Writer, eng *engine, addr co
 		return nil
 	}
 	fmt.Fprintf(out, "\n=== WELCOME TO OLIVARES AI ===\n"+
-		"Starting the engine — secure by default (TLS on, loopback-only, no default\n"+
-		"credentials). One step left: create your first administrator in the console.\n\n"+
+		"Starting the engine — secure by default (TLS on, no default credentials, a\n"+
+		"single-use setup token). One step left: create your first administrator.\n\n"+
 		"  1. Open:   %s\n"+
 		"     (HTTPS with a self-signed certificate on first boot — your browser will\n"+
 		"      warn once; that is expected for a local install.)\n"+

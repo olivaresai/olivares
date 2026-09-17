@@ -35,7 +35,7 @@ para sitios desconectados, consulta
 |---|---|
 | **Credenciales** | ninguna. El primer arranque imprime un **token de configuración de un solo uso** (`olst_…`); con él creas el primer administrador. |
 | **TLS** | activado por defecto. `--insecure` (texto plano) es solo para desarrollo en localhost. |
-| **Bind** | el binario se enlaza a **loopback** por defecto; expónlo de forma deliberada. |
+| **Bind** | **todas las interfaces** (`:8443`, `:8444`) por defecto: esto es un servidor. Usa `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` para restringirlo a este host. |
 | **Licencia** | En el binario abierto (AGPL), la licencia se valida **offline** (Ed25519) y solo sirve como atestación — nunca restringe ni degrada el producto abierto, y eso no cambia. Los add-ons comerciales son un derecho por término pagado, entregado como **acceso por suscripción a los repositorios enterprise** (el modelo SUSE/Novell): para obtenerlos y recibir sus actualizaciones — incluidas las actualizaciones de seguridad — se requiere ese derecho. Los entornos aislados de red se atienden igual que en SUSE, mediante un reflejo local que sigue sujeto a ese derecho. |
 | **Telemetría-home** | desactivada. El motor no hace llamadas salientes obligatorias en el arranque. |
 

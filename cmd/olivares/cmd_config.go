@@ -215,8 +215,8 @@ func configGenerateCmd() *cobra.Command {
 		return []string{"eval", "single-node-prod", "postgres-prod", "k8s"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	cmd.Flags().StringVar(&out, "out", "-", "output path (default - = stdout); for systemd use "+defaultEnvFilePath)
-	cmd.Flags().StringVar(&listen, "listen", "127.0.0.1:8443", "HTTP (REST + console) listen address")
-	cmd.Flags().StringVar(&grpcListen, "grpc-listen", "127.0.0.1:8444", "gRPC listen address")
+	cmd.Flags().StringVar(&listen, "listen", defaultHTTPListen, "HTTP (REST + console) listen address; the default is every interface (0.0.0.0), bind "+loopbackHTTPListen+" to restrict it")
+	cmd.Flags().StringVar(&grpcListen, "grpc-listen", defaultGRPCListen, "gRPC listen address; the default is every interface, bind "+loopbackGRPCListen+" to restrict it")
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "data directory override (default the unit's "+defaultUnitDataDir+")")
 	cmd.Flags().StringVar(&engine, "engine", "", "store engine override: sqlite or postgres (profile default: postgres for postgres-prod, sqlite otherwise)")
 	_ = cmd.RegisterFlagCompletionFunc("engine", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {

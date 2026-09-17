@@ -118,9 +118,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now olivares
 ```
 
-Die Engine bindet standardmäßig an **Loopback** — `127.0.0.1:8443` ist
-beabsichtigt. Exponieren Sie sie später, hinter Ihrem eigenen Ingress und TLS,
-als bewusste Entscheidung (siehe [Hardening](/de/how-to/security-hardening/)).
+Die Engine bindet standardmäßig **alle Schnittstellen** (`:8443`): Sie ist ein
+Server. Der Befehl oben übergibt `--listen 127.0.0.1:8443`, um die Installation
+dieses Tutorials auf den Host zu beschränken, an dem Sie sitzen — eine bewusste
+Entscheidung. Lassen Sie die beiden Flags weg, damit die Konsole aus dem Netz
+antwortet, und stellen Sie dann Ihren eigenen Ingress und TLS davor (siehe
+[Hardening](/de/how-to/security-hardening/)).
 
 <Aside type="note" title="TLS ist aktiv, mit einem selbstsignierten Zertifikat">
 Ohne `--tls-cert`/`--tls-key` generiert die Engine beim ersten Boot ein

@@ -116,7 +116,7 @@ sudo rc-update add olivares default
 
 ```bash
 sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
-  --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h
+  --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h
 ```
 
 ## 3. 硬化した systemd ユニット
@@ -135,9 +135,13 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 OpenRC の下で動く。`olivares` アカウントを使い、初回起動トークンを `/var/log/olivares.log` に
 書き、systemd のサンドボックス指令は実装しない。
 
-**リスナーはデフォルトでループバックのみ** — HTTP（REST と埋め込みコンソール）は
-`--listen=127.0.0.1:8443`、gRPC は `--grpc-listen=127.0.0.1:8444`。広げるときは
-`/etc/olivares/olivares.env` の `OLIVARES_EXTRA_ARGS` で意図的に行い、手前に自分の
+**リスナーはデフォルトでネットワークからの接続を受け付ける** — HTTP（REST と埋め込み
+コンソール）は `--listen=:8443`、gRPC は `--grpc-listen=:8444`、デュアルスタックの
+ワイルドカードである。これはサーバーであり、守っているのは TLS 有効、デフォルト認証情報
+なし、単回使用のセットアップトークンである。制限するときは
+`/etc/olivares/olivares.env` の
+`OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444` で意図的に
+行う（これらはユニット自身のフラグの後ろに追加され、後のフラグが勝つ）。手前に自分の
 TLS 終端を置く。IPv6 ループバックは `--listen=[::1]:8443` を使う。
 
 ### 実行可能なスクラッチマウント
@@ -342,7 +346,7 @@ KEK 下の各ペイロードを認証する。より新しいエンジンから�
   それが更新確認の意味であり、`--check` は何か動く前に計画を見せる。約束の正直な形は:
   *ライセンスの検証は誰にも電話しない。有料分のダウンロードはする。* 更新経路も呼び出しを
   したくなければ `--bundle` を使う。
-- **ネットワークへポートを開けない。** ユニットは、自分で広げるまでループバックにだけ
+- **ネットワークへポートを開く。** ユニットは、自分で制限するまですべてのインターフェースに
   バインドする。
 
 ## 関連

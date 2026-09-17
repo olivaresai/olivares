@@ -42,6 +42,22 @@ type consoleAddress struct {
 	// needs no explanation. Paragraphs are separated by a blank line. It is filled
 	// by withPlan, once the resolved authentication plan is known.
 	Advice string
+	// AdviceAfterAddresses is Advice without its leading address list, for a
+	// reader that has already printed the addresses itself. Identical to Advice
+	// when there is no list.
+	AdviceAfterAddresses string
+
+	// Reachable is every address this host answers at for a WILDCARD bind, in the
+	// order the banner prints them: routable addresses of this host first, then
+	// loopback. It is EMPTY for a bind that is already an address — there is
+	// nothing to enumerate — and it is a list of addresses this PROCESS holds,
+	// never a claim about reachability (hostaddrs.go).
+	Reachable []webaddr.Address
+	// Container is true when this process can SEE that it runs in a container, in
+	// which case the addresses above are the container's and the useful one is the
+	// published port on a host this process cannot observe. False means "cannot
+	// tell", never "is not".
+	Container bool
 
 	// wildcard and insecure are what the address was derived under, kept so the
 	// paragraphs can be built later without re-deriving anything.
@@ -69,6 +85,10 @@ func resolveConsoleAddress(declared webaddr.Address, listen string, insecure boo
 		out.Browse, wildcard = webaddr.FromListen(listen, scheme)
 	}
 	out.wildcard, out.insecure = wildcard, insecure
+	if wildcard {
+		out.Reachable = hostConsoleAddresses(listen, scheme)
+		out.Container = runningInContainer()
+	}
 	return out
 }
 
@@ -84,31 +104,105 @@ func resolveConsoleAddress(declared webaddr.Address, listen string, insecure boo
 // neither was true. An operator who follows a printed instruction and gets a
 // generic failure has been sent somewhere by the product.
 func (c consoleAddress) withPlan(plan webAuthnPlan) consoleAddress {
-	var paragraphs []string
-	if p := wildcardBindAdvice(c.wildcard); p != "" {
-		paragraphs = append(paragraphs, p)
+	// afterAddresses is every paragraph EXCEPT the address list. The banner prints
+	// the whole thing; `olivares first-boot` prints the addresses in its own layout
+	// and then these, so the list is never rendered twice on one screen.
+	var afterAddresses []string
+	if p := wildcardBindGuidance(c); p != "" {
+		afterAddresses = append(afterAddresses, p)
 	}
 	if p := passkeyAddressAdvice(c.Browse, plan); p != "" {
-		paragraphs = append(paragraphs, p)
+		afterAddresses = append(afterAddresses, p)
 	}
 	if p := schemeTransportAdvice(c.Browse, c.Declared, c.insecure); p != "" {
-		paragraphs = append(paragraphs, p)
+		afterAddresses = append(afterAddresses, p)
+	}
+	paragraphs := afterAddresses
+	if list := wildcardAddressList(c); list != "" {
+		paragraphs = append([]string{list}, afterAddresses...)
 	}
 	c.Advice = strings.Join(paragraphs, "\n\n")
+	c.AdviceAfterAddresses = strings.Join(afterAddresses, "\n\n")
 	return c
 }
 
-// wildcardBindAdvice explains a bind that accepts connections on every interface.
-// The printed address is the one that works on the machine reading the banner,
-// and this paragraph exists so nobody reads it as a claim about anywhere else.
-func wildcardBindAdvice(wildcard bool) string {
-	if !wildcard {
+// THE WILDCARD PARAGRAPHS, AND WHY THEY ARE TWO FUNCTIONS AND NOT ONE.
+//
+// A bind that accepts connections on every interface is explained in two parts:
+// the DATA (which addresses it answers at) and the PROSE (what to do about them).
+// They are separate because two readers compose them differently — the banner
+// prints both, one after the other, while `olivares first-boot` prints the
+// addresses in its own layout and then only the prose, so the list is never
+// rendered twice on one screen (consolestate.go).
+//
+// The single paragraph they replaced said only "the URL above is the one that
+// works on this machine", which is true and useless: the reader is usually in a
+// terminal on a server, over SSH, and the one address the panel offered was the
+// one address their browser cannot reach.
+//
+// Both halves are bounded the same way. The addresses come from the kernel's own
+// view of this process's interfaces, so the text says "answers at" and never
+// "reachable from": a firewall, a route or a NAT is not something this process
+// can observe.
+
+// wildcardAddressList is the DATA half: the addresses, and the sentence that says
+// what they are.
+func wildcardAddressList(c consoleAddress) string {
+	if !c.wildcard {
 		return ""
 	}
-	return "This engine is bound to EVERY interface on this host, which is not an address:\n" +
-		"the URL above is the one that works on this machine. A browser anywhere else\n" +
-		"needs this host's own name or address — start the engine with --public-url (or\n" +
-		"OLIVARES_PUBLIC_URL) set to it and this panel will print that instead."
+	var b strings.Builder
+	b.WriteString("This engine accepts connections on EVERY interface of this host (0.0.0.0, and\n" +
+		"where the kernel has IPv6, ::). A bind is not an address, so the console answers\n" +
+		"at each of these:")
+	if len(c.Reachable) == 0 {
+		// Enumeration failed or the host holds nothing but loopback. Say which
+		// question went unanswered rather than printing an empty list.
+		b.WriteString("\n  " + c.Browse.Origin + "\n" +
+			"This process could not enumerate any other address of its own; open the console\n" +
+			"at this host's name or address from wherever you are.")
+		return b.String()
+	}
+	for _, addr := range c.Reachable {
+		b.WriteString("\n  " + addr.Origin)
+	}
+	return b.String()
+}
+
+// wildcardBindGuidance is the PROSE half: what to do about those addresses. In a
+// container the remedy is different in kind, so it is a different paragraph and
+// not a hedge on the list.
+func wildcardBindGuidance(c consoleAddress) string {
+	if !c.wildcard {
+		return ""
+	}
+	if c.Container {
+		// The published port is the container runtime's choice and this process
+		// cannot read it, so the sentence names the port the container listens on
+		// and says the host's is whatever was mapped to it.
+		return "Those are addresses INSIDE this container. From outside it, open the host port\n" +
+			"mapped to " + c.portLabel() + " — https://<that host>:<published port> — and declare that\n" +
+			"address with OLIVARES_PUBLIC_URL so this panel, and the passkey relying party,\n" +
+			"use it. The one-time setup token is printed to this container's log and nowhere\n" +
+			"else: read it back with `docker logs`, or mint a replacement with\n" +
+			"`olivares first-boot --new-token` while no administrator exists."
+	}
+	return "A name is better than an address: set --public-url (or OLIVARES_PUBLIC_URL) to\n" +
+		"the https:// URL your operators type and this panel prints that instead. Passkeys\n" +
+		"need it — a relying party cannot be an IP."
+}
+
+// portLabel is the port this process listens on, as an operator reads it. An
+// address whose port is the scheme default carries no port at all in its origin,
+// which is correct for a URL and unhelpful in a sentence about port mapping.
+func (c consoleAddress) portLabel() string {
+	if c.Browse.Port != "" {
+		return c.Browse.Port
+	}
+	if c.Browse.Scheme == "http" {
+		return "80"
+	}
+	return "443"
 }
 
 // passkeyAddressAdvice names, before the operator ever clicks, the two reasons a

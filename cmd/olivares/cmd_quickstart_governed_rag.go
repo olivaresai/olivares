@@ -71,10 +71,14 @@ type quickstartGovernedRAGOptions struct {
 // agent identity and confines the KB to that agent. It does not fake identity
 // attributes: clearance/groups must come from the customer's roster/SCIM source, and
 // the script says so before it binds the agent.
-func newQuickstartGovernedRAGCmd() *cobra.Command {
-	opts := quickstartGovernedRAGOptions{
-		listen:             "127.0.0.1:8443",
-		grpcListen:         "127.0.0.1:8444",
+// newQuickstartGovernedRAGOptions is this command's defaults, in one place so a
+// test can read them without building a cobra command. The two BIND defaults come
+// from the product-wide constants; the agent gateway keeps its own loopback
+// default because it is a separate, opt-in surface (binddefaults.go).
+func newQuickstartGovernedRAGOptions() quickstartGovernedRAGOptions {
+	return quickstartGovernedRAGOptions{
+		listen:             defaultHTTPListen,
+		grpcListen:         defaultGRPCListen,
 		agentGatewayListen: "127.0.0.1:8446",
 		source:             "s3",
 		sourceName:         "governed-rag-live",
@@ -86,6 +90,10 @@ func newQuickstartGovernedRAGCmd() *cobra.Command {
 		clearance:          "confidential",
 		groupRef:           "group:engineering",
 	}
+}
+
+func newQuickstartGovernedRAGCmd() *cobra.Command {
+	opts := newQuickstartGovernedRAGOptions()
 	cmd := &cobra.Command{
 		Use:   "governed-rag",
 		Short: "Prepare live governed data for Claude Code (S3/Drive -> semantic KB -> MCP retrieval)",

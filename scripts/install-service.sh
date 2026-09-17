@@ -525,7 +525,11 @@ render_launchd_wrapper() {
     printf '%s\n' "  done <\"\$config\""
     printf '%s\n' 'fi'
     printf '%s\n' 'set -f'
-    printf "exec %s serve --data-dir=%s --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h \${OLIVARES_EXTRA_ARGS:-}\n" "'$binary'" "'$data_dir'"
+    # --listen=:8443 is the dual-stack wildcard: the console accepts connections from
+    # the network, TLS is on with a self-signed first-boot certificate and there are no
+    # default credentials. OLIVARES_EXTRA_ARGS is appended, so
+    # --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 in the env file restricts it.
+    printf "exec %s serve --data-dir=%s --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h \${OLIVARES_EXTRA_ARGS:-}\n" "'$binary'" "'$data_dir'"
   } >"$tmp"
   if [ -e "$output" ]; then
     if cmp -s "$tmp" "$output"; then rm -f "$tmp"; chmod 0755 "$output"; return 0; fi

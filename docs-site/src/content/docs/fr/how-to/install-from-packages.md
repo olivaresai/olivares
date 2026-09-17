@@ -130,7 +130,7 @@ démarrage s'imprime sur stdout :
 
 ```bash
 sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
-  --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h
+  --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h
 ```
 
 ## 3. L'unité systemd durcie
@@ -152,11 +152,14 @@ paquets `.apk` construits depuis cet arbre source tournent sous OpenRC à la pla
 utilisent le compte `olivares`, écrivent le jeton de premier démarrage dans
 `/var/log/olivares.log` et n'implémentent pas les directives de bac à sable de systemd.
 
-**Les écouteurs sont loopback uniquement par défaut** — `--listen=127.0.0.1:8443`
-pour HTTP (REST plus la console embarquée) et `--grpc-listen=127.0.0.1:8444` pour
-gRPC. Élargissez-les délibérément, via `OLIVARES_EXTRA_ARGS` dans
-`/etc/olivares/olivares.env`, et placez devant votre propre terminaison TLS. Pour le
-loopback IPv6, utilisez `--listen=[::1]:8443`.
+**Les écouteurs acceptent les connexions du réseau par défaut** — `--listen=:8443`
+pour HTTP (REST plus la console embarquée) et `--grpc-listen=:8444` pour gRPC, le joker
+dual-stack. C'est un serveur, et ce qui le protège, c'est TLS activé, aucun identifiant
+par défaut et un jeton à usage unique. Restreignez-les délibérément avec
+`OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444` dans
+`/etc/olivares/olivares.env` — ces drapeaux sont ajoutés après ceux de l'unité et le
+dernier l'emporte — et placez devant votre propre terminaison TLS. Pour le loopback IPv6,
+utilisez `--listen=[::1]:8443`.
 
 ### Montage scratch exécutable
 
@@ -393,7 +396,7 @@ l'installation :
   *vérifier une licence n'appelle jamais personne ; télécharger ce que vous avez
   payé, si.* Utilisez `--bundle` si vous voulez que le chemin de mise à jour ne
   fasse aucun appel non plus.
-- **Il n'ouvre pas de port vers le réseau.** L'unité se lie au loopback seulement
+- **Il ouvre un port vers le réseau.** L'unité se lie à toutes les interfaces
   jusqu'à ce que vous l'élargissiez vous-même.
 
 ## Voir aussi

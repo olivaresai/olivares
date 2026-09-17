@@ -249,13 +249,29 @@ assert set(task_pin.findall(install)) == mainline_pins, "compose-ready.yml Task 
 for token in ('>> "$GITHUB_PATH"', "command -v task"):
     assert token in install, f"the Task install step lacks {token!r}"
 
-# The runner's Docker daemon is shared. The CI-only final layer carries exactly one change:
-# the engine's published ports are replaced by an empty list.
+# The runner's Docker daemon is shared. The CI-only final layer carries exactly two changes,
+# both about sharing one daemon: the engine's published ports are replaced by an empty list,
+# and the fixed container_name the shipped base pins for operators is reset, because a
+# container name is unique per daemon and two runs would collide on it.
 no_ports = [
     line for line in read(NO_PORTS).splitlines() if line.strip() and not line.lstrip().startswith("#")
 ]
-assert no_ports == ["services:", "  olivares:", "    ports: !override []"], (
-    f"{NO_PORTS} must contain only services.olivares.ports: !override [], found {no_ports}"
+assert no_ports == [
+    "services:", "  olivares:", "    container_name: !reset null", "    ports: !override []",
+], (
+    f"{NO_PORTS} must contain only services.olivares.container_name: !reset null and "
+    f"ports: !override [], found {no_ports}"
+)
+
+# And the shipped base must carry BOTH of the things that layer exists to undo. A base that
+# stopped pinning the name would make the reset above inert and nobody would notice.
+assert "\nname: olivares\n" in compose, (
+    "deploy/compose/docker-compose.yml must name its project, or the container is named after "
+    "the directory the file lives in (compose-olivares-1)"
+)
+assert "    container_name: olivares\n" in compose, (
+    "deploy/compose/docker-compose.yml must pin container_name: olivares, or the documented "
+    "`docker exec olivares olivares first-boot` is not one argv an operator can type"
 )
 
 # Both projects and the image tag are defined once, in the job env, and are evaluated here for

@@ -742,14 +742,14 @@ func doctorUnitCheck(deps doctorDeps, o doctorOptions, modes []fs.FileMode) doct
 			c.Status, c.Remediation = "unknown", "make the launchd wrapper readable and rerun doctor"
 			return c
 		}
-		for _, token := range []string{o.binary, o.config, o.dataDir, "127.0.0.1:8443"} {
+		for _, token := range []string{o.binary, o.config, o.dataDir, listenFlagToken} {
 			if !bytesContain(wrapperBody, token) {
 				c.Status, c.Remediation = "fail", "rerun the pinned installer; launchd wrapper paths or listener drifted"
 				return c
 			}
 		}
 	} else {
-		required = append(required, o.binary, o.config, "127.0.0.1:8443")
+		required = append(required, o.binary, o.config, listenFlagToken)
 	}
 	for _, token := range required {
 		if !bytesContain(body, token) {
@@ -759,6 +759,19 @@ func doctorUnitCheck(deps doctorDeps, o doctorOptions, modes []fs.FileMode) doct
 	}
 	return c
 }
+
+// listenFlagToken is what the service-definition check requires of the listener,
+// and it is a FLAG rather than an address on purpose.
+//
+// It used to be the literal "127.0.0.1:8443", which was the shipped default. Once
+// the default became the wildcard, pinning any address here would have made doctor
+// fail for the one thing the product tells operators to do — restrict the console
+// with --listen=127.0.0.1:8443 — and a health check that reports "fail" for a
+// documented, supported configuration teaches its reader to ignore it. What the
+// check is for is drift: a service definition that no longer passes a listener at
+// all is not the one the installer wrote. That is what this token measures, and it
+// says nothing about which address the operator chose.
+const listenFlagToken = "--listen="
 
 func bytesContain(body []byte, token string) bool {
 	return strings.Contains(string(body), token)

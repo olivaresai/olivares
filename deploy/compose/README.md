@@ -11,13 +11,49 @@ embedded pure-Go SQLite store — zero external dependencies, air-gap-ready.
 
 ```sh
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
-# get the one-time first-boot setup token:
-docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
-# open https://localhost:8443 (self-signed TLS by default)
 ```
 
-The host port is bound to `127.0.0.1` — expose deliberately. Data persists in the
-`olivares-data` volume (audit signing key, TLS material, the SQLite store).
+Then, without a shell — the image is distroless, so `docker exec … bash` has nothing to
+run. These four commands are the whole operator surface:
+
+```sh
+# where the console answers, and whether first setup is still pending
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
+# the one-time setup token, printed once at first boot
+docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+
+# what is running, and how to stop it
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
+```
+
+**Every one of them needs the `-f`.** Compose looks for a compose file in the working
+directory and this one lives in `deploy/compose/`, so a bare `docker compose ps` at the
+repository root answers *"no configuration file provided"*. Run `export
+COMPOSE_FILE=deploy/compose/docker-compose.yml` once if you would rather not repeat it.
+
+**`olivares quickstart` is the local-binary path, not this one.** In Docker the server is
+already running: the container's command is `serve`, and `quickstart` would start a second
+engine inside the container. Use the commands above instead.
+
+The engine is named `olivares` (the project is named in the compose file, so the container
+is not `compose-olivares-1`), and the Postgres and backup services of the overrides are
+`olivares-postgres-1` and `olivares-backup-1`.
+
+The host ports are published on **every interface** by default: this is a server, the
+console serves TLS with a self-signed first-boot certificate, and there are no default
+credentials. Set `OLIVARES_BIND=127.0.0.1` in `.env` to restrict it to the host itself — and
+note that a published Docker port is DNAT'd ahead of a host firewall's INPUT chain, so that
+variable, not `ufw deny 8443`, is what closes it. Data persists in the `olivares-data`
+volume (audit signing key, TLS material, the SQLite store).
+
+If the setup token scrolled away or the log rotated, and no administrator exists yet, mint a
+replacement without a restart:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot --new-token
+```
 
 **DIST-24-12 current tree contract.** The distroless image carries `olivares readyz`,
 and the reference stack invokes it directly—no shell, curl, or wget. The hermetic

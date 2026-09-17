@@ -55,14 +55,19 @@ Lorsque l’image `26.9.0` existe : définissez
 
    | Propriété | Valeur |
    |---|---|
-   | Ports | `127.0.0.1:8443` (HTTPS : REST + interface web), `127.0.0.1:8444` (gRPC) — liés à **localhost sur l'hôte** ; exposez délibérément |
+   | Ports | `8443` (HTTPS : REST + interface web), `8444` (gRPC) — publiés sur **toutes les interfaces de l'hôte**, car c'est un serveur. Mettez `OLIVARES_BIND=127.0.0.1` dans `.env` pour les restreindre à l'hôte |
    | Données | volume nommé `olivares-data` → `/var/lib/olivares` (store SQLite, clé de signature d'audit, matériel TLS) |
    | Durcissement | tourne en `65532:65532`, racine en lecture seule, toutes les capabilities supprimées, `no-new-privileges`, tmpfs `/tmp` |
    | Healthcheck | exécution directe de la commande intégrée `olivares readyz` — sans shell, curl ni wget. Seul un HTTP 200 de `/readyz` local est sain |
 
-2. Lisez le jeton de configuration à usage unique depuis les journaux :
+2. Demandez au moteur où il est, et lisez le jeton de configuration à usage unique depuis les journaux :
 
    ```bash
+   # where the console answers, and whether setup is still pending. The image is
+   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
+   # the one-time setup token, printed once at first boot
    docker compose -f deploy/compose/docker-compose.yml logs olivares \
      | sed -n '/FIRST-BOOT SETUP/,/========================/p'
    ```
@@ -89,11 +94,36 @@ d'un workflow dans le dépôt ne prouve pas que son exécution Docker a eu lieu.
 </Aside>
 
 <Aside type="tip" title="Jeton manqué ?">
-Un redémarrage ne le réaffiche pas (seul son hash est stocké). Tant qu'aucun utilisateur
-n'existe encore, la récupération est sûre : `docker compose down`, supprimez `setup.token`
-du volume `olivares-data` (ou supprimez entièrement le volume sur une installation neuve),
-et `up -d` à nouveau — un nouveau jeton est émis.
+Un redémarrage ne le réaffiche pas (seul son hash est stocké). Tant qu'aucun administrateur
+n'existe, émettez-en un de remplacement sans rien redémarrer — le moteur en cours l'accepte
+immédiatement et le jeton précédent cesse de fonctionner :
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares \
+  olivares first-boot --new-token
+```
 </Aside>
+
+<Aside type="tip" title="Les quatre commandes, et pourquoi chacune a besoin du `-f`">
+La stack nomme son propre projet Compose : le conteneur du moteur est donc `olivares` (et
+non `compose-olivares-1`) et les services des overrides sont `olivares-postgres-1` et
+`olivares-backup-1`. Compose cherche toujours un fichier compose dans le **répertoire
+courant**, et celui-ci vit dans `deploy/compose/` — un simple `docker compose ps` à la
+racine du dépôt répond donc *"no configuration file provided"*. Passez `-f` à chaque fois,
+ou faites `export COMPOSE_FILE=deploy/compose/docker-compose.yml` une seule fois.
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+docker compose -f deploy/compose/docker-compose.yml logs olivares
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
+```
+
+`olivares quickstart` est la voie du **binaire local**, pas celle-ci : ici le serveur tourne
+déjà — la commande du conteneur est `serve` — et `quickstart` lancerait un second moteur
+dans le conteneur.
+</Aside>
+
 
 ## 2. Câbler les sources
 
