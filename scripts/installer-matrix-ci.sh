@@ -133,7 +133,11 @@ export HOME="$work/home"
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$HOME/.local/share"
 export TMPDIR="$work/tmp"
-export MATRIX_BINARY="$work/bin/olivares"
+# The fake init adapters start the engine from MATRIX_BINARY; it must be the binary the
+# service adapter installed and validated, $HOME/.local/bin/olivares (the leg log said
+# "nohup: failed to run command '…/bin/olivares': No such file or directory" while the
+# --start phase waited 60 s for /livez and /readyz, 2026-09-17).
+export MATRIX_BINARY="$HOME/.local/bin/olivares"
 export MATRIX_DATA="$XDG_DATA_HOME/olivares"
 export MATRIX_CONFIG="$XDG_CONFIG_HOME/olivares/olivares.env"
 if [[ "$init_name" == launchd ]]; then
