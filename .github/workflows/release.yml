@@ -2201,7 +2201,7 @@ jobs:
             echo "No tracked code has run." >&2
             exit 1
             ;;
-          # sigstore/cosign-installer v4.1.2 installs to $HOME/.cosign/cosign on hosted runners
+          # The reviewed installer step above (v4.1.2) installs to $HOME/.cosign/cosign on hosted runners
           # (measured 2026-09-17, run 35244623296: "/home/runner/.cosign/cosign"); the digest
           # assertion that follows still pins the binary to COSIGN_EXPECTED_SHA256.
           /opt/hostedtoolcache/* | /usr/local/bin/* | "${HOME}"/.cosign/cosign) ;;
