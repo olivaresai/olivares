@@ -172,7 +172,7 @@ sudo rpm -i olivares_*_linux_amd64.rpm
 # Alpine
 sudo apk add --allow-untrusted olivares_*_linux_amd64.apk
 
-# systemd hosts (loopback-only by default; see the env file to widen it)
+# systemd hosts (the console answers on every interface; see the env file to restrict it)
 sudo systemctl enable --now olivares
 journalctl -u olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 
@@ -206,13 +206,15 @@ olivares db check --dsn "postgres://olivares_app@db:5432/olivares?sslmode=verify
 Prefer to edit `/etc/olivares/olivares.env` directly? It is preserved across upgrades:
 
 ```sh
-# expose beyond loopback with a dual-stack Go bind (front it with your own
-# TLS-terminating reverse proxy), or switch to Postgres, pin a TLS cert, etc.
-OLIVARES_EXTRA_ARGS=--listen=:8443 --grpc-listen=:8444
+# restrict the console to this host, or switch to Postgres, pin a TLS cert, etc.
+# These flags are appended after the unit's own, and the later flag wins.
+OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444
 ```
 
-The default listeners are **loopback-only** with a self-signed cert generated on first
-boot (secure-by-default, [`docs/SECURITY-HARDENING.md`](docs/SECURITY-HARDENING.md)). Uninstalling never
+The default listeners are the **dual-stack wildcard** (`:8443` / `:8444`) with a self-signed
+cert generated on first boot. Secure by default is the TLS, the absence of any default
+credential and the single-use setup token — not the bind
+([`docs/SECURITY-HARDENING.md`](docs/SECURITY-HARDENING.md)). Uninstalling never
 deletes `/var/lib/olivares` — it holds the append-only audit ledger and signing key; remove
 it by hand if you really mean to.
 
@@ -232,31 +234,56 @@ sudo install -m0755 olivares /usr/local/bin/olivares
 
 ### Docker
 
-Multi-arch (amd64/arm64), distroless, non-root. Run it — secure by default (TLS, loopback,
-one-time setup token) with a persistent data volume:
+Multi-arch (amd64/arm64), distroless, non-root. Run it — secure by default (TLS on, no default
+credentials, a one-time setup token) with a persistent data volume:
 
 ```sh
-docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
   docker.io/olivaresai/olivares:latest \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 
-`--listen :8443` is the container-safe bind: Go listens dual-stack (IPv4+IPv6), and on
-IPv6-disabled kernels it still serves IPv4. `0.0.0.0:8443` would bind IPv4 only. The host
-mapping (`-p 127.0.0.1:…`) is what keeps it loopback-only on the host; use
-`-p [::1]:8443:8443` / `-p [::1]:8444:8444` for IPv6 loopback instead.
-
-Or, just to look around, an ephemeral synthetic estate (loopback, plaintext — never for real data):
+Then ask the container where it is, and finish setup. The image is distroless, so there is no
+shell in it — `docker exec … bash` fails, and these two commands are the whole surface:
 
 ```sh
-docker run --rm -p 127.0.0.1:8443:8443 --tmpfs /data:uid=65532,gid=65532 \
-  docker.io/olivaresai/olivares:latest \
-  serve --seed-demo --insecure --listen :8443 --data-dir /data
+docker exec olivares olivares first-boot
+docker logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 ```
 
-The packaged systemd unit stays loopback-only with `--listen=127.0.0.1:8443`; change it to
-`--listen=[::1]:8443` (and similarly for gRPC) if you want IPv6 loopback there.
+The first prints the address or addresses the console answers at and whether setup is still
+pending; the second prints the one-time token, which is shown once and stored only as a hash.
+If that token is gone and no administrator exists yet, mint a replacement with
+`docker exec olivares olivares first-boot --new-token` — no restart, and the previous token
+stops working.
+
+`--listen :8443` is the container-safe bind: Go listens dual-stack (IPv4+IPv6), and on
+IPv6-disabled kernels it still serves IPv4. `0.0.0.0:8443` would bind IPv4 only. The host
+mapping decides exposure: `-p 8443:8443` publishes on every host interface, which is the
+default for a server; use `-p 127.0.0.1:8443:8443` (or `-p [::1]:8443:8443` for IPv6) to keep
+it on the host itself. A published Docker port is DNAT'd ahead of a host firewall's INPUT
+chain, so restricting it here — not with `ufw deny 8443` — is what closes it.
+
+The synthetic demo estate is **loopback-only by construction** and cannot be published: it mints
+a superadmin whose password is in the public source tree, so the engine refuses `--seed-demo` on
+any non-loopback bind, and refuses `--insecure` there too. In Docker that means sharing the
+host's network namespace (Linux):
+
+```sh
+docker run --rm --network host --tmpfs /data:uid=65532,gid=65532 \
+  docker.io/olivaresai/olivares:latest \
+  serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 --data-dir /data
+```
+
+Without `--network host` — on macOS or Windows, or if you would rather not share the namespace —
+run the demo from the binary instead.
+
+The packaged systemd unit binds `--listen=:8443` — every interface, like the engine's own
+default. To restrict the service to its own host, put
+`--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444` in `OLIVARES_EXTRA_ARGS` in
+`/etc/olivares/olivares.env`: those flags are appended after the unit's own, and the later flag
+on the command line wins.
 
 The official image is `docker.io/olivaresai/olivares` (Docker Hub). `ghcr.io/olivaresai/olivares`
 is the **fallback**: the release pipeline builds and signs on ghcr.io and then copies the same
@@ -408,8 +435,8 @@ directive could reach a workspace under `/tmp`; that was false — see
 [`docs/RELEASE-INSTALLER.md`](docs/RELEASE-INSTALLER.md) for the upstream commit and what
 has and has not been verified on a live manager.)
 
-Secure by default in every case: loopback-only, non-root (65532), read-only root, the
-deny-closed inference credential, and an anchored audit ledger over the session lifecycle.
+Secure by default in every case: TLS on with no default credentials, non-root (65532),
+read-only root, the deny-closed inference credential, and an anchored audit ledger over the session lifecycle.
 The four topologies (both-Docker, both-native, and the two mixed cases with their honest
 constraints), the first-session walkthrough, and the bring-up smoke
 ([`scripts/smoke-agentops.sh`](scripts/smoke-agentops.sh)) are in the
@@ -434,8 +461,10 @@ The cask installs the signed binary and **clears the Gatekeeper quarantine** for
 ```sh
 brew install olivaresai/tap/olivares
 olivares quickstart                               # secure by default; prints the console URL + one-time setup token
-# or, just to look around, an ephemeral synthetic estate (loopback, plaintext):
-olivares serve --seed-demo --insecure --data-dir "$(mktemp -d)"
+# or, just to look around, an ephemeral synthetic estate — loopback and plaintext by
+# construction: the demo password is public, so the engine refuses any wider bind
+olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 \
+  --data-dir "$(mktemp -d)"
 ```
 
 ### Manual binary
@@ -492,8 +521,10 @@ For development, air-gapped builds, or before the first release. Needs Go 1.26+,
 task build            # → ./bin/olivares, web console embedded
 ./bin/olivares version
 ./bin/olivares quickstart   # secure by default; prints the console URL + one-time setup token
-# or, just to look around, an ephemeral synthetic estate (loopback, plaintext):
-./bin/olivares serve --seed-demo --insecure --data-dir "$(mktemp -d)"
+# or, just to look around, an ephemeral synthetic estate — loopback and plaintext by
+# construction: the demo password is public, so the engine refuses any wider bind
+./bin/olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 \
+  --data-dir "$(mktemp -d)"
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full development setup.

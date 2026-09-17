@@ -43,14 +43,16 @@ produit ».
 Un nouveau répertoire de données ne contient **aucun identifiant par défaut**.
 La première commande recommandée est `olivares quickstart`
 (`cmd/olivares/cmd_quickstart.go`). Il s’agit de `serve` avec des valeurs par
-défaut sûres : TLS activé, écoute limitée au loopback et aucun identifiant par
-défaut. L’adresse d’écoute par défaut est `127.0.0.1:8443` (`:61`). Mesure
+défaut sûres : TLS activé, aucun identifiant par défaut et un token de configuration
+à usage unique. L’adresse d’écoute par défaut est `:8443` — toutes les interfaces, car
+c’est un serveur (`cmd/olivares/binddefaults.go`). Mesure
 effectuée le 2026-09-04 sur une installation propre du binaire public avec un
 véritable TLS (y compris une exécution sur **:8460**) ; le texte du panneau est
 identique.
 
 Le panneau de bienvenue (`announceQuickstart`, `:154-163`) est numéroté. Le
-moteur affiche `127.0.0.1`. **N’utilisez pas cet hôte pour la cérémonie de la
+moteur affiche `https://localhost:8443` pour cette liaison, et liste sous le token
+toutes les autres adresses auxquelles cet hôte répond. **N’utilisez pas une IP pour la cérémonie de la
 passkey.** Le navigateur refuse une adresse IP comme RP ID WebAuthn
 (`SecurityError`). Le produit dérive le RP ID du nom d’hôte de la requête
 (`core/api/handlers_webauthn.go:33-50`). Avant d’enregistrer la passkey, ouvrez
@@ -68,7 +70,8 @@ d’hôte), et non à `127.0.0.1`. `PORT` vaut `8443`, sauf si vous avez passé
          olst_…
 ```
 
-La bannière affichée indique toujours `https://127.0.0.1:8443`. Remplacez
+La bannière affiche `localhost` pour la liaison par défaut et liste sous le token les
+autres adresses de cet hôte ; une cérémonie passkey exige un nom, pas une adresse. Remplacez
 l’hôte par `localhost` dans la barre d’adresse.
 
 Le préfixe du jeton est `olst_` (`cmd/olivares/e2e_binary_test.go` recherche

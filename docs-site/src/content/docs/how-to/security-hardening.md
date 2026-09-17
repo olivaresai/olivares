@@ -28,7 +28,7 @@ A fresh install is secure by default. The job here is mostly *not weakening* it.
 |---|---|---|
 | **No default credentials** | The #1 self-hosted footgun. First boot mints a **one-time, single-use setup token**; you create the first administrator with it. | Read the token from the boot output (or container logs), create the admin, then it is consumed. Never bake a credential into an image. |
 | **TLS on by default** | The collector→core and user→panel channels carry sensitive metadata. | Leave TLS on. `--insecure` (plaintext) is **localhost development only** — never on an exposed bind. |
-| **Loopback bind** | The engine binds loopback by default so it is never accidentally exposed. | Expose it **deliberately**, behind your own ingress/TLS. In containers the process binds inside the container and the Compose stack maps the host port to loopback — see [self-hosting](/how-to/self-hosting/). |
+| **The bind is not the protection** | The engine binds **every interface** by default: it is a server. What protects it is TLS on, no default credentials and a single-use setup token — none of which depends on the bind. | Restrict it **deliberately** when you want to: `--listen 127.0.0.1:8443` for the binary, `OLIVARES_BIND=127.0.0.1` for the Compose stack. Front it with your own ingress/TLS for a certificate browsers trust and a host name passkeys accept — see [self-hosting](/how-to/self-hosting/). |
 | **No telemetry-home** | A security tool that phones home is a liability. | No action — the engine makes no mandatory outbound calls at boot. In air-gapped mode there is zero egress. |
 
 Every dangerous departure from the defaults is a **named, explicit opt-in** (for

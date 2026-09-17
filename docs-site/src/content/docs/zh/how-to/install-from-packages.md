@@ -103,7 +103,7 @@ env 文件也不会作为 shell 执行。
 
 ```bash
 sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
-  --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h
+  --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h
 ```
 
 ## 3. 加固的 systemd 单元
@@ -121,9 +121,11 @@ ambient 也没有 bounding capability — 并设置 `NoNewPrivileges=true`，因
 单元并未运行。本源码树构建的 `.apk` 软件包改为在 OpenRC 下运行：使用 `olivares` 账户，把首次
 启动令牌写入 `/var/log/olivares.log`，并且不实现 systemd 沙箱指令。
 
-**监听器默认仅回环** — HTTP（REST 加上嵌入式控制台）为 `--listen=127.0.0.1:8443`，gRPC 为
-`--grpc-listen=127.0.0.1:8444`。通过 `/etc/olivares/olivares.env` 中的
-`OLIVARES_EXTRA_ARGS` 有意放宽，并在前面放置你自己的 TLS 终结。IPv6 回环使用
+**监听器默认接受来自网络的连接** — HTTP（REST 加上嵌入式控制台）为 `--listen=:8443`，gRPC 为
+`--grpc-listen=:8444`，即双栈通配符。这是一台服务器，保护它的是默认启用的 TLS、没有任何默认凭据，
+以及单次使用的设置令牌。要加以限制，请在 `/etc/olivares/olivares.env` 中有意设置
+`OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444`（这些标志附加在单元
+自身的标志之后，后者获胜），并在前面放置你自己的 TLS 终结。IPv6 回环使用
 `--listen=[::1]:8443`。
 
 ### 可执行的临时目录挂载
@@ -307,7 +309,7 @@ Preserve 是软件包移除策略：它保留配置、数据、日志、密钥�
 - **但 `olivares upgrade` 在你运行它时会故意发起网络调用** — 这正是更新检查的意义，`--check`
   在任何东西移动之前向你展示计划。该承诺的诚实表述是：*验证许可证从不打电话；下载你付过款的
   内容会。* 若希望更新路径也不调用，使用 `--bundle`。
-- **它不向网络打开端口。** 单元只绑定回环，直到你自己放宽。
+- **它会向网络打开端口。** 单元绑定所有网络接口，直到你自己加以限制。
 
 ## 另见
 

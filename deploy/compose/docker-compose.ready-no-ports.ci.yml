@@ -4,15 +4,26 @@
 # CI-only final layer for .github/workflows/compose-ready.yml. Layer it LAST, after the
 # shipped base and every other override, on both fixture stacks and their cleanup.
 #
-# The shipped base publishes 127.0.0.1:8443 and 127.0.0.1:8444 for operators. On the shared
-# self-hosted Docker daemon those host ports would collide with other projects, and this
-# workflow has no host-port consumer: its readiness probes run inside the containers and its
-# host-side checks use docker inspect. `!override` replaces the base list; a plain
-# `ports: []` would merge into it and keep both ports. The tag needs Compose >= 2.24.4, which
-# the workflow requires and then confirms on the effective configuration before any `up`.
+# TWO CHANGES, both about SHARING ONE DAEMON, and neither about what the stack does.
+#
+# 1. PORTS. The shipped base publishes 8443 and 8444 on the host. On the shared self-hosted
+#    Docker daemon those host ports would collide with other projects, and this workflow has
+#    no host-port consumer: its readiness probes run inside the containers and its host-side
+#    checks use docker inspect. `!override` replaces the base list; a plain `ports: []` would
+#    merge into it and keep both ports.
+#
+# 2. CONTAINER NAME. The base pins `container_name: olivares` so an operator can type
+#    `docker exec olivares olivares first-boot`. A container name is unique PER DAEMON, so two
+#    runs of this workflow would collide on it — and the effective-config check refuses any
+#    fixed container_name for exactly that reason. `!reset` removes the value and lets Compose
+#    derive the name from the run's own owned project.
+#
+# Both tags need Compose >= 2.24.4, which the workflow requires and then confirms on the
+# effective configuration before any `up`.
 #
 # Nothing else changes: image, user, read-only root, capabilities, resource limits, named
 # volumes and the in-binary readyz healthcheck remain the shipped files' own values.
 services:
   olivares:
+    container_name: !reset null
     ports: !override []

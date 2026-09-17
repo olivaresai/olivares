@@ -8,7 +8,7 @@ This page documents the configuration surface of the control plane engine — th
 Everything listed here is taken from the engine's own command definitions and composition root. Where a setting cannot be confirmed in source it is not listed. For the conceptual security posture behind these defaults, see [the security model](/explanation/security/security-model/); for the runnable end-to-end path, see [self-hosting](/how-to/self-hosting/).
 
 :::note[Configuration philosophy]
-The engine is configured by flags and by environment variables, not by a sprawling config file. Every variable it reads is listed below, generated from the sources themselves. Secrets that wire real sources stay in operator-held files referenced by environment variable — never in the store. The defaults are chosen to fail closed: loopback binds, TLS on, no default credentials.
+The engine is configured by flags and by environment variables, not by a sprawling config file. Every variable it reads is listed below, generated from the sources themselves. Secrets that wire real sources stay in operator-held files referenced by environment variable — never in the store. The defaults are chosen to fail closed: TLS on, no default credentials, a single-use setup token. The binds are the dual-stack wildcard (`:8443`, `:8444`) — this is a server, and the bind was never what made it safe.
 :::
 
 ## The `serve` subcommand
@@ -17,8 +17,8 @@ The engine is configured by flags and by environment variables, not by a sprawli
 
 | Flag | Default | Purpose |
 | --- | --- | --- |
-| `--listen` | `127.0.0.1:8443` | HTTP listen address (REST API + embedded web UI). |
-| `--grpc-listen` | `127.0.0.1:8444` | gRPC listen address (control-plane / collector ingest API). |
+| `--listen` | `:8443` | HTTP listen address (REST API + embedded web UI). |
+| `--grpc-listen` | `:8444` | gRPC listen address (control-plane / collector ingest API). |
 | `--data-dir` | `$OLIVARES_DATA_DIR`, an existing `./olivares-data`, else `$XDG_DATA_HOME/olivares` or `~/.local/share/olivares` | Data directory: audit signing key, TLS material, and (for SQLite) the store file. |
 | `--engine` | `sqlite` | Store engine: `sqlite` or `postgres`. |
 | `--dsn` | empty (SQLite file in the data dir) | Store connection string. |
@@ -443,13 +443,13 @@ These are the postures in effect with no configuration beyond `serve`. They are 
 | Credentials | None shipped | No default username or password exists. On first boot with no users, the engine mints a single-use setup token and prints it to standard output only — never to the logs. |
 | First-boot setup | One-time token | The administrator creates the first user with that token, then logs in. The token is shown once and is single-use. |
 | Transport | TLS on | HTTP and gRPC serve over TLS by default; a self-signed certificate is generated in the data directory if none is supplied, and both its certificate fingerprint and its `--pin-sha256` value are logged. |
-| Bind address | Loopback | `--listen` and `--grpc-listen` default to `127.0.0.1`. The engine binds the local host until you deliberately publish it. |
+| Bind address | Every interface | `--listen` and `--grpc-listen` default to `:8443` and `:8444`. Restrict the engine to its own host deliberately, with `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`. |
 | Plaintext mode | Off | `--insecure` is the only way to serve plaintext, and the gRPC path fails closed rather than degrade. Intended for localhost development only. |
 | Demo seeding | Off | `--seed-demo` is off by default and refuses any non-loopback bind because it mints a public-password demo administrator. |
 | Telemetry home | Off | The engine does not phone home: there is no telemetry-to-vendor channel, and nothing is sent as a side effect of running. Outbound connections exist to the sources you configure, plus `olivares upgrade` when you run it — it reaches the update channel unless `--endpoint` or `--bundle` points it elsewhere. That is what makes the [air-gapped install](/how-to/air-gap-install/) possible with zero egress. |
 
-:::caution[Loopback by default, exposed by intent]
-The default loopback binds mean the engine is not reachable off-host until you change them. When you do publish it — for example by mapping a host port in Docker Compose — that is a deliberate operator decision, and TLS is already on to protect it. Do not pair a published bind with `--insecure`.
+:::caution[Reachable by default, restricted by intent]
+The default binds accept connections on every interface: this is a server, and what protects it is TLS on, no default credentials and a single-use setup token. Restricting it is the deliberate operator decision — `--listen 127.0.0.1:8443` for the binary, `OLIVARES_BIND=127.0.0.1` for the Compose stack. Never pair a non-loopback bind with `--insecure`: the engine refuses that combination.
 :::
 
 ### First boot, in practice

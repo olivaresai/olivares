@@ -8,7 +8,7 @@ Diese Seite dokumentiert die Konfigurationsschnittstelle der Control-Plane-Engin
 Alles hier Aufgeführte stammt aus den eigenen Befehlsdefinitionen und der Composition Root der Engine. Wo eine Einstellung im Quellcode nicht bestätigt werden kann, wird sie nicht aufgeführt. Für die konzeptionelle Sicherheitshaltung hinter diesen Defaults siehe [das Security-Modell](/de/explanation/security/security-model/); für den ausführbaren End-to-End-Pfad siehe [Self-Hosting](/de/how-to/self-hosting/).
 
 :::note[Konfigurationsphilosophie]
-Die Engine wird über Flags und Umgebungsvariablen konfiguriert, nicht über eine wuchernde Konfigurationsdatei. Jede Variable, die sie liest, ist unten aufgeführt und aus den Quellen selbst generiert. Secrets, die echte Sources verdrahten, bleiben in betreibergehaltenen Dateien, auf die per Umgebungsvariable verwiesen wird — nie im Store. Die Defaults sind so gewählt, dass sie fehl-geschlossen (fail closed) sind: Loopback-Binds, TLS an, keine Default-Credentials.
+Die Engine wird über Flags und Umgebungsvariablen konfiguriert, nicht über eine wuchernde Konfigurationsdatei. Jede Variable, die sie liest, ist unten aufgeführt und aus den Quellen selbst generiert. Secrets, die echte Sources verdrahten, bleiben in betreibergehaltenen Dateien, auf die per Umgebungsvariable verwiesen wird — nie im Store. Die Defaults sind so gewählt, dass sie fehl-geschlossen (fail closed) sind: TLS an, keine Default-Credentials, ein einmalig verwendbares Setup-Token. Die Binds sind der Dual-Stack-Wildcard (`:8443`, `:8444`) — dies ist ein Server, und der Bind war nie das, was ihn sicher gemacht hat.
 :::
 
 ## Der `serve`-Subcommand
@@ -17,8 +17,8 @@ Die Engine wird über Flags und Umgebungsvariablen konfiguriert, nicht über ein
 
 | Flag | Default | Zweck |
 | --- | --- | --- |
-| `--listen` | `127.0.0.1:8443` | HTTP-Listen-Adresse (REST API + eingebettete Web-UI). |
-| `--grpc-listen` | `127.0.0.1:8444` | gRPC-Listen-Adresse (Control-Plane- / Collector-Ingest-API). |
+| `--listen` | `:8443` | HTTP-Listen-Adresse (REST API + eingebettete Web-UI). |
+| `--grpc-listen` | `:8444` | gRPC-Listen-Adresse (Control-Plane- / Collector-Ingest-API). |
 | `--data-dir` | `$OLIVARES_DATA_DIR`, eine vorhandene Installation in `./olivares-data`, sonst `$XDG_DATA_HOME/olivares` oder `~/.local/share/olivares` | Datenverzeichnis: Audit-Signaturschlüssel, TLS-Material und (bei SQLite) die Store-Datei. |
 | `--engine` | `sqlite` | Store-Engine: `sqlite` oder `postgres`. |
 | `--dsn` | leer (SQLite-Datei im Datenverzeichnis) | Store-Verbindungsstring. |
@@ -442,13 +442,13 @@ Dies sind die Haltungen, die ganz ohne Konfiguration über `serve` hinaus in Kra
 | Credentials | Keine ausgeliefert | Es existiert kein Default-Benutzername und kein Default-Passwort. Beim ersten Boot ohne Nutzer prägt die Engine ein single-use Setup-Token und gibt es nur auf Standard-Output aus — nie in die Logs. |
 | First-Boot-Setup | Einmaliges Token | Der Administrator erstellt mit diesem Token den ersten Nutzer und meldet sich dann an. Das Token wird einmal angezeigt und ist single-use. |
 | Transport | TLS an | HTTP und gRPC liefern standardmäßig über TLS aus; ein selbstsigniertes Zertifikat wird im Datenverzeichnis generiert, wenn keines bereitgestellt wird, und sowohl sein Zertifikatsfingerprint als auch sein `--pin-sha256`-Wert werden protokolliert. |
-| Bind-Adresse | Loopback | `--listen` und `--grpc-listen` binden standardmäßig auf `127.0.0.1`. Die Engine bindet den lokalen Host, bis Sie sie bewusst veröffentlichen. |
+| Bind-Adresse | Alle Schnittstellen | `--listen` und `--grpc-listen` binden standardmäßig `:8443` und `:8444`. Beschränken Sie die Engine bewusst auf ihren eigenen Host, mit `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`. |
 | Klartext-Modus | Aus | `--insecure` ist die einzige Möglichkeit, Klartext auszuliefern, und der gRPC-Pfad schlägt fehl-geschlossen (fail closed) fehl, statt herabzustufen. Nur für localhost-Entwicklung gedacht. |
 | Demo-Seeding | Aus | `--seed-demo` ist standardmäßig aus und verweigert jeden Nicht-Loopback-Bind, weil es einen Demo-Administrator mit öffentlichem Passwort prägt. |
 | Telemetrie nach Hause | Aus | Die Engine telefoniert nicht nach Hause: Es gibt keinen Telemetrie-zum-Hersteller-Kanal, und im laufenden Betrieb wird nichts als Nebeneffekt gesendet. Ausgehende Verbindungen bestehen zu den Sources, die Sie konfigurieren, sowie zu `olivares upgrade`, wenn Sie es ausführen — es ruft den Update-Kanal auf, sofern `--endpoint` oder `--bundle` nicht woanders hinzeigt. Das ist es, was die [air-gapped Installation](/de/how-to/air-gap-install/) mit null Egress möglich macht. |
 
-:::caution[Standardmäßig Loopback, absichtlich exponiert]
-Die Default-Loopback-Binds bedeuten, dass die Engine off-host nicht erreichbar ist, bis Sie sie ändern. Wenn Sie sie veröffentlichen — zum Beispiel durch das Mappen eines Host-Ports in Docker Compose —, ist das eine bewusste Betreiberentscheidung, und TLS ist bereits an, um sie zu schützen. Paaren Sie einen veröffentlichten Bind nicht mit `--insecure`.
+:::caution[Standardmäßig erreichbar, absichtlich beschränkt]
+Die Default-Binds nehmen Verbindungen auf allen Schnittstellen an: dies ist ein Server, und was ihn schützt, ist TLS an, keine Default-Credentials und ein einmalig verwendbares Setup-Token. Ihn zu beschränken ist die bewusste Betreiberentscheidung — `--listen 127.0.0.1:8443` für das Binary, `OLIVARES_BIND=127.0.0.1` für den Compose-Stack. Paaren Sie niemals einen Nicht-Loopback-Bind mit `--insecure`: die Engine verweigert diese Kombination.
 :::
 
 ### First Boot, in der Praxis

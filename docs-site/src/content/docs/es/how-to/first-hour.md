@@ -42,13 +42,14 @@ pero no rellena el resto de la consola. No lo uses para «explorar el producto»
 Un directorio de datos nuevo **no tiene credenciales predeterminadas**. El
 primer comando recomendado es `olivares quickstart`
 (`cmd/olivares/cmd_quickstart.go`). Es `serve` con valores predeterminados
-seguros: TLS activado, escucha solo en loopback y ninguna credencial
-predeterminada. La dirección de escucha predeterminada es `127.0.0.1:8443`
-(`:61`). Medido el 2026-09-04 en una instalación limpia del binario público con
+seguros: TLS activado, ninguna credencial predeterminada y un token de
+configuración de un solo uso. La dirección de escucha predeterminada es `:8443`
+— todas las interfaces, porque esto es un servidor (`cmd/olivares/binddefaults.go`). Medido el 2026-09-04 en una instalación limpia del binario público con
 TLS real (incluida una ejecución en **:8460**); el texto del panel es el mismo.
 
 El panel de bienvenida (`announceQuickstart`, `:154-163`) está numerado. El
-motor imprime `127.0.0.1`. **No uses ese host para la ceremonia de la
+motor imprime `https://localhost:8443` para ese bind, y lista debajo del token
+todas las demás direcciones en las que responde este host. **No uses una IP para la
 passkey.** El navegador rechaza una IP como RP ID de WebAuthn
 (`SecurityError`). El producto obtiene el RP ID del nombre de host de la
 solicitud (`core/api/handlers_webauthn.go:33-50`). Antes de registrar la
@@ -65,7 +66,9 @@ real), no en `127.0.0.1`. `PORT` es `8443`, salvo que hayas pasado `--listen`.
          olst_…
 ```
 
-El banner impreso sigue mostrando `https://127.0.0.1:8443`. Sustituye el host
+El banner imprime `localhost` para el bind por defecto y lista debajo del token las
+otras direcciones de este host; una ceremonia de passkey necesita un nombre, no una
+dirección. Sustituye el host
 por `localhost` en la barra de direcciones.
 
 El prefijo del token es `olst_` (`cmd/olivares/e2e_binary_test.go` comprueba

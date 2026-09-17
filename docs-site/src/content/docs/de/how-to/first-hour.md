@@ -42,14 +42,15 @@ zu erkunden“.
 Ein neues Datenverzeichnis enthält **keine Standardanmeldedaten**. Der
 empfohlene erste Befehl ist `olivares quickstart`
 (`cmd/olivares/cmd_quickstart.go`). Er entspricht `serve` mit sicheren
-Standardeinstellungen: TLS ist aktiv, es wird nur auf Loopback gelauscht und
-es gibt keine Standardanmeldedaten. Die voreingestellte Listen-Adresse ist
-`127.0.0.1:8443` (`:61`). Gemessen am 2026-09-04 mit einer sauberen
+Standardeinstellungen: TLS ist aktiv, es gibt keine Standardanmeldedaten und ein
+einmalig verwendbares Setup-Token. Die voreingestellte Listen-Adresse ist `:8443`
+— alle Schnittstellen, denn dies ist ein Server (`cmd/olivares/binddefaults.go`). Gemessen am 2026-09-04 mit einer sauberen
 Installation des öffentlichen Binärprogramms und echtem TLS (einschließlich
 eines Laufs auf **:8460**); der Text des Panels ist identisch.
 
 Das Willkommenspanel (`announceQuickstart`, `:154-163`) ist nummeriert. Die
-Engine gibt `127.0.0.1` aus. **Verwenden Sie diesen Host nicht für die
+Engine gibt für diesen Bind `https://localhost:8443` aus und listet unter dem Token
+jede weitere Adresse auf, unter der dieser Host antwortet. **Verwenden Sie keine IP für die
 Passkey-Zeremonie.** Der Browser lehnt eine IP als WebAuthn-RP-ID ab
 (`SecurityError`). Das Produkt leitet die RP-ID aus dem Hostnamen der Anfrage
 ab (`core/api/handlers_webauthn.go:33-50`). Öffnen Sie die Konsole vor der
@@ -67,7 +68,9 @@ Hostnamen), nicht unter `127.0.0.1`. `PORT` ist `8443`, sofern Sie nicht
          olst_…
 ```
 
-Das ausgegebene Banner zeigt weiterhin `https://127.0.0.1:8443`. Ersetzen Sie
+Das Banner gibt für den Standard-Bind `localhost` aus und listet unter dem Token die
+weiteren Adressen dieses Hosts; eine Passkey-Zeremonie braucht einen Namen, keine
+Adresse. Ersetzen Sie
 den Host in der Adressleiste durch `localhost`.
 
 Das Token-Präfix ist `olst_` (`cmd/olivares/e2e_binary_test.go` gleicht mit

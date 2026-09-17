@@ -12,7 +12,7 @@ El motor se configura mediante flags y variables de entorno, no mediante un fich
 configuración inabarcable. Todas las variables que lee se enumeran más abajo, generadas
 a partir de las propias fuentes. Los secretos que cablean fuentes reales permanecen en
 ficheros en poder del operador referenciados por variable de entorno — nunca en el
-almacén. Los valores por defecto se eligen para fallar cerrado: enlaces a loopback, TLS
+almacén. Los valores por defecto se eligen para fallar cerrado: TLS activado, sin credenciales por defecto y un token de un solo uso. Los enlaces son el comodín dual-stack (`:8443`, `:8444`): esto es un servidor, y el enlace nunca fue lo que lo hacía seguro. TLS
 activado, sin credenciales por defecto.
 :::
 
@@ -22,8 +22,8 @@ activado, sin credenciales por defecto.
 
 | Flag | Por defecto | Propósito |
 | --- | --- | --- |
-| `--listen` | `127.0.0.1:8443` | Dirección de escucha HTTP (API REST + interfaz web embebida). |
-| `--grpc-listen` | `127.0.0.1:8444` | Dirección de escucha gRPC (API de control-plane / ingesta de colector). |
+| `--listen` | `:8443` | Dirección de escucha HTTP (API REST + interfaz web embebida). |
+| `--grpc-listen` | `:8444` | Dirección de escucha gRPC (API de control-plane / ingesta de colector). |
 | `--data-dir` | `$OLIVARES_DATA_DIR`, una instalación existente en `./olivares-data`, si no `$XDG_DATA_HOME/olivares` o `~/.local/share/olivares` | Directorio de datos: clave de firma de auditoría, material TLS y (para SQLite) el fichero del almacén. |
 | `--engine` | `sqlite` | Motor de almacén: `sqlite` o `postgres`. |
 | `--dsn` | vacío (fichero SQLite en el directorio de datos) | Cadena de conexión al almacén. |
@@ -449,13 +449,13 @@ Estas son las posturas en efecto sin configuración más allá de `serve`. Son l
 | Credenciales | Ninguna de fábrica | No existe ningún usuario o contraseña por defecto. En el primer arranque sin usuarios, el motor acuña un token de configuración de un solo uso y lo imprime solo por salida estándar — nunca en los logs. |
 | Configuración de primer arranque | Token de un solo uso | El administrador crea el primer usuario con ese token y luego inicia sesión. El token se muestra una vez y es de un solo uso. |
 | Transporte | TLS activado | HTTP y gRPC sirven sobre TLS por defecto; se genera un certificado autofirmado en el directorio de datos si no se suministra ninguno, y se registran tanto su huella de certificado como su valor `--pin-sha256`. |
-| Dirección de enlace | Loopback | `--listen` y `--grpc-listen` enlazan por defecto a `127.0.0.1`. El motor enlaza al host local hasta que lo publiques deliberadamente. |
+| Dirección de enlace | Todas las interfaces | `--listen` y `--grpc-listen` enlazan por defecto a `:8443` y `:8444`. Restringe el motor a su propio host deliberadamente, con `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`. |
 | Modo texto plano | Off | `--insecure` es la única forma de servir en texto plano, y el camino gRPC falla cerrado en lugar de degradarse. Pensado solo para desarrollo en localhost. |
 | Sembrado de demo | Off | `--seed-demo` está desactivado por defecto y rechaza cualquier enlace no-loopback porque acuña un administrador de demo con contraseña pública. |
 | Telemetría a casa | Off | El motor no llama a casa: no hay canal de telemetría hacia el proveedor y no se envía nada como efecto de ejecutar. Las conexiones salientes existen hacia las fuentes que configures, más `olivares upgrade` cuando lo ejecutas — llega al canal de actualizaciones salvo que `--endpoint` o `--bundle` lo apunten a otro sitio. Esto es lo que hace posible la [instalación en entorno aislado](/es/how-to/air-gap-install/) con cero egress. |
 
-:::caution[Loopback por defecto, expuesto por intención]
-Los enlaces loopback por defecto significan que el motor no es alcanzable fuera del host hasta que los cambies. Cuando lo publiques — por ejemplo mapeando un puerto del host en Docker Compose — esa es una decisión deliberada del operador, y TLS ya está activado para protegerlo. No emparejes un enlace publicado con `--insecure`.
+:::caution[Alcanzable por defecto, restringido por intención]
+Los enlaces por defecto aceptan conexiones en todas las interfaces: esto es un servidor, y lo que lo protege es TLS activado, cero credenciales por defecto y un token de un solo uso. Restringirlo es la decisión deliberada del operador — `--listen 127.0.0.1:8443` para el binario, `OLIVARES_BIND=127.0.0.1` para el stack de Compose. Nunca emparejes un enlace no-loopback con `--insecure`: el motor rechaza esa combinación.
 :::
 
 ### Primer arranque, en la práctica

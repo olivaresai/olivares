@@ -75,19 +75,24 @@ func newServeCmd() *cobra.Command {
 		Short: "Run the engine (REST + gRPC + embedded console), TLS-on-by-default",
 		Long: "serve starts the Olivares control plane: REST API, embedded web console, gRPC ingest,\n" +
 			"configured modules and source connectors. It uses TLS by default, opens the selected SQLite\n" +
-			"or Postgres store, and prints one-time setup guidance on a first boot.",
-		Example: `  # Start the control plane on the default address
+			"or Postgres store, and prints one-time setup guidance on a first boot. It binds every\n" +
+			"interface (:8443 and :8444) — this is a server; bind 127.0.0.1 to restrict it to this host.",
+		Example: `  # Start the control plane on the default address: every interface, TLS on
   olivares serve --data-dir /var/lib/olivares
+
+  # Restrict the console and the ingest API to this machine
+  olivares serve --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
 
   # Serve with TLS and Postgres backend
   olivares serve --engine postgres --dsn "file:/etc/olivares/secrets/db.dsn" \
     --tls-cert /etc/olivares/cert.pem --tls-key /etc/olivares/key.pem
 
-  # Development mode (plaintext, loopback only)
-  olivares serve --insecure --listen 127.0.0.1:8080
+  # Development mode (plaintext). Both binds must be loopback: --insecure is refused
+  # off-host, and that refusal is what makes the wider default safe to ship.
+  olivares serve --insecure --listen 127.0.0.1:8080 --grpc-listen 127.0.0.1:8081
 
-  # Behind a reverse proxy: bind every interface, declare the address a browser uses
-  olivares serve --listen :8443 --public-url https://olivares.example.com`,
+  # Behind a reverse proxy: declare the address a browser uses
+  olivares serve --public-url https://olivares.example.com`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.publicURLSet = cmd.Flags().Changed("public-url")
@@ -106,9 +111,9 @@ func newServeCmd() *cobra.Command {
 			return runEngine(cmd.Context(), cmd.OutOrStdout(), opts, announce)
 		},
 	}
-	cmd.Flags().StringVar(&opts.listen, "listen", "127.0.0.1:8443", "HTTP (REST + web) listen address")
+	cmd.Flags().StringVar(&opts.listen, "listen", defaultHTTPListen, "HTTP (REST + web) listen address. The default "+defaultHTTPListen+" is EVERY interface (0.0.0.0 and, where the kernel has IPv6, ::) — this is a server. Bind 127.0.0.1:8443 to restrict it to this host")
 	cmd.Flags().StringVar(&opts.publicURL, "public-url", "", publicURLFlagHelp)
-	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", "127.0.0.1:8444", "gRPC listen address")
+	cmd.Flags().StringVar(&opts.grpcListen, "grpc-listen", defaultGRPCListen, "gRPC listen address. The default "+defaultGRPCListen+" is EVERY interface, like --listen; bind 127.0.0.1:8444 to restrict it")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	cmd.Flags().StringVar(&opts.engine, "engine", "sqlite", "store engine: sqlite or postgres")
 	_ = cmd.RegisterFlagCompletionFunc("engine", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
@@ -439,8 +444,17 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// relying party. The announcement runs only once every listener is held, so a
 	// bind failure can no longer follow a freshly minted setup token. A token that
 	// may have been partly delivered is kept: the pending-setup banner is the recovery.
-	if err := runAnnouncement(ctx, out, eng, consoleAddr.withPlan(eng.webAuthn), announce); err != nil {
+	resolved := consoleAddr.withPlan(eng.webAuthn)
+	if err := runAnnouncement(ctx, out, eng, resolved, announce); err != nil {
 		return withCloseErrors(err, owned.closeAll())
+	}
+	// The banner goes to a terminal somebody may not be reading — in Compose it
+	// goes to a log that rotates. The same answer is left in the data directory so
+	// `olivares first-boot` can repeat it later, from a second process in the same
+	// container, with no shell and no credential (consolestate.go). A failure here
+	// is logged and never fatal: the engine is up and the banner was delivered.
+	if err := writeConsoleState(eng.dataDir, newConsoleState(resolved, opts.listen, opts.grpcListen, opts.insecure)); err != nil {
+		log.Warn("could not record the console address for `olivares first-boot`; the engine is unaffected", "err", err)
 	}
 	// A callback may cancel and still return nil. This is an observation before
 	// launch, not an atomic stop/admission barrier.

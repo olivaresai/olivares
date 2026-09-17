@@ -10,7 +10,7 @@ description: >-
 整个产品是一个 distroless 单镜像——引擎内嵌 web UI——因此单台主机即可运行
 SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 即可获得多租户拓扑。
 每条路径都保持相同的安全默认值：无默认凭据、一次性 setup token、默认开启 TLS，
-以及将主机端口绑定到 loopback。
+以及默认启用的 TLS。主机端口默认发布在所有网络接口上，因为这是一台服务器——请按下文有意识地加以限制。
 
 :::note[Beta——26.9.0 尚未发布]
 Olivares AI 处于 **beta** 阶段。下文的镜像坐标只有在**版本
@@ -67,7 +67,7 @@ cosign verify-attestation "$REF" --type spdxjson \
 ### 使用 `docker run`（加固）
 
 镜像的默认命令在**容器内部**绑定 `0.0.0.0`，以便你用 ingress 在前面承载它；
-下面的主机侧端口映射将暴露面限定在 loopback。以非 root、只读、丢弃所有
+主机侧端口映射决定暴露面：下面发布在所有主机接口上——改用 `-p 127.0.0.1:8443:8443` 可把控制台留在本机。以非 root、只读、丢弃所有
 capabilities 的方式运行：
 
 ```bash
@@ -80,8 +80,8 @@ docker run -d --name olivares \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -v olivares-data:/var/lib/olivares \
-  -p 127.0.0.1:8443:8443 \
-  -p 127.0.0.1:8444:8444 \
+  -p 8443:8443 \
+  -p 8444:8444 \
   docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
@@ -98,12 +98,13 @@ docker run -d --name olivares \
 | `--cap-drop ALL` | 引擎不需要任何 Linux capabilities |
 | `--security-opt no-new-privileges` | 阻止通过 setuid 二进制提权 |
 | `-v olivares-data:/var/lib/olivares` | 持久化数据目录（参见 [§5](#5-运维须知)） |
-| `-p 127.0.0.1:8443:8443` | 仅向 **loopback** 发布 HTTPS（REST + web UI） |
-| `-p 127.0.0.1:8444:8444` | 仅向 loopback 发布 gRPC（摄取 / ControlPlane API） |
+| `-p 8443:8443` | 向**所有主机接口**发布 HTTPS（REST + web UI） |
+| `-p 8444:8444` | 向所有主机接口发布 gRPC（摄取 / ControlPlane API） |
 
 从日志读取一次性 setup token 并创建第一位管理员：
 
 ```bash
+docker exec olivares olivares first-boot   # the console address(es) + setup state
 docker logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 
 curl -fsS -k -X POST https://127.0.0.1:8443/v1/setup \
@@ -117,14 +118,22 @@ curl -fsS -k -X POST https://127.0.0.1:8443/v1/setup \
 
 ### 使用 Docker Compose
 
-仓库附带一套 Compose stack，它接好数据卷、loopback 端口映射，
+仓库附带一套 Compose stack，它接好数据卷、发布的端口，
 以及与上文相同的加固标志：
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d
 
+# Where the console answers, and whether first setup is still pending:
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
 # Read the one-time first-boot setup token:
 docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+
+# What is running, and how to stop it. Every command needs the -f: this file lives in
+# deploy/compose/, so a bare `docker compose ps` answers "no configuration file provided".
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
 
 # Then open https://localhost:8443 (self-signed TLS by default)
 ```
@@ -217,10 +226,10 @@ curl -fsS -k https://127.0.0.1:8443/readyz
 
 开箱即用时引擎提供自己的**自签名**证书，这对评估足够，但不适用于会校验
 信任的客户端。在生产环境中，用一个以运营者提供的证书（来自你的 CA 或 ACME）
-终止 TLS 的反向代理来承载绑定在 loopback 上的引擎，并让该代理成为网络上唯一
+先把引擎限制到 loopback（`OLIVARES_BIND=127.0.0.1`），再用终止 TLS 的反向代理承载它，并让该代理成为网络上唯一
 被暴露的东西。
 
-由于引擎本身讲 TLS，代理通过 loopback 端口以 HTTPS 连接它。一个最小的 nginx
+由于引擎本身讲 TLS，代理通过这个受限端口以 HTTPS 连接它。一个最小的 nginx
 server 块：
 
 ```nginx
@@ -232,7 +241,7 @@ server {
   ssl_certificate_key /etc/ssl/olivares/privkey.pem;
 
   location / {
-    proxy_pass         https://127.0.0.1:8443;   # engine's own TLS on loopback
+    proxy_pass         https://127.0.0.1:8443;   # engine restricted to loopback, own TLS
     proxy_ssl_verify   off;                       # engine cert is self-signed
     proxy_set_header   Host              $host;
     proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -247,7 +256,7 @@ server {
 olivares.example.com {
   reverse_proxy https://127.0.0.1:8443 {
     transport http {
-      tls_insecure_skip_verify   # engine cert is self-signed on loopback
+      tls_insecure_skip_verify   # the engine's cert is self-signed
     }
   }
 }

@@ -20,7 +20,13 @@ fi
 
 olivares_config="/etc/olivares/olivares.env"
 command="/usr/bin/olivares"
-command_args_base="serve --data-dir=/var/lib/olivares --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h"
+# --listen=:8443 is the dual-stack wildcard: the console accepts connections from the
+# network, which is what a server is for. TLS is on with a self-signed first-boot
+# certificate and there are no default credentials. To restrict the engine to this
+# host, put --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 in
+# OLIVARES_EXTRA_ARGS in /etc/olivares/olivares.env: it is appended after these flags
+# and the later flag wins.
+command_args_base="serve --data-dir=/var/lib/olivares --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h"
 command_args="$command_args_base"
 command_user="olivares:olivares"
 command_background=true
@@ -37,9 +43,9 @@ output_log="/var/log/olivares.log"
 error_log="/var/log/olivares.log"
 
 depend() {
-	# Loopback-only listeners do not require a configured uplink. `need net`
-	# refuses to start when the networking service cannot run (measured on
-	# Alpine 3.22 OpenRC 0.62.6 with no NIC: rc-service start exits 1).
+	# A wildcard bind succeeds before an uplink is configured, so `use net` is
+	# enough. `need net` refuses to start when the networking service cannot run
+	# (measured on Alpine 3.22 OpenRC 0.62.6 with no NIC: rc-service start exits 1).
 	use net
 	after firewall
 }
@@ -52,7 +58,8 @@ start_pre() {
 	# Intentional IFS split of extra flags; nested quotes are not interpreted.
 	command_args="$command_args_base $olivares_extra_args"
 	set +f
-	# Loopback-only listeners still need lo. `use net` does not start
+	# The loopback interface is still needed for the local readiness probe and
+	# for `olivares readyz`. `use net` does not start
 	# networking, and `need net` refuses when there is no uplink (Alpine
 	# 3.22 OpenRC 0.62.6, -nic none): wget to 127.0.0.1 then fails with
 	# "Network unreachable".

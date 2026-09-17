@@ -119,7 +119,7 @@ unit. Start the engine as the service user; the first-boot token is printed on s
 
 ```bash
 sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
-  --listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444 --checkpoint-interval=1h
+  --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h
 ```
 
 ## 3. The hardened systemd unit
@@ -139,10 +139,14 @@ this source run under OpenRC instead: they use the `olivares` account, write the
 first-boot token to `/var/log/olivares.log`, and do not implement systemd
 sandbox directives.
 
-**The listeners are loopback-only by default** — `--listen=127.0.0.1:8443` for HTTP (REST
-plus the embedded console) and `--grpc-listen=127.0.0.1:8444` for gRPC. Widen them
-deliberately, through `OLIVARES_EXTRA_ARGS` in `/etc/olivares/olivares.env`, and front the
-result with your own TLS termination. For IPv6 loopback use `--listen=[::1]:8443`.
+**The listeners accept connections from the network by default** — `--listen=:8443` for
+HTTP (REST plus the embedded console) and `--grpc-listen=:8444` for gRPC, the dual-stack
+wildcard. This is a server, and what protects it is TLS on, no default credentials and a
+single-use setup token. Restrict it deliberately with
+`OLIVARES_EXTRA_ARGS=--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444` in
+`/etc/olivares/olivares.env` — those flags are appended after the unit's own and the later
+flag wins — and front the result with your own TLS termination for a certificate browsers
+trust. For IPv6 loopback use `--listen=[::1]:8443`.
 
 ### Executable scratch mount
 
@@ -351,7 +355,7 @@ Stated plainly, because a security product that is vague here does not deserve t
   moves. The honest form of the promise is: *verifying a licence never calls anyone;
   downloading what you paid for does.* Use `--bundle` if you want the update path to make
   no call either.
-- **It does not open a port to the network.** The unit binds loopback only until you widen
+- **It opens a port to the network.** The unit binds every interface until you restrict
   it yourself.
 
 ## See also

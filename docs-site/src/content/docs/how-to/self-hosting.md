@@ -33,7 +33,7 @@ for disconnected sites, see
 |---|---|
 | **Credentials** | none. First boot prints a **one-time, single-use setup token** (`olst_…`); you create the first admin with it. |
 | **TLS** | on by default. `--insecure` (plaintext) is for localhost development only. |
-| **Bind** | the binary binds **loopback** by default; expose it deliberately. |
+| **Bind** | **every interface** (`:8443`, `:8444`) by default — this is a server. Pass `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` to restrict it to this host. |
 | **License** | In the open (AGPL) binary: validated **offline** (Ed25519), attestation only — it never gates or degrades the open product, and that does not change. Commercial add-ons are a paid-term right delivered as **subscription access to the enterprise repositories** (the SUSE/Novell model): obtaining them and receiving their updates — security updates included — requires that entitlement. Air-gapped estates are served the same way SUSE serves them, through a local mirror that still carries the entitlement. |
 | **Telemetry-home** | off. The engine makes no mandatory outbound calls at boot. |
 

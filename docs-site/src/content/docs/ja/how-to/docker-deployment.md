@@ -11,7 +11,8 @@ description: >-
 単一ホストで外部依存なしに SQLite トポロジを実行でき、必要なときには Postgres オーバーライドで
 マルチテナントトポロジを構成できます。どの経路でも同じセキュアなデフォルトを維持します:
 デフォルト認証情報なし、ワンタイムのセットアップトークン、TLS デフォルト有効、
-そしてホストポートはループバックにバインド。
+そして TLS はデフォルトで有効です。ホストポートはすべてのインターフェースに公開されます —
+これはサーバーだからです。下記のように意図して制限してください。
 
 :::note[ベータ ── 26.9.0 はまだ公開されていません]
 Olivares AI は **ベータ** です。以下のイメージ座標は **リリース
@@ -69,7 +70,8 @@ cosign verify-attestation "$REF" --type spdxjson \
 ### `docker run` を使う（堅牢化）
 
 イメージのデフォルトコマンドは **コンテナ内** で `0.0.0.0` にバインドするため、
-イングレスで前段に置けます。下記のホスト側ポートマッピングは公開をループバックに固定します。
+イングレスで前段に置けます。公開範囲を決めるのはホスト側ポートマッピングです。下記ではすべての
+ホストインターフェースに公開します。コンソールをホストだけに留めるには `-p 127.0.0.1:8443:8443` を使います。
 非 root、読み取り専用、すべての capability を削除して実行してください:
 
 ```bash
@@ -82,8 +84,8 @@ docker run -d --name olivares \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   -v olivares-data:/var/lib/olivares \
-  -p 127.0.0.1:8443:8443 \
-  -p 127.0.0.1:8444:8444 \
+  -p 8443:8443 \
+  -p 8444:8444 \
   docker.io/olivaresai/olivares:26.9.0 \
   serve \
     --listen=0.0.0.0:8443 \
@@ -100,12 +102,13 @@ docker run -d --name olivares \
 | `--cap-drop ALL` | エンジンは Linux capability を一切必要としない |
 | `--security-opt no-new-privileges` | setuid バイナリ経由の権限昇格をブロックする |
 | `-v olivares-data:/var/lib/olivares` | データディレクトリを永続化する（[§5](#5-運用上の注記) を参照） |
-| `-p 127.0.0.1:8443:8443` | HTTPS（REST + Web UI）を **ループバックのみ** に公開する |
-| `-p 127.0.0.1:8444:8444` | gRPC（取り込み / ControlPlane API）をループバックのみに公開する |
+| `-p 8443:8443` | HTTPS（REST + Web UI）を **すべてのホストインターフェース** に公開する |
+| `-p 8444:8444` | gRPC（取り込み / ControlPlane API）をすべてのホストインターフェースに公開する |
 
 ログからワンタイムのセットアップトークンを読み取り、最初の管理者を作成します:
 
 ```bash
+docker exec olivares olivares first-boot   # the console address(es) + setup state
 docker logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 
 curl -fsS -k -X POST https://127.0.0.1:8443/v1/setup \
@@ -119,14 +122,22 @@ curl -fsS -k -X POST https://127.0.0.1:8443/v1/setup \
 
 ### Docker Compose を使う
 
-リポジトリには、ボリューム、ループバックポートマッピング、上記と同じ堅牢化フラグを
+リポジトリには、ボリューム、公開ポート、上記と同じ堅牢化フラグを
 配線した Compose スタックが同梱されています:
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d
 
+# Where the console answers, and whether first setup is still pending:
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
+
 # Read the one-time first-boot setup token:
 docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
+
+# What is running, and how to stop it. Every command needs the -f: this file lives in
+# deploy/compose/, so a bare `docker compose ps` answers "no configuration file provided".
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml down
 
 # Then open https://localhost:8443 (self-signed TLS by default)
 ```
@@ -223,11 +234,11 @@ curl -fsS -k https://127.0.0.1:8443/readyz
 ## 6. リバースプロキシ / TLS 終端
 
 そのままではエンジンは自身の **自己署名** 証明書を提供します。評価には十分ですが、
-信頼を検証するクライアントには適しません。本番では、ループバックにバインドされたエンジンの前段に、
+信頼を検証するクライアントには適しません。本番では、エンジンをループバックに制限し（`OLIVARES_BIND=127.0.0.1`）、その前段に、
 運用者が提供する証明書（あなたの CA または ACME から）で TLS を終端するリバースプロキシを置き、
 ネットワークに公開するのはプロキシだけにしてください。
 
-エンジン自身が TLS を話すため、プロキシはループバックポート上で HTTPS でエンジンに接続します。
+エンジン自身が TLS を話すため、プロキシは制限されたポート上で HTTPS でエンジンに接続します。
 最小構成の nginx server ブロック:
 
 ```nginx
@@ -239,7 +250,7 @@ server {
   ssl_certificate_key /etc/ssl/olivares/privkey.pem;
 
   location / {
-    proxy_pass         https://127.0.0.1:8443;   # engine's own TLS on loopback
+    proxy_pass         https://127.0.0.1:8443;   # engine restricted to loopback, own TLS
     proxy_ssl_verify   off;                       # engine cert is self-signed
     proxy_set_header   Host              $host;
     proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -254,7 +265,7 @@ server {
 olivares.example.com {
   reverse_proxy https://127.0.0.1:8443 {
     transport http {
-      tls_insecure_skip_verify   # engine cert is self-signed on loopback
+      tls_insecure_skip_verify   # the engine's cert is self-signed
     }
   }
 }
