@@ -451,17 +451,44 @@ jobs:
           set -euo pipefail
           match="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=100" \
                   --jq "[.workflow_runs[] | select(.head_sha == \"${GITHUB_SHA}\")] | length")"
+          # A count, or a refusal. `[ "" -eq 0 ]` is an error that an `if` reads as FALSE, so a
+          # non-numeric answer skipped both branches below and printed the success line.
+          if ! [[ "${match}" =~ ^[0-9]+$ ]]; then
+            echo "::error::race-full run history answered '${match}', not a count; could not look is not evidence."
+            exit 1
+          fi
+          equal="${match}"
           # The ONE admitted non-equality: a green race-full on a commit whose diff to the tagged
           # SHA touches only .github/workflows/ (the race sweep tests Go code; a workflow-only
           # change cannot alter its result). Named loudly, with the SHA and the file list, so it
           # is evidence and not a silent pass. Anything outside .github/workflows/ keeps the
-          # equality rule. (2026-09-17: v26.9.0 re-tagged after this file's runs-on change.)
+          # equality rule. (2026-09-17: v26.9.0 re-tagged after this file's runs-on change;
+          # ported from olivaresai/olivares 7263d082e8 + 37da5b582a.)
+          #
+          # Two defects of that first form, both measured on the real commits (2026-09-17, a
+          # local clone of 1d84bd1788 with the v26.8.0 green f443e0844d as the only candidate):
+          # · `printf | grep -qvE` under pipefail ADMITTED a 2,986-file diff as "workflow-only".
+          #   grep -q exits at the first non-workflow name; above the pipe buffer printf then
+          #   dies of SIGPIPE, the pipeline answers 141, and `!` reads 141 as "no other file".
+          #   git filters the paths here instead: no pipe, no early reader.
+          # · `git fetch --depth=1` into this fetch-depth: 0 checkout made it SHALLOW (10 commits
+          #   visible before, 5 after). Run 35237680006 shows the effect: goreleaser logged
+          #   "running against a shallow clone", found no tag before v26.9.0 although v26.8.0 is
+          #   an ancestor, and wrote previous_tag "" into dist/metadata.json. The full checkout
+          #   already holds every branch and tag; only a missing object is fetched, never shallow.
           if [ "${match}" -eq 0 ]; then
             for green in $(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=100" --jq '.workflow_runs[].head_sha'); do
-              git fetch -q --depth=1 origin "${green}" 2>/dev/null || continue
+              [[ "${green}" =~ ^[0-9a-f]{40}$ ]] || continue
+              if ! git cat-file -e "${green}^{commit}" 2>/dev/null; then
+                git fetch -q origin "${green}" 2>/dev/null || continue
+              fi
               changed="$(git diff --name-only "${green}" HEAD)"
               [ -n "${changed}" ] || continue
-              if ! printf '%s\n' "${changed}" | grep -qvE '^\.github/workflows/'; then
+              # ROOT-ANCHORED (':/' + exclude,top), not `.`: a pathspec relative to the working
+              # directory would answer "nothing outside the workflows" for any diff whose files
+              # all sit outside that directory, which is an admission, not a filter.
+              outside="$(git diff --name-only "${green}" HEAD -- ':/' ':(exclude,top).github/workflows/')"
+              if [ -z "${outside}" ]; then
                 echo "race-full evidence: green run on ${green}; diff to ${GITHUB_SHA} is workflow-only:"; printf '%s\n' "${changed}" | sed 's/^/  /'
                 match=1; break
               fi
@@ -473,7 +500,15 @@ jobs:
             echo "::error::no successful race-full run exists on the tagged SHA ${GITHUB_SHA} (newest green: ${newest}). An ancestor green does not cover the diff after it — dispatch race-full on this exact commit, wait for green, and re-tag."
             exit 1
           fi
-          echo "race-full evidence exists for the exact tagged SHA ${GITHUB_SHA}"
+          # GoReleaser reads the previous tag and the changelog from this history (checkout
+          # fetch-depth: 0). A shallow clone does not fail the build; it publishes wrong metadata.
+          if [ "$(git rev-parse --is-shallow-repository)" != "false" ]; then
+            echo "::error::the release checkout is shallow; GoReleaser would compute the previous tag and the changelog from a truncated history."
+            exit 1
+          fi
+          if [ "${equal}" -gt 0 ]; then
+            echo "race-full evidence exists for the exact tagged SHA ${GITHUB_SHA}"
+          fi
       # syft on PATH for goreleaser's `sboms`; cosign for `signs`/`docker_signs`.
       - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -1935,7 +1970,7 @@ jobs:
         run: |
           set -euo pipefail
           TRUSTED_BIN="/usr/bin"
-          for t in sha256sum readlink grep; do
+          for t in sha256sum readlink grep chmod; do
             [ -x "${TRUSTED_BIN}/${t}" ] || { echo "ERROR: no trusted ${t} at ${TRUSTED_BIN}" >&2; exit 1; }
           done
           resolved="$(command -v slsa-verifier || true)"
@@ -1949,7 +1984,11 @@ jobs:
           # The installer writes the binary execute-only (measured 2026-09-17, run 35243925445:
           # `sha256sum: …/.slsa/bin/v2.7.1/slsa-verifier: Permission denied`). Digesting it is the
           # whole point of this step; the file is the runner user's own, so u+r moves no trust line.
-          chmod u+r "${abs}"
+          # BY ABSOLUTE PATH, like the other three tools of this step: the public form
+          # (0cceaf1c75's parent c19994b22b) called `chmod` through PATH, which an earlier action
+          # owns — the exact hole TRUSTED_BIN exists to close, in the step that decides whether
+          # the verifier is the reviewed artifact.
+          "${TRUSTED_BIN}/chmod" u+r "${abs}"
           # Split in the shell rather than piping: a failing sha256sum inside a pipeline would
           # leave an EMPTY digest that matches nothing and reports the wrong reason.
           sum_line="$("${TRUSTED_BIN}/sha256sum" "${abs}")"
@@ -2201,9 +2240,12 @@ jobs:
             echo "No tracked code has run." >&2
             exit 1
             ;;
-          # The reviewed installer step above (v4.1.2) installs to $HOME/.cosign/cosign on hosted runners
-          # (measured 2026-09-17, run 35244623296: "/home/runner/.cosign/cosign"); the digest
-          # assertion that follows still pins the binary to COSIGN_EXPECTED_SHA256.
+          # The reviewed cosign installer action, v4.1.2, installs to $HOME/.cosign/cosign on
+          # hosted runners (measured 2026-09-17, run 35244623296: "/home/runner/.cosign/cosign");
+          # the digest assertion that follows still pins the binary to COSIGN_EXPECTED_SHA256.
+          # The action is named here in PROSE ONLY: lint:cosign-pins reads `sigstore/`+the
+          # installer name inside a run: scalar as an acquisition of cosign outside the reviewed
+          # step, and it is right to — this comment is not how the binary got here.
           /opt/hostedtoolcache/* | /usr/local/bin/* | "${HOME}"/.cosign/cosign) ;;
           *)
             echo "ERROR: cosign resolves to ${COSIGN_BIN}, outside the installer's locations." >&2
