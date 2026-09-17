@@ -13,7 +13,7 @@ lib="$root/scripts/installer-matrix-lib.sh"
 family=""
 image=""
 candidate=""
-release_version=26.8.0
+release_version=26.9.0
 inside=0
 
 usage() {
@@ -127,7 +127,7 @@ else
 	init_name=launchd
 fi
 
-mkdir -p "$work/bin" "$work/fakebin" "$work/home" "$work/tmp"
+mkdir -p "$work/bin" "$work/fakebin" "$work/home/.local/bin" "$work/tmp"
 chmod 0700 "$work/home" "$work/tmp"
 export HOME="$work/home"
 export XDG_CONFIG_HOME="$HOME/.config"
@@ -219,7 +219,7 @@ trap cleanup_live EXIT
 release_base="https://github.com/olivaresai/olivares/releases/download/v$release_version"
 if ! curl -fsSL --range 0-0 "$release_base/checksums.txt" -o /dev/null; then
 	env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" \
-		--version "v$release_version" --bindir "$work/bin" --dry-run >>"$all_log" 2>&1
+		--version "v$release_version" --bindir "$HOME/.local/bin" --dry-run >>"$all_log" 2>&1
 	printf 'installer-matrix: NO HE PODIDO MIRAR — public release network path unavailable; dry-run only\n' >&2
 	exit 2
 fi
@@ -227,8 +227,12 @@ fi
 # Real public release: current installer, real Fulcio/Rekor identity, signed checksums
 # and the published archive. No service flag is passed in this phase.
 env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" --version "v$release_version" \
-	--bindir "$work/bin" >>"$all_log" 2>&1
-installed="$work/bin/olivares"
+	--bindir "$HOME/.local/bin" >>"$all_log" 2>&1
+# The user-mode service adapter accepts exactly one binary route, $HOME/.local/bin/olivares
+# (install-service.sh, the release-index install_layout). The matrix used to install into
+# $work/bin and every leg died at "user binary path is outside the release-index
+# install_layout" — read for the first time on 2026-09-17 once the leg log was printed.
+installed="$HOME/.local/bin/olivares"
 bash "$lib" binary "$installed" "$(id -u)"
 "$installed" version >"$work/release-version.log" 2>&1
 grep -Fq "$release_version" "$work/release-version.log" || {

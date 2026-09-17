@@ -148,7 +148,7 @@ jobs:
     # `task test:functional` is fail-closed on the Postgres posture (scripts/pg-test-env.sh):
     # without the DSN pair it refuses rather than skipping. The first real run of this job on
     # the public repository (PR #31, 2026-09-17) died exactly there, because the job had no
-    # Postgres at all. Same two services and the same hub resolver as mainline-ci's functional
+    # Postgres at all. Same two services and the same resolver script as mainline-ci's functional
     # job: two servers on ephemeral host ports (the failover test needs a second, distinct one).
     services:
       postgres:
