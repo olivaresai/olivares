@@ -126,7 +126,9 @@ assert goreleaser.count("      - scripts/install-service.sh\n") == 2
 assert goreleaser.count("      - packaging/service/\n") == 2
 assert 'tar -xzf "$tmp/$archive"' in installer
 assert 'scripts/install-service.sh packaging/service' in installer
-assert installer.index('cosign verify-blob') < installer.index('tar -xzf "$tmp/$archive"')
+# The verifier is invoked through the resolved binary since the pinned temporary cosign
+# (193e9bace7): `"$cosign_bin" verify-blob`. The contract is the ORDER, verify before extract.
+assert installer.index('verify-blob') < installer.index('tar -xzf "$tmp/$archive"')
 assert '"--$service_mode"' in installer
 assert installer.count('--managed-binary') == 2
 assert '"--$service_mode"' in bootstrap
