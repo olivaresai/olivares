@@ -136,6 +136,14 @@ export TMPDIR="$work/tmp"
 export MATRIX_BINARY="$work/bin/olivares"
 export MATRIX_DATA="$XDG_DATA_HOME/olivares"
 export MATRIX_CONFIG="$XDG_CONFIG_HOME/olivares/olivares.env"
+if [[ "$init_name" == launchd ]]; then
+	# The user-mode launchd tuple is the ONLY one the service adapter accepts on macOS
+	# (install-service.sh, release-index install_layout): the XDG pair above is the systemd
+	# tuple, and the macos leg refused it as "user config/unit tuple is outside the
+	# release-index install_layout" (2026-09-17, read from the printed leg log).
+	export MATRIX_DATA="$HOME/Library/Application Support/Olivares"
+	export MATRIX_CONFIG="$HOME/Library/Preferences/dev.olivares.olivares.env"
+fi
 export MATRIX_PID_FILE="$work/engine.pid"
 export MATRIX_ENGINE_LOG="$work/engine.log"
 export MATRIX_INIT_TRACE="$work/init.trace"
