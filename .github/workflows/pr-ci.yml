@@ -145,6 +145,36 @@ jobs:
     # The functional leg without -race. Its own task carries a 45-minute internal timeout, so
     # the job ceiling sits above the sum of its steps rather than cancelling them mute.
     timeout-minutes: 75
+    # `task test:functional` is fail-closed on the Postgres posture (scripts/pg-test-env.sh):
+    # without the DSN pair it refuses rather than skipping. The first real run of this job on
+    # the public repository (PR #31, 2026-09-17) died exactly there, because the job had no
+    # Postgres at all. Same two services and the same hub resolver as mainline-ci's functional
+    # job: two servers on ephemeral host ports (the failover test needs a second, distinct one).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+      postgres_other:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -175,6 +205,18 @@ jobs:
           mkdir -p "$RUNNER_TEMP/exec"
           echo "TMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
           echo "GOTMPDIR=$RUNNER_TEMP/exec" >> "$GITHUB_ENV"
+      - name: resolve the ephemeral Postgres ports into the test DSNs
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+          PGPORT_OTHER: ${{ job.services.postgres_other.ports['5432'] }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci-postgres-service.sh resolve
+          echo "OLIVARES_TEST_PG_EXPECT_MAJOR=16" >> "$GITHUB_ENV"
+      - name: provision postgres roles (least-privilege app role + BYPASSRLS admin)
+        env:
+          PGPASSWORD: postgres
+        run: bash scripts/ci-postgres-service.sh provision
       - name: the Go suite, without the race detector
         timeout-minutes: 60
         run: task test:functional
